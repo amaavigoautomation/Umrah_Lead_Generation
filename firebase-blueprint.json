@@ -1,0 +1,127 @@
+{
+  "entities": {
+    "Contact": {
+      "title": "Contact",
+      "description": "Pilgrimage agency contact profile",
+      "type": "object",
+      "properties": {
+        "contactId": { "type": "string", "maxLength": 128 },
+        "firstName": { "type": "string", "maxLength": 128 },
+        "lastName": { "type": "string", "maxLength": 128 },
+        "email": { "type": "string", "format": "email", "maxLength": 256 },
+        "phone": { "type": "string", "maxLength": 64 },
+        "companyName": { "type": "string", "maxLength": 256 },
+        "jobTitle": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" },
+        "lastActivityAt": { "type": "string" }
+      },
+      "required": ["contactId", "firstName", "email", "companyName"]
+    },
+    "Lead": {
+      "title": "Lead",
+      "description": "Qualified tour operator lead record",
+      "type": "object",
+      "properties": {
+        "leadId": { "type": "string", "maxLength": 128 },
+        "contactId": { "type": "string", "maxLength": 128 },
+        "source": { "type": "string", "enum": ["WEBSITE", "WHATSAPP", "INSTAGRAM", "FACEBOOK", "LINKEDIN", "EMAIL", "APOLLO"] },
+        "leadType": { "type": "string", "enum": ["INBOUND", "OUTBOUND"] },
+        "status": { "type": "string" },
+        "leadScore": { "type": "number" },
+        "intent": { "type": "string", "enum": ["LOW", "MEDIUM", "HIGH"] },
+        "buyingStage": { "type": "string", "enum": ["AWARENESS", "CONSIDERATION", "DECISION", "PURCHASE"] },
+        "serviceInterest": { "type": "string", "maxLength": 256 },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["leadId", "contactId", "source", "status"]
+    },
+    "Conversation": {
+      "title": "Conversation",
+      "description": "Cross-channel conversation session",
+      "type": "object",
+      "properties": {
+        "conversationId": { "type": "string", "maxLength": 128 },
+        "contactId": { "type": "string", "maxLength": 128 },
+        "leadId": { "type": "string", "maxLength": 128 },
+        "channel": { "type": "string", "enum": ["WEBSITE", "WHATSAPP", "INSTAGRAM", "FACEBOOK", "LINKEDIN", "EMAIL"] },
+        "direction": { "type": "string", "enum": ["INBOUND", "OUTBOUND"] },
+        "status": { "type": "string" },
+        "aiEnabled": { "type": "boolean" },
+        "humanHandoff": { "type": "boolean" },
+        "managementMode": { "type": "string", "enum": ["AI", "HUMAN"] },
+        "emailThreadId": { "type": "string", "maxLength": 128 },
+        "gmailThreadId": { "type": "string", "maxLength": 256 },
+        "isRead": { "type": "boolean" },
+        "unread": { "type": "boolean" },
+        "unreadCount": { "type": "number" },
+        "startedAt": { "type": "string" },
+        "lastMessageAt": { "type": "string" },
+        "lastMessageText": { "type": "string", "maxLength": 4096 }
+      },
+      "required": ["conversationId", "contactId", "channel", "direction"]
+    },
+    "Message": {
+      "title": "Message",
+      "description": "Conversation message record",
+      "type": "object",
+      "properties": {
+        "messageId": { "type": "string", "maxLength": 128 },
+        "conversationId": { "type": "string", "maxLength": 128 },
+        "channel": { "type": "string" },
+        "senderType": { "type": "string", "enum": ["CUSTOMER", "PROSPECT", "AI", "AGENT", "HUMAN"] },
+        "senderName": { "type": "string", "maxLength": 128 },
+        "senderEmail": { "type": "string", "maxLength": 256 },
+        "text": { "type": "string", "maxLength": 8192 },
+        "timestamp": { "type": "string" },
+        "gmailMessageId": { "type": "string", "maxLength": 256 },
+        "gmailThreadId": { "type": "string", "maxLength": 256 },
+        "direction": { "type": "string", "enum": ["INBOUND", "OUTBOUND"] },
+        "sentAt": { "type": "string" },
+        "receivedAt": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "aiProcessed": { "type": "boolean" },
+        "confidence": { "type": "number" }
+      },
+      "required": ["messageId", "conversationId", "senderType", "text"]
+    },
+    "LeadActivity": {
+      "title": "LeadActivity",
+      "description": "Audit and timeline activity item",
+      "type": "object",
+      "properties": {
+        "activityId": { "type": "string", "maxLength": 128 },
+        "leadId": { "type": "string", "maxLength": 128 },
+        "contactId": { "type": "string", "maxLength": 128 },
+        "type": { "type": "string" },
+        "title": { "type": "string", "maxLength": 256 },
+        "description": { "type": "string", "maxLength": 1024 },
+        "timestamp": { "type": "string" }
+      },
+      "required": ["activityId", "leadId", "title", "timestamp"]
+    }
+  },
+  "firestore": {
+    "/contacts/{contactId}": {
+      "schema": "Contact",
+      "description": "Pilgrimage tour operator contacts"
+    },
+    "/leads/{leadId}": {
+      "schema": "Lead",
+      "description": "Tour operator sales leads"
+    },
+    "/conversations/{conversationId}": {
+      "schema": "Conversation",
+      "description": "Inbound and outbound omnichannel threads"
+    },
+    "/messages/{messageId}": {
+      "schema": "Message",
+      "description": "Individual messages in conversations"
+    },
+    "/lead_activities/{activityId}": {
+      "schema": "LeadActivity",
+      "description": "Chronological CRM and lead timeline activities"
+    }
+  }
+}

@@ -1,0 +1,9 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Umrah360 Platform rules - Allow access for system operations and app users
+    match /{document=**} {
+      allow read, write: if true;
+    }
+  }
+}

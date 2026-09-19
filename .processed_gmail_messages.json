@@ -1,0 +1,98 @@
+[
+  {
+    "gmailMessageId": "<cold-msg-001@umrah360.in>",
+    "direction": "OUTBOUND",
+    "senderType": "AGENT",
+    "aiReplied": false,
+    "firstSeenAt": "2026-09-12T10:20:00Z",
+    "subject": "Umrah360 for ABC Travels - Automate B2B Packages & Visa Operations",
+    "from": "sales@umrah360.in"
+  },
+  {
+    "gmailMessageId": "<rahul-reply-001@abctravels.in>",
+    "direction": "INBOUND",
+    "senderType": "PROSPECT",
+    "aiReplied": true,
+    "repliedAt": "2026-09-12T14:18:00Z",
+    "repliedByMessageId": "<ai-reply-001@umrah360.in>",
+    "firstSeenAt": "2026-09-12T14:15:00Z",
+    "subject": "Re: Umrah360 for ABC Travels - Automate B2B Packages & Visa Operations",
+    "from": "rahul@abctravels.in"
+  },
+  {
+    "gmailMessageId": "<ai-reply-001@umrah360.in>",
+    "direction": "OUTBOUND",
+    "senderType": "AI",
+    "aiReplied": false,
+    "firstSeenAt": "2026-09-12T14:18:00Z",
+    "subject": "Re: Umrah360 for ABC Travels - Automate B2B Packages & Visa Operations",
+    "from": "sales@umrah360.in"
+  },
+  {
+    "gmailMessageId": "<rahul-reply-002@abctravels.in>",
+    "direction": "INBOUND",
+    "senderType": "PROSPECT",
+    "aiReplied": true,
+    "repliedAt": "2026-09-13T11:12:00Z",
+    "repliedByMessageId": "<ai-reply-002@umrah360.in>",
+    "firstSeenAt": "2026-09-13T11:10:00Z",
+    "subject": "Re: Umrah360 for ABC Travels - Automate B2B Packages & Visa Operations",
+    "from": "rahul@abctravels.in"
+  },
+  {
+    "gmailMessageId": "<ai-reply-002@umrah360.in>",
+    "direction": "OUTBOUND",
+    "senderType": "AI",
+    "aiReplied": false,
+    "firstSeenAt": "2026-09-13T11:12:00Z",
+    "subject": "Re: Umrah360 for ABC Travels - Automate B2B Packages & Visa Operations",
+    "from": "sales@umrah360.in"
+  },
+  {
+    "gmailMessageId": "<farhan-inquiry-001@malikpilgrimages.co.uk>",
+    "direction": "INBOUND",
+    "senderType": "CUSTOMER",
+    "aiReplied": true,
+    "repliedAt": "2026-09-15T08:05:00Z",
+    "repliedByMessageId": "<concierge-reply-001@umrah360.in>",
+    "firstSeenAt": "2026-09-15T07:30:00Z",
+    "subject": "Inquiry: ATOL Compliance & Haramain Rail Booking API",
+    "from": "farhan@malikpilgrimages.co.uk"
+  },
+  {
+    "gmailMessageId": "<concierge-reply-001@umrah360.in>",
+    "direction": "OUTBOUND",
+    "senderType": "AGENT",
+    "aiReplied": false,
+    "firstSeenAt": "2026-09-15T08:05:00Z",
+    "subject": "Re: Inquiry: ATOL Compliance & Haramain Rail Booking API",
+    "from": "sales@umrah360.in"
+  },
+  {
+    "gmailMessageId": "<PNVP287MB6222576DE3BB54E04F834629BFB82@PNVP287MB6222.INDP287.PROD.OUTLOOK.COM>",
+    "direction": "INBOUND",
+    "senderType": "CUSTOMER",
+    "aiReplied": false,
+    "firstSeenAt": "2026-09-18T07:36:25.170Z",
+    "subject": "Re: Test",
+    "from": "growth4@amaavigo.com"
+  },
+  {
+    "gmailMessageId": "<rahul-reply-003-new@abctravels.in>",
+    "direction": "INBOUND",
+    "senderType": "CUSTOMER",
+    "aiReplied": true,
+    "repliedAt": "2026-09-18T07:36:47.490Z",
+    "repliedByMessageId": "<1d0c2f41-b917-7e54-a321-491d497a296b@gmail.com>",
+    "firstSeenAt": "2026-09-18T07:36:33.366Z",
+    "subject": "Re: Umrah360 for ABC Travels",
+    "from": "rahul@abctravels.in"
+  },
+  {
+    "gmailMessageId": "<1d0c2f41-b917-7e54-a321-491d497a296b@gmail.com>",
+    "direction": "OUTBOUND",
+    "senderType": "AI",
+    "aiReplied": false,
+    "firstSeenAt": "2026-09-18T07:36:47.490Z"
+  }
+]

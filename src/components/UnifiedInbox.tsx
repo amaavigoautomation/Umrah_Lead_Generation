@@ -35,11 +35,18 @@ import {
 } from '../types';
 import { generateOmnichannelResponse } from '../services/aiService';
 import { InboundEmailFlowModal } from './InboundEmailFlowModal';
+import { InboundWhatsAppFlowModal } from './InboundWhatsAppFlowModal';
 import {
   InboundEmailPayload,
   InboundProcessingResult,
   INBOUND_MAILBOX,
 } from '../services/emailInboundService';
+import {
+  InboundWhatsAppPayload,
+  InboundWhatsAppProcessingResult,
+  WHATSAPP_BUSINESS_NUMBER,
+  WHATSAPP_BUSINESS_NUMBER_FORMATTED,
+} from '../services/whatsappInboundService';
 
 interface UnifiedInboxProps {
   conversations: Conversation[];
@@ -54,6 +61,7 @@ interface UnifiedInboxProps {
   onUpdateLeadScore: (leadId: string, delta: number) => void;
   onViewLeadInCrm: (leadId: string) => void;
   onProcessInboundEmail?: (payload: InboundEmailPayload) => Promise<InboundProcessingResult>;
+  onProcessInboundWhatsApp?: (payload: InboundWhatsAppPayload) => Promise<InboundWhatsAppProcessingResult>;
   onSyncNow?: () => void;
 }
 
@@ -67,8 +75,10 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
   onToggleAi,
   onMarkAsRead,
   onApproveDraft,
+  onUpdateLeadScore,
   onViewLeadInCrm,
   onProcessInboundEmail,
+  onProcessInboundWhatsApp,
   onSyncNow,
 }) => {
   const [selectedConversationId, setSelectedConversationId] = useState<string>(
@@ -83,6 +93,7 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
   const [replyChannelOverride, setReplyChannelOverride] = useState<Channel | ''>('');
   const [showSimulateModal, setShowSimulateModal] = useState<boolean>(false);
   const [showInboundFlowModal, setShowInboundFlowModal] = useState<boolean>(false);
+  const [showInboundWhatsAppModal, setShowInboundWhatsAppModal] = useState<boolean>(false);
   const [simulatedPlatform, setSimulatedPlatform] = useState<Channel>('WHATSAPP');
   const [simulatedText, setSimulatedText] = useState<string>('Hi, can you send us your B2B package cost breakdown for 5-star Makkah hotels?');
 
@@ -203,34 +214,8 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
   };
 
   // Handle simulating customer message on specific platform
-  const handleSimulateInbound = async () => {
+  const handleSimulateInbound = () => {
     if (!simulatedText.trim()) return;
-
-    if (simulatedPlatform === 'WHATSAPP') {
-      try {
-        const phone = activeContact?.phone || activeContact?.whatsappUserId || '919820252434';
-        const senderName = `${activeContact?.firstName || ''} ${activeContact?.lastName || ''}`.trim() || 'Pilgrimage Lead';
-        const res = await fetch('/api/whatsapp/simulate', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            from: phone,
-            senderName,
-            text: simulatedText,
-            conversationId: activeConversation?.conversationId,
-          }),
-        });
-        const data = await res.json();
-        if (data && data.success) {
-          setShowSimulateModal(false);
-          if (onSyncNow) onSyncNow();
-          return;
-        }
-      } catch (err) {
-        console.warn('Backend WhatsApp simulation fallback:', err);
-      }
-    }
-
     const targetConv = contactConversations.find((c) => c.channel === simulatedPlatform) || activeConversation;
     if (!targetConv) return;
     onSendMessage(targetConv.conversationId, simulatedText, 'CUSTOMER');
@@ -272,7 +257,7 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
       <div className="w-full lg:w-84 border-r border-slate-800 flex flex-col bg-slate-900/90">
         {/* Search Header */}
         <div className="p-3 border-b border-slate-800 space-y-2">
-          {/* Live Inbound Mailbox Trigger & Connected WhatsApp Business Trigger & Sync */}
+          {/* Live Inbound Mailbox & WhatsApp Triggers */}
           <div className="space-y-1.5">
             <div className="flex items-center space-x-1.5">
               <button
@@ -285,9 +270,9 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
                     <span className="text-[11px] font-bold block truncate">{INBOUND_MAILBOX}</span>
                   </div>
                 </div>
-                <span className="flex items-center space-x-1 text-[10px] text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded shrink-0 border border-emerald-500/20">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                  <span>Test Inbound</span>
+                <span className="flex items-center space-x-1 text-[10px] text-blue-400 bg-blue-500/10 px-1.5 py-0.5 rounded shrink-0 border border-blue-500/20">
+                  <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse"></span>
+                  <span>Email</span>
                 </span>
               </button>
 
@@ -302,16 +287,21 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
               )}
             </div>
 
-            {/* WhatsApp Live Business Number Status */}
-            <div className="flex items-center justify-between px-2.5 py-1 rounded-lg bg-emerald-950/40 border border-emerald-500/30 text-emerald-200 text-left">
+            <button
+              onClick={() => setShowInboundWhatsAppModal(true)}
+              className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-emerald-950/40 hover:bg-emerald-900/50 border border-emerald-500/30 text-emerald-200 transition text-left group"
+            >
               <div className="flex items-center space-x-2 truncate">
-                <MessageCircle className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                <span className="text-[11px] font-bold font-mono text-emerald-300 truncate">+91 9820252434</span>
+                <MessageSquare className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                <div className="truncate">
+                  <span className="text-[11px] font-bold block truncate font-mono">{WHATSAPP_BUSINESS_NUMBER_FORMATTED}</span>
+                </div>
               </div>
-              <span className="text-[9px] font-semibold text-emerald-400 bg-emerald-500/20 px-1.5 py-0.5 rounded uppercase tracking-wider">
-                WhatsApp Live
+              <span className="flex items-center space-x-1 text-[10px] text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded shrink-0 border border-emerald-500/20">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                <span>WhatsApp Flow</span>
               </span>
-            </div>
+            </button>
           </div>
 
           <div className="relative">
@@ -523,6 +513,12 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
                       {renderChannelIcon(activeConversation.channel, 3.5)}
                       <span className="capitalize">{activeConversation.channel.toLowerCase()}</span>
                     </div>
+                    {(activeLead?.demoStatus === 'BOOKED' || activeLead?.status === 'DEMO_BOOKED') && (
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 flex items-center gap-1">
+                        <Sparkles className="w-2.5 h-2.5 text-emerald-400" />
+                        <span>Demo Booked</span>
+                      </span>
+                    )}
                   </div>
                   <p className="text-xs text-slate-400">
                     {activeContact.jobTitle || 'Decision Maker'} at{' '}
@@ -660,37 +656,6 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
                       Gmail Thread: {activeConversation.gmailThreadId.slice(0, 16)}...
                     </span>
                   )}
-                  {activeConversation.managementMode && (
-                    <span className={`px-1.5 py-0.5 rounded text-[10px] font-sans font-semibold uppercase ${
-                      activeConversation.managementMode === 'AUTONOMOUS'
-                        ? 'bg-emerald-500/20 text-emerald-300'
-                        : activeConversation.managementMode === 'REVIEW'
-                        ? 'bg-amber-500/20 text-amber-300'
-                        : 'bg-slate-700 text-slate-300'
-                    }`}>
-                      {activeConversation.managementMode} MODE
-                    </span>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* WhatsApp Metadata banner if WhatsApp channel */}
-            {!isUnifiedAllPlatforms && activeConversation.channel === 'WHATSAPP' && (
-              <div className="px-4 py-2 bg-slate-900 border-b border-slate-800 text-xs text-slate-300 flex items-center justify-between">
-                <div className="flex items-center space-x-2 truncate">
-                  <span className="flex items-center space-x-1.5 font-semibold text-emerald-400">
-                    <MessageCircle className="w-3.5 h-3.5" />
-                    <span>WhatsApp Business Live</span>
-                  </span>
-                  <span className="text-slate-400 font-mono text-[11px]">
-                    • Contact Phone: {activeContact.phone || activeContact.whatsappUserId || activeConversation.customerPhone || '+91 9820252434'}
-                  </span>
-                </div>
-                <div className="flex items-center space-x-3 text-[11px] text-slate-400 font-mono">
-                  <span className="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px] font-sans font-semibold">
-                    Business No: +91 9820252434
-                  </span>
                   {activeConversation.managementMode && (
                     <span className={`px-1.5 py-0.5 rounded text-[10px] font-sans font-semibold uppercase ${
                       activeConversation.managementMode === 'AUTONOMOUS'
@@ -1061,6 +1026,54 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
             </div>
           )}
 
+          {/* Demo Booking (Single Source of Truth) */}
+          {activeLead && (
+            <div className="p-3 bg-slate-800/80 rounded-lg border border-slate-700/60 flex items-center justify-between">
+              <div>
+                <span className="text-xs font-semibold text-slate-200 flex items-center gap-1">
+                  <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Demo Status</span>
+                </span>
+                <span className="text-[11px] text-slate-400 block mt-0.5">
+                  {activeLead.demoStatus === 'BOOKED' || activeLead.status === 'DEMO_BOOKED'
+                    ? `Booked (${activeLead.demoSource || 'Manual'})`
+                    : 'Not Booked'}
+                </span>
+              </div>
+              <button
+                onClick={async () => {
+                  const isBooked = activeLead.demoStatus === 'BOOKED' || activeLead.status === 'DEMO_BOOKED';
+                  const nextStatus = isBooked ? 'NOT_BOOKED' : 'BOOKED';
+                  try {
+                    await fetch(`/api/campaigns/lead/${activeLead.leadId}/demo-status`, {
+                      method: 'PATCH',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        demoStatus: nextStatus,
+                        demoSource: 'MANUAL',
+                      }),
+                    });
+                    // Also fire score delta or update to trigger refresh
+                    onUpdateLeadScore(activeLead.leadId, 0);
+                  } catch (e) {
+                    console.error('Error toggling demo status:', e);
+                  }
+                }}
+                className={`px-2.5 py-1 rounded text-xs font-semibold flex items-center gap-1 border transition ${
+                  activeLead.demoStatus === 'BOOKED' || activeLead.status === 'DEMO_BOOKED'
+                    ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 hover:bg-emerald-500/30'
+                    : 'bg-slate-700 text-slate-300 border-slate-600 hover:bg-slate-600'
+                }`}
+              >
+                <span>
+                  {activeLead.demoStatus === 'BOOKED' || activeLead.status === 'DEMO_BOOKED'
+                    ? 'Booked ✓'
+                    : 'Book Demo'}
+                </span>
+              </button>
+            </div>
+          )}
+
           {/* Section 23 Conversation Memory (Customer Facts & Extracted Requirements) */}
           <div className="space-y-3">
             <h5 className="text-xs font-semibold text-slate-300 flex items-center space-x-1">
@@ -1240,6 +1253,46 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
             setSelectedConversationId(convId);
           }}
           onNavigateToCrmLead={(leadId) => {
+            onViewLeadInCrm(leadId);
+          }}
+        />
+      )}
+
+      {/* Inbound WhatsApp Flow Simulator Modal for +919820252434 */}
+      {showInboundWhatsAppModal && (
+        <InboundWhatsAppFlowModal
+          isOpen={showInboundWhatsAppModal}
+          onClose={() => setShowInboundWhatsAppModal(false)}
+          contacts={contacts}
+          leads={leads}
+          conversations={conversations}
+          messages={messages}
+          knowledgeDocs={knowledgeDocs}
+          settings={{
+            autoPilot: true,
+            defaultTone: 'PROFESSIONAL',
+            humanHandoffThreshold: 0.7,
+            officeHoursOnly: false,
+            maxAutoRepliesPerLead: 5,
+          } as any}
+          onInboundComplete={(res) => {
+            if (onProcessInboundWhatsApp && res.incomingMessage) {
+              onProcessInboundWhatsApp({
+                from: res.contact.phone || '',
+                fromName: `${res.contact.firstName} ${res.contact.lastName}`,
+                to: WHATSAPP_BUSINESS_NUMBER,
+                body: res.incomingMessage.text,
+                companyName: res.contact.companyName,
+              }).catch(() => {});
+            }
+            if (res.conversation) {
+              setSelectedConversationId(res.conversation.conversationId);
+            }
+          }}
+          onNavigateToConversation={(convId) => {
+            setSelectedConversationId(convId);
+          }}
+          onNavigateToLead={(leadId) => {
             onViewLeadInCrm(leadId);
           }}
         />

@@ -38,7 +38,8 @@ export function getSmtpConfig() {
   const port = parseInt(process.env.SMTP_PORT || '465', 10);
   const secure = process.env.SMTP_SECURE === 'true' || port === 465;
   const user = process.env.SMTP_USER || 'amaavigo@gmail.com';
-  const pass = process.env.SMTP_PASS || '';
+  const rawPass = process.env.SMTP_PASS || '';
+  const pass = rawPass.trim();
   const from = process.env.SMTP_FROM || `Umrah360 Automation <${user}>`;
 
   const configured = Boolean(host && pass);
@@ -46,26 +47,31 @@ export function getSmtpConfig() {
   return { host, port, secure, user, pass, from, configured };
 }
 
-export function createTransporter() {
+export function createTransporter(customPort?: number, customSecure?: boolean) {
   const config = getSmtpConfig();
 
   if (!config.configured) {
     return null;
   }
 
+  const port = customPort ?? config.port;
+  const secure = customSecure !== undefined ? customSecure : (config.secure && port === 465);
+  // Clean password of any spaces (standard Gmail App Password formatted with spaces)
+  const cleanPass = config.pass.replace(/\s+/g, '');
+
   return nodemailer.createTransport({
     host: config.host,
-    port: config.port,
-    secure: config.secure,
+    port,
+    secure,
     auth: {
       user: config.user,
-      pass: config.pass,
+      pass: cleanPass,
     },
     tls: {
       rejectUnauthorized: false, // Prevents self-signed cert blocks on custom mail hosts
     },
-    connectionTimeout: 10000,
-    greetingTimeout: 5000,
+    connectionTimeout: 15000,
+    greetingTimeout: 10000,
   });
 }
 
@@ -135,7 +141,7 @@ export async function sendLiveEmail(params: SendMailParams): Promise<SendMailRes
         throw new Error('SMTP transporter creation failed');
       }
 
-      const info = await transporter.sendMail({
+      const mailOptions = {
         from: config.from,
         to: params.to,
         replyTo: params.replyTo || config.user,
@@ -148,7 +154,24 @@ export async function sendLiveEmail(params: SendMailParams): Promise<SendMailRes
           'X-Mailer': 'Umrah360-AI-Automated-Platform',
           'X-Automated-By': config.user,
         },
-      });
+      };
+
+      let info: any;
+      try {
+        info = await transporter.sendMail(mailOptions);
+      } catch (firstErr: any) {
+        if (config.port === 465 && (firstErr?.code === 'ETIMEDOUT' || firstErr?.code === 'ESOCKET' || firstErr?.command === 'CONN')) {
+          console.warn('[SMTP Live] Port 465 connection issue, attempting port 587 fallback...');
+          const fallbackTransporter = createTransporter(587, false);
+          if (fallbackTransporter) {
+            info = await fallbackTransporter.sendMail(mailOptions);
+          } else {
+            throw firstErr;
+          }
+        } else {
+          throw firstErr;
+        }
+      }
 
       console.log(`[SMTP Live] Successfully sent email to ${params.to}, messageId: ${info.messageId}`);
 

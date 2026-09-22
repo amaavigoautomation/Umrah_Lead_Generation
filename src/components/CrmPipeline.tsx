@@ -44,6 +44,7 @@ interface CrmPipelineProps {
   activities: LeadActivity[];
   onOpenConversation: (conversationId?: string, leadId?: string) => void;
   selectedLeadId?: string | null;
+  onUpdateLeadStatus?: (leadId: string, newStatus: LeadStatus) => void;
 }
 
 type ViewMode = 'PIPELINE' | 'TABLE' | 'GRID';
@@ -55,6 +56,7 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
   activities,
   onOpenConversation,
   selectedLeadId: initialSelectedLeadId,
+  onUpdateLeadStatus,
 }) => {
   const [viewMode, setViewMode] = useState<ViewMode>('PIPELINE');
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(
@@ -66,6 +68,27 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [sortField, setSortField] = useState<SortField>('score');
   const [sortAsc, setSortAsc] = useState<boolean>(false);
+
+  const handleLeadStatusChange = async (leadId: string, newStatus: LeadStatus) => {
+    if (onUpdateLeadStatus) {
+      onUpdateLeadStatus(leadId, newStatus);
+    }
+    if (newStatus === 'DEMO_BOOKED') {
+      try {
+        await fetch(`/api/campaigns/lead/${leadId}/demo-status`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ demoStatus: 'BOOKED', demoSource: 'MANUAL' }),
+        });
+      } catch {}
+    }
+  };
+
+  const handleToggleLeadDemoStatus = async (lead: Lead) => {
+    const isBooked = lead.demoStatus === 'BOOKED' || lead.status === 'DEMO_BOOKED';
+    const nextStatus: LeadStatus = isBooked ? 'QUALIFIED' : 'DEMO_BOOKED';
+    handleLeadStatusChange(lead.leadId, nextStatus);
+  };
 
   // Active lead for Split Pipeline view or Inspect Modal
   const activeDetailLeadId = inspectModalLeadId || selectedLeadId || leads[0]?.leadId;
@@ -125,6 +148,7 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
   const outboundCount = leads.filter((l) => l.leadType === 'OUTBOUND').length;
   const qualifiedCount = leads.filter((l) => l.status === 'QUALIFIED' || l.leadScore >= 80).length;
   const highIntentCount = leads.filter((l) => l.intent === 'HIGH').length;
+  const demoBookedCount = leads.filter((l) => l.demoStatus === 'BOOKED' || l.status === 'DEMO_BOOKED').length;
 
   const toggleSort = (field: SortField) => {
     if (sortField === field) {
@@ -138,7 +162,7 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
   return (
     <div className="max-w-7xl mx-auto p-4 space-y-6">
       {/* Top CRM Dashboard Metrics (Section 56) */}
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-6 gap-3">
         <div className="bg-slate-900 border border-slate-800 p-3.5 rounded-xl">
           <span className="text-xs text-slate-400 block font-medium">Total CRM Leads</span>
           <span className="text-2xl font-bold text-white mt-1 block">{totalLeads}</span>
@@ -148,16 +172,23 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
           <span className="text-2xl font-bold text-teal-400 mt-1 block">{inboundCount}</span>
         </div>
         <div className="bg-slate-900 border border-slate-800 p-3.5 rounded-xl">
-          <span className="text-xs text-slate-400 block font-medium">Outbound (Apollo)</span>
+          <span className="text-xs text-slate-400 block font-medium">Outbound Leads</span>
           <span className="text-2xl font-bold text-purple-400 mt-1 block">{outboundCount}</span>
         </div>
         <div className="bg-slate-900 border border-slate-800 p-3.5 rounded-xl">
           <span className="text-xs text-slate-400 block font-medium">AI Qualified</span>
           <span className="text-2xl font-bold text-emerald-400 mt-1 block">{qualifiedCount}</span>
         </div>
-        <div className="bg-slate-900 border border-slate-800 p-3.5 rounded-xl col-span-2 sm:col-span-1">
+        <div className="bg-slate-900 border border-slate-800 p-3.5 rounded-xl">
           <span className="text-xs text-slate-400 block font-medium">High Intent</span>
           <span className="text-2xl font-bold text-amber-400 mt-1 block">{highIntentCount}</span>
+        </div>
+        <div className="bg-emerald-950/20 border border-emerald-500/30 p-3.5 rounded-xl">
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-emerald-400 block font-semibold">Demo Booked</span>
+            <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
+          </div>
+          <span className="text-2xl font-bold text-emerald-300 mt-1 block">{demoBookedCount}</span>
         </div>
       </div>
 
@@ -321,7 +352,14 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
 
           {/* Right Column: Lead 360 Profile & Timeline */}
           <div className="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-xl p-6 shadow-lg overflow-y-auto h-[calc(100vh-18rem)] space-y-6">
-            {renderLeadDetail(activeLead, activeContact, activeActivities, onOpenConversation)}
+            {renderLeadDetail(
+              activeLead,
+              activeContact,
+              activeActivities,
+              onOpenConversation,
+              (newStatus) => handleLeadStatusChange(activeLead.leadId, newStatus),
+              () => handleToggleLeadDemoStatus(activeLead)
+            )}
           </div>
         </div>
       )}
@@ -488,9 +526,17 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
 
                         {/* Status */}
                         <td className="p-3.5">
-                          <span className="px-2 py-0.5 rounded-md bg-slate-800 border border-slate-700 text-slate-200 text-[11px] font-medium">
-                            {lead.status}
-                          </span>
+                          <div className="flex flex-col gap-1 items-start">
+                            <span className="px-2 py-0.5 rounded-md bg-slate-800 border border-slate-700 text-slate-200 text-[11px] font-medium">
+                              {lead.status}
+                            </span>
+                            {(lead.demoStatus === 'BOOKED' || lead.status === 'DEMO_BOOKED') && (
+                              <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 flex items-center gap-1">
+                                <Sparkles className="w-2.5 h-2.5 text-emerald-400" />
+                                <span>Demo Booked</span>
+                              </span>
+                            )}
+                          </div>
                         </td>
 
                         {/* Identified Requirements */}
@@ -668,10 +714,17 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
               <X className="w-5 h-5" />
             </button>
 
-            {renderLeadDetail(activeLead, activeContact, activeActivities, (convId, leadId) => {
-              setInspectModalLeadId(null);
-              onOpenConversation(convId, leadId);
-            })}
+            {renderLeadDetail(
+              activeLead,
+              activeContact,
+              activeActivities,
+              (convId, leadId) => {
+                setInspectModalLeadId(null);
+                onOpenConversation(convId, leadId);
+              },
+              (newStatus) => handleLeadStatusChange(activeLead.leadId, newStatus),
+              () => handleToggleLeadDemoStatus(activeLead)
+            )}
           </div>
         </div>
       )}
@@ -684,7 +737,9 @@ function renderLeadDetail(
   selectedLead: Lead,
   selectedContact: Contact | undefined,
   selectedActivities: LeadActivity[],
-  onOpenConversation: (conversationId?: string, leadId?: string) => void
+  onOpenConversation: (conversationId?: string, leadId?: string) => void,
+  onUpdateStatus?: (newStatus: LeadStatus) => void,
+  onToggleDemo?: () => void
 ) {
   if (!selectedLead || !selectedContact) {
     return (
@@ -693,6 +748,8 @@ function renderLeadDetail(
       </div>
     );
   }
+
+  const isDemoBooked = selectedLead.demoStatus === 'BOOKED' || selectedLead.status === 'DEMO_BOOKED';
 
   return (
     <div className="space-y-6">
@@ -707,6 +764,8 @@ function renderLeadDetail(
               className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${
                 selectedLead.status === 'QUALIFIED'
                   ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                  : selectedLead.status === 'DEMO_BOOKED'
+                  ? 'bg-emerald-500/30 text-emerald-300 border border-emerald-500/50'
                   : 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
               }`}
             >
@@ -727,6 +786,47 @@ function renderLeadDetail(
         >
           <MessageCircle className="w-4 h-4" />
           <span>Open Omnichannel Inbox</span>
+        </button>
+      </div>
+
+      {/* CRM Status & Single Source of Truth Demo Booking Action Bar */}
+      <div className="p-3 bg-slate-800/60 rounded-xl border border-slate-700/60 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-semibold text-slate-400">Pipeline Status:</span>
+          <select
+            value={selectedLead.status}
+            onChange={(e) => onUpdateStatus?.(e.target.value as LeadStatus)}
+            className="px-2.5 py-1 bg-slate-900 border border-slate-700 rounded-lg text-xs font-semibold text-slate-200 focus:outline-none focus:border-emerald-500"
+          >
+            <option value="NEW">NEW</option>
+            <option value="ENGAGED">ENGAGED</option>
+            <option value="QUALIFIED">QUALIFIED</option>
+            <option value="DEMO_SCHEDULED">DEMO SCHEDULED</option>
+            <option value="DEMO_BOOKED">DEMO BOOKED</option>
+            <option value="PROPOSAL_SENT">PROPOSAL SENT</option>
+            <option value="CLOSED_WON">CLOSED WON</option>
+            <option value="CLOSED_LOST">CLOSED LOST</option>
+            <option value="NOT_INTERESTED">NOT INTERESTED</option>
+            <option value="UNSUBSCRIBED">UNSUBSCRIBED</option>
+            <option value="HUMAN_HANDOFF">HUMAN HANDOFF</option>
+          </select>
+        </div>
+
+        <button
+          type="button"
+          onClick={onToggleDemo}
+          className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition flex items-center gap-1.5 border ${
+            isDemoBooked
+              ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 hover:bg-emerald-500/30'
+              : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700 hover:text-white'
+          }`}
+        >
+          <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
+          <span>
+            {isDemoBooked
+              ? `Demo Booked (${selectedLead.demoSource || 'Manual'}) - Click to Toggle`
+              : 'Mark as Demo Booked'}
+          </span>
         </button>
       </div>
 

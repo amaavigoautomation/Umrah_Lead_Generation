@@ -1,5 +1,11 @@
 import { ImapFlow } from 'imapflow';
 import { simpleParser, ParsedMail } from 'mailparser';
+import {
+  initPersistentIdempotencyStore,
+  isMessageAlreadyProcessed,
+  recordProcessedInboundEmail,
+  normalizeIdentifier,
+} from './firestorePersistence.js';
 
 export interface FetchedInboundEmail {
   uid: number;
@@ -40,6 +46,11 @@ export function getImapConfig() {
 
 // In-memory set of already processed message IDs & UIDs to prevent duplicate ingestion
 const processedEmailIdentifiers = new Set<string>();
+
+// Startup timestamp tracking to guarantee version restores / restarts never re-send historical emails
+const SERVER_BOOT_TIMESTAMP = Date.now();
+let isFirestoreSynced = false;
+let isFirstPollCycleCompleted = false;
 
 /**
  * Creates a resilient ImapFlow instance with pre-attached error handlers
@@ -230,33 +241,92 @@ export async function pollUnreadEmails(markAsSeen: boolean = true): Promise<Imap
         };
       }
 
+      // Ensure Firestore idempotency store is initialized before inspecting mailbox
+      if (!isFirestoreSynced) {
+        try {
+          await initPersistentIdempotencyStore();
+          isFirestoreSynced = true;
+        } catch (e) {
+          console.warn('[IMAP Sync] Notice initializing Firestore idempotency store:', e);
+        }
+      }
+
       // Inspect the latest 30 messages in the mailbox, prioritizing the newest sequence numbers first
       const rawCandidates: { seq: number; msgId: string; uidStr: string }[] = [];
       const inspectCount = Math.min(30, totalMessages);
       const startSeq = Math.max(1, totalMessages - inspectCount + 1);
       const range = `${startSeq}:*`;
 
-      for await (const message of client.fetch(range, { envelope: true, flags: true, uid: true })) {
+      for await (const message of client.fetch(range, { envelope: true, flags: true, uid: true, internalDate: true })) {
         const msgId = message.envelope?.messageId || `seq-${message.seq}`;
         const uidStr = String(message.uid);
+        const normId = normalizeIdentifier(msgId);
 
-        // If already ingested in this server session, skip
-        if (processedEmailIdentifiers.has(msgId) || processedEmailIdentifiers.has(uidStr)) {
+        // 1. If already ingested in this server session, skip
+        if (processedEmailIdentifiers.has(normId) || processedEmailIdentifiers.has(msgId) || processedEmailIdentifiers.has(uidStr)) {
           continue;
         }
 
         const fromAddress = message.envelope?.from?.[0]?.address || '';
         const subject = message.envelope?.subject || '';
 
-        // Skip newsletters and system bots
+        // 2. Skip newsletters and system bots
         if (isBotOrNewsletter(fromAddress, subject)) {
+          processedEmailIdentifiers.add(normId);
           processedEmailIdentifiers.add(msgId);
           processedEmailIdentifiers.add(uidStr);
           continue;
         }
 
+        // 3. Skip messages already marked as SEEN/read in IMAP
+        const isSeen = Boolean(message.flags && message.flags.has('\\Seen'));
+        if (isSeen) {
+          processedEmailIdentifiers.add(normId);
+          processedEmailIdentifiers.add(msgId);
+          processedEmailIdentifiers.add(uidStr);
+          continue;
+        }
+
+        // 4. Check persistent Firestore idempotency store
+        const firestoreCheck = await isMessageAlreadyProcessed(msgId, fromAddress);
+        if (firestoreCheck.processed) {
+          processedEmailIdentifiers.add(normId);
+          processedEmailIdentifiers.add(msgId);
+          processedEmailIdentifiers.add(uidStr);
+          continue;
+        }
+
+        // 5. Version Restore / Cold-Start Protection:
+        // On the very first poll cycle after server restart or version restore,
+        // any existing inbox message that arrived before server boot is baselined
+        // and suppressed so historical prospects never receive duplicate email blasts!
+        const msgInternalTime = message.internalDate ? new Date(message.internalDate).getTime() : 0;
+        if (!isFirstPollCycleCompleted && msgInternalTime > 0 && msgInternalTime < SERVER_BOOT_TIMESTAMP - 15000) {
+          console.log(`[IMAP Guard] Baselining historical email ${msgId} from ${fromAddress} (arrived before server boot/restore).`);
+          processedEmailIdentifiers.add(normId);
+          processedEmailIdentifiers.add(msgId);
+          processedEmailIdentifiers.add(uidStr);
+          await recordProcessedInboundEmail({
+            messageId: msgId,
+            fromEmail: fromAddress,
+            subject,
+            aiReplied: false,
+            status: 'BASELINE',
+            reason: 'Historical email baselined on server start/restore to prevent re-sending',
+            timestamp: message.internalDate ? new Date(message.internalDate).toISOString() : new Date().toISOString(),
+          });
+          if (markAsSeen) {
+            try {
+              await client.messageFlagsAdd(message.seq, ['\\Seen']);
+            } catch {}
+          }
+          continue;
+        }
+
         rawCandidates.push({ seq: message.seq, msgId, uidStr });
       }
+
+      isFirstPollCycleCompleted = true;
 
       // Sort candidate sequences descending: NEWEST message processed first
       rawCandidates.sort((a, b) => b.seq - a.seq);
@@ -302,8 +372,23 @@ export async function pollUnreadEmails(markAsSeen: boolean = true): Promise<Imap
 
           // Deterministic message ID: Never use Date.now() so recurring polls produce the exact same ID
           const finalMsgId = parsed.messageId || `<inbound-seq-${seq}-${parsed.date ? parsed.date.getTime() : 'nodate'}@${config.user.split('@')[1] || 'gmail.com'}>`;
+          const finalNormId = normalizeIdentifier(finalMsgId);
 
-          if (processedEmailIdentifiers.has(finalMsgId)) {
+          if (processedEmailIdentifiers.has(finalMsgId) || processedEmailIdentifiers.has(finalNormId)) {
+            continue;
+          }
+
+          // Double check Firestore idempotency after parsing full messageId
+          const parsedCheck = await isMessageAlreadyProcessed(finalMsgId, fromAddress);
+          if (parsedCheck.processed) {
+            processedEmailIdentifiers.add(finalMsgId);
+            processedEmailIdentifiers.add(finalNormId);
+            processedEmailIdentifiers.add(String(seq));
+            if (markAsSeen) {
+              try {
+                await client.messageFlagsAdd(seq, ['\\Seen']);
+              } catch {}
+            }
             continue;
           }
 

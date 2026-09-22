@@ -34,19 +34,6 @@ export const DEFAULT_SETTINGS: SystemSettings = {
     LINKEDIN: 'REVIEW',
     WEBSITE: 'AUTO',
   },
-  whatsappMode: 'AUTO',
-  whatsappConfig: {
-    channel: 'WHATSAPP',
-    displayPhoneNumber: '+91 9820252434',
-    metaPhoneNumberId: '104829102849102',
-    metaBusinessAccountId: '2948102948190',
-    mode: 'AUTO',
-    aiEnabled: true,
-    webhookStatus: 'CONNECTED',
-    connected: true,
-    webhookUrl: '/api/webhook/whatsapp',
-    updatedAt: new Date().toISOString(),
-  },
   sendingAccounts: [
     { id: 'acc-1', email: 'sales@umrah360.in', name: 'Umrah360 Sales', isDefault: true },
     { id: 'acc-2', email: 'hello@umrah360.in', name: 'Umrah360 Concierge', isDefault: false },
@@ -58,7 +45,6 @@ export const DEFAULT_SETTINGS: SystemSettings = {
   webhookEndpoint: 'https://api.umrah360.in/v1/webhooks',
   updatedAt: new Date().toISOString(),
 };
-
 
 // Initial Indian Umrah Operators Campaign (Section 7, Section 72)
 export const INITIAL_CAMPAIGN: OutboundCampaign = {

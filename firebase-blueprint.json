@@ -100,6 +100,133 @@
         "timestamp": { "type": "string" }
       },
       "required": ["activityId", "leadId", "title", "timestamp"]
+    },
+    "ProcessedInboundEmail": {
+      "title": "ProcessedInboundEmail",
+      "description": "Cross-session and cross-restore persistent email idempotency ledger to prevent duplicate outbound replies",
+      "type": "object",
+      "properties": {
+        "messageId": { "type": "string", "maxLength": 512 },
+        "cleanKey": { "type": "string", "maxLength": 512 },
+        "fromEmail": { "type": "string", "format": "email", "maxLength": 256 },
+        "subject": { "type": "string", "maxLength": 512 },
+        "aiReplied": { "type": "boolean" },
+        "repliedAt": { "type": "string" },
+        "replyMessageId": { "type": "string", "maxLength": 512 },
+        "status": { "type": "string", "enum": ["PROCESSED", "REPLIED", "SKIPPED", "BASELINE"] },
+        "reason": { "type": "string", "maxLength": 512 },
+        "timestamp": { "type": "string" }
+      },
+      "required": ["messageId", "status", "timestamp"]
+    },
+    "EmailTemplate": {
+      "title": "EmailTemplate",
+      "description": "Predefined outbound email templates with variable substitution",
+      "type": "object",
+      "properties": {
+        "templateId": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 256 },
+        "subject": { "type": "string", "maxLength": 512 },
+        "body": { "type": "string", "maxLength": 16384 },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["templateId", "name", "subject", "body"]
+    },
+    "Campaign": {
+      "title": "Campaign",
+      "description": "Outbound sales campaign record",
+      "type": "object",
+      "properties": {
+        "campaignId": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 256 },
+        "type": { "type": "string", "enum": ["EMAIL", "WHATSAPP", "WHATSAPP_EMAIL"] },
+        "status": { "type": "string", "enum": ["DRAFT", "RUNNING", "PAUSED", "COMPLETED", "FAILED"] },
+        "templateId": { "type": "string", "maxLength": 128 },
+        "templateName": { "type": "string", "maxLength": 256 },
+        "sourceFileName": { "type": "string", "maxLength": 256 },
+        "totalLeads": { "type": "number" },
+        "sentCount": { "type": "number" },
+        "pendingCount": { "type": "number" },
+        "failedCount": { "type": "number" },
+        "repliedCount": { "type": "number" },
+        "demoBookedCount": { "type": "number" },
+        "currentRunId": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["campaignId", "name", "type", "status"]
+    },
+    "CampaignLead": {
+      "title": "CampaignLead",
+      "description": "Lead member uploaded and linked to an outbound campaign",
+      "type": "object",
+      "properties": {
+        "campaignLeadId": { "type": "string", "maxLength": 128 },
+        "campaignId": { "type": "string", "maxLength": 128 },
+        "leadId": { "type": "string", "maxLength": 128 },
+        "campaignRunId": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 256 },
+        "companyName": { "type": "string", "maxLength": 256 },
+        "email": { "type": "string", "format": "email", "maxLength": 256 },
+        "phone": { "type": "string", "maxLength": 64 },
+        "designation": { "type": "string", "maxLength": 128 },
+        "sourceFile": { "type": "string", "maxLength": 256 },
+        "rowNumber": { "type": "number" },
+        "sendStatus": { "type": "string", "enum": ["PENDING", "SENDING", "SENT", "FAILED", "PAUSED", "COMPLETED"] },
+        "replyStatus": { "type": "string", "enum": ["NOT_REPLIED", "REPLIED"] },
+        "demoStatus": { "type": "string", "enum": ["NOT_BOOKED", "BOOKED"] },
+        "demoIntent": { "type": "boolean" },
+        "demoSource": { "type": "string", "enum": ["AUTOMATIC", "MANUAL"] },
+        "demoBookedAt": { "type": "string" },
+        "lastSentAt": { "type": "string" },
+        "repliedAt": { "type": "string" },
+        "sendCount": { "type": "number" },
+        "lastError": { "type": "string", "maxLength": 1024 },
+        "gmailMessageId": { "type": "string", "maxLength": 256 },
+        "gmailThreadId": { "type": "string", "maxLength": 256 },
+        "conversationId": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["campaignLeadId", "campaignId", "email", "sendStatus"]
+    },
+    "CampaignRun": {
+      "title": "CampaignRun",
+      "description": "Execution instance tracking history of campaign runs and restarts",
+      "type": "object",
+      "properties": {
+        "runId": { "type": "string", "maxLength": 128 },
+        "campaignId": { "type": "string", "maxLength": 128 },
+        "runNumber": { "type": "number" },
+        "status": { "type": "string", "enum": ["RUNNING", "PAUSED", "COMPLETED", "FAILED"] },
+        "templateId": { "type": "string", "maxLength": 128 },
+        "totalLeads": { "type": "number" },
+        "sentCount": { "type": "number" },
+        "startedAt": { "type": "string" },
+        "completedAt": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["runId", "campaignId", "runNumber", "status"]
+    },
+    "CampaignSendHistory": {
+      "title": "CampaignSendHistory",
+      "description": "Send audit log and persistent duplicate protection for cold outreach",
+      "type": "object",
+      "properties": {
+        "historyId": { "type": "string", "maxLength": 128 },
+        "campaignId": { "type": "string", "maxLength": 128 },
+        "campaignRunId": { "type": "string", "maxLength": 128 },
+        "campaignLeadId": { "type": "string", "maxLength": 128 },
+        "email": { "type": "string", "format": "email", "maxLength": 256 },
+        "templateId": { "type": "string", "maxLength": 128 },
+        "subject": { "type": "string", "maxLength": 512 },
+        "gmailMessageId": { "type": "string", "maxLength": 256 },
+        "sentAt": { "type": "string" },
+        "status": { "type": "string", "enum": ["SENT", "FAILED"] },
+        "error": { "type": "string", "maxLength": 512 }
+      },
+      "required": ["historyId", "campaignId", "email", "sentAt", "status"]
     }
   },
   "firestore": {
@@ -122,6 +249,30 @@
     "/lead_activities/{activityId}": {
       "schema": "LeadActivity",
       "description": "Chronological CRM and lead timeline activities"
+    },
+    "/processed_inbound_emails/{docId}": {
+      "schema": "ProcessedInboundEmail",
+      "description": "Persistent cross-restore idempotency ledger preventing duplicate email dispatch"
+    },
+    "/email_templates/{templateId}": {
+      "schema": "EmailTemplate",
+      "description": "Predefined cold outreach email templates"
+    },
+    "/campaigns/{campaignId}": {
+      "schema": "Campaign",
+      "description": "Outbound prospecting campaigns"
+    },
+    "/campaign_leads/{campaignLeadId}": {
+      "schema": "CampaignLead",
+      "description": "Campaign leads uploaded via CSV/XLS/XLSX"
+    },
+    "/campaign_runs/{runId}": {
+      "schema": "CampaignRun",
+      "description": "Historical and active run executions per campaign"
+    },
+    "/campaign_send_history/{historyId}": {
+      "schema": "CampaignSendHistory",
+      "description": "Cross-restart and cross-session email send ledger ensuring no duplicates"
     }
   }
 }

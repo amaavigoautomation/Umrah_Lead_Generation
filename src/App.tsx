@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Navbar, ActiveTab } from './components/Navbar';
 import { UnifiedInbox } from './components/UnifiedInbox';
+import { CampaignManagement } from './components/CampaignManagement';
 import { OutboundCampaigns } from './components/OutboundCampaigns';
 import { CrmPipeline } from './components/CrmPipeline';
 import { KnowledgeBaseView } from './components/KnowledgeBaseView';
@@ -36,6 +37,13 @@ import {
   InboundEmailPayload,
   InboundProcessingResult,
 } from './services/emailInboundService';
+import {
+  processInboundWhatsAppMessage,
+  InboundWhatsAppPayload,
+  InboundWhatsAppProcessingResult,
+  WHATSAPP_BUSINESS_NUMBER,
+  WHATSAPP_BUSINESS_NUMBER_FORMATTED,
+} from './services/whatsappInboundService';
 import { db, isFirebaseConfigured } from './firebase/config';
 import { collection, doc, setDoc, getDoc, getDocs, updateDoc, query, orderBy, onSnapshot } from 'firebase/firestore';
 
@@ -65,10 +73,10 @@ function deduplicateMessages(msgs: Message[]): Message[] {
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<ActiveTab>('inbox');
-  const [contacts, setContacts] = useState<Contact[]>(INITIAL_CONTACTS);
-  const [leads, setLeads] = useState<Lead[]>(INITIAL_LEADS);
-  const [conversations, setConversations] = useState<Conversation[]>(INITIAL_CONVERSATIONS);
-  const [messagesState, setMessagesState] = useState<Message[]>(deduplicateMessages(INITIAL_MESSAGES));
+  const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ? [] : INITIAL_CONTACTS);
+  const [leads, setLeads] = useState<Lead[]>(() => isFirebaseConfigured ? [] : INITIAL_LEADS);
+  const [conversations, setConversations] = useState<Conversation[]>(() => isFirebaseConfigured ? [] : INITIAL_CONVERSATIONS);
+  const [messagesState, setMessagesState] = useState<Message[]>(() => isFirebaseConfigured ? [] : deduplicateMessages(INITIAL_MESSAGES));
   const setMessages = (updater: Message[] | ((prev: Message[]) => Message[])) => {
     setMessagesState((prev) => {
       const next = typeof updater === 'function' ? updater(prev) : updater;
@@ -76,10 +84,10 @@ export default function App() {
     });
   };
   const messages = messagesState;
-  const [campaigns, setCampaigns] = useState<OutboundCampaign[]>([INITIAL_CAMPAIGN]);
-  const [prospects, setProspects] = useState<OutboundProspect[]>(INITIAL_PROSPECTS);
-  const [activities, setActivities] = useState<LeadActivity[]>(INITIAL_ACTIVITIES);
-  const [knowledgeDocs, setKnowledgeDocs] = useState<KnowledgeDocument[]>(INITIAL_KNOWLEDGE_DOCUMENTS);
+  const [campaigns, setCampaigns] = useState<OutboundCampaign[]>(() => isFirebaseConfigured ? [] : [INITIAL_CAMPAIGN]);
+  const [prospects, setProspects] = useState<OutboundProspect[]>(() => isFirebaseConfigured ? [] : INITIAL_PROSPECTS);
+  const [activities, setActivities] = useState<LeadActivity[]>(() => isFirebaseConfigured ? [] : INITIAL_ACTIVITIES);
+  const [knowledgeDocs, setKnowledgeDocs] = useState<KnowledgeDocument[]>(() => isFirebaseConfigured ? [] : INITIAL_KNOWLEDGE_DOCUMENTS);
   const [settings, setSettings] = useState<SystemSettings>(DEFAULT_SETTINGS);
   const [selectedLeadIdForCrm, setSelectedLeadIdForCrm] = useState<string | null>(null);
   const [isFirebaseActive, setIsFirebaseActive] = useState<boolean>(isFirebaseConfigured);
@@ -88,6 +96,9 @@ export default function App() {
   useEffect(() => {
     let unsubConvs: (() => void) | undefined;
     let unsubMsgs: (() => void) | undefined;
+    let unsubLeads: (() => void) | undefined;
+    let unsubContacts: (() => void) | undefined;
+    let unsubKb: (() => void) | undefined;
 
     async function initFirestore() {
       // Sync settings from backend API
@@ -121,82 +132,101 @@ export default function App() {
           await setDoc(settingsRef, DEFAULT_SETTINGS);
         }
 
-        // Check if initial contacts exist in Firestore
-        const contactsRef = collection(db, 'contacts');
-        const snapshot = await getDocs(contactsRef);
+        // Check if database was ever initialized before
+        const initMarkerRef = doc(db, 'system_metadata', 'db_initialized');
+        const initMarkerSnap = await getDoc(initMarkerRef);
 
-        if (snapshot.empty) {
-          // Seed contacts
-          for (const c of INITIAL_CONTACTS) {
-            await setDoc(doc(db, 'contacts', c.contactId), c);
-          }
-          // Seed leads
-          for (const l of INITIAL_LEADS) {
-            await setDoc(doc(db, 'leads', l.leadId), l);
-          }
-          // Seed conversations
-          for (const conv of INITIAL_CONVERSATIONS) {
-            await setDoc(doc(db, 'conversations', conv.conversationId), conv);
-          }
-          // Seed initial messages with complete persistent fields
-          for (const m of INITIAL_MESSAGES) {
-            await setDoc(doc(db, 'messages', m.messageId), m);
-          }
-          // Seed KB
-          for (const kb of INITIAL_KNOWLEDGE_DOCUMENTS) {
-            await setDoc(doc(db, 'knowledge_documents', kb.id), kb);
-          }
-          // Seed campaigns
-          await setDoc(doc(db, 'outbound_campaigns', INITIAL_CAMPAIGN.campaignId), INITIAL_CAMPAIGN);
-        } else {
-          // Load persisted entities from Firestore so state survives page refresh
-          const [convsSnap, msgsSnap, leadsSnap, contsSnap] = await Promise.all([
-            getDocs(query(collection(db, 'conversations'), orderBy('lastMessageAt', 'desc'))),
-            getDocs(query(collection(db, 'messages'), orderBy('sentAt', 'asc'))),
-            getDocs(collection(db, 'leads')),
-            getDocs(collection(db, 'contacts')),
-          ]);
+        if (!initMarkerSnap.exists()) {
+          // Check if any contacts or leads already exist in Firestore
+          const contactsSnap = await getDocs(collection(db, 'contacts'));
+          const leadsSnap = await getDocs(collection(db, 'leads'));
+          const convsSnap = await getDocs(collection(db, 'conversations'));
 
-          if (!convsSnap.empty) {
-            const cList = convsSnap.docs.map((d) => d.data() as Conversation);
-            setConversations(cList);
+          if (contactsSnap.empty && leadsSnap.empty && convsSnap.empty) {
+            // Seed initial data ONLY on brand-new setup
+            for (const c of INITIAL_CONTACTS) {
+              await setDoc(doc(db, 'contacts', c.contactId), c);
+            }
+            for (const l of INITIAL_LEADS) {
+              await setDoc(doc(db, 'leads', l.leadId), l);
+            }
+            for (const conv of INITIAL_CONVERSATIONS) {
+              await setDoc(doc(db, 'conversations', conv.conversationId), conv);
+            }
+            for (const m of INITIAL_MESSAGES) {
+              await setDoc(doc(db, 'messages', m.messageId), m);
+            }
+            for (const kb of INITIAL_KNOWLEDGE_DOCUMENTS) {
+              await setDoc(doc(db, 'knowledge_documents', kb.id), kb);
+            }
+            await setDoc(doc(db, 'outbound_campaigns', INITIAL_CAMPAIGN.campaignId), INITIAL_CAMPAIGN);
           }
-          if (!msgsSnap.empty) {
-            const mList = msgsSnap.docs.map((d) => d.data() as Message);
-            setMessages(mList);
-          }
-          if (!leadsSnap.empty) {
-            setLeads(leadsSnap.docs.map((d) => d.data() as Lead));
-          }
-          if (!contsSnap.empty) {
-            setContacts(contsSnap.docs.map((d) => d.data() as Contact));
-          }
+
+          // Mark database as permanently initialized so deletions are never resurrected on reload
+          await setDoc(initMarkerRef, {
+            initialized: true,
+            initializedAt: new Date().toISOString(),
+          });
         }
 
-        // Attach realtime listeners for Firestore updates
+        // Load persisted entities from Firestore so state reflects actual database state
+        const [convsSnap, msgsSnap, leadsSnap, contsSnap, kbSnap, campSnap] = await Promise.all([
+          getDocs(query(collection(db, 'conversations'), orderBy('lastMessageAt', 'desc'))),
+          getDocs(query(collection(db, 'messages'), orderBy('sentAt', 'asc'))),
+          getDocs(collection(db, 'leads')),
+          getDocs(collection(db, 'contacts')),
+          getDocs(collection(db, 'knowledge_documents')),
+          getDocs(collection(db, 'outbound_campaigns')),
+        ]);
+
+        // Always set the exact documents present in Firestore (if user deleted documents, reflects empty/subset)
+        setConversations(convsSnap.docs.map((d) => d.data() as Conversation));
+        setMessages(msgsSnap.docs.map((d) => d.data() as Message));
+        setLeads(leadsSnap.docs.map((d) => d.data() as Lead));
+        setContacts(contsSnap.docs.map((d) => d.data() as Contact));
+        if (!kbSnap.empty) {
+          setKnowledgeDocs(kbSnap.docs.map((d) => d.data() as KnowledgeDocument));
+        }
+        if (!campSnap.empty) {
+          setCampaigns(campSnap.docs.map((d) => d.data() as OutboundCampaign));
+        }
+
+        // Attach realtime listeners for Firestore updates (handles adds, updates, and deletes immediately)
         unsubConvs = onSnapshot(collection(db, 'conversations'), (snap) => {
-          if (!snap.empty) {
-            const list = snap.docs.map((d) => d.data() as Conversation);
-            setConversations(
-              list.sort(
-                (a, b) =>
-                  new Date(b.lastMessageAt || b.createdAt || 0).getTime() -
-                  new Date(a.lastMessageAt || a.createdAt || 0).getTime()
-              )
-            );
-          }
+          const list = snap.docs.map((d) => d.data() as Conversation);
+          setConversations(
+            list.sort(
+              (a, b) =>
+                new Date(b.lastMessageAt || b.createdAt || 0).getTime() -
+                new Date(a.lastMessageAt || a.createdAt || 0).getTime()
+            )
+          );
         });
 
         unsubMsgs = onSnapshot(collection(db, 'messages'), (snap) => {
+          const list = snap.docs.map((d) => d.data() as Message);
+          setMessages(
+            list.sort(
+              (a, b) =>
+                new Date(a.sentAt || a.timestamp || a.createdAt || 0).getTime() -
+                new Date(b.sentAt || b.timestamp || b.createdAt || 0).getTime()
+            )
+          );
+        });
+
+        unsubLeads = onSnapshot(collection(db, 'leads'), (snap) => {
+          const list = snap.docs.map((d) => d.data() as Lead);
+          setLeads(list);
+        });
+
+        unsubContacts = onSnapshot(collection(db, 'contacts'), (snap) => {
+          const list = snap.docs.map((d) => d.data() as Contact);
+          setContacts(list);
+        });
+
+        unsubKb = onSnapshot(collection(db, 'knowledge_documents'), (snap) => {
           if (!snap.empty) {
-            const list = snap.docs.map((d) => d.data() as Message);
-            setMessages(
-              list.sort(
-                (a, b) =>
-                  new Date(a.sentAt || a.timestamp || a.createdAt || 0).getTime() -
-                  new Date(b.sentAt || b.timestamp || b.createdAt || 0).getTime()
-              )
-            );
+            setKnowledgeDocs(snap.docs.map((d) => d.data() as KnowledgeDocument));
           }
         });
 
@@ -211,6 +241,9 @@ export default function App() {
     return () => {
       if (unsubConvs) unsubConvs();
       if (unsubMsgs) unsubMsgs();
+      if (unsubLeads) unsubLeads();
+      if (unsubContacts) unsubContacts();
+      if (unsubKb) unsubKb();
     };
   }, []);
 
@@ -225,109 +258,100 @@ export default function App() {
       const data = await res.json();
       if (!data.history || !Array.isArray(data.history)) return;
 
-      for (const item of data.history) {
-        if (!item.crmEntities || !item.messageId) continue;
-        if (ingestedBackendMsgIds.current.has(item.messageId)) continue;
-        ingestedBackendMsgIds.current.add(item.messageId);
+      // Note: When Firebase is configured and active, Firestore realtime onSnapshot listeners
+      // are the authoritative single source of truth for CRM entities (contacts, leads, conversations, messages).
+      // We do NOT write data.history back to Firestore here, preventing deleted documents from resurrecting.
+      if (!isFirebaseConfigured) {
+        for (const item of data.history) {
+          if (!item.crmEntities || !item.messageId) continue;
+          if (ingestedBackendMsgIds.current.has(item.messageId)) continue;
+          ingestedBackendMsgIds.current.add(item.messageId);
 
-        const { contact, lead, conversation, incomingMessage, aiReplyMessage, activity } = item.crmEntities;
+          const { contact, lead, conversation, incomingMessage, aiReplyMessage, activity } = item.crmEntities;
 
-        if (contact) {
-          setContacts((prev) => {
-            const idx = prev.findIndex(
-              (c) =>
-                c.contactId === contact.contactId ||
-                c.email.toLowerCase() === contact.email.toLowerCase()
-            );
-            if (idx >= 0) {
-              const next = [...prev];
-              next[idx] = { ...next[idx], ...contact, lastActivityAt: contact.lastActivityAt };
-              return next;
-            }
-            return [contact, ...prev];
-          });
-        }
-
-        if (lead) {
-          setLeads((prev) => {
-            const idx = prev.findIndex(
-              (l) => l.leadId === lead.leadId || l.contactId === lead.contactId
-            );
-            if (idx >= 0) {
-              const next = [...prev];
-              const updated = { ...next[idx], ...lead };
-              next.splice(idx, 1);
-              return [updated, ...next];
-            }
-            return [lead, ...prev];
-          });
-        }
-
-        if (conversation) {
-          setConversations((prev) => {
-            const idx = prev.findIndex(
-              (c) =>
-                c.conversationId === conversation.conversationId ||
-                (conversation.emailThreadId && c.emailThreadId === conversation.emailThreadId)
-            );
-            if (idx >= 0) {
-              const next = [...prev];
-              const updated = {
-                ...next[idx],
-                ...conversation,
-                lastMessageAt: conversation.lastMessageAt,
-                lastMessageText: conversation.lastMessageText,
-              };
-              next.splice(idx, 1);
-              return [updated, ...next];
-            }
-            return [conversation, ...prev];
-          });
-        }
-
-        // Ingest complete thread messages for multi-turn conversations
-        const threadMsgs: Message[] = Array.isArray(item.crmEntities?.allThreadMessages) && item.crmEntities.allThreadMessages.length > 0
-          ? item.crmEntities.allThreadMessages
-          : ([incomingMessage, aiReplyMessage].filter(Boolean) as Message[]);
-
-        setMessages((prev) => {
-          const toAdd: Message[] = [];
-          for (const msg of threadMsgs) {
-            if (msg && !prev.some((m) => m.messageId === msg.messageId)) {
-              toAdd.push(msg);
-            }
+          if (contact) {
+            setContacts((prev) => {
+              const idx = prev.findIndex(
+                (c) =>
+                  c.contactId === contact.contactId ||
+                  c.email.toLowerCase() === contact.email.toLowerCase()
+              );
+              if (idx >= 0) {
+                const next = [...prev];
+                next[idx] = { ...next[idx], ...contact, lastActivityAt: contact.lastActivityAt };
+                return next;
+              }
+              return [contact, ...prev];
+            });
           }
-          return toAdd.length > 0 ? [...prev, ...toAdd] : prev;
-        });
 
-        if (activity) {
-          setActivities((prev) => {
-            if (prev.some((a) => a.activityId === activity.activityId)) return prev;
-            return [activity, ...prev];
-          });
-        }
+          if (lead) {
+            setLeads((prev) => {
+              const idx = prev.findIndex(
+                (l) => l.leadId === lead.leadId || l.contactId === lead.contactId
+              );
+              if (idx >= 0) {
+                const next = [...prev];
+                const updated = { ...next[idx], ...lead };
+                next.splice(idx, 1);
+                return [updated, ...next];
+              }
+              return [lead, ...prev];
+            });
+          }
 
-        // Persist to Firestore if configured
-        if (isFirebaseConfigured && db) {
-          try {
-            if (contact) setDoc(doc(db, 'contacts', contact.contactId), contact, { merge: true }).catch(() => {});
-            if (lead) setDoc(doc(db, 'leads', lead.leadId), lead, { merge: true }).catch(() => {});
-            if (conversation) setDoc(doc(db, 'conversations', conversation.conversationId), conversation, { merge: true }).catch(() => {});
-            for (const msg of threadMsgs) {
-              if (msg) setDoc(doc(db, 'messages', msg.messageId), msg, { merge: true }).catch(() => {});
-            }
-          } catch {}
-        }
-      }
+          if (conversation) {
+            setConversations((prev) => {
+              const idx = prev.findIndex(
+                (c) =>
+                  c.conversationId === conversation.conversationId ||
+                  (conversation.emailThreadId && c.emailThreadId === conversation.emailThreadId)
+              );
+              if (idx >= 0) {
+                const next = [...prev];
+                const updated = {
+                  ...next[idx],
+                  ...conversation,
+                  lastMessageAt: conversation.lastMessageAt,
+                  lastMessageText: conversation.lastMessageText,
+                };
+                next.splice(idx, 1);
+                return [updated, ...next];
+              }
+              return [conversation, ...prev];
+            });
+          }
 
-      // Ingest all stored thread messages from backend
-      if (data.allThreadMessages && typeof data.allThreadMessages === 'object') {
-        const allMsgList: Message[] = Object.values(data.allThreadMessages).flat() as Message[];
-        if (allMsgList.length > 0) {
+          const threadMsgs: Message[] = Array.isArray(item.crmEntities?.allThreadMessages) && item.crmEntities.allThreadMessages.length > 0
+            ? item.crmEntities.allThreadMessages
+            : ([incomingMessage, aiReplyMessage].filter(Boolean) as Message[]);
+
           setMessages((prev) => {
-            const toAdd = allMsgList.filter((m) => m && !prev.some((p) => p.messageId === m.messageId));
+            const toAdd: Message[] = [];
+            for (const msg of threadMsgs) {
+              if (msg && !prev.some((m) => m.messageId === msg.messageId)) {
+                toAdd.push(msg);
+              }
+            }
             return toAdd.length > 0 ? [...prev, ...toAdd] : prev;
           });
+
+          if (activity) {
+            setActivities((prev) => {
+              if (prev.some((a) => a.activityId === activity.activityId)) return prev;
+              return [activity, ...prev];
+            });
+          }
+        }
+
+        if (data.allThreadMessages && typeof data.allThreadMessages === 'object') {
+          const allMsgList: Message[] = Object.values(data.allThreadMessages).flat() as Message[];
+          if (allMsgList.length > 0) {
+            setMessages((prev) => {
+              const toAdd = allMsgList.filter((m) => m && !prev.some((p) => p.messageId === m.messageId));
+              return toAdd.length > 0 ? [...prev, ...toAdd] : prev;
+            });
+          }
         }
       }
     } catch (e) {
@@ -388,31 +412,6 @@ export default function App() {
         }
       } catch (err) {
         console.warn('Live email dispatch notice:', err);
-      }
-    }
-
-    // If sending a WhatsApp message manually via Meta Cloud API
-    if (conv.channel === 'WHATSAPP' && senderType === 'AGENT') {
-      const recipientPhone = contact?.whatsappUserId || contact?.phone || conv.customerPhone;
-      if (recipientPhone) {
-        try {
-          const sendRes = await fetch('/api/whatsapp/send', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              to: recipientPhone,
-              text,
-              conversationId,
-              recipientName: `${contact?.firstName || ''} ${contact?.lastName || ''}`.trim(),
-            }),
-          });
-          const sendData = await sendRes.json();
-          if (sendData?.messageId) {
-            sentGmailMessageId = sendData.messageId;
-          }
-        } catch (err) {
-          console.warn('Live WhatsApp dispatch notice:', err);
-        }
       }
     }
 
@@ -675,6 +674,68 @@ export default function App() {
     payload: InboundEmailPayload
   ): Promise<InboundProcessingResult> => {
     const result = await processInboundEmail({
+      payload,
+      contacts,
+      leads,
+      conversations,
+      messages,
+      knowledgeDocs,
+      settings,
+    });
+
+    // Merge Contact
+    setContacts((prev) => {
+      const idx = prev.findIndex((c) => c.contactId === result.contact.contactId);
+      if (idx >= 0) {
+        const next = [...prev];
+        next[idx] = result.contact;
+        return next;
+      }
+      return [result.contact, ...prev];
+    });
+
+    // Merge Lead
+    setLeads((prev) => {
+      const idx = prev.findIndex((l) => l.leadId === result.lead.leadId);
+      if (idx >= 0) {
+        const next = [...prev];
+        next[idx] = result.lead;
+        return next;
+      }
+      return [result.lead, ...prev];
+    });
+
+    // Merge Conversation
+    setConversations((prev) => {
+      const idx = prev.findIndex((c) => c.conversationId === result.conversation.conversationId);
+      if (idx >= 0) {
+        const next = [...prev];
+        next[idx] = result.conversation;
+        return next;
+      }
+      return [result.conversation, ...prev];
+    });
+
+    // Append Messages (Incoming and AI reply)
+    setMessages((prev) => {
+      const toAdd = [result.incomingMessage];
+      if (result.aiReplyMessage) toAdd.push(result.aiReplyMessage);
+      return [...prev, ...toAdd];
+    });
+
+    // Prepend Activities
+    if (result.activities && result.activities.length > 0) {
+      setActivities((prev) => [...result.activities, ...prev]);
+    }
+
+    return result;
+  };
+
+  // Process inbound WhatsApp sent to +919820252434
+  const handleProcessInboundWhatsApp = async (
+    payload: InboundWhatsAppPayload
+  ): Promise<InboundWhatsAppProcessingResult> => {
+    const result = await processInboundWhatsAppMessage({
       payload,
       contacts,
       leads,
@@ -995,13 +1056,6 @@ export default function App() {
     }
 
     try {
-      if (newSettings.whatsappMode) {
-        await fetch('/api/whatsapp/mode', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ mode: newSettings.whatsappMode }),
-        });
-      }
       await fetch('/api/settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1009,7 +1063,6 @@ export default function App() {
           emailMode: newSettings.channelModes.EMAIL,
           emailSignature: newSettings.emailSignature,
           debounceSeconds: newSettings.debounceSeconds,
-          whatsappMode: newSettings.whatsappMode,
         }),
       });
     } catch (err) {
@@ -1062,31 +1115,16 @@ export default function App() {
             }}
             onViewLeadInCrm={handleViewLeadInCrm}
             onProcessInboundEmail={handleProcessInboundEmail}
+            onProcessInboundWhatsApp={handleProcessInboundWhatsApp}
             onSyncNow={syncWithBackendInbound}
           />
         )}
 
         {activeTab === 'campaigns' && (
-          <OutboundCampaigns
-            campaigns={campaigns}
-            prospects={prospects}
-            contacts={contacts}
-            onAddProspect={(p) => setProspects((prev) => [p, ...prev])}
-            onSendColdEmail={handleSendColdEmail}
-            onToggleCampaignStatus={(campId) => {
-              setCampaigns((prev) =>
-                prev.map((c) =>
-                  c.campaignId === campId
-                    ? { ...c, status: c.status === 'RUNNING' ? 'PAUSED' : 'RUNNING' }
-                    : c
-                )
-              );
-            }}
-            onSelectProspectConversation={(threadId) => {
-              const conv = conversations.find((c) => c.emailThreadId === threadId);
-              if (conv) {
-                setActiveTab('inbox');
-              }
+          <CampaignManagement
+            conversations={conversations}
+            onOpenConversation={(convId) => {
+              setActiveTab('inbox');
             }}
           />
         )}
@@ -1099,6 +1137,34 @@ export default function App() {
             selectedLeadId={selectedLeadIdForCrm}
             onOpenConversation={(convId, leadId) => {
               setActiveTab('inbox');
+            }}
+            onUpdateLeadStatus={(leadId, newStatus) => {
+              setLeads((prev) =>
+                prev.map((l) =>
+                  l.leadId === leadId
+                    ? {
+                        ...l,
+                        status: newStatus,
+                        demoStatus: newStatus === 'DEMO_BOOKED' ? 'BOOKED' : l.demoStatus,
+                        demoSource: newStatus === 'DEMO_BOOKED' ? 'MANUAL' : l.demoSource,
+                        demoBookedAt:
+                          newStatus === 'DEMO_BOOKED' ? new Date().toISOString() : l.demoBookedAt,
+                      }
+                    : l
+                )
+              );
+              if (isFirebaseConfigured && db) {
+                updateDoc(doc(db, 'leads', leadId), {
+                  status: newStatus,
+                  ...(newStatus === 'DEMO_BOOKED'
+                    ? {
+                        demoStatus: 'BOOKED',
+                        demoSource: 'MANUAL',
+                        demoBookedAt: new Date().toISOString(),
+                      }
+                    : {}),
+                }).catch(() => {});
+              }
             }}
           />
         )}
@@ -1120,6 +1186,7 @@ export default function App() {
             onNavigateToInbox={() => setActiveTab('inbox')}
             onNavigateToCrm={() => setActiveTab('crm')}
             onProcessInboundEmail={handleProcessInboundEmail}
+            onProcessInboundWhatsApp={handleProcessInboundWhatsApp}
             onNavigateToThread={(threadId) => {
               setActiveTab('inbox');
             }}

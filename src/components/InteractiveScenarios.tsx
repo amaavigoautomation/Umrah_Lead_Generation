@@ -23,11 +23,19 @@ import {
   PRESET_INBOUND_EMAILS,
   INBOUND_MAILBOX,
 } from '../services/emailInboundService';
+import {
+  InboundWhatsAppPayload,
+  InboundWhatsAppProcessingResult,
+  WHATSAPP_BUSINESS_NUMBER,
+  WHATSAPP_BUSINESS_NUMBER_FORMATTED,
+  PRESET_WHATSAPP_MESSAGES,
+} from '../services/whatsappInboundService';
 
 interface InteractiveScenariosProps {
   onNavigateToInbox: () => void;
   onNavigateToCrm: () => void;
   onProcessInboundEmail?: (payload: InboundEmailPayload) => Promise<InboundProcessingResult>;
+  onProcessInboundWhatsApp?: (payload: InboundWhatsAppPayload) => Promise<InboundWhatsAppProcessingResult>;
   onNavigateToThread?: (conversationId: string) => void;
   onNavigateToCrmLead?: (leadId: string) => void;
 }
@@ -36,6 +44,7 @@ export const InteractiveScenarios: React.FC<InteractiveScenariosProps> = ({
   onNavigateToInbox,
   onNavigateToCrm,
   onProcessInboundEmail,
+  onProcessInboundWhatsApp,
   onNavigateToThread,
   onNavigateToCrmLead,
 }) => {
@@ -48,6 +57,11 @@ export const InteractiveScenarios: React.FC<InteractiveScenariosProps> = ({
   const [selectedPresetIndex, setSelectedPresetIndex] = useState<number>(0);
   const [isExecutingLive, setIsExecutingLive] = useState<boolean>(false);
   const [liveResult, setLiveResult] = useState<InboundProcessingResult | null>(null);
+
+  // Live WhatsApp simulation state
+  const [selectedWaPresetIndex, setSelectedWaPresetIndex] = useState<number>(0);
+  const [isExecutingWaLive, setIsExecutingWaLive] = useState<boolean>(false);
+  const [liveWaResult, setLiveWaResult] = useState<InboundWhatsAppProcessingResult | null>(null);
 
   // Section 74 Inbound Email steps definition
   const inboundSteps = [
@@ -98,6 +112,59 @@ export const InteractiveScenarios: React.FC<InteractiveScenariosProps> = ({
       title: 'CRM Timeline Synchronized & Memory Updated',
       desc: 'Lead activities logged (PROSPECT_REPLIED and AI_REPLIED). Conversation memory captures sub-agent requirements and sets next action to schedule platform demo.',
       badge: 'CRM Synced',
+    },
+  ];
+
+  // Section 73 Inbound WhatsApp steps definition
+  const whatsappSteps = [
+    {
+      step: 1,
+      title: `Inbound WhatsApp Arrives at ${WHATSAPP_BUSINESS_NUMBER_FORMATTED}`,
+      desc: `A prospective partner sends a WhatsApp message to ${WHATSAPP_BUSINESS_NUMBER_FORMATTED}: "Assalamu Alaikum, we need a B2B portal for our Umrah agency in Mumbai."`,
+      badge: `To: ${WHATSAPP_BUSINESS_NUMBER_FORMATTED}`,
+    },
+    {
+      step: 2,
+      title: 'WhatsApp Webhook Ingestion & Number Normalization',
+      desc: 'System ingests Meta WhatsApp Cloud API webhook, normalizes phone numbers (e.g. +91 98202 52434), extracts incoming text, and creates an ingestion audit payload.',
+      badge: 'Webhook Validated',
+    },
+    {
+      step: 3,
+      title: 'Contact Phone Match & CRM Lead Auto-Creation',
+      desc: 'Searches centralized CRM for existing phone match. If brand new, automatically generates Contact and Lead with Source: INBOUND, Channel: WHATSAPP, and Status: CONTACTED.',
+      badge: 'CRM Contact Resolved',
+    },
+    {
+      step: 4,
+      title: 'Idempotency Lock & Anti-Spam Turn Protection',
+      desc: 'Enforces deduplication key lock on wamid to prevent duplicate AI triggers. Applies turn lock so only 1 AI reply can be dispatched per inbound customer turn.',
+      badge: 'Idempotent Turn Lock',
+    },
+    {
+      step: 5,
+      title: 'RAG Grounding & Umrah360 Knowledge Search',
+      desc: 'RAG engine vector-searches verified knowledge documentation (B2B Sub-Agent Portals, Multi-Currency Invoicing, Hotel Allotments) and prepares context for Gemini 2.5 Flash.',
+      badge: 'RAG Knowledge Grounded',
+    },
+    {
+      step: 6,
+      title: 'Conversational Memory & WhatsApp Formatting',
+      desc: 'Formats message according to WhatsApp guidelines (warm, concise, natural, *bold* highlights, no robotic markup, tailored to conversational chat length).',
+      badge: 'WhatsApp Native Tone',
+    },
+    {
+      step: 7,
+      title: 'Real-Time Message Persistence in Unified Inbox',
+      desc: 'Stores both incoming customer message and AI response in conversation thread, updating timestamps, unread status, and lead engagement score.',
+      badge: 'Real-Time Sync',
+    },
+    {
+      step: 8,
+      title: 'Outbound WhatsApp Dispatch & Specialist Visibility',
+      desc: `Dispatches WhatsApp message to customer via WhatsApp Business API (+919820252434). Updates Unified Inbox live and notifies human operators.`,
+      badge: 'Dispatch Complete',
+      isFinal: true,
     },
   ];
 
@@ -434,61 +501,376 @@ export const InteractiveScenarios: React.FC<InteractiveScenariosProps> = ({
 
       {/* Scenario 2: Section 73 WhatsApp Inbound */}
       {activeScenario === 'whatsapp' && (
-        <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 shadow-lg space-y-4">
-          <div className="flex items-center space-x-2">
-            <MessageCircle className="w-5 h-5 text-emerald-400" />
-            <h3 className="font-bold text-white text-base">
-              Section 73: WhatsApp Inbound Lead Simulation
-            </h3>
+        <div className="space-y-6">
+          {/* Step Progress Bar & Actions */}
+          <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-lg space-y-4">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div>
+                <div className="flex items-center space-x-2">
+                  <span className="text-xs font-mono uppercase tracking-wider text-emerald-400 font-bold">
+                    Section 73 WhatsApp Inbound Flow
+                  </span>
+                  <span className="px-2 py-0.5 rounded text-[11px] font-bold font-mono bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                    {WHATSAPP_BUSINESS_NUMBER_FORMATTED}
+                  </span>
+                </div>
+                <h3 className="text-lg font-bold text-white mt-1">
+                  Step {whatsappStep} of {whatsappSteps.length}: {whatsappSteps[whatsappStep - 1]?.title}
+                </h3>
+              </div>
+
+              <div className="flex items-center space-x-2">
+                <button
+                  onClick={() => setWhatsappStep((prev) => Math.max(1, prev - 1))}
+                  disabled={whatsappStep === 1}
+                  className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 disabled:opacity-40 text-xs font-semibold transition"
+                >
+                  Previous
+                </button>
+                <button
+                  onClick={() => setWhatsappStep((prev) => Math.min(whatsappSteps.length, prev + 1))}
+                  disabled={whatsappStep === whatsappSteps.length}
+                  className="px-4 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white disabled:opacity-40 text-xs font-semibold transition flex items-center space-x-1"
+                >
+                  <span>Next Step</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  onClick={() => setWhatsappStep(1)}
+                  className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition"
+                  title="Reset to Step 1"
+                >
+                  <RotateCcw className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* Stepper Progress Indicator */}
+            <div className="grid grid-cols-4 sm:grid-cols-8 gap-1.5 pt-2">
+              {whatsappSteps.map((s) => (
+                <button
+                  key={s.step}
+                  onClick={() => setWhatsappStep(s.step)}
+                  className={`h-2 rounded-full transition-all ${
+                    s.step === whatsappStep
+                      ? 'bg-emerald-400 ring-2 ring-emerald-500/50'
+                      : s.step < whatsappStep
+                      ? 'bg-emerald-600'
+                      : 'bg-slate-800'
+                  }`}
+                  title={`Step ${s.step}: ${s.title}`}
+                />
+              ))}
+            </div>
           </div>
-          <p className="text-xs text-slate-400">
-            Customer reaches out via WhatsApp Business API: &quot;Hi, I want to know about Umrah360&quot;.
-          </p>
 
-          <div className="space-y-3 pt-2">
-            <div className="p-3 bg-slate-800 rounded-lg text-xs space-y-1 text-slate-200 max-w-lg">
-              <span className="font-bold text-emerald-400 block">Customer (WhatsApp):</span>
-              <p>&quot;Hi, I want to know about Umrah360 for my UK travel agency.&quot;</p>
-            </div>
-
-            <div className="p-3 bg-blue-950/80 rounded-lg text-xs space-y-1 text-blue-100 max-w-lg ml-auto border border-blue-800">
-              <span className="font-bold text-blue-300 flex items-center space-x-1">
-                <Bot className="w-3.5 h-3.5" />
-                <span>Umrah360 AI (Grounded):</span>
+          {/* Current Step Explanation & Visual Card */}
+          <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 shadow-lg space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                {whatsappSteps[whatsappStep - 1]?.badge}
               </span>
-              <p>
-                &quot;Umrah360 is an all-in-one cloud ERP and CRM platform purpose-built for Hajj and Umrah
-                tour operators. It streamlines FIT package generation, Makkah/Madinah hotel room blocks,
-                multi-currency invoicing, and B2B sub-agent distribution. Are you looking to upgrade from
-                spreadsheets?&quot;
-              </p>
-            </div>
-
-            <div className="p-3 bg-slate-800 rounded-lg text-xs space-y-1 text-slate-200 max-w-lg">
-              <span className="font-bold text-emerald-400 block">Customer (WhatsApp):</span>
-              <p>&quot;Can we calculate multi-currency exchange buffers between GBP and SAR?&quot;</p>
-            </div>
-
-            <div className="p-3 bg-blue-950/80 rounded-lg text-xs space-y-1 text-blue-100 max-w-lg ml-auto border border-blue-800">
-              <span className="font-bold text-blue-300 flex items-center space-x-1">
-                <Bot className="w-3.5 h-3.5" />
-                <span>Umrah360 AI (Conversation Memory):</span>
+              <span className="text-xs text-slate-500 font-mono">
+                Pipeline Stage {whatsappStep} / {whatsappSteps.length}
               </span>
-              <p>
-                &quot;Yes! Our live Forex engine auto-converts supplier costs in Saudi Riyal (SAR) to British
-                Pounds (GBP) with configurable hedge buffers, and outputs compliant VAT invoices. Would you
-                like to see a sample itinerary and costing sheet?&quot;
-              </p>
             </div>
+
+            <p className="text-sm text-slate-200 leading-relaxed font-sans">
+              {whatsappSteps[whatsappStep - 1]?.desc}
+            </p>
+
+            {/* Visual preview according to current step */}
+            {whatsappStep === 1 && (
+              <div className="p-4 bg-slate-950 rounded-xl border border-slate-800 text-xs space-y-2 font-mono">
+                <div className="text-slate-400">
+                  <span className="text-slate-600">To (Business Line):</span> {WHATSAPP_BUSINESS_NUMBER_FORMATTED} ({WHATSAPP_BUSINESS_NUMBER})
+                </div>
+                <div className="text-slate-400">
+                  <span className="text-slate-600">From (Customer):</span> +91 98201 11223 (Al-Haramain Travels)
+                </div>
+                <div className="pt-2 text-slate-300 font-sans border-t border-slate-800/80 whitespace-pre-wrap">
+                  Assalamu Alaikum! We operate Umrah tours from Bangalore with 200 pilgrims every Ramadan. Does Umrah360 support custom hotel room blocks in Makkah and instant sub-agent credit limits?
+                </div>
+              </div>
+            )}
+
+            {whatsappStep === 2 && (
+              <div className="p-4 bg-emerald-950/30 rounded-xl border border-emerald-800/60 text-xs space-y-2 text-emerald-200">
+                <div className="font-bold flex items-center space-x-1.5 text-emerald-300">
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>Webhook Verified: Meta WhatsApp Cloud API Spec</span>
+                </div>
+                <p className="text-xs leading-relaxed text-emerald-100 font-sans">
+                  The API endpoint at <code className="bg-slate-900 px-1.5 py-0.5 rounded text-emerald-300 font-mono">/api/inbound/whatsapp</code> successfully verifies the hub challenge, unpacks the sender payload, parses timestamp buckets, and generates a normalized internal event.
+                </p>
+              </div>
+            )}
+
+            {whatsappStep === 3 && (
+              <div className="p-4 bg-slate-950 rounded-xl border border-slate-800 text-xs space-y-2">
+                <div className="text-slate-300 font-bold flex items-center space-x-1.5">
+                  <Users className="w-4 h-4 text-emerald-400" />
+                  <span>CRM Entity Resolution Flow</span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-2 text-[11px]">
+                  <div className="p-2.5 bg-slate-900 rounded-lg border border-slate-800">
+                    <span className="text-slate-500 block">Contact</span>
+                    <strong className="text-white">Auto-Matched / Created</strong>
+                    <span className="text-emerald-400 block font-mono mt-1">+91 98201 11223</span>
+                  </div>
+                  <div className="p-2.5 bg-slate-900 rounded-lg border border-slate-800">
+                    <span className="text-slate-500 block">Lead Source</span>
+                    <strong className="text-white">INBOUND_WHATSAPP</strong>
+                    <span className="text-blue-400 block mt-1">Stage: CONTACTED</span>
+                  </div>
+                  <div className="p-2.5 bg-slate-900 rounded-lg border border-slate-800">
+                    <span className="text-slate-500 block">Conversation</span>
+                    <strong className="text-white">WHATSAPP Thread</strong>
+                    <span className="text-purple-400 block mt-1">AI: ACTIVE</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {whatsappStep === 4 && (
+              <div className="p-4 bg-blue-950/40 rounded-xl border border-blue-800/60 text-xs space-y-2 text-blue-200">
+                <div className="font-bold flex items-center space-x-1.5 text-blue-300">
+                  <ShieldCheck className="w-4 h-4" />
+                  <span>Idempotency & Anti-Spam (Section 73 Guarantee)</span>
+                </div>
+                <p className="text-xs leading-relaxed text-blue-100 font-sans">
+                  The system prevents infinite AI loop hazards or rapid-fire replies. Even if a customer sends 3 quick WhatsApp messages in 10 seconds, only 1 cohesive, context-aware AI response is generated for that turn.
+                </p>
+              </div>
+            )}
+
+            {whatsappStep === 5 && (
+              <div className="p-4 bg-slate-950 rounded-xl border border-slate-800 text-xs space-y-2">
+                <div className="text-slate-300 font-bold flex items-center space-x-1.5">
+                  <Bot className="w-4 h-4 text-emerald-400" />
+                  <span>RAG Knowledge Base Grounding Excerpts</span>
+                </div>
+                <div className="p-3 bg-slate-900 rounded-lg border border-slate-800 text-slate-300 font-sans text-xs space-y-1">
+                  <div className="text-emerald-400 font-semibold">Grounded in: B2B Sub-Agent Portal & Reseller Distribution</div>
+                  <p className="text-slate-400 text-[11px]">
+                    &quot;Umrah360 provides a white-label B2B sub-agent portal where wholesale operators can set distinct credit limits, assign customized markup percentage tiers, and upload exclusive Makkah/Madinah hotel room blocks.&quot;
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {whatsappStep === 6 && (
+              <div className="p-4 bg-emerald-950/30 rounded-xl border border-emerald-800/60 text-xs space-y-2">
+                <div className="font-bold text-emerald-300">WhatsApp Native Tone Guidelines Enforced</div>
+                <ul className="list-disc list-inside text-emerald-100 space-y-1 text-xs font-sans">
+                  <li>Warm, professional, respectful Islamic greeting (Wa Alaikum Assalam).</li>
+                  <li>WhatsApp formatting with <strong>*bold highlights*</strong> for legibility on mobile screens.</li>
+                  <li>Concise, action-oriented responses without overly long essay blocks.</li>
+                </ul>
+              </div>
+            )}
+
+            {whatsappStep === 7 && (
+              <div className="p-4 bg-slate-950 rounded-xl border border-slate-800 text-xs space-y-2">
+                <div className="text-slate-300 font-bold">Real-Time CRM & Unified Inbox Persistence</div>
+                <p className="text-slate-400 text-xs font-sans">
+                  Incoming message and AI reply are immediately saved to Firestore, visible in the Unified Inbox under the WhatsApp channel, and reflected in the Lead timeline and score.
+                </p>
+              </div>
+            )}
+
+            {whatsappStep === 8 && (
+              <div className="p-4 bg-emerald-950/40 rounded-xl border border-emerald-800/60 text-xs space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-emerald-300 text-sm flex items-center space-x-2">
+                    <CheckCircle2 className="w-5 h-5 text-emerald-400" />
+                    <span>WhatsApp Inbound Pipeline Verified</span>
+                  </span>
+                  <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-mono text-xs">
+                    {WHATSAPP_BUSINESS_NUMBER_FORMATTED}
+                  </span>
+                </div>
+                <p className="text-xs text-emerald-100 font-sans">
+                  The complete end-to-end pipeline functions identically to the email inbound flow, tailored with WhatsApp delivery, phone resolution, and instant chat responsiveness.
+                </p>
+              </div>
+            )}
           </div>
 
-          <div className="pt-4 border-t border-slate-800 flex justify-end">
-            <button
-              onClick={onNavigateToInbox}
-              className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold transition"
-            >
-              Open Live in WhatsApp Inbox
-            </button>
+          {/* Live Inbound WhatsApp Pipeline Runner */}
+          <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 shadow-lg space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800 pb-3">
+              <div>
+                <h4 className="font-bold text-white text-sm flex items-center space-x-2">
+                  <MessageCircle className="w-4 h-4 text-emerald-400" />
+                  <span>Execute Live WhatsApp Inbound Message</span>
+                </h4>
+                <p className="text-xs text-slate-400">
+                  Select a realistic inquiry preset and test the automated AI ingestion, scoring, and reply dispatch to <span className="font-mono text-emerald-400">{WHATSAPP_BUSINESS_NUMBER_FORMATTED}</span>.
+                </p>
+              </div>
+            </div>
+
+            {/* Presets Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              {PRESET_WHATSAPP_MESSAGES.map((preset, idx) => (
+                <button
+                  key={preset.id}
+                  onClick={() => setSelectedWaPresetIndex(idx)}
+                  className={`p-3 rounded-xl border text-left transition ${
+                    selectedWaPresetIndex === idx
+                      ? 'bg-emerald-950/50 border-emerald-500 text-white shadow-md'
+                      : 'bg-slate-950 border-slate-800 text-slate-300 hover:border-slate-700'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold truncate">{preset.label}</span>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 font-mono">
+                      {preset.payload.from}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-400 line-clamp-2 mt-1 font-sans">
+                    &quot;{preset.payload.body}&quot;
+                  </p>
+                </button>
+              ))}
+            </div>
+
+            {/* Selected Message Preview */}
+            {(() => {
+              const activePreset = PRESET_WHATSAPP_MESSAGES[selectedWaPresetIndex] || PRESET_WHATSAPP_MESSAGES[0];
+              return (
+                <div className="p-4 bg-slate-950 border border-slate-800 rounded-xl space-y-2 text-xs">
+                  <div className="flex flex-wrap items-center justify-between gap-2 text-slate-400 font-mono text-[11px]">
+                    <div>
+                      <span className="text-slate-600">To Line:</span> <strong className="text-emerald-400">{WHATSAPP_BUSINESS_NUMBER_FORMATTED}</strong>
+                    </div>
+                    <div>
+                      <span className="text-slate-600">Sender:</span> <strong className="text-white">{activePreset.payload.fromName}</strong> ({activePreset.payload.from})
+                    </div>
+                    <div>
+                      <span className="text-slate-600">Company:</span> <strong className="text-white">{activePreset.payload.companyName}</strong>
+                    </div>
+                  </div>
+                  <div className="p-3 bg-slate-900 rounded-lg text-slate-200 font-sans text-xs whitespace-pre-wrap border border-slate-800">
+                    {activePreset.payload.body}
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Execution Trigger */}
+            <div className="flex justify-end pt-2">
+              <button
+                onClick={async () => {
+                  const activePreset = PRESET_WHATSAPP_MESSAGES[selectedWaPresetIndex] || PRESET_WHATSAPP_MESSAGES[0];
+                  setIsExecutingWaLive(true);
+                  try {
+                    const payload: InboundWhatsAppPayload = {
+                      from: activePreset.payload.from,
+                      fromName: activePreset.payload.fromName,
+                      to: WHATSAPP_BUSINESS_NUMBER,
+                      body: activePreset.payload.body,
+                      companyName: activePreset.payload.companyName,
+                      timestamp: new Date().toISOString(),
+                    };
+
+                    let res: InboundWhatsAppProcessingResult;
+                    if (onProcessInboundWhatsApp) {
+                      res = await onProcessInboundWhatsApp(payload);
+                    } else {
+                      const response = await fetch('/api/inbound/whatsapp', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload),
+                      });
+                      res = await response.json();
+                    }
+                    setLiveWaResult(res);
+                  } catch (err) {
+                    console.error('WhatsApp execution error:', err);
+                  } finally {
+                    setIsExecutingWaLive(false);
+                  }
+                }}
+                disabled={isExecutingWaLive}
+                className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold transition flex items-center space-x-2 shadow-lg disabled:opacity-50"
+              >
+                {isExecutingWaLive ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Processing WhatsApp Inbound Message...</span>
+                  </>
+                ) : (
+                  <>
+                    <Send className="w-3.5 h-3.5" />
+                    <span>Dispatch WhatsApp Inbound Message</span>
+                  </>
+                )}
+              </button>
+            </div>
+
+            {/* Live Result Card */}
+            {liveWaResult && (
+              <div className="mt-4 p-4 bg-slate-950 border border-slate-800 rounded-xl space-y-3 animate-in fade-in slide-in-from-top-3">
+                <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                  <span className="font-bold text-white text-xs flex items-center space-x-1.5">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                    <span>WhatsApp Flow Execution Complete</span>
+                  </span>
+                  {liveWaResult.humanHandoffTriggered ? (
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                      Human Takeover Triggered
+                    </span>
+                  ) : (
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                      AI Auto-Replied (1 Reply per Turn)
+                    </span>
+                  )}
+                </div>
+
+                <div className="text-xs space-y-1 text-slate-300">
+                  <div>
+                    <span className="text-slate-500">Contact:</span> <strong className="text-white">{liveWaResult.contact.firstName} {liveWaResult.contact.lastName}</strong> ({liveWaResult.contact.phone})
+                  </div>
+                  <div>
+                    <span className="text-slate-500">Lead Score:</span> <strong className="text-emerald-400">{liveWaResult.lead.leadScore}/100</strong> • Stage: {liveWaResult.lead.buyingStage}
+                  </div>
+                  <div className="pt-2 text-slate-200 whitespace-pre-wrap bg-slate-900 p-3 rounded-lg border border-slate-800 text-[12px] font-sans">
+                    {liveWaResult.aiReplyMessage?.text}
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-end space-x-3 pt-2">
+                  <button
+                    onClick={() => {
+                      if (onNavigateToThread && liveWaResult.conversation) {
+                        onNavigateToThread(liveWaResult.conversation.conversationId);
+                      } else {
+                        onNavigateToInbox();
+                      }
+                    }}
+                    className="px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold transition flex items-center space-x-1.5"
+                  >
+                    <Inbox className="w-3.5 h-3.5" />
+                    <span>Open in Unified Inbox</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (onNavigateToCrmLead && liveWaResult.lead) {
+                        onNavigateToCrmLead(liveWaResult.lead.leadId);
+                      } else {
+                        onNavigateToCrm();
+                      }
+                    }}
+                    className="px-3.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold transition flex items-center space-x-1.5"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                    <span>View in CRM</span>
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

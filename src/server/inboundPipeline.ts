@@ -5,6 +5,16 @@ import crypto from 'node:crypto';
 import { sendLiveEmail, SendMailResult, getSmtpConfig } from './smtpService.js';
 import { pollUnreadEmails, FetchedInboundEmail } from './imapService.js';
 import { INITIAL_KNOWLEDGE_DOCUMENTS } from '../services/knowledgeData.js';
+import {
+  initPersistentIdempotencyStore,
+  isMessageAlreadyProcessed,
+  recordProcessedInboundEmail,
+  normalizeIdentifier,
+} from './firestorePersistence.js';
+import { handleIncomingCampaignLeadReply } from './campaignService.js';
+import { db, isFirebaseConfigured } from '../firebase/config.js';
+import { doc } from 'firebase/firestore';
+import { safeSetDoc } from './firestoreUtils.js';
 
 export interface ProcessedMessageRecord {
   gmailMessageId: string;
@@ -258,7 +268,7 @@ for (const seed of INITIAL_PROCESSED_SEEDS) {
   }
 }
 
-// Load persisted state from disk
+// Load persisted state from disk and Firestore
 try {
   if (fs.existsSync(IDEMPOTENCY_FILE)) {
     const raw = fs.readFileSync(IDEMPOTENCY_FILE, 'utf-8');
@@ -282,6 +292,13 @@ try {
   console.warn('[Idempotency Store] Warning loading idempotency file:', err);
 }
 
+// Background sync from persistent Firestore ledger on module startup
+initPersistentIdempotencyStore().then((stats) => {
+  console.log(`[Inbound Pipeline] Idempotency store initialized with ${stats.totalLoaded} records (${stats.repliedCount} replied) from Firestore.`);
+}).catch((err) => {
+  console.warn('[Inbound Pipeline] Notice initializing Firestore idempotency store:', err);
+});
+
 function saveProcessedRecordsToDisk(): void {
   try {
     const items = Array.from(processedRecordsMap.values());
@@ -301,6 +318,18 @@ export function recordProcessedMessage(record: ProcessedMessageRecord): void {
     repliedMessageIds.add(record.gmailMessageId);
   }
   saveProcessedRecordsToDisk();
+
+  // Persist to Firestore so server restarts / version restores retain idempotency
+  recordProcessedInboundEmail({
+    messageId: record.gmailMessageId,
+    fromEmail: record.from || 'unknown@prospect.com',
+    subject: record.subject || '',
+    aiReplied: Boolean(record.aiReplied),
+    replyMessageId: record.repliedByMessageId,
+    status: record.aiReplied ? 'REPLIED' : 'PROCESSED',
+    reason: record.aiReplied ? 'AI auto-reply dispatched' : 'Inbound email processed',
+    timestamp: record.firstSeenAt || new Date().toISOString(),
+  }).catch((e) => console.warn('[Idempotency Store] Firestore record error:', e));
 }
 
 export function getProcessedMessageRecord(gmailMessageId: string): ProcessedMessageRecord | undefined {
@@ -337,6 +366,18 @@ export function markMessageAsReplied(gmailMessageId: string, replyMessageId?: st
     });
   }
   saveProcessedRecordsToDisk();
+
+  // Persist to Firestore immediately
+  recordProcessedInboundEmail({
+    messageId: cleanId,
+    fromEmail: existing?.from || 'unknown@prospect.com',
+    subject: existing?.subject || '',
+    aiReplied: true,
+    replyMessageId,
+    status: 'REPLIED',
+    reason: 'AI auto-reply dispatched via SMTP',
+    timestamp: nowIso,
+  }).catch((e) => console.warn('[Idempotency Store] Firestore markMessageAsReplied error:', e));
 }
 
 export function isGmailMessageReplied(gmailMessageId: string): boolean {
@@ -870,12 +911,15 @@ export async function processLiveInboundEmail(payload: {
   }
 
   // =========================================================================
-  // RULE 2: STRICT IDEMPOTENCY CHECK BEFORE GENERATING OR SENDING
-  // Check: gmailMessageId + direction=INBOUND + senderType=CUSTOMER + aiReplied=true
-  // If that message has already received an AI reply:
-  // → STOP processing
-  // → DO NOT generate
-  // → DO NOT send.
+  // RULE 2: STRICT PERSISTENT IDEMPOTENCY CHECK BEFORE GENERATING OR SENDING
+  // Check:
+  // 1. In-memory processedRecordsMap & active conversation thread
+  // 2. Persistent Firestore idempotency collection (cross-restore & cold-start safe)
+  // 3. Conversation Turn State (never auto-reply multiple times to the same customer turn)
+  // If this message has already received an AI reply or was baselined:
+  // → STOP processing immediately
+  // → DO NOT generate AI response
+  // → DO NOT send SMTP email.
   // =========================================================================
   const existingRecord = getProcessedMessageRecord(incomingMsgId);
   const isRecordAlreadyReplied =
@@ -892,11 +936,30 @@ export async function processLiveInboundEmail(payload: {
       m.aiReplied === true
   );
 
+  // Check persistent Firestore store
+  const firestoreCheck = await isMessageAlreadyProcessed(incomingMsgId, payload.from);
+  const isFirestoreRepliedOrBaselined = Boolean(
+    firestoreCheck.processed &&
+    (firestoreCheck.replied || firestoreCheck.reason?.includes('BASELINE') || firestoreCheck.reason?.includes('status: REPLIED'))
+  );
+
+  // Check Conversation Turn Map
+  const turnState = conversationTurnMap.get(senderEmail);
+  const isTurnAlreadyReplied = Boolean(
+    turnState &&
+    turnState.waitingForCustomerReply &&
+    (turnState.lastRepliedMessageId === incomingMsgId || normalizeIdentifier(turnState.lastRepliedMessageId) === normalizeIdentifier(incomingMsgId))
+  );
+
   // IDEMPOTENCY GATE:
-  // Before generating a reply, check:
-  // gmailMessageId + direction=INBOUND + senderType=CUSTOMER + aiReplied=true
-  if (isRecordAlreadyReplied || isThreadMsgAlreadyReplied) {
-    console.log(`[Unified Inbox Idempotency] STOP: Message ${incomingMsgId} already received an AI reply (aiReplied=true). Skipping duplicate reply.`);
+  if (isRecordAlreadyReplied || isThreadMsgAlreadyReplied || isFirestoreRepliedOrBaselined || isTurnAlreadyReplied) {
+    const reasonDetail = isFirestoreRepliedOrBaselined
+      ? `Firestore persistent record: ${firestoreCheck.reason || 'Already processed/baselined'}`
+      : isTurnAlreadyReplied
+      ? `Turn state: already replied to customer turn for message ${turnState?.lastRepliedMessageId}`
+      : `Memory state: already replied (aiReplied=true)`;
+
+    console.log(`[Unified Inbox Idempotency] STOP: Suppressing duplicate email to ${payload.from} for message ${incomingMsgId}. Reason: ${reasonDetail}`);
     return {
       messageId: incomingMsgId,
       from: payload.from,
@@ -907,11 +970,11 @@ export async function processLiveInboundEmail(payload: {
       replySubject,
       replyText: '',
       shouldSendAutoReply: false,
-      replyDecisionReason: `Idempotency check: gmailMessageId ${incomingMsgId} with direction=INBOUND and senderType=CUSTOMER already has aiReplied=true. Duplicate ignored.`,
+      replyDecisionReason: `Strict idempotency enforced: message ${incomingMsgId} already replied or baselined. ${reasonDetail}`,
       smtpDelivery: {
         success: false,
         simulated: false,
-        error: `Already replied to gmailMessageId ${incomingMsgId}`,
+        error: `Already replied or baselined for message ${incomingMsgId}`,
       },
       handoffTriggered: false,
       leadScore: 85,
@@ -1033,6 +1096,19 @@ export async function processLiveInboundEmail(payload: {
       subject: payload.subject,
       from: payload.from,
     });
+
+    // Hook into Outbound Campaign System: track lead reply and detect demo booking intent
+    try {
+      await handleIncomingCampaignLeadReply({
+        fromEmail: payload.from,
+        subject: payload.subject,
+        body: payload.body,
+        gmailMessageId: incomingMsgId,
+        gmailThreadId: threadId,
+      });
+    } catch (campaignErr) {
+      console.warn('[Unified Inbox] Campaign lead tracking hook notice:', campaignErr);
+    }
 
     // =========================================================================
     // HUMAN TAKEOVER CHECK (TAKE OVER / HUMAN MODE)
@@ -1333,6 +1409,32 @@ export async function processLiveInboundEmail(payload: {
     recentProcessedEmails.unshift(record);
     if (recentProcessedEmails.length > 50) {
       recentProcessedEmails.pop();
+    }
+
+    // Persist CRM entities to Firestore once at arrival time
+    if (isFirebaseConfigured && db && crmEntities) {
+      try {
+        if (crmEntities.contact) {
+          safeSetDoc(doc(db, 'contacts', crmEntities.contact.contactId), crmEntities.contact, { merge: true }).catch(() => {});
+        }
+        if (crmEntities.lead) {
+          safeSetDoc(doc(db, 'leads', crmEntities.lead.leadId), crmEntities.lead, { merge: true }).catch(() => {});
+        }
+        if (crmEntities.conversation) {
+          safeSetDoc(doc(db, 'conversations', crmEntities.conversation.conversationId), crmEntities.conversation, { merge: true }).catch(() => {});
+        }
+        if (crmEntities.incomingMessage) {
+          safeSetDoc(doc(db, 'messages', crmEntities.incomingMessage.messageId), crmEntities.incomingMessage, { merge: true }).catch(() => {});
+        }
+        if (crmEntities.aiReplyMessage) {
+          safeSetDoc(doc(db, 'messages', crmEntities.aiReplyMessage.messageId), crmEntities.aiReplyMessage, { merge: true }).catch(() => {});
+        }
+        if (crmEntities.activity) {
+          safeSetDoc(doc(db, 'lead_activities', crmEntities.activity.activityId), crmEntities.activity).catch(() => {});
+        }
+      } catch (err) {
+        console.warn('[Inbound Pipeline] Notice syncing CRM entities to Firestore:', err);
+      }
     }
 
     return record;

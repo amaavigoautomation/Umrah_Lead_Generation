@@ -4,11 +4,137 @@ export type LeadSource = 'WEBSITE' | 'WHATSAPP' | 'INSTAGRAM' | 'FACEBOOK' | 'LI
 
 export type LeadType = 'INBOUND' | 'OUTBOUND';
 
+export type CampaignType = 'EMAIL' | 'WHATSAPP' | 'WHATSAPP_EMAIL';
+
+export type CampaignRunStatus = 'RUNNING' | 'PAUSED' | 'COMPLETED' | 'FAILED';
+
+export type CampaignSendStatus = 'PENDING' | 'SENDING' | 'SENT' | 'FAILED' | 'PAUSED' | 'COMPLETED';
+
+export type CampaignReplyStatus = 'NOT_REPLIED' | 'REPLIED';
+
+export type DemoStatus = 'NOT_BOOKED' | 'BOOKED';
+
+export type DemoSource = 'AUTOMATIC' | 'MANUAL';
+
+export interface EmailTemplate {
+  templateId: string;
+  name: string;
+  subject: string;
+  body: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CampaignLead {
+  campaignLeadId: string;
+  campaignId: string;
+  leadId: string;
+  campaignRunId?: string;
+  name: string;
+  firstName?: string;
+  lastName?: string;
+  companyName: string;
+  email: string;
+  phone?: string;
+  designation?: string;
+  sourceFile: string;
+  rowNumber?: number;
+  sendStatus: CampaignSendStatus;
+  replyStatus: CampaignReplyStatus;
+  demoStatus: DemoStatus;
+  demoIntent?: boolean;
+  demoSource?: DemoSource;
+  demoBookedAt?: string;
+  lastSentAt?: string;
+  repliedAt?: string;
+  sendCount: number;
+  lastError?: string;
+  gmailMessageId?: string;
+  gmailThreadId?: string;
+  conversationId?: string;
+  researchStatus?: 'PENDING' | 'RESEARCHING' | 'RESEARCHED' | 'FAILED';
+  generationStatus?: 'PENDING' | 'GENERATING' | 'GENERATED' | 'QUALITY_CHECK' | 'READY_TO_SEND' | 'GENERATION_FAILED';
+  researchData?: {
+    companySummary?: string;
+    relevantSignals?: string[];
+    companyType?: string;
+    confidence?: 'HIGH' | 'MEDIUM' | 'LOW';
+  };
+  selectedPainPoint?: string;
+  selectedCapabilities?: string[];
+  personalizationEvidence?: string;
+  generatedSubject?: string;
+  generatedBody?: string;
+  qualityCheckStatus?: 'PASSED' | 'FAILED' | 'PENDING';
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CampaignRun {
+  runId: string;
+  campaignId: string;
+  runNumber: number;
+  status: CampaignRunStatus;
+  templateId: string;
+  templateSubject?: string;
+  totalLeads: number;
+  sentCount: number;
+  startedAt: string;
+  completedAt?: string;
+  createdAt: string;
+}
+
+export interface CampaignSendHistory {
+  historyId: string;
+  campaignId: string;
+  campaignRunId?: string;
+  campaignLeadId: string;
+  email: string;
+  templateId?: string;
+  subject: string;
+  gmailMessageId?: string;
+  sentAt: string;
+  status: 'SENT' | 'FAILED';
+  error?: string;
+}
+
+export interface Campaign {
+  campaignId: string;
+  name: string;
+  type: CampaignType;
+  campaignMode?: 'PREDEFINED' | 'AI_GENERATED';
+  status: 'DRAFT' | 'RUNNING' | 'PAUSED' | 'COMPLETED' | 'FAILED';
+  templateId?: string;
+  templateName?: string;
+  sourceFileName?: string;
+  totalLeads: number;
+  sentCount: number;
+  pendingCount: number;
+  failedCount?: number;
+  repliedCount: number;
+  demoBookedCount: number;
+  currentRunId?: string;
+  createdAt: string;
+  updatedAt: string;
+  startedAt?: string;
+  completedAt?: string;
+  lastRunNumber?: number;
+  stats?: {
+    totalLeads: number;
+    sent: number;
+    pending: number;
+    failed: number;
+    replied: number;
+    demoBooked: number;
+  };
+}
+
 export type LeadStatus =
   | 'NEW'
   | 'ENGAGED'
   | 'QUALIFIED'
   | 'DEMO_SCHEDULED'
+  | 'DEMO_BOOKED'
   | 'PROPOSAL_SENT'
   | 'CLOSED_WON'
   | 'CLOSED_LOST'
@@ -41,20 +167,6 @@ export type ProspectStatus =
 export type KnowledgeStatus = 'DRAFT' | 'REVIEW' | 'APPROVED' | 'PUBLISHED';
 
 export type ChannelMode = 'SIMULATION' | 'REVIEW' | 'AUTO';
-export type WhatsAppMode = 'AUTO' | 'HUMAN';
-
-export interface WhatsAppConfig {
-  channel: 'WHATSAPP';
-  displayPhoneNumber: string; // '+91 9820252434'
-  metaPhoneNumberId?: string;
-  metaBusinessAccountId?: string;
-  mode: WhatsAppMode;
-  aiEnabled: boolean;
-  webhookStatus: 'CONNECTED' | 'DISCONNECTED';
-  connected: boolean;
-  webhookUrl?: string;
-  updatedAt: string;
-}
 
 export interface Contact {
   contactId: string;
@@ -91,6 +203,10 @@ export interface Lead {
   aiRecommendation?: string;
   ownerId?: string;
   campaignId?: string;
+  campaignLeadId?: string;
+  demoStatus?: DemoStatus;
+  demoSource?: DemoSource;
+  demoBookedAt?: string;
   createdAt: string;
   updatedAt: string;
   lastActivityAt: string;
@@ -132,8 +248,6 @@ export interface Conversation {
   unread?: boolean;
   emailThreadId?: string;
   gmailThreadId?: string;
-  customerPhone?: string;
-  whatsappMessageId?: string;
   draftReply?: {
     draftId: string;
     text: string;
@@ -152,10 +266,6 @@ export interface Message {
   senderType: 'CUSTOMER' | 'PROSPECT' | 'AI' | 'AGENT' | 'HUMAN';
   senderName: string;
   senderEmail?: string;
-  senderPhone?: string;
-  fromPhone?: string;
-  toPhone?: string;
-  whatsappMessageId?: string;
   text: string;
   timestamp: string;
   gmailMessageId?: string;
@@ -184,16 +294,7 @@ export interface Message {
     inReplyTo?: string;
     references?: string[];
   };
-  whatsappMeta?: {
-    from?: string;
-    to?: string;
-    displayPhoneNumber?: string;
-    messageId?: string;
-    profileName?: string;
-    timestamp?: string;
-  };
 }
-
 
 export interface EmailThread {
   emailThreadId: string;
@@ -306,8 +407,6 @@ export interface LeadActivity {
 
 export interface SystemSettings {
   channelModes: Record<Channel, ChannelMode>;
-  whatsappMode?: WhatsAppMode;
-  whatsappConfig?: WhatsAppConfig;
   sendingAccounts: Array<{ id: string; email: string; name: string; isDefault: boolean }>;
   emailSignature: string;
   debounceSeconds: number;
@@ -315,4 +414,3 @@ export interface SystemSettings {
   webhookEndpoint: string;
   updatedAt: string;
 }
-

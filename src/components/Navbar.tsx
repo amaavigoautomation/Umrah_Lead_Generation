@@ -12,7 +12,9 @@ import {
   RefreshCw,
   Mail,
   Radio,
+  MessageSquare,
 } from 'lucide-react';
+import { WHATSAPP_BUSINESS_NUMBER_FORMATTED } from '../services/whatsappInboundService';
 
 export type ActiveTab =
   | 'inbox'
@@ -101,7 +103,16 @@ export const Navbar: React.FC<NavbarProps> = ({
               title={`Live Mailbox & SMTP Connection for ${activeMailbox}`}
             >
               <Radio className="w-3.5 h-3.5 text-blue-400 animate-pulse" />
-              <span className="font-mono">{activeMailbox} (Live)</span>
+              <span className="font-mono">{activeMailbox}</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('inbox')}
+              className="flex items-center space-x-1.5 px-2.5 py-1 rounded-md border text-xs transition bg-emerald-950/70 border-emerald-800 text-emerald-300 hover:bg-emerald-900/60"
+              title={`Live WhatsApp Business Inbound Line for ${WHATSAPP_BUSINESS_NUMBER_FORMATTED}`}
+            >
+              <MessageSquare className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
+              <span className="font-mono">{WHATSAPP_BUSINESS_NUMBER_FORMATTED}</span>
             </button>
 
             {handoffCount > 0 && (
@@ -152,7 +163,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             }`}
           >
             <Send className="w-4 h-4" />
-            <span>Outbound & Apollo</span>
+            <span>Campaigns</span>
           </button>
 
           <button

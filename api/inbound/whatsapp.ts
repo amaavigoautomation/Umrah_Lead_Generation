@@ -1,24 +1,99 @@
 import type { IncomingMessage, ServerResponse } from 'http';
-import { handleCoreApi } from '../../src/server/coreApiHandler.js';
+import { processLiveInboundWhatsApp, getWhatsAppGatewayStatus } from '../../src/server/whatsappInboundPipeline.js';
 
 /**
- * Vercel Serverless Function for Meta WhatsApp Webhooks
- * Endpoint: /api/inbound/whatsapp
- * Supports:
- * - GET: Meta verification handshake with hub.challenge and hub.verify_token
- * - POST: Incoming message ingestion, Gemini AI reasoning, and automated WhatsApp replies
+ * Dedicated Vercel Serverless Function for Meta WhatsApp Webhook
+ * Route: /api/inbound/whatsapp
  */
-export default async function handler(req: IncomingMessage & { body?: any }, res: ServerResponse) {
-  // Ensure the request URL includes the endpoint path for route matching
-  if (!req.url || req.url === '/' || !req.url.includes('/api/')) {
-    const search = req.url && req.url.includes('?') ? req.url.substring(req.url.indexOf('?')) : '';
-    req.url = '/api/inbound/whatsapp' + search;
+export default async function handler(req: IncomingMessage & { body?: any; query?: any }, res: ServerResponse) {
+  // CORS & Security Headers
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+
+  if (req.method === 'OPTIONS') {
+    res.statusCode = 204;
+    return res.end();
   }
 
-  const handled = await handleCoreApi(req, res);
-  if (!handled && !res.writableEnded) {
-    res.statusCode = 404;
-    res.setHeader('Content-Type', 'application/json');
-    res.end(JSON.stringify({ error: 'WhatsApp webhook route not found', url: req.url }));
+  // 1. Meta Webhook Verification Handshake (GET)
+  if (req.method === 'GET') {
+    try {
+      const parsedUrl = new URL(req.url || '', 'https://leadgeneration-sable.vercel.app');
+      const mode = parsedUrl.searchParams.get('hub.mode') || parsedUrl.searchParams.get('hub_mode');
+      const verifyToken =
+        parsedUrl.searchParams.get('hub.verify_token') || parsedUrl.searchParams.get('hub_verify_token');
+      const challenge =
+        parsedUrl.searchParams.get('hub.challenge') || parsedUrl.searchParams.get('hub_challenge');
+
+      const expectedToken =
+        process.env.META_WEBHOOK_VERIFY_TOKEN ||
+        process.env.WHATSAPP_VERIFY_TOKEN ||
+        'umrah360_webhook_token';
+
+      if (verifyToken && verifyToken !== expectedToken) {
+        console.warn('[WhatsApp Webhook] Invalid verify token:', verifyToken);
+        res.statusCode = 403;
+        res.setHeader('Content-Type', 'text/plain');
+        return res.end('Forbidden: Invalid verification token');
+      }
+
+      // If challenge provided, return it directly in text/plain (required by Meta)
+      if (challenge) {
+        console.log('[WhatsApp Webhook] Meta challenge verified successfully:', challenge);
+        res.statusCode = 200;
+        res.setHeader('Content-Type', 'text/plain');
+        return res.end(challenge);
+      }
+
+      // Health status ping
+      const gateway = getWhatsAppGatewayStatus();
+      res.statusCode = 200;
+      res.setHeader('Content-Type', 'application/json');
+      return res.end(
+        JSON.stringify({
+          status: 'online',
+          service: 'Umrah360 WhatsApp Webhook',
+          gateway,
+        })
+      );
+    } catch (err: any) {
+      console.error('[WhatsApp Webhook GET] Error:', err);
+      res.statusCode = 200;
+      res.setHeader('Content-Type', 'text/plain');
+      return res.end('OK');
+    }
   }
+
+  // 2. Incoming WhatsApp Message Ingestion (POST)
+  if (req.method === 'POST') {
+    try {
+      let body = req.body;
+      if (!body) {
+        const chunks: Buffer[] = [];
+        for await (const chunk of req) {
+          chunks.push(typeof chunk === 'string' ? Buffer.from(chunk) : chunk);
+        }
+        const raw = Buffer.concat(chunks).toString('utf-8');
+        if (raw) {
+          body = JSON.parse(raw);
+        }
+      }
+      if (!body) body = {};
+
+      const result = await processLiveInboundWhatsApp(body);
+      res.statusCode = 200;
+      res.setHeader('Content-Type', 'application/json');
+      return res.end(JSON.stringify(result));
+    } catch (err: any) {
+      console.error('[WhatsApp Webhook POST] Error processing message:', err);
+      // Return 200 OK so Meta doesn't redundantly retry broken payloads
+      res.statusCode = 200;
+      res.setHeader('Content-Type', 'application/json');
+      return res.end(JSON.stringify({ success: false, error: err?.message || 'Processing error' }));
+    }
+  }
+
+  res.statusCode = 405;
+  res.end('Method Not Allowed');
 }

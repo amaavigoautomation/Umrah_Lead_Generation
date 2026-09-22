@@ -3,14 +3,26 @@ import { getFirestore, Firestore, doc, getDocFromServer } from 'firebase/firesto
 import { getAuth, Auth } from 'firebase/auth';
 import firebaseConfigJson from '../../firebase-applet-config.json';
 
+const fallbackConfig = {
+  projectId: "gen-lang-client-0376069258",
+  appId: "1:280237761588:web:1e0633ce031a5a49f15661",
+  apiKey: "AIzaSyAcr6lIIH50XWD7CcmclWh9lxbPKO7TzBk",
+  authDomain: "gen-lang-client-0376069258.firebaseapp.com",
+  firestoreDatabaseId: "ai-studio-379c884e-3360-468a-ad55-8105acbd3214",
+  storageBucket: "gen-lang-client-0376069258.firebasestorage.app",
+  messagingSenderId: "280237761588",
+};
+
+const configSource = firebaseConfigJson || fallbackConfig;
+
 export const firebaseConfig = {
-  apiKey: firebaseConfigJson.apiKey,
-  authDomain: firebaseConfigJson.authDomain,
-  projectId: firebaseConfigJson.projectId,
-  storageBucket: firebaseConfigJson.storageBucket,
-  messagingSenderId: firebaseConfigJson.messagingSenderId,
-  appId: firebaseConfigJson.appId,
-  firestoreDatabaseId: firebaseConfigJson.firestoreDatabaseId,
+  apiKey: process.env.VITE_FIREBASE_API_KEY || configSource.apiKey || fallbackConfig.apiKey,
+  authDomain: configSource.authDomain || fallbackConfig.authDomain,
+  projectId: process.env.VITE_FIREBASE_PROJECT_ID || configSource.projectId || fallbackConfig.projectId,
+  storageBucket: configSource.storageBucket || fallbackConfig.storageBucket,
+  messagingSenderId: configSource.messagingSenderId || fallbackConfig.messagingSenderId,
+  appId: configSource.appId || fallbackConfig.appId,
+  firestoreDatabaseId: configSource.firestoreDatabaseId || fallbackConfig.firestoreDatabaseId,
 };
 
 // Initialize Firebase App singleton

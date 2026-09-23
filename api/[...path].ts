@@ -25,6 +25,19 @@ export default async function handler(req: IncomingMessage & { body?: any }, res
     );
   }
 
+  if (
+    req.url === '/api/webhooks/umrah-demo' ||
+    req.url?.startsWith('/api/webhooks/umrah-demo?') ||
+    req.url === '/api/leads/inbound' ||
+    req.url?.startsWith('/api/leads/inbound?')
+  ) {
+    // @ts-ignore
+    const { default: demoHandler } = await import('./webhooks/umrah-demo.js').catch(() => import('./webhooks/umrah-demo.ts'));
+    if (demoHandler) {
+      return demoHandler(req, res);
+    }
+  }
+
   try {
     // Dynamic import to support various bundler paths safely
     // @ts-ignore

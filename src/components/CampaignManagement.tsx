@@ -33,7 +33,12 @@ import {
   Phone,
   Briefcase,
   AlertTriangle,
+  Database,
+  Check,
+  Copy,
 } from 'lucide-react';
+import { collection, doc, setDoc, deleteDoc, onSnapshot, getDoc, getDocs } from 'firebase/firestore';
+import { db, isFirebaseConfigured } from '../firebase/config.js';
 import {
   Campaign,
   CampaignLead,
@@ -68,6 +73,7 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
 
   // Filters & Search
   const [searchQuery, setSearchQuery] = useState('');
+  const [templateSearchQuery, setTemplateSearchQuery] = useState('');
   const [leadStatusFilter, setLeadStatusFilter] = useState<'ALL' | 'PENDING' | 'SENT' | 'REPLIED' | 'DEMO_BOOKED' | 'FAILED'>('ALL');
 
   // Modals
@@ -75,12 +81,114 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
   const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<EmailTemplate | null>(null);
   const [isRestartConfirmOpen, setIsRestartConfirmOpen] = useState(false);
+  const [isRestarting, setIsRestarting] = useState(false);
+  const [campaignNotification, setCampaignNotification] = useState<{
+    type: 'info' | 'success' | 'warning';
+    title: string;
+    message: string;
+    subtext?: string;
+  } | null>(null);
+  const [isSavingTemplate, setIsSavingTemplate] = useState(false);
+  const [templateFormError, setTemplateFormError] = useState<string | null>(null);
+  const [templateSaveFeedback, setTemplateSaveFeedback] = useState<string | null>(null);
+  const [templateToDelete, setTemplateToDelete] = useState<EmailTemplate | null>(null);
+  const [isDeleteTemplateModalOpen, setIsDeleteTemplateModalOpen] = useState(false);
+  const [isDeletingTemplate, setIsDeletingTemplate] = useState(false);
 
   // Create Campaign Wizard State
   const [newCampaignName, setNewCampaignName] = useState('');
   const [newCampaignType, setNewCampaignType] = useState<'EMAIL' | 'WHATSAPP' | 'WHATSAPP_EMAIL'>('EMAIL');
   const [campaignMode, setCampaignMode] = useState<'PREDEFINED' | 'AI_GENERATED'>('PREDEFINED');
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
+  const selectedTemplateIdRef = useRef<string>(selectedTemplateId);
+  const [selectedTemplateFromDb, setSelectedTemplateFromDb] = useState<EmailTemplate | null>(null);
+  const [isLoadingTemplateFromDb, setIsLoadingTemplateFromDb] = useState(false);
+
+  useEffect(() => {
+    selectedTemplateIdRef.current = selectedTemplateId;
+  }, [selectedTemplateId]);
+
+  // Fetch all templates directly from Firestore DB
+  const fetchTemplatesDirectlyFromDb = async (): Promise<EmailTemplate[]> => {
+    try {
+      if (isFirebaseConfigured && db) {
+        const snap = await getDocs(collection(db, 'email_templates'));
+        if (!snap.empty) {
+          const dbTpls: EmailTemplate[] = [];
+          snap.forEach((d) => {
+            const data = d.data() as EmailTemplate;
+            if (data && data.templateId) dbTpls.push(data);
+          });
+          dbTpls.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+          setTemplates(dbTpls);
+          return dbTpls;
+        }
+      }
+    } catch (e) {
+      console.warn('[DB Template] Note fetching templates from Firestore DB:', e);
+    }
+    try {
+      const res = await fetch('/api/templates');
+      const data = await res.json();
+      if (data.templates && data.templates.length > 0) {
+        setTemplates(data.templates);
+        return data.templates;
+      }
+    } catch (e) {}
+    return [];
+  };
+
+  // Fetch a specific template document directly from Firestore DB
+  const loadTemplateDirectlyFromDb = async (templateId: string): Promise<EmailTemplate | null> => {
+    if (!templateId) return null;
+    setIsLoadingTemplateFromDb(true);
+    try {
+      if (isFirebaseConfigured && db) {
+        const snap = await getDoc(doc(db, 'email_templates', templateId));
+        if (snap.exists()) {
+          const tpl = snap.data() as EmailTemplate;
+          setSelectedTemplateFromDb(tpl);
+          return tpl;
+        }
+      }
+      const res = await fetch(`/api/templates/${templateId}`);
+      if (res.ok) {
+        const json = await res.json();
+        if (json.template) {
+          setSelectedTemplateFromDb(json.template);
+          return json.template;
+        }
+      }
+    } catch (err) {
+      console.warn('Error fetching template document from DB:', err);
+    } finally {
+      setIsLoadingTemplateFromDb(false);
+    }
+    return null;
+  };
+
+  const handleSelectTemplate = async (templateId: string) => {
+    setSelectedTemplateId(templateId);
+    selectedTemplateIdRef.current = templateId;
+    await loadTemplateDirectlyFromDb(templateId);
+  };
+
+  const openCreateCampaignModal = async (preferredTemplateId?: string) => {
+    setCampaignMode('PREDEFINED');
+    setIsCreateModalOpen(true);
+    const dbTpls = await fetchTemplatesDirectlyFromDb();
+    const targetId =
+      preferredTemplateId ||
+      (selectedTemplateId && dbTpls.some((t) => t.templateId === selectedTemplateId)
+        ? selectedTemplateId
+        : (dbTpls.length > 0 ? dbTpls[0].templateId : ''));
+    if (targetId) {
+      setSelectedTemplateId(targetId);
+      selectedTemplateIdRef.current = targetId;
+      await loadTemplateDirectlyFromDb(targetId);
+    }
+  };
+
   const [startImmediately, setStartImmediately] = useState(true);
   const [aiPreviewSamples, setAiPreviewSamples] = useState<any[]>([]);
   const [isAiPreviewModalOpen, setIsAiPreviewModalOpen] = useState(false);
@@ -141,11 +249,20 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
         }
       }
 
-      if (tplData.templates) {
+      if (tplData.templates && tplData.templates.length > 0) {
         setTemplates(tplData.templates);
-        if (!selectedTemplateId && tplData.templates.length > 0) {
-          setSelectedTemplateId(tplData.templates[0].templateId);
-        }
+        setSelectedTemplateId((curr) => {
+          if (curr && tplData.templates.some((t: EmailTemplate) => t.templateId === curr)) {
+            selectedTemplateIdRef.current = curr;
+            return curr;
+          }
+          if (selectedTemplateIdRef.current && tplData.templates.some((t: EmailTemplate) => t.templateId === selectedTemplateIdRef.current)) {
+            return selectedTemplateIdRef.current;
+          }
+          const firstId = tplData.templates[0].templateId;
+          selectedTemplateIdRef.current = firstId;
+          return firstId;
+        });
       }
     } catch (e) {
       console.warn('Error loading campaigns/templates:', e);
@@ -173,6 +290,50 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
       console.warn('Error loading campaign leads/runs:', e);
     }
   };
+
+  // Real-time Firestore sync for email templates
+  useEffect(() => {
+    if (isFirebaseConfigured && db) {
+      try {
+        const unsubscribe = onSnapshot(
+          collection(db, 'email_templates'),
+          (snapshot) => {
+            if (!snapshot.empty) {
+              const loadedTpls: EmailTemplate[] = [];
+              snapshot.forEach((docSnap) => {
+                const data = docSnap.data() as EmailTemplate;
+                if (data && data.templateId) {
+                  loadedTpls.push(data);
+                }
+              });
+              loadedTpls.sort(
+                (a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
+              );
+              setTemplates(loadedTpls);
+              setSelectedTemplateId((curr) => {
+                if (curr && loadedTpls.some((t) => t.templateId === curr)) {
+                  selectedTemplateIdRef.current = curr;
+                  return curr;
+                }
+                if (selectedTemplateIdRef.current && loadedTpls.some((t) => t.templateId === selectedTemplateIdRef.current)) {
+                  return selectedTemplateIdRef.current;
+                }
+                const firstId = loadedTpls[0]?.templateId || '';
+                selectedTemplateIdRef.current = firstId;
+                return firstId;
+              });
+            }
+          },
+          (err) => {
+            console.warn('Notice from Firestore email_templates listener:', err);
+          }
+        );
+        return () => unsubscribe();
+      } catch (e) {
+        console.warn('Firestore subscription setup note:', e);
+      }
+    }
+  }, []);
 
   useEffect(() => {
     loadData();
@@ -225,6 +386,7 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
 
   const handleRestartCampaign = async (campaignId: string) => {
     try {
+      setIsRestarting(true);
       const res = await fetch(`/api/campaigns/${campaignId}/restart`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -232,13 +394,64 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
       });
       const data = await res.json();
       setIsRestartConfirmOpen(false);
-      if (data.campaign) {
-        setSelectedCampaign(data.campaign);
+
+      if (data.success) {
+        if (data.allQualified) {
+          setCampaignNotification({
+            type: 'warning',
+            title: 'All Leads Qualified! 🎉',
+            message: data.message || 'All leads in this campaign have replied and qualified. 0 emails were dispatched as no unreplied leads remain.',
+            subtext: `Run #${data.run?.runNumber || (selectedCampaign?.lastRunNumber || 1) + 1} recorded with 0 new sends.`,
+          });
+        } else {
+          setCampaignNotification({
+            type: 'success',
+            title: `Run #${data.run?.runNumber || (selectedCampaign?.lastRunNumber || 0) + 1} Dispatched!`,
+            message: data.message || `Started follow-up run for ${data.targetLeadsCount} unreplied lead(s).`,
+            subtext: `${data.alreadyRepliedCount} lead(s) who already replied were safely excluded from sending.`,
+          });
+        }
+
+        if (data.campaign) setSelectedCampaign(data.campaign);
+        await loadData();
+        await loadSelectedCampaignDetails(campaignId);
+      } else {
+        setCampaignNotification({
+          type: 'warning',
+          title: 'Restart Failed',
+          message: data.error || 'Unable to restart campaign',
+        });
+      }
+    } catch (e: any) {
+      console.error('Error restarting campaign:', e);
+      setCampaignNotification({
+        type: 'warning',
+        title: 'Restart Error',
+        message: e?.message || 'Network error occurred while restarting campaign',
+      });
+    } finally {
+      setIsRestarting(false);
+    }
+  };
+
+  // Update lead reply status (e.g. when manually qualifying or syncing lead state)
+  const handleToggleReplyStatus = async (lead: CampaignLead) => {
+    const nextStatus = lead.replyStatus === 'REPLIED' ? 'NOT_REPLIED' : 'REPLIED';
+    try {
+      const res = await fetch(`/api/campaigns/lead/${lead.campaignLeadId}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          replyStatus: nextStatus,
+        }),
+      });
+      const data = await res.json();
+      if (data.lead && selectedCampaignId) {
+        loadSelectedCampaignDetails(selectedCampaignId);
         loadData();
-        loadSelectedCampaignDetails(campaignId);
       }
     } catch (e) {
-      console.error('Error restarting campaign:', e);
+      console.error('Error toggling reply status:', e);
     }
   };
 
@@ -435,6 +648,25 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
       return;
     }
 
+    const effectiveTemplateId =
+      campaignMode === 'PREDEFINED'
+        ? selectedTemplateId || selectedTemplateIdRef.current || (templates.length > 0 ? templates[0].templateId : undefined)
+        : undefined;
+
+    const matchedTemplate =
+      (selectedTemplateFromDb && selectedTemplateFromDb.templateId === effectiveTemplateId)
+        ? selectedTemplateFromDb
+        : templates.find((t) => t.templateId === effectiveTemplateId);
+
+    console.log('[Create Campaign] Dispatching creation payload:', {
+      name: newCampaignName,
+      campaignMode,
+      effectiveTemplateId,
+      templateName: matchedTemplate?.name,
+      leadsCount: validLeads.length,
+      startImmediately,
+    });
+
     setLoading(true);
     try {
       const res = await fetch('/api/campaigns', {
@@ -444,7 +676,10 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
           name: newCampaignName,
           type: newCampaignType,
           campaignMode,
-          templateId: campaignMode === 'PREDEFINED' ? selectedTemplateId : undefined,
+          templateId: effectiveTemplateId,
+          templateName: matchedTemplate?.name,
+          templateSubject: matchedTemplate?.subject,
+          templateBody: matchedTemplate?.body,
           sourceFileName: uploadedFileName,
           leads: validLeads,
           startImmediately,
@@ -472,49 +707,137 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
     }
   };
 
-  // Save / Update Template
+  // Save / Update Template with direct Firestore & API synchronization
   const handleSaveTemplate = async () => {
-    if (!templateFormName || !templateFormSubject || !templateFormBody) {
-      alert('Please fill in all template fields.');
+    if (!templateFormName.trim() || !templateFormSubject.trim() || !templateFormBody.trim()) {
+      setTemplateFormError('Please fill in Template Name, Subject Line, and Email Body.');
       return;
     }
 
+    setIsSavingTemplate(true);
+    setTemplateFormError(null);
+
+    const now = new Date().toISOString();
+    const templateId = editingTemplate?.templateId || `tpl-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    const payload: EmailTemplate = {
+      templateId,
+      name: templateFormName.trim(),
+      subject: templateFormSubject.trim(),
+      body: templateFormBody.trim(),
+      createdAt: editingTemplate?.createdAt || now,
+      updatedAt: now,
+    };
+
     try {
-      const payload: Partial<EmailTemplate> = {
-        name: templateFormName,
-        subject: templateFormSubject,
-        body: templateFormBody,
-      };
-      if (editingTemplate) {
-        payload.templateId = editingTemplate.templateId;
+      // 1. PRIMARY: Store directly into Firestore Database
+      if (isFirebaseConfigured && db) {
+        try {
+          await setDoc(doc(db, 'email_templates', templateId), payload, { merge: true });
+          console.log('[DB Storage] Successfully saved template directly to Firestore DB:', templateId);
+        } catch (fsErr) {
+          console.error('[DB Storage] Direct Firestore write note:', fsErr);
+        }
       }
 
+      // 2. Server API call (updates in-memory store and verifies persistence)
       const res = await fetch('/api/templates', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
       const data = await res.json();
-      if (data.template) {
-        setIsTemplateModalOpen(false);
-        setEditingTemplate(null);
-        setTemplateFormName('');
-        setTemplateFormSubject('');
-        setTemplateFormBody('');
-        loadData();
-      }
-    } catch (e) {
+      const savedTpl: EmailTemplate = (data && data.success && data.template) ? data.template : payload;
+
+      // 3. Update local templates state with the new template at the very top
+      setTemplates((prev) => {
+        const remaining = prev.filter((t) => t.templateId !== savedTpl.templateId);
+        return [savedTpl, ...remaining];
+      });
+
+      // 4. CRITICAL: Automatically pre-select this newly saved template immediately for the next campaign!
+      setSelectedTemplateId(savedTpl.templateId);
+      selectedTemplateIdRef.current = savedTpl.templateId;
+      setSelectedTemplateFromDb(savedTpl);
+
+      setIsTemplateModalOpen(false);
+      setEditingTemplate(null);
+      setTemplateFormName('');
+      setTemplateFormSubject('');
+      setTemplateFormBody('');
+      setTemplateSaveFeedback(
+        editingTemplate
+          ? `Template "${savedTpl.name}" updated successfully in database!`
+          : `New template "${savedTpl.name}" saved to database and selected for your next campaign!`
+      );
+      setTimeout(() => setTemplateSaveFeedback(null), 5000);
+      loadData();
+    } catch (e: any) {
       console.error('Error saving template:', e);
+      setTemplateFormError(`Failed to save template: ${e?.message || 'Unknown error'}`);
+    } finally {
+      setIsSavingTemplate(false);
     }
   };
 
-  const handleDeleteTemplate = async (templateId: string) => {
-    if (!confirm('Are you sure you want to delete this template?')) return;
+  const promptDeleteTemplate = (tpl: EmailTemplate) => {
+    setTemplateToDelete(tpl);
+    setIsDeleteTemplateModalOpen(true);
+  };
+
+  const handleConfirmDeleteTemplate = async () => {
+    if (!templateToDelete) return;
+    const targetId = templateToDelete.templateId;
+    setIsDeletingTemplate(true);
+
     try {
-      await fetch(`/api/templates/${templateId}`, { method: 'DELETE' });
+      // 1. Direct Firestore deletion
+      if (isFirebaseConfigured && db) {
+        try {
+          await deleteDoc(doc(db, 'email_templates', targetId));
+        } catch (fsErr) {
+          console.warn('Firestore delete template note:', fsErr);
+        }
+      }
+
+      // 2. Delete via API
+      await fetch(`/api/templates/${targetId}`, { method: 'DELETE' });
+
+      // 3. Optimistic local state update
+      setTemplates((prev) => prev.filter((t) => t.templateId !== targetId));
+      if (selectedTemplateId === targetId) {
+        setSelectedTemplateId('');
+      }
+      if (editingTemplate?.templateId === targetId) {
+        setIsTemplateModalOpen(false);
+        setEditingTemplate(null);
+      }
+
+      setIsDeleteTemplateModalOpen(false);
+      setTemplateToDelete(null);
+      setTemplateSaveFeedback('Email template deleted from database.');
+      setTimeout(() => setTemplateSaveFeedback(null), 3500);
       loadData();
-    } catch (e) {
+    } catch (e: any) {
       console.error('Error deleting template:', e);
+      alert(`Failed to delete template: ${e?.message || e}`);
+    } finally {
+      setIsDeletingTemplate(false);
+    }
+  };
+
+  const handleDeleteTemplate = (templateId: string) => {
+    const tpl = templates.find((t) => t.templateId === templateId);
+    if (tpl) {
+      promptDeleteTemplate(tpl);
+    } else {
+      promptDeleteTemplate({
+        templateId,
+        name: 'Email Template',
+        subject: '',
+        body: '',
+        createdAt: '',
+        updatedAt: '',
+      });
     }
   };
 
@@ -523,7 +846,19 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
     setTemplateFormName(tpl.name);
     setTemplateFormSubject(tpl.subject);
     setTemplateFormBody(tpl.body);
+    setTemplateFormError(null);
     setIsTemplateModalOpen(true);
+  };
+
+  // Helper to preview variable replacement with mock agency data
+  const renderTemplatePreview = (text: string) => {
+    return text
+      .replace(/\{\{name\}\}/gi, 'Mr. Tariq Farooq')
+      .replace(/\{\{firstName\}\}/gi, 'Tariq')
+      .replace(/\{\{lastName\}\}/gi, 'Farooq')
+      .replace(/\{\{company\}\}/gi, 'Al-Bait Pilgrimage Tours')
+      .replace(/\{\{designation\}\}/gi, 'Managing Director')
+      .replace(/\{\{email\}\}/gi, 'tariq@albait-tours.com');
   };
 
   // Filtered Leads
@@ -620,7 +955,7 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
           {activeTab === 'CAMPAIGNS' ? (
             <button
               id="create-campaign-btn"
-              onClick={() => setIsCreateModalOpen(true)}
+              onClick={() => openCreateCampaignModal()}
               className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-sm font-medium transition shadow-md shadow-emerald-950/40"
             >
               <Plus className="w-4 h-4" />
@@ -666,7 +1001,7 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                   <p className="text-sm font-medium text-slate-400">No campaigns yet</p>
                   <p className="text-xs text-slate-400 mt-1">Create your first campaign to begin cold outreach</p>
                   <button
-                    onClick={() => setIsCreateModalOpen(true)}
+                    onClick={() => openCreateCampaignModal()}
                     className="mt-3 px-3 py-1.5 text-xs bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 rounded-lg hover:bg-emerald-600/50 transition inline-block"
                   >
                     Create Campaign
@@ -759,6 +1094,44 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
           <main className="flex-1 flex flex-col overflow-y-auto bg-slate-950">
             {selectedCampaign ? (
               <div className="p-6 space-y-6">
+                {/* Notification Banner */}
+                {campaignNotification && (
+                  <div
+                    className={`p-4 rounded-2xl border flex items-start justify-between gap-3 animate-in fade-in slide-in-from-top-2 duration-200 ${
+                      campaignNotification.type === 'success'
+                        ? 'bg-emerald-950/40 border-emerald-500/40 text-emerald-200'
+                        : campaignNotification.type === 'warning'
+                        ? 'bg-amber-950/40 border-amber-500/40 text-amber-200'
+                        : 'bg-sky-950/40 border-sky-500/40 text-sky-200'
+                    }`}
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className="p-1.5 rounded-lg bg-black/20 shrink-0 mt-0.5">
+                        {campaignNotification.type === 'success' ? (
+                          <CheckCircle2 className="w-5 h-5 text-emerald-400" />
+                        ) : campaignNotification.type === 'warning' ? (
+                          <AlertTriangle className="w-5 h-5 text-amber-400" />
+                        ) : (
+                          <Sparkles className="w-5 h-5 text-sky-400" />
+                        )}
+                      </div>
+                      <div>
+                        <h4 className="text-sm font-bold text-slate-100">{campaignNotification.title}</h4>
+                        <p className="text-xs text-slate-300 mt-0.5 leading-relaxed">{campaignNotification.message}</p>
+                        {campaignNotification.subtext && (
+                          <p className="text-[11px] opacity-80 mt-1 font-mono">{campaignNotification.subtext}</p>
+                        )}
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => setCampaignNotification(null)}
+                      className="text-slate-400 hover:text-slate-200 p-1 rounded-lg hover:bg-white/5 transition"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
+
                 {/* Campaign Header Toolbar */}
                 <div className="flex flex-wrap items-center justify-between gap-4 p-5 bg-slate-900 border border-slate-800 rounded-2xl">
                   <div>
@@ -818,10 +1191,10 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                     <button
                       id="restart-campaign-btn"
                       onClick={() => setIsRestartConfirmOpen(true)}
-                      className="flex items-center gap-2 px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl text-sm font-medium transition"
-                      title="Create a new run without duplicate sends"
+                      className="flex items-center gap-2 px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl text-sm font-medium transition group"
+                      title="Intelligent restart: only sends to unreplied leads"
                     >
-                      <RotateCcw className="w-4 h-4 text-sky-400" />
+                      <RotateCcw className="w-4 h-4 text-sky-400 group-hover:rotate-180 transition-transform duration-300" />
                       <span>Restart (New Run)</span>
                     </button>
 
@@ -1062,22 +1435,24 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                                   )}
                                 </td>
                                 <td className="py-3 px-4">
-                                  <span
-                                    className={`px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider inline-flex items-center gap-1 ${
+                                  <button
+                                    onClick={() => handleToggleReplyStatus(lead)}
+                                    title="Click to toggle Lead Reply / Qualification status"
+                                    className={`px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider inline-flex items-center gap-1 transition border ${
                                       lead.replyStatus === 'REPLIED'
-                                        ? 'bg-sky-500/20 text-sky-300 border border-sky-500/30'
-                                        : 'bg-slate-800 text-slate-400'
+                                        ? 'bg-sky-500/20 text-sky-300 border-sky-500/40 hover:bg-sky-500/30'
+                                        : 'bg-slate-800/90 text-slate-400 border-slate-700 hover:text-slate-200 hover:border-slate-600'
                                     }`}
                                   >
                                     {lead.replyStatus === 'REPLIED' ? (
                                       <>
-                                        <MessageSquare className="w-2.5 h-2.5" />
+                                        <MessageSquare className="w-2.5 h-2.5 text-sky-400" />
                                         <span>REPLIED</span>
                                       </>
                                     ) : (
                                       <span>NO REPLY</span>
                                     )}
-                                  </span>
+                                  </button>
                                 </td>
                                 <td className="py-3 px-4">
                                   <button
@@ -1142,69 +1517,216 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
       ) : (
         /* Email Templates Sub-Tab */
         <div className="flex-1 overflow-y-auto p-6 bg-slate-950">
-          <div className="max-w-5xl mx-auto space-y-6">
-            <div className="flex items-center justify-between">
+          <div className="max-w-6xl mx-auto space-y-6">
+            {/* Feedback notification */}
+            {templateSaveFeedback && (
+              <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-xl text-xs text-emerald-300 flex items-center justify-between shadow-lg animate-in fade-in slide-in-from-top-2 duration-200">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <span className="font-medium">{templateSaveFeedback}</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => {
+                      setActiveTab('CAMPAIGNS');
+                      openCreateCampaignModal(selectedTemplateIdRef.current);
+                    }}
+                    className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-semibold flex items-center gap-1 shadow transition"
+                  >
+                    <span>Use in Campaign</span>
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    onClick={() => setTemplateSaveFeedback(null)}
+                    className="text-emerald-400 hover:text-emerald-200 p-1"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Header & Actions */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-900/60 p-5 rounded-2xl border border-slate-800/80">
               <div>
-                <h2 className="text-lg font-bold text-slate-100">Predefined Email Templates</h2>
-                <p className="text-xs text-slate-400 mt-0.5">
-                  Templates support variables like <code className="text-emerald-400">{`{{name}}`}</code>, <code className="text-emerald-400">{`{{company}}`}</code>, and <code className="text-emerald-400">{`{{designation}}`}</code>
+                <div className="flex items-center gap-3">
+                  <h2 className="text-lg font-bold text-slate-100">Outbound Email Templates</h2>
+                  <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                    {templates.length} {templates.length === 1 ? 'Template' : 'Templates'}
+                  </span>
+                  <span className="hidden sm:inline-flex items-center gap-1 text-[11px] text-slate-400">
+                    <Database className="w-3 h-3 text-emerald-400" />
+                    <span>Database Synced</span>
+                  </span>
+                </div>
+                <p className="text-xs text-slate-400 mt-1">
+                  Dynamic templates stored in Firestore database. Supports variable replacement like <code className="text-emerald-400 bg-slate-950 px-1 py-0.5 rounded">{`{{name}}`}</code>, <code className="text-emerald-400 bg-slate-950 px-1 py-0.5 rounded">{`{{company}}`}</code>, and <code className="text-emerald-400 bg-slate-950 px-1 py-0.5 rounded">{`{{designation}}`}</code>.
                 </p>
               </div>
-              <button
-                onClick={() => {
-                  setEditingTemplate(null);
-                  setTemplateFormName('');
-                  setTemplateFormSubject('');
-                  setTemplateFormBody('');
-                  setIsTemplateModalOpen(true);
-                }}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-medium transition"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                <span>Create Template</span>
-              </button>
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    setEditingTemplate(null);
+                    setTemplateFormName('');
+                    setTemplateFormSubject('');
+                    setTemplateFormBody('');
+                    setTemplateFormError(null);
+                    setIsTemplateModalOpen(true);
+                  }}
+                  className="flex items-center gap-1.5 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-semibold transition shadow-lg shadow-emerald-900/20"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Create Template</span>
+                </button>
+              </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {templates.map((tpl) => (
-                <div
-                  key={tpl.templateId}
-                  className="p-5 bg-slate-900 border border-slate-800 rounded-xl flex flex-col justify-between"
+            {/* Search Filter Bar */}
+            <div className="flex items-center gap-3 bg-slate-900 p-2.5 rounded-xl border border-slate-800">
+              <Search className="w-4 h-4 text-slate-400 ml-1.5" />
+              <input
+                type="text"
+                placeholder="Search templates by name or subject..."
+                value={templateSearchQuery}
+                onChange={(e) => setTemplateSearchQuery(e.target.value)}
+                className="bg-transparent border-none text-xs text-slate-200 placeholder-slate-500 focus:outline-none flex-1"
+              />
+              {templateSearchQuery && (
+                <button
+                  onClick={() => setTemplateSearchQuery('')}
+                  className="text-slate-500 hover:text-slate-300 text-xs px-2"
                 >
-                  <div>
-                    <div className="flex items-start justify-between gap-2">
-                      <h3 className="font-semibold text-slate-200 text-sm">{tpl.name}</h3>
-                      <div className="flex items-center gap-1">
-                        <button
-                          onClick={() => openEditTemplate(tpl)}
-                          className="p-1 text-slate-400 hover:text-slate-200 rounded"
-                          title="Edit Template"
-                        >
-                          <Edit3 className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          onClick={() => handleDeleteTemplate(tpl.templateId)}
-                          className="p-1 text-slate-400 hover:text-rose-400 rounded"
-                          title="Delete Template"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </div>
-                    <div className="mt-2 text-xs font-mono text-emerald-400/90 bg-slate-950 p-2 rounded border border-slate-800 truncate">
-                      Subject: {tpl.subject}
-                    </div>
-                    <p className="mt-3 text-xs text-slate-400 line-clamp-5 whitespace-pre-wrap leading-relaxed">
-                      {tpl.body}
-                    </p>
-                  </div>
-                  <div className="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between text-[11px] text-slate-400">
-                    <span>ID: {tpl.templateId}</span>
-                    <span>{new Date(tpl.updatedAt).toLocaleDateString()}</span>
-                  </div>
-                </div>
-              ))}
+                  Clear
+                </button>
+              )}
             </div>
+
+            {/* Templates List */}
+            {templates.filter((tpl) => {
+              if (!templateSearchQuery.trim()) return true;
+              const q = templateSearchQuery.toLowerCase();
+              return tpl.name.toLowerCase().includes(q) || tpl.subject.toLowerCase().includes(q);
+            }).length === 0 ? (
+              <div className="p-12 text-center bg-slate-900/40 rounded-2xl border border-slate-800/60 space-y-3">
+                <Mail className="w-10 h-10 text-slate-600 mx-auto" />
+                <p className="text-sm font-medium text-slate-300">
+                  {templateSearchQuery ? 'No templates match your search query.' : 'No email templates found in database.'}
+                </p>
+                <p className="text-xs text-slate-400 max-w-sm mx-auto">
+                  Create your first email template with dynamic placeholders to use in outbound campaigns.
+                </p>
+                <button
+                  onClick={() => {
+                    setEditingTemplate(null);
+                    setTemplateFormName('');
+                    setTemplateFormSubject('');
+                    setTemplateFormBody('');
+                    setTemplateFormError(null);
+                    setIsTemplateModalOpen(true);
+                  }}
+                  className="mt-2 inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-semibold"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Create First Template</span>
+                </button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                {templates
+                  .filter((tpl) => {
+                    if (!templateSearchQuery.trim()) return true;
+                    const q = templateSearchQuery.toLowerCase();
+                    return tpl.name.toLowerCase().includes(q) || tpl.subject.toLowerCase().includes(q);
+                  })
+                  .map((tpl) => {
+                    // Extract placeholder tags present in this template
+                    const tags = Array.from(
+                      new Set(
+                        `${tpl.subject} ${tpl.body}`.match(/\{\{[a-zA-Z0-9_]+\}\}/g) || []
+                      )
+                    );
+
+                    return (
+                      <div
+                        key={tpl.templateId}
+                        className="p-5 bg-slate-900 border border-slate-800 hover:border-slate-700/80 rounded-2xl flex flex-col justify-between transition-all duration-150 shadow-sm"
+                      >
+                        <div className="space-y-3">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="flex items-center gap-2">
+                              <h3 className="font-semibold text-slate-100 text-sm">{tpl.name}</h3>
+                              <span className="text-[10px] px-1.5 py-0.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded">
+                                Saved in DB
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              <button
+                                onClick={() => openEditTemplate(tpl)}
+                                className="p-1.5 text-slate-400 hover:text-slate-100 hover:bg-slate-800 rounded-lg transition"
+                                title="Edit Email Template"
+                              >
+                                <Edit3 className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={() => promptDeleteTemplate(tpl)}
+                                className="p-1.5 text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition"
+                                title="Delete Email Template from Database"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </div>
+
+                          <div className="text-xs font-mono text-emerald-400 bg-slate-950 p-2.5 rounded-xl border border-slate-800/80 break-words">
+                            <span className="text-slate-400 font-sans text-[11px] mr-1">Subject:</span>
+                            {tpl.subject}
+                          </div>
+
+                          <div className="text-xs text-slate-400 line-clamp-4 whitespace-pre-wrap leading-relaxed bg-slate-950/40 p-3 rounded-xl border border-slate-800/40 font-mono">
+                            {tpl.body}
+                          </div>
+
+                          {tags.length > 0 && (
+                            <div className="flex flex-wrap items-center gap-1 pt-1">
+                              <span className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold mr-1">
+                                Variables:
+                              </span>
+                              {tags.map((tag) => (
+                                <span
+                                  key={tag}
+                                  className="text-[10px] font-mono px-1.5 py-0.5 bg-slate-800 text-slate-300 rounded border border-slate-700/60"
+                                >
+                                  {tag}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="mt-4 pt-3.5 border-t border-slate-800/80 flex items-center justify-between text-[11px] text-slate-400">
+                          <span className="truncate max-w-[140px]" title={tpl.templateId}>
+                            ID: {tpl.templateId}
+                          </span>
+                          <div className="flex items-center gap-3">
+                            <span>{new Date(tpl.updatedAt || tpl.createdAt).toLocaleDateString()}</span>
+                            <button
+                              onClick={() => {
+                                setActiveTab('CAMPAIGNS');
+                                openCreateCampaignModal(tpl.templateId);
+                              }}
+                              className="inline-flex items-center gap-1 text-emerald-400 hover:text-emerald-300 font-medium"
+                            >
+                              <span>Use in Campaign</span>
+                              <ChevronRight className="w-3 h-3" />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -1460,14 +1982,27 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
 
               {/* Conditional: Predefined Template Selector or AI Preview Button */}
               {campaignMode === 'PREDEFINED' ? (
-                <div>
-                  <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
-                    Select Predefined Email Template *
-                  </label>
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider">
+                        Select Predefined Email Template *
+                      </label>
+                      <span className="inline-flex items-center gap-1 text-[10px] text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20 font-medium">
+                        <Database className="w-3 h-3" />
+                        <span>Database Synced</span>
+                      </span>
+                    </div>
+                    <span className="text-[11px] text-emerald-400 font-medium">
+                      {templates.length} templates in database
+                    </span>
+                  </div>
+
+                  {/* Dropdown Selector */}
                   <select
-                    value={selectedTemplateId}
-                    onChange={(e) => setSelectedTemplateId(e.target.value)}
-                    className="w-full px-3.5 py-2 bg-slate-950 border border-slate-700/80 rounded-lg text-sm text-slate-100 focus:outline-none focus:border-emerald-500"
+                    value={selectedTemplateId || (templates.length > 0 ? templates[0].templateId : '')}
+                    onChange={(e) => handleSelectTemplate(e.target.value)}
+                    className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-sm font-medium text-slate-100 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition"
                   >
                     {templates.map((tpl) => (
                       <option key={tpl.templateId} value={tpl.templateId}>
@@ -1476,16 +2011,101 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                     ))}
                   </select>
 
-                  {selectedTemplateId && (
-                    <div className="mt-2.5 p-3 bg-slate-950 border border-slate-800/80 rounded-lg text-xs space-y-1">
-                      <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">
-                        Subject Line Preview:
-                      </span>
-                      <p className="font-mono text-emerald-400/90 truncate">
-                        {templates.find((t) => t.templateId === selectedTemplateId)?.subject}
-                      </p>
+                  {/* Visual Selectable Template Cards */}
+                  <div className="space-y-2">
+                    <div className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+                      Or Select Directly from Database:
                     </div>
-                  )}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-52 overflow-y-auto pr-1">
+                      {templates.map((tpl) => {
+                        const isSelected = (selectedTemplateId || (templates.length > 0 ? templates[0].templateId : '')) === tpl.templateId;
+                        return (
+                          <div
+                            key={tpl.templateId}
+                            onClick={() => handleSelectTemplate(tpl.templateId)}
+                            className={`p-3 rounded-xl border cursor-pointer transition text-left relative flex flex-col justify-between ${
+                              isSelected
+                                ? 'bg-emerald-500/10 border-emerald-500 ring-1 ring-emerald-500/50 shadow-sm'
+                                : 'bg-slate-950/80 border-slate-800 hover:border-slate-700 text-slate-400'
+                            }`}
+                          >
+                            <div>
+                              <div className="flex items-start justify-between gap-2">
+                                <h4 className={`text-xs font-bold leading-tight ${isSelected ? 'text-emerald-300' : 'text-slate-200'}`}>
+                                  {tpl.name}
+                                </h4>
+                                <div className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 ${
+                                  isSelected ? 'border-emerald-400 bg-emerald-500 text-slate-950' : 'border-slate-700'
+                                }`}>
+                                  {isSelected && <Check className="w-2.5 h-2.5 stroke-[3]" />}
+                                </div>
+                              </div>
+                              <p className="text-[11px] text-slate-400 mt-1 line-clamp-1 font-mono">
+                                {tpl.subject}
+                              </p>
+                              <p className="text-[10px] text-slate-400 mt-1 line-clamp-2 leading-relaxed">
+                                {tpl.body.slice(0, 100)}...
+                              </p>
+                            </div>
+                            <div className="mt-2 pt-2 border-t border-slate-800/60 flex items-center justify-between text-[10px]">
+                              <span className={isSelected ? 'text-emerald-400 font-semibold' : 'text-slate-400'}>
+                                {isSelected ? '✓ ACTIVE SELECTION' : 'Click to select from DB'}
+                              </span>
+                              <span className="text-slate-400 font-mono text-[9px]">DB Doc: {tpl.templateId.slice(0, 14)}</span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Active Selected Template Verification Box */}
+                  {(() => {
+                    const currentId = selectedTemplateId || (templates.length > 0 ? templates[0].templateId : '');
+                    const activeTpl = (selectedTemplateFromDb && selectedTemplateFromDb.templateId === currentId)
+                      ? selectedTemplateFromDb
+                      : templates.find((t) => t.templateId === currentId);
+                    if (!activeTpl) return null;
+                    return (
+                      <div className="p-3.5 bg-slate-950 border border-emerald-500/30 rounded-xl text-xs space-y-2.5 shadow-inner">
+                        <div className="flex items-center justify-between border-b border-slate-800/80 pb-2">
+                          <div className="flex items-center gap-2">
+                            <Database className="w-4 h-4 text-emerald-400" />
+                            <span className="text-[11px] font-bold text-emerald-400 uppercase tracking-wider">
+                              Retrieved from Database:
+                            </span>
+                            {isLoadingTemplateFromDb && (
+                              <RefreshCw className="w-3 h-3 text-emerald-400 animate-spin" />
+                            )}
+                          </div>
+                          <span className="text-[11px] text-emerald-300 font-semibold bg-emerald-950/60 px-2.5 py-0.5 rounded border border-emerald-800/40 font-mono">
+                            {activeTpl.name}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">
+                            Personalized Subject Line:
+                          </span>
+                          <p className="font-semibold text-emerald-300 mt-0.5 bg-slate-900/90 px-3 py-1.5 rounded-lg border border-slate-800 text-xs">
+                            {activeTpl.subject}
+                          </p>
+                        </div>
+                        <div>
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">
+                              Email Message Body (from DB):
+                            </span>
+                            <span className="text-[10px] text-slate-400">
+                              (Placeholders like <code className="text-emerald-400 font-mono">{"{{name}}"}</code> & <code className="text-emerald-400 font-mono">{"{{company}}"}</code> will be auto-filled)
+                            </span>
+                          </div>
+                          <div className="max-h-36 overflow-y-auto bg-slate-900/90 p-3 rounded-lg border border-slate-800 text-slate-200 font-mono text-xs whitespace-pre-wrap leading-relaxed shadow-inner">
+                            {activeTpl.body}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
               ) : (
                 <div className="p-4 bg-slate-950 border border-emerald-500/30 rounded-xl space-y-3">
@@ -1569,48 +2189,220 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
         </div>
       )}
 
-      {/* RESTART CAMPAIGN CONFIRMATION MODAL */}
-      {isRestartConfirmOpen && selectedCampaign && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md p-6 space-y-4 shadow-2xl">
-            <div className="flex items-center gap-3">
-              <div className="p-2.5 bg-sky-500/10 border border-sky-500/20 rounded-xl text-sky-400">
-                <RotateCcw className="w-5 h-5" />
-              </div>
-              <div>
-                <h3 className="text-base font-bold text-slate-100">Restart Campaign</h3>
-                <p className="text-xs text-slate-400">Creates a new execution run</p>
-              </div>
-            </div>
+      {/* RESTART CAMPAIGN CONFIRMATION MODAL & ALL-QUALIFIED POPUP */}
+      {isRestartConfirmOpen && selectedCampaign && (() => {
+        const repliedLeads = campaignLeads.filter((l) => l.replyStatus === 'REPLIED');
+        const unrepliedLeads = campaignLeads.filter((l) => l.replyStatus !== 'REPLIED');
+        const allQualified = campaignLeads.length > 0 && repliedLeads.length === campaignLeads.length;
+        const nextRun = (selectedCampaign.lastRunNumber || 0) + 1;
 
-            <div className="p-3.5 bg-slate-950 border border-slate-800 rounded-xl text-xs space-y-2 text-slate-300">
-              <p className="font-semibold text-slate-200">Safe Idempotent Execution:</p>
-              <ul className="list-disc list-inside space-y-1 text-slate-400">
-                <li>Preserves all campaign leads, history, and metrics.</li>
-                <li>
-                  <strong className="text-emerald-400">Strict Duplicate Protection:</strong> leads who already received an email will NOT be re-sent to.
-                </li>
-                <li>Only pending or previously failed leads will be queued for dispatch.</li>
-              </ul>
-            </div>
+        return (
+          <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-lg p-6 space-y-4 shadow-2xl animate-in fade-in zoom-in-95 duration-150">
+              {allQualified ? (
+                // ALL LEADS QUALIFIED POPUP
+                <>
+                  <div className="flex items-start gap-3">
+                    <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl text-amber-400 shrink-0">
+                      <Sparkles className="w-6 h-6 text-amber-400" />
+                    </div>
+                    <div>
+                      <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 text-[11px] font-semibold mb-1">
+                        <Check className="w-3 h-3" /> 100% Campaign Conversion
+                      </div>
+                      <h3 className="text-base font-bold text-slate-100">
+                        All Leads Have Replied & Qualified! 🎉
+                      </h3>
+                      <p className="text-xs text-slate-400 mt-0.5">
+                        No pending follow-ups required
+                      </p>
+                    </div>
+                  </div>
 
-            <div className="flex items-center justify-end gap-3 pt-2">
-              <button
-                onClick={() => setIsRestartConfirmOpen(false)}
-                className="px-4 py-2 text-xs text-slate-400 hover:text-slate-200 font-medium"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => handleRestartCampaign(selectedCampaign.campaignId)}
-                className="px-4 py-2 bg-sky-600 hover:bg-sky-500 text-white rounded-lg text-xs font-semibold transition"
-              >
-                Confirm & Start Run #{(selectedCampaign.lastRunNumber || 1) + 1}
-              </button>
+                  <div className="p-4 bg-amber-950/20 border border-amber-500/30 rounded-xl text-xs space-y-2.5 text-slate-200">
+                    <div className="flex items-center gap-2 text-amber-300 font-semibold">
+                      <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
+                      <span>Zero Follow-up Emails Will Be Dispatched</span>
+                    </div>
+                    <p className="text-slate-300 text-[12px] leading-relaxed">
+                      Every single lead in this campaign (<strong>{campaignLeads.length} of {campaignLeads.length} leads</strong>) has already responded and engaged.
+                    </p>
+                    <p className="text-amber-200/90 text-[11px] bg-amber-900/30 p-2.5 rounded-lg border border-amber-600/30 font-medium">
+                      ⚠️ <strong>Notice:</strong> If you restart the campaign now for Run #{nextRun}, <span className="underline decoration-amber-400">no one will receive an email</span> because all contacts have already converted and qualified.
+                    </p>
+                  </div>
+
+                  {/* Qualified Leads List */}
+                  <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
+                    <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+                      Qualified Responders ({repliedLeads.length})
+                    </p>
+                    {repliedLeads.map((l) => (
+                      <div
+                        key={l.campaignLeadId}
+                        className="flex items-center justify-between p-2 bg-slate-950/80 border border-slate-800 rounded-lg text-xs"
+                      >
+                        <div className="flex items-center gap-2">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-sky-400" />
+                          <span className="font-medium text-slate-200">{l.name}</span>
+                          <span className="text-slate-400 text-[11px]">({l.companyName})</span>
+                        </div>
+                        <span className="px-2 py-0.5 bg-sky-500/20 text-sky-300 rounded text-[10px] font-semibold">
+                          REPLIED
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="flex items-center justify-end gap-3 pt-2">
+                    <button
+                      onClick={() => setIsRestartConfirmOpen(false)}
+                      className="px-4 py-2 text-xs text-slate-400 hover:text-slate-200 font-medium"
+                    >
+                      Close / Do Not Send
+                    </button>
+                    <button
+                      id="confirm-restart-all-qualified-btn"
+                      disabled={isRestarting}
+                      onClick={() => handleRestartCampaign(selectedCampaign.campaignId)}
+                      className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-lg text-xs font-semibold transition flex items-center gap-2"
+                    >
+                      {isRestarting ? (
+                        <>
+                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                          <span>Processing...</span>
+                        </>
+                      ) : (
+                        <span>Acknowledge & Record Run #{nextRun} (0 Mails)</span>
+                      )}
+                    </button>
+                  </div>
+                </>
+              ) : (
+                // INTELLIGENT FOLLOW-UP RESTART MODAL
+                <>
+                  <div className="flex items-center gap-3">
+                    <div className="p-2.5 bg-sky-500/10 border border-sky-500/20 rounded-xl text-sky-400">
+                      <RotateCcw className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className="text-base font-bold text-slate-100">
+                        Restart Campaign & Launch Follow-Up Run #{nextRun}
+                      </h3>
+                      <p className="text-xs text-slate-400">
+                        Automated smart filtering based on lead reply & delivery status
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Summary Breakdown */}
+                  <div className="grid grid-cols-2 gap-3 text-xs">
+                    <div className="p-3 bg-emerald-950/20 border border-emerald-500/30 rounded-xl">
+                      <div className="text-[11px] text-emerald-400 font-semibold uppercase tracking-wider">
+                        Follow-Up Queue (Run #{nextRun})
+                      </div>
+                      <div className="text-xl font-bold text-emerald-300 mt-1">
+                        {unrepliedLeads.length} <span className="text-xs font-normal text-slate-400">leads</span>
+                      </div>
+                      <p className="text-[10px] text-slate-400 mt-0.5">
+                        Failed sends or unreplied contacts
+                      </p>
+                    </div>
+
+                    <div className="p-3 bg-sky-950/20 border border-sky-500/30 rounded-xl">
+                      <div className="text-[11px] text-sky-400 font-semibold uppercase tracking-wider">
+                        Excluded (Already Replied)
+                      </div>
+                      <div className="text-xl font-bold text-sky-300 mt-1">
+                        {repliedLeads.length} <span className="text-xs font-normal text-slate-400">leads</span>
+                      </div>
+                      <p className="text-[10px] text-slate-400 mt-0.5">
+                        0 emails sent to replied contacts
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Follow-up Recipients List */}
+                  <div className="space-y-1.5">
+                    <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider flex items-center justify-between">
+                      <span>Recipients for Run #{nextRun} ({unrepliedLeads.length})</span>
+                      <span className="text-[10px] text-emerald-400 font-normal">Will receive follow-up email</span>
+                    </p>
+                    <div className="max-h-36 overflow-y-auto space-y-1.5 pr-1">
+                      {unrepliedLeads.map((lead) => {
+                        const isFailed = lead.sendStatus === 'FAILED';
+                        return (
+                          <div
+                            key={lead.campaignLeadId}
+                            className="flex items-center justify-between p-2 bg-slate-950 border border-slate-800 rounded-lg text-xs"
+                          >
+                            <div>
+                              <div className="font-medium text-slate-200">{lead.name}</div>
+                              <div className="text-[11px] text-slate-400 font-mono">{lead.email}</div>
+                            </div>
+                            <div className="text-right">
+                              <span
+                                className={`px-2 py-0.5 rounded text-[10px] font-semibold ${
+                                  isFailed
+                                    ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
+                                    : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                                }`}
+                              >
+                                {isFailed ? 'Retry Failed Send' : 'Follow-up (No Reply)'}
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                      {repliedLeads.map((lead) => (
+                        <div
+                          key={lead.campaignLeadId}
+                          className="flex items-center justify-between p-2 bg-slate-950/40 border border-slate-800/60 rounded-lg text-xs opacity-60"
+                        >
+                          <div>
+                            <div className="font-medium text-slate-400">{lead.name}</div>
+                            <div className="text-[11px] text-slate-400 font-mono">{lead.email}</div>
+                          </div>
+                          <span className="px-2 py-0.5 bg-slate-800 text-slate-400 rounded text-[10px]">
+                            Skipped (Replied)
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-end gap-3 pt-2">
+                    <button
+                      onClick={() => setIsRestartConfirmOpen(false)}
+                      className="px-4 py-2 text-xs text-slate-400 hover:text-slate-200 font-medium"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      id="confirm-restart-campaign-btn"
+                      disabled={isRestarting || unrepliedLeads.length === 0}
+                      onClick={() => handleRestartCampaign(selectedCampaign.campaignId)}
+                      className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-semibold transition flex items-center gap-2 shadow shadow-emerald-950/40"
+                    >
+                      {isRestarting ? (
+                        <>
+                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                          <span>Dispatching Run #{nextRun}...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Play className="w-3.5 h-3.5 fill-white" />
+                          <span>Confirm & Start Run #{nextRun} ({unrepliedLeads.length} Leads)</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* DELETE CAMPAIGN CONFIRMATION MODAL */}
       {isDeleteModalOpen && campaignToDelete && (
@@ -1675,11 +2467,14 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
       {/* CREATE / EDIT TEMPLATE MODAL */}
       {isTemplateModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-xl flex flex-col overflow-hidden shadow-2xl">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden shadow-2xl">
             <div className="px-6 py-4 border-b border-slate-800 flex items-center justify-between">
-              <h3 className="text-base font-bold text-slate-100">
-                {editingTemplate ? 'Edit Email Template' : 'New Email Template'}
-              </h3>
+              <div className="flex items-center gap-2">
+                <Mail className="w-5 h-5 text-emerald-400" />
+                <h3 className="text-base font-bold text-slate-100">
+                  {editingTemplate ? 'Edit Email Template' : 'Create New Email Template'}
+                </h3>
+              </div>
               <button
                 onClick={() => setIsTemplateModalOpen(false)}
                 className="p-1.5 text-slate-400 hover:text-slate-200 rounded-lg"
@@ -1688,32 +2483,42 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
               </button>
             </div>
 
-            <div className="p-6 space-y-4">
+            <div className="flex-1 overflow-y-auto p-6 space-y-4">
+              {templateFormError && (
+                <div className="p-3 bg-rose-500/10 border border-rose-500/30 rounded-xl text-xs text-rose-300 flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 text-rose-400 flex-shrink-0" />
+                  <span>{templateFormError}</span>
+                </div>
+              )}
+
               <div>
-                <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">
+                <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
                   Template Name *
                 </label>
                 <input
                   type="text"
-                  placeholder="e.g. Ramadan Hotel Blocks Outreach"
+                  placeholder="e.g. Ramadan B2B Operator Outreach"
                   value={templateFormName}
-                  onChange={(e) => setTemplateFormName(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-sm text-slate-100 placeholder-slate-400 focus:outline-none focus:border-emerald-500"
+                  onChange={(e) => {
+                    setTemplateFormName(e.target.value);
+                    if (templateFormError) setTemplateFormError(null);
+                  }}
+                  className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-emerald-500"
                 />
               </div>
 
               <div>
-                <div className="flex items-center justify-between mb-1">
+                <div className="flex items-center justify-between mb-1.5">
                   <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider">
                     Subject Line *
                   </label>
-                  <div className="flex gap-1 text-[10px]">
+                  <div className="flex flex-wrap gap-1 text-[10px]">
                     {['{{name}}', '{{company}}', '{{designation}}'].map((v) => (
                       <button
                         key={v}
                         type="button"
                         onClick={() => setTemplateFormSubject((prev) => `${prev} ${v}`)}
-                        className="px-1.5 py-0.5 bg-slate-800 hover:bg-slate-700 text-emerald-400 rounded font-mono"
+                        className="px-1.5 py-0.5 bg-slate-800 hover:bg-slate-700 text-emerald-400 rounded font-mono border border-slate-700/60 transition"
                       >
                         +{v}
                       </button>
@@ -1722,25 +2527,28 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                 </div>
                 <input
                   type="text"
-                  placeholder="e.g. Umrah360 for {{company}} - Dynamic B2B Packages"
+                  placeholder="e.g. Streamlining Pilgrimage Operations for {{company}}"
                   value={templateFormSubject}
-                  onChange={(e) => setTemplateFormSubject(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-sm text-slate-100 placeholder-slate-400 focus:outline-none focus:border-emerald-500 font-mono text-xs"
+                  onChange={(e) => {
+                    setTemplateFormSubject(e.target.value);
+                    if (templateFormError) setTemplateFormError(null);
+                  }}
+                  className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-xs font-mono text-slate-100 placeholder-slate-500 focus:outline-none focus:border-emerald-500"
                 />
               </div>
 
               <div>
-                <div className="flex items-center justify-between mb-1">
+                <div className="flex items-center justify-between mb-1.5">
                   <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider">
                     Email Body *
                   </label>
-                  <div className="flex gap-1 text-[10px]">
-                    {['{{name}}', '{{company}}', '{{designation}}', '{{firstName}}'].map((v) => (
+                  <div className="flex flex-wrap gap-1 text-[10px]">
+                    {['{{name}}', '{{firstName}}', '{{company}}', '{{designation}}', '{{email}}'].map((v) => (
                       <button
                         key={v}
                         type="button"
                         onClick={() => setTemplateFormBody((prev) => `${prev} ${v}`)}
-                        className="px-1.5 py-0.5 bg-slate-800 hover:bg-slate-700 text-emerald-400 rounded font-mono"
+                        className="px-1.5 py-0.5 bg-slate-800 hover:bg-slate-700 text-emerald-400 rounded font-mono border border-slate-700/60 transition"
                       >
                         +{v}
                       </button>
@@ -1749,28 +2557,139 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                 </div>
                 <textarea
                   rows={8}
-                  placeholder={`Hi {{name}},\n\nI noticed you manage pilgrimage operations at {{company}}...`}
+                  placeholder={`Hi {{name}},\n\nI noticed you manage pilgrimage operations at {{company}}.\n\nUmrah360 helps tour operators like yours automate dynamic package pricing, manage B2B sub-agents, and streamline Makkah/Madinah hotel allotments.\n\nWould you be open to a quick 10-minute walkthrough this week?\n\nBest regards,\nUmrah360 Team`}
                   value={templateFormBody}
-                  onChange={(e) => setTemplateFormBody(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-xs text-slate-100 placeholder-slate-400 focus:outline-none focus:border-emerald-500 leading-relaxed font-mono"
+                  onChange={(e) => {
+                    setTemplateFormBody(e.target.value);
+                    if (templateFormError) setTemplateFormError(null);
+                  }}
+                  className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-emerald-500 leading-relaxed font-mono"
                 />
+              </div>
+
+              {/* Dynamic Sample Live Preview */}
+              {(templateFormSubject || templateFormBody) && (
+                <div className="p-3.5 bg-slate-950/80 rounded-xl border border-slate-800 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] uppercase font-bold text-slate-400 flex items-center gap-1">
+                      <Eye className="w-3 h-3 text-emerald-400" />
+                      <span>Live Rendered Preview (Sample Lead Data)</span>
+                    </span>
+                    <span className="text-[10px] text-slate-400 font-mono">
+                      Lead: Tariq Farooq @ Al-Bait Pilgrimage Tours
+                    </span>
+                  </div>
+                  {templateFormSubject && (
+                    <div className="text-xs font-mono text-emerald-300 bg-slate-900 p-2 rounded-lg border border-slate-800/80">
+                      <span className="text-slate-400 mr-1.5">Subject:</span>
+                      {renderTemplatePreview(templateFormSubject)}
+                    </div>
+                  )}
+                  {templateFormBody && (
+                    <div className="text-xs text-slate-300 bg-slate-900 p-3 rounded-lg border border-slate-800/80 whitespace-pre-wrap leading-relaxed font-mono">
+                      {renderTemplatePreview(templateFormBody)}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div className="px-6 py-4 border-t border-slate-800 bg-slate-950 flex items-center justify-between">
+              <div>
+                {editingTemplate && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      promptDeleteTemplate(editingTemplate);
+                    }}
+                    className="inline-flex items-center gap-1.5 px-3 py-2 text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 rounded-xl text-xs font-semibold transition"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Delete Template</span>
+                  </button>
+                )}
+              </div>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setIsTemplateModalOpen(false)}
+                  className="px-4 py-2 text-xs text-slate-400 hover:text-slate-200 transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveTemplate}
+                  disabled={isSavingTemplate}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white rounded-xl text-xs font-semibold shadow-lg shadow-emerald-900/20 transition"
+                >
+                  {isSavingTemplate ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      <span>Saving to DB...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Check className="w-3.5 h-3.5" />
+                      <span>{editingTemplate ? 'Update Template' : 'Save Template'}</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* DELETE TEMPLATE CONFIRMATION MODAL */}
+      {isDeleteTemplateModalOpen && templateToDelete && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md flex flex-col overflow-hidden shadow-2xl">
+            <div className="p-6 space-y-4">
+              <div className="w-10 h-10 rounded-xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-400">
+                <Trash2 className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-slate-100">Delete Email Template</h3>
+                <p className="text-xs text-slate-400 mt-1">
+                  Are you sure you want to delete <strong className="text-slate-200">"{templateToDelete.name}"</strong>?
+                  This will permanently remove the template from the Firestore database.
+                </p>
+              </div>
+              <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 text-xs text-slate-400 font-mono truncate">
+                Subject: {templateToDelete.subject}
               </div>
             </div>
 
             <div className="px-6 py-4 border-t border-slate-800 bg-slate-950 flex items-center justify-end gap-3">
               <button
                 type="button"
-                onClick={() => setIsTemplateModalOpen(false)}
-                className="px-4 py-2 text-xs text-slate-400 hover:text-slate-200"
+                onClick={() => {
+                  setIsDeleteTemplateModalOpen(false);
+                  setTemplateToDelete(null);
+                }}
+                disabled={isDeletingTemplate}
+                className="px-4 py-2 text-xs text-slate-400 hover:text-slate-200 transition"
               >
                 Cancel
               </button>
               <button
                 type="button"
-                onClick={handleSaveTemplate}
-                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-semibold"
+                onClick={handleConfirmDeleteTemplate}
+                disabled={isDeletingTemplate}
+                className="inline-flex items-center gap-1.5 px-4 py-2 bg-rose-600 hover:bg-rose-500 disabled:opacity-50 text-white rounded-xl text-xs font-semibold shadow-lg shadow-rose-900/20 transition"
               >
-                Save Template
+                {isDeletingTemplate ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Deleting...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Delete Permanently</span>
+                  </>
+                )}
               </button>
             </div>
           </div>

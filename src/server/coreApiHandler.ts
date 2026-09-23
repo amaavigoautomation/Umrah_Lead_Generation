@@ -33,12 +33,18 @@ import {
   pauseCampaign,
   restartCampaign,
   getAllTemplates,
+  getTemplatesFromDbOrCache,
+  getTemplateById,
+  getTemplateFromDbById,
   saveTemplate,
   deleteTemplate,
   deleteCampaign,
   updateLeadDemoStatus,
+  updateCampaignLeadStatus,
   generateAiEmailForLead,
+  generateAiSamplePreviews,
 } from './campaignService.js';
+import { processWebsiteLeadSubmission } from './websiteLeadService.js';
 
 /**
  * Universal API request handler that works in both:
@@ -75,7 +81,23 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
       }
       const rawBody = Buffer.concat(chunks).toString('utf-8');
       if (rawBody) {
-        body = JSON.parse(rawBody);
+        try {
+          body = JSON.parse(rawBody);
+        } catch {
+          // If not standard JSON, parse as urlencoded form data
+          try {
+            const params = new URLSearchParams(rawBody);
+            const formObj: Record<string, any> = {};
+            params.forEach((val, key) => {
+              formObj[key] = val;
+            });
+            if (Object.keys(formObj).length > 0) {
+              body = formObj;
+            }
+          } catch {
+            // unable to parse form
+          }
+        }
       }
     } catch (e) {
       // Body parse error
@@ -93,10 +115,83 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
         geminiModel: 'gemini-3.8-flash',
         geminiKeyPresent: Boolean(process.env.GEMINI_API_KEY),
         whatsAppGateway: getWhatsAppGatewayStatus(),
+        websiteWebhook: {
+          endpoint: '/api/webhooks/umrah-demo',
+          status: 'ready',
+        },
         timestamp: new Date().toISOString(),
       })
     );
     return true;
+  }
+
+  // 1.5. Website Inbound Demo Lead Webhook (/api/webhooks/umrah-demo, /api/leads/webhook, /api/leads/inbound)
+  const isWebsiteWebhook =
+    url === '/api/webhooks/umrah-demo' ||
+    url.startsWith('/api/webhooks/umrah-demo?') ||
+    url === '/api/leads/webhook' ||
+    url.startsWith('/api/leads/webhook?') ||
+    url === '/api/leads/inbound' ||
+    url.startsWith('/api/leads/inbound?');
+
+  if (isWebsiteWebhook) {
+    if (req.method === 'POST') {
+      try {
+        console.log('[Inbound Webhook] Received website demo request from umrah360.in:', {
+          name: body.fullName || body.name || body.your_full_name,
+          email: body.email || body.your_email,
+          company: body.companyName || body.company_name || body.company,
+          phone: body.phone || body.phoneNumber,
+        });
+
+        const result = await processWebsiteLeadSubmission(body);
+        res.statusCode = 200;
+        res.end(JSON.stringify(result));
+        return true;
+      } catch (err: any) {
+        console.error('[Inbound Webhook] Error processing lead submission:', err);
+        res.statusCode = 400;
+        res.end(
+          JSON.stringify({
+            success: false,
+            error: err?.message || 'Failed to process website lead submission',
+          })
+        );
+        return true;
+      }
+    } else if (req.method === 'GET') {
+      // Documentation & schema check for developers or webhook monitors
+      res.statusCode = 200;
+      res.end(
+        JSON.stringify({
+          service: 'Umrah360 Website Demo Lead Ingestion Webhook',
+          status: 'active',
+          acceptedMethods: ['POST'],
+          description: 'Directly pushes leads from umrah360.in/request-demo form into Firestore DB and CRM pipeline',
+          supportedFields: {
+            yourDetails: ['fullName (or name, your_full_name)', 'email', 'designation', 'country', 'phone (or phoneNumber)', 'city'],
+            aboutYourCompany: ['companyName (or company)', 'website (or companyWebsite)', 'branches (Yes / No)'],
+            product: ['product (or select_products, productInterest)', 'teamSize (e.g. 5-10, 10-20, 20+)'],
+            messageQuery: ['message (or query, notes)'],
+          },
+          samplePayload: {
+            fullName: 'Mohammad Al-Bakhla',
+            email: 'demo@bakhlatours.com',
+            designation: 'Managing Director',
+            country: 'India',
+            phone: '+91 9820252434',
+            city: 'Mumbai',
+            companyName: 'Bakhla Tours & Travels Pvt. Ltd.',
+            website: 'https://bakhlatours.com',
+            branches: 'Yes',
+            product: 'Umrah ERP & B2B Sub-Agent Portal',
+            teamSize: '10-20',
+            message: 'We handle 3,500 pilgrims yearly. Interested in B2B booking engine.',
+          },
+        })
+      );
+      return true;
+    }
   }
 
   // 2. AI Respond endpoint (/api/ai/respond)
@@ -585,8 +680,61 @@ Generate a helpful, accurate, grounded response adhering to all rules.`;
   }
 
   // 9. Campaign Management Endpoints
+  // Templates endpoints (supports both /api/templates and /api/campaign-templates)
+  if ((url === '/api/templates' || url === '/api/campaign-templates') && req.method === 'GET') {
+    await initCampaignStore();
+    const tpls = await getTemplatesFromDbOrCache();
+    res.statusCode = 200;
+    res.end(JSON.stringify({ success: true, templates: tpls }));
+    return true;
+  }
+
+  if ((url === '/api/templates' || url === '/api/campaign-templates') && req.method === 'POST') {
+    try {
+      await initCampaignStore();
+      const saved = await saveTemplate(body);
+      res.statusCode = 200;
+      res.end(JSON.stringify({ success: true, template: saved }));
+    } catch (err: any) {
+      res.statusCode = 400;
+      res.end(JSON.stringify({ error: err?.message || 'Failed to save template' }));
+    }
+    return true;
+  }
+
+  const templateMatch = url.match(/^\/api\/(?:campaign-)?templates\/([a-zA-Z0-9_-]+)$/);
+  if (templateMatch) {
+    const templateId = templateMatch[1];
+    await initCampaignStore();
+
+    if (req.method === 'GET') {
+      const tpl = await getTemplateFromDbById(templateId);
+      if (!tpl) {
+        res.statusCode = 404;
+        res.end(JSON.stringify({ error: 'Template not found' }));
+      } else {
+        res.statusCode = 200;
+        res.end(JSON.stringify({ success: true, template: tpl }));
+      }
+      return true;
+    }
+
+    if (req.method === 'DELETE') {
+      try {
+        await deleteTemplate(templateId);
+        res.statusCode = 200;
+        res.end(JSON.stringify({ success: true, deletedTemplateId: templateId }));
+      } catch (err: any) {
+        res.statusCode = 400;
+        res.end(JSON.stringify({ error: err?.message || 'Failed to delete template' }));
+      }
+      return true;
+    }
+  }
+
+  // Campaigns endpoints
   if (url === '/api/campaigns' && req.method === 'GET') {
-    initCampaignStore();
+    await initCampaignStore();
     res.statusCode = 200;
     res.end(JSON.stringify({ success: true, campaigns: getAllCampaigns() }));
     return true;
@@ -596,7 +744,7 @@ Generate a helpful, accurate, grounded response adhering to all rules.`;
     try {
       const created = await createCampaign(body);
       res.statusCode = 201;
-      res.end(JSON.stringify({ success: true, campaign: created }));
+      res.end(JSON.stringify({ success: true, campaign: created.campaign, leads: created.leads }));
     } catch (err: any) {
       res.statusCode = 400;
       res.end(JSON.stringify({ error: err?.message || 'Failed to create campaign' }));
@@ -604,21 +752,14 @@ Generate a helpful, accurate, grounded response adhering to all rules.`;
     return true;
   }
 
-  if (url === '/api/campaign-templates' && req.method === 'GET') {
-    initCampaignStore();
-    res.statusCode = 200;
-    res.end(JSON.stringify({ success: true, templates: getAllTemplates() }));
-    return true;
-  }
-
-  if (url === '/api/campaign-templates' && req.method === 'POST') {
+  if (url === '/api/campaigns/ai-generate-preview' && req.method === 'POST') {
     try {
-      const saved = saveTemplate(body);
+      const samples = await generateAiSamplePreviews(body.leads || []);
       res.statusCode = 200;
-      res.end(JSON.stringify({ success: true, template: saved }));
+      res.end(JSON.stringify({ success: true, samples }));
     } catch (err: any) {
       res.statusCode = 400;
-      res.end(JSON.stringify({ error: err?.message || 'Failed to save template' }));
+      res.end(JSON.stringify({ error: err?.message || 'Failed to generate AI previews' }));
     }
     return true;
   }
@@ -641,13 +782,128 @@ Generate a helpful, accurate, grounded response adhering to all rules.`;
   if (campaignPauseMatch && req.method === 'POST') {
     const campaignId = campaignPauseMatch[1];
     try {
-      const paused = pauseCampaign(campaignId);
+      const paused = await pauseCampaign(campaignId);
       res.statusCode = 200;
       res.end(JSON.stringify({ success: true, campaign: paused }));
     } catch (err: any) {
       res.statusCode = 400;
       res.end(JSON.stringify({ error: err?.message || 'Failed to pause campaign' }));
     }
+    return true;
+  }
+
+  const campaignRestartPreviewMatch = url.match(/^\/api\/campaigns\/([a-zA-Z0-9_-]+)\/restart-preview$/);
+  if (campaignRestartPreviewMatch && req.method === 'GET') {
+    const campaignId = campaignRestartPreviewMatch[1];
+    await initCampaignStore();
+    const camp = getCampaignById(campaignId);
+    if (!camp) {
+      res.statusCode = 404;
+      res.end(JSON.stringify({ error: 'Campaign not found' }));
+      return true;
+    }
+    const leads = getCampaignLeads(campaignId);
+    const repliedLeads = leads.filter((l) => l.replyStatus === 'REPLIED');
+    const unrepliedLeads = leads.filter((l) => l.replyStatus !== 'REPLIED');
+    const allQualified = leads.length > 0 && repliedLeads.length === leads.length;
+    const nextRunNumber = (camp.lastRunNumber || 0) + 1;
+
+    res.statusCode = 200;
+    res.end(
+      JSON.stringify({
+        success: true,
+        campaignId,
+        nextRunNumber,
+        totalLeads: leads.length,
+        unrepliedCount: unrepliedLeads.length,
+        repliedCount: repliedLeads.length,
+        allQualified,
+        unrepliedLeads,
+        repliedLeads,
+      })
+    );
+    return true;
+  }
+
+  const campaignRestartMatch = url.match(/^\/api\/campaigns\/([a-zA-Z0-9_-]+)\/restart$/);
+  if (campaignRestartMatch && req.method === 'POST') {
+    const campaignId = campaignRestartMatch[1];
+    try {
+      const restarted = await restartCampaign(campaignId, body);
+      res.statusCode = 200;
+      res.end(
+        JSON.stringify({
+          success: true,
+          campaign: restarted.campaign,
+          run: restarted.run,
+          targetLeadsCount: restarted.targetLeadsCount,
+          alreadyRepliedCount: restarted.alreadyRepliedCount,
+          allQualified: restarted.allQualified,
+          message: restarted.message,
+        })
+      );
+    } catch (err: any) {
+      res.statusCode = 400;
+      res.end(JSON.stringify({ error: err?.message || 'Failed to restart campaign' }));
+    }
+    return true;
+  }
+
+  const campaignLeadsMatch = url.match(/^\/api\/campaigns\/([a-zA-Z0-9_-]+)\/leads$/);
+  if (campaignLeadsMatch && req.method === 'GET') {
+    const campaignId = campaignLeadsMatch[1];
+    await initCampaignStore();
+    res.statusCode = 200;
+    res.end(JSON.stringify({ success: true, leads: getCampaignLeads(campaignId) }));
+    return true;
+  }
+
+  const campaignRunsMatch = url.match(/^\/api\/campaigns\/([a-zA-Z0-9_-]+)\/runs$/);
+  if (campaignRunsMatch && req.method === 'GET') {
+    const campaignId = campaignRunsMatch[1];
+    await initCampaignStore();
+    res.statusCode = 200;
+    res.end(JSON.stringify({ success: true, runs: getCampaignRuns(campaignId) }));
+    return true;
+  }
+
+  const campaignSingleMatch = url.match(/^\/api\/campaigns\/([a-zA-Z0-9_-]+)$/);
+  if (campaignSingleMatch) {
+    const campaignId = campaignSingleMatch[1];
+    await initCampaignStore();
+
+    if (req.method === 'GET') {
+      const camp = getCampaignById(campaignId);
+      if (!camp) {
+        res.statusCode = 404;
+        res.end(JSON.stringify({ error: 'Campaign not found' }));
+      } else {
+        res.statusCode = 200;
+        res.end(JSON.stringify({ success: true, campaign: camp }));
+      }
+      return true;
+    }
+
+    if (req.method === 'DELETE') {
+      try {
+        await deleteCampaign(campaignId);
+        res.statusCode = 200;
+        res.end(JSON.stringify({ success: true, deletedCampaignId: campaignId }));
+      } catch (err: any) {
+        res.statusCode = 400;
+        res.end(JSON.stringify({ error: err?.message || 'Failed to delete campaign' }));
+      }
+      return true;
+    }
+  }
+
+  const leadStatusMatch = url.match(/^\/api\/campaigns\/lead\/([a-zA-Z0-9_-]+)\/status$/);
+  if (leadStatusMatch && (req.method === 'PATCH' || req.method === 'POST')) {
+    const leadId = leadStatusMatch[1];
+    const { sendStatus, replyStatus, demoStatus, lastError } = body;
+    const updated = await updateCampaignLeadStatus({ leadId, sendStatus, replyStatus, demoStatus, lastError });
+    res.statusCode = 200;
+    res.end(JSON.stringify({ success: true, lead: updated }));
     return true;
   }
 

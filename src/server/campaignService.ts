@@ -5,6 +5,7 @@ import {
   collection,
   doc,
   getDocs,
+  getDoc,
   setDoc,
   deleteDoc,
 } from 'firebase/firestore';
@@ -260,14 +261,21 @@ let isCampaignStoreInitialized = false;
 
 /**
  * Synchronizes the in-memory campaign stores directly from Firestore.
- * Guarantees that any documents deleted in Firestore are pruned from memory,
+ * Guarantees that all templates (predefined + custom) are preserved,
  * and any newly updated documents in Firestore are accurately reflected.
  */
 export async function syncCampaignStoreFromFirestore(): Promise<void> {
+  // Ensure default predefined templates are always loaded in memory
+  for (const tpl of DEFAULT_EMAIL_TEMPLATES) {
+    if (!emailTemplatesMap.has(tpl.templateId)) {
+      emailTemplatesMap.set(tpl.templateId, tpl);
+    }
+  }
+
   if (!isFirebaseConfigured || !db) return;
 
   try {
-    // 1. Templates
+    // 1. Templates: merge from Firestore
     const tplSnap = await getDocs(collection(db, 'email_templates'));
     const firestoreTplIds = new Set<string>();
     tplSnap.forEach((d) => {
@@ -277,11 +285,11 @@ export async function syncCampaignStoreFromFirestore(): Promise<void> {
         emailTemplatesMap.set(data.templateId, data);
       }
     });
-    if (firestoreTplIds.size > 0) {
-      for (const id of Array.from(emailTemplatesMap.keys())) {
-        if (!firestoreTplIds.has(id)) {
-          emailTemplatesMap.delete(id);
-        }
+
+    // Seed default predefined templates to Firestore if not already present
+    for (const tpl of DEFAULT_EMAIL_TEMPLATES) {
+      if (!firestoreTplIds.has(tpl.templateId)) {
+        safeSetDoc(doc(db, 'email_templates', tpl.templateId), tpl, { merge: true }).catch(() => {});
       }
     }
 
@@ -363,29 +371,90 @@ export async function initCampaignStore() {
 // -------------------------------------------------------------
 // TEMPLATE MANAGEMENT
 // -------------------------------------------------------------
+export async function getTemplatesFromDbOrCache(): Promise<EmailTemplate[]> {
+  if (isFirebaseConfigured && db) {
+    try {
+      const snap = await getDocs(collection(db, 'email_templates'));
+      if (!snap.empty) {
+        snap.forEach((d) => {
+          const t = d.data() as EmailTemplate;
+          if (t && t.templateId) {
+            emailTemplatesMap.set(t.templateId, t);
+          }
+        });
+      }
+    } catch (err) {
+      console.warn('[getTemplatesFromDbOrCache] Firestore templates lookup error:', err);
+    }
+  }
+  return getAllTemplates();
+}
+
+export async function getTemplateFromDbById(templateId: string): Promise<EmailTemplate | undefined> {
+  if (!templateId) return undefined;
+  if (isFirebaseConfigured && db) {
+    try {
+      const snap = await getDoc(doc(db, 'email_templates', templateId));
+      if (snap.exists()) {
+        const t = snap.data() as EmailTemplate;
+        emailTemplatesMap.set(templateId, t);
+        return t;
+      }
+    } catch (err) {
+      console.warn('[getTemplateFromDbById] DB lookup error:', err);
+    }
+  }
+  return getTemplateById(templateId);
+}
+
 export function getAllTemplates(): EmailTemplate[] {
+  // Always ensure default templates are included
+  for (const tpl of DEFAULT_EMAIL_TEMPLATES) {
+    if (!emailTemplatesMap.has(tpl.templateId)) {
+      emailTemplatesMap.set(tpl.templateId, tpl);
+    }
+  }
   return Array.from(emailTemplatesMap.values()).sort(
-    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    (a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
   );
 }
 
-export async function saveTemplate(template: EmailTemplate): Promise<EmailTemplate> {
+export function getTemplateById(templateId: string): EmailTemplate | undefined {
+  if (!templateId) return undefined;
+  const inMap = emailTemplatesMap.get(templateId);
+  if (inMap) return inMap;
+  const inDefault = DEFAULT_EMAIL_TEMPLATES.find((t) => t.templateId === templateId);
+  if (inDefault) return inDefault;
+  return getAllTemplates().find((t) => t.templateId === templateId);
+}
+
+export async function saveTemplate(template: Partial<EmailTemplate>): Promise<EmailTemplate> {
   const now = new Date().toISOString();
+  const templateId = template.templateId || `tpl-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+  const existing = emailTemplatesMap.get(templateId);
+
   const tpl: EmailTemplate = {
-    ...template,
-    templateId: template.templateId || `tpl-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-    createdAt: template.createdAt || now,
+    templateId,
+    name: (template.name || existing?.name || 'Untitled Template').trim(),
+    subject: (template.subject || existing?.subject || 'Umrah360 Solutions for {{company}}').trim(),
+    body: (template.body || existing?.body || '').trim(),
+    createdAt: existing?.createdAt || template.createdAt || now,
     updatedAt: now,
   };
-  emailTemplatesMap.set(tpl.templateId, tpl);
 
+  // 1. First: Directly persist to Firestore DB
   if (isFirebaseConfigured && db) {
     try {
-      await setDoc(doc(db, 'email_templates', tpl.templateId), tpl, { merge: true });
+      await safeSetDoc(doc(db, 'email_templates', tpl.templateId), tpl, { merge: true });
+      console.log(`[saveTemplate] Successfully stored template "${tpl.name}" (${tpl.templateId}) directly to DB.`);
     } catch (e) {
       console.warn('Failed to save template to Firestore:', e);
     }
   }
+
+  // 2. Cache in memory
+  emailTemplatesMap.set(tpl.templateId, tpl);
+
   return tpl;
 }
 
@@ -394,9 +463,37 @@ export async function deleteTemplate(templateId: string): Promise<boolean> {
   if (isFirebaseConfigured && db) {
     try {
       await deleteDoc(doc(db, 'email_templates', templateId));
-    } catch {}
+    } catch (err) {
+      console.warn(`Failed to delete template ${templateId} from Firestore:`, err);
+    }
   }
   return true;
+}
+
+export async function generateAiSamplePreviews(leads: any[]): Promise<any[]> {
+  const sampleLeads = (leads || []).slice(0, 3);
+  const results: any[] = [];
+  for (const lead of sampleLeads) {
+    try {
+      const generated = await generateAiEmailForLead(lead);
+      results.push({
+        lead,
+        subject: generated.subject,
+        body: generated.body,
+        researchData: generated.researchData,
+        selectedPainPoint: generated.selectedPainPoint,
+        selectedCapabilities: generated.selectedCapabilities,
+        personalizationEvidence: generated.personalizationEvidence,
+      });
+    } catch (e: any) {
+      results.push({
+        lead,
+        subject: `Pilgrimage Operations & B2B Growth for ${lead.companyName || 'Your Agency'}`,
+        body: `Hi ${lead.name || 'there'},\n\nI noticed your operations at ${lead.companyName || 'your agency'}. Umrah360 automates dynamic package costing and sub-agent portals.\n\nWould you be open to a 10-minute walkthrough?\n\nBest regards,\nUmrah360 Growth Team`,
+      });
+    }
+  }
+  return results;
 }
 
 // -------------------------------------------------------------
@@ -484,6 +581,9 @@ export async function createCampaign(params: {
   type?: 'EMAIL' | 'WHATSAPP' | 'WHATSAPP_EMAIL';
   campaignMode?: 'PREDEFINED' | 'AI_GENERATED';
   templateId?: string;
+  templateName?: string;
+  templateSubject?: string;
+  templateBody?: string;
   sourceFileName?: string;
   leads: Array<{
     name?: string;
@@ -501,8 +601,51 @@ export async function createCampaign(params: {
 
   const now = new Date().toISOString();
   const campaignId = `camp-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-  const template = params.templateId ? emailTemplatesMap.get(params.templateId) : undefined;
   const mode = params.campaignMode || 'PREDEFINED';
+
+  // Dynamically resolve the selected template directly from Firestore DB
+  let selectedTemplate: EmailTemplate | undefined;
+  if (params.templateId) {
+    if (isFirebaseConfigured && db) {
+      try {
+        const snap = await getDoc(doc(db, 'email_templates', params.templateId));
+        if (snap.exists()) {
+          selectedTemplate = snap.data() as EmailTemplate;
+          emailTemplatesMap.set(params.templateId, selectedTemplate);
+          console.log(`[createCampaign] Successfully loaded template "${selectedTemplate.name}" directly from DB.`);
+        }
+      } catch (err) {
+        console.warn('Direct Firestore template lookup note in createCampaign:', err);
+      }
+    }
+    if (!selectedTemplate) {
+      selectedTemplate = getTemplateById(params.templateId);
+    }
+  }
+
+  // If payload provided full template content directly, construct and register it immediately
+  if (!selectedTemplate && params.templateId && params.templateBody) {
+    selectedTemplate = {
+      templateId: params.templateId,
+      name: params.templateName || 'Custom Template',
+      subject: params.templateSubject || 'Umrah360 Solutions for {{company}}',
+      body: params.templateBody,
+      createdAt: now,
+      updatedAt: now,
+    };
+    emailTemplatesMap.set(params.templateId, selectedTemplate);
+    if (isFirebaseConfigured && db) {
+      safeSetDoc(doc(db, 'email_templates', params.templateId), selectedTemplate).catch(() => {});
+    }
+  }
+
+  if (!selectedTemplate && mode === 'PREDEFINED') {
+    const allAvailable = getAllTemplates();
+    selectedTemplate = allAvailable.length > 0 ? allAvailable[0] : DEFAULT_EMAIL_TEMPLATES[0];
+  }
+
+  const finalTemplateId = mode === 'AI_GENERATED' ? undefined : (selectedTemplate?.templateId || params.templateId);
+  const finalTemplateName = mode === 'AI_GENERATED' ? 'AI Intelligent Personalization' : (selectedTemplate?.name || params.templateName || 'Predefined Template');
 
   const initialCampaign: Campaign = {
     campaignId,
@@ -510,8 +653,8 @@ export async function createCampaign(params: {
     type: params.type || 'EMAIL',
     campaignMode: mode,
     status: 'DRAFT',
-    templateId: params.templateId,
-    templateName: mode === 'AI_GENERATED' ? 'AI Intelligent Personalization' : (template?.name || 'Predefined Template'),
+    templateId: finalTemplateId,
+    templateName: finalTemplateName,
     sourceFileName: params.sourceFileName || 'Uploaded Leads',
     totalLeads: params.leads.length,
     sentCount: 0,
@@ -539,6 +682,22 @@ export async function createCampaign(params: {
     const leadName = l.name || [l.firstName, l.lastName].filter(Boolean).join(' ') || cleanEmail.split('@')[0];
     const company = l.companyName || `${leadName}'s Agency`;
 
+    let initialSubject: string | undefined = undefined;
+    let initialBody: string | undefined = undefined;
+
+    if (mode === 'PREDEFINED' && selectedTemplate) {
+      const personalized = personalizeTemplate(selectedTemplate, {
+        name: leadName,
+        firstName: l.firstName || leadName.split(' ')[0],
+        lastName: l.lastName || leadName.split(' ').slice(1).join(' '),
+        companyName: company,
+        designation: l.designation || 'Director / Owner',
+        email: cleanEmail,
+      });
+      initialSubject = personalized.subject;
+      initialBody = personalized.body;
+    }
+
     const cLead: CampaignLead = {
       campaignLeadId,
       campaignId,
@@ -557,6 +716,8 @@ export async function createCampaign(params: {
       demoStatus: 'NOT_BOOKED',
       demoIntent: false,
       sendCount: 0,
+      generatedSubject: initialSubject,
+      generatedBody: initialBody,
       createdAt: now,
       updatedAt: now,
     };
@@ -602,12 +763,14 @@ export async function startCampaign(campaignId: string): Promise<Campaign> {
   if (!currentRunId || campaign.status === 'COMPLETED' || campaign.status === 'DRAFT') {
     const nextRunNumber = (campaign.lastRunNumber || 0) + 1;
     currentRunId = `run-${campaignId}-${nextRunNumber}`;
+    const allAvailable = getAllTemplates();
+    const activeTemplateId = campaign.templateId || (allAvailable.length > 0 ? allAvailable[0].templateId : DEFAULT_EMAIL_TEMPLATES[0].templateId);
     const newRun: CampaignRun = {
       runId: currentRunId,
       campaignId,
       runNumber: nextRunNumber,
       status: 'RUNNING',
-      templateId: campaign.templateId || 'tpl-b2b-portal',
+      templateId: activeTemplateId,
       totalLeads: campaign.totalLeads,
       sentCount: campaign.sentCount,
       startedAt: now,
@@ -700,18 +863,27 @@ export async function pauseCampaign(campaignId: string): Promise<Campaign> {
  * - Does NOT create a duplicate campaign in UI.
  * - Retains identity, name, leads, and history.
  * - Creates a new campaignRun (tracks runId, campaignId, runNumber, status, templateId, startedAt, etc.)
- * - Safe restart logic: only sends to leads who have NOT been sent to in this campaign,
- *   OR resets leads that failed, ensuring strict idempotency and zero duplicate emails!
+ * - Safe Intelligent Follow-up Logic:
+ *   1. Leads who have ALREADY REPLIED (replyStatus === 'REPLIED') are PRESERVED and EXCLUDED from sending (0 new emails sent to them).
+ *   2. Leads who have NOT replied (replyStatus !== 'REPLIED', whether previous send failed or had no reply) are QUEUED (sendStatus = 'PENDING') for this follow-up run.
+ *   3. If ALL leads have replied (allQualified = true, 0 unreplied leads), no emails are sent and the run records that all leads have qualified.
  */
 export async function restartCampaign(
   campaignId: string,
   options?: { resetFailedOnly?: boolean; newTemplateId?: string }
-): Promise<{ campaign: Campaign; run: CampaignRun }> {
+): Promise<{
+  campaign: Campaign;
+  run: CampaignRun;
+  targetLeadsCount: number;
+  alreadyRepliedCount: number;
+  allQualified: boolean;
+  message: string;
+}> {
   await initCampaignStore();
   const campaign = campaignsMap.get(campaignId);
   if (!campaign) throw new Error(`Campaign ${campaignId} not found`);
 
-  // Halt any currently active send loops
+  // Halt any currently active send loops for this campaign
   const existingAbort = activeCampaignAbortControllers.get(campaignId);
   if (existingAbort) {
     existingAbort.abort();
@@ -721,9 +893,10 @@ export async function restartCampaign(
   const now = new Date().toISOString();
   const nextRunNumber = (campaign.lastRunNumber || 0) + 1;
   const newRunId = `run-${campaignId}-${nextRunNumber}`;
-  const templateId = options?.newTemplateId || campaign.templateId || 'tpl-b2b-portal';
+  const allAvailable = getAllTemplates();
+  const templateId = options?.newTemplateId || campaign.templateId || (allAvailable.length > 0 ? allAvailable[0].templateId : DEFAULT_EMAIL_TEMPLATES[0].templateId);
 
-  // Mark previous run as COMPLETED if it was running
+  // Mark previous run as COMPLETED if it was running or paused
   if (campaign.currentRunId) {
     const prevRun = campaignRunsMap.get(campaign.currentRunId);
     if (prevRun && (prevRun.status === 'RUNNING' || prevRun.status === 'PAUSED')) {
@@ -736,22 +909,78 @@ export async function restartCampaign(
   }
 
   const leads = getCampaignLeads(campaignId);
-  let pendingCount = 0;
+  const repliedLeads = leads.filter((l) => l.replyStatus === 'REPLIED');
+  const unrepliedLeads = leads.filter((l) => l.replyStatus !== 'REPLIED');
 
-  // Identify leads for this run
-  leads.forEach((l) => {
-    // If the lead was already SENT, we preserve its SENT status to guarantee NO DUPLICATE SENDS
-    if (l.sendStatus === 'SENT') {
-      // Do nothing, already safely sent
-    } else if (l.sendStatus === 'FAILED' || l.sendStatus === 'PAUSED' || l.sendStatus === 'PENDING') {
-      l.sendStatus = 'PENDING';
-      l.lastError = undefined;
-      l.campaignRunId = newRunId;
-      l.updatedAt = now;
-      pendingCount++;
-      if (isFirebaseConfigured && db) {
-        setDoc(doc(db, 'campaign_leads', l.campaignLeadId), l, { merge: true }).catch(() => {});
-      }
+  const allQualified = leads.length > 0 && repliedLeads.length === leads.length;
+  let targetLeadsCount = 0;
+  let message = '';
+
+  if (allQualified) {
+    // All leads have replied and qualified: 0 emails will be dispatched
+    message = `All ${leads.length} lead(s) in this campaign have replied & qualified. No one will receive an email in Run #${nextRunNumber}.`;
+    console.log(`[Campaign Engine] Restart requested for campaign ${campaignId}, but ALL leads have already replied. Disagreeing to send any duplicate emails.`);
+
+    const newRun: CampaignRun = {
+      runId: newRunId,
+      campaignId,
+      runNumber: nextRunNumber,
+      status: 'COMPLETED',
+      templateId,
+      totalLeads: leads.length,
+      sentCount: 0,
+      startedAt: now,
+      completedAt: now,
+      createdAt: now,
+    };
+    campaignRunsMap.set(newRunId, newRun);
+
+    campaign.currentRunId = newRunId;
+    campaign.lastRunNumber = nextRunNumber;
+    campaign.status = 'COMPLETED';
+    campaign.completedAt = now;
+    campaign.templateId = templateId;
+    campaign.updatedAt = now;
+    campaignsMap.set(campaignId, campaign);
+
+    if (isFirebaseConfigured && db) {
+      setDoc(doc(db, 'campaigns', campaignId), campaign, { merge: true }).catch(() => {});
+      setDoc(doc(db, 'campaign_runs', newRunId), newRun).catch(() => {});
+    }
+
+    recalculateCampaignMetrics(campaignId);
+
+    return {
+      campaign,
+      run: newRun,
+      targetLeadsCount: 0,
+      alreadyRepliedCount: repliedLeads.length,
+      allQualified: true,
+      message,
+    };
+  }
+
+  // Queue unreplied leads for the new follow-up run
+  unrepliedLeads.forEach((l) => {
+    l.sendStatus = 'PENDING';
+    l.lastError = undefined;
+    l.campaignRunId = newRunId;
+    l.updatedAt = now;
+    targetLeadsCount++;
+    if (isFirebaseConfigured && db) {
+      setDoc(doc(db, 'campaign_leads', l.campaignLeadId), l, { merge: true }).catch(() => {});
+    }
+  });
+
+  // Keep replied leads untouched with their REPLIED status preserved
+  repliedLeads.forEach((l) => {
+    // Ensure they are not queued
+    if (l.sendStatus === 'PENDING' || l.sendStatus === 'SENDING') {
+      l.sendStatus = 'SENT';
+    }
+    l.updatedAt = now;
+    if (isFirebaseConfigured && db) {
+      setDoc(doc(db, 'campaign_leads', l.campaignLeadId), l, { merge: true }).catch(() => {});
     }
   });
 
@@ -762,7 +991,7 @@ export async function restartCampaign(
     status: 'RUNNING',
     templateId,
     totalLeads: leads.length,
-    sentCount: campaign.sentCount,
+    sentCount: 0,
     startedAt: now,
     createdAt: now,
   };
@@ -780,18 +1009,30 @@ export async function restartCampaign(
     setDoc(doc(db, 'campaign_runs', newRunId), newRun).catch(() => {});
   }
 
-  // Start background sending
-  executeCampaignSendingEngine(campaignId).catch((err) => {
+  recalculateCampaignMetrics(campaignId);
+
+  message = `Run #${nextRunNumber} started. Sending follow-up to ${targetLeadsCount} unreplied lead(s). (${repliedLeads.length} lead(s) skipped because they already replied).`;
+  console.log(`[Campaign Engine] ${message}`);
+
+  // Start background sending for unreplied leads
+  executeCampaignSendingEngine(campaignId, newRunId).catch((err) => {
     console.error(`[Campaign Engine] Error on restart of ${campaignId}:`, err);
   });
 
-  return { campaign, run: newRun };
+  return {
+    campaign,
+    run: newRun,
+    targetLeadsCount,
+    alreadyRepliedCount: repliedLeads.length,
+    allQualified: false,
+    message,
+  };
 }
 
 /**
- * Sequential / Controlled Sending Engine with strict idempotency and duplicate protection
+ * Sequential / Controlled Sending Engine with strict reply checks and per-run tracking
  */
-async function executeCampaignSendingEngine(campaignId: string) {
+async function executeCampaignSendingEngine(campaignId: string, expectedRunId?: string) {
   const abortCtrl = new AbortController();
   activeCampaignAbortControllers.set(campaignId, abortCtrl);
 
@@ -799,14 +1040,52 @@ async function executeCampaignSendingEngine(campaignId: string) {
     const campaign = campaignsMap.get(campaignId);
     if (!campaign) return;
 
-    const template = emailTemplatesMap.get(campaign.templateId || '') || DEFAULT_EMAIL_TEMPLATES[0];
+    const currentRunId = expectedRunId || campaign.currentRunId || `run-${campaignId}-1`;
+    const selectedTplId = campaign.templateId || '';
+    let template = getTemplateById(selectedTplId);
+    if (!template && selectedTplId && isFirebaseConfigured && db) {
+      try {
+        const snap = await getDoc(doc(db, 'email_templates', selectedTplId));
+        if (snap.exists()) {
+          template = snap.data() as EmailTemplate;
+          emailTemplatesMap.set(selectedTplId, template);
+        }
+      } catch (err) {
+        console.warn('Firestore fallback lookup note for template:', err);
+      }
+    }
+    if (!template) {
+      template = DEFAULT_EMAIL_TEMPLATES.find((t) => t.templateId === selectedTplId) || DEFAULT_EMAIL_TEMPLATES[0];
+    }
     const leads = getCampaignLeads(campaignId);
 
-    // Candidates: only leads with sendStatus === 'PENDING'
-    const pendingLeads = leads.filter((l) => l.sendStatus === 'PENDING');
+    // Candidates: only leads with sendStatus === 'PENDING' AND replyStatus !== 'REPLIED'
+    const pendingLeads = leads.filter((l) => l.sendStatus === 'PENDING' && l.replyStatus !== 'REPLIED');
     console.log(
-      `[Campaign Engine] Starting send batch for "${campaign.name}" (${pendingLeads.length} leads pending)...`
+      `[Campaign Engine] Starting send batch for "${campaign.name}" [Run: ${currentRunId}] using template "${template.name}" (${template.templateId}) (${pendingLeads.length} leads pending, ${leads.filter(l => l.replyStatus === 'REPLIED').length} replied/excluded)...`
     );
+
+    if (pendingLeads.length === 0) {
+      // Nothing to send, finish run
+      const now = new Date().toISOString();
+      campaign.status = 'COMPLETED';
+      campaign.completedAt = now;
+      campaign.updatedAt = now;
+
+      const run = campaignRunsMap.get(currentRunId);
+      if (run) {
+        run.status = 'COMPLETED';
+        run.completedAt = now;
+        if (isFirebaseConfigured && db) {
+          safeSetDoc(doc(db, 'campaign_runs', run.runId), run, { merge: true }).catch(() => {});
+        }
+      }
+
+      if (isFirebaseConfigured && db) {
+        safeSetDoc(doc(db, 'campaigns', campaignId), campaign, { merge: true }).catch(() => {});
+      }
+      return;
+    }
 
     for (const lead of pendingLeads) {
       // 1. Check if paused or aborted
@@ -821,20 +1100,30 @@ async function executeCampaignSendingEngine(campaignId: string) {
         break;
       }
 
-      // 2. Strict Idempotency Check:
-      // Has this email already been sent to in this campaign?
-      const historyKey = `${campaignId}_${lead.email.toLowerCase()}`;
-      if (lead.sendStatus === 'SENT' || sendHistorySet.has(historyKey)) {
-        console.log(`[Campaign Engine] SKIPPING already-sent lead ${lead.email} to prevent duplicate.`);
+      // 2. Strict Reply Check:
+      // If the lead has replied at any point, NEVER send to them!
+      if (lead.replyStatus === 'REPLIED') {
+        console.log(`[Campaign Engine] SKIPPING lead ${lead.email} because they have already REPLIED & qualified.`);
         lead.sendStatus = 'SENT';
         continue;
       }
 
-      // 3. Subject and Body generation (Predefined vs AI Generated)
+      // 3. Prevent duplicate send within the SAME run
+      const runHistoryKey = `${campaignId}_${currentRunId}_${lead.email.toLowerCase()}`;
+      if (sendHistorySet.has(runHistoryKey)) {
+        console.log(`[Campaign Engine] SKIPPING already-sent lead ${lead.email} for run ${currentRunId}.`);
+        lead.sendStatus = 'SENT';
+        continue;
+      }
+
+      // 4. Subject and Body generation (Predefined vs AI Generated)
       let subject = '';
       let body = '';
 
-      if (campaign.campaignMode === 'AI_GENERATED') {
+      const currentCamp = campaignsMap.get(campaignId) || campaign;
+      const targetTplId = currentCamp.templateId || template.templateId;
+
+      if (currentCamp.campaignMode === 'AI_GENERATED' && !currentCamp.templateId) {
         if (!lead.generatedBody) {
           lead.generationStatus = 'GENERATING';
           const aiResult = await generateAiEmailForLead(lead);
@@ -850,12 +1139,29 @@ async function executeCampaignSendingEngine(campaignId: string) {
         subject = lead.generatedSubject || `Streamlining Operations for ${lead.companyName}`;
         body = lead.generatedBody || `Hi ${lead.name},\n\nI noticed your operations at ${lead.companyName}.`;
       } else {
-        const personalized = personalizeTemplate(template, lead);
+        // Strictly resolve and personalize the exact selected template
+        let activeTpl = getTemplateById(targetTplId);
+        if (!activeTpl && targetTplId && isFirebaseConfigured && db) {
+          try {
+            const snap = await getDoc(doc(db, 'email_templates', targetTplId));
+            if (snap.exists()) {
+              activeTpl = snap.data() as EmailTemplate;
+              emailTemplatesMap.set(targetTplId, activeTpl);
+            }
+          } catch (err) {}
+        }
+        if (!activeTpl) {
+          activeTpl = template;
+        }
+        console.log(`[Campaign Engine] [Send to ${lead.email}] Applying exact template "${activeTpl.name}" (ID: ${activeTpl.templateId})`);
+        const personalized = personalizeTemplate(activeTpl, lead);
         subject = personalized.subject;
         body = personalized.body;
+        lead.generatedSubject = subject;
+        lead.generatedBody = body;
       }
 
-      // 4. Mark SENDING
+      // 5. Mark SENDING
       lead.sendStatus = 'SENDING';
       lead.updatedAt = new Date().toISOString();
 
@@ -865,7 +1171,7 @@ async function executeCampaignSendingEngine(campaignId: string) {
       const gmailThreadId = lead.gmailThreadId || `thread-${lead.leadId}`;
 
       try {
-        console.log(`[Campaign Engine] Dispatching email to ${lead.email} ("${subject}")...`);
+        console.log(`[Campaign Engine] [Run ${currentRunId}] Dispatching email to ${lead.email} ("${subject}")...`);
         const sendResult = await sendLiveEmail({
           to: lead.email,
           subject: subject,
@@ -885,13 +1191,14 @@ async function executeCampaignSendingEngine(campaignId: string) {
           lead.lastError = undefined;
           lead.updatedAt = now;
 
-          // Record in send history ledger to guarantee cross-restore safety
-          sendHistorySet.add(historyKey);
+          // Record in send history ledger for this run
+          sendHistorySet.add(runHistoryKey);
+          sendHistorySet.add(`${campaignId}_${lead.email.toLowerCase()}`);
 
           const historyRecord: CampaignSendHistory = {
             historyId: `hist-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
             campaignId,
-            campaignRunId: campaign.currentRunId,
+            campaignRunId: currentRunId,
             campaignLeadId: lead.campaignLeadId,
             email: lead.email,
             templateId: template.templateId,
@@ -900,6 +1207,12 @@ async function executeCampaignSendingEngine(campaignId: string) {
             sentAt: now,
             status: 'SENT',
           };
+
+          // Increment run sent count
+          const currentRun = campaignRunsMap.get(currentRunId);
+          if (currentRun) {
+            currentRun.sentCount = (currentRun.sentCount || 0) + 1;
+          }
 
           // Synchronize with Unified Inbox thread
           appendOutboundMessageToThread(conversationId, {
@@ -929,9 +1242,12 @@ async function executeCampaignSendingEngine(campaignId: string) {
           if (isFirebaseConfigured && db) {
             safeSetDoc(doc(db, 'campaign_leads', lead.campaignLeadId), lead, { merge: true }).catch(() => {});
             safeSetDoc(doc(db, 'campaign_send_history', historyRecord.historyId), historyRecord).catch(() => {});
+            if (currentRun) {
+              safeSetDoc(doc(db, 'campaign_runs', currentRun.runId), currentRun, { merge: true }).catch(() => {});
+            }
           }
 
-          console.log(`[Campaign Engine] Successfully dispatched to ${lead.email} (ID: ${sentMsgId})`);
+          console.log(`[Campaign Engine] Successfully dispatched to ${lead.email} (ID: ${sentMsgId}) in run ${currentRunId}`);
         } else {
           lead.sendStatus = 'FAILED';
           lead.lastError = sendResult.error || 'SMTP delivery failure';
@@ -961,15 +1277,15 @@ async function executeCampaignSendingEngine(campaignId: string) {
     }
 
     // Check completion status
-    const remainingPending = getCampaignLeads(campaignId).filter((l) => l.sendStatus === 'PENDING');
+    const remainingPending = getCampaignLeads(campaignId).filter((l) => l.sendStatus === 'PENDING' && l.replyStatus !== 'REPLIED');
     if (remainingPending.length === 0) {
       const now = new Date().toISOString();
       campaign.status = 'COMPLETED';
       campaign.completedAt = now;
       campaign.updatedAt = now;
 
-      if (campaign.currentRunId) {
-        const run = campaignRunsMap.get(campaign.currentRunId);
+      if (currentRunId) {
+        const run = campaignRunsMap.get(currentRunId);
         if (run) {
           run.status = 'COMPLETED';
           run.completedAt = now;
@@ -982,7 +1298,7 @@ async function executeCampaignSendingEngine(campaignId: string) {
       if (isFirebaseConfigured && db) {
         safeSetDoc(doc(db, 'campaigns', campaignId), campaign, { merge: true }).catch(() => {});
       }
-      console.log(`[Campaign Engine] Campaign ${campaign.name} marked COMPLETED.`);
+      console.log(`[Campaign Engine] Campaign ${campaign.name} [Run: ${currentRunId}] marked COMPLETED.`);
     }
   } finally {
     activeCampaignAbortControllers.delete(campaignId);
@@ -1160,4 +1476,64 @@ export async function handleIncomingCampaignLeadReply(params: {
     campaignLead: matchedLead,
     demoDetected: matchedLead.demoStatus === 'BOOKED',
   };
+}
+
+/**
+ * Update a lead's send or reply status directly (useful for testing scenarios and CRM operations)
+ */
+export async function updateCampaignLeadStatus(params: {
+  leadId: string;
+  sendStatus?: 'PENDING' | 'SENDING' | 'SENT' | 'FAILED' | 'PAUSED' | 'COMPLETED';
+  replyStatus?: 'NOT_REPLIED' | 'REPLIED';
+  demoStatus?: DemoStatus;
+  lastError?: string;
+}): Promise<CampaignLead | null> {
+  await initCampaignStore();
+
+  const targetLead = Array.from(campaignLeadsMap.values()).find(
+    (l) => l.leadId === params.leadId || l.campaignLeadId === params.leadId
+  );
+
+  if (!targetLead) return null;
+
+  const now = new Date().toISOString();
+  if (params.sendStatus) {
+    targetLead.sendStatus = params.sendStatus;
+    if (params.sendStatus === 'FAILED') {
+      targetLead.lastError = params.lastError || 'Delivery failure';
+    } else if (params.sendStatus === 'PENDING') {
+      targetLead.lastError = undefined;
+    } else if (params.sendStatus === 'SENT') {
+      targetLead.lastSentAt = targetLead.lastSentAt || now;
+      targetLead.sendCount = (targetLead.sendCount || 0) + 1;
+    }
+  }
+
+  if (params.replyStatus) {
+    targetLead.replyStatus = params.replyStatus;
+    if (params.replyStatus === 'REPLIED') {
+      targetLead.repliedAt = targetLead.repliedAt || now;
+    } else {
+      targetLead.repliedAt = undefined;
+    }
+  }
+
+  if (params.demoStatus) {
+    targetLead.demoStatus = params.demoStatus;
+    targetLead.demoBookedAt = params.demoStatus === 'BOOKED' ? now : undefined;
+  }
+
+  targetLead.updatedAt = now;
+
+  if (isFirebaseConfigured && db) {
+    try {
+      await safeSetDoc(doc(db, 'campaign_leads', targetLead.campaignLeadId), targetLead, { merge: true });
+    } catch (e) {
+      console.warn('Firestore update warning for lead status:', e);
+    }
+  }
+
+  recalculateCampaignMetrics(targetLead.campaignId);
+
+  return targetLead;
 }

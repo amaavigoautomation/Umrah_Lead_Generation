@@ -9,6 +9,14 @@
       "destination": "/api/inbound/whatsapp"
     },
     {
+      "source": "/api/webhooks/umrah-demo",
+      "destination": "/api/webhooks/umrah-demo"
+    },
+    {
+      "source": "/api/leads/inbound",
+      "destination": "/api/leads/inbound"
+    },
+    {
       "source": "/api/(.*)",
       "destination": "/api/[...path]"
     },

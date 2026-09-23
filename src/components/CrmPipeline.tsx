@@ -37,6 +37,7 @@ import {
   LeadType,
   LeadSource,
 } from '../types';
+import { WebsiteLeadIntegrationModal } from './WebsiteLeadIntegrationModal';
 
 interface CrmPipelineProps {
   leads: Lead[];
@@ -68,6 +69,7 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [sortField, setSortField] = useState<SortField>('score');
   const [sortAsc, setSortAsc] = useState<boolean>(false);
+  const [isWebsiteModalOpen, setIsWebsiteModalOpen] = useState<boolean>(false);
 
   const handleLeadStatusChange = async (leadId: string, newStatus: LeadStatus) => {
     if (onUpdateLeadStatus) {
@@ -276,9 +278,22 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
             <option value="CONTACTED">CONTACTED</option>
             <option value="ENGAGED">ENGAGED</option>
             <option value="QUALIFIED">QUALIFIED</option>
+            <option value="DEMO_SCHEDULED">DEMO SCHEDULED</option>
+            <option value="DEMO_BOOKED">DEMO BOOKED</option>
             <option value="HUMAN_HANDOFF">HUMAN_HANDOFF</option>
             <option value="CLOSED_WON">CLOSED_WON</option>
           </select>
+
+          {/* Website Form Webhook Integration Button */}
+          <button
+            onClick={() => setIsWebsiteModalOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/40 rounded-lg text-xs font-semibold transition shadow-sm hover:border-emerald-500/60 shrink-0"
+            title="Connect your website demo form (umrah360.in/request-demo) to CRM"
+          >
+            <Globe className="w-3.5 h-3.5 text-emerald-400" />
+            <span>Website Form Webhook</span>
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+          </button>
         </div>
       </div>
 
@@ -476,7 +491,14 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
                             >
                               {lead.leadType}
                             </span>
-                            <span className="text-[11px] text-slate-400">{lead.source}</span>
+                            {lead.source === 'WEBSITE' ? (
+                              <span className="text-[11px] text-emerald-400 font-semibold flex items-center gap-1 bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">
+                                <Globe className="w-3 h-3" />
+                                <span>Website Demo</span>
+                              </span>
+                            ) : (
+                              <span className="text-[11px] text-slate-400">{lead.source}</span>
+                            )}
                           </div>
                         </td>
 
@@ -728,6 +750,16 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
           </div>
         </div>
       )}
+
+      {/* Website Lead Ingestion Modal (umrah360.in) */}
+      <WebsiteLeadIntegrationModal
+        isOpen={isWebsiteModalOpen}
+        onClose={() => setIsWebsiteModalOpen(false)}
+        onLeadCreated={(newLeadId) => {
+          setSelectedLeadId(newLeadId);
+          setInspectModalLeadId(newLeadId);
+        }}
+      />
     </div>
   );
 };
@@ -849,6 +881,71 @@ function renderLeadDetail(
           </span>
         </div>
       </div>
+
+      {/* Website Demo Request Details Card */}
+      {(selectedLead.source === 'WEBSITE' || selectedLead.queryMessage || selectedContact.website || selectedContact.city) && (
+        <div className="bg-gradient-to-br from-emerald-950/40 via-slate-900 to-slate-900 border border-emerald-500/40 rounded-xl p-4 space-y-3 shadow-md">
+          <div className="flex items-center justify-between border-b border-emerald-500/20 pb-2.5">
+            <div className="flex items-center gap-2">
+              <Globe className="w-4 h-4 text-emerald-400" />
+              <span className="text-xs font-bold text-white uppercase tracking-wider">
+                Website Demo Form (umrah360.in/request-demo)
+              </span>
+            </div>
+            <span className="text-[10px] font-semibold text-emerald-300 bg-emerald-500/20 px-2 py-0.5 rounded border border-emerald-500/40 flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+              <span>Inbound Webhook</span>
+            </span>
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+            <div>
+              <span className="text-[10px] text-slate-400 block font-medium">Designation</span>
+              <span className="text-slate-100 font-semibold">{selectedContact.jobTitle || 'Agency Executive'}</span>
+            </div>
+            <div>
+              <span className="text-[10px] text-slate-400 block font-medium">Location</span>
+              <span className="text-slate-100 font-semibold">
+                {selectedContact.city ? `${selectedContact.city}, ` : ''}{selectedContact.country || 'India'}
+              </span>
+            </div>
+            <div>
+              <span className="text-[10px] text-slate-400 block font-medium">Branches</span>
+              <span className="text-slate-100 font-semibold">{selectedContact.branches || selectedLead.branches || 'Single Office'}</span>
+            </div>
+            <div>
+              <span className="text-[10px] text-slate-400 block font-medium">Team Size</span>
+              <span className="text-slate-100 font-semibold">{selectedContact.teamSize || selectedLead.teamSize || '5-10 Users'}</span>
+            </div>
+          </div>
+
+          {selectedContact.website && (
+            <div className="text-xs flex items-center gap-2 pt-1 border-t border-slate-800/80">
+              <span className="text-[10px] text-slate-400 font-medium">Agency Website:</span>
+              <a
+                href={selectedContact.website.startsWith('http') ? selectedContact.website : `https://${selectedContact.website}`}
+                target="_blank"
+                rel="noreferrer"
+                className="text-emerald-400 hover:text-emerald-300 underline font-mono text-[11px] inline-flex items-center gap-1"
+              >
+                <span>{selectedContact.website}</span>
+                <ExternalLink className="w-3 h-3" />
+              </a>
+            </div>
+          )}
+
+          {(selectedLead.queryMessage || selectedLead.notes) && (
+            <div className="pt-2 border-t border-slate-800/80">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
+                Customer Message / Query:
+              </span>
+              <div className="bg-slate-950/90 p-3 rounded-lg border border-slate-800 text-slate-200 font-mono text-xs leading-relaxed whitespace-pre-wrap">
+                {selectedLead.queryMessage || selectedLead.notes}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* AI Intelligence Summary & Recommendations */}
       <div className="bg-slate-800/60 p-4 rounded-xl border border-slate-700/60 space-y-3">

@@ -1,22 +1,27 @@
 import type { IncomingMessage, ServerResponse } from 'http';
+import nodemailer from 'nodemailer';
 
 /**
  * Production-Ready Standalone Vercel Serverless Function for Website Demo Inbound Webhook
- * Route: /api/webhooks/umrah-demo
+ * Route: /api/webhooks/umrah-demo & /api/leads/inbound
  *
- * Dedicated for: https://umrah360.in/request-demo, Elementor forms, WordPress, Webflow
- * Target CRM Database: Firestore (ai-studio-379c884e-3360-468a-ad55-8105acbd3214)
+ * Dedicated for: https://umrah360.in/request-demo, Elementor forms, WordPress, Webflow, Postman
+ * Target CRM Database: Firestore (gen-lang-client-0376069258 / ai-studio-379c884e-3360-468a-ad55-8105acbd3214)
+ * Actions on Submission:
+ *  1. Create Contact in Firestore `contacts`
+ *  2. Create Lead in Firestore `leads` (DEMO_SCHEDULED, BOOKED)
+ *  3. Create Conversation & Inbound Message in Firestore `conversations` & `messages` (Unified Inbox)
+ *  4. Dispatch instant personalized Thank You Auto-Reply email to the lead's email via SMTP
+ *  5. Append the Outbound Auto-Reply Message to the Unified Inbox thread
  */
 
-const FIREBASE_PROJECT_ID =
-  process.env.VITE_FIREBASE_PROJECT_ID ||
-  process.env.FIREBASE_PROJECT_ID ||
-  'ai-studio-379c884e-3360-468a-ad55-8105acbd3214';
+const FIREBASE_PROJECT_ID = 'gen-lang-client-0376069258';
+const FIRESTORE_DATABASE_ID = 'ai-studio-379c884e-3360-468a-ad55-8105acbd3214';
 
 // Helper to write directly to Firestore REST API in serverless environments
 async function writeToFirestoreRest(collectionName: string, docId: string, data: Record<string, any>) {
   try {
-    const firestoreUrl = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/${collectionName}/${encodeURIComponent(
+    const firestoreUrl = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/${FIRESTORE_DATABASE_ID}/documents/${collectionName}/${encodeURIComponent(
       docId
     )}`;
 
@@ -51,10 +56,80 @@ async function writeToFirestoreRest(collectionName: string, docId: string, data:
       body: JSON.stringify({ fields }),
     });
 
+    if (!res.ok) {
+      const errText = await res.text().catch(() => '');
+      console.warn(`[Firestore REST Warning] ${collectionName}/${docId} status ${res.status}:`, errText.slice(0, 150));
+    }
+
     return res.ok;
   } catch (err) {
     console.warn(`[Firestore REST Warning] Failed writing to ${collectionName}/${docId}:`, err);
     return false;
+  }
+}
+
+// Helper to send live auto-reply email via SMTP
+async function sendAutoReplyEmail(toEmail: string, fullName: string, companyName: string, product: string, teamSize: string, city: string, country: string, branches: string, phone: string) {
+  const host = process.env.SMTP_HOST || 'smtp.gmail.com';
+  const port = parseInt(process.env.SMTP_PORT || '465', 10);
+  const secure = process.env.SMTP_SECURE === 'true' || port === 465;
+  const user = process.env.SMTP_USER || 'amaavigo@gmail.com';
+  const rawPass = process.env.SMTP_PASS || '';
+  const pass = rawPass.trim();
+  const from = process.env.SMTP_FROM || `Umrah360 Team <${user}>`;
+
+  const firstName = fullName.split(/\s+/)[0] || 'there';
+  const subject = `We have received your Umrah360 Demo Request - ${companyName || 'Umrah360'}`;
+  
+  const textBody = [
+    `As-salamu alaykum ${firstName},`,
+    ``,
+    `Thank you for requesting a live demo of Umrah360 for ${companyName || 'your travel agency'}!`,
+    ``,
+    `We have received your requirements:`,
+    `- Product Interest: ${product}`,
+    `- Estimated Team Size: ${teamSize}`,
+    `- Location: ${city ? `${city}, ` : ''}${country || 'Global'}`,
+    `- Multi-Branch Operations: ${branches}`,
+    ``,
+    `One of our senior pilgrimage software specialists will reach out to you shortly at ${phone || toEmail} to coordinate a suitable time for your personalized walkthrough and answer any operational questions you have.`,
+    ``,
+    `If you have specific Saudi visa tracking, Makkah/Madinah hotel contracting, or B2B sub-agent workflows you would like to test, simply reply to this email.`,
+    ``,
+    `Warm regards,`,
+    `The Umrah360 Team`,
+    `https://umrah360.in`,
+  ].join('\n');
+
+  if (!pass) {
+    console.log('[Auto-Reply Notice] SMTP_PASS not set in environment, skipping live email dispatch.');
+    return { sent: false, subject, textBody };
+  }
+
+  try {
+    const transporter = nodemailer.createTransport({
+      host,
+      port,
+      secure,
+      auth: { user, pass },
+      connectionTimeout: 10000,
+      greetingTimeout: 10000,
+      socketTimeout: 15000,
+    });
+
+    const info = await transporter.sendMail({
+      from,
+      to: toEmail,
+      subject,
+      text: textBody,
+      replyTo: user,
+    });
+
+    console.log(`[Auto-Reply Success] Sent demo confirmation to ${toEmail} (ID: ${info.messageId})`);
+    return { sent: true, messageId: info.messageId, subject, textBody };
+  } catch (err: any) {
+    console.warn(`[Auto-Reply Email Notice] Could not dispatch email to ${toEmail}:`, err?.message);
+    return { sent: false, error: err?.message, subject, textBody };
   }
 }
 
@@ -88,30 +163,15 @@ export default async function handler(
           supportedFields: {
             personal: [
               'fullName (or name, your_full_name, your-name, firstName, lastName)',
-              'email (or your_email, your-email)',
-              'phone (or phoneNumber, phone_number, mobile)',
+              'email (or your_email, your-email, work_email)',
+              'phone (or phoneNumber, phone_number, mobile, mobile_number)',
               'countryCode',
               'designation (or jobTitle, role)',
             ],
             location: ['country (or select_country)', 'city (or your_city)'],
-            company: ['companyName (or company, agency)', 'companyWebsite (or website)', 'branches (or has_branches, Yes/No)'],
-            product: ['product (or select_products, productInterest)', 'teamSize (e.g. 5-10 Users, 10-20 Users)'],
-            query: ['message (or query, notes, comments)'],
-          },
-          samplePayload: {
-            fullName: 'Mohammad Al-Bakhla',
-            email: 'demo@bakhlatours.com',
-            designation: 'Managing Director',
-            country: 'India',
-            countryCode: '+91',
-            phone: '9820252434',
-            city: 'Mumbai',
-            companyName: 'Bakhla Tours & Travels Pvt. Ltd.',
-            website: 'https://bakhlatours.com',
-            branches: 'Yes',
-            product: 'Umrah ERP & B2B Sub-Agent Portal',
-            teamSize: '10-20',
-            message: 'We manage 3,500 pilgrims annually across Mumbai and Gujarat branches.',
+            company: ['companyName (or company_name, company, agency)', 'companyWebsite (or company_url, website)', 'branches (or has_branches, Yes/No)'],
+            product: ['product (or select_products, productInterest)', 'teamSize (or team_size, users, 10-20)'],
+            query: ['message (or query, remark, remarks, notes, comments)'],
           },
           timestamp: new Date().toISOString(),
         },
@@ -217,7 +277,7 @@ export default async function handler(
         body.jobTitle ||
         body.job_title ||
         body.role ||
-        'Travel Executive'
+        'Tour Operator / Agency Leader'
       ).trim();
 
       const country = (body.country || body.select_country || body.selectCountry || 'India').trim();
@@ -229,7 +289,7 @@ export default async function handler(
         body.company ||
         body.agency ||
         body.agency_name ||
-        'Umrah Tour Operator'
+        (rawFullName ? `${rawFullName}'s Pilgrimage Agency` : 'Umrah Tour Operator')
       ).trim();
 
       const website = (
@@ -282,8 +342,8 @@ export default async function handler(
 
       // Split name
       const nameParts = rawFullName.split(/\s+/).filter(Boolean);
-      const firstName = nameParts[0] || 'Prospective';
-      const lastName = nameParts.slice(1).join(' ') || 'Pilgrim Operator';
+      const firstName = nameParts[0] || 'Valued';
+      const lastName = nameParts.slice(1).join(' ') || 'Partner';
       const finalFullName = rawFullName || `${firstName} ${lastName}`;
 
       // Calculate Lead Qualification Score (0 - 100)
@@ -305,6 +365,7 @@ export default async function handler(
       const contactId = `cnt-web-${Date.now()}-${randSuffix}`;
       const conversationId = `conv-web-${Date.now()}-${randSuffix}`;
       const messageId = `msg-web-${Date.now()}-${randSuffix}`;
+      const autoReplyMsgId = `msg-auto-reply-${Date.now()}-${randSuffix}`;
 
       // 2. Build CRM Objects
       const contactData = {
@@ -355,17 +416,39 @@ export default async function handler(
         updatedAt: nowIso,
       };
 
+      const inboundSummaryText = [
+        `🕋 INBOUND DEMO REQUEST from umrah360.in/request-demo:`,
+        ``,
+        `• Name: ${finalFullName} (${designation})`,
+        `• Company: ${companyName}${website ? ` (${website})` : ''}`,
+        `• Email: ${email}`,
+        `• Phone: ${formattedPhone}`,
+        `• Location: ${city ? `${city}, ` : ''}${country}`,
+        `• Product Interest: ${product}`,
+        `• Team Size: ${teamSize}`,
+        `• Multi-Branch: ${branches}`,
+        ``,
+        `Message / Requirement:`,
+        queryMessage || 'Customer submitted the "Schedule my Free Demo" form on umrah360.in.',
+      ].join('\n');
+
       const conversationData = {
         conversationId,
         contactId,
         leadId,
         channel: 'EMAIL',
         subject: `Website Demo Request: ${companyName} (${product})`,
-        status: 'OPEN',
+        status: 'ACTIVE',
         direction: 'INBOUND',
-        lastMessageText: queryMessage || `Requested demo for ${product}`,
+        aiEnabled: true,
+        humanHandoff: false,
+        conversationSummary: `Website Demo Request: ${companyName} (${finalFullName})`,
+        startedAt: nowIso,
+        lastMessageText: inboundSummaryText.slice(0, 180) + '...',
         lastMessageAt: nowIso,
         unreadCount: 1,
+        isRead: false,
+        unread: true,
         createdAt: nowIso,
         updatedAt: nowIso,
       };
@@ -377,19 +460,57 @@ export default async function handler(
         senderName: finalFullName,
         channel: 'EMAIL',
         direction: 'INBOUND',
-        text: `Inbound Demo Request:\n\nName: ${finalFullName}\nEmail: ${email}\nPhone: ${formattedPhone}\nDesignation: ${designation}\nCompany: ${companyName}\nCity: ${city}, ${country}\nWebsite: ${website}\nBranches: ${branches}\nProduct: ${product}\nTeam Size: ${teamSize}\nMessage: ${queryMessage}`,
+        text: inboundSummaryText,
         timestamp: nowIso,
         sentAt: nowIso,
         receivedAt: nowIso,
       };
 
-      // Persist to Firestore via REST API (compatible with all serverless runtimes)
+      // 3. Persist Contact, Lead, Conversation, and Inbound Message to Firestore
       await Promise.allSettled([
         writeToFirestoreRest('contacts', contactId, contactData),
         writeToFirestoreRest('leads', leadId, leadData),
         writeToFirestoreRest('conversations', conversationId, conversationData),
         writeToFirestoreRest('messages', messageId, messageData),
       ]);
+
+      console.log(`[Webhook Success] Ingested lead "${companyName}" (${leadId}) into Firestore DB.`);
+
+      // 4. Dispatch Auto-Reply Thank-You Email via SMTP
+      let autoReplySent = false;
+      let autoReplyText = '';
+      if (email && email.includes('@')) {
+        const mailResult = await sendAutoReplyEmail(
+          email,
+          finalFullName,
+          companyName,
+          product,
+          teamSize,
+          city,
+          country,
+          branches,
+          formattedPhone
+        );
+
+        autoReplySent = mailResult.sent;
+        autoReplyText = mailResult.textBody;
+
+        // 5. Append Outbound Thank-You Message to the Conversation in Firestore
+        const autoReplyMessageData = {
+          messageId: autoReplyMsgId,
+          conversationId,
+          senderType: 'AI',
+          senderName: 'Umrah360 Automation',
+          channel: 'EMAIL',
+          direction: 'OUTBOUND',
+          text: autoReplyText,
+          timestamp: new Date().toISOString(),
+          sentAt: new Date().toISOString(),
+          receivedAt: new Date().toISOString(),
+        };
+
+        await writeToFirestoreRest('messages', autoReplyMsgId, autoReplyMessageData);
+      }
 
       // Return 200 Success Response
       res.statusCode = 200;
@@ -398,8 +519,9 @@ export default async function handler(
         JSON.stringify(
           {
             success: true,
-            message: 'Website demo request successfully received and synced to Umrah360 CRM & Firestore DB.',
+            message: 'Website demo request successfully received, stored in CRM & Unified Inbox, and auto-reply dispatched.',
             leadId,
+            autoReplySent,
             lead: {
               leadId,
               title: leadData.title,

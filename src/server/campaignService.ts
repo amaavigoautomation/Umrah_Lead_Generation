@@ -433,11 +433,19 @@ export async function saveTemplate(template: Partial<EmailTemplate>): Promise<Em
   const templateId = template.templateId || `tpl-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
   const existing = emailTemplatesMap.get(templateId);
 
+  const isHtml = template.isHtml !== undefined
+    ? template.isHtml
+    : (template.format === 'html' || existing?.isHtml || false);
+
   const tpl: EmailTemplate = {
     templateId,
     name: (template.name || existing?.name || 'Untitled Template').trim(),
     subject: (template.subject || existing?.subject || 'Umrah360 Solutions for {{company}}').trim(),
     body: (template.body || existing?.body || '').trim(),
+    htmlBody: template.htmlBody !== undefined ? template.htmlBody : existing?.htmlBody,
+    format: template.format || (isHtml ? 'html' : 'text') || existing?.format || 'text',
+    isHtml,
+    attachments: template.attachments || existing?.attachments || [],
     createdAt: existing?.createdAt || template.createdAt || now,
     updatedAt: now,
   };
@@ -446,7 +454,7 @@ export async function saveTemplate(template: Partial<EmailTemplate>): Promise<Em
   if (isFirebaseConfigured && db) {
     try {
       await safeSetDoc(doc(db, 'email_templates', tpl.templateId), tpl, { merge: true });
-      console.log(`[saveTemplate] Successfully stored template "${tpl.name}" (${tpl.templateId}) directly to DB.`);
+      console.log(`[saveTemplate] Successfully stored template "${tpl.name}" (${tpl.templateId}) directly to DB with ${tpl.attachments?.length || 0} attachments.`);
     } catch (e) {
       console.warn('Failed to save template to Firestore:', e);
     }
@@ -1123,6 +1131,9 @@ async function executeCampaignSendingEngine(campaignId: string, expectedRunId?: 
       const currentCamp = campaignsMap.get(campaignId) || campaign;
       const targetTplId = currentCamp.templateId || template.templateId;
 
+      let activeAttachments: any[] = [];
+      let htmlContent: string | undefined = undefined;
+
       if (currentCamp.campaignMode === 'AI_GENERATED' && !currentCamp.templateId) {
         if (!lead.generatedBody) {
           lead.generationStatus = 'GENERATING';
@@ -1153,10 +1164,22 @@ async function executeCampaignSendingEngine(campaignId: string, expectedRunId?: 
         if (!activeTpl) {
           activeTpl = template;
         }
-        console.log(`[Campaign Engine] [Send to ${lead.email}] Applying exact template "${activeTpl.name}" (ID: ${activeTpl.templateId})`);
+        console.log(`[Campaign Engine] [Send to ${lead.email}] Applying exact template "${activeTpl.name}" (ID: ${activeTpl.templateId}) with ${activeTpl.attachments?.length || 0} attachments`);
         const personalized = personalizeTemplate(activeTpl, lead);
         subject = personalized.subject;
         body = personalized.body;
+        htmlContent = personalized.html;
+
+        if (activeTpl.attachments && activeTpl.attachments.length > 0) {
+          activeAttachments = activeTpl.attachments.map((att: any) => ({
+            filename: att.name || att.filename || 'attachment',
+            contentType: att.type || att.contentType,
+            dataUrl: att.dataUrl,
+            content: att.base64 || att.content,
+            encoding: att.base64 ? 'base64' : undefined,
+          }));
+        }
+
         lead.generatedSubject = subject;
         lead.generatedBody = body;
       }
@@ -1171,11 +1194,13 @@ async function executeCampaignSendingEngine(campaignId: string, expectedRunId?: 
       const gmailThreadId = lead.gmailThreadId || `thread-${lead.leadId}`;
 
       try {
-        console.log(`[Campaign Engine] [Run ${currentRunId}] Dispatching email to ${lead.email} ("${subject}")...`);
+        console.log(`[Campaign Engine] [Run ${currentRunId}] Dispatching email to ${lead.email} ("${subject}") with ${activeAttachments.length} attachments...`);
         const sendResult = await sendLiveEmail({
           to: lead.email,
           subject: subject,
           text: body,
+          html: htmlContent,
+          attachments: activeAttachments.length > 0 ? activeAttachments : undefined,
         });
 
         const now = new Date().toISOString();
@@ -1311,7 +1336,7 @@ async function executeCampaignSendingEngine(campaignId: string, expectedRunId?: 
 export function personalizeTemplate(
   template: EmailTemplate,
   lead: { name?: string; firstName?: string; lastName?: string; companyName?: string; designation?: string; email: string }
-): { subject: string; body: string } {
+): { subject: string; body: string; html?: string; attachments?: any[] } {
   const name = lead.name || lead.firstName || lead.email.split('@')[0];
   const firstName = lead.firstName || name.split(' ')[0];
   const lastName = lead.lastName || name.split(' ').slice(1).join(' ');
@@ -1319,7 +1344,7 @@ export function personalizeTemplate(
   const designation = lead.designation || 'Director';
 
   const replaceVars = (str: string) => {
-    return str
+    return (str || '')
       .replace(/\{\{\s*name\s*\}\}/gi, name)
       .replace(/\{\{\s*firstName\s*\}\}/gi, firstName)
       .replace(/\{\{\s*lastName\s*\}\}/gi, lastName)
@@ -1330,9 +1355,18 @@ export function personalizeTemplate(
       .replace(/\{\{\s*email\s*\}\}/gi, lead.email);
   };
 
+  const subject = replaceVars(template.subject);
+  const rawBody = template.body || '';
+  const body = replaceVars(rawBody);
+
+  const rawHtml = template.htmlBody || (template.isHtml || template.format === 'html' ? template.body : undefined);
+  const html = rawHtml ? replaceVars(rawHtml) : undefined;
+
   return {
-    subject: replaceVars(template.subject),
-    body: replaceVars(template.body),
+    subject,
+    body,
+    html,
+    attachments: template.attachments || [],
   };
 }
 

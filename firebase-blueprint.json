@@ -121,13 +121,17 @@
     },
     "EmailTemplate": {
       "title": "EmailTemplate",
-      "description": "Predefined outbound email templates with variable substitution",
+      "description": "Predefined outbound email templates with variable substitution, styling, HTML, and attachments",
       "type": "object",
       "properties": {
         "templateId": { "type": "string", "maxLength": 128 },
         "name": { "type": "string", "maxLength": 256 },
         "subject": { "type": "string", "maxLength": 512 },
-        "body": { "type": "string", "maxLength": 16384 },
+        "body": { "type": "string", "maxLength": 65536 },
+        "htmlBody": { "type": "string", "maxLength": 65536 },
+        "format": { "type": "string", "enum": ["text", "html"] },
+        "isHtml": { "type": "boolean" },
+        "attachments": { "type": "array" },
         "createdAt": { "type": "string" },
         "updatedAt": { "type": "string" }
       },

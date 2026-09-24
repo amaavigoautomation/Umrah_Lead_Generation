@@ -12,6 +12,15 @@ export interface SmtpStatus {
   lastError?: string;
 }
 
+export interface EmailAttachmentParam {
+  filename: string;
+  content?: string | Buffer;
+  path?: string;
+  contentType?: string;
+  encoding?: string;
+  dataUrl?: string;
+}
+
 export interface SendMailParams {
   to: string;
   subject: string;
@@ -20,6 +29,7 @@ export interface SendMailParams {
   inReplyTo?: string;
   references?: string[];
   replyTo?: string;
+  attachments?: EmailAttachmentParam[];
 }
 
 export interface SendMailResult {
@@ -141,7 +151,37 @@ export async function sendLiveEmail(params: SendMailParams): Promise<SendMailRes
         throw new Error('SMTP transporter creation failed');
       }
 
-      const mailOptions = {
+      // Process attachments if present
+      let formattedAttachments: any[] | undefined = undefined;
+      if (params.attachments && Array.isArray(params.attachments) && params.attachments.length > 0) {
+        formattedAttachments = params.attachments.map((att) => {
+          if (att.dataUrl && !att.content) {
+            const matches = att.dataUrl.match(/^data:([^;]+);base64,(.+)$/);
+            if (matches) {
+              return {
+                filename: att.filename,
+                contentType: att.contentType || matches[1],
+                content: Buffer.from(matches[2], 'base64'),
+              };
+            }
+          }
+          if (att.content && typeof att.content === 'string' && att.encoding === 'base64') {
+            return {
+              filename: att.filename,
+              contentType: att.contentType,
+              content: Buffer.from(att.content, 'base64'),
+            };
+          }
+          return {
+            filename: att.filename,
+            contentType: att.contentType,
+            content: att.content,
+            path: att.path,
+          };
+        });
+      }
+
+      const mailOptions: any = {
         from: config.from,
         to: params.to,
         replyTo: params.replyTo || config.user,
@@ -155,6 +195,10 @@ export async function sendLiveEmail(params: SendMailParams): Promise<SendMailRes
           'X-Automated-By': config.user,
         },
       };
+
+      if (formattedAttachments && formattedAttachments.length > 0) {
+        mailOptions.attachments = formattedAttachments;
+      }
 
       let info: any;
       try {

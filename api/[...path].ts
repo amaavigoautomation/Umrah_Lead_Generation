@@ -1,7 +1,9 @@
 import type { IncomingMessage, ServerResponse } from 'http';
+import { handleCoreApi } from '../src/server/coreApiHandler';
 
 /**
  * Vercel Serverless Catch-All Function for /api/*
+ * Bundles all server routes: SMTP/IMAP inbound sync, auto-replies, campaign dispatch, and lead webhooks
  */
 export default async function handler(req: IncomingMessage & { body?: any }, res: ServerResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -25,29 +27,16 @@ export default async function handler(req: IncomingMessage & { body?: any }, res
     );
   }
 
-  if (
-    req.url === '/api/webhooks/umrah-demo' ||
-    req.url?.startsWith('/api/webhooks/umrah-demo?') ||
-    req.url === '/api/leads/inbound' ||
-    req.url?.startsWith('/api/leads/inbound?')
-  ) {
-    // @ts-ignore
-    const { default: demoHandler } = await import('./webhooks/umrah-demo.js').catch(() => import('./webhooks/umrah-demo.ts'));
-    if (demoHandler) {
-      return demoHandler(req, res);
-    }
-  }
-
   try {
-    // Dynamic import to support various bundler paths safely
-    // @ts-ignore
-    const { handleCoreApi } = await import('../src/server/coreApiHandler.js').catch(() => import('../src/server/coreApiHandler.ts'));
-    if (handleCoreApi) {
-      const handled = await handleCoreApi(req, res);
-      if (handled) return;
-    }
+    const handled = await handleCoreApi(req, res);
+    if (handled) return;
   } catch (err: any) {
-    console.warn('[API Catch-all] Core API execution notice:', err?.message);
+    console.error('[API Catch-all] Core API execution error:', err);
+    if (!res.writableEnded) {
+      res.statusCode = 500;
+      res.setHeader('Content-Type', 'application/json');
+      return res.end(JSON.stringify({ error: err?.message || 'Internal Server Error' }));
+    }
   }
 
   if (!res.writableEnded) {
@@ -56,3 +45,4 @@ export default async function handler(req: IncomingMessage & { body?: any }, res
     res.end(JSON.stringify({ status: 'ok', url: req.url, message: 'Endpoint acknowledged' }));
   }
 }
+

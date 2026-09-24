@@ -16,11 +16,26 @@ export type DemoStatus = 'NOT_BOOKED' | 'BOOKED';
 
 export type DemoSource = 'AUTOMATIC' | 'MANUAL';
 
+export interface TemplateAttachment {
+  id: string;
+  name: string;
+  filename?: string;
+  size: number;
+  type: string;
+  contentType?: string;
+  dataUrl?: string;
+  base64?: string;
+}
+
 export interface EmailTemplate {
   templateId: string;
   name: string;
   subject: string;
   body: string;
+  htmlBody?: string;
+  format?: 'text' | 'html';
+  isHtml?: boolean;
+  attachments?: TemplateAttachment[];
   createdAt: string;
   updatedAt: string;
 }

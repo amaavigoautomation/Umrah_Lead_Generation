@@ -3,6 +3,11 @@
   "framework": "vite",
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
+  "functions": {
+    "api/**/*.ts": {
+      "includeFiles": "src/server/**"
+    }
+  },
   "rewrites": [
     {
       "source": "/api/inbound/whatsapp",

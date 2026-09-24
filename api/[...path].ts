@@ -1,5 +1,4 @@
 import type { IncomingMessage, ServerResponse } from 'http';
-import { handleCoreApi } from '../src/server/coreApiHandler';
 
 /**
  * Vercel Serverless Catch-All Function for /api/*
@@ -28,8 +27,17 @@ export default async function handler(req: IncomingMessage & { body?: any }, res
   }
 
   try {
-    const handled = await handleCoreApi(req, res);
-    if (handled) return;
+    // Dynamically load bundled server module generated during build
+    // @ts-ignore
+    const serverMod = await import('../src/server/coreApiHandler.bundle.js')
+      .catch(() => import('../src/server/coreApiHandler.js'))
+      .catch(() => import('../src/server/coreApiHandler'));
+
+    const handleCoreApi = serverMod?.handleCoreApi;
+    if (handleCoreApi) {
+      const handled = await handleCoreApi(req, res);
+      if (handled) return;
+    }
   } catch (err: any) {
     console.error('[API Catch-all] Core API execution error:', err);
     if (!res.writableEnded) {
@@ -45,4 +53,5 @@ export default async function handler(req: IncomingMessage & { body?: any }, res
     res.end(JSON.stringify({ status: 'ok', url: req.url, message: 'Endpoint acknowledged' }));
   }
 }
+
 

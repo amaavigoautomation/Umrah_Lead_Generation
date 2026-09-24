@@ -27,11 +27,9 @@ export default async function handler(req: IncomingMessage & { body?: any }, res
   }
 
   try {
-    // Dynamically load bundled server module generated during build
+    // Dynamically load bundled server module within /api directory
     // @ts-ignore
-    const serverMod = await import('../src/server/coreApiHandler.bundle.js')
-      .catch(() => import('../src/server/coreApiHandler.js'))
-      .catch(() => import('../src/server/coreApiHandler'));
+    const serverMod = await import('./core-server.bundle.js').catch(() => null);
 
     const handleCoreApi = serverMod?.handleCoreApi;
     if (handleCoreApi) {

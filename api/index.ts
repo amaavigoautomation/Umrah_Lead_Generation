@@ -12,8 +12,13 @@ export default async function handler(req: IncomingMessage & { body?: any }, res
   }
 
   try {
-    const handled = await handleCoreApi(req, res);
-    if (handled) return;
+    // @ts-ignore
+    const serverMod = await import('./core-server.bundle.js').catch(() => null);
+    const handleCoreApi = serverMod?.handleCoreApi;
+    if (handleCoreApi) {
+      const handled = await handleCoreApi(req, res);
+      if (handled) return;
+    }
   } catch (err: any) {
     console.error('[API Index] Core API execution error:', err);
   }

@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite --port=3000 --host=0.0.0.0",
-    "build": "vite build && esbuild src/server/coreApiHandler.ts --bundle --platform=node --format=esm --outfile=src/server/coreApiHandler.bundle.js --external:imapflow --external:mailparser --external:nodemailer",
+    "build": "vite build && esbuild src/server/coreApiHandler.ts --bundle --platform=node --format=esm --outfile=api/core-server.bundle.js --external:imapflow --external:mailparser --external:nodemailer",
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit"

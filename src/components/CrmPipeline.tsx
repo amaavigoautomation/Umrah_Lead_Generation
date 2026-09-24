@@ -564,7 +564,12 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
                         {/* Identified Requirements */}
                         <td className="p-3.5">
                           <div className="flex flex-wrap gap-1 max-w-xs">
-                            {lead.requirements.slice(0, 2).map((req, i) => (
+                            {(Array.isArray(lead.requirements)
+                              ? lead.requirements
+                              : typeof lead.requirements === 'string'
+                              ? (lead.requirements as string).split('|').map((s) => s.trim())
+                              : []
+                            ).slice(0, 2).map((req, i) => (
                               <span
                                 key={i}
                                 className="px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-300 border border-blue-500/20 text-[10px] truncate"
@@ -572,9 +577,9 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
                                 {req}
                               </span>
                             ))}
-                            {lead.requirements.length > 2 && (
+                            {(Array.isArray(lead.requirements) ? lead.requirements.length : 0) > 2 && (
                               <span className="text-[10px] text-slate-500 font-medium">
-                                +{lead.requirements.length - 2} more
+                                +{(lead.requirements?.length || 0) - 2} more
                               </span>
                             )}
                           </div>
@@ -682,7 +687,12 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
 
                     {/* Requirements Tags */}
                     <div className="mt-3 flex flex-wrap gap-1">
-                      {lead.requirements.slice(0, 3).map((req, i) => (
+                      {(Array.isArray(lead.requirements)
+                        ? lead.requirements
+                        : typeof lead.requirements === 'string'
+                        ? (lead.requirements as string).split('|').map((s) => s.trim())
+                        : []
+                      ).slice(0, 3).map((req, i) => (
                         <span
                           key={i}
                           className="px-2 py-0.5 rounded bg-blue-500/10 text-blue-300 border border-blue-500/20 text-[10px]"
@@ -977,7 +987,12 @@ function renderLeadDetail(
         <div className="bg-slate-800/40 p-4 rounded-xl border border-slate-800 text-xs space-y-2">
           <span className="text-slate-400 font-medium block">Identified Requirements:</span>
           <div className="flex flex-wrap gap-1.5">
-            {selectedLead.requirements.map((req, i) => (
+            {(Array.isArray(selectedLead.requirements)
+              ? selectedLead.requirements
+              : typeof selectedLead.requirements === 'string'
+              ? (selectedLead.requirements as string).split('|').map((s) => s.trim())
+              : ['Umrah Packages', 'Costing Engine']
+            ).map((req, i) => (
               <span
                 key={i}
                 className="px-2.5 py-1 rounded bg-blue-500/10 text-blue-300 border border-blue-500/20 text-xs"

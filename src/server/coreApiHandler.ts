@@ -45,6 +45,14 @@ import {
   generateAiSamplePreviews,
 } from './campaignService.js';
 import { processWebsiteLeadSubmission } from './websiteLeadService.js';
+import {
+  initKnowledgeStore,
+  getAllKnowledgeDocs,
+  getPublishedKnowledgeDocs,
+  saveKnowledgeDoc,
+  deleteKnowledgeDoc,
+  retrieveRelevantKnowledge as serverRetrieveKnowledge,
+} from './knowledgeService.js';
 
 /**
  * Universal API request handler that works in both:
@@ -398,31 +406,146 @@ Generate a helpful, accurate, grounded response adhering to all rules.`;
     return true;
   }
 
-  // 4. AI Test Playground (/api/ai/test)
+  // 4. Knowledge Base CRUD & Synchronization (/api/knowledge)
+  if (url === '/api/knowledge' || url.startsWith('/api/knowledge?') || url.startsWith('/api/knowledge/')) {
+    await initKnowledgeStore();
+
+    if (req.method === 'GET') {
+      const documents = getAllKnowledgeDocs();
+      res.statusCode = 200;
+      res.end(JSON.stringify({ success: true, documents, count: documents.length }));
+      return true;
+    }
+
+    if (req.method === 'POST' || req.method === 'PUT') {
+      try {
+        const saved = await saveKnowledgeDoc(body);
+        res.statusCode = 200;
+        res.end(JSON.stringify({ success: true, document: saved, message: 'Article successfully saved and active in RAG' }));
+      } catch (err: any) {
+        res.statusCode = 400;
+        res.end(JSON.stringify({ success: false, error: err?.message || 'Failed to save knowledge document' }));
+      }
+      return true;
+    }
+
+    if (req.method === 'DELETE') {
+      let docId = '';
+      const pathMatch = url.match(/^\/api\/knowledge\/([a-zA-Z0-9_-]+)$/);
+      if (pathMatch) {
+        docId = pathMatch[1];
+      } else if (url.includes('?')) {
+        const parsedUrl = new URL(url, 'http://localhost');
+        docId = parsedUrl.searchParams.get('id') || '';
+      }
+      if (!docId && body?.id) {
+        docId = body.id;
+      }
+
+      if (!docId) {
+        res.statusCode = 400;
+        res.end(JSON.stringify({ success: false, error: 'Knowledge document ID required' }));
+        return true;
+      }
+
+      const deleted = await deleteKnowledgeDoc(docId);
+      res.statusCode = 200;
+      res.end(JSON.stringify({ success: deleted, deletedId: docId }));
+      return true;
+    }
+  }
+
+  // 4.5. AI Test Playground (/api/ai/test)
   if ((url === '/api/ai/test' || url.startsWith('/api/ai/test?')) && req.method === 'POST') {
-    const { message } = body;
+    const { message, contact, lead, conversation, signature } = body;
     const isTwentyUsers = /20 user|twenty|20 seat|enterprise/i.test(message || '');
-    const isB2b = /b2b|agent|reseller/i.test(message || '');
+    const isB2b = /b2b|agent|reseller|wholesaler/i.test(message || '');
+
+    // Retrieve live grounded chunks from memory cache (0ms)
+    const chunks = serverRetrieveKnowledge(message || '', 3);
+    const knowledgeSources = chunks.map((c) => c.title);
+
+    if (isTwentyUsers) {
+      res.statusCode = 200;
+      res.end(
+        JSON.stringify({
+          responseText: `Thank you for your inquiry! For 20+ users, our Enterprise plan provides dedicated cloud infrastructure, custom B2B sub-agent networks, and personalized onboarding. Because this requires custom volume assessment, I'm transferring you to our Senior Solutions Specialist.\n\n${signature || 'Regards,\nUmrah360 Team'}`,
+          confidence: 0.96,
+          humanHandoff: true,
+          handoffReason: 'Enterprise 20+ users requires custom volume quote',
+          leadScore: 95,
+          intent: 'HIGH',
+          buyingStage: 'DECISION',
+          knowledgeSources: knowledgeSources.length > 0 ? knowledgeSources : ['Umrah360 Official Subscription Plans & Approved Pricing'],
+        })
+      );
+      return true;
+    }
+
+    if (process.env.GEMINI_API_KEY) {
+      try {
+        const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+        const systemInstruction = `You are the AI conversation engine for Umrah360 (www.umrah360.in).
+CRITICAL RULES:
+1. Ground your response strictly in the provided Approved Knowledge Chunks. NEVER fabricate features, pricing, or guarantees.
+2. Keep your reply concise, professional, warm, and helpful.
+3. Plain text only. No markdown formatting symbols in emails.
+4. Sign off with: ${signature || 'Regards,\nUmrah360 Team'}`;
+
+        const prompt = `APPROVED KNOWLEDGE CHUNKS:
+${chunks.map((c) => `[${c.title}]: ${c.relevantExcerpt}`).join('\n\n')}
+
+CUSTOMER MESSAGE:
+"${message}"
+
+Generate a helpful, grounded response.`;
+
+        const response = await ai.models.generateContent({
+          model: 'gemini-3.8-flash',
+          contents: prompt,
+          config: { systemInstruction, temperature: 0.3 },
+        });
+
+        if (response.text && response.text.trim().length > 10) {
+          res.statusCode = 200;
+          res.end(
+            JSON.stringify({
+              responseText: response.text.trim(),
+              confidence: 0.96,
+              humanHandoff: false,
+              leadScore: isB2b ? 88 : 80,
+              intent: 'HIGH',
+              buyingStage: 'CONSIDERATION',
+              knowledgeSources: knowledgeSources.length > 0 ? knowledgeSources : ['Umrah360 Platform Knowledge Base'],
+            })
+          );
+          return true;
+        }
+      } catch (e) {
+        console.warn('AI Test playground Gemini fallback:', e);
+      }
+    }
+
+    // Dynamic grounded fallback
+    let responseText = '';
+    if (chunks.length > 0) {
+      responseText = `Based on Umrah360's verified documentation:\n\n${chunks[0].relevantExcerpt}\n\nPlease let us know if you would like a guided demo or specific details for your agency.\n\n${signature || 'Regards,\nUmrah360 Team'}`;
+    } else if (isB2b) {
+      responseText = `Yes! Umrah360 includes a full B2B Sub-Agent Portal allowing your partner agencies to search contracted hotel allotments and issue white-label PDF vouchers directly.\n\n${signature || 'Regards,\nUmrah360 Team'}`;
+    } else {
+      responseText = `Umrah360 automates pilgrimage tour operations, dynamic package pricing, and Saudi visa workflows.\n\n${signature || 'Regards,\nUmrah360 Team'}`;
+    }
 
     res.statusCode = 200;
     res.end(
       JSON.stringify({
-        responseText: isTwentyUsers
-          ? `Thank you for your inquiry! For 20+ users, our Enterprise plan provides dedicated cloud infrastructure, custom B2B sub-agent networks, and personalized onboarding. Because this requires custom volume assessment, I'm transferring you to our Senior Solutions Specialist.\n\nRegards,\nUmrah360 Team`
-          : isB2b
-          ? `Yes! Umrah360 includes a full B2B Sub-Agent Portal allowing your partner agencies to search contracted hotel allotments and issue white-label PDF vouchers directly.\n\nRegards,\nUmrah360 Team`
-          : `Umrah360 automates pilgrimage tour operations, dynamic package pricing, and Saudi visa workflows.\n\nRegards,\nUmrah360 Team`,
-        confidence: 0.95,
-        humanHandoff: isTwentyUsers,
-        handoffReason: isTwentyUsers ? 'Enterprise 20+ users requires custom quote' : undefined,
-        leadScore: isTwentyUsers ? 95 : isB2b ? 88 : 75,
+        responseText,
+        confidence: 0.94,
+        humanHandoff: false,
+        leadScore: isB2b ? 88 : 75,
         intent: 'HIGH',
-        buyingStage: isTwentyUsers ? 'DECISION' : 'CONSIDERATION',
-        knowledgeSources: isTwentyUsers
-          ? ['Umrah360 Official Subscription Plans & Approved Pricing']
-          : isB2b
-          ? ['B2B Sub-Agent Portal & Reseller Distribution Engine']
-          : ['Umrah360 Platform Architecture & Capabilities Overview'],
+        buyingStage: 'CONSIDERATION',
+        knowledgeSources,
       })
     );
     return true;

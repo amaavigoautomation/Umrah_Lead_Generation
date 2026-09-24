@@ -4,7 +4,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { sendLiveEmail, SendMailResult, getSmtpConfig } from './smtpService.js';
 import { pollUnreadEmails, FetchedInboundEmail } from './imapService.js';
-import { INITIAL_KNOWLEDGE_DOCUMENTS } from '../services/knowledgeData.js';
+import { getPublishedKnowledgeDocs } from './knowledgeService.js';
 import {
   initPersistentIdempotencyStore,
   isMessageAlreadyProcessed,
@@ -557,8 +557,9 @@ export async function generateAutoReplyText(params: {
   const targetMailbox = process.env.SMTP_USER || process.env.IMAP_USER || 'amaavigo@gmail.com';
   const senderGreetingName = fromName ? fromName.split(' ')[0] : from.split('@')[0];
 
-  // Prepare full knowledgebase grounding text from INITIAL_KNOWLEDGE_DOCUMENTS
-  const kbGroundingText = INITIAL_KNOWLEDGE_DOCUMENTS.map(
+  // Prepare full knowledgebase grounding text from dynamic published knowledge documents
+  const publishedDocs = getPublishedKnowledgeDocs();
+  const kbGroundingText = publishedDocs.map(
     (doc) => `=== [${doc.category}] ${doc.title} ===\n${doc.content}`
   ).join('\n\n');
 

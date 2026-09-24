@@ -45,7 +45,7 @@ import {
   WHATSAPP_BUSINESS_NUMBER_FORMATTED,
 } from './services/whatsappInboundService';
 import { db, isFirebaseConfigured } from './firebase/config';
-import { collection, doc, setDoc, getDoc, getDocs, updateDoc, query, orderBy, onSnapshot } from 'firebase/firestore';
+import { collection, doc, setDoc, getDoc, getDocs, updateDoc, deleteDoc, query, orderBy, onSnapshot } from 'firebase/firestore';
 
 function deduplicateMessages(msgs: Message[]): Message[] {
   const seenMap = new Map<string, Message>();
@@ -69,6 +69,45 @@ function deduplicateMessages(msgs: Message[]): Message[] {
     }
   }
   return Array.from(seenMap.values());
+}
+
+function sanitizeLead(l: any): Lead {
+  if (!l) return {} as Lead;
+  let reqs: string[] = [];
+  if (Array.isArray(l.requirements)) {
+    reqs = l.requirements.map(String);
+  } else if (typeof l.requirements === 'string') {
+    reqs = l.requirements.split('|').map((s: string) => s.trim()).filter(Boolean);
+  }
+  if (reqs.length === 0) {
+    reqs = ['Umrah ERP & B2B Portal'];
+  }
+  return {
+    ...l,
+    leadScore: Number(l.leadScore) || 75,
+    intent: l.intent || 'HIGH',
+    buyingStage: l.buyingStage || 'ENGAGED',
+    status: l.status || 'DEMO_SCHEDULED',
+    requirements: reqs,
+    tags: Array.isArray(l.tags) ? l.tags : [],
+  };
+}
+
+function sanitizeContact(c: any): Contact {
+  if (!c) return {} as Contact;
+  const firstName = c.firstName || (c.fullName ? c.fullName.split(' ')[0] : 'Tour') || 'Tour';
+  const lastName = c.lastName || (c.fullName ? c.fullName.split(' ').slice(1).join(' ') : 'Operator') || 'Operator';
+  return {
+    ...c,
+    firstName,
+    lastName,
+    fullName: c.fullName || `${firstName} ${lastName}`,
+    companyName: c.companyName || 'Umrah Travel Agency',
+    jobTitle: c.jobTitle || c.designation || 'Tour Operator',
+    email: c.email || '',
+    phone: c.phone || '',
+    tags: Array.isArray(c.tags) ? c.tags : [],
+  };
 }
 
 export default function App() {
@@ -182,8 +221,8 @@ export default function App() {
         // Always set the exact documents present in Firestore (if user deleted documents, reflects empty/subset)
         setConversations(convsSnap.docs.map((d) => d.data() as Conversation));
         setMessages(msgsSnap.docs.map((d) => d.data() as Message));
-        setLeads(leadsSnap.docs.map((d) => d.data() as Lead));
-        setContacts(contsSnap.docs.map((d) => d.data() as Contact));
+        setLeads(leadsSnap.docs.map((d) => sanitizeLead(d.data())));
+        setContacts(contsSnap.docs.map((d) => sanitizeContact(d.data())));
         if (!kbSnap.empty) {
           setKnowledgeDocs(kbSnap.docs.map((d) => d.data() as KnowledgeDocument));
         }
@@ -215,12 +254,12 @@ export default function App() {
         });
 
         unsubLeads = onSnapshot(collection(db, 'leads'), (snap) => {
-          const list = snap.docs.map((d) => d.data() as Lead);
+          const list = snap.docs.map((d) => sanitizeLead(d.data()));
           setLeads(list);
         });
 
         unsubContacts = onSnapshot(collection(db, 'contacts'), (snap) => {
-          const list = snap.docs.map((d) => d.data() as Contact);
+          const list = snap.docs.map((d) => sanitizeContact(d.data()));
           setContacts(list);
         });
 
@@ -1076,6 +1115,64 @@ export default function App() {
     setActiveTab('crm');
   };
 
+  // Knowledge Document Save/Update with instant local state, Firestore persistence, and Backend RAG cache synchronization
+  const handleSaveKnowledgeDoc = async (docItem: KnowledgeDocument) => {
+    // 1. Instant local state update for zero latency
+    setKnowledgeDocs((prev) => {
+      const idx = prev.findIndex((d) => d.id === docItem.id);
+      if (idx >= 0) {
+        const next = [...prev];
+        next[idx] = docItem;
+        return next;
+      }
+      return [docItem, ...prev];
+    });
+
+    // 2. Persist to Firestore
+    if (isFirebaseConfigured && db) {
+      try {
+        await setDoc(doc(db, 'knowledge_documents', docItem.id), docItem, { merge: true });
+      } catch (err) {
+        console.warn('Firestore KB save error:', err);
+      }
+    }
+
+    // 3. Sync to backend API cache (0ms lookup on server for auto-replies)
+    try {
+      await fetch('/api/knowledge', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(docItem),
+      });
+    } catch (apiErr) {
+      console.warn('Backend KB cache sync error:', apiErr);
+    }
+  };
+
+  // Knowledge Document Delete with Firestore & Backend cache removal
+  const handleDeleteKnowledgeDoc = async (id: string) => {
+    // 1. Instant local removal
+    setKnowledgeDocs((prev) => prev.filter((d) => d.id !== id));
+
+    // 2. Remove from Firestore
+    if (isFirebaseConfigured && db) {
+      try {
+        await deleteDoc(doc(db, 'knowledge_documents', id));
+      } catch (err) {
+        console.warn('Firestore KB delete error:', err);
+      }
+    }
+
+    // 3. Remove from backend cache
+    try {
+      await fetch(`/api/knowledge?id=${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+      });
+    } catch (apiErr) {
+      console.warn('Backend KB delete sync error:', apiErr);
+    }
+  };
+
   // Count unread & handoff with Firestore persistent unread tracking
   const handoffCount = conversations.filter((c) => c.humanHandoff).length;
   const unreadCount = conversations.reduce(
@@ -1172,10 +1269,9 @@ export default function App() {
         {activeTab === 'knowledge' && (
           <KnowledgeBaseView
             documents={knowledgeDocs}
-            onAddDocument={(doc) => setKnowledgeDocs((prev) => [doc, ...prev])}
-            onUpdateDocument={(doc) =>
-              setKnowledgeDocs((prev) => prev.map((d) => (d.id === doc.id ? doc : d)))
-            }
+            onAddDocument={handleSaveKnowledgeDoc}
+            onUpdateDocument={handleSaveKnowledgeDoc}
+            onDeleteDocument={handleDeleteKnowledgeDoc}
           />
         )}
 

@@ -202,10 +202,12 @@ export interface Contact {
   branches?: string;
   hasBranches?: boolean | string;
   teamSize?: string;
+  tier?: string;
+  tags?: string[];
   notes?: string;
   createdAt: string;
   updatedAt: string;
-  lastActivityAt: string;
+  lastActivityAt?: string;
 }
 
 export interface Lead {

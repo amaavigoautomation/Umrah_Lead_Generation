@@ -100,7 +100,20 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
   // Active conversation and linked objects
   const activeConversation =
     conversations.find((c) => c.conversationId === selectedConversationId) || conversations[0];
-  const activeContact = contacts.find((c) => c.contactId === activeConversation?.contactId);
+  const foundContact = contacts.find((c) => c.contactId === activeConversation?.contactId);
+  const activeContact: Contact = foundContact || {
+    contactId: activeConversation?.contactId || 'unknown',
+    firstName: 'Tour',
+    lastName: 'Operator',
+    email: '',
+    phone: '',
+    companyName: 'Umrah Travel Agency',
+    jobTitle: 'Tour Operator',
+    tags: ['WEBSITE_DEMO_FORM'],
+    notes: '',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
   const activeLead = leads.find((l) => l.leadId === activeConversation?.leadId);
 
   // All conversations for this active contact across different platforms (Section 55 Unified Customer View)
@@ -658,11 +671,9 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
                   )}
                   {activeConversation.managementMode && (
                     <span className={`px-1.5 py-0.5 rounded text-[10px] font-sans font-semibold uppercase ${
-                      activeConversation.managementMode === 'AUTONOMOUS'
+                      activeConversation.managementMode === 'AI' || (activeConversation.managementMode as any) === 'AUTONOMOUS'
                         ? 'bg-emerald-500/20 text-emerald-300'
-                        : activeConversation.managementMode === 'REVIEW'
-                        ? 'bg-amber-500/20 text-amber-300'
-                        : 'bg-slate-700 text-slate-300'
+                        : 'bg-amber-500/20 text-amber-300'
                     }`}>
                       {activeConversation.managementMode} MODE
                     </span>
@@ -1085,7 +1096,12 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
             <div className="p-2.5 bg-slate-800/50 rounded-lg border border-slate-800 text-xs space-y-1.5">
               <span className="text-[11px] text-slate-400 font-medium">Extracted Needs:</span>
               <div className="flex flex-wrap gap-1">
-                {(activeLead?.requirements || ['Umrah Packages', 'Costing Engine']).map((req, i) => (
+                {(Array.isArray(activeLead?.requirements)
+                  ? activeLead.requirements
+                  : typeof activeLead?.requirements === 'string'
+                  ? (activeLead.requirements as string).split('|').map((s) => s.trim())
+                  : ['Umrah Packages', 'Costing Engine']
+                ).map((req, i) => (
                   <span
                     key={i}
                     className="px-2 py-0.5 rounded bg-blue-500/10 text-blue-300 border border-blue-500/20 text-[10px]"

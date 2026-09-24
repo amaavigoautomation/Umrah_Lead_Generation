@@ -231,9 +231,31 @@
         "error": { "type": "string", "maxLength": 512 }
       },
       "required": ["historyId", "campaignId", "email", "sentAt", "status"]
+    },
+    "KnowledgeDocument": {
+      "title": "KnowledgeDocument",
+      "description": "Verified domain knowledge article used for RAG grounding in AI auto-replies",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "title": { "type": "string", "maxLength": 256 },
+        "category": { "type": "string", "enum": ["PRODUCT", "MODULES", "PRICING", "B2B", "OPERATIONS", "FAQS", "INTEGRATIONS"] },
+        "content": { "type": "string", "maxLength": 65536 },
+        "tags": { "type": "array" },
+        "status": { "type": "string", "enum": ["DRAFT", "REVIEW", "APPROVED", "PUBLISHED"] },
+        "version": { "type": "number" },
+        "author": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "title", "category", "content", "status"]
     }
   },
   "firestore": {
+    "/knowledge_documents/{docId}": {
+      "schema": "KnowledgeDocument",
+      "description": "Ground truth knowledge base articles"
+    },
     "/contacts/{contactId}": {
       "schema": "Contact",
       "description": "Pilgrimage tour operator contacts"

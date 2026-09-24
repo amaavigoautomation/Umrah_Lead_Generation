@@ -113,8 +113,36 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
     selectedTemplateIdRef.current = selectedTemplateId;
   }, [selectedTemplateId]);
 
-  // Fetch all templates directly from Firestore DB
+  // Merge template arrays by templateId, preserving newest updates and never dropping items
+  const mergeTemplates = (incoming: EmailTemplate[], existing: EmailTemplate[]): EmailTemplate[] => {
+    const map = new Map<string, EmailTemplate>();
+    // Add existing
+    for (const t of existing) {
+      if (t && t.templateId) map.set(t.templateId, t);
+    }
+    // Overlay incoming
+    for (const t of incoming) {
+      if (t && t.templateId) {
+        const prev = map.get(t.templateId);
+        if (!prev) {
+          map.set(t.templateId, t);
+        } else {
+          const prevTime = new Date(prev.updatedAt || prev.createdAt || 0).getTime();
+          const nextTime = new Date(t.updatedAt || t.createdAt || 0).getTime();
+          if (nextTime >= prevTime) {
+            map.set(t.templateId, { ...prev, ...t });
+          }
+        }
+      }
+    }
+    return Array.from(map.values()).sort(
+      (a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
+    );
+  };
+
+  // Fetch all templates directly from Firestore DB & API and merge them
   const fetchTemplatesDirectlyFromDb = async (): Promise<EmailTemplate[]> => {
+    let combined: EmailTemplate[] = [];
     try {
       if (isFirebaseConfigured && db) {
         const snap = await getDocs(collection(db, 'email_templates'));
@@ -124,9 +152,7 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
             const data = d.data() as EmailTemplate;
             if (data && data.templateId) dbTpls.push(data);
           });
-          dbTpls.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
-          setTemplates(dbTpls);
-          return dbTpls;
+          combined = mergeTemplates(dbTpls, combined);
         }
       }
     } catch (e) {
@@ -135,12 +161,16 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
     try {
       const res = await fetch('/api/templates');
       const data = await res.json();
-      if (data.templates && data.templates.length > 0) {
-        setTemplates(data.templates);
-        return data.templates;
+      if (data.templates && Array.isArray(data.templates) && data.templates.length > 0) {
+        combined = mergeTemplates(data.templates, combined);
       }
     } catch (e) {}
-    return [];
+
+    setTemplates((prev) => {
+      const finalMerged = mergeTemplates(combined, prev);
+      return finalMerged;
+    });
+    return combined;
   };
 
   // Fetch a specific template document directly from Firestore DB
@@ -182,11 +212,12 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
     setCampaignMode('PREDEFINED');
     setIsCreateModalOpen(true);
     const dbTpls = await fetchTemplatesDirectlyFromDb();
+    const allAvailable = mergeTemplates(dbTpls, templates);
     const targetId =
       preferredTemplateId ||
-      (selectedTemplateId && dbTpls.some((t) => t.templateId === selectedTemplateId)
+      (selectedTemplateId && allAvailable.some((t) => t.templateId === selectedTemplateId)
         ? selectedTemplateId
-        : (dbTpls.length > 0 ? dbTpls[0].templateId : ''));
+        : (allAvailable.length > 0 ? allAvailable[0].templateId : ''));
     if (targetId) {
       setSelectedTemplateId(targetId);
       selectedTemplateIdRef.current = targetId;
@@ -255,7 +286,7 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
       }
 
       if (tplData.templates && tplData.templates.length > 0) {
-        setTemplates(tplData.templates);
+        setTemplates((prev) => mergeTemplates(tplData.templates, prev));
         setSelectedTemplateId((curr) => {
           if (curr && tplData.templates.some((t: EmailTemplate) => t.templateId === curr)) {
             selectedTemplateIdRef.current = curr;
@@ -311,10 +342,7 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                   loadedTpls.push(data);
                 }
               });
-              loadedTpls.sort(
-                (a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
-              );
-              setTemplates(loadedTpls);
+              setTemplates((prev) => mergeTemplates(loadedTpls, prev));
               setSelectedTemplateId((curr) => {
                 if (curr && loadedTpls.some((t) => t.templateId === curr)) {
                   selectedTemplateIdRef.current = curr;
@@ -744,10 +772,7 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
       const savedTpl: EmailTemplate = (data && data.success && data.template) ? data.template : fullPayload;
 
       // 3. Update local templates state with the new template at the very top
-      setTemplates((prev) => {
-        const remaining = prev.filter((t) => t.templateId !== savedTpl.templateId);
-        return [savedTpl, ...remaining];
-      });
+      setTemplates((prev) => mergeTemplates([savedTpl], prev));
 
       // 4. CRITICAL: Automatically pre-select this newly saved template immediately for the next campaign!
       setSelectedTemplateId(savedTpl.templateId);

@@ -2,7 +2,7 @@ import { GoogleGenAI } from '@google/genai';
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import { INITIAL_KNOWLEDGE_DOCUMENTS } from '../services/knowledgeData.js';
+import { getPublishedKnowledgeDocs } from './knowledgeService.js';
 import { db, isFirebaseConfigured } from '../firebase/config.js';
 import { doc } from 'firebase/firestore';
 import { safeSetDoc } from './firestoreUtils.js';
@@ -458,8 +458,9 @@ export async function generateWhatsAppAutoReplyText(params: {
 
   const senderGreetingName = fromName ? fromName.split(' ')[0] : 'Brother / Sister';
 
-  // Knowledge base grounding summary
-  const kbGroundingText = INITIAL_KNOWLEDGE_DOCUMENTS.map(
+  // Dynamic knowledge base grounding summary from published docs
+  const publishedDocs = getPublishedKnowledgeDocs();
+  const kbGroundingText = publishedDocs.map(
     (doc) => `[DOCUMENT: ${doc.title} (${doc.category})]\n${doc.content}`
   ).join('\n\n');
 

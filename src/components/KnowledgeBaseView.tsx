@@ -40,6 +40,8 @@ export const KnowledgeBaseView: React.FC<KnowledgeBaseViewProps> = ({
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [saveToast, setSaveToast] = useState<string | null>(null);
+  const [deleteCandidateDoc, setDeleteCandidateDoc] = useState<KnowledgeDocument | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Form State
   const [editingDoc, setEditingDoc] = useState<Partial<KnowledgeDocument>>({
@@ -130,20 +132,27 @@ export const KnowledgeBaseView: React.FC<KnowledgeBaseViewProps> = ({
     setTimeout(() => setSaveToast(null), 3500);
   };
 
-  // Handle Delete
-  const handleDeleteDoc = async (id: string, title: string) => {
-    if (window.confirm(`Are you sure you want to delete "${title}"?`)) {
+  // Handle Delete Confirmation (No window.confirm to avoid iframe blocking)
+  const handleConfirmDelete = async () => {
+    if (!deleteCandidateDoc) return;
+    const { id, title } = deleteCandidateDoc;
+    setIsDeleting(true);
+
+    try {
       if (onDeleteDocument) {
         await onDeleteDocument(id);
-        if (selectedDocId === id) {
-          const remaining = documents.filter((d) => d.id !== id);
-          if (remaining.length > 0) {
-            setSelectedDocId(remaining[0].id);
-          }
-        }
-        setSaveToast(`Deleted article "${title}"`);
-        setTimeout(() => setSaveToast(null), 3500);
       }
+      const remaining = documents.filter((d) => d.id !== id);
+      if (selectedDocId === id) {
+        setSelectedDocId(remaining[0]?.id || '');
+      }
+      setSaveToast(`Deleted article "${title}" from Database & RAG`);
+      setTimeout(() => setSaveToast(null), 3500);
+    } catch (err) {
+      console.error('Failed to delete document:', err);
+    } finally {
+      setIsDeleting(false);
+      setDeleteCandidateDoc(null);
     }
   };
 
@@ -357,8 +366,8 @@ export const KnowledgeBaseView: React.FC<KnowledgeBaseViewProps> = ({
 
                   {onDeleteDocument && (
                     <button
-                      onClick={() => handleDeleteDoc(selectedDoc.id, selectedDoc.title)}
-                      className="p-1.5 rounded-lg bg-red-950/40 hover:bg-red-900/60 text-red-400 border border-red-800/60 transition"
+                      onClick={() => setDeleteCandidateDoc(selectedDoc)}
+                      className="p-1.5 rounded-lg bg-red-950/40 hover:bg-red-900/60 text-red-400 border border-red-800/60 transition flex items-center justify-center cursor-pointer"
                       title="Delete Article"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
@@ -598,6 +607,54 @@ export const KnowledgeBaseView: React.FC<KnowledgeBaseViewProps> = ({
                   {isSaving ? <span>Saving to DB...</span> : <span>Save & Activate in RAG</span>}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Delete Confirmation Modal */}
+      {deleteCandidateDoc && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-xl max-w-md w-full p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95">
+            <div className="flex items-center space-x-3 text-red-400">
+              <div className="p-2.5 bg-red-950/70 border border-red-800/60 rounded-xl">
+                <Trash2 className="w-5 h-5 text-red-400" />
+              </div>
+              <div>
+                <h3 className="font-bold text-white text-sm">Delete Knowledge Article</h3>
+                <p className="text-[11px] text-slate-400">Deletes from Firestore Database & RAG</p>
+              </div>
+            </div>
+
+            <div className="bg-slate-950 p-3.5 rounded-lg border border-slate-800 text-xs space-y-1.5">
+              <p className="text-slate-300">
+                Are you sure you want to permanently delete:
+              </p>
+              <p className="font-semibold text-white text-xs bg-slate-900 p-2 rounded border border-slate-800">
+                &ldquo;{deleteCandidateDoc.title}&rdquo;
+              </p>
+              <p className="text-[11px] text-slate-400">
+                This will delete the document from Firestore and immediately remove it from AI auto-replies.
+              </p>
+            </div>
+
+            <div className="flex items-center justify-end space-x-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setDeleteCandidateDoc(null)}
+                disabled={isDeleting}
+                className="px-4 py-2 rounded-lg bg-slate-800 text-slate-300 text-xs font-medium hover:bg-slate-700 transition"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDelete}
+                disabled={isDeleting}
+                className="px-4 py-2 rounded-lg bg-red-600 text-white text-xs font-semibold hover:bg-red-500 disabled:opacity-50 flex items-center space-x-1.5 transition shadow"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>{isDeleting ? 'Deleting from DB...' : 'Delete Permanently'}</span>
+              </button>
             </div>
           </div>
         </div>

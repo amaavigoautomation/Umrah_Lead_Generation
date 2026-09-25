@@ -9,6 +9,8 @@ import { AiTestingPlayground } from './components/AiTestingPlayground';
 import { InteractiveScenarios } from './components/InteractiveScenarios';
 import { SettingsView } from './components/SettingsView';
 import { LiveMailboxCenter } from './components/LiveMailboxCenter';
+import { LoginView } from './components/LoginView';
+import { LockedModuleView } from './components/LockedModuleView';
 import {
   Contact,
   Lead,
@@ -19,6 +21,7 @@ import {
   OutboundProspect,
   LeadActivity,
   SystemSettings,
+  AppUser,
 } from './types';
 import {
   INITIAL_CONTACTS,
@@ -29,6 +32,7 @@ import {
   INITIAL_PROSPECTS,
   INITIAL_ACTIVITIES,
   DEFAULT_SETTINGS,
+  INITIAL_USERS,
 } from './services/dataService';
 import { INITIAL_KNOWLEDGE_DOCUMENTS } from './services/knowledgeData';
 import { generateOmnichannelResponse } from './services/aiService';
@@ -131,6 +135,17 @@ export default function App() {
   const [selectedLeadIdForCrm, setSelectedLeadIdForCrm] = useState<string | null>(null);
   const [isFirebaseActive, setIsFirebaseActive] = useState<boolean>(isFirebaseConfigured);
 
+  // Users & Authentication State
+  const [users, setUsers] = useState<AppUser[]>(INITIAL_USERS);
+  const [currentUser, setCurrentUser] = useState<AppUser | null>(() => {
+    try {
+      const saved = localStorage.getItem('umrah360_user_session');
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
+
   // Initialize Firestore seeding & loading on startup
   useEffect(() => {
     let unsubConvs: (() => void) | undefined;
@@ -138,6 +153,7 @@ export default function App() {
     let unsubLeads: (() => void) | undefined;
     let unsubContacts: (() => void) | undefined;
     let unsubKb: (() => void) | undefined;
+    let unsubUsers: (() => void) | undefined;
 
     async function initFirestore() {
       // Sync settings from backend API
@@ -209,13 +225,14 @@ export default function App() {
         }
 
         // Load persisted entities from Firestore so state reflects actual database state
-        const [convsSnap, msgsSnap, leadsSnap, contsSnap, kbSnap, campSnap] = await Promise.all([
+        const [convsSnap, msgsSnap, leadsSnap, contsSnap, kbSnap, campSnap, usersSnap] = await Promise.all([
           getDocs(query(collection(db, 'conversations'), orderBy('lastMessageAt', 'desc'))),
           getDocs(query(collection(db, 'messages'), orderBy('sentAt', 'asc'))),
           getDocs(collection(db, 'leads')),
           getDocs(collection(db, 'contacts')),
           getDocs(collection(db, 'knowledge_documents')),
           getDocs(collection(db, 'outbound_campaigns')),
+          getDocs(collection(db, 'app_users')),
         ]);
 
         // Always set the exact documents present in Firestore (if user deleted documents, reflects empty/subset)
@@ -223,11 +240,19 @@ export default function App() {
         setMessages(msgsSnap.docs.map((d) => d.data() as Message));
         setLeads(leadsSnap.docs.map((d) => sanitizeLead(d.data())));
         setContacts(contsSnap.docs.map((d) => sanitizeContact(d.data())));
-        if (!kbSnap.empty) {
-          setKnowledgeDocs(kbSnap.docs.map((d) => d.data() as KnowledgeDocument));
-        }
+        setKnowledgeDocs(kbSnap.docs.map((d) => d.data() as KnowledgeDocument));
         if (!campSnap.empty) {
           setCampaigns(campSnap.docs.map((d) => d.data() as OutboundCampaign));
+        }
+
+        // Initialize / sync users
+        if (usersSnap.empty) {
+          for (const u of INITIAL_USERS) {
+            await setDoc(doc(db, 'app_users', u.userId), u);
+          }
+          setUsers(INITIAL_USERS);
+        } else {
+          setUsers(usersSnap.docs.map((d) => d.data() as AppUser));
         }
 
         // Attach realtime listeners for Firestore updates (handles adds, updates, and deletes immediately)
@@ -264,8 +289,24 @@ export default function App() {
         });
 
         unsubKb = onSnapshot(collection(db, 'knowledge_documents'), (snap) => {
+          setKnowledgeDocs(snap.docs.map((d) => d.data() as KnowledgeDocument));
+        });
+
+        unsubUsers = onSnapshot(collection(db, 'app_users'), (snap) => {
           if (!snap.empty) {
-            setKnowledgeDocs(snap.docs.map((d) => d.data() as KnowledgeDocument));
+            const list = snap.docs.map((d) => d.data() as AppUser);
+            setUsers(list);
+            setCurrentUser((prev) => {
+              if (!prev) return null;
+              const updated = list.find((u) => u.userId === prev.userId || u.email.toLowerCase() === prev.email.toLowerCase());
+              if (updated) {
+                try {
+                  localStorage.setItem('umrah360_user_session', JSON.stringify(updated));
+                } catch {}
+                return updated;
+              }
+              return prev;
+            });
           }
         });
 
@@ -283,6 +324,7 @@ export default function App() {
       if (unsubLeads) unsubLeads();
       if (unsubContacts) unsubContacts();
       if (unsubKb) unsubKb();
+      if (unsubUsers) unsubUsers();
     };
   }, []);
 
@@ -425,32 +467,47 @@ export default function App() {
 
     let sentGmailMessageId = `<out-${Date.now()}@amaavigo.com>`;
 
-    // If sending an email manually over SMTP
-    if (conv.channel === 'EMAIL' && senderType === 'AGENT' && contact?.email) {
+    // If sending an email manually or automated over live SMTP
+    const recipientEmail = contact?.email || conv.customerEmail;
+    const shouldSendLiveEmail =
+      (conv.channel === 'EMAIL' || conv.channel === 'WEBSITE') &&
+      (senderType === 'AGENT' || senderType === 'AI') &&
+      Boolean(recipientEmail && recipientEmail.includes('@') && !recipientEmail.includes('@placeholder'));
+
+    let deliveryStatus: 'DELIVERED' | 'FAILED' | 'PENDING' = 'PENDING';
+    let smtpDeliveredId: string | undefined = undefined;
+
+    if (shouldSendLiveEmail && recipientEmail) {
       const subject = lastIncoming?.emailMeta?.subject
         ? (lastIncoming.emailMeta.subject.toLowerCase().startsWith('re:') ? lastIncoming.emailMeta.subject : `Re: ${lastIncoming.emailMeta.subject}`)
-        : 'Re: Umrah360 - Automate B2B Packages & Visa Operations';
+        : (conv.subject ? (conv.subject.startsWith('Re:') ? conv.subject : `Re: ${conv.subject}`) : 'Re: Umrah360 Demo Request & Walkthrough');
 
       try {
         const sendRes = await fetch('/api/email/send', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            to: contact.email,
+            to: recipientEmail,
             subject,
             text,
             inReplyTo,
             references: inReplyTo ? [inReplyTo] : undefined,
             conversationId,
             gmailThreadId,
+            senderName: senderType === 'AGENT' ? (currentUser?.name || 'Umrah360 Agent') : 'Umrah360 Automation',
           }),
         });
         const sendData = await sendRes.json();
-        if (sendData.messageId) {
+        if (sendData.success && sendData.messageId) {
           sentGmailMessageId = sendData.messageId;
+          smtpDeliveredId = sendData.messageId;
+          deliveryStatus = 'DELIVERED';
+        } else {
+          deliveryStatus = 'FAILED';
         }
       } catch (err) {
         console.warn('Live email dispatch notice:', err);
+        deliveryStatus = 'FAILED';
       }
     }
 
@@ -459,6 +516,10 @@ export default function App() {
     const newMsg: Message = {
       messageId: `msg-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
       gmailMessageId: sentGmailMessageId,
+      smtpMessageId: smtpDeliveredId,
+      recipientEmail: recipientEmail,
+      deliveryStatus: shouldSendLiveEmail ? deliveryStatus : undefined,
+      emailDeliveredAt: deliveryStatus === 'DELIVERED' ? nowIso : undefined,
       gmailThreadId,
       conversationId,
       channel: conv.channel,
@@ -478,13 +539,13 @@ export default function App() {
       receivedAt: nowIso,
       createdAt: nowIso,
       emailMeta:
-        conv.channel === 'EMAIL'
+        conv.channel === 'EMAIL' || shouldSendLiveEmail
           ? {
               subject: lastIncoming?.emailMeta?.subject
                 ? (lastIncoming.emailMeta.subject.toLowerCase().startsWith('re:') ? lastIncoming.emailMeta.subject : `Re: ${lastIncoming.emailMeta.subject}`)
                 : 'Re: Umrah360 - Automate B2B Packages & Visa Operations',
               from: senderType === 'AGENT' ? 'sales@umrah360.in' : contact?.email,
-              to: senderType === 'AGENT' ? contact?.email : 'sales@umrah360.in',
+              to: senderType === 'AGENT' ? recipientEmail : 'sales@umrah360.in',
               messageId: sentGmailMessageId,
               inReplyTo,
               references: inReplyTo ? [inReplyTo] : undefined,
@@ -502,6 +563,14 @@ export default function App() {
             lastMessageAt: newMsg.timestamp,
             lastMessageText: newMsg.text.slice(0, 120),
             updatedAt: newMsg.timestamp,
+            ...(deliveryStatus === 'DELIVERED'
+              ? {
+                  thankYouEmailSent: true,
+                  thankYouEmailDeliveredAt: nowIso,
+                  thankYouSmtpMessageId: sentGmailMessageId,
+                  customerEmail: recipientEmail,
+                }
+              : {}),
           },
           { merge: true }
         );
@@ -522,6 +591,14 @@ export default function App() {
               lastMessageAt: newMsg.timestamp,
               lastMessageText: newMsg.text,
               updatedAt: newMsg.timestamp,
+              ...(deliveryStatus === 'DELIVERED'
+                ? {
+                    thankYouEmailSent: true,
+                    thankYouEmailDeliveredAt: nowIso,
+                    thankYouSmtpMessageId: sentGmailMessageId,
+                    customerEmail: recipientEmail,
+                  }
+                : {}),
             }
           : c
       )
@@ -1180,6 +1257,77 @@ export default function App() {
     0
   );
 
+  // User Authentication Handlers
+  const handleLogin = (user: AppUser) => {
+    setCurrentUser(user);
+    try {
+      localStorage.setItem('umrah360_user_session', JSON.stringify(user));
+    } catch {}
+    if (user.accessLevel !== 'ALL' && user.role !== 'ADMIN' && !user.allowedModules.includes(activeTab)) {
+      setActiveTab((user.allowedModules[0] as ActiveTab) || 'knowledge');
+    }
+  };
+
+  const handleLogout = () => {
+    setCurrentUser(null);
+    try {
+      localStorage.removeItem('umrah360_user_session');
+    } catch {}
+  };
+
+  const handleSaveUser = async (userToSave: AppUser) => {
+    setUsers((prev) => {
+      const idx = prev.findIndex((u) => u.userId === userToSave.userId);
+      if (idx >= 0) {
+        const next = [...prev];
+        next[idx] = userToSave;
+        return next;
+      }
+      return [...prev, userToSave];
+    });
+
+    if (currentUser?.userId === userToSave.userId) {
+      setCurrentUser(userToSave);
+      try {
+        localStorage.setItem('umrah360_user_session', JSON.stringify(userToSave));
+      } catch {}
+    }
+
+    if (db && isFirebaseConfigured) {
+      try {
+        await setDoc(doc(db, 'app_users', userToSave.userId), userToSave, { merge: true });
+      } catch (err) {
+        console.warn('Firestore user save error:', err);
+      }
+    }
+  };
+
+  const handleDeleteUser = async (userId: string) => {
+    setUsers((prev) => prev.filter((u) => u.userId !== userId));
+    if (db && isFirebaseConfigured) {
+      try {
+        await deleteDoc(doc(db, 'app_users', userId));
+      } catch (err) {
+        console.warn('Firestore user delete error:', err);
+      }
+    }
+  };
+
+  if (!currentUser) {
+    return (
+      <LoginView
+        onLogin={handleLogin}
+        users={users}
+        isFirebaseActive={isFirebaseActive}
+      />
+    );
+  }
+
+  const isCurrentTabAllowed =
+    currentUser.accessLevel === 'ALL' ||
+    currentUser.role === 'ADMIN' ||
+    currentUser.allowedModules.includes(activeTab);
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col">
       <Navbar
@@ -1189,124 +1337,139 @@ export default function App() {
         handoffCount={handoffCount}
         onResetSeedData={handleResetSeedData}
         isFirebaseActive={isFirebaseActive}
+        currentUser={currentUser}
+        onLogout={handleLogout}
       />
 
       <main className="flex-1">
-        {activeTab === 'inbox' && (
-          <UnifiedInbox
-            conversations={conversations}
-            messages={messages}
-            contacts={contacts}
-            leads={leads}
-            knowledgeDocs={knowledgeDocs}
-            onSendMessage={(convId, text, type) => handleSendMessage(convId, text, type)}
-            onToggleAi={handleToggleAi}
-            onMarkAsRead={handleMarkConversationAsRead}
-            onApproveDraft={handleApproveDraft}
-            onUpdateLeadScore={(leadId, delta) => {
-              setLeads((prev) =>
-                prev.map((l) =>
-                  l.leadId === leadId ? { ...l, leadScore: Math.min(100, l.leadScore + delta) } : l
-                )
-              );
-            }}
-            onViewLeadInCrm={handleViewLeadInCrm}
-            onProcessInboundEmail={handleProcessInboundEmail}
-            onProcessInboundWhatsApp={handleProcessInboundWhatsApp}
-            onSyncNow={syncWithBackendInbound}
+        {!isCurrentTabAllowed ? (
+          <LockedModuleView
+            currentUser={currentUser}
+            attemptedTab={activeTab}
+            onNavigateToAllowed={(tab) => setActiveTab(tab)}
           />
-        )}
+        ) : (
+          <>
+            {activeTab === 'inbox' && (
+              <UnifiedInbox
+                conversations={conversations}
+                messages={messages}
+                contacts={contacts}
+                leads={leads}
+                knowledgeDocs={knowledgeDocs}
+                onSendMessage={(convId, text, type) => handleSendMessage(convId, text, type)}
+                onToggleAi={handleToggleAi}
+                onMarkAsRead={handleMarkConversationAsRead}
+                onApproveDraft={handleApproveDraft}
+                onUpdateLeadScore={(leadId, delta) => {
+                  setLeads((prev) =>
+                    prev.map((l) =>
+                      l.leadId === leadId ? { ...l, leadScore: Math.min(100, l.leadScore + delta) } : l
+                    )
+                  );
+                }}
+                onViewLeadInCrm={handleViewLeadInCrm}
+                onProcessInboundEmail={handleProcessInboundEmail}
+                onProcessInboundWhatsApp={handleProcessInboundWhatsApp}
+                onSyncNow={syncWithBackendInbound}
+              />
+            )}
 
-        {activeTab === 'campaigns' && (
-          <CampaignManagement
-            conversations={conversations}
-            onOpenConversation={(convId) => {
-              setActiveTab('inbox');
-            }}
-          />
-        )}
+            {activeTab === 'campaigns' && (
+              <CampaignManagement
+                conversations={conversations}
+                onOpenConversation={(convId) => {
+                  setActiveTab('inbox');
+                }}
+              />
+            )}
 
-        {activeTab === 'crm' && (
-          <CrmPipeline
-            leads={leads}
-            contacts={contacts}
-            activities={activities}
-            selectedLeadId={selectedLeadIdForCrm}
-            onOpenConversation={(convId, leadId) => {
-              setActiveTab('inbox');
-            }}
-            onUpdateLeadStatus={(leadId, newStatus) => {
-              setLeads((prev) =>
-                prev.map((l) =>
-                  l.leadId === leadId
-                    ? {
-                        ...l,
-                        status: newStatus,
-                        demoStatus: newStatus === 'DEMO_BOOKED' ? 'BOOKED' : l.demoStatus,
-                        demoSource: newStatus === 'DEMO_BOOKED' ? 'MANUAL' : l.demoSource,
-                        demoBookedAt:
-                          newStatus === 'DEMO_BOOKED' ? new Date().toISOString() : l.demoBookedAt,
-                      }
-                    : l
-                )
-              );
-              if (isFirebaseConfigured && db) {
-                updateDoc(doc(db, 'leads', leadId), {
-                  status: newStatus,
-                  ...(newStatus === 'DEMO_BOOKED'
-                    ? {
-                        demoStatus: 'BOOKED',
-                        demoSource: 'MANUAL',
-                        demoBookedAt: new Date().toISOString(),
-                      }
-                    : {}),
-                }).catch(() => {});
-              }
-            }}
-          />
-        )}
+            {activeTab === 'crm' && (
+              <CrmPipeline
+                leads={leads}
+                contacts={contacts}
+                activities={activities}
+                selectedLeadId={selectedLeadIdForCrm}
+                onOpenConversation={(convId, leadId) => {
+                  setActiveTab('inbox');
+                }}
+                onUpdateLeadStatus={(leadId, newStatus) => {
+                  setLeads((prev) =>
+                    prev.map((l) =>
+                      l.leadId === leadId
+                        ? {
+                            ...l,
+                            status: newStatus,
+                            demoStatus: newStatus === 'DEMO_BOOKED' ? 'BOOKED' : l.demoStatus,
+                            demoSource: newStatus === 'DEMO_BOOKED' ? 'MANUAL' : l.demoSource,
+                            demoBookedAt:
+                              newStatus === 'DEMO_BOOKED' ? new Date().toISOString() : l.demoBookedAt,
+                          }
+                        : l
+                    )
+                  );
+                  if (isFirebaseConfigured && db) {
+                    updateDoc(doc(db, 'leads', leadId), {
+                      status: newStatus,
+                      ...(newStatus === 'DEMO_BOOKED'
+                        ? {
+                            demoStatus: 'BOOKED',
+                            demoSource: 'MANUAL',
+                            demoBookedAt: new Date().toISOString(),
+                          }
+                        : {}),
+                    }).catch(() => {});
+                  }
+                }}
+              />
+            )}
 
-        {activeTab === 'knowledge' && (
-          <KnowledgeBaseView
-            documents={knowledgeDocs}
-            onAddDocument={handleSaveKnowledgeDoc}
-            onUpdateDocument={handleSaveKnowledgeDoc}
-            onDeleteDocument={handleDeleteKnowledgeDoc}
-          />
-        )}
+            {activeTab === 'knowledge' && (
+              <KnowledgeBaseView
+                documents={knowledgeDocs}
+                onAddDocument={handleSaveKnowledgeDoc}
+                onUpdateDocument={handleSaveKnowledgeDoc}
+                onDeleteDocument={handleDeleteKnowledgeDoc}
+              />
+            )}
 
-        {activeTab === 'playground' && <AiTestingPlayground knowledgeDocs={knowledgeDocs} />}
+            {activeTab === 'playground' && <AiTestingPlayground knowledgeDocs={knowledgeDocs} />}
 
-        {activeTab === 'scenarios' && (
-          <InteractiveScenarios
-            onNavigateToInbox={() => setActiveTab('inbox')}
-            onNavigateToCrm={() => setActiveTab('crm')}
-            onProcessInboundEmail={handleProcessInboundEmail}
-            onProcessInboundWhatsApp={handleProcessInboundWhatsApp}
-            onNavigateToThread={(threadId) => {
-              setActiveTab('inbox');
-            }}
-            onNavigateToCrmLead={(leadId) => {
-              setSelectedLeadIdForCrm(leadId);
-              setActiveTab('crm');
-            }}
-          />
-        )}
+            {activeTab === 'scenarios' && (
+              <InteractiveScenarios
+                onNavigateToInbox={() => setActiveTab('inbox')}
+                onNavigateToCrm={() => setActiveTab('crm')}
+                onProcessInboundEmail={handleProcessInboundEmail}
+                onProcessInboundWhatsApp={handleProcessInboundWhatsApp}
+                onNavigateToThread={(threadId) => {
+                  setActiveTab('inbox');
+                }}
+                onNavigateToCrmLead={(leadId) => {
+                  setSelectedLeadIdForCrm(leadId);
+                  setActiveTab('crm');
+                }}
+              />
+            )}
 
-        {activeTab === 'settings' && (
-          <SettingsView
-            settings={settings}
-            onSaveSettings={handleSaveSettings}
-            onResetSeedData={handleResetSeedData}
-          />
-        )}
+            {activeTab === 'settings' && (
+              <SettingsView
+                settings={settings}
+                onSaveSettings={handleSaveSettings}
+                onResetSeedData={handleResetSeedData}
+                users={users}
+                onSaveUser={handleSaveUser}
+                onDeleteUser={handleDeleteUser}
+              />
+            )}
 
-        {activeTab === 'live-mailbox' && (
-          <LiveMailboxCenter
-            onNavigateToThread={() => setActiveTab('inbox')}
-            onNavigateToCrm={() => setActiveTab('crm')}
-            onSyncNow={syncWithBackendInbound}
-          />
+            {activeTab === 'live-mailbox' && (
+              <LiveMailboxCenter
+                onNavigateToThread={() => setActiveTab('inbox')}
+                onNavigateToCrm={() => setActiveTab('crm')}
+                onSyncNow={syncWithBackendInbound}
+              />
+            )}
+          </>
         )}
       </main>
     </div>

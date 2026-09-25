@@ -1,3 +1,13 @@
+export type ActiveTab =
+  | 'inbox'
+  | 'campaigns'
+  | 'crm'
+  | 'knowledge'
+  | 'playground'
+  | 'scenarios'
+  | 'settings'
+  | 'live-mailbox';
+
 export type Channel = 'WEBSITE' | 'WHATSAPP' | 'INSTAGRAM' | 'FACEBOOK' | 'LINKEDIN' | 'EMAIL';
 
 export type LeadSource = 'WEBSITE' | 'WHATSAPP' | 'INSTAGRAM' | 'FACEBOOK' | 'LINKEDIN' | 'EMAIL' | 'APOLLO';
@@ -279,6 +289,7 @@ export interface Conversation {
   isRead?: boolean;
   readAt?: string | null;
   unread?: boolean;
+  subject?: string;
   emailThreadId?: string;
   gmailThreadId?: string;
   draftReply?: {
@@ -288,6 +299,10 @@ export interface Conversation {
     generatedAt: string;
     status: 'PENDING' | 'APPROVED' | 'DISCARDED';
   };
+  thankYouEmailSent?: boolean;
+  thankYouEmailDeliveredAt?: string;
+  thankYouSmtpMessageId?: string;
+  customerEmail?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -299,6 +314,11 @@ export interface Message {
   senderType: 'CUSTOMER' | 'PROSPECT' | 'AI' | 'AGENT' | 'HUMAN';
   senderName: string;
   senderEmail?: string;
+  recipientEmail?: string;
+  deliveryStatus?: 'DELIVERED' | 'FAILED' | 'PENDING';
+  smtpMessageId?: string;
+  emailDeliveredAt?: string;
+  deliveryError?: string;
   text: string;
   timestamp: string;
   gmailMessageId?: string;
@@ -447,3 +467,21 @@ export interface SystemSettings {
   webhookEndpoint: string;
   updatedAt: string;
 }
+
+export type UserRole = 'ADMIN' | 'OPERATOR' | 'SPECIALIST' | 'CUSTOM';
+export type UserAccessLevel = 'ALL' | 'CUSTOM';
+
+export interface AppUser {
+  userId: string;
+  email: string;
+  username?: string;
+  password: string;
+  name: string;
+  role: UserRole;
+  accessLevel: UserAccessLevel;
+  allowedModules: string[]; // Module IDs: 'inbox', 'campaigns', 'crm', 'knowledge', 'playground', 'scenarios', 'settings', 'live-mailbox'
+  isActive?: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+

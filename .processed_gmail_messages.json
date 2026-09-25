@@ -94,5 +94,95 @@
     "senderType": "AI",
     "aiReplied": false,
     "firstSeenAt": "2026-09-18T07:36:47.490Z"
+  },
+  {
+    "gmailMessageId": "<0noyr1jfSKSNpKRImrIh-w@geopod-ismtpd-11>",
+    "direction": "INBOUND",
+    "senderType": "CUSTOMER",
+    "aiReplied": true,
+    "repliedAt": "2026-09-23T09:51:51.931Z",
+    "repliedByMessageId": "<879370ae-d100-7a1e-bf9d-eac1282facd1@gmail.com>",
+    "firstSeenAt": "2026-09-23T09:51:22.447Z",
+    "subject": "You just joined 34 million of the world's sharpest communicators",
+    "from": "alison@piktochart.com"
+  },
+  {
+    "gmailMessageId": "<879370ae-d100-7a1e-bf9d-eac1282facd1@gmail.com>",
+    "direction": "OUTBOUND",
+    "senderType": "AI",
+    "aiReplied": false,
+    "firstSeenAt": "2026-09-23T09:51:51.931Z"
+  },
+  {
+    "gmailMessageId": "<W9VJGvgTSSOO8VUNxHFb0g@geopod-ismtpd-105>",
+    "direction": "INBOUND",
+    "senderType": "CUSTOMER",
+    "aiReplied": true,
+    "repliedAt": "2026-09-23T11:04:14.669Z",
+    "repliedByMessageId": "<d730a7a0-fcf5-88ec-9ad8-c8a60b92933e@gmail.com>",
+    "firstSeenAt": "2026-09-23T11:03:47.728Z",
+    "subject": "Register Now: Get your business Diwali-ready with Meta experts [Mumbai - October 9, 2026]",
+    "from": "msbgpmum26@splash.metamail.com"
+  },
+  {
+    "gmailMessageId": "<d730a7a0-fcf5-88ec-9ad8-c8a60b92933e@gmail.com>",
+    "direction": "OUTBOUND",
+    "senderType": "AI",
+    "aiReplied": false,
+    "firstSeenAt": "2026-09-23T11:04:14.669Z"
+  },
+  {
+    "gmailMessageId": "<20260923124721.7a3d705f1f75d57c@cio54818.mail.apollo.io>",
+    "direction": "INBOUND",
+    "senderType": "CUSTOMER",
+    "aiReplied": true,
+    "repliedAt": "2026-09-23T12:48:12.696Z",
+    "repliedByMessageId": "<7e8e5da9-4f70-1221-149f-32679cfdf62c@gmail.com>",
+    "firstSeenAt": "2026-09-23T12:47:36.185Z",
+    "subject": "Select 1,000 contacts instantly → Plans start at $49/mo",
+    "from": "hello@mail.apollo.io"
+  },
+  {
+    "gmailMessageId": "<7e8e5da9-4f70-1221-149f-32679cfdf62c@gmail.com>",
+    "direction": "OUTBOUND",
+    "senderType": "AI",
+    "aiReplied": false,
+    "firstSeenAt": "2026-09-23T12:48:12.696Z"
+  },
+  {
+    "gmailMessageId": "<ACD3DEE53F7D4408B4FD8A439AC468CE.MAI@RX2110.rapidns.com>",
+    "direction": "INBOUND",
+    "senderType": "CUSTOMER",
+    "aiReplied": true,
+    "repliedAt": "2026-09-24T05:02:04.593Z",
+    "repliedByMessageId": "<52eef199-b501-84d3-3bc4-881595acb8ec@gmail.com>",
+    "firstSeenAt": "2026-09-24T05:01:53.456Z",
+    "subject": "Re: product details required",
+    "from": "parth@amaavigo.in"
+  },
+  {
+    "gmailMessageId": "<52eef199-b501-84d3-3bc4-881595acb8ec@gmail.com>",
+    "direction": "OUTBOUND",
+    "senderType": "AI",
+    "aiReplied": false,
+    "firstSeenAt": "2026-09-24T05:02:04.593Z"
+  },
+  {
+    "gmailMessageId": "<9DF78E899FC54BACA08EB189CCAC53F8.MAI@RX2110.rapidns.com>",
+    "direction": "INBOUND",
+    "senderType": "CUSTOMER",
+    "aiReplied": true,
+    "repliedAt": "2026-09-24T12:53:24.061Z",
+    "repliedByMessageId": "<3d71ca82-358f-6e19-2789-b3ee5a66f3ef@gmail.com>",
+    "firstSeenAt": "2026-09-24T12:53:16.331Z",
+    "subject": "Need product details",
+    "from": "parth@amaavigo.in"
+  },
+  {
+    "gmailMessageId": "<3d71ca82-358f-6e19-2789-b3ee5a66f3ef@gmail.com>",
+    "direction": "OUTBOUND",
+    "senderType": "AI",
+    "aiReplied": false,
+    "firstSeenAt": "2026-09-24T12:53:24.061Z"
   }
 ]

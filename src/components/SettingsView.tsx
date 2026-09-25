@@ -13,18 +13,25 @@ import {
   Database,
   RefreshCw,
 } from 'lucide-react';
-import { SystemSettings, Channel, ChannelMode } from '../types';
+import { SystemSettings, Channel, ChannelMode, AppUser } from '../types';
+import { UserManagementView } from './UserManagementView';
 
 interface SettingsViewProps {
   settings: SystemSettings;
   onSaveSettings: (settings: SystemSettings) => void;
   onResetSeedData: () => void;
+  users?: AppUser[];
+  onSaveUser?: (user: AppUser) => Promise<void>;
+  onDeleteUser?: (userId: string) => Promise<void>;
 }
 
 export const SettingsView: React.FC<SettingsViewProps> = ({
   settings,
   onSaveSettings,
   onResetSeedData,
+  users,
+  onSaveUser,
+  onDeleteUser,
 }) => {
   const [formData, setFormData] = useState<SystemSettings>(settings);
   const [isSaved, setIsSaved] = useState(false);
@@ -220,6 +227,15 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           </div>
         </div>
       </div>
+
+      {/* User Management & Access Control (Firestore app_users) */}
+      {users && onSaveUser && onDeleteUser && (
+        <UserManagementView
+          users={users}
+          onSaveUser={onSaveUser}
+          onDeleteUser={onDeleteUser}
+        />
+      )}
 
       {/* Database Reset & Cloud Details */}
       <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 shadow-lg flex flex-col sm:flex-row sm:items-center justify-between gap-4">

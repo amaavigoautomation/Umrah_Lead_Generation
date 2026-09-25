@@ -24,6 +24,8 @@ import {
   X,
   MessageSquare,
   RefreshCw,
+  Loader2,
+  AlertCircle,
 } from 'lucide-react';
 import {
   Conversation,
@@ -132,17 +134,120 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
     return 0;
   };
 
-  const activeMessages = messages
-    .filter((m) => m.conversationId === activeConversation?.conversationId)
-    .sort(sortMsgs);
+  // Helper to deduplicate messages in thread (e.g. preventing duplicate outbound confirmation emails)
+  const deduplicateThreadMessages = (rawMsgs: Message[]) => {
+    const sorted = [...rawMsgs].sort(sortMsgs);
+    const result: Message[] = [];
+
+    // Check if there is already a verified delivered outbound Thank You email
+    const hasDeliveredThankYou = sorted.some(
+      (m) =>
+        m.direction === 'OUTBOUND' &&
+        (m.deliveryStatus === 'DELIVERED' || Boolean(m.smtpMessageId && m.smtpMessageId.startsWith('<'))) &&
+        (m.text?.includes('Thank you for requesting') ||
+          m.text?.includes('We have received your requirements') ||
+          m.text?.includes('As-salamu alaykum'))
+    );
+
+    let seenThankYou = false;
+
+    for (const msg of sorted) {
+      const isThankYou =
+        msg.direction === 'OUTBOUND' &&
+        (msg.text?.includes('Thank you for requesting') ||
+          msg.text?.includes('We have received your requirements') ||
+          msg.text?.includes('As-salamu alaykum'));
+
+      if (isThankYou) {
+        // If there is already a delivered version, drop any pending/unverified version
+        if (hasDeliveredThankYou && msg.deliveryStatus !== 'DELIVERED' && !msg.smtpMessageId) {
+          continue;
+        }
+        // Only allow one Thank You confirmation email in the thread
+        if (seenThankYou) {
+          continue;
+        }
+        seenThankYou = true;
+      }
+
+      result.push(msg);
+    }
+
+    return result;
+  };
+
+  const activeMessages = deduplicateThreadMessages(
+    messages.filter((m) => m.conversationId === activeConversation?.conversationId)
+  );
 
   const unifiedAllMessages = activeContact
-    ? messages
-        .filter((m) => contactConversations.some((c) => c.conversationId === m.conversationId))
-        .sort(sortMsgs)
+    ? deduplicateThreadMessages(
+        messages.filter((m) => contactConversations.some((c) => c.conversationId === m.conversationId))
+      )
     : activeMessages;
 
   const displayMessages = isUnifiedAllPlatforms ? unifiedAllMessages : activeMessages;
+
+  // Resolve the authoritative email address for the active lead/contact
+  const inboundCustomerMsg = [...activeMessages].find(
+    (m) => m.direction === 'INBOUND' && m.text && m.text.includes('• Email:')
+  );
+  const emailFromInboundText = inboundCustomerMsg?.text
+    ?.match(/•\s*Email:\s*([^\s\n\r]+@[^\s\n\r]+)/i)?.[1]
+    ?.trim();
+
+  const effectiveEmail =
+    activeContact?.email && activeContact.email.includes('@') && !activeContact.email.endsWith('@umrah360.in')
+      ? activeContact.email
+      : activeConversation?.customerEmail ||
+        emailFromInboundText ||
+        (activeContact?.email?.includes('@') ? activeContact.email : '');
+
+  const isThankYouDelivered =
+    Boolean(activeConversation?.thankYouEmailSent && activeConversation?.thankYouSmtpMessageId) ||
+    activeMessages.some(
+      (m) =>
+        m.direction === 'OUTBOUND' &&
+        (m.deliveryStatus === 'DELIVERED' || Boolean(m.smtpMessageId && m.smtpMessageId.startsWith('<')))
+    );
+
+  const [isSendingThankYou, setIsSendingThankYou] = useState<boolean>(false);
+  const [thankYouStatusMsg, setThankYouStatusMsg] = useState<{
+    type: 'success' | 'error';
+    text: string;
+  } | null>(null);
+
+  const handleDispatchThankYou = async () => {
+    if (!activeConversation) return;
+    setIsSendingThankYou(true);
+    setThankYouStatusMsg(null);
+    try {
+      const res = await fetch('/api/leads/send-thank-you', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ conversationId: activeConversation.conversationId }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setThankYouStatusMsg({
+          type: 'success',
+          text: `Thank You email delivered live to ${data.email || effectiveEmail}! (Message ID: ${data.messageId})`,
+        });
+      } else {
+        setThankYouStatusMsg({
+          type: 'error',
+          text: data.error || 'Failed to dispatch email over SMTP',
+        });
+      }
+    } catch (err: any) {
+      setThankYouStatusMsg({
+        type: 'error',
+        text: err?.message || 'Network error dispatching email',
+      });
+    } finally {
+      setIsSendingThankYou(false);
+    }
+  };
 
   // Helper for channel icon
   const renderChannelIcon = (channel: Channel, size = 4) => {
@@ -533,16 +638,49 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
                       </span>
                     )}
                   </div>
-                  <p className="text-xs text-slate-400">
-                    {activeContact.jobTitle || 'Decision Maker'} at{' '}
-                    <span className="text-slate-300 font-medium">{activeContact.companyName}</span> •{' '}
-                    {activeContact.email}
+                  <p className="text-xs text-slate-400 flex items-center flex-wrap gap-x-2 gap-y-0.5 mt-0.5">
+                    <span>
+                      {activeContact.jobTitle || 'Decision Maker'} at{' '}
+                      <span className="text-slate-300 font-medium">{activeContact.companyName}</span>
+                    </span>
+                    <span>•</span>
+                    <span className="inline-flex items-center gap-1 font-mono text-blue-300 bg-blue-950/40 px-1.5 py-0.2 rounded border border-blue-800/40">
+                      <Mail className="w-3 h-3 text-blue-400" />
+                      {effectiveEmail || 'No email'}
+                    </span>
                   </p>
                 </div>
               </div>
 
-              {/* AI vs Human Takeover Toggle */}
+              {/* Actions & Takeover Toggle */}
               <div className="flex items-center space-x-2">
+                {/* 1-Click Send / Resend Thank-You Email */}
+                {effectiveEmail ? (
+                  isThankYouDelivered ? (
+                    <span
+                      className="px-2.5 py-1 rounded-md text-[11px] font-medium bg-emerald-950/60 border border-emerald-600/40 text-emerald-300 flex items-center gap-1.5"
+                      title={`Delivered via Gmail SMTP to ${effectiveEmail}`}
+                    >
+                      <CheckCircle className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>Thank-You Sent</span>
+                    </span>
+                  ) : (
+                    <button
+                      onClick={handleDispatchThankYou}
+                      disabled={isSendingThankYou}
+                      className="px-3 py-1 rounded-md bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold flex items-center space-x-1.5 transition shadow-sm disabled:opacity-50"
+                      title={`Send live walkthrough and demo confirmation email to ${effectiveEmail}`}
+                    >
+                      {isSendingThankYou ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Send className="w-3.5 h-3.5" />
+                      )}
+                      <span>Send Thank-You Email</span>
+                    </button>
+                  )
+                ) : null}
+
                 {activeConversation.humanHandoff ? (
                   <button
                     onClick={() => onToggleAi(activeConversation.conversationId, true)}
@@ -582,6 +720,32 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
                 </div>
               </div>
             </div>
+
+            {/* Notification alert banner when thank-you email is sent */}
+            {thankYouStatusMsg && (
+              <div
+                className={`px-4 py-2 text-xs flex items-center justify-between border-b ${
+                  thankYouStatusMsg.type === 'success'
+                    ? 'bg-emerald-950/80 border-emerald-700 text-emerald-200'
+                    : 'bg-rose-950/80 border-rose-700 text-rose-200'
+                }`}
+              >
+                <div className="flex items-center space-x-2">
+                  {thankYouStatusMsg.type === 'success' ? (
+                    <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0" />
+                  ) : (
+                    <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+                  )}
+                  <span>{thankYouStatusMsg.text}</span>
+                </div>
+                <button
+                  onClick={() => setThankYouStatusMsg(null)}
+                  className="text-slate-400 hover:text-white"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
 
             {/* Omnichannel Platform Navigation Tabs (Section 55 - Unified Multi-Platform Conversations) */}
             <div className="px-3.5 py-2 bg-slate-900/90 border-b border-slate-800 flex items-center justify-between gap-2 overflow-x-auto">
@@ -754,6 +918,53 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
                         }`}
                       >
                         <div className="whitespace-pre-wrap">{msg.text}</div>
+
+                        {/* Outbound live email delivery tracking & inline trigger */}
+                        {!isIncoming && (
+                          <div className="mt-2.5 pt-2 border-t border-slate-700/60">
+                            {msg.deliveryStatus === 'DELIVERED' || (msg.smtpMessageId && msg.smtpMessageId.startsWith('<')) ? (
+                              <div className="text-[10px] text-emerald-300 flex items-center justify-between flex-wrap gap-1">
+                                <span className="flex items-center space-x-1">
+                                  <CheckCircle className="w-3 h-3 text-emerald-400 shrink-0" />
+                                  <span>Live Email Delivered to {msg.recipientEmail || effectiveEmail}</span>
+                                </span>
+                                {msg.smtpMessageId && (
+                                  <span className="font-mono text-[9px] text-emerald-400/80 truncate max-w-[150px]" title={msg.smtpMessageId}>
+                                    {msg.smtpMessageId}
+                                  </span>
+                                )}
+                              </div>
+                            ) : msg.deliveryStatus === 'FAILED' ? (
+                              <div className="text-[10px] text-rose-300 flex items-center justify-between flex-wrap gap-1">
+                                <span className="flex items-center space-x-1">
+                                  <AlertCircle className="w-3 h-3 text-rose-400 shrink-0" />
+                                  <span>Email not delivered to {msg.recipientEmail || effectiveEmail}</span>
+                                </span>
+                                <button
+                                  onClick={handleDispatchThankYou}
+                                  disabled={isSendingThankYou}
+                                  className="px-2 py-0.5 rounded bg-blue-600 hover:bg-blue-500 text-white font-medium text-[10px]"
+                                >
+                                  Retry Send
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="text-[10px] text-amber-300/90 flex items-center justify-between bg-amber-950/40 p-1.5 rounded border border-amber-800/40 flex-wrap gap-1">
+                                <span className="flex items-center space-x-1">
+                                  <AlertCircle className="w-3 h-3 text-amber-400 shrink-0" />
+                                  <span>Recorded in CRM • Live mail pending for {effectiveEmail || 'lead'}</span>
+                                </span>
+                                <button
+                                  onClick={handleDispatchThankYou}
+                                  disabled={isSendingThankYou || !effectiveEmail}
+                                  className="ml-auto px-2 py-0.5 rounded bg-blue-600 hover:bg-blue-500 text-white font-semibold text-[10px] shrink-0"
+                                >
+                                  {isSendingThankYou ? 'Sending...' : 'Send Live Email'}
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        )}
 
                         {/* RAG sources indicator */}
                         {msg.knowledgeSources && msg.knowledgeSources.length > 0 && (
@@ -937,6 +1148,45 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
               <Building className="w-3.5 h-3.5 text-slate-400" />
               <span>{activeContact.companyName}</span>
             </div>
+          </div>
+
+          {/* Lead Email & Quick Dispatch Action */}
+          <div className="p-3 bg-slate-800/80 rounded-lg border border-slate-700/60 space-y-2">
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-slate-300 font-semibold flex items-center space-x-1.5">
+                <Mail className="w-3.5 h-3.5 text-blue-400" />
+                <span>Lead Email Field</span>
+              </span>
+              {isThankYouDelivered ? (
+                <span className="text-[10px] text-emerald-400 font-semibold flex items-center gap-0.5">
+                  <CheckCircle className="w-3 h-3" />
+                  <span>Delivered</span>
+                </span>
+              ) : (
+                <span className="text-[10px] text-amber-400 font-semibold">
+                  Pending
+                </span>
+              )}
+            </div>
+
+            <div className="p-2 rounded bg-slate-900 border border-slate-700/80 font-mono text-[11px] text-blue-300 break-all select-all">
+              {effectiveEmail || '(No email on file)'}
+            </div>
+
+            {effectiveEmail && (
+              <button
+                onClick={handleDispatchThankYou}
+                disabled={isSendingThankYou}
+                className="w-full py-1.5 rounded-md text-xs font-semibold flex items-center justify-center space-x-1.5 bg-blue-600 hover:bg-blue-500 text-white transition disabled:opacity-50 shadow-sm"
+              >
+                {isSendingThankYou ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Send className="w-3.5 h-3.5" />
+                )}
+                <span>{isThankYouDelivered ? 'Resend Thank-You Email' : 'Send Thank-You to This Email'}</span>
+              </button>
+            )}
           </div>
 
           {/* Connected Channels & Platform Streams (Section 55 Omnichannel Customer 360) */}

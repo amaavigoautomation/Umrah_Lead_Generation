@@ -2,7 +2,7 @@ import { collection, doc, getDocs, query, where } from 'firebase/firestore';
 import { db, isFirebaseConfigured } from '../firebase/config.js';
 import { safeSetDoc } from './firestoreUtils.js';
 import { Contact, Lead, Conversation, Message } from '../types/index.js';
-import { sendLiveEmail, getSmtpConfig } from './smtpService.js';
+import { sendLiveEmail, getSmtpConfig, fetchFirestoreSmtpConfig } from './smtpService.js';
 
 export interface WebsiteLeadInput {
   // Personal
@@ -81,147 +81,294 @@ export interface ProcessedLeadResult {
   autoConfirmationSent?: boolean;
 }
 
+// Recursively flattens nested Elementor Pro form objects, arrays, and bracket keys
+function flattenAllFields(obj: any, target: Record<string, string> = {}): Record<string, string> {
+  if (!obj || typeof obj !== 'object') return target;
+
+  if (Array.isArray(obj)) {
+    for (let i = 0; i < obj.length; i++) {
+      const item = obj[i];
+      if (item && typeof item === 'object') {
+        const itemKey = item.id || item.name || item.field_id || item.key || item.label || `item_${i}`;
+        const itemVal = item.value ?? item.val ?? item.raw_value ?? item.text ?? '';
+        if (typeof itemVal === 'string' || typeof itemVal === 'number' || typeof itemVal === 'boolean') {
+          target[String(itemKey)] = String(itemVal).trim();
+        }
+        flattenAllFields(item, target);
+      } else if (typeof item === 'string' || typeof item === 'number') {
+        target[`item_${i}`] = String(item).trim();
+      }
+    }
+    return target;
+  }
+
+  for (const [rawK, rawV] of Object.entries(obj)) {
+    if (rawV === null || rawV === undefined) continue;
+
+    if (typeof rawV === 'string' || typeof rawV === 'number' || typeof rawV === 'boolean') {
+      const strVal = String(rawV).trim();
+      target[rawK] = strVal;
+
+      // Extract bracket key e.g. "form_fields[name]" -> also set "name"
+      const bracketMatch = rawK.match(/(?:form_fields|fields|entry|wpforms)\[([^\]]+)\]/i);
+      if (bracketMatch && bracketMatch[1]) {
+        target[bracketMatch[1]] = strVal;
+      }
+    } else if (typeof rawV === 'object') {
+      const nestedVal = (rawV as any).value ?? (rawV as any).val ?? (rawV as any).raw_value ?? (rawV as any).text;
+      if (typeof nestedVal === 'string' || typeof nestedVal === 'number' || typeof nestedVal === 'boolean') {
+        target[rawK] = String(nestedVal).trim();
+        if ((rawV as any).id) target[String((rawV as any).id)] = String(nestedVal).trim();
+        if ((rawV as any).name) target[String((rawV as any).name)] = String(nestedVal).trim();
+        if ((rawV as any).label) target[String((rawV as any).label)] = String(nestedVal).trim();
+      }
+      flattenAllFields(rawV, target);
+    }
+  }
+
+  return target;
+}
+
 /**
  * Normalizes input from web forms, WordPress, Elementor, CF7, Webflow, or custom HTML forms.
  */
 export async function processWebsiteLeadSubmission(
-  rawInput: WebsiteLeadInput
+  rawInput: any
 ): Promise<ProcessedLeadResult> {
-  const input = rawInput || {};
+  const flatFields = flattenAllFields(rawInput || {});
 
-  // 1. Resolve Full Name
-  const rawFullName = (
-    input.fullName ||
-    input.name ||
-    input.your_full_name ||
-    input['your-name'] ||
-    (input.firstName ? `${input.firstName} ${input.lastName || ''}` : '') ||
-    'Valued Pilgrim Partner'
-  ).trim();
+  const findValue = (patterns: RegExp[]): string => {
+    for (const pat of patterns) {
+      for (const [k, v] of Object.entries(flatFields)) {
+        if (!v) continue;
+        const cleanK = k.toLowerCase().replace(/[-_\[\]\.\s]/g, '');
+        if (pat.test(cleanK)) return v;
+      }
+    }
+    return '';
+  };
 
-  let firstName = input.firstName?.trim() || '';
-  let lastName = input.lastName?.trim() || '';
+  // 1. Resolve & Validate Email
+  let email = findValue([
+    /^email$/,
+    /^youremail$/,
+    /^useremail$/,
+    /^contactemail$/,
+    /^workemail$/,
+    /^emailaddress$/,
+    /^mail$/,
+    /email/,
+    /mail/,
+  ]).trim().toLowerCase();
 
+  // Scan all values for an email regex if not found by key
+  if (!email || !email.includes('@')) {
+    const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/;
+    for (const [, v] of Object.entries(flatFields)) {
+      const match = v.match(emailRegex);
+      if (match && match[0]) {
+        email = match[0].trim().toLowerCase();
+        break;
+      }
+    }
+  }
+
+  // 2. Resolve Full Name
+  let rawFullName = findValue([
+    /^fullname$/,
+    /^yourfullname$/,
+    /^name$/,
+    /^yourname$/,
+    /^contactname$/,
+    /^leadname$/,
+    /^clientname$/,
+    /^username$/,
+    /^author$/,
+  ]).trim();
+
+  let firstNamePart = findValue([/^firstname$/, /^fname$/, /^first$/]).trim();
+  let lastNamePart = findValue([/^lastname$/, /^lname$/, /^last$/]).trim();
+
+  if (!rawFullName && (firstNamePart || lastNamePart)) {
+    rawFullName = `${firstNamePart} ${lastNamePart}`.trim();
+  }
+
+  if (!rawFullName && email) {
+    const userPart = email.split('@')[0] || '';
+    const cleanUserPart = userPart.replace(/[._\-0-9]/g, ' ').trim();
+    if (cleanUserPart.length > 2) {
+      rawFullName = cleanUserPart
+        .split(' ')
+        .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+        .join(' ');
+    }
+  }
+
+  rawFullName = rawFullName || 'Inbound Website Lead';
+
+  let firstName = firstNamePart;
+  let lastName = lastNamePart;
   if (!firstName) {
     const parts = rawFullName.split(/\s+/);
     firstName = parts[0] || 'Partner';
     lastName = parts.slice(1).join(' ') || '';
   }
 
-  // 2. Resolve & Validate Email
-  const email = (input.email || input.your_email || input['your-email'] || '')
-    .trim()
-    .toLowerCase();
+  // 3. Resolve Phone
+  let rawPhone = findValue([
+    /^phone$/,
+    /^phonenumber$/,
+    /^yourphone$/,
+    /^mobile$/,
+    /^mobilenumber$/,
+    /^contactnumber$/,
+    /^tel$/,
+    /^telephone$/,
+    /^whatsapp$/,
+    /phone/,
+    /mobile/,
+    /whatsapp/,
+  ]).trim();
 
-  if (!email || !email.includes('@')) {
-    throw new Error('A valid email address is required to submit a demo request.');
+  if (!rawPhone) {
+    for (const [k, v] of Object.entries(flatFields)) {
+      if (/id|date|time|nonce|token|zip|postal|lead/i.test(k)) continue;
+      const cleanDigits = v.replace(/[\s\-\(\)\.]/g, '');
+      if (/^\+?[0-9]{7,16}$/.test(cleanDigits) && !v.includes('@')) {
+        rawPhone = v.trim();
+        break;
+      }
+    }
   }
 
-  // 3. Resolve Phone with Country Code
-  const rawCountryCode = (input.countryCode || input.country_code || '').trim();
-  const rawPhone = (
-    input.phone ||
-    input.phoneNumber ||
-    input.phone_number ||
-    input['your-phone'] ||
-    input.mobile ||
-    ''
-  ).trim();
-
+  const rawCountryCode = findValue([/^countrycode$/, /^code$/]).trim();
   let fullPhone = rawPhone;
-  if (rawCountryCode && !rawPhone.startsWith('+')) {
+  if (fullPhone && rawCountryCode && !fullPhone.startsWith('+')) {
     const cleanCode = rawCountryCode.startsWith('+') ? rawCountryCode : `+${rawCountryCode}`;
-    fullPhone = `${cleanCode} ${rawPhone}`.trim();
+    fullPhone = `${cleanCode} ${fullPhone}`.trim();
   }
 
   // 4. Resolve Designation & Location
   const designation = (
-    input.designation ||
-    input.jobTitle ||
-    input.job_title ||
-    input.role ||
+    findValue([/^designation$/, /^jobtitle$/, /^job$/, /^role$/, /^position$/, /^title$/]) ||
     'Tour Operator / Agency Leader'
   ).trim();
 
   const country = (
-    input.country ||
-    input.select_country ||
-    input.selectCountry ||
+    findValue([/^country$/, /^selectcountry$/, /^yourcountry$/, /^nation$/, /country/]) ||
     'India'
   ).trim();
 
-  const city = (
-    input.city ||
-    input.your_city ||
-    input.yourCity ||
-    ''
-  ).trim();
+  const city = findValue([/^city$/, /^yourcity$/, /^town$/, /city/]).trim();
 
   // 5. Resolve Company Info
-  let companyName = (
-    input.companyName ||
-    input.company_name ||
-    input.company ||
-    input.agency ||
-    ''
-  ).trim();
+  let companyName = findValue([
+    /^companyname$/,
+    /^company$/,
+    /^agencyname$/,
+    /^agency$/,
+    /^organization$/,
+    /^businessname$/,
+    /^firm$/,
+    /^operator$/,
+    /^touroperator$/,
+    /company/,
+    /agency/,
+  ]).trim();
 
   if (!companyName) {
-    // Derive sensible company name from domain or user name
-    const domainPart = email.split('@')[1] || '';
-    if (domainPart && !['gmail.com', 'yahoo.com', 'outlook.com', 'hotmail.com', 'icloud.com'].includes(domainPart)) {
-      const derived = domainPart.split('.')[0];
-      companyName = derived.charAt(0).toUpperCase() + derived.slice(1) + ' Travels';
-    } else {
+    if (email) {
+      const domainPart = email.split('@')[1] || '';
+      if (domainPart && !['gmail.com', 'yahoo.com', 'outlook.com', 'hotmail.com', 'icloud.com'].includes(domainPart)) {
+        const derived = domainPart.split('.')[0];
+        companyName = derived.charAt(0).toUpperCase() + derived.slice(1) + ' Travels';
+      }
+    }
+    if (!companyName) {
       companyName = `${firstName}'s Pilgrimage Agency`;
     }
   }
 
-  const website = (
-    input.companyWebsite ||
-    input.company_website ||
-    input.website ||
-    ''
-  ).trim();
+  const website = findValue([/^website$/, /^companywebsite$/, /^url$/, /^companyurl$/]).trim();
 
-  const rawBranches = input.branches ?? input.has_branches ?? input.hasBranches;
+  const rawBranchesVal = findValue([/^branches$/, /^hasbranches$/, /^hasbranch$/, /^branch$/, /branch/]).trim();
   const branches =
-    typeof rawBranches === 'boolean'
-      ? rawBranches
-        ? 'Yes'
-        : 'No'
-      : typeof rawBranches === 'string' && rawBranches.toLowerCase().includes('yes')
+    typeof rawBranchesVal === 'string' && /yes|true|multiple|branch/i.test(rawBranchesVal)
       ? 'Yes'
+      : rawBranchesVal && /no|false|single/i.test(rawBranchesVal)
+      ? 'No'
       : 'No';
 
   // 6. Resolve Product & Team Size
   const product = (
-    input.product ||
-    input.products ||
-    input.select_products ||
-    input.selectProducts ||
-    input.productInterest ||
-    input.serviceInterest ||
-    'Umrah360 ERP & B2B Sub-Agent Portal'
+    findValue([
+      /^product$/,
+      /^products$/,
+      /^selectproducts$/,
+      /^productinterest$/,
+      /^serviceinterest$/,
+      /^solution$/,
+      /^interest$/,
+      /product/,
+    ]) || 'Umrah360 ERP & B2B Sub-Agent Portal'
   ).trim();
 
   const teamSize = (
-    input.teamSize ||
-    input.team_size ||
+    findValue([/^teamsize$/, /^team$/, /^size$/, /^employees$/, /^users$/, /^capacity$/]) ||
     '5-10 Users'
   ).trim();
 
   // 7. Resolve Message / Query
-  const message = (
-    input.message ||
-    input.query ||
-    input.notes ||
-    input.comments ||
-    input.message_here ||
-    ''
-  ).trim();
+  const message = findValue([
+    /^message$/,
+    /^yourmessage$/,
+    /^query$/,
+    /^notes$/,
+    /^comments$/,
+    /^remark$/,
+    /^remarks$/,
+    /^requirement$/,
+    /^requirements$/,
+    /^inquiry$/,
+    /^description$/,
+    /^details$/,
+    /message/,
+    /query/,
+    /remark/,
+    /comment/,
+  ]).trim();
 
-  const sourceUrl = (input.sourceUrl || input.referrer || 'https://umrah360.in/request-demo').trim();
+  const sourceUrl = findValue([/^sourceurl$/, /^source$/, /^referrer$/]) || 'https://umrah360.in/request-demo';
+
+  // Unmapped fields
+  const unmapped: string[] = [];
+  const mappedValues = new Set([
+    email,
+    rawPhone,
+    fullPhone,
+    rawFullName,
+    firstNamePart,
+    lastNamePart,
+    companyName,
+    designation,
+    city,
+    country,
+    product,
+    teamSize,
+    branches,
+    message,
+    website,
+    sourceUrl,
+  ]);
+
+  for (const [k, v] of Object.entries(flatFields)) {
+    if (!v) continue;
+    if (mappedValues.has(v)) continue;
+    const lowerK = k.toLowerCase().replace(/[-_\[\]\.\s]/g, '');
+    if (/^(id|type|rawvalue|fieldid|fieldtype|key|label|formid|formname|action|submit|nonce|wpnonce|wphttpreferer|recaptcha|token|postid|referertitle)$/i.test(lowerK)) continue;
+    if (k.length > 50 || v.length > 500) continue;
+    unmapped.push(`• ${k}: ${v}`);
+  }
 
   // 8. Lead Score Calculation
   let leadScore = 85; // Base high intent for direct inbound demo request
@@ -334,12 +481,12 @@ export async function processWebsiteLeadSubmission(
   const conversationId = `conv-web-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
   const messageId = `msg-web-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
 
-  const inboundDetailsText = [
+  const inboundLines = [
     `🕋 INBOUND DEMO REQUEST from umrah360.in/request-demo:`,
     ``,
     `• Name: ${rawFullName} (${designation})`,
     `• Company: ${companyName}${website ? ` (${website})` : ''}`,
-    `• Email: ${email}`,
+    `• Email: ${email || 'Not provided'}`,
     `• Phone: ${fullPhone || 'Not provided'}`,
     `• Location: ${city ? `${city}, ` : ''}${country}`,
     `• Product Interest: ${product}`,
@@ -348,7 +495,13 @@ export async function processWebsiteLeadSubmission(
     ``,
     `Message / Query:`,
     message || 'Customer submitted the "Schedule my Free Demo" form for an operational walkthrough.',
-  ].join('\n');
+  ];
+
+  if (unmapped.length > 0) {
+    inboundLines.push(``, `Additional Form Submission Data:`, ...unmapped);
+  }
+
+  const inboundDetailsText = inboundLines.join('\n');
 
   const conversation: Conversation = {
     conversationId,
@@ -404,6 +557,7 @@ export async function processWebsiteLeadSubmission(
   // 13. Dispatch Confirmation Email via SMTP if Configured
   // -----------------------------------------------------------------
   let autoConfirmationSent = false;
+  await fetchFirestoreSmtpConfig();
   const smtpConfig = getSmtpConfig();
   if (smtpConfig.configured && email) {
     try {
@@ -436,10 +590,11 @@ export async function processWebsiteLeadSubmission(
 
       if (mailResult.success) {
         autoConfirmationSent = true;
-        console.log(`[Website Lead] Dispatched auto-confirmation email to ${email}`);
+        const nowIso = new Date().toISOString();
+        console.log(`[Website Lead] Dispatched auto-confirmation email to ${email} (Message ID: ${mailResult.messageId})`);
 
         // Also record this outbound message in Firestore
-        const replyMsgId = `msg-auto-reply-${Date.now()}`;
+        const replyMsgId = `msg-thankyou-${conversationId}`;
         const autoReplyMessage: Message = {
           messageId: replyMsgId,
           conversationId,
@@ -447,14 +602,31 @@ export async function processWebsiteLeadSubmission(
           senderName: 'Umrah360 Automation',
           channel: 'EMAIL',
           direction: 'OUTBOUND',
+          recipientEmail: email,
+          deliveryStatus: 'DELIVERED',
+          smtpMessageId: mailResult.messageId,
+          emailDeliveredAt: nowIso,
           text: emailBody,
-          timestamp: new Date().toISOString(),
-          sentAt: new Date().toISOString(),
+          timestamp: nowIso,
+          sentAt: nowIso,
           aiReplied: true,
         };
 
         if (isFirebaseConfigured && db) {
           safeSetDoc(doc(db, 'messages', replyMsgId), autoReplyMessage, { merge: true }).catch(() => {});
+          safeSetDoc(
+            doc(db, 'conversations', conversationId),
+            {
+              thankYouEmailSent: true,
+              thankYouEmailDeliveredAt: nowIso,
+              thankYouSmtpMessageId: mailResult.messageId,
+              customerEmail: email,
+              lastMessageText: emailBody.slice(0, 160) + '...',
+              lastMessageAt: nowIso,
+              updatedAt: nowIso,
+            },
+            { merge: true }
+          ).catch(() => {});
         }
       }
     } catch (smtpErr) {

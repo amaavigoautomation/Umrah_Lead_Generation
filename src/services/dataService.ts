@@ -21,8 +21,57 @@ import {
   LeadActivity,
   SystemSettings,
   Channel,
+  AppUser,
 } from '../types';
 import { INITIAL_KNOWLEDGE_DOCUMENTS } from './knowledgeData';
+
+// Platform Module Registry
+export interface PlatformModule {
+  id: string;
+  name: string;
+  description: string;
+}
+
+export const PLATFORM_MODULES: PlatformModule[] = [
+  { id: 'inbox', name: 'Unified Inbox', description: 'Omnichannel communication (Email, WhatsApp, CRM)' },
+  { id: 'campaigns', name: 'Campaigns', description: 'Cold outreach campaigns & batch dispatching' },
+  { id: 'crm', name: 'CRM & Leads', description: 'Pipeline stages, lead scores, and agency profiles' },
+  { id: 'knowledge', name: 'Knowledge Base', description: 'Ground truth RAG documentation for AI auto-replies' },
+  { id: 'playground', name: 'AI Testing', description: 'Interactive prompt playground & response validation' },
+  { id: 'scenarios', name: 'E2E Walkthroughs', description: 'Interactive simulated omnichannel scenarios' },
+  { id: 'settings', name: 'Channels & Settings', description: 'Autopilot rules, email signatures, and integrations' },
+  { id: 'live-mailbox', name: 'Live Mailbox & SMTP', description: 'IMAP live polling & SMTP credentials management' },
+];
+
+// Initial pre-configured users stored in Firestore DB
+export const INITIAL_USERS: AppUser[] = [
+  {
+    userId: 'user-admin-01',
+    email: 'admin@umrah360.com',
+    username: 'admin',
+    password: 'admin123',
+    name: 'Full Administrator',
+    role: 'ADMIN',
+    accessLevel: 'ALL',
+    allowedModules: ['inbox', 'campaigns', 'crm', 'knowledge', 'playground', 'scenarios', 'settings', 'live-mailbox'],
+    isActive: true,
+    createdAt: '2025-01-01T00:00:00.000Z',
+    updatedAt: '2025-01-01T00:00:00.000Z',
+  },
+  {
+    userId: 'user-tester-02',
+    email: 'tester@umrah360.com',
+    username: 'tester',
+    password: 'tester123',
+    name: 'Knowledge & AI Specialist',
+    role: 'SPECIALIST',
+    accessLevel: 'CUSTOM',
+    allowedModules: ['knowledge', 'playground'],
+    isActive: true,
+    createdAt: '2025-01-01T00:00:00.000Z',
+    updatedAt: '2025-01-01T00:00:00.000Z',
+  },
+];
 
 // Default initial system settings
 export const DEFAULT_SETTINGS: SystemSettings = {

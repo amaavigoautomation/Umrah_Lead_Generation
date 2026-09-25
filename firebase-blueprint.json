@@ -249,9 +249,32 @@
         "updatedAt": { "type": "string" }
       },
       "required": ["id", "title", "category", "content", "status"]
+    },
+    "AppUser": {
+      "title": "AppUser",
+      "description": "User accounts with module-based access control stored directly in Firestore database",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "maxLength": 128 },
+        "email": { "type": "string", "format": "email", "maxLength": 256 },
+        "username": { "type": "string", "maxLength": 128 },
+        "password": { "type": "string", "maxLength": 256 },
+        "name": { "type": "string", "maxLength": 128 },
+        "role": { "type": "string", "enum": ["ADMIN", "OPERATOR", "SPECIALIST", "CUSTOM"] },
+        "accessLevel": { "type": "string", "enum": ["ALL", "CUSTOM"] },
+        "allowedModules": { "type": "array" },
+        "isActive": { "type": "boolean" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["userId", "email", "password", "name", "role", "accessLevel", "allowedModules"]
     }
   },
   "firestore": {
+    "/app_users/{userId}": {
+      "schema": "AppUser",
+      "description": "Platform user credentials and module permissions"
+    },
     "/knowledge_documents/{docId}": {
       "schema": "KnowledgeDocument",
       "description": "Ground truth knowledge base articles"

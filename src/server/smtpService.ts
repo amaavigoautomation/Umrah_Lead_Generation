@@ -42,14 +42,37 @@ export interface SendMailResult {
 
 // In-memory status cache
 let cachedSmtpStatus: SmtpStatus | null = null;
+let dynamicSmtpPass: string = '';
+let dynamicSmtpUser: string = '';
+let dynamicSmtpHost: string = '';
+let dynamicSmtpPort: number = 465;
+
+export async function fetchFirestoreSmtpConfig() {
+  if (dynamicSmtpPass) return;
+  try {
+    const projectId = process.env.VITE_FIREBASE_PROJECT_ID || 'gen-lang-client-0376069258';
+    const dbId = 'ai-studio-379c884e-3360-468a-ad55-8105acbd3214';
+    const res = await fetch(`https://firestore.googleapis.com/v1/projects/${projectId}/databases/${dbId}/documents/settings/smtp`);
+    if (res.ok) {
+      const data = await res.json();
+      const f = data.fields || {};
+      if (f.pass?.stringValue) dynamicSmtpPass = f.pass.stringValue.replace(/\s+/g, '');
+      if (f.user?.stringValue) dynamicSmtpUser = f.user.stringValue;
+      if (f.host?.stringValue) dynamicSmtpHost = f.host.stringValue;
+      if (f.port?.integerValue) dynamicSmtpPort = parseInt(f.port.integerValue, 10);
+    }
+  } catch (e) {
+    // Ignore fallback fetch error
+  }
+}
 
 export function getSmtpConfig() {
-  const host = process.env.SMTP_HOST || 'smtp.gmail.com';
-  const port = parseInt(process.env.SMTP_PORT || '465', 10);
+  const host = process.env.SMTP_HOST || dynamicSmtpHost || 'smtp.gmail.com';
+  const port = parseInt(process.env.SMTP_PORT || (dynamicSmtpPort ? String(dynamicSmtpPort) : '465'), 10);
   const secure = process.env.SMTP_SECURE === 'true' || port === 465;
-  const user = process.env.SMTP_USER || 'amaavigo@gmail.com';
-  const rawPass = process.env.SMTP_PASS || '';
-  const pass = rawPass.trim();
+  const user = process.env.SMTP_USER || dynamicSmtpUser || 'amaavigo@gmail.com';
+  const rawPass = process.env.SMTP_PASS || dynamicSmtpPass || '';
+  const pass = rawPass.replace(/\s+/g, '').trim();
   const from = process.env.SMTP_FROM || `Umrah360 Automation <${user}>`;
 
   const configured = Boolean(host && pass);
@@ -141,7 +164,11 @@ export async function verifySmtpConnection(): Promise<SmtpStatus> {
 }
 
 export async function sendLiveEmail(params: SendMailParams): Promise<SendMailResult> {
-  const config = getSmtpConfig();
+  let config = getSmtpConfig();
+  if (!config.configured) {
+    await fetchFirestoreSmtpConfig();
+    config = getSmtpConfig();
+  }
 
   // If SMTP is configured, attempt real SMTP transmission
   if (config.configured) {

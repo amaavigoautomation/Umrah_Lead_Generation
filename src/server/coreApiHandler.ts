@@ -46,6 +46,10 @@ import {
 } from './campaignService.js';
 import { processWebsiteLeadSubmission } from './websiteLeadService.js';
 import {
+  checkAndDispatchPendingWebsiteLeadEmails,
+  dispatchThankYouEmailForConversation,
+} from './websiteLeadAutoResponder.js';
+import {
   initKnowledgeStore,
   getAllKnowledgeDocs,
   getPublishedKnowledgeDocs,
@@ -200,6 +204,29 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
       );
       return true;
     }
+  }
+
+  // 1.6. Explicit Send Thank-You Email to Lead from Unified Box
+  if ((url === '/api/leads/send-thank-you' || url.startsWith('/api/leads/send-thank-you')) && req.method === 'POST') {
+    const { conversationId } = body;
+    if (!conversationId) {
+      res.statusCode = 400;
+      res.end(JSON.stringify({ success: false, error: 'Missing conversationId parameter' }));
+      return true;
+    }
+
+    const result = await dispatchThankYouEmailForConversation(conversationId);
+    res.statusCode = result.success ? 200 : 400;
+    res.end(JSON.stringify(result));
+    return true;
+  }
+
+  // 1.7. Trigger background sweep for pending website leads
+  if ((url === '/api/leads/auto-reply-check' || url.startsWith('/api/leads/auto-reply-check')) && (req.method === 'POST' || req.method === 'GET')) {
+    const result = await checkAndDispatchPendingWebsiteLeadEmails();
+    res.statusCode = 200;
+    res.end(JSON.stringify({ success: true, ...result }));
+    return true;
   }
 
   // 2. AI Respond endpoint (/api/ai/respond)

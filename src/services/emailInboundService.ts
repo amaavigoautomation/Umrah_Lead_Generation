@@ -541,8 +541,51 @@ export async function processInboundEmail(params: {
   }
 
   const aiReplyTimestamp = new Date().toISOString();
+  let outboundSmtpStatus = 'DELIVERY_QUEUED';
+  let liveSentMessageId = `<reply-${Date.now()}@amaavigo.com>`;
+  let smtpDeliveryError: string | undefined = undefined;
+
+  // Dispatch real email to customer over live SMTP
+  if (payload.from && replyText) {
+    try {
+      const sendRes = await fetch('/api/email/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          to: payload.from,
+          subject: replySubject,
+          text: replyText,
+          inReplyTo: incomingMessageId,
+          references: [incomingMessageId],
+          conversationId: conversation.conversationId,
+          senderName: 'Umrah360 AI Automation',
+        }),
+      });
+      let sendData: any = {};
+      try {
+        const rawText = await sendRes.text();
+        sendData = rawText ? JSON.parse(rawText) : {};
+      } catch {
+        sendData = { error: `Server returned non-JSON response (${sendRes.status})` };
+      }
+
+      if (sendRes.ok && sendData?.messageId) {
+        liveSentMessageId = sendData.messageId;
+        outboundSmtpStatus = 'DELIVERED';
+      } else {
+        outboundSmtpStatus = 'DELIVERY_FAILED';
+        smtpDeliveryError = sendData?.error || `Failed to dispatch via SMTP (HTTP ${sendRes.status})`;
+      }
+    } catch (smtpErr: any) {
+      outboundSmtpStatus = 'DELIVERY_FAILED';
+      smtpDeliveryError = smtpErr?.message || 'SMTP network failure';
+      console.warn('[Inbound Email Service] SMTP dispatch error:', smtpErr);
+    }
+  }
+
   const aiReplyMessage: Message = {
     messageId: `msg-ai-${Date.now()}@amaavigo.com`,
+    gmailMessageId: liveSentMessageId,
     conversationId: conversation.conversationId,
     channel: 'EMAIL',
     direction: 'OUTBOUND',
@@ -551,6 +594,8 @@ export async function processInboundEmail(params: {
     senderEmail: INBOUND_MAILBOX,
     text: replyText,
     timestamp: aiReplyTimestamp,
+    sentAt: aiReplyTimestamp,
+    createdAt: aiReplyTimestamp,
     aiProcessed: true,
     aiGenerated: true,
     confidence: aiConfidence,
@@ -561,8 +606,10 @@ export async function processInboundEmail(params: {
       to: payload.from,
       inReplyTo: incomingMessageId,
       references: [incomingMessageId],
-      messageId: `<reply-${Date.now()}@amaavigo.com>`,
+      messageId: liveSentMessageId,
     },
+    smtpStatus: outboundSmtpStatus as any,
+    smtpError: smtpDeliveryError,
   };
 
   incomingMessage.repliedAt = aiReplyTimestamp;

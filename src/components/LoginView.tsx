@@ -8,8 +8,11 @@ import {
   Database,
   KeyRound,
   AlertCircle,
+  Shield,
+  Sparkles,
 } from 'lucide-react';
 import { AppUser } from '../types';
+import { Umrah360Logo } from './Umrah360Logo';
 
 interface LoginViewProps {
   onLogin: (user: AppUser) => void;
@@ -69,80 +72,74 @@ export const LoginView: React.FC<LoginViewProps> = ({
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col justify-center items-center px-4 py-12 relative overflow-hidden selection:bg-emerald-500/30 selection:text-emerald-300">
-      {/* Subtle ambient lighting glows */}
-      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-emerald-600/10 rounded-full blur-3xl pointer-events-none" />
-      <div className="absolute bottom-1/4 left-1/3 w-80 h-80 bg-blue-600/10 rounded-full blur-3xl pointer-events-none" />
+    <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col justify-center items-center px-4 py-12 relative overflow-hidden selection:bg-orange-500/20 selection:text-orange-900">
+      {/* Soft orange ambient ambient glows */}
+      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-orange-500/10 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute bottom-1/4 left-1/3 w-80 h-80 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
 
       <div className="w-full max-w-md space-y-6 relative z-10">
         {/* Brand Header */}
-        <div className="text-center space-y-2">
-          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-to-tr from-emerald-600 to-emerald-400 text-white font-black text-2xl shadow-xl shadow-emerald-950/60 border border-emerald-400/30 mb-2">
-            U
+        <div className="text-center space-y-3">
+          <div className="flex justify-center mb-2">
+            <Umrah360Logo size="lg" />
           </div>
-          <div className="flex items-center justify-center space-x-2">
-            <h1 className="text-2xl font-bold tracking-tight text-white">Umrah360</h1>
-            <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 font-semibold text-xs border border-emerald-500/30">
-              Enterprise
-            </span>
-          </div>
-          <p className="text-xs text-slate-400 max-w-sm mx-auto">
-            Autonomous Inbound Pilgrimage Capture, Cold Outreach & Omnichannel AI Agent
+          <p className="text-xs text-slate-600 max-w-sm mx-auto font-medium">
+            Autonomous Inbound Pilgrimage Capture, Cold Outreach & Omnichannel Lead Engine
           </p>
         </div>
 
         {/* Login Card */}
-        <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-6 sm:p-8 shadow-2xl backdrop-blur-md space-y-5">
-          <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+        <div className="bg-white border border-slate-200/90 rounded-2xl p-6 sm:p-8 shadow-xl space-y-5">
+          <div className="flex items-center justify-between border-b border-slate-100 pb-3">
             <div className="flex items-center space-x-2">
-              <KeyRound className="w-4 h-4 text-emerald-400" />
-              <h2 className="text-sm font-bold text-white uppercase tracking-wider">Account Sign In</h2>
+              <KeyRound className="w-4 h-4 text-orange-500" />
+              <h2 className="text-xs font-extrabold text-slate-900 uppercase tracking-wider">Account Sign In</h2>
             </div>
-            <div className="flex items-center space-x-1.5 text-[11px] text-slate-400">
-              <Database className="w-3.5 h-3.5 text-purple-400" />
-              <span>{isFirebaseActive ? 'Firestore Connected' : 'DB Ready'}</span>
+            <div className="flex items-center space-x-1.5 text-[11px] text-slate-500 font-medium">
+              <Database className="w-3.5 h-3.5 text-orange-500" />
+              <span>{isFirebaseActive ? 'Firestore Live' : 'Database Ready'}</span>
             </div>
           </div>
 
           {error && (
-            <div className="p-3 bg-red-950/50 border border-red-800/80 rounded-xl text-red-200 text-xs flex items-center space-x-2 animate-in fade-in">
-              <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
+            <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-red-800 text-xs flex items-center space-x-2">
+              <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
               <span>{error}</span>
             </div>
           )}
 
           <form onSubmit={handleSubmit} className="space-y-4 text-xs">
             <div>
-              <label className="text-slate-300 block mb-1.5 font-medium">Email or Username</label>
+              <label className="text-slate-700 block mb-1.5 font-bold">Email or Username</label>
               <div className="relative">
-                <Mail className="w-4 h-4 absolute left-3 top-2.5 text-slate-500" />
+                <Mail className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
                 <input
                   type="text"
                   value={identifier}
                   onChange={(e) => setIdentifier(e.target.value)}
                   placeholder="name@umrah360.com"
-                  className="w-full bg-slate-950 border border-slate-700/80 rounded-xl pl-9 pr-3 py-2.5 text-xs text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-3 py-2.5 text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 font-medium transition"
                   required
                 />
               </div>
             </div>
 
             <div>
-              <label className="text-slate-300 block mb-1.5 font-medium">Password</label>
+              <label className="text-slate-700 block mb-1.5 font-bold">Password</label>
               <div className="relative">
-                <Lock className="w-4 h-4 absolute left-3 top-2.5 text-slate-500" />
+                <Lock className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
                 <input
                   type={showPassword ? 'text' : 'password'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
-                  className="w-full bg-slate-950 border border-slate-700/80 rounded-xl pl-9 pr-10 py-2.5 text-xs text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-10 py-2.5 text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 font-medium transition"
                   required
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-2.5 text-slate-500 hover:text-slate-300 focus:outline-none"
+                  className="absolute right-3 top-3 text-slate-400 hover:text-slate-600 focus:outline-none"
                 >
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
@@ -152,18 +149,39 @@ export const LoginView: React.FC<LoginViewProps> = ({
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs transition flex items-center justify-center space-x-2 shadow-lg shadow-emerald-950/50 disabled:opacity-50 cursor-pointer"
+              className="w-full py-3 rounded-xl bg-orange-500 hover:bg-orange-600 active:bg-orange-700 text-white font-bold text-xs transition flex items-center justify-center space-x-2 shadow-md shadow-orange-500/20 disabled:opacity-50 cursor-pointer"
             >
               {isLoading ? (
                 <span>Verifying credentials...</span>
               ) : (
                 <>
-                  <span>Sign In to Umrah360</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
+                  <span>Sign In to Umrah 360</span>
+                  <ArrowRight className="w-4 h-4" />
                 </>
               )}
             </button>
           </form>
+
+          {/* Preset User Quick Fill */}
+          <div className="pt-2 border-t border-slate-100">
+            <div className="text-[11px] font-bold text-slate-500 mb-2">Quick Sign-in (Demo Accounts):</div>
+            <div className="grid grid-cols-2 gap-2">
+              {users.slice(0, 2).map((u) => (
+                <button
+                  key={u.id}
+                  type="button"
+                  onClick={() => {
+                    setIdentifier(u.email);
+                    setPassword(u.password || 'admin123');
+                  }}
+                  className="p-2 text-left bg-slate-50 hover:bg-orange-50 hover:border-orange-200 border border-slate-200 rounded-xl transition text-[11px]"
+                >
+                  <div className="font-bold text-slate-800">{u.name}</div>
+                  <div className="text-[10px] text-slate-500">{u.role}</div>
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
     </div>

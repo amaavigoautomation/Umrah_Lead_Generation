@@ -289,17 +289,17 @@ export const InteractiveScenarios: React.FC<InteractiveScenariosProps> = ({
   ];
 
   return (
-    <div className="max-w-7xl mx-auto p-4 space-y-6">
+    <div className="max-w-7xl mx-auto p-4 space-y-6 font-sans">
       {/* Header */}
-      <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 shadow-lg flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+      <div className="bg-white border border-slate-200/90 rounded-2xl p-6 shadow-sm flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         <div>
           <div className="flex items-center space-x-2">
-            <Sparkles className="w-6 h-6 text-emerald-400" />
-            <h2 className="text-xl font-bold text-white">
-              End-to-End Walkthroughs (Sections 72, 73, 74)
+            <Sparkles className="w-6 h-6 text-orange-500" />
+            <h2 className="text-xl font-extrabold text-slate-900">
+              End-to-End Walkthroughs
             </h2>
           </div>
-          <p className="text-xs text-slate-400 mt-1 max-w-3xl">
+          <p className="text-xs text-slate-500 mt-1 max-w-3xl font-medium">
             Interactive verification of the complete specification. Step through the exact 19-step
             outbound cold outreach flow from Apollo to Human Handoff, or verify WhatsApp & Inbound Email
             scenarios.
@@ -307,18 +307,18 @@ export const InteractiveScenarios: React.FC<InteractiveScenariosProps> = ({
         </div>
 
         {/* Tab Selector */}
-        <div className="flex flex-wrap items-center gap-1.5 bg-slate-800 p-1 rounded-lg">
+        <div className="flex flex-wrap items-center gap-1.5 bg-slate-100 p-1 rounded-xl border border-slate-200">
           <button
             onClick={() => setActiveScenario('inbound')}
-            className={`px-3 py-1.5 rounded-md text-xs font-semibold transition flex items-center space-x-1.5 ${
+            className={`px-3.5 py-2 rounded-lg text-xs font-bold transition flex items-center space-x-1.5 ${
               activeScenario === 'inbound'
-                ? 'bg-blue-600 text-white shadow-sm'
-                : 'text-slate-400 hover:text-slate-200'
+                ? 'bg-orange-500 text-white shadow-xs'
+                : 'text-slate-600 hover:text-slate-900'
             }`}
           >
             <Mail className="w-3.5 h-3.5" />
-            <span>Section 74: Inbound Email ({INBOUND_MAILBOX})</span>
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+            <span>Inbound Email ({INBOUND_MAILBOX})</span>
+            <span className="w-2 h-2 rounded-full bg-white animate-pulse"></span>
           </button>
           <button
             onClick={() => setActiveScenario('outbound')}

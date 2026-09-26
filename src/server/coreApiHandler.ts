@@ -1,6 +1,6 @@
 import { GoogleGenAI } from '@google/genai';
-import { verifySmtpConnection, sendLiveEmail, getSmtpConfig } from './smtpService.js';
-import { checkImapStatus, getImapConfig } from './imapService.js';
+import { verifySmtpConnection, sendLiveEmail, getSmtpConfig, updateSmtpConfig } from './smtpService.js';
+import { checkImapStatus, getImapConfig, updateImapConfig } from './imapService.js';
 import {
   processLiveInboundEmail,
   pollAndProcessImapMailbox,
@@ -46,10 +46,6 @@ import {
 } from './campaignService.js';
 import { processWebsiteLeadSubmission } from './websiteLeadService.js';
 import {
-  checkAndDispatchPendingWebsiteLeadEmails,
-  dispatchThankYouEmailForConversation,
-} from './websiteLeadAutoResponder.js';
-import {
   initKnowledgeStore,
   getAllKnowledgeDocs,
   getPublishedKnowledgeDocs,
@@ -64,12 +60,26 @@ import {
  * 2. Vercel Production Serverless Functions (via api/index.ts or api/inbound/whatsapp.ts)
  */
 export async function handleCoreApi(req: any, res: any): Promise<boolean> {
-  // Normalize URL
-  let url = req.url || '';
-  if (!url.startsWith('/api/') && !url.startsWith('/api')) {
-    const cleanUrl = url.startsWith('/') ? url : '/' + url;
-    url = '/api' + cleanUrl;
+  // Normalize URL and Pathname
+  const rawUrl = req.url || '';
+  let pathname = rawUrl;
+  try {
+    const parsed = new URL(rawUrl.startsWith('/') ? 'http://localhost' + rawUrl : rawUrl);
+    pathname = parsed.pathname;
+  } catch {
+    pathname = rawUrl.split('?')[0];
   }
+
+  if (!pathname.startsWith('/api/') && pathname !== '/api') {
+    const cleanPath = pathname.startsWith('/') ? pathname : '/' + pathname;
+    pathname = '/api' + cleanPath;
+  }
+
+  if (pathname.length > 4 && pathname.endsWith('/')) {
+    pathname = pathname.slice(0, -1);
+  }
+
+  let url = pathname;
 
   // Set standard API headers and CORS
   res.setHeader('Content-Type', 'application/json');
@@ -204,29 +214,6 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
       );
       return true;
     }
-  }
-
-  // 1.6. Explicit Send Thank-You Email to Lead from Unified Box
-  if ((url === '/api/leads/send-thank-you' || url.startsWith('/api/leads/send-thank-you')) && req.method === 'POST') {
-    const { conversationId } = body;
-    if (!conversationId) {
-      res.statusCode = 400;
-      res.end(JSON.stringify({ success: false, error: 'Missing conversationId parameter' }));
-      return true;
-    }
-
-    const result = await dispatchThankYouEmailForConversation(conversationId);
-    res.statusCode = result.success ? 200 : 400;
-    res.end(JSON.stringify(result));
-    return true;
-  }
-
-  // 1.7. Trigger background sweep for pending website leads
-  if ((url === '/api/leads/auto-reply-check' || url.startsWith('/api/leads/auto-reply-check')) && (req.method === 'POST' || req.method === 'GET')) {
-    const result = await checkAndDispatchPendingWebsiteLeadEmails();
-    res.statusCode = 200;
-    res.end(JSON.stringify({ success: true, ...result }));
-    return true;
   }
 
   // 2. AI Respond endpoint (/api/ai/respond)
@@ -579,6 +566,53 @@ Generate a helpful, grounded response.`;
   }
 
   // 5. SMTP & Email Sending Operations
+  if (url === '/api/smtp/config') {
+    if (req.method === 'GET') {
+      const config = getSmtpConfig();
+      res.statusCode = 200;
+      res.end(
+        JSON.stringify({
+          configured: config.configured,
+          host: config.host || '',
+          port: config.port,
+          secure: config.secure,
+          user: config.user,
+          from: config.from,
+          hasPassword: Boolean(config.pass),
+        })
+      );
+      return true;
+    } else if (req.method === 'POST') {
+      const updated = updateSmtpConfig({
+        host: body.host,
+        port: body.port ? parseInt(body.port, 10) : undefined,
+        secure: body.secure,
+        user: body.user,
+        pass: body.pass,
+        from: body.from,
+      });
+      // Also update IMAP password if same user
+      if (body.pass) {
+        updateImapConfig({
+          user: body.user || updated.user,
+          pass: body.pass,
+        });
+      }
+      res.statusCode = 200;
+      res.end(
+        JSON.stringify({
+          success: true,
+          configured: updated.configured,
+          host: updated.host,
+          port: updated.port,
+          user: updated.user,
+          hasPassword: Boolean(updated.pass),
+        })
+      );
+      return true;
+    }
+  }
+
   if (url === '/api/smtp/status' && req.method === 'GET') {
     const config = getSmtpConfig();
     res.statusCode = 200;
@@ -589,7 +623,9 @@ Generate a helpful, grounded response.`;
         port: config.port,
         secure: config.secure,
         user: config.user,
+        from: config.from,
         passConfigured: Boolean(config.pass),
+        hasPassword: Boolean(config.pass),
       })
     );
     return true;
@@ -639,6 +675,43 @@ Generate a helpful, grounded response.`;
   }
 
   // 6. IMAP Operations
+  if (url === '/api/imap/config') {
+    if (req.method === 'GET') {
+      const config = getImapConfig();
+      res.statusCode = 200;
+      res.end(
+        JSON.stringify({
+          configured: config.configured,
+          host: config.host || '',
+          port: config.port,
+          secure: config.secure,
+          user: config.user,
+          hasPassword: Boolean(config.pass),
+        })
+      );
+      return true;
+    } else if (req.method === 'POST') {
+      const updated = updateImapConfig({
+        host: body.host,
+        port: body.port ? parseInt(body.port, 10) : undefined,
+        secure: body.secure,
+        user: body.user,
+        pass: body.pass,
+      });
+      res.statusCode = 200;
+      res.end(
+        JSON.stringify({
+          success: true,
+          configured: updated.configured,
+          host: updated.host,
+          port: updated.port,
+          user: updated.user,
+          hasPassword: Boolean(updated.pass),
+        })
+      );
+      return true;
+    }
+  }
   if (url === '/api/imap/status' && req.method === 'GET') {
     const config = getImapConfig();
     res.statusCode = 200;

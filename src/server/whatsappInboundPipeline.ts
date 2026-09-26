@@ -476,7 +476,14 @@ export async function generateWhatsAppAutoReplyText(params: {
   // Attempt Gemini generation
   if (process.env.GEMINI_API_KEY) {
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+      const ai = new GoogleGenAI({
+        apiKey: process.env.GEMINI_API_KEY,
+        httpOptions: {
+          headers: {
+            'User-Agent': 'aistudio-build',
+          },
+        },
+      });
       const prompt = `You are the official Umrah360 WhatsApp AI Assistant representing Umrah360 (+919820252434 / www.umrah360.in).
 Umrah360 is the leading all-in-one ERP, CRM, and distribution platform for Umrah and Hajj tour operators and travel agencies.
 

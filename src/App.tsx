@@ -51,6 +51,19 @@ import {
 import { db, isFirebaseConfigured } from './firebase/config';
 import { collection, doc, setDoc, getDoc, getDocs, updateDoc, deleteDoc, query, orderBy, onSnapshot } from 'firebase/firestore';
 
+function sanitizeDoc(obj: any): any {
+  if (obj === undefined) return null;
+  if (obj === null || typeof obj !== 'object') return obj;
+  if (Array.isArray(obj)) return obj.map(sanitizeDoc);
+  const clean: Record<string, any> = {};
+  for (const [k, v] of Object.entries(obj)) {
+    if (v !== undefined) {
+      clean[k] = sanitizeDoc(v);
+    }
+  }
+  return clean;
+}
+
 function deduplicateMessages(msgs: Message[]): Message[] {
   const seenMap = new Map<string, Message>();
   for (const msg of msgs) {
@@ -339,100 +352,113 @@ export default function App() {
       const data = await res.json();
       if (!data.history || !Array.isArray(data.history)) return;
 
-      // Note: When Firebase is configured and active, Firestore realtime onSnapshot listeners
-      // are the authoritative single source of truth for CRM entities (contacts, leads, conversations, messages).
-      // We do NOT write data.history back to Firestore here, preventing deleted documents from resurrecting.
-      if (!isFirebaseConfigured) {
-        for (const item of data.history) {
-          if (!item.crmEntities || !item.messageId) continue;
-          if (ingestedBackendMsgIds.current.has(item.messageId)) continue;
-          ingestedBackendMsgIds.current.add(item.messageId);
+      for (const item of data.history) {
+        if (!item.crmEntities || !item.messageId) continue;
+        if (ingestedBackendMsgIds.current.has(item.messageId)) continue;
+        ingestedBackendMsgIds.current.add(item.messageId);
 
-          const { contact, lead, conversation, incomingMessage, aiReplyMessage, activity } = item.crmEntities;
+        const { contact, lead, conversation, incomingMessage, aiReplyMessage, activity } = item.crmEntities;
 
-          if (contact) {
-            setContacts((prev) => {
-              const idx = prev.findIndex(
-                (c) =>
-                  c.contactId === contact.contactId ||
-                  c.email.toLowerCase() === contact.email.toLowerCase()
-              );
-              if (idx >= 0) {
-                const next = [...prev];
-                next[idx] = { ...next[idx], ...contact, lastActivityAt: contact.lastActivityAt };
-                return next;
-              }
-              return [contact, ...prev];
-            });
-          }
-
-          if (lead) {
-            setLeads((prev) => {
-              const idx = prev.findIndex(
-                (l) => l.leadId === lead.leadId || l.contactId === lead.contactId
-              );
-              if (idx >= 0) {
-                const next = [...prev];
-                const updated = { ...next[idx], ...lead };
-                next.splice(idx, 1);
-                return [updated, ...next];
-              }
-              return [lead, ...prev];
-            });
-          }
-
-          if (conversation) {
-            setConversations((prev) => {
-              const idx = prev.findIndex(
-                (c) =>
-                  c.conversationId === conversation.conversationId ||
-                  (conversation.emailThreadId && c.emailThreadId === conversation.emailThreadId)
-              );
-              if (idx >= 0) {
-                const next = [...prev];
-                const updated = {
-                  ...next[idx],
-                  ...conversation,
-                  lastMessageAt: conversation.lastMessageAt,
-                  lastMessageText: conversation.lastMessageText,
-                };
-                next.splice(idx, 1);
-                return [updated, ...next];
-              }
-              return [conversation, ...prev];
-            });
-          }
-
-          const threadMsgs: Message[] = Array.isArray(item.crmEntities?.allThreadMessages) && item.crmEntities.allThreadMessages.length > 0
-            ? item.crmEntities.allThreadMessages
-            : ([incomingMessage, aiReplyMessage].filter(Boolean) as Message[]);
-
-          setMessages((prev) => {
-            const toAdd: Message[] = [];
-            for (const msg of threadMsgs) {
-              if (msg && !prev.some((m) => m.messageId === msg.messageId)) {
-                toAdd.push(msg);
-              }
+        if (contact) {
+          setContacts((prev) => {
+            const idx = prev.findIndex(
+              (c) =>
+                c.contactId === contact.contactId ||
+                c.email.toLowerCase() === contact.email.toLowerCase()
+            );
+            if (idx >= 0) {
+              const next = [...prev];
+              next[idx] = { ...next[idx], ...contact, lastActivityAt: contact.lastActivityAt };
+              return next;
             }
-            return toAdd.length > 0 ? [...prev, ...toAdd] : prev;
+            return [contact, ...prev];
           });
-
-          if (activity) {
-            setActivities((prev) => {
-              if (prev.some((a) => a.activityId === activity.activityId)) return prev;
-              return [activity, ...prev];
-            });
-          }
         }
 
-        if (data.allThreadMessages && typeof data.allThreadMessages === 'object') {
-          const allMsgList: Message[] = Object.values(data.allThreadMessages).flat() as Message[];
-          if (allMsgList.length > 0) {
-            setMessages((prev) => {
-              const toAdd = allMsgList.filter((m) => m && !prev.some((p) => p.messageId === m.messageId));
-              return toAdd.length > 0 ? [...prev, ...toAdd] : prev;
-            });
+        if (lead) {
+          setLeads((prev) => {
+            const idx = prev.findIndex(
+              (l) => l.leadId === lead.leadId || l.contactId === lead.contactId
+            );
+            if (idx >= 0) {
+              const next = [...prev];
+              const updated = { ...next[idx], ...lead };
+              next.splice(idx, 1);
+              return [updated, ...next];
+            }
+            return [lead, ...prev];
+          });
+        }
+
+        if (conversation) {
+          setConversations((prev) => {
+            const idx = prev.findIndex(
+              (c) =>
+                c.conversationId === conversation.conversationId ||
+                (conversation.emailThreadId && c.emailThreadId === conversation.emailThreadId)
+            );
+            if (idx >= 0) {
+              const next = [...prev];
+              const updated = {
+                ...next[idx],
+                ...conversation,
+                lastMessageAt: conversation.lastMessageAt,
+                lastMessageText: conversation.lastMessageText,
+              };
+              next.splice(idx, 1);
+              return [updated, ...next];
+            }
+            return [conversation, ...prev];
+          });
+        }
+
+        const threadMsgs: Message[] = Array.isArray(item.crmEntities?.allThreadMessages) && item.crmEntities.allThreadMessages.length > 0
+          ? item.crmEntities.allThreadMessages
+          : ([incomingMessage, aiReplyMessage].filter(Boolean) as Message[]);
+
+        setMessages((prev) => {
+          let updated = [...prev];
+          for (const msg of threadMsgs) {
+            if (!msg) continue;
+            const existingIdx = updated.findIndex((m) => m.messageId === msg.messageId || (msg.gmailMessageId && m.gmailMessageId === msg.gmailMessageId && !m.gmailMessageId.startsWith('<out-')));
+            if (existingIdx >= 0) {
+              updated[existingIdx] = { ...updated[existingIdx], ...msg };
+            } else {
+              updated.push(msg);
+            }
           }
+          return updated;
+        });
+
+        if (activity) {
+          setActivities((prev) => {
+            if (prev.some((a) => a.activityId === activity.activityId)) return prev;
+            return [activity, ...prev];
+          });
+        }
+
+        if (isFirebaseConfigured && db) {
+          try {
+            if (incomingMessage) {
+              setDoc(doc(db, 'messages', incomingMessage.messageId), sanitizeDoc(incomingMessage), { merge: true }).catch(() => {});
+            }
+            if (aiReplyMessage) {
+              setDoc(doc(db, 'messages', aiReplyMessage.messageId), sanitizeDoc(aiReplyMessage), { merge: true }).catch(() => {});
+            }
+            if (conversation) {
+              setDoc(doc(db, 'conversations', conversation.conversationId), sanitizeDoc(conversation), { merge: true }).catch(() => {});
+            }
+          } catch {}
+        }
+      }
+
+      if (data.allThreadMessages && typeof data.allThreadMessages === 'object') {
+        const allMsgList: Message[] = Object.values(data.allThreadMessages).flat() as Message[];
+        if (allMsgList.length > 0) {
+          setMessages((prev) => {
+            const toAdd = allMsgList.filter((m) => m && !prev.some((p) => p.messageId === m.messageId));
+            return toAdd.length > 0 ? [...prev, ...toAdd] : prev;
+          });
         }
       }
     } catch (e) {
@@ -447,6 +473,185 @@ export default function App() {
     return () => clearInterval(interval);
   }, [syncWithBackendInbound]);
 
+  // Active AI Auto-Reply Engine: checks for any unreplied inbound customer messages in AI-enabled threads
+  const autoRepliedTurnsRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (conversations.length === 0 || messages.length === 0) return;
+
+    for (const conv of conversations) {
+      if (!conv.aiEnabled || conv.humanHandoff) continue;
+
+      const threadMsgs = messages.filter((m) => m.conversationId === conv.conversationId);
+      if (threadMsgs.length === 0) continue;
+
+      const lastMsg = threadMsgs[threadMsgs.length - 1];
+      if (
+        lastMsg &&
+        lastMsg.direction === 'INBOUND' &&
+        (lastMsg.senderType === 'CUSTOMER' || lastMsg.senderType === 'PROSPECT') &&
+        !lastMsg.aiReplied
+      ) {
+        const turnKey = `${conv.conversationId}-${lastMsg.messageId}`;
+        if (autoRepliedTurnsRef.current.has(turnKey)) continue;
+        autoRepliedTurnsRef.current.add(turnKey);
+
+        const foundContact = contacts.find((c) => c.contactId === conv.contactId);
+        const targetRecipientEmail = (
+          foundContact?.email ||
+          lastMsg.senderEmail ||
+          lastMsg.emailMeta?.from ||
+          (conv.emailThreadId?.includes('@') ? conv.emailThreadId.split('thread-')[1] : '') ||
+          (conv.conversationId?.includes('@') ? conv.conversationId.replace('conv-', '').replace(/_/g, '.') : '') ||
+          ''
+        ).trim();
+        const recipientEmail = targetRecipientEmail.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/)?.[0] || targetRecipientEmail;
+
+        const contact: Contact = {
+          contactId: foundContact?.contactId || conv.contactId || `contact-${Date.now()}`,
+          firstName: foundContact?.firstName || (lastMsg.senderName ? lastMsg.senderName.split(' ')[0] : 'Customer'),
+          lastName: foundContact?.lastName || (lastMsg.senderName ? lastMsg.senderName.split(' ').slice(1).join(' ') : ''),
+          email: recipientEmail,
+          phone: foundContact?.phone || '',
+          companyName: foundContact?.companyName || 'Umrah Travel Agency',
+          jobTitle: foundContact?.jobTitle || 'Tour Operator',
+          createdAt: foundContact?.createdAt || new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          lastActivityAt: new Date().toISOString(),
+        };
+        const lead = leads.find((l) => l.leadId === conv.leadId);
+
+        generateOmnichannelResponse({
+          incomingMessage: lastMsg.text,
+          contact,
+          lead,
+          conversation: conv,
+          recentMessages: threadMsgs,
+          knowledgeDocs,
+          signature: settings.emailSignature,
+        }).then(async (aiResult) => {
+          const replyNowIso = new Date().toISOString();
+          const inReplyTo = lastMsg.gmailMessageId || lastMsg.emailMeta?.messageId || lastMsg.messageId;
+          const aiMsg: Message = {
+            messageId: `msg-ai-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+            gmailMessageId: `<ai-reply-${Date.now()}@umrah360.in>`,
+            conversationId: conv.conversationId,
+            channel: conv.channel,
+            direction: 'OUTBOUND',
+            senderType: 'AI',
+            senderName: 'Umrah360 AI',
+            senderEmail: 'sales@umrah360.in',
+            text: aiResult.responseText,
+            timestamp: replyNowIso,
+            sentAt: replyNowIso,
+            receivedAt: replyNowIso,
+            createdAt: replyNowIso,
+            aiProcessed: true,
+            aiGenerated: true,
+            confidence: aiResult.confidence,
+            knowledgeSources: aiResult.knowledgeSources || [],
+            emailMeta: conv.channel === 'EMAIL' ? {
+              subject: lastMsg.emailMeta?.subject
+                ? (lastMsg.emailMeta.subject.toLowerCase().startsWith('re:') ? lastMsg.emailMeta.subject : `Re: ${lastMsg.emailMeta.subject}`)
+                : 'Re: Umrah360 - Automate B2B Packages & Visa Operations',
+              from: 'sales@umrah360.in',
+              to: recipientEmail || 'sales@umrah360.in',
+              inReplyTo,
+              references: inReplyTo ? [inReplyTo] : undefined,
+              messageId: `<ai-reply-${Date.now()}@umrah360.in>`,
+            } : undefined,
+          };
+
+          const updatedLastMsg: Message = {
+            ...lastMsg,
+            aiReplied: true,
+            repliedAt: replyNowIso,
+            repliedByMessageId: aiMsg.messageId,
+          };
+
+          // Dispatch real email to customer over live SMTP
+          if (conv.channel === 'EMAIL' && recipientEmail) {
+            try {
+              const sendRes = await fetch('/api/email/send', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  to: recipientEmail,
+                  subject: aiMsg.emailMeta?.subject || `Re: ${lastMsg.emailMeta?.subject || 'Umrah360 Platform'}`,
+                  text: aiResult.responseText,
+                  inReplyTo: inReplyTo || lastMsg.messageId,
+                  references: inReplyTo ? [inReplyTo] : undefined,
+                  conversationId: conv.conversationId,
+                  gmailThreadId: conv.gmailThreadId || conv.emailThreadId,
+                  senderName: 'Umrah360 AI Automation',
+                }),
+              });
+              let sendData: any = {};
+              try {
+                const rawText = await sendRes.text();
+                sendData = rawText ? JSON.parse(rawText) : {};
+              } catch {
+                sendData = { error: `Server returned non-JSON response (${sendRes.status})` };
+              }
+
+              if (sendRes.ok && sendData?.messageId) {
+                aiMsg.gmailMessageId = sendData.messageId;
+                aiMsg.smtpStatus = 'DELIVERED';
+                if (aiMsg.emailMeta) {
+                  aiMsg.emailMeta.messageId = sendData.messageId;
+                }
+              } else {
+                aiMsg.smtpStatus = 'DELIVERY_FAILED';
+                aiMsg.smtpError = sendData?.error || `SMTP Delivery Failed (HTTP ${sendRes.status})`;
+              }
+            } catch (smtpErr: any) {
+              aiMsg.smtpStatus = 'DELIVERY_FAILED';
+              aiMsg.smtpError = smtpErr?.message || 'SMTP Connection Error';
+              console.warn('[AI Email Dispatch] Notice dispatching auto-reply email:', smtpErr);
+            }
+          }
+
+          if (isFirebaseConfigured && db) {
+            try {
+              await setDoc(doc(db, 'messages', lastMsg.messageId), sanitizeDoc(updatedLastMsg), { merge: true });
+              await setDoc(doc(db, 'messages', aiMsg.messageId), sanitizeDoc(aiMsg));
+              await setDoc(
+                doc(db, 'conversations', conv.conversationId),
+                sanitizeDoc({
+                  lastMessageAt: replyNowIso,
+                  lastMessageText: aiMsg.text.slice(0, 120),
+                  updatedAt: replyNowIso,
+                }),
+                { merge: true }
+              );
+            } catch (e) {
+              console.warn('Firestore auto-reply sync notice:', e);
+            }
+          }
+
+          setMessages((prev) => [
+            ...prev.map((m) => (m.messageId === lastMsg.messageId ? updatedLastMsg : m)),
+            aiMsg,
+          ]);
+
+          setConversations((prev) =>
+            prev.map((c) =>
+              c.conversationId === conv.conversationId
+                ? {
+                    ...c,
+                    lastMessageAt: replyNowIso,
+                    lastMessageText: aiMsg.text,
+                    updatedAt: replyNowIso,
+                  }
+                : c
+            )
+          );
+        }).catch((err) => {
+          console.warn('[Auto-Reply Engine] Error generating auto-reply:', err);
+        });
+      }
+    }
+  }, [conversations, messages, contacts, leads, knowledgeDocs, settings.emailSignature]);
+
   // Handle message sending (Manual or Inbound / Outbound reply)
   const handleSendMessage = async (
     conversationId: string,
@@ -456,31 +661,44 @@ export default function App() {
     const conv = conversations.find((c) => c.conversationId === conversationId);
     if (!conv) return;
 
-    const contact = contacts.find((c) => c.contactId === conv.contactId);
-    const lead = leads.find((l) => l.leadId === conv.leadId);
-    const nowIso = new Date().toISOString();
-
     const threadMsgs = messages.filter((m) => m.conversationId === conversationId);
     const lastIncoming = [...threadMsgs].reverse().find((m) => m.senderType === 'CUSTOMER' || m.senderType === 'PROSPECT');
     const inReplyTo = lastIncoming?.gmailMessageId || lastIncoming?.emailMeta?.messageId;
     const gmailThreadId = conv.gmailThreadId || conv.emailThreadId || `thread-${conversationId}`;
+    const nowIso = new Date().toISOString();
+
+    const foundContact = contacts.find((c) => c.contactId === conv.contactId);
+    const targetRecipientEmail = (
+      foundContact?.email ||
+      lastIncoming?.senderEmail ||
+      lastIncoming?.emailMeta?.from ||
+      (conv.emailThreadId?.includes('@') ? conv.emailThreadId.split('thread-')[1] : '') ||
+      (conv.conversationId?.includes('@') ? conv.conversationId.replace('conv-', '').replace(/_/g, '.') : '') ||
+      ''
+    ).trim();
+    const recipientEmail = targetRecipientEmail.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/)?.[0] || targetRecipientEmail;
+
+    const contact: Contact = {
+      contactId: foundContact?.contactId || conv.contactId || `contact-${Date.now()}`,
+      firstName: foundContact?.firstName || ((senderType === 'CUSTOMER' || senderType === 'PROSPECT') ? (lastIncoming?.senderName ? lastIncoming.senderName.split(' ')[0] : 'Customer') : 'Tour'),
+      lastName: foundContact?.lastName || ((senderType === 'CUSTOMER' || senderType === 'PROSPECT') ? (lastIncoming?.senderName ? lastIncoming.senderName.split(' ').slice(1).join(' ') : '') : 'Operator'),
+      email: recipientEmail,
+      phone: foundContact?.phone || '',
+      companyName: foundContact?.companyName || 'Umrah Travel Agency',
+      jobTitle: foundContact?.jobTitle || 'Tour Operator',
+      createdAt: foundContact?.createdAt || nowIso,
+      updatedAt: nowIso,
+      lastActivityAt: nowIso,
+    };
+    const lead = leads.find((l) => l.leadId === conv.leadId);
 
     let sentGmailMessageId = `<out-${Date.now()}@amaavigo.com>`;
 
-    // If sending an email manually or automated over live SMTP
-    const recipientEmail = contact?.email || conv.customerEmail;
-    const shouldSendLiveEmail =
-      (conv.channel === 'EMAIL' || conv.channel === 'WEBSITE') &&
-      (senderType === 'AGENT' || senderType === 'AI') &&
-      Boolean(recipientEmail && recipientEmail.includes('@') && !recipientEmail.includes('@placeholder'));
-
-    let deliveryStatus: 'DELIVERED' | 'FAILED' | 'PENDING' = 'PENDING';
-    let smtpDeliveredId: string | undefined = undefined;
-
-    if (shouldSendLiveEmail && recipientEmail) {
+    // If sending an email manually over SMTP
+    if (conv.channel === 'EMAIL' && senderType === 'AGENT' && recipientEmail) {
       const subject = lastIncoming?.emailMeta?.subject
         ? (lastIncoming.emailMeta.subject.toLowerCase().startsWith('re:') ? lastIncoming.emailMeta.subject : `Re: ${lastIncoming.emailMeta.subject}`)
-        : (conv.subject ? (conv.subject.startsWith('Re:') ? conv.subject : `Re: ${conv.subject}`) : 'Re: Umrah360 Demo Request & Walkthrough');
+        : 'Re: Umrah360 - Automate B2B Packages & Visa Operations';
 
       try {
         const sendRes = await fetch('/api/email/send', {
@@ -494,20 +712,14 @@ export default function App() {
             references: inReplyTo ? [inReplyTo] : undefined,
             conversationId,
             gmailThreadId,
-            senderName: senderType === 'AGENT' ? (currentUser?.name || 'Umrah360 Agent') : 'Umrah360 Automation',
           }),
         });
         const sendData = await sendRes.json();
-        if (sendData.success && sendData.messageId) {
+        if (sendData.messageId) {
           sentGmailMessageId = sendData.messageId;
-          smtpDeliveredId = sendData.messageId;
-          deliveryStatus = 'DELIVERED';
-        } else {
-          deliveryStatus = 'FAILED';
         }
       } catch (err) {
         console.warn('Live email dispatch notice:', err);
-        deliveryStatus = 'FAILED';
       }
     }
 
@@ -516,10 +728,6 @@ export default function App() {
     const newMsg: Message = {
       messageId: `msg-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
       gmailMessageId: sentGmailMessageId,
-      smtpMessageId: smtpDeliveredId,
-      recipientEmail: recipientEmail,
-      deliveryStatus: shouldSendLiveEmail ? deliveryStatus : undefined,
-      emailDeliveredAt: deliveryStatus === 'DELIVERED' ? nowIso : undefined,
       gmailThreadId,
       conversationId,
       channel: conv.channel,
@@ -539,13 +747,13 @@ export default function App() {
       receivedAt: nowIso,
       createdAt: nowIso,
       emailMeta:
-        conv.channel === 'EMAIL' || shouldSendLiveEmail
+        conv.channel === 'EMAIL'
           ? {
               subject: lastIncoming?.emailMeta?.subject
                 ? (lastIncoming.emailMeta.subject.toLowerCase().startsWith('re:') ? lastIncoming.emailMeta.subject : `Re: ${lastIncoming.emailMeta.subject}`)
                 : 'Re: Umrah360 - Automate B2B Packages & Visa Operations',
-              from: senderType === 'AGENT' ? 'sales@umrah360.in' : contact?.email,
-              to: senderType === 'AGENT' ? recipientEmail : 'sales@umrah360.in',
+              from: senderType === 'AGENT' ? 'sales@umrah360.in' : (contact?.email || 'sales@umrah360.in'),
+              to: senderType === 'AGENT' ? (contact?.email || 'sales@umrah360.in') : 'sales@umrah360.in',
               messageId: sentGmailMessageId,
               inReplyTo,
               references: inReplyTo ? [inReplyTo] : undefined,
@@ -556,22 +764,14 @@ export default function App() {
     // Save to Firestore BEFORE local state update to ensure persistent state of truth
     if (isFirebaseConfigured && db) {
       try {
-        await setDoc(doc(db, 'messages', newMsg.messageId), newMsg);
+        await setDoc(doc(db, 'messages', newMsg.messageId), sanitizeDoc(newMsg));
         await setDoc(
           doc(db, 'conversations', conversationId),
-          {
+          sanitizeDoc({
             lastMessageAt: newMsg.timestamp,
             lastMessageText: newMsg.text.slice(0, 120),
             updatedAt: newMsg.timestamp,
-            ...(deliveryStatus === 'DELIVERED'
-              ? {
-                  thankYouEmailSent: true,
-                  thankYouEmailDeliveredAt: nowIso,
-                  thankYouSmtpMessageId: sentGmailMessageId,
-                  customerEmail: recipientEmail,
-                }
-              : {}),
-          },
+          }),
           { merge: true }
         );
       } catch (e) {
@@ -591,14 +791,6 @@ export default function App() {
               lastMessageAt: newMsg.timestamp,
               lastMessageText: newMsg.text,
               updatedAt: newMsg.timestamp,
-              ...(deliveryStatus === 'DELIVERED'
-                ? {
-                    thankYouEmailSent: true,
-                    thankYouEmailDeliveredAt: nowIso,
-                    thankYouSmtpMessageId: sentGmailMessageId,
-                    customerEmail: recipientEmail,
-                  }
-                : {}),
             }
           : c
       )
@@ -615,7 +807,6 @@ export default function App() {
       !newMsg.aiReplied
     ) {
       setTimeout(async () => {
-        if (!contact) return;
         const aiResult = await generateOmnichannelResponse({
           incomingMessage: text,
           contact,
@@ -628,7 +819,8 @@ export default function App() {
 
         const replyNowIso = new Date().toISOString();
         const aiMsg: Message = {
-          messageId: `msg-ai-${Date.now()}`,
+          messageId: `msg-ai-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          gmailMessageId: `<ai-reply-${Date.now()}@umrah360.in>`,
           conversationId,
           channel: conv.channel,
           direction: 'OUTBOUND',
@@ -637,10 +829,23 @@ export default function App() {
           senderEmail: 'sales@umrah360.in',
           text: aiResult.responseText,
           timestamp: replyNowIso,
+          sentAt: replyNowIso,
+          receivedAt: replyNowIso,
+          createdAt: replyNowIso,
           aiProcessed: true,
           aiGenerated: true,
           confidence: aiResult.confidence,
-          knowledgeSources: aiResult.knowledgeSources,
+          knowledgeSources: aiResult.knowledgeSources || [],
+          emailMeta: conv.channel === 'EMAIL' ? {
+            subject: lastIncoming?.emailMeta?.subject
+              ? (lastIncoming.emailMeta.subject.toLowerCase().startsWith('re:') ? lastIncoming.emailMeta.subject : `Re: ${lastIncoming.emailMeta.subject}`)
+              : 'Re: Umrah360 - Automate B2B Packages & Visa Operations',
+            from: 'sales@umrah360.in',
+            to: contact.email || 'sales@umrah360.in',
+            inReplyTo: inReplyTo || newMsg.messageId,
+            references: inReplyTo ? [inReplyTo] : undefined,
+            messageId: `<ai-reply-${Date.now()}@umrah360.in>`,
+          } : undefined,
         };
 
         // Mark incoming message as replied
@@ -648,10 +853,61 @@ export default function App() {
         newMsg.repliedAt = replyNowIso;
         newMsg.repliedByMessageId = aiMsg.messageId;
 
+        // Dispatch real email to customer over live SMTP
+        if (conv.channel === 'EMAIL' && contact.email) {
+          try {
+            const sendRes = await fetch('/api/email/send', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                to: contact.email,
+                subject: aiMsg.emailMeta?.subject || `Re: ${lastIncoming?.emailMeta?.subject || 'Umrah360 Platform'}`,
+                text: aiResult.responseText,
+                inReplyTo: inReplyTo || newMsg.messageId,
+                references: inReplyTo ? [inReplyTo] : undefined,
+                conversationId: conv.conversationId,
+                gmailThreadId: conv.gmailThreadId || conv.emailThreadId,
+                senderName: 'Umrah360 AI Automation',
+              }),
+            });
+            let sendData: any = {};
+            try {
+              const rawText = await sendRes.text();
+              sendData = rawText ? JSON.parse(rawText) : {};
+            } catch {
+              sendData = { error: `Server returned non-JSON response (${sendRes.status})` };
+            }
+
+            if (sendRes.ok && sendData?.messageId) {
+              aiMsg.gmailMessageId = sendData.messageId;
+              aiMsg.smtpStatus = 'DELIVERED';
+              if (aiMsg.emailMeta) {
+                aiMsg.emailMeta.messageId = sendData.messageId;
+              }
+            } else {
+              aiMsg.smtpStatus = 'DELIVERY_FAILED';
+              aiMsg.smtpError = sendData?.error || `SMTP Delivery Failed (HTTP ${sendRes.status})`;
+            }
+          } catch (smtpErr: any) {
+            aiMsg.smtpStatus = 'DELIVERY_FAILED';
+            aiMsg.smtpError = smtpErr?.message || 'SMTP Connection Error';
+            console.warn('[AI Email Dispatch] Notice dispatching AI reply email:', smtpErr);
+          }
+        }
+
         if (isFirebaseConfigured && db) {
           try {
-            await setDoc(doc(db, 'messages', newMsg.messageId), newMsg, { merge: true });
-            await setDoc(doc(db, 'messages', aiMsg.messageId), aiMsg);
+            await setDoc(doc(db, 'messages', newMsg.messageId), sanitizeDoc(newMsg), { merge: true });
+            await setDoc(doc(db, 'messages', aiMsg.messageId), sanitizeDoc(aiMsg));
+            await setDoc(
+              doc(db, 'conversations', conversationId),
+              sanitizeDoc({
+                lastMessageAt: replyNowIso,
+                lastMessageText: aiMsg.text.slice(0, 120),
+                updatedAt: replyNowIso,
+              }),
+              { merge: true }
+            );
           } catch (e) {
             console.warn('Firestore write warning:', e);
           }
@@ -1084,6 +1340,9 @@ export default function App() {
     const subject = draft.subject || 'Re: Umrah360 Inquiry';
     const nowIso = new Date().toISOString();
 
+    let approvedSmtpStatus: 'DELIVERED' | 'DELIVERY_FAILED' = 'DELIVERED';
+    let approvedSmtpError: string | undefined = undefined;
+
     try {
       const res = await fetch('/api/email/send', {
         method: 'POST',
@@ -1096,7 +1355,18 @@ export default function App() {
           gmailThreadId: conv.gmailThreadId || conv.emailThreadId,
         }),
       });
-      const sendResult = await res.json();
+      let sendResult: any = {};
+      try {
+        const rawText = await res.text();
+        sendResult = rawText ? JSON.parse(rawText) : {};
+      } catch {
+        sendResult = { error: `Server returned non-JSON response (${res.status})` };
+      }
+
+      if (!res.ok || !sendResult.success) {
+        approvedSmtpStatus = 'DELIVERY_FAILED';
+        approvedSmtpError = sendResult.error || `SMTP Delivery Failed (HTTP ${res.status})`;
+      }
 
       const aiMsgId = sendResult.messageId || `<reply-approved-${Date.now()}@amaavigo.com>`;
       const approvedMsg: Message = {
@@ -1123,6 +1393,8 @@ export default function App() {
           to: toEmail,
           messageId: aiMsgId,
         },
+        smtpStatus: approvedSmtpStatus,
+        smtpError: approvedSmtpError,
       };
 
       setMessages((prev) => [...prev, approvedMsg]);
@@ -1329,7 +1601,7 @@ export default function App() {
     currentUser.allowedModules.includes(activeTab);
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col">
+    <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col font-sans selection:bg-orange-500/20 selection:text-orange-900">
       <Navbar
         activeTab={activeTab}
         setActiveTab={setActiveTab}

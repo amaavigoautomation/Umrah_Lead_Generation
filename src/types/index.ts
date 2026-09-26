@@ -128,6 +128,7 @@ export interface Campaign {
   name: string;
   type: CampaignType;
   campaignMode?: 'PREDEFINED' | 'AI_GENERATED';
+  deliveryMode?: 'LIVE_IMAP' | 'SIMULATED' | 'SMTP' | string;
   status: 'DRAFT' | 'RUNNING' | 'PAUSED' | 'COMPLETED' | 'FAILED';
   templateId?: string;
   templateName?: string;
@@ -144,6 +145,7 @@ export interface Campaign {
   startedAt?: string;
   completedAt?: string;
   lastRunNumber?: number;
+  lastError?: string;
   stats?: {
     totalLeads: number;
     sent: number;
@@ -281,6 +283,11 @@ export interface Conversation {
   humanHandoff: boolean;
   managementMode?: 'AI' | 'HUMAN';
   conversationSummary?: string;
+  subject?: string;
+  thankYouEmailSent?: boolean;
+  thankYouEmailDeliveredAt?: string;
+  thankYouSmtpMessageId?: string;
+  customerEmail?: string;
   memory?: ConversationMemory;
   startedAt: string;
   lastMessageAt: string;
@@ -289,7 +296,6 @@ export interface Conversation {
   isRead?: boolean;
   readAt?: string | null;
   unread?: boolean;
-  subject?: string;
   emailThreadId?: string;
   gmailThreadId?: string;
   draftReply?: {
@@ -299,10 +305,6 @@ export interface Conversation {
     generatedAt: string;
     status: 'PENDING' | 'APPROVED' | 'DISCARDED';
   };
-  thankYouEmailSent?: boolean;
-  thankYouEmailDeliveredAt?: string;
-  thankYouSmtpMessageId?: string;
-  customerEmail?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -315,10 +317,6 @@ export interface Message {
   senderName: string;
   senderEmail?: string;
   recipientEmail?: string;
-  deliveryStatus?: 'DELIVERED' | 'FAILED' | 'PENDING';
-  smtpMessageId?: string;
-  emailDeliveredAt?: string;
-  deliveryError?: string;
   text: string;
   timestamp: string;
   gmailMessageId?: string;
@@ -347,6 +345,11 @@ export interface Message {
     inReplyTo?: string;
     references?: string[];
   };
+  smtpStatus?: 'DELIVERED' | 'DELIVERY_FAILED' | 'DELIVERY_QUEUED' | 'SIMULATED';
+  smtpError?: string;
+  smtpMessageId?: string;
+  deliveryStatus?: 'DELIVERED' | 'FAILED' | 'PENDING' | 'QUEUED' | string;
+  emailDeliveredAt?: string;
 }
 
 export interface EmailThread {

@@ -198,23 +198,23 @@ export const KnowledgeBaseView: React.FC<KnowledgeBaseViewProps> = ({
       )}
 
       {/* KB Header & Controls */}
-      <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 shadow-lg flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+      <div className="bg-white border border-slate-200/90 rounded-2xl p-6 shadow-sm flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         <div>
           <div className="flex items-center space-x-2">
-            <BookOpen className="w-6 h-6 text-emerald-500" />
-            <h2 className="text-xl font-bold text-white">Official Umrah360 Knowledge Base</h2>
+            <BookOpen className="w-6 h-6 text-orange-500" />
+            <h2 className="text-xl font-extrabold text-slate-900">Official Umrah 360 Knowledge Base</h2>
           </div>
-          <p className="text-xs text-slate-400 mt-1 max-w-2xl">
+          <p className="text-xs text-slate-500 mt-1 max-w-2xl font-medium">
             Ground truth repository for all AI Inbound email auto-replies, WhatsApp dialogues, website leads, and AI testing.
-            All <span className="text-emerald-400 font-semibold">PUBLISHED</span> articles are automatically active in RAG with <span className="text-blue-400 font-medium">0ms in-memory latency</span>.
+            All <span className="text-orange-600 font-bold">PUBLISHED</span> articles are automatically active in RAG with <span className="text-slate-900 font-bold">0ms in-memory latency</span>.
           </p>
         </div>
 
         <div className="flex items-center space-x-3">
-          <div className="hidden sm:flex items-center space-x-2 px-3 py-1.5 rounded-lg bg-slate-800/80 border border-slate-700/80 text-xs">
-            <Database className="w-3.5 h-3.5 text-purple-400" />
-            <span className="text-slate-300">
-              <span className="font-bold text-emerald-400">{publishedCount}</span> / {documents.length} Published
+          <div className="hidden sm:flex items-center space-x-2 px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200 text-xs">
+            <Database className="w-3.5 h-3.5 text-orange-500" />
+            <span className="text-slate-700 font-medium">
+              <span className="font-extrabold text-orange-600">{publishedCount}</span> / {documents.length} Published
             </span>
           </div>
 
@@ -229,7 +229,7 @@ export const KnowledgeBaseView: React.FC<KnowledgeBaseViewProps> = ({
               });
               setIsModalOpen(true);
             }}
-            className="flex items-center space-x-1.5 px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold transition shadow-sm"
+            className="flex items-center space-x-1.5 px-4 py-2 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-xs font-bold transition shadow-md shadow-orange-500/20"
           >
             <Plus className="w-4 h-4" />
             <span>Create Article</span>
@@ -240,9 +240,9 @@ export const KnowledgeBaseView: React.FC<KnowledgeBaseViewProps> = ({
       {/* Main Grid: Articles Browser & Article Inspector */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left 1 Col: Articles List */}
-        <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-lg flex flex-col h-[calc(100vh-20rem)]">
+        <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm flex flex-col h-[calc(100vh-20rem)]">
           {/* Search & Category Filter */}
-          <div className="p-3 border-b border-slate-800 space-y-2">
+          <div className="p-3.5 border-b border-slate-100 bg-slate-50 space-y-2">
             <div className="relative">
               <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
               <input
@@ -250,7 +250,7 @@ export const KnowledgeBaseView: React.FC<KnowledgeBaseViewProps> = ({
                 placeholder="Search KB by title or tag..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full bg-slate-800 border border-slate-700 rounded-lg pl-9 pr-3 py-1.5 text-xs text-slate-200 placeholder:text-slate-500 focus:outline-none focus:border-emerald-500"
+                className="w-full bg-white border border-slate-200 rounded-xl pl-9 pr-3 py-1.5 text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-orange-500 font-medium"
               />
             </div>
 
@@ -259,10 +259,10 @@ export const KnowledgeBaseView: React.FC<KnowledgeBaseViewProps> = ({
                 <button
                   key={cat}
                   onClick={() => setCategoryFilter(cat)}
-                  className={`px-2 py-0.5 rounded font-medium transition ${
+                  className={`px-2.5 py-1 rounded-lg font-bold transition ${
                     categoryFilter === cat
-                      ? 'bg-emerald-600 text-white'
-                      : 'bg-slate-800 text-slate-400 hover:text-slate-200'
+                      ? 'bg-orange-500 text-white'
+                      : 'bg-white border border-slate-200 text-slate-600 hover:text-slate-900'
                   }`}
                 >
                   {cat}
@@ -272,9 +272,9 @@ export const KnowledgeBaseView: React.FC<KnowledgeBaseViewProps> = ({
           </div>
 
           {/* List of articles */}
-          <div className="flex-1 overflow-y-auto divide-y divide-slate-800/60">
+          <div className="flex-1 overflow-y-auto divide-y divide-slate-100 bg-white">
             {filteredDocs.length === 0 ? (
-              <div className="p-8 text-center text-slate-500 text-xs">
+              <div className="p-8 text-center text-slate-400 text-xs font-medium">
                 No matching articles found. Click &quot;Create Article&quot; to add one.
               </div>
             ) : (
@@ -287,36 +287,36 @@ export const KnowledgeBaseView: React.FC<KnowledgeBaseViewProps> = ({
                     onClick={() => setSelectedDocId(doc.id)}
                     className={`p-3.5 cursor-pointer transition ${
                       isSelected
-                        ? 'bg-slate-800/90 border-l-4 border-emerald-500'
-                        : 'hover:bg-slate-800/40'
+                        ? 'bg-orange-50/80 border-l-4 border-orange-500'
+                        : 'hover:bg-slate-50'
                     }`}
                   >
                     <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-semibold text-emerald-400 uppercase tracking-wider">
+                      <span className="text-[10px] font-bold text-orange-600 uppercase tracking-wider">
                         {doc.category}
                       </span>
-                      <span className="text-[10px] text-slate-500">v{doc.version || 1}</span>
+                      <span className="text-[10px] text-slate-400 font-medium">v{doc.version || 1}</span>
                     </div>
 
-                    <h4 className="font-semibold text-xs text-slate-100 mt-1 line-clamp-1">
+                    <h4 className="font-bold text-xs text-slate-900 mt-1 line-clamp-1">
                       {doc.title}
                     </h4>
 
-                    <p className="text-[11px] text-slate-400 mt-1 line-clamp-2 leading-relaxed">
+                    <p className="text-[11px] text-slate-500 mt-1 line-clamp-2 leading-relaxed font-medium">
                       {doc.content}
                     </p>
 
-                    <div className="flex items-center justify-between mt-2 pt-1 border-t border-slate-800/40 text-[10px]">
+                    <div className="flex items-center justify-between mt-2 pt-1 border-t border-slate-100 text-[10px]">
                       <span
-                        className={`px-1.5 py-0.5 rounded font-medium ${
+                        className={`px-2 py-0.5 rounded-full font-bold ${
                           doc.status === 'PUBLISHED'
-                            ? 'text-emerald-400 bg-emerald-500/10'
-                            : 'text-amber-400 bg-amber-500/10'
+                            ? 'text-orange-700 bg-orange-100 border border-orange-200'
+                            : 'text-slate-600 bg-slate-100 border border-slate-200'
                         }`}
                       >
                         {doc.status}
                       </span>
-                      <span className="text-slate-500">{doc.tags.slice(0, 2).join(', ')}</span>
+                      <span className="text-slate-400 font-medium">{doc.tags.slice(0, 2).join(', ')}</span>
                     </div>
                   </div>
                 );
@@ -329,25 +329,25 @@ export const KnowledgeBaseView: React.FC<KnowledgeBaseViewProps> = ({
         <div className="lg:col-span-2 space-y-6">
           {/* Article View Card */}
           {selectedDoc ? (
-            <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 shadow-lg space-y-4">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-800 pb-4 gap-3">
+            <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-100 pb-4 gap-3">
                 <div>
                   <div className="flex items-center space-x-3">
-                    <span className="text-xs font-bold text-emerald-400 uppercase">
+                    <span className="text-xs font-extrabold text-orange-600 uppercase">
                       {selectedDoc.category}
                     </span>
                     {renderStatusBadge(selectedDoc.status)}
                   </div>
-                  <h3 className="text-lg font-bold text-white mt-1">{selectedDoc.title}</h3>
+                  <h3 className="text-lg font-extrabold text-slate-900 mt-1">{selectedDoc.title}</h3>
                 </div>
 
                 <div className="flex items-center space-x-2">
                   <button
                     onClick={() => handleToggleStatus(selectedDoc)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition ${
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition ${
                       selectedDoc.status === 'PUBLISHED'
-                        ? 'bg-amber-950/40 hover:bg-amber-900/60 text-amber-300 border-amber-800/60'
-                        : 'bg-emerald-950/40 hover:bg-emerald-900/60 text-emerald-300 border-emerald-800/60'
+                        ? 'bg-slate-100 hover:bg-slate-200 text-slate-800 border-slate-200'
+                        : 'bg-orange-500 hover:bg-orange-600 text-white border-orange-500'
                     }`}
                   >
                     {selectedDoc.status === 'PUBLISHED' ? 'Set to Draft' : 'Publish to RAG'}
@@ -358,7 +358,7 @@ export const KnowledgeBaseView: React.FC<KnowledgeBaseViewProps> = ({
                       setEditingDoc(selectedDoc);
                       setIsModalOpen(true);
                     }}
-                    className="flex items-center space-x-1 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium border border-slate-700 transition"
+                    className="flex items-center space-x-1 px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-black text-white text-xs font-bold transition"
                   >
                     <Edit2 className="w-3.5 h-3.5" />
                     <span>Edit</span>
@@ -367,7 +367,7 @@ export const KnowledgeBaseView: React.FC<KnowledgeBaseViewProps> = ({
                   {onDeleteDocument && (
                     <button
                       onClick={() => setDeleteCandidateDoc(selectedDoc)}
-                      className="p-1.5 rounded-lg bg-red-950/40 hover:bg-red-900/60 text-red-400 border border-red-800/60 transition flex items-center justify-center cursor-pointer"
+                      className="p-2 rounded-xl bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 transition flex items-center justify-center cursor-pointer"
                       title="Delete Article"
                     >
                       <Trash2 className="w-3.5 h-3.5" />

@@ -21,13 +21,14 @@ import nodemailer from 'nodemailer';
 
 const FIREBASE_PROJECT_ID = 'gen-lang-client-0376069258';
 const FIRESTORE_DATABASE_ID = 'ai-studio-379c884e-3360-468a-ad55-8105acbd3214';
+const FIREBASE_API_KEY = 'AIzaSyAcr6lIIH50XWD7CcmclWh9lxbPKO7TzBk';
 
 // Helper to write directly to Firestore REST API in serverless environments
 async function writeToFirestoreRest(collectionName: string, docId: string, data: Record<string, any>) {
   try {
     const firestoreUrl = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/${FIRESTORE_DATABASE_ID}/documents/${collectionName}/${encodeURIComponent(
       docId
-    )}`;
+    )}?key=${FIREBASE_API_KEY}`;
 
     const fields: Record<string, any> = {};
     for (const [key, value] of Object.entries(data)) {
@@ -72,31 +73,34 @@ async function writeToFirestoreRest(collectionName: string, docId: string, data:
   }
 }
 
-// Helper to retrieve live SMTP credentials from environment or Firestore settings/smtp
+// Helper to retrieve live SMTP credentials from environment, Firestore settings/smtp, or verified system fallback
 async function getLiveSmtpCredentials() {
   let host = process.env.SMTP_HOST || 'smtp.gmail.com';
-  let port = parseInt(process.env.SMTP_PORT || '465', 10);
+  let port = parseInt(process.env.SMTP_PORT || '587', 10);
   let secure = process.env.SMTP_SECURE === 'true' || port === 465;
   let user = process.env.SMTP_USER || 'amaavigo@gmail.com';
   let rawPass = process.env.SMTP_PASS || '';
 
-  // If environment variable is missing, fetch from Firestore settings/smtp
-  if (!rawPass) {
-    try {
-      const url = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/${FIRESTORE_DATABASE_ID}/documents/settings/smtp`;
-      const res = await fetch(url, { headers: { 'Content-Type': 'application/json' } });
-      if (res.ok) {
-        const docData = await res.json();
-        const f = docData.fields || {};
-        if (f.pass?.stringValue) rawPass = f.pass.stringValue;
-        if (f.user?.stringValue) user = f.user.stringValue;
-        if (f.host?.stringValue) host = f.host.stringValue;
-        if (f.port?.integerValue) port = parseInt(f.port.integerValue, 10);
-        secure = port === 465;
-      }
-    } catch (e) {
-      console.warn('[SMTP Credentials Fetch Notice]:', e);
+  // 1. If environment variable is missing, fetch from Firestore settings/smtp
+  try {
+    const url = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/${FIRESTORE_DATABASE_ID}/documents/settings/smtp?key=${FIREBASE_API_KEY}`;
+    const res = await fetch(url, { headers: { 'Content-Type': 'application/json' } });
+    if (res.ok) {
+      const docData = await res.json();
+      const f = docData.fields || {};
+      if (f.pass?.stringValue) rawPass = f.pass.stringValue;
+      if (f.user?.stringValue) user = f.user.stringValue;
+      if (f.host?.stringValue) host = f.host.stringValue;
+      if (f.port?.integerValue) port = parseInt(f.port.integerValue, 10);
+      secure = port === 465;
     }
+  } catch (e) {
+    console.warn('[SMTP Credentials Fetch Notice]:', e);
+  }
+
+  // 2. Production fallback password for amaavigo@gmail.com to guarantee serverless delivery
+  if (!rawPass) {
+    rawPass = 'czzkspuwwpxccceb';
   }
 
   const cleanPass = rawPass.replace(/\s+/g, '');
@@ -105,7 +109,7 @@ async function getLiveSmtpCredentials() {
   return { host, port, secure, user, pass: cleanPass, configured };
 }
 
-// Helper to send live auto-reply email via SMTP with relay fallback
+// Helper to send live auto-reply email via direct SMTP with multi-port fallback
 async function sendAutoReplyEmail(
   toEmail: string,
   fullName: string,
@@ -142,19 +146,35 @@ async function sendAutoReplyEmail(
     `https://umrah360.in`,
   ].join('\n');
 
-  // Attempt 1: Direct SMTP via Nodemailer
-  if (creds.configured) {
+  if (!creds.configured) {
+    console.error('[Auto-Reply SMTP Error] SMTP credentials not configured for sending.');
+    return { sent: false, error: 'SMTP credentials not configured', subject, textBody };
+  }
+
+  // Dual-port strategy for Vercel Serverless / AWS Lambda (Port 587 STARTTLS IPv4 is most reliable)
+  const attempts = [
+    { port: 587, secure: false, requireTLS: true, label: 'Port 587 (STARTTLS, IPv4)' },
+    { port: 465, secure: true, requireTLS: false, label: 'Port 465 (SMTPS, IPv4)' },
+    { port: 2525, secure: false, requireTLS: true, label: 'Port 2525 (Alternative, IPv4)' },
+  ];
+
+  let lastError = '';
+
+  for (const transportOpt of attempts) {
     try {
+      console.log(`[Auto-Reply Webhook] Dispatching email to ${toEmail} via ${transportOpt.label}...`);
       const transporter = nodemailer.createTransport({
         host: creds.host,
-        port: creds.port,
-        secure: creds.secure,
+        port: transportOpt.port,
+        secure: transportOpt.secure,
+        requireTLS: transportOpt.requireTLS,
+        family: 4, // CRITICAL: forces IPv4 to avoid AWS Lambda/Vercel IPv6 unreachable socket drop
         auth: { user: creds.user, pass: creds.pass },
         tls: { rejectUnauthorized: false },
-        connectionTimeout: 12000,
-        greetingTimeout: 10000,
-        socketTimeout: 15000,
-      });
+        connectionTimeout: 8000,
+        greetingTimeout: 6000,
+        socketTimeout: 10000,
+      } as any);
 
       const info = await transporter.sendMail({
         from: `Umrah360 Team <${creds.user}>`,
@@ -164,48 +184,16 @@ async function sendAutoReplyEmail(
         replyTo: creds.user,
       });
 
-      console.log(`[Auto-Reply Success] Sent demo confirmation to ${toEmail} (ID: ${info.messageId})`);
+      console.log(`[Auto-Reply Success] Delivered demo confirmation to ${toEmail} via ${transportOpt.label} (ID: ${info.messageId})`);
       return { sent: true, messageId: info.messageId, subject, textBody };
     } catch (err: any) {
-      console.warn(`[Auto-Reply Direct SMTP Notice] Direct transmission failed:`, err?.message);
+      lastError = err?.message || String(err);
+      console.warn(`[Auto-Reply SMTP ${transportOpt.label} Notice] Transmission attempt failed:`, lastError);
     }
   }
 
-  // Attempt 2: Relay through AI Studio Applet backend
-  try {
-    const relayUrls = [
-      'https://ais-pre-3xmgysisounf7552polmhz-894785851538.asia-southeast1.run.app/api/email/send',
-      'https://ais-dev-3xmgysisounf7552polmhz-894785851538.asia-southeast1.run.app/api/email/send',
-    ];
-
-    for (const relayUrl of relayUrls) {
-      try {
-        const relayRes = await fetch(relayUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            to: toEmail,
-            subject,
-            text: textBody,
-          }),
-        });
-
-        if (relayRes.ok) {
-          const relayData = await relayRes.json();
-          if (relayData.success !== false) {
-            console.log(`[Auto-Reply Relay Success] Sent demo confirmation via relay to ${toEmail}`);
-            return { sent: true, messageId: relayData.messageId || 'relayed', subject, textBody };
-          }
-        }
-      } catch (innerRelay) {
-        console.warn(`[Auto-Reply Relay Url Notice] Failed ${relayUrl}:`, innerRelay);
-      }
-    }
-  } catch (relayErr) {
-    console.warn('[Auto-Reply Relay Notice]:', relayErr);
-  }
-
-  return { sent: false, error: 'Could not deliver auto-reply email via direct SMTP or relay', subject, textBody };
+  console.error('[Auto-Reply Webhook Failed] Exhausted all direct SMTP ports for:', toEmail, 'Error:', lastError);
+  return { sent: false, error: `Could not deliver auto-reply email via direct SMTP: ${lastError}`, subject, textBody };
 }
 
 // Parse multipart/form-data text into a flat key-value dictionary
@@ -845,8 +833,9 @@ export default async function handler(
       // 4. Dispatch Auto-Reply Thank-You Email via SMTP
       let autoReplySent = false;
       let autoReplyText = '';
+      let mailResult: { sent: boolean; messageId?: string; textBody?: string; error?: string } | null = null;
       if (email && email.includes('@')) {
-        const mailResult = await sendAutoReplyEmail(
+        mailResult = await sendAutoReplyEmail(
           email,
           fullName,
           companyName,
@@ -892,7 +881,32 @@ export default async function handler(
             }),
           ]);
         } else {
-          console.warn('[Webhook Notice] Auto-reply was NOT sent, skipping writing outbound message to Unified Inbox:', mailResult.error);
+          console.error('[Webhook Notice] Auto-reply was NOT sent, recording FAILED status in Firestore:', mailResult.error);
+          const nowIsoFailed = new Date().toISOString();
+          const failedMessageData = {
+            messageId: autoReplyMsgId,
+            conversationId,
+            senderType: 'AI',
+            senderName: 'Umrah360 Automation',
+            channel: 'EMAIL',
+            direction: 'OUTBOUND',
+            recipientEmail: email,
+            deliveryStatus: 'FAILED',
+            deliveryError: mailResult.error || 'SMTP delivery failed on serverless',
+            text: autoReplyText,
+            timestamp: nowIsoFailed,
+            sentAt: nowIsoFailed,
+            receivedAt: nowIsoFailed,
+          };
+
+          await Promise.allSettled([
+            writeToFirestoreRest('messages', autoReplyMsgId, failedMessageData),
+            writeToFirestoreRest('conversations', conversationId, {
+              ...conversationData,
+              thankYouEmailSent: false,
+              customerEmail: email,
+            }),
+          ]);
         }
       } else {
         console.log('[Webhook Notice] No valid email address detected in form submission, skipping auto-reply email.');
@@ -908,6 +922,8 @@ export default async function handler(
             message: 'Website demo request successfully received, stored in CRM & Unified Inbox, and auto-reply dispatched.',
             leadId,
             autoReplySent,
+            autoReplyMessageId: mailResult?.messageId || null,
+            autoReplyError: mailResult?.sent ? null : (mailResult?.error || (email ? 'Email could not be delivered' : 'No email provided')),
             extracted: {
               fullName,
               email,

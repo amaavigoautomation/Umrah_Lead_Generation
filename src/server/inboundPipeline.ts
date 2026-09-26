@@ -1249,7 +1249,7 @@ export async function processLiveInboundEmail(payload: {
       : `<reply-${Date.now()}-${Math.random().toString(36).slice(2, 7)}@amaavigo.com>`;
 
     if (shouldSendAutoReply && smtpResult.success) {
-      // 1. Mark incoming customer message as replied in memory and thread
+      // 1. Mark incoming customer message as replied in memory and thread ONLY when SMTP send succeeds
       incomingMessage.aiReplied = true;
       (incomingMessage as any).repliedAt = nowIso;
       (incomingMessage as any).repliedByMessageId = aiMsgId;
@@ -1263,7 +1263,7 @@ export async function processLiveInboundEmail(payload: {
         threadMsg.repliedByMessageId = aiMsgId;
       }
 
-      // 2. Mark in persistent idempotency store (persists to disk)
+      // 2. Mark in persistent idempotency store
       markMessageAsReplied(incomingMsgId, aiMsgId);
 
       // 3. Update Conversation Turn Tracker
@@ -1305,10 +1305,54 @@ export async function processLiveInboundEmail(payload: {
           references: [incomingMsgId, ...(payload.inReplyTo ? [payload.inReplyTo] : [])],
           messageId: aiMsgId,
         },
+        smtpStatus: 'DELIVERED',
       };
 
       thread.push(aiReplyMessage);
-      console.log(`[Unified Inbox Idempotency] Successfully replied ONCE to message ${incomingMsgId}. Marked PROCESSED/REPLIED.`);
+      console.log(`[Unified Inbox Idempotency] Successfully generated and delivered AI auto-reply to message ${incomingMsgId}.`);
+    } else if (shouldSendAutoReply) {
+      // SMTP delivery failed: DO NOT mark as replied, store as DELIVERY_FAILED so retry is allowed
+      incomingMessage.aiReplied = false;
+      const threadMsg = thread.find(
+        (m) => m.gmailMessageId === incomingMsgId || m.messageId === incomingMessage.messageId
+      );
+      if (threadMsg) {
+        threadMsg.aiReplied = false;
+      }
+
+      // Save draft AI reply message in thread with DELIVERY_FAILED status
+      aiReplyMessage = {
+        messageId: `msg-failed-${Date.now()}-${Math.random().toString(36).slice(2, 7)}@amaavigo.com`,
+        gmailMessageId: aiMsgId,
+        gmailThreadId: threadId,
+        conversationId,
+        channel: 'EMAIL' as const,
+        direction: 'OUTBOUND' as const,
+        senderType: 'AI' as const,
+        senderName: 'Umrah360 AI Automation',
+        senderEmail: targetMailbox,
+        text: aiResult.replyText,
+        timestamp: nowIso,
+        sentAt: nowIso,
+        receivedAt: nowIso,
+        createdAt: nowIso,
+        aiProcessed: true,
+        aiGenerated: true,
+        confidence: 0.96,
+        emailMeta: {
+          subject: replySubject,
+          from: targetMailbox,
+          to: payload.from,
+          inReplyTo: incomingMsgId,
+          references: [incomingMsgId, ...(payload.inReplyTo ? [payload.inReplyTo] : [])],
+          messageId: aiMsgId,
+        },
+        smtpStatus: smtpResult.simulated ? 'SIMULATED' : 'DELIVERY_FAILED',
+        smtpError: smtpResult.error || 'SMTP delivery failed',
+      };
+
+      thread.push(aiReplyMessage);
+      console.warn(`[Unified Inbox Delivery Failure] Delivery failed for message ${incomingMsgId}: ${smtpResult.error}. Retaining aiReplied=false for retry.`);
     }
 
     // =========================================================================

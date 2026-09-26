@@ -123,22 +123,22 @@ export const AiTestingPlayground: React.FC<AiTestingPlaygroundProps> = ({ knowle
   };
 
   return (
-    <div className="max-w-7xl mx-auto p-4 space-y-6">
+    <div className="max-w-7xl mx-auto p-4 space-y-6 font-sans">
       {/* Title & Scope */}
-      <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 shadow-lg">
+      <div className="bg-white border border-slate-200/90 rounded-2xl p-6 shadow-sm">
         <div className="flex items-center space-x-2">
-          <Sparkles className="w-6 h-6 text-blue-400" />
-          <h2 className="text-xl font-bold text-white">Section 59: AI Testing & Evaluation Sandbox</h2>
+          <Sparkles className="w-6 h-6 text-orange-500" />
+          <h2 className="text-xl font-extrabold text-slate-900">AI Testing & Evaluation Sandbox</h2>
         </div>
-        <p className="text-xs text-slate-400 mt-1 max-w-3xl">
+        <p className="text-xs text-slate-500 mt-1 max-w-3xl font-medium">
           Simulate any incoming customer prompt or reply across channels. Inspect the Gemini generated response,
           intent classification, lead score, grounded RAG chunks, and human handoff determination{' '}
-          <span className="text-white font-semibold">WITHOUT sending anything to real customers.</span>
+          <span className="text-slate-900 font-bold">WITHOUT sending anything to real customers.</span>
         </p>
 
         {/* Presets */}
-        <div className="flex flex-wrap gap-2 mt-4 pt-4 border-t border-slate-800">
-          <span className="text-[11px] text-slate-400 self-center mr-1">Quick Presets:</span>
+        <div className="flex flex-wrap gap-2 mt-4 pt-4 border-t border-slate-100">
+          <span className="text-[11px] text-slate-500 font-bold self-center mr-1">Quick Presets:</span>
           {presets.map((p, idx) => (
             <button
               key={idx}
@@ -146,7 +146,7 @@ export const AiTestingPlayground: React.FC<AiTestingPlaygroundProps> = ({ knowle
                 setCustomerMessage(p.message);
                 setSelectedChannel(p.channel);
               }}
-              className="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs border border-slate-700 transition"
+              className="px-3 py-1 rounded-xl bg-slate-100 hover:bg-orange-50 hover:text-orange-700 hover:border-orange-200 text-slate-700 text-xs font-semibold border border-slate-200 transition"
             >
               {p.label}
             </button>
@@ -157,37 +157,37 @@ export const AiTestingPlayground: React.FC<AiTestingPlaygroundProps> = ({ knowle
       {/* Grid: Test Input vs Evaluation Results */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Left Column: Simulation Inputs */}
-        <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-lg space-y-4">
-          <h3 className="font-semibold text-sm text-white flex items-center space-x-2">
-            <Sliders className="w-4 h-4 text-emerald-400" />
+        <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-4">
+          <h3 className="font-extrabold text-sm text-slate-900 flex items-center space-x-2">
+            <Sliders className="w-4 h-4 text-orange-500" />
             <span>Simulation Parameters</span>
           </h3>
 
           <div className="grid grid-cols-3 gap-3 text-xs">
             <div>
-              <label className="text-slate-400 block mb-1">Contact Name</label>
+              <label className="text-slate-700 font-bold block mb-1">Contact Name</label>
               <input
                 type="text"
                 value={prospectName}
                 onChange={(e) => setProspectName(e.target.value)}
-                className="w-full bg-slate-800 border border-slate-700 rounded-md p-2 text-slate-200"
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-900 font-medium focus:outline-none focus:border-orange-500"
               />
             </div>
             <div>
-              <label className="text-slate-400 block mb-1">Company</label>
+              <label className="text-slate-700 font-bold block mb-1">Company</label>
               <input
                 type="text"
                 value={companyName}
                 onChange={(e) => setCompanyName(e.target.value)}
-                className="w-full bg-slate-800 border border-slate-700 rounded-md p-2 text-slate-200"
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-900 font-medium focus:outline-none focus:border-orange-500"
               />
             </div>
             <div>
-              <label className="text-slate-400 block mb-1">Channel</label>
+              <label className="text-slate-700 font-bold block mb-1">Channel</label>
               <select
                 value={selectedChannel}
                 onChange={(e) => setSelectedChannel(e.target.value as Channel)}
-                className="w-full bg-slate-800 border border-slate-700 rounded-md p-2 text-slate-200"
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-900 font-bold focus:outline-none focus:border-orange-500"
               >
                 <option value="EMAIL">Email</option>
                 <option value="WHATSAPP">WhatsApp</option>
@@ -207,14 +207,14 @@ export const AiTestingPlayground: React.FC<AiTestingPlaygroundProps> = ({ knowle
               value={customerMessage}
               onChange={(e) => setCustomerMessage(e.target.value)}
               placeholder="Enter customer message to test..."
-              className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-xs text-slate-100 leading-relaxed resize-none focus:outline-none focus:border-emerald-500"
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs text-slate-900 font-medium leading-relaxed resize-none focus:outline-none focus:border-orange-500"
             />
           </div>
 
           <button
             onClick={handleRunTest}
             disabled={isEvaluating || !customerMessage.trim()}
-            className="w-full py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs transition flex items-center justify-center space-x-2 shadow-md disabled:opacity-50"
+            className="w-full py-3 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-bold text-xs transition flex items-center justify-center space-x-2 shadow-md shadow-orange-500/20 disabled:opacity-50 cursor-pointer"
           >
             <Play className="w-4 h-4" />
             <span>{isEvaluating ? 'Evaluating with Gemini 2.5 Flash...' : 'Execute AI Test'}</span>
@@ -222,10 +222,10 @@ export const AiTestingPlayground: React.FC<AiTestingPlaygroundProps> = ({ knowle
         </div>
 
         {/* Right Column: AI Output & Qualification Output */}
-        <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-lg space-y-4 flex flex-col">
-          <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-            <h3 className="font-semibold text-sm text-white flex items-center space-x-2">
-              <Bot className="w-4 h-4 text-blue-400" />
+        <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-4 flex flex-col">
+          <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+            <h3 className="font-extrabold text-sm text-slate-900 flex items-center space-x-2">
+              <Bot className="w-4 h-4 text-orange-500" />
               <span>Evaluated AI Output (Sandbox Mode)</span>
             </h3>
 

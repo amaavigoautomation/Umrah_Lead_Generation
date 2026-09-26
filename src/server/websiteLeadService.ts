@@ -2,7 +2,7 @@ import { collection, doc, getDocs, query, where } from 'firebase/firestore';
 import { db, isFirebaseConfigured } from '../firebase/config.js';
 import { safeSetDoc } from './firestoreUtils.js';
 import { Contact, Lead, Conversation, Message } from '../types/index.js';
-import { sendLiveEmail, getSmtpConfig, fetchFirestoreSmtpConfig } from './smtpService.js';
+import { sendLiveEmail, getSmtpConfig } from './smtpService.js';
 
 export interface WebsiteLeadInput {
   // Personal
@@ -557,7 +557,6 @@ export async function processWebsiteLeadSubmission(
   // 13. Dispatch Confirmation Email via SMTP if Configured
   // -----------------------------------------------------------------
   let autoConfirmationSent = false;
-  await fetchFirestoreSmtpConfig();
   const smtpConfig = getSmtpConfig();
   if (smtpConfig.configured && email) {
     try {
@@ -588,46 +587,29 @@ export async function processWebsiteLeadSubmission(
         text: emailBody,
       });
 
+      // Record auto-confirmation outbound message
+      const replyMsgId = `msg-auto-reply-${Date.now()}`;
+      const autoReplyMessage: Message = {
+        messageId: replyMsgId,
+        conversationId,
+        senderType: 'AI',
+        senderName: 'Umrah360 Automation',
+        channel: 'EMAIL',
+        direction: 'OUTBOUND',
+        text: emailBody,
+        timestamp: new Date().toISOString(),
+        sentAt: new Date().toISOString(),
+        createdAt: new Date().toISOString(),
+        aiReplied: true,
+      };
+
       if (mailResult.success) {
         autoConfirmationSent = true;
-        const nowIso = new Date().toISOString();
-        console.log(`[Website Lead] Dispatched auto-confirmation email to ${email} (Message ID: ${mailResult.messageId})`);
+        console.log(`[Website Lead] Dispatched auto-confirmation email to ${email}`);
+      }
 
-        // Also record this outbound message in Firestore
-        const replyMsgId = `msg-thankyou-${conversationId}`;
-        const autoReplyMessage: Message = {
-          messageId: replyMsgId,
-          conversationId,
-          senderType: 'AI',
-          senderName: 'Umrah360 Automation',
-          channel: 'EMAIL',
-          direction: 'OUTBOUND',
-          recipientEmail: email,
-          deliveryStatus: 'DELIVERED',
-          smtpMessageId: mailResult.messageId,
-          emailDeliveredAt: nowIso,
-          text: emailBody,
-          timestamp: nowIso,
-          sentAt: nowIso,
-          aiReplied: true,
-        };
-
-        if (isFirebaseConfigured && db) {
-          safeSetDoc(doc(db, 'messages', replyMsgId), autoReplyMessage, { merge: true }).catch(() => {});
-          safeSetDoc(
-            doc(db, 'conversations', conversationId),
-            {
-              thankYouEmailSent: true,
-              thankYouEmailDeliveredAt: nowIso,
-              thankYouSmtpMessageId: mailResult.messageId,
-              customerEmail: email,
-              lastMessageText: emailBody.slice(0, 160) + '...',
-              lastMessageAt: nowIso,
-              updatedAt: nowIso,
-            },
-            { merge: true }
-          ).catch(() => {});
-        }
+      if (isFirebaseConfigured && db) {
+        safeSetDoc(doc(db, 'messages', replyMsgId), autoReplyMessage, { merge: true }).catch(() => {});
       }
     } catch (smtpErr) {
       console.warn('[Website Lead] Notice sending auto-confirmation email:', smtpErr);

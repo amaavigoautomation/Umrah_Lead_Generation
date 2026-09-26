@@ -165,45 +165,45 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
     <div className="max-w-7xl mx-auto p-4 space-y-6">
       {/* Top CRM Dashboard Metrics (Section 56) */}
       <div className="grid grid-cols-2 sm:grid-cols-6 gap-3">
-        <div className="bg-slate-900 border border-slate-800 p-3.5 rounded-xl">
-          <span className="text-xs text-slate-400 block font-medium">Total CRM Leads</span>
-          <span className="text-2xl font-bold text-white mt-1 block">{totalLeads}</span>
+        <div className="bg-white border border-slate-200/90 p-4 rounded-2xl shadow-sm">
+          <span className="text-xs text-slate-500 block font-bold uppercase tracking-wider">Total CRM Leads</span>
+          <span className="text-3xl font-extrabold text-slate-900 mt-1 block">{totalLeads}</span>
         </div>
-        <div className="bg-slate-900 border border-slate-800 p-3.5 rounded-xl">
-          <span className="text-xs text-slate-400 block font-medium">Inbound Leads</span>
-          <span className="text-2xl font-bold text-teal-400 mt-1 block">{inboundCount}</span>
+        <div className="bg-white border border-slate-200/90 p-4 rounded-2xl shadow-sm">
+          <span className="text-xs text-slate-500 block font-bold uppercase tracking-wider">Inbound Leads</span>
+          <span className="text-3xl font-extrabold text-orange-600 mt-1 block">{inboundCount}</span>
         </div>
-        <div className="bg-slate-900 border border-slate-800 p-3.5 rounded-xl">
-          <span className="text-xs text-slate-400 block font-medium">Outbound Leads</span>
-          <span className="text-2xl font-bold text-purple-400 mt-1 block">{outboundCount}</span>
+        <div className="bg-white border border-slate-200/90 p-4 rounded-2xl shadow-sm">
+          <span className="text-xs text-slate-500 block font-bold uppercase tracking-wider">Outbound Leads</span>
+          <span className="text-3xl font-extrabold text-slate-900 mt-1 block">{outboundCount}</span>
         </div>
-        <div className="bg-slate-900 border border-slate-800 p-3.5 rounded-xl">
-          <span className="text-xs text-slate-400 block font-medium">AI Qualified</span>
-          <span className="text-2xl font-bold text-emerald-400 mt-1 block">{qualifiedCount}</span>
+        <div className="bg-white border border-slate-200/90 p-4 rounded-2xl shadow-sm">
+          <span className="text-xs text-slate-500 block font-bold uppercase tracking-wider">AI Qualified</span>
+          <span className="text-3xl font-extrabold text-emerald-600 mt-1 block">{qualifiedCount}</span>
         </div>
-        <div className="bg-slate-900 border border-slate-800 p-3.5 rounded-xl">
-          <span className="text-xs text-slate-400 block font-medium">High Intent</span>
-          <span className="text-2xl font-bold text-amber-400 mt-1 block">{highIntentCount}</span>
+        <div className="bg-white border border-slate-200/90 p-4 rounded-2xl shadow-sm">
+          <span className="text-xs text-slate-500 block font-bold uppercase tracking-wider">High Intent</span>
+          <span className="text-3xl font-extrabold text-orange-500 mt-1 block">{highIntentCount}</span>
         </div>
-        <div className="bg-emerald-950/20 border border-emerald-500/30 p-3.5 rounded-xl">
+        <div className="bg-orange-500 text-white border border-orange-600 p-4 rounded-2xl shadow-md shadow-orange-500/20">
           <div className="flex items-center justify-between">
-            <span className="text-xs text-emerald-400 block font-semibold">Demo Booked</span>
-            <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
+            <span className="text-xs text-orange-100 block font-bold uppercase tracking-wider">Demo Booked</span>
+            <Sparkles className="w-4 h-4 text-white" />
           </div>
-          <span className="text-2xl font-bold text-emerald-300 mt-1 block">{demoBookedCount}</span>
+          <span className="text-3xl font-extrabold text-white mt-1 block">{demoBookedCount}</span>
         </div>
       </div>
 
       {/* Control Toolbar: View Mode Toggle, Filters, Search */}
-      <div className="bg-slate-900 border border-slate-800 p-3.5 rounded-xl flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 shadow-md">
+      <div className="bg-white border border-slate-200 p-4 rounded-2xl flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 shadow-sm">
         {/* Left: View Switcher (Pipeline vs Table vs Grid) */}
-        <div className="flex items-center space-x-1 bg-slate-950 p-1 rounded-lg border border-slate-800 self-start">
+        <div className="flex items-center space-x-1 bg-slate-100 p-1 rounded-xl border border-slate-200 self-start">
           <button
             onClick={() => setViewMode('PIPELINE')}
-            className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition ${
+            className={`flex items-center space-x-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold transition ${
               viewMode === 'PIPELINE'
-                ? 'bg-emerald-600 text-white shadow-sm'
-                : 'text-slate-400 hover:text-slate-200'
+                ? 'bg-orange-500 text-white shadow-sm'
+                : 'text-slate-600 hover:text-slate-900'
             }`}
             title="Split Pipeline View"
           >
@@ -212,10 +212,10 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
           </button>
           <button
             onClick={() => setViewMode('TABLE')}
-            className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition ${
+            className={`flex items-center space-x-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold transition ${
               viewMode === 'TABLE'
-                ? 'bg-emerald-600 text-white shadow-sm'
-                : 'text-slate-400 hover:text-slate-200'
+                ? 'bg-orange-500 text-white shadow-sm'
+                : 'text-slate-600 hover:text-slate-900'
             }`}
             title="Full Data Grid / Table View"
           >
@@ -224,10 +224,10 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
           </button>
           <button
             onClick={() => setViewMode('GRID')}
-            className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition ${
+            className={`flex items-center space-x-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold transition ${
               viewMode === 'GRID'
-                ? 'bg-emerald-600 text-white shadow-sm'
-                : 'text-slate-400 hover:text-slate-200'
+                ? 'bg-orange-500 text-white shadow-sm'
+                : 'text-slate-600 hover:text-slate-900'
             }`}
             title="Card Grid View"
           >
@@ -240,26 +240,26 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
         <div className="flex flex-wrap items-center gap-2">
           {/* Search */}
           <div className="relative flex-1 sm:w-60">
-            <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-400" />
+            <Search className="w-3.5 h-3.5 absolute left-3 top-3 text-slate-400" />
             <input
               type="text"
               placeholder="Search leads, companies..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-slate-950 border border-slate-700/80 rounded-lg pl-8 pr-3 py-1.5 text-xs text-slate-200 placeholder:text-slate-500 focus:outline-none focus:border-emerald-500"
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-8 pr-3 py-2 text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 font-medium"
             />
           </div>
 
           {/* Lead Type Pill */}
-          <div className="flex items-center space-x-1 text-xs bg-slate-950 p-1 rounded-lg border border-slate-800">
+          <div className="flex items-center space-x-1 text-xs bg-slate-100 p-1 rounded-xl border border-slate-200">
             {(['ALL', 'INBOUND', 'OUTBOUND'] as const).map((t) => (
               <button
                 key={t}
                 onClick={() => setTypeFilter(t)}
-                className={`px-2.5 py-1 rounded-md font-medium transition ${
+                className={`px-3 py-1 rounded-lg font-bold transition ${
                   typeFilter === t
-                    ? 'bg-emerald-600 text-white'
-                    : 'text-slate-400 hover:text-slate-200'
+                    ? 'bg-slate-900 text-white'
+                    : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
                 {t}
@@ -271,7 +271,7 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="bg-slate-950 border border-slate-700/80 text-xs text-slate-300 rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-emerald-500"
+            className="bg-slate-50 border border-slate-200 text-xs text-slate-800 font-bold rounded-xl px-3 py-2 focus:outline-none focus:border-orange-500"
           >
             <option value="ALL">All Statuses</option>
             <option value="NEW">NEW</option>
@@ -287,12 +287,12 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
           {/* Website Form Webhook Integration Button */}
           <button
             onClick={() => setIsWebsiteModalOpen(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/40 rounded-lg text-xs font-semibold transition shadow-sm hover:border-emerald-500/60 shrink-0"
+            className="flex items-center gap-1.5 px-3.5 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-xs font-bold transition shadow-md shadow-orange-500/20 shrink-0"
             title="Connect your website demo form (umrah360.in/request-demo) to CRM"
           >
-            <Globe className="w-3.5 h-3.5 text-emerald-400" />
+            <Globe className="w-3.5 h-3.5 text-white" />
             <span>Website Form Webhook</span>
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+            <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse"></span>
           </button>
         </div>
       </div>
@@ -301,16 +301,16 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
       {viewMode === 'PIPELINE' && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Left Column: Leads List */}
-          <div className="lg:col-span-1 bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-lg flex flex-col h-[calc(100vh-18rem)]">
-            <div className="p-3 border-b border-slate-800 flex items-center justify-between text-xs text-slate-400 font-medium">
+          <div className="lg:col-span-1 bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm flex flex-col h-[calc(100vh-18rem)]">
+            <div className="p-3.5 border-b border-slate-100 flex items-center justify-between text-xs text-slate-500 font-bold bg-slate-50">
               <span>Showing {processedLeads.length} leads</span>
-              <span className="text-[11px] text-slate-500">Sorted by score</span>
+              <span className="text-[11px] text-slate-400">Sorted by score</span>
             </div>
 
             {/* Lead List Cards */}
-            <div className="flex-1 overflow-y-auto divide-y divide-slate-800/60">
+            <div className="flex-1 overflow-y-auto divide-y divide-slate-100">
               {processedLeads.length === 0 ? (
-                <div className="p-8 text-center text-slate-500 text-xs">No matching leads found.</div>
+                <div className="p-8 text-center text-slate-400 text-xs font-medium">No matching leads found.</div>
               ) : (
                 processedLeads.map((lead) => {
                   const contact = contacts.find((c) => c.contactId === lead.contactId);
@@ -322,39 +322,39 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
                       onClick={() => setSelectedLeadId(lead.leadId)}
                       className={`p-3.5 cursor-pointer transition ${
                         isSelected
-                          ? 'bg-slate-800/90 border-l-4 border-emerald-500'
-                          : 'hover:bg-slate-800/40'
+                          ? 'bg-orange-50/80 border-l-4 border-orange-500'
+                          : 'hover:bg-slate-50'
                       }`}
                     >
                       <div className="flex items-start justify-between">
                         <div>
-                          <h4 className="font-semibold text-xs text-white">
+                          <h4 className="font-bold text-xs text-slate-900">
                             {contact?.firstName} {contact?.lastName}
                           </h4>
-                          <p className="text-[11px] text-slate-400 mt-0.5">{contact?.companyName}</p>
+                          <p className="text-[11px] text-slate-500 mt-0.5 font-medium">{contact?.companyName}</p>
                         </div>
 
                         <div className="text-right">
                           <div className="flex items-center space-x-1">
-                            <Flame className="w-3.5 h-3.5 text-amber-400" />
-                            <span className="font-bold text-xs text-emerald-400">{lead.leadScore}</span>
+                            <Flame className="w-3.5 h-3.5 text-orange-500" />
+                            <span className="font-extrabold text-xs text-slate-900">{lead.leadScore}</span>
                           </div>
-                          <span className="text-[10px] text-slate-500 uppercase">{lead.intent}</span>
+                          <span className="text-[10px] text-slate-400 uppercase font-bold">{lead.intent}</span>
                         </div>
                       </div>
 
-                      <div className="flex items-center justify-between mt-2 pt-2 border-t border-slate-800/40 text-[10px]">
+                      <div className="flex items-center justify-between mt-2 pt-2 border-t border-slate-100 text-[10px]">
                         <span
-                          className={`px-1.5 py-0.5 rounded font-semibold ${
+                          className={`px-2 py-0.5 rounded-full font-bold ${
                             lead.leadType === 'OUTBOUND'
-                              ? 'bg-purple-500/20 text-purple-300'
-                              : 'bg-teal-500/20 text-teal-300'
+                              ? 'bg-slate-900 text-white'
+                              : 'bg-orange-100 text-orange-800 border border-orange-200'
                           }`}
                         >
                           {lead.source}
                         </span>
 
-                        <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-medium">
+                        <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 font-bold border border-slate-200">
                           {lead.status}
                         </span>
                       </div>
@@ -366,7 +366,7 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
           </div>
 
           {/* Right Column: Lead 360 Profile & Timeline */}
-          <div className="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-xl p-6 shadow-lg overflow-y-auto h-[calc(100vh-18rem)] space-y-6">
+          <div className="lg:col-span-2 bg-white border border-slate-200 rounded-2xl p-6 shadow-sm overflow-y-auto h-[calc(100vh-18rem)] space-y-6">
             {renderLeadDetail(
               activeLead,
               activeContact,
@@ -381,65 +381,65 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
 
       {/* VIEW 2: TABLE / DATA GRID VIEW */}
       {viewMode === 'TABLE' && (
-        <div className="bg-slate-900 border border-slate-800 rounded-xl shadow-xl overflow-hidden">
+        <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse text-xs">
               <thead>
-                <tr className="bg-slate-950/80 border-b border-slate-800 text-slate-400 font-semibold uppercase tracking-wider text-[11px]">
+                <tr className="bg-slate-50 border-b border-slate-200 text-slate-700 font-extrabold uppercase tracking-wider text-[11px]">
                   <th
-                    className="p-3.5 cursor-pointer hover:text-slate-200 transition"
+                    className="p-3.5 cursor-pointer hover:text-orange-600 transition"
                     onClick={() => toggleSort('name')}
                   >
                     <div className="flex items-center space-x-1">
                       <span>Lead & Contact</span>
-                      <ArrowUpDown className="w-3 h-3 text-slate-500" />
+                      <ArrowUpDown className="w-3 h-3 text-slate-400" />
                     </div>
                   </th>
                   <th
-                    className="p-3.5 cursor-pointer hover:text-slate-200 transition"
+                    className="p-3.5 cursor-pointer hover:text-orange-600 transition"
                     onClick={() => toggleSort('company')}
                   >
                     <div className="flex items-center space-x-1">
                       <span>Agency / Company</span>
-                      <ArrowUpDown className="w-3 h-3 text-slate-500" />
+                      <ArrowUpDown className="w-3 h-3 text-slate-400" />
                     </div>
                   </th>
                   <th className="p-3.5">Type & Source</th>
                   <th
-                    className="p-3.5 cursor-pointer hover:text-slate-200 transition"
+                    className="p-3.5 cursor-pointer hover:text-orange-600 transition"
                     onClick={() => toggleSort('score')}
                   >
                     <div className="flex items-center space-x-1">
                       <span>Score</span>
-                      <ArrowUpDown className="w-3 h-3 text-slate-500" />
+                      <ArrowUpDown className="w-3 h-3 text-slate-400" />
                     </div>
                   </th>
                   <th
-                    className="p-3.5 cursor-pointer hover:text-slate-200 transition"
+                    className="p-3.5 cursor-pointer hover:text-orange-600 transition"
                     onClick={() => toggleSort('intent')}
                   >
                     <div className="flex items-center space-x-1">
                       <span>Intent</span>
-                      <ArrowUpDown className="w-3 h-3 text-slate-500" />
+                      <ArrowUpDown className="w-3 h-3 text-slate-400" />
                     </div>
                   </th>
                   <th
-                    className="p-3.5 cursor-pointer hover:text-slate-200 transition"
+                    className="p-3.5 cursor-pointer hover:text-orange-600 transition"
                     onClick={() => toggleSort('status')}
                   >
                     <div className="flex items-center space-x-1">
                       <span>Status</span>
-                      <ArrowUpDown className="w-3 h-3 text-slate-500" />
+                      <ArrowUpDown className="w-3 h-3 text-slate-400" />
                     </div>
                   </th>
                   <th className="p-3.5">Key Requirements</th>
                   <th className="p-3.5 text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-800/80 text-slate-300">
+              <tbody className="divide-y divide-slate-100 text-slate-800">
                 {processedLeads.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="p-8 text-center text-slate-500 text-xs">
+                    <td colSpan={8} className="p-8 text-center text-slate-400 text-xs font-medium">
                       No leads match the selected criteria.
                     </td>
                   </tr>
@@ -590,15 +590,15 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
                           <div className="flex items-center justify-end space-x-1.5">
                             <button
                               onClick={() => setInspectModalLeadId(lead.leadId)}
-                              className="px-2 py-1 rounded bg-slate-800 hover:bg-slate-750 text-slate-300 text-[11px] font-medium border border-slate-700 flex items-center space-x-1 transition"
+                              className="px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-black text-white text-[11px] font-bold flex items-center space-x-1 transition shadow-xs"
                               title="Inspect 360 Profile"
                             >
-                              <Eye className="w-3 h-3 text-slate-400" />
+                              <Eye className="w-3 h-3 text-white" />
                               <span>360 Profile</span>
                             </button>
                             <button
                               onClick={() => onOpenConversation(undefined, lead.leadId)}
-                              className="px-2.5 py-1 rounded bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-semibold flex items-center space-x-1 transition shadow-sm"
+                              className="px-2.5 py-1 rounded-lg bg-orange-500 hover:bg-orange-600 text-white text-[11px] font-bold flex items-center space-x-1 transition shadow-xs"
                               title="Open Omnichannel Inbox"
                             >
                               <MessageCircle className="w-3 h-3" />

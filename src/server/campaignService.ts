@@ -81,7 +81,14 @@ export async function generateAiEmailForLead(lead: {
   }
 
   try {
-    const ai = new GoogleGenAI({ apiKey });
+    const ai = new GoogleGenAI({
+      apiKey,
+      httpOptions: {
+        headers: {
+          'User-Agent': 'aistudio-build',
+        },
+      },
+    });
     const kbContext = INITIAL_KNOWLEDGE_DOCUMENTS.map((d) => `### ${d.title}\n${d.content}`).join('\n\n');
 
     const prompt = `You are an expert B2B sales development AI for Umrah360 (www.umrah360.in), the premier ERP and CRM platform for Hajj and Umrah tour operators.
@@ -125,7 +132,7 @@ Output your response strictly as a JSON object:
 `;
 
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-3.8-flash',
       contents: prompt,
     });
 
@@ -357,15 +364,16 @@ export async function syncCampaignStoreFromFirestore(): Promise<void> {
 /**
  * Initializes campaign data from Firestore, ensuring idempotency and cross-restart safety
  */
-export async function initCampaignStore() {
-  if (!isCampaignStoreInitialized) {
+export async function initCampaignStore(forceSync: boolean = false) {
+  if (!isCampaignStoreInitialized || forceSync) {
     isCampaignStoreInitialized = true;
     DEFAULT_EMAIL_TEMPLATES.forEach((tpl) => {
-      emailTemplatesMap.set(tpl.templateId, tpl);
+      if (!emailTemplatesMap.has(tpl.templateId)) {
+        emailTemplatesMap.set(tpl.templateId, tpl);
+      }
     });
+    await syncCampaignStoreFromFirestore();
   }
-
-  await syncCampaignStoreFromFirestore();
 }
 
 // -------------------------------------------------------------
@@ -588,6 +596,7 @@ export async function createCampaign(params: {
   name: string;
   type?: 'EMAIL' | 'WHATSAPP' | 'WHATSAPP_EMAIL';
   campaignMode?: 'PREDEFINED' | 'AI_GENERATED';
+  deliveryMode?: 'LIVE_SMTP' | 'SIMULATION';
   templateId?: string;
   templateName?: string;
   templateSubject?: string;
@@ -607,9 +616,20 @@ export async function createCampaign(params: {
 }): Promise<{ campaign: Campaign; leads: CampaignLead[] }> {
   await initCampaignStore();
 
+  const campaignName = (params.name || '').trim();
+  if (!campaignName) {
+    throw new Error('Campaign name is required.');
+  }
+
+  const rawLeads = Array.isArray(params.leads) ? params.leads : [];
+  if (rawLeads.length === 0) {
+    throw new Error('At least one lead is required to create a campaign.');
+  }
+
   const now = new Date().toISOString();
   const campaignId = `camp-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
   const mode = params.campaignMode || 'PREDEFINED';
+  const deliveryMode = params.deliveryMode || 'LIVE_SMTP';
 
   // Dynamically resolve the selected template directly from Firestore DB
   let selectedTemplate: EmailTemplate | undefined;
@@ -660,6 +680,7 @@ export async function createCampaign(params: {
     name: params.name,
     type: params.type || 'EMAIL',
     campaignMode: mode,
+    deliveryMode,
     status: 'DRAFT',
     templateId: finalTemplateId,
     templateName: finalTemplateName,
@@ -734,13 +755,19 @@ export async function createCampaign(params: {
     createdLeads.push(cLead);
   });
 
-  // Sync to Firestore
+  // Sync to Firestore in parallel
   if (isFirebaseConfigured && db) {
     try {
       await safeSetDoc(doc(db, 'campaigns', campaignId), initialCampaign);
-      for (const cl of createdLeads) {
-        await safeSetDoc(doc(db, 'campaign_leads', cl.campaignLeadId), cl);
+      // Batch write leads concurrently
+      const leadBatches = [];
+      for (let i = 0; i < createdLeads.length; i += 20) {
+        const chunk = createdLeads.slice(i, i + 20);
+        leadBatches.push(
+          Promise.all(chunk.map((cl) => safeSetDoc(doc(db, 'campaign_leads', cl.campaignLeadId), cl)))
+        );
       }
+      await Promise.all(leadBatches);
     } catch (e) {
       console.warn('Firestore write notice during campaign creation:', e);
     }
@@ -1194,14 +1221,22 @@ async function executeCampaignSendingEngine(campaignId: string, expectedRunId?: 
       const gmailThreadId = lead.gmailThreadId || `thread-${lead.leadId}`;
 
       try {
-        console.log(`[Campaign Engine] [Run ${currentRunId}] Dispatching email to ${lead.email} ("${subject}") with ${activeAttachments.length} attachments...`);
-        const sendResult = await sendLiveEmail({
-          to: lead.email,
-          subject: subject,
-          text: body,
-          html: htmlContent,
-          attachments: activeAttachments.length > 0 ? activeAttachments : undefined,
-        });
+        const isSimulationMode = campaign.deliveryMode === 'SIMULATION';
+        console.log(`[Campaign Engine] [Run ${currentRunId}] Dispatching email to ${lead.email} ("${subject}") [Mode: ${isSimulationMode ? 'Simulation' : 'Live SMTP'}] with ${activeAttachments.length} attachments...`);
+        
+        const sendResult = isSimulationMode
+          ? {
+              success: true,
+              messageId: `<sim-camp-${Date.now()}-${Math.random().toString(36).slice(2, 6)}@umrah360.in>`,
+              simulated: true,
+            }
+          : await sendLiveEmail({
+              to: lead.email,
+              subject: subject,
+              text: body,
+              html: htmlContent,
+              attachments: activeAttachments.length > 0 ? activeAttachments : undefined,
+            });
 
         const now = new Date().toISOString();
 
@@ -1282,6 +1317,18 @@ async function executeCampaignSendingEngine(campaignId: string, expectedRunId?: 
             safeSetDoc(doc(db, 'campaign_leads', lead.campaignLeadId), lead, { merge: true }).catch(() => {});
           }
           console.warn(`[Campaign Engine] Failed to dispatch to ${lead.email}: ${sendResult.error}`);
+
+          // If daily quota is exceeded, pause campaign to prevent further quota errors
+          if (sendResult.isDailyLimitExceeded) {
+            console.warn(`[Campaign Engine] Halting campaign ${campaignId} due to Gmail Daily Sending Limit (550 5.4.5).`);
+            campaign.status = 'PAUSED';
+            campaign.lastError = 'Gmail Daily Sending Limit (550 5.4.5) reached on amaavigo@gmail.com. Campaign paused. Resets automatically in 24 hours, or you can run in Test Simulation mode.';
+            campaign.updatedAt = now;
+            if (isFirebaseConfigured && db) {
+              safeSetDoc(doc(db, 'campaigns', campaignId), campaign, { merge: true }).catch(() => {});
+            }
+            break;
+          }
         }
       } catch (err: any) {
         lead.sendStatus = 'FAILED';

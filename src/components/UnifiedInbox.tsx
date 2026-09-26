@@ -6,6 +6,7 @@ import {
   Send,
   AlertTriangle,
   CheckCircle,
+  CheckCircle2,
   Mail,
   MessageCircle,
   Instagram,
@@ -24,8 +25,9 @@ import {
   X,
   MessageSquare,
   RefreshCw,
-  Loader2,
-  AlertCircle,
+  Key,
+  Settings,
+  ExternalLink,
 } from 'lucide-react';
 import {
   Conversation,
@@ -99,6 +101,166 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
   const [simulatedPlatform, setSimulatedPlatform] = useState<Channel>('WHATSAPP');
   const [simulatedText, setSimulatedText] = useState<string>('Hi, can you send us your B2B package cost breakdown for 5-star Makkah hotels?');
 
+  // SMTP Configuration & Delivery State
+  const [smtpStatus, setSmtpStatus] = useState<{
+    configured: boolean;
+    host: string;
+    port: number;
+    user: string;
+    from: string;
+    hasPassword: boolean;
+  } | null>(null);
+  const [showSmtpModal, setShowSmtpModal] = useState<boolean>(false);
+  const [smtpHostInput, setSmtpHostInput] = useState<string>('smtp.gmail.com');
+  const [smtpPortInput, setSmtpPortInput] = useState<number>(465);
+  const [smtpUserInput, setSmtpUserInput] = useState<string>('amaavigo@gmail.com');
+  const [smtpPassInput, setSmtpPassInput] = useState<string>('');
+  const [smtpFromInput, setSmtpFromInput] = useState<string>('Umrah360 Automation <amaavigo@gmail.com>');
+  const [isSavingSmtp, setIsSavingSmtp] = useState<boolean>(false);
+  const [smtpSaveMessage, setSmtpSaveMessage] = useState<{ success: boolean; text: string } | null>(null);
+  const [retryingMessageId, setRetryingMessageId] = useState<string | null>(null);
+
+  // Fetch SMTP status on load
+  const fetchSmtpConfig = async () => {
+    try {
+      const res = await fetch('/api/smtp/config');
+      if (res.ok) {
+        const data = await res.json();
+        setSmtpStatus(data);
+        if (data.host) setSmtpHostInput(data.host);
+        if (data.port) setSmtpPortInput(data.port);
+        if (data.user) setSmtpUserInput(data.user);
+        if (data.from) setSmtpFromInput(data.from);
+      }
+    } catch {}
+  };
+
+  React.useEffect(() => {
+    fetchSmtpConfig();
+  }, []);
+
+  // Save & Test SMTP credentials directly from Unified Inbox
+  const handleSaveSmtpConfig = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSavingSmtp(true);
+    setSmtpSaveMessage(null);
+    try {
+      const res = await fetch('/api/smtp/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          host: smtpHostInput,
+          port: smtpPortInput,
+          user: smtpUserInput,
+          pass: smtpPassInput,
+          from: smtpFromInput,
+        }),
+      });
+      let data: any = {};
+      try {
+        const rawText = await res.text();
+        data = rawText ? JSON.parse(rawText) : {};
+      } catch {
+        data = { error: `Server returned non-JSON response (${res.status})` };
+      }
+
+      if (res.ok && data.success) {
+        // Now verify connection
+        const verifyRes = await fetch('/api/smtp/verify', { method: 'POST' });
+        let verifyData: any = {};
+        try {
+          const rawVerify = await verifyRes.text();
+          verifyData = rawVerify ? JSON.parse(rawVerify) : {};
+        } catch {
+          verifyData = { error: `Verification failed (${verifyRes.status})` };
+        }
+
+        if (verifyRes.ok && verifyData.verified) {
+          setSmtpSaveMessage({
+            success: true,
+            text: `SMTP Connected successfully to ${smtpHostInput}! Auto-retrying any pending outbound emails now...`,
+          });
+          // Auto retry any failed outbound messages in current active conversation
+          const failedOutbound = activeMessages.filter(
+            (m) => m.channel === 'EMAIL' && m.direction === 'OUTBOUND' && m.smtpStatus !== 'DELIVERED'
+          );
+          for (const m of failedOutbound) {
+            await handleRetrySendEmail(m);
+          }
+        } else {
+          setSmtpSaveMessage({
+            success: false,
+            text: `Settings saved, but connection test reported: ${verifyData.error || 'Check username & App Password'}`,
+          });
+        }
+        fetchSmtpConfig();
+        if (onSyncNow) {
+          onSyncNow();
+        }
+      } else {
+        setSmtpSaveMessage({
+          success: false,
+          text: data.error || 'Failed to save SMTP configuration',
+        });
+      }
+    } catch (err: any) {
+      setSmtpSaveMessage({
+        success: false,
+        text: err?.message || 'Network error saving SMTP config',
+      });
+    } finally {
+      setIsSavingSmtp(false);
+    }
+  };
+
+  // Retry sending an email message over SMTP
+  const handleRetrySendEmail = async (msg: Message) => {
+    const toEmail = activeContact.email || msg.emailMeta?.to || msg.senderEmail;
+    if (!toEmail) return;
+    setRetryingMessageId(msg.messageId);
+
+    try {
+      const res = await fetch('/api/email/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          to: toEmail,
+          subject: msg.emailMeta?.subject || 'Re: Umrah360 Inquiry',
+          text: msg.text,
+          inReplyTo: msg.emailMeta?.inReplyTo,
+          conversationId: msg.conversationId,
+          senderName: msg.senderName || 'Umrah360 AI Automation',
+        }),
+      });
+      let data: any = {};
+      try {
+        const rawText = await res.text();
+        data = rawText ? JSON.parse(rawText) : {};
+      } catch {
+        data = { error: `Server returned non-JSON response (${res.status})` };
+      }
+
+      if (res.ok && data.success) {
+        msg.smtpStatus = 'DELIVERED';
+        msg.smtpError = undefined;
+        if (data.messageId) {
+          msg.gmailMessageId = data.messageId;
+          if (msg.emailMeta) msg.emailMeta.messageId = data.messageId;
+        }
+        if (onSyncNow) onSyncNow();
+      } else {
+        msg.smtpStatus = 'DELIVERY_FAILED';
+        msg.smtpError = data.error || `Failed to dispatch via SMTP (HTTP ${res.status})`;
+        setShowSmtpModal(true);
+      }
+    } catch (err: any) {
+      msg.smtpStatus = 'DELIVERY_FAILED';
+      msg.smtpError = err?.message || 'SMTP Network Failure';
+    } finally {
+      setRetryingMessageId(null);
+    }
+  };
+
   // Active conversation and linked objects
   const activeConversation =
     conversations.find((c) => c.conversationId === selectedConversationId) || conversations[0];
@@ -134,120 +296,17 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
     return 0;
   };
 
-  // Helper to deduplicate messages in thread (e.g. preventing duplicate outbound confirmation emails)
-  const deduplicateThreadMessages = (rawMsgs: Message[]) => {
-    const sorted = [...rawMsgs].sort(sortMsgs);
-    const result: Message[] = [];
-
-    // Check if there is already a verified delivered outbound Thank You email
-    const hasDeliveredThankYou = sorted.some(
-      (m) =>
-        m.direction === 'OUTBOUND' &&
-        (m.deliveryStatus === 'DELIVERED' || Boolean(m.smtpMessageId && m.smtpMessageId.startsWith('<'))) &&
-        (m.text?.includes('Thank you for requesting') ||
-          m.text?.includes('We have received your requirements') ||
-          m.text?.includes('As-salamu alaykum'))
-    );
-
-    let seenThankYou = false;
-
-    for (const msg of sorted) {
-      const isThankYou =
-        msg.direction === 'OUTBOUND' &&
-        (msg.text?.includes('Thank you for requesting') ||
-          msg.text?.includes('We have received your requirements') ||
-          msg.text?.includes('As-salamu alaykum'));
-
-      if (isThankYou) {
-        // If there is already a delivered version, drop any pending/unverified version
-        if (hasDeliveredThankYou && msg.deliveryStatus !== 'DELIVERED' && !msg.smtpMessageId) {
-          continue;
-        }
-        // Only allow one Thank You confirmation email in the thread
-        if (seenThankYou) {
-          continue;
-        }
-        seenThankYou = true;
-      }
-
-      result.push(msg);
-    }
-
-    return result;
-  };
-
-  const activeMessages = deduplicateThreadMessages(
-    messages.filter((m) => m.conversationId === activeConversation?.conversationId)
-  );
+  const activeMessages = messages
+    .filter((m) => m.conversationId === activeConversation?.conversationId)
+    .sort(sortMsgs);
 
   const unifiedAllMessages = activeContact
-    ? deduplicateThreadMessages(
-        messages.filter((m) => contactConversations.some((c) => c.conversationId === m.conversationId))
-      )
+    ? messages
+        .filter((m) => contactConversations.some((c) => c.conversationId === m.conversationId))
+        .sort(sortMsgs)
     : activeMessages;
 
   const displayMessages = isUnifiedAllPlatforms ? unifiedAllMessages : activeMessages;
-
-  // Resolve the authoritative email address for the active lead/contact
-  const inboundCustomerMsg = [...activeMessages].find(
-    (m) => m.direction === 'INBOUND' && m.text && m.text.includes('• Email:')
-  );
-  const emailFromInboundText = inboundCustomerMsg?.text
-    ?.match(/•\s*Email:\s*([^\s\n\r]+@[^\s\n\r]+)/i)?.[1]
-    ?.trim();
-
-  const effectiveEmail =
-    activeContact?.email && activeContact.email.includes('@') && !activeContact.email.endsWith('@umrah360.in')
-      ? activeContact.email
-      : activeConversation?.customerEmail ||
-        emailFromInboundText ||
-        (activeContact?.email?.includes('@') ? activeContact.email : '');
-
-  const isThankYouDelivered =
-    Boolean(activeConversation?.thankYouEmailSent && activeConversation?.thankYouSmtpMessageId) ||
-    activeMessages.some(
-      (m) =>
-        m.direction === 'OUTBOUND' &&
-        (m.deliveryStatus === 'DELIVERED' || Boolean(m.smtpMessageId && m.smtpMessageId.startsWith('<')))
-    );
-
-  const [isSendingThankYou, setIsSendingThankYou] = useState<boolean>(false);
-  const [thankYouStatusMsg, setThankYouStatusMsg] = useState<{
-    type: 'success' | 'error';
-    text: string;
-  } | null>(null);
-
-  const handleDispatchThankYou = async () => {
-    if (!activeConversation) return;
-    setIsSendingThankYou(true);
-    setThankYouStatusMsg(null);
-    try {
-      const res = await fetch('/api/leads/send-thank-you', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ conversationId: activeConversation.conversationId }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        setThankYouStatusMsg({
-          type: 'success',
-          text: `Thank You email delivered live to ${data.email || effectiveEmail}! (Message ID: ${data.messageId})`,
-        });
-      } else {
-        setThankYouStatusMsg({
-          type: 'error',
-          text: data.error || 'Failed to dispatch email over SMTP',
-        });
-      }
-    } catch (err: any) {
-      setThankYouStatusMsg({
-        type: 'error',
-        text: err?.message || 'Network error dispatching email',
-      });
-    } finally {
-      setIsSendingThankYou(false);
-    }
-  };
 
   // Helper for channel icon
   const renderChannelIcon = (channel: Channel, size = 4) => {
@@ -370,26 +429,26 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
   };
 
   return (
-    <div className="flex flex-col lg:flex-row h-[calc(100vh-8rem)] bg-slate-950 text-slate-100 overflow-hidden border border-slate-800 rounded-xl m-2 sm:m-4 shadow-2xl relative">
+    <div className="flex flex-col lg:flex-row h-[calc(100vh-8rem)] bg-white text-slate-900 overflow-hidden border border-slate-200/90 rounded-2xl m-2 sm:m-4 shadow-xl relative font-sans">
       {/* 1. LEFT COLUMN: Conversation List & Filters (Width: 340px) */}
-      <div className="w-full lg:w-84 border-r border-slate-800 flex flex-col bg-slate-900/90">
+      <div className="w-full lg:w-84 border-r border-slate-200 flex flex-col bg-slate-50/80">
         {/* Search Header */}
-        <div className="p-3 border-b border-slate-800 space-y-2">
+        <div className="p-3 border-b border-slate-200 bg-white space-y-2">
           {/* Live Inbound Mailbox & WhatsApp Triggers */}
           <div className="space-y-1.5">
             <div className="flex items-center space-x-1.5">
               <button
                 onClick={() => setShowInboundFlowModal(true)}
-                className="flex-1 flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-blue-950/40 hover:bg-blue-900/50 border border-blue-500/30 text-blue-200 transition text-left group"
+                className="flex-1 flex items-center justify-between px-2.5 py-1.5 rounded-xl bg-orange-50 hover:bg-orange-100/80 border border-orange-200 text-orange-900 transition text-left group"
               >
                 <div className="flex items-center space-x-2 truncate">
-                  <Mail className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+                  <Mail className="w-3.5 h-3.5 text-orange-600 shrink-0" />
                   <div className="truncate">
                     <span className="text-[11px] font-bold block truncate">{INBOUND_MAILBOX}</span>
                   </div>
                 </div>
-                <span className="flex items-center space-x-1 text-[10px] text-blue-400 bg-blue-500/10 px-1.5 py-0.5 rounded shrink-0 border border-blue-500/20">
-                  <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse"></span>
+                <span className="flex items-center space-x-1 text-[10px] text-orange-700 bg-orange-200/50 px-1.5 py-0.5 rounded-full shrink-0 border border-orange-300/40">
+                  <span className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse"></span>
                   <span>Email</span>
                 </span>
               </button>
@@ -398,25 +457,25 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
                 <button
                   onClick={onSyncNow}
                   title="Sync Inbound Mailbox with Live Server"
-                  className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 transition shrink-0"
+                  className="p-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 transition shrink-0"
                 >
-                  <RefreshCw className="w-3.5 h-3.5" />
+                  <RefreshCw className="w-3.5 h-3.5 text-slate-600" />
                 </button>
               )}
             </div>
 
             <button
               onClick={() => setShowInboundWhatsAppModal(true)}
-              className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-emerald-950/40 hover:bg-emerald-900/50 border border-emerald-500/30 text-emerald-200 transition text-left group"
+              className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100/80 border border-emerald-200 text-emerald-900 transition text-left group"
             >
               <div className="flex items-center space-x-2 truncate">
-                <MessageSquare className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                <MessageSquare className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
                 <div className="truncate">
                   <span className="text-[11px] font-bold block truncate font-mono">{WHATSAPP_BUSINESS_NUMBER_FORMATTED}</span>
                 </div>
               </div>
-              <span className="flex items-center space-x-1 text-[10px] text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded shrink-0 border border-emerald-500/20">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+              <span className="flex items-center space-x-1 text-[10px] text-emerald-700 bg-emerald-100/80 px-1.5 py-0.5 rounded-full shrink-0 border border-emerald-200">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
                 <span>WhatsApp Flow</span>
               </span>
             </button>
@@ -429,7 +488,7 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
               placeholder="Search conversations, contacts..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-slate-800/80 border border-slate-700/80 rounded-lg pl-9 pr-3 py-1.5 text-xs placeholder:text-slate-500 focus:outline-none focus:border-emerald-500 transition"
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-3 py-1.5 text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 transition"
             />
           </div>
 
@@ -439,10 +498,10 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
               <button
                 key={ch}
                 onClick={() => setChannelFilter(ch)}
-                className={`px-2 py-1 rounded-md whitespace-nowrap font-medium transition ${
+                className={`px-2.5 py-1 rounded-lg whitespace-nowrap font-bold transition ${
                   channelFilter === ch
-                    ? 'bg-emerald-600 text-white shadow-sm'
-                    : 'bg-slate-800 text-slate-400 hover:text-slate-200'
+                    ? 'bg-orange-500 text-white shadow-sm'
+                    : 'bg-slate-100 text-slate-600 hover:text-slate-900 hover:bg-slate-200'
                 }`}
               >
                 {ch}
@@ -462,36 +521,36 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
             </button>
             <button
               onClick={() => setStatusFilter('UNREAD')}
-              className={`px-2 py-0.5 rounded transition whitespace-nowrap ${
-                statusFilter === 'UNREAD' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-slate-200'
+              className={`px-2 py-0.5 rounded-md font-semibold transition whitespace-nowrap ${
+                statusFilter === 'UNREAD' ? 'bg-orange-500 text-white' : 'text-slate-500 hover:text-slate-800'
               }`}
             >
               Unread
             </button>
             <button
               onClick={() => setStatusFilter('AI_ACTIVE')}
-              className={`px-2 py-0.5 rounded transition whitespace-nowrap ${
-                statusFilter === 'AI_ACTIVE' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-slate-200'
+              className={`px-2 py-0.5 rounded-md font-semibold transition whitespace-nowrap ${
+                statusFilter === 'AI_ACTIVE' ? 'bg-slate-900 text-white' : 'text-slate-500 hover:text-slate-800'
               }`}
             >
               AI Active
             </button>
             <button
               onClick={() => setStatusFilter('HUMAN_HANDOFF')}
-              className={`px-2 py-0.5 rounded transition whitespace-nowrap ${
+              className={`px-2 py-0.5 rounded-md font-semibold transition whitespace-nowrap ${
                 statusFilter === 'HUMAN_HANDOFF'
-                  ? 'bg-amber-600 text-white'
-                  : 'text-slate-400 hover:text-slate-200'
+                  ? 'bg-amber-500 text-white'
+                  : 'text-slate-500 hover:text-slate-800'
               }`}
             >
               Handoff
             </button>
             <button
               onClick={() => setStatusFilter('HIGH_INTENT')}
-              className={`px-2 py-0.5 rounded transition whitespace-nowrap ${
+              className={`px-2 py-0.5 rounded-md font-semibold transition whitespace-nowrap ${
                 statusFilter === 'HIGH_INTENT'
-                  ? 'bg-emerald-600 text-white'
-                  : 'text-slate-400 hover:text-slate-200'
+                  ? 'bg-orange-500 text-white'
+                  : 'text-slate-500 hover:text-slate-800'
               }`}
             >
               High Intent
@@ -500,9 +559,9 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
         </div>
 
         {/* Conversation List */}
-        <div className="flex-1 overflow-y-auto divide-y divide-slate-800/60">
+        <div className="flex-1 overflow-y-auto divide-y divide-slate-100 bg-white">
           {filteredConversations.length === 0 ? (
-            <div className="p-8 text-center text-slate-500 text-xs">
+            <div className="p-8 text-center text-slate-400 text-xs font-medium">
               No conversations found matching filters.
             </div>
           ) : (
@@ -523,25 +582,25 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
                       onMarkAsRead?.(conv.conversationId);
                     }
                   }}
-                  className={`p-3 cursor-pointer transition relative ${
+                  className={`p-3.5 cursor-pointer transition relative ${
                     isSelected
-                      ? 'bg-slate-800/90 border-l-4 border-emerald-500'
+                      ? 'bg-orange-50/80 border-l-4 border-orange-500'
                       : isUnread
-                      ? 'bg-slate-800/50 hover:bg-slate-800/70'
-                      : 'hover:bg-slate-800/40'
+                      ? 'bg-slate-50 hover:bg-slate-100/80 font-bold'
+                      : 'hover:bg-slate-50'
                   }`}
                 >
                   <div className="flex items-start justify-between">
                     <div className="flex items-center space-x-2">
                       {renderChannelIcon(conv.channel, 4)}
-                      <span className={`text-xs ${isUnread ? 'font-bold text-white' : 'font-semibold text-slate-200'}`}>
+                      <span className={`text-xs ${isUnread ? 'font-black text-slate-900' : 'font-bold text-slate-800'}`}>
                         {contact?.firstName} {contact?.lastName}
                       </span>
                       {isUnread && (
-                        <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" title="Unread Message" />
+                        <span className="w-2 h-2 rounded-full bg-orange-500 animate-pulse" title="Unread Message" />
                       )}
                     </div>
-                    <span className="text-[10px] text-slate-500">
+                    <span className="text-[10px] text-slate-400 font-medium">
                       {new Date(conv.lastMessageAt || conv.createdAt || 0).toLocaleDateString([], {
                         month: 'short',
                         day: 'numeric',
@@ -549,40 +608,40 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
                     </span>
                   </div>
 
-                  <p className="text-[11px] text-slate-400 font-medium mt-0.5 truncate">
+                  <p className="text-[11px] text-slate-500 font-medium mt-0.5 truncate">
                     {contact?.companyName}
                   </p>
 
-                  <p className={`text-xs mt-1 line-clamp-2 leading-relaxed ${isUnread ? 'text-slate-200 font-medium' : 'text-slate-400'}`}>
+                  <p className={`text-xs mt-1 line-clamp-2 leading-relaxed ${isUnread ? 'text-slate-900 font-semibold' : 'text-slate-600'}`}>
                     {conv.lastMessageText || 'New conversation started'}
                   </p>
 
-                  <div className="flex items-center justify-between mt-2 pt-1 border-t border-slate-800/40 text-[10px]">
+                  <div className="flex items-center justify-between mt-2 pt-1 border-t border-slate-100 text-[10px]">
                     <div className="flex items-center space-x-1.5 flex-wrap gap-y-1">
                       {conv.direction === 'OUTBOUND' ? (
-                        <span className="px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-300 font-medium">
+                        <span className="px-2 py-0.5 rounded-full bg-slate-900 text-white font-bold">
                           Outbound
                         </span>
                       ) : (
-                        <span className="px-1.5 py-0.5 rounded bg-teal-500/20 text-teal-300 font-medium">
+                        <span className="px-2 py-0.5 rounded-full bg-orange-100 text-orange-800 font-bold border border-orange-200">
                           Inbound
                         </span>
                       )}
 
                       {lead?.intent === 'HIGH' && (
-                        <span className="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400 font-medium">
+                        <span className="px-2 py-0.5 rounded-full bg-orange-500 text-white font-bold">
                           High Intent
                         </span>
                       )}
 
                       {hasPendingDraft && (
-                        <span className="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 font-semibold border border-amber-500/30">
+                        <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 font-bold border border-amber-200">
                           Draft Ready
                         </span>
                       )}
 
                       {conv.managementMode && (
-                        <span className="px-1.5 py-0.5 rounded bg-slate-700/60 text-slate-300 font-mono text-[9px]">
+                        <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 font-mono text-[9px] border border-slate-200">
                           {conv.managementMode}
                         </span>
                       )}
@@ -590,17 +649,17 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
 
                     <div>
                       {conv.humanHandoff ? (
-                        <span className="flex items-center space-x-1 text-amber-400 font-medium">
+                        <span className="flex items-center space-x-1 text-orange-600 font-bold">
                           <AlertTriangle className="w-3 h-3" />
                           <span>Handoff</span>
                         </span>
                       ) : conv.aiEnabled ? (
-                        <span className="flex items-center space-x-1 text-blue-400 font-medium">
-                          <Bot className="w-3 h-3" />
+                        <span className="flex items-center space-x-1 text-slate-900 font-bold">
+                          <Bot className="w-3 h-3 text-orange-500" />
                           <span>AI On</span>
                         </span>
                       ) : (
-                        <span className="text-slate-500">Manual</span>
+                        <span className="text-slate-400 font-medium">Manual</span>
                       )}
                     </div>
                   </div>
@@ -612,79 +671,61 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
       </div>
 
       {/* 2. MIDDLE COLUMN: Conversation & Message Thread UI */}
-      <div className="flex-1 flex flex-col bg-slate-950 overflow-hidden">
+      <div className="flex-1 flex flex-col bg-slate-50 overflow-hidden">
         {/* Active Conversation Header */}
         {activeConversation && activeContact ? (
           <>
-            <div className="p-3.5 border-b border-slate-800 bg-slate-900/60 flex items-center justify-between">
+            <div className="p-3.5 border-b border-slate-200 bg-white flex items-center justify-between shadow-2xs">
               <div className="flex items-center space-x-3">
-                <div className="w-9 h-9 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center font-bold text-slate-300 text-sm">
+                <div className="w-9 h-9 rounded-full bg-slate-900 text-white font-bold flex items-center justify-center text-sm shadow-xs">
                   {activeContact.firstName?.[0]}
                   {activeContact.lastName?.[0]}
                 </div>
                 <div>
                   <div className="flex items-center space-x-2">
-                    <h3 className="font-semibold text-sm text-slate-100">
+                    <h3 className="font-extrabold text-sm text-slate-900">
                       {activeContact.firstName} {activeContact.lastName}
                     </h3>
-                    <div className="flex items-center space-x-1 text-xs text-slate-400">
+                    <div className="flex items-center space-x-1 text-xs text-slate-500 font-medium">
                       {renderChannelIcon(activeConversation.channel, 3.5)}
                       <span className="capitalize">{activeConversation.channel.toLowerCase()}</span>
                     </div>
                     {(activeLead?.demoStatus === 'BOOKED' || activeLead?.status === 'DEMO_BOOKED') && (
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 flex items-center gap-1">
-                        <Sparkles className="w-2.5 h-2.5 text-emerald-400" />
+                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-orange-100 text-orange-800 border border-orange-200 flex items-center gap-1">
+                        <Sparkles className="w-2.5 h-2.5 text-orange-600" />
                         <span>Demo Booked</span>
                       </span>
                     )}
                   </div>
-                  <p className="text-xs text-slate-400 flex items-center flex-wrap gap-x-2 gap-y-0.5 mt-0.5">
-                    <span>
-                      {activeContact.jobTitle || 'Decision Maker'} at{' '}
-                      <span className="text-slate-300 font-medium">{activeContact.companyName}</span>
-                    </span>
-                    <span>•</span>
-                    <span className="inline-flex items-center gap-1 font-mono text-blue-300 bg-blue-950/40 px-1.5 py-0.2 rounded border border-blue-800/40">
-                      <Mail className="w-3 h-3 text-blue-400" />
-                      {effectiveEmail || 'No email'}
-                    </span>
+                  <p className="text-xs text-slate-500 font-medium">
+                    {activeContact.jobTitle || 'Decision Maker'} at{' '}
+                    <span className="text-slate-900 font-bold">{activeContact.companyName}</span> •{' '}
+                    {activeContact.email}
                   </p>
                 </div>
               </div>
 
-              {/* Actions & Takeover Toggle */}
+              {/* AI vs Human Takeover Toggle & SMTP Settings */}
               <div className="flex items-center space-x-2">
-                {/* 1-Click Send / Resend Thank-You Email */}
-                {effectiveEmail ? (
-                  isThankYouDelivered ? (
-                    <span
-                      className="px-2.5 py-1 rounded-md text-[11px] font-medium bg-emerald-950/60 border border-emerald-600/40 text-emerald-300 flex items-center gap-1.5"
-                      title={`Delivered via Gmail SMTP to ${effectiveEmail}`}
-                    >
-                      <CheckCircle className="w-3.5 h-3.5 text-emerald-400" />
-                      <span>Thank-You Sent</span>
-                    </span>
-                  ) : (
-                    <button
-                      onClick={handleDispatchThankYou}
-                      disabled={isSendingThankYou}
-                      className="px-3 py-1 rounded-md bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold flex items-center space-x-1.5 transition shadow-sm disabled:opacity-50"
-                      title={`Send live walkthrough and demo confirmation email to ${effectiveEmail}`}
-                    >
-                      {isSendingThankYou ? (
-                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                      ) : (
-                        <Send className="w-3.5 h-3.5" />
-                      )}
-                      <span>Send Thank-You Email</span>
-                    </button>
-                  )
-                ) : null}
+                {activeConversation.channel === 'EMAIL' && (
+                  <button
+                    onClick={() => setShowSmtpModal(true)}
+                    className={`flex items-center space-x-1 px-2.5 py-1 rounded-xl text-xs font-bold border transition ${
+                      smtpStatus?.configured
+                        ? 'bg-slate-900 text-white border-slate-900'
+                        : 'bg-orange-500 text-white border-orange-500 animate-pulse'
+                    }`}
+                    title="Configure SMTP Delivery & Gmail App Password"
+                  >
+                    <Key className="w-3 h-3" />
+                    <span>{smtpStatus?.configured ? 'SMTP Live' : 'Configure SMTP'}</span>
+                  </button>
+                )}
 
                 {activeConversation.humanHandoff ? (
                   <button
                     onClick={() => onToggleAi(activeConversation.conversationId, true)}
-                    className="flex items-center space-x-1.5 px-3 py-1 rounded-md bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium transition shadow-sm"
+                    className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-xs font-bold transition shadow-xs"
                   >
                     <Bot className="w-3.5 h-3.5" />
                     <span>Resume AI</span>
@@ -692,7 +733,7 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
                 ) : (
                   <button
                     onClick={() => onToggleAi(activeConversation.conversationId, false)}
-                    className="flex items-center space-x-1.5 px-3 py-1 rounded-md bg-amber-600 hover:bg-amber-500 text-white text-xs font-medium transition shadow-sm"
+                    className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-black text-white text-xs font-bold transition shadow-xs"
                   >
                     <User className="w-3.5 h-3.5" />
                     <span>Take Over (Human)</span>
@@ -700,20 +741,20 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
                 )}
 
                 <div
-                  className={`px-2.5 py-1 rounded-md text-xs font-semibold flex items-center space-x-1 border ${
+                  className={`px-3 py-1 rounded-xl text-xs font-extrabold flex items-center space-x-1 border ${
                     activeConversation.aiEnabled && !activeConversation.humanHandoff
-                      ? 'bg-blue-950/60 border-blue-800 text-blue-400'
-                      : 'bg-amber-950/60 border-amber-800 text-amber-400'
+                      ? 'bg-orange-50 text-orange-700 border-orange-200'
+                      : 'bg-slate-100 text-slate-800 border-slate-200'
                   }`}
                 >
                   {activeConversation.aiEnabled && !activeConversation.humanHandoff ? (
                     <>
-                      <Zap className="w-3.5 h-3.5" />
+                      <Zap className="w-3.5 h-3.5 text-orange-500" />
                       <span>AI AUTO-REPLY ON</span>
                     </>
                   ) : (
                     <>
-                      <UserCheck className="w-3.5 h-3.5" />
+                      <UserCheck className="w-3.5 h-3.5 text-slate-700" />
                       <span>HUMAN MANAGED</span>
                     </>
                   )}
@@ -721,36 +762,10 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
               </div>
             </div>
 
-            {/* Notification alert banner when thank-you email is sent */}
-            {thankYouStatusMsg && (
-              <div
-                className={`px-4 py-2 text-xs flex items-center justify-between border-b ${
-                  thankYouStatusMsg.type === 'success'
-                    ? 'bg-emerald-950/80 border-emerald-700 text-emerald-200'
-                    : 'bg-rose-950/80 border-rose-700 text-rose-200'
-                }`}
-              >
-                <div className="flex items-center space-x-2">
-                  {thankYouStatusMsg.type === 'success' ? (
-                    <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0" />
-                  ) : (
-                    <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
-                  )}
-                  <span>{thankYouStatusMsg.text}</span>
-                </div>
-                <button
-                  onClick={() => setThankYouStatusMsg(null)}
-                  className="text-slate-400 hover:text-white"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            )}
-
-            {/* Omnichannel Platform Navigation Tabs (Section 55 - Unified Multi-Platform Conversations) */}
-            <div className="px-3.5 py-2 bg-slate-900/90 border-b border-slate-800 flex items-center justify-between gap-2 overflow-x-auto">
+            {/* Omnichannel Platform Navigation Tabs */}
+            <div className="px-3.5 py-2 bg-white border-b border-slate-200 flex items-center justify-between gap-2 overflow-x-auto">
               <div className="flex items-center space-x-1.5 overflow-x-auto text-xs scrollbar-none">
-                <span className="text-[11px] text-slate-400 font-medium mr-1 flex items-center space-x-1 whitespace-nowrap">
+                <span className="text-[11px] text-slate-500 font-bold mr-1 flex items-center space-x-1 whitespace-nowrap">
                   <Layers className="w-3.5 h-3.5 text-slate-400" />
                   <span>Platforms:</span>
                 </span>
@@ -758,17 +773,17 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
                 {/* All Platforms Unified Stream Tab */}
                 <button
                   onClick={() => setIsUnifiedAllPlatforms(true)}
-                  className={`px-2.5 py-1 rounded-md text-xs font-medium flex items-center space-x-1.5 transition whitespace-nowrap ${
+                  className={`px-3 py-1 rounded-lg text-xs font-bold flex items-center space-x-1.5 transition whitespace-nowrap ${
                     isUnifiedAllPlatforms
-                      ? 'bg-emerald-600 text-white shadow-md'
-                      : 'bg-slate-800/80 text-slate-300 hover:bg-slate-700 hover:text-white'
+                      ? 'bg-orange-500 text-white shadow-xs'
+                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                   }`}
                 >
                   <Globe className="w-3.5 h-3.5" />
                   <span>All Platforms Stream</span>
                   <span
-                    className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
-                      isUnifiedAllPlatforms ? 'bg-white/20 text-white' : 'bg-slate-700 text-slate-300'
+                    className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
+                      isUnifiedAllPlatforms ? 'bg-white text-orange-600' : 'bg-slate-200 text-slate-800'
                     }`}
                   >
                     {unifiedAllMessages.length}
@@ -787,17 +802,17 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
                         setIsUnifiedAllPlatforms(false);
                         setSelectedConversationId(conv.conversationId);
                       }}
-                      className={`px-2.5 py-1 rounded-md text-xs font-medium flex items-center space-x-1.5 transition whitespace-nowrap ${
+                      className={`px-3 py-1 rounded-lg text-xs font-bold flex items-center space-x-1.5 transition whitespace-nowrap ${
                         isSelected
-                          ? 'bg-emerald-600 text-white shadow-sm'
-                          : 'bg-slate-800/80 text-slate-300 hover:bg-slate-700 hover:text-white'
+                          ? 'bg-orange-500 text-white shadow-xs'
+                          : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                       }`}
                     >
                       {renderChannelIcon(conv.channel, 3.5)}
                       <span className="capitalize">{conv.channel.toLowerCase()}</span>
                       <span
-                        className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
-                          isSelected ? 'bg-white/20 text-white' : 'bg-slate-700 text-slate-300'
+                        className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
+                          isSelected ? 'bg-white text-orange-600' : 'bg-slate-200 text-slate-800'
                         }`}
                       >
                         {convMsgs.length}
@@ -810,35 +825,31 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
               {/* Simulate Inbound Button */}
               <button
                 onClick={() => setShowSimulateModal(true)}
-                className="flex items-center space-x-1 px-2.5 py-1 rounded-md bg-purple-900/40 hover:bg-purple-800/60 text-purple-300 border border-purple-700/50 text-xs font-medium transition whitespace-nowrap"
+                className="flex items-center space-x-1 px-3 py-1 rounded-lg bg-slate-900 hover:bg-black text-white text-xs font-bold transition whitespace-nowrap"
                 title="Simulate receiving an inbound message from another platform"
               >
-                <Sparkles className="w-3.5 h-3.5 text-purple-400" />
+                <Sparkles className="w-3.5 h-3.5 text-orange-400" />
                 <span>Simulate Inbound Platform Msg</span>
               </button>
             </div>
 
             {/* Email Metadata banner if email channel */}
             {!isUnifiedAllPlatforms && activeConversation.channel === 'EMAIL' && (
-              <div className="px-4 py-2 bg-slate-900 border-b border-slate-800 text-xs text-slate-300 flex items-center justify-between">
+              <div className="px-4 py-2 bg-slate-50 border-b border-slate-200 text-xs text-slate-700 flex items-center justify-between font-medium">
                 <div className="flex items-center space-x-2 truncate">
-                  <span className="font-semibold text-slate-400">Subject:</span>
-                  <span className="font-medium text-slate-200 truncate">
+                  <span className="font-bold text-slate-500">Subject:</span>
+                  <span className="font-bold text-slate-900 truncate">
                     {activeMessages[0]?.emailMeta?.subject || activeConversation.conversationSummary || 'Umrah360 Inquiry'}
                   </span>
                 </div>
-                <div className="flex items-center space-x-3 text-[11px] text-slate-400 font-mono">
+                <div className="flex items-center space-x-3 text-[11px] text-slate-500 font-mono">
                   {activeConversation.gmailThreadId && (
-                    <span className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-300">
+                    <span className="px-2 py-0.5 rounded-md bg-white border border-slate-200 text-slate-700 font-bold">
                       Gmail Thread: {activeConversation.gmailThreadId.slice(0, 16)}...
                     </span>
                   )}
                   {activeConversation.managementMode && (
-                    <span className={`px-1.5 py-0.5 rounded text-[10px] font-sans font-semibold uppercase ${
-                      activeConversation.managementMode === 'AI' || (activeConversation.managementMode as any) === 'AUTONOMOUS'
-                        ? 'bg-emerald-500/20 text-emerald-300'
-                        : 'bg-amber-500/20 text-amber-300'
-                    }`}>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-sans font-bold uppercase bg-orange-100 text-orange-800 border border-orange-200">
                       {activeConversation.managementMode} MODE
                     </span>
                   )}
@@ -848,23 +859,23 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
 
             {/* Unified Stream Notification Banner */}
             {isUnifiedAllPlatforms && (
-              <div className="px-4 py-1.5 bg-emerald-950/40 border-b border-emerald-900/60 text-[11px] text-emerald-300 flex items-center justify-between">
+              <div className="px-4 py-1.5 bg-orange-50 border-b border-orange-200 text-[11px] text-orange-900 flex items-center justify-between font-medium">
                 <div className="flex items-center space-x-2">
-                  <Globe className="w-3.5 h-3.5 text-emerald-400" />
+                  <Globe className="w-3.5 h-3.5 text-orange-600" />
                   <span>
                     Unified Stream active: Showing complete chronological history across{' '}
                     <strong>{contactConversations.length} connected platforms</strong> (
                     {contactConversations.map((c) => c.channel).join(', ')}).
                   </span>
                 </div>
-                <span className="text-emerald-400/80 font-medium">All Interactions Linked</span>
+                <span className="text-orange-700 font-bold">All Interactions Linked</span>
               </div>
             )}
 
             {/* Message Thread Scroll Area */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50/50">
               {displayMessages.length === 0 ? (
-                <div className="text-center py-12 text-slate-500 text-xs">
+                <div className="text-center py-12 text-slate-400 text-xs font-medium">
                   No messages on this platform yet. Use &ldquo;Simulate Inbound Platform Msg&rdquo; or dispatch cold outreach.
                 </div>
               ) : (
@@ -878,23 +889,21 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
                       className={`flex flex-col ${isIncoming ? 'items-start' : 'items-end'}`}
                     >
                       {/* Sender label & Platform Badge */}
-                      <div className="flex items-center space-x-2 text-[11px] text-slate-400 mb-1 px-1">
+                      <div className="flex items-center space-x-2 text-[11px] text-slate-500 font-medium mb-1 px-1">
                         {/* Channel Badge */}
                         <span
-                          className={`px-1.5 py-0.2 rounded text-[10px] font-semibold border flex items-center space-x-1 ${getChannelColor(
-                            msg.channel
-                          )}`}
+                          className={`px-2 py-0.5 rounded-full text-[10px] font-bold border flex items-center space-x-1 bg-white text-slate-800 border-slate-200 shadow-2xs`}
                         >
                           {renderChannelIcon(msg.channel, 2.5)}
                           <span className="uppercase">{msg.channel}</span>
                         </span>
 
-                        <span className="font-medium">
+                        <span className="font-bold text-slate-800">
                           {msg.senderName || (isIncoming ? activeContact.firstName : 'Umrah360 Agent')}
                         </span>
                         {isAi && (
-                          <span className="px-1.5 py-0.2 rounded bg-blue-500/20 text-blue-400 font-semibold border border-blue-500/30 flex items-center space-x-1">
-                            <Bot className="w-2.5 h-2.5" />
+                          <span className="px-2 py-0.5 rounded-full bg-orange-100 text-orange-800 font-bold border border-orange-200 flex items-center space-x-1 text-[10px]">
+                            <Bot className="w-2.5 h-2.5 text-orange-600" />
                             <span>AI Grounded</span>
                           </span>
                         )}
@@ -909,68 +918,63 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
 
                       {/* Bubble */}
                       <div
-                        className={`max-w-xl p-3.5 rounded-xl text-xs leading-relaxed ${
+                        className={`max-w-xl p-4 rounded-2xl text-xs leading-relaxed ${
                           isIncoming
-                            ? 'bg-slate-800 text-slate-100 rounded-tl-none border border-slate-700/80 shadow-sm'
+                            ? 'bg-white text-slate-900 rounded-tl-xs border border-slate-200/90 shadow-2xs'
                             : isAi
-                            ? 'bg-blue-950/80 text-blue-50 rounded-tr-none border border-blue-800/80 shadow-sm'
-                            : 'bg-emerald-900/70 text-emerald-50 rounded-tr-none border border-emerald-700/80 shadow-sm'
+                            ? 'bg-slate-900 text-white rounded-tr-xs shadow-xs'
+                            : 'bg-orange-500 text-white rounded-tr-xs shadow-xs'
                         }`}
                       >
-                        <div className="whitespace-pre-wrap">{msg.text}</div>
-
-                        {/* Outbound live email delivery tracking & inline trigger */}
-                        {!isIncoming && (
-                          <div className="mt-2.5 pt-2 border-t border-slate-700/60">
-                            {msg.deliveryStatus === 'DELIVERED' || (msg.smtpMessageId && msg.smtpMessageId.startsWith('<')) ? (
-                              <div className="text-[10px] text-emerald-300 flex items-center justify-between flex-wrap gap-1">
-                                <span className="flex items-center space-x-1">
-                                  <CheckCircle className="w-3 h-3 text-emerald-400 shrink-0" />
-                                  <span>Live Email Delivered to {msg.recipientEmail || effectiveEmail}</span>
-                                </span>
-                                {msg.smtpMessageId && (
-                                  <span className="font-mono text-[9px] text-emerald-400/80 truncate max-w-[150px]" title={msg.smtpMessageId}>
-                                    {msg.smtpMessageId}
-                                  </span>
-                                )}
-                              </div>
-                            ) : msg.deliveryStatus === 'FAILED' ? (
-                              <div className="text-[10px] text-rose-300 flex items-center justify-between flex-wrap gap-1">
-                                <span className="flex items-center space-x-1">
-                                  <AlertCircle className="w-3 h-3 text-rose-400 shrink-0" />
-                                  <span>Email not delivered to {msg.recipientEmail || effectiveEmail}</span>
-                                </span>
-                                <button
-                                  onClick={handleDispatchThankYou}
-                                  disabled={isSendingThankYou}
-                                  className="px-2 py-0.5 rounded bg-blue-600 hover:bg-blue-500 text-white font-medium text-[10px]"
-                                >
-                                  Retry Send
-                                </button>
-                              </div>
-                            ) : (
-                              <div className="text-[10px] text-amber-300/90 flex items-center justify-between bg-amber-950/40 p-1.5 rounded border border-amber-800/40 flex-wrap gap-1">
-                                <span className="flex items-center space-x-1">
-                                  <AlertCircle className="w-3 h-3 text-amber-400 shrink-0" />
-                                  <span>Recorded in CRM • Live mail pending for {effectiveEmail || 'lead'}</span>
-                                </span>
-                                <button
-                                  onClick={handleDispatchThankYou}
-                                  disabled={isSendingThankYou || !effectiveEmail}
-                                  className="ml-auto px-2 py-0.5 rounded bg-blue-600 hover:bg-blue-500 text-white font-semibold text-[10px] shrink-0"
-                                >
-                                  {isSendingThankYou ? 'Sending...' : 'Send Live Email'}
-                                </button>
-                              </div>
-                            )}
-                          </div>
-                        )}
+                        <div className="whitespace-pre-wrap font-medium">{msg.text}</div>
 
                         {/* RAG sources indicator */}
                         {msg.knowledgeSources && msg.knowledgeSources.length > 0 && (
                           <div className="mt-2.5 pt-2 border-t border-blue-800/40 text-[10px] text-blue-300/80 flex items-center space-x-1.5">
                             <ShieldCheck className="w-3 h-3 text-blue-400" />
                             <span>Knowledge Sources: {msg.knowledgeSources.join(', ')}</span>
+                          </div>
+                        )}
+
+                        {/* Email Live Delivery Status Badge (Outbound) */}
+                        {!isIncoming && (msg.channel === 'EMAIL' || msg.emailMeta) && (
+                          <div className="mt-2.5 pt-2 border-t border-slate-700/60 flex items-center justify-between text-[10px]">
+                            {msg.smtpStatus === 'DELIVERED' ? (
+                              <span className="flex items-center space-x-1 text-emerald-400 font-medium">
+                                <CheckCircle2 className="w-3 h-3 text-emerald-400 shrink-0" />
+                                <span>Delivered via SMTP to {msg.emailMeta?.to || activeContact.email}</span>
+                              </span>
+                            ) : msg.smtpStatus === 'DELIVERY_FAILED' ? (
+                              <div className="flex items-center justify-between w-full">
+                                <span className="flex items-center space-x-1 text-amber-300 font-medium">
+                                  <AlertTriangle className="w-3 h-3 text-amber-400 shrink-0" />
+                                  <span className="truncate max-w-[260px]">
+                                    Not delivered: {msg.smtpError || 'SMTP connection required'}
+                                  </span>
+                                </span>
+                                <div className="flex items-center space-x-1.5 ml-2">
+                                  <button
+                                    onClick={() => setShowSmtpModal(true)}
+                                    className="px-2 py-0.5 rounded bg-amber-600 hover:bg-amber-500 text-white font-semibold transition"
+                                  >
+                                    Setup SMTP
+                                  </button>
+                                  <button
+                                    onClick={() => handleRetrySendEmail(msg)}
+                                    disabled={retryingMessageId === msg.messageId}
+                                    className="px-2 py-0.5 rounded bg-slate-700 hover:bg-slate-600 text-slate-200 transition flex items-center space-x-1"
+                                  >
+                                    <RefreshCw className={`w-2.5 h-2.5 ${retryingMessageId === msg.messageId ? 'animate-spin' : ''}`} />
+                                    <span>Retry</span>
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
+                              <span className="flex items-center space-x-1 text-blue-300">
+                                <Mail className="w-3 h-3 text-blue-400 shrink-0" />
+                                <span>Sent to {msg.emailMeta?.to || activeContact.email}</span>
+                              </span>
+                            )}
                           </div>
                         )}
                       </div>
@@ -1124,79 +1128,40 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
 
       {/* 3. RIGHT COLUMN: Lead Profile 360 & Conversation Memory (Width: 320px) */}
       {activeConversation && activeContact && (
-        <div className="w-full lg:w-80 border-l border-slate-800 bg-slate-900/95 p-4 overflow-y-auto space-y-4">
+        <div className="w-full lg:w-80 border-l border-slate-200 bg-white p-5 overflow-y-auto space-y-4 font-sans">
           {/* Customer Card Header */}
-          <div className="border-b border-slate-800 pb-3">
+          <div className="border-b border-slate-100 pb-3">
             <div className="flex items-center justify-between">
-              <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+              <span className="text-[11px] font-extrabold text-slate-500 uppercase tracking-wider">
                 Lead Profile 360
               </span>
               {activeLead && (
                 <button
                   onClick={() => onViewLeadInCrm(activeLead.leadId)}
-                  className="text-[11px] text-emerald-400 hover:text-emerald-300 flex items-center space-x-0.5"
+                  className="text-[11px] font-bold text-orange-600 hover:text-orange-700 flex items-center space-x-0.5"
                 >
                   <span>Open CRM</span>
                   <ArrowUpRight className="w-3 h-3" />
                 </button>
               )}
             </div>
-            <h4 className="font-bold text-sm text-slate-100 mt-2">
+            <h4 className="font-extrabold text-sm text-slate-900 mt-2">
               {activeContact.firstName} {activeContact.lastName}
             </h4>
-            <div className="flex items-center space-x-1.5 text-xs text-slate-300 mt-0.5">
+            <div className="flex items-center space-x-1.5 text-xs text-slate-600 mt-0.5 font-medium">
               <Building className="w-3.5 h-3.5 text-slate-400" />
               <span>{activeContact.companyName}</span>
             </div>
           </div>
 
-          {/* Lead Email & Quick Dispatch Action */}
-          <div className="p-3 bg-slate-800/80 rounded-lg border border-slate-700/60 space-y-2">
+          {/* Connected Channels & Platform Streams */}
+          <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200/90 space-y-2.5">
             <div className="flex items-center justify-between text-xs">
-              <span className="text-slate-300 font-semibold flex items-center space-x-1.5">
-                <Mail className="w-3.5 h-3.5 text-blue-400" />
-                <span>Lead Email Field</span>
-              </span>
-              {isThankYouDelivered ? (
-                <span className="text-[10px] text-emerald-400 font-semibold flex items-center gap-0.5">
-                  <CheckCircle className="w-3 h-3" />
-                  <span>Delivered</span>
-                </span>
-              ) : (
-                <span className="text-[10px] text-amber-400 font-semibold">
-                  Pending
-                </span>
-              )}
-            </div>
-
-            <div className="p-2 rounded bg-slate-900 border border-slate-700/80 font-mono text-[11px] text-blue-300 break-all select-all">
-              {effectiveEmail || '(No email on file)'}
-            </div>
-
-            {effectiveEmail && (
-              <button
-                onClick={handleDispatchThankYou}
-                disabled={isSendingThankYou}
-                className="w-full py-1.5 rounded-md text-xs font-semibold flex items-center justify-center space-x-1.5 bg-blue-600 hover:bg-blue-500 text-white transition disabled:opacity-50 shadow-sm"
-              >
-                {isSendingThankYou ? (
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                ) : (
-                  <Send className="w-3.5 h-3.5" />
-                )}
-                <span>{isThankYouDelivered ? 'Resend Thank-You Email' : 'Send Thank-You to This Email'}</span>
-              </button>
-            )}
-          </div>
-
-          {/* Connected Channels & Platform Streams (Section 55 Omnichannel Customer 360) */}
-          <div className="p-3 bg-slate-800/80 rounded-lg border border-slate-700/60 space-y-2">
-            <div className="flex items-center justify-between text-xs">
-              <span className="text-slate-300 font-semibold flex items-center space-x-1.5">
-                <Smartphone className="w-3.5 h-3.5 text-emerald-400" />
+              <span className="text-slate-900 font-bold flex items-center space-x-1.5">
+                <Smartphone className="w-3.5 h-3.5 text-orange-500" />
                 <span>Connected Platforms</span>
               </span>
-              <span className="text-[10px] text-slate-400 font-mono">
+              <span className="text-[10px] text-slate-500 font-mono font-bold">
                 {contactConversations.length} Active
               </span>
             </div>
@@ -1214,25 +1179,25 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
                       setIsUnifiedAllPlatforms(false);
                       setSelectedConversationId(conv.conversationId);
                     }}
-                    className={`p-2 rounded-md border text-xs cursor-pointer transition flex items-center justify-between ${
+                    className={`p-2.5 rounded-xl border text-xs cursor-pointer transition flex items-center justify-between ${
                       isSelected
-                        ? 'bg-slate-700/80 border-emerald-500 text-white'
-                        : 'bg-slate-900/60 border-slate-800 hover:bg-slate-700/40 text-slate-300'
+                        ? 'bg-orange-50 border-orange-300 text-orange-900 font-bold'
+                        : 'bg-white border-slate-200 hover:bg-slate-100 text-slate-700 font-medium'
                     }`}
                   >
                     <div className="flex items-center space-x-2">
                       {renderChannelIcon(conv.channel, 3.5)}
-                      <span className="capitalize font-medium">{conv.channel.toLowerCase()}</span>
+                      <span className="capitalize font-bold">{conv.channel.toLowerCase()}</span>
                     </div>
 
                     <div className="flex items-center space-x-1.5">
-                      <span className="text-[10px] text-slate-400">
+                      <span className="text-[10px] text-slate-500 font-bold">
                         {convMsgs.length} msgs
                       </span>
                       {conv.humanHandoff ? (
-                        <span className="w-2 h-2 rounded-full bg-amber-400" title="Human Handoff" />
+                        <span className="w-2 h-2 rounded-full bg-amber-500" title="Human Handoff" />
                       ) : (
-                        <span className="w-2 h-2 rounded-full bg-emerald-400" title="AI Active" />
+                        <span className="w-2 h-2 rounded-full bg-orange-500" title="AI Active" />
                       )}
                     </div>
                   </div>
@@ -1242,60 +1207,60 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
 
             <button
               onClick={() => setIsUnifiedAllPlatforms(true)}
-              className={`w-full py-1.5 rounded-md text-xs font-semibold flex items-center justify-center space-x-1.5 border transition ${
+              className={`w-full py-2 rounded-xl text-xs font-bold flex items-center justify-center space-x-1.5 border transition ${
                 isUnifiedAllPlatforms
-                  ? 'bg-emerald-600 text-white border-emerald-500 shadow-sm'
-                  : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700'
+                  ? 'bg-orange-500 text-white border-orange-500 shadow-xs'
+                  : 'bg-white text-slate-800 border-slate-200 hover:bg-slate-100'
               }`}
             >
-              <Globe className="w-3.5 h-3.5 text-emerald-400" />
+              <Globe className="w-3.5 h-3.5 text-orange-500" />
               <span>Open All-Platform Timeline</span>
             </button>
           </div>
 
           {/* Lead Qualification Score & Intent */}
           {activeLead && (
-            <div className="p-3 bg-slate-800/80 rounded-lg border border-slate-700/60 space-y-2">
+            <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200/90 space-y-2">
               <div className="flex items-center justify-between text-xs">
-                <span className="text-slate-400">Lead Score</span>
-                <span className="font-bold text-emerald-400 text-sm">
+                <span className="text-slate-600 font-bold">Lead Score</span>
+                <span className="font-extrabold text-orange-600 text-sm">
                   {activeLead.leadScore} / 100
                 </span>
               </div>
-              <div className="w-full bg-slate-700 rounded-full h-2 overflow-hidden">
+              <div className="w-full bg-slate-200 rounded-full h-2 overflow-hidden">
                 <div
-                  className="bg-emerald-500 h-2 rounded-full transition-all duration-500"
+                  className="bg-orange-500 h-2 rounded-full transition-all duration-500"
                   style={{ width: `${activeLead.leadScore}%` }}
                 />
               </div>
               <div className="flex items-center justify-between pt-1 text-[11px]">
-                <span className="text-slate-400">Intent:</span>
+                <span className="text-slate-500 font-bold">Intent:</span>
                 <span
-                  className={`px-1.5 py-0.2 rounded font-semibold ${
+                  className={`px-2 py-0.5 rounded-full font-bold ${
                     activeLead.intent === 'HIGH'
-                      ? 'bg-emerald-500/20 text-emerald-300'
-                      : 'bg-amber-500/20 text-amber-300'
+                      ? 'bg-orange-500 text-white'
+                      : 'bg-amber-100 text-amber-900 border border-amber-200'
                   }`}
                 >
                   {activeLead.intent}
                 </span>
               </div>
               <div className="flex items-center justify-between text-[11px]">
-                <span className="text-slate-400">Buying Stage:</span>
-                <span className="text-slate-200 font-medium">{activeLead.buyingStage}</span>
+                <span className="text-slate-500 font-bold">Buying Stage:</span>
+                <span className="text-slate-900 font-extrabold">{activeLead.buyingStage}</span>
               </div>
             </div>
           )}
 
-          {/* Demo Booking (Single Source of Truth) */}
+          {/* Demo Booking */}
           {activeLead && (
-            <div className="p-3 bg-slate-800/80 rounded-lg border border-slate-700/60 flex items-center justify-between">
+            <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200/90 flex items-center justify-between">
               <div>
-                <span className="text-xs font-semibold text-slate-200 flex items-center gap-1">
-                  <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
+                <span className="text-xs font-bold text-slate-900 flex items-center gap-1">
+                  <Sparkles className="w-3.5 h-3.5 text-orange-500" />
                   <span>Demo Status</span>
                 </span>
-                <span className="text-[11px] text-slate-400 block mt-0.5">
+                <span className="text-[11px] text-slate-500 font-medium block mt-0.5">
                   {activeLead.demoStatus === 'BOOKED' || activeLead.status === 'DEMO_BOOKED'
                     ? `Booked (${activeLead.demoSource || 'Manual'})`
                     : 'Not Booked'}
@@ -1314,16 +1279,15 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
                         demoSource: 'MANUAL',
                       }),
                     });
-                    // Also fire score delta or update to trigger refresh
                     onUpdateLeadScore(activeLead.leadId, 0);
                   } catch (e) {
                     console.error('Error toggling demo status:', e);
                   }
                 }}
-                className={`px-2.5 py-1 rounded text-xs font-semibold flex items-center gap-1 border transition ${
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1 border transition ${
                   activeLead.demoStatus === 'BOOKED' || activeLead.status === 'DEMO_BOOKED'
-                    ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 hover:bg-emerald-500/30'
-                    : 'bg-slate-700 text-slate-300 border-slate-600 hover:bg-slate-600'
+                    ? 'bg-orange-500 text-white border-orange-500 hover:bg-orange-600'
+                    : 'bg-slate-900 text-white border-slate-900 hover:bg-black'
                 }`}
               >
                 <span>
@@ -1335,16 +1299,16 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
             </div>
           )}
 
-          {/* Section 23 Conversation Memory (Customer Facts & Extracted Requirements) */}
+          {/* Conversation Memory */}
           <div className="space-y-3">
-            <h5 className="text-xs font-semibold text-slate-300 flex items-center space-x-1">
-              <Bot className="w-3.5 h-3.5 text-blue-400" />
+            <h5 className="text-xs font-bold text-slate-900 flex items-center space-x-1">
+              <Bot className="w-3.5 h-3.5 text-orange-500" />
               <span>Conversation Memory</span>
             </h5>
 
             {/* Requirements */}
-            <div className="p-2.5 bg-slate-800/50 rounded-lg border border-slate-800 text-xs space-y-1.5">
-              <span className="text-[11px] text-slate-400 font-medium">Extracted Needs:</span>
+            <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200/90 text-xs space-y-1.5">
+              <span className="text-[11px] text-slate-500 font-bold">Extracted Needs:</span>
               <div className="flex flex-wrap gap-1">
                 {(Array.isArray(activeLead?.requirements)
                   ? activeLead.requirements
@@ -1354,7 +1318,7 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
                 ).map((req, i) => (
                   <span
                     key={i}
-                    className="px-2 py-0.5 rounded bg-blue-500/10 text-blue-300 border border-blue-500/20 text-[10px]"
+                    className="px-2.5 py-0.5 rounded-full bg-orange-100 text-orange-900 border border-orange-200 text-[10px] font-bold"
                   >
                     {req}
                   </span>
@@ -1364,12 +1328,12 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
 
             {/* Customer Facts */}
             {activeConversation.memory?.customerFacts && (
-              <div className="p-2.5 bg-slate-800/50 rounded-lg border border-slate-800 text-xs space-y-1">
-                <span className="text-[11px] text-slate-400 font-medium">Customer Facts:</span>
-                <ul className="space-y-1 text-[11px] text-slate-300">
+              <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200/90 text-xs space-y-1">
+                <span className="text-[11px] text-slate-500 font-bold">Customer Facts:</span>
+                <ul className="space-y-1 text-[11px] text-slate-800 font-medium">
                   {activeConversation.memory.customerFacts.map((fact, i) => (
                     <li key={i} className="flex items-start space-x-1.5">
-                      <span className="text-emerald-400 mt-0.5">•</span>
+                      <span className="text-orange-500 font-bold mt-0.5">•</span>
                       <span>{fact}</span>
                     </li>
                   ))}
@@ -1562,6 +1526,132 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
             onViewLeadInCrm(leadId);
           }}
         />
+      )}
+
+      {/* SMTP & Live Outbound Mail Delivery Settings Modal */}
+      {showSmtpModal && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-lg p-6 shadow-2xl space-y-5">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center space-x-2">
+                <div className="w-8 h-8 rounded-lg bg-blue-500/20 border border-blue-500/30 flex items-center justify-center text-blue-400">
+                  <Mail className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white">Live Outbound SMTP Delivery Settings</h3>
+                  <p className="text-[11px] text-slate-400">Configure email delivery to send real responses to leads.</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowSmtpModal(false)}
+                className="p-1 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveSmtpConfig} className="space-y-4">
+              <div className="grid grid-cols-3 gap-3">
+                <div className="col-span-2 space-y-1">
+                  <label className="text-xs font-semibold text-slate-300">SMTP Host</label>
+                  <input
+                    type="text"
+                    required
+                    value={smtpHostInput}
+                    onChange={(e) => setSmtpHostInput(e.target.value)}
+                    placeholder="smtp.gmail.com"
+                    className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-xs text-white focus:outline-none focus:border-blue-500 font-mono"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-slate-300">Port</label>
+                  <input
+                    type="number"
+                    required
+                    value={smtpPortInput}
+                    onChange={(e) => setSmtpPortInput(parseInt(e.target.value, 10) || 465)}
+                    className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-xs text-white focus:outline-none focus:border-blue-500 font-mono"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-slate-300">SMTP User / Email</label>
+                <input
+                  type="email"
+                  required
+                  value={smtpUserInput}
+                  onChange={(e) => setSmtpUserInput(e.target.value)}
+                  placeholder="amaavigo@gmail.com"
+                  className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-xs text-white focus:outline-none focus:border-blue-500 font-mono"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-semibold text-slate-300">Gmail App Password (16 chars) / SMTP Password</label>
+                  <span className="text-[10px] text-blue-400">Required for live sending</span>
+                </div>
+                <input
+                  type="password"
+                  value={smtpPassInput}
+                  onChange={(e) => setSmtpPassInput(e.target.value)}
+                  placeholder={smtpStatus?.hasPassword ? '•••••••••••••••• (Password configured)' : 'Enter 16-character Gmail App Password'}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-xs text-white focus:outline-none focus:border-blue-500 font-mono"
+                />
+                <p className="text-[10px] text-slate-400 leading-normal pt-0.5">
+                  For Gmail: Go to <strong className="text-slate-200">myaccount.google.com/apppasswords</strong> &rarr; generate 16-character password (e.g. <code>abcd efgh ijkl mnop</code>).
+                </p>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-slate-300">From Name &amp; Header</label>
+                <input
+                  type="text"
+                  value={smtpFromInput}
+                  onChange={(e) => setSmtpFromInput(e.target.value)}
+                  placeholder="Umrah360 Automation <amaavigo@gmail.com>"
+                  className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-xs text-white focus:outline-none focus:border-blue-500 font-mono"
+                />
+              </div>
+
+              {smtpSaveMessage && (
+                <div
+                  className={`p-3 rounded-xl border flex items-start space-x-2 text-xs ${
+                    smtpSaveMessage.success
+                      ? 'bg-emerald-950/40 border-emerald-500/40 text-emerald-200'
+                      : 'bg-amber-950/40 border-amber-500/40 text-amber-200'
+                  }`}
+                >
+                  {smtpSaveMessage.success ? (
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                  ) : (
+                    <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                  )}
+                  <div className="flex-1">{smtpSaveMessage.text}</div>
+                </div>
+              )}
+
+              <div className="flex items-center justify-end space-x-2 pt-2 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setShowSmtpModal(false)}
+                  className="px-3.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium transition"
+                >
+                  Close
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSavingSmtp}
+                  className="px-4 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold flex items-center space-x-1.5 transition disabled:opacity-50 shadow-md"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${isSavingSmtp ? 'animate-spin' : ''}`} />
+                  <span>{isSavingSmtp ? 'Verifying & Saving...' : 'Save & Verify Connection'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
     </div>
   );

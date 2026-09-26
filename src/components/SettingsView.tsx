@@ -59,40 +59,40 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   };
 
   return (
-    <div className="max-w-5xl mx-auto p-4 space-y-6">
-      <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 shadow-lg flex items-center justify-between">
+    <div className="max-w-5xl mx-auto p-4 space-y-6 font-sans">
+      <div className="bg-white border border-slate-200/90 rounded-2xl p-6 shadow-sm flex items-center justify-between">
         <div>
           <div className="flex items-center space-x-2">
-            <Settings className="w-6 h-6 text-emerald-500" />
-            <h2 className="text-xl font-bold text-white">System Settings & Channel Configurations</h2>
+            <Settings className="w-6 h-6 text-orange-500" />
+            <h2 className="text-xl font-extrabold text-slate-900">System Settings & Channel Configurations</h2>
           </div>
-          <p className="text-xs text-slate-400 mt-1">
-            Section 60 & 61: Configure operational modes (AUTO, REVIEW, SIMULATION), verified email identities,
+          <p className="text-xs text-slate-500 mt-1 font-medium">
+            Configure operational modes (AUTO, REVIEW, SIMULATION), verified email identities,
             and debounce intervals.
           </p>
         </div>
 
         <button
           onClick={handleSave}
-          className="flex items-center space-x-1.5 px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold transition shadow-md"
+          className="flex items-center space-x-1.5 px-4 py-2.5 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-xs font-bold transition shadow-md shadow-orange-500/20"
         >
           {isSaved ? <CheckCircle className="w-4 h-4 text-white" /> : <Save className="w-4 h-4" />}
           <span>{isSaved ? 'Saved!' : 'Save Settings'}</span>
         </button>
       </div>
 
-      {/* Section 60 & 61: Production Channel Modes */}
-      <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 shadow-lg space-y-4">
-        <h3 className="font-bold text-sm text-white flex items-center space-x-2">
-          <Zap className="w-4 h-4 text-amber-400" />
-          <span>Channel Operational Modes (Section 60 & 61)</span>
+      {/* Production Channel Modes */}
+      <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-4">
+        <h3 className="font-extrabold text-sm text-slate-900 flex items-center space-x-2">
+          <Zap className="w-4 h-4 text-orange-500" />
+          <span>Channel Operational Modes</span>
         </h3>
-        <p className="text-xs text-slate-400">
-          • <span className="text-emerald-400 font-semibold">AUTO:</span> Automatically generate,
+        <p className="text-xs text-slate-500 font-medium leading-relaxed">
+          • <span className="text-orange-600 font-bold">AUTO:</span> Automatically generate,
           validate with RAG, and send replies.
-          <br />• <span className="text-blue-400 font-semibold">REVIEW:</span> Generate AI drafts
+          <br />• <span className="text-slate-900 font-bold">REVIEW:</span> Generate AI drafts
           requiring human verification prior to dispatch.
-          <br />• <span className="text-slate-400 font-semibold">SIMULATION:</span> Analyze incoming
+          <br />• <span className="text-slate-500 font-bold">SIMULATION:</span> Analyze incoming
           prompts for insights without drafting responses.
         </p>
 
@@ -103,19 +103,19 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             return (
               <div
                 key={ch}
-                className="bg-slate-800/60 p-4 rounded-xl border border-slate-700/60 space-y-2.5"
+                className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-2.5"
               >
                 <div className="flex items-center justify-between">
-                  <span className="font-semibold text-xs text-white capitalize">
+                  <span className="font-bold text-xs text-slate-900 capitalize">
                     {ch.toLowerCase()}
                   </span>
                   <span
-                    className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
+                    className={`text-[10px] px-2.5 py-0.5 rounded-full font-bold ${
                       currentMode === 'AUTO'
-                        ? 'bg-emerald-500/20 text-emerald-400'
+                        ? 'bg-orange-100 text-orange-800 border border-orange-200'
                         : currentMode === 'REVIEW'
-                        ? 'bg-blue-500/20 text-blue-400'
-                        : 'bg-slate-700 text-slate-300'
+                        ? 'bg-slate-900 text-white'
+                        : 'bg-slate-200 text-slate-700'
                     }`}
                   >
                     {currentMode}
@@ -127,10 +127,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     <button
                       key={m}
                       onClick={() => handleModeChange(ch, m)}
-                      className={`py-1 rounded text-center font-medium transition ${
+                      className={`py-1 rounded-lg text-center font-bold transition ${
                         currentMode === m
-                          ? 'bg-emerald-600 text-white'
-                          : 'bg-slate-800 text-slate-400 hover:text-slate-200'
+                          ? 'bg-orange-500 text-white shadow-xs'
+                          : 'bg-white border border-slate-200 text-slate-600 hover:text-slate-900'
                       }`}
                     >
                       {m}

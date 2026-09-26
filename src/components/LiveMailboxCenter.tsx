@@ -93,10 +93,68 @@ export const LiveMailboxCenter: React.FC<LiveMailboxCenterProps> = ({
   const [isVerifyingSmtp, setIsVerifyingSmtp] = useState<boolean>(false);
   const [smtpVerifyResult, setSmtpVerifyResult] = useState<{ success: boolean; message: string } | null>(null);
 
+  // SMTP Configuration Modal State
+  const [showSmtpConfigModal, setShowSmtpConfigModal] = useState<boolean>(false);
+  const [modalSmtpHost, setModalSmtpHost] = useState<string>('smtp.gmail.com');
+  const [modalSmtpPort, setModalSmtpPort] = useState<number>(465);
+  const [modalSmtpUser, setModalSmtpUser] = useState<string>('amaavigo@gmail.com');
+  const [modalSmtpPass, setModalSmtpPass] = useState<string>('');
+  const [modalSmtpFrom, setModalSmtpFrom] = useState<string>('Umrah360 Automation <amaavigo@gmail.com>');
+  const [isSavingModalSmtp, setIsSavingModalSmtp] = useState<boolean>(false);
+  const [modalSmtpSaveResult, setModalSmtpSaveResult] = useState<{ success: boolean; message: string } | null>(null);
+
   const [isPollingImap, setIsPollingImap] = useState<boolean>(false);
   const [pollResult, setPollResult] = useState<{ success: boolean; count: number; message: string } | null>(null);
 
   const activeMailbox = smtpStatus?.user || imapStatus?.user || INBOUND_MAILBOX || 'amaavigo@gmail.com';
+
+  const handleSaveModalSmtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSavingModalSmtp(true);
+    setModalSmtpSaveResult(null);
+    try {
+      const res = await fetch('/api/smtp/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          host: modalSmtpHost,
+          port: modalSmtpPort,
+          user: modalSmtpUser,
+          pass: modalSmtpPass,
+          from: modalSmtpFrom,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        const verifyRes = await fetch('/api/smtp/verify', { method: 'POST' });
+        const verifyData = await verifyRes.json();
+        if (verifyRes.ok && verifyData.verified) {
+          setModalSmtpSaveResult({
+            success: true,
+            message: `SMTP Connected and verified successfully! Outbound emails will be delivered live via ${modalSmtpHost}.`,
+          });
+        } else {
+          setModalSmtpSaveResult({
+            success: false,
+            message: `Configuration saved, but verification reported: ${verifyData.error || 'Check password'}`,
+          });
+        }
+        fetchStatus();
+      } else {
+        setModalSmtpSaveResult({
+          success: false,
+          message: data.error || 'Failed to save configuration',
+        });
+      }
+    } catch (err: any) {
+      setModalSmtpSaveResult({
+        success: false,
+        message: err?.message || 'Error saving SMTP configuration',
+      });
+    } finally {
+      setIsSavingModalSmtp(false);
+    }
+  };
 
   // WhatsApp Gateway & Setup Modal State
   const [waGatewayStatus, setWaGatewayStatus] = useState<{
@@ -438,20 +496,28 @@ export const LiveMailboxCenter: React.FC<LiveMailboxCenterProps> = ({
         <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-3">
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">SMTP Connection</span>
-            <span
-              className={`px-2 py-0.5 rounded text-[11px] font-medium border ${
-                smtpStatus?.configured
-                  ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
-                  : 'bg-amber-500/20 text-amber-300 border-amber-500/30'
-              }`}
-            >
-              {smtpStatus?.configured ? 'Configured' : 'Needs Credentials'}
-            </span>
+            <div className="flex items-center space-x-1.5">
+              <button
+                onClick={() => setShowSmtpConfigModal(true)}
+                className="px-2 py-0.5 rounded text-[10px] font-semibold bg-blue-500/20 text-blue-300 border border-blue-500/30 hover:bg-blue-500/30 transition"
+              >
+                Configure
+              </button>
+              <span
+                className={`px-2 py-0.5 rounded text-[11px] font-medium border ${
+                  smtpStatus?.configured
+                    ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+                    : 'bg-amber-500/20 text-amber-300 border-amber-500/30'
+                }`}
+              >
+                {smtpStatus?.configured ? 'Configured' : 'Needs Password'}
+              </span>
+            </div>
           </div>
           <div className="space-y-1">
             <div className="flex items-center space-x-2 text-xs text-slate-300 font-mono">
               <Server className="w-3.5 h-3.5 text-blue-400" />
-              <span>{smtpStatus?.host || 'SMTP_HOST not set'}</span>
+              <span>{smtpStatus?.host || 'smtp.gmail.com'}</span>
               <span>:{smtpStatus?.port || 465}</span>
             </div>
             <div className="flex items-center space-x-2 text-xs text-slate-400">
@@ -474,10 +540,13 @@ export const LiveMailboxCenter: React.FC<LiveMailboxCenterProps> = ({
                 <span>Password set</span>
               </span>
             ) : (
-              <span className="text-[11px] text-amber-400 flex items-center space-x-1">
+              <button
+                onClick={() => setShowSmtpConfigModal(true)}
+                className="text-[11px] text-amber-400 hover:underline flex items-center space-x-1"
+              >
                 <AlertTriangle className="w-3 h-3" />
-                <span>No password in .env</span>
-              </span>
+                <span>Add App Password</span>
+              </button>
             )}
           </div>
         </div>
@@ -1219,6 +1288,132 @@ export const LiveMailboxCenter: React.FC<LiveMailboxCenterProps> = ({
                 )}
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* SMTP Configuration Modal */}
+      {showSmtpConfigModal && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-lg p-6 shadow-2xl space-y-5">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center space-x-2">
+                <div className="w-8 h-8 rounded-lg bg-blue-500/20 border border-blue-500/30 flex items-center justify-center text-blue-400">
+                  <Mail className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white">Outbound SMTP Mailbox Configuration</h3>
+                  <p className="text-[11px] text-slate-400">Set up SMTP credentials for real outgoing auto-reply delivery.</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowSmtpConfigModal(false)}
+                className="p-1 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveModalSmtp} className="space-y-4">
+              <div className="grid grid-cols-3 gap-3">
+                <div className="col-span-2 space-y-1">
+                  <label className="text-xs font-semibold text-slate-300">SMTP Host</label>
+                  <input
+                    type="text"
+                    required
+                    value={modalSmtpHost}
+                    onChange={(e) => setModalSmtpHost(e.target.value)}
+                    placeholder="smtp.gmail.com"
+                    className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-xs text-white focus:outline-none focus:border-blue-500 font-mono"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-slate-300">Port</label>
+                  <input
+                    type="number"
+                    required
+                    value={modalSmtpPort}
+                    onChange={(e) => setModalSmtpPort(parseInt(e.target.value, 10) || 465)}
+                    className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-xs text-white focus:outline-none focus:border-blue-500 font-mono"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-slate-300">SMTP User / Email</label>
+                <input
+                  type="email"
+                  required
+                  value={modalSmtpUser}
+                  onChange={(e) => setModalSmtpUser(e.target.value)}
+                  placeholder="amaavigo@gmail.com"
+                  className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-xs text-white focus:outline-none focus:border-blue-500 font-mono"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-semibold text-slate-300">Gmail App Password (16 chars)</label>
+                  <span className="text-[10px] text-blue-400">Required for live delivery</span>
+                </div>
+                <input
+                  type="password"
+                  value={modalSmtpPass}
+                  onChange={(e) => setModalSmtpPass(e.target.value)}
+                  placeholder={smtpStatus?.hasPassword ? '•••••••••••••••• (Password saved)' : 'Enter 16-char Gmail App Password'}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-xs text-white focus:outline-none focus:border-blue-500 font-mono"
+                />
+                <p className="text-[10px] text-slate-400 leading-normal pt-0.5">
+                  Go to <strong className="text-slate-200">myaccount.google.com/apppasswords</strong> &rarr; generate a 16-character App Password.
+                </p>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-slate-300">From Header</label>
+                <input
+                  type="text"
+                  value={modalSmtpFrom}
+                  onChange={(e) => setModalSmtpFrom(e.target.value)}
+                  placeholder="Umrah360 Automation <amaavigo@gmail.com>"
+                  className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-xs text-white focus:outline-none focus:border-blue-500 font-mono"
+                />
+              </div>
+
+              {modalSmtpSaveResult && (
+                <div
+                  className={`p-3 rounded-xl border flex items-start space-x-2 text-xs ${
+                    modalSmtpSaveResult.success
+                      ? 'bg-emerald-950/40 border-emerald-500/40 text-emerald-200'
+                      : 'bg-amber-950/40 border-amber-500/40 text-amber-200'
+                  }`}
+                >
+                  {modalSmtpSaveResult.success ? (
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                  ) : (
+                    <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                  )}
+                  <div className="flex-1">{modalSmtpSaveResult.message}</div>
+                </div>
+              )}
+
+              <div className="flex items-center justify-end space-x-2 pt-2 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setShowSmtpConfigModal(false)}
+                  className="px-3.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium transition"
+                >
+                  Close
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSavingModalSmtp}
+                  className="px-4 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold flex items-center space-x-1.5 transition disabled:opacity-50 shadow-md"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${isSavingModalSmtp ? 'animate-spin' : ''}`} />
+                  <span>{isSavingModalSmtp ? 'Verifying...' : 'Save & Verify Connection'}</span>
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

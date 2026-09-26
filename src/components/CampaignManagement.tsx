@@ -39,6 +39,7 @@ import {
   Paperclip,
   Code,
   File,
+  Users,
 } from 'lucide-react';
 import { collection, doc, setDoc, deleteDoc, onSnapshot, getDoc, getDocs } from 'firebase/firestore';
 import { db, isFirebaseConfigured } from '../firebase/config.js';
@@ -51,17 +52,23 @@ import {
   DemoStatus,
   DemoSource,
   Conversation,
+  Lead,
+  Contact,
 } from '../types/index.js';
 import { EmailTemplateEditorModal } from './EmailTemplateEditorModal.js';
 
 interface CampaignManagementProps {
   onOpenConversation?: (conversationId: string) => void;
   conversations?: Conversation[];
+  leads?: Lead[];
+  contacts?: Contact[];
 }
 
 export const CampaignManagement: React.FC<CampaignManagementProps> = ({
   onOpenConversation,
   conversations = [],
+  leads = [],
+  contacts = [],
 }) => {
   // Navigation sub-tabs
   const [activeTab, setActiveTab] = useState<'CAMPAIGNS' | 'TEMPLATES'>('CAMPAIGNS');
@@ -238,6 +245,10 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
 
   // File Upload & Column Mapping State
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [leadInputMethod, setLeadInputMethod] = useState<'UPLOAD' | 'PASTE' | 'SAMPLE' | 'CRM'>('UPLOAD');
+  const [deliveryMode, setDeliveryMode] = useState<'LIVE_SMTP' | 'SIMULATION'>('LIVE_SMTP');
+  const [pastedLeadsText, setPastedLeadsText] = useState('');
+  const [createCampaignError, setCreateCampaignError] = useState<string | null>(null);
   const [uploadedFileName, setUploadedFileName] = useState('');
   const [rawHeaders, setRawHeaders] = useState<string[]>([]);
   const [rawRows, setRawRows] = useState<any[][]>([]);
@@ -256,6 +267,96 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
   });
   const [parsedPreviewLeads, setParsedPreviewLeads] = useState<any[]>([]);
   const [uploadError, setUploadError] = useState<string | null>(null);
+
+  const SAMPLE_PILGRIMAGE_LEADS = [
+    {
+      rowNumber: 1,
+      name: 'Tariq Al-Mansoor',
+      email: 'tariq@mansoorhajj.com',
+      companyName: 'Al-Mansoor Hajj & Umrah Services',
+      designation: 'Managing Director',
+      phone: '+91 98201 11222',
+      isValid: true,
+    },
+    {
+      rowNumber: 2,
+      name: 'Rashid Farooqui',
+      email: 'rashid@haramainjourneys.in',
+      companyName: 'Haramain Journeys Mumbai',
+      designation: 'Owner / Partner',
+      phone: '+91 98202 33445',
+      isValid: true,
+    },
+    {
+      rowNumber: 3,
+      name: 'Zeeshan Malik',
+      email: 'zeeshan@malikpilgrimages.co.uk',
+      companyName: 'Malik Pilgrimages UK',
+      designation: 'Operations Director',
+      phone: '+44 7700 900123',
+      isValid: true,
+    },
+    {
+      rowNumber: 4,
+      name: 'Bilal Qureshi',
+      email: 'bilal@alnoortravels.ae',
+      companyName: 'Al-Noor Tours Dubai',
+      designation: 'General Manager',
+      phone: '+971 50 123 4567',
+      isValid: true,
+    },
+    {
+      rowNumber: 5,
+      name: 'Irfan Siddiqui',
+      email: 'irfan@delhiumrah.in',
+      companyName: 'Delhi Pilgrimage Consolidators',
+      designation: 'CEO / Founder',
+      phone: '+91 98111 55667',
+      isValid: true,
+    },
+  ];
+
+  const handleLoadSampleLeads = () => {
+    setParsedPreviewLeads([...SAMPLE_PILGRIMAGE_LEADS]);
+    setUploadedFileName('5_Sample_Pilgrimage_Tour_Operators.csv');
+    setUploadError(null);
+    setCreateCampaignError(null);
+    if (!newCampaignName.trim()) {
+      setNewCampaignName('Umrah Operators Outreach - Season 1448');
+    }
+  };
+
+  const handleParsePastedLeads = (text: string) => {
+    setPastedLeadsText(text);
+    if (!text.trim()) {
+      setParsedPreviewLeads([]);
+      return;
+    }
+    const lines = text.split('\n').map((l) => l.trim()).filter(Boolean);
+    const parsed = lines.map((line, idx) => {
+      const parts = line.includes('\t') ? line.split('\t') : line.includes(',') ? line.split(',') : [line];
+      const emailPart = parts.find((p) => p.includes('@')) || parts[0] || '';
+      const email = emailPart.replace(/[<>"']/g, '').trim();
+      const remainingParts = parts.filter((p) => p !== emailPart).map((p) => p.trim());
+      const name = remainingParts[0] || (email ? email.split('@')[0] : `Lead ${idx + 1}`);
+      const companyName = remainingParts[1] || `${name}'s Agency`;
+      const phone = remainingParts[2] || '';
+      return {
+        rowNumber: idx + 1,
+        email,
+        name,
+        companyName,
+        phone,
+        designation: 'Director / Owner',
+        isValid: Boolean(email && email.includes('@') && email.includes('.')),
+      };
+    }).filter((l) => l.email);
+
+    setParsedPreviewLeads(parsed);
+    setUploadedFileName(`Pasted_Leads_${parsed.length}_recipients`);
+    setUploadError(null);
+    setCreateCampaignError(null);
+  };
 
   // Template Form State
   const [templateFormName, setTemplateFormName] = useState('');
@@ -566,13 +667,32 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
         const worksheet = workbook.Sheets[sheetName];
         const rows: any[][] = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
 
-        if (!rows || rows.length < 2) {
-          setUploadError('The uploaded file contains no data rows.');
+        if (!rows || rows.length === 0) {
+          setUploadError('The uploaded file is empty.');
           return;
         }
 
-        const headers = rows[0].map((h: any) => String(h || '').trim());
-        const dataRows = rows.slice(1).filter((r) => r && r.length > 0 && r.some((c) => Boolean(c)));
+        // Check if row 0 has an email address (indicates no header row)
+        let headers: string[] = [];
+        let dataRows: any[][] = [];
+
+        const firstRowStr = (rows[0] || []).join(' ');
+        const hasHeader = !firstRowStr.includes('@');
+
+        if (hasHeader && rows.length >= 2) {
+          headers = rows[0].map((h: any, i: number) => String(h || `Column_${i + 1}`).trim());
+          dataRows = rows.slice(1).filter((r) => r && r.length > 0 && r.some((c) => Boolean(c)));
+        } else {
+          // No header row: synthesize headers
+          const maxCols = Math.max(...rows.map((r) => (r ? r.length : 0)), 1);
+          headers = Array.from({ length: maxCols }, (_, i) => i === 0 ? 'Email' : i === 1 ? 'Name' : i === 2 ? 'Company' : `Column_${i + 1}`);
+          dataRows = rows.filter((r) => r && r.length > 0 && r.some((c) => Boolean(c)));
+        }
+
+        if (dataRows.length === 0) {
+          setUploadError('The uploaded file contains no data rows.');
+          return;
+        }
 
         setRawHeaders(headers);
         setRawRows(dataRows);
@@ -581,14 +701,14 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
         const findCol = (candidates: string[]) =>
           headers.find((h) => candidates.some((c) => h.toLowerCase().includes(c))) || '';
 
-        const detectedEmail = findCol(['email', 'e-mail', 'mail']);
+        const detectedEmail = findCol(['email', 'e-mail', 'mail']) || headers[0] || '';
         const detectedName = findCol(['name', 'contact', 'person', 'lead']);
         const detectedCompany = findCol(['company', 'agency', 'firm', 'organization', 'operator']);
         const detectedPhone = findCol(['phone', 'mobile', 'whatsapp', 'tel']);
         const detectedDesignation = findCol(['designation', 'job', 'title', 'role']);
 
         const mapping = {
-          email: detectedEmail || headers[0] || '',
+          email: detectedEmail,
           name: detectedName || '',
           company: detectedCompany || '',
           phone: detectedPhone || '',
@@ -671,13 +791,16 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
 
   // Submit Create Campaign
   const handleCreateCampaignSubmit = async () => {
-    if (!newCampaignName.trim()) {
-      alert('Please enter a campaign name');
+    setCreateCampaignError(null);
+
+    const trimmedName = newCampaignName.trim();
+    if (!trimmedName) {
+      setCreateCampaignError('Please enter a campaign name.');
       return;
     }
     const validLeads = parsedPreviewLeads.filter((l) => l.isValid);
     if (validLeads.length === 0) {
-      alert('Please upload a file with at least one valid email address.');
+      setCreateCampaignError('Please add at least one lead (Upload a spreadsheet, paste emails, or click "⚡ Sample Leads").');
       return;
     }
 
@@ -692,7 +815,7 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
         : templates.find((t) => t.templateId === effectiveTemplateId);
 
     console.log('[Create Campaign] Dispatching creation payload:', {
-      name: newCampaignName,
+      name: trimmedName,
       campaignMode,
       effectiveTemplateId,
       templateName: matchedTemplate?.name,
@@ -706,14 +829,14 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          name: newCampaignName,
+          name: trimmedName,
           type: newCampaignType,
           campaignMode,
           templateId: effectiveTemplateId,
           templateName: matchedTemplate?.name,
           templateSubject: matchedTemplate?.subject,
           templateBody: matchedTemplate?.body,
-          sourceFileName: uploadedFileName,
+          sourceFileName: uploadedFileName || 'Leads List',
           leads: validLeads,
           startImmediately,
         }),
@@ -725,16 +848,18 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
         // Reset modal fields
         setNewCampaignName('');
         setUploadedFileName('');
+        setPastedLeadsText('');
         setRawHeaders([]);
         setRawRows([]);
         setParsedPreviewLeads([]);
+        setCreateCampaignError(null);
         setSelectedCampaignId(data.campaign.campaignId);
         loadData();
       } else {
-        alert(data.error || 'Failed to create campaign');
+        setCreateCampaignError(data.error || 'Failed to create campaign');
       }
     } catch (e: any) {
-      alert(`Error creating campaign: ${e.message}`);
+      setCreateCampaignError(`Error creating campaign: ${e.message}`);
     } finally {
       setLoading(false);
     }
@@ -922,21 +1047,21 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
   }, [templates, selectedCampaign?.templateId]);
 
   return (
-    <div id="campaign-management-root" className="flex flex-col h-full bg-slate-950 text-slate-100 overflow-hidden">
+    <div id="campaign-management-root" className="flex flex-col h-full bg-slate-50 text-slate-900 overflow-hidden font-sans">
       {/* Top Header */}
-      <header className="px-6 py-4 bg-slate-900 border-b border-slate-800 flex items-center justify-between shrink-0">
+      <header className="px-6 py-4 bg-white border-b border-slate-200 flex items-center justify-between shrink-0 shadow-xs">
         <div className="flex items-center gap-4">
-          <div className="p-2.5 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-emerald-400">
+          <div className="p-2.5 bg-orange-50 border border-orange-200 rounded-xl text-orange-600">
             <Send className="w-5 h-5" />
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-xl font-bold text-slate-100">Outbound Campaigns</h1>
-              <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+              <h1 className="text-xl font-extrabold text-slate-900">Outbound Campaigns</h1>
+              <span className="px-2.5 py-0.5 text-xs font-bold rounded-full bg-orange-50 text-orange-700 border border-orange-200">
                 Persistent Engine
               </span>
             </div>
-            <p className="text-xs text-slate-400 mt-0.5">
+            <p className="text-xs text-slate-500 font-medium mt-0.5">
               High-converting cold email sequences, run tracking, automatic demo detection & idempotency
             </p>
           </div>
@@ -944,14 +1069,14 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
 
         {/* Tab Switcher & Primary Action */}
         <div className="flex items-center gap-3">
-          <div className="flex bg-slate-800/80 p-1 rounded-lg border border-slate-700/60">
+          <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200">
             <button
               id="tab-campaigns"
               onClick={() => setActiveTab('CAMPAIGNS')}
-              className={`px-3.5 py-1.5 text-xs font-medium rounded-md transition-all ${
+              className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all ${
                 activeTab === 'CAMPAIGNS'
-                  ? 'bg-emerald-600 text-white shadow-sm'
-                  : 'text-slate-400 hover:text-slate-200'
+                  ? 'bg-orange-500 text-white shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
               }`}
             >
               <div className="flex items-center gap-1.5">
@@ -962,10 +1087,10 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
             <button
               id="tab-templates"
               onClick={() => setActiveTab('TEMPLATES')}
-              className={`px-3.5 py-1.5 text-xs font-medium rounded-md transition-all ${
+              className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all ${
                 activeTab === 'TEMPLATES'
-                  ? 'bg-emerald-600 text-white shadow-sm'
-                  : 'text-slate-400 hover:text-slate-200'
+                  ? 'bg-orange-500 text-white shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
               }`}
             >
               <div className="flex items-center gap-1.5">
@@ -1875,45 +2000,147 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                 </div>
               </div>
 
-              {/* Upload Leads File */}
+              {/* Lead Sources Selection Tabs */}
               <div>
-                <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
-                  Upload Leads File (CSV / XLS / XLSX) *
-                </label>
-                <input
-                  type="file"
-                  ref={fileInputRef}
-                  onChange={handleFileChange}
-                  accept=".csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel"
-                  className="hidden"
-                />
-
-                <div
-                  onClick={() => fileInputRef.current?.click()}
-                  className="border-2 border-dashed border-slate-700/80 hover:border-emerald-500/60 rounded-xl p-5 text-center cursor-pointer bg-slate-950/60 transition group"
-                >
-                  <FileSpreadsheet className="w-8 h-8 mx-auto mb-2 text-slate-400 group-hover:text-emerald-400 transition" />
-                  {uploadedFileName ? (
-                    <div>
-                      <p className="text-sm font-semibold text-emerald-400">{uploadedFileName}</p>
-                      <p className="text-xs text-slate-400 mt-1">
-                        Found {parsedPreviewLeads.length} valid rows. Click to change file.
-                      </p>
-                    </div>
-                  ) : (
-                    <div>
-                      <p className="text-sm font-medium text-slate-300">
-                        Click to select or drag and drop leads spreadsheet
-                      </p>
-                      <p className="text-xs text-slate-400 mt-1">
-                        Supports CSV, XLS, XLSX. Any column structure supported.
-                      </p>
-                    </div>
-                  )}
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider">
+                    Add Campaign Leads *
+                  </label>
+                  <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+                    parsedPreviewLeads.length > 0 ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'bg-slate-800 text-slate-400'
+                  }`}>
+                    {parsedPreviewLeads.length} Lead{parsedPreviewLeads.length === 1 ? '' : 's'} Ready
+                  </span>
                 </div>
 
+                <div className="flex items-center gap-1.5 p-1 bg-slate-950 border border-slate-800 rounded-xl mb-3">
+                  <button
+                    type="button"
+                    onClick={() => setLeadInputMethod('UPLOAD')}
+                    className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-semibold transition flex items-center justify-center gap-1.5 ${
+                      leadInputMethod === 'UPLOAD'
+                        ? 'bg-emerald-600 text-white shadow-sm'
+                        : 'text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    <FileSpreadsheet className="w-3.5 h-3.5" />
+                    <span>Upload File</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setLeadInputMethod('PASTE')}
+                    className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-semibold transition flex items-center justify-center gap-1.5 ${
+                      leadInputMethod === 'PASTE'
+                        ? 'bg-emerald-600 text-white shadow-sm'
+                        : 'text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    <Copy className="w-3.5 h-3.5" />
+                    <span>Paste Leads</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setLeadInputMethod('SAMPLE');
+                      handleLoadSampleLeads();
+                    }}
+                    className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-semibold transition flex items-center justify-center gap-1.5 ${
+                      leadInputMethod === 'SAMPLE'
+                        ? 'bg-emerald-600 text-white shadow-sm'
+                        : 'text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                    <span>⚡ Sample Leads</span>
+                  </button>
+                </div>
+
+                {/* TAB 1: FILE UPLOAD */}
+                {leadInputMethod === 'UPLOAD' && (
+                  <div>
+                    <input
+                      type="file"
+                      ref={fileInputRef}
+                      onChange={handleFileChange}
+                      accept=".csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel"
+                      className="hidden"
+                    />
+
+                    <div
+                      onClick={() => fileInputRef.current?.click()}
+                      className="border-2 border-dashed border-slate-700/80 hover:border-emerald-500/60 rounded-xl p-5 text-center cursor-pointer bg-slate-950/60 transition group"
+                    >
+                      <FileSpreadsheet className="w-8 h-8 mx-auto mb-2 text-slate-400 group-hover:text-emerald-400 transition" />
+                      {uploadedFileName && leadInputMethod === 'UPLOAD' ? (
+                        <div>
+                          <p className="text-sm font-semibold text-emerald-400">{uploadedFileName}</p>
+                          <p className="text-xs text-slate-400 mt-1">
+                            Found {parsedPreviewLeads.length} valid rows. Click to change file.
+                          </p>
+                        </div>
+                      ) : (
+                        <div>
+                          <p className="text-sm font-medium text-slate-300">
+                            Click to select or drag and drop leads spreadsheet
+                          </p>
+                          <p className="text-xs text-slate-400 mt-1">
+                            Supports CSV, XLS, XLSX. Any column structure supported.
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* TAB 2: QUICK PASTE */}
+                {leadInputMethod === 'PASTE' && (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between text-[11px] text-slate-400">
+                      <span>Paste lines with Email, Name, Company (comma, tab or newline separated):</span>
+                      <button
+                        type="button"
+                        onClick={() => handleParsePastedLeads(`tariq@mansoorhajj.com, Tariq Al-Mansoor, Al-Mansoor Hajj Mumbai\nrashid@haramainjourneys.in, Rashid Farooqui, Haramain Journeys\nfarhan@malikpilgrimages.co.uk, Farhan Malik, Malik Pilgrimages UK`)}
+                        className="text-emerald-400 hover:underline text-[10px]"
+                      >
+                        Paste Example Format
+                      </button>
+                    </div>
+                    <textarea
+                      rows={4}
+                      value={pastedLeadsText}
+                      onChange={(e) => handleParsePastedLeads(e.target.value)}
+                      placeholder={`e.g.:\nahmed@safwatravels.in, Ahmed Khan, Al-Safwa Travels\ncontact@delhiumrah.in, Irfan Siddiqui, Delhi Consolidators\nbooking@alnoortours.ae, Bilal Qureshi, Al-Noor Tours`}
+                      className="w-full p-3 bg-slate-950 border border-slate-700 rounded-xl text-xs font-mono text-slate-200 placeholder-slate-500 focus:outline-none focus:border-emerald-500"
+                    />
+                  </div>
+                )}
+
+                {/* TAB 3: 1-CLICK SAMPLE LEADS */}
+                {leadInputMethod === 'SAMPLE' && (
+                  <div className="p-4 bg-slate-950/80 border border-emerald-500/30 rounded-xl space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Sparkles className="w-4 h-4 text-emerald-400" />
+                        <span className="text-xs font-bold text-slate-200">5 Verified Pilgrimage Tour Operator Leads</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleLoadSampleLeads}
+                        className="px-3 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-semibold transition"
+                      >
+                        Reload 5 Leads
+                      </button>
+                    </div>
+                    <p className="text-[11px] text-slate-400">
+                      Pre-configured licensed agency contacts across Mumbai, Delhi, London, and Dubai ready for instant campaign dispatch.
+                    </p>
+                  </div>
+                )}
+
                 {uploadError && (
-                  <p className="text-xs text-rose-400 mt-1.5 flex items-center gap-1">
+                  <p className="text-xs text-rose-400 mt-2 flex items-center gap-1">
                     <AlertTriangle className="w-3.5 h-3.5" />
                     <span>{uploadError}</span>
                   </p>
@@ -2293,33 +2520,54 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
               </div>
             </div>
 
+            {/* Error feedback if any */}
+            {createCampaignError && (
+              <div className="px-6 py-2.5 bg-rose-500/10 border-t border-rose-500/20 text-rose-300 text-xs flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0 text-rose-400" />
+                <span>{createCampaignError}</span>
+              </div>
+            )}
+
             {/* Modal Actions */}
-            <div className="px-6 py-4 border-t border-slate-800 bg-slate-950 flex items-center justify-end gap-3">
-              <button
-                type="button"
-                onClick={() => setIsCreateModalOpen(false)}
-                className="px-4 py-2 text-sm text-slate-400 hover:text-slate-200 font-medium"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleCreateCampaignSubmit}
-                disabled={loading || parsedPreviewLeads.length === 0}
-                className="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white rounded-lg text-sm font-semibold transition flex items-center gap-2"
-              >
-                {loading ? (
-                  <>
-                    <RefreshCw className="w-4 h-4 animate-spin" />
-                    <span>Creating...</span>
-                  </>
+            <div className="px-6 py-4 border-t border-slate-800 bg-slate-950 flex items-center justify-between gap-3">
+              <div className="text-xs text-slate-400">
+                {parsedPreviewLeads.length > 0 ? (
+                  <span className="text-emerald-400 font-medium">
+                    ✓ {parsedPreviewLeads.length} lead{parsedPreviewLeads.length === 1 ? '' : 's'} ready
+                  </span>
                 ) : (
-                  <>
-                    <span>{startImmediately ? 'Create & Start Campaign' : 'Save as Draft'}</span>
-                    <ArrowRight className="w-4 h-4" />
-                  </>
+                  <span className="text-slate-500">
+                    Add leads via file, paste or sample button
+                  </span>
                 )}
-              </button>
+              </div>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setIsCreateModalOpen(false)}
+                  className="px-4 py-2 text-sm text-slate-400 hover:text-slate-200 font-medium"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleCreateCampaignSubmit}
+                  disabled={loading}
+                  className="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white rounded-lg text-sm font-semibold transition flex items-center gap-2 shadow-lg shadow-emerald-950/40"
+                >
+                  {loading ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                      <span>Creating...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>{startImmediately ? 'Create & Start Campaign' : 'Save as Draft'}</span>
+                      <ArrowRight className="w-4 h-4" />
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
         </div>

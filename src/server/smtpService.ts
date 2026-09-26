@@ -1,4 +1,8 @@
 import nodemailer from 'nodemailer';
+import fs from 'fs';
+import path from 'path';
+import { doc, getDoc } from 'firebase/firestore';
+import { db, isFirebaseConfigured } from '../firebase/config.js';
 
 export interface SmtpStatus {
   configured: boolean;
@@ -38,46 +42,111 @@ export interface SendMailResult {
   response?: string;
   error?: string;
   simulated?: boolean;
+  isDailyLimitExceeded?: boolean;
 }
 
 // In-memory status cache
 let cachedSmtpStatus: SmtpStatus | null = null;
-let dynamicSmtpPass: string = '';
-let dynamicSmtpUser: string = '';
-let dynamicSmtpHost: string = '';
-let dynamicSmtpPort: number = 465;
 
-export async function fetchFirestoreSmtpConfig() {
-  if (dynamicSmtpPass) return;
+// Runtime in-memory config override
+let runtimeSmtpConfig: {
+  host?: string;
+  port?: number;
+  secure?: boolean;
+  user?: string;
+  pass?: string;
+  from?: string;
+} | null = null;
+
+const CREDENTIALS_FILE = path.join(process.cwd(), '.mail_credentials.json');
+
+function loadSavedCredentials(): any {
   try {
-    const projectId = process.env.VITE_FIREBASE_PROJECT_ID || 'gen-lang-client-0376069258';
-    const dbId = 'ai-studio-379c884e-3360-468a-ad55-8105acbd3214';
-    const res = await fetch(`https://firestore.googleapis.com/v1/projects/${projectId}/databases/${dbId}/documents/settings/smtp`);
-    if (res.ok) {
-      const data = await res.json();
-      const f = data.fields || {};
-      if (f.pass?.stringValue) dynamicSmtpPass = f.pass.stringValue.replace(/\s+/g, '');
-      if (f.user?.stringValue) dynamicSmtpUser = f.user.stringValue;
-      if (f.host?.stringValue) dynamicSmtpHost = f.host.stringValue;
-      if (f.port?.integerValue) dynamicSmtpPort = parseInt(f.port.integerValue, 10);
+    if (fs.existsSync(CREDENTIALS_FILE)) {
+      const data = fs.readFileSync(CREDENTIALS_FILE, 'utf-8');
+      return JSON.parse(data);
     }
   } catch (e) {
-    // Ignore fallback fetch error
+    // ignore
+  }
+  return null;
+}
+
+function saveCredentialsToFile(creds: any) {
+  try {
+    const existing = loadSavedCredentials() || {};
+    const updated = { ...existing, ...creds };
+    fs.writeFileSync(CREDENTIALS_FILE, JSON.stringify(updated, null, 2), 'utf-8');
+  } catch (e) {
+    // ignore
   }
 }
 
+export function updateSmtpConfig(newConfig: {
+  host?: string;
+  port?: number;
+  secure?: boolean;
+  user?: string;
+  pass?: string;
+  from?: string;
+}) {
+  const current = getSmtpConfig();
+  runtimeSmtpConfig = {
+    host: newConfig.host !== undefined ? newConfig.host : current.host,
+    port: newConfig.port !== undefined ? newConfig.port : current.port,
+    secure: newConfig.secure !== undefined ? newConfig.secure : current.secure,
+    user: newConfig.user !== undefined ? newConfig.user : current.user,
+    pass: newConfig.pass !== undefined ? newConfig.pass : current.pass,
+    from: newConfig.from !== undefined ? newConfig.from : current.from,
+  };
+  cachedSmtpStatus = null;
+  saveCredentialsToFile({ smtp: runtimeSmtpConfig });
+  return getSmtpConfig();
+}
+
 export function getSmtpConfig() {
-  const host = process.env.SMTP_HOST || dynamicSmtpHost || 'smtp.gmail.com';
-  const port = parseInt(process.env.SMTP_PORT || (dynamicSmtpPort ? String(dynamicSmtpPort) : '465'), 10);
-  const secure = process.env.SMTP_SECURE === 'true' || port === 465;
-  const user = process.env.SMTP_USER || dynamicSmtpUser || 'amaavigo@gmail.com';
-  const rawPass = process.env.SMTP_PASS || dynamicSmtpPass || '';
-  const pass = rawPass.replace(/\s+/g, '').trim();
-  const from = process.env.SMTP_FROM || `Umrah360 Automation <${user}>`;
+  const saved = loadSavedCredentials()?.smtp;
+  const host = runtimeSmtpConfig?.host || saved?.host || process.env.SMTP_HOST || 'smtp.gmail.com';
+  const port = runtimeSmtpConfig?.port || saved?.port || parseInt(process.env.SMTP_PORT || '465', 10);
+  const secure = runtimeSmtpConfig?.secure !== undefined
+    ? runtimeSmtpConfig.secure
+    : saved?.secure !== undefined
+    ? saved.secure
+    : (process.env.SMTP_SECURE === 'true' || port === 465);
+  const user = runtimeSmtpConfig?.user || saved?.user || process.env.SMTP_USER || process.env.GMAIL_USER || process.env.IMAP_USER || 'amaavigo@gmail.com';
+  const rawPass = runtimeSmtpConfig?.pass || saved?.pass || process.env.SMTP_PASS || process.env.IMAP_PASS || process.env.GMAIL_APP_PASSWORD || process.env.GMAIL_PASS || '';
+  const pass = rawPass.trim();
+  const from = runtimeSmtpConfig?.from || saved?.from || process.env.SMTP_FROM || `Umrah360 Automation <${user}>`;
 
   const configured = Boolean(host && pass);
 
   return { host, port, secure, user, pass, from, configured };
+}
+
+export async function fetchFirestoreSmtpConfig() {
+  if (isFirebaseConfigured && db) {
+    try {
+      const settingsRef = doc(db, 'system_settings', 'default');
+      const settingsSnap = await getDoc(settingsRef);
+      if (settingsSnap.exists()) {
+        const data = settingsSnap.data() as any;
+        if (data.smtpHost || data.smtpUser || data.smtpPass || data.smtp) {
+          const smtp = data.smtp || {};
+          updateSmtpConfig({
+            host: data.smtpHost || smtp.host,
+            port: data.smtpPort || smtp.port,
+            secure: data.smtpSecure !== undefined ? data.smtpSecure : smtp.secure,
+            user: data.smtpUser || smtp.user,
+            pass: data.smtpPass || smtp.pass,
+            from: data.smtpFrom || smtp.from,
+          });
+        }
+      }
+    } catch (e) {
+      console.warn('[SMTP Service] Error reading Firestore SMTP config:', e);
+    }
+  }
+  return getSmtpConfig();
 }
 
 export function createTransporter(customPort?: number, customSecure?: boolean) {
@@ -88,9 +157,44 @@ export function createTransporter(customPort?: number, customSecure?: boolean) {
   }
 
   const port = customPort ?? config.port;
-  const secure = customSecure !== undefined ? customSecure : (config.secure && port === 465);
+  const isGmail = config.host.toLowerCase().includes('gmail') || config.user.toLowerCase().includes('gmail.com');
   // Clean password of any spaces (standard Gmail App Password formatted with spaces)
   const cleanPass = config.pass.replace(/\s+/g, '');
+
+  if (isGmail && (!customPort || customPort === 465 || customPort === 587)) {
+    if (port === 587) {
+      return nodemailer.createTransport({
+        host: 'smtp.gmail.com',
+        port: 587,
+        secure: false, // STARTTLS
+        auth: {
+          user: config.user,
+          pass: cleanPass,
+        },
+        tls: {
+          rejectUnauthorized: false,
+        },
+        connectionTimeout: 15000,
+        greetingTimeout: 10000,
+      });
+    }
+
+    // Gmail service transport
+    return nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        user: config.user,
+        pass: cleanPass,
+      },
+      tls: {
+        rejectUnauthorized: false,
+      },
+      connectionTimeout: 15000,
+      greetingTimeout: 10000,
+    });
+  }
+
+  const secure = customSecure !== undefined ? customSecure : (config.secure && port === 465);
 
   return nodemailer.createTransport({
     host: config.host,
@@ -164,11 +268,7 @@ export async function verifySmtpConnection(): Promise<SmtpStatus> {
 }
 
 export async function sendLiveEmail(params: SendMailParams): Promise<SendMailResult> {
-  let config = getSmtpConfig();
-  if (!config.configured) {
-    await fetchFirestoreSmtpConfig();
-    config = getSmtpConfig();
-  }
+  const config = getSmtpConfig();
 
   // If SMTP is configured, attempt real SMTP transmission
   if (config.configured) {
@@ -231,16 +331,25 @@ export async function sendLiveEmail(params: SendMailParams): Promise<SendMailRes
       try {
         info = await transporter.sendMail(mailOptions);
       } catch (firstErr: any) {
-        if (config.port === 465 && (firstErr?.code === 'ETIMEDOUT' || firstErr?.code === 'ESOCKET' || firstErr?.command === 'CONN')) {
-          console.warn('[SMTP Live] Port 465 connection issue, attempting port 587 fallback...');
-          const fallbackTransporter = createTransporter(587, false);
-          if (fallbackTransporter) {
-            info = await fallbackTransporter.sendMail(mailOptions);
+        console.warn(`[SMTP Live] Primary transport error (${firstErr?.code || firstErr?.message}), trying fallback port 587/465...`);
+        try {
+          const fallback587 = createTransporter(587, false);
+          if (fallback587) {
+            info = await fallback587.sendMail(mailOptions);
           } else {
             throw firstErr;
           }
-        } else {
-          throw firstErr;
+        } catch (secondErr: any) {
+          try {
+            const fallback465 = createTransporter(465, true);
+            if (fallback465) {
+              info = await fallback465.sendMail(mailOptions);
+            } else {
+              throw secondErr;
+            }
+          } catch (thirdErr: any) {
+            throw firstErr;
+          }
         }
       }
 

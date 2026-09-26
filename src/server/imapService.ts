@@ -32,12 +32,71 @@ export interface ImapPollResult {
   timestamp: string;
 }
 
+import fs from 'fs';
+import path from 'path';
+
+const CREDENTIALS_FILE = path.join(process.cwd(), '.mail_credentials.json');
+
+function loadSavedCredentials(): any {
+  try {
+    if (fs.existsSync(CREDENTIALS_FILE)) {
+      const data = fs.readFileSync(CREDENTIALS_FILE, 'utf-8');
+      return JSON.parse(data);
+    }
+  } catch (e) {
+    // ignore
+  }
+  return null;
+}
+
+function saveCredentialsToFile(creds: any) {
+  try {
+    const existing = loadSavedCredentials() || {};
+    const updated = { ...existing, ...creds };
+    fs.writeFileSync(CREDENTIALS_FILE, JSON.stringify(updated, null, 2), 'utf-8');
+  } catch (e) {
+    // ignore
+  }
+}
+
+let runtimeImapConfig: {
+  host?: string;
+  port?: number;
+  secure?: boolean;
+  user?: string;
+  pass?: string;
+} | null = null;
+
+export function updateImapConfig(newConfig: {
+  host?: string;
+  port?: number;
+  secure?: boolean;
+  user?: string;
+  pass?: string;
+}) {
+  const current = getImapConfig();
+  runtimeImapConfig = {
+    host: newConfig.host !== undefined ? newConfig.host : current.host,
+    port: newConfig.port !== undefined ? newConfig.port : current.port,
+    secure: newConfig.secure !== undefined ? newConfig.secure : current.secure,
+    user: newConfig.user !== undefined ? newConfig.user : current.user,
+    pass: newConfig.pass !== undefined ? newConfig.pass : current.pass,
+  };
+  saveCredentialsToFile({ imap: runtimeImapConfig });
+  return getImapConfig();
+}
+
 export function getImapConfig() {
-  const host = process.env.IMAP_HOST || (process.env.SMTP_HOST ? process.env.SMTP_HOST.replace('smtp.', 'imap.') : 'imap.gmail.com');
-  const port = parseInt(process.env.IMAP_PORT || '993', 10);
-  const secure = process.env.IMAP_SECURE !== 'false';
-  const user = process.env.IMAP_USER || process.env.SMTP_USER || 'amaavigo@gmail.com';
-  const pass = process.env.IMAP_PASS || process.env.SMTP_PASS || '';
+  const saved = loadSavedCredentials()?.imap || loadSavedCredentials()?.smtp;
+  const host = runtimeImapConfig?.host || saved?.host?.replace('smtp.', 'imap.') || process.env.IMAP_HOST || (process.env.SMTP_HOST ? process.env.SMTP_HOST.replace('smtp.', 'imap.') : 'imap.gmail.com');
+  const port = runtimeImapConfig?.port || saved?.port || parseInt(process.env.IMAP_PORT || '993', 10);
+  const secure = runtimeImapConfig?.secure !== undefined
+    ? runtimeImapConfig.secure
+    : saved?.secure !== undefined
+    ? saved.secure
+    : process.env.IMAP_SECURE !== 'false';
+  const user = runtimeImapConfig?.user || saved?.user || process.env.IMAP_USER || process.env.SMTP_USER || 'amaavigo@gmail.com';
+  const pass = (runtimeImapConfig?.pass || saved?.pass || process.env.IMAP_PASS || process.env.SMTP_PASS || 'czzk spuw wpxc cceb').trim();
 
   const configured = Boolean(host && pass);
 

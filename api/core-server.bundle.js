@@ -27447,9 +27447,9 @@ var require_minimal = __commonJS({
       return bits.toNumber(Boolean(unsigned));
     };
     function merge(dst) {
-      var ifNotSet = typeof arguments[arguments.length - 1] === "boolean", limit2 = ifNotSet ? arguments.length - 1 : arguments.length;
+      var ifNotSet = typeof arguments[arguments.length - 1] === "boolean", limit3 = ifNotSet ? arguments.length - 1 : arguments.length;
       ifNotSet = ifNotSet && arguments[arguments.length - 1];
-      for (var a = 1; a < limit2; ++a) {
+      for (var a = 1; a < limit3; ++a) {
         var src = arguments[a];
         if (!src)
           continue;
@@ -39687,19 +39687,19 @@ var require_server_call = __commonJS({
           let receivedLength = 0;
           const call = this;
           const body = [];
-          const limit2 = this.maxReceiveMessageSize;
+          const limit3 = this.maxReceiveMessageSize;
           this.stream.on("data", onData);
           this.stream.on("end", onEnd);
           this.stream.on("error", onEnd);
           function onData(chunk) {
             receivedLength += chunk.byteLength;
-            if (limit2 !== -1 && receivedLength > limit2) {
+            if (limit3 !== -1 && receivedLength > limit3) {
               stream.removeListener("data", onData);
               stream.removeListener("end", onEnd);
               stream.removeListener("error", onEnd);
               reject({
                 code: constants_1.Status.RESOURCE_EXHAUSTED,
-                details: `Received message larger than max (${receivedLength} vs. ${limit2})`
+                details: `Received message larger than max (${receivedLength} vs. ${limit3})`
               });
               return;
             }
@@ -64513,13 +64513,37 @@ function getApiKeyFromEnv() {
 // src/server/smtpService.ts
 import nodemailer from "nodemailer";
 var cachedSmtpStatus = null;
+var dynamicSmtpPass = "";
+var dynamicSmtpUser = "";
+var dynamicSmtpHost = "";
+var dynamicSmtpPort = 465;
+async function fetchFirestoreSmtpConfig() {
+  if (dynamicSmtpPass) return;
+  try {
+    const projectId = process.env.VITE_FIREBASE_PROJECT_ID || "gen-lang-client-0376069258";
+    const dbId = "ai-studio-379c884e-3360-468a-ad55-8105acbd3214";
+    const res = await fetch(`https://firestore.googleapis.com/v1/projects/${projectId}/databases/${dbId}/documents/settings/smtp?key=AIzaSyAcr6lIIH50XWD7CcmclWh9lxbPKO7TzBk`);
+    if (res.ok) {
+      const data = await res.json();
+      const f3 = data.fields || {};
+      if (f3.pass?.stringValue) dynamicSmtpPass = f3.pass.stringValue.replace(/\s+/g, "");
+      if (f3.user?.stringValue) dynamicSmtpUser = f3.user.stringValue;
+      if (f3.host?.stringValue) dynamicSmtpHost = f3.host.stringValue;
+      if (f3.port?.integerValue) dynamicSmtpPort = parseInt(f3.port.integerValue, 10);
+    }
+  } catch (e2) {
+  }
+  if (!dynamicSmtpPass) {
+    dynamicSmtpPass = "czzkspuwwpxccceb";
+  }
+}
 function getSmtpConfig() {
-  const host = process.env.SMTP_HOST || "smtp.gmail.com";
-  const port = parseInt(process.env.SMTP_PORT || "465", 10);
+  const host = process.env.SMTP_HOST || dynamicSmtpHost || "smtp.gmail.com";
+  const port = parseInt(process.env.SMTP_PORT || (dynamicSmtpPort ? String(dynamicSmtpPort) : "587"), 10);
   const secure = process.env.SMTP_SECURE === "true" || port === 465;
-  const user = process.env.SMTP_USER || "amaavigo@gmail.com";
-  const rawPass = process.env.SMTP_PASS || "";
-  const pass = rawPass.trim();
+  const user = process.env.SMTP_USER || dynamicSmtpUser || "amaavigo@gmail.com";
+  const rawPass = process.env.SMTP_PASS || dynamicSmtpPass || "czzkspuwwpxccceb";
+  const pass = rawPass.replace(/\s+/g, "").trim();
   const from = process.env.SMTP_FROM || `Umrah360 Automation <${user}>`;
   const configured = Boolean(host && pass);
   return { host, port, secure, user, pass, from, configured };
@@ -64536,6 +64560,9 @@ function createTransporter(customPort, customSecure) {
     host: config.host,
     port,
     secure,
+    requireTLS: !secure && (port === 587 || port === 2525),
+    family: 4,
+    // CRITICAL: Force IPv4 to prevent serverless IPv6 connection hanging
     auth: {
       user: config.user,
       pass: cleanPass
@@ -64544,8 +64571,9 @@ function createTransporter(customPort, customSecure) {
       rejectUnauthorized: false
       // Prevents self-signed cert blocks on custom mail hosts
     },
-    connectionTimeout: 15e3,
-    greetingTimeout: 1e4
+    connectionTimeout: 12e3,
+    greetingTimeout: 8e3,
+    socketTimeout: 15e3
   });
 }
 async function verifySmtpConnection() {
@@ -64599,7 +64627,11 @@ async function verifySmtpConnection() {
   }
 }
 async function sendLiveEmail(params) {
-  const config = getSmtpConfig();
+  let config = getSmtpConfig();
+  if (!config.configured) {
+    await fetchFirestoreSmtpConfig();
+    config = getSmtpConfig();
+  }
   if (config.configured) {
     try {
       const transporter = createTransporter();
@@ -68027,16 +68059,16 @@ var MachineUTF8Input = class extends MachineInputBase {
     let targetLength = target.length;
     if (targetLength === 0) return fromIndex <= this.end ? fromIndex : -1;
     const firstByte = target[0];
-    let limit2 = this.end - targetLength;
+    let limit3 = this.end - targetLength;
     const hasNativeIndexOf = typeof source.indexOf === "function";
     let i2 = fromIndex;
-    while (i2 <= limit2) {
+    while (i2 <= limit3) {
       if (hasNativeIndexOf) {
         i2 = source.indexOf(firstByte, i2);
-        if (i2 === -1 || i2 > limit2) return -1;
+        if (i2 === -1 || i2 > limit3) return -1;
       } else {
-        while (i2 <= limit2 && source[i2] !== firstByte) i2++;
-        if (i2 > limit2) return -1;
+        while (i2 <= limit3 && source[i2] !== firstByte) i2++;
+        if (i2 > limit3) return -1;
       }
       let match2 = true;
       for (let j = 1; j < targetLength; j++) if (source[i2 + j] !== target[j]) {
@@ -73283,7 +73315,7 @@ var RE2JS = class RE2JS2 {
   * @param {number} [limit=0] the limit
   * @returns {string[]} the split strings
   */
-  split(input, limit2 = 0) {
+  split(input, limit3 = 0) {
     const m2 = this.matcher(input);
     const result = [];
     let emptiesSkipped = 0;
@@ -73293,9 +73325,9 @@ var RE2JS = class RE2JS2 {
         last = m2.end();
         continue;
       }
-      if (limit2 > 0 && result.length === limit2 - 1) break;
+      if (limit3 > 0 && result.length === limit3 - 1) break;
       if (last === m2.start()) {
-        if (limit2 === 0) {
+        if (limit3 === 0) {
           emptiesSkipped += 1;
           last = m2.end();
           continue;
@@ -73307,14 +73339,14 @@ var RE2JS = class RE2JS2 {
       result.push(m2.substring(last, m2.start()));
       last = m2.end();
     }
-    if (limit2 === 0 && last !== m2.inputLength()) {
+    if (limit3 === 0 && last !== m2.inputLength()) {
       while (emptiesSkipped > 0) {
         result.push("");
         emptiesSkipped -= 1;
       }
       result.push(m2.substring(last, m2.inputLength()));
     }
-    if (limit2 !== 0 || result.length === 0 && !(last === m2.inputLength() && last > 0)) result.push(m2.substring(last, m2.inputLength()));
+    if (limit3 !== 0 || result.length === 0 && !(last === m2.inputLength() && last > 0)) result.push(m2.substring(last, m2.inputLength()));
     return result;
   }
   /**
@@ -76658,19 +76690,19 @@ function indexOffsetComparator(left, right) {
   return primitiveComparator(left.largestBatchId, right.largestBatchId);
 }
 var TargetImpl = class {
-  constructor(path3, collectionGroup2 = null, orderBy = [], filters = [], limit2 = null, startAt = null, endAt = null) {
+  constructor(path3, collectionGroup2 = null, orderBy = [], filters = [], limit3 = null, startAt = null, endAt = null) {
     this.path = path3;
     this.collectionGroup = collectionGroup2;
     this.orderBy = orderBy;
     this.filters = filters;
-    this.limit = limit2;
+    this.limit = limit3;
     this.startAt = startAt;
     this.endAt = endAt;
     this.memoizedCanonicalId = null;
   }
 };
-function newTarget(path3, collectionGroup2 = null, orderBy = [], filters = [], limit2 = null, startAt = null, endAt = null) {
-  return new TargetImpl(path3, collectionGroup2, orderBy, filters, limit2, startAt, endAt);
+function newTarget(path3, collectionGroup2 = null, orderBy = [], filters = [], limit3 = null, startAt = null, endAt = null) {
+  return new TargetImpl(path3, collectionGroup2, orderBy, filters, limit3, startAt, endAt);
 }
 function canonifyTarget(target) {
   const targetImpl = debugCast(target);
@@ -76769,12 +76801,12 @@ var QueryImpl = class {
    * Initializes a Query with a path and optional additional query constraints.
    * Path must currently be empty if this is a collection group query.
    */
-  constructor(path3, collectionGroup2 = null, explicitOrderBy = [], filters = [], limit2 = null, limitType = "F", startAt = null, endAt = null) {
+  constructor(path3, collectionGroup2 = null, explicitOrderBy = [], filters = [], limit3 = null, limitType = "F", startAt = null, endAt = null) {
     this.path = path3;
     this.collectionGroup = collectionGroup2;
     this.explicitOrderBy = explicitOrderBy;
     this.filters = filters;
-    this.limit = limit2;
+    this.limit = limit3;
     this.limitType = limitType;
     this.startAt = startAt;
     this.endAt = endAt;
@@ -76785,8 +76817,8 @@ var QueryImpl = class {
     if (this.endAt) ;
   }
 };
-function newQuery(path3, collectionGroup2, explicitOrderBy, filters, limit2, limitType, startAt, endAt) {
-  return new QueryImpl(path3, collectionGroup2, explicitOrderBy, filters, limit2, limitType, startAt, endAt);
+function newQuery(path3, collectionGroup2, explicitOrderBy, filters, limit3, limitType, startAt, endAt) {
+  return new QueryImpl(path3, collectionGroup2, explicitOrderBy, filters, limit3, limitType, startAt, endAt);
 }
 function newQueryForPath(path3) {
   return new QueryImpl(path3);
@@ -76871,8 +76903,8 @@ function queryWithAddedFilter(query2, filter) {
   const newFilters = query2.filters.concat([filter]);
   return new QueryImpl(query2.path, query2.collectionGroup, query2.explicitOrderBy.slice(), newFilters, query2.limit, query2.limitType, query2.startAt, query2.endAt);
 }
-function queryWithLimit(query2, limit2, limitType) {
-  return new QueryImpl(query2.path, query2.collectionGroup, query2.explicitOrderBy.slice(), query2.filters.slice(), limit2, limitType, query2.startAt, query2.endAt);
+function queryWithLimit(query2, limit3, limitType) {
+  return new QueryImpl(query2.path, query2.collectionGroup, query2.explicitOrderBy.slice(), query2.filters.slice(), limit3, limitType, query2.startAt, query2.endAt);
 }
 function queryEquals(left, right) {
   return targetEquals(queryToTarget(left), queryToTarget(right)) && left.limitType === right.limitType;
@@ -78279,9 +78311,9 @@ function toQueryTarget(serializer, target) {
   if (orderBy) {
     queryTarget.structuredQuery.orderBy = orderBy;
   }
-  const limit2 = toInt32Proto(serializer, target.limit);
-  if (limit2 !== null) {
-    queryTarget.structuredQuery.limit = limit2;
+  const limit3 = toInt32Proto(serializer, target.limit);
+  if (limit3 !== null) {
+    queryTarget.structuredQuery.limit = limit3;
   }
   if (target.startAt) {
     queryTarget.structuredQuery.startAt = toStartAtCursor(target.startAt);
@@ -78313,9 +78345,9 @@ function convertQueryTargetToQuery(target) {
   if (query2.orderBy) {
     orderBy = fromOrder(query2.orderBy);
   }
-  let limit2 = null;
+  let limit3 = null;
   if (query2.limit) {
-    limit2 = fromInt32Proto(query2.limit);
+    limit3 = fromInt32Proto(query2.limit);
   }
   let startAt = null;
   if (query2.startAt) {
@@ -78325,7 +78357,7 @@ function convertQueryTargetToQuery(target) {
   if (query2.endAt) {
     endAt = fromEndAtCursor(query2.endAt);
   }
-  return newQuery(path3, collectionGroup2, orderBy, filterBy, limit2, "F", startAt, endAt);
+  return newQuery(path3, collectionGroup2, orderBy, filterBy, limit3, "F", startAt, endAt);
 }
 function toListenRequestLabels(serializer, targetData) {
   const value = toLabel(targetData.purpose);
@@ -88076,10 +88108,10 @@ var Limit = class extends Stage {
   get _optionsUtil() {
     return new OptionsUtil({});
   }
-  constructor(limit2, options2) {
-    hardAssert(!isNaN(limit2) && limit2 !== Infinity && limit2 !== -Infinity, 34860);
+  constructor(limit3, options2) {
+    hardAssert(!isNaN(limit3) && limit3 !== Infinity && limit3 !== -Infinity, 34860);
     super(options2);
-    this.limit = limit2;
+    this.limit = limit3;
   }
   /**
    * @internal
@@ -90577,9 +90609,9 @@ var RealtimePipeline = class _RealtimePipeline {
     copy.push(new Where(condition, {}));
     return new _RealtimePipeline(this._db, this.userDataReader, this._userDataWriter, copy);
   }
-  limit(limit2) {
+  limit(limit3) {
     const copy = this.stages.map((s2) => s2);
-    copy.push(new Limit(limit2, {}));
+    copy.push(new Limit(limit3, {}));
     return new _RealtimePipeline(this._db, this.userDataReader, this._userDataWriter, copy);
   }
   sort(optionsOrOrderings, ...rest) {
@@ -92138,7 +92170,7 @@ var MemoryRemoteDocumentCacheImpl = class {
     }
     return PersistencePromise.resolve(results);
   }
-  getAllFromCollectionGroup(transaction, collectionGroup2, offset, limit2) {
+  getAllFromCollectionGroup(transaction, collectionGroup2, offset, limit3) {
     fail2(9500);
   }
   forEachDocumentKey(transaction, f3) {
@@ -94505,8 +94537,8 @@ var View = class {
         }
       }
     });
-    const limit2 = this.getLimit(this.query);
-    if (limit2) {
+    const limit3 = this.getLimit(this.query);
+    if (limit3) {
       if (isPipeline(this.query)) {
         const candidates = [];
         newDocumentSet.forEach((doc3) => candidates.push(doc3));
@@ -94524,7 +94556,7 @@ var View = class {
         newDocumentSet = newResults;
       } else {
         const limitType = this.getLimitType(this.query);
-        while (newDocumentSet.size > limit2) {
+        while (newDocumentSet.size > limit3) {
           const oldDoc = limitType === "F" ? newDocumentSet.last() : newDocumentSet.first();
           newDocumentSet = newDocumentSet.delete(oldDoc.key);
           newMutatedKeys = newMutatedKeys.delete(oldDoc.key);
@@ -94551,9 +94583,9 @@ var View = class {
   }
   getLimitEdges(query2, oldDocumentSet) {
     if (isPipeline(query2)) {
-      const limit2 = getLastEffectiveLimit(query2)?.limit;
+      const limit3 = getLastEffectiveLimit(query2)?.limit;
       return [
-        oldDocumentSet.size === limit2 ? oldDocumentSet.last() : null,
+        oldDocumentSet.size === limit3 ? oldDocumentSet.last() : null,
         null
       ];
     } else {
@@ -96126,11 +96158,11 @@ var QueryLimitConstraint = class _QueryLimitConstraint extends QueryConstraint {
     return new Query(query2.firestore, query2.converter, queryWithLimit(query2._query, this._limit, this._limitType));
   }
 };
-function limit(limit2) {
-  validatePositiveNumber("limit", limit2);
+function limit(limit3) {
+  validatePositiveNumber("limit", limit3);
   return QueryLimitConstraint._create(
     "limit",
-    limit2,
+    limit3,
     "F"
     /* LimitType.First */
   );
@@ -101223,6 +101255,163 @@ A: All data is encrypted in transit (TLS 1.3) and at rest (AES-256) on Google Cl
   }
 ];
 
+// src/server/knowledgeService.ts
+var knowledgeDocsCache = /* @__PURE__ */ new Map();
+var isInitialized = false;
+async function initKnowledgeStore() {
+  for (const docItem of INITIAL_KNOWLEDGE_DOCUMENTS) {
+    knowledgeDocsCache.set(docItem.id, { ...docItem });
+  }
+  if (!isFirebaseConfigured || !db) {
+    console.log(`[Knowledge Store] In-memory KB initialized with ${knowledgeDocsCache.size} documents.`);
+    isInitialized = true;
+    return knowledgeDocsCache.size;
+  }
+  try {
+    const colRef = collection(db, "knowledge_documents");
+    const snap = await getDocs(colRef);
+    if (!snap.empty) {
+      knowledgeDocsCache.clear();
+      snap.forEach((d) => {
+        const item = d.data();
+        if (item && item.id) {
+          knowledgeDocsCache.set(item.id, item);
+        }
+      });
+      console.log(`[Knowledge Store] Successfully loaded ${knowledgeDocsCache.size} knowledge articles from Firestore.`);
+    } else {
+      for (const docItem of INITIAL_KNOWLEDGE_DOCUMENTS) {
+        await safeSetDoc(doc(db, "knowledge_documents", docItem.id), docItem, { merge: true });
+      }
+      console.log(`[Knowledge Store] Seeded ${INITIAL_KNOWLEDGE_DOCUMENTS.length} initial articles into Firestore.`);
+    }
+    isInitialized = true;
+    return knowledgeDocsCache.size;
+  } catch (err) {
+    console.warn("[Knowledge Store] Warning during Firestore KB sync, using in-memory baseline:", err);
+    isInitialized = true;
+    return knowledgeDocsCache.size;
+  }
+}
+function getAllKnowledgeDocs() {
+  if (!isInitialized && knowledgeDocsCache.size === 0) {
+    for (const docItem of INITIAL_KNOWLEDGE_DOCUMENTS) {
+      knowledgeDocsCache.set(docItem.id, { ...docItem });
+    }
+  }
+  return Array.from(knowledgeDocsCache.values()).sort(
+    (a, b) => new Date(b.updatedAt || 0).getTime() - new Date(a.updatedAt || 0).getTime()
+  );
+}
+function getPublishedKnowledgeDocs() {
+  return getAllKnowledgeDocs().filter((d) => d.status === "PUBLISHED");
+}
+async function saveKnowledgeDoc(docData) {
+  const sanitizedDoc = {
+    ...docData,
+    id: docData.id || `kb-${Date.now()}`,
+    title: (docData.title || "Untitled Knowledge Article").trim(),
+    category: docData.category || "PRODUCT",
+    content: (docData.content || "").trim(),
+    tags: Array.isArray(docData.tags) ? docData.tags : ["umrah360"],
+    status: docData.status || "PUBLISHED",
+    version: Number(docData.version) || 1,
+    author: docData.author || "Admin",
+    createdAt: docData.createdAt || (/* @__PURE__ */ new Date()).toISOString(),
+    updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+  };
+  knowledgeDocsCache.set(sanitizedDoc.id, sanitizedDoc);
+  console.log(`[Knowledge Store] Saved doc "${sanitizedDoc.title}" (status: ${sanitizedDoc.status}, version: ${sanitizedDoc.version}) to memory cache.`);
+  if (isFirebaseConfigured && db) {
+    try {
+      await safeSetDoc(doc(db, "knowledge_documents", sanitizedDoc.id), sanitizedDoc, { merge: true });
+      console.log(`[Knowledge Store] Persisted doc "${sanitizedDoc.id}" to Firestore collection knowledge_documents.`);
+    } catch (err) {
+      console.error(`[Knowledge Store] Error saving doc ${sanitizedDoc.id} to Firestore:`, err);
+    }
+  }
+  return sanitizedDoc;
+}
+async function deleteKnowledgeDoc(id) {
+  if (!id) return false;
+  knowledgeDocsCache.delete(id);
+  console.log(`[Knowledge Store] Deleted doc "${id}" from memory cache.`);
+  if (isFirebaseConfigured && db) {
+    try {
+      await deleteDoc(doc(db, "knowledge_documents", id));
+      console.log(`[Knowledge Store] Deleted doc "${id}" from Firestore.`);
+    } catch (err) {
+      console.warn(`[Knowledge Store] Error deleting doc ${id} from Firestore:`, err);
+    }
+  }
+  return true;
+}
+function retrieveRelevantKnowledge(query2, maxResults = 3) {
+  const publishedDocs = getPublishedKnowledgeDocs();
+  if (!query2 || query2.trim() === "") {
+    return [];
+  }
+  const normalizedQuery = query2.toLowerCase();
+  const queryTokens = normalizedQuery.replace(/[^\w\s]/g, "").split(/\s+/).filter((token) => token.length > 2);
+  const intentBoosts = {
+    pricing: ["price", "pricing", "cost", "plan", "plans", "starter", "growth", "enterprise", "users", "subscription", "quote", "discount"],
+    b2b: ["b2b", "agent", "agents", "sub-agent", "subagent", "wholesaler", "reseller", "markup", "credit", "voucher"],
+    packages: ["package", "itinerary", "fit", "groups", "hotel", "hotels", "makkah", "madinah", "ziyarat", "transport", "train", "bus"],
+    visa: ["visa", "nusuk", "evisa", "passport", "mofa", "document", "stamped"],
+    invoicing: ["invoice", "costing", "vat", "gst", "tax", "forex", "currency", "sar", "ledger"],
+    faq: ["setup", "onboarding", "security", "time", "mobile", "support", "contract"]
+  };
+  const scoredDocs = publishedDocs.map((docItem) => {
+    let score = 0;
+    const docText = `${docItem.title} ${docItem.category} ${docItem.tags.join(" ")} ${docItem.content}`.toLowerCase();
+    queryTokens.forEach((token) => {
+      const occurrences = (docText.match(new RegExp(`\\b${token}\\b`, "g")) || []).length;
+      if (occurrences > 0) {
+        score += occurrences * 3;
+      } else if (docText.includes(token)) {
+        score += 1;
+      }
+    });
+    for (const [intent, keywords] of Object.entries(intentBoosts)) {
+      const queryMatchesIntent = keywords.some((kw) => normalizedQuery.includes(kw));
+      const docMatchesIntent = keywords.some((kw) => docText.includes(kw));
+      if (queryMatchesIntent && docMatchesIntent) {
+        score += 8;
+        if (docItem.category.toLowerCase().includes(intent)) {
+          score += 6;
+        }
+      }
+    }
+    queryTokens.forEach((token) => {
+      if (docItem.title.toLowerCase().includes(token)) {
+        score += 5;
+      }
+    });
+    const paragraphs = docItem.content.split("\n\n");
+    let bestParagraph = paragraphs[0] || docItem.content;
+    let bestParaScore = 0;
+    paragraphs.forEach((p) => {
+      let pScore = 0;
+      const lowerP = p.toLowerCase();
+      queryTokens.forEach((token) => {
+        if (lowerP.includes(token)) pScore += 2;
+      });
+      if (pScore > bestParaScore) {
+        bestParaScore = pScore;
+        bestParagraph = p;
+      }
+    });
+    return {
+      documentId: docItem.id,
+      title: docItem.title,
+      category: docItem.category,
+      relevantExcerpt: bestParagraph.trim(),
+      score
+    };
+  });
+  return scoredDocs.filter((d) => d.score > 0).sort((a, b) => b.score - a.score).slice(0, maxResults);
+}
+
 // src/server/campaignService.ts
 var companyResearchCache = /* @__PURE__ */ new Map();
 async function generateAiEmailForLead(lead) {
@@ -102752,7 +102941,8 @@ ${body}`;
   }
   const targetMailbox = process.env.SMTP_USER || process.env.IMAP_USER || "amaavigo@gmail.com";
   const senderGreetingName = fromName2 ? fromName2.split(" ")[0] : from.split("@")[0];
-  const kbGroundingText = INITIAL_KNOWLEDGE_DOCUMENTS.map(
+  const publishedDocs = getPublishedKnowledgeDocs();
+  const kbGroundingText = publishedDocs.map(
     (doc3) => `=== [${doc3.category}] ${doc3.title} ===
 ${doc3.content}`
   ).join("\n\n");
@@ -103742,7 +103932,8 @@ async function generateWhatsAppAutoReplyText(params) {
     buyingStage = "CONSIDERATION";
   }
   const senderGreetingName = fromName2 ? fromName2.split(" ")[0] : "Brother / Sister";
-  const kbGroundingText = INITIAL_KNOWLEDGE_DOCUMENTS.map(
+  const publishedDocs = getPublishedKnowledgeDocs();
+  const kbGroundingText = publishedDocs.map(
     (doc3) => `[DOCUMENT: ${doc3.title} (${doc3.category})]
 ${doc3.content}`
   ).join("\n\n");
@@ -104247,47 +104438,228 @@ async function processLiveInboundWhatsApp(payload) {
 }
 
 // src/server/websiteLeadService.ts
+function flattenAllFields(obj, target = {}) {
+  if (!obj || typeof obj !== "object") return target;
+  if (Array.isArray(obj)) {
+    for (let i2 = 0; i2 < obj.length; i2++) {
+      const item = obj[i2];
+      if (item && typeof item === "object") {
+        const itemKey = item.id || item.name || item.field_id || item.key || item.label || `item_${i2}`;
+        const itemVal = item.value ?? item.val ?? item.raw_value ?? item.text ?? "";
+        if (typeof itemVal === "string" || typeof itemVal === "number" || typeof itemVal === "boolean") {
+          target[String(itemKey)] = String(itemVal).trim();
+        }
+        flattenAllFields(item, target);
+      } else if (typeof item === "string" || typeof item === "number") {
+        target[`item_${i2}`] = String(item).trim();
+      }
+    }
+    return target;
+  }
+  for (const [rawK, rawV] of Object.entries(obj)) {
+    if (rawV === null || rawV === void 0) continue;
+    if (typeof rawV === "string" || typeof rawV === "number" || typeof rawV === "boolean") {
+      const strVal = String(rawV).trim();
+      target[rawK] = strVal;
+      const bracketMatch = rawK.match(/(?:form_fields|fields|entry|wpforms)\[([^\]]+)\]/i);
+      if (bracketMatch && bracketMatch[1]) {
+        target[bracketMatch[1]] = strVal;
+      }
+    } else if (typeof rawV === "object") {
+      const nestedVal = rawV.value ?? rawV.val ?? rawV.raw_value ?? rawV.text;
+      if (typeof nestedVal === "string" || typeof nestedVal === "number" || typeof nestedVal === "boolean") {
+        target[rawK] = String(nestedVal).trim();
+        if (rawV.id) target[String(rawV.id)] = String(nestedVal).trim();
+        if (rawV.name) target[String(rawV.name)] = String(nestedVal).trim();
+        if (rawV.label) target[String(rawV.label)] = String(nestedVal).trim();
+      }
+      flattenAllFields(rawV, target);
+    }
+  }
+  return target;
+}
 async function processWebsiteLeadSubmission(rawInput) {
-  const input = rawInput || {};
-  const rawFullName = (input.fullName || input.name || input.your_full_name || input["your-name"] || (input.firstName ? `${input.firstName} ${input.lastName || ""}` : "") || "Valued Pilgrim Partner").trim();
-  let firstName = input.firstName?.trim() || "";
-  let lastName = input.lastName?.trim() || "";
+  const flatFields = flattenAllFields(rawInput || {});
+  const findValue = (patterns) => {
+    for (const pat of patterns) {
+      for (const [k, v] of Object.entries(flatFields)) {
+        if (!v) continue;
+        const cleanK = k.toLowerCase().replace(/[-_\[\]\.\s]/g, "");
+        if (pat.test(cleanK)) return v;
+      }
+    }
+    return "";
+  };
+  let email = findValue([
+    /^email$/,
+    /^youremail$/,
+    /^useremail$/,
+    /^contactemail$/,
+    /^workemail$/,
+    /^emailaddress$/,
+    /^mail$/,
+    /email/,
+    /mail/
+  ]).trim().toLowerCase();
+  if (!email || !email.includes("@")) {
+    const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/;
+    for (const [, v] of Object.entries(flatFields)) {
+      const match2 = v.match(emailRegex);
+      if (match2 && match2[0]) {
+        email = match2[0].trim().toLowerCase();
+        break;
+      }
+    }
+  }
+  let rawFullName = findValue([
+    /^fullname$/,
+    /^yourfullname$/,
+    /^name$/,
+    /^yourname$/,
+    /^contactname$/,
+    /^leadname$/,
+    /^clientname$/,
+    /^username$/,
+    /^author$/
+  ]).trim();
+  let firstNamePart = findValue([/^firstname$/, /^fname$/, /^first$/]).trim();
+  let lastNamePart = findValue([/^lastname$/, /^lname$/, /^last$/]).trim();
+  if (!rawFullName && (firstNamePart || lastNamePart)) {
+    rawFullName = `${firstNamePart} ${lastNamePart}`.trim();
+  }
+  if (!rawFullName && email) {
+    const userPart = email.split("@")[0] || "";
+    const cleanUserPart = userPart.replace(/[._\-0-9]/g, " ").trim();
+    if (cleanUserPart.length > 2) {
+      rawFullName = cleanUserPart.split(" ").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+    }
+  }
+  rawFullName = rawFullName || "Inbound Website Lead";
+  let firstName = firstNamePart;
+  let lastName = lastNamePart;
   if (!firstName) {
     const parts = rawFullName.split(/\s+/);
     firstName = parts[0] || "Partner";
     lastName = parts.slice(1).join(" ") || "";
   }
-  const email = (input.email || input.your_email || input["your-email"] || "").trim().toLowerCase();
-  if (!email || !email.includes("@")) {
-    throw new Error("A valid email address is required to submit a demo request.");
+  let rawPhone = findValue([
+    /^phone$/,
+    /^phonenumber$/,
+    /^yourphone$/,
+    /^mobile$/,
+    /^mobilenumber$/,
+    /^contactnumber$/,
+    /^tel$/,
+    /^telephone$/,
+    /^whatsapp$/,
+    /phone/,
+    /mobile/,
+    /whatsapp/
+  ]).trim();
+  if (!rawPhone) {
+    for (const [k, v] of Object.entries(flatFields)) {
+      if (/id|date|time|nonce|token|zip|postal|lead/i.test(k)) continue;
+      const cleanDigits = v.replace(/[\s\-\(\)\.]/g, "");
+      if (/^\+?[0-9]{7,16}$/.test(cleanDigits) && !v.includes("@")) {
+        rawPhone = v.trim();
+        break;
+      }
+    }
   }
-  const rawCountryCode = (input.countryCode || input.country_code || "").trim();
-  const rawPhone = (input.phone || input.phoneNumber || input.phone_number || input["your-phone"] || input.mobile || "").trim();
+  const rawCountryCode = findValue([/^countrycode$/, /^code$/]).trim();
   let fullPhone = rawPhone;
-  if (rawCountryCode && !rawPhone.startsWith("+")) {
+  if (fullPhone && rawCountryCode && !fullPhone.startsWith("+")) {
     const cleanCode = rawCountryCode.startsWith("+") ? rawCountryCode : `+${rawCountryCode}`;
-    fullPhone = `${cleanCode} ${rawPhone}`.trim();
+    fullPhone = `${cleanCode} ${fullPhone}`.trim();
   }
-  const designation = (input.designation || input.jobTitle || input.job_title || input.role || "Tour Operator / Agency Leader").trim();
-  const country = (input.country || input.select_country || input.selectCountry || "India").trim();
-  const city = (input.city || input.your_city || input.yourCity || "").trim();
-  let companyName = (input.companyName || input.company_name || input.company || input.agency || "").trim();
+  const designation = (findValue([/^designation$/, /^jobtitle$/, /^job$/, /^role$/, /^position$/, /^title$/]) || "Tour Operator / Agency Leader").trim();
+  const country = (findValue([/^country$/, /^selectcountry$/, /^yourcountry$/, /^nation$/, /country/]) || "India").trim();
+  const city = findValue([/^city$/, /^yourcity$/, /^town$/, /city/]).trim();
+  let companyName = findValue([
+    /^companyname$/,
+    /^company$/,
+    /^agencyname$/,
+    /^agency$/,
+    /^organization$/,
+    /^businessname$/,
+    /^firm$/,
+    /^operator$/,
+    /^touroperator$/,
+    /company/,
+    /agency/
+  ]).trim();
   if (!companyName) {
-    const domainPart = email.split("@")[1] || "";
-    if (domainPart && !["gmail.com", "yahoo.com", "outlook.com", "hotmail.com", "icloud.com"].includes(domainPart)) {
-      const derived = domainPart.split(".")[0];
-      companyName = derived.charAt(0).toUpperCase() + derived.slice(1) + " Travels";
-    } else {
+    if (email) {
+      const domainPart = email.split("@")[1] || "";
+      if (domainPart && !["gmail.com", "yahoo.com", "outlook.com", "hotmail.com", "icloud.com"].includes(domainPart)) {
+        const derived = domainPart.split(".")[0];
+        companyName = derived.charAt(0).toUpperCase() + derived.slice(1) + " Travels";
+      }
+    }
+    if (!companyName) {
       companyName = `${firstName}'s Pilgrimage Agency`;
     }
   }
-  const website = (input.companyWebsite || input.company_website || input.website || "").trim();
-  const rawBranches = input.branches ?? input.has_branches ?? input.hasBranches;
-  const branches = typeof rawBranches === "boolean" ? rawBranches ? "Yes" : "No" : typeof rawBranches === "string" && rawBranches.toLowerCase().includes("yes") ? "Yes" : "No";
-  const product = (input.product || input.products || input.select_products || input.selectProducts || input.productInterest || input.serviceInterest || "Umrah360 ERP & B2B Sub-Agent Portal").trim();
-  const teamSize = (input.teamSize || input.team_size || "5-10 Users").trim();
-  const message = (input.message || input.query || input.notes || input.comments || input.message_here || "").trim();
-  const sourceUrl = (input.sourceUrl || input.referrer || "https://umrah360.in/request-demo").trim();
+  const website = findValue([/^website$/, /^companywebsite$/, /^url$/, /^companyurl$/]).trim();
+  const rawBranchesVal = findValue([/^branches$/, /^hasbranches$/, /^hasbranch$/, /^branch$/, /branch/]).trim();
+  const branches = typeof rawBranchesVal === "string" && /yes|true|multiple|branch/i.test(rawBranchesVal) ? "Yes" : rawBranchesVal && /no|false|single/i.test(rawBranchesVal) ? "No" : "No";
+  const product = (findValue([
+    /^product$/,
+    /^products$/,
+    /^selectproducts$/,
+    /^productinterest$/,
+    /^serviceinterest$/,
+    /^solution$/,
+    /^interest$/,
+    /product/
+  ]) || "Umrah360 ERP & B2B Sub-Agent Portal").trim();
+  const teamSize = (findValue([/^teamsize$/, /^team$/, /^size$/, /^employees$/, /^users$/, /^capacity$/]) || "5-10 Users").trim();
+  const message = findValue([
+    /^message$/,
+    /^yourmessage$/,
+    /^query$/,
+    /^notes$/,
+    /^comments$/,
+    /^remark$/,
+    /^remarks$/,
+    /^requirement$/,
+    /^requirements$/,
+    /^inquiry$/,
+    /^description$/,
+    /^details$/,
+    /message/,
+    /query/,
+    /remark/,
+    /comment/
+  ]).trim();
+  const sourceUrl = findValue([/^sourceurl$/, /^source$/, /^referrer$/]) || "https://umrah360.in/request-demo";
+  const unmapped = [];
+  const mappedValues = /* @__PURE__ */ new Set([
+    email,
+    rawPhone,
+    fullPhone,
+    rawFullName,
+    firstNamePart,
+    lastNamePart,
+    companyName,
+    designation,
+    city,
+    country,
+    product,
+    teamSize,
+    branches,
+    message,
+    website,
+    sourceUrl
+  ]);
+  for (const [k, v] of Object.entries(flatFields)) {
+    if (!v) continue;
+    if (mappedValues.has(v)) continue;
+    const lowerK = k.toLowerCase().replace(/[-_\[\]\.\s]/g, "");
+    if (/^(id|type|rawvalue|fieldid|fieldtype|key|label|formid|formname|action|submit|nonce|wpnonce|wphttpreferer|recaptcha|token|postid|referertitle)$/i.test(lowerK)) continue;
+    if (k.length > 50 || v.length > 500) continue;
+    unmapped.push(`\u2022 ${k}: ${v}`);
+  }
   let leadScore = 85;
   if (teamSize.includes("10") || teamSize.includes("20") || teamSize.includes("Enterprise")) {
     leadScore += 10;
@@ -104378,12 +104750,12 @@ async function processWebsiteLeadSubmission(rawInput) {
   };
   const conversationId = `conv-web-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
   const messageId = `msg-web-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-  const inboundDetailsText = [
+  const inboundLines = [
     `\u{1F54B} INBOUND DEMO REQUEST from umrah360.in/request-demo:`,
     ``,
     `\u2022 Name: ${rawFullName} (${designation})`,
     `\u2022 Company: ${companyName}${website ? ` (${website})` : ""}`,
-    `\u2022 Email: ${email}`,
+    `\u2022 Email: ${email || "Not provided"}`,
     `\u2022 Phone: ${fullPhone || "Not provided"}`,
     `\u2022 Location: ${city ? `${city}, ` : ""}${country}`,
     `\u2022 Product Interest: ${product}`,
@@ -104392,7 +104764,11 @@ async function processWebsiteLeadSubmission(rawInput) {
     ``,
     `Message / Query:`,
     message || 'Customer submitted the "Schedule my Free Demo" form for an operational walkthrough.'
-  ].join("\n");
+  ];
+  if (unmapped.length > 0) {
+    inboundLines.push(``, `Additional Form Submission Data:`, ...unmapped);
+  }
+  const inboundDetailsText = inboundLines.join("\n");
   const conversation = {
     conversationId,
     contactId,
@@ -104438,6 +104814,7 @@ async function processWebsiteLeadSubmission(rawInput) {
     }
   }
   let autoConfirmationSent = false;
+  await fetchFirestoreSmtpConfig();
   const smtpConfig = getSmtpConfig();
   if (smtpConfig.configured && email) {
     try {
@@ -104468,8 +104845,9 @@ async function processWebsiteLeadSubmission(rawInput) {
       });
       if (mailResult.success) {
         autoConfirmationSent = true;
-        console.log(`[Website Lead] Dispatched auto-confirmation email to ${email}`);
-        const replyMsgId = `msg-auto-reply-${Date.now()}`;
+        const nowIso2 = (/* @__PURE__ */ new Date()).toISOString();
+        console.log(`[Website Lead] Dispatched auto-confirmation email to ${email} (Message ID: ${mailResult.messageId})`);
+        const replyMsgId = `msg-thankyou-${conversationId}`;
         const autoReplyMessage = {
           messageId: replyMsgId,
           conversationId,
@@ -104477,13 +104855,31 @@ async function processWebsiteLeadSubmission(rawInput) {
           senderName: "Umrah360 Automation",
           channel: "EMAIL",
           direction: "OUTBOUND",
+          recipientEmail: email,
+          deliveryStatus: "DELIVERED",
+          smtpMessageId: mailResult.messageId,
+          emailDeliveredAt: nowIso2,
           text: emailBody,
-          timestamp: (/* @__PURE__ */ new Date()).toISOString(),
-          sentAt: (/* @__PURE__ */ new Date()).toISOString(),
+          timestamp: nowIso2,
+          sentAt: nowIso2,
           aiReplied: true
         };
         if (isFirebaseConfigured && db) {
           safeSetDoc(doc(db, "messages", replyMsgId), autoReplyMessage, { merge: true }).catch(() => {
+          });
+          safeSetDoc(
+            doc(db, "conversations", conversationId),
+            {
+              thankYouEmailSent: true,
+              thankYouEmailDeliveredAt: nowIso2,
+              thankYouSmtpMessageId: mailResult.messageId,
+              customerEmail: email,
+              lastMessageText: emailBody.slice(0, 160) + "...",
+              lastMessageAt: nowIso2,
+              updatedAt: nowIso2
+            },
+            { merge: true }
+          ).catch(() => {
           });
         }
       }
@@ -104500,6 +104896,249 @@ async function processWebsiteLeadSubmission(rawInput) {
     initialMessage,
     autoConfirmationSent
   };
+}
+
+// src/server/websiteLeadAutoResponder.ts
+var isRunningCheck = false;
+async function checkAndDispatchPendingWebsiteLeadEmails() {
+  if (isRunningCheck) {
+    return { processedCount: 0, dispatchedCount: 0 };
+  }
+  if (!isFirebaseConfigured || !db) {
+    return { processedCount: 0, dispatchedCount: 0 };
+  }
+  isRunningCheck = true;
+  let processedCount = 0;
+  let dispatchedCount = 0;
+  try {
+    await fetchFirestoreSmtpConfig();
+    const smtpCfg = getSmtpConfig();
+    if (!smtpCfg.configured) {
+      return { processedCount: 0, dispatchedCount: 0 };
+    }
+    const convsSnap = await getDocs(collection(db, "conversations"));
+    const candidateConvs = [];
+    convsSnap.forEach((d) => {
+      const conv = d.data();
+      const isWebsiteLead = conv.conversationId?.startsWith("conv-web-") || conv.channel === "WEBSITE" || conv.conversationSummary && conv.conversationSummary.includes("Website Demo Request") || conv.subject?.includes("Website Demo Request");
+      if (isWebsiteLead && !conv.thankYouEmailSent) {
+        candidateConvs.push(conv);
+      }
+    });
+    for (const conv of candidateConvs) {
+      processedCount++;
+      const result = await dispatchThankYouEmailForConversation(conv.conversationId);
+      if (result.success) {
+        dispatchedCount++;
+      }
+    }
+  } catch (err) {
+    console.warn("[Website Auto-Responder Notice]:", err);
+  } finally {
+    isRunningCheck = false;
+  }
+  return { processedCount, dispatchedCount };
+}
+async function dispatchThankYouEmailForConversation(conversationId) {
+  if (!isFirebaseConfigured || !db) {
+    return { success: false, error: "Database is not initialized." };
+  }
+  try {
+    await fetchFirestoreSmtpConfig();
+    const smtpCfg = getSmtpConfig();
+    if (!smtpCfg.configured) {
+      return { success: false, error: "SMTP server credentials not configured." };
+    }
+    const convRef = doc(db, "conversations", conversationId);
+    const convSnap = await getDoc(convRef);
+    if (!convSnap.exists()) {
+      return { success: false, error: `Conversation ${conversationId} not found.` };
+    }
+    const conv = convSnap.data();
+    const msgsQuery = query(collection(db, "messages"), where("conversationId", "==", conversationId));
+    const msgsSnap = await getDocs(msgsQuery);
+    let alreadyDelivered = Boolean(conv.thankYouEmailSent && conv.thankYouSmtpMessageId);
+    let targetEmail = conv.customerEmail || "";
+    let extractedDetails = {};
+    let deliveredMsgDocId = null;
+    let pendingMsgDocId = null;
+    const staleDuplicateDocIds = [];
+    msgsSnap.forEach((mDoc) => {
+      const m2 = mDoc.data();
+      const isOutboundThankYou = m2.direction === "OUTBOUND" && (m2.text?.includes("Thank you for requesting") || m2.text?.includes("We have received your requirements") || m2.text?.includes("As-salamu alaykum"));
+      if (isOutboundThankYou) {
+        if (m2.deliveryStatus === "DELIVERED" || Boolean(m2.smtpMessageId && m2.smtpMessageId.startsWith("<"))) {
+          if (!deliveredMsgDocId) {
+            deliveredMsgDocId = mDoc.id;
+            alreadyDelivered = true;
+            if (m2.smtpMessageId && !conv.thankYouSmtpMessageId) {
+              conv.thankYouSmtpMessageId = m2.smtpMessageId;
+            }
+          } else {
+            staleDuplicateDocIds.push(mDoc.id);
+          }
+        } else {
+          if (!pendingMsgDocId) {
+            pendingMsgDocId = mDoc.id;
+          } else {
+            staleDuplicateDocIds.push(mDoc.id);
+          }
+        }
+      }
+      if (!targetEmail && m2.recipientEmail && m2.recipientEmail.includes("@")) {
+        targetEmail = m2.recipientEmail;
+      }
+      if (m2.direction === "INBOUND" && m2.text) {
+        const emailMatch = m2.text.match(/•\s*Email:\s*([^\s\n\r]+@[^\s\n\r]+)/i);
+        if (emailMatch && emailMatch[1]) {
+          targetEmail = emailMatch[1].trim();
+        }
+        const nameMatch = m2.text.match(/•\s*Name:\s*([^\n\r(]+)/i);
+        if (nameMatch && nameMatch[1]) {
+          extractedDetails.fullName = nameMatch[1].trim();
+        }
+        const companyMatch = m2.text.match(/•\s*Company:\s*([^\n\r(]+)/i);
+        if (companyMatch && companyMatch[1]) {
+          extractedDetails.companyName = companyMatch[1].trim();
+        }
+        const productMatch = m2.text.match(/•\s*Product Interest:\s*([^\n\r]+)/i);
+        if (productMatch && productMatch[1]) {
+          extractedDetails.product = productMatch[1].trim();
+        }
+        const phoneMatch = m2.text.match(/•\s*Phone:\s*([^\n\r]+)/i);
+        if (phoneMatch && phoneMatch[1]) {
+          extractedDetails.phone = phoneMatch[1].trim();
+        }
+      }
+    });
+    if (alreadyDelivered) {
+      if (pendingMsgDocId) {
+        deleteDoc(doc(db, "messages", pendingMsgDocId)).catch(() => {
+        });
+      }
+      for (const dupId of staleDuplicateDocIds) {
+        deleteDoc(doc(db, "messages", dupId)).catch(() => {
+        });
+      }
+      if (!conv.thankYouEmailSent) {
+        safeSetDoc(
+          convRef,
+          {
+            thankYouEmailSent: true,
+            thankYouSmtpMessageId: conv.thankYouSmtpMessageId || "verified",
+            customerEmail: targetEmail
+          },
+          { merge: true }
+        ).catch(() => {
+        });
+      }
+      return { success: true, messageId: conv.thankYouSmtpMessageId, email: targetEmail };
+    }
+    let contact = null;
+    if (conv.contactId) {
+      try {
+        const contactRef = doc(db, "contacts", conv.contactId);
+        const contactSnap = await getDoc(contactRef);
+        if (contactSnap.exists()) {
+          contact = contactSnap.data();
+          if (contact.email && contact.email.includes("@") && !contact.email.includes("@umrah360.in")) {
+            targetEmail = contact.email;
+          }
+        }
+      } catch (cErr) {
+        console.warn(`[Website Auto-Responder] Notice loading contact ${conv.contactId}:`, cErr);
+      }
+    }
+    if (!targetEmail || !targetEmail.includes("@") || targetEmail.includes("@placeholder") || targetEmail.endsWith("@umrah360.in")) {
+      return {
+        success: false,
+        error: `No valid customer email address found for lead in conversation ${conversationId}.`
+      };
+    }
+    const firstName = contact?.firstName || extractedDetails.fullName?.split(/\s+/)[0] || "there";
+    const companyName = contact?.companyName || extractedDetails.companyName || "your agency";
+    const product = extractedDetails.product || contact?.tags?.find((t2) => t2 !== "WEBSITE_DEMO_FORM" && t2 !== "UMRAH360_IN") || "Umrah360 Platform";
+    const phone = contact?.phone || extractedDetails.phone || "";
+    const subject = `We have received your Umrah360 Demo Request - ${companyName}`;
+    const emailBody = [
+      `As-salamu alaykum ${firstName},`,
+      ``,
+      `Thank you for requesting a live demo of Umrah360 for ${companyName}!`,
+      ``,
+      `We have received your requirements:`,
+      `- Product Interest: ${product}`,
+      ...contact?.city || contact?.country ? [`- Location: ${[contact?.city, contact?.country].filter(Boolean).join(", ")}`] : [],
+      ...contact?.teamSize ? [`- Team Size: ${contact.teamSize}`] : [],
+      ...contact?.branches ? [`- Multi-Branch Setup: ${contact.branches}`] : [],
+      ``,
+      `One of our senior pilgrimage software specialists will reach out to you shortly at ${phone || targetEmail} to coordinate a suitable time for your personalized walkthrough and answer any operational questions you have.`,
+      ``,
+      `If you have specific Saudi visa tracking, Makkah/Madinah hotel contracting, or B2B sub-agent workflows you would like to test, simply reply to this email.`,
+      ``,
+      `Warm regards,`,
+      `The Umrah360 Team`,
+      `https://umrah360.in`
+    ].join("\n");
+    console.log(`[Website Auto-Responder] Dispatching real Thank You email to ${targetEmail} for ${companyName}...`);
+    const mailResult = await sendLiveEmail({
+      to: targetEmail,
+      subject,
+      text: emailBody
+    });
+    if (!mailResult.success) {
+      console.warn(`[Website Auto-Responder Error] SMTP delivery failed to ${targetEmail}:`, mailResult.error);
+      return { success: false, error: mailResult.error || "SMTP delivery failed", email: targetEmail };
+    }
+    const nowIso = (/* @__PURE__ */ new Date()).toISOString();
+    const autoReplyMsgId = pendingMsgDocId || `msg-thankyou-${conversationId}`;
+    const outboundMessage = {
+      messageId: autoReplyMsgId,
+      conversationId,
+      senderType: "AI",
+      senderName: "Umrah360 Automation",
+      senderEmail: smtpCfg.user || "amaavigo@gmail.com",
+      recipientEmail: targetEmail,
+      channel: "EMAIL",
+      direction: "OUTBOUND",
+      text: emailBody,
+      timestamp: nowIso,
+      sentAt: nowIso,
+      receivedAt: nowIso,
+      aiReplied: true,
+      deliveryStatus: "DELIVERED",
+      smtpMessageId: mailResult.messageId,
+      emailDeliveredAt: nowIso
+    };
+    await safeSetDoc(doc(db, "messages", autoReplyMsgId), outboundMessage, { merge: true });
+    for (const dupId of staleDuplicateDocIds) {
+      if (dupId !== autoReplyMsgId) {
+        deleteDoc(doc(db, "messages", dupId)).catch(() => {
+        });
+      }
+    }
+    await safeSetDoc(
+      convRef,
+      {
+        thankYouEmailSent: true,
+        thankYouEmailDeliveredAt: nowIso,
+        thankYouSmtpMessageId: mailResult.messageId,
+        customerEmail: targetEmail,
+        lastMessageText: emailBody.slice(0, 160) + "...",
+        lastMessageAt: nowIso,
+        updatedAt: nowIso
+      },
+      { merge: true }
+    );
+    console.log(`[Website Auto-Responder Success] \u2713 Real Thank You email delivered to ${targetEmail} (Message ID: ${mailResult.messageId})!`);
+    return {
+      success: true,
+      messageId: mailResult.messageId,
+      email: targetEmail
+    };
+  } catch (err) {
+    console.error(`[Website Auto-Responder Exception] Error dispatching for ${conversationId}:`, err);
+    return { success: false, error: err?.message || "Internal error" };
+  }
 }
 
 // src/server/coreApiHandler.ts
@@ -104622,6 +105261,24 @@ async function handleCoreApi(req, res) {
       );
       return true;
     }
+  }
+  if ((url === "/api/leads/send-thank-you" || url.startsWith("/api/leads/send-thank-you")) && req.method === "POST") {
+    const { conversationId } = body;
+    if (!conversationId) {
+      res.statusCode = 400;
+      res.end(JSON.stringify({ success: false, error: "Missing conversationId parameter" }));
+      return true;
+    }
+    const result = await dispatchThankYouEmailForConversation(conversationId);
+    res.statusCode = result.success ? 200 : 400;
+    res.end(JSON.stringify(result));
+    return true;
+  }
+  if ((url === "/api/leads/auto-reply-check" || url.startsWith("/api/leads/auto-reply-check")) && (req.method === "POST" || req.method === "GET")) {
+    const result = await checkAndDispatchPendingWebsiteLeadEmails();
+    res.statusCode = 200;
+    res.end(JSON.stringify({ success: true, ...result }));
+    return true;
   }
   if ((url === "/api/ai/respond" || url.startsWith("/api/ai/respond?")) && req.method === "POST") {
     const { incomingMessage, contact, lead, conversation, recentMessages, knowledgeChunks, handoffCheck, signature } = body;
@@ -104833,30 +105490,140 @@ ${signature || "Regards,\nUmrah360 Team"}`;
     );
     return true;
   }
+  if (url === "/api/knowledge" || url.startsWith("/api/knowledge?") || url.startsWith("/api/knowledge/")) {
+    await initKnowledgeStore();
+    if (req.method === "GET") {
+      const documents = getAllKnowledgeDocs();
+      res.statusCode = 200;
+      res.end(JSON.stringify({ success: true, documents, count: documents.length }));
+      return true;
+    }
+    if (req.method === "POST" || req.method === "PUT") {
+      try {
+        const saved = await saveKnowledgeDoc(body);
+        res.statusCode = 200;
+        res.end(JSON.stringify({ success: true, document: saved, message: "Article successfully saved and active in RAG" }));
+      } catch (err) {
+        res.statusCode = 400;
+        res.end(JSON.stringify({ success: false, error: err?.message || "Failed to save knowledge document" }));
+      }
+      return true;
+    }
+    if (req.method === "DELETE") {
+      let docId = "";
+      const pathMatch = url.match(/^\/api\/knowledge\/([a-zA-Z0-9_-]+)$/);
+      if (pathMatch) {
+        docId = pathMatch[1];
+      } else if (url.includes("?")) {
+        const parsedUrl = new URL(url, "http://localhost");
+        docId = parsedUrl.searchParams.get("id") || "";
+      }
+      if (!docId && body?.id) {
+        docId = body.id;
+      }
+      if (!docId) {
+        res.statusCode = 400;
+        res.end(JSON.stringify({ success: false, error: "Knowledge document ID required" }));
+        return true;
+      }
+      const deleted = await deleteKnowledgeDoc(docId);
+      res.statusCode = 200;
+      res.end(JSON.stringify({ success: deleted, deletedId: docId }));
+      return true;
+    }
+  }
   if ((url === "/api/ai/test" || url.startsWith("/api/ai/test?")) && req.method === "POST") {
-    const { message } = body;
+    const { message, contact, lead, conversation, signature } = body;
     const isTwentyUsers = /20 user|twenty|20 seat|enterprise/i.test(message || "");
-    const isB2b = /b2b|agent|reseller/i.test(message || "");
+    const isB2b = /b2b|agent|reseller|wholesaler/i.test(message || "");
+    const chunks = retrieveRelevantKnowledge(message || "", 3);
+    const knowledgeSources = chunks.map((c) => c.title);
+    if (isTwentyUsers) {
+      res.statusCode = 200;
+      res.end(
+        JSON.stringify({
+          responseText: `Thank you for your inquiry! For 20+ users, our Enterprise plan provides dedicated cloud infrastructure, custom B2B sub-agent networks, and personalized onboarding. Because this requires custom volume assessment, I'm transferring you to our Senior Solutions Specialist.
+
+${signature || "Regards,\nUmrah360 Team"}`,
+          confidence: 0.96,
+          humanHandoff: true,
+          handoffReason: "Enterprise 20+ users requires custom volume quote",
+          leadScore: 95,
+          intent: "HIGH",
+          buyingStage: "DECISION",
+          knowledgeSources: knowledgeSources.length > 0 ? knowledgeSources : ["Umrah360 Official Subscription Plans & Approved Pricing"]
+        })
+      );
+      return true;
+    }
+    if (process.env.GEMINI_API_KEY) {
+      try {
+        const ai = new GoogleGenAI2({ apiKey: process.env.GEMINI_API_KEY });
+        const systemInstruction = `You are the AI conversation engine for Umrah360 (www.umrah360.in).
+CRITICAL RULES:
+1. Ground your response strictly in the provided Approved Knowledge Chunks. NEVER fabricate features, pricing, or guarantees.
+2. Keep your reply concise, professional, warm, and helpful.
+3. Plain text only. No markdown formatting symbols in emails.
+4. Sign off with: ${signature || "Regards,\nUmrah360 Team"}`;
+        const prompt = `APPROVED KNOWLEDGE CHUNKS:
+${chunks.map((c) => `[${c.title}]: ${c.relevantExcerpt}`).join("\n\n")}
+
+CUSTOMER MESSAGE:
+"${message}"
+
+Generate a helpful, grounded response.`;
+        const response = await ai.models.generateContent({
+          model: "gemini-3.8-flash",
+          contents: prompt,
+          config: { systemInstruction, temperature: 0.3 }
+        });
+        if (response.text && response.text.trim().length > 10) {
+          res.statusCode = 200;
+          res.end(
+            JSON.stringify({
+              responseText: response.text.trim(),
+              confidence: 0.96,
+              humanHandoff: false,
+              leadScore: isB2b ? 88 : 80,
+              intent: "HIGH",
+              buyingStage: "CONSIDERATION",
+              knowledgeSources: knowledgeSources.length > 0 ? knowledgeSources : ["Umrah360 Platform Knowledge Base"]
+            })
+          );
+          return true;
+        }
+      } catch (e2) {
+        console.warn("AI Test playground Gemini fallback:", e2);
+      }
+    }
+    let responseText = "";
+    if (chunks.length > 0) {
+      responseText = `Based on Umrah360's verified documentation:
+
+${chunks[0].relevantExcerpt}
+
+Please let us know if you would like a guided demo or specific details for your agency.
+
+${signature || "Regards,\nUmrah360 Team"}`;
+    } else if (isB2b) {
+      responseText = `Yes! Umrah360 includes a full B2B Sub-Agent Portal allowing your partner agencies to search contracted hotel allotments and issue white-label PDF vouchers directly.
+
+${signature || "Regards,\nUmrah360 Team"}`;
+    } else {
+      responseText = `Umrah360 automates pilgrimage tour operations, dynamic package pricing, and Saudi visa workflows.
+
+${signature || "Regards,\nUmrah360 Team"}`;
+    }
     res.statusCode = 200;
     res.end(
       JSON.stringify({
-        responseText: isTwentyUsers ? `Thank you for your inquiry! For 20+ users, our Enterprise plan provides dedicated cloud infrastructure, custom B2B sub-agent networks, and personalized onboarding. Because this requires custom volume assessment, I'm transferring you to our Senior Solutions Specialist.
-
-Regards,
-Umrah360 Team` : isB2b ? `Yes! Umrah360 includes a full B2B Sub-Agent Portal allowing your partner agencies to search contracted hotel allotments and issue white-label PDF vouchers directly.
-
-Regards,
-Umrah360 Team` : `Umrah360 automates pilgrimage tour operations, dynamic package pricing, and Saudi visa workflows.
-
-Regards,
-Umrah360 Team`,
-        confidence: 0.95,
-        humanHandoff: isTwentyUsers,
-        handoffReason: isTwentyUsers ? "Enterprise 20+ users requires custom quote" : void 0,
-        leadScore: isTwentyUsers ? 95 : isB2b ? 88 : 75,
+        responseText,
+        confidence: 0.94,
+        humanHandoff: false,
+        leadScore: isB2b ? 88 : 75,
         intent: "HIGH",
-        buyingStage: isTwentyUsers ? "DECISION" : "CONSIDERATION",
-        knowledgeSources: isTwentyUsers ? ["Umrah360 Official Subscription Plans & Approved Pricing"] : isB2b ? ["B2B Sub-Agent Portal & Reseller Distribution Engine"] : ["Umrah360 Platform Architecture & Capabilities Overview"]
+        buyingStage: "CONSIDERATION",
+        knowledgeSources
       })
     );
     return true;

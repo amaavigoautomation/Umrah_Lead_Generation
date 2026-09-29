@@ -382,7 +382,7 @@ export const KnowledgeBaseView: React.FC<KnowledgeBaseViewProps> = ({
                   <div className="flex items-center space-x-2">
                     <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
                     <span>
-                      <strong>Active in Live AI RAG</strong> — This article is automatically cited by Gemini in the AI Testing Playground, Inbound Emails, WhatsApp, and Website leads.
+                      <strong>Active in Live AI RAG</strong> — This article is automatically cited by OpenAI in the AI Testing Playground, Inbound Emails, WhatsApp, and Website leads.
                     </span>
                   </div>
                   <span className="text-[10px] text-emerald-400/80 font-mono">0ms latency cache</span>
@@ -580,7 +580,7 @@ export const KnowledgeBaseView: React.FC<KnowledgeBaseViewProps> = ({
                   rows={8}
                   value={editingDoc.content || ''}
                   onChange={(e) => setEditingDoc({ ...editingDoc, content: e.target.value })}
-                  placeholder="Detailed factual documentation that Gemini will cite..."
+                  placeholder="Detailed factual documentation that OpenAI will cite..."
                   className="w-full bg-slate-800 border border-slate-700 rounded-md p-2.5 text-slate-200 leading-relaxed resize-none focus:outline-none focus:border-emerald-500"
                 />
               </div>

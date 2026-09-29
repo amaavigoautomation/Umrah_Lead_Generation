@@ -12,8 +12,10 @@ import { db, isFirebaseConfigured } from '../firebase/config.js';
 import { safeSetDoc } from './firestoreUtils.js';
 import { sendLiveEmail, getSmtpConfig, fetchFirestoreSmtpConfig } from './smtpService.js';
 import { Conversation, Contact, Message } from '../types/index.js';
+import { hasThankYouEmailBeenSent, recordThankYouEmailSent } from './websiteLeadService.js';
 
 let isRunningCheck = false;
+const inFlightDispatches = new Set<string>();
 
 /**
  * Checks all website demo leads that have arrived in the Unified Inbox.
@@ -49,7 +51,7 @@ export async function checkAndDispatchPendingWebsiteLeadEmails(): Promise<{
     const convsSnap = await getDocs(collection(db, 'conversations'));
     const candidateConvs: Conversation[] = [];
 
-    convsSnap.forEach((d) => {
+    for (const d of convsSnap.docs) {
       const conv = d.data() as Conversation;
       // Identify website demo requests
       const isWebsiteLead =
@@ -58,10 +60,37 @@ export async function checkAndDispatchPendingWebsiteLeadEmails(): Promise<{
         (conv.conversationSummary && conv.conversationSummary.includes('Website Demo Request')) ||
         conv.subject?.includes('Website Demo Request');
 
-      if (isWebsiteLead && !conv.thankYouEmailSent) {
-        candidateConvs.push(conv);
+      if (!isWebsiteLead) continue;
+
+      if (conv.thankYouEmailSent) {
+        continue;
       }
-    });
+
+      // CRITICAL: Prevent race condition with live webhook or direct submission.
+      // Allow 45 seconds for live webhook SMTP delivery to complete before considering it pending.
+      const createdAtMs = conv.createdAt ? new Date(conv.createdAt).getTime() : (conv.startedAt ? new Date(conv.startedAt).getTime() : 0);
+      if (createdAtMs > 0 && Date.now() - createdAtMs < 45000) {
+        continue;
+      }
+
+      // If customerEmail is present and has already received a thank-you email, mark conversation as sent and skip
+      if (conv.customerEmail && conv.customerEmail.includes('@')) {
+        const alreadySent = await hasThankYouEmailBeenSent(conv.customerEmail);
+        if (alreadySent) {
+          safeSetDoc(
+            doc(db, 'conversations', conv.conversationId),
+            {
+              thankYouEmailSent: true,
+              thankYouSmtpMessageId: conv.thankYouSmtpMessageId || 'ALREADY_SENT_PREVIOUSLY',
+            },
+            { merge: true }
+          ).catch(() => {});
+          continue;
+        }
+      }
+
+      candidateConvs.push(conv);
+    }
 
     for (const conv of candidateConvs) {
       processedCount++;
@@ -82,6 +111,7 @@ export async function checkAndDispatchPendingWebsiteLeadEmails(): Promise<{
 /**
  * Dispatches a personalized Thank You / Demo Walkthrough confirmation email
  * directly to the email address of a lead in a specific conversation.
+ * GUARANTEE: Exactly ONCE per email address across the entire platform.
  */
 export async function dispatchThankYouEmailForConversation(conversationId: string): Promise<{
   success: boolean;
@@ -91,6 +121,10 @@ export async function dispatchThankYouEmailForConversation(conversationId: strin
 }> {
   if (!isFirebaseConfigured || !db) {
     return { success: false, error: 'Database is not initialized.' };
+  }
+
+  if (inFlightDispatches.has(conversationId)) {
+    return { success: true, messageId: 'IN_FLIGHT' };
   }
 
   try {
@@ -108,11 +142,16 @@ export async function dispatchThankYouEmailForConversation(conversationId: strin
     }
     const conv = convSnap.data() as Conversation;
 
-    // 2. Check if a real delivered email already exists for this conversation
+    // Fast-exit if already flagged as sent
+    if (conv.thankYouEmailSent && conv.thankYouSmtpMessageId) {
+      return { success: true, messageId: conv.thankYouSmtpMessageId, email: conv.customerEmail };
+    }
+
+    // 2. Check if a real delivered email or outbound message already exists for this conversation
     const msgsQuery = query(collection(db, 'messages'), where('conversationId', '==', conversationId));
     const msgsSnap = await getDocs(msgsQuery);
 
-    let alreadyDelivered = Boolean(conv.thankYouEmailSent && conv.thankYouSmtpMessageId);
+    let alreadyDelivered = Boolean(conv.thankYouEmailSent);
     let targetEmail = conv.customerEmail || '';
     let extractedDetails: {
       fullName?: string;
@@ -137,10 +176,10 @@ export async function dispatchThankYouEmailForConversation(conversationId: strin
           m.text?.includes('As-salamu alaykum'));
 
       if (isOutboundThankYou) {
+        alreadyDelivered = true;
         if (m.deliveryStatus === 'DELIVERED' || Boolean(m.smtpMessageId && m.smtpMessageId.startsWith('<'))) {
           if (!deliveredMsgDocId) {
             deliveredMsgDocId = mDoc.id;
-            alreadyDelivered = true;
             if (m.smtpMessageId && !conv.thankYouSmtpMessageId) {
               conv.thankYouSmtpMessageId = m.smtpMessageId;
             }
@@ -185,6 +224,34 @@ export async function dispatchThankYouEmailForConversation(conversationId: strin
       }
     });
 
+    targetEmail = targetEmail.trim().toLowerCase();
+
+    // 3. Fetch contact details to obtain real email if needed
+    let contact: Contact | null = null;
+    if ((!targetEmail || !targetEmail.includes('@')) && conv.contactId) {
+      try {
+        const contactRef = doc(db, 'contacts', conv.contactId);
+        const contactSnap = await getDoc(contactRef);
+        if (contactSnap.exists()) {
+          contact = contactSnap.data() as Contact;
+          if (contact.email && contact.email.includes('@') && !contact.email.includes('@umrah360.in')) {
+            targetEmail = contact.email.trim().toLowerCase();
+          }
+        }
+      } catch (cErr) {
+        console.warn(`[Website Auto-Responder] Notice loading contact ${conv.contactId}:`, cErr);
+      }
+    }
+
+    // 4. Strict Idempotency: Check if this email already received a thank-you email ANYWHERE
+    if (targetEmail && targetEmail.includes('@')) {
+      const emailAlreadySent = await hasThankYouEmailBeenSent(targetEmail);
+      if (emailAlreadySent) {
+        console.log(`[Website Auto-Responder] Recipient ${targetEmail} has already received a thank-you email. Suppressing duplicate.`);
+        alreadyDelivered = true;
+      }
+    }
+
     if (alreadyDelivered) {
       // Clean up any stale pending or duplicate unverified messages so only the delivered one remains
       if (pendingMsgDocId) {
@@ -200,31 +267,14 @@ export async function dispatchThankYouEmailForConversation(conversationId: strin
           convRef,
           {
             thankYouEmailSent: true,
-            thankYouSmtpMessageId: conv.thankYouSmtpMessageId || 'verified',
+            thankYouSmtpMessageId: conv.thankYouSmtpMessageId || 'verified_single',
             customerEmail: targetEmail,
           },
           { merge: true }
         ).catch(() => {});
       }
 
-      return { success: true, messageId: conv.thankYouSmtpMessageId, email: targetEmail };
-    }
-
-    // 3. Fetch contact details to obtain real email
-    let contact: Contact | null = null;
-    if (conv.contactId) {
-      try {
-        const contactRef = doc(db, 'contacts', conv.contactId);
-        const contactSnap = await getDoc(contactRef);
-        if (contactSnap.exists()) {
-          contact = contactSnap.data() as Contact;
-          if (contact.email && contact.email.includes('@') && !contact.email.includes('@umrah360.in')) {
-            targetEmail = contact.email;
-          }
-        }
-      } catch (cErr) {
-        console.warn(`[Website Auto-Responder] Notice loading contact ${conv.contactId}:`, cErr);
-      }
+      return { success: true, messageId: conv.thankYouSmtpMessageId || 'already_delivered', email: targetEmail };
     }
 
     if (!targetEmail || !targetEmail.includes('@') || targetEmail.includes('@placeholder') || targetEmail.endsWith('@umrah360.in')) {
@@ -234,7 +284,14 @@ export async function dispatchThankYouEmailForConversation(conversationId: strin
       };
     }
 
-    // 4. Construct personalized Thank You message
+    if (inFlightDispatches.has(targetEmail)) {
+      return { success: true, messageId: 'IN_FLIGHT_EMAIL', email: targetEmail };
+    }
+
+    inFlightDispatches.add(conversationId);
+    inFlightDispatches.add(targetEmail);
+
+    // 5. Construct personalized Thank You message
     const firstName =
       contact?.firstName ||
       extractedDetails.fullName?.split(/\s+/)[0] ||
@@ -270,13 +327,18 @@ export async function dispatchThankYouEmailForConversation(conversationId: strin
       `https://umrah360.in`,
     ].join('\n');
 
-    console.log(`[Website Auto-Responder] Dispatching real Thank You email to ${targetEmail} for ${companyName}...`);
+    console.log(`[Website Auto-Responder] Dispatching single Thank You email to ${targetEmail} for ${companyName}...`);
 
-    // 5. Send Live Email via verified SMTP service
+    // 6. Send Live Email via verified SMTP service
     const mailResult = await sendLiveEmail({
       to: targetEmail,
       subject,
       text: emailBody,
+      headers: {
+        'X-Conversation-Id': conversationId,
+        'X-Lead-Id': conv.leadId || '',
+        'X-Contact-Id': conv.contactId || '',
+      },
     });
 
     if (!mailResult.success) {
@@ -287,7 +349,7 @@ export async function dispatchThankYouEmailForConversation(conversationId: strin
     const nowIso = new Date().toISOString();
     const autoReplyMsgId = pendingMsgDocId || `msg-thankyou-${conversationId}`;
 
-    // 6. Record the verified outbound message in Firestore (reusing existing doc ID if pending)
+    // 7. Record the verified outbound message in Firestore
     const outboundMessage: Message = {
       messageId: autoReplyMsgId,
       conversationId,
@@ -316,7 +378,7 @@ export async function dispatchThankYouEmailForConversation(conversationId: strin
       }
     }
 
-    // 7. Update conversation document
+    // 8. Update conversation document
     await safeSetDoc(
       convRef,
       {
@@ -331,6 +393,13 @@ export async function dispatchThankYouEmailForConversation(conversationId: strin
       { merge: true }
     );
 
+    // 9. Record in global persistent idempotency ledger
+    await recordThankYouEmailSent(targetEmail, {
+      leadId: conv.leadId,
+      conversationId,
+      smtpMessageId: mailResult.messageId,
+    });
+
     console.log(`[Website Auto-Responder Success] ✓ Real Thank You email delivered to ${targetEmail} (Message ID: ${mailResult.messageId})!`);
 
     return {
@@ -341,5 +410,8 @@ export async function dispatchThankYouEmailForConversation(conversationId: strin
   } catch (err: any) {
     console.error(`[Website Auto-Responder Exception] Error dispatching for ${conversationId}:`, err);
     return { success: false, error: err?.message || 'Internal error' };
+  } finally {
+    inFlightDispatches.delete(conversationId);
   }
 }
+

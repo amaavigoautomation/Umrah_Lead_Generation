@@ -34,6 +34,7 @@ export interface SendMailParams {
   references?: string[];
   replyTo?: string;
   attachments?: EmailAttachmentParam[];
+  headers?: Record<string, string>;
 }
 
 export interface SendMailResult {
@@ -320,6 +321,7 @@ export async function sendLiveEmail(params: SendMailParams): Promise<SendMailRes
         headers: {
           'X-Mailer': 'Umrah360-AI-Automated-Platform',
           'X-Automated-By': config.user,
+          ...(params.headers || {}),
         },
       };
 

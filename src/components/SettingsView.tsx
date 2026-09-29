@@ -35,10 +35,55 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 }) => {
   const [formData, setFormData] = useState<SystemSettings>(settings);
   const [isSaved, setIsSaved] = useState(false);
+  const [openAiKeyInput, setOpenAiKeyInput] = useState('');
+  const [isOpenAiConfigured, setIsOpenAiConfigured] = useState(false);
+  const [maskedOpenAiKey, setMaskedOpenAiKey] = useState('');
+  const [isSavingOpenAiKey, setIsSavingOpenAiKey] = useState(false);
+  const [openAiKeySaveStatus, setOpenAiKeySaveStatus] = useState<string | null>(null);
 
   React.useEffect(() => {
     setFormData(settings);
   }, [settings]);
+
+  React.useEffect(() => {
+    // Fetch current OpenAI key status
+    fetch('/api/ai/openai-key')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data) {
+          setIsOpenAiConfigured(Boolean(data.configured));
+          if (data.maskedKey) setMaskedOpenAiKey(data.maskedKey);
+        }
+      })
+      .catch((err) => console.warn('Notice loading OpenAI key status:', err));
+  }, []);
+
+  const handleSaveOpenAiKey = async () => {
+    if (!openAiKeyInput.trim()) return;
+    setIsSavingOpenAiKey(true);
+    setOpenAiKeySaveStatus(null);
+    try {
+      const res = await fetch('/api/ai/openai-key', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ apiKey: openAiKeyInput.trim() }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setIsOpenAiConfigured(true);
+        setMaskedOpenAiKey(`${openAiKeyInput.trim().slice(0, 7)}...${openAiKeyInput.trim().slice(-4)}`);
+        setOpenAiKeyInput('');
+        setOpenAiKeySaveStatus('OpenAI API Key saved & active!');
+      } else {
+        setOpenAiKeySaveStatus('Failed to save API key');
+      }
+    } catch (err: any) {
+      setOpenAiKeySaveStatus(err?.message || 'Error saving key');
+    } finally {
+      setIsSavingOpenAiKey(false);
+      setTimeout(() => setOpenAiKeySaveStatus(null), 3500);
+    }
+  };
 
   const channels: Channel[] = ['WHATSAPP', 'EMAIL', 'INSTAGRAM', 'FACEBOOK', 'LINKEDIN', 'WEBSITE'];
 
@@ -140,6 +185,76 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               </div>
             );
           })}
+        </div>
+      </div>
+
+      {/* OpenAI AI Model & API Key Configuration */}
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-lg space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-2">
+            <Key className="w-5 h-5 text-emerald-400" />
+            <h3 className="font-extrabold text-sm text-white">OpenAI Engine & API Credentials</h3>
+          </div>
+          <span
+            className={`text-xs px-2.5 py-1 rounded-full font-bold flex items-center space-x-1.5 ${
+              isOpenAiConfigured
+                ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+            }`}
+          >
+            <span className={`w-2 h-2 rounded-full ${isOpenAiConfigured ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />
+            <span>{isOpenAiConfigured ? 'OpenAI Model Active' : 'API Key Required'}</span>
+          </span>
+        </div>
+
+        <p className="text-xs text-slate-400 leading-relaxed">
+          OpenAI models (<strong className="text-emerald-300">gpt-4o</strong>, <strong className="text-emerald-300">gpt-4o-mini</strong>) power the
+          real-time Email Auto-Responder, Universal Demo Scheduling Agent, Outbound Personalization, and WhatsApp Inbound channels.
+        </p>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+          <div className="bg-slate-800/80 p-3 rounded-xl border border-slate-700/80">
+            <span className="text-[11px] text-slate-400 font-medium block">Default Production Model</span>
+            <span className="text-xs font-mono font-bold text-emerald-400 mt-0.5 block">gpt-4o-mini / gpt-4o</span>
+          </div>
+          <div className="bg-slate-800/80 p-3 rounded-xl border border-slate-700/80">
+            <span className="text-[11px] text-slate-400 font-medium block">Active Key Status</span>
+            <span className="text-xs font-mono font-bold text-slate-200 mt-0.5 block">
+              {isOpenAiConfigured ? (maskedOpenAiKey || 'Active in Environment') : 'Not Configured'}
+            </span>
+          </div>
+          <div className="bg-slate-800/80 p-3 rounded-xl border border-slate-700/80">
+            <span className="text-[11px] text-slate-400 font-medium block">Active Integrations</span>
+            <span className="text-xs font-semibold text-slate-200 mt-0.5 block">Email, Demo Agent, WhatsApp, Campaigns</span>
+          </div>
+        </div>
+
+        <div className="pt-2 border-t border-slate-800 space-y-2">
+          <label className="text-xs font-semibold text-slate-300 block">
+            Update or Provide OpenAI API Key
+          </label>
+          <div className="flex flex-col sm:flex-row gap-2">
+            <input
+              type="password"
+              value={openAiKeyInput}
+              onChange={(e) => setOpenAiKeyInput(e.target.value)}
+              placeholder="sk-proj-..."
+              className="flex-1 bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-100 font-mono focus:outline-none focus:border-emerald-500"
+            />
+            <button
+              onClick={handleSaveOpenAiKey}
+              disabled={isSavingOpenAiKey || !openAiKeyInput.trim()}
+              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition flex items-center justify-center space-x-1.5 cursor-pointer shadow-md shadow-emerald-900/30"
+            >
+              {isSavingOpenAiKey ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+              <span>{isSavingOpenAiKey ? 'Saving...' : 'Save OpenAI Key'}</span>
+            </button>
+          </div>
+          {openAiKeySaveStatus && (
+            <p className={`text-xs font-semibold mt-1 ${openAiKeySaveStatus.includes('active') || openAiKeySaveStatus.includes('saved') ? 'text-emerald-400' : 'text-amber-400'}`}>
+              ✓ {openAiKeySaveStatus}
+            </p>
+          )}
         </div>
       </div>
 

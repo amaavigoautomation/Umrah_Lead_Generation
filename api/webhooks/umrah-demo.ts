@@ -73,6 +73,34 @@ async function writeToFirestoreRest(collectionName: string, docId: string, data:
   }
 }
 
+// Helper to check if an email already received a thank-you email via Firestore REST API
+const inFlightWebhookEmails = new Set<string>();
+const sentWebhookEmails = new Set<string>();
+
+async function checkEmailAlreadyReceivedThankYou(cleanEmail: string): Promise<boolean> {
+  const clean = cleanEmail?.trim().toLowerCase();
+  if (!clean || !clean.includes('@')) return true;
+
+  if (sentWebhookEmails.has(clean) || inFlightWebhookEmails.has(clean)) {
+    return true;
+  }
+
+  try {
+    const emailKey = clean.replace(/[^a-z0-9_.-]/g, '_');
+    const url = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/${FIRESTORE_DATABASE_ID}/documents/website_lead_thankyou_history/${encodeURIComponent(
+      emailKey
+    )}?key=${FIREBASE_API_KEY}`;
+    const res = await fetch(url, { headers: { 'Content-Type': 'application/json' } });
+    if (res.ok) {
+      sentWebhookEmails.add(clean);
+      return true;
+    }
+  } catch (e) {
+    console.warn('[Webhook Idempotency Notice]:', e);
+  }
+  return false;
+}
+
 // Helper to retrieve live SMTP credentials from environment, Firestore settings/smtp, or verified system fallback
 async function getLiveSmtpCredentials() {
   let host = process.env.SMTP_HOST || 'smtp.gmail.com';
@@ -340,8 +368,29 @@ function flattenAllFields(obj: any, target: Record<string, string> = {}): Record
   for (const [rawK, rawV] of Object.entries(obj)) {
     if (rawV === null || rawV === undefined) continue;
 
+    const lowerK = rawK.toLowerCase().trim();
+
+    // Prevent Elementor/WordPress form metadata objects from polluting root keys like "name" or "id"
+    if (lowerK === 'form' && typeof rawV === 'object' && rawV !== null) {
+      if ((rawV as any).id) target['form_id'] = String((rawV as any).id).trim();
+      if ((rawV as any).name) target['form_name'] = String((rawV as any).name).trim();
+      continue;
+    }
+    if ((lowerK === 'post' || lowerK === 'page') && typeof rawV === 'object' && rawV !== null) {
+      if ((rawV as any).id) target[`${lowerK}_id`] = String((rawV as any).id).trim();
+      if ((rawV as any).title) target[`${lowerK}_title`] = String((rawV as any).title).trim();
+      continue;
+    }
+
     if (typeof rawV === 'string' || typeof rawV === 'number' || typeof rawV === 'boolean') {
       const strVal = String(rawV).trim();
+
+      // If key is form_name or form-name, store under form_name, NOT name
+      if (lowerK === 'form_name' || lowerK === 'form-name' || lowerK === 'formname' || lowerK === 'form_title') {
+        target['form_name'] = strVal;
+        continue;
+      }
+
       target[rawK] = strVal;
 
       // Extract bracket key e.g. "form_fields[name]" -> also set "name"
@@ -355,7 +404,9 @@ function flattenAllFields(obj: any, target: Record<string, string> = {}): Record
       if (typeof nestedVal === 'string' || typeof nestedVal === 'number' || typeof nestedVal === 'boolean') {
         target[rawK] = String(nestedVal).trim();
         if ((rawV as any).id) target[String((rawV as any).id)] = String(nestedVal).trim();
-        if ((rawV as any).name) target[String((rawV as any).name)] = String(nestedVal).trim();
+        if ((rawV as any).name && String((rawV as any).name).toLowerCase() !== 'form') {
+          target[String((rawV as any).name)] = String(nestedVal).trim();
+        }
         if ((rawV as any).label) target[String((rawV as any).label)] = String(nestedVal).trim();
       }
       flattenAllFields(rawV, target);
@@ -363,6 +414,46 @@ function flattenAllFields(obj: any, target: Record<string, string> = {}): Record
   }
 
   return target;
+}
+
+// Detects whether a string is a product name, form title, or software feature rather than an actual human name
+function isInvalidHumanName(val: string): boolean {
+  if (!val || typeof val !== 'string') return true;
+  const s = val.trim();
+  if (s.length < 2) return true;
+  const productOrFormKeywords = [
+    'crm',
+    'booking',
+    'management',
+    'group series',
+    'erp',
+    'portal',
+    'software',
+    'package',
+    'solution',
+    'license',
+    'b2b',
+    'allotment',
+    'request demo',
+    'demo request',
+    'demo form',
+    'inquiry form',
+    'contact form',
+    'series',
+    'pilgrim',
+    'agency leader',
+    'tour operator',
+    'partner',
+    'system',
+    'platform',
+    'app',
+    'application',
+  ];
+  const lower = s.toLowerCase();
+  for (const kw of productOrFormKeywords) {
+    if (lower.includes(kw)) return true;
+  }
+  return false;
 }
 
 // Universal Field Matcher & Extractor
@@ -439,26 +530,75 @@ function resolveLeadSubmission(flatFields: Record<string, string>) {
   }
 
   // 3. Name Resolution
+  // First, check explicit full name and your-name keys
   let rawFullName = findValue([
     /^fullname$/,
     /^yourfullname$/,
-    /^name$/,
     /^yourname$/,
+    /^clientname$/,
     /^contactname$/,
     /^leadname$/,
-    /^clientname$/,
     /^username$/,
     /^author$/,
   ]).trim();
 
+  // If candidate is a product or form name, reject it and preserve it as detected product
+  let detectedProductFromField = '';
+  if (rawFullName && isInvalidHumanName(rawFullName)) {
+    detectedProductFromField = rawFullName;
+    rawFullName = '';
+  }
+
+  // Next try separate first and last name parts
   const firstNamePart = findValue([/^firstname$/, /^fname$/, /^first$/]).trim();
   const lastNamePart = findValue([/^lastname$/, /^lname$/, /^last$/]).trim();
   if (!rawFullName && (firstNamePart || lastNamePart)) {
-    rawFullName = `${firstNamePart} ${lastNamePart}`.trim();
+    const combinedParts = `${firstNamePart} ${lastNamePart}`.trim();
+    if (!isInvalidHumanName(combinedParts)) {
+      rawFullName = combinedParts;
+    }
+  }
+
+  // Next try standard name key if not yet resolved
+  if (!rawFullName) {
+    const candidateName = findValue([/^name$/]).trim();
+    if (candidateName && !isInvalidHumanName(candidateName)) {
+      rawFullName = candidateName;
+    } else if (candidateName && isInvalidHumanName(candidateName) && !detectedProductFromField) {
+      detectedProductFromField = candidateName;
+    }
+  }
+
+  // If still not resolved or invalid, scan all flatFields entries for a genuine person name (e.g. wasim saikh)
+  if (!rawFullName || isInvalidHumanName(rawFullName)) {
+    for (const [k, v] of Object.entries(flatFields)) {
+      if (!v) continue;
+      const cleanK = k.toLowerCase().replace(/[-_\[\]\.\s]/g, '');
+      if (
+        /email|mail|phone|mobile|tel|city|country|state|zip|product|service|company|agency|message|query|remark|note|size|team|branch|form|post|page|nonce|token|url|ref|recaptcha/i.test(
+          cleanK
+        )
+      ) {
+        continue;
+      }
+      const trimmedV = v.trim();
+      // Check if value matches genuine human name characteristics (2-40 chars, alpha, no digits, no @, not product)
+      if (
+        trimmedV.length >= 2 &&
+        trimmedV.length <= 40 &&
+        !trimmedV.includes('@') &&
+        !/\d/.test(trimmedV) &&
+        /^[a-zA-Z\s.'-]+$/.test(trimmedV) &&
+        !isInvalidHumanName(trimmedV)
+      ) {
+        rawFullName = trimmedV;
+        break;
+      }
+    }
   }
 
   // Derive sensible name fallback from email if user didn't provide a name field
-  if (!rawFullName && email) {
+  if ((!rawFullName || isInvalidHumanName(rawFullName)) && email) {
     const userPart = email.split('@')[0] || '';
     const cleanUserPart = userPart.replace(/[._\-0-9]/g, ' ').trim();
     if (cleanUserPart.length > 2) {
@@ -507,7 +647,7 @@ function resolveLeadSubmission(flatFields: Record<string, string>) {
   const country = findValue([/^country$/, /^selectcountry$/, /^yourcountry$/, /^nation$/, /country/]).trim();
 
   // 7. Product Interest
-  const product = findValue([
+  let product = findValue([
     /^product$/,
     /^products$/,
     /^selectproducts$/,
@@ -517,6 +657,15 @@ function resolveLeadSubmission(flatFields: Record<string, string>) {
     /^interest$/,
     /product/,
   ]).trim();
+
+  // If product is empty or generic, use detected product from form fields or form_name
+  if (!product || product === 'Umrah ERP & B2B Sub-Agent Portal') {
+    if (detectedProductFromField) {
+      product = detectedProductFromField;
+    } else if (flatFields['form_name']) {
+      product = flatFields['form_name'];
+    }
+  }
 
   // 8. Team Size
   const teamSize = findValue([
@@ -665,7 +814,7 @@ export default async function handler(
         unmappedCount: extracted.unmappedFields.length,
       });
 
-      const email = extracted.email;
+      const email = extracted.email ? extracted.email.trim().toLowerCase() : '';
       const fullName = extracted.fullName;
       const nameParts = fullName.split(/\s+/).filter(Boolean);
       const firstName = nameParts[0] || 'Valued';
@@ -681,6 +830,9 @@ export default async function handler(
       const branches = extracted.branches;
       const queryMessage = extracted.queryMessage;
       const website = extracted.website;
+
+      // Idempotency check: check if this email already received a Thank You email
+      const alreadySentThankYou = email ? await checkEmailAlreadyReceivedThankYou(email) : false;
 
       // Calculate Lead Score
       let score = 85;
@@ -789,13 +941,16 @@ export default async function handler(
         conversationId,
         contactId,
         leadId,
-        channel: 'EMAIL',
+        channel: 'WEBSITE',
         subject: `Website Demo Request: ${companyName} (${product})`,
         status: 'ACTIVE',
         direction: 'INBOUND',
-        aiEnabled: true,
+        aiEnabled: false, // Explicitly false for website leads so generic AI does not auto-reply
         humanHandoff: false,
         conversationSummary: `Website Demo Request: ${companyName} (${fullName})`,
+        customerEmail: email,
+        thankYouEmailSent: true, // Marked true immediately so no background poller or concurrent worker can duplicate this dispatch
+        thankYouSmtpMessageId: alreadySentThankYou ? 'ALREADY_SENT_PREVIOUSLY' : undefined,
         startedAt: nowIso,
         lastMessageText: inboundSummaryText.slice(0, 180) + '...',
         lastMessageAt: nowIso,
@@ -812,15 +967,17 @@ export default async function handler(
         conversationId,
         senderType: 'CUSTOMER',
         senderName: fullName,
-        channel: 'EMAIL',
+        senderEmail: email,
+        channel: 'WEBSITE',
         direction: 'INBOUND',
         text: inboundSummaryText,
         timestamp: nowIso,
         sentAt: nowIso,
         receivedAt: nowIso,
+        aiReplied: true, // Marked true so generic AI auto-replier ignores it
       };
 
-      // 3. Persist all 4 records to Firestore REST API
+      // 3. Persist all records to Firestore REST API
       await Promise.allSettled([
         writeToFirestoreRest('contacts', contactId, contactData),
         writeToFirestoreRest('leads', leadId, leadData),
@@ -830,11 +987,28 @@ export default async function handler(
 
       console.log(`[Webhook Success] Ingested lead "${companyName}" (${leadId}) into Firestore DB.`);
 
-      // 4. Dispatch Auto-Reply Thank-You Email via SMTP
+      // 4. Dispatch Auto-Reply Thank-You Email via SMTP (STRICTLY ONCE PER EMAIL ADDRESS)
       let autoReplySent = false;
       let autoReplyText = '';
       let mailResult: { sent: boolean; messageId?: string; textBody?: string; error?: string } | null = null;
-      if (email && email.includes('@')) {
+      
+      const emailKey = email ? email.replace(/[^a-z0-9_.-]/g, '_') : '';
+
+      if (alreadySentThankYou || (email && sentWebhookEmails.has(email))) {
+        console.log(`[Webhook Notice] Auto-reply previously sent to ${email}, skipping duplicate email send.`);
+      } else if (email && email.includes('@')) {
+        // Register immediate lock before awaiting SMTP
+        inFlightWebhookEmails.add(email);
+        sentWebhookEmails.add(email);
+
+        await writeToFirestoreRest('website_lead_thankyou_history', emailKey, {
+          email,
+          leadId,
+          conversationId,
+          sentAt: nowIso,
+          status: 'SENDING',
+        });
+
         mailResult = await sendAutoReplyEmail(
           email,
           fullName,
@@ -847,8 +1021,8 @@ export default async function handler(
           phone
         );
 
-        autoReplySent = mailResult.sent;
-        autoReplyText = mailResult.textBody;
+        autoReplySent = Boolean(mailResult.sent);
+        autoReplyText = mailResult.textBody || '';
 
         // 5. Append Outbound Thank-You Message to the Conversation in Firestore ONLY IF actually sent
         if (autoReplySent) {
@@ -868,6 +1042,7 @@ export default async function handler(
             timestamp: nowIsoSent,
             sentAt: nowIsoSent,
             receivedAt: nowIsoSent,
+            aiReplied: true,
           };
 
           await Promise.allSettled([
@@ -879,9 +1054,17 @@ export default async function handler(
               thankYouSmtpMessageId: mailResult.messageId,
               customerEmail: email,
             }),
+            writeToFirestoreRest('website_lead_thankyou_history', emailKey, {
+              email,
+              leadId,
+              conversationId,
+              sentAt: nowIsoSent,
+              smtpMessageId: mailResult.messageId || 'delivered',
+              status: 'DELIVERED',
+            }),
           ]);
         } else {
-          console.error('[Webhook Notice] Auto-reply was NOT sent, recording FAILED status in Firestore:', mailResult.error);
+          console.error('[Webhook Notice] Auto-reply was NOT sent, recording FAILED status in Firestore:', mailResult?.error);
           const nowIsoFailed = new Date().toISOString();
           const failedMessageData = {
             messageId: autoReplyMsgId,
@@ -892,7 +1075,7 @@ export default async function handler(
             direction: 'OUTBOUND',
             recipientEmail: email,
             deliveryStatus: 'FAILED',
-            deliveryError: mailResult.error || 'SMTP delivery failed on serverless',
+            deliveryError: mailResult?.error || 'SMTP delivery failed on serverless',
             text: autoReplyText,
             timestamp: nowIsoFailed,
             sentAt: nowIsoFailed,
@@ -903,7 +1086,7 @@ export default async function handler(
             writeToFirestoreRest('messages', autoReplyMsgId, failedMessageData),
             writeToFirestoreRest('conversations', conversationId, {
               ...conversationData,
-              thankYouEmailSent: false,
+              thankYouEmailSent: true,
               customerEmail: email,
             }),
           ]);
@@ -919,11 +1102,14 @@ export default async function handler(
         JSON.stringify(
           {
             success: true,
-            message: 'Website demo request successfully received, stored in CRM & Unified Inbox, and auto-reply dispatched.',
+            message: alreadySentThankYou
+              ? 'Website demo request saved. Thank-you email was already sent previously to this address and preserved without duplicates.'
+              : 'Website demo request successfully received, stored in CRM & Unified Inbox, and single thank-you confirmation dispatched.',
             leadId,
             autoReplySent,
+            alreadySentPreviousThankYou: alreadySentThankYou,
             autoReplyMessageId: mailResult?.messageId || null,
-            autoReplyError: mailResult?.sent ? null : (mailResult?.error || (email ? 'Email could not be delivered' : 'No email provided')),
+            autoReplyError: mailResult?.sent ? null : (mailResult?.error || (alreadySentThankYou ? null : (email ? 'Email could not be delivered' : 'No email provided'))),
             extracted: {
               fullName,
               email,

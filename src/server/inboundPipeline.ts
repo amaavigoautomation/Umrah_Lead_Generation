@@ -1,4 +1,4 @@
-import { GoogleGenAI } from '@google/genai';
+import OpenAI from 'openai';
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
@@ -13,8 +13,21 @@ import {
 } from './firestorePersistence.js';
 import { handleIncomingCampaignLeadReply } from './campaignService.js';
 import { db, isFirebaseConfigured } from '../firebase/config.js';
-import { doc } from 'firebase/firestore';
+import {
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  limit,
+  orderBy,
+  query,
+  where,
+} from 'firebase/firestore';
 import { safeSetDoc } from './firestoreUtils.js';
+import {
+  detectDemoSchedulingIntent,
+  processSchedulingConversationTurn,
+} from './demoSchedulingService.js';
 
 export interface ProcessedMessageRecord {
   gmailMessageId: string;
@@ -498,6 +511,310 @@ export function getAllThreadMessages(): Record<string, any[]> {
   return result;
 }
 
+export interface MatchedConversationContext {
+  conversationId: string;
+  contactId: string;
+  leadId: string;
+  threadId: string;
+  conversation?: any;
+  contact?: any;
+  lead?: any;
+  isExisting: boolean;
+  matchedBy: 'inReplyTo' | 'references' | 'customerEmail' | 'contactEmail' | 'subject' | 'memory' | 'new';
+}
+
+/**
+ * Resolves whether an incoming email is a reply to an existing conversation
+ * (such as a website demo request thank-you email, prior outbound email, or ongoing thread).
+ * Checks In-Reply-To / References headers, Firestore message records, conversation customer emails,
+ * contact records, and in-memory threads so replies continue in the SAME thread instead of creating a new chat.
+ */
+export async function findExistingConversationForInboundEmail(params: {
+  senderEmail: string;
+  inReplyTo?: string;
+  references?: string[] | string;
+  subject?: string;
+  companyName?: string;
+}): Promise<MatchedConversationContext> {
+  const cleanEmail = (params.senderEmail || '').toLowerCase().trim();
+  const safeId = cleanEmail.replace(/[^a-z0-9]/gi, '_') || `lead_${Date.now()}`;
+
+  // Gather all candidate message IDs from In-Reply-To and References
+  const candidateIds = new Set<string>();
+  if (params.inReplyTo && params.inReplyTo.trim()) {
+    const raw = params.inReplyTo.trim();
+    candidateIds.add(raw);
+    const unbracketed = raw.replace(/^<|>$/g, '').trim();
+    if (unbracketed) candidateIds.add(unbracketed);
+    candidateIds.add(`<${unbracketed}>`);
+  }
+
+  if (params.references) {
+    const rawRefs = Array.isArray(params.references)
+      ? params.references
+      : typeof params.references === 'string'
+      ? params.references.split(/\s+/)
+      : [];
+    for (const ref of rawRefs) {
+      if (typeof ref === 'string' && ref.trim()) {
+        const r = ref.trim();
+        candidateIds.add(r);
+        const unb = r.replace(/^<|>$/g, '').trim();
+        if (unb) {
+          candidateIds.add(unb);
+          candidateIds.add(`<${unb}>`);
+        }
+      }
+    }
+  }
+
+  let matchedConvId: string | null = null;
+  let matchedBy: MatchedConversationContext['matchedBy'] = 'new';
+
+  // 1. In-memory check by candidate message IDs across active threads
+  if (candidateIds.size > 0) {
+    for (const [cId, msgs] of conversationThreadMessagesMap.entries()) {
+      const found = msgs.some((m: any) => {
+        if (!m) return false;
+        return (
+          (m.smtpMessageId && candidateIds.has(m.smtpMessageId)) ||
+          (m.gmailMessageId && candidateIds.has(m.gmailMessageId)) ||
+          (m.messageId && candidateIds.has(m.messageId)) ||
+          (m.emailMeta?.messageId && candidateIds.has(m.emailMeta.messageId)) ||
+          (m.emailMeta?.inReplyTo && candidateIds.has(m.emailMeta.inReplyTo))
+        );
+      });
+      if (found) {
+        matchedConvId = cId;
+        matchedBy = 'inReplyTo';
+        console.log(`[Thread Matcher] In-memory match found by In-Reply-To/References for conversation ${cId}`);
+        break;
+      }
+    }
+  }
+
+  // 2. Firestore query by candidate message IDs (smtpMessageId / thankYouSmtpMessageId)
+  if (!matchedConvId && isFirebaseConfigured && db && candidateIds.size > 0) {
+    try {
+      for (const candId of Array.from(candidateIds)) {
+        if (!candId) continue;
+
+        // Check messages collection for smtpMessageId
+        const msgSnap = await getDocs(
+          query(collection(db, 'messages'), where('smtpMessageId', '==', candId), limit(1))
+        );
+        if (!msgSnap.empty) {
+          const docData = msgSnap.docs[0].data();
+          if (docData?.conversationId) {
+            matchedConvId = docData.conversationId;
+            matchedBy = 'inReplyTo';
+            console.log(`[Thread Matcher] Firestore message smtpMessageId match found: ${matchedConvId}`);
+            break;
+          }
+        }
+
+        // Check messages collection for gmailMessageId
+        const gmailSnap = await getDocs(
+          query(collection(db, 'messages'), where('gmailMessageId', '==', candId), limit(1))
+        );
+        if (!gmailSnap.empty) {
+          const docData = gmailSnap.docs[0].data();
+          if (docData?.conversationId) {
+            matchedConvId = docData.conversationId;
+            matchedBy = 'inReplyTo';
+            console.log(`[Thread Matcher] Firestore message gmailMessageId match found: ${matchedConvId}`);
+            break;
+          }
+        }
+
+        // Check conversations collection for thankYouSmtpMessageId
+        const convSnap = await getDocs(
+          query(collection(db, 'conversations'), where('thankYouSmtpMessageId', '==', candId), limit(1))
+        );
+        if (!convSnap.empty) {
+          matchedConvId = convSnap.docs[0].id;
+          matchedBy = 'inReplyTo';
+          console.log(`[Thread Matcher] Firestore conversation thankYouSmtpMessageId match found: ${matchedConvId}`);
+          break;
+        }
+
+        // Check conversations collection for emailThreadId
+        const threadSnap = await getDocs(
+          query(collection(db, 'conversations'), where('emailThreadId', '==', candId), limit(1))
+        );
+        if (!threadSnap.empty) {
+          matchedConvId = threadSnap.docs[0].id;
+          matchedBy = 'references';
+          console.log(`[Thread Matcher] Firestore conversation emailThreadId match found: ${matchedConvId}`);
+          break;
+        }
+      }
+    } catch (err) {
+      console.warn('[Thread Matcher] Notice querying candidate IDs from Firestore:', err);
+    }
+  }
+
+  // 3. Fallback: Match by customerEmail in Firestore conversations
+  if (!matchedConvId && isFirebaseConfigured && db && cleanEmail) {
+    try {
+      const emailSnap = await getDocs(
+        query(collection(db, 'conversations'), where('customerEmail', '==', cleanEmail), limit(5))
+      );
+
+      if (!emailSnap.empty) {
+        const candidateConvs = emailSnap.docs.map((d) => ({ id: d.id, ...d.data() } as any));
+        const websiteConv = candidateConvs.find(
+          (c) =>
+            c.channel === 'WEBSITE' ||
+            c.conversationId?.startsWith('conv-web-') ||
+            c.thankYouEmailSent === true ||
+            c.conversationSummary?.toLowerCase().includes('website demo')
+        );
+
+        if (websiteConv) {
+          matchedConvId = websiteConv.id || websiteConv.conversationId;
+          matchedBy = 'customerEmail';
+          console.log(`[Thread Matcher] Matched website demo conversation for ${cleanEmail}: ${matchedConvId}`);
+        } else {
+          candidateConvs.sort(
+            (a, b) =>
+              new Date(b.lastMessageAt || b.updatedAt || b.createdAt || 0).getTime() -
+              new Date(a.lastMessageAt || a.updatedAt || a.createdAt || 0).getTime()
+          );
+          matchedConvId = candidateConvs[0].id || candidateConvs[0].conversationId;
+          matchedBy = 'customerEmail';
+          console.log(`[Thread Matcher] Matched recent conversation for ${cleanEmail}: ${matchedConvId}`);
+        }
+      }
+    } catch (err) {
+      console.warn('[Thread Matcher] Notice querying conversations by customerEmail:', err);
+    }
+  }
+
+  // 4. Fallback: Match via Contact's email in Firestore contacts
+  let foundContactDoc: any = null;
+  if (isFirebaseConfigured && db && cleanEmail) {
+    try {
+      const contactSnap = await getDocs(
+        query(collection(db, 'contacts'), where('email', '==', cleanEmail), limit(1))
+      );
+      if (!contactSnap.empty) {
+        foundContactDoc = { id: contactSnap.docs[0].id, ...contactSnap.docs[0].data() };
+        if (!matchedConvId) {
+          const convByContactSnap = await getDocs(
+            query(collection(db, 'conversations'), where('contactId', '==', foundContactDoc.id), limit(5))
+          );
+          if (!convByContactSnap.empty) {
+            const list = convByContactSnap.docs.map((d) => ({ id: d.id, ...d.data() } as any));
+            const webConv = list.find(
+              (c) =>
+                c.channel === 'WEBSITE' ||
+                c.conversationId?.startsWith('conv-web-') ||
+                c.thankYouEmailSent === true
+            );
+            const chosen = webConv || list[0];
+            matchedConvId = chosen.id || chosen.conversationId;
+            matchedBy = 'contactEmail';
+            console.log(`[Thread Matcher] Matched conversation via Contact ${foundContactDoc.id}: ${matchedConvId}`);
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('[Thread Matcher] Notice querying contacts by email:', err);
+    }
+  }
+
+  // 5. In-memory fallback: Scan thread sender emails
+  if (!matchedConvId && cleanEmail) {
+    for (const [cId, msgs] of conversationThreadMessagesMap.entries()) {
+      const match = msgs.some(
+        (m: any) =>
+          (m.senderEmail && m.senderEmail.toLowerCase().trim() === cleanEmail) ||
+          (m.recipientEmail && m.recipientEmail.toLowerCase().trim() === cleanEmail)
+      );
+      if (match) {
+        matchedConvId = cId;
+        matchedBy = 'memory';
+        console.log(`[Thread Matcher] In-memory match found by email ${cleanEmail}: ${matchedConvId}`);
+        break;
+      }
+    }
+  }
+
+  // 6. Fetch complete conversation, lead, and contact data if matched
+  let loadedConversation: any = null;
+  let loadedLead: any = null;
+
+  if (matchedConvId && isFirebaseConfigured && db) {
+    try {
+      const cSnap = await getDoc(doc(db, 'conversations', matchedConvId));
+      if (cSnap.exists()) {
+        loadedConversation = { id: cSnap.id, ...cSnap.data() };
+      }
+    } catch (err) {
+      console.warn('[Thread Matcher] Notice fetching conversation doc:', err);
+    }
+  }
+
+  const effectiveContactId =
+    loadedConversation?.contactId || foundContactDoc?.contactId || foundContactDoc?.id || `contact-${safeId}`;
+  const effectiveLeadId =
+    loadedConversation?.leadId || (foundContactDoc as any)?.leadId || `lead-${safeId}`;
+
+  if (effectiveContactId && !foundContactDoc && isFirebaseConfigured && db) {
+    try {
+      const cSnap = await getDoc(doc(db, 'contacts', effectiveContactId));
+      if (cSnap.exists()) {
+        foundContactDoc = { id: cSnap.id, ...cSnap.data() };
+      }
+    } catch {}
+  }
+
+  if (effectiveLeadId && isFirebaseConfigured && db) {
+    try {
+      const lSnap = await getDoc(doc(db, 'leads', effectiveLeadId));
+      if (lSnap.exists()) {
+        loadedLead = { id: lSnap.id, ...lSnap.data() };
+      }
+    } catch {}
+  }
+
+  // 7. Ensure in-memory thread has all previous messages from Firestore
+  const finalConvId = matchedConvId || `conv-${safeId}`;
+  let thread = conversationThreadMessagesMap.get(finalConvId);
+
+  if ((!thread || thread.length === 0) && isFirebaseConfigured && db && matchedConvId) {
+    try {
+      const msgsSnap = await getDocs(
+        query(collection(db, 'messages'), where('conversationId', '==', finalConvId))
+      );
+      const loaded: any[] = [];
+      msgsSnap.forEach((d) => loaded.push({ id: d.id, ...d.data() }));
+      loaded.sort(
+        (a, b) =>
+          new Date(a.sentAt || a.timestamp || a.createdAt || 0).getTime() -
+          new Date(b.sentAt || b.timestamp || b.createdAt || 0).getTime()
+      );
+      conversationThreadMessagesMap.set(finalConvId, loaded);
+      console.log(`[Thread Matcher] Populated in-memory thread with ${loaded.length} prior messages for ${finalConvId}`);
+    } catch (err) {
+      console.warn('[Thread Matcher] Notice loading prior messages from Firestore:', err);
+    }
+  }
+
+  return {
+    conversationId: finalConvId,
+    contactId: effectiveContactId,
+    leadId: effectiveLeadId,
+    threadId: loadedConversation?.emailThreadId || loadedConversation?.gmailThreadId || `thread-${safeId}`,
+    conversation: loadedConversation,
+    contact: foundContactDoc,
+    lead: loadedLead,
+    isExisting: Boolean(matchedConvId),
+    matchedBy,
+  };
+}
+
 export async function generateAutoReplyText(params: {
   from: string;
   fromName?: string;
@@ -508,6 +825,40 @@ export async function generateAutoReplyText(params: {
 }): Promise<{ replyText: string; handoffTriggered: boolean; handoffReason?: string; leadScore: number; buyingStage: string }> {
   const { from, fromName, subject, body, companyName, threadHistory } = params;
   const combinedText = `${subject}\n${body}`.toLowerCase();
+
+  // =========================================================================
+  // UNIVERSAL DEMO SCHEDULING AGENT INTERCEPTION
+  // =========================================================================
+  if (detectDemoSchedulingIntent(body) || detectDemoSchedulingIntent(subject)) {
+    try {
+      const historyTurns = (threadHistory || []).map((m: any) => ({
+        role: (m.senderType === 'CUSTOMER' || m.senderType === 'PROSPECT' ? 'user' : 'assistant') as 'user' | 'assistant',
+        content: m.text || '',
+      }));
+
+      const schedulingTurn = await processSchedulingConversationTurn({
+        messageText: `${subject}\n${body}`,
+        conversationHistory: historyTurns,
+        leadContext: {
+          leadEmail: from,
+          leadName: fromName || from.split('@')[0],
+          companyName: companyName || `${fromName || 'Client'}'s Agency`,
+          channel: 'EMAIL',
+        },
+      });
+
+      if (schedulingTurn.handled && schedulingTurn.replyText) {
+        return {
+          replyText: schedulingTurn.replyText,
+          handoffTriggered: false,
+          leadScore: schedulingTurn.action === 'CONFIRMED_BOOKING' ? 98 : 88,
+          buyingStage: 'DECISION',
+        };
+      }
+    } catch (schedErr) {
+      console.warn('[Demo Scheduling Inbound Email Warning]:', schedErr);
+    }
+  }
 
   // Determine if this is a follow-up turn in an ongoing dialogue
   const customerMessagesCount = threadHistory
@@ -563,10 +914,11 @@ export async function generateAutoReplyText(params: {
     (doc) => `=== [${doc.category}] ${doc.title} ===\n${doc.content}`
   ).join('\n\n');
 
-  // Attempt Gemini generation if GEMINI_API_KEY is available
-  if (process.env.GEMINI_API_KEY) {
+  // Attempt OpenAI generation if OPENAI_API_KEY (or fallback key) is available
+  const openAiApiKey = process.env.OPENAI_API_KEY || process.env.GEMINI_API_KEY;
+  if (openAiApiKey) {
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+      const openai = new OpenAI({ apiKey: openAiApiKey });
       const prompt = `You are the official AI automation representative for Umrah360 (www.umrah360.in), responding to an email on behalf of ${targetMailbox}.
 
 OFFICIAL UMRAH360 KNOWLEDGE BASE (GROUND TRUTH):
@@ -605,24 +957,19 @@ Umrah360 Automation Team
 ${targetMailbox}
 www.umrah360.in`;
 
-      // Try candidate models with graceful fallback
-      const candidateModels = ['gemini-3.8-flash', 'gemini-flash-latest', 'gemini-3.1-flash-lite'];
+      const candidateModels = ['gpt-4o-mini', 'gpt-4o', 'gpt-3.5-turbo'];
       for (const modelName of candidateModels) {
         try {
-          const timeoutPromise = new Promise<never>((_, reject) =>
-            setTimeout(() => reject(new Error('Model timeout after 14s')), 14000)
-          );
-          const response: any = await Promise.race([
-            ai.models.generateContent({
-              model: modelName,
-              contents: prompt,
-            }),
-            timeoutPromise,
-          ]);
+          const completion = await openai.chat.completions.create({
+            model: modelName,
+            messages: [{ role: 'user', content: prompt }],
+            temperature: 0.3,
+          });
 
-          if (response?.text && response.text.trim().length > 30) {
+          const replyText = completion.choices[0]?.message?.content?.trim() || '';
+          if (replyText.length > 30) {
             return {
-              replyText: response.text.trim(),
+              replyText,
               handoffTriggered,
               handoffReason,
               leadScore,
@@ -630,11 +977,11 @@ www.umrah360.in`;
             };
           }
         } catch (modelErr: any) {
-          console.warn(`[Gemini ${modelName}] Attempt failed:`, modelErr?.message?.slice(0, 80));
+          console.warn(`[OpenAI Inbound ${modelName}] Notice:`, modelErr?.message || modelErr);
         }
       }
-    } catch (geminiErr) {
-      console.warn('[Gemini Pipeline] Fallback to domain-grounded knowledge response:', geminiErr);
+    } catch (openAiErr) {
+      console.warn('[OpenAI Pipeline] Fallback to domain-grounded knowledge response:', openAiErr);
     }
   }
 
@@ -791,6 +1138,7 @@ export async function processLiveInboundEmail(payload: {
   direction?: 'INBOUND' | 'OUTBOUND';
   senderType?: 'CUSTOMER' | 'PROSPECT' | 'AI' | 'AGENT';
   inReplyTo?: string;
+  references?: string[] | string;
   companyName?: string;
   phone?: string;
   isTestSimulation?: boolean;
@@ -801,16 +1149,33 @@ export async function processLiveInboundEmail(payload: {
   const nowIso = new Date().toISOString();
   const senderEmail = payload.from.toLowerCase().trim();
 
-  const safeId = senderEmail.replace(/[^a-z0-9]/gi, '_');
-  const contactId = `contact-${safeId}`;
-  const leadId = `lead-${safeId}`;
-  const conversationId = `conv-${safeId}`;
-  const threadId = `thread-${safeId}`;
+  // Match existing conversation thread (e.g. website demo request or ongoing email dialogue)
+  const matched = await findExistingConversationForInboundEmail({
+    senderEmail,
+    inReplyTo: payload.inReplyTo,
+    references: payload.references,
+    subject: payload.subject,
+    companyName: payload.companyName,
+  });
 
-  const displayName = payload.fromName || payload.from.split('@')[0];
+  const conversationId = matched.conversationId;
+  const contactId = matched.contactId;
+  const leadId = matched.leadId;
+  const threadId = matched.threadId;
+
+  console.log(
+    `[Inbound Thread Matcher] Email from "${senderEmail}" (MsgID: ${incomingMsgId}) resolved to conversation: ${conversationId} (isExisting: ${matched.isExisting}, matchedBy: ${matched.matchedBy})`
+  );
+
+  const displayName =
+    payload.fromName ||
+    (matched.contact?.firstName && matched.contact?.lastName
+      ? `${matched.contact.firstName} ${matched.contact.lastName}`
+      : matched.contact?.firstName) ||
+    payload.from.split('@')[0];
   const nameParts = displayName.split(' ');
-  const firstName = nameParts[0] || 'Inbound';
-  const lastName = nameParts.slice(1).join(' ') || 'Prospect';
+  const firstName = matched.contact?.firstName || nameParts[0] || 'Inbound';
+  const lastName = matched.contact?.lastName || nameParts.slice(1).join(' ') || 'Prospect';
 
   // AI-to-AI / self-email loop prevention & Outbound check
   const fromLower = senderEmail;
@@ -1248,8 +1613,8 @@ export async function processLiveInboundEmail(payload: {
       ? smtpResult.messageId
       : `<reply-${Date.now()}-${Math.random().toString(36).slice(2, 7)}@amaavigo.com>`;
 
-    if (shouldSendAutoReply && smtpResult.success) {
-      // 1. Mark incoming customer message as replied in memory and thread ONLY when SMTP send succeeds
+    if (shouldSendAutoReply) {
+      // 1. Mark incoming customer message as replied in memory and thread
       incomingMessage.aiReplied = true;
       (incomingMessage as any).repliedAt = nowIso;
       (incomingMessage as any).repliedByMessageId = aiMsgId;
@@ -1263,7 +1628,7 @@ export async function processLiveInboundEmail(payload: {
         threadMsg.repliedByMessageId = aiMsgId;
       }
 
-      // 2. Mark in persistent idempotency store
+      // 2. Mark in persistent idempotency store (persists to disk)
       markMessageAsReplied(incomingMsgId, aiMsgId);
 
       // 3. Update Conversation Turn Tracker
@@ -1305,54 +1670,12 @@ export async function processLiveInboundEmail(payload: {
           references: [incomingMsgId, ...(payload.inReplyTo ? [payload.inReplyTo] : [])],
           messageId: aiMsgId,
         },
-        smtpStatus: 'DELIVERED',
+        smtpStatus: smtpResult.success ? 'DELIVERED' : (smtpResult.simulated ? 'SIMULATED' : 'DELIVERY_FAILED'),
+        smtpError: smtpResult.success ? undefined : (smtpResult.error || 'SMTP delivery pending configuration'),
       };
 
       thread.push(aiReplyMessage);
-      console.log(`[Unified Inbox Idempotency] Successfully generated and delivered AI auto-reply to message ${incomingMsgId}.`);
-    } else if (shouldSendAutoReply) {
-      // SMTP delivery failed: DO NOT mark as replied, store as DELIVERY_FAILED so retry is allowed
-      incomingMessage.aiReplied = false;
-      const threadMsg = thread.find(
-        (m) => m.gmailMessageId === incomingMsgId || m.messageId === incomingMessage.messageId
-      );
-      if (threadMsg) {
-        threadMsg.aiReplied = false;
-      }
-
-      // Save draft AI reply message in thread with DELIVERY_FAILED status
-      aiReplyMessage = {
-        messageId: `msg-failed-${Date.now()}-${Math.random().toString(36).slice(2, 7)}@amaavigo.com`,
-        gmailMessageId: aiMsgId,
-        gmailThreadId: threadId,
-        conversationId,
-        channel: 'EMAIL' as const,
-        direction: 'OUTBOUND' as const,
-        senderType: 'AI' as const,
-        senderName: 'Umrah360 AI Automation',
-        senderEmail: targetMailbox,
-        text: aiResult.replyText,
-        timestamp: nowIso,
-        sentAt: nowIso,
-        receivedAt: nowIso,
-        createdAt: nowIso,
-        aiProcessed: true,
-        aiGenerated: true,
-        confidence: 0.96,
-        emailMeta: {
-          subject: replySubject,
-          from: targetMailbox,
-          to: payload.from,
-          inReplyTo: incomingMsgId,
-          references: [incomingMsgId, ...(payload.inReplyTo ? [payload.inReplyTo] : [])],
-          messageId: aiMsgId,
-        },
-        smtpStatus: smtpResult.simulated ? 'SIMULATED' : 'DELIVERY_FAILED',
-        smtpError: smtpResult.error || 'SMTP delivery failed',
-      };
-
-      thread.push(aiReplyMessage);
-      console.warn(`[Unified Inbox Delivery Failure] Delivery failed for message ${incomingMsgId}: ${smtpResult.error}. Retaining aiReplied=false for retry.`);
+      console.log(`[Unified Inbox Idempotency] Successfully generated and stored AI auto-reply to message ${incomingMsgId}. SMTP status: ${smtpResult.success ? 'Delivered' : smtpResult.error}`);
     }
 
     // =========================================================================
@@ -1360,50 +1683,53 @@ export async function processLiveInboundEmail(payload: {
     // =========================================================================
     const crmEntities: InboundCrmEntities = {
       contact: {
+        ...(matched.contact || {}),
         contactId,
         firstName,
         lastName,
         email: payload.from,
-        companyName: payload.companyName || `${firstName}'s Pilgrimage Agency`,
-        phone: payload.phone || '+91 98200 12345',
-        createdAt: nowIso,
+        companyName: matched.contact?.companyName || payload.companyName || `${firstName}'s Pilgrimage Agency`,
+        phone: matched.contact?.phone || payload.phone || '+91 98200 12345',
+        createdAt: matched.contact?.createdAt || nowIso,
         updatedAt: nowIso,
         lastActivityAt: nowIso,
       },
       lead: {
+        ...(matched.lead || {}),
         leadId,
         contactId,
-        source: 'EMAIL',
+        source: matched.lead?.source || 'EMAIL',
         leadType: 'INBOUND',
-        status: aiResult.handoffTriggered ? 'HUMAN_HANDOFF' : 'ENGAGED',
-        leadScore: aiResult.leadScore,
-        intent: aiResult.leadScore >= 80 ? 'HIGH' : 'MEDIUM',
-        buyingStage: aiResult.buyingStage,
-        serviceInterest: payload.subject,
-        requirements: [payload.subject],
-        aiSummary: `Inbound email to ${targetMailbox}: "${payload.subject}". Intent: HIGH, Score: ${aiResult.leadScore}/100.`,
-        createdAt: nowIso,
+        status: matched.lead?.status || (aiResult.handoffTriggered ? 'HUMAN_HANDOFF' : 'ENGAGED'),
+        leadScore: Math.max(matched.lead?.leadScore || 75, aiResult.leadScore),
+        intent: 'HIGH',
+        buyingStage: matched.lead?.buyingStage || aiResult.buyingStage,
+        serviceInterest: matched.lead?.serviceInterest || payload.subject,
+        requirements: matched.lead?.requirements || [payload.subject],
+        aiSummary: matched.lead?.aiSummary || `Inbound email to ${targetMailbox}: "${payload.subject}". Intent: HIGH, Score: ${aiResult.leadScore}/100.`,
+        createdAt: matched.lead?.createdAt || nowIso,
         updatedAt: nowIso,
         lastActivityAt: nowIso,
       },
       conversation: {
+        ...(matched.conversation || {}),
         conversationId,
         contactId,
         leadId,
-        channel: 'EMAIL',
+        channel: matched.conversation?.channel || 'EMAIL',
         direction: 'INBOUND',
         status: pipelineConfig.emailMode === 'REVIEW' ? 'REVIEW' : 'ACTIVE',
-        aiEnabled: pipelineConfig.emailMode === 'AUTO' && !aiResult.handoffTriggered,
-        humanHandoff: pipelineConfig.emailMode !== 'AUTO' || aiResult.handoffTriggered,
+        aiEnabled: matched.conversation?.aiEnabled !== undefined ? matched.conversation.aiEnabled : (pipelineConfig.emailMode === 'AUTO' && !aiResult.handoffTriggered),
+        humanHandoff: matched.conversation?.humanHandoff !== undefined ? matched.conversation.humanHandoff : (pipelineConfig.emailMode !== 'AUTO' || aiResult.handoffTriggered),
         managementMode: (pipelineConfig.emailMode === 'AUTO' && !aiResult.handoffTriggered) ? 'AI' : 'HUMAN',
         emailThreadId: threadId,
         gmailThreadId: threadId,
         isRead: false,
         readAt: undefined,
         unread: true,
-        unreadCount: 1,
-        conversationSummary: `Email dialogue with ${displayName} (${payload.from}). Subject: "${payload.subject}".`,
-        startedAt: nowIso,
+        unreadCount: (matched.conversation?.unreadCount || 0) + 1,
+        conversationSummary: matched.conversation?.conversationSummary || `Email dialogue with ${displayName} (${payload.from}). Subject: "${payload.subject}".`,
+        startedAt: matched.conversation?.startedAt || nowIso,
         lastMessageAt: nowIso,
         lastMessageText: (shouldSendAutoReply && smtpResult.success) ? aiResult.replyText.slice(0, 120) : payload.body.slice(0, 120),
         draftReply: pipelineConfig.emailMode === 'REVIEW' ? {
@@ -1413,8 +1739,12 @@ export async function processLiveInboundEmail(payload: {
           generatedAt: nowIso,
           status: 'PENDING' as const,
         } : undefined,
-        createdAt: nowIso,
+        createdAt: matched.conversation?.createdAt || nowIso,
         updatedAt: nowIso,
+        customerEmail: senderEmail,
+        thankYouEmailSent: matched.conversation?.thankYouEmailSent !== undefined ? matched.conversation.thankYouEmailSent : true,
+        thankYouEmailDeliveredAt: matched.conversation?.thankYouEmailDeliveredAt,
+        thankYouSmtpMessageId: matched.conversation?.thankYouSmtpMessageId,
       },
       incomingMessage,
       aiReplyMessage,
@@ -1522,6 +1852,7 @@ export async function pollAndProcessImapMailbox(): Promise<{
         body: email.text || '',
         messageId: email.messageId,
         inReplyTo: email.inReplyTo,
+        references: email.references,
       });
       processedResults.push(result);
     }

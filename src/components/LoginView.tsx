@@ -168,7 +168,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
             <div className="grid grid-cols-2 gap-2">
               {users.slice(0, 2).map((u) => (
                 <button
-                  key={u.id}
+                  key={u.userId}
                   type="button"
                   onClick={() => {
                     setIdentifier(u.email);

@@ -1,5 +1,5 @@
 import crypto from 'crypto';
-import { GoogleGenAI } from '@google/genai';
+import OpenAI from 'openai';
 import { INITIAL_KNOWLEDGE_DOCUMENTS } from '../services/knowledgeData.js';
 import {
   collection,
@@ -60,7 +60,7 @@ export async function generateAiEmailForLead(lead: {
     return generateEmailWithCachedResearch(lead, cached);
   }
 
-  const apiKey = process.env.GEMINI_API_KEY;
+  const apiKey = process.env.OPENAI_API_KEY || process.env.GEMINI_API_KEY;
   if (!apiKey) {
     const fallback = {
       subject: `Streamlining Operations & B2B Bookings for ${company}`,
@@ -81,14 +81,7 @@ export async function generateAiEmailForLead(lead: {
   }
 
   try {
-    const ai = new GoogleGenAI({
-      apiKey,
-      httpOptions: {
-        headers: {
-          'User-Agent': 'aistudio-build',
-        },
-      },
-    });
+    const openai = new OpenAI({ apiKey });
     const kbContext = INITIAL_KNOWLEDGE_DOCUMENTS.map((d) => `### ${d.title}\n${d.content}`).join('\n\n');
 
     const prompt = `You are an expert B2B sales development AI for Umrah360 (www.umrah360.in), the premier ERP and CRM platform for Hajj and Umrah tour operators.
@@ -131,12 +124,26 @@ Output your response strictly as a JSON object:
 }
 `;
 
-    const response = await ai.models.generateContent({
-      model: 'gemini-3.8-flash',
-      contents: prompt,
-    });
+    const candidateModels = ['gpt-4o-mini', 'gpt-4o', 'gpt-3.5-turbo'];
+    let text = '';
 
-    const text = response.text || '';
+    for (const modelName of candidateModels) {
+      try {
+        const completion = await openai.chat.completions.create({
+          model: modelName,
+          messages: [{ role: 'user', content: prompt }],
+          response_format: { type: 'json_object' },
+          temperature: 0.3,
+        });
+        const content = completion.choices[0]?.message?.content;
+        if (content) {
+          text = content;
+          break;
+        }
+      } catch (mErr: any) {
+        console.warn(`[Campaign OpenAI ${modelName}] Notice:`, mErr?.message || mErr);
+      }
+    }
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     if (jsonMatch) {
       const parsed = JSON.parse(jsonMatch[0]);
@@ -1567,6 +1574,7 @@ export async function updateCampaignLeadStatus(params: {
   sendStatus?: 'PENDING' | 'SENDING' | 'SENT' | 'FAILED' | 'PAUSED' | 'COMPLETED';
   replyStatus?: 'NOT_REPLIED' | 'REPLIED';
   demoStatus?: DemoStatus;
+  demoSource?: DemoSource;
   lastError?: string;
 }): Promise<CampaignLead | null> {
   await initCampaignStore();
@@ -1602,6 +1610,10 @@ export async function updateCampaignLeadStatus(params: {
   if (params.demoStatus) {
     targetLead.demoStatus = params.demoStatus;
     targetLead.demoBookedAt = params.demoStatus === 'BOOKED' ? now : undefined;
+  }
+
+  if (params.demoSource) {
+    targetLead.demoSource = params.demoSource;
   }
 
   targetLead.updatedAt = now;

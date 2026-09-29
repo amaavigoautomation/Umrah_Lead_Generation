@@ -329,12 +329,81 @@ export async function processInboundEmail(params: {
   // ----------------------------------------------------
   // Step 4: Email Thread & Conversation Identification
   // ----------------------------------------------------
-  let conversation = conversations.find(
-    (c) =>
-      c.contactId === contact!.contactId &&
-      c.channel === 'EMAIL' &&
-      (payload.inReplyTo || c.emailThreadId)
-  );
+  // 1. Match by inReplyTo or references across messages & conversations
+  let conversation: Conversation | undefined;
+
+  const candidateIds = new Set<string>();
+  if (payload.inReplyTo?.trim()) {
+    const raw = payload.inReplyTo.trim();
+    candidateIds.add(raw);
+    const unb = raw.replace(/^<|>$/g, '').trim();
+    if (unb) {
+      candidateIds.add(unb);
+      candidateIds.add(`<${unb}>`);
+    }
+  }
+  if (payload.references) {
+    const refs = Array.isArray(payload.references)
+      ? payload.references
+      : [payload.references];
+    for (const r of refs) {
+      if (r?.trim()) {
+        candidateIds.add(r.trim());
+        const unb = r.trim().replace(/^<|>$/g, '').trim();
+        if (unb) {
+          candidateIds.add(unb);
+          candidateIds.add(`<${unb}>`);
+        }
+      }
+    }
+  }
+
+  if (candidateIds.size > 0) {
+    const matchedMsg = messages.find((m) =>
+      Array.from(candidateIds).some(
+        (cand) =>
+          m.smtpMessageId === cand ||
+          m.gmailMessageId === cand ||
+          m.messageId === cand ||
+          m.emailMeta?.messageId === cand
+      )
+    );
+    if (matchedMsg) {
+      conversation = conversations.find((c) => c.conversationId === matchedMsg.conversationId);
+    }
+
+    if (!conversation) {
+      conversation = conversations.find((c) =>
+        Array.from(candidateIds).some(
+          (cand) =>
+            c.thankYouSmtpMessageId === cand ||
+            c.emailThreadId === cand ||
+            c.gmailThreadId === cand
+        )
+      );
+    }
+  }
+
+  // 2. Fallback: match by contactId or customerEmail (supporting both WEBSITE and EMAIL channels)
+  if (!conversation) {
+    const cleanFrom = payload.from.trim().toLowerCase();
+    const candidateConvs = conversations.filter(
+      (c) =>
+        c.contactId === contact!.contactId ||
+        c.customerEmail?.trim().toLowerCase() === cleanFrom
+    );
+
+    if (candidateConvs.length > 0) {
+      const websiteConv = candidateConvs.find(
+        (c) =>
+          c.channel === 'WEBSITE' ||
+          c.conversationId?.startsWith('conv-web-') ||
+          c.thankYouEmailSent === true ||
+          c.conversationSummary?.toLowerCase().includes('website demo')
+      );
+      conversation = websiteConv || candidateConvs[0];
+    }
+  }
 
   let emailThread: EmailThread;
 
@@ -561,20 +630,13 @@ export async function processInboundEmail(params: {
           senderName: 'Umrah360 AI Automation',
         }),
       });
-      let sendData: any = {};
-      try {
-        const rawText = await sendRes.text();
-        sendData = rawText ? JSON.parse(rawText) : {};
-      } catch {
-        sendData = { error: `Server returned non-JSON response (${sendRes.status})` };
-      }
-
+      const sendData = await sendRes.json();
       if (sendRes.ok && sendData?.messageId) {
         liveSentMessageId = sendData.messageId;
         outboundSmtpStatus = 'DELIVERED';
       } else {
         outboundSmtpStatus = 'DELIVERY_FAILED';
-        smtpDeliveryError = sendData?.error || `Failed to dispatch via SMTP (HTTP ${sendRes.status})`;
+        smtpDeliveryError = sendData?.error || 'Failed to dispatch via SMTP';
       }
     } catch (smtpErr: any) {
       outboundSmtpStatus = 'DELIVERY_FAILED';

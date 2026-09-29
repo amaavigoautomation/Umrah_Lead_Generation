@@ -2,6 +2,7 @@ export type ActiveTab =
   | 'inbox'
   | 'campaigns'
   | 'crm'
+  | 'scheduling'
   | 'knowledge'
   | 'playground'
   | 'scenarios'
@@ -243,6 +244,12 @@ export interface Lead {
   demoStatus?: DemoStatus;
   demoSource?: DemoSource;
   demoBookedAt?: string;
+  demoDate?: string;
+  demoStartTime?: string;
+  demoEndTime?: string;
+  demoTimezone?: string;
+  calendarEventId?: string;
+  googleMeetLink?: string;
   country?: string;
   city?: string;
   website?: string;
@@ -487,4 +494,44 @@ export interface AppUser {
   createdAt: string;
   updatedAt: string;
 }
+
+export interface WebsiteLeadThankYouHistory {
+  email: string;
+  leadId?: string;
+  conversationId?: string;
+  sentAt: string;
+  smtpMessageId?: string;
+  status: 'SENT' | 'DELIVERED' | 'SUPPRESSED_DUPLICATE';
+}
+
+export type BookingStatus = 'BOOKED' | 'CANCELLED' | 'COMPLETED' | 'RESCHEDULED';
+
+export interface Booking {
+  bookingId: string;
+  leadId?: string;
+  contactId?: string;
+  campaignId?: string;
+  conversationId?: string;
+  channel: Channel;
+  leadName: string;
+  leadEmail: string;
+  leadPhone?: string;
+  companyName: string;
+  calendarEventId: string;
+  googleMeetLink: string;
+  date: string; // YYYY-MM-DD in Asia/Kolkata
+  startTime: string; // e.g. "15:00"
+  endTime: string; // e.g. "16:00"
+  startDateTimeIso: string; // e.g. "2026-09-30T15:00:00+05:30"
+  endDateTimeIso: string; // e.g. "2026-09-30T16:00:00+05:30"
+  timezone: string; // 'Asia/Kolkata'
+  status: BookingStatus;
+  summary?: string;
+  description?: string;
+  attendees?: string[];
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 

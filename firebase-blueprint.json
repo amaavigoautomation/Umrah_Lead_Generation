@@ -119,6 +119,20 @@
       },
       "required": ["messageId", "status", "timestamp"]
     },
+    "WebsiteLeadThankYouHistory": {
+      "title": "WebsiteLeadThankYouHistory",
+      "description": "Persistent cross-session idempotency ledger ensuring website demo leads receive exactly one thank you email",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string", "format": "email", "maxLength": 256 },
+        "leadId": { "type": "string", "maxLength": 128 },
+        "conversationId": { "type": "string", "maxLength": 128 },
+        "sentAt": { "type": "string" },
+        "smtpMessageId": { "type": "string", "maxLength": 256 },
+        "status": { "type": "string", "enum": ["SENT", "DELIVERED", "SUPPRESSED_DUPLICATE"] }
+      },
+      "required": ["email", "sentAt", "status"]
+    },
     "EmailTemplate": {
       "title": "EmailTemplate",
       "description": "Predefined outbound email templates with variable substitution, styling, HTML, and attachments",
@@ -302,6 +316,10 @@
     "/processed_inbound_emails/{docId}": {
       "schema": "ProcessedInboundEmail",
       "description": "Persistent cross-restore idempotency ledger preventing duplicate email dispatch"
+    },
+    "/website_lead_thankyou_history/{emailKey}": {
+      "schema": "WebsiteLeadThankYouHistory",
+      "description": "Idempotency ledger ensuring website thank-you emails are dispatched strictly once per lead email"
     },
     "/email_templates/{templateId}": {
       "schema": "EmailTemplate",

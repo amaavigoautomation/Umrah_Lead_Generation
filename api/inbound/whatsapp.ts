@@ -88,7 +88,7 @@ export default async function handler(req: IncomingMessage & { body?: any; query
           service: 'Umrah360 WhatsApp Webhook Engine',
           targetNumber: TARGET_WHATSAPP_NUMBER,
           metaConfigured: Boolean(process.env.META_ACCESS_TOKEN && process.env.META_PHONE_NUMBER_ID),
-          geminiConfigured: Boolean(process.env.GEMINI_API_KEY),
+          openAiConfigured: Boolean(process.env.OPENAI_API_KEY || process.env.GEMINI_API_KEY),
           timestamp: new Date().toISOString(),
         })
       );
@@ -151,42 +151,47 @@ export default async function handler(req: IncomingMessage & { body?: any; query
       const isTwentyUsers = /20 user|twenty|20 seat|enterprise/i.test(messageText);
       const isPricing = /price|cost|rate|pricing|subscription|quote/i.test(messageText);
 
+      const openAiKey = process.env.OPENAI_API_KEY || process.env.GEMINI_API_KEY;
       if (isTwentyUsers) {
         replyText = `Thank you for your inquiry, ${senderName}!\n\nFor teams of 20+ users, our Enterprise tier provides dedicated cloud hosting, custom B2B sub-agent capacity, dynamic volume pricing, and SLA guarantees.\n\nBecause Enterprise accounts are customized to your agency's transaction volume, I have connected our Senior Solutions Specialist to provide a tailored proposal. Someone will reach out to you shortly.\n\nRegards,\nUmrah360 Team`;
-      } else if (process.env.GEMINI_API_KEY) {
-        try {
-          const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`;
-          const geminiPayload = {
-            contents: [
-              {
-                role: 'user',
-                parts: [
-                  {
-                    text: `${UMRAH360_SYSTEM_PROMPT}\n\nIncoming WhatsApp message from ${senderName} (+${senderPhone}):\n"${messageText}"\n\nGenerate a helpful, grounded response:`,
-                  },
-                ],
-              },
-            ],
-            generationConfig: {
+      } else if (openAiKey) {
+        const candidateModels = ['gpt-4o-mini', 'gpt-4o', 'gpt-3.5-turbo'];
+        for (const modelName of candidateModels) {
+          try {
+            const openAiUrl = 'https://api.openai.com/v1/chat/completions';
+            const openAiPayload = {
+              model: modelName,
+              messages: [
+                { role: 'system', content: UMRAH360_SYSTEM_PROMPT },
+                {
+                  role: 'user',
+                  content: `Incoming WhatsApp message from ${senderName} (+${senderPhone}):\n"${messageText}"\n\nGenerate a helpful, grounded response:`,
+                },
+              ],
               temperature: 0.3,
-              maxOutputTokens: 500,
-            },
-          };
+              max_tokens: 500,
+            };
 
-          const geminiRes = await fetch(geminiUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(geminiPayload),
-          });
+            const openAiRes = await fetch(openAiUrl, {
+              method: 'POST',
+              headers: {
+                Authorization: `Bearer ${openAiKey}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify(openAiPayload),
+            });
 
-          if (geminiRes.ok) {
-            const geminiData: any = await geminiRes.json();
-            replyText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
-          } else {
-            console.warn('[Gemini Call Failed]:', await geminiRes.text());
+            if (openAiRes.ok) {
+              const openAiData: any = await openAiRes.json();
+              replyText = openAiData.choices?.[0]?.message?.content?.trim() || '';
+              if (replyText) break;
+            } else {
+              const errBody = await openAiRes.text();
+              console.warn(`[OpenAI ${modelName} Notice]:`, errBody.slice(0, 100));
+            }
+          } catch (openAiErr: any) {
+            console.warn(`[OpenAI Exception ${modelName}]:`, openAiErr?.message || openAiErr);
           }
-        } catch (geminiErr) {
-          console.error('[Gemini Exception]:', geminiErr);
         }
       }
 

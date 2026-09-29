@@ -90,7 +90,7 @@ export function checkHumanHandoffConditions(
 }
 
 /**
- * Generates an omnichannel AI response using server-side Gemini or verified domain knowledge engine.
+ * Generates an omnichannel AI response using server-side OpenAI or verified domain knowledge engine.
  */
 export async function generateOmnichannelResponse(params: {
   incomingMessage: string;

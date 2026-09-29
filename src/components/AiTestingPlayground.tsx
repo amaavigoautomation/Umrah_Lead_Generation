@@ -217,7 +217,7 @@ export const AiTestingPlayground: React.FC<AiTestingPlaygroundProps> = ({ knowle
             className="w-full py-3 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-bold text-xs transition flex items-center justify-center space-x-2 shadow-md shadow-orange-500/20 disabled:opacity-50 cursor-pointer"
           >
             <Play className="w-4 h-4" />
-            <span>{isEvaluating ? 'Evaluating with Gemini 2.5 Flash...' : 'Execute AI Test'}</span>
+            <span>{isEvaluating ? 'Evaluating with OpenAI (gpt-4o-mini)...' : 'Execute AI Test'}</span>
           </button>
         </div>
 

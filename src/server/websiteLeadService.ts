@@ -1,8 +1,104 @@
-import { collection, doc, getDocs, query, where } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, limit, query, where } from 'firebase/firestore';
 import { db, isFirebaseConfigured } from '../firebase/config.js';
 import { safeSetDoc } from './firestoreUtils.js';
 import { Contact, Lead, Conversation, Message } from '../types/index.js';
-import { sendLiveEmail, getSmtpConfig } from './smtpService.js';
+import { sendLiveEmail, getSmtpConfig, fetchFirestoreSmtpConfig } from './smtpService.js';
+
+// In-memory cache + in-flight locks to guarantee strict single thank-you email delivery
+const sentThankYouEmailsCache = new Set<string>();
+const inFlightThankYouSends = new Set<string>();
+
+/**
+ * Checks whether a given lead email has already received a Thank You / Demo Walkthrough email.
+ * Checks in-memory cache, the website_lead_thankyou_history collection, and conversations.
+ */
+export async function hasThankYouEmailBeenSent(rawEmail: string): Promise<boolean> {
+  const clean = rawEmail?.trim().toLowerCase() || '';
+  if (!clean || !clean.includes('@') || clean.endsWith('@umrah360.in')) return true;
+
+  if (sentThankYouEmailsCache.has(clean)) {
+    return true;
+  }
+
+  if (!isFirebaseConfigured || !db) return false;
+
+  try {
+    // 1. Check dedicated website_lead_thankyou_history document
+    const emailKey = clean.replace(/[^a-z0-9_.-]/g, '_');
+    const historyRef = doc(db, 'website_lead_thankyou_history', emailKey);
+    const historySnap = await getDoc(historyRef);
+    if (historySnap.exists()) {
+      sentThankYouEmailsCache.add(clean);
+      return true;
+    }
+
+    // 2. Check if any conversation with this email already has thankYouEmailSent == true
+    const convQ = query(
+      collection(db, 'conversations'),
+      where('customerEmail', '==', clean),
+      where('thankYouEmailSent', '==', true),
+      limit(1)
+    );
+    const convSnap = await getDocs(convQ);
+    if (!convSnap.empty) {
+      sentThankYouEmailsCache.add(clean);
+      return true;
+    }
+
+    // 3. Check if any contact with this email has thankYouEmailSent == true
+    const contactQ = query(
+      collection(db, 'contacts'),
+      where('email', '==', clean),
+      limit(1)
+    );
+    const contactSnap = await getDocs(contactQ);
+    if (!contactSnap.empty) {
+      const cData = contactSnap.docs[0].data() as any;
+      if (cData.thankYouEmailSent) {
+        sentThankYouEmailsCache.add(clean);
+        return true;
+      }
+    }
+  } catch (e) {
+    console.warn('[Website Lead] Notice checking thank you history in Firestore:', e);
+  }
+
+  return false;
+}
+
+/**
+ * Records that a thank you email was dispatched to a specific recipient address
+ * in both memory and the persistent Firestore collection.
+ */
+export async function recordThankYouEmailSent(
+  rawEmail: string,
+  meta: { leadId?: string; conversationId?: string; smtpMessageId?: string }
+): Promise<void> {
+  const clean = rawEmail?.trim().toLowerCase() || '';
+  if (!clean) return;
+  sentThankYouEmailsCache.add(clean);
+
+  if (!isFirebaseConfigured || !db) return;
+
+  try {
+    const emailKey = clean.replace(/[^a-z0-9_.-]/g, '_');
+    const nowIso = new Date().toISOString();
+    await safeSetDoc(
+      doc(db, 'website_lead_thankyou_history', emailKey),
+      {
+        email: clean,
+        leadId: meta.leadId || '',
+        conversationId: meta.conversationId || '',
+        sentAt: nowIso,
+        smtpMessageId: meta.smtpMessageId || 'verified',
+        status: 'DELIVERED',
+      },
+      { merge: true }
+    );
+  } catch (e) {
+    console.warn('[Website Lead] Notice recording thank you history:', e);
+  }
+}
 
 export interface WebsiteLeadInput {
   // Personal
@@ -79,6 +175,7 @@ export interface ProcessedLeadResult {
   conversation: Conversation;
   initialMessage: Message;
   autoConfirmationSent?: boolean;
+  duplicateThankYouSuppressed?: boolean;
 }
 
 // Recursively flattens nested Elementor Pro form objects, arrays, and bracket keys
@@ -105,8 +202,29 @@ function flattenAllFields(obj: any, target: Record<string, string> = {}): Record
   for (const [rawK, rawV] of Object.entries(obj)) {
     if (rawV === null || rawV === undefined) continue;
 
+    const lowerK = rawK.toLowerCase().trim();
+
+    // Prevent Elementor/WordPress form metadata objects from polluting root keys like "name" or "id"
+    if (lowerK === 'form' && typeof rawV === 'object' && rawV !== null) {
+      if ((rawV as any).id) target['form_id'] = String((rawV as any).id).trim();
+      if ((rawV as any).name) target['form_name'] = String((rawV as any).name).trim();
+      continue;
+    }
+    if ((lowerK === 'post' || lowerK === 'page') && typeof rawV === 'object' && rawV !== null) {
+      if ((rawV as any).id) target[`${lowerK}_id`] = String((rawV as any).id).trim();
+      if ((rawV as any).title) target[`${lowerK}_title`] = String((rawV as any).title).trim();
+      continue;
+    }
+
     if (typeof rawV === 'string' || typeof rawV === 'number' || typeof rawV === 'boolean') {
       const strVal = String(rawV).trim();
+
+      // If key is form_name or form-name, store under form_name, NOT name
+      if (lowerK === 'form_name' || lowerK === 'form-name' || lowerK === 'formname' || lowerK === 'form_title') {
+        target['form_name'] = strVal;
+        continue;
+      }
+
       target[rawK] = strVal;
 
       // Extract bracket key e.g. "form_fields[name]" -> also set "name"
@@ -119,7 +237,9 @@ function flattenAllFields(obj: any, target: Record<string, string> = {}): Record
       if (typeof nestedVal === 'string' || typeof nestedVal === 'number' || typeof nestedVal === 'boolean') {
         target[rawK] = String(nestedVal).trim();
         if ((rawV as any).id) target[String((rawV as any).id)] = String(nestedVal).trim();
-        if ((rawV as any).name) target[String((rawV as any).name)] = String(nestedVal).trim();
+        if ((rawV as any).name && String((rawV as any).name).toLowerCase() !== 'form') {
+          target[String((rawV as any).name)] = String(nestedVal).trim();
+        }
         if ((rawV as any).label) target[String((rawV as any).label)] = String(nestedVal).trim();
       }
       flattenAllFields(rawV, target);
@@ -127,6 +247,46 @@ function flattenAllFields(obj: any, target: Record<string, string> = {}): Record
   }
 
   return target;
+}
+
+// Detects whether a string is a product name, form title, or software feature rather than an actual human name
+function isInvalidHumanName(val: string): boolean {
+  if (!val || typeof val !== 'string') return true;
+  const s = val.trim();
+  if (s.length < 2) return true;
+  const productOrFormKeywords = [
+    'crm',
+    'booking',
+    'management',
+    'group series',
+    'erp',
+    'portal',
+    'software',
+    'package',
+    'solution',
+    'license',
+    'b2b',
+    'allotment',
+    'request demo',
+    'demo request',
+    'demo form',
+    'inquiry form',
+    'contact form',
+    'series',
+    'pilgrim',
+    'agency leader',
+    'tour operator',
+    'partner',
+    'system',
+    'platform',
+    'app',
+    'application',
+  ];
+  const lower = s.toLowerCase();
+  for (const kw of productOrFormKeywords) {
+    if (lower.includes(kw)) return true;
+  }
+  return false;
 }
 
 /**
@@ -177,20 +337,67 @@ export async function processWebsiteLeadSubmission(
   let rawFullName = findValue([
     /^fullname$/,
     /^yourfullname$/,
-    /^name$/,
     /^yourname$/,
+    /^clientname$/,
     /^contactname$/,
     /^leadname$/,
-    /^clientname$/,
     /^username$/,
     /^author$/,
   ]).trim();
+
+  // If candidate is a product or form name, reject it and preserve it as detected product
+  let detectedProductFromField = '';
+  if (rawFullName && isInvalidHumanName(rawFullName)) {
+    detectedProductFromField = rawFullName;
+    rawFullName = '';
+  }
 
   let firstNamePart = findValue([/^firstname$/, /^fname$/, /^first$/]).trim();
   let lastNamePart = findValue([/^lastname$/, /^lname$/, /^last$/]).trim();
 
   if (!rawFullName && (firstNamePart || lastNamePart)) {
-    rawFullName = `${firstNamePart} ${lastNamePart}`.trim();
+    const combinedParts = `${firstNamePart} ${lastNamePart}`.trim();
+    if (!isInvalidHumanName(combinedParts)) {
+      rawFullName = combinedParts;
+    }
+  }
+
+  // Next try standard name key if not yet resolved
+  if (!rawFullName) {
+    const candidateName = findValue([/^name$/]).trim();
+    if (candidateName && !isInvalidHumanName(candidateName)) {
+      rawFullName = candidateName;
+    } else if (candidateName && isInvalidHumanName(candidateName) && !detectedProductFromField) {
+      detectedProductFromField = candidateName;
+    }
+  }
+
+  // If still not resolved or invalid, scan all flatFields entries for a genuine person name (e.g. wasim saikh)
+  if (!rawFullName || isInvalidHumanName(rawFullName)) {
+    for (const [k, v] of Object.entries(flatFields)) {
+      if (!v) continue;
+      const cleanK = k.toLowerCase().replace(/[-_\[\]\.\s]/g, '');
+      if (
+        /email|mail|phone|mobile|tel|city|country|state|zip|product|service|company|agency|message|query|remark|note|size|team|branch|form|post|page|nonce|token|url|ref|recaptcha/i.test(
+          cleanK
+        )
+      ) {
+        continue;
+      }
+      const trimmedV = v.trim();
+      // Check if value matches genuine human name characteristics (2-40 chars, alpha, no digits, no @, not product)
+      if (
+        trimmedV.length >= 2 &&
+        trimmedV.length <= 40 &&
+        !trimmedV.includes('@') &&
+        !/\d/.test(trimmedV) &&
+        /^[a-zA-Z\s.'-]+$/.test(trimmedV) &&
+        !isInvalidHumanName(trimmedV)
+      ) {
+        rawFullName = trimmedV;
+        break;
+      }
+    }
   }
 
   if (!rawFullName && email) {
@@ -300,7 +507,7 @@ export async function processWebsiteLeadSubmission(
       : 'No';
 
   // 6. Resolve Product & Team Size
-  const product = (
+  let product = (
     findValue([
       /^product$/,
       /^products$/,
@@ -312,6 +519,14 @@ export async function processWebsiteLeadSubmission(
       /product/,
     ]) || 'Umrah360 ERP & B2B Sub-Agent Portal'
   ).trim();
+
+  if (product === 'Umrah360 ERP & B2B Sub-Agent Portal' || !product) {
+    if (detectedProductFromField) {
+      product = detectedProductFromField;
+    } else if (flatFields['form_name']) {
+      product = flatFields['form_name'];
+    }
+  }
 
   const teamSize = (
     findValue([/^teamsize$/, /^team$/, /^size$/, /^employees$/, /^users$/, /^capacity$/]) ||
@@ -503,6 +718,33 @@ export async function processWebsiteLeadSubmission(
 
   const inboundDetailsText = inboundLines.join('\n');
 
+  const cleanEmail = email ? email.trim().toLowerCase() : '';
+
+  // -----------------------------------------------------------------
+  // 11. Deduplication Gate: Check if this email already received a Thank You email
+  // -----------------------------------------------------------------
+  let alreadySent = false;
+  let isInFlight = false;
+  if (cleanEmail && cleanEmail.includes('@')) {
+    alreadySent = await hasThankYouEmailBeenSent(cleanEmail);
+    isInFlight = inFlightThankYouSends.has(cleanEmail);
+  }
+
+  const shouldSendThankYou = Boolean(
+    cleanEmail &&
+    cleanEmail.includes('@') &&
+    !cleanEmail.endsWith('@umrah360.in') &&
+    !alreadySent &&
+    !isInFlight
+  );
+
+  let duplicateThankYouSuppressed = alreadySent || isInFlight;
+  if (duplicateThankYouSuppressed) {
+    console.log(
+      `[Website Lead Idempotency] Thank you email already previously sent or in-flight for "${cleanEmail}". Strictly sending ONCE; suppressing duplicate email dispatch.`
+    );
+  }
+
   const conversation: Conversation = {
     conversationId,
     contactId,
@@ -510,9 +752,13 @@ export async function processWebsiteLeadSubmission(
     channel: 'WEBSITE',
     direction: 'INBOUND',
     status: 'ACTIVE',
-    aiEnabled: true,
+    aiEnabled: false, // Explicitly false for website leads so generic AI never sends duplicate emails
     humanHandoff: false,
     conversationSummary: `Website Demo Request: ${companyName} (${rawFullName})`,
+    subject: `Website Demo Request: ${companyName} (${product})`,
+    customerEmail: cleanEmail,
+    thankYouEmailSent: true, // Always marked true so background pollers NEVER duplicate this dispatch
+    thankYouSmtpMessageId: alreadySent ? 'ALREADY_SENT_PREVIOUSLY' : undefined,
     startedAt: nowIso,
     lastMessageAt: nowIso,
     lastMessageText: inboundDetailsText.slice(0, 180) + '...',
@@ -528,101 +774,147 @@ export async function processWebsiteLeadSubmission(
     conversationId,
     senderType: 'CUSTOMER',
     senderName: rawFullName,
+    senderEmail: cleanEmail,
+    recipientEmail: 'sales@umrah360.in',
     channel: 'WEBSITE',
     direction: 'INBOUND',
     text: inboundDetailsText,
     timestamp: nowIso,
     sentAt: nowIso,
     receivedAt: nowIso,
+    aiReplied: true, // Marked true so generic inbox auto-replier NEVER attempts an AI response
   };
 
   // -----------------------------------------------------------------
-  // 12. Persist All Entities Directly to Firestore DB
+  // 12. Dispatch Confirmation Email via SMTP (Strictly ONCE per lead)
+  // -----------------------------------------------------------------
+  let autoConfirmationSent = false;
+  let autoReplyMessage: Message | null = null;
+
+  if (shouldSendThankYou) {
+    inFlightThankYouSends.add(cleanEmail);
+    try {
+      await fetchFirestoreSmtpConfig();
+      const smtpConfig = getSmtpConfig();
+
+      if (smtpConfig.configured) {
+        const emailSubject = `We have received your Umrah360 Demo Request - ${companyName}`;
+        const emailBody = [
+          `As-salamu alaykum ${firstName},`,
+          ``,
+          `Thank you for requesting a live demo of Umrah360 for ${companyName}!`,
+          ``,
+          `We have received your requirements:`,
+          `- Product: ${product}`,
+          `- Team Size: ${teamSize}`,
+          `- Location: ${city ? `${city}, ` : ''}${country}`,
+          `- Multi-Branch Setup: ${branches}`,
+          ``,
+          `One of our senior pilgrimage software specialists will reach out to you shortly at ${fullPhone || cleanEmail} to coordinate a suitable time for your personalized walkthrough and answer any operational questions you have.`,
+          ``,
+          `If you need immediate assistance or have specific visa/hotel allotment workflows you would like to test, simply reply to this email.`,
+          ``,
+          `Warm regards,`,
+          `The Umrah360 Team`,
+          `https://umrah360.in`,
+        ].join('\n');
+
+        console.log(`[Website Lead] Dispatching single Thank You email to ${cleanEmail} for ${companyName}...`);
+        const mailResult = await sendLiveEmail({
+          to: cleanEmail,
+          subject: emailSubject,
+          text: emailBody,
+          headers: {
+            'X-Conversation-Id': conversationId,
+            'X-Lead-Id': leadId,
+            'X-Contact-Id': contactId,
+          },
+        });
+
+        if (mailResult.success) {
+          autoConfirmationSent = true;
+          const sentIso = new Date().toISOString();
+          console.log(`[Website Lead Success] ✓ Live Thank You email delivered to ${cleanEmail} (ID: ${mailResult.messageId})!`);
+
+          // Update conversation object
+          conversation.thankYouEmailSent = true;
+          conversation.thankYouEmailDeliveredAt = sentIso;
+          conversation.thankYouSmtpMessageId = mailResult.messageId;
+
+          // Record auto-confirmation outbound message
+          const replyMsgId = `msg-thankyou-${conversationId}`;
+          autoReplyMessage = {
+            messageId: replyMsgId,
+            conversationId,
+            senderType: 'AI',
+            senderName: 'Umrah360 Automation',
+            senderEmail: smtpConfig.user || 'amaavigo@gmail.com',
+            recipientEmail: cleanEmail,
+            channel: 'EMAIL',
+            direction: 'OUTBOUND',
+            text: emailBody,
+            timestamp: sentIso,
+            sentAt: sentIso,
+            receivedAt: sentIso,
+            createdAt: sentIso,
+            deliveryStatus: 'DELIVERED',
+            smtpMessageId: mailResult.messageId,
+            emailDeliveredAt: sentIso,
+            aiReplied: true,
+          };
+
+          // Record in persistent history ledger so it can NEVER be sent again to this address
+          await recordThankYouEmailSent(cleanEmail, {
+            leadId,
+            conversationId,
+            smtpMessageId: mailResult.messageId,
+          });
+        } else {
+          console.warn(`[Website Lead Warning] SMTP delivery attempt to ${cleanEmail} failed:`, mailResult.error);
+        }
+      } else {
+        console.warn(`[Website Lead Notice] SMTP credentials not configured yet; skipping live email dispatch.`);
+      }
+    } catch (smtpErr) {
+      console.warn('[Website Lead] Notice sending auto-confirmation email:', smtpErr);
+    } finally {
+      inFlightThankYouSends.delete(cleanEmail);
+    }
+  }
+
+  // -----------------------------------------------------------------
+  // 13. Persist All Entities Directly to Firestore DB
   // -----------------------------------------------------------------
   if (isFirebaseConfigured && db) {
     try {
-      await Promise.all([
+      const writes: Promise<any>[] = [
         safeSetDoc(doc(db, 'contacts', contact.contactId), contact, { merge: true }),
         safeSetDoc(doc(db, 'leads', lead.leadId), lead, { merge: true }),
         safeSetDoc(doc(db, 'conversations', conversation.conversationId), conversation, { merge: true }),
         safeSetDoc(doc(db, 'messages', initialMessage.messageId), initialMessage, { merge: true }),
-      ]);
-      console.log(`[Website Lead] Successfully stored Lead "${companyName}" (${leadId}) and Contact (${contactId}) directly into Firestore DB!`);
+      ];
+
+      if (autoReplyMessage) {
+        writes.push(safeSetDoc(doc(db, 'messages', autoReplyMessage.messageId), autoReplyMessage, { merge: true }));
+      }
+
+      await Promise.all(writes);
+      console.log(`[Website Lead] Successfully stored Lead "${companyName}" (${leadId}) directly into Firestore DB!`);
     } catch (dbErr) {
       console.error('[Website Lead] Error writing to Firestore DB:', dbErr);
     }
   }
 
-  // -----------------------------------------------------------------
-  // 13. Dispatch Confirmation Email via SMTP if Configured
-  // -----------------------------------------------------------------
-  let autoConfirmationSent = false;
-  const smtpConfig = getSmtpConfig();
-  if (smtpConfig.configured && email) {
-    try {
-      const emailSubject = `We have received your Umrah360 Demo Request - ${companyName}`;
-      const emailBody = [
-        `As-salamu alaykum ${firstName},`,
-        ``,
-        `Thank you for requesting a live demo of Umrah360 for ${companyName}!`,
-        ``,
-        `We have received your requirements:`,
-        `- Product: ${product}`,
-        `- Team Size: ${teamSize}`,
-        `- Location: ${city ? `${city}, ` : ''}${country}`,
-        `- Multi-Branch Setup: ${branches}`,
-        ``,
-        `One of our senior pilgrimage software specialists will reach out to you shortly at ${fullPhone || email} to coordinate a suitable time for your personalized walkthrough and answer any operational questions you have.`,
-        ``,
-        `If you need immediate assistance or have specific visa/hotel allotment workflows you would like to test, simply reply to this email.`,
-        ``,
-        `Warm regards,`,
-        `The Umrah360 Team`,
-        `https://umrah360.in`,
-      ].join('\n');
-
-      const mailResult = await sendLiveEmail({
-        to: email,
-        subject: emailSubject,
-        text: emailBody,
-      });
-
-      // Record auto-confirmation outbound message
-      const replyMsgId = `msg-auto-reply-${Date.now()}`;
-      const autoReplyMessage: Message = {
-        messageId: replyMsgId,
-        conversationId,
-        senderType: 'AI',
-        senderName: 'Umrah360 Automation',
-        channel: 'EMAIL',
-        direction: 'OUTBOUND',
-        text: emailBody,
-        timestamp: new Date().toISOString(),
-        sentAt: new Date().toISOString(),
-        createdAt: new Date().toISOString(),
-        aiReplied: true,
-      };
-
-      if (mailResult.success) {
-        autoConfirmationSent = true;
-        console.log(`[Website Lead] Dispatched auto-confirmation email to ${email}`);
-      }
-
-      if (isFirebaseConfigured && db) {
-        safeSetDoc(doc(db, 'messages', replyMsgId), autoReplyMessage, { merge: true }).catch(() => {});
-      }
-    } catch (smtpErr) {
-      console.warn('[Website Lead] Notice sending auto-confirmation email:', smtpErr);
-    }
-  }
-
   return {
     success: true,
-    message: `Lead for ${companyName} (${rawFullName}) successfully pushed to CRM!`,
+    message: duplicateThankYouSuppressed
+      ? `Lead for ${companyName} (${rawFullName}) saved in CRM. Thank-you email was already sent previously to ${cleanEmail} and preserved without duplicates.`
+      : `Lead for ${companyName} (${rawFullName}) successfully pushed to CRM and thank-you confirmation delivered!`,
     contact,
     lead,
     conversation,
     initialMessage,
     autoConfirmationSent,
+    duplicateThankYouSuppressed,
   };
 }

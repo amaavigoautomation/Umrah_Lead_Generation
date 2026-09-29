@@ -522,7 +522,7 @@ export const OutboundCampaigns: React.FC<OutboundCampaignsProps> = ({
 
             <p className="text-xs text-slate-400">
               Enter candidate details discovered from Apollo search. The system will perform duplicate
-              detection against contacts, verify ICP fit with Gemini, and queue for outbound campaign.
+              detection against contacts, verify ICP fit with OpenAI, and queue for outbound campaign.
             </p>
 
             <div className="grid grid-cols-2 gap-3 text-xs">

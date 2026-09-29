@@ -9,6 +9,7 @@ import { AiTestingPlayground } from './components/AiTestingPlayground';
 import { InteractiveScenarios } from './components/InteractiveScenarios';
 import { SettingsView } from './components/SettingsView';
 import { LiveMailboxCenter } from './components/LiveMailboxCenter';
+import { DemoSchedulingView } from './components/DemoSchedulingView';
 import { LoginView } from './components/LoginView';
 import { LockedModuleView } from './components/LockedModuleView';
 import {
@@ -50,6 +51,7 @@ import {
 } from './services/whatsappInboundService';
 import { db, isFirebaseConfigured } from './firebase/config';
 import { collection, doc, setDoc, getDoc, getDocs, updateDoc, deleteDoc, query, orderBy, onSnapshot } from 'firebase/firestore';
+import { initCalendarAuth } from './services/googleCalendarAuth';
 
 function sanitizeDoc(obj: any): any {
   if (obj === undefined) return null;
@@ -169,6 +171,9 @@ export default function App() {
     let unsubUsers: (() => void) | undefined;
 
     async function initFirestore() {
+      // Initialize Google Calendar authentication & sync token to backend
+      initCalendarAuth();
+
       // Sync settings from backend API
       try {
         const apiSetRes = await fetch('/api/settings');
@@ -481,6 +486,19 @@ export default function App() {
     for (const conv of conversations) {
       if (!conv.aiEnabled || conv.humanHandoff) continue;
 
+      // CRITICAL: Website Demo Leads must NEVER be auto-replied by generic inbox AI.
+      // Website leads receive their single verified thank-you email upon submission.
+      const isWebsiteLeadConv =
+        conv.channel === 'WEBSITE' ||
+        conv.conversationId?.startsWith('conv-web-') ||
+        conv.conversationSummary?.includes('Website Demo Request') ||
+        conv.subject?.includes('Website Demo Request') ||
+        Boolean(conv.thankYouEmailSent);
+
+      if (isWebsiteLeadConv) {
+        continue;
+      }
+
       const threadMsgs = messages.filter((m) => m.conversationId === conv.conversationId);
       if (threadMsgs.length === 0) continue;
 
@@ -585,14 +603,7 @@ export default function App() {
                   senderName: 'Umrah360 AI Automation',
                 }),
               });
-              let sendData: any = {};
-              try {
-                const rawText = await sendRes.text();
-                sendData = rawText ? JSON.parse(rawText) : {};
-              } catch {
-                sendData = { error: `Server returned non-JSON response (${sendRes.status})` };
-              }
-
+              const sendData = await sendRes.json();
               if (sendRes.ok && sendData?.messageId) {
                 aiMsg.gmailMessageId = sendData.messageId;
                 aiMsg.smtpStatus = 'DELIVERED';
@@ -601,7 +612,7 @@ export default function App() {
                 }
               } else {
                 aiMsg.smtpStatus = 'DELIVERY_FAILED';
-                aiMsg.smtpError = sendData?.error || `SMTP Delivery Failed (HTTP ${sendRes.status})`;
+                aiMsg.smtpError = sendData?.error || 'SMTP Delivery Failed';
               }
             } catch (smtpErr: any) {
               aiMsg.smtpStatus = 'DELIVERY_FAILED';
@@ -695,7 +706,7 @@ export default function App() {
     let sentGmailMessageId = `<out-${Date.now()}@amaavigo.com>`;
 
     // If sending an email manually over SMTP
-    if (conv.channel === 'EMAIL' && senderType === 'AGENT' && recipientEmail) {
+    if ((conv.channel === 'EMAIL' || conv.channel === 'WEBSITE') && senderType === 'AGENT' && recipientEmail) {
       const subject = lastIncoming?.emailMeta?.subject
         ? (lastIncoming.emailMeta.subject.toLowerCase().startsWith('re:') ? lastIncoming.emailMeta.subject : `Re: ${lastIncoming.emailMeta.subject}`)
         : 'Re: Umrah360 - Automate B2B Packages & Visa Operations';
@@ -730,7 +741,7 @@ export default function App() {
       gmailMessageId: sentGmailMessageId,
       gmailThreadId,
       conversationId,
-      channel: conv.channel,
+      channel: conv.channel === 'WEBSITE' ? 'EMAIL' : conv.channel,
       direction,
       senderType,
       senderName:
@@ -747,7 +758,7 @@ export default function App() {
       receivedAt: nowIso,
       createdAt: nowIso,
       emailMeta:
-        conv.channel === 'EMAIL'
+        conv.channel === 'EMAIL' || conv.channel === 'WEBSITE' || Boolean(recipientEmail)
           ? {
               subject: lastIncoming?.emailMeta?.subject
                 ? (lastIncoming.emailMeta.subject.toLowerCase().startsWith('re:') ? lastIncoming.emailMeta.subject : `Re: ${lastIncoming.emailMeta.subject}`)
@@ -870,14 +881,7 @@ export default function App() {
                 senderName: 'Umrah360 AI Automation',
               }),
             });
-            let sendData: any = {};
-            try {
-              const rawText = await sendRes.text();
-              sendData = rawText ? JSON.parse(rawText) : {};
-            } catch {
-              sendData = { error: `Server returned non-JSON response (${sendRes.status})` };
-            }
-
+            const sendData = await sendRes.json();
             if (sendRes.ok && sendData?.messageId) {
               aiMsg.gmailMessageId = sendData.messageId;
               aiMsg.smtpStatus = 'DELIVERED';
@@ -886,7 +890,7 @@ export default function App() {
               }
             } else {
               aiMsg.smtpStatus = 'DELIVERY_FAILED';
-              aiMsg.smtpError = sendData?.error || `SMTP Delivery Failed (HTTP ${sendRes.status})`;
+              aiMsg.smtpError = sendData?.error || 'SMTP Delivery Failed';
             }
           } catch (smtpErr: any) {
             aiMsg.smtpStatus = 'DELIVERY_FAILED';
@@ -1355,17 +1359,11 @@ export default function App() {
           gmailThreadId: conv.gmailThreadId || conv.emailThreadId,
         }),
       });
-      let sendResult: any = {};
-      try {
-        const rawText = await res.text();
-        sendResult = rawText ? JSON.parse(rawText) : {};
-      } catch {
-        sendResult = { error: `Server returned non-JSON response (${res.status})` };
-      }
+      const sendResult = await res.json();
 
       if (!res.ok || !sendResult.success) {
         approvedSmtpStatus = 'DELIVERY_FAILED';
-        approvedSmtpError = sendResult.error || `SMTP Delivery Failed (HTTP ${res.status})`;
+        approvedSmtpError = sendResult.error || 'SMTP Delivery Failed';
       }
 
       const aiMsgId = sendResult.messageId || `<reply-approved-${Date.now()}@amaavigo.com>`;
@@ -1601,7 +1599,7 @@ export default function App() {
     currentUser.allowedModules.includes(activeTab);
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col font-sans selection:bg-orange-500/20 selection:text-orange-900">
+    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col">
       <Navbar
         activeTab={activeTab}
         setActiveTab={setActiveTab}
@@ -1694,6 +1692,10 @@ export default function App() {
                   }
                 }}
               />
+            )}
+
+            {activeTab === 'scheduling' && (
+              <DemoSchedulingView leads={leads} />
             )}
 
             {activeTab === 'knowledge' && (

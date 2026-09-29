@@ -13,33 +13,57 @@ const fallbackConfig = {
   messagingSenderId: "280237761588",
 };
 
-const configSource = firebaseConfigJson || fallbackConfig;
+// If firebase-applet-config.json points to another project without Firestore enabled (e.g. dedicated OAuth project),
+// use the provisioned Firestore database project to ensure Firestore operations succeed.
+const activeProjectId = process.env.VITE_FIREBASE_PROJECT_ID ||
+  ((firebaseConfigJson as any)?.projectId === fallbackConfig.projectId
+    ? (firebaseConfigJson as any).projectId
+    : fallbackConfig.projectId);
+
+const activeApiKey = process.env.VITE_FIREBASE_API_KEY ||
+  ((firebaseConfigJson as any)?.projectId === fallbackConfig.projectId
+    ? (firebaseConfigJson as any).apiKey
+    : fallbackConfig.apiKey);
 
 export const firebaseConfig = {
-  apiKey: process.env.VITE_FIREBASE_API_KEY || configSource.apiKey || fallbackConfig.apiKey,
-  authDomain: configSource.authDomain || fallbackConfig.authDomain,
-  projectId: process.env.VITE_FIREBASE_PROJECT_ID || configSource.projectId || fallbackConfig.projectId,
-  storageBucket: configSource.storageBucket || fallbackConfig.storageBucket,
-  messagingSenderId: configSource.messagingSenderId || fallbackConfig.messagingSenderId,
-  appId: configSource.appId || fallbackConfig.appId,
-  firestoreDatabaseId: configSource.firestoreDatabaseId || fallbackConfig.firestoreDatabaseId,
+  apiKey: activeApiKey,
+  authDomain: (firebaseConfigJson as any)?.authDomain || fallbackConfig.authDomain,
+  projectId: activeProjectId,
+  storageBucket: (firebaseConfigJson as any)?.storageBucket || fallbackConfig.storageBucket,
+  messagingSenderId: (firebaseConfigJson as any)?.messagingSenderId || fallbackConfig.messagingSenderId,
+  appId: (firebaseConfigJson as any)?.appId || fallbackConfig.appId,
+  firestoreDatabaseId: (firebaseConfigJson as any)?.firestoreDatabaseId || fallbackConfig.firestoreDatabaseId,
 };
 
-// Initialize Firebase App singleton
-export const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
+// Initialize Firebase App singleton for Firestore
+export const app = getApps().find((a) => a.name === '[DEFAULT]') || initializeApp(firebaseConfig);
 
 // Initialize Firestore with specific database ID if provided
 export const db: Firestore = firebaseConfig.firestoreDatabaseId
   ? getFirestore(app, firebaseConfig.firestoreDatabaseId)
   : getFirestore(app);
 
-// Initialize Auth
-export const auth: Auth = getAuth(app);
+// Auth configuration uses OAuth project credentials from firebase-applet-config.json
+const oauthProjectConfig = {
+  apiKey: (firebaseConfigJson as any)?.apiKey || activeApiKey,
+  authDomain: (firebaseConfigJson as any)?.authDomain || "gen-lang-client-0295687148.firebaseapp.com",
+  projectId: (firebaseConfigJson as any)?.projectId || "gen-lang-client-0295687148",
+  appId: (firebaseConfigJson as any)?.appId || "1:27669323758:web:ca139ff1b786c339b1b8ff",
+};
+
+export const authApp =
+  oauthProjectConfig.projectId === firebaseConfig.projectId
+    ? app
+    : (getApps().find((a) => a.name === 'authApp') || initializeApp(oauthProjectConfig, 'authApp'));
+
+// Initialize Auth with the OAuth-enabled app
+export const auth: Auth = getAuth(authApp);
 
 export const isFirebaseConfigured = Boolean(firebaseConfig.projectId && firebaseConfig.apiKey);
 
-// Validate connection per skill guideline
+// Validate connection per skill guideline (browser client only; skip during Node SSR/build)
 async function testFirestoreConnection() {
+  if (typeof window === 'undefined') return;
   if (!isFirebaseConfigured || !db) return;
   try {
     await getDocFromServer(doc(db, 'test', 'connection'));

@@ -1,4 +1,4 @@
-import { GoogleGenAI } from '@google/genai';
+import OpenAI from 'openai';
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
@@ -6,6 +6,10 @@ import { getPublishedKnowledgeDocs } from './knowledgeService.js';
 import { db, isFirebaseConfigured } from '../firebase/config.js';
 import { doc } from 'firebase/firestore';
 import { safeSetDoc } from './firestoreUtils.js';
+import {
+  detectDemoSchedulingIntent,
+  processSchedulingConversationTurn,
+} from './demoSchedulingService.js';
 
 export const TARGET_WHATSAPP_NUMBER = '+919820252434';
 export const TARGET_WHATSAPP_NUMBER_DISPLAY = '+91 98202 52434';
@@ -425,6 +429,40 @@ export async function generateWhatsAppAutoReplyText(params: {
   const { fromPhone, fromName, body, companyName, threadHistory } = params;
   const combinedText = body.toLowerCase();
 
+  // =========================================================================
+  // UNIVERSAL DEMO SCHEDULING AGENT INTERCEPTION FOR WHATSAPP
+  // =========================================================================
+  if (detectDemoSchedulingIntent(body)) {
+    try {
+      const historyTurns = (threadHistory || []).map((m: any) => ({
+        role: (m.senderType === 'CUSTOMER' || m.senderType === 'PROSPECT' ? 'user' : 'assistant') as 'user' | 'assistant',
+        content: m.text || '',
+      }));
+
+      const schedulingTurn = await processSchedulingConversationTurn({
+        messageText: body,
+        conversationHistory: historyTurns,
+        leadContext: {
+          leadPhone: fromPhone,
+          leadName: fromName || 'Brother / Sister',
+          companyName: companyName || 'Umrah Travel Agency',
+          channel: 'WHATSAPP',
+        },
+      });
+
+      if (schedulingTurn.handled && schedulingTurn.replyText) {
+        return {
+          replyText: schedulingTurn.replyText,
+          handoffTriggered: false,
+          leadScore: schedulingTurn.action === 'CONFIRMED_BOOKING' ? 98 : 90,
+          buyingStage: 'DECISION',
+        };
+      }
+    } catch (schedErr) {
+      console.warn('[Demo Scheduling WhatsApp Warning]:', schedErr);
+    }
+  }
+
   // Intent classification
   const isIndividualPilgrimOrFamily =
     /myself|my family|for family|for myself|as a customer|planning umrah|booking experience|customized package|customize a package|book a customized|hotels in makkah|flights.*hotels|transfers.*meals.*visa|real-time.*availability|online payment|direct booking|retail|pax|vip package|ramadan/i.test(
@@ -473,17 +511,11 @@ export async function generateWhatsAppAutoReplyText(params: {
       }).join('\n')
     : `[Msg 1 - Customer (${fromName || fromPhone})]: ${body}`;
 
-  // Attempt Gemini generation
-  if (process.env.GEMINI_API_KEY) {
+  // Attempt OpenAI generation if OPENAI_API_KEY (or fallback key) is available
+  const openAiApiKey = process.env.OPENAI_API_KEY || process.env.GEMINI_API_KEY;
+  if (openAiApiKey) {
     try {
-      const ai = new GoogleGenAI({
-        apiKey: process.env.GEMINI_API_KEY,
-        httpOptions: {
-          headers: {
-            'User-Agent': 'aistudio-build',
-          },
-        },
-      });
+      const openai = new OpenAI({ apiKey: openAiApiKey });
       const prompt = `You are the official Umrah360 WhatsApp AI Assistant representing Umrah360 (+919820252434 / www.umrah360.in).
 Umrah360 is the leading all-in-one ERP, CRM, and distribution platform for Umrah and Hajj tour operators and travel agencies.
 
@@ -510,23 +542,19 @@ INSTRUCTIONS FOR WHATSAPP RESPONSE:
 WhatsApp: +91 98202 52434
 www.umrah360.in"`;
 
-      const candidateModels = ['gemini-2.5-flash', 'gemini-3.8-flash', 'gemini-flash-latest'];
+      const candidateModels = ['gpt-4o-mini', 'gpt-4o', 'gpt-3.5-turbo'];
       for (const modelName of candidateModels) {
         try {
-          const timeoutPromise = new Promise<never>((_, reject) =>
-            setTimeout(() => reject(new Error('Timeout')), 12000)
-          );
-          const response: any = await Promise.race([
-            ai.models.generateContent({
-              model: modelName,
-              contents: prompt,
-            }),
-            timeoutPromise,
-          ]);
+          const completion = await openai.chat.completions.create({
+            model: modelName,
+            messages: [{ role: 'user', content: prompt }],
+            temperature: 0.3,
+          });
 
-          if (response?.text && response.text.trim().length > 30) {
+          const replyText = completion.choices[0]?.message?.content?.trim() || '';
+          if (replyText.length > 30) {
             return {
-              replyText: response.text.trim(),
+              replyText,
               handoffTriggered,
               handoffReason,
               leadScore,
@@ -534,11 +562,11 @@ www.umrah360.in"`;
             };
           }
         } catch (mErr: any) {
-          console.warn(`[WhatsApp Gemini ${modelName}] Attempt failed:`, mErr?.message?.slice(0, 80));
+          console.warn(`[WhatsApp OpenAI ${modelName}] Notice:`, mErr?.message || mErr);
         }
       }
     } catch (gErr) {
-      console.warn('[WhatsApp Gemini] Fallback to domain knowledge engine:', gErr);
+      console.warn('[WhatsApp OpenAI] Fallback to domain knowledge engine:', gErr);
     }
   }
 

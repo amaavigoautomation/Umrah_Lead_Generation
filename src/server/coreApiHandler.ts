@@ -1,4 +1,4 @@
-import { GoogleGenAI } from '@google/genai';
+import OpenAI from 'openai';
 import { verifySmtpConnection, sendLiveEmail, getSmtpConfig, updateSmtpConfig } from './smtpService.js';
 import { checkImapStatus, getImapConfig, updateImapConfig } from './imapService.js';
 import {
@@ -46,6 +46,24 @@ import {
 } from './campaignService.js';
 import { processWebsiteLeadSubmission } from './websiteLeadService.js';
 import {
+  TARGET_CALENDAR_EMAIL,
+  SCHEDULING_TIMEZONE,
+  WORKING_START_HOUR,
+  WORKING_END_HOUR,
+  VALID_SLOT_START_HOURS,
+  getLiveCalendarToken,
+  setServerCalendarAccessToken,
+  findNextAvailableSlots,
+  createGoogleCalendarDemoBooking,
+  rescheduleDemoBooking,
+  cancelDemoBooking,
+  getAllBookings,
+  processSchedulingConversationTurn,
+} from './demoSchedulingService.js';
+import { db, isFirebaseConfigured } from '../firebase/config.js';
+import { doc } from 'firebase/firestore';
+import { safeSetDoc } from './firestoreUtils.js';
+import {
   initKnowledgeStore,
   getAllKnowledgeDocs,
   getPublishedKnowledgeDocs,
@@ -60,26 +78,12 @@ import {
  * 2. Vercel Production Serverless Functions (via api/index.ts or api/inbound/whatsapp.ts)
  */
 export async function handleCoreApi(req: any, res: any): Promise<boolean> {
-  // Normalize URL and Pathname
-  const rawUrl = req.url || '';
-  let pathname = rawUrl;
-  try {
-    const parsed = new URL(rawUrl.startsWith('/') ? 'http://localhost' + rawUrl : rawUrl);
-    pathname = parsed.pathname;
-  } catch {
-    pathname = rawUrl.split('?')[0];
+  // Normalize URL
+  let url = req.url || '';
+  if (!url.startsWith('/api/') && !url.startsWith('/api')) {
+    const cleanUrl = url.startsWith('/') ? url : '/' + url;
+    url = '/api' + cleanUrl;
   }
-
-  if (!pathname.startsWith('/api/') && pathname !== '/api') {
-    const cleanPath = pathname.startsWith('/') ? pathname : '/' + pathname;
-    pathname = '/api' + cleanPath;
-  }
-
-  if (pathname.length > 4 && pathname.endsWith('/')) {
-    pathname = pathname.slice(0, -1);
-  }
-
-  let url = pathname;
 
   // Set standard API headers and CORS
   res.setHeader('Content-Type', 'application/json');
@@ -127,6 +131,26 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
   }
   if (!body) body = {};
 
+  // Automatically extract and register Google Calendar OAuth bearer token from Authorization header if present
+  const rawAuthHeader = req.headers.authorization || req.headers.Authorization;
+  let requestBearerToken: string | null = null;
+  if (typeof rawAuthHeader === 'string' && rawAuthHeader.toLowerCase().startsWith('bearer ')) {
+    const candidate = rawAuthHeader.slice(7).trim();
+    if (candidate && candidate !== 'null' && candidate !== 'undefined') {
+      requestBearerToken = candidate;
+      setServerCalendarAccessToken(candidate);
+    }
+  }
+
+  // Also register if accessToken was passed in body
+  if (body?.accessToken && typeof body.accessToken === 'string' && body.accessToken.trim()) {
+    const bodyToken = body.accessToken.trim();
+    if (bodyToken && bodyToken !== 'null' && bodyToken !== 'undefined') {
+      requestBearerToken = requestBearerToken || bodyToken;
+      setServerCalendarAccessToken(bodyToken);
+    }
+  }
+
   // 1. Health check
   if (url === '/api/health' || url.startsWith('/api/health?')) {
     res.statusCode = 200;
@@ -134,16 +158,164 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
       JSON.stringify({
         status: 'healthy',
         service: 'Umrah360 AI Omnichannel Engine',
-        geminiModel: 'gemini-3.8-flash',
-        geminiKeyPresent: Boolean(process.env.GEMINI_API_KEY),
+        openaiModel: 'gpt-4o-mini',
+        openaiKeyPresent: Boolean(process.env.OPENAI_API_KEY || process.env.GEMINI_API_KEY),
         whatsAppGateway: getWhatsAppGatewayStatus(),
         websiteWebhook: {
           endpoint: '/api/webhooks/umrah-demo',
           status: 'ready',
         },
+        calendar: {
+          targetEmail: TARGET_CALENDAR_EMAIL,
+          timezone: SCHEDULING_TIMEZONE,
+          workingDays: 'Monday - Friday',
+          workingHours: '10:00 AM - 7:00 PM IST',
+        },
         timestamp: new Date().toISOString(),
       })
     );
+    return true;
+  }
+
+  // =========================================================================
+  // UNIVERSAL DEMO SCHEDULING AGENT ENDPOINTS
+  // =========================================================================
+  if (url === '/api/calendar/auth-token' && req.method === 'POST') {
+    const { accessToken, email, expiresIn } = body;
+    if (accessToken) {
+      setServerCalendarAccessToken(accessToken, expiresIn || 3600);
+      if (isFirebaseConfigured && db) {
+        await safeSetDoc(
+          doc(db, 'settings', 'calendar_auth'),
+          {
+            accessToken,
+            email: email || TARGET_CALENDAR_EMAIL,
+            targetAccount: TARGET_CALENDAR_EMAIL,
+            updatedAt: new Date().toISOString(),
+            active: true,
+          },
+          { merge: true }
+        ).catch(() => {});
+      }
+      res.statusCode = 200;
+      res.end(JSON.stringify({ success: true, message: 'Google Calendar OAuth token registered on server' }));
+      return true;
+    }
+    res.statusCode = 400;
+    res.end(JSON.stringify({ error: 'accessToken is required' }));
+    return true;
+  }
+
+  if (url === '/api/calendar/status' && req.method === 'GET') {
+    const liveToken = await getLiveCalendarToken();
+    res.statusCode = 200;
+    res.end(
+      JSON.stringify({
+        configured: Boolean(liveToken),
+        targetAccount: TARGET_CALENDAR_EMAIL,
+        timezone: SCHEDULING_TIMEZONE,
+        workingDays: 'Monday – Friday (Saturday & Sunday closed)',
+        workingHours: '10:00 AM – 7:00 PM IST',
+        durationMinutes: 60,
+        fixedSlots: VALID_SLOT_START_HOURS.map((h) => `${h}:00 – ${h + 1}:00 IST`),
+        timestamp: new Date().toISOString(),
+      })
+    );
+    return true;
+  }
+
+  if ((url === '/api/calendar/availability' || url.startsWith('/api/calendar/availability?')) && req.method === 'GET') {
+    const parsedUrl = new URL(url, 'http://localhost:3000');
+    const preferredDate = parsedUrl.searchParams.get('date') || parsedUrl.searchParams.get('preferredDate') || undefined;
+    const preferredPeriod = (parsedUrl.searchParams.get('period') as any) || 'ANY';
+    const count = parseInt(parsedUrl.searchParams.get('count') || '8', 10);
+
+    const slots = await findNextAvailableSlots({
+      preferredDate,
+      preferredPeriod,
+      maxSlotsToReturn: count,
+    });
+
+    res.statusCode = 200;
+    res.end(
+      JSON.stringify({
+        success: true,
+        targetAccount: TARGET_CALENDAR_EMAIL,
+        timezone: SCHEDULING_TIMEZONE,
+        workingHours: '10:00 AM – 7:00 PM IST (Mon–Fri)',
+        slots,
+        totalAvailable: slots.length,
+      })
+    );
+    return true;
+  }
+
+  if (url === '/api/calendar/bookings' && req.method === 'GET') {
+    const bookings = await getAllBookings();
+    res.statusCode = 200;
+    res.end(JSON.stringify({ success: true, bookings, count: bookings.length }));
+    return true;
+  }
+
+  if (url === '/api/calendar/book' && req.method === 'POST') {
+    try {
+      const bookingPayload = {
+        ...body,
+        accessToken: body.accessToken || requestBearerToken || undefined,
+      };
+      const result = await createGoogleCalendarDemoBooking(bookingPayload);
+      res.statusCode = result.success ? 200 : (result.conflict ? 409 : 400);
+      res.end(JSON.stringify(result));
+    } catch (err: any) {
+      res.statusCode = 500;
+      res.end(JSON.stringify({ success: false, error: err?.message || 'Booking failed' }));
+    }
+    return true;
+  }
+
+  if (url === '/api/calendar/cancel' && req.method === 'POST') {
+    const { bookingId, reason } = body;
+    if (!bookingId) {
+      res.statusCode = 400;
+      res.end(JSON.stringify({ success: false, error: 'bookingId is required' }));
+      return true;
+    }
+    const result = await cancelDemoBooking(bookingId, reason);
+    res.statusCode = result.success ? 200 : 400;
+    res.end(JSON.stringify(result));
+    return true;
+  }
+
+  if (url === '/api/calendar/reschedule' && req.method === 'POST') {
+    const { bookingId, newStartIso, newEndIso, newDateString, newStartTime, newEndTime } = body;
+    if (!bookingId || !newStartIso || !newEndIso) {
+      res.statusCode = 400;
+      res.end(JSON.stringify({ success: false, error: 'bookingId, newStartIso, and newEndIso are required' }));
+      return true;
+    }
+    const result = await rescheduleDemoBooking(
+      bookingId,
+      newStartIso,
+      newEndIso,
+      newDateString,
+      newStartTime,
+      newEndTime
+    );
+    res.statusCode = result.success ? 200 : 400;
+    res.end(JSON.stringify(result));
+    return true;
+  }
+
+  if (url === '/api/calendar/schedule-turn' && req.method === 'POST') {
+    try {
+      const result = await processSchedulingConversationTurn(body);
+      res.statusCode = 200;
+      res.end(JSON.stringify(result));
+    } catch (err: any) {
+      console.warn('[Schedule Turn Error]:', err?.message || err);
+      res.statusCode = 500;
+      res.end(JSON.stringify({ handled: false, error: err?.message || 'Scheduling failed' }));
+    }
     return true;
   }
 
@@ -257,10 +429,11 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
       return true;
     }
 
-    // If Gemini API Key is available, invoke gemini-3.8-flash
-    if (process.env.GEMINI_API_KEY) {
+    // If OpenAI API Key (or fallback key) is available, invoke gpt-4o-mini
+    const openAiApiKey = process.env.OPENAI_API_KEY || process.env.GEMINI_API_KEY;
+    if (openAiApiKey) {
       try {
-        const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+        const openai = new OpenAI({ apiKey: openAiApiKey });
         const systemInstruction = `You are the AI conversation engine for Umrah360 (www.umrah360.in), the leading all-in-one ERP and CRM platform for Hajj and Umrah tour operators.
 CRITICAL RULES:
 1. Ground your responses strictly in the provided Approved Knowledge Chunks. NEVER fabricate features, pricing, or guarantees.
@@ -291,26 +464,27 @@ CURRENT INCOMING MESSAGE:
 
 Generate a helpful, accurate, grounded response adhering to all rules.`;
 
-        const candidateModels = ['gemini-3.8-flash', 'gemini-flash-latest', 'gemini-3.1-flash-lite'];
+        const candidateModels = ['gpt-4o-mini', 'gpt-4o', 'gpt-3.5-turbo'];
         let generatedText = '';
 
         for (const modelName of candidateModels) {
           try {
-            const response = await ai.models.generateContent({
+            const completion = await openai.chat.completions.create({
               model: modelName,
-              contents: contextPrompt,
-              config: {
-                systemInstruction,
-                temperature: 0.3,
-              },
+              messages: [
+                { role: 'system', content: systemInstruction },
+                { role: 'user', content: contextPrompt },
+              ],
+              temperature: 0.3,
             });
 
-            if (response.text && response.text.trim().length > 20) {
-              generatedText = response.text.trim();
+            const content = completion.choices[0]?.message?.content?.trim() || '';
+            if (content.length > 20) {
+              generatedText = content;
               break;
             }
           } catch (modelErr: any) {
-            console.warn(`[Gemini Respond ${modelName}] Attempt failed:`, modelErr?.message?.slice(0, 80));
+            console.warn(`[OpenAI Respond ${modelName}] Notice:`, modelErr?.message || modelErr);
           }
         }
 
@@ -343,8 +517,8 @@ Generate a helpful, accurate, grounded response adhering to all rules.`;
           );
           return true;
         }
-      } catch (geminiError) {
-        console.warn('Gemini API call failed, using fallback:', geminiError);
+      } catch (openAiError) {
+        console.warn('OpenAI API call failed, using fallback:', openAiError);
       }
     }
 
@@ -496,9 +670,10 @@ Generate a helpful, accurate, grounded response adhering to all rules.`;
       return true;
     }
 
-    if (process.env.GEMINI_API_KEY) {
+    const openAiKey = process.env.OPENAI_API_KEY || process.env.GEMINI_API_KEY;
+    if (openAiKey) {
       try {
-        const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+        const openai = new OpenAI({ apiKey: openAiKey });
         const systemInstruction = `You are the AI conversation engine for Umrah360 (www.umrah360.in).
 CRITICAL RULES:
 1. Ground your response strictly in the provided Approved Knowledge Chunks. NEVER fabricate features, pricing, or guarantees.
@@ -514,17 +689,35 @@ CUSTOMER MESSAGE:
 
 Generate a helpful, grounded response.`;
 
-        const response = await ai.models.generateContent({
-          model: 'gemini-3.8-flash',
-          contents: prompt,
-          config: { systemInstruction, temperature: 0.3 },
-        });
+        const candidateModels = ['gpt-4o-mini', 'gpt-4o', 'gpt-3.5-turbo'];
+        let testResponseText = '';
 
-        if (response.text && response.text.trim().length > 10) {
+        for (const modelName of candidateModels) {
+          try {
+            const completion = await openai.chat.completions.create({
+              model: modelName,
+              messages: [
+                { role: 'system', content: systemInstruction },
+                { role: 'user', content: prompt },
+              ],
+              temperature: 0.3,
+            });
+
+            const content = completion.choices[0]?.message?.content?.trim() || '';
+            if (content.length > 10) {
+              testResponseText = content;
+              break;
+            }
+          } catch (mErr: any) {
+            console.warn(`[Playground OpenAI ${modelName}] Notice:`, mErr?.message || mErr);
+          }
+        }
+
+        if (testResponseText) {
           res.statusCode = 200;
           res.end(
             JSON.stringify({
-              responseText: response.text.trim(),
+              responseText: testResponseText,
               confidence: 0.96,
               humanHandoff: false,
               leadScore: isB2b ? 88 : 80,
@@ -770,7 +963,7 @@ Generate a helpful, grounded response.`;
   }
 
   if (url === '/api/inbound/email' && req.method === 'POST') {
-    const { from, fromName, to, subject, body: emailBody, companyName, phone, inReplyTo, messageId, isTestSimulation } = body;
+    const { from, fromName, to, subject, body: emailBody, companyName, phone, inReplyTo, references, messageId, isTestSimulation } = body;
 
     const result = await processLiveInboundEmail({
       from,
@@ -781,6 +974,7 @@ Generate a helpful, grounded response.`;
       companyName,
       phone,
       inReplyTo,
+      references,
       messageId,
       isTestSimulation,
     });

@@ -113,10 +113,17 @@ export const WebsiteLeadIntegrationModal: React.FC<WebsiteLeadIntegrationModalPr
       const data = await res.json();
 
       if (res.ok && data.success) {
+        const isDuplicateSuppressed = data.duplicateThankYouSuppressed || data.alreadySentPreviousThankYou;
+        const emailMsg = isDuplicateSuppressed
+          ? 'Thank-you email was already delivered previously to this address; duplicate email suppressed to prevent multiple sends.'
+          : (data.autoConfirmationSent ? 'Single personalized thank-you confirmation email dispatched via SMTP.' : 'Saved to CRM.');
+
         setSubmissionFeedback({
           type: 'success',
-          message: `Success! Lead for "${data.contact?.companyName || companyName}" was pushed directly to your CRM & Firestore DB.`,
-          details: data,
+          message: isDuplicateSuppressed
+            ? `Lead for "${data.contact?.companyName || companyName}" saved in CRM. Note: Thank-you email already sent previously; duplicate send suppressed.`
+            : `Success! Lead for "${data.contact?.companyName || companyName}" pushed to CRM and single thank-you confirmation email delivered!`,
+          details: { ...data, emailDispatchNote: emailMsg },
         });
 
         if (onLeadCreated && data.lead?.leadId) {
@@ -348,6 +355,11 @@ export const WebsiteLeadIntegrationModal: React.FC<WebsiteLeadIntegrationModalPr
                         <div>Contact: {submissionFeedback.details.contact?.firstName} {submissionFeedback.details.contact?.lastName} ({submissionFeedback.details.contact?.email})</div>
                         <div>Company: {submissionFeedback.details.contact?.companyName} • Score: {submissionFeedback.details.lead?.leadScore} / 100</div>
                         <div>Demo Status: {submissionFeedback.details.lead?.demoStatus} (Auto-Scheduled)</div>
+                        {submissionFeedback.details.emailDispatchNote && (
+                          <div className="text-emerald-400 font-semibold pt-1">
+                            ✉ {submissionFeedback.details.emailDispatchNote}
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>

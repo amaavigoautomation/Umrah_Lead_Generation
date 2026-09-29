@@ -79034,19 +79034,14 @@ async function ensureCampaignInStore(campaignId) {
       if (snap.exists()) {
         camp = snap.data();
         campaignsMap.set(campaignId, camp);
-        const leadsSnap = await getDocs(collection(db, "campaign_leads")).catch(() => null);
-        if (leadsSnap) {
-          leadsSnap.forEach((d) => {
-            const l = d.data();
-            if (l && l.campaignLeadId && l.campaignId === campaignId) {
-              campaignLeadsMap.set(l.campaignLeadId, l);
-            }
-          });
-        }
       }
     } catch (e) {
       console.warn("[ensureCampaignInStore] Lookup error:", e);
     }
+  }
+  const memoryLeads = Array.from(campaignLeadsMap.values()).filter((l) => l.campaignId === campaignId);
+  if (memoryLeads.length === 0) {
+    await getCampaignLeadsFromDb(campaignId);
   }
   return camp;
 }
@@ -79329,7 +79324,7 @@ async function startCampaign(campaignId) {
       });
     }
   }
-  const leads = getCampaignLeads(campaignId);
+  const leads = await getCampaignLeadsFromDb(campaignId);
   const pendingLeads = leads.filter((l) => l.sendStatus === "PENDING");
   if (pendingLeads.length === 0) {
     const failedLeads = leads.filter((l) => l.sendStatus === "FAILED");
@@ -79414,7 +79409,7 @@ async function restartCampaign(campaignId, options2) {
       }
     }
   }
-  const leads = getCampaignLeads(campaignId);
+  const leads = await getCampaignLeadsFromDb(campaignId);
   const repliedLeads = leads.filter((l) => l.replyStatus === "REPLIED");
   const unrepliedLeads = leads.filter((l) => l.replyStatus !== "REPLIED");
   const allQualified = leads.length > 0 && repliedLeads.length === leads.length;
@@ -79777,7 +79772,7 @@ async function executeCampaignSendingEngine(campaignId, expectedRunId) {
     if (!template) {
       template = DEFAULT_EMAIL_TEMPLATES.find((t) => t.templateId === selectedTplId) || DEFAULT_EMAIL_TEMPLATES[0];
     }
-    const leads = getCampaignLeads(campaignId);
+    const leads = await getCampaignLeadsFromDb(campaignId);
     const pendingLeads = leads.filter((l) => l.sendStatus === "PENDING" && l.replyStatus !== "REPLIED");
     console.log(
       `[Campaign Engine] Starting send batch for "${campaign.name}" [Run: ${currentRunId}] using template "${template.name}" (${template.templateId}) (${pendingLeads.length} leads pending, ${leads.filter((l) => l.replyStatus === "REPLIED").length} replied/excluded)...`
@@ -80182,6 +80177,60 @@ async function updateCampaignLeadStatus(params) {
   }
   recalculateCampaignMetrics(targetLead.campaignId);
   return targetLead;
+}
+var isAutoProcessingCampaigns = false;
+async function processActiveRunningCampaignsBatch(batchSize = 3) {
+  if (isAutoProcessingCampaigns) {
+    return { activeCount: 0, processedCampaigns: [] };
+  }
+  isAutoProcessingCampaigns = true;
+  try {
+    await initCampaignStore();
+    const runningCampaignsMap = /* @__PURE__ */ new Map();
+    for (const c of campaignsMap.values()) {
+      if (c.status === "RUNNING") {
+        runningCampaignsMap.set(c.campaignId, c);
+      }
+    }
+    if (isFirebaseConfigured && db) {
+      try {
+        const snap = await getDocs(collection(db, "campaigns")).catch(() => null);
+        if (snap && !snap.empty) {
+          snap.forEach((d) => {
+            const c = d.data();
+            if (c && c.campaignId) {
+              campaignsMap.set(c.campaignId, c);
+              if (c.status === "RUNNING") {
+                runningCampaignsMap.set(c.campaignId, c);
+              }
+            }
+          });
+        }
+      } catch (e) {
+      }
+    }
+    const runningCampaigns = Array.from(runningCampaignsMap.values());
+    const results = [];
+    for (const camp of runningCampaigns) {
+      try {
+        await getCampaignLeadsFromDb(camp.campaignId);
+        const res = await processNextCampaignSendBatch(camp.campaignId, batchSize);
+        results.push({
+          campaignId: camp.campaignId,
+          processedCount: res.processedCount,
+          remainingPendingCount: res.remainingPendingCount
+        });
+      } catch (err) {
+        console.warn(`[Auto-Campaign Engine] Batch execution note for campaign ${camp.campaignId}:`, err?.message || err);
+      }
+    }
+    return {
+      activeCount: runningCampaigns.length,
+      processedCampaigns: results
+    };
+  } finally {
+    isAutoProcessingCampaigns = false;
+  }
 }
 
 // src/server/demoSchedulingService.ts
@@ -84962,6 +85011,19 @@ ${signature || "Regards,\nUmrah360 Team"}`;
     } catch (err) {
       res.statusCode = 400;
       res.end(JSON.stringify({ error: err?.message || "Failed to generate AI previews" }));
+    }
+    return true;
+  }
+  if ((url === "/api/campaigns/process-active" || url === "/api/campaigns/cron") && (req.method === "POST" || req.method === "GET")) {
+    try {
+      const result = await processActiveRunningCampaignsBatch(3);
+      res.statusCode = 200;
+      res.setHeader("Content-Type", "application/json");
+      res.end(JSON.stringify({ success: true, ...result }));
+    } catch (err) {
+      res.statusCode = 500;
+      res.setHeader("Content-Type", "application/json");
+      res.end(JSON.stringify({ error: err?.message || "Failed to process active campaigns" }));
     }
     return true;
   }

@@ -725,21 +725,18 @@ export async function ensureCampaignInStore(campaignId: string): Promise<Campaig
       if (snap.exists()) {
         camp = snap.data() as Campaign;
         campaignsMap.set(campaignId, camp);
-
-        const leadsSnap = await getDocs(collection(db, 'campaign_leads')).catch(() => null);
-        if (leadsSnap) {
-          leadsSnap.forEach((d) => {
-            const l = d.data() as CampaignLead;
-            if (l && l.campaignLeadId && l.campaignId === campaignId) {
-              campaignLeadsMap.set(l.campaignLeadId, l);
-            }
-          });
-        }
       }
     } catch (e) {
       console.warn('[ensureCampaignInStore] Lookup error:', e);
     }
   }
+
+  // Ensure leads for this campaign are loaded into memory
+  const memoryLeads = Array.from(campaignLeadsMap.values()).filter((l) => l.campaignId === campaignId);
+  if (memoryLeads.length === 0) {
+    await getCampaignLeadsFromDb(campaignId);
+  }
+
   return camp;
 }
 
@@ -1109,7 +1106,7 @@ export async function startCampaign(campaignId: string): Promise<Campaign> {
 
   // Ensure leads can be processed: if no leads are currently PENDING but some are FAILED,
   // automatically reset FAILED leads to PENDING so they are delivered
-  const leads = getCampaignLeads(campaignId);
+  const leads = await getCampaignLeadsFromDb(campaignId);
   const pendingLeads = leads.filter((l) => l.sendStatus === 'PENDING');
   if (pendingLeads.length === 0) {
     const failedLeads = leads.filter((l) => l.sendStatus === 'FAILED');
@@ -1233,7 +1230,7 @@ export async function restartCampaign(
     }
   }
 
-  const leads = getCampaignLeads(campaignId);
+  const leads = await getCampaignLeadsFromDb(campaignId);
   const repliedLeads = leads.filter((l) => l.replyStatus === 'REPLIED');
   const unrepliedLeads = leads.filter((l) => l.replyStatus !== 'REPLIED');
 
@@ -1650,7 +1647,7 @@ async function executeCampaignSendingEngine(campaignId: string, expectedRunId?: 
     if (!template) {
       template = DEFAULT_EMAIL_TEMPLATES.find((t) => t.templateId === selectedTplId) || DEFAULT_EMAIL_TEMPLATES[0];
     }
-    const leads = getCampaignLeads(campaignId);
+    const leads = await getCampaignLeadsFromDb(campaignId);
 
     // Candidates: only leads with sendStatus === 'PENDING' AND replyStatus !== 'REPLIED'
     const pendingLeads = leads.filter((l) => l.sendStatus === 'PENDING' && l.replyStatus !== 'REPLIED');
@@ -2181,3 +2178,79 @@ export async function updateCampaignLeadStatus(params: {
 
   return targetLead;
 }
+
+/**
+ * Autonomous background campaign processor.
+ * Finds all RUNNING campaigns (in memory and Firestore) and processes their next send batch.
+ * This runs continuously on the server regardless of whether a browser client is open.
+ */
+let isAutoProcessingCampaigns = false;
+export async function processActiveRunningCampaignsBatch(batchSize: number = 3): Promise<{
+  activeCount: number;
+  processedCampaigns: Array<{ campaignId: string; processedCount: number; remainingPendingCount: number }>;
+}> {
+  if (isAutoProcessingCampaigns) {
+    return { activeCount: 0, processedCampaigns: [] };
+  }
+  isAutoProcessingCampaigns = true;
+
+  try {
+    await initCampaignStore();
+
+    // Map of running campaigns to process
+    const runningCampaignsMap = new Map<string, Campaign>();
+
+    // 1. In-memory running campaigns
+    for (const c of campaignsMap.values()) {
+      if (c.status === 'RUNNING') {
+        runningCampaignsMap.set(c.campaignId, c);
+      }
+    }
+
+    // 2. Also check Firestore in case a campaign was started from another instance or browser
+    if (isFirebaseConfigured && db) {
+      try {
+        const snap = await getDocs(collection(db, 'campaigns')).catch(() => null);
+        if (snap && !snap.empty) {
+          snap.forEach((d) => {
+            const c = d.data() as Campaign;
+            if (c && c.campaignId) {
+              campaignsMap.set(c.campaignId, c);
+              if (c.status === 'RUNNING') {
+                runningCampaignsMap.set(c.campaignId, c);
+              }
+            }
+          });
+        }
+      } catch (e) {
+        // quiet ignore
+      }
+    }
+
+    const runningCampaigns = Array.from(runningCampaignsMap.values());
+    const results: Array<{ campaignId: string; processedCount: number; remainingPendingCount: number }> = [];
+
+    for (const camp of runningCampaigns) {
+      try {
+        // Ensure leads are populated
+        await getCampaignLeadsFromDb(camp.campaignId);
+        const res = await processNextCampaignSendBatch(camp.campaignId, batchSize);
+        results.push({
+          campaignId: camp.campaignId,
+          processedCount: res.processedCount,
+          remainingPendingCount: res.remainingPendingCount,
+        });
+      } catch (err: any) {
+        console.warn(`[Auto-Campaign Engine] Batch execution note for campaign ${camp.campaignId}:`, err?.message || err);
+      }
+    }
+
+    return {
+      activeCount: runningCampaigns.length,
+      processedCampaigns: results,
+    };
+  } finally {
+    isAutoProcessingCampaigns = false;
+  }
+}
+

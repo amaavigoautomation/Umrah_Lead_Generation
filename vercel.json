@@ -8,6 +8,12 @@
       "includeFiles": "src/server/**"
     }
   },
+  "crons": [
+    {
+      "path": "/api/campaigns/process-active",
+      "schedule": "* * * * *"
+    }
+  ],
   "rewrites": [
     {
       "source": "/api/inbound/whatsapp",

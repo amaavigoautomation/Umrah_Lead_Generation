@@ -636,7 +636,22 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
         loadData();
       }
     }, 4000);
-    return () => clearInterval(interval);
+
+    const handleFocusOrVisible = () => {
+      if (document.visibilityState === 'visible') {
+        loadData();
+        const activeId = selectedCampaignIdRef.current;
+        if (activeId) loadSelectedCampaignDetails(activeId);
+      }
+    };
+    document.addEventListener('visibilitychange', handleFocusOrVisible);
+    window.addEventListener('focus', handleFocusOrVisible);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleFocusOrVisible);
+      window.removeEventListener('focus', handleFocusOrVisible);
+    };
   }, []);
 
   useEffect(() => {

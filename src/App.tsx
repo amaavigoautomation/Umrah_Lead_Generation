@@ -512,12 +512,38 @@ export default function App() {
     }
   }, []);
 
-  // Poll backend inbound mailbox every 4 seconds for immediate UI updates
+  // Global campaign dispatch keep-alive: ensures RUNNING campaigns dispatch continuously
+  // regardless of which tab is active, or whether CampaignManagement component is mounted
+  const triggerActiveCampaignsDispatch = useCallback(async () => {
+    try {
+      await fetch('/api/campaigns/process-active', { method: 'POST' }).catch(() => null);
+    } catch {}
+  }, []);
+
+  // Poll backend inbound mailbox and trigger active campaign dispatches
   useEffect(() => {
     syncWithBackendInbound();
-    const interval = setInterval(syncWithBackendInbound, 4000);
-    return () => clearInterval(interval);
-  }, [syncWithBackendInbound]);
+    triggerActiveCampaignsDispatch();
+    const interval = setInterval(() => {
+      syncWithBackendInbound();
+      triggerActiveCampaignsDispatch();
+    }, 4000);
+
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        syncWithBackendInbound();
+        triggerActiveCampaignsDispatch();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    window.addEventListener('focus', handleVisibility);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibility);
+      window.removeEventListener('focus', handleVisibility);
+    };
+  }, [syncWithBackendInbound, triggerActiveCampaignsDispatch]);
 
   // Active AI Auto-Reply Engine: checks for any unreplied inbound customer messages in AI-enabled threads
   const autoRepliedTurnsRef = useRef<Set<string>>(new Set());

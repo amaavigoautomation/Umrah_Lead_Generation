@@ -46,6 +46,7 @@ import {
   generateAiEmailForLead,
   generateAiSamplePreviews,
   processNextCampaignSendBatch,
+  processActiveRunningCampaignsBatch,
 } from './campaignService.js';
 import { processWebsiteLeadSubmission } from './websiteLeadService.js';
 import {
@@ -1202,6 +1203,20 @@ Generate a helpful, grounded response.`;
     } catch (err: any) {
       res.statusCode = 400;
       res.end(JSON.stringify({ error: err?.message || 'Failed to generate AI previews' }));
+    }
+    return true;
+  }
+
+  if ((url === '/api/campaigns/process-active' || url === '/api/campaigns/cron') && (req.method === 'POST' || req.method === 'GET')) {
+    try {
+      const result = await processActiveRunningCampaignsBatch(3);
+      res.statusCode = 200;
+      res.setHeader('Content-Type', 'application/json');
+      res.end(JSON.stringify({ success: true, ...result }));
+    } catch (err: any) {
+      res.statusCode = 500;
+      res.setHeader('Content-Type', 'application/json');
+      res.end(JSON.stringify({ error: err?.message || 'Failed to process active campaigns' }));
     }
     return true;
   }

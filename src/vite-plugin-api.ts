@@ -9,8 +9,9 @@ export function umrah360ApiPlugin(): Plugin {
       const { pollAndProcessImapMailbox } = await import('./server/inboundPipeline.js');
       const { getImapConfig } = await import('./server/imapService.js');
       const { checkAndDispatchPendingWebsiteLeadEmails } = await import('./server/websiteLeadAutoResponder.js');
+      const { processActiveRunningCampaignsBatch } = await import('./server/campaignService.js');
 
-      // Auto-poll IMAP inbox for incoming mail and check for new website leads every 6 seconds
+      // Auto-poll IMAP inbox, website leads, and active campaigns in server background every 4 seconds
       let isBackgroundPolling = false;
       const safeBackgroundPoll = async () => {
         if (isBackgroundPolling) return;
@@ -24,6 +25,9 @@ export function umrah360ApiPlugin(): Plugin {
           if (cfg.configured) {
             await pollAndProcessImapMailbox();
           }
+
+          // 3. Autonomously dispatch active running campaigns in server background
+          await processActiveRunningCampaignsBatch(3);
         } catch (e) {
           // ignore background poller errors
         } finally {
@@ -31,8 +35,8 @@ export function umrah360ApiPlugin(): Plugin {
         }
       };
 
-      const initialTimer = setTimeout(safeBackgroundPoll, 3000);
-      const poller = setInterval(safeBackgroundPoll, 6000);
+      const initialTimer = setTimeout(safeBackgroundPoll, 2000);
+      const poller = setInterval(safeBackgroundPoll, 4000);
 
       server.httpServer?.on('close', () => {
         clearTimeout(initialTimer);

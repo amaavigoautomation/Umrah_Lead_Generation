@@ -97,39 +97,61 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
     return true;
   }
 
-  // Parse JSON body if not pre-parsed
+  // Robust Universal Body Parsing (Vercel Serverless, Express, Connect/Vite)
   let body: any = req.body;
-  if (!body && (req.method === 'POST' || req.method === 'PATCH' || req.method === 'PUT')) {
+
+  if (typeof body === 'string') {
     try {
-      const chunks: Buffer[] = [];
-      for await (const chunk of req) {
-        chunks.push(typeof chunk === 'string' ? Buffer.from(chunk) : chunk);
-      }
-      const rawBody = Buffer.concat(chunks).toString('utf-8');
-      if (rawBody) {
-        try {
-          body = JSON.parse(rawBody);
-        } catch {
-          // If not standard JSON, parse as urlencoded form data
-          try {
-            const params = new URLSearchParams(rawBody);
-            const formObj: Record<string, any> = {};
-            params.forEach((val, key) => {
-              formObj[key] = val;
-            });
-            if (Object.keys(formObj).length > 0) {
-              body = formObj;
+      body = JSON.parse(body);
+    } catch {
+      try {
+        const params = new URLSearchParams(body);
+        const formObj: Record<string, any> = {};
+        params.forEach((val, key) => {
+          formObj[key] = val;
+        });
+        if (Object.keys(formObj).length > 0) body = formObj;
+      } catch {}
+    }
+  } else if (Buffer.isBuffer(body)) {
+    try {
+      const rawStr = body.toString('utf-8');
+      body = JSON.parse(rawStr);
+    } catch {}
+  }
+
+  // If body is still not parsed into an object, try reading from request stream
+  if (!body || typeof body !== 'object' || Object.keys(body).length === 0) {
+    if (req.method === 'POST' || req.method === 'PATCH' || req.method === 'PUT') {
+      try {
+        const chunks: Buffer[] = [];
+        for await (const chunk of req) {
+          chunks.push(typeof chunk === 'string' ? Buffer.from(chunk) : chunk);
+        }
+        if (chunks.length > 0) {
+          const rawBody = Buffer.concat(chunks).toString('utf-8');
+          if (rawBody) {
+            try {
+              body = JSON.parse(rawBody);
+            } catch {
+              try {
+                const params = new URLSearchParams(rawBody);
+                const formObj: Record<string, any> = {};
+                params.forEach((val, key) => {
+                  formObj[key] = val;
+                });
+                if (Object.keys(formObj).length > 0) body = formObj;
+              } catch {}
             }
-          } catch {
-            // unable to parse form
           }
         }
+      } catch (e) {
+        // Body stream read exception
       }
-    } catch (e) {
-      // Body parse error
     }
   }
-  if (!body) body = {};
+
+  if (!body || typeof body !== 'object') body = {};
 
   // Automatically extract and register Google Calendar OAuth bearer token from Authorization header if present
   const rawAuthHeader = req.headers.authorization || req.headers.Authorization;

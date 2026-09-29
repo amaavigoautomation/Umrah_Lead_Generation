@@ -288,84 +288,81 @@ export async function syncCampaignStoreFromFirestore(): Promise<void> {
 
   if (!isFirebaseConfigured || !db) return;
 
-  try {
-    // 1. Templates: merge from Firestore
-    const tplSnap = await getDocs(collection(db, 'email_templates'));
-    const firestoreTplIds = new Set<string>();
-    tplSnap.forEach((d) => {
-      const data = d.data() as EmailTemplate;
-      if (data.templateId) {
-        firestoreTplIds.add(data.templateId);
-        emailTemplatesMap.set(data.templateId, data);
-      }
-    });
+  // Add 2.5s timeout wrapper to prevent hanging serverless responses on Vercel
+  const timeoutPromise = new Promise<void>((resolve) => setTimeout(resolve, 2500));
 
-    // Seed default predefined templates to Firestore if not already present
-    for (const tpl of DEFAULT_EMAIL_TEMPLATES) {
-      if (!firestoreTplIds.has(tpl.templateId)) {
-        safeSetDoc(doc(db, 'email_templates', tpl.templateId), tpl, { merge: true }).catch(() => {});
+  const syncPromise = (async () => {
+    try {
+      // Execute all 5 Firestore queries concurrently in parallel
+      const [tplSnap, campSnap, leadsSnap, runsSnap, historySnap] = await Promise.all([
+        getDocs(collection(db, 'email_templates')).catch(() => null),
+        getDocs(collection(db, 'campaigns')).catch(() => null),
+        getDocs(collection(db, 'campaign_leads')).catch(() => null),
+        getDocs(collection(db, 'campaign_runs')).catch(() => null),
+        getDocs(collection(db, 'campaign_send_history')).catch(() => null),
+      ]);
+
+      if (tplSnap) {
+        const firestoreTplIds = new Set<string>();
+        tplSnap.forEach((d) => {
+          const data = d.data() as EmailTemplate;
+          if (data && data.templateId) {
+            firestoreTplIds.add(data.templateId);
+            emailTemplatesMap.set(data.templateId, data);
+          }
+        });
+
+        // Seed default predefined templates to Firestore if not already present
+        for (const tpl of DEFAULT_EMAIL_TEMPLATES) {
+          if (!firestoreTplIds.has(tpl.templateId)) {
+            safeSetDoc(doc(db, 'email_templates', tpl.templateId), tpl, { merge: true }).catch(() => {});
+          }
+        }
       }
+
+      if (campSnap) {
+        const firestoreCampIds = new Set<string>();
+        campSnap.forEach((d) => {
+          const data = d.data() as Campaign;
+          if (data && data.campaignId) {
+            firestoreCampIds.add(data.campaignId);
+            campaignsMap.set(data.campaignId, data);
+          }
+        });
+      }
+
+      if (leadsSnap) {
+        leadsSnap.forEach((d) => {
+          const data = d.data() as CampaignLead;
+          if (data && data.campaignLeadId) {
+            campaignLeadsMap.set(data.campaignLeadId, data);
+          }
+        });
+      }
+
+      if (runsSnap) {
+        runsSnap.forEach((d) => {
+          const data = d.data() as CampaignRun;
+          if (data && data.runId) {
+            campaignRunsMap.set(data.runId, data);
+          }
+        });
+      }
+
+      if (historySnap) {
+        historySnap.forEach((d) => {
+          const data = d.data() as CampaignSendHistory;
+          if (data && data.campaignId && data.email && data.status === 'SENT') {
+            sendHistorySet.add(`${data.campaignId}_${data.email.toLowerCase()}`);
+          }
+        });
+      }
+    } catch (err) {
+      console.warn('[Campaign Store] Notice syncing from Firestore:', err);
     }
+  })();
 
-    // 2. Campaigns
-    const campSnap = await getDocs(collection(db, 'campaigns'));
-    const firestoreCampIds = new Set<string>();
-    campSnap.forEach((d) => {
-      const data = d.data() as Campaign;
-      if (data.campaignId) {
-        firestoreCampIds.add(data.campaignId);
-        campaignsMap.set(data.campaignId, data);
-      }
-    });
-    for (const id of Array.from(campaignsMap.keys())) {
-      if (!firestoreCampIds.has(id)) {
-        campaignsMap.delete(id);
-      }
-    }
-
-    // 3. Campaign Leads
-    const leadsSnap = await getDocs(collection(db, 'campaign_leads'));
-    const firestoreLeadIds = new Set<string>();
-    leadsSnap.forEach((d) => {
-      const data = d.data() as CampaignLead;
-      if (data.campaignLeadId) {
-        firestoreLeadIds.add(data.campaignLeadId);
-        campaignLeadsMap.set(data.campaignLeadId, data);
-      }
-    });
-    for (const id of Array.from(campaignLeadsMap.keys())) {
-      if (!firestoreLeadIds.has(id)) {
-        campaignLeadsMap.delete(id);
-      }
-    }
-
-    // 4. Campaign Runs
-    const runsSnap = await getDocs(collection(db, 'campaign_runs'));
-    const firestoreRunIds = new Set<string>();
-    runsSnap.forEach((d) => {
-      const data = d.data() as CampaignRun;
-      if (data.runId) {
-        firestoreRunIds.add(data.runId);
-        campaignRunsMap.set(data.runId, data);
-      }
-    });
-    for (const id of Array.from(campaignRunsMap.keys())) {
-      if (!firestoreRunIds.has(id)) {
-        campaignRunsMap.delete(id);
-      }
-    }
-
-    // 5. Send History
-    const historySnap = await getDocs(collection(db, 'campaign_send_history'));
-    historySnap.forEach((d) => {
-      const data = d.data() as CampaignSendHistory;
-      if (data.campaignId && data.email && data.status === 'SENT') {
-        sendHistorySet.add(`${data.campaignId}_${data.email.toLowerCase()}`);
-      }
-    });
-  } catch (err) {
-    console.warn('[Campaign Store] Notice syncing from Firestore:', err);
-  }
+  await Promise.race([syncPromise, timeoutPromise]);
 }
 
 /**
@@ -762,22 +759,18 @@ export async function createCampaign(params: {
     createdLeads.push(cLead);
   });
 
-  // Sync to Firestore in parallel
+  // Sync to Firestore in parallel without blocking API response
   if (isFirebaseConfigured && db) {
-    try {
-      await safeSetDoc(doc(db, 'campaigns', campaignId), initialCampaign);
-      // Batch write leads concurrently
-      const leadBatches = [];
-      for (let i = 0; i < createdLeads.length; i += 20) {
-        const chunk = createdLeads.slice(i, i + 20);
-        leadBatches.push(
-          Promise.all(chunk.map((cl) => safeSetDoc(doc(db, 'campaign_leads', cl.campaignLeadId), cl)))
-        );
+    (async () => {
+      try {
+        await safeSetDoc(doc(db, 'campaigns', campaignId), initialCampaign);
+        // Batch write leads concurrently
+        const leadPromises = createdLeads.map((cl) => safeSetDoc(doc(db, 'campaign_leads', cl.campaignLeadId), cl));
+        await Promise.allSettled(leadPromises);
+      } catch (e) {
+        console.warn('Firestore write notice during campaign creation:', e);
       }
-      await Promise.all(leadBatches);
-    } catch (e) {
-      console.warn('Firestore write notice during campaign creation:', e);
-    }
+    })();
   }
 
   // If user requested to start immediately

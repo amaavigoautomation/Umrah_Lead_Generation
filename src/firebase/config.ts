@@ -15,19 +15,19 @@ const fallbackConfig = {
 
 // If firebase-applet-config.json points to another project without Firestore enabled (e.g. dedicated OAuth project),
 // use the provisioned Firestore database project to ensure Firestore operations succeed.
-const activeProjectId =
-  process.env.VITE_FIREBASE_PROJECT_ID ||
-  process.env.FIREBASE_PROJECT_ID ||
-  ((firebaseConfigJson as any)?.projectId === fallbackConfig.projectId
-    ? (firebaseConfigJson as any).projectId
-    : fallbackConfig.projectId);
+// Safely detect environment variables in both Vite browser client and Node serverless functions
+const envProjectId =
+  (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_FIREBASE_PROJECT_ID) ||
+  (typeof process !== 'undefined' && process.env?.VITE_FIREBASE_PROJECT_ID) ||
+  (typeof process !== 'undefined' && process.env?.FIREBASE_PROJECT_ID);
 
-const activeApiKey =
-  process.env.VITE_FIREBASE_API_KEY ||
-  process.env.FIREBASE_API_KEY ||
-  ((firebaseConfigJson as any)?.projectId === fallbackConfig.projectId
-    ? (firebaseConfigJson as any).apiKey
-    : fallbackConfig.apiKey);
+const envApiKey =
+  (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_FIREBASE_API_KEY) ||
+  (typeof process !== 'undefined' && process.env?.VITE_FIREBASE_API_KEY) ||
+  (typeof process !== 'undefined' && process.env?.FIREBASE_API_KEY);
+
+const activeProjectId = envProjectId || fallbackConfig.projectId;
+const activeApiKey = envApiKey || fallbackConfig.apiKey;
 
 export const firebaseConfig = {
   apiKey: activeApiKey,

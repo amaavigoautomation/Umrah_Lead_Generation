@@ -564,6 +564,29 @@ export function getCampaignLeads(campaignId: string): CampaignLead[] {
     .sort((a, b) => (a.rowNumber || 0) - (b.rowNumber || 0));
 }
 
+export async function getCampaignLeadsFromDb(campaignId: string): Promise<CampaignLead[]> {
+  let leads = getCampaignLeads(campaignId);
+
+  if (leads.length === 0 && isFirebaseConfigured && db) {
+    try {
+      const snap = await getDocs(collection(db, 'campaign_leads')).catch(() => null);
+      if (snap && !snap.empty) {
+        snap.forEach((d) => {
+          const l = d.data() as CampaignLead;
+          if (l && l.campaignLeadId) {
+            campaignLeadsMap.set(l.campaignLeadId, l);
+          }
+        });
+        leads = getCampaignLeads(campaignId);
+      }
+    } catch (e) {
+      console.warn('Error fetching campaign_leads from Firestore:', e);
+    }
+  }
+
+  return leads;
+}
+
 export function getCampaignRuns(campaignId: string): CampaignRun[] {
   return Array.from(campaignRunsMap.values())
     .filter((r) => r.campaignId === campaignId)
@@ -786,18 +809,16 @@ export async function createCampaign(params: {
     createdLeads.push(cLead);
   });
 
-  // Sync to Firestore in parallel without blocking API response
+  // Sync to Firestore synchronously before responding
   if (isFirebaseConfigured && db) {
-    (async () => {
-      try {
-        await safeSetDoc(doc(db, 'campaigns', campaignId), initialCampaign);
-        // Batch write leads concurrently
-        const leadPromises = createdLeads.map((cl) => safeSetDoc(doc(db, 'campaign_leads', cl.campaignLeadId), cl));
-        await Promise.allSettled(leadPromises);
-      } catch (e) {
-        console.warn('Firestore write notice during campaign creation:', e);
-      }
-    })();
+    try {
+      await safeSetDoc(doc(db, 'campaigns', campaignId), initialCampaign);
+      // Batch write leads concurrently
+      const leadPromises = createdLeads.map((cl) => safeSetDoc(doc(db, 'campaign_leads', cl.campaignLeadId), cl));
+      await Promise.allSettled(leadPromises);
+    } catch (e) {
+      console.warn('Firestore write notice during campaign creation:', e);
+    }
   }
 
   // If user requested to start immediately
@@ -1129,7 +1150,7 @@ export async function processNextCampaignSendBatch(
     template = DEFAULT_EMAIL_TEMPLATES.find((t) => t.templateId === selectedTplId) || DEFAULT_EMAIL_TEMPLATES[0];
   }
 
-  const leads = getCampaignLeads(campaignId);
+  const leads = await getCampaignLeadsFromDb(campaignId);
   const pendingLeads = leads.filter((l) => l.sendStatus === 'PENDING' && l.replyStatus !== 'REPLIED');
 
   if (pendingLeads.length === 0) {

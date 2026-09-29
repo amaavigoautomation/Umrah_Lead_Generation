@@ -76,6 +76,10 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
   // Campaigns state
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [selectedCampaignId, setSelectedCampaignId] = useState<string | null>(null);
+  const selectedCampaignIdRef = useRef<string | null>(selectedCampaignId);
+  useEffect(() => {
+    selectedCampaignIdRef.current = selectedCampaignId;
+  }, [selectedCampaignId]);
   const [selectedCampaign, setSelectedCampaign] = useState<Campaign | null>(null);
   const [campaignLeads, setCampaignLeads] = useState<CampaignLead[]>([]);
   const [campaignRuns, setCampaignRuns] = useState<CampaignRun[]>([]);
@@ -412,19 +416,43 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
   const loadSelectedCampaignDetails = async (campaignId: string) => {
     try {
       const [campRes, leadsRes, runsRes] = await Promise.all([
-        fetch(`/api/campaigns/${campaignId}`),
-        fetch(`/api/campaigns/${campaignId}/leads`),
-        fetch(`/api/campaigns/${campaignId}/runs`),
+        fetch(`/api/campaigns/${campaignId}`).catch(() => null),
+        fetch(`/api/campaigns/${campaignId}/leads`).catch(() => null),
+        fetch(`/api/campaigns/${campaignId}/runs`).catch(() => null),
       ]);
-      const campData = await campRes.json();
-      const leadsData = await leadsRes.json();
-      const runsData = await runsRes.json();
+      const campData = campRes && campRes.ok ? await campRes.json().catch(() => ({})) : {};
+      const leadsData = leadsRes && leadsRes.ok ? await leadsRes.json().catch(() => ({})) : {};
+      const runsData = runsRes && runsRes.ok ? await runsRes.json().catch(() => ({})) : {};
 
       if (campData.campaign) setSelectedCampaign(campData.campaign);
-      if (leadsData.leads) setCampaignLeads(leadsData.leads);
+      if (leadsData.leads && Array.isArray(leadsData.leads) && leadsData.leads.length > 0) {
+        setCampaignLeads(leadsData.leads);
+      }
       if (runsData.runs) setCampaignRuns(runsData.runs);
     } catch (e) {
-      console.warn('Error loading campaign leads/runs:', e);
+      console.warn('Error loading campaign leads/runs from API:', e);
+    }
+
+    // Direct Firestore lookup fallback if API returned empty leads
+    if (isFirebaseConfigured && db) {
+      try {
+        const snap = await getDocs(collection(db, 'campaign_leads')).catch(() => null);
+        if (snap && !snap.empty) {
+          const fsLeads: CampaignLead[] = [];
+          snap.forEach((d) => {
+            const l = d.data() as CampaignLead;
+            if (l && l.campaignLeadId && l.campaignId === campaignId) {
+              fsLeads.push(l);
+            }
+          });
+          if (fsLeads.length > 0) {
+            fsLeads.sort((a, b) => (a.rowNumber || 0) - (b.rowNumber || 0));
+            setCampaignLeads(fsLeads);
+          }
+        }
+      } catch (fsErr) {
+        console.warn('Firestore leads lookup note:', fsErr);
+      }
     }
   };
 
@@ -473,9 +501,33 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
           (err) => console.warn('Notice from Firestore campaigns listener:', err)
         );
 
+        const unsubLeads = onSnapshot(
+          collection(db, 'campaign_leads'),
+          (snapshot) => {
+            if (!snapshot.empty) {
+              const loadedLeads: CampaignLead[] = [];
+              snapshot.forEach((docSnap) => {
+                const data = docSnap.data() as CampaignLead;
+                if (data && data.campaignLeadId) {
+                  loadedLeads.push(data);
+                }
+              });
+              if (selectedCampaignIdRef.current) {
+                const matching = loadedLeads.filter((l) => l.campaignId === selectedCampaignIdRef.current);
+                if (matching.length > 0) {
+                  matching.sort((a, b) => (a.rowNumber || 0) - (b.rowNumber || 0));
+                  setCampaignLeads(matching);
+                }
+              }
+            }
+          },
+          (err) => console.warn('Notice from Firestore campaign_leads listener:', err)
+        );
+
         return () => {
           unsubTemplates();
           unsubCampaigns();
+          unsubLeads();
         };
       } catch (e) {
         console.warn('Firestore subscription setup note:', e);
@@ -978,9 +1030,10 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
     if (createdCampaignResult && isFirebaseConfigured && db) {
       try {
         await setDoc(doc(db, 'campaigns', createdCampaignResult.campaignId), createdCampaignResult, { merge: true });
-        for (const cl of createdLeadsResult) {
-          setDoc(doc(db, 'campaign_leads', cl.campaignLeadId), cl, { merge: true }).catch(() => {});
-        }
+        const leadSaves = createdLeadsResult.map((cl) =>
+          setDoc(doc(db, 'campaign_leads', cl.campaignLeadId), cl, { merge: true })
+        );
+        await Promise.allSettled(leadSaves);
       } catch (fsErr) {
         console.warn('Browser Firestore save note:', fsErr);
       }

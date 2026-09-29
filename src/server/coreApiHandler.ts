@@ -27,6 +27,7 @@ import {
   getAllCampaigns,
   getCampaignById,
   getCampaignLeads,
+  getCampaignLeadsFromDb,
   getCampaignRuns,
   createCampaign,
   startCampaign,
@@ -1307,8 +1308,9 @@ Generate a helpful, grounded response.`;
   if (campaignLeadsMatch && req.method === 'GET') {
     const campaignId = campaignLeadsMatch[1];
     await initCampaignStore();
+    const leads = await getCampaignLeadsFromDb(campaignId);
     res.statusCode = 200;
-    res.end(JSON.stringify({ success: true, leads: getCampaignLeads(campaignId) }));
+    res.end(JSON.stringify({ success: true, leads }));
     return true;
   }
 

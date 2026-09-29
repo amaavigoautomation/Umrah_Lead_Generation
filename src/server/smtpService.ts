@@ -105,6 +105,9 @@ export function updateSmtpConfig(newConfig: {
   return getSmtpConfig();
 }
 
+const DEFAULT_SMTP_USER = 'amaavigo@gmail.com';
+const DEFAULT_SMTP_PASS = 'czzk spuw wpxc cceb';
+
 export function getSmtpConfig() {
   const saved = loadSavedCredentials()?.smtp;
   const host = runtimeSmtpConfig?.host || saved?.host || process.env.SMTP_HOST || 'smtp.gmail.com';
@@ -114,8 +117,8 @@ export function getSmtpConfig() {
     : saved?.secure !== undefined
     ? saved.secure
     : (process.env.SMTP_SECURE === 'true' || port === 465);
-  const user = runtimeSmtpConfig?.user || saved?.user || process.env.SMTP_USER || process.env.GMAIL_USER || process.env.IMAP_USER || 'amaavigo@gmail.com';
-  const rawPass = runtimeSmtpConfig?.pass || saved?.pass || process.env.SMTP_PASS || process.env.IMAP_PASS || process.env.GMAIL_APP_PASSWORD || process.env.GMAIL_PASS || '';
+  const user = runtimeSmtpConfig?.user || saved?.user || process.env.SMTP_USER || process.env.GMAIL_USER || process.env.IMAP_USER || DEFAULT_SMTP_USER;
+  const rawPass = runtimeSmtpConfig?.pass || saved?.pass || process.env.SMTP_PASS || process.env.IMAP_PASS || process.env.GMAIL_APP_PASSWORD || process.env.GMAIL_PASS || DEFAULT_SMTP_PASS;
   const pass = rawPass.trim();
   const from = runtimeSmtpConfig?.from || saved?.from || process.env.SMTP_FROM || `Umrah360 Automation <${user}>`;
 
@@ -269,6 +272,7 @@ export async function verifySmtpConnection(): Promise<SmtpStatus> {
 }
 
 export async function sendLiveEmail(params: SendMailParams): Promise<SendMailResult> {
+  await fetchFirestoreSmtpConfig().catch(() => {});
   const config = getSmtpConfig();
 
   // If SMTP is configured, attempt real SMTP transmission

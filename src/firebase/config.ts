@@ -29,13 +29,15 @@ const envApiKey =
 const activeProjectId = envProjectId || fallbackConfig.projectId;
 const activeApiKey = envApiKey || fallbackConfig.apiKey;
 
+const isUsingFallbackProject = activeProjectId === fallbackConfig.projectId;
+
 export const firebaseConfig = {
   apiKey: activeApiKey,
-  authDomain: (firebaseConfigJson as any)?.authDomain || fallbackConfig.authDomain,
+  authDomain: isUsingFallbackProject ? fallbackConfig.authDomain : ((firebaseConfigJson as any)?.authDomain || fallbackConfig.authDomain),
   projectId: activeProjectId,
-  storageBucket: (firebaseConfigJson as any)?.storageBucket || fallbackConfig.storageBucket,
-  messagingSenderId: (firebaseConfigJson as any)?.messagingSenderId || fallbackConfig.messagingSenderId,
-  appId: (firebaseConfigJson as any)?.appId || fallbackConfig.appId,
+  storageBucket: isUsingFallbackProject ? fallbackConfig.storageBucket : ((firebaseConfigJson as any)?.storageBucket || fallbackConfig.storageBucket),
+  messagingSenderId: isUsingFallbackProject ? fallbackConfig.messagingSenderId : ((firebaseConfigJson as any)?.messagingSenderId || fallbackConfig.messagingSenderId),
+  appId: isUsingFallbackProject ? fallbackConfig.appId : ((firebaseConfigJson as any)?.appId || fallbackConfig.appId),
   firestoreDatabaseId: (firebaseConfigJson as any)?.firestoreDatabaseId || fallbackConfig.firestoreDatabaseId,
 };
 

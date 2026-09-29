@@ -73,15 +73,61 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
   // Navigation sub-tabs
   const [activeTab, setActiveTab] = useState<'CAMPAIGNS' | 'TEMPLATES'>('CAMPAIGNS');
 
-  // Campaigns state
-  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
-  const [selectedCampaignId, setSelectedCampaignId] = useState<string | null>(null);
+  // Campaigns state with persistent localStorage cache
+  const [campaigns, setCampaigns] = useState<Campaign[]>(() => {
+    try {
+      const cached = localStorage.getItem('umrah360_campaigns_cache');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {}
+    return [];
+  });
+  const [selectedCampaignId, setSelectedCampaignId] = useState<string | null>(() => {
+    try {
+      const cachedId = localStorage.getItem('umrah360_selected_campaign_id');
+      if (cachedId) return cachedId;
+      const cachedCamps = localStorage.getItem('umrah360_campaigns_cache');
+      if (cachedCamps) {
+        const parsed = JSON.parse(cachedCamps);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed[0].campaignId;
+      }
+    } catch {}
+    return null;
+  });
   const selectedCampaignIdRef = useRef<string | null>(selectedCampaignId);
   useEffect(() => {
     selectedCampaignIdRef.current = selectedCampaignId;
+    if (selectedCampaignId) {
+      try {
+        localStorage.setItem('umrah360_selected_campaign_id', selectedCampaignId);
+      } catch {}
+    }
   }, [selectedCampaignId]);
-  const [selectedCampaign, setSelectedCampaign] = useState<Campaign | null>(null);
-  const [campaignLeads, setCampaignLeads] = useState<CampaignLead[]>([]);
+  const [selectedCampaign, setSelectedCampaign] = useState<Campaign | null>(() => {
+    try {
+      const cachedCamps = localStorage.getItem('umrah360_campaigns_cache');
+      if (cachedCamps) {
+        const parsed = JSON.parse(cachedCamps);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed[0];
+      }
+    } catch {}
+    return null;
+  });
+  const [campaignLeads, setCampaignLeads] = useState<CampaignLead[]>(() => {
+    try {
+      const cachedId = localStorage.getItem('umrah360_selected_campaign_id');
+      if (cachedId) {
+        const cachedLeads = localStorage.getItem(`umrah360_leads_${cachedId}`);
+        if (cachedLeads) {
+          const parsed = JSON.parse(cachedLeads);
+          if (Array.isArray(parsed)) return parsed;
+        }
+      }
+    } catch {}
+    return [];
+  });
   const [campaignRuns, setCampaignRuns] = useState<CampaignRun[]>([]);
   const [templates, setTemplates] = useState<EmailTemplate[]>([]);
   const [loading, setLoading] = useState(false);
@@ -378,8 +424,11 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
       const campData = await campRes.json();
       const tplData = await tplRes.json();
 
-      if (campData.campaigns) {
+      if (campData.campaigns && Array.isArray(campData.campaigns) && campData.campaigns.length > 0) {
         setCampaigns(campData.campaigns);
+        try {
+          localStorage.setItem('umrah360_campaigns_cache', JSON.stringify(campData.campaigns));
+        } catch {}
         // If a campaign is currently selected, refresh its details
         if (selectedCampaignId) {
           const updated = campData.campaigns.find((c: Campaign) => c.campaignId === selectedCampaignId);
@@ -388,6 +437,21 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
           setSelectedCampaignId(campData.campaigns[0].campaignId);
           setSelectedCampaign(campData.campaigns[0]);
         }
+      } else {
+        // Fallback to localStorage cache if server returned empty
+        try {
+          const cached = localStorage.getItem('umrah360_campaigns_cache');
+          if (cached) {
+            const parsed = JSON.parse(cached);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              setCampaigns(parsed);
+              if (!selectedCampaignId) {
+                setSelectedCampaignId(parsed[0].campaignId);
+                setSelectedCampaign(parsed[0]);
+              }
+            }
+          }
+        } catch {}
       }
 
       if (tplData.templates && tplData.templates.length > 0) {
@@ -427,6 +491,20 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
       if (campData.campaign) setSelectedCampaign(campData.campaign);
       if (leadsData.leads && Array.isArray(leadsData.leads) && leadsData.leads.length > 0) {
         setCampaignLeads(leadsData.leads);
+        try {
+          localStorage.setItem(`umrah360_leads_${campaignId}`, JSON.stringify(leadsData.leads));
+        } catch {}
+      } else {
+        // Fallback to localStorage if API returned empty
+        try {
+          const cachedLeads = localStorage.getItem(`umrah360_leads_${campaignId}`);
+          if (cachedLeads) {
+            const parsedLeads = JSON.parse(cachedLeads);
+            if (Array.isArray(parsedLeads) && parsedLeads.length > 0) {
+              setCampaignLeads(parsedLeads);
+            }
+          }
+        } catch {}
       }
       if (runsData.runs) setCampaignRuns(runsData.runs);
     } catch (e) {
@@ -448,6 +526,9 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
           if (fsLeads.length > 0) {
             fsLeads.sort((a, b) => (a.rowNumber || 0) - (b.rowNumber || 0));
             setCampaignLeads(fsLeads);
+            try {
+              localStorage.setItem(`umrah360_leads_${campaignId}`, JSON.stringify(fsLeads));
+            } catch {}
           }
         }
       } catch (fsErr) {
@@ -592,6 +673,13 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
         loadData();
         loadSelectedCampaignDetails(campaignId);
       }
+      // Immediately kick off batch processing on Vercel
+      fetch(`/api/campaigns/${campaignId}/process`, { method: 'POST' })
+        .then(() => {
+          loadData();
+          loadSelectedCampaignDetails(campaignId);
+        })
+        .catch(() => {});
     } catch (e) {
       console.error('Error starting campaign:', e);
     }
@@ -666,6 +754,14 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
         if (data.campaign) setSelectedCampaign(data.campaign);
         await loadData();
         await loadSelectedCampaignDetails(campaignId);
+
+        // Immediately kick off batch processing on Vercel
+        fetch(`/api/campaigns/${campaignId}/process`, { method: 'POST' })
+          .then(() => {
+            loadData();
+            loadSelectedCampaignDetails(campaignId);
+          })
+          .catch(() => {});
       } else {
         setCampaignNotification({
           type: 'success',
@@ -1055,9 +1151,26 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
       setSelectedCampaign(targetCamp);
       setCampaignLeads(createdLeadsResult);
 
+      try {
+        localStorage.setItem('umrah360_selected_campaign_id', targetCamp.campaignId);
+        localStorage.setItem(`umrah360_leads_${targetCamp.campaignId}`, JSON.stringify(createdLeadsResult));
+        const currentCamps = JSON.parse(localStorage.getItem('umrah360_campaigns_cache') || '[]');
+        const updatedCamps = [targetCamp, ...currentCamps.filter((c: any) => c.campaignId !== targetCamp.campaignId)];
+        localStorage.setItem('umrah360_campaigns_cache', JSON.stringify(updatedCamps));
+      } catch {}
+
       loadData();
       if (targetCamp.campaignId) {
         loadSelectedCampaignDetails(targetCamp.campaignId);
+      }
+
+      if (startImmediately && targetCamp.campaignId) {
+        fetch(`/api/campaigns/${targetCamp.campaignId}/process`, { method: 'POST' })
+          .then(() => {
+            loadData();
+            loadSelectedCampaignDetails(targetCamp.campaignId);
+          })
+          .catch(() => {});
       }
     } else {
       setCreateCampaignError('Unable to create campaign. Please check inputs and try again.');

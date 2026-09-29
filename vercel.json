@@ -5,7 +5,7 @@
   "outputDirectory": "dist",
   "functions": {
     "api/**/*.ts": {
-      "includeFiles": "src/server/**"
+      "includeFiles": "src/server/**,.mail_credentials.json"
     }
   },
   "rewrites": [

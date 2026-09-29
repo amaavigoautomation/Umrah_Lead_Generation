@@ -535,21 +535,29 @@ export async function ensureCampaignInStore(campaignId: string): Promise<Campaig
       if (snap.exists()) {
         camp = snap.data() as Campaign;
         campaignsMap.set(campaignId, camp);
-
-        const leadsSnap = await getDocs(collection(db, 'campaign_leads')).catch(() => null);
-        if (leadsSnap) {
-          leadsSnap.forEach((d) => {
-            const l = d.data() as CampaignLead;
-            if (l && l.campaignLeadId && l.campaignId === campaignId) {
-              campaignLeadsMap.set(l.campaignLeadId, l);
-            }
-          });
-        }
       }
     } catch (e) {
-      console.warn('[ensureCampaignInStore] Lookup error:', e);
+      console.warn('[ensureCampaignInStore] Campaign lookup error:', e);
     }
   }
+
+  // Ensure leads are populated if missing in memory
+  if (camp && getCampaignLeads(campaignId).length === 0 && isFirebaseConfigured && db) {
+    try {
+      const leadsSnap = await getDocs(collection(db, 'campaign_leads')).catch(() => null);
+      if (leadsSnap) {
+        leadsSnap.forEach((d) => {
+          const l = d.data() as CampaignLead;
+          if (l && l.campaignLeadId && l.campaignId === campaignId) {
+            campaignLeadsMap.set(l.campaignLeadId, l);
+          }
+        });
+      }
+    } catch (e) {
+      console.warn('[ensureCampaignInStore] Leads lookup error:', e);
+    }
+  }
+
   return camp;
 }
 
@@ -821,14 +829,17 @@ export async function createCampaign(params: {
     }
   }
 
-  // If user requested to start immediately
+  // If user requested to start immediately, execute first batch synchronously
+  let finalCampaign = initialCampaign;
   if (params.startImmediately) {
-    startCampaign(campaignId).catch((err) => {
+    try {
+      finalCampaign = await startCampaign(campaignId);
+    } catch (err) {
       console.error('Error starting campaign immediately:', err);
-    });
+    }
   }
 
-  return { campaign: initialCampaign, leads: createdLeads };
+  return { campaign: finalCampaign, leads: createdLeads };
 }
 
 /**
@@ -869,7 +880,7 @@ export async function startCampaign(campaignId: string): Promise<Campaign> {
 
   // Ensure leads can be processed: if no leads are currently PENDING but some are FAILED,
   // automatically reset FAILED leads to PENDING so they are delivered
-  const leads = getCampaignLeads(campaignId);
+  const leads = await getCampaignLeadsFromDb(campaignId);
   const pendingLeads = leads.filter((l) => l.sendStatus === 'PENDING');
   if (pendingLeads.length === 0) {
     const failedLeads = leads.filter((l) => l.sendStatus === 'FAILED');
@@ -1152,6 +1163,11 @@ export async function processNextCampaignSendBatch(
 
   const leads = await getCampaignLeadsFromDb(campaignId);
   const pendingLeads = leads.filter((l) => l.sendStatus === 'PENDING' && l.replyStatus !== 'REPLIED');
+
+  if (leads.length === 0 && (campaign.totalLeads || 0) > 0) {
+    console.warn(`[Campaign Engine] Leads not yet loaded for campaign ${campaignId} (expected ${campaign.totalLeads}). Retrying load...`);
+    return { campaign, processedCount: 0, remainingPendingCount: campaign.totalLeads };
+  }
 
   if (pendingLeads.length === 0) {
     const now = new Date().toISOString();

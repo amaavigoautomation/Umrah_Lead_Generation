@@ -43,6 +43,7 @@ import {
   updateCampaignLeadStatus,
   generateAiEmailForLead,
   generateAiSamplePreviews,
+  processNextCampaignSendBatch,
 } from './campaignService.js';
 import { processWebsiteLeadSubmission } from './websiteLeadService.js';
 import {
@@ -1213,6 +1214,20 @@ Generate a helpful, grounded response.`;
     } catch (err: any) {
       res.statusCode = 400;
       res.end(JSON.stringify({ error: err?.message || 'Failed to start campaign' }));
+    }
+    return true;
+  }
+
+  const campaignProcessMatch = url.match(/^\/api\/campaigns\/([a-zA-Z0-9_-]+)\/process$/);
+  if (campaignProcessMatch && req.method === 'POST') {
+    const campaignId = campaignProcessMatch[1];
+    try {
+      const batchResult = await processNextCampaignSendBatch(campaignId, 3);
+      res.statusCode = 200;
+      res.end(JSON.stringify({ success: true, ...batchResult }));
+    } catch (err: any) {
+      res.statusCode = 400;
+      res.end(JSON.stringify({ error: err?.message || 'Failed to process campaign batch' }));
     }
     return true;
   }

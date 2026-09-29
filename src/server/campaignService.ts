@@ -874,12 +874,16 @@ export async function startCampaign(campaignId: string): Promise<Campaign> {
     safeSetDoc(doc(db, 'campaigns', campaignId), campaign, { merge: true }).catch(() => {});
   }
 
-  // Trigger background sending engine
-  executeCampaignSendingEngine(campaignId).catch((err) => {
-    console.error(`[Campaign Engine] Error executing campaign ${campaignId}:`, err);
+  // Synchronously process initial batch for immediate dispatch on Vercel & dev server
+  const batchRes = await processNextCampaignSendBatch(campaignId, 3).catch((err) => {
+    console.warn(`[Campaign Engine] Note processing initial batch on start:`, err);
+    return null;
   });
 
-  return campaign;
+  // Also trigger background sending engine for dev environment
+  executeCampaignSendingEngine(campaignId).catch(() => {});
+
+  return batchRes?.campaign || recalculateCampaignMetrics(campaignId) || campaign;
 }
 
 /**
@@ -1074,18 +1078,286 @@ export async function restartCampaign(
   message = `Run #${nextRunNumber} started. Sending follow-up to ${targetLeadsCount} unreplied lead(s). (${repliedLeads.length} lead(s) skipped because they already replied).`;
   console.log(`[Campaign Engine] ${message}`);
 
-  // Start background sending for unreplied leads
-  executeCampaignSendingEngine(campaignId, newRunId).catch((err) => {
-    console.error(`[Campaign Engine] Error on restart of ${campaignId}:`, err);
+  // Synchronously process initial batch for immediate dispatch on Vercel & dev server
+  const batchRes = await processNextCampaignSendBatch(campaignId, 3).catch((err) => {
+    console.warn(`[Campaign Engine] Note processing initial batch on restart:`, err);
+    return null;
   });
 
+  // Also trigger background sending engine for dev environment
+  executeCampaignSendingEngine(campaignId, newRunId).catch(() => {});
+
   return {
-    campaign,
+    campaign: batchRes?.campaign || recalculateCampaignMetrics(campaignId) || campaign,
     run: newRun,
     targetLeadsCount,
     alreadyRepliedCount: repliedLeads.length,
     allQualified: false,
     message,
+  };
+}
+
+/**
+ * Synchronously processes a batch of pending emails for a campaign.
+ * Built for Vercel Serverless Function lifecycle: each call processes up to `maxBatchSize` leads,
+ * dispatches emails via SMTP/Simulation, updates Firestore, and returns updated campaign state.
+ */
+export async function processNextCampaignSendBatch(
+  campaignId: string,
+  maxBatchSize: number = 3
+): Promise<{
+  campaign: Campaign;
+  processedCount: number;
+  remainingPendingCount: number;
+}> {
+  const campaign = await ensureCampaignInStore(campaignId);
+  if (!campaign) throw new Error(`Campaign ${campaignId} not found`);
+
+  const currentRunId = campaign.currentRunId || `run-${campaignId}-1`;
+  const selectedTplId = campaign.templateId || '';
+  let template = getTemplateById(selectedTplId);
+  if (!template && selectedTplId && isFirebaseConfigured && db) {
+    try {
+      const snap = await getDoc(doc(db, 'email_templates', selectedTplId));
+      if (snap.exists()) {
+        template = snap.data() as EmailTemplate;
+        emailTemplatesMap.set(selectedTplId, template);
+      }
+    } catch (err) {}
+  }
+  if (!template) {
+    template = DEFAULT_EMAIL_TEMPLATES.find((t) => t.templateId === selectedTplId) || DEFAULT_EMAIL_TEMPLATES[0];
+  }
+
+  const leads = getCampaignLeads(campaignId);
+  const pendingLeads = leads.filter((l) => l.sendStatus === 'PENDING' && l.replyStatus !== 'REPLIED');
+
+  if (pendingLeads.length === 0) {
+    const now = new Date().toISOString();
+    campaign.status = 'COMPLETED';
+    campaign.completedAt = now;
+    campaign.updatedAt = now;
+
+    const run = campaignRunsMap.get(currentRunId);
+    if (run) {
+      run.status = 'COMPLETED';
+      run.completedAt = now;
+      if (isFirebaseConfigured && db) {
+        safeSetDoc(doc(db, 'campaign_runs', run.runId), run, { merge: true }).catch(() => {});
+      }
+    }
+
+    if (isFirebaseConfigured && db) {
+      safeSetDoc(doc(db, 'campaigns', campaignId), campaign, { merge: true }).catch(() => {});
+    }
+
+    const finalCamp = recalculateCampaignMetrics(campaignId) || campaign;
+    return { campaign: finalCamp, processedCount: 0, remainingPendingCount: 0 };
+  }
+
+  const batchToProcess = pendingLeads.slice(0, maxBatchSize);
+  let processedCount = 0;
+
+  for (const lead of batchToProcess) {
+    if (lead.replyStatus === 'REPLIED') {
+      lead.sendStatus = 'SENT';
+      continue;
+    }
+
+    const runHistoryKey = `${campaignId}_${currentRunId}_${lead.email.toLowerCase()}`;
+    if (sendHistorySet.has(runHistoryKey)) {
+      lead.sendStatus = 'SENT';
+      continue;
+    }
+
+    let subject = '';
+    let body = '';
+    let activeAttachments: any[] = [];
+    let htmlContent: string | undefined = undefined;
+
+    if (campaign.campaignMode === 'AI_GENERATED' && !campaign.templateId) {
+      if (!lead.generatedBody) {
+        lead.generationStatus = 'GENERATING';
+        const aiResult = await generateAiEmailForLead(lead);
+        lead.researchData = aiResult.researchData;
+        lead.selectedPainPoint = aiResult.selectedPainPoint;
+        lead.selectedCapabilities = aiResult.selectedCapabilities;
+        lead.personalizationEvidence = aiResult.personalizationEvidence;
+        lead.generatedSubject = aiResult.subject;
+        lead.generatedBody = aiResult.body;
+        lead.qualityCheckStatus = aiResult.qualityCheckStatus;
+        lead.generationStatus = 'READY_TO_SEND';
+      }
+      subject = lead.generatedSubject || `Streamlining Operations for ${lead.companyName}`;
+      body = lead.generatedBody || `Hi ${lead.name},\n\nI noticed your operations at ${lead.companyName}.`;
+    } else {
+      let activeTpl = getTemplateById(template.templateId);
+      if (!activeTpl) activeTpl = template;
+      const personalized = personalizeTemplate(activeTpl, lead);
+      subject = personalized.subject;
+      body = personalized.body;
+      htmlContent = personalized.html;
+
+      if (activeTpl.attachments && activeTpl.attachments.length > 0) {
+        activeAttachments = activeTpl.attachments.map((att: any) => ({
+          filename: att.name || att.filename || 'attachment',
+          contentType: att.type || att.contentType,
+          dataUrl: att.dataUrl,
+          content: att.base64 || att.content,
+          encoding: att.base64 ? 'base64' : undefined,
+        }));
+      }
+      lead.generatedSubject = subject;
+      lead.generatedBody = body;
+    }
+
+    lead.sendStatus = 'SENDING';
+    lead.updatedAt = new Date().toISOString();
+
+    const smtpConfig = getSmtpConfig();
+    const senderFrom = smtpConfig.from || smtpConfig.user || 'sales@umrah360.in';
+    const conversationId = lead.conversationId || `conv-${lead.leadId}`;
+    const gmailThreadId = lead.gmailThreadId || `thread-${lead.leadId}`;
+
+    try {
+      const isSimulationMode = campaign.deliveryMode === 'SIMULATION';
+      const sendResult = isSimulationMode
+        ? {
+            success: true,
+            messageId: `<sim-camp-${Date.now()}-${Math.random().toString(36).slice(2, 6)}@umrah360.in>`,
+            simulated: true,
+          }
+        : await sendLiveEmail({
+            to: lead.email,
+            subject: subject,
+            text: body,
+            html: htmlContent,
+            attachments: activeAttachments.length > 0 ? activeAttachments : undefined,
+          });
+
+      const now = new Date().toISOString();
+
+      if (sendResult.success) {
+        const sentMsgId = sendResult.messageId || `<camp-${Date.now()}@umrah360.in>`;
+        lead.sendStatus = 'SENT';
+        lead.sendCount = (lead.sendCount || 0) + 1;
+        lead.lastSentAt = now;
+        lead.gmailMessageId = sentMsgId;
+        lead.gmailThreadId = gmailThreadId;
+        lead.conversationId = conversationId;
+        lead.lastError = undefined;
+        lead.updatedAt = now;
+
+        sendHistorySet.add(runHistoryKey);
+        sendHistorySet.add(`${campaignId}_${lead.email.toLowerCase()}`);
+
+        const historyRecord: CampaignSendHistory = {
+          historyId: `hist-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          campaignId,
+          campaignRunId: currentRunId,
+          campaignLeadId: lead.campaignLeadId,
+          email: lead.email,
+          templateId: template.templateId,
+          subject: subject,
+          gmailMessageId: sentMsgId,
+          sentAt: now,
+          status: 'SENT',
+        };
+
+        const currentRun = campaignRunsMap.get(currentRunId);
+        if (currentRun) {
+          currentRun.sentCount = (currentRun.sentCount || 0) + 1;
+        }
+
+        appendOutboundMessageToThread(conversationId, {
+          messageId: `msg-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          gmailMessageId: sentMsgId,
+          gmailThreadId,
+          conversationId,
+          channel: 'EMAIL',
+          direction: 'OUTBOUND',
+          senderType: 'AGENT',
+          senderName: 'Umrah360 Growth Team',
+          senderEmail: senderFrom,
+          text: body,
+          sentAt: now,
+          receivedAt: now,
+          createdAt: now,
+          timestamp: now,
+          emailMeta: {
+            subject: subject,
+            from: senderFrom,
+            to: lead.email,
+            messageId: sentMsgId,
+          },
+        });
+
+        if (isFirebaseConfigured && db) {
+          safeSetDoc(doc(db, 'campaign_leads', lead.campaignLeadId), lead, { merge: true }).catch(() => {});
+          safeSetDoc(doc(db, 'campaign_send_history', historyRecord.historyId), historyRecord).catch(() => {});
+          if (currentRun) {
+            safeSetDoc(doc(db, 'campaign_runs', currentRun.runId), currentRun, { merge: true }).catch(() => {});
+          }
+        }
+        processedCount++;
+      } else {
+        lead.sendStatus = 'FAILED';
+        lead.lastError = sendResult.error || 'SMTP delivery failure';
+        lead.updatedAt = now;
+
+        if (isFirebaseConfigured && db) {
+          safeSetDoc(doc(db, 'campaign_leads', lead.campaignLeadId), lead, { merge: true }).catch(() => {});
+        }
+
+        if (sendResult.isDailyLimitExceeded) {
+          campaign.status = 'PAUSED';
+          campaign.lastError = 'Gmail Daily Sending Limit reached. Campaign paused.';
+          campaign.updatedAt = now;
+          if (isFirebaseConfigured && db) {
+            safeSetDoc(doc(db, 'campaigns', campaignId), campaign, { merge: true }).catch(() => {});
+          }
+          break;
+        }
+      }
+    } catch (err: any) {
+      lead.sendStatus = 'FAILED';
+      lead.lastError = err?.message || 'Unexpected sending exception';
+      lead.updatedAt = new Date().toISOString();
+
+      if (isFirebaseConfigured && db) {
+        safeSetDoc(doc(db, 'campaign_leads', lead.campaignLeadId), lead, { merge: true }).catch(() => {});
+      }
+    }
+  }
+
+  const updatedLeads = getCampaignLeads(campaignId);
+  const remainingPending = updatedLeads.filter((l) => l.sendStatus === 'PENDING' && l.replyStatus !== 'REPLIED');
+
+  if (remainingPending.length === 0) {
+    const now = new Date().toISOString();
+    campaign.status = 'COMPLETED';
+    campaign.completedAt = now;
+    campaign.updatedAt = now;
+
+    const run = campaignRunsMap.get(currentRunId);
+    if (run) {
+      run.status = 'COMPLETED';
+      run.completedAt = now;
+      if (isFirebaseConfigured && db) {
+        safeSetDoc(doc(db, 'campaign_runs', run.runId), run, { merge: true }).catch(() => {});
+      }
+    }
+
+    if (isFirebaseConfigured && db) {
+      safeSetDoc(doc(db, 'campaigns', campaignId), campaign, { merge: true }).catch(() => {});
+    }
+  }
+
+  const updatedCampaign = recalculateCampaignMetrics(campaignId) || campaign;
+  return {
+    campaign: updatedCampaign,
+    processedCount,
+    remainingPendingCount: remainingPending.length,
   };
 }
 

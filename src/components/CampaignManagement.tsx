@@ -486,16 +486,27 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
   useEffect(() => {
     loadData();
     const interval = setInterval(() => {
-      // Poll every 3 seconds if active campaign is running
-      if (selectedCampaign?.status === 'RUNNING' || campaigns.some((c) => c.status === 'RUNNING')) {
+      // Poll and process batch every 3 seconds if active campaign or any campaign is running
+      const runningCamp = selectedCampaign?.status === 'RUNNING' ? selectedCampaign : campaigns.find((c) => c.status === 'RUNNING');
+      if (runningCamp) {
+        fetch(`/api/campaigns/${runningCamp.campaignId}/process`, { method: 'POST' })
+          .then(() => {
+            loadData();
+            if (runningCamp.campaignId) {
+              loadSelectedCampaignDetails(runningCamp.campaignId);
+            }
+          })
+          .catch(() => {
+            loadData();
+            if (selectedCampaignId) loadSelectedCampaignDetails(selectedCampaignId);
+          });
+      } else {
         loadData();
-        if (selectedCampaignId) {
-          loadSelectedCampaignDetails(selectedCampaignId);
-        }
+        if (selectedCampaignId) loadSelectedCampaignDetails(selectedCampaignId);
       }
     }, 3000);
     return () => clearInterval(interval);
-  }, [selectedCampaignId, selectedCampaign?.status]);
+  }, [selectedCampaignId, selectedCampaign?.status, campaigns]);
 
   useEffect(() => {
     if (selectedCampaignId) {

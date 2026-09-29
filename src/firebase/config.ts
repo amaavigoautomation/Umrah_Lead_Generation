@@ -15,12 +15,16 @@ const fallbackConfig = {
 
 // If firebase-applet-config.json points to another project without Firestore enabled (e.g. dedicated OAuth project),
 // use the provisioned Firestore database project to ensure Firestore operations succeed.
-const activeProjectId = process.env.VITE_FIREBASE_PROJECT_ID ||
+const activeProjectId =
+  process.env.VITE_FIREBASE_PROJECT_ID ||
+  process.env.FIREBASE_PROJECT_ID ||
   ((firebaseConfigJson as any)?.projectId === fallbackConfig.projectId
     ? (firebaseConfigJson as any).projectId
     : fallbackConfig.projectId);
 
-const activeApiKey = process.env.VITE_FIREBASE_API_KEY ||
+const activeApiKey =
+  process.env.VITE_FIREBASE_API_KEY ||
+  process.env.FIREBASE_API_KEY ||
   ((firebaseConfigJson as any)?.projectId === fallbackConfig.projectId
     ? (firebaseConfigJson as any).apiKey
     : fallbackConfig.apiKey);

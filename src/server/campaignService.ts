@@ -527,8 +527,35 @@ export function getAllCampaigns(): Campaign[] {
   );
 }
 
+export async function ensureCampaignInStore(campaignId: string): Promise<Campaign | undefined> {
+  let camp = campaignsMap.get(campaignId);
+  if (!camp && isFirebaseConfigured && db) {
+    try {
+      const snap = await getDoc(doc(db, 'campaigns', campaignId));
+      if (snap.exists()) {
+        camp = snap.data() as Campaign;
+        campaignsMap.set(campaignId, camp);
+
+        const leadsSnap = await getDocs(collection(db, 'campaign_leads')).catch(() => null);
+        if (leadsSnap) {
+          leadsSnap.forEach((d) => {
+            const l = d.data() as CampaignLead;
+            if (l && l.campaignLeadId && l.campaignId === campaignId) {
+              campaignLeadsMap.set(l.campaignLeadId, l);
+            }
+          });
+        }
+      }
+    } catch (e) {
+      console.warn('[ensureCampaignInStore] Lookup error:', e);
+    }
+  }
+  return camp;
+}
+
 export function getCampaignById(campaignId: string): Campaign | undefined {
-  return recalculateCampaignMetrics(campaignId);
+  const camp = campaignsMap.get(campaignId);
+  return camp ? recalculateCampaignMetrics(campaignId) : undefined;
 }
 
 export function getCampaignLeads(campaignId: string): CampaignLead[] {
@@ -547,7 +574,7 @@ export function getCampaignRuns(campaignId: string): CampaignRun[] {
  * Deletes a campaign and all associated leads, runs, and send history
  */
 export async function deleteCampaign(campaignId: string): Promise<boolean> {
-  await initCampaignStore();
+  await ensureCampaignInStore(campaignId);
 
   // 1. If campaign is currently running, halt background execution
   const abortCtrl = activeCampaignAbortControllers.get(campaignId);
@@ -586,7 +613,7 @@ export async function deleteCampaign(campaignId: string): Promise<boolean> {
   // 5. Delete campaign from memory and Firestore
   campaignsMap.delete(campaignId);
   if (isFirebaseConfigured && db) {
-    deleteDoc(doc(db, 'campaigns', campaignId)).catch(() => {});
+    await deleteDoc(doc(db, 'campaigns', campaignId)).catch(() => {});
   }
 
   console.log(`[Campaign Engine] Successfully deleted campaign ${campaignId} (${leads.length} leads, ${runs.length} runs).`);
@@ -787,8 +814,7 @@ export async function createCampaign(params: {
  * Start or resume a campaign
  */
 export async function startCampaign(campaignId: string): Promise<Campaign> {
-  await initCampaignStore();
-  const campaign = campaignsMap.get(campaignId);
+  const campaign = await ensureCampaignInStore(campaignId);
   if (!campaign) throw new Error(`Campaign ${campaignId} not found`);
 
   // If campaign was COMPLETED or DRAFT without run, create a run
@@ -860,7 +886,7 @@ export async function startCampaign(campaignId: string): Promise<Campaign> {
  * Pause campaign immediately
  */
 export async function pauseCampaign(campaignId: string): Promise<Campaign> {
-  const campaign = campaignsMap.get(campaignId);
+  const campaign = await ensureCampaignInStore(campaignId);
   if (!campaign) throw new Error(`Campaign ${campaignId} not found`);
 
   // Trigger abort controller to stop further sends
@@ -914,8 +940,7 @@ export async function restartCampaign(
   allQualified: boolean;
   message: string;
 }> {
-  await initCampaignStore();
-  const campaign = campaignsMap.get(campaignId);
+  const campaign = await ensureCampaignInStore(campaignId);
   if (!campaign) throw new Error(`Campaign ${campaignId} not found`);
 
   // Halt any currently active send loops for this campaign

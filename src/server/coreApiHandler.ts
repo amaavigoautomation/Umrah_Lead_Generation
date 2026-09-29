@@ -26,6 +26,7 @@ import {
   initCampaignStore,
   getAllCampaigns,
   getCampaignById,
+  getCampaignByIdAsync,
   getCampaignLeads,
   getCampaignLeadsFromDb,
   getCampaignRuns,
@@ -1329,7 +1330,7 @@ Generate a helpful, grounded response.`;
     await initCampaignStore();
 
     if (req.method === 'GET') {
-      const camp = getCampaignById(campaignId);
+      const camp = await getCampaignByIdAsync(campaignId);
       if (!camp) {
         res.statusCode = 404;
         res.end(JSON.stringify({ error: 'Campaign not found' }));

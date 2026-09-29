@@ -12,9 +12,22 @@ export default async function handler(req: IncomingMessage & { body?: any }, res
   }
 
   try {
-    // @ts-ignore
-    const serverMod = await import('./core-server.bundle.js').catch(() => null);
-    const handleCoreApi = serverMod?.handleCoreApi;
+    let handleCoreApi: any;
+    try {
+      // @ts-ignore
+      const serverMod = await import('./core-server.bundle.js').catch(() => null);
+      handleCoreApi = serverMod?.handleCoreApi;
+    } catch {}
+
+    if (!handleCoreApi) {
+      try {
+        const directMod =
+          (await import('../src/server/coreApiHandler.js').catch(() => null)) ||
+          (await import('../src/server/coreApiHandler').catch(() => null));
+        handleCoreApi = directMod?.handleCoreApi;
+      } catch {}
+    }
+
     if (handleCoreApi) {
       const handled = await handleCoreApi(req, res);
       if (handled) return;

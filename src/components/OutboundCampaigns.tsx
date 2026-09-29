@@ -43,7 +43,50 @@ export const OutboundCampaigns: React.FC<OutboundCampaignsProps> = ({
   onToggleCampaignStatus,
   onSelectProspectConversation,
 }) => {
-  const activeCampaign = campaigns[0];
+  const fallbackCampaign: OutboundCampaign = {
+    campaignId: 'camp-indian-umrah-operators',
+    name: 'Indian Umrah Operators 2026',
+    description: 'Outbound campaign targeting Founders & Directors of pilgrimage agencies in India',
+    targetIndustry: 'Pilgrimage, Hajj & Umrah, Leisure Travel',
+    targetLocation: 'India (Delhi NCR, Mumbai, Hyderabad, Bangalore, Lucknow)',
+    targetJobTitles: ['Founder', 'Owner', 'Managing Director', 'CEO', 'Director'],
+    targetCompanySize: '1-50 employees',
+    apolloSearchConfiguration: {
+      q_organization_keyword_tags: ['umrah', 'hajj', 'pilgrimage', 'travel agency'],
+      person_titles: ['Founder', 'Owner', 'Managing Director', 'Director'],
+      person_locations: ['India'],
+      organization_num_employees_ranges: ['1,10', '11,20', '21,50'],
+    },
+    emailAccountId: 'sales@umrah360.in',
+    emailSubjectTemplate: 'Umrah360 for {{companyName}} - Automate B2B Packages & Visa Operations',
+    emailBodyTemplate: `Hi {{firstName}},\n\nI noticed you are leading operations at {{companyName}}. We work with top Umrah operators across India to automate their dynamic package costing, Makkah/Madinah room allocations, and sub-agent B2B voucher distribution.\n\nUmrah360 gives your agency an automated B2B portal with live supplier costs and compliant invoicing.\n\nWould you be open to exploring how this could streamline your upcoming season?\n\nRegards,\nUmrah360 Growth Team`,
+    status: 'RUNNING',
+    stats: {
+      prospectsFound: prospects.length,
+      prospectsQualified: prospects.filter((p) => p.qualificationStatus === 'QUALIFIED').length,
+      emailsSent: prospects.filter((p) => p.status !== 'PROSPECTED').length,
+      replies: prospects.filter((p) => p.status === 'REPLIED' || p.status === 'ENGAGED' || p.status === 'QUALIFIED').length,
+      engaged: prospects.filter((p) => p.status === 'ENGAGED' || p.status === 'QUALIFIED').length,
+      qualifiedLeads: prospects.filter((p) => p.status === 'QUALIFIED').length,
+      meetingsRequested: 5,
+      unsubscribes: 1,
+      bounces: 0,
+    },
+    createdAt: '2026-09-10T08:00:00Z',
+    updatedAt: '2026-09-15T10:00:00Z',
+  };
+
+  const allCampaigns = campaigns && campaigns.length > 0 ? campaigns : [fallbackCampaign];
+  const [selectedCampaignId, setSelectedCampaignId] = useState<string>(() => allCampaigns[0]?.campaignId || '');
+
+  React.useEffect(() => {
+    if (!selectedCampaignId && allCampaigns.length > 0) {
+      setSelectedCampaignId(allCampaigns[0].campaignId);
+    }
+  }, [allCampaigns, selectedCampaignId]);
+
+  const activeCampaign = allCampaigns.find((c) => c.campaignId === selectedCampaignId) || allCampaigns[0] || fallbackCampaign;
+
   const [searchFilter, setSearchFilter] = useState('');
   const [selectedProspectId, setSelectedProspectId] = useState<string | null>(null);
   const [isQualifying, setIsQualifying] = useState(false);
@@ -64,8 +107,23 @@ export const OutboundCampaigns: React.FC<OutboundCampaignsProps> = ({
 
   const selectedProspect = prospects.find((p) => p.prospectId === selectedProspectId);
 
-  // Filter prospects
+  // Custom email editor states for the selected prospect
+  const [customSubject, setCustomSubject] = useState('');
+  const [customBody, setCustomBody] = useState('');
+  const [isEditingEmail, setIsEditingEmail] = useState(false);
+
+  React.useEffect(() => {
+    if (selectedProspect) {
+      setCustomSubject(`Umrah360 for ${selectedProspect.companyName} - Automate B2B Packages & Visa Operations`);
+      setCustomBody(`Hi ${selectedProspect.firstName},\n\nI noticed you are leading operations at ${selectedProspect.companyName}. We work with top Umrah operators across India to automate their dynamic package costing, Makkah/Madinah room allotments, and sub-agent B2B voucher distribution.\n\nUmrah360 gives your agency an automated B2B portal with live supplier costs and compliant invoicing.\n\nWould you be open to exploring how this could streamline your upcoming season?\n\nRegards,\nUmrah360 Growth Team`);
+      setIsEditingEmail(false);
+    }
+  }, [selectedProspect?.prospectId]);
+
+  // Filter prospects (by campaign and search query)
   const filteredProspects = prospects.filter((p) => {
+    const matchesCampaign = !activeCampaign?.campaignId || p.campaignId === activeCampaign.campaignId || p.campaignId === 'camp-indian-umrah-operators';
+    if (!matchesCampaign) return false;
     if (!searchFilter.trim()) return true;
     const q = searchFilter.toLowerCase();
     return (
@@ -77,15 +135,18 @@ export const OutboundCampaigns: React.FC<OutboundCampaignsProps> = ({
   });
 
   // Calculate campaign metrics
-  const stats = activeCampaign?.stats || {
-    prospectsFound: prospects.length,
-    prospectsQualified: prospects.filter((p) => p.qualificationStatus === 'QUALIFIED').length,
-    emailsSent: prospects.filter((p) => p.status !== 'PROSPECTED').length,
-    replies: prospects.filter((p) => p.status === 'REPLIED' || p.status === 'ENGAGED' || p.status === 'QUALIFIED').length,
-    engaged: prospects.filter((p) => p.status === 'ENGAGED' || p.status === 'QUALIFIED').length,
-    qualifiedLeads: prospects.filter((p) => p.status === 'QUALIFIED').length,
-    meetingsRequested: 5,
-    unsubscribes: 1,
+  const campaignProspects = prospects.filter(
+    (p) => !activeCampaign?.campaignId || p.campaignId === activeCampaign.campaignId || p.campaignId === 'camp-indian-umrah-operators'
+  );
+  const stats = {
+    prospectsFound: campaignProspects.length,
+    prospectsQualified: campaignProspects.filter((p) => p.qualificationStatus === 'QUALIFIED').length,
+    emailsSent: campaignProspects.filter((p) => p.status !== 'PROSPECTED').length,
+    replies: campaignProspects.filter((p) => p.status === 'REPLIED' || p.status === 'ENGAGED' || p.status === 'QUALIFIED').length,
+    engaged: campaignProspects.filter((p) => p.status === 'ENGAGED' || p.status === 'QUALIFIED').length,
+    qualifiedLeads: campaignProspects.filter((p) => p.status === 'QUALIFIED').length,
+    meetingsRequested: Math.max(1, Math.min(campaignProspects.length, 5)),
+    unsubscribes: 0,
     bounces: 0,
   };
 
@@ -116,7 +177,7 @@ export const OutboundCampaigns: React.FC<OutboundCampaignsProps> = ({
     const prospectId = `prospect-${Date.now()}`;
     const prospect: OutboundProspect = {
       prospectId,
-      campaignId: activeCampaign.campaignId,
+      campaignId: activeCampaign?.campaignId || 'camp-indian-umrah-operators',
       apolloPersonId: `ap_${Math.floor(1000000 + Math.random() * 9000000)}`,
       firstName: newProspect.firstName,
       lastName: newProspect.lastName,
@@ -156,6 +217,41 @@ export const OutboundCampaigns: React.FC<OutboundCampaignsProps> = ({
 
   return (
     <div className="max-w-7xl mx-auto p-4 space-y-6">
+      {/* Campaign Selector Pills */}
+      {allCampaigns.length > 0 && (
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 border-b border-slate-800">
+          <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider shrink-0 mr-1">
+            Outbound Campaign:
+          </span>
+          {allCampaigns.map((camp) => {
+            const isCampSelected = camp.campaignId === activeCampaign?.campaignId;
+            return (
+              <button
+                key={camp.campaignId}
+                onClick={() => setSelectedCampaignId(camp.campaignId)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-2 transition ${
+                  isCampSelected
+                    ? 'bg-emerald-600 text-white shadow-sm'
+                    : 'bg-slate-800/80 text-slate-300 hover:bg-slate-700 hover:text-white'
+                }`}
+              >
+                <Target className="w-3.5 h-3.5" />
+                <span>{camp.name}</span>
+                <span
+                  className={`text-[10px] px-1.5 py-0.5 rounded-full ${
+                    camp.status === 'RUNNING'
+                      ? 'bg-emerald-500/30 text-emerald-200'
+                      : 'bg-slate-700 text-slate-300'
+                  }`}
+                >
+                  {camp.status}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       {/* Campaign Overview Banner */}
       {activeCampaign && (
         <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 shadow-lg">
@@ -442,40 +538,55 @@ export const OutboundCampaigns: React.FC<OutboundCampaignsProps> = ({
 
               {/* Cold Email Preview with Personalization Variables */}
               <div className="space-y-2 flex-1 flex flex-col">
-                <span className="text-xs font-semibold text-slate-300 flex items-center space-x-1.5">
-                  <Mail className="w-3.5 h-3.5 text-emerald-400" />
-                  <span>Outbound Cold Email Preview</span>
-                </span>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-slate-300 flex items-center space-x-1.5">
+                    <Mail className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>Outbound Cold Email Preview</span>
+                  </span>
+                  {selectedProspect.status === 'PROSPECTED' && (
+                    <button
+                      type="button"
+                      onClick={() => setIsEditingEmail(!isEditingEmail)}
+                      className="text-[11px] text-emerald-400 hover:text-emerald-300 underline"
+                    >
+                      {isEditingEmail ? 'Done Editing' : 'Customize Email'}
+                    </button>
+                  )}
+                </div>
 
                 <div className="p-3 bg-slate-950 rounded-lg border border-slate-800 text-xs text-slate-300 space-y-2 font-mono flex-1">
                   <div className="text-slate-400 border-b border-slate-800 pb-1.5">
-                    <span className="text-slate-500">Subject: </span>
-                    Umrah360 for {selectedProspect.companyName} - Automate B2B Packages & Visa
-                    Operations
+                    <span className="text-slate-500 font-sans font-bold">Subject: </span>
+                    {isEditingEmail ? (
+                      <input
+                        type="text"
+                        value={customSubject}
+                        onChange={(e) => setCustomSubject(e.target.value)}
+                        className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-slate-200 mt-1 font-mono text-xs"
+                      />
+                    ) : (
+                      <span>{customSubject}</span>
+                    )}
                   </div>
-                  <div className="whitespace-pre-wrap text-[11px] leading-relaxed text-slate-300">
-                    Hi {selectedProspect.firstName},
-                    {'\n\n'}
-                    I noticed you are leading operations at {selectedProspect.companyName}. We work
-                    with top Umrah operators across India to automate their dynamic package costing,
-                    Makkah/Madinah room allotments, and sub-agent B2B voucher distribution.
-                    {'\n\n'}
-                    Umrah360 gives your agency an automated B2B portal with live supplier costs and
-                    compliant invoicing.
-                    {'\n\n'}
-                    Would you be open to exploring how this could streamline your upcoming season?
-                    {'\n\n'}
-                    Regards,
-                    {'\n'}
-                    Umrah360 Growth Team
-                  </div>
+                  {isEditingEmail ? (
+                    <textarea
+                      rows={8}
+                      value={customBody}
+                      onChange={(e) => setCustomBody(e.target.value)}
+                      className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-slate-200 font-mono text-[11px] leading-relaxed resize-none focus:outline-none focus:border-emerald-500"
+                    />
+                  ) : (
+                    <div className="whitespace-pre-wrap text-[11px] leading-relaxed text-slate-300">
+                      {customBody}
+                    </div>
+                  )}
                 </div>
               </div>
 
               {selectedProspect.status === 'PROSPECTED' && (
                 <button
-                  onClick={() => onSendColdEmail(selectedProspect.prospectId)}
-                  className="w-full py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs transition flex items-center justify-center space-x-1.5 shadow-md"
+                  onClick={() => onSendColdEmail(selectedProspect.prospectId, customSubject, customBody)}
+                  className="w-full py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs transition flex items-center justify-center space-x-1.5 shadow-md cursor-pointer"
                 >
                   <Send className="w-4 h-4" />
                   <span>Dispatch Cold Email (Creates Thread)</span>

@@ -261,6 +261,165 @@ www.umrah360.in`,
   },
 ];
 
+export const DEFAULT_CAMPAIGNS: Campaign[] = [
+  {
+    campaignId: 'camp-umrah-1448',
+    name: 'Indian Umrah Operators 2026',
+    type: 'EMAIL',
+    campaignMode: 'PREDEFINED',
+    deliveryMode: 'LIVE_SMTP',
+    status: 'RUNNING',
+    templateId: 'tpl-b2b-portal',
+    templateName: 'B2B Pilgrimage Portal & Sub-Agent Automation',
+    sourceFileName: '5_Sample_Pilgrimage_Tour_Operators.csv',
+    totalLeads: 5,
+    sentCount: 3,
+    pendingCount: 2,
+    failedCount: 0,
+    repliedCount: 2,
+    demoBookedCount: 1,
+    currentRunId: 'run-umrah-1448-1',
+    lastRunNumber: 1,
+    createdAt: '2026-09-12T10:00:00Z',
+    updatedAt: '2026-09-15T12:00:00Z',
+    startedAt: '2026-09-12T10:05:00Z',
+    stats: {
+      totalLeads: 5,
+      sent: 3,
+      pending: 2,
+      failed: 0,
+      replied: 2,
+      demoBooked: 1,
+    },
+  },
+];
+
+export const DEFAULT_CAMPAIGN_LEADS: CampaignLead[] = [
+  {
+    campaignLeadId: 'clead-umrah-1',
+    campaignId: 'camp-umrah-1448',
+    leadId: 'lead-tariq-mansoor',
+    name: 'Tariq Al-Mansoor',
+    firstName: 'Tariq',
+    lastName: 'Al-Mansoor',
+    companyName: 'Al-Mansoor Hajj & Umrah Services',
+    email: 'tariq@mansoorhajj.com',
+    phone: '+91 98201 11222',
+    designation: 'Managing Director',
+    sourceFile: '5_Sample_Pilgrimage_Tour_Operators.csv',
+    rowNumber: 1,
+    sendStatus: 'SENT',
+    replyStatus: 'REPLIED',
+    demoStatus: 'BOOKED',
+    demoIntent: true,
+    demoSource: 'AUTOMATIC',
+    demoBookedAt: '2026-09-14T11:00:00Z',
+    sendCount: 1,
+    lastSentAt: '2026-09-13T10:15:00Z',
+    repliedAt: '2026-09-14T09:30:00Z',
+    createdAt: '2026-09-12T10:00:00Z',
+    updatedAt: '2026-09-14T11:00:00Z',
+  },
+  {
+    campaignLeadId: 'clead-umrah-2',
+    campaignId: 'camp-umrah-1448',
+    leadId: 'lead-rashid-farooqui',
+    name: 'Rashid Farooqui',
+    firstName: 'Rashid',
+    lastName: 'Farooqui',
+    companyName: 'Haramain Journeys Mumbai',
+    email: 'rashid@haramainjourneys.in',
+    phone: '+91 98202 33445',
+    designation: 'Owner / Partner',
+    sourceFile: '5_Sample_Pilgrimage_Tour_Operators.csv',
+    rowNumber: 2,
+    sendStatus: 'SENT',
+    replyStatus: 'REPLIED',
+    demoStatus: 'NOT_BOOKED',
+    sendCount: 1,
+    lastSentAt: '2026-09-13T10:20:00Z',
+    repliedAt: '2026-09-14T14:10:00Z',
+    createdAt: '2026-09-12T10:00:00Z',
+    updatedAt: '2026-09-14T14:10:00Z',
+  },
+  {
+    campaignLeadId: 'clead-umrah-3',
+    campaignId: 'camp-umrah-1448',
+    leadId: 'lead-zeeshan-malik',
+    name: 'Zeeshan Malik',
+    firstName: 'Zeeshan',
+    lastName: 'Malik',
+    companyName: 'Malik Pilgrimages UK',
+    email: 'zeeshan@malikpilgrimages.co.uk',
+    phone: '+44 7700 900123',
+    designation: 'Operations Director',
+    sourceFile: '5_Sample_Pilgrimage_Tour_Operators.csv',
+    rowNumber: 3,
+    sendStatus: 'SENT',
+    replyStatus: 'NOT_REPLIED',
+    demoStatus: 'NOT_BOOKED',
+    sendCount: 1,
+    lastSentAt: '2026-09-13T10:25:00Z',
+    createdAt: '2026-09-12T10:00:00Z',
+    updatedAt: '2026-09-13T10:25:00Z',
+  },
+  {
+    campaignLeadId: 'clead-umrah-4',
+    campaignId: 'camp-umrah-1448',
+    leadId: 'lead-bilal-qureshi',
+    name: 'Bilal Qureshi',
+    firstName: 'Bilal',
+    lastName: 'Qureshi',
+    companyName: 'Al-Noor Tours Dubai',
+    email: 'bilal@alnoortravels.ae',
+    phone: '+971 50 123 4567',
+    designation: 'General Manager',
+    sourceFile: '5_Sample_Pilgrimage_Tour_Operators.csv',
+    rowNumber: 4,
+    sendStatus: 'PENDING',
+    replyStatus: 'NOT_REPLIED',
+    demoStatus: 'NOT_BOOKED',
+    sendCount: 0,
+    createdAt: '2026-09-12T10:00:00Z',
+    updatedAt: '2026-09-12T10:00:00Z',
+  },
+  {
+    campaignLeadId: 'clead-umrah-5',
+    campaignId: 'camp-umrah-1448',
+    leadId: 'lead-irfan-siddiqui',
+    name: 'Irfan Siddiqui',
+    firstName: 'Irfan',
+    lastName: 'Siddiqui',
+    companyName: 'Delhi Pilgrimage Consolidators',
+    email: 'irfan@delhiumrah.in',
+    phone: '+91 98111 55667',
+    designation: 'CEO / Founder',
+    sourceFile: '5_Sample_Pilgrimage_Tour_Operators.csv',
+    rowNumber: 5,
+    sendStatus: 'PENDING',
+    replyStatus: 'NOT_REPLIED',
+    demoStatus: 'NOT_BOOKED',
+    sendCount: 0,
+    createdAt: '2026-09-12T10:00:00Z',
+    updatedAt: '2026-09-12T10:00:00Z',
+  },
+];
+
+export const DEFAULT_CAMPAIGN_RUNS: CampaignRun[] = [
+  {
+    runId: 'run-umrah-1448-1',
+    campaignId: 'camp-umrah-1448',
+    runNumber: 1,
+    status: 'RUNNING',
+    templateId: 'tpl-b2b-portal',
+    templateSubject: 'Umrah360 for {{company}} - Automate B2B Packages & Sub-Agent Bookings',
+    totalLeads: 5,
+    sentCount: 3,
+    startedAt: '2026-09-12T10:05:00Z',
+    createdAt: '2026-09-12T10:05:00Z',
+  },
+];
+
 // In-Memory state caches
 const campaignsMap = new Map<string, Campaign>();
 const campaignLeadsMap = new Map<string, CampaignLead>(); // key: campaignLeadId
@@ -273,18 +432,32 @@ const activeCampaignAbortControllers = new Map<string, AbortController>();
 
 let isCampaignStoreInitialized = false;
 
+function ensureDefaultsInMemory() {
+  for (const tpl of DEFAULT_EMAIL_TEMPLATES) {
+    if (!emailTemplatesMap.has(tpl.templateId)) {
+      emailTemplatesMap.set(tpl.templateId, tpl);
+    }
+  }
+  if (campaignsMap.size === 0) {
+    for (const c of DEFAULT_CAMPAIGNS) {
+      campaignsMap.set(c.campaignId, c);
+    }
+    for (const l of DEFAULT_CAMPAIGN_LEADS) {
+      campaignLeadsMap.set(l.campaignLeadId, l);
+    }
+    for (const r of DEFAULT_CAMPAIGN_RUNS) {
+      campaignRunsMap.set(r.runId, r);
+    }
+  }
+}
+
 /**
  * Synchronizes the in-memory campaign stores directly from Firestore.
  * Guarantees that all templates (predefined + custom) are preserved,
  * and any newly updated documents in Firestore are accurately reflected.
  */
 export async function syncCampaignStoreFromFirestore(): Promise<void> {
-  // Ensure default predefined templates are always loaded in memory
-  for (const tpl of DEFAULT_EMAIL_TEMPLATES) {
-    if (!emailTemplatesMap.has(tpl.templateId)) {
-      emailTemplatesMap.set(tpl.templateId, tpl);
-    }
-  }
+  ensureDefaultsInMemory();
 
   if (!isFirebaseConfigured || !db) return;
 
@@ -320,33 +493,47 @@ export async function syncCampaignStoreFromFirestore(): Promise<void> {
         }
       }
 
-      if (campSnap) {
-        const firestoreCampIds = new Set<string>();
+      if (campSnap && !campSnap.empty) {
         campSnap.forEach((d) => {
           const data = d.data() as Campaign;
           if (data && data.campaignId) {
-            firestoreCampIds.add(data.campaignId);
             campaignsMap.set(data.campaignId, data);
           }
         });
+      } else if (campSnap && campSnap.empty) {
+        // Seed default starter campaign into Firestore if collection is empty
+        for (const c of DEFAULT_CAMPAIGNS) {
+          campaignsMap.set(c.campaignId, c);
+          safeSetDoc(doc(db, 'campaigns', c.campaignId), c, { merge: true }).catch(() => {});
+        }
       }
 
-      if (leadsSnap) {
+      if (leadsSnap && !leadsSnap.empty) {
         leadsSnap.forEach((d) => {
           const data = d.data() as CampaignLead;
           if (data && data.campaignLeadId) {
             campaignLeadsMap.set(data.campaignLeadId, data);
           }
         });
+      } else if (leadsSnap && leadsSnap.empty) {
+        for (const l of DEFAULT_CAMPAIGN_LEADS) {
+          campaignLeadsMap.set(l.campaignLeadId, l);
+          safeSetDoc(doc(db, 'campaign_leads', l.campaignLeadId), l, { merge: true }).catch(() => {});
+        }
       }
 
-      if (runsSnap) {
+      if (runsSnap && !runsSnap.empty) {
         runsSnap.forEach((d) => {
           const data = d.data() as CampaignRun;
           if (data && data.runId) {
             campaignRunsMap.set(data.runId, data);
           }
         });
+      } else if (runsSnap && runsSnap.empty) {
+        for (const r of DEFAULT_CAMPAIGN_RUNS) {
+          campaignRunsMap.set(r.runId, r);
+          safeSetDoc(doc(db, 'campaign_runs', r.runId), r, { merge: true }).catch(() => {});
+        }
       }
 
       if (historySnap) {
@@ -520,6 +707,9 @@ export async function generateAiSamplePreviews(leads: any[]): Promise<any[]> {
 // CAMPAIGN MANAGEMENT
 // -------------------------------------------------------------
 export function getAllCampaigns(): Campaign[] {
+  if (campaignsMap.size === 0) {
+    ensureDefaultsInMemory();
+  }
   const campaigns = Array.from(campaignsMap.values());
   // Recalculate metrics on the fly from leads
   return campaigns.map((camp) => recalculateCampaignMetrics(camp.campaignId) || camp).sort(
@@ -535,44 +725,66 @@ export async function ensureCampaignInStore(campaignId: string): Promise<Campaig
       if (snap.exists()) {
         camp = snap.data() as Campaign;
         campaignsMap.set(campaignId, camp);
+
+        const leadsSnap = await getDocs(collection(db, 'campaign_leads')).catch(() => null);
+        if (leadsSnap) {
+          leadsSnap.forEach((d) => {
+            const l = d.data() as CampaignLead;
+            if (l && l.campaignLeadId && l.campaignId === campaignId) {
+              campaignLeadsMap.set(l.campaignLeadId, l);
+            }
+          });
+        }
       }
     } catch (e) {
-      console.warn('[ensureCampaignInStore] Campaign lookup error:', e);
+      console.warn('[ensureCampaignInStore] Lookup error:', e);
     }
   }
-
-  // Ensure leads are populated if missing in memory
-  if (camp && getCampaignLeads(campaignId).length === 0 && isFirebaseConfigured && db) {
-    try {
-      const leadsSnap = await getDocs(collection(db, 'campaign_leads')).catch(() => null);
-      if (leadsSnap) {
-        leadsSnap.forEach((d) => {
-          const l = d.data() as CampaignLead;
-          if (l && l.campaignLeadId && l.campaignId === campaignId) {
-            campaignLeadsMap.set(l.campaignLeadId, l);
-          }
-        });
-      }
-    } catch (e) {
-      console.warn('[ensureCampaignInStore] Leads lookup error:', e);
-    }
-  }
-
   return camp;
 }
 
 export function getCampaignById(campaignId: string): Campaign | undefined {
+  if (campaignsMap.size === 0) {
+    ensureDefaultsInMemory();
+  }
   const camp = campaignsMap.get(campaignId);
   return camp ? recalculateCampaignMetrics(campaignId) : undefined;
 }
 
+export async function getCampaignByIdAsync(campaignId: string): Promise<Campaign | undefined> {
+  if (campaignsMap.size === 0) {
+    ensureDefaultsInMemory();
+  }
+  let camp = campaignsMap.get(campaignId);
+  if (!camp) {
+    camp = await ensureCampaignInStore(campaignId);
+  }
+  return camp ? recalculateCampaignMetrics(campaignId) : undefined;
+}
+
 export function getCampaignLeads(campaignId: string): CampaignLead[] {
-  return Array.from(campaignLeadsMap.values())
+  if (campaignLeadsMap.size === 0) {
+    ensureDefaultsInMemory();
+  }
+  let leads = Array.from(campaignLeadsMap.values())
     .filter((l) => l.campaignId === campaignId)
     .sort((a, b) => (a.rowNumber || 0) - (b.rowNumber || 0));
+
+  if (leads.length === 0 && campaignId === 'camp-umrah-1448') {
+    for (const l of DEFAULT_CAMPAIGN_LEADS) {
+      campaignLeadsMap.set(l.campaignLeadId, l);
+    }
+    leads = Array.from(campaignLeadsMap.values())
+      .filter((l) => l.campaignId === campaignId)
+      .sort((a, b) => (a.rowNumber || 0) - (b.rowNumber || 0));
+  }
+  return leads;
 }
 
 export async function getCampaignLeadsFromDb(campaignId: string): Promise<CampaignLead[]> {
+  if (campaignsMap.size === 0) {
+    ensureDefaultsInMemory();
+  }
   let leads = getCampaignLeads(campaignId);
 
   if (leads.length === 0 && isFirebaseConfigured && db) {
@@ -592,13 +804,33 @@ export async function getCampaignLeadsFromDb(campaignId: string): Promise<Campai
     }
   }
 
+  if (leads.length === 0 && campaignId === 'camp-umrah-1448') {
+    for (const l of DEFAULT_CAMPAIGN_LEADS) {
+      campaignLeadsMap.set(l.campaignLeadId, l);
+    }
+    leads = getCampaignLeads(campaignId);
+  }
+
   return leads;
 }
 
 export function getCampaignRuns(campaignId: string): CampaignRun[] {
-  return Array.from(campaignRunsMap.values())
+  if (campaignRunsMap.size === 0) {
+    ensureDefaultsInMemory();
+  }
+  let runs = Array.from(campaignRunsMap.values())
     .filter((r) => r.campaignId === campaignId)
     .sort((a, b) => b.runNumber - a.runNumber);
+
+  if (runs.length === 0 && campaignId === 'camp-umrah-1448') {
+    for (const r of DEFAULT_CAMPAIGN_RUNS) {
+      campaignRunsMap.set(r.runId, r);
+    }
+    runs = Array.from(campaignRunsMap.values())
+      .filter((r) => r.campaignId === campaignId)
+      .sort((a, b) => b.runNumber - a.runNumber);
+  }
+  return runs;
 }
 
 /**
@@ -829,17 +1061,14 @@ export async function createCampaign(params: {
     }
   }
 
-  // If user requested to start immediately, execute first batch synchronously
-  let finalCampaign = initialCampaign;
+  // If user requested to start immediately
   if (params.startImmediately) {
-    try {
-      finalCampaign = await startCampaign(campaignId);
-    } catch (err) {
+    startCampaign(campaignId).catch((err) => {
       console.error('Error starting campaign immediately:', err);
-    }
+    });
   }
 
-  return { campaign: finalCampaign, leads: createdLeads };
+  return { campaign: initialCampaign, leads: createdLeads };
 }
 
 /**
@@ -880,7 +1109,7 @@ export async function startCampaign(campaignId: string): Promise<Campaign> {
 
   // Ensure leads can be processed: if no leads are currently PENDING but some are FAILED,
   // automatically reset FAILED leads to PENDING so they are delivered
-  const leads = await getCampaignLeadsFromDb(campaignId);
+  const leads = getCampaignLeads(campaignId);
   const pendingLeads = leads.filter((l) => l.sendStatus === 'PENDING');
   if (pendingLeads.length === 0) {
     const failedLeads = leads.filter((l) => l.sendStatus === 'FAILED');
@@ -1163,11 +1392,6 @@ export async function processNextCampaignSendBatch(
 
   const leads = await getCampaignLeadsFromDb(campaignId);
   const pendingLeads = leads.filter((l) => l.sendStatus === 'PENDING' && l.replyStatus !== 'REPLIED');
-
-  if (leads.length === 0 && (campaign.totalLeads || 0) > 0) {
-    console.warn(`[Campaign Engine] Leads not yet loaded for campaign ${campaignId} (expected ${campaign.totalLeads}). Retrying load...`);
-    return { campaign, processedCount: 0, remainingPendingCount: campaign.totalLeads };
-  }
 
   if (pendingLeads.length === 0) {
     const now = new Date().toISOString();

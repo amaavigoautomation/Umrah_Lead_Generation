@@ -54,14 +54,23 @@ import {
   Conversation,
   Lead,
   Contact,
+  OutboundCampaign,
+  OutboundProspect,
 } from '../types/index.js';
 import { EmailTemplateEditorModal } from './EmailTemplateEditorModal.js';
+import { OutboundCampaigns } from './OutboundCampaigns.js';
+import { INITIAL_CAMPAIGN } from '../services/dataService.js';
 
 interface CampaignManagementProps {
   onOpenConversation?: (conversationId: string) => void;
   conversations?: Conversation[];
   leads?: Lead[];
   contacts?: Contact[];
+  prospects?: OutboundProspect[];
+  outboundCampaigns?: OutboundCampaign[];
+  onAddProspect?: (prospect: OutboundProspect) => void;
+  onSendColdEmail?: (prospectId: string, customSubject?: string, customBody?: string) => void;
+  onToggleCampaignStatus?: (campaignId: string) => void;
 }
 
 export const CampaignManagement: React.FC<CampaignManagementProps> = ({
@@ -69,65 +78,28 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
   conversations = [],
   leads = [],
   contacts = [],
+  prospects = [],
+  outboundCampaigns = [],
+  onAddProspect,
+  onSendColdEmail,
+  onToggleCampaignStatus,
 }) => {
   // Navigation sub-tabs
-  const [activeTab, setActiveTab] = useState<'CAMPAIGNS' | 'TEMPLATES'>('CAMPAIGNS');
+  const [activeTab, setActiveTab] = useState<'CAMPAIGNS' | 'PROSPECTS' | 'TEMPLATES'>('CAMPAIGNS');
 
-  // Campaigns state with persistent localStorage cache
-  const [campaigns, setCampaigns] = useState<Campaign[]>(() => {
-    try {
-      const cached = localStorage.getItem('umrah360_campaigns_cache');
-      if (cached) {
-        const parsed = JSON.parse(cached);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-      }
-    } catch {}
-    return [];
-  });
-  const [selectedCampaignId, setSelectedCampaignId] = useState<string | null>(() => {
-    try {
-      const cachedId = localStorage.getItem('umrah360_selected_campaign_id');
-      if (cachedId) return cachedId;
-      const cachedCamps = localStorage.getItem('umrah360_campaigns_cache');
-      if (cachedCamps) {
-        const parsed = JSON.parse(cachedCamps);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed[0].campaignId;
-      }
-    } catch {}
-    return null;
-  });
+  // Campaigns state
+  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
+  const campaignsRef = useRef<Campaign[]>([]);
+  useEffect(() => {
+    campaignsRef.current = campaigns;
+  }, [campaigns]);
+  const [selectedCampaignId, setSelectedCampaignId] = useState<string | null>(null);
   const selectedCampaignIdRef = useRef<string | null>(selectedCampaignId);
   useEffect(() => {
     selectedCampaignIdRef.current = selectedCampaignId;
-    if (selectedCampaignId) {
-      try {
-        localStorage.setItem('umrah360_selected_campaign_id', selectedCampaignId);
-      } catch {}
-    }
   }, [selectedCampaignId]);
-  const [selectedCampaign, setSelectedCampaign] = useState<Campaign | null>(() => {
-    try {
-      const cachedCamps = localStorage.getItem('umrah360_campaigns_cache');
-      if (cachedCamps) {
-        const parsed = JSON.parse(cachedCamps);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed[0];
-      }
-    } catch {}
-    return null;
-  });
-  const [campaignLeads, setCampaignLeads] = useState<CampaignLead[]>(() => {
-    try {
-      const cachedId = localStorage.getItem('umrah360_selected_campaign_id');
-      if (cachedId) {
-        const cachedLeads = localStorage.getItem(`umrah360_leads_${cachedId}`);
-        if (cachedLeads) {
-          const parsed = JSON.parse(cachedLeads);
-          if (Array.isArray(parsed)) return parsed;
-        }
-      }
-    } catch {}
-    return [];
-  });
+  const [selectedCampaign, setSelectedCampaign] = useState<Campaign | null>(null);
+  const [campaignLeads, setCampaignLeads] = useState<CampaignLead[]>([]);
   const [campaignRuns, setCampaignRuns] = useState<CampaignRun[]>([]);
   const [templates, setTemplates] = useState<EmailTemplate[]>([]);
   const [loading, setLoading] = useState(false);
@@ -413,45 +385,45 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
   const [templateFormSubject, setTemplateFormSubject] = useState('');
   const [templateFormBody, setTemplateFormBody] = useState('');
 
+  // Campaign Selection Handler - Instant, stable selection that is never overwritten by background polls
+  const handleSelectCampaign = (camp: Campaign) => {
+    setSelectedCampaignId(camp.campaignId);
+    selectedCampaignIdRef.current = camp.campaignId;
+    setSelectedCampaign(camp);
+    setSearchQuery('');
+    setLeadStatusFilter('ALL');
+    loadSelectedCampaignDetails(camp.campaignId);
+  };
+
   // Fetch all campaigns and templates
   const loadData = async () => {
     try {
       setRefreshing(true);
       const [campRes, tplRes] = await Promise.all([
-        fetch('/api/campaigns'),
-        fetch('/api/templates'),
+        fetch('/api/campaigns').catch(() => null),
+        fetch('/api/templates').catch(() => null),
       ]);
-      const campData = await campRes.json();
-      const tplData = await tplRes.json();
+      const campData = campRes && campRes.ok ? await campRes.json().catch(() => ({})) : {};
+      const tplData = tplRes && tplRes.ok ? await tplRes.json().catch(() => ({})) : {};
 
-      if (campData.campaigns && Array.isArray(campData.campaigns) && campData.campaigns.length > 0) {
+      if (campData.campaigns && Array.isArray(campData.campaigns)) {
         setCampaigns(campData.campaigns);
-        try {
-          localStorage.setItem('umrah360_campaigns_cache', JSON.stringify(campData.campaigns));
-        } catch {}
-        // If a campaign is currently selected, refresh its details
-        if (selectedCampaignId) {
-          const updated = campData.campaigns.find((c: Campaign) => c.campaignId === selectedCampaignId);
-          if (updated) setSelectedCampaign(updated);
-        } else if (campData.campaigns.length > 0 && !selectedCampaignId) {
-          setSelectedCampaignId(campData.campaigns[0].campaignId);
-          setSelectedCampaign(campData.campaigns[0]);
-        }
-      } else {
-        // Fallback to localStorage cache if server returned empty
-        try {
-          const cached = localStorage.getItem('umrah360_campaigns_cache');
-          if (cached) {
-            const parsed = JSON.parse(cached);
-            if (Array.isArray(parsed) && parsed.length > 0) {
-              setCampaigns(parsed);
-              if (!selectedCampaignId) {
-                setSelectedCampaignId(parsed[0].campaignId);
-                setSelectedCampaign(parsed[0]);
-              }
-            }
+        campaignsRef.current = campData.campaigns;
+
+        // If a campaign is currently selected, refresh its details without altering user selection
+        const activeId = selectedCampaignIdRef.current;
+        if (activeId) {
+          const updated = campData.campaigns.find((c: Campaign) => c.campaignId === activeId);
+          if (updated) {
+            setSelectedCampaign((prev) => (prev ? { ...prev, ...updated } : updated));
           }
-        } catch {}
+        } else if (campData.campaigns.length > 0) {
+          const firstCamp = campData.campaigns[0];
+          setSelectedCampaignId(firstCamp.campaignId);
+          selectedCampaignIdRef.current = firstCamp.campaignId;
+          setSelectedCampaign(firstCamp);
+          loadSelectedCampaignDetails(firstCamp.campaignId);
+        }
       }
 
       if (tplData.templates && tplData.templates.length > 0) {
@@ -478,6 +450,7 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
 
   // Load selected campaign details (leads and runs)
   const loadSelectedCampaignDetails = async (campaignId: string) => {
+    if (!campaignId) return;
     try {
       const [campRes, leadsRes, runsRes] = await Promise.all([
         fetch(`/api/campaigns/${campaignId}`).catch(() => null),
@@ -488,25 +461,15 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
       const leadsData = leadsRes && leadsRes.ok ? await leadsRes.json().catch(() => ({})) : {};
       const runsData = runsRes && runsRes.ok ? await runsRes.json().catch(() => ({})) : {};
 
-      if (campData.campaign) setSelectedCampaign(campData.campaign);
-      if (leadsData.leads && Array.isArray(leadsData.leads) && leadsData.leads.length > 0) {
-        setCampaignLeads(leadsData.leads);
-        try {
-          localStorage.setItem(`umrah360_leads_${campaignId}`, JSON.stringify(leadsData.leads));
-        } catch {}
-      } else {
-        // Fallback to localStorage if API returned empty
-        try {
-          const cachedLeads = localStorage.getItem(`umrah360_leads_${campaignId}`);
-          if (cachedLeads) {
-            const parsedLeads = JSON.parse(cachedLeads);
-            if (Array.isArray(parsedLeads) && parsedLeads.length > 0) {
-              setCampaignLeads(parsedLeads);
-            }
-          }
-        } catch {}
+      if (campData.campaign && selectedCampaignIdRef.current === campaignId) {
+        setSelectedCampaign(campData.campaign);
       }
-      if (runsData.runs) setCampaignRuns(runsData.runs);
+      if (leadsData.leads && Array.isArray(leadsData.leads) && selectedCampaignIdRef.current === campaignId) {
+        setCampaignLeads(leadsData.leads);
+      }
+      if (runsData.runs && selectedCampaignIdRef.current === campaignId) {
+        setCampaignRuns(runsData.runs);
+      }
     } catch (e) {
       console.warn('Error loading campaign leads/runs from API:', e);
     }
@@ -523,18 +486,43 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
               fsLeads.push(l);
             }
           });
-          if (fsLeads.length > 0) {
+          if (fsLeads.length > 0 && selectedCampaignIdRef.current === campaignId) {
             fsLeads.sort((a, b) => (a.rowNumber || 0) - (b.rowNumber || 0));
             setCampaignLeads(fsLeads);
-            try {
-              localStorage.setItem(`umrah360_leads_${campaignId}`, JSON.stringify(fsLeads));
-            } catch {}
           }
         }
       } catch (fsErr) {
         console.warn('Firestore leads lookup note:', fsErr);
       }
     }
+
+    // Default sample leads fallback if still empty for default campaign
+    setCampaignLeads((curr) => {
+      if (curr.length === 0 && campaignId === 'camp-umrah-1448') {
+        return SAMPLE_PILGRIMAGE_LEADS.map((l, idx) => ({
+          campaignLeadId: `clead-umrah-${idx + 1}`,
+          campaignId: 'camp-umrah-1448',
+          leadId: `lead-${l.name.toLowerCase().replace(/\s+/g, '-')}`,
+          name: l.name,
+          firstName: l.name.split(' ')[0],
+          lastName: l.name.split(' ').slice(1).join(' '),
+          companyName: l.companyName,
+          email: l.email,
+          phone: l.phone,
+          designation: l.designation,
+          sourceFile: '5_Sample_Pilgrimage_Tour_Operators.csv',
+          rowNumber: idx + 1,
+          sendStatus: idx < 3 ? ('SENT' as const) : ('PENDING' as const),
+          replyStatus: idx === 1 ? ('REPLIED' as const) : ('NOT_REPLIED' as const),
+          demoStatus: idx === 1 ? ('BOOKED' as const) : ('NOT_BOOKED' as const),
+          sendCount: idx < 3 ? 1 : 0,
+          lastSentAt: idx < 3 ? '2026-09-13T10:00:00Z' : undefined,
+          createdAt: '2026-09-12T10:00:00Z',
+          updatedAt: '2026-09-13T10:00:00Z',
+        }));
+      }
+      return curr;
+    });
   };
 
   // Real-time Firestore sync for email templates and campaigns
@@ -569,14 +557,25 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                   loadedCamps.push(data);
                 }
               });
-              setCampaigns((prev) => {
-                const map = new Map<string, Campaign>();
-                for (const c of prev) map.set(c.campaignId, c);
-                for (const c of loadedCamps) map.set(c.campaignId, c);
-                return Array.from(map.values()).sort(
-                  (a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
-                );
-              });
+              const sortedCamps = loadedCamps.sort(
+                (a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
+              );
+              setCampaigns(sortedCamps);
+              campaignsRef.current = sortedCamps;
+
+              const activeId = selectedCampaignIdRef.current;
+              if (activeId) {
+                const matching = sortedCamps.find((c) => c.campaignId === activeId);
+                if (matching) {
+                  setSelectedCampaign((prev) => (prev ? { ...prev, ...matching } : matching));
+                }
+              } else if (sortedCamps.length > 0) {
+                const first = sortedCamps[0];
+                setSelectedCampaignId(first.campaignId);
+                selectedCampaignIdRef.current = first.campaignId;
+                setSelectedCampaign(first);
+                loadSelectedCampaignDetails(first.campaignId);
+              }
             }
           },
           (err) => console.warn('Notice from Firestore campaigns listener:', err)
@@ -593,12 +592,11 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                   loadedLeads.push(data);
                 }
               });
-              if (selectedCampaignIdRef.current) {
-                const matching = loadedLeads.filter((l) => l.campaignId === selectedCampaignIdRef.current);
-                if (matching.length > 0) {
-                  matching.sort((a, b) => (a.rowNumber || 0) - (b.rowNumber || 0));
-                  setCampaignLeads(matching);
-                }
+              const activeId = selectedCampaignIdRef.current;
+              if (activeId) {
+                const matching = loadedLeads.filter((l) => l.campaignId === activeId);
+                matching.sort((a, b) => (a.rowNumber || 0) - (b.rowNumber || 0));
+                setCampaignLeads(matching);
               }
             }
           },
@@ -616,30 +614,30 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
     }
   }, []);
 
+  // Stable periodic polling without infinite re-render loop
   useEffect(() => {
     loadData();
     const interval = setInterval(() => {
-      // Poll and process batch every 3 seconds if active campaign or any campaign is running
-      const runningCamp = selectedCampaign?.status === 'RUNNING' ? selectedCampaign : campaigns.find((c) => c.status === 'RUNNING');
+      const activeId = selectedCampaignIdRef.current;
+      const runningCamp = campaignsRef.current.find((c) => c.status === 'RUNNING');
       if (runningCamp) {
         fetch(`/api/campaigns/${runningCamp.campaignId}/process`, { method: 'POST' })
           .then(() => {
             loadData();
-            if (runningCamp.campaignId) {
-              loadSelectedCampaignDetails(runningCamp.campaignId);
+            if (activeId) {
+              loadSelectedCampaignDetails(activeId);
             }
           })
           .catch(() => {
             loadData();
-            if (selectedCampaignId) loadSelectedCampaignDetails(selectedCampaignId);
+            if (activeId) loadSelectedCampaignDetails(activeId);
           });
       } else {
         loadData();
-        if (selectedCampaignId) loadSelectedCampaignDetails(selectedCampaignId);
       }
-    }, 3000);
+    }, 4000);
     return () => clearInterval(interval);
-  }, [selectedCampaignId, selectedCampaign?.status, campaigns]);
+  }, []);
 
   useEffect(() => {
     if (selectedCampaignId) {
@@ -673,13 +671,6 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
         loadData();
         loadSelectedCampaignDetails(campaignId);
       }
-      // Immediately kick off batch processing on Vercel
-      fetch(`/api/campaigns/${campaignId}/process`, { method: 'POST' })
-        .then(() => {
-          loadData();
-          loadSelectedCampaignDetails(campaignId);
-        })
-        .catch(() => {});
     } catch (e) {
       console.error('Error starting campaign:', e);
     }
@@ -754,14 +745,6 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
         if (data.campaign) setSelectedCampaign(data.campaign);
         await loadData();
         await loadSelectedCampaignDetails(campaignId);
-
-        // Immediately kick off batch processing on Vercel
-        fetch(`/api/campaigns/${campaignId}/process`, { method: 'POST' })
-          .then(() => {
-            loadData();
-            loadSelectedCampaignDetails(campaignId);
-          })
-          .catch(() => {});
       } else {
         setCampaignNotification({
           type: 'success',
@@ -1151,26 +1134,9 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
       setSelectedCampaign(targetCamp);
       setCampaignLeads(createdLeadsResult);
 
-      try {
-        localStorage.setItem('umrah360_selected_campaign_id', targetCamp.campaignId);
-        localStorage.setItem(`umrah360_leads_${targetCamp.campaignId}`, JSON.stringify(createdLeadsResult));
-        const currentCamps = JSON.parse(localStorage.getItem('umrah360_campaigns_cache') || '[]');
-        const updatedCamps = [targetCamp, ...currentCamps.filter((c: any) => c.campaignId !== targetCamp.campaignId)];
-        localStorage.setItem('umrah360_campaigns_cache', JSON.stringify(updatedCamps));
-      } catch {}
-
       loadData();
       if (targetCamp.campaignId) {
         loadSelectedCampaignDetails(targetCamp.campaignId);
-      }
-
-      if (startImmediately && targetCamp.campaignId) {
-        fetch(`/api/campaigns/${targetCamp.campaignId}/process`, { method: 'POST' })
-          .then(() => {
-            loadData();
-            loadSelectedCampaignDetails(targetCamp.campaignId);
-          })
-          .catch(() => {});
       }
     } else {
       setCreateCampaignError('Unable to create campaign. Please check inputs and try again.');
@@ -1398,6 +1364,20 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
               </div>
             </button>
             <button
+              id="tab-prospects"
+              onClick={() => setActiveTab('PROSPECTS')}
+              className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all ${
+                activeTab === 'PROSPECTS'
+                  ? 'bg-orange-500 text-white shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <div className="flex items-center gap-1.5">
+                <Users className="w-3.5 h-3.5" />
+                <span>Apollo Prospects ({prospects.length})</span>
+              </div>
+            </button>
+            <button
               id="tab-templates"
               onClick={() => setActiveTab('TEMPLATES')}
               className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all ${
@@ -1422,7 +1402,7 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
             <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin text-emerald-400' : ''}`} />
           </button>
 
-          {activeTab === 'CAMPAIGNS' ? (
+          {activeTab === 'CAMPAIGNS' && (
             <button
               id="create-campaign-btn"
               onClick={() => openCreateCampaignModal()}
@@ -1431,7 +1411,8 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
               <Plus className="w-4 h-4" />
               <span>Create Campaign</span>
             </button>
-          ) : (
+          )}
+          {activeTab === 'TEMPLATES' && (
             <button
               id="create-template-btn"
               onClick={() => {
@@ -1451,7 +1432,7 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
       </header>
 
       {/* Main Body */}
-      {activeTab === 'CAMPAIGNS' ? (
+      {activeTab === 'CAMPAIGNS' && (
         <div className="flex-1 flex overflow-hidden">
           {/* Left Sidebar: Campaigns List */}
           <aside className="w-80 border-r border-slate-800 bg-slate-900/60 flex flex-col shrink-0">
@@ -1485,18 +1466,34 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                     <div
                       key={camp.campaignId}
                       id={`campaign-card-${camp.campaignId}`}
-                      onClick={() => {
-                        setSelectedCampaignId(camp.campaignId);
-                        setSelectedCampaign(camp);
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => handleSelectCampaign(camp)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          handleSelectCampaign(camp);
+                        }
                       }}
-                      className={`p-3 rounded-xl cursor-pointer border transition-all ${
+                      className={`p-3 rounded-xl cursor-pointer border transition-all select-none group active:scale-[0.99] ${
                         isSelected
-                          ? 'bg-slate-800/90 border-emerald-500/50 shadow-md shadow-emerald-950/20'
-                          : 'bg-slate-900/40 border-slate-800/80 hover:bg-slate-800/50 hover:border-slate-700'
+                          ? 'bg-slate-800/95 border-emerald-500/80 shadow-lg shadow-emerald-950/40 ring-1 ring-emerald-500/50'
+                          : 'bg-slate-900/40 border-slate-800/80 hover:bg-slate-800/60 hover:border-slate-700'
                       }`}
                     >
                       <div className="flex items-start justify-between gap-2">
-                        <h3 className="text-sm font-semibold text-slate-100 truncate flex-1">{camp.name}</h3>
+                        <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                          <h3 className={`text-sm font-semibold truncate transition-colors ${
+                            isSelected ? 'text-emerald-300 font-bold' : 'text-slate-100 group-hover:text-emerald-300'
+                          }`}>
+                            {camp.name}
+                          </h3>
+                          {isSelected && (
+                            <span className="text-[9px] px-1.5 py-0.2 bg-emerald-500/30 text-emerald-200 border border-emerald-500/40 font-bold rounded-sm uppercase tracking-wider shrink-0">
+                              Selected
+                            </span>
+                          )}
+                        </div>
                         <div className="flex items-center gap-1.5 shrink-0">
                           <span
                             className={`text-[10px] px-2 py-0.5 font-medium rounded-full ${
@@ -1984,8 +1981,29 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
             )}
           </main>
         </div>
-      ) : (
-        /* Email Templates Sub-Tab */
+      )}
+
+      {/* Apollo Outbound Prospects Sub-Tab */}
+      {activeTab === 'PROSPECTS' && (
+        <div className="flex-1 overflow-y-auto bg-slate-950">
+          <OutboundCampaigns
+            campaigns={outboundCampaigns && outboundCampaigns.length > 0 ? outboundCampaigns : [INITIAL_CAMPAIGN]}
+            prospects={prospects}
+            contacts={contacts}
+            onAddProspect={onAddProspect || (() => {})}
+            onSendColdEmail={onSendColdEmail || (() => {})}
+            onToggleCampaignStatus={onToggleCampaignStatus || (() => {})}
+            onSelectProspectConversation={(threadId) => {
+              if (onOpenConversation) {
+                onOpenConversation(threadId);
+              }
+            }}
+          />
+        </div>
+      )}
+
+      {/* Email Templates Sub-Tab */}
+      {activeTab === 'TEMPLATES' && (
         <div className="flex-1 overflow-y-auto p-6 bg-slate-950">
           <div className="max-w-6xl mx-auto space-y-6">
             {/* Feedback notification */}

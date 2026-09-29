@@ -169,6 +169,8 @@ export default function App() {
     let unsubContacts: (() => void) | undefined;
     let unsubKb: (() => void) | undefined;
     let unsubUsers: (() => void) | undefined;
+    let unsubOutboundCamps: (() => void) | undefined;
+    let unsubOutboundProspects: (() => void) | undefined;
 
     async function initFirestore() {
       // Initialize Google Calendar authentication & sync token to backend
@@ -233,6 +235,9 @@ export default function App() {
               await setDoc(doc(db, 'knowledge_documents', kb.id), kb);
             }
             await setDoc(doc(db, 'outbound_campaigns', INITIAL_CAMPAIGN.campaignId), INITIAL_CAMPAIGN);
+            for (const p of INITIAL_PROSPECTS) {
+              await setDoc(doc(db, 'outbound_prospects', p.prospectId), p);
+            }
           }
 
           // Mark database as permanently initialized so deletions are never resurrected on reload
@@ -242,8 +247,22 @@ export default function App() {
           });
         }
 
+        // Ensure outbound campaigns and prospects are seeded in Firestore if missing
+        const [campCheckSnap, prospCheckSnap] = await Promise.all([
+          getDocs(collection(db, 'outbound_campaigns')).catch(() => null),
+          getDocs(collection(db, 'outbound_prospects')).catch(() => null),
+        ]);
+        if (!campCheckSnap || campCheckSnap.empty) {
+          await setDoc(doc(db, 'outbound_campaigns', INITIAL_CAMPAIGN.campaignId), INITIAL_CAMPAIGN).catch(() => {});
+        }
+        if (!prospCheckSnap || prospCheckSnap.empty) {
+          for (const p of INITIAL_PROSPECTS) {
+            await setDoc(doc(db, 'outbound_prospects', p.prospectId), p).catch(() => {});
+          }
+        }
+
         // Load persisted entities from Firestore so state reflects actual database state
-        const [convsSnap, msgsSnap, leadsSnap, contsSnap, kbSnap, campSnap, usersSnap] = await Promise.all([
+        const [convsSnap, msgsSnap, leadsSnap, contsSnap, kbSnap, campSnap, usersSnap, prospectsSnap] = await Promise.all([
           getDocs(query(collection(db, 'conversations'), orderBy('lastMessageAt', 'desc'))),
           getDocs(query(collection(db, 'messages'), orderBy('sentAt', 'asc'))),
           getDocs(collection(db, 'leads')),
@@ -251,6 +270,7 @@ export default function App() {
           getDocs(collection(db, 'knowledge_documents')),
           getDocs(collection(db, 'outbound_campaigns')),
           getDocs(collection(db, 'app_users')),
+          getDocs(collection(db, 'outbound_prospects')),
         ]);
 
         // Always set the exact documents present in Firestore (if user deleted documents, reflects empty/subset)
@@ -259,8 +279,15 @@ export default function App() {
         setLeads(leadsSnap.docs.map((d) => sanitizeLead(d.data())));
         setContacts(contsSnap.docs.map((d) => sanitizeContact(d.data())));
         setKnowledgeDocs(kbSnap.docs.map((d) => d.data() as KnowledgeDocument));
-        if (!campSnap.empty) {
+        if (campSnap && !campSnap.empty) {
           setCampaigns(campSnap.docs.map((d) => d.data() as OutboundCampaign));
+        } else {
+          setCampaigns([INITIAL_CAMPAIGN]);
+        }
+        if (prospectsSnap && !prospectsSnap.empty) {
+          setProspects(prospectsSnap.docs.map((d) => d.data() as OutboundProspect));
+        } else {
+          setProspects(INITIAL_PROSPECTS);
         }
 
         // Initialize / sync users
@@ -310,6 +337,18 @@ export default function App() {
           setKnowledgeDocs(snap.docs.map((d) => d.data() as KnowledgeDocument));
         });
 
+        unsubOutboundCamps = onSnapshot(collection(db, 'outbound_campaigns'), (snap) => {
+          if (!snap.empty) {
+            setCampaigns(snap.docs.map((d) => d.data() as OutboundCampaign));
+          }
+        });
+
+        unsubOutboundProspects = onSnapshot(collection(db, 'outbound_prospects'), (snap) => {
+          if (!snap.empty) {
+            setProspects(snap.docs.map((d) => d.data() as OutboundProspect));
+          }
+        });
+
         unsubUsers = onSnapshot(collection(db, 'app_users'), (snap) => {
           if (!snap.empty) {
             const list = snap.docs.map((d) => d.data() as AppUser);
@@ -343,6 +382,8 @@ export default function App() {
       if (unsubContacts) unsubContacts();
       if (unsubKb) unsubKb();
       if (unsubUsers) unsubUsers();
+      if (unsubOutboundCamps) unsubOutboundCamps();
+      if (unsubOutboundProspects) unsubOutboundProspects();
     };
   }, []);
 
@@ -1170,7 +1211,7 @@ export default function App() {
   };
 
   // Send cold outreach for Apollo prospect (Section 14 & 15)
-  const handleSendColdEmail = (prospectId: string) => {
+  const handleSendColdEmail = async (prospectId: string, customSubject?: string, customBody?: string) => {
     const prospect = prospects.find((p) => p.prospectId === prospectId);
     if (!prospect) return;
 
@@ -1191,6 +1232,9 @@ export default function App() {
         lastActivityAt: new Date().toISOString(),
       };
       setContacts((prev) => [contact!, ...prev]);
+      if (isFirebaseConfigured && db) {
+        setDoc(doc(db, 'contacts', contact.contactId), contact).catch(() => {});
+      }
     }
 
     // 2. Create Lead
@@ -1214,12 +1258,17 @@ export default function App() {
       lastActivityAt: new Date().toISOString(),
     };
     setLeads((prev) => [newLead, ...prev]);
+    if (isFirebaseConfigured && db) {
+      setDoc(doc(db, 'leads', leadId), newLead).catch(() => {});
+    }
 
     // 3. Create Conversation & Email Thread immediately (Section 14 & 15)
     const conversationId = `conv-${Date.now()}`;
     const emailThreadId = `thread-${Date.now()}`;
 
-    const coldMsgText = `Hi ${prospect.firstName},\n\nI noticed you are leading operations at ${prospect.companyName}. We work with top Umrah operators across India to automate their dynamic package costing, Makkah/Madinah room allotments, and sub-agent B2B voucher distribution.\n\nUmrah360 gives your agency an automated B2B portal with live supplier costs and compliant invoicing.\n\nWould you be open to exploring how this could streamline your upcoming season?\n\nRegards,\nUmrah360 Growth Team`;
+    const coldMsgText =
+      customBody ||
+      `Hi ${prospect.firstName},\n\nI noticed you are leading operations at ${prospect.companyName}. We work with top Umrah operators across India to automate their dynamic package costing, Makkah/Madinah room allotments, and sub-agent B2B voucher distribution.\n\nUmrah360 gives your agency an automated B2B portal with live supplier costs and compliant invoicing.\n\nWould you be open to exploring how this could streamline your upcoming season?\n\nRegards,\nUmrah360 Growth Team`;
 
     const newConversation: Conversation = {
       conversationId,
@@ -1240,6 +1289,9 @@ export default function App() {
       updatedAt: new Date().toISOString(),
     };
     setConversations((prev) => [newConversation, ...prev]);
+    if (isFirebaseConfigured && db) {
+      setDoc(doc(db, 'conversations', conversationId), newConversation).catch(() => {});
+    }
 
     const coldMessage: Message = {
       messageId: `msg-${Date.now()}`,
@@ -1251,28 +1303,33 @@ export default function App() {
       text: coldMsgText,
       timestamp: new Date().toISOString(),
       emailMeta: {
-        subject: `Umrah360 for ${prospect.companyName} - Automate B2B Packages & Visa Operations`,
+        subject:
+          customSubject ||
+          `Umrah360 for ${prospect.companyName} - Automate B2B Packages & Visa Operations`,
         from: 'sales@umrah360.in',
         to: prospect.email,
         messageId: `<cold-${Date.now()}@umrah360.in>`,
       },
     };
     setMessages((prev) => [...prev, coldMessage]);
+    if (isFirebaseConfigured && db) {
+      setDoc(doc(db, 'messages', coldMessage.messageId), coldMessage).catch(() => {});
+    }
 
     // Update prospect status
+    const updatedProspect = {
+      ...prospect,
+      status: 'EMAIL_SENT' as const,
+      emailThreadId,
+      conversationId,
+      updatedAt: new Date().toISOString(),
+    };
     setProspects((prev) =>
-      prev.map((p) =>
-        p.prospectId === prospectId
-          ? {
-              ...p,
-              status: 'EMAIL_SENT',
-              emailThreadId,
-              conversationId,
-              updatedAt: new Date().toISOString(),
-            }
-          : p
-      )
+      prev.map((p) => (p.prospectId === prospectId ? updatedProspect : p))
     );
+    if (isFirebaseConfigured && db) {
+      setDoc(doc(db, 'outbound_prospects', prospectId), updatedProspect, { merge: true }).catch(() => {});
+    }
 
     // Log Activity
     const act: LeadActivity = {
@@ -1285,6 +1342,45 @@ export default function App() {
       timestamp: new Date().toISOString(),
     };
     setActivities((prev) => [act, ...prev]);
+    if (isFirebaseConfigured && db) {
+      setDoc(doc(db, 'lead_activities', act.activityId), act).catch(() => {});
+    }
+  };
+
+  // Add Apollo Prospect (Persistent to Firestore)
+  const handleAddProspect = async (prospect: OutboundProspect) => {
+    setProspects((prev) => [prospect, ...prev]);
+    if (isFirebaseConfigured && db) {
+      try {
+        await setDoc(doc(db, 'outbound_prospects', prospect.prospectId), prospect);
+      } catch (err) {
+        console.warn('Error saving prospect to Firestore:', err);
+      }
+    }
+  };
+
+  // Toggle Outbound Campaign Running/Paused Status
+  const handleToggleCampaignStatus = async (campaignId: string) => {
+    let nextStatus: 'RUNNING' | 'PAUSED' = 'RUNNING';
+    setCampaigns((prev) =>
+      prev.map((c) => {
+        if (c.campaignId === campaignId) {
+          nextStatus = c.status === 'RUNNING' ? 'PAUSED' : 'RUNNING';
+          return { ...c, status: nextStatus, updatedAt: new Date().toISOString() };
+        }
+        return c;
+      })
+    );
+    if (isFirebaseConfigured && db) {
+      try {
+        await updateDoc(doc(db, 'outbound_campaigns', campaignId), {
+          status: nextStatus,
+          updatedAt: new Date().toISOString(),
+        });
+      } catch (err) {
+        console.warn('Error toggling campaign status in Firestore:', err);
+      }
+    }
   };
 
   // Reset demo seed data
@@ -1648,6 +1744,13 @@ export default function App() {
             {activeTab === 'campaigns' && (
               <CampaignManagement
                 conversations={conversations}
+                leads={leads}
+                contacts={contacts}
+                prospects={prospects}
+                outboundCampaigns={campaigns}
+                onAddProspect={handleAddProspect}
+                onSendColdEmail={handleSendColdEmail}
+                onToggleCampaignStatus={handleToggleCampaignStatus}
                 onOpenConversation={(convId) => {
                   setActiveTab('inbox');
                 }}

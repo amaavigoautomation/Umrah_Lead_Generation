@@ -14,6 +14,13 @@ export default async function handler(req: IncomingMessage & { body?: any }, res
     return res.end();
   }
 
+  // Normalize URL in case Vercel rewrote to catch-all query parameter
+  if (req.url?.includes('[...path]') && (req as any).query?.path) {
+    const pathParam = (req as any).query.path;
+    const pathStr = Array.isArray(pathParam) ? pathParam.join('/') : pathParam;
+    req.url = `/api/${pathStr}`;
+  }
+
   if (req.url === '/api/health' || req.url?.startsWith('/api/health?')) {
     res.statusCode = 200;
     res.setHeader('Content-Type', 'application/json');
@@ -27,11 +34,26 @@ export default async function handler(req: IncomingMessage & { body?: any }, res
   }
 
   try {
-    // Dynamically load bundled server module within /api directory
-    // @ts-ignore
-    const serverMod = await import('./core-server.bundle.js').catch(() => null);
+    let handleCoreApi: any;
+    // 1. Try bundled server module in /api
+    try {
+      // @ts-ignore
+      const serverMod = await import('./core-server.bundle.js').catch(() => null);
+      handleCoreApi = serverMod?.handleCoreApi;
+    } catch {}
 
-    const handleCoreApi = serverMod?.handleCoreApi;
+    // 2. Direct fallback to TypeScript source if bundle not present in serverless runtime
+    if (!handleCoreApi) {
+      try {
+        const directMod =
+          (await import('../src/server/coreApiHandler.js').catch(() => null)) ||
+          (await import('../src/server/coreApiHandler').catch(() => null));
+        handleCoreApi = directMod?.handleCoreApi;
+      } catch (directErr) {
+        console.warn('[API Catch-all] Direct coreApiHandler import notice:', directErr);
+      }
+    }
+
     if (handleCoreApi) {
       const handled = await handleCoreApi(req, res);
       if (handled) return;

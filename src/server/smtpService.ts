@@ -134,15 +134,21 @@ export async function fetchFirestoreSmtpConfig() {
       const settingsSnap = await getDoc(settingsRef);
       if (settingsSnap.exists()) {
         const data = settingsSnap.data() as any;
-        if (data.smtpHost || data.smtpUser || data.smtpPass || data.smtp) {
-          const smtp = data.smtp || {};
+        const smtp = data.smtp || {};
+        const hostToUse = data.smtpHost || smtp.host;
+        const userToUse = data.smtpUser || smtp.user;
+        const passToUse = data.smtpPass || smtp.pass;
+        const fromToUse = data.smtpFrom || smtp.from;
+
+        // Only update runtime config if passToUse is a valid non-empty password
+        if (passToUse && typeof passToUse === 'string' && passToUse.trim().length > 3) {
           updateSmtpConfig({
-            host: data.smtpHost || smtp.host,
+            host: hostToUse,
             port: data.smtpPort || smtp.port,
             secure: data.smtpSecure !== undefined ? data.smtpSecure : smtp.secure,
-            user: data.smtpUser || smtp.user,
-            pass: data.smtpPass || smtp.pass,
-            from: data.smtpFrom || smtp.from,
+            user: userToUse,
+            pass: passToUse.trim(),
+            from: fromToUse,
           });
         }
       }
@@ -178,12 +184,13 @@ export function createTransporter(customPort?: number, customSecure?: boolean) {
         tls: {
           rejectUnauthorized: false,
         },
-        connectionTimeout: 15000,
-        greetingTimeout: 10000,
+        connectionTimeout: 10000,
+        greetingTimeout: 8000,
+        socketTimeout: 10000,
       });
     }
 
-    // Gmail service transport
+    // Gmail service transport (Optimized for Vercel Serverless AWS Lambda runtime)
     return nodemailer.createTransport({
       service: 'gmail',
       auth: {
@@ -193,8 +200,9 @@ export function createTransporter(customPort?: number, customSecure?: boolean) {
       tls: {
         rejectUnauthorized: false,
       },
-      connectionTimeout: 15000,
-      greetingTimeout: 10000,
+      connectionTimeout: 10000,
+      greetingTimeout: 8000,
+      socketTimeout: 10000,
     });
   }
 
@@ -211,8 +219,9 @@ export function createTransporter(customPort?: number, customSecure?: boolean) {
     tls: {
       rejectUnauthorized: false, // Prevents self-signed cert blocks on custom mail hosts
     },
-    connectionTimeout: 15000,
-    greetingTimeout: 10000,
+    connectionTimeout: 10000,
+    greetingTimeout: 8000,
+    socketTimeout: 10000,
   });
 }
 

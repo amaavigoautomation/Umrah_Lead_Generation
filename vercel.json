@@ -11,7 +11,7 @@
   "crons": [
     {
       "path": "/api/campaigns/process-active",
-      "schedule": "* * * * *"
+      "schedule": "0 0 * * *"
     }
   ],
   "rewrites": [

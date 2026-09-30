@@ -65,6 +65,7 @@ export function setServerCalendarAccessToken(token: string, expiresInSeconds: nu
 /**
  * Retrieves an active Google Calendar OAuth access token.
  * Checks explicit parameter, in-memory cache, Firestore settings/calendar_auth, and env vars.
+ * Automatically exchanges stored Refresh Token if Access Token is expired.
  */
 export async function getLiveCalendarToken(explicitToken?: string): Promise<string | null> {
   if (explicitToken && explicitToken.trim() && explicitToken !== 'null' && explicitToken !== 'undefined') {
@@ -82,10 +83,55 @@ export async function getLiveCalendarToken(explicitToken?: string): Promise<stri
       const snap = await getDoc(doc(db, 'settings', 'calendar_auth'));
       if (snap.exists()) {
         const data = snap.data();
+
+        // Check if we have an active access token that isn't flagged expired
         if (data?.accessToken && data.accessToken !== 'null' && data?.active !== false && !data?.expired) {
           serverCalendarAccessToken = data.accessToken;
           serverTokenExpiresAt = Date.now() + 3600 * 1000;
           return serverCalendarAccessToken;
+        }
+
+        // Automatic Refresh Token Exchange if Refresh Token + Client Credentials are saved
+        const refreshToken = data?.refreshToken || process.env.GOOGLE_CALENDAR_REFRESH_TOKEN;
+        const clientId = data?.clientId || process.env.GOOGLE_CALENDAR_CLIENT_ID;
+        const clientSecret = data?.clientSecret || process.env.GOOGLE_CALENDAR_CLIENT_SECRET;
+
+        if (refreshToken && clientId && clientSecret) {
+          try {
+            const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+              body: new URLSearchParams({
+                client_id: clientId,
+                client_secret: clientSecret,
+                refresh_token: refreshToken,
+                grant_type: 'refresh_token',
+              }),
+            });
+
+            if (tokenRes.ok) {
+              const tokenData = await tokenRes.json();
+              if (tokenData.access_token) {
+                setServerCalendarAccessToken(tokenData.access_token, tokenData.expires_in || 3600);
+                await safeSetDoc(
+                  doc(db, 'settings', 'calendar_auth'),
+                  {
+                    accessToken: tokenData.access_token,
+                    active: true,
+                    expired: false,
+                    updatedAt: new Date().toISOString(),
+                  },
+                  { merge: true }
+                );
+                return tokenData.access_token;
+              }
+            } else {
+              const errBody = await tokenRes.text();
+              console.warn('[Calendar Refresh Token Exchange Failed]:', tokenRes.status, errBody);
+            }
+          } catch (refErr) {
+            console.warn('[Calendar Refresh Token Error]:', refErr);
+          }
         }
       }
     } catch (e) {

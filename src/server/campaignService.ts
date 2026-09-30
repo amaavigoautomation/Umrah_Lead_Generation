@@ -349,8 +349,6 @@ export async function syncCampaignStoreFromFirestore(): Promise<void> {
             if (
               data.campaignId === 'camp-umrah-1448' ||
               data.campaignId === 'camp-indian-umrah-operators' ||
-              data.campaignId === 'test' ||
-              cleanName === 'test' ||
               cleanName === 'indian umrah operators 2026'
             ) {
               deleteDoc(doc(db, 'campaigns', d.id)).catch(() => {});
@@ -669,6 +667,19 @@ export async function deleteCampaign(campaignId: string): Promise<boolean> {
     if (isFirebaseConfigured && db) {
       deleteDoc(doc(db, 'campaign_leads', lead.campaignLeadId)).catch(() => {});
     }
+  }
+  if (isFirebaseConfigured && db) {
+    try {
+      const snap = await getDocs(collection(db, 'campaign_leads'));
+      if (!snap.empty) {
+        snap.forEach((d) => {
+          const lData = d.data();
+          if (lData && lData.campaignId === campaignId) {
+            deleteDoc(doc(db, 'campaign_leads', d.id)).catch(() => {});
+          }
+        });
+      }
+    } catch {}
   }
 
   // 3. Delete all runs belonging to this campaign

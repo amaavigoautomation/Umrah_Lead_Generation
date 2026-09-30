@@ -267,8 +267,6 @@ export default function App() {
             if (
               data.campaignId === 'camp-umrah-1448' ||
               data.campaignId === 'camp-indian-umrah-operators' ||
-              data.campaignId === 'test' ||
-              cleanName === 'test' ||
               cleanName === 'indian umrah operators 2026'
             ) {
               deleteDoc(doc(db, 'outbound_campaigns', d.id)).catch(() => {});
@@ -343,8 +341,6 @@ export default function App() {
             if (
               data.campaignId === 'camp-umrah-1448' ||
               data.campaignId === 'camp-indian-umrah-operators' ||
-              data.campaignId === 'test' ||
-              cleanName === 'test' ||
               cleanName === 'indian umrah operators 2026'
             ) {
               deleteDoc(doc(db, 'outbound_campaigns', d.id)).catch(() => {});

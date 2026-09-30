@@ -1124,6 +1124,7 @@ export async function startCampaign(campaignId: string): Promise<Campaign> {
   }
 
   campaign.status = 'RUNNING';
+  campaign.lastError = undefined;
   campaign.startedAt = campaign.startedAt || now;
   campaign.updatedAt = now;
   campaignsMap.set(campaignId, campaign);
@@ -1329,6 +1330,7 @@ export async function restartCampaign(
   campaign.currentRunId = newRunId;
   campaign.lastRunNumber = nextRunNumber;
   campaign.status = 'RUNNING';
+  campaign.lastError = undefined;
   campaign.templateId = templateId;
   campaign.updatedAt = now;
   campaignsMap.set(campaignId, campaign);
@@ -1574,8 +1576,12 @@ export async function processNextCampaignSendBatch(
         lead.lastError = sendResult.error || 'SMTP delivery failure';
         lead.updatedAt = now;
 
+        // Surface last error on campaign for complete visibility in UI
+        campaign.lastError = `Email delivery failed for ${lead.email}: ${sendResult.error}`;
+
         if (isFirebaseConfigured && db) {
           safeSetDoc(doc(db, 'campaign_leads', lead.campaignLeadId), lead, { merge: true }).catch(() => {});
+          safeSetDoc(doc(db, 'campaigns', campaignId), campaign, { merge: true }).catch(() => {});
         }
 
         if (sendResult.isDailyLimitExceeded) {
@@ -1592,25 +1598,35 @@ export async function processNextCampaignSendBatch(
       lead.sendStatus = 'FAILED';
       lead.lastError = err?.message || 'Unexpected sending exception';
       lead.updatedAt = new Date().toISOString();
+      campaign.lastError = `Sending exception for ${lead.email}: ${err?.message || 'Unknown'}`;
 
       if (isFirebaseConfigured && db) {
         safeSetDoc(doc(db, 'campaign_leads', lead.campaignLeadId), lead, { merge: true }).catch(() => {});
+        safeSetDoc(doc(db, 'campaigns', campaignId), campaign, { merge: true }).catch(() => {});
       }
     }
   }
 
   const updatedLeads = getCampaignLeads(campaignId);
   const remainingPending = updatedLeads.filter((l) => l.sendStatus === 'PENDING' && l.replyStatus !== 'REPLIED');
+  const totalFailed = updatedLeads.filter((l) => l.sendStatus === 'FAILED').length;
+  const totalSent = updatedLeads.filter((l) => l.sendStatus === 'SENT').length;
 
   if (remainingPending.length === 0) {
     const now = new Date().toISOString();
-    campaign.status = 'COMPLETED';
-    campaign.completedAt = now;
+    // If all attempts failed and 0 were sent, mark campaign as FAILED or PAUSED so user can fix SMTP or retry
+    if (totalSent === 0 && totalFailed > 0) {
+      campaign.status = 'PAUSED';
+      campaign.completedAt = undefined;
+    } else {
+      campaign.status = 'COMPLETED';
+      campaign.completedAt = now;
+    }
     campaign.updatedAt = now;
 
     const run = campaignRunsMap.get(currentRunId);
     if (run) {
-      run.status = 'COMPLETED';
+      run.status = totalSent === 0 && totalFailed > 0 ? 'PAUSED' : 'COMPLETED';
       run.completedAt = now;
       if (isFirebaseConfigured && db) {
         safeSetDoc(doc(db, 'campaign_runs', run.runId), run, { merge: true }).catch(() => {});
@@ -1879,8 +1895,11 @@ async function executeCampaignSendingEngine(campaignId: string, expectedRunId?: 
           lead.lastError = sendResult.error || 'SMTP delivery failure';
           lead.updatedAt = now;
 
+          campaign.lastError = `Email delivery failed for ${lead.email}: ${sendResult.error}`;
+
           if (isFirebaseConfigured && db) {
             safeSetDoc(doc(db, 'campaign_leads', lead.campaignLeadId), lead, { merge: true }).catch(() => {});
+            safeSetDoc(doc(db, 'campaigns', campaignId), campaign, { merge: true }).catch(() => {});
           }
           console.warn(`[Campaign Engine] Failed to dispatch to ${lead.email}: ${sendResult.error}`);
 
@@ -1900,9 +1919,11 @@ async function executeCampaignSendingEngine(campaignId: string, expectedRunId?: 
         lead.sendStatus = 'FAILED';
         lead.lastError = err?.message || 'Unexpected sending exception';
         lead.updatedAt = new Date().toISOString();
+        campaign.lastError = `Sending exception for ${lead.email}: ${err?.message || 'Unknown'}`;
 
         if (isFirebaseConfigured && db) {
           safeSetDoc(doc(db, 'campaign_leads', lead.campaignLeadId), lead, { merge: true }).catch(() => {});
+          safeSetDoc(doc(db, 'campaigns', campaignId), campaign, { merge: true }).catch(() => {});
         }
         console.error(`[Campaign Engine] Error sending to ${lead.email}:`, err);
       }
@@ -1915,10 +1936,21 @@ async function executeCampaignSendingEngine(campaignId: string, expectedRunId?: 
     }
 
     // Check completion status
-    const remainingPending = getCampaignLeads(campaignId).filter((l) => l.sendStatus === 'PENDING' && l.replyStatus !== 'REPLIED');
+    const allCampaignLeads = getCampaignLeads(campaignId);
+    const remainingPending = allCampaignLeads.filter((l) => l.sendStatus === 'PENDING' && l.replyStatus !== 'REPLIED');
+    const totalFailed = allCampaignLeads.filter((l) => l.sendStatus === 'FAILED').length;
+    const totalSent = allCampaignLeads.filter((l) => l.sendStatus === 'SENT').length;
+
     if (remainingPending.length === 0) {
       const now = new Date().toISOString();
-      campaign.status = 'COMPLETED';
+      if (totalSent === 0 && totalFailed > 0) {
+        campaign.status = 'PAUSED';
+        campaign.completedAt = undefined;
+      } else {
+        campaign.status = 'COMPLETED';
+        campaign.completedAt = now;
+      }
+      campaign.updatedAt = now;
       campaign.completedAt = now;
       campaign.updatedAt = now;
 

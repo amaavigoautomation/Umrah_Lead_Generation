@@ -205,11 +205,12 @@ export const LiveMailboxCenter: React.FC<LiveMailboxCenterProps> = ({
   const fetchStatus = async () => {
     setIsLoadingStatus(true);
     try {
+      const safeJson = (r: Response) => (r.ok && r.headers.get('content-type')?.includes('application/json') ? r.json() : null);
       const [smtpRes, imapRes, historyRes, waRes] = await Promise.all([
-        fetch('/api/smtp/status').then((r) => r.json()).catch(() => null),
-        fetch('/api/imap/status').then((r) => r.json()).catch(() => null),
-        fetch('/api/inbound/history').then((r) => r.json()).catch(() => ({ history: [] })),
-        fetch('/api/whatsapp/status').then((r) => r.json()).catch(() => null),
+        fetch('/api/smtp/status').then(safeJson).catch(() => null),
+        fetch('/api/imap/status').then(safeJson).catch(() => null),
+        fetch('/api/inbound/history').then(safeJson).catch(() => ({ history: [] })),
+        fetch('/api/whatsapp/status').then(safeJson).catch(() => null),
       ]);
 
       if (smtpRes) setSmtpStatus(smtpRes);

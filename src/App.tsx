@@ -399,8 +399,10 @@ export default function App() {
     try {
       const res = await fetch('/api/inbound/sync');
       if (!res.ok) return;
+      const contentType = res.headers.get('content-type') || '';
+      if (!contentType.includes('application/json')) return;
       const data = await res.json();
-      if (!data.history || !Array.isArray(data.history)) return;
+      if (!data || !data.history || !Array.isArray(data.history)) return;
 
       for (const item of data.history) {
         if (!item.crmEntities || !item.messageId) continue;

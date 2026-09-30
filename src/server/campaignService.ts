@@ -342,6 +342,7 @@ export async function syncCampaignStoreFromFirestore(): Promise<void> {
       }
 
       if (campSnap) {
+        const firestoreCampIds = new Set<string>();
         campSnap.forEach((d) => {
           const data = d.data() as Campaign;
           if (data && data.campaignId) {
@@ -349,15 +350,28 @@ export async function syncCampaignStoreFromFirestore(): Promise<void> {
             if (
               data.campaignId === 'camp-umrah-1448' ||
               data.campaignId === 'camp-indian-umrah-operators' ||
-              cleanName === 'indian umrah operators 2026'
+              cleanName === 'indian umrah operators 2026' ||
+              data.campaignId === 'camp-1790758967982-7his' ||
+              cleanName === 'test'
             ) {
               deleteDoc(doc(db, 'campaigns', d.id)).catch(() => {});
               deleteDoc(doc(db, 'outbound_campaigns', d.id)).catch(() => {});
+              campaignsMap.delete(data.campaignId);
+              campaignsMap.delete(d.id);
             } else {
+              firestoreCampIds.add(data.campaignId);
+              firestoreCampIds.add(d.id);
               campaignsMap.set(data.campaignId, data);
             }
           }
         });
+
+        // Prune any campaign from memory that is no longer in Firestore
+        for (const existingId of Array.from(campaignsMap.keys())) {
+          if (!firestoreCampIds.has(existingId)) {
+            campaignsMap.delete(existingId);
+          }
+        }
       }
 
       if (leadsSnap) {
@@ -1852,10 +1866,6 @@ export function recalculateCampaignMetrics(campaignId: string): Campaign | undef
     replied,
     demoBooked,
   };
-
-  if (isFirebaseConfigured && db) {
-    safeSetDoc(doc(db, 'campaigns', campaignId), camp, { merge: true }).catch(() => {});
-  }
 
   return camp;
 }

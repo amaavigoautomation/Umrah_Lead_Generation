@@ -255,7 +255,7 @@ export const KnowledgeBaseView: React.FC<KnowledgeBaseViewProps> = ({
             </div>
 
             <div className="flex space-x-1 overflow-x-auto text-[11px] scrollbar-none pb-1">
-              {['ALL', 'PRODUCT', 'B2B', 'MODULES', 'PRICING', 'OPERATIONS', 'FAQS'].map((cat) => (
+              {['ALL', 'PRODUCT', 'B2B', 'MODULES', 'PRICING', 'OPERATIONS', 'FAQS', 'INTEGRATIONS'].map((cat) => (
                 <button
                   key={cat}
                   onClick={() => setCategoryFilter(cat)}

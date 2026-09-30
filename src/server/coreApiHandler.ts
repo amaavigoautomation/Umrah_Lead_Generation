@@ -568,9 +568,20 @@ Generate a helpful, accurate, grounded response adhering to all rules.`;
     } else if (isB2b) {
       responseText = `Yes! Umrah360 provides a complete white-label B2B Sub-Agent Portal. It allows tour operators to distribute packages to external travel agents, manage custom multi-tier markups, establish real-time credit wallets, and enable agents to generate branded PDF vouchers instantly with their own agency logo.\n\nWould you like to see how sub-agent allotments and credit limits are configured?\n\n${signature || 'Regards,\nUmrah360 Team'}`;
     } else if (isPricing) {
-      responseText = `Here is our approved subscription pricing:\n• Starter Plan: $199/month (up to 3 users) — includes B2C CRM, FIT package builder, and invoicing.\n• Growth Plan: $499/month (up to 10 users) — includes everything in Starter plus the complete B2B Sub-Agent Portal, dynamic multi-currency costing, and automated alerts.\n• Enterprise Plan: For 20+ users, custom quotes with dedicated cloud hosting and SLA guarantees are available through our team.\n\nHow many team members would be using the software at ${contact?.companyName || 'your agency'}?\n\n${signature || 'Regards,\nUmrah360 Team'}`;
+      responseText = `Here is our approved subscription pricing:
+• Lite Plan: INR 36,000/year (or INR 4,000/month) | International: USD 825/year (up to 5 users) — includes Umrah group package creation, booking management, departure control, visa tracking, proforma invoices, and payment receipts.
+• Business Plan: INR 55,000/year (or INR 5,500/month) | International: USD 1,260/year (up to 10 users) — includes everything in Lite plus Hajj/Umrah/Ziarah packages, tent occupancy, CRM & lead funnel, departure-wise P&L, supplier accounts payable, and priority WhatsApp/email support.
+• Professional Plan: INR 1,20,000/year (or INR 12,500/month) | International: USD 2,760/year (unlimited users) — includes multi-company Hajj quota, custom approval workflows, full FIT module, and dedicated account manager.
+
+How many team members would be using the software at ${contact?.companyName || 'your agency'}?
+
+${signature || 'Regards,\nUmrah360 Team'}`;
     } else {
-      responseText = `Umrah360 is an all-in-one cloud ERP and CRM software purpose-built for Hajj and Umrah tour operators. It unifies lead management, FIT (Free Independent Traveler) and group package creation, dynamic costing, multi-currency invoicing, Saudi visa tracking, hotel & transport allotments, and sub-agent B2B networks into a single cohesive interface.\n\nAre you currently handling your operations through spreadsheets or looking to upgrade from another system?\n\n${signature || 'Regards,\nUmrah360 Team'}`;
+      responseText = `Umrah360 is the unified cloud operating platform purpose-built for Hajj and Umrah tour operators. It connects package creation, group departures, FIT custom packages, passenger manifests, Saudi visa tracking, rooming lists, B2B agent distribution, and departure-level profitability.
+
+Are you currently handling your operations through spreadsheets or looking to upgrade from another system?
+
+${signature || 'Regards,\nUmrah360 Team'}`;
     }
 
     res.statusCode = 200;

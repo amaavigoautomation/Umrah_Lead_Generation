@@ -32,12 +32,12 @@ export function retrieveRelevantKnowledge(
 
   // Specific domain intent weightings
   const intentBoosts: Record<string, string[]> = {
-    pricing: ['price', 'pricing', 'cost', 'plan', 'plans', 'starter', 'growth', 'enterprise', 'users', 'subscription', 'quote', 'discount'],
-    b2b: ['b2b', 'agent', 'agents', 'sub-agent', 'subagent', 'wholesaler', 'reseller', 'markup', 'credit', 'voucher'],
-    packages: ['package', 'itinerary', 'fit', 'groups', 'hotel', 'hotels', 'makkah', 'madinah', 'ziyarat', 'transport', 'train', 'bus'],
-    visa: ['visa', 'nusuk', 'evisa', 'passport', 'mofa', 'document', 'stamped'],
-    invoicing: ['invoice', 'costing', 'vat', 'gst', 'tax', 'forex', 'currency', 'sar', 'ledger'],
-    faq: ['setup', 'onboarding', 'security', 'time', 'mobile', 'support', 'contract'],
+    pricing: ['price', 'pricing', 'cost', 'plan', 'plans', 'lite', 'business', 'professional', 'enterprise', 'users', 'subscription', 'quote', 'discount', 'inr', 'usd'],
+    b2b: ['b2b', 'agent', 'agents', 'sub-agent', 'subagent', 'wholesaler', 'reseller', 'markup', 'credit', 'voucher', 'franchise', 'extranet'],
+    packages: ['package', 'itinerary', 'fit', 'groups', 'hotel', 'hotels', 'makkah', 'madinah', 'ziyarat', 'transport', 'train', 'bus', 'series', 'departure'],
+    visa: ['visa', 'nusuk', 'evisa', 'passport', 'mofa', 'document', 'stamped', 'ocr'],
+    invoicing: ['invoice', 'costing', 'vat', 'gst', 'tax', 'tcs', 'forex', 'currency', 'sar', 'ledger', 'receivable', 'payable', 'profitability'],
+    faq: ['setup', 'onboarding', 'security', 'time', 'mobile', 'support', 'contract', 'training', 'app', 'marketplace'],
   };
 
   const scoredDocs = publishedDocs.map((doc) => {

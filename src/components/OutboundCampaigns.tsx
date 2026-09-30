@@ -76,7 +76,7 @@ export const OutboundCampaigns: React.FC<OutboundCampaignsProps> = ({
     updatedAt: '2026-09-15T10:00:00Z',
   };
 
-  const allCampaigns = campaigns && campaigns.length > 0 ? campaigns : [fallbackCampaign];
+  const allCampaigns = campaigns || [];
   const [selectedCampaignId, setSelectedCampaignId] = useState<string>(() => allCampaigns[0]?.campaignId || '');
 
   React.useEffect(() => {
@@ -85,7 +85,7 @@ export const OutboundCampaigns: React.FC<OutboundCampaignsProps> = ({
     }
   }, [allCampaigns, selectedCampaignId]);
 
-  const activeCampaign = allCampaigns.find((c) => c.campaignId === selectedCampaignId) || allCampaigns[0] || fallbackCampaign;
+  const activeCampaign = allCampaigns.find((c) => c.campaignId === selectedCampaignId) || allCampaigns[0];
 
   const [searchFilter, setSearchFilter] = useState('');
   const [selectedProspectId, setSelectedProspectId] = useState<string | null>(null);

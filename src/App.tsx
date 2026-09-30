@@ -247,20 +247,6 @@ export default function App() {
           });
         }
 
-        // Ensure outbound campaigns and prospects are seeded in Firestore if missing
-        const [campCheckSnap, prospCheckSnap] = await Promise.all([
-          getDocs(collection(db, 'outbound_campaigns')).catch(() => null),
-          getDocs(collection(db, 'outbound_prospects')).catch(() => null),
-        ]);
-        if (!campCheckSnap || campCheckSnap.empty) {
-          await setDoc(doc(db, 'outbound_campaigns', INITIAL_CAMPAIGN.campaignId), INITIAL_CAMPAIGN).catch(() => {});
-        }
-        if (!prospCheckSnap || prospCheckSnap.empty) {
-          for (const p of INITIAL_PROSPECTS) {
-            await setDoc(doc(db, 'outbound_prospects', p.prospectId), p).catch(() => {});
-          }
-        }
-
         // Load persisted entities from Firestore so state reflects actual database state
         const [convsSnap, msgsSnap, leadsSnap, contsSnap, kbSnap, campSnap, usersSnap, prospectsSnap] = await Promise.all([
           getDocs(query(collection(db, 'conversations'), orderBy('lastMessageAt', 'desc'))),
@@ -279,16 +265,8 @@ export default function App() {
         setLeads(leadsSnap.docs.map((d) => sanitizeLead(d.data())));
         setContacts(contsSnap.docs.map((d) => sanitizeContact(d.data())));
         setKnowledgeDocs(kbSnap.docs.map((d) => d.data() as KnowledgeDocument));
-        if (campSnap && !campSnap.empty) {
-          setCampaigns(campSnap.docs.map((d) => d.data() as OutboundCampaign));
-        } else {
-          setCampaigns([INITIAL_CAMPAIGN]);
-        }
-        if (prospectsSnap && !prospectsSnap.empty) {
-          setProspects(prospectsSnap.docs.map((d) => d.data() as OutboundProspect));
-        } else {
-          setProspects(INITIAL_PROSPECTS);
-        }
+        setCampaigns(campSnap ? campSnap.docs.map((d) => d.data() as OutboundCampaign) : []);
+        setProspects(prospectsSnap ? prospectsSnap.docs.map((d) => d.data() as OutboundProspect) : []);
 
         // Initialize / sync users
         if (usersSnap.empty) {

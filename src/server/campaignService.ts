@@ -432,21 +432,24 @@ const activeCampaignAbortControllers = new Map<string, AbortController>();
 
 let isCampaignStoreInitialized = false;
 
+let hasLoadedInitialDefaults = false;
+
 function ensureDefaultsInMemory() {
   for (const tpl of DEFAULT_EMAIL_TEMPLATES) {
     if (!emailTemplatesMap.has(tpl.templateId)) {
       emailTemplatesMap.set(tpl.templateId, tpl);
     }
   }
-  if (campaignsMap.size === 0) {
+  if (!hasLoadedInitialDefaults) {
+    hasLoadedInitialDefaults = true;
     for (const c of DEFAULT_CAMPAIGNS) {
-      campaignsMap.set(c.campaignId, c);
+      if (!campaignsMap.has(c.campaignId)) campaignsMap.set(c.campaignId, c);
     }
     for (const l of DEFAULT_CAMPAIGN_LEADS) {
-      campaignLeadsMap.set(l.campaignLeadId, l);
+      if (!campaignLeadsMap.has(l.campaignLeadId)) campaignLeadsMap.set(l.campaignLeadId, l);
     }
     for (const r of DEFAULT_CAMPAIGN_RUNS) {
-      campaignRunsMap.set(r.runId, r);
+      if (!campaignRunsMap.has(r.runId)) campaignRunsMap.set(r.runId, r);
     }
   }
 }
@@ -493,47 +496,31 @@ export async function syncCampaignStoreFromFirestore(): Promise<void> {
         }
       }
 
-      if (campSnap && !campSnap.empty) {
+      if (campSnap) {
         campSnap.forEach((d) => {
           const data = d.data() as Campaign;
           if (data && data.campaignId) {
             campaignsMap.set(data.campaignId, data);
           }
         });
-      } else if (campSnap && campSnap.empty) {
-        // Seed default starter campaign into Firestore if collection is empty
-        for (const c of DEFAULT_CAMPAIGNS) {
-          campaignsMap.set(c.campaignId, c);
-          safeSetDoc(doc(db, 'campaigns', c.campaignId), c, { merge: true }).catch(() => {});
-        }
       }
 
-      if (leadsSnap && !leadsSnap.empty) {
+      if (leadsSnap) {
         leadsSnap.forEach((d) => {
           const data = d.data() as CampaignLead;
           if (data && data.campaignLeadId) {
             campaignLeadsMap.set(data.campaignLeadId, data);
           }
         });
-      } else if (leadsSnap && leadsSnap.empty) {
-        for (const l of DEFAULT_CAMPAIGN_LEADS) {
-          campaignLeadsMap.set(l.campaignLeadId, l);
-          safeSetDoc(doc(db, 'campaign_leads', l.campaignLeadId), l, { merge: true }).catch(() => {});
-        }
       }
 
-      if (runsSnap && !runsSnap.empty) {
+      if (runsSnap) {
         runsSnap.forEach((d) => {
           const data = d.data() as CampaignRun;
           if (data && data.runId) {
             campaignRunsMap.set(data.runId, data);
           }
         });
-      } else if (runsSnap && runsSnap.empty) {
-        for (const r of DEFAULT_CAMPAIGN_RUNS) {
-          campaignRunsMap.set(r.runId, r);
-          safeSetDoc(doc(db, 'campaign_runs', r.runId), r, { merge: true }).catch(() => {});
-        }
       }
 
       if (historySnap) {
@@ -763,19 +750,9 @@ export function getCampaignLeads(campaignId: string): CampaignLead[] {
   if (campaignLeadsMap.size === 0) {
     ensureDefaultsInMemory();
   }
-  let leads = Array.from(campaignLeadsMap.values())
+  return Array.from(campaignLeadsMap.values())
     .filter((l) => l.campaignId === campaignId)
     .sort((a, b) => (a.rowNumber || 0) - (b.rowNumber || 0));
-
-  if (leads.length === 0 && campaignId === 'camp-umrah-1448') {
-    for (const l of DEFAULT_CAMPAIGN_LEADS) {
-      campaignLeadsMap.set(l.campaignLeadId, l);
-    }
-    leads = Array.from(campaignLeadsMap.values())
-      .filter((l) => l.campaignId === campaignId)
-      .sort((a, b) => (a.rowNumber || 0) - (b.rowNumber || 0));
-  }
-  return leads;
 }
 
 export async function getCampaignLeadsFromDb(campaignId: string): Promise<CampaignLead[]> {
@@ -801,13 +778,6 @@ export async function getCampaignLeadsFromDb(campaignId: string): Promise<Campai
     }
   }
 
-  if (leads.length === 0 && campaignId === 'camp-umrah-1448') {
-    for (const l of DEFAULT_CAMPAIGN_LEADS) {
-      campaignLeadsMap.set(l.campaignLeadId, l);
-    }
-    leads = getCampaignLeads(campaignId);
-  }
-
   return leads;
 }
 
@@ -815,19 +785,9 @@ export function getCampaignRuns(campaignId: string): CampaignRun[] {
   if (campaignRunsMap.size === 0) {
     ensureDefaultsInMemory();
   }
-  let runs = Array.from(campaignRunsMap.values())
+  return Array.from(campaignRunsMap.values())
     .filter((r) => r.campaignId === campaignId)
     .sort((a, b) => b.runNumber - a.runNumber);
-
-  if (runs.length === 0 && campaignId === 'camp-umrah-1448') {
-    for (const r of DEFAULT_CAMPAIGN_RUNS) {
-      campaignRunsMap.set(r.runId, r);
-    }
-    runs = Array.from(campaignRunsMap.values())
-      .filter((r) => r.campaignId === campaignId)
-      .sort((a, b) => b.runNumber - a.runNumber);
-  }
-  return runs;
 }
 
 /**
@@ -1124,7 +1084,6 @@ export async function startCampaign(campaignId: string): Promise<Campaign> {
   }
 
   campaign.status = 'RUNNING';
-  campaign.lastError = undefined;
   campaign.startedAt = campaign.startedAt || now;
   campaign.updatedAt = now;
   campaignsMap.set(campaignId, campaign);
@@ -1330,7 +1289,6 @@ export async function restartCampaign(
   campaign.currentRunId = newRunId;
   campaign.lastRunNumber = nextRunNumber;
   campaign.status = 'RUNNING';
-  campaign.lastError = undefined;
   campaign.templateId = templateId;
   campaign.updatedAt = now;
   campaignsMap.set(campaignId, campaign);
@@ -1576,12 +1534,8 @@ export async function processNextCampaignSendBatch(
         lead.lastError = sendResult.error || 'SMTP delivery failure';
         lead.updatedAt = now;
 
-        // Surface last error on campaign for complete visibility in UI
-        campaign.lastError = `Email delivery failed for ${lead.email}: ${sendResult.error}`;
-
         if (isFirebaseConfigured && db) {
           safeSetDoc(doc(db, 'campaign_leads', lead.campaignLeadId), lead, { merge: true }).catch(() => {});
-          safeSetDoc(doc(db, 'campaigns', campaignId), campaign, { merge: true }).catch(() => {});
         }
 
         if (sendResult.isDailyLimitExceeded) {
@@ -1598,35 +1552,25 @@ export async function processNextCampaignSendBatch(
       lead.sendStatus = 'FAILED';
       lead.lastError = err?.message || 'Unexpected sending exception';
       lead.updatedAt = new Date().toISOString();
-      campaign.lastError = `Sending exception for ${lead.email}: ${err?.message || 'Unknown'}`;
 
       if (isFirebaseConfigured && db) {
         safeSetDoc(doc(db, 'campaign_leads', lead.campaignLeadId), lead, { merge: true }).catch(() => {});
-        safeSetDoc(doc(db, 'campaigns', campaignId), campaign, { merge: true }).catch(() => {});
       }
     }
   }
 
   const updatedLeads = getCampaignLeads(campaignId);
   const remainingPending = updatedLeads.filter((l) => l.sendStatus === 'PENDING' && l.replyStatus !== 'REPLIED');
-  const totalFailed = updatedLeads.filter((l) => l.sendStatus === 'FAILED').length;
-  const totalSent = updatedLeads.filter((l) => l.sendStatus === 'SENT').length;
 
   if (remainingPending.length === 0) {
     const now = new Date().toISOString();
-    // If all attempts failed and 0 were sent, mark campaign as FAILED or PAUSED so user can fix SMTP or retry
-    if (totalSent === 0 && totalFailed > 0) {
-      campaign.status = 'PAUSED';
-      campaign.completedAt = undefined;
-    } else {
-      campaign.status = 'COMPLETED';
-      campaign.completedAt = now;
-    }
+    campaign.status = 'COMPLETED';
+    campaign.completedAt = now;
     campaign.updatedAt = now;
 
     const run = campaignRunsMap.get(currentRunId);
     if (run) {
-      run.status = totalSent === 0 && totalFailed > 0 ? 'PAUSED' : 'COMPLETED';
+      run.status = 'COMPLETED';
       run.completedAt = now;
       if (isFirebaseConfigured && db) {
         safeSetDoc(doc(db, 'campaign_runs', run.runId), run, { merge: true }).catch(() => {});
@@ -1895,11 +1839,8 @@ async function executeCampaignSendingEngine(campaignId: string, expectedRunId?: 
           lead.lastError = sendResult.error || 'SMTP delivery failure';
           lead.updatedAt = now;
 
-          campaign.lastError = `Email delivery failed for ${lead.email}: ${sendResult.error}`;
-
           if (isFirebaseConfigured && db) {
             safeSetDoc(doc(db, 'campaign_leads', lead.campaignLeadId), lead, { merge: true }).catch(() => {});
-            safeSetDoc(doc(db, 'campaigns', campaignId), campaign, { merge: true }).catch(() => {});
           }
           console.warn(`[Campaign Engine] Failed to dispatch to ${lead.email}: ${sendResult.error}`);
 
@@ -1919,11 +1860,9 @@ async function executeCampaignSendingEngine(campaignId: string, expectedRunId?: 
         lead.sendStatus = 'FAILED';
         lead.lastError = err?.message || 'Unexpected sending exception';
         lead.updatedAt = new Date().toISOString();
-        campaign.lastError = `Sending exception for ${lead.email}: ${err?.message || 'Unknown'}`;
 
         if (isFirebaseConfigured && db) {
           safeSetDoc(doc(db, 'campaign_leads', lead.campaignLeadId), lead, { merge: true }).catch(() => {});
-          safeSetDoc(doc(db, 'campaigns', campaignId), campaign, { merge: true }).catch(() => {});
         }
         console.error(`[Campaign Engine] Error sending to ${lead.email}:`, err);
       }
@@ -1936,21 +1875,10 @@ async function executeCampaignSendingEngine(campaignId: string, expectedRunId?: 
     }
 
     // Check completion status
-    const allCampaignLeads = getCampaignLeads(campaignId);
-    const remainingPending = allCampaignLeads.filter((l) => l.sendStatus === 'PENDING' && l.replyStatus !== 'REPLIED');
-    const totalFailed = allCampaignLeads.filter((l) => l.sendStatus === 'FAILED').length;
-    const totalSent = allCampaignLeads.filter((l) => l.sendStatus === 'SENT').length;
-
+    const remainingPending = getCampaignLeads(campaignId).filter((l) => l.sendStatus === 'PENDING' && l.replyStatus !== 'REPLIED');
     if (remainingPending.length === 0) {
       const now = new Date().toISOString();
-      if (totalSent === 0 && totalFailed > 0) {
-        campaign.status = 'PAUSED';
-        campaign.completedAt = undefined;
-      } else {
-        campaign.status = 'COMPLETED';
-        campaign.completedAt = now;
-      }
-      campaign.updatedAt = now;
+      campaign.status = 'COMPLETED';
       campaign.completedAt = now;
       campaign.updatedAt = now;
 

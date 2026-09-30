@@ -497,32 +497,7 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
     }
 
     // Default sample leads fallback if still empty for default campaign
-    setCampaignLeads((curr) => {
-      if (curr.length === 0 && campaignId === 'camp-umrah-1448') {
-        return SAMPLE_PILGRIMAGE_LEADS.map((l, idx) => ({
-          campaignLeadId: `clead-umrah-${idx + 1}`,
-          campaignId: 'camp-umrah-1448',
-          leadId: `lead-${l.name.toLowerCase().replace(/\s+/g, '-')}`,
-          name: l.name,
-          firstName: l.name.split(' ')[0],
-          lastName: l.name.split(' ').slice(1).join(' '),
-          companyName: l.companyName,
-          email: l.email,
-          phone: l.phone,
-          designation: l.designation,
-          sourceFile: '5_Sample_Pilgrimage_Tour_Operators.csv',
-          rowNumber: idx + 1,
-          sendStatus: idx < 3 ? ('SENT' as const) : ('PENDING' as const),
-          replyStatus: idx === 1 ? ('REPLIED' as const) : ('NOT_REPLIED' as const),
-          demoStatus: idx === 1 ? ('BOOKED' as const) : ('NOT_BOOKED' as const),
-          sendCount: idx < 3 ? 1 : 0,
-          lastSentAt: idx < 3 ? '2026-09-13T10:00:00Z' : undefined,
-          createdAt: '2026-09-12T10:00:00Z',
-          updatedAt: '2026-09-13T10:00:00Z',
-        }));
-      }
-      return curr;
-    });
+    setCampaignLeads((curr) => curr);
   };
 
   // Real-time Firestore sync for email templates and campaigns
@@ -549,33 +524,37 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
         const unsubCampaigns = onSnapshot(
           collection(db, 'campaigns'),
           (snapshot) => {
+            const loadedCamps: Campaign[] = [];
             if (!snapshot.empty) {
-              const loadedCamps: Campaign[] = [];
               snapshot.forEach((docSnap) => {
                 const data = docSnap.data() as Campaign;
                 if (data && data.campaignId) {
                   loadedCamps.push(data);
                 }
               });
-              const sortedCamps = loadedCamps.sort(
-                (a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
-              );
-              setCampaigns(sortedCamps);
-              campaignsRef.current = sortedCamps;
+            }
+            const sortedCamps = loadedCamps.sort(
+              (a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
+            );
+            setCampaigns(sortedCamps);
+            campaignsRef.current = sortedCamps;
 
-              const activeId = selectedCampaignIdRef.current;
-              if (activeId) {
-                const matching = sortedCamps.find((c) => c.campaignId === activeId);
-                if (matching) {
-                  setSelectedCampaign((prev) => (prev ? { ...prev, ...matching } : matching));
-                }
-              } else if (sortedCamps.length > 0) {
-                const first = sortedCamps[0];
-                setSelectedCampaignId(first.campaignId);
-                selectedCampaignIdRef.current = first.campaignId;
-                setSelectedCampaign(first);
-                loadSelectedCampaignDetails(first.campaignId);
+            const activeId = selectedCampaignIdRef.current;
+            if (activeId) {
+              const matching = sortedCamps.find((c) => c.campaignId === activeId);
+              if (matching) {
+                setSelectedCampaign((prev) => (prev ? { ...prev, ...matching } : matching));
+              } else {
+                setSelectedCampaign(null);
               }
+            } else if (sortedCamps.length > 0) {
+              const first = sortedCamps[0];
+              setSelectedCampaignId(first.campaignId);
+              selectedCampaignIdRef.current = first.campaignId;
+              setSelectedCampaign(first);
+              loadSelectedCampaignDetails(first.campaignId);
+            } else {
+              setSelectedCampaign(null);
             }
           },
           (err) => console.warn('Notice from Firestore campaigns listener:', err)

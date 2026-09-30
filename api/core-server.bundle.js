@@ -77140,8 +77140,22 @@ function _isEmptyString(input) {
   return typeof input === "undefined" || input?.length === 0;
 }
 
+// firebase-applet-config.json
+var firebase_applet_config_default = {
+  projectId: "gen-lang-client-0295687148",
+  appId: "1:27669323758:web:ca139ff1b786c339b1b8ff",
+  apiKey: "AIzaSyC1AhpGYKFVZgyX4LEVqjC84dfI0rxIxAk",
+  authDomain: "gen-lang-client-0295687148.firebaseapp.com",
+  storageBucket: "gen-lang-client-0295687148.firebasestorage.app",
+  messagingSenderId: "27669323758",
+  firestoreDatabaseId: "ai-studio-379c884e-3360-468a-ad55-8105acbd3214",
+  measurementId: "",
+  oAuthClientId: "27669323758-b2krdjmjjo3gqd8cj71jmt8v4d2n4qhj.apps.googleusercontent.com",
+  recaptchaSiteKey: ""
+};
+
 // src/firebase/config.ts
-var firestoreProjectConfig = {
+var fallbackConfig = {
   projectId: "gen-lang-client-0376069258",
   appId: "1:280237761588:web:1e0633ce031a5a49f15661",
   apiKey: "AIzaSyAcr6lIIH50XWD7CcmclWh9lxbPKO7TzBk",
@@ -77152,20 +77166,27 @@ var firestoreProjectConfig = {
 };
 var envProjectId = typeof import.meta !== "undefined" && import.meta.env?.VITE_FIREBASE_PROJECT_ID || typeof process !== "undefined" && process.env?.VITE_FIREBASE_PROJECT_ID || typeof process !== "undefined" && process.env?.FIREBASE_PROJECT_ID;
 var envApiKey = typeof import.meta !== "undefined" && import.meta.env?.VITE_FIREBASE_API_KEY || typeof process !== "undefined" && process.env?.VITE_FIREBASE_API_KEY || typeof process !== "undefined" && process.env?.FIREBASE_API_KEY;
-var activeProjectId = envProjectId || firestoreProjectConfig.projectId;
-var activeApiKey = envApiKey || firestoreProjectConfig.apiKey;
+var activeProjectId = envProjectId || fallbackConfig.projectId;
+var activeApiKey = envApiKey || fallbackConfig.apiKey;
 var firebaseConfig = {
   apiKey: activeApiKey,
-  authDomain: firestoreProjectConfig.authDomain,
+  authDomain: firebase_applet_config_default?.authDomain || fallbackConfig.authDomain,
   projectId: activeProjectId,
-  storageBucket: firestoreProjectConfig.storageBucket,
-  messagingSenderId: firestoreProjectConfig.messagingSenderId,
-  appId: firestoreProjectConfig.appId,
-  firestoreDatabaseId: firestoreProjectConfig.firestoreDatabaseId
+  storageBucket: firebase_applet_config_default?.storageBucket || fallbackConfig.storageBucket,
+  messagingSenderId: firebase_applet_config_default?.messagingSenderId || fallbackConfig.messagingSenderId,
+  appId: firebase_applet_config_default?.appId || fallbackConfig.appId,
+  firestoreDatabaseId: firebase_applet_config_default?.firestoreDatabaseId || fallbackConfig.firestoreDatabaseId
 };
 var app = getApps().find((a) => a.name === "[DEFAULT]") || initializeApp(firebaseConfig);
 var db = firebaseConfig.firestoreDatabaseId ? getFirestore(app, firebaseConfig.firestoreDatabaseId) : getFirestore(app);
-var auth = getAuth(app);
+var oauthProjectConfig = {
+  apiKey: firebase_applet_config_default?.apiKey || activeApiKey,
+  authDomain: firebase_applet_config_default?.authDomain || "gen-lang-client-0295687148.firebaseapp.com",
+  projectId: firebase_applet_config_default?.projectId || "gen-lang-client-0295687148",
+  appId: firebase_applet_config_default?.appId || "1:27669323758:web:ca139ff1b786c339b1b8ff"
+};
+var authApp = oauthProjectConfig.projectId === firebaseConfig.projectId ? app : getApps().find((a) => a.name === "authApp") || initializeApp(oauthProjectConfig, "authApp");
+var auth = getAuth(authApp);
 var isFirebaseConfigured = Boolean(firebaseConfig.projectId && firebaseConfig.apiKey);
 async function testFirestoreConnection() {
   if (typeof window === "undefined") return;
@@ -77216,15 +77237,13 @@ function updateSmtpConfig(newConfig) {
   saveCredentialsToFile({ smtp: runtimeSmtpConfig });
   return getSmtpConfig();
 }
-var DEFAULT_SMTP_USER = "amaavigo@gmail.com";
-var DEFAULT_SMTP_PASS = "czzk spuw wpxc cceb";
 function getSmtpConfig() {
   const saved = loadSavedCredentials()?.smtp;
   const host = runtimeSmtpConfig?.host || saved?.host || process.env.SMTP_HOST || "smtp.gmail.com";
   const port = runtimeSmtpConfig?.port || saved?.port || parseInt(process.env.SMTP_PORT || "465", 10);
   const secure = runtimeSmtpConfig?.secure !== void 0 ? runtimeSmtpConfig.secure : saved?.secure !== void 0 ? saved.secure : process.env.SMTP_SECURE === "true" || port === 465;
-  const user = runtimeSmtpConfig?.user || saved?.user || process.env.SMTP_USER || process.env.GMAIL_USER || process.env.IMAP_USER || DEFAULT_SMTP_USER;
-  const rawPass = runtimeSmtpConfig?.pass || saved?.pass || process.env.SMTP_PASS || process.env.IMAP_PASS || process.env.GMAIL_APP_PASSWORD || process.env.GMAIL_PASS || DEFAULT_SMTP_PASS;
+  const user = runtimeSmtpConfig?.user || saved?.user || process.env.SMTP_USER || process.env.GMAIL_USER || process.env.IMAP_USER || "amaavigo@gmail.com";
+  const rawPass = runtimeSmtpConfig?.pass || saved?.pass || process.env.SMTP_PASS || process.env.IMAP_PASS || process.env.GMAIL_APP_PASSWORD || process.env.GMAIL_PASS || "";
   const pass = rawPass.trim();
   const from = runtimeSmtpConfig?.from || saved?.from || process.env.SMTP_FROM || `Umrah360 Automation <${user}>`;
   const configured = Boolean(host && pass);
@@ -77237,19 +77256,15 @@ async function fetchFirestoreSmtpConfig() {
       const settingsSnap = await getDoc(settingsRef);
       if (settingsSnap.exists()) {
         const data = settingsSnap.data();
-        const smtp = data.smtp || {};
-        const hostToUse = data.smtpHost || smtp.host;
-        const userToUse = data.smtpUser || smtp.user;
-        const passToUse = data.smtpPass || smtp.pass;
-        const fromToUse = data.smtpFrom || smtp.from;
-        if (passToUse && typeof passToUse === "string" && passToUse.trim().length > 3) {
+        if (data.smtpHost || data.smtpUser || data.smtpPass || data.smtp) {
+          const smtp = data.smtp || {};
           updateSmtpConfig({
-            host: hostToUse,
+            host: data.smtpHost || smtp.host,
             port: data.smtpPort || smtp.port,
             secure: data.smtpSecure !== void 0 ? data.smtpSecure : smtp.secure,
-            user: userToUse,
-            pass: passToUse.trim(),
-            from: fromToUse
+            user: data.smtpUser || smtp.user,
+            pass: data.smtpPass || smtp.pass,
+            from: data.smtpFrom || smtp.from
           });
         }
       }
@@ -77281,9 +77296,8 @@ function createTransporter(customPort, customSecure) {
         tls: {
           rejectUnauthorized: false
         },
-        connectionTimeout: 1e4,
-        greetingTimeout: 8e3,
-        socketTimeout: 1e4
+        connectionTimeout: 15e3,
+        greetingTimeout: 1e4
       });
     }
     return nodemailer.createTransport({
@@ -77295,9 +77309,8 @@ function createTransporter(customPort, customSecure) {
       tls: {
         rejectUnauthorized: false
       },
-      connectionTimeout: 1e4,
-      greetingTimeout: 8e3,
-      socketTimeout: 1e4
+      connectionTimeout: 15e3,
+      greetingTimeout: 1e4
     });
   }
   const secure = customSecure !== void 0 ? customSecure : config.secure && port === 465;
@@ -77313,9 +77326,8 @@ function createTransporter(customPort, customSecure) {
       rejectUnauthorized: false
       // Prevents self-signed cert blocks on custom mail hosts
     },
-    connectionTimeout: 1e4,
-    greetingTimeout: 8e3,
-    socketTimeout: 1e4
+    connectionTimeout: 15e3,
+    greetingTimeout: 1e4
   });
 }
 async function verifySmtpConnection() {
@@ -77369,8 +77381,6 @@ async function verifySmtpConnection() {
   }
 }
 async function sendLiveEmail(params) {
-  await fetchFirestoreSmtpConfig().catch(() => {
-  });
   const config = getSmtpConfig();
   if (config.configured) {
     try {
@@ -78012,385 +78022,212 @@ import crypto3 from "node:crypto";
 // src/services/knowledgeData.ts
 var INITIAL_KNOWLEDGE_DOCUMENTS = [
   {
-    "id": "kb-platform-overview",
-    "title": "Umrah360 Platform Architecture & Operating Model",
-    "category": "PRODUCT",
-    "tags": [
-      "overview",
-      "architecture",
-      "group-departures",
-      "fit",
-      "b2b",
-      "b2c",
-      "puratech",
-      "etos-global",
-      "umrah360.in"
-    ],
-    "status": "PUBLISHED",
-    "version": 1,
-    "author": "Umrah360 Product Team",
-    "createdAt": "2026-09-30T12:00:00Z",
-    "updatedAt": "2026-09-30T12:00:00Z",
-    "content": "Umrah360 (https://www.puratech.in/demo/umrah360new/ | www.umrah360.in) is the unified, cloud-based operating system purpose-built for Hajj, Umrah, Ziyarah, and Ramadan pilgrimage tour operators, group travel companies, consolidators, and DMCs worldwide (powered by ETOS Global travel technology).\n\nCore Platform Mission & Value Proposition:\n- Tagline: 'Run Your Umrah Business From One Connected Platform. One Platform. Every Departure. Complete Control.'\n- Connects sales, reservations, passenger data, flight and hotel inventory, visa management, collections, profitability, and partner distribution into one reliable operating system.\n- Eliminates manual spreadsheets, departmental communication silos, and repetitive data entry across operations teams in India, Saudi Arabia, UAE, the UK, and international pilgrimage markets.\n- Purpose-engineered around pilgrimage-specific workflows: fixed group departures, tent-occupancy management for Hajj, multi-city Makkah and Madinah hotel allotments, room sharing (Quad, Triple, Double, Single), family co-traveller groups, Saudi eVisa and Nusuk tracking, and sub-agent B2B distribution networks.\n- Multilingual Operations: Supports mid-office interfaces and communication in English, Arabic, French, Italian, Spanish, German, Malaysian, and Indonesian.\n- Contact Details: Email: info@umrah360.in | Phone: +91 9820252434 | Headquarters: Puratech Consultancy Solutions Pvt. Ltd. / ETOS Global."
+    id: "kb-platform-overview",
+    title: "Umrah360 Platform Architecture & Core Capabilities Overview",
+    category: "PRODUCT",
+    tags: ["overview", "erp", "crm", "hajj", "umrah", "tour-operator", "etos-global", "umrah360.in"],
+    status: "PUBLISHED",
+    version: 2,
+    author: "Umrah360 Product Team",
+    createdAt: "2026-09-01T10:00:00Z",
+    updatedAt: "2026-09-17T08:00:00Z",
+    content: `Umrah360 (www.umrah360.in) is the premier all-in-one cloud ERP, CRM, and dynamic booking technology platform purpose-built for Hajj and Umrah tour operators, pilgrimage travel agencies, consolidators, and DMCs worldwide (powered by ETOS Global travel technology).
+
+Core Mission & Architecture:
+- Purpose-engineered for Islamic pilgrimage workflows: unifies lead management, FIT (Free Independent Traveler) and group series package creation, dynamic costing, multi-currency invoicing, Saudi visa tracking, hotel & transport allotments, and sub-agent B2B networks into a single cohesive system.
+- Eliminates manual spreadsheets and operational silos across offices in India, Saudi Arabia, UAE, UK, and worldwide.
+- Provides agencies with both Back-Office / Mid-Office ERP systems and Consumer-Facing (B2C) online booking websites with dynamic package engines.
+- Official Website: https://www.umrah360.in
+- Support: 24/7 dedicated human support, onboarding assistance, and comprehensive video training.`
   },
   {
-    "id": "kb-product-suites",
-    "title": "Umrah360 Product Suites & Multi-Channel Solutions",
-    "category": "PRODUCT",
-    "tags": [
-      "products",
-      "group-departure",
-      "fit",
-      "b2b-portal",
-      "b2c-website",
-      "d2c-marketplace",
-      "pilgrim-app",
-      "dynamic-umrah"
-    ],
-    "status": "PUBLISHED",
-    "version": 1,
-    "author": "Umrah360 Solutions Lead",
-    "createdAt": "2026-09-30T12:00:00Z",
-    "updatedAt": "2026-09-30T12:00:00Z",
-    "content": "Umrah360 provides a modular technology platform with distinct solutions tailored for every aspect of pilgrimage travel operations:\n\n1. Group Departure Management (Core Platform):\n   - The primary mid-office system for managing fixed-date Hajj, Umrah, Ziyarah, and Ramadan departures from package creation to final operational and financial reporting.\n   - Includes inventory allocation, passenger manifests, rooming lists, visa status tracking, receivables, and departure-level P&L.\n\n2. FIT Booking CRM and Management Module:\n   - Purpose-built for tailor-made, customized packages for individuals, families, and private VIP groups.\n   - Dynamic quotation builder with live costing, supplier rates, markups, commissions, and taxes.\n\n3. B2B Agent Booking Platform:\n   - Dedicated digital reseller portal allowing approved travel agents and sub-agents to browse live contracted inventory, create bookings, manage passengers, submit payments, and instantly download white-labeled vouchers featuring their own agency logo.\n\n4. B2C Customer Booking & Enquiry Website:\n   - Turnkey, mobile-responsive consumer storefront showcasing packages with real-time departure dates, hotel categories, day-by-day itineraries, online booking, payment gateway integration, and document uploads.\n\n5. Dynamic Umrah Booking Platform:\n   - Real-time packaging engine integrating live flight GDS, Saudi hotel APIs, Haramain High-Speed Rail, and local transfers with instant pricing calculations.\n\n6. D2C Hajj & Umrah Marketplace (Upcoming Product):\n   - A centralized pilgrimage marketplace where verified, licensed Hajj and Umrah operators can list and sell packages directly to pilgrims worldwide.\n\n7. Pilgrim Mobile App (Upcoming Product):\n   - Companion smartphone application providing pilgrims real-time access to itineraries, flight updates, hotel vouchers, prayer times, emergency contacts, guide locations, and payment receipts.\n\n8. Customised Bespoke Plan:\n   - Fully tailored enterprise deployment with bespoke workflows, custom ERP/accounting integrations, and dedicated API connectivity."
+    id: "kb-customer-vs-agency-booking",
+    title: "Pilgrim Booking Experience: Direct Customer Inquiries vs Travel Agency Role",
+    category: "FAQS",
+    tags: ["customer-booking", "b2c", "retail-pilgrim", "direct-booking", "travel-agency", "faq", "family-package"],
+    status: "PUBLISHED",
+    version: 2,
+    author: "Umrah360 Solutions Lead",
+    createdAt: "2026-09-02T10:00:00Z",
+    updatedAt: "2026-09-17T08:00:00Z",
+    content: `Crucial Clarification on How Booking Works for Individual Pilgrims and Families:
+
+Q: Can an individual pilgrim or family directly use the Umrah360 platform to create and book a customized package (flights, Makkah/Madinah hotels, transfers, meals, visa) with real-time pricing and online payment? Do they need to go through a travel agency?
+
+A:
+1. The Role of Umrah360:
+   - Umrah360 (www.umrah360.in) is an enterprise travel technology and booking software provider. We empower licensed Hajj & Umrah tour operators, travel agencies, and consolidators with the software to run their business.
+   - We do NOT sell travel packages directly to consumers as an airline or retail travel agency ourselves.
+
+2. How the Booking Experience Works for Pilgrims:
+   - Travel agencies using Umrah360 are equipped with modern, white-labeled B2C consumer booking websites and dynamic packaging engines.
+   - On these agency websites powered by Umrah360, pilgrims and families CAN directly:
+     \u2022 Customize their pilgrimage itinerary day-by-day.
+     \u2022 Select real-time Makkah and Madinah hotel options (5-star, 4-star, 3-star, Clock Tower, Markaziyah) with preferred room sharing (Quad, Triple, Double) and meal plans (BB, Half Board, Full Board).
+     \u2022 Add live flights, Haramain High-Speed Train tickets, private VIP transfers (GMC/Yukon), or luxury buses.
+     \u2022 Add Ziyarat tours in Makkah and Madinah with certified guides.
+     \u2022 Submit passport details for Saudi tourist eVisa or Umrah visa processing.
+     \u2022 View instant, transparent, real-time pricing and availability.
+     \u2022 Complete the entire booking and payment process securely online.
+
+3. How to Book:
+   - To make a booking, pilgrims book through one of the verified, licensed travel agencies that run on the Umrah360 platform.
+   - Umrah360's team is delighted to connect any inquiring pilgrim or family with our top authorized partner travel agencies in their city (Mumbai, Delhi, Bangalore, Hyderabad, etc.) who will provide them instant access to customized packages with transparent pricing.
+   - If the person inquiring is a travel agency or tour operator, Umrah360 provides the software so they can launch their own automated booking engine and manage pilgrims seamlessly!`
   },
   {
-    "id": "kb-why-umrah360",
-    "title": "Why Umrah360: Replacing Spreadsheets with Connected Workflows",
-    "category": "PRODUCT",
-    "tags": [
-      "why-umrah360",
-      "spreadsheets",
-      "centralization",
-      "automation",
-      "productivity",
-      "roi",
-      "compliance"
-    ],
-    "status": "PUBLISHED",
-    "version": 1,
-    "author": "Umrah360 Product Team",
-    "createdAt": "2026-09-30T12:00:00Z",
-    "updatedAt": "2026-09-30T12:00:00Z",
-    "content": "Why Pilgrimage Operators Upgrade to Umrah360:\n\nThe Cost of Managing Umrah Operations with Spreadsheets:\n- Database Mismanagement: Passenger passport details, rooming arrangements, and booking variations scattered across multiple unversioned files.\n- Manual Errors: Costly mistakes in room allocations, double-bookings, forgotten visa deadlines, and wrong currency conversions.\n- Communication Delays: Business owners and managers lack live visibility, having to ask operations or sales staff for status updates.\n- Reduced Time Efficiency: Staff spend hours re-typing traveller details from enquiries into booking forms, visa lists, and flight manifests.\n- Limited Scalability: Inability to scale departure volume or agent networks without exponentially hiring administrative staff.\n- Difficult Tracking & Auditing: Lack of automated audit trails for discounts, cancellations, and payment collections.\n\nThe Umrah360 Transformation:\n1. Centralized Data Management: Single source of truth for leads, pilgrims, hotels, flights, visas, and accounting accessible securely by authorized staff.\n2. Automation of Key Processes: Automated itinerary generation, payment reminders, visa stage alerts, and departure cut-off notifications.\n3. Enhanced Team Collaboration: Information entered by sales flows automatically into reservations, operations, and accounts without re-entry.\n4. Over 20+ MIS Reports with Dashboards: Real-time graphical analytics on departures, seat occupancy, sales funnels, agent performance, and cash flow.\n5. Tangible Cost Savings: Eliminates overbooking penalties, reduces staff overtime by over 60%, and automates agent commission reconciliations.\n6. Enhanced Security & Role-Based Access: Rigorous permissions restrict sensitive passenger passport scans and financial ledgers to authorized roles."
+    id: "kb-b2b-portal",
+    title: "B2B Sub-Agent Reseller Portal & Agent Distribution Engine",
+    category: "B2B",
+    tags: ["b2b", "sub-agents", "wholesalers", "credit-limit", "white-label", "vouchers", "allotments"],
+    status: "PUBLISHED",
+    version: 2,
+    author: "Umrah360 Product Team",
+    createdAt: "2026-09-01T10:00:00Z",
+    updatedAt: "2026-09-17T08:00:00Z",
+    content: `Umrah360 provides a dedicated, white-label B2B Sub-Agent Portal designed specifically for wholesale tour operators who distribute packages through external travel agents, resellers, and franchise branches.
+
+Key B2B Capabilities:
+- Multi-tier agent hierarchy: Set custom markup percentages, commission structures, and inventory visibility per agent class (Gold, Silver, Bronze, Standard).
+- Credit Limits & Virtual Wallet Engine: Real-time agent credit management, balance alerts, deposit receipts, and ledger reconciliation to ensure zero bad debt.
+- Instant White-Label PDF Vouchers: Sub-agents can search contracted inventory, customize pilgrim packages, and immediately generate and download vouchers branded with their OWN agency name, logo, and contact details.
+- Offline Contract Upload: Consolidators can upload custom negotiated offline hotel room blocks and transport allotments with specific blackout dates, release periods, and minimum stays alongside online inventory.
+- Real-Time Allotment Locking: Prevents overbooking across high-demand dates like Ramadan, Mawlid, and peak winter school breaks.`
   },
   {
-    "id": "kb-pricing-and-plans",
-    "title": "Official Subscription Plans, Regional Pricing & Feature Matrix",
-    "category": "PRICING",
-    "tags": [
-      "pricing",
-      "plans",
-      "lite",
-      "business",
-      "professional",
-      "cost",
-      "subscription",
-      "india",
-      "international",
-      "inr",
-      "usd"
-    ],
-    "status": "PUBLISHED",
-    "version": 1,
-    "author": "Umrah360 Commercial Director",
-    "createdAt": "2026-09-30T12:00:00Z",
-    "updatedAt": "2026-09-30T12:00:00Z",
-    "content": "Official Umrah360 Subscription Plans & Pricing (Published from https://www.puratech.in/demo/umrah360new/pricing.html):\n\nUmrah360 offers transparent tiered subscription pricing tailored for Indian domestic operators (INR) and International pilgrimage companies (USD):\n\n1. LITE PLAN \u2014 Essential Control (Move beyond spreadsheets and manage complete group-departure workflows):\n   \u2022 India Pricing: INR 36,000 / year (or INR 4,000 / month)\n   \u2022 International Pricing: USD 825 / year (or USD 75 / month)\n   \u2022 User Limit: Up to 5 users\n   \u2022 Included Capabilities:\n     - Umrah Group Package Creation\n     - Booking Management (Bookings, Amendments, and Cancellations)\n     - Booking Documents (Proforma Invoice, Booking Form, Itinerary)\n     - Departure Management (Seats Availability and Closed Departures)\n     - Receivable Tracking and Reminders (with payment receipts)\n     - Group Operations Management (Passenger list, Rooming, Airline List, ID cards)\n     - Visa Status Management (Applied, Rejected, and Approved)\n     - Customer and Co-traveller Management\n     - Basic Reporting & User Dashboards\n     - User & Role Management\n     - Mid-office interface in English and Arabic (more languages coming)\n     - Email Notifications\n     - Optionally Extend to B2C enquiry website\n     - Onboarding & Training: 3 sessions\n     - Support: Basic email support\n\n2. BUSINESS PLAN \u2014 Connected Growth (Everything in Lite, plus advanced features for growing Hajj & Umrah operators):\n   \u2022 India Pricing: INR 55,000 / year (or INR 5,500 / month)\n   \u2022 International Pricing: USD 1,260 / year (or USD 120 / month)\n   \u2022 User Limit: Up to 10 users\n   \u2022 Included Capabilities (Everything in Lite, Plus):\n     - Hajj, Umrah, and Ziarah Group Package Creation\n     - Hajj Tent Occupancy Management\n     - Enquiry Management & Follow-up Management\n     - Sales and CRM Funnel Management\n     - Cancelled Departure and Transfer Pilgrims\n     - Refund Management\n     - Customer History Management\n     - Supplier Management\n     - Accounts Payable Management\n     - Departure-wise Profit and Loss (P&L) per departure\n     - Passport Scanner Integration (Optionally)\n     - Optionally Extend to B2C enquiry and booking website\n     - Optionally Extend to B2B Network of Agents\n     - Advanced Reporting (CRM and Operations)\n     - Advanced Dashboard with drill-down analytics\n     - Email and SMS Notifications\n     - Onboarding & Training: 6 sessions\n     - Support: Priority support on WhatsApp and Email\n     - Optional Payment Gateway or UPI Integration (India)\n\n3. PROFESSIONAL PLAN \u2014 Enterprise Flexibility (Full power, unlimited scale, advanced security & multi-company quota):\n   \u2022 India Pricing: INR 1,20,000 / year (or INR 12,500 / month)\n   \u2022 International Pricing: USD 2,760 / year (or USD 280 / month)\n   \u2022 User Limit: UNLIMITED users\n   \u2022 Included Capabilities (Everything in Business, Plus):\n     - Hajj Quota Management for multiple companies\n     - Pilgrim billing as per Hajj quota company\n     - Hajj Pre-Booking Management\n     - Umrah Pre-Booking Management\n     - Custom Approval Workflows for Discounts, Amendments, and Cancellations\n     - Includes FIT Module (CRM, Booking, and Reservation Module included)\n     - WhatsApp Integration at various touchpoints\n     - Advanced Security & Audit Logs\n     - Dedicated Account Manager\n     - Unlimited Users\n     - Comprehensive Onboarding & Customized Training\n     - SLA & Priority Support\n\n4. Add-on Specialized Modules:\n   \u2022 B2C Portal: Enable retail customers to explore packages, book, and track journeys via your branded portal.\n   \u2022 B2B Portal: Empower travel agents to search packages, book, manage passengers, pay, and track commissions.\n   \u2022 FIT Engine: Allow individual travelers to customize trips with flexible options and real-time availability.\n   \u2022 Customised / Bespoke Plan: Tailor-made online booking system with full API integrations for large enterprises."
+    id: "kb-dynamic-packages",
+    title: "Dynamic Package Builder & Day-by-Day Itinerary Generator",
+    category: "MODULES",
+    tags: ["packages", "itinerary", "fit", "groups", "hotels", "ziyarat", "transport", "real-time"],
+    status: "PUBLISHED",
+    version: 2,
+    author: "Umrah360 Product Team",
+    createdAt: "2026-09-02T10:00:00Z",
+    updatedAt: "2026-09-17T08:00:00Z",
+    content: `The Dynamic Umrah Package Builder empowers operators to create both bespoke FIT (Free Independent Traveler) custom itineraries and fixed departure group packages in under 3 minutes.
+
+Features & Integrations:
+- Makkah & Madinah Hotel Inventories: Live contracted rates and extranet connectivity for properties across Makkah (Clock Tower / Abraj Al Bait, Swissotel, Pullman Zamzam, Jabal Omar Hyatt, Aziziyah) and Madinah (Dar Al Taqwa, Oberoi, Anwar Al Madinah, Pullman Zamzam Madinah, Markaziyah).
+- Room Configurations & Meal Plans: Support for Quad, Triple, Double, and Quint sharing, with meal plans ranging from Room Only, Bed & Breakfast (BB), Half Board (HB), Full Board (FB), to Ramadan Sahoor and Iftar.
+- Ground Transport Options: Integration with bus fleet operators, private VIP vehicles (GMC Yukon, Toyota HiAce, Camry), and Haramain High-Speed Railway links (Jeddah Airport -> Makkah -> Madinah).
+- Ziyarat Tour Planner: Pre-configured holy site visits (Cave Hira, Jabal Thawr, Mount Arafat, Mina, Muzdalifah, Masjid Quba, Mount Uhud, Seven Mosques) with multilingual guide assignments.
+- Dynamic Day-by-Day Itinerary PDF: Generates elegant pilgrim itineraries in English, Arabic, and Urdu with flight PNRs, hotel confirmations, prayer timings, and local Saudi ground emergency contacts.`
   },
   {
-    "id": "kb-feature-platform-setup-automation",
-    "title": "Platform Setup, Multi-Branch, Master Data & Multi-Channel Automation",
-    "category": "MODULES",
-    "tags": [
-      "platform-setup",
-      "branch-setup",
-      "multi-branch",
-      "multi-currency",
-      "taxes",
-      "gst",
-      "vat",
-      "tcs",
-      "forex",
-      "master-data",
-      "automation",
-      "whatsapp"
-    ],
-    "status": "PUBLISHED",
-    "version": 1,
-    "author": "Umrah360 Product Team",
-    "createdAt": "2026-09-30T12:00:00Z",
-    "updatedAt": "2026-09-30T12:00:00Z",
-    "content": "Umrah360 Feature Capabilities 01 & 02 (Platform Setup, Master Data & Automation):\n\n01. Platform & Business Setup:\n- Company & Branch Setup: Configure the main company profile and manage multiple regional branches from one centralized system. Set distinct bank details, default currencies, and financial-year definitions for accurate period-based accounting.\n- Currency & Tax Configuration: Operate across multiple currencies (SAR, INR, USD, GBP, EUR, AED, etc.) with live exchange-rate API connectivity. Built-in compliance for India GST, international VAT, and Tax Collected at Source (TCS) with automated invoice calculations.\n- Users, Roles & Permissions: Granular role-based access control ensuring employees perform only authorized actions. Multi-level approval workflows cover custom discounts, tentative bookings, passport checkouts, travel date alterations, and receipt cancellations.\n- Multilingual Support: Mid-office interface and customer collaterals available in English, Arabic, French, Italian, Spanish, German, Malaysian, and Indonesian.\n- Document Sequencing: Define controlled prefix and sequence numbering for proforma invoices, receipts, vouchers, itineraries, and booking IDs for complete audit compliance.\n\n02. Destination Data, Communication & Automation:\n- Destination & Master Database: Standardized repository for countries, cities, Makkah/Madinah hotels, airlines, airports, and meal plans (Room Only, BB, Half Board, Full Board). Destination image gallery supports up to 15 images per country for rich itinerary generation.\n- Automated Reminder Rules: Set rules for upcoming payment milestones, passport expiry alerts, departure balance cut-offs, and operations tasks.\n- Alert Rules: Immediate notifications to managers when bookings occur, quotas fill up, or cancellations are submitted.\n- Multi-Channel Integrations: Native support for automated transaction emails, WhatsApp Business API notifications (brochures, booking confirmations, vouchers), SMS alerts, and website chatbot integration."
+    id: "kb-hotel-extranet-allotments",
+    title: "Hotel Contracting, Extranets & Room Allotment Management",
+    category: "OPERATIONS",
+    tags: ["hotels", "makkah", "madinah", "allotments", "contracts", "extranet", "inventory"],
+    status: "PUBLISHED",
+    version: 2,
+    author: "Umrah360 Product Team",
+    createdAt: "2026-09-03T10:00:00Z",
+    updatedAt: "2026-09-17T08:00:00Z",
+    content: `Managing accommodation in Makkah and Madinah is the most critical operational component for Umrah operators. Umrah360 provides a complete hotel management extranet.
+
+Capabilities:
+- Contract Setup: Enter seasonal rates, room categories (Deluxe, Executive, Haram View, Kaaba View, City View), and occupancy policies.
+- Allotment & Room Blocking: Track confirmed blocked rooms, release dates, and cutoff policies to minimize cancellation penalties.
+- Dynamic Pricing & Real-Time Availability: Reflect real-time supplier prices and inventory adjustments.
+- Offline + Online Hybrid: Seamlessly combine directly negotiated hotel blocks with connected bed-banks and B2B aggregators.`
   },
   {
-    "id": "kb-feature-package-departure-mgmt",
-    "title": "Umrah & Hajj Package & Series Departure Management",
-    "category": "MODULES",
-    "tags": [
-      "packages",
-      "series-departures",
-      "hajj-packages",
-      "umrah-packages",
-      "ziyarah",
-      "ramadan",
-      "allotments",
-      "seats",
-      "room-sharing"
-    ],
-    "status": "PUBLISHED",
-    "version": 1,
-    "author": "Umrah360 Product Team",
-    "createdAt": "2026-09-30T12:00:00Z",
-    "updatedAt": "2026-09-30T12:00:00Z",
-    "content": "Umrah360 Feature Capabilities 03 (Package & Series Departure Management):\n\nGroup Package Architecture:\n- Comprehensive Departure Types: Purpose-built templates for Hajj fixed group departures, Umrah series, Ramadan special departures, and Ziyarah extensions (Taif, Badr, Al Ula, Madinah historic sites).\n- Hajj Quota & Tent Occupancy: Specialized modules for Hajj quota companies, managing Mina and Arafat tent room allocations, Maktab registrations, and multi-company pilgrim billing.\n- Flexible Room Sharing Pricing: Configure commercial pricing across Single, Double, Triple, Quad, and Quint sharing configurations, with adult, child with bed, child no bed, and infant pricing.\n- Flight & Seat Block Management: Track group PNR airline blocks, departure dates, flight numbers, airline baggage rules, and seat allocation counts.\n- Hotel Inventory Allocations: Track contracted hotel room blocks in Makkah (Clock Tower, Ajyad, Aziziyah, Markaziyah) and Madinah with check-in/check-out dates and release deadlines.\n- Customer-Ready Collateral: Instant generation of branded PDF itineraries, day-by-day program guides, and digital departure links ready to share via WhatsApp or email."
+    id: "kb-visa-management",
+    title: "Saudi Visa, Nusuk & Pilgrimage Document Operations",
+    category: "MODULES",
+    tags: ["visa", "saudi-evisa", "nusuk", "mofa", "passport-tracking", "biometrics"],
+    status: "PUBLISHED",
+    version: 2,
+    author: "Umrah360 Product Team",
+    createdAt: "2026-09-04T10:00:00Z",
+    updatedAt: "2026-09-17T08:00:00Z",
+    content: `Streamlined operations for Saudi Tourist eVisas, Umrah visas, and pilgrimage document management in compliance with the Saudi Ministry of Hajj and Umrah.
+
+Capabilities:
+- OCR Passport Extraction: Automatically extracts pilgrim full names, passport numbers, nationalities, dates of birth, and expiry dates with 99.4% accuracy.
+- Status Workflow: Live status tracking [Document Collected -> MOFA / Nusuk Submission -> Visa Issued -> Stamped & Vouchered].
+- Nusuk Coordination: Guidelines and tracking for pilgrim Nusuk permits (Umrah permit slots and Rawdah prayer appointments).
+- Automated Pilgrim Alerts: Real-time WhatsApp and email status notifications sent to pilgrims as their visas are approved.
+- Ground Manifest Export: 1-click export of passenger manifests formatted for Saudi Ground Handling Agents (Muassasa / Maktab).`
   },
   {
-    "id": "kb-feature-crm-leads-partners",
-    "title": "CRM, Lead Funnel Management & Partner Ecosystem",
-    "category": "MODULES",
-    "tags": [
-      "crm",
-      "leads",
-      "sales-funnel",
-      "partners",
-      "sub-agents",
-      "suppliers",
-      "inbound",
-      "routing",
-      "conversion"
-    ],
-    "status": "PUBLISHED",
-    "version": 1,
-    "author": "Umrah360 Sales Lead",
-    "createdAt": "2026-09-30T12:00:00Z",
-    "updatedAt": "2026-09-30T12:00:00Z",
-    "content": "Umrah360 Feature Capabilities 04 & 05 (CRM, Leads & Partner Ecosystem):\n\n04. Customer, Agent & Partner Management:\n- Unified Partner Directory: Single connected directory for retail B2C pilgrims, sub-agents, corporate partners, and suppliers (hoteliers, transport companies, catering, visa agents).\n- Sub-Agent Onboarding: Approve trade partners, upload existing agent lists via Excel, assign credit limits, and define commission tiers.\n- Supplier Directory: Maintain supplier contact details, bank accounts, contracted rates, and payables ledgers.\n\n05. CRM & Lead Management:\n- Omnichannel Lead Capture: Automatically ingest leads from website contact/demo forms, social media campaigns (Facebook, Instagram, LinkedIn), WhatsApp chats, walk-in inquiries, and email inquiries.\n- Smart Lead Routing: Automatically assign leads to specific branches, departments, or sales executives based on destination, budget, or language.\n- Visual Sales Pipeline: Track leads across structured stages: New Enquiry, Contacted, Requirement Gathered, Proposal Sent, Follow-up, Booking Won, or Lost.\n- Automated Follow-up Reminders: System alerts ensure no pilgrimage enquiry goes cold.\n- Customer Pilgrimage History: Maintain a complete log of previous departures taken by pilgrims, co-travellers, preferences, passport numbers, and lifetime value."
+    id: "kb-costing-invoicing",
+    title: "Dynamic Costing, Margin Control & Multi-Currency Invoicing",
+    category: "OPERATIONS",
+    tags: ["costing", "pricing", "invoicing", "vat", "gst", "forex", "currency", "zatca"],
+    status: "PUBLISHED",
+    version: 2,
+    author: "Umrah360 Product Team",
+    createdAt: "2026-09-05T10:00:00Z",
+    updatedAt: "2026-09-17T08:00:00Z",
+    content: `Umrah360 handles complex multi-currency hospitality costing and strict tax compliance across Saudi Arabia (15% VAT) and origin countries (GST in India, VAT in UK/UAE).
+
+Capabilities:
+- Live Forex Engine: Auto-converts supplier costs in Saudi Riyals (SAR) to your billing currencies (INR, USD, GBP, EUR, AED, IDR) with configurable hedge safety buffers.
+- Profit Margin Calculator: Apply percentage markups, flat passenger fees, or tiered margins per item (flight, hotel, visa, transport).
+- Compliant Tax Invoices: 1-click generation of proforma, interim, and final tax invoices compliant with ZATCA (Saudi e-Invoicing) and local domestic tax regulations.
+- Payment Gateways: Supports Stripe, Razorpay, net banking, UPI, direct wire transfers, and installment payment tracking.`
   },
   {
-    "id": "kb-feature-bookings-operations",
-    "title": "Booking Lifecycle, Passenger Operations & Travel Documents",
-    "category": "OPERATIONS",
-    "tags": [
-      "bookings",
-      "lifecycle",
-      "passengers",
-      "visas",
-      "operations",
-      "rooming-list",
-      "manifest",
-      "id-cards",
-      "vouchers"
-    ],
-    "status": "PUBLISHED",
-    "version": 1,
-    "author": "Umrah360 Operations Lead",
-    "createdAt": "2026-09-30T12:00:00Z",
-    "updatedAt": "2026-09-30T12:00:00Z",
-    "content": "Umrah360 Feature Capabilities 06 & 07 (Bookings, Operations & Documents):\n\n06. Booking, Amendment & Cancellation Lifecycle:\n- Unique Booking ID: Every confirmed reservation generates a distinct booking reference number for multi-department tracking.\n- Passenger Variations: Add, modify, or replace passengers within a family booking while maintaining rooming integrity.\n- Departure Transfers: Seamlessly transfer pilgrims between departures when travel plans change without re-entering traveller data.\n- Controlled Cancellations & Refunds: Multi-level authorization for cancellations with automated calculation of cancellation fees, supplier retention charges, and customer refund balances.\n\n07. Passenger Operations & Travel Documentation:\n- Visa Status Tracking: Monitor Saudi eVisa, Tourist Visa, Umrah Visa, and Nusuk application stages (Documents Received, Submitted to MOFA, Stamped/Approved, Rejected) with expiry date validation.\n- Airline Manifest Generation: Generate airline-ready passenger lists with passport numbers, dates of birth, expiry dates, and meal preferences.\n- Rooming Lists: Automatically generate hotel rooming lists for Makkah and Madinah properties organized by room sharing (Double, Triple, Quad) and family relationships.\n- Pilgrim ID Cards: One-click generation of printable pilgrim badges featuring emergency contacts, hotel name, group leader phone, and QR codes.\n- Branded Travel Vouchers: Issue hotel service vouchers, transport vouchers, and proforma invoices featuring your agency branding."
+    id: "kb-pricing-plans",
+    title: "Umrah360 Official Subscription Plans & Approved Pricing Structure",
+    category: "PRICING",
+    tags: ["pricing", "plans", "lite", "pro", "enterprise", "cost", "subscription"],
+    status: "PUBLISHED",
+    version: 2,
+    author: "Umrah360 Sales Leadership",
+    createdAt: "2026-09-05T10:00:00Z",
+    updatedAt: "2026-09-17T08:00:00Z",
+    content: `Umrah360 offers transparent and cost-effective subscription plans tailored to pilgrimage businesses:
+
+1. Umrah360 Lite Plan:
+   - Price: Starting at $15 per user per month (billed annually).
+   - Target: Emerging travel agencies, boutique pilgrimage consultants, and growing tour operators.
+   - Includes:
+     \u2022 Dynamic package creation and management.
+     \u2022 Multiple departure date package management.
+     \u2022 Unlimited pilgrim bookings.
+     \u2022 Booking manager & reservation system.
+     \u2022 Lead Manager & Pilgrimage CRM.
+     \u2022 Invoicing & Billing module.
+
+2. Umrah360 Pro / Growth Plan:
+   - Price: Contact for customized agency tier ($499/mo for up to 10 users).
+   - Target: Established tour operators with sub-agent reseller networks.
+   - Includes:
+     \u2022 All Lite features.
+     \u2022 Complete B2B Sub-Agent Reseller Portal with custom markups and credit wallets.
+     \u2022 Hotel Extranet & Allotment management with blackout dates.
+     \u2022 Automated WhatsApp and SMS pilgrim status alerts.
+     \u2022 Multi-branch and role-based staff management.
+
+3. Umrah360 Enterprise Plan (20+ Users / Large Consolidators):
+   - Price: STRICTLY CUSTOM QUOTE REQUIRED.
+   - AI RULE: If an agency inquires about 20+ users, high transaction volumes, or custom enterprise architecture, inform them that Enterprise tiers require a tailored volume assessment covering dedicated cloud infrastructure, custom GDS/Nusuk API integrations, and SLA guarantees, and immediately connect them with our Senior Solutions Specialist.`
   },
   {
-    "id": "kb-feature-finance-profitability-reports",
-    "title": "Finance, Receivables, Payables & Departure Profitability",
-    "category": "MODULES",
-    "tags": [
-      "finance",
-      "receivables",
-      "payables",
-      "profitability",
-      "p-and-l",
-      "mis-reports",
-      "dashboards",
-      "gst",
-      "vat"
-    ],
-    "status": "PUBLISHED",
-    "version": 1,
-    "author": "Umrah360 Finance Lead",
-    "createdAt": "2026-09-30T12:00:00Z",
-    "updatedAt": "2026-09-30T12:00:00Z",
-    "content": "Umrah360 Feature Capabilities 08 & 09 (Finance, Profitability & MIS Analytics):\n\n08. Finance, Profitability & Liabilities:\n- Customer Receivables Tracking: Monitor total package value, deposits paid, and outstanding balances per booking, family, and corporate client.\n- Automated Payment Receipts: Generate official numbered payment receipts and dispatch them instantly via email or WhatsApp.\n- Accounts Payable: Record supplier purchase invoices for Makkah hotels, Madinah hotels, transport buses, airline tickets, and catering. Track amounts due and payment milestones.\n- Departure-wise Profit and Loss (P&L): Compare actual revenue against consolidated supplier costs for every individual departure date to view real gross profit and net margin.\n- Tax Compliance: Generate GST-compliant invoices for India (with CGST, SGST, IGST, and TCS breakdowns) and VAT-compliant documentation for international markets.\n\n09. Dashboards & 20+ MIS Reports:\n- Executive Overview Dashboard: Real-time KPIs covering total bookings, monthly revenue, pending receivables, visa turnaround times, and seat occupancy rates.\n- Comprehensive MIS Reports: Over 20 built-in reports covering enquiry conversion rates, sales rep performance, B2B agent volumes, departure occupancy, passport expiry warnings, and cash flow forecasts."
-  },
-  {
-    "id": "kb-fit-dynamic-packaging",
-    "title": "FIT Booking CRM & Tailor-Made Dynamic Packaging Engine",
-    "category": "MODULES",
-    "tags": [
-      "fit",
-      "tailor-made",
-      "dynamic-packaging",
-      "quotations",
-      "custom-itinerary",
-      "vip",
-      "family-packages"
-    ],
-    "status": "PUBLISHED",
-    "version": 1,
-    "author": "Umrah360 FIT Solutions Team",
-    "createdAt": "2026-09-30T12:00:00Z",
-    "updatedAt": "2026-09-30T12:00:00Z",
-    "content": "FIT Booking CRM & Tailor-Made Umrah Management (from https://www.puratech.in/demo/umrah360new/fit_features.html):\n\nConnected Workflow from First Enquiry to Final Profitability:\nThe FIT Module empowers tour operators to create, cost, quote, book, and manage personalized Hajj and Umrah journeys for individuals, families, and private VIP groups.\n\nStep-by-Step Connected Workflow:\n1. Capture Enquiry: Record travel dates, party size (adults, children, infants), preferred hotel ratings (3-star, 4-star, 5-star, Clock Tower), and special requirements.\n2. Combine Services: Select live or contracted components:\n   - Flights: Preferred airlines, direct or transit routing.\n   - Hotels: Makkah and Madinah properties with custom room categories and meal plans.\n   - Transfers: Private VIP vehicles (GMC Yukon, Hyundai H1, luxury sedan), group buses, or Haramain High-Speed Rail tickets.\n   - Ziyarah & Activities: Private tours of historic Islamic sites in Makkah, Madinah, Taif, and Badr with certified guides.\n   - Visas: Saudi tourist eVisa, Umrah visa, or visa assistance.\n3. Dynamic Costing & Markups: Automatically compute net supplier costs, apply rule-based markups or agent commissions, calculate taxes, and establish net profit margins.\n4. Multi-Option Quotation Builder: Generate multiple quotation versions (e.g. Economy, Premium, Luxury) from a single inquiry. Share professionally branded PDF proposals or interactive web links.\n5. Quote-to-Booking Conversion: With a single click, convert the customer\u2019s accepted quotation into an active booking without re-entering passenger, service, or pricing data.\n6. Profitability Tracking: Monitor actual service supplier vouchers against customer collections to verify booking-level profitability."
-  },
-  {
-    "id": "kb-b2b-agent-platform",
-    "title": "B2B Travel Agent Booking Platform & Distribution Network",
-    "category": "B2B",
-    "tags": [
-      "b2b",
-      "agent-portal",
-      "sub-agents",
-      "distribution",
-      "markups",
-      "commissions",
-      "credit-wallet",
-      "white-label-vouchers"
-    ],
-    "status": "PUBLISHED",
-    "version": 1,
-    "author": "Umrah360 B2B Distribution Team",
-    "createdAt": "2026-09-30T12:00:00Z",
-    "updatedAt": "2026-09-30T12:00:00Z",
-    "content": "B2B Travel Agent Booking Platform (from https://www.puratech.in/demo/umrah360new/b2b_booking_platform.html):\n\nEmpower Travel Partners to Sell More Departures:\nThe B2B extension provides approved travel agents, sub-agents, and wholesale partners with a secure self-service portal connected directly to your mid-office inventory.\n\nCore Capabilities:\n1. Online Agent Onboarding & Approval:\n   - Travel agents register online with business details, license numbers, and tax identification.\n   - Operators review and approve applications before granting access to inventory, net rates, or booking functions.\n   - Secure agent KYC document storage (IATA accreditation, company registration, trade license).\n\n2. Tiered Pricing & Commission Controls:\n   - Configure tiered pricing and markup rules per agent category (e.g., Gold, Silver, Retail).\n   - Set fixed commissions or percentage margins.\n\n3. Credit Limits & Deposit Wallets:\n   - Assign credit limits to trusted partners and manage pre-funded deposit wallets.\n   - Automatic booking cut-offs when an agent\u2019s credit ceiling is reached.\n\n4. Live Inventory Search & Instant Booking:\n   - Sub-agents search assigned departures, room availability, and flight allocations in real time.\n   - Instant booking creation with passenger passport uploads and seat reservation.\n\n5. White-Labeled Branded Vouchers:\n   - When an agent confirms a booking, the system generates vouchers with the SUB-AGENT's agency logo and contact details, preserving their brand equity with their retail pilgrims.\n\n6. Agent Financial Reconciliation:\n   - Sub-agents track bookings, passenger status, payment receipts, statement of accounts, and commission earnings inside their secure portal."
-  },
-  {
-    "id": "kb-b2c-customer-platform",
-    "title": "B2C Pilgrim Booking & Enquiry Website",
-    "category": "OPERATIONS",
-    "tags": [
-      "b2c",
-      "customer-website",
-      "pilgrim-portal",
-      "online-booking",
-      "payments",
-      "itinerary",
-      "mobile-responsive"
-    ],
-    "status": "PUBLISHED",
-    "version": 1,
-    "author": "Umrah360 Digital Experience Team",
-    "createdAt": "2026-09-30T12:00:00Z",
-    "updatedAt": "2026-09-30T12:00:00Z",
-    "content": "B2C Customer Booking & Enquiry Platform (from https://www.puratech.in/demo/umrah360new/b2c_booking_platform.html):\n\nTurn Package Discovery into a Seamless Pilgrim Journey:\nThe B2C website provides operators with a professionally designed, mobile-responsive consumer website that connects directly to the Umrah360 mid-office.\n\nKey Capabilities:\n1. Branded Digital Storefront:\n   - Fully customized with the operator\u2019s corporate identity, color palette, logo, contact details, and marketing imagery.\n   - 100% responsive across smartphones, tablets, laptops, and desktop computers.\n\n2. Package Discovery & Smart Filtering:\n   - Travellers search and filter packages by departure city, travel date, duration, hotel star category, room sharing type, and budget.\n   - Comprehensive package display with day-by-day itineraries, flight schedules, inclusions, exclusions, and high-resolution hotel galleries.\n\n3. Online Bookings & Payments:\n   - Pilgrims can book directly online or submit an inquiry for bespoke customization.\n   - Integrated payment gateway supporting credit/debit cards, net banking, and UPI for instant deposit collection.\n\n4. Pilgrim Self-Service Portal:\n   - Travellers log in to view booking status, upload passport scans and passport photos for visa processing, and download proforma invoices, receipts, and confirmed itineraries.\n   - Directly feeds the mid-office CRM, eliminating manual re-entry of customer data."
-  },
-  {
-    "id": "kb-case-study-umrahbookings",
-    "title": "Case Study: Scaling UmrahBookings to 5,000 Agents & 3,500 Monthly Bookings",
-    "category": "B2B",
-    "tags": [
-      "case-study",
-      "umrahbookings",
-      "emaar-al-diyafa",
-      "b2b-distribution",
-      "hotel-extranet",
-      "franchise",
-      "scale"
-    ],
-    "status": "PUBLISHED",
-    "version": 1,
-    "author": "Umrah360 Strategy & Case Study Group",
-    "createdAt": "2026-09-30T12:00:00Z",
-    "updatedAt": "2026-09-30T12:00:00Z",
-    "content": "Client Case Study: Building a Scalable Umrah Hotel Distribution Platform for UmrahBookings (from https://www.puratech.in/demo/umrah360new/case_study.html):\n\nClient Background:\n- Client: UmrahBookings (UK & KSA-based Travel Tech, backed by Emaar Al Diyafa Group Hotels).\n- Operating Markets: United Kingdom, Kingdom of Saudi Arabia, Egypt, and Morocco.\n- Vision: Create a fully digitized, transparent B2B ecosystem for Umrah hotel booking, connecting hotels, travel agents, and regional franchise operators worldwide.\n- Mandate to ETOS Global: Conceptualize, engineer, and deploy a comprehensive, scalable B2B hotel distribution platform from the ground up.\n\nChallenges Before ETOS Global:\n- Hotels lacked a centralized system to manage live inventory, rates, and seasonal promotions, causing frequent rate discrepancies.\n- Heavy reliance on manual coordination via WhatsApp and phone calls, resulting in booking delays and overbooking risks.\n- Inability to efficiently onboard and govern a rapid international network of agents and regional franchises.\n\nSolution Architecture Deployed:\n1. Hotel Extranet: Dedicated portal for hotel partners (Emaar Al Diyafa, etc.) to upload rates, special offers, and live room availability. Replaced 80% of manual coordination and eliminated overbooking risks.\n2. B2B Agent Booking Platform: Responsive web portal for travel agents to search, compare, and book Makkah & Madinah hotels instantly with confirmed availability.\n3. Franchise Control Module: Hierarchical management structure for regional franchises, multi-tier commissions, agent onboarding, and multi-country operational oversight.\n4. Global Multi-Currency & Multi-Language Setup: Multi-currency billing (SAR, GBP, USD, EUR, EGP, MAD) with high-availability cloud architecture.\n5. Automated Notification Engine: Instant confirmation and update triggers via Email and WhatsApp.\n\nQuantified Results in 10 Months:\n\u2022 Network Growth: Expanded from 50 agents to over 5,000 active travel agents across 4 countries.\n\u2022 Booking Volume: Processes 3,500+ confirmed hotel bookings per month with steady month-over-month growth.\n\u2022 Operational Efficiency: Reduced manual coordination errors by over 80% through live extranet updates.\n\u2022 Hotel Partnerships: Grew partner hotel inventory from 30 to over 100 active contributing properties in Makkah and Madinah."
-  },
-  {
-    "id": "kb-faqs-general-departures",
-    "title": "Frequently Asked Questions: General Platform & Group Departures",
-    "category": "FAQS",
-    "tags": [
-      "faqs",
-      "general",
-      "group-departures",
-      "seats",
-      "hotels",
-      "visas",
-      "co-travellers"
-    ],
-    "status": "PUBLISHED",
-    "version": 1,
-    "author": "Umrah360 Support Lead",
-    "createdAt": "2026-09-30T12:00:00Z",
-    "updatedAt": "2026-09-30T12:00:00Z",
-    "content": "Frequently Asked Questions: General & Group Departure Management (from https://www.puratech.in/demo/umrah360new/faqs.html):\n\nGeneral Questions:\nQ: What is Umrah360?\nA: Umrah360 is a cloud-based software ecosystem designed for Hajj and Umrah tour operators. It connects package creation, departures, enquiries, bookings, passengers, visas, operations, payments, and reporting through one platform.\n\nQ: Who should use Umrah360?\nA: Hajj and Umrah tour operators, group departure organizers, pilgrimage consolidators, wholesalers, and travel agencies selling pilgrimage packages directly to pilgrims or through sub-agent networks.\n\nQ: Is Umrah360 specifically designed for Hajj and Umrah operators?\nA: Yes. Umrah360 supports pilgrimage-specific workflows including fixed departures, Makkah/Madinah hotels, quad/triple/double room sharing, family bookings, Nusuk and Saudi visa tracking, agent commissions, and departure-wise operational manifests.\n\nQ: Is Umrah360 suitable for small operators?\nA: Yes. Smaller operators can start with Umrah360 Lite (INR 36,000/yr or USD 825/yr) for essential package, departure, booking, passenger, and receivable management.\n\nQ: Can larger pilgrimage companies use Umrah360?\nA: Yes. Business and Professional tiers support multi-branch operations, multi-currency accounting, sub-agent networks, approval hierarchies, and customized business processes.\n\nQ: Is Umrah360 cloud-based?\nA: Yes. Authorized users can access Umrah360 securely from any internet-connected device with role-based permissions.\n\nGroup Departure Management:\nQ: What can we manage within a group departure?\nA: Package details, departure dates, seat inventory, flight blocks, hotel room allocations, passenger manifests, rooming lists, visa applications, proforma invoices, and payment receipts.\n\nQ: How does Umrah360 handle room sharing?\nA: Supports Quad, Triple, Double, and Single sharing configurations with automatic tracking of room allocations and family grouping.\n\nQ: Can we track Saudi visas within departures?\nA: Yes. Track visa stages (Applied, Under Process, Approved/Issued, Rejected) along with passport scan uploads and expiry alerts."
-  },
-  {
-    "id": "kb-faqs-plans-pricing-crm",
-    "title": "Frequently Asked Questions: Plans, Pricing & CRM Lead Management",
-    "category": "FAQS",
-    "tags": [
-      "faqs",
-      "pricing-faq",
-      "crm-faq",
-      "leads",
-      "plans",
-      "user-limits",
-      "demo"
-    ],
-    "status": "PUBLISHED",
-    "version": 1,
-    "author": "Umrah360 Commercial Lead",
-    "createdAt": "2026-09-30T12:00:00Z",
-    "updatedAt": "2026-09-30T12:00:00Z",
-    "content": "Frequently Asked Questions: Plans, Pricing & CRM Lead Management (from https://www.puratech.in/demo/umrah360new/faqs.html):\n\nPlans and Pricing FAQs:\nQ: Which Umrah360 plans are available?\nA: Umrah360 is available in three subscription tiers:\n   - Lite: INR 36,000/year (or INR 4,000/month) | International: USD 825/year (or USD 75/month) \u2014 up to 5 users.\n   - Business: INR 55,000/year (or INR 5,500/month) | International: USD 1,260/year (or USD 120/month) \u2014 up to 10 users.\n   - Professional: INR 1,20,000/year (or INR 12,500/month) | International: USD 2,760/year (or USD 280/month) \u2014 unlimited users.\n   - Bespoke Customised Plan: Tailor-made deployment with API integrations.\n\nQ: Can we upgrade our plan later?\nA: Yes. Operators can start on Lite or Business and seamlessly upgrade as their team size, departures, or agent network grows.\n\nQ: Are there onboarding and training sessions included?\nA: Yes. Lite includes 3 training sessions, Business includes 6 sessions, and Professional includes comprehensive onboarding with a dedicated account manager.\n\nCRM and Lead Management FAQs:\nQ: Does Umrah360 include CRM?\nA: Yes. Structured CRM and lead management are included in Business and Professional tiers.\n\nQ: Where does Umrah360 capture leads from?\nA: Ingests inquiries automatically from website forms, social media campaigns (Facebook, Instagram, LinkedIn), WhatsApp chats, phone inquiries, newspaper ads, and walk-in visits.\n\nQ: Can leads be assigned automatically to sales staff?\nA: Yes. Automated lead routing rules assign leads based on branch, destination, language, or sales executive availability.\n\nQ: How does follow-up tracking work?\nA: The system logs follow-up dates, notes, call summaries, and automatically alerts sales agents when a follow-up is due."
-  },
-  {
-    "id": "kb-faqs-b2b-b2c-fit",
-    "title": "Frequently Asked Questions: B2B Agent Portal, B2C Website & FIT Module",
-    "category": "FAQS",
-    "tags": [
-      "faqs",
-      "b2b-faq",
-      "b2c-faq",
-      "fit-faq",
-      "tailor-made",
-      "sub-agents",
-      "white-label"
-    ],
-    "status": "PUBLISHED",
-    "version": 1,
-    "author": "Umrah360 Product Lead",
-    "createdAt": "2026-09-30T12:00:00Z",
-    "updatedAt": "2026-09-30T12:00:00Z",
-    "content": "Frequently Asked Questions: B2B, B2C & FIT Solutions (from https://www.puratech.in/demo/umrah360new/faqs.html):\n\nB2B Agent Booking Platform FAQs:\nQ: What is the Umrah360 B2B Agent Platform?\nA: A secure portal for approved travel agents and sub-agents to access live departure inventory, book packages, manage passengers, and track commissions.\n\nQ: Can agents register online?\nA: Yes. Agents submit their registration and KYC documents (trade licenses, tax certificates) online for operator approval.\n\nQ: Can vouchers show the agent's branding?\nA: Yes. Confirmed booking vouchers display the sub-agent's company logo and contact details.\n\nB2C Customer Website FAQs:\nQ: What is the Umrah360 B2C Website?\nA: A turnkey, branded consumer booking website allowing pilgrims to explore departures, customize trips, submit enquiries, and book online.\n\nQ: Can customers pay online?\nA: Yes. Integrates with payment gateways (and UPI for India) for real-time deposit and balance collections.\n\nQ: Can pilgrims upload passport scans?\nA: Yes. Pilgrims can upload passport copies and photographs securely via their personal account.\n\nFIT Tailor-Made Module FAQs:\nQ: What is the FIT Module?\nA: Allows operators to design, cost, quote, and book custom Umrah itineraries for individuals and private family groups.\n\nQ: What services can be included in an FIT package?\nA: Flights, Makkah & Madinah hotels, Haramain train tickets, private vehicle transfers (GMC, sedan), Ziyarah tours with licensed guides, and Saudi visas.\n\nQ: Can quotations be converted to bookings automatically?\nA: Yes. One-click conversion converts approved quotations into confirmed bookings without data re-entry."
-  },
-  {
-    "id": "kb-faqs-finance-integrations-security",
-    "title": "Frequently Asked Questions: Finance, Integrations, Security & Implementation",
-    "category": "FAQS",
-    "tags": [
-      "faqs",
-      "finance-faq",
-      "integrations-faq",
-      "security-faq",
-      "gst",
-      "upi",
-      "whatsapp-api",
-      "cloud"
-    ],
-    "status": "PUBLISHED",
-    "version": 1,
-    "author": "Umrah360 Engineering Team",
-    "createdAt": "2026-09-30T12:00:00Z",
-    "updatedAt": "2026-09-30T12:00:00Z",
-    "content": "Frequently Asked Questions: Finance, Integrations & Security (from https://www.puratech.in/demo/umrah360new/faqs.html):\n\nFinance & Reporting FAQs:\nQ: Can Umrah360 track customer receivables and receipts?\nA: Yes. Tracks booking-wise and customer-wise payments, outstanding balances, and generates automated payment receipts.\n\nQ: Can we calculate profit per departure?\nA: Yes. Departure-wise Profit and Loss (P&L) calculates revenue against actual hotel, flight, transport, and visa expenses.\n\nQ: Does Umrah360 support GST and TCS for India?\nA: Yes. Comprehensive India-specific GST and TCS tax rules, invoice generation, and audit reports are supported.\n\nIntegrations FAQs:\nQ: What integrations are supported?\nA: Payment gateways, UPI (India), WhatsApp Business API, SMS gateways, email services (SMTP/IMAP), Passport OCR readers, and accounting systems.\n\nQ: Can Umrah360 read passports automatically?\nA: Yes. Optional Passport OCR integration scans passport MRZ zones and populates passenger names, nationality, passport numbers, and birth dates automatically.\n\nSecurity & Hosting FAQs:\nQ: Is passenger information protected?\nA: Yes. Umrah360 enforces SSL/TLS encryption in transit and at rest, role-based authorization, and comprehensive audit logs.\n\nQ: Where is data hosted?\nA: High-availability cloud infrastructure with enterprise-grade data backup and redundancy."
-  },
-  {
-    "id": "kb-industry-operations-insights",
-    "title": "Industry Best Practices & Digital Transformation for Umrah Operators",
-    "category": "OPERATIONS",
-    "tags": [
-      "industry-trends",
-      "best-practices",
-      "automation",
-      "commission-automation",
-      "digital-first",
-      "market-trends-2026"
-    ],
-    "status": "PUBLISHED",
-    "version": 1,
-    "author": "Umrah360 Editorial Team",
-    "createdAt": "2026-09-30T12:00:00Z",
-    "updatedAt": "2026-09-30T12:00:00Z",
-    "content": "Strategic Insights & Operational Best Practices from Umrah360 Knowledge Center (Blogs 01-12 from https://www.puratech.in/demo/umrah360new/blogs.html):\n\n1. Automating Agent Commissions on Umrah360:\n- Eliminates manual spreadsheet calculations and disputes with sub-agents.\n- Real-time commission ledger crediting upon booking confirmation and transparent statement generation.\n\n2. The Rise of Digital-First Umrah Tour Operators:\n- Modern pilgrims expect instant online price quotes, WhatsApp updates, and digital payment options.\n- Agencies with digital packaging engines experience 3.4x higher inquiry-to-booking conversion rates.\n\n3. Preventing Small Operational Gaps That Cause Pilgrim Complaints:\n- Operational pitfalls like delayed hotel vouchers, missed airport meet-and-greets, and wrong rooming configurations are eliminated through unified operations manifests.\n\n4. Cross-Departmental Visibility as the Foundation of Smooth Departures:\n- When sales, visa processors, rooming coordinators, and accounts work from a single live system, last-minute departure firefighting is replaced by predictable workflows.\n\n5. Key Umrah Market Trends for 2026:\n- Shift toward tailor-made FIT packages alongside traditional fixed departures.\n- Increased adoption of the Haramain High-Speed Train between Jeddah, Makkah, and Madinah.\n- Transition to paperless e-visas and Nusuk digital permits."
+    id: "kb-onboarding-support",
+    title: "Onboarding, Data Migration & 24/7 Human Support",
+    category: "FAQS",
+    tags: ["faq", "migration", "support", "onboarding", "security", "data-hosting"],
+    status: "PUBLISHED",
+    version: 2,
+    author: "Umrah360 Support Lead",
+    createdAt: "2026-09-06T10:00:00Z",
+    updatedAt: "2026-09-17T08:00:00Z",
+    content: `Frequently Asked Technical & Operational Questions:
+
+Q: How long does onboarding and setup take?
+A: Standard setup takes 48 to 72 hours. Our onboarding team assists in importing your existing hotel contracts, agent lists, and past customer records via standard CSV/Excel templates.
+
+Q: Can we keep our existing offline hotel contracts?
+A: Yes! Umrah360 allows you to load custom offline hotel room blocks with negotiated rates, blackout dates, and cutoff policies alongside online inventory.
+
+Q: Does Umrah360 offer 24/7 support?
+A: Yes, Umrah360 provides 24/7 dedicated human support and access to extensive video documentation.
+
+Q: Where is our client and pilgrim data hosted?
+A: All data is encrypted in transit (TLS 1.3) and at rest (AES-256) on Google Cloud infrastructure with role-based access control, GDPR compliance, and automated daily backups.`
   }
 ];
 
@@ -78493,12 +78330,12 @@ function retrieveRelevantKnowledge(query2, maxResults = 3) {
   const normalizedQuery = query2.toLowerCase();
   const queryTokens = normalizedQuery.replace(/[^\w\s]/g, "").split(/\s+/).filter((token) => token.length > 2);
   const intentBoosts = {
-    pricing: ["price", "pricing", "cost", "plan", "plans", "lite", "business", "professional", "enterprise", "users", "subscription", "quote", "discount", "inr", "usd"],
-    b2b: ["b2b", "agent", "agents", "sub-agent", "subagent", "wholesaler", "reseller", "markup", "credit", "voucher", "franchise", "extranet"],
-    packages: ["package", "itinerary", "fit", "groups", "hotel", "hotels", "makkah", "madinah", "ziyarat", "transport", "train", "bus", "series", "departure"],
-    visa: ["visa", "nusuk", "evisa", "passport", "mofa", "document", "stamped", "ocr"],
-    invoicing: ["invoice", "costing", "vat", "gst", "tax", "tcs", "forex", "currency", "sar", "ledger", "receivable", "payable", "profitability"],
-    faq: ["setup", "onboarding", "security", "time", "mobile", "support", "contract", "training", "app", "marketplace"]
+    pricing: ["price", "pricing", "cost", "plan", "plans", "starter", "growth", "enterprise", "users", "subscription", "quote", "discount"],
+    b2b: ["b2b", "agent", "agents", "sub-agent", "subagent", "wholesaler", "reseller", "markup", "credit", "voucher"],
+    packages: ["package", "itinerary", "fit", "groups", "hotel", "hotels", "makkah", "madinah", "ziyarat", "transport", "train", "bus"],
+    visa: ["visa", "nusuk", "evisa", "passport", "mofa", "document", "stamped"],
+    invoicing: ["invoice", "costing", "vat", "gst", "tax", "forex", "currency", "sar", "ledger"],
+    faq: ["setup", "onboarding", "security", "time", "mobile", "support", "contract"]
   };
   const scoredDocs = publishedDocs.map((docItem) => {
     let score = 0;
@@ -78780,9 +78617,162 @@ www.umrah360.in`,
     updatedAt: "2026-09-12T10:00:00Z"
   }
 ];
-var DEFAULT_CAMPAIGNS = [];
-var DEFAULT_CAMPAIGN_LEADS = [];
-var DEFAULT_CAMPAIGN_RUNS = [];
+var DEFAULT_CAMPAIGNS = [
+  {
+    campaignId: "camp-umrah-1448",
+    name: "Indian Umrah Operators 2026",
+    type: "EMAIL",
+    campaignMode: "PREDEFINED",
+    deliveryMode: "LIVE_SMTP",
+    status: "RUNNING",
+    templateId: "tpl-b2b-portal",
+    templateName: "B2B Pilgrimage Portal & Sub-Agent Automation",
+    sourceFileName: "5_Sample_Pilgrimage_Tour_Operators.csv",
+    totalLeads: 5,
+    sentCount: 3,
+    pendingCount: 2,
+    failedCount: 0,
+    repliedCount: 2,
+    demoBookedCount: 1,
+    currentRunId: "run-umrah-1448-1",
+    lastRunNumber: 1,
+    createdAt: "2026-09-12T10:00:00Z",
+    updatedAt: "2026-09-15T12:00:00Z",
+    startedAt: "2026-09-12T10:05:00Z",
+    stats: {
+      totalLeads: 5,
+      sent: 3,
+      pending: 2,
+      failed: 0,
+      replied: 2,
+      demoBooked: 1
+    }
+  }
+];
+var DEFAULT_CAMPAIGN_LEADS = [
+  {
+    campaignLeadId: "clead-umrah-1",
+    campaignId: "camp-umrah-1448",
+    leadId: "lead-tariq-mansoor",
+    name: "Tariq Al-Mansoor",
+    firstName: "Tariq",
+    lastName: "Al-Mansoor",
+    companyName: "Al-Mansoor Hajj & Umrah Services",
+    email: "tariq@mansoorhajj.com",
+    phone: "+91 98201 11222",
+    designation: "Managing Director",
+    sourceFile: "5_Sample_Pilgrimage_Tour_Operators.csv",
+    rowNumber: 1,
+    sendStatus: "SENT",
+    replyStatus: "REPLIED",
+    demoStatus: "BOOKED",
+    demoIntent: true,
+    demoSource: "AUTOMATIC",
+    demoBookedAt: "2026-09-14T11:00:00Z",
+    sendCount: 1,
+    lastSentAt: "2026-09-13T10:15:00Z",
+    repliedAt: "2026-09-14T09:30:00Z",
+    createdAt: "2026-09-12T10:00:00Z",
+    updatedAt: "2026-09-14T11:00:00Z"
+  },
+  {
+    campaignLeadId: "clead-umrah-2",
+    campaignId: "camp-umrah-1448",
+    leadId: "lead-rashid-farooqui",
+    name: "Rashid Farooqui",
+    firstName: "Rashid",
+    lastName: "Farooqui",
+    companyName: "Haramain Journeys Mumbai",
+    email: "rashid@haramainjourneys.in",
+    phone: "+91 98202 33445",
+    designation: "Owner / Partner",
+    sourceFile: "5_Sample_Pilgrimage_Tour_Operators.csv",
+    rowNumber: 2,
+    sendStatus: "SENT",
+    replyStatus: "REPLIED",
+    demoStatus: "NOT_BOOKED",
+    sendCount: 1,
+    lastSentAt: "2026-09-13T10:20:00Z",
+    repliedAt: "2026-09-14T14:10:00Z",
+    createdAt: "2026-09-12T10:00:00Z",
+    updatedAt: "2026-09-14T14:10:00Z"
+  },
+  {
+    campaignLeadId: "clead-umrah-3",
+    campaignId: "camp-umrah-1448",
+    leadId: "lead-zeeshan-malik",
+    name: "Zeeshan Malik",
+    firstName: "Zeeshan",
+    lastName: "Malik",
+    companyName: "Malik Pilgrimages UK",
+    email: "zeeshan@malikpilgrimages.co.uk",
+    phone: "+44 7700 900123",
+    designation: "Operations Director",
+    sourceFile: "5_Sample_Pilgrimage_Tour_Operators.csv",
+    rowNumber: 3,
+    sendStatus: "SENT",
+    replyStatus: "NOT_REPLIED",
+    demoStatus: "NOT_BOOKED",
+    sendCount: 1,
+    lastSentAt: "2026-09-13T10:25:00Z",
+    createdAt: "2026-09-12T10:00:00Z",
+    updatedAt: "2026-09-13T10:25:00Z"
+  },
+  {
+    campaignLeadId: "clead-umrah-4",
+    campaignId: "camp-umrah-1448",
+    leadId: "lead-bilal-qureshi",
+    name: "Bilal Qureshi",
+    firstName: "Bilal",
+    lastName: "Qureshi",
+    companyName: "Al-Noor Tours Dubai",
+    email: "bilal@alnoortravels.ae",
+    phone: "+971 50 123 4567",
+    designation: "General Manager",
+    sourceFile: "5_Sample_Pilgrimage_Tour_Operators.csv",
+    rowNumber: 4,
+    sendStatus: "PENDING",
+    replyStatus: "NOT_REPLIED",
+    demoStatus: "NOT_BOOKED",
+    sendCount: 0,
+    createdAt: "2026-09-12T10:00:00Z",
+    updatedAt: "2026-09-12T10:00:00Z"
+  },
+  {
+    campaignLeadId: "clead-umrah-5",
+    campaignId: "camp-umrah-1448",
+    leadId: "lead-irfan-siddiqui",
+    name: "Irfan Siddiqui",
+    firstName: "Irfan",
+    lastName: "Siddiqui",
+    companyName: "Delhi Pilgrimage Consolidators",
+    email: "irfan@delhiumrah.in",
+    phone: "+91 98111 55667",
+    designation: "CEO / Founder",
+    sourceFile: "5_Sample_Pilgrimage_Tour_Operators.csv",
+    rowNumber: 5,
+    sendStatus: "PENDING",
+    replyStatus: "NOT_REPLIED",
+    demoStatus: "NOT_BOOKED",
+    sendCount: 0,
+    createdAt: "2026-09-12T10:00:00Z",
+    updatedAt: "2026-09-12T10:00:00Z"
+  }
+];
+var DEFAULT_CAMPAIGN_RUNS = [
+  {
+    runId: "run-umrah-1448-1",
+    campaignId: "camp-umrah-1448",
+    runNumber: 1,
+    status: "RUNNING",
+    templateId: "tpl-b2b-portal",
+    templateSubject: "Umrah360 for {{company}} - Automate B2B Packages & Sub-Agent Bookings",
+    totalLeads: 5,
+    sentCount: 3,
+    startedAt: "2026-09-12T10:05:00Z",
+    createdAt: "2026-09-12T10:05:00Z"
+  }
+];
 var campaignsMap = /* @__PURE__ */ new Map();
 var campaignLeadsMap = /* @__PURE__ */ new Map();
 var campaignRunsMap = /* @__PURE__ */ new Map();
@@ -78790,23 +78780,21 @@ var emailTemplatesMap = /* @__PURE__ */ new Map();
 var sendHistorySet = /* @__PURE__ */ new Set();
 var activeCampaignAbortControllers = /* @__PURE__ */ new Map();
 var isCampaignStoreInitialized = false;
-var hasLoadedInitialDefaults = false;
 function ensureDefaultsInMemory() {
   for (const tpl of DEFAULT_EMAIL_TEMPLATES) {
     if (!emailTemplatesMap.has(tpl.templateId)) {
       emailTemplatesMap.set(tpl.templateId, tpl);
     }
   }
-  if (!hasLoadedInitialDefaults) {
-    hasLoadedInitialDefaults = true;
+  if (campaignsMap.size === 0) {
     for (const c of DEFAULT_CAMPAIGNS) {
-      if (!campaignsMap.has(c.campaignId)) campaignsMap.set(c.campaignId, c);
+      campaignsMap.set(c.campaignId, c);
     }
     for (const l of DEFAULT_CAMPAIGN_LEADS) {
-      if (!campaignLeadsMap.has(l.campaignLeadId)) campaignLeadsMap.set(l.campaignLeadId, l);
+      campaignLeadsMap.set(l.campaignLeadId, l);
     }
     for (const r of DEFAULT_CAMPAIGN_RUNS) {
-      if (!campaignRunsMap.has(r.runId)) campaignRunsMap.set(r.runId, r);
+      campaignRunsMap.set(r.runId, r);
     }
   }
 }
@@ -78839,47 +78827,47 @@ async function syncCampaignStoreFromFirestore() {
           }
         }
       }
-      if (campSnap) {
-        const firestoreCampIds = /* @__PURE__ */ new Set();
+      if (campSnap && !campSnap.empty) {
         campSnap.forEach((d) => {
           const data = d.data();
           if (data && data.campaignId) {
-            const cleanName = (data.name || "").toLowerCase().trim();
-            if (data.campaignId === "camp-umrah-1448" || data.campaignId === "camp-indian-umrah-operators" || cleanName === "indian umrah operators 2026" || data.campaignId === "camp-1790758967982-7his" || cleanName === "test") {
-              deleteDoc(doc(db, "campaigns", d.id)).catch(() => {
-              });
-              deleteDoc(doc(db, "outbound_campaigns", d.id)).catch(() => {
-              });
-              campaignsMap.delete(data.campaignId);
-              campaignsMap.delete(d.id);
-            } else {
-              firestoreCampIds.add(data.campaignId);
-              firestoreCampIds.add(d.id);
-              campaignsMap.set(data.campaignId, data);
-            }
+            campaignsMap.set(data.campaignId, data);
           }
         });
-        for (const existingId of Array.from(campaignsMap.keys())) {
-          if (!firestoreCampIds.has(existingId)) {
-            campaignsMap.delete(existingId);
-          }
+      } else if (campSnap && campSnap.empty) {
+        for (const c of DEFAULT_CAMPAIGNS) {
+          campaignsMap.set(c.campaignId, c);
+          safeSetDoc(doc(db, "campaigns", c.campaignId), c, { merge: true }).catch(() => {
+          });
         }
       }
-      if (leadsSnap) {
+      if (leadsSnap && !leadsSnap.empty) {
         leadsSnap.forEach((d) => {
           const data = d.data();
           if (data && data.campaignLeadId) {
             campaignLeadsMap.set(data.campaignLeadId, data);
           }
         });
+      } else if (leadsSnap && leadsSnap.empty) {
+        for (const l of DEFAULT_CAMPAIGN_LEADS) {
+          campaignLeadsMap.set(l.campaignLeadId, l);
+          safeSetDoc(doc(db, "campaign_leads", l.campaignLeadId), l, { merge: true }).catch(() => {
+          });
+        }
       }
-      if (runsSnap) {
+      if (runsSnap && !runsSnap.empty) {
         runsSnap.forEach((d) => {
           const data = d.data();
           if (data && data.runId) {
             campaignRunsMap.set(data.runId, data);
           }
         });
+      } else if (runsSnap && runsSnap.empty) {
+        for (const r of DEFAULT_CAMPAIGN_RUNS) {
+          campaignRunsMap.set(r.runId, r);
+          safeSetDoc(doc(db, "campaign_runs", r.runId), r, { merge: true }).catch(() => {
+          });
+        }
       }
       if (historySnap) {
         historySnap.forEach((d) => {
@@ -79078,7 +79066,14 @@ function getCampaignLeads(campaignId) {
   if (campaignLeadsMap.size === 0) {
     ensureDefaultsInMemory();
   }
-  return Array.from(campaignLeadsMap.values()).filter((l) => l.campaignId === campaignId).sort((a, b) => (a.rowNumber || 0) - (b.rowNumber || 0));
+  let leads = Array.from(campaignLeadsMap.values()).filter((l) => l.campaignId === campaignId).sort((a, b) => (a.rowNumber || 0) - (b.rowNumber || 0));
+  if (leads.length === 0 && campaignId === "camp-umrah-1448") {
+    for (const l of DEFAULT_CAMPAIGN_LEADS) {
+      campaignLeadsMap.set(l.campaignLeadId, l);
+    }
+    leads = Array.from(campaignLeadsMap.values()).filter((l) => l.campaignId === campaignId).sort((a, b) => (a.rowNumber || 0) - (b.rowNumber || 0));
+  }
+  return leads;
 }
 async function getCampaignLeadsFromDb(campaignId) {
   if (campaignsMap.size === 0) {
@@ -79101,13 +79096,26 @@ async function getCampaignLeadsFromDb(campaignId) {
       console.warn("Error fetching campaign_leads from Firestore:", e);
     }
   }
+  if (leads.length === 0 && campaignId === "camp-umrah-1448") {
+    for (const l of DEFAULT_CAMPAIGN_LEADS) {
+      campaignLeadsMap.set(l.campaignLeadId, l);
+    }
+    leads = getCampaignLeads(campaignId);
+  }
   return leads;
 }
 function getCampaignRuns(campaignId) {
   if (campaignRunsMap.size === 0) {
     ensureDefaultsInMemory();
   }
-  return Array.from(campaignRunsMap.values()).filter((r) => r.campaignId === campaignId).sort((a, b) => b.runNumber - a.runNumber);
+  let runs = Array.from(campaignRunsMap.values()).filter((r) => r.campaignId === campaignId).sort((a, b) => b.runNumber - a.runNumber);
+  if (runs.length === 0 && campaignId === "camp-umrah-1448") {
+    for (const r of DEFAULT_CAMPAIGN_RUNS) {
+      campaignRunsMap.set(r.runId, r);
+    }
+    runs = Array.from(campaignRunsMap.values()).filter((r) => r.campaignId === campaignId).sort((a, b) => b.runNumber - a.runNumber);
+  }
+  return runs;
 }
 async function deleteCampaign(campaignId) {
   await ensureCampaignInStore(campaignId);
@@ -79127,21 +79135,6 @@ async function deleteCampaign(campaignId) {
       });
     }
   }
-  if (isFirebaseConfigured && db) {
-    try {
-      const snap = await getDocs(collection(db, "campaign_leads"));
-      if (!snap.empty) {
-        snap.forEach((d) => {
-          const lData = d.data();
-          if (lData && lData.campaignId === campaignId) {
-            deleteDoc(doc(db, "campaign_leads", d.id)).catch(() => {
-            });
-          }
-        });
-      }
-    } catch {
-    }
-  }
   const runs = getCampaignRuns(campaignId);
   for (const run of runs) {
     campaignRunsMap.delete(run.runId);
@@ -79157,12 +79150,8 @@ async function deleteCampaign(campaignId) {
   }
   campaignsMap.delete(campaignId);
   if (isFirebaseConfigured && db) {
-    await Promise.all([
-      deleteDoc(doc(db, "campaigns", campaignId)).catch(() => {
-      }),
-      deleteDoc(doc(db, "outbound_campaigns", campaignId)).catch(() => {
-      })
-    ]);
+    await deleteDoc(doc(db, "campaigns", campaignId)).catch(() => {
+    });
   }
   console.log(`[Campaign Engine] Successfully deleted campaign ${campaignId} (${leads.length} leads, ${runs.length} runs).`);
   return true;
@@ -79465,16 +79454,15 @@ async function restartCampaign(campaignId, options2) {
       message
     };
   }
-  const leadSavePromises = [];
   unrepliedLeads.forEach((l) => {
     l.sendStatus = "PENDING";
     l.lastError = void 0;
     l.campaignRunId = newRunId;
     l.updatedAt = now;
     targetLeadsCount++;
-    campaignLeadsMap.set(l.campaignLeadId, l);
     if (isFirebaseConfigured && db) {
-      leadSavePromises.push(safeSetDoc(doc(db, "campaign_leads", l.campaignLeadId), l, { merge: true }));
+      setDoc(doc(db, "campaign_leads", l.campaignLeadId), l, { merge: true }).catch(() => {
+      });
     }
   });
   repliedLeads.forEach((l) => {
@@ -79482,15 +79470,11 @@ async function restartCampaign(campaignId, options2) {
       l.sendStatus = "SENT";
     }
     l.updatedAt = now;
-    campaignLeadsMap.set(l.campaignLeadId, l);
     if (isFirebaseConfigured && db) {
-      leadSavePromises.push(safeSetDoc(doc(db, "campaign_leads", l.campaignLeadId), l, { merge: true }));
+      setDoc(doc(db, "campaign_leads", l.campaignLeadId), l, { merge: true }).catch(() => {
+      });
     }
   });
-  if (leadSavePromises.length > 0) {
-    await Promise.allSettled(leadSavePromises).catch(() => {
-    });
-  }
   const newRun = {
     runId: newRunId,
     campaignId,
@@ -79510,13 +79494,12 @@ async function restartCampaign(campaignId, options2) {
   campaign.updatedAt = now;
   campaignsMap.set(campaignId, campaign);
   if (isFirebaseConfigured && db) {
-    await Promise.allSettled([
-      safeSetDoc(doc(db, "campaigns", campaignId), campaign, { merge: true }),
-      safeSetDoc(doc(db, "campaign_runs", newRunId), newRun)
-    ]).catch(() => {
+    setDoc(doc(db, "campaigns", campaignId), campaign, { merge: true }).catch(() => {
+    });
+    setDoc(doc(db, "campaign_runs", newRunId), newRun).catch(() => {
     });
   }
-  await recalculateAndPersistCampaignMetrics(campaignId);
+  recalculateCampaignMetrics(campaignId);
   message = `Run #${nextRunNumber} started. Sending follow-up to ${targetLeadsCount} unreplied lead(s). (${repliedLeads.length} lead(s) skipped because they already replied).`;
   console.log(`[Campaign Engine] ${message}`);
   const batchRes = await processNextCampaignSendBatch(campaignId, 3).catch((err) => {
@@ -79525,9 +79508,8 @@ async function restartCampaign(campaignId, options2) {
   });
   executeCampaignSendingEngine(campaignId, newRunId).catch(() => {
   });
-  const finalCampaignState = await recalculateAndPersistCampaignMetrics(campaignId) || batchRes?.campaign || campaign;
   return {
-    campaign: finalCampaignState,
+    campaign: batchRes?.campaign || recalculateCampaignMetrics(campaignId) || campaign,
     run: newRun,
     targetLeadsCount,
     alreadyRepliedCount: repliedLeads.length,
@@ -80084,6 +80066,10 @@ function recalculateCampaignMetrics(campaignId) {
     replied,
     demoBooked
   };
+  if (isFirebaseConfigured && db) {
+    safeSetDoc(doc(db, "campaigns", campaignId), camp, { merge: true }).catch(() => {
+    });
+  }
   return camp;
 }
 async function recalculateAndPersistCampaignMetrics(campaignId) {
@@ -80170,13 +80156,14 @@ async function updateLeadDemoStatus(params) {
 }
 async function handleIncomingCampaignLeadReply(params) {
   await initCampaignStore();
-  const cleanFromEmail = params.fromEmail ? extractCleanEmail(params.fromEmail) : "";
-  const rawPhoneDigits = params.fromPhone ? params.fromPhone.replace(/[^\d]/g, "") : "";
-  const cleanPhoneDigits = rawPhoneDigits.length >= 7 ? rawPhoneDigits.slice(-10) : "";
-  if (!cleanFromEmail && !cleanPhoneDigits) {
+  const cleanFrom = extractCleanEmail(params.fromEmail);
+  if (!cleanFrom) {
     return { isCampaignLead: false };
   }
-  if (isFirebaseConfigured && db) {
+  let matchedLead = Array.from(campaignLeadsMap.values()).find(
+    (l) => extractCleanEmail(l.email) === cleanFrom
+  );
+  if (!matchedLead && isFirebaseConfigured && db) {
     try {
       const snap = await getDocs(collection(db, "campaign_leads")).catch(() => null);
       if (snap && !snap.empty) {
@@ -80184,82 +80171,63 @@ async function handleIncomingCampaignLeadReply(params) {
           const l = d.data();
           if (l && l.campaignLeadId) {
             campaignLeadsMap.set(l.campaignLeadId, l);
+            if (extractCleanEmail(l.email) === cleanFrom && !matchedLead) {
+              matchedLead = l;
+            }
           }
         });
       }
     } catch (e) {
-      console.warn("[handleIncomingCampaignLeadReply] DB search notice:", e);
+      console.warn("[handleIncomingCampaignLeadReply] DB search error:", e);
     }
   }
-  const matchedLeads = [];
-  for (const l of campaignLeadsMap.values()) {
-    let isMatch = false;
-    if (cleanFromEmail) {
-      const lEmail = extractCleanEmail(l.email);
-      if (lEmail && (lEmail === cleanFromEmail || lEmail.includes(cleanFromEmail) || cleanFromEmail.includes(lEmail))) {
-        isMatch = true;
-      }
-    }
-    if (!isMatch && cleanPhoneDigits && l.phone) {
-      const lPhoneDigits = l.phone.replace(/[^\d]/g, "");
-      if (lPhoneDigits && (lPhoneDigits.endsWith(cleanPhoneDigits) || cleanPhoneDigits.endsWith(lPhoneDigits.slice(-10)))) {
-        isMatch = true;
-      }
-    }
-    if (isMatch) {
-      matchedLeads.push(l);
-    }
-  }
-  if (matchedLeads.length === 0) {
+  if (!matchedLead) {
     return { isCampaignLead: false };
   }
   const now = (/* @__PURE__ */ new Date()).toISOString();
-  const text = `${params.subject || ""} ${params.body || ""}`.toLowerCase();
-  const hasDemoIntent = /book a demo|schedule a demo|demo tomorrow|book the demo|yes.*demo|interested in a demo|platform walkthrough|live demo/i.test(text);
-  const hasConfirmedBooking = /calendar.*confirmed|appointment.*scheduled|booked for|demo scheduled|meeting invite accepted/i.test(text);
-  const affectedCampaignIds = /* @__PURE__ */ new Set();
-  for (const matchedLead of matchedLeads) {
-    matchedLead.replyStatus = "REPLIED";
-    matchedLead.repliedAt = matchedLead.repliedAt || now;
-    matchedLead.updatedAt = now;
-    if (params.gmailMessageId) matchedLead.gmailMessageId = params.gmailMessageId;
-    if (params.gmailThreadId) matchedLead.gmailThreadId = params.gmailThreadId;
-    if (hasDemoIntent) {
-      matchedLead.demoIntent = true;
-      if (hasConfirmedBooking) {
-        matchedLead.demoStatus = "BOOKED";
-        matchedLead.demoSource = "AUTOMATIC";
-        matchedLead.demoBookedAt = now;
-      }
+  matchedLead.replyStatus = "REPLIED";
+  matchedLead.repliedAt = now;
+  matchedLead.updatedAt = now;
+  if (params.gmailMessageId) matchedLead.gmailMessageId = params.gmailMessageId;
+  if (params.gmailThreadId) matchedLead.gmailThreadId = params.gmailThreadId;
+  const text = `${params.subject} ${params.body}`.toLowerCase();
+  const hasDemoIntent = /book a demo|schedule a demo|demo tomorrow|book the demo|yes.*demo|interested in a demo|platform walkthrough|live demo/i.test(
+    text
+  );
+  if (hasDemoIntent) {
+    matchedLead.demoIntent = true;
+    const hasConfirmedBooking = /calendar.*confirmed|appointment.*scheduled|booked for|demo scheduled|meeting invite accepted/i.test(
+      text
+    );
+    if (hasConfirmedBooking) {
+      matchedLead.demoStatus = "BOOKED";
+      matchedLead.demoSource = "AUTOMATIC";
+      matchedLead.demoBookedAt = now;
     }
-    campaignLeadsMap.set(matchedLead.campaignLeadId, matchedLead);
-    affectedCampaignIds.add(matchedLead.campaignId);
-    if (isFirebaseConfigured && db) {
-      try {
-        safeSetDoc(doc(db, "campaign_leads", matchedLead.campaignLeadId), matchedLead, { merge: true }).catch(() => {
+  }
+  campaignLeadsMap.set(matchedLead.campaignLeadId, matchedLead);
+  if (isFirebaseConfigured && db) {
+    try {
+      await safeSetDoc(doc(db, "campaign_leads", matchedLead.campaignLeadId), matchedLead, { merge: true });
+      if (matchedLead.leadId) {
+        await safeSetDoc(doc(db, "leads", matchedLead.leadId), {
+          replyStatus: "REPLIED",
+          repliedAt: now,
+          status: matchedLead.demoStatus === "BOOKED" ? "DEMO_BOOKED" : "ENGAGED",
+          demoStatus: matchedLead.demoStatus,
+          updatedAt: now
+        }, { merge: true }).catch(() => {
         });
-        if (matchedLead.leadId) {
-          safeSetDoc(doc(db, "leads", matchedLead.leadId), {
-            replyStatus: "REPLIED",
-            repliedAt: now,
-            status: matchedLead.demoStatus === "BOOKED" ? "DEMO_BOOKED" : "ENGAGED",
-            demoStatus: matchedLead.demoStatus,
-            updatedAt: now
-          }, { merge: true }).catch(() => {
-          });
-        }
-      } catch (e) {
-        console.warn("Error syncing lead reply to Firestore:", e);
       }
+    } catch (e) {
+      console.warn("Error syncing lead reply to Firestore:", e);
     }
   }
-  for (const cId of affectedCampaignIds) {
-    await recalculateAndPersistCampaignMetrics(cId);
-  }
+  await recalculateAndPersistCampaignMetrics(matchedLead.campaignId);
   return {
     isCampaignLead: true,
-    campaignLead: matchedLeads[0],
-    demoDetected: matchedLeads.some((l) => l.demoStatus === "BOOKED")
+    campaignLead: matchedLead,
+    demoDetected: matchedLead.demoStatus === "BOOKED"
   };
 }
 async function updateCampaignLeadStatus(params) {
@@ -80387,38 +80355,16 @@ var SCHEDULING_TIMEZONE = "Asia/Kolkata";
 var VALID_SLOT_START_HOURS = [10, 11, 12, 13, 14, 15, 16, 17, 18];
 var serverCalendarAccessToken = null;
 var serverTokenExpiresAt = 0;
-async function handleExpiredCalendarToken() {
-  serverCalendarAccessToken = null;
-  serverTokenExpiresAt = 0;
-  if (isFirebaseConfigured && db) {
-    try {
-      await safeSetDoc(
-        doc(db, "settings", "calendar_auth"),
-        {
-          accessToken: null,
-          active: false,
-          expired: true,
-          expiredAt: (/* @__PURE__ */ new Date()).toISOString(),
-          updatedAt: (/* @__PURE__ */ new Date()).toISOString()
-        },
-        { merge: true }
-      );
-    } catch (e) {
-      console.warn("[Calendar Auth Notice] Error updating expired status in Firestore:", e);
-    }
-  }
-}
 function setServerCalendarAccessToken(token, expiresInSeconds = 3600) {
-  if (!token || !token.trim() || token === "null" || token === "undefined") return;
-  serverCalendarAccessToken = token.trim();
+  serverCalendarAccessToken = token;
   serverTokenExpiresAt = Date.now() + expiresInSeconds * 1e3;
 }
 async function getLiveCalendarToken(explicitToken) {
-  if (explicitToken && explicitToken.trim() && explicitToken !== "null" && explicitToken !== "undefined") {
+  if (explicitToken && explicitToken.trim()) {
     setServerCalendarAccessToken(explicitToken.trim());
     return explicitToken.trim();
   }
-  if (serverCalendarAccessToken && Date.now() < serverTokenExpiresAt - 3e4) {
+  if (serverCalendarAccessToken && Date.now() < serverTokenExpiresAt - 6e4) {
     return serverCalendarAccessToken;
   }
   if (isFirebaseConfigured && db) {
@@ -80426,49 +80372,10 @@ async function getLiveCalendarToken(explicitToken) {
       const snap = await getDoc(doc(db, "settings", "calendar_auth"));
       if (snap.exists()) {
         const data = snap.data();
-        if (data?.accessToken && data.accessToken !== "null" && data?.active !== false && !data?.expired) {
+        if (data?.accessToken) {
           serverCalendarAccessToken = data.accessToken;
           serverTokenExpiresAt = Date.now() + 3600 * 1e3;
           return serverCalendarAccessToken;
-        }
-        const refreshToken = data?.refreshToken || process.env.GOOGLE_CALENDAR_REFRESH_TOKEN;
-        const clientId = data?.clientId || process.env.GOOGLE_CALENDAR_CLIENT_ID;
-        const clientSecret = data?.clientSecret || process.env.GOOGLE_CALENDAR_CLIENT_SECRET;
-        if (refreshToken && clientId && clientSecret) {
-          try {
-            const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
-              method: "POST",
-              headers: { "Content-Type": "application/x-www-form-urlencoded" },
-              body: new URLSearchParams({
-                client_id: clientId,
-                client_secret: clientSecret,
-                refresh_token: refreshToken,
-                grant_type: "refresh_token"
-              })
-            });
-            if (tokenRes.ok) {
-              const tokenData = await tokenRes.json();
-              if (tokenData.access_token) {
-                setServerCalendarAccessToken(tokenData.access_token, tokenData.expires_in || 3600);
-                await safeSetDoc(
-                  doc(db, "settings", "calendar_auth"),
-                  {
-                    accessToken: tokenData.access_token,
-                    active: true,
-                    expired: false,
-                    updatedAt: (/* @__PURE__ */ new Date()).toISOString()
-                  },
-                  { merge: true }
-                );
-                return tokenData.access_token;
-              }
-            } else {
-              const errBody = await tokenRes.text();
-              console.warn("[Calendar Refresh Token Exchange Failed]:", tokenRes.status, errBody);
-            }
-          } catch (refErr) {
-            console.warn("[Calendar Refresh Token Error]:", refErr);
-          }
         }
       }
     } catch (e) {
@@ -80479,30 +80386,6 @@ async function getLiveCalendarToken(explicitToken) {
     return process.env.GOOGLE_CALENDAR_ACCESS_TOKEN;
   }
   return null;
-}
-async function verifyGoogleCalendarConnection(tokenOverride) {
-  const token = await getLiveCalendarToken(tokenOverride);
-  if (!token) {
-    return { connected: false, error: "No OAuth token found. Please sign in with Google Calendar." };
-  }
-  try {
-    const res = await fetch("https://www.googleapis.com/calendar/v3/calendars/primary", {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    if (res.ok) {
-      const data = await res.json();
-      return { connected: true, email: data.id || TARGET_CALENDAR_EMAIL };
-    } else {
-      const errText = await res.text();
-      if (res.status === 401) {
-        await handleExpiredCalendarToken();
-        return { connected: false, error: 'Google Calendar OAuth token expired (401). Please click "Connect / Sync Google Calendar" to re-authenticate.' };
-      }
-      return { connected: false, error: `Google API returned status ${res.status}: ${errText}` };
-    }
-  } catch (err) {
-    return { connected: false, error: err?.message || "Network error verifying Google Calendar" };
-  }
 }
 function getNowInIst() {
   const now = /* @__PURE__ */ new Date();
@@ -80559,22 +80442,18 @@ function formatSlotLabel(dateString, startHour) {
   };
   return `${dayName}: ${formatHour(startHour)} \u2013 ${formatHour(startHour + 1)} IST`;
 }
-async function checkRealtimeGoogleCalendarSlot(startIso, endIso, accessTokenOverride) {
-  const token = await getLiveCalendarToken(accessTokenOverride);
+async function checkRealtimeGoogleCalendarSlot(startIso, endIso) {
+  const token = await getLiveCalendarToken();
   if (!token) {
     const fallbackOccupied = await checkFirestoreBookingsConflict(startIso, endIso);
     return {
       available: !fallbackOccupied,
       busyIntervals: fallbackOccupied ? [{ start: startIso, end: endIso }] : [],
       source: "FALLBACK",
-      googleCalendarChecked: false,
-      error: "Google Calendar OAuth token not yet authenticated. Checking booked records ledger."
+      error: "Google Calendar OAuth token not yet authenticated. Connected via Firestore ledger."
     };
   }
   try {
-    const reqStartMs = new Date(startIso).getTime();
-    const reqEndMs = new Date(endIso).getTime();
-    const busyList = [];
     const freeBusyRes = await fetch("https://www.googleapis.com/calendar/v3/freeBusy", {
       method: "POST",
       headers: {
@@ -80585,43 +80464,28 @@ async function checkRealtimeGoogleCalendarSlot(startIso, endIso, accessTokenOver
         timeMin: startIso,
         timeMax: endIso,
         timeZone: SCHEDULING_TIMEZONE,
-        items: [{ id: "primary" }]
+        items: [{ id: "primary" }, { id: TARGET_CALENDAR_EMAIL }]
       })
     });
-    if (freeBusyRes.status === 401) {
-      console.warn("[Calendar Service Notice] Google Calendar token expired (401). Clearing stale token.");
-      await handleExpiredCalendarToken();
-      const fallbackOccupied = await checkFirestoreBookingsConflict(startIso, endIso);
-      return {
-        available: !fallbackOccupied,
-        busyIntervals: fallbackOccupied ? [{ start: startIso, end: endIso }] : [],
-        source: "FALLBACK",
-        googleCalendarChecked: false,
-        error: "Google Calendar OAuth token expired (401). Please re-authenticate."
-      };
-    }
     if (freeBusyRes.ok) {
       const fbData = await freeBusyRes.json();
+      const busyList = [];
       const primaryBusy = fbData.calendars?.primary?.busy || [];
-      for (const item of primaryBusy) {
-        const itemStartMs = new Date(item.start).getTime();
-        const itemEndMs = new Date(item.end).getTime();
-        if (reqStartMs < itemEndMs && reqEndMs > itemStartMs) {
-          busyList.push({ start: item.start, end: item.end });
-        }
-      }
+      const targetBusy = fbData.calendars?.[TARGET_CALENDAR_EMAIL]?.busy || [];
+      busyList.push(...primaryBusy, ...targetBusy);
       if (busyList.length > 0) {
         return {
           available: false,
           busyIntervals: busyList,
-          source: "GOOGLE_CALENDAR",
-          googleCalendarChecked: true
+          source: "GOOGLE_CALENDAR"
         };
       }
+    } else {
+      console.warn("[Calendar Service Notice] FreeBusy status:", freeBusyRes.status);
     }
     const eventsUrl = `https://www.googleapis.com/calendar/v3/calendars/primary/events?timeMin=${encodeURIComponent(
       startIso
-    )}&timeMax=${encodeURIComponent(endIso)}&singleEvents=true&timeZone=${encodeURIComponent(SCHEDULING_TIMEZONE)}`;
+    )}&timeMax=${encodeURIComponent(endIso)}&singleEvents=true`;
     const eventsRes = await fetch(eventsUrl, {
       headers: {
         Authorization: `Bearer ${token}`
@@ -80630,29 +80494,29 @@ async function checkRealtimeGoogleCalendarSlot(startIso, endIso, accessTokenOver
     if (eventsRes.ok) {
       const eventsData = await eventsRes.json();
       const items = (eventsData.items || []).filter((e) => e.status !== "cancelled");
-      for (const item of items) {
-        const itemStart = item.start?.dateTime || (item.start?.date ? `${item.start.date}T00:00:00+05:30` : startIso);
-        const itemEnd = item.end?.dateTime || (item.end?.date ? `${item.end.date}T23:59:59+05:30` : endIso);
-        const itemStartMs = new Date(itemStart).getTime();
-        const itemEndMs = new Date(itemEnd).getTime();
-        if (reqStartMs < itemEndMs && reqEndMs > itemStartMs) {
-          busyList.push({ start: itemStart, end: itemEnd });
-        }
-      }
-      if (busyList.length > 0) {
+      if (items.length > 0) {
         return {
           available: false,
-          busyIntervals: busyList,
-          source: "GOOGLE_CALENDAR",
-          googleCalendarChecked: true
+          busyIntervals: items.map((i) => ({
+            start: i.start?.dateTime || i.start?.date || startIso,
+            end: i.end?.dateTime || i.end?.date || endIso
+          })),
+          source: "GOOGLE_CALENDAR"
         };
       }
+    }
+    const firestoreConflict = await checkFirestoreBookingsConflict(startIso, endIso);
+    if (firestoreConflict) {
+      return {
+        available: false,
+        busyIntervals: [{ start: startIso, end: endIso }],
+        source: "GOOGLE_CALENDAR"
+      };
     }
     return {
       available: true,
       busyIntervals: [],
-      source: "GOOGLE_CALENDAR",
-      googleCalendarChecked: true
+      source: "GOOGLE_CALENDAR"
     };
   } catch (err) {
     console.error("[Calendar Service Error] Realtime availability check failed:", err);
@@ -80661,7 +80525,6 @@ async function checkRealtimeGoogleCalendarSlot(startIso, endIso, accessTokenOver
       available: !fallbackOccupied,
       busyIntervals: fallbackOccupied ? [{ start: startIso, end: endIso }] : [],
       source: "FALLBACK",
-      googleCalendarChecked: false,
       error: err?.message || "Network error querying Google Calendar"
     };
   }
@@ -80671,8 +80534,8 @@ async function checkFirestoreBookingsConflict(startIso, endIso, excludeBookingId
   try {
     const q = query(
       collection(db, "bookings"),
-      where("status", "in", ["BOOKED", "RESCHEDULED"]),
-      limit2(50)
+      where("status", "==", "BOOKED"),
+      limit2(20)
     );
     const snap = await getDocs(q);
     const reqStart = new Date(startIso).getTime();
@@ -80680,7 +80543,6 @@ async function checkFirestoreBookingsConflict(startIso, endIso, excludeBookingId
     for (const d of snap.docs) {
       const b = d.data();
       if (excludeBookingId && b.bookingId === excludeBookingId) continue;
-      if (!b.startDateTimeIso || !b.endDateTimeIso) continue;
       const bStart = new Date(b.startDateTimeIso).getTime();
       const bEnd = new Date(b.endDateTimeIso).getTime();
       if (reqStart < bEnd && reqEnd > bStart) {
@@ -80693,13 +80555,7 @@ async function checkFirestoreBookingsConflict(startIso, endIso, excludeBookingId
   return false;
 }
 async function findNextAvailableSlots(options2 = {}) {
-  const {
-    targetDaysCount = 5,
-    maxSlotsToReturn = 4,
-    preferredDate,
-    preferredPeriod = "ANY",
-    accessToken
-  } = options2;
+  const { targetDaysCount = 5, maxSlotsToReturn = 4, preferredDate, preferredPeriod = "ANY" } = options2;
   const nowIst = getNowInIst();
   const availableSlots = [];
   let startOffset = 0;
@@ -80746,7 +80602,7 @@ async function findNextAvailableSlots(options2 = {}) {
       }
       const startIso = createIstIsoString(dateStr, h, 0);
       const endIso = createIstIsoString(dateStr, h + 1, 0);
-      const check = await checkRealtimeGoogleCalendarSlot(startIso, endIso, accessToken);
+      const check = await checkRealtimeGoogleCalendarSlot(startIso, endIso);
       if (check.available) {
         availableSlots.push({
           date: dateStr,
@@ -80778,7 +80634,7 @@ async function createGoogleCalendarDemoBooking(params) {
     endTime,
     accessToken
   } = params;
-  const freshCheck = await checkRealtimeGoogleCalendarSlot(startIso, endIso, accessToken);
+  const freshCheck = await checkRealtimeGoogleCalendarSlot(startIso, endIso);
   if (!freshCheck.available) {
     return {
       success: false,
@@ -80799,7 +80655,6 @@ async function createGoogleCalendarDemoBooking(params) {
   }
   let calendarEventId = `mock-cal-${Date.now()}`;
   let googleMeetLink = "";
-  let calendarInviteSent = false;
   const summary = `Umrah360 Demo - ${companyName || leadName || "Agency Partner"}`;
   const description = [
     `Personalized 1-on-1 walkthrough of Umrah360 pilgrimage enterprise software.`,
@@ -80865,13 +80720,6 @@ async function createGoogleCalendarDemoBooking(params) {
       );
       if (!calRes.ok) {
         const errText = await calRes.text();
-        if (calRes.status === 401) {
-          await handleExpiredCalendarToken();
-          return {
-            success: false,
-            error: 'Google Calendar OAuth token expired or invalid (401). Please click "Connect / Sync Google Calendar" in the dashboard to re-authenticate.'
-          };
-        }
         console.error("[Google Calendar API Error] Event creation failed:", calRes.status, errText);
         return {
           success: false,
@@ -80880,7 +80728,6 @@ async function createGoogleCalendarDemoBooking(params) {
       }
       const eventData = await calRes.json();
       calendarEventId = eventData.id || calendarEventId;
-      calendarInviteSent = attendees.length > 0;
       googleMeetLink = eventData.hangoutLink || eventData.conferenceData?.entryPoints?.find((e) => e.entryPointType === "video")?.uri || (eventData.conferenceData?.conferenceId ? `https://meet.google.com/${eventData.conferenceData.conferenceId}` : "");
       if (!googleMeetLink && eventData.id) {
         try {
@@ -80984,8 +80831,7 @@ async function createGoogleCalendarDemoBooking(params) {
     success: true,
     booking,
     googleMeetLink,
-    calendarEventId,
-    calendarInviteSent
+    calendarEventId
   };
 }
 async function cancelDemoBooking(bookingId, reason = "Customer requested cancellation") {
@@ -81044,13 +80890,13 @@ async function cancelDemoBooking(bookingId, reason = "Customer requested cancell
     return { success: false, error: err?.message || "Failed to cancel booking" };
   }
 }
-async function rescheduleDemoBooking(bookingId, newStartIso, newEndIso, newDateString, newStartTime, newEndTime, accessToken) {
-  const freshCheck = await checkRealtimeGoogleCalendarSlot(newStartIso, newEndIso, accessToken);
+async function rescheduleDemoBooking(bookingId, newStartIso, newEndIso, newDateString, newStartTime, newEndTime) {
+  const freshCheck = await checkRealtimeGoogleCalendarSlot(newStartIso, newEndIso);
   if (!freshCheck.available) {
     return {
       success: false,
       conflict: true,
-      error: "The requested new slot is already booked on our calendar. Please choose another time."
+      error: "The requested new slot is already booked. Please choose another time."
     };
   }
   if (!isFirebaseConfigured || !db) {
@@ -81063,46 +80909,30 @@ async function rescheduleDemoBooking(bookingId, newStartIso, newEndIso, newDateS
       return { success: false, error: "Booking not found" };
     }
     const booking = snap.data();
-    const token = await getLiveCalendarToken(accessToken);
-    if (booking.calendarEventId && !booking.calendarEventId.startsWith("mock-") && token) {
-      try {
-        await fetch(
+    let meetLink = booking.googleMeetLink;
+    if (booking.calendarEventId && !booking.calendarEventId.startsWith("mock-")) {
+      const token = await getLiveCalendarToken();
+      if (token) {
+        const patchRes = await fetch(
           `https://www.googleapis.com/calendar/v3/calendars/primary/events/${encodeURIComponent(
             booking.calendarEventId
-          )}?sendUpdates=all`,
+          )}?conferenceDataVersion=1&sendUpdates=all`,
           {
-            method: "DELETE",
-            headers: { Authorization: `Bearer ${token}` }
+            method: "PATCH",
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+              start: { dateTime: newStartIso, timeZone: SCHEDULING_TIMEZONE },
+              end: { dateTime: newEndIso, timeZone: SCHEDULING_TIMEZONE }
+            })
           }
         );
-        console.log(`[Reschedule] Initial booked slot (${booking.startDateTimeIso}) emptied on Google Calendar.`);
-      } catch (delErr) {
-        console.warn("[Reschedule Notice] Error deleting original event to empty initial slot:", delErr);
-      }
-    }
-    let newCalendarEventId = `mock-cal-${Date.now()}`;
-    let newGoogleMeetLink = booking.googleMeetLink;
-    if (token) {
-      const createRes = await createGoogleCalendarDemoBooking({
-        leadId: booking.leadId,
-        contactId: booking.contactId,
-        campaignId: booking.campaignId,
-        conversationId: booking.conversationId,
-        channel: booking.channel,
-        leadName: booking.leadName,
-        leadEmail: booking.leadEmail,
-        leadPhone: booking.leadPhone,
-        companyName: booking.companyName,
-        startIso: newStartIso,
-        endIso: newEndIso,
-        dateString: newDateString,
-        startTime: newStartTime,
-        endTime: newEndTime,
-        accessToken: token
-      });
-      if (createRes.success && createRes.booking) {
-        newCalendarEventId = createRes.calendarEventId || newCalendarEventId;
-        newGoogleMeetLink = createRes.googleMeetLink || newGoogleMeetLink;
+        if (patchRes.ok) {
+          const patchData = await patchRes.json();
+          meetLink = patchData.hangoutLink || meetLink;
+        }
       }
     }
     const nowIso = (/* @__PURE__ */ new Date()).toISOString();
@@ -81114,8 +80944,7 @@ async function rescheduleDemoBooking(bookingId, newStartIso, newEndIso, newDateS
       startDateTimeIso: newStartIso,
       endDateTimeIso: newEndIso,
       status: "RESCHEDULED",
-      calendarEventId: newCalendarEventId,
-      googleMeetLink: newGoogleMeetLink,
+      googleMeetLink: meetLink,
       updatedAt: nowIso
     };
     await safeSetDoc(bookingRef, updatedBooking, { merge: true });
@@ -81127,8 +80956,7 @@ async function rescheduleDemoBooking(bookingId, newStartIso, newEndIso, newDateS
           demoStartTime: newStartTime,
           demoEndTime: newEndTime,
           demoTimezone: SCHEDULING_TIMEZONE,
-          calendarEventId: newCalendarEventId,
-          googleMeetLink: newGoogleMeetLink,
+          googleMeetLink: meetLink,
           updatedAt: nowIso
         },
         { merge: true }
@@ -81223,7 +81051,6 @@ async function processSchedulingConversationTurn(params) {
   const conversationId = ctx.conversationId || params.conversationId;
   const contactId = ctx.contactId || params.contactId;
   const campaignId = ctx.campaignId || params.campaignId;
-  const accessToken = params.accessToken || ctx.accessToken;
   const leadContext = {
     leadId,
     contactId,
@@ -81233,8 +81060,7 @@ async function processSchedulingConversationTurn(params) {
     companyName,
     channel,
     campaignId,
-    conversationId,
-    accessToken
+    conversationId
   };
   const nowIst = getNowInIst();
   const activeBooking = await getActiveBookingForLeadOrConversation(
@@ -81249,7 +81075,7 @@ async function processSchedulingConversationTurn(params) {
       return {
         handled: true,
         action: "CANCELLED",
-        replyText: `Your Umrah360 demo scheduled for ${activeBooking.date} at ${activeBooking.startTime} IST has been cancelled. The time slot has been freed up on our calendar. Whenever you're ready to explore Umrah360 in the future, just let us know and we'll gladly schedule a fresh walkthrough!`
+        replyText: `Your Umrah360 demo scheduled for ${activeBooking.date} at ${activeBooking.startTime} IST has been cancelled. The time slot has been freed up. Whenever you're ready to explore Umrah360 in the future, just let us know and we'll gladly schedule a fresh walkthrough!`
       };
     } else {
       return {
@@ -81320,63 +81146,30 @@ Analyze the conversation and latest message. Output JSON only:
     }
   }
   if (!nlpResult.hasSpecificSlot) {
-    const lower = messageText.toLowerCase();
-    if (lower.includes("today") || lower.includes("tonight") || lower.includes("this evening") || lower.includes("this afternoon")) {
-      nlpResult.dateString = nowIst.dateString;
-      nlpResult.isDemoIntent = true;
-    } else if (lower.includes("tomorrow")) {
-      const nextDay = /* @__PURE__ */ new Date();
-      nextDay.setDate(nextDay.getDate() + 1);
-      const f = new Intl.DateTimeFormat("en-CA", { timeZone: SCHEDULING_TIMEZONE });
-      nlpResult.dateString = f.format(nextDay);
-      nlpResult.isDemoIntent = true;
-    } else {
-      const weekdays = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
-      for (let i = 0; i < weekdays.length; i++) {
-        if (lower.includes(weekdays[i])) {
-          nlpResult.isDemoIntent = true;
-          let diff = i - nowIst.dayOfWeek;
-          if (diff <= 0) diff += 7;
-          const targetD = /* @__PURE__ */ new Date();
-          targetD.setDate(targetD.getDate() + diff);
-          const f = new Intl.DateTimeFormat("en-CA", { timeZone: SCHEDULING_TIMEZONE });
-          nlpResult.dateString = f.format(targetD);
-          if (i === 0 || i === 6) nlpResult.isWeekend = true;
-          break;
-        }
-      }
-    }
-    const rangeMatch = lower.match(/(\d{1,2})(?::\d{2})?\s*(?:-|to|–)\s*(\d{1,2})/i);
-    const timeMatch = lower.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/i);
-    let foundHour = void 0;
-    if (rangeMatch) {
-      let rawH = parseInt(rangeMatch[1], 10);
-      if (rawH >= 1 && rawH <= 6) rawH += 12;
-      if (rawH >= 10 && rawH <= 18) {
-        foundHour = rawH;
-      } else if (rawH < 10 || rawH >= 19) {
-        nlpResult.isOutOfHours = true;
-      }
-    } else if (timeMatch) {
+    const timeMatch = lowerText.match(/(\d{1,2})(?::00)?\s*(am|pm)/i);
+    const dayMatch = lowerText.match(/(monday|tuesday|wednesday|thursday|friday|tomorrow)/i);
+    if (timeMatch) {
       let rawH = parseInt(timeMatch[1], 10);
-      const ampm = timeMatch[3]?.toLowerCase();
+      const ampm = timeMatch[2].toLowerCase();
       if (ampm === "pm" && rawH < 12) rawH += 12;
-      else if (ampm === "am" && rawH === 12) rawH = 0;
-      else if (!ampm && rawH >= 1 && rawH <= 6) rawH += 12;
+      if (ampm === "am" && rawH === 12) rawH = 0;
       if (rawH >= 10 && rawH <= 18) {
-        foundHour = rawH;
+        nlpResult.startHour = rawH;
       } else if (rawH < 10 || rawH >= 19) {
         nlpResult.isOutOfHours = true;
       }
     }
-    if (foundHour !== void 0) {
-      nlpResult.startHour = foundHour;
+    if (dayMatch) {
       nlpResult.isDemoIntent = true;
+      const d = dayMatch[1].toLowerCase();
+      if (d === "tomorrow") {
+        const nextDay = /* @__PURE__ */ new Date();
+        nextDay.setDate(nextDay.getDate() + 1);
+        const f = new Intl.DateTimeFormat("en-CA", { timeZone: SCHEDULING_TIMEZONE });
+        nlpResult.dateString = f.format(nextDay);
+      }
     }
-    if (!nlpResult.dateString && nlpResult.isDemoIntent && !nlpResult.isWeekend) {
-      nlpResult.dateString = nowIst.dateString;
-    }
-    if (nlpResult.dateString && nlpResult.startHour !== void 0 && !nlpResult.isOutOfHours && !nlpResult.isWeekend) {
+    if (nlpResult.dateString && nlpResult.startHour !== void 0 && !nlpResult.isOutOfHours) {
       nlpResult.hasSpecificSlot = true;
     }
   }
@@ -81399,32 +81192,33 @@ Would you like to reschedule it to another date or time?`
     };
   }
   if (!nlpResult.hasSpecificSlot && !nlpResult.isWeekend && !nlpResult.isOutOfHours) {
-    const suggestions = await findNextAvailableSlots({
-      preferredDate: nlpResult.dateString,
-      preferredPeriod: nlpResult.preferredPeriod,
-      maxSlotsToReturn: 4,
-      accessToken
-    });
-    if (suggestions.length > 0) {
-      const slotsText = suggestions.map((s) => `\u2022 ${s.label}`).join("\n");
-      return {
-        handled: true,
-        action: "OFFERED_ALTERNATIVES",
-        replyText: `I would be glad to arrange a live walkthrough of Umrah360 for ${companyName}! Here are our earliest available slots directly from our calendar:
+    if (nlpResult.dateString || nlpResult.preferredPeriod !== "ANY") {
+      const suggestions = await findNextAvailableSlots({
+        preferredDate: nlpResult.dateString,
+        preferredPeriod: nlpResult.preferredPeriod,
+        maxSlotsToReturn: 3
+      });
+      if (suggestions.length > 0) {
+        const slotsText = suggestions.map((s) => `\u2022 ${s.label}`).join("\n");
+        return {
+          handled: true,
+          action: "OFFERED_ALTERNATIVES",
+          replyText: `Sure, I'd be happy to arrange your demo! Here are our earliest available slots:
 
 ${slotsText}
 
-Which of these works best for you? (Or let me know another preferred timing between 10:00 AM and 7:00 PM IST, Monday to Friday).`
-      };
+Which of these works best for you? (Or let me know another time between 10 AM and 7 PM IST Monday\u2013Friday).`
+        };
+      }
     }
     return {
       handled: true,
       action: "ASKED_AVAILABILITY",
-      replyText: `I would be happy to schedule a demo of Umrah360 for ${companyName}! Our demo slots run Monday to Friday between 10:00 AM and 7:00 PM IST (1-hour duration). What day and time work best for you?`
+      replyText: `Sure, I'd be happy to arrange a demo. Could you share your preferred date and time? Our demo slots are Monday to Friday between 10 AM and 7 PM IST, with each demo lasting one hour.`
     };
   }
   if (nlpResult.isWeekend) {
-    const suggestions = await findNextAvailableSlots({ maxSlotsToReturn: 3, accessToken });
+    const suggestions = await findNextAvailableSlots({ maxSlotsToReturn: 3 });
     const alternativesText = suggestions.map((s) => `\u2022 ${s.label}`).join("\n");
     return {
       handled: true,
@@ -81439,8 +81233,7 @@ Would one of these work for you?`
   if (nlpResult.isOutOfHours) {
     const suggestions = await findNextAvailableSlots({
       preferredDate: nlpResult.dateString || nowIst.dateString,
-      maxSlotsToReturn: 3,
-      accessToken
+      maxSlotsToReturn: 3
     });
     const alternativesText = suggestions.map((s) => `\u2022 ${s.label}`).join("\n");
     return {
@@ -81459,8 +81252,9 @@ Which slot would you prefer?`
   const endIso = createIstIsoString(targetDateStr, startH + 1, 0);
   const startTimeStr = `${String(startH).padStart(2, "0")}:00`;
   const endTimeStr = `${String(startH + 1).padStart(2, "0")}:00`;
-  const availability = await checkRealtimeGoogleCalendarSlot(startIso, endIso, accessToken);
+  const availability = await checkRealtimeGoogleCalendarSlot(startIso, endIso);
   if (availability.available) {
+    let bookingResult;
     if (isRescheduleIntent && activeBooking) {
       const resched = await rescheduleDemoBooking(
         activeBooking.bookingId,
@@ -81468,8 +81262,7 @@ Which slot would you prefer?`
         endIso,
         targetDateStr,
         startTimeStr,
-        endTimeStr,
-        accessToken
+        endTimeStr
       );
       if (resched.success && resched.booking) {
         const slotLabel2 = formatSlotLabel(targetDateStr, startH);
@@ -81484,11 +81277,11 @@ Which slot would you prefer?`
 \u2022 Attendee: ${leadName} (${leadEmail || "Email invite updated"})
 \u2022 Timezone: Asia/Kolkata (IST)
 
-We have sent the updated calendar invitation to your email. We look forward to demonstrating how Umrah360 automates your pilgrimage operations!`
+We look forward to demonstrating how Umrah360 automates your pilgrimage operations!`
         };
       }
     }
-    const bookingResult = await createGoogleCalendarDemoBooking({
+    bookingResult = await createGoogleCalendarDemoBooking({
       leadId: leadContext.leadId,
       contactId: leadContext.contactId,
       campaignId: leadContext.campaignId,
@@ -81502,8 +81295,7 @@ We have sent the updated calendar invitation to your email. We look forward to d
       endIso,
       dateString: targetDateStr,
       startTime: startTimeStr,
-      endTime: endTimeStr,
-      accessToken
+      endTime: endTimeStr
     });
     if (bookingResult.success && bookingResult.booking) {
       const slotLabel2 = formatSlotLabel(targetDateStr, startH);
@@ -81528,14 +81320,13 @@ We have sent the updated calendar invitation to your email. We look forward to d
     } else if (bookingResult.conflict) {
       const alternatives2 = await findNextAvailableSlots({
         preferredDate: targetDateStr,
-        maxSlotsToReturn: 3,
-        accessToken
+        maxSlotsToReturn: 3
       });
       const altText = alternatives2.map((s) => `\u2022 ${s.label}`).join("\n");
       return {
         handled: true,
         action: "OFFERED_ALTERNATIVES",
-        replyText: `That slot was just booked by another attendee. Here are our earliest available slots instead:
+        replyText: `That slot was just booked by another attendee. Let me offer these next available options instead:
 
 ${altText}
 
@@ -81546,14 +81337,13 @@ Which one would you prefer?`
   const slotLabel = formatSlotLabel(targetDateStr, startH);
   const alternatives = await findNextAvailableSlots({
     preferredDate: targetDateStr,
-    maxSlotsToReturn: 4,
-    accessToken
+    maxSlotsToReturn: 4
   });
   const altList = alternatives.map((s) => `\u2022 ${s.label}`).join("\n");
   return {
     handled: true,
     action: "OFFERED_ALTERNATIVES",
-    replyText: `${slotLabel} is already booked on our calendar. Here are our earliest available slots instead:
+    replyText: `${slotLabel} is already booked on our calendar. I can offer these available slots instead:
 
 ${altList}
 
@@ -82561,7 +82351,6 @@ async function processLiveInboundEmail(payload) {
     try {
       await handleIncomingCampaignLeadReply({
         fromEmail: payload.from,
-        fromPhone: payload.phone,
         subject: payload.subject,
         body: payload.body,
         gmailMessageId: incomingMsgId,
@@ -82863,27 +82652,7 @@ async function processLiveInboundEmail(payload) {
     inFlightMessageIds.delete(incomingMsgId);
   }
 }
-var isImapPollingActive = false;
-var lastImapPollTimestamp = 0;
-var IMAP_POLL_MIN_INTERVAL_MS = 15e3;
-async function pollAndProcessImapMailbox(force = false) {
-  const now = Date.now();
-  if (isImapPollingActive) {
-    return {
-      success: true,
-      polledCount: 0,
-      results: recentProcessedEmails.slice(0, 10)
-    };
-  }
-  if (!force && now - lastImapPollTimestamp < IMAP_POLL_MIN_INTERVAL_MS) {
-    return {
-      success: true,
-      polledCount: 0,
-      results: recentProcessedEmails.slice(0, 10)
-    };
-  }
-  isImapPollingActive = true;
-  lastImapPollTimestamp = now;
+async function pollAndProcessImapMailbox() {
   try {
     const imapResult = await pollUnreadEmails(true);
     if (!imapResult.success) {
@@ -82915,15 +82684,13 @@ async function pollAndProcessImapMailbox(force = false) {
       results: processedResults
     };
   } catch (err) {
-    console.error("[IMAP Inbound] Error during scheduled mailbox poll:", err?.message || err);
+    console.error("[IMAP Pipeline Error]:", err);
     return {
       success: false,
       polledCount: 0,
       results: [],
-      error: err?.message || "IMAP polling failed"
+      error: err.message || "Error processing IMAP inbox"
     };
-  } finally {
-    isImapPollingActive = false;
   }
 }
 
@@ -83479,15 +83246,6 @@ async function processLiveInboundWhatsApp(payload) {
     aiReplied: false
   };
   thread.push(incomingMessage);
-  try {
-    await handleIncomingCampaignLeadReply({
-      fromPhone: senderPhone,
-      fromEmail: payload.from,
-      body: payload.body
-    });
-  } catch (campaignErr) {
-    console.warn("[WhatsApp Pipeline] Campaign lead tracking hook notice:", campaignErr);
-  }
   const aiResult = await generateWhatsAppAutoReplyText({
     fromPhone: senderPhone,
     fromName: payload.fromName,
@@ -84159,16 +83917,6 @@ async function processWebsiteLeadSubmission(rawInput) {
     updatedAt: nowIso,
     lastActivityAt: nowIso
   };
-  try {
-    await handleIncomingCampaignLeadReply({
-      fromEmail: email,
-      fromPhone: fullPhone,
-      subject: `Website Demo Request: ${companyName}`,
-      body: message || "Submitted website demo request form"
-    });
-  } catch (campErr) {
-    console.warn("[Website Lead] Campaign lead reply hook notice:", campErr);
-  }
   const conversationId = `conv-web-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
   const messageId = `msg-web-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
   const inboundLines = [
@@ -84494,13 +84242,11 @@ async function handleCoreApi(req, res) {
     return true;
   }
   if (url === "/api/calendar/status" && req.method === "GET") {
-    const liveToken = await getLiveCalendarToken(requestBearerToken || void 0);
-    const verification = liveToken ? await verifyGoogleCalendarConnection(liveToken) : { connected: false };
+    const liveToken = await getLiveCalendarToken();
     res.statusCode = 200;
     res.end(
       JSON.stringify({
         configured: Boolean(liveToken),
-        connected: verification.connected,
         targetAccount: TARGET_CALENDAR_EMAIL,
         timezone: SCHEDULING_TIMEZONE,
         workingDays: "Monday \u2013 Friday (Saturday & Sunday closed)",
@@ -84520,8 +84266,7 @@ async function handleCoreApi(req, res) {
     const slots = await findNextAvailableSlots({
       preferredDate,
       preferredPeriod,
-      maxSlotsToReturn: count,
-      accessToken: requestBearerToken || void 0
+      maxSlotsToReturn: count
     });
     res.statusCode = 200;
     res.end(
@@ -84582,8 +84327,7 @@ async function handleCoreApi(req, res) {
       newEndIso,
       newDateString,
       newStartTime,
-      newEndTime,
-      body.accessToken || requestBearerToken || void 0
+      newEndTime
     );
     res.statusCode = result.success ? 200 : 400;
     res.end(JSON.stringify(result));
@@ -84591,11 +84335,7 @@ async function handleCoreApi(req, res) {
   }
   if (url === "/api/calendar/schedule-turn" && req.method === "POST") {
     try {
-      const turnPayload = {
-        ...body,
-        accessToken: body.accessToken || requestBearerToken || void 0
-      };
-      const result = await processSchedulingConversationTurn(turnPayload);
+      const result = await processSchedulingConversationTurn(body);
       res.statusCode = 200;
       res.end(JSON.stringify(result));
     } catch (err) {
@@ -84813,15 +84553,15 @@ Would you like to see how sub-agent allotments and credit limits are configured?
 ${signature || "Regards,\nUmrah360 Team"}`;
     } else if (isPricing) {
       responseText = `Here is our approved subscription pricing:
-\u2022 Lite Plan: INR 36,000/year (or INR 4,000/month) | International: USD 825/year (up to 5 users) \u2014 includes Umrah group package creation, booking management, departure control, visa tracking, proforma invoices, and payment receipts.
-\u2022 Business Plan: INR 55,000/year (or INR 5,500/month) | International: USD 1,260/year (up to 10 users) \u2014 includes everything in Lite plus Hajj/Umrah/Ziarah packages, tent occupancy, CRM & lead funnel, departure-wise P&L, supplier accounts payable, and priority WhatsApp/email support.
-\u2022 Professional Plan: INR 1,20,000/year (or INR 12,500/month) | International: USD 2,760/year (unlimited users) \u2014 includes multi-company Hajj quota, custom approval workflows, full FIT module, and dedicated account manager.
+\u2022 Starter Plan: $199/month (up to 3 users) \u2014 includes B2C CRM, FIT package builder, and invoicing.
+\u2022 Growth Plan: $499/month (up to 10 users) \u2014 includes everything in Starter plus the complete B2B Sub-Agent Portal, dynamic multi-currency costing, and automated alerts.
+\u2022 Enterprise Plan: For 20+ users, custom quotes with dedicated cloud hosting and SLA guarantees are available through our team.
 
 How many team members would be using the software at ${contact?.companyName || "your agency"}?
 
 ${signature || "Regards,\nUmrah360 Team"}`;
     } else {
-      responseText = `Umrah360 is the unified cloud operating platform purpose-built for Hajj and Umrah tour operators. It connects package creation, group departures, FIT custom packages, passenger manifests, Saudi visa tracking, rooming lists, B2B agent distribution, and departure-level profitability.
+      responseText = `Umrah360 is an all-in-one cloud ERP and CRM software purpose-built for Hajj and Umrah tour operators. It unifies lead management, FIT (Free Independent Traveler) and group package creation, dynamic costing, multi-currency invoicing, Saudi visa tracking, hotel & transport allotments, and sub-agent B2B networks into a single cohesive interface.
 
 Are you currently handling your operations through spreadsheets or looking to upgrade from another system?
 

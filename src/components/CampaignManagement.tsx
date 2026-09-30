@@ -407,40 +407,22 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
       const tplData = tplRes && tplRes.ok ? await tplRes.json().catch(() => ({})) : {};
 
       if (campData.campaigns && Array.isArray(campData.campaigns)) {
-        const cleanCamps = campData.campaigns.filter((c: Campaign) => {
-          const n = (c.name || '').toLowerCase().trim();
-          return (
-            c.campaignId !== 'camp-1790758967982-7his' &&
-            n !== 'test' &&
-            c.campaignId !== 'camp-umrah-1448' &&
-            c.campaignId !== 'camp-indian-umrah-operators' &&
-            n !== 'indian umrah operators 2026'
-          );
-        });
-        setCampaigns(cleanCamps);
-        campaignsRef.current = cleanCamps;
+        setCampaigns(campData.campaigns);
+        campaignsRef.current = campData.campaigns;
 
         // If a campaign is currently selected, refresh its details without altering user selection
         const activeId = selectedCampaignIdRef.current;
         if (activeId) {
-          const updated = cleanCamps.find((c: Campaign) => c.campaignId === activeId);
+          const updated = campData.campaigns.find((c: Campaign) => c.campaignId === activeId);
           if (updated) {
             setSelectedCampaign((prev) => (prev ? { ...prev, ...updated } : updated));
-          } else {
-            setSelectedCampaignId(null);
-            setSelectedCampaign(null);
           }
-        } else if (cleanCamps.length > 0) {
-          const firstCamp = cleanCamps[0];
+        } else if (campData.campaigns.length > 0) {
+          const firstCamp = campData.campaigns[0];
           setSelectedCampaignId(firstCamp.campaignId);
           selectedCampaignIdRef.current = firstCamp.campaignId;
           setSelectedCampaign(firstCamp);
           loadSelectedCampaignDetails(firstCamp.campaignId);
-        } else {
-          setSelectedCampaignId(null);
-          setSelectedCampaign(null);
-          setCampaignLeads([]);
-          setCampaignRuns([]);
         }
       }
 
@@ -547,19 +529,7 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
               snapshot.forEach((docSnap) => {
                 const data = docSnap.data() as Campaign;
                 if (data && data.campaignId) {
-                  const cleanName = (data.name || '').toLowerCase().trim();
-                  if (
-                    data.campaignId === 'camp-umrah-1448' ||
-                    data.campaignId === 'camp-indian-umrah-operators' ||
-                    cleanName === 'indian umrah operators 2026' ||
-                    data.campaignId === 'camp-1790758967982-7his' ||
-                    cleanName === 'test'
-                  ) {
-                    deleteDoc(doc(db, 'campaigns', docSnap.id)).catch(() => {});
-                    deleteDoc(doc(db, 'outbound_campaigns', docSnap.id)).catch(() => {});
-                  } else {
-                    loadedCamps.push(data);
-                  }
+                  loadedCamps.push(data);
                 }
               });
             }

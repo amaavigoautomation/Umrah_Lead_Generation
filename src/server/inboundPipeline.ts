@@ -1467,6 +1467,7 @@ export async function processLiveInboundEmail(payload: {
     try {
       await handleIncomingCampaignLeadReply({
         fromEmail: payload.from,
+        fromPhone: payload.phone,
         subject: payload.subject,
         body: payload.body,
         gmailMessageId: incomingMsgId,

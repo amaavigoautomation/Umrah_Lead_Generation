@@ -1283,14 +1283,16 @@ export async function restartCampaign(
   }
 
   // Queue unreplied leads for the new follow-up run
+  const leadSavePromises: Promise<any>[] = [];
   unrepliedLeads.forEach((l) => {
     l.sendStatus = 'PENDING';
     l.lastError = undefined;
     l.campaignRunId = newRunId;
     l.updatedAt = now;
     targetLeadsCount++;
+    campaignLeadsMap.set(l.campaignLeadId, l);
     if (isFirebaseConfigured && db) {
-      setDoc(doc(db, 'campaign_leads', l.campaignLeadId), l, { merge: true }).catch(() => {});
+      leadSavePromises.push(safeSetDoc(doc(db, 'campaign_leads', l.campaignLeadId), l, { merge: true }));
     }
   });
 
@@ -1301,10 +1303,15 @@ export async function restartCampaign(
       l.sendStatus = 'SENT';
     }
     l.updatedAt = now;
+    campaignLeadsMap.set(l.campaignLeadId, l);
     if (isFirebaseConfigured && db) {
-      setDoc(doc(db, 'campaign_leads', l.campaignLeadId), l, { merge: true }).catch(() => {});
+      leadSavePromises.push(safeSetDoc(doc(db, 'campaign_leads', l.campaignLeadId), l, { merge: true }));
     }
   });
+
+  if (leadSavePromises.length > 0) {
+    await Promise.allSettled(leadSavePromises).catch(() => {});
+  }
 
   const newRun: CampaignRun = {
     runId: newRunId,
@@ -1327,11 +1334,13 @@ export async function restartCampaign(
   campaignsMap.set(campaignId, campaign);
 
   if (isFirebaseConfigured && db) {
-    setDoc(doc(db, 'campaigns', campaignId), campaign, { merge: true }).catch(() => {});
-    setDoc(doc(db, 'campaign_runs', newRunId), newRun).catch(() => {});
+    await Promise.allSettled([
+      safeSetDoc(doc(db, 'campaigns', campaignId), campaign, { merge: true }),
+      safeSetDoc(doc(db, 'campaign_runs', newRunId), newRun),
+    ]).catch(() => {});
   }
 
-  recalculateCampaignMetrics(campaignId);
+  await recalculateAndPersistCampaignMetrics(campaignId);
 
   message = `Run #${nextRunNumber} started. Sending follow-up to ${targetLeadsCount} unreplied lead(s). (${repliedLeads.length} lead(s) skipped because they already replied).`;
   console.log(`[Campaign Engine] ${message}`);
@@ -1345,8 +1354,10 @@ export async function restartCampaign(
   // Also trigger background sending engine for dev environment
   executeCampaignSendingEngine(campaignId, newRunId).catch(() => {});
 
+  const finalCampaignState = (await recalculateAndPersistCampaignMetrics(campaignId)) || batchRes?.campaign || campaign;
+
   return {
-    campaign: batchRes?.campaign || recalculateCampaignMetrics(campaignId) || campaign,
+    campaign: finalCampaignState,
     run: newRun,
     targetLeadsCount,
     alreadyRepliedCount: repliedLeads.length,
@@ -2124,30 +2135,29 @@ export async function updateLeadDemoStatus(params: {
 }
 
 /**
- * Hooks into incoming emails to identify if sender is a campaign lead.
- * If yes, updates replyStatus = 'REPLIED' and analyzes for demo booking!
+ * Hooks into incoming emails, WhatsApp messages, or webhooks to identify if sender is a campaign lead.
+ * If yes, updates replyStatus = 'REPLIED' across all campaign records and recalculates campaign metrics!
  */
 export async function handleIncomingCampaignLeadReply(params: {
-  fromEmail: string;
-  subject: string;
-  body: string;
+  fromEmail?: string;
+  fromPhone?: string;
+  subject?: string;
+  body?: string;
   gmailMessageId?: string;
   gmailThreadId?: string;
 }): Promise<{ isCampaignLead: boolean; campaignLead?: CampaignLead; demoDetected?: boolean }> {
   await initCampaignStore();
 
-  const cleanFrom = extractCleanEmail(params.fromEmail);
-  if (!cleanFrom) {
+  const cleanFromEmail = params.fromEmail ? extractCleanEmail(params.fromEmail) : '';
+  const rawPhoneDigits = params.fromPhone ? params.fromPhone.replace(/[^\d]/g, '') : '';
+  const cleanPhoneDigits = rawPhoneDigits.length >= 7 ? rawPhoneDigits.slice(-10) : '';
+
+  if (!cleanFromEmail && !cleanPhoneDigits) {
     return { isCampaignLead: false };
   }
 
-  // 1. Search in-memory
-  let matchedLead = Array.from(campaignLeadsMap.values()).find(
-    (l) => extractCleanEmail(l.email) === cleanFrom
-  );
-
-  // 2. Search in Firestore DB (essential for Vercel serverless / cold start)
-  if (!matchedLead && isFirebaseConfigured && db) {
+  // Ensure DB store is populated so serverless instances have all leads
+  if (isFirebaseConfigured && db) {
     try {
       const snap = await getDocs(collection(db, 'campaign_leads')).catch(() => null);
       if (snap && !snap.empty) {
@@ -2155,72 +2165,92 @@ export async function handleIncomingCampaignLeadReply(params: {
           const l = d.data() as CampaignLead;
           if (l && l.campaignLeadId) {
             campaignLeadsMap.set(l.campaignLeadId, l);
-            if (extractCleanEmail(l.email) === cleanFrom && !matchedLead) {
-              matchedLead = l;
-            }
           }
         });
       }
     } catch (e) {
-      console.warn('[handleIncomingCampaignLeadReply] DB search error:', e);
+      console.warn('[handleIncomingCampaignLeadReply] DB search notice:', e);
     }
   }
 
-  if (!matchedLead) {
+  // Find ALL matching leads across memory & DB (by clean email or phone digits)
+  const matchedLeads: CampaignLead[] = [];
+  for (const l of campaignLeadsMap.values()) {
+    let isMatch = false;
+    if (cleanFromEmail) {
+      const lEmail = extractCleanEmail(l.email);
+      if (lEmail && (lEmail === cleanFromEmail || lEmail.includes(cleanFromEmail) || cleanFromEmail.includes(lEmail))) {
+        isMatch = true;
+      }
+    }
+    if (!isMatch && cleanPhoneDigits && l.phone) {
+      const lPhoneDigits = l.phone.replace(/[^\d]/g, '');
+      if (lPhoneDigits && (lPhoneDigits.endsWith(cleanPhoneDigits) || cleanPhoneDigits.endsWith(lPhoneDigits.slice(-10)))) {
+        isMatch = true;
+      }
+    }
+    if (isMatch) {
+      matchedLeads.push(l);
+    }
+  }
+
+  if (matchedLeads.length === 0) {
     return { isCampaignLead: false };
   }
 
   const now = new Date().toISOString();
-  matchedLead.replyStatus = 'REPLIED';
-  matchedLead.repliedAt = now;
-  matchedLead.updatedAt = now;
-  if (params.gmailMessageId) matchedLead.gmailMessageId = params.gmailMessageId;
-  if (params.gmailThreadId) matchedLead.gmailThreadId = params.gmailThreadId;
+  const text = `${params.subject || ''} ${params.body || ''}`.toLowerCase();
+  const hasDemoIntent = /book a demo|schedule a demo|demo tomorrow|book the demo|yes.*demo|interested in a demo|platform walkthrough|live demo/i.test(text);
+  const hasConfirmedBooking = /calendar.*confirmed|appointment.*scheduled|booked for|demo scheduled|meeting invite accepted/i.test(text);
 
-  // Demo intent check:
-  const text = `${params.subject} ${params.body}`.toLowerCase();
-  const hasDemoIntent = /book a demo|schedule a demo|demo tomorrow|book the demo|yes.*demo|interested in a demo|platform walkthrough|live demo/i.test(
-    text
-  );
+  const affectedCampaignIds = new Set<string>();
 
-  if (hasDemoIntent) {
-    matchedLead.demoIntent = true;
-    const hasConfirmedBooking = /calendar.*confirmed|appointment.*scheduled|booked for|demo scheduled|meeting invite accepted/i.test(
-      text
-    );
+  for (const matchedLead of matchedLeads) {
+    matchedLead.replyStatus = 'REPLIED';
+    matchedLead.repliedAt = matchedLead.repliedAt || now;
+    matchedLead.updatedAt = now;
+    if (params.gmailMessageId) matchedLead.gmailMessageId = params.gmailMessageId;
+    if (params.gmailThreadId) matchedLead.gmailThreadId = params.gmailThreadId;
 
-    if (hasConfirmedBooking) {
-      matchedLead.demoStatus = 'BOOKED';
-      matchedLead.demoSource = 'AUTOMATIC';
-      matchedLead.demoBookedAt = now;
-    }
-  }
-
-  campaignLeadsMap.set(matchedLead.campaignLeadId, matchedLead);
-
-  if (isFirebaseConfigured && db) {
-    try {
-      await safeSetDoc(doc(db, 'campaign_leads', matchedLead.campaignLeadId), matchedLead, { merge: true });
-      if (matchedLead.leadId) {
-        await safeSetDoc(doc(db, 'leads', matchedLead.leadId), {
-          replyStatus: 'REPLIED',
-          repliedAt: now,
-          status: matchedLead.demoStatus === 'BOOKED' ? 'DEMO_BOOKED' : 'ENGAGED',
-          demoStatus: matchedLead.demoStatus,
-          updatedAt: now,
-        }, { merge: true }).catch(() => {});
+    if (hasDemoIntent) {
+      matchedLead.demoIntent = true;
+      if (hasConfirmedBooking) {
+        matchedLead.demoStatus = 'BOOKED';
+        matchedLead.demoSource = 'AUTOMATIC';
+        matchedLead.demoBookedAt = now;
       }
-    } catch (e) {
-      console.warn('Error syncing lead reply to Firestore:', e);
+    }
+
+    campaignLeadsMap.set(matchedLead.campaignLeadId, matchedLead);
+    affectedCampaignIds.add(matchedLead.campaignId);
+
+    if (isFirebaseConfigured && db) {
+      try {
+        safeSetDoc(doc(db, 'campaign_leads', matchedLead.campaignLeadId), matchedLead, { merge: true }).catch(() => {});
+        if (matchedLead.leadId) {
+          safeSetDoc(doc(db, 'leads', matchedLead.leadId), {
+            replyStatus: 'REPLIED',
+            repliedAt: now,
+            status: matchedLead.demoStatus === 'BOOKED' ? 'DEMO_BOOKED' : 'ENGAGED',
+            demoStatus: matchedLead.demoStatus,
+            updatedAt: now,
+          }, { merge: true }).catch(() => {});
+        }
+      } catch (e) {
+        console.warn('Error syncing lead reply to Firestore:', e);
+      }
     }
   }
 
-  await recalculateAndPersistCampaignMetrics(matchedLead.campaignId);
+  // Recalculate metrics for all affected campaigns so cards and lead counts update instantly
+  for (const cId of affectedCampaignIds) {
+    await recalculateAndPersistCampaignMetrics(cId);
+  }
 
   return {
     isCampaignLead: true,
-    campaignLead: matchedLead,
-    demoDetected: matchedLead.demoStatus === 'BOOKED',
+    campaignLead: matchedLeads[0],
+    demoDetected: matchedLeads.some((l) => l.demoStatus === 'BOOKED'),
   };
 }
 

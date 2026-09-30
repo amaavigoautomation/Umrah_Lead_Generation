@@ -10,6 +10,7 @@ import {
   detectDemoSchedulingIntent,
   processSchedulingConversationTurn,
 } from './demoSchedulingService.js';
+import { handleIncomingCampaignLeadReply } from './campaignService.js';
 
 export const TARGET_WHATSAPP_NUMBER = '+919820252434';
 export const TARGET_WHATSAPP_NUMBER_DISPLAY = '+91 98202 52434';
@@ -861,6 +862,17 @@ export async function processLiveInboundWhatsApp(payload: {
   };
 
   thread.push(incomingMessage);
+
+  // Hook into Outbound Campaign System: track lead reply via WhatsApp phone or email
+  try {
+    await handleIncomingCampaignLeadReply({
+      fromPhone: senderPhone,
+      fromEmail: payload.from,
+      body: payload.body,
+    });
+  } catch (campaignErr) {
+    console.warn('[WhatsApp Pipeline] Campaign lead tracking hook notice:', campaignErr);
+  }
 
   // =========================================================================
   // RULE 4: GENERATE GROUNDED AI REPLY

@@ -3,6 +3,7 @@ import { db, isFirebaseConfigured } from '../firebase/config.js';
 import { safeSetDoc } from './firestoreUtils.js';
 import { Contact, Lead, Conversation, Message } from '../types/index.js';
 import { sendLiveEmail, getSmtpConfig, fetchFirestoreSmtpConfig } from './smtpService.js';
+import { handleIncomingCampaignLeadReply } from './campaignService.js';
 
 // In-memory cache + in-flight locks to guarantee strict single thank-you email delivery
 const sentThankYouEmailsCache = new Set<string>();
@@ -689,6 +690,18 @@ export async function processWebsiteLeadSubmission(
     updatedAt: nowIso,
     lastActivityAt: nowIso,
   };
+
+  // If this website lead is part of an outbound campaign, mark them as REPLIED & DEMO_BOOKED
+  try {
+    await handleIncomingCampaignLeadReply({
+      fromEmail: email,
+      fromPhone: fullPhone,
+      subject: `Website Demo Request: ${companyName}`,
+      body: message || 'Submitted website demo request form',
+    });
+  } catch (campErr) {
+    console.warn('[Website Lead] Campaign lead reply hook notice:', campErr);
+  }
 
   // -----------------------------------------------------------------
   // 11. Create Conversation & Inbound Message in Firestore

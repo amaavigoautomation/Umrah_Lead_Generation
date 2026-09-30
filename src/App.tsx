@@ -389,9 +389,13 @@ export default function App() {
 
   // Track message IDs ingested from backend to prevent duplicates
   const ingestedBackendMsgIds = useRef<Set<string>>(new Set());
+  const isSyncingInboundRef = useRef<boolean>(false);
+  const isDispatchingCampaignsRef = useRef<boolean>(false);
 
   // Background sync for live inbound emails (from IMAP or direct webhook)
   const syncWithBackendInbound = useCallback(async () => {
+    if (isSyncingInboundRef.current) return;
+    isSyncingInboundRef.current = true;
     try {
       const res = await fetch('/api/inbound/sync');
       if (!res.ok) return;
@@ -509,25 +513,33 @@ export default function App() {
       }
     } catch (e) {
       console.warn('Inbound sync polling notice:', e);
+    } finally {
+      isSyncingInboundRef.current = false;
     }
   }, []);
 
   // Global campaign dispatch keep-alive: ensures RUNNING campaigns dispatch continuously
   // regardless of which tab is active, or whether CampaignManagement component is mounted
   const triggerActiveCampaignsDispatch = useCallback(async () => {
+    if (isDispatchingCampaignsRef.current) return;
+    isDispatchingCampaignsRef.current = true;
     try {
       await fetch('/api/campaigns/process-active', { method: 'POST' }).catch(() => null);
-    } catch {}
+    } catch {} finally {
+      isDispatchingCampaignsRef.current = false;
+    }
   }, []);
 
-  // Poll backend inbound mailbox and trigger active campaign dispatches
+  // Poll backend inbound mailbox and trigger active campaign dispatches safely (25s interval)
   useEffect(() => {
     syncWithBackendInbound();
     triggerActiveCampaignsDispatch();
     const interval = setInterval(() => {
-      syncWithBackendInbound();
-      triggerActiveCampaignsDispatch();
-    }, 4000);
+      if (document.visibilityState === 'visible') {
+        syncWithBackendInbound();
+        triggerActiveCampaignsDispatch();
+      }
+    }, 25000);
 
     const handleVisibility = () => {
       if (document.visibilityState === 'visible') {

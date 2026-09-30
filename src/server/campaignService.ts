@@ -1611,7 +1611,7 @@ export async function processNextCampaignSendBatch(
     }
   }
 
-  const updatedCampaign = recalculateCampaignMetrics(campaignId) || campaign;
+  const updatedCampaign = (await recalculateAndPersistCampaignMetrics(campaignId)) || campaign;
   return {
     campaign: updatedCampaign,
     processedCount,
@@ -1973,7 +1973,16 @@ export function personalizeTemplate(
 }
 
 /**
- * Recalculates metrics for a campaign from its leads
+ * Helper to extract raw clean email address from string
+ */
+export function extractCleanEmail(raw: string): string {
+  if (!raw) return '';
+  const match = raw.match(/<([^>]+)>/) || raw.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/);
+  return (match ? match[1] : raw).trim().toLowerCase();
+}
+
+/**
+ * Recalculates metrics for a campaign from its leads and persists to Firestore
  */
 export function recalculateCampaignMetrics(campaignId: string): Campaign | undefined {
   const camp = campaignsMap.get(campaignId);
@@ -1982,7 +1991,7 @@ export function recalculateCampaignMetrics(campaignId: string): Campaign | undef
   const leads = getCampaignLeads(campaignId);
   const total = leads.length;
   const sent = leads.filter((l) => l.sendStatus === 'SENT').length;
-  const pending = leads.filter((l) => l.sendStatus === 'PENDING').length;
+  const pending = leads.filter((l) => l.sendStatus === 'PENDING' && l.replyStatus !== 'REPLIED').length;
   const failed = leads.filter((l) => l.sendStatus === 'FAILED').length;
   const replied = leads.filter((l) => l.replyStatus === 'REPLIED').length;
   const demoBooked = leads.filter((l) => l.demoStatus === 'BOOKED').length;
@@ -2002,6 +2011,53 @@ export function recalculateCampaignMetrics(campaignId: string): Campaign | undef
     demoBooked,
   };
 
+  if (isFirebaseConfigured && db) {
+    safeSetDoc(doc(db, 'campaigns', campaignId), camp, { merge: true }).catch(() => {});
+  }
+
+  return camp;
+}
+
+/**
+ * Asynchronously loads leads from DB and recalculates metrics and persists to Firestore
+ */
+export async function recalculateAndPersistCampaignMetrics(campaignId: string): Promise<Campaign | undefined> {
+  const camp = await ensureCampaignInStore(campaignId);
+  if (!camp) return undefined;
+
+  const leads = await getCampaignLeadsFromDb(campaignId);
+  const total = leads.length;
+  const sent = leads.filter((l) => l.sendStatus === 'SENT').length;
+  const pending = leads.filter((l) => l.sendStatus === 'PENDING' && l.replyStatus !== 'REPLIED').length;
+  const failed = leads.filter((l) => l.sendStatus === 'FAILED').length;
+  const replied = leads.filter((l) => l.replyStatus === 'REPLIED').length;
+  const demoBooked = leads.filter((l) => l.demoStatus === 'BOOKED').length;
+
+  camp.totalLeads = total;
+  camp.sentCount = sent;
+  camp.pendingCount = pending;
+  camp.failedCount = failed;
+  camp.repliedCount = replied;
+  camp.demoBookedCount = demoBooked;
+  camp.stats = {
+    totalLeads: total,
+    sent,
+    pending,
+    failed,
+    replied,
+    demoBooked,
+  };
+
+  campaignsMap.set(campaignId, camp);
+
+  if (isFirebaseConfigured && db) {
+    try {
+      await safeSetDoc(doc(db, 'campaigns', campaignId), camp, { merge: true });
+    } catch (e) {
+      console.warn('[recalculateAndPersistCampaignMetrics] Firestore save note:', e);
+    }
+  }
+
   return camp;
 }
 
@@ -2015,10 +2071,28 @@ export async function updateLeadDemoStatus(params: {
 }): Promise<CampaignLead | null> {
   await initCampaignStore();
 
-  // Find corresponding campaign lead
-  const targetLead = Array.from(campaignLeadsMap.values()).find(
+  let targetLead = Array.from(campaignLeadsMap.values()).find(
     (l) => l.leadId === params.leadId || l.campaignLeadId === params.leadId
   );
+
+  if (!targetLead && isFirebaseConfigured && db) {
+    try {
+      const snap = await getDoc(doc(db, 'campaign_leads', params.leadId));
+      if (snap.exists()) {
+        targetLead = snap.data() as CampaignLead;
+        campaignLeadsMap.set(targetLead.campaignLeadId, targetLead);
+      } else {
+        const querySnap = await getDocs(collection(db, 'campaign_leads'));
+        querySnap.forEach((d) => {
+          const l = d.data() as CampaignLead;
+          if (l && (l.leadId === params.leadId || l.campaignLeadId === params.leadId)) {
+            targetLead = l;
+            campaignLeadsMap.set(l.campaignLeadId, l);
+          }
+        });
+      }
+    } catch (e) {}
+  }
 
   if (!targetLead) return null;
 
@@ -2027,6 +2101,7 @@ export async function updateLeadDemoStatus(params: {
   targetLead.demoSource = params.demoSource;
   targetLead.demoBookedAt = params.demoStatus === 'BOOKED' ? now : undefined;
   targetLead.updatedAt = now;
+  campaignLeadsMap.set(targetLead.campaignLeadId, targetLead);
 
   if (isFirebaseConfigured && db) {
     try {
@@ -2043,8 +2118,7 @@ export async function updateLeadDemoStatus(params: {
     }
   }
 
-  // Recalculate campaign metrics immediately
-  recalculateCampaignMetrics(targetLead.campaignId);
+  await recalculateAndPersistCampaignMetrics(targetLead.campaignId);
 
   return targetLead;
 }
@@ -2062,10 +2136,35 @@ export async function handleIncomingCampaignLeadReply(params: {
 }): Promise<{ isCampaignLead: boolean; campaignLead?: CampaignLead; demoDetected?: boolean }> {
   await initCampaignStore();
 
-  const cleanFrom = (params.fromEmail || '').trim().toLowerCase();
-  const matchedLead = Array.from(campaignLeadsMap.values()).find(
-    (l) => l.email.toLowerCase() === cleanFrom
+  const cleanFrom = extractCleanEmail(params.fromEmail);
+  if (!cleanFrom) {
+    return { isCampaignLead: false };
+  }
+
+  // 1. Search in-memory
+  let matchedLead = Array.from(campaignLeadsMap.values()).find(
+    (l) => extractCleanEmail(l.email) === cleanFrom
   );
+
+  // 2. Search in Firestore DB (essential for Vercel serverless / cold start)
+  if (!matchedLead && isFirebaseConfigured && db) {
+    try {
+      const snap = await getDocs(collection(db, 'campaign_leads')).catch(() => null);
+      if (snap && !snap.empty) {
+        snap.forEach((d) => {
+          const l = d.data() as CampaignLead;
+          if (l && l.campaignLeadId) {
+            campaignLeadsMap.set(l.campaignLeadId, l);
+            if (extractCleanEmail(l.email) === cleanFrom && !matchedLead) {
+              matchedLead = l;
+            }
+          }
+        });
+      }
+    } catch (e) {
+      console.warn('[handleIncomingCampaignLeadReply] DB search error:', e);
+    }
+  }
 
   if (!matchedLead) {
     return { isCampaignLead: false };
@@ -2079,7 +2178,6 @@ export async function handleIncomingCampaignLeadReply(params: {
   if (params.gmailThreadId) matchedLead.gmailThreadId = params.gmailThreadId;
 
   // Demo intent check:
-  // Detect demo intent, but only book if confirmed
   const text = `${params.subject} ${params.body}`.toLowerCase();
   const hasDemoIntent = /book a demo|schedule a demo|demo tomorrow|book the demo|yes.*demo|interested in a demo|platform walkthrough|live demo/i.test(
     text
@@ -2087,7 +2185,6 @@ export async function handleIncomingCampaignLeadReply(params: {
 
   if (hasDemoIntent) {
     matchedLead.demoIntent = true;
-    // Automatic booking detection: only when an appointment confirmation or calendar scheduled event is present
     const hasConfirmedBooking = /calendar.*confirmed|appointment.*scheduled|booked for|demo scheduled|meeting invite accepted/i.test(
       text
     );
@@ -2099,13 +2196,26 @@ export async function handleIncomingCampaignLeadReply(params: {
     }
   }
 
+  campaignLeadsMap.set(matchedLead.campaignLeadId, matchedLead);
+
   if (isFirebaseConfigured && db) {
     try {
       await safeSetDoc(doc(db, 'campaign_leads', matchedLead.campaignLeadId), matchedLead, { merge: true });
-    } catch {}
+      if (matchedLead.leadId) {
+        await safeSetDoc(doc(db, 'leads', matchedLead.leadId), {
+          replyStatus: 'REPLIED',
+          repliedAt: now,
+          status: matchedLead.demoStatus === 'BOOKED' ? 'DEMO_BOOKED' : 'ENGAGED',
+          demoStatus: matchedLead.demoStatus,
+          updatedAt: now,
+        }, { merge: true }).catch(() => {});
+      }
+    } catch (e) {
+      console.warn('Error syncing lead reply to Firestore:', e);
+    }
   }
 
-  recalculateCampaignMetrics(matchedLead.campaignId);
+  await recalculateAndPersistCampaignMetrics(matchedLead.campaignId);
 
   return {
     isCampaignLead: true,
@@ -2127,9 +2237,28 @@ export async function updateCampaignLeadStatus(params: {
 }): Promise<CampaignLead | null> {
   await initCampaignStore();
 
-  const targetLead = Array.from(campaignLeadsMap.values()).find(
+  let targetLead = Array.from(campaignLeadsMap.values()).find(
     (l) => l.leadId === params.leadId || l.campaignLeadId === params.leadId
   );
+
+  if (!targetLead && isFirebaseConfigured && db) {
+    try {
+      const snap = await getDoc(doc(db, 'campaign_leads', params.leadId));
+      if (snap.exists()) {
+        targetLead = snap.data() as CampaignLead;
+        campaignLeadsMap.set(targetLead.campaignLeadId, targetLead);
+      } else {
+        const querySnap = await getDocs(collection(db, 'campaign_leads'));
+        querySnap.forEach((d) => {
+          const l = d.data() as CampaignLead;
+          if (l && (l.leadId === params.leadId || l.campaignLeadId === params.leadId)) {
+            targetLead = l;
+            campaignLeadsMap.set(l.campaignLeadId, l);
+          }
+        });
+      }
+    } catch (e) {}
+  }
 
   if (!targetLead) return null;
 
@@ -2165,6 +2294,7 @@ export async function updateCampaignLeadStatus(params: {
   }
 
   targetLead.updatedAt = now;
+  campaignLeadsMap.set(targetLead.campaignLeadId, targetLead);
 
   if (isFirebaseConfigured && db) {
     try {
@@ -2174,7 +2304,7 @@ export async function updateCampaignLeadStatus(params: {
     }
   }
 
-  recalculateCampaignMetrics(targetLead.campaignId);
+  await recalculateAndPersistCampaignMetrics(targetLead.campaignId);
 
   return targetLead;
 }

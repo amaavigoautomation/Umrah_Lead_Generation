@@ -92,10 +92,10 @@ export const DemoSchedulingView: React.FC<DemoSchedulingViewProps> = ({ leads = 
       const res = await fetch('/api/calendar/status');
       if (res.ok) {
         const data = await res.json();
-        setCalendarConnected(Boolean(data.configured));
+        setCalendarConnected(Boolean(data.configured && data.connected));
+      } else {
+        setCalendarConnected(false);
       }
-      const token = await getCalendarAccessToken();
-      if (token) setCalendarConnected(true);
     } catch {
       // offline or dev
     }
@@ -110,7 +110,12 @@ export const DemoSchedulingView: React.FC<DemoSchedulingViewProps> = ({ leads = 
       if (token) headers['Authorization'] = `Bearer ${token}`;
 
       const res = await fetch('/api/calendar/availability?count=8', { headers });
-      if (res.ok) {
+      if (res.status === 401) {
+        setCalendarConnected(false);
+        try {
+          window.sessionStorage.removeItem('umrah360_calendar_token');
+        } catch {}
+      } else if (res.ok) {
         const data = await res.json();
         setAvailableSlots(data.slots || []);
       }

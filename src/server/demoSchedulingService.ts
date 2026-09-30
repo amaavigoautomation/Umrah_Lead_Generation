@@ -17,7 +17,7 @@ import { updateCampaignLeadStatus } from './campaignService.js';
 export const TARGET_CALENDAR_EMAIL = 'amaavigo@gmail.com';
 export const SCHEDULING_TIMEZONE = 'Asia/Kolkata'; // IST (UTC +05:30)
 export const WORKING_START_HOUR = 10; // 10:00 AM IST
-export const WORKING_END_HOUR = 19; // 7:00 PM IST (last slot starts at 18:00)
+export const WORKING_END_HOUR = 19; // 7:00 PM IST (last 60-min demo starts at 18:00)
 export const DEMO_DURATION_MINUTES = 60;
 
 // Valid fixed 1-hour slots: 10-11, 11-12, 12-13, 13-14, 14-15, 15-16, 16-17, 17-18, 18-19
@@ -28,10 +28,37 @@ let serverCalendarAccessToken: string | null = null;
 let serverTokenExpiresAt: number = 0;
 
 /**
+ * Clears the expired or invalid Google Calendar access token on the server and Firestore
+ * to prevent continuous 401 background log errors.
+ */
+export async function handleExpiredCalendarToken() {
+  serverCalendarAccessToken = null;
+  serverTokenExpiresAt = 0;
+  if (isFirebaseConfigured && db) {
+    try {
+      await safeSetDoc(
+        doc(db, 'settings', 'calendar_auth'),
+        {
+          accessToken: null,
+          active: false,
+          expired: true,
+          expiredAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
+        { merge: true }
+      );
+    } catch (e) {
+      console.warn('[Calendar Auth Notice] Error updating expired status in Firestore:', e);
+    }
+  }
+}
+
+/**
  * Updates or registers the Google Calendar OAuth access token on the server.
  */
 export function setServerCalendarAccessToken(token: string, expiresInSeconds: number = 3600) {
-  serverCalendarAccessToken = token;
+  if (!token || !token.trim() || token === 'null' || token === 'undefined') return;
+  serverCalendarAccessToken = token.trim();
   serverTokenExpiresAt = Date.now() + expiresInSeconds * 1000;
 }
 
@@ -40,12 +67,12 @@ export function setServerCalendarAccessToken(token: string, expiresInSeconds: nu
  * Checks explicit parameter, in-memory cache, Firestore settings/calendar_auth, and env vars.
  */
 export async function getLiveCalendarToken(explicitToken?: string): Promise<string | null> {
-  if (explicitToken && explicitToken.trim()) {
+  if (explicitToken && explicitToken.trim() && explicitToken !== 'null' && explicitToken !== 'undefined') {
     setServerCalendarAccessToken(explicitToken.trim());
     return explicitToken.trim();
   }
 
-  if (serverCalendarAccessToken && Date.now() < serverTokenExpiresAt - 60000) {
+  if (serverCalendarAccessToken && Date.now() < serverTokenExpiresAt - 30000) {
     return serverCalendarAccessToken;
   }
 
@@ -55,7 +82,7 @@ export async function getLiveCalendarToken(explicitToken?: string): Promise<stri
       const snap = await getDoc(doc(db, 'settings', 'calendar_auth'));
       if (snap.exists()) {
         const data = snap.data();
-        if (data?.accessToken) {
+        if (data?.accessToken && data.accessToken !== 'null' && data?.active !== false && !data?.expired) {
           serverCalendarAccessToken = data.accessToken;
           serverTokenExpiresAt = Date.now() + 3600 * 1000;
           return serverCalendarAccessToken;
@@ -72,6 +99,40 @@ export async function getLiveCalendarToken(explicitToken?: string): Promise<stri
   }
 
   return null;
+}
+
+/**
+ * Validates whether the active Google Calendar token is valid by querying Google Calendar API.
+ */
+export async function verifyGoogleCalendarConnection(tokenOverride?: string): Promise<{
+  connected: boolean;
+  email?: string;
+  error?: string;
+}> {
+  const token = await getLiveCalendarToken(tokenOverride);
+  if (!token) {
+    return { connected: false, error: 'No OAuth token found. Please sign in with Google Calendar.' };
+  }
+
+  try {
+    const res = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary', {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      return { connected: true, email: data.id || TARGET_CALENDAR_EMAIL };
+    } else {
+      const errText = await res.text();
+      if (res.status === 401) {
+        await handleExpiredCalendarToken();
+        return { connected: false, error: 'Google Calendar OAuth token expired (401). Please click "Connect / Sync Google Calendar" to re-authenticate.' };
+      }
+      return { connected: false, error: `Google API returned status ${res.status}: ${errText}` };
+    }
+  } catch (err: any) {
+    return { connected: false, error: err?.message || 'Network error verifying Google Calendar' };
+  }
 }
 
 // -----------------------------------------------------------------------------
@@ -169,6 +230,8 @@ export function formatSlotLabel(dateString: string, startHour: number): string {
 
 // -----------------------------------------------------------------------------
 // Realtime Google Calendar Integration (Single Source of Truth)
+// NOTE: Available slots are NEVER stored in any database.
+// They are computed dynamically on-the-fly directly from Google Calendar.
 // -----------------------------------------------------------------------------
 
 export interface CalendarBusyInterval {
@@ -180,18 +243,20 @@ export interface CalendarAvailabilityResult {
   available: boolean;
   busyIntervals: CalendarBusyInterval[];
   source: 'GOOGLE_CALENDAR' | 'FALLBACK';
+  googleCalendarChecked: boolean;
   error?: string;
 }
 
 /**
  * Queries Google Calendar FreeBusy and Events API in real time for [startIso, endIso).
- * NEVER relies on cached availability. Always verifies with Google Calendar.
+ * Checks the Google Calendar directly as the single source of truth.
  */
 export async function checkRealtimeGoogleCalendarSlot(
   startIso: string,
-  endIso: string
+  endIso: string,
+  accessTokenOverride?: string
 ): Promise<CalendarAvailabilityResult> {
-  const token = await getLiveCalendarToken();
+  const token = await getLiveCalendarToken(accessTokenOverride);
 
   if (!token) {
     // If OAuth token is not configured yet, query existing Firestore bookings as fallback
@@ -200,11 +265,16 @@ export async function checkRealtimeGoogleCalendarSlot(
       available: !fallbackOccupied,
       busyIntervals: fallbackOccupied ? [{ start: startIso, end: endIso }] : [],
       source: 'FALLBACK',
-      error: 'Google Calendar OAuth token not yet authenticated. Connected via Firestore ledger.',
+      googleCalendarChecked: false,
+      error: 'Google Calendar OAuth token not yet authenticated. Checking booked records ledger.',
     };
   }
 
   try {
+    const reqStartMs = new Date(startIso).getTime();
+    const reqEndMs = new Date(endIso).getTime();
+    const busyList: CalendarBusyInterval[] = [];
+
     // 1. Check Google Calendar FreeBusy API
     const freeBusyRes = await fetch('https://www.googleapis.com/calendar/v3/freeBusy', {
       method: 'POST',
@@ -216,34 +286,49 @@ export async function checkRealtimeGoogleCalendarSlot(
         timeMin: startIso,
         timeMax: endIso,
         timeZone: SCHEDULING_TIMEZONE,
-        items: [{ id: 'primary' }, { id: TARGET_CALENDAR_EMAIL }],
+        items: [{ id: 'primary' }],
       }),
     });
 
+    if (freeBusyRes.status === 401) {
+      console.warn('[Calendar Service Notice] Google Calendar token expired (401). Clearing stale token.');
+      await handleExpiredCalendarToken();
+      const fallbackOccupied = await checkFirestoreBookingsConflict(startIso, endIso);
+      return {
+        available: !fallbackOccupied,
+        busyIntervals: fallbackOccupied ? [{ start: startIso, end: endIso }] : [],
+        source: 'FALLBACK',
+        googleCalendarChecked: false,
+        error: 'Google Calendar OAuth token expired (401). Please re-authenticate.',
+      };
+    }
+
     if (freeBusyRes.ok) {
       const fbData = await freeBusyRes.json();
-      const busyList: CalendarBusyInterval[] = [];
-
       const primaryBusy = fbData.calendars?.primary?.busy || [];
-      const targetBusy = fbData.calendars?.[TARGET_CALENDAR_EMAIL]?.busy || [];
 
-      busyList.push(...primaryBusy, ...targetBusy);
+      for (const item of primaryBusy) {
+        const itemStartMs = new Date(item.start).getTime();
+        const itemEndMs = new Date(item.end).getTime();
+        if (reqStartMs < itemEndMs && reqEndMs > itemStartMs) {
+          busyList.push({ start: item.start, end: item.end });
+        }
+      }
 
       if (busyList.length > 0) {
         return {
           available: false,
           busyIntervals: busyList,
           source: 'GOOGLE_CALENDAR',
+          googleCalendarChecked: true,
         };
       }
-    } else {
-      console.warn('[Calendar Service Notice] FreeBusy status:', freeBusyRes.status);
     }
 
-    // 2. Double-check Events List for any existing single events
+    // 2. Query Events API for single events overlapping [startIso, endIso)
     const eventsUrl = `https://www.googleapis.com/calendar/v3/calendars/primary/events?timeMin=${encodeURIComponent(
       startIso
-    )}&timeMax=${encodeURIComponent(endIso)}&singleEvents=true`;
+    )}&timeMax=${encodeURIComponent(endIso)}&singleEvents=true&timeZone=${encodeURIComponent(SCHEDULING_TIMEZONE)}`;
 
     const eventsRes = await fetch(eventsUrl, {
       headers: {
@@ -255,41 +340,43 @@ export async function checkRealtimeGoogleCalendarSlot(
       const eventsData = await eventsRes.json();
       const items = (eventsData.items || []).filter((e: any) => e.status !== 'cancelled');
 
-      if (items.length > 0) {
+      for (const item of items) {
+        const itemStart = item.start?.dateTime || (item.start?.date ? `${item.start.date}T00:00:00+05:30` : startIso);
+        const itemEnd = item.end?.dateTime || (item.end?.date ? `${item.end.date}T23:59:59+05:30` : endIso);
+        const itemStartMs = new Date(itemStart).getTime();
+        const itemEndMs = new Date(itemEnd).getTime();
+
+        if (reqStartMs < itemEndMs && reqEndMs > itemStartMs) {
+          busyList.push({ start: itemStart, end: itemEnd });
+        }
+      }
+
+      if (busyList.length > 0) {
         return {
           available: false,
-          busyIntervals: items.map((i: any) => ({
-            start: i.start?.dateTime || i.start?.date || startIso,
-            end: i.end?.dateTime || i.end?.date || endIso,
-          })),
+          busyIntervals: busyList,
           source: 'GOOGLE_CALENDAR',
+          googleCalendarChecked: true,
         };
       }
     }
 
-    // 3. Check Firestore bookings for extra safety
-    const firestoreConflict = await checkFirestoreBookingsConflict(startIso, endIso);
-    if (firestoreConflict) {
-      return {
-        available: false,
-        busyIntervals: [{ start: startIso, end: endIso }],
-        source: 'GOOGLE_CALENDAR',
-      };
-    }
-
+    // Google Calendar API queried successfully and found no busy intervals.
+    // Google Calendar is the single source of truth: slot is AVAILABLE.
     return {
       available: true,
       busyIntervals: [],
       source: 'GOOGLE_CALENDAR',
+      googleCalendarChecked: true,
     };
   } catch (err: any) {
     console.error('[Calendar Service Error] Realtime availability check failed:', err);
-    // On network failure, check Firestore ledger so system does not double-book
     const fallbackOccupied = await checkFirestoreBookingsConflict(startIso, endIso);
     return {
       available: !fallbackOccupied,
       busyIntervals: fallbackOccupied ? [{ start: startIso, end: endIso }] : [],
       source: 'FALLBACK',
+      googleCalendarChecked: false,
       error: err?.message || 'Network error querying Google Calendar',
     };
   }
@@ -307,8 +394,8 @@ export async function checkFirestoreBookingsConflict(
   try {
     const q = query(
       collection(db, 'bookings'),
-      where('status', '==', 'BOOKED'),
-      limit(20)
+      where('status', 'in', ['BOOKED', 'RESCHEDULED']),
+      limit(50)
     );
     const snap = await getDocs(q);
 
@@ -318,6 +405,8 @@ export async function checkFirestoreBookingsConflict(
     for (const d of snap.docs) {
       const b = d.data() as Booking;
       if (excludeBookingId && b.bookingId === excludeBookingId) continue;
+      if (!b.startDateTimeIso || !b.endDateTimeIso) continue;
+
       const bStart = new Date(b.startDateTimeIso).getTime();
       const bEnd = new Date(b.endDateTimeIso).getTime();
 
@@ -334,6 +423,7 @@ export async function checkFirestoreBookingsConflict(
 
 /**
  * Finds next available fixed 1-hour slots in Google Calendar across upcoming business days.
+ * NO AVAILABLE SLOTS ARE SAVED TO ANY DATABASE.
  * Only returns slots strictly within Monday-Friday, 10 AM - 7 PM IST.
  */
 export async function findNextAvailableSlots(
@@ -342,14 +432,21 @@ export async function findNextAvailableSlots(
     maxSlotsToReturn?: number;
     preferredDate?: string; // YYYY-MM-DD
     preferredPeriod?: 'MORNING' | 'AFTERNOON' | 'EVENING' | 'ANY';
+    accessToken?: string;
   } = {}
 ): Promise<Array<{ date: string; startHour: number; label: string; startIso: string; endIso: string }>> {
-  const { targetDaysCount = 5, maxSlotsToReturn = 4, preferredDate, preferredPeriod = 'ANY' } = options;
+  const {
+    targetDaysCount = 5,
+    maxSlotsToReturn = 4,
+    preferredDate,
+    preferredPeriod = 'ANY',
+    accessToken,
+  } = options;
 
   const nowIst = getNowInIst();
   const availableSlots: Array<{ date: string; startHour: number; label: string; startIso: string; endIso: string }> = [];
 
-  // Determine starting date
+  // Determine starting date offset
   let startOffset = 0;
   if (preferredDate) {
     const targetDate = new Date(`${preferredDate}T12:00:00+05:30`);
@@ -410,7 +507,7 @@ export async function findNextAvailableSlots(
       const startIso = createIstIsoString(dateStr, h, 0);
       const endIso = createIstIsoString(dateStr, h + 1, 0);
 
-      const check = await checkRealtimeGoogleCalendarSlot(startIso, endIso);
+      const check = await checkRealtimeGoogleCalendarSlot(startIso, endIso, accessToken);
       if (check.available) {
         availableSlots.push({
           date: dateStr,
@@ -453,14 +550,15 @@ export interface CreateBookingResult {
   booking?: Booking;
   googleMeetLink?: string;
   calendarEventId?: string;
+  calendarInviteSent?: boolean;
   conflict?: boolean;
   error?: string;
 }
 
 /**
  * Creates a Google Calendar Event with an authentic Google Meet conference link,
- * invites the lead's email, stores the booking in Firestore, and updates the CRM Lead.
- * Guarantees Double-Booking Protection via immediate pre-check.
+ * invites the lead's email (sends calendar invitation ONCE via sendUpdates=all),
+ * stores the confirmed booking record in Firestore, and updates the CRM Lead.
  */
 export async function createGoogleCalendarDemoBooking(
   params: CreateBookingParams
@@ -484,7 +582,7 @@ export async function createGoogleCalendarDemoBooking(
   } = params;
 
   // 1. Double-booking atomic pre-check: perform fresh Google Calendar check right now
-  const freshCheck = await checkRealtimeGoogleCalendarSlot(startIso, endIso);
+  const freshCheck = await checkRealtimeGoogleCalendarSlot(startIso, endIso, accessToken);
   if (!freshCheck.available) {
     return {
       success: false,
@@ -506,6 +604,7 @@ export async function createGoogleCalendarDemoBooking(
 
   let calendarEventId = `mock-cal-${Date.now()}`;
   let googleMeetLink = '';
+  let calendarInviteSent = false;
 
   const summary = `Umrah360 Demo - ${companyName || leadName || 'Agency Partner'}`;
   const description = [
@@ -527,9 +626,9 @@ export async function createGoogleCalendarDemoBooking(
   ].join('\n');
 
   // 2. Create Event in Google Calendar with genuine Google Meet video conference
+  // and send the calendar invitation ONCE to leadEmail
   if (token) {
     try {
-      // Filter attendees so organizer is not listed as attendee, avoiding 400 errors
       const attendees: Array<{ email: string }> = [];
       if (leadEmail && leadEmail.includes('@') && leadEmail.toLowerCase() !== TARGET_CALENDAR_EMAIL.toLowerCase()) {
         attendees.push({ email: leadEmail });
@@ -564,6 +663,7 @@ export async function createGoogleCalendarDemoBooking(
         },
       };
 
+      // sendUpdates=all sends calendar invitation ONCE to attendees
       const calRes = await fetch(
         'https://www.googleapis.com/calendar/v3/calendars/primary/events?conferenceDataVersion=1&sendUpdates=all',
         {
@@ -578,6 +678,13 @@ export async function createGoogleCalendarDemoBooking(
 
       if (!calRes.ok) {
         const errText = await calRes.text();
+        if (calRes.status === 401) {
+          await handleExpiredCalendarToken();
+          return {
+            success: false,
+            error: 'Google Calendar OAuth token expired or invalid (401). Please click "Connect / Sync Google Calendar" in the dashboard to re-authenticate.',
+          };
+        }
         console.error('[Google Calendar API Error] Event creation failed:', calRes.status, errText);
         return {
           success: false,
@@ -587,6 +694,7 @@ export async function createGoogleCalendarDemoBooking(
 
       const eventData = await calRes.json();
       calendarEventId = eventData.id || calendarEventId;
+      calendarInviteSent = attendees.length > 0;
 
       // Extract genuine Google Meet Link returned by Google Calendar
       googleMeetLink =
@@ -635,7 +743,7 @@ export async function createGoogleCalendarDemoBooking(
     };
   }
 
-  // 3. Store Booking Record in Firestore bookings collection
+  // 3. Store Booking Record in Firestore bookings collection (only confirmed bookings stored)
   const nowIso = new Date().toISOString();
   const bookingId = `book-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
 
@@ -711,6 +819,7 @@ export async function createGoogleCalendarDemoBooking(
     booking,
     googleMeetLink,
     calendarEventId,
+    calendarInviteSent,
   };
 }
 
@@ -734,7 +843,7 @@ export async function cancelDemoBooking(
 
     const booking = snap.data() as Booking;
 
-    // 1. Remove from Google Calendar
+    // 1. Remove from Google Calendar and notify attendees
     if (booking.calendarEventId && !booking.calendarEventId.startsWith('mock-')) {
       const token = await getLiveCalendarToken();
       if (token) {
@@ -787,7 +896,11 @@ export async function cancelDemoBooking(
 }
 
 /**
- * Reschedules a demo booking to a new time slot with real-time Google Calendar verification.
+ * Reschedules a demo booking to a new time slot:
+ * 1. Checks real-time Google Calendar availability for the requested new slot.
+ * 2. Empties/clears the initial booked slot by deleting the old event on Google Calendar (sendUpdates=all).
+ * 3. Books the new slot on Google Calendar with a fresh Google Meet link and sends the new calendar invitation.
+ * 4. Updates the booking record and lead state in Firestore.
  */
 export async function rescheduleDemoBooking(
   bookingId: string,
@@ -795,15 +908,16 @@ export async function rescheduleDemoBooking(
   newEndIso: string,
   newDateString: string,
   newStartTime: string,
-  newEndTime: string
+  newEndTime: string,
+  accessToken?: string
 ): Promise<{ success: boolean; booking?: Booking; error?: string; conflict?: boolean }> {
-  // 1. Check realtime availability for new slot
-  const freshCheck = await checkRealtimeGoogleCalendarSlot(newStartIso, newEndIso);
+  // 1. Verify availability for requested new slot before modifying existing booking
+  const freshCheck = await checkRealtimeGoogleCalendarSlot(newStartIso, newEndIso, accessToken);
   if (!freshCheck.available) {
     return {
       success: false,
       conflict: true,
-      error: 'The requested new slot is already booked. Please choose another time.',
+      error: 'The requested new slot is already booked on our calendar. Please choose another time.',
     };
   }
 
@@ -819,33 +933,52 @@ export async function rescheduleDemoBooking(
     }
 
     const booking = snap.data() as Booking;
+    const token = await getLiveCalendarToken(accessToken);
 
-    // 2. Update Google Calendar Event
-    let meetLink = booking.googleMeetLink;
-    if (booking.calendarEventId && !booking.calendarEventId.startsWith('mock-')) {
-      const token = await getLiveCalendarToken();
-      if (token) {
-        const patchRes = await fetch(
+    // 2. FIRST: Make the initial booked slot EMPTY on Google Calendar by removing the original event
+    if (booking.calendarEventId && !booking.calendarEventId.startsWith('mock-') && token) {
+      try {
+        await fetch(
           `https://www.googleapis.com/calendar/v3/calendars/primary/events/${encodeURIComponent(
             booking.calendarEventId
-          )}?conferenceDataVersion=1&sendUpdates=all`,
+          )}?sendUpdates=all`,
           {
-            method: 'PATCH',
-            headers: {
-              Authorization: `Bearer ${token}`,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              start: { dateTime: newStartIso, timeZone: SCHEDULING_TIMEZONE },
-              end: { dateTime: newEndIso, timeZone: SCHEDULING_TIMEZONE },
-            }),
+            method: 'DELETE',
+            headers: { Authorization: `Bearer ${token}` },
           }
         );
+        console.log(`[Reschedule] Initial booked slot (${booking.startDateTimeIso}) emptied on Google Calendar.`);
+      } catch (delErr) {
+        console.warn('[Reschedule Notice] Error deleting original event to empty initial slot:', delErr);
+      }
+    }
 
-        if (patchRes.ok) {
-          const patchData = await patchRes.json();
-          meetLink = patchData.hangoutLink || meetLink;
-        }
+    // 3. SECOND: Book the new slot on Google Calendar and dispatch new calendar invite
+    let newCalendarEventId = `mock-cal-${Date.now()}`;
+    let newGoogleMeetLink = booking.googleMeetLink;
+
+    if (token) {
+      const createRes = await createGoogleCalendarDemoBooking({
+        leadId: booking.leadId,
+        contactId: booking.contactId,
+        campaignId: booking.campaignId,
+        conversationId: booking.conversationId,
+        channel: booking.channel,
+        leadName: booking.leadName,
+        leadEmail: booking.leadEmail,
+        leadPhone: booking.leadPhone,
+        companyName: booking.companyName,
+        startIso: newStartIso,
+        endIso: newEndIso,
+        dateString: newDateString,
+        startTime: newStartTime,
+        endTime: newEndTime,
+        accessToken: token,
+      });
+
+      if (createRes.success && createRes.booking) {
+        newCalendarEventId = createRes.calendarEventId || newCalendarEventId;
+        newGoogleMeetLink = createRes.googleMeetLink || newGoogleMeetLink;
       }
     }
 
@@ -858,7 +991,8 @@ export async function rescheduleDemoBooking(
       startDateTimeIso: newStartIso,
       endDateTimeIso: newEndIso,
       status: 'RESCHEDULED',
-      googleMeetLink: meetLink,
+      calendarEventId: newCalendarEventId,
+      googleMeetLink: newGoogleMeetLink,
       updatedAt: nowIso,
     };
 
@@ -872,7 +1006,8 @@ export async function rescheduleDemoBooking(
           demoStartTime: newStartTime,
           demoEndTime: newEndTime,
           demoTimezone: SCHEDULING_TIMEZONE,
-          googleMeetLink: meetLink,
+          calendarEventId: newCalendarEventId,
+          googleMeetLink: newGoogleMeetLink,
           updatedAt: nowIso,
         },
         { merge: true }
@@ -1016,7 +1151,9 @@ export async function processSchedulingConversationTurn(params: {
     channel?: Channel;
     campaignId?: string;
     conversationId?: string;
+    accessToken?: string;
   };
+  accessToken?: string;
   [key: string]: any;
 }): Promise<SchedulingTurnResult> {
   const messageText = params.messageText || '';
@@ -1031,6 +1168,7 @@ export async function processSchedulingConversationTurn(params: {
   const conversationId = ctx.conversationId || params.conversationId;
   const contactId = ctx.contactId || params.contactId;
   const campaignId = ctx.campaignId || params.campaignId;
+  const accessToken = params.accessToken || ctx.accessToken;
 
   const leadContext = {
     leadId,
@@ -1042,6 +1180,7 @@ export async function processSchedulingConversationTurn(params: {
     channel,
     campaignId,
     conversationId,
+    accessToken,
   };
 
   const nowIst = getNowInIst();
@@ -1062,7 +1201,7 @@ export async function processSchedulingConversationTurn(params: {
       return {
         handled: true,
         action: 'CANCELLED',
-        replyText: `Your Umrah360 demo scheduled for ${activeBooking.date} at ${activeBooking.startTime} IST has been cancelled. The time slot has been freed up. Whenever you're ready to explore Umrah360 in the future, just let us know and we'll gladly schedule a fresh walkthrough!`,
+        replyText: `Your Umrah360 demo scheduled for ${activeBooking.date} at ${activeBooking.startTime} IST has been cancelled. The time slot has been freed up on our calendar. Whenever you're ready to explore Umrah360 in the future, just let us know and we'll gladly schedule a fresh walkthrough!`,
       };
     } else {
       return {
@@ -1076,7 +1215,7 @@ export async function processSchedulingConversationTurn(params: {
   // 3. Rescheduling Intent
   const isRescheduleIntent = /reschedule|change\s+(the\s+)?(time|date|slot|demo|meeting)/i.test(lowerText);
 
-  // 4. Use Gemini AI to extract intent and slot parameters from the full conversation
+  // 4. Use AI to extract intent and slot parameters from the full conversation
   let nlpResult: {
     isDemoIntent: boolean;
     hasSpecificSlot: boolean;
@@ -1154,35 +1293,73 @@ Analyze the conversation and latest message. Output JSON only:
 
   // Rule-based fallback checks if AI parsing did not find a slot
   if (!nlpResult.hasSpecificSlot) {
-    // Check common patterns e.g. "tomorrow at 3pm", "thursday at 4", "wednesday 3 pm"
-    const timeMatch = lowerText.match(/(\d{1,2})(?::00)?\s*(am|pm)/i);
-    const dayMatch = lowerText.match(/(monday|tuesday|wednesday|thursday|friday|tomorrow)/i);
+    const lower = messageText.toLowerCase();
 
-    if (timeMatch) {
+    // 1. Date resolution (today, tomorrow, weekdays)
+    if (lower.includes('today') || lower.includes('tonight') || lower.includes('this evening') || lower.includes('this afternoon')) {
+      nlpResult.dateString = nowIst.dateString;
+      nlpResult.isDemoIntent = true;
+    } else if (lower.includes('tomorrow')) {
+      const nextDay = new Date();
+      nextDay.setDate(nextDay.getDate() + 1);
+      const f = new Intl.DateTimeFormat('en-CA', { timeZone: SCHEDULING_TIMEZONE });
+      nlpResult.dateString = f.format(nextDay);
+      nlpResult.isDemoIntent = true;
+    } else {
+      const weekdays = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+      for (let i = 0; i < weekdays.length; i++) {
+        if (lower.includes(weekdays[i])) {
+          nlpResult.isDemoIntent = true;
+          let diff = i - nowIst.dayOfWeek;
+          if (diff <= 0) diff += 7;
+          const targetD = new Date();
+          targetD.setDate(targetD.getDate() + diff);
+          const f = new Intl.DateTimeFormat('en-CA', { timeZone: SCHEDULING_TIMEZONE });
+          nlpResult.dateString = f.format(targetD);
+          if (i === 0 || i === 6) nlpResult.isWeekend = true;
+          break;
+        }
+      }
+    }
+
+    // 2. Time resolution (e.g. "6 - 7", "6 to 7", "6-7", "6pm", "6:00", "18:00")
+    const rangeMatch = lower.match(/(\d{1,2})(?::\d{2})?\s*(?:-|to|–)\s*(\d{1,2})/i);
+    const timeMatch = lower.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/i);
+
+    let foundHour: number | undefined = undefined;
+
+    if (rangeMatch) {
+      let rawH = parseInt(rangeMatch[1], 10);
+      if (rawH >= 1 && rawH <= 6) rawH += 12; // 6 -> 18 (6 PM IST)
+      if (rawH >= 10 && rawH <= 18) {
+        foundHour = rawH;
+      } else if (rawH < 10 || rawH >= 19) {
+        nlpResult.isOutOfHours = true;
+      }
+    } else if (timeMatch) {
       let rawH = parseInt(timeMatch[1], 10);
-      const ampm = timeMatch[2].toLowerCase();
+      const ampm = timeMatch[3]?.toLowerCase();
       if (ampm === 'pm' && rawH < 12) rawH += 12;
-      if (ampm === 'am' && rawH === 12) rawH = 0;
+      else if (ampm === 'am' && rawH === 12) rawH = 0;
+      else if (!ampm && rawH >= 1 && rawH <= 6) rawH += 12; // 6 -> 18 (6 PM IST)
 
       if (rawH >= 10 && rawH <= 18) {
-        nlpResult.startHour = rawH;
+        foundHour = rawH;
       } else if (rawH < 10 || rawH >= 19) {
         nlpResult.isOutOfHours = true;
       }
     }
 
-    if (dayMatch) {
+    if (foundHour !== undefined) {
+      nlpResult.startHour = foundHour;
       nlpResult.isDemoIntent = true;
-      const d = dayMatch[1].toLowerCase();
-      if (d === 'tomorrow') {
-        const nextDay = new Date();
-        nextDay.setDate(nextDay.getDate() + 1);
-        const f = new Intl.DateTimeFormat('en-CA', { timeZone: SCHEDULING_TIMEZONE });
-        nlpResult.dateString = f.format(nextDay);
-      }
     }
 
-    if (nlpResult.dateString && nlpResult.startHour !== undefined && !nlpResult.isOutOfHours) {
+    if (!nlpResult.dateString && nlpResult.isDemoIntent && !nlpResult.isWeekend) {
+      nlpResult.dateString = nowIst.dateString;
+    }
+
+    if (nlpResult.dateString && nlpResult.startHour !== undefined && !nlpResult.isOutOfHours && !nlpResult.isWeekend) {
       nlpResult.hasSpecificSlot = true;
     }
   }
@@ -1205,37 +1382,35 @@ Analyze the conversation and latest message. Output JSON only:
     };
   }
 
-  // 6. First Response: Ask Availability if lead hasn't provided a slot yet
+  // 6. REQUIREMENT 2: When lead asks for demo scheduling, FIRST refer to Google Calendar,
+  // check earliest available slots and suggest them!
   if (!nlpResult.hasSpecificSlot && !nlpResult.isWeekend && !nlpResult.isOutOfHours) {
-    // If user indicated morning/afternoon/evening or a day, fetch and suggest available slots
-    if (nlpResult.dateString || nlpResult.preferredPeriod !== 'ANY') {
-      const suggestions = await findNextAvailableSlots({
-        preferredDate: nlpResult.dateString,
-        preferredPeriod: nlpResult.preferredPeriod,
-        maxSlotsToReturn: 3,
-      });
+    const suggestions = await findNextAvailableSlots({
+      preferredDate: nlpResult.dateString,
+      preferredPeriod: nlpResult.preferredPeriod,
+      maxSlotsToReturn: 4,
+      accessToken,
+    });
 
-      if (suggestions.length > 0) {
-        const slotsText = suggestions.map((s) => `• ${s.label}`).join('\n');
-        return {
-          handled: true,
-          action: 'OFFERED_ALTERNATIVES',
-          replyText: `Sure, I'd be happy to arrange your demo! Here are our earliest available slots:\n\n${slotsText}\n\nWhich of these works best for you? (Or let me know another time between 10 AM and 7 PM IST Monday–Friday).`,
-        };
-      }
+    if (suggestions.length > 0) {
+      const slotsText = suggestions.map((s) => `• ${s.label}`).join('\n');
+      return {
+        handled: true,
+        action: 'OFFERED_ALTERNATIVES',
+        replyText: `I would be glad to arrange a live walkthrough of Umrah360 for ${companyName}! Here are our earliest available slots directly from our calendar:\n\n${slotsText}\n\nWhich of these works best for you? (Or let me know another preferred timing between 10:00 AM and 7:00 PM IST, Monday to Friday).`,
+      };
     }
 
-    // Default first response as required by Rule 4:
     return {
       handled: true,
       action: 'ASKED_AVAILABILITY',
-      replyText: `Sure, I'd be happy to arrange a demo. Could you share your preferred date and time? Our demo slots are Monday to Friday between 10 AM and 7 PM IST, with each demo lasting one hour.`,
+      replyText: `I would be happy to schedule a demo of Umrah360 for ${companyName}! Our demo slots run Monday to Friday between 10:00 AM and 7:00 PM IST (1-hour duration). What day and time work best for you?`,
     };
   }
 
   // 7. Weekend Validation
   if (nlpResult.isWeekend) {
-    const suggestions = await findNextAvailableSlots({ maxSlotsToReturn: 3 });
+    const suggestions = await findNextAvailableSlots({ maxSlotsToReturn: 3, accessToken });
     const alternativesText = suggestions.map((s) => `• ${s.label}`).join('\n');
 
     return {
@@ -1250,6 +1425,7 @@ Analyze the conversation and latest message. Output JSON only:
     const suggestions = await findNextAvailableSlots({
       preferredDate: nlpResult.dateString || nowIst.dateString,
       maxSlotsToReturn: 3,
+      accessToken,
     });
     const alternativesText = suggestions.map((s) => `• ${s.label}`).join('\n');
 
@@ -1268,12 +1444,10 @@ Analyze the conversation and latest message. Output JSON only:
   const startTimeStr = `${String(startH).padStart(2, '0')}:00`;
   const endTimeStr = `${String(startH + 1).padStart(2, '0')}:00`;
 
-  const availability = await checkRealtimeGoogleCalendarSlot(startIso, endIso);
+  const availability = await checkRealtimeGoogleCalendarSlot(startIso, endIso, accessToken);
 
-  // 10. IF SLOT IS AVAILABLE: BOOK IMMEDIATELY!
+  // 10. IF SLOT IS AVAILABLE ON GOOGLE CALENDAR: BOOK IMMEDIATELY!
   if (availability.available) {
-    let bookingResult: CreateBookingResult;
-
     if (isRescheduleIntent && activeBooking) {
       // Reschedule existing booking
       const resched = await rescheduleDemoBooking(
@@ -1282,7 +1456,8 @@ Analyze the conversation and latest message. Output JSON only:
         endIso,
         targetDateStr,
         startTimeStr,
-        endTimeStr
+        endTimeStr,
+        accessToken
       );
 
       if (resched.success && resched.booking) {
@@ -1291,13 +1466,13 @@ Analyze the conversation and latest message. Output JSON only:
           handled: true,
           action: 'RESCHEDULED',
           booking: resched.booking,
-          replyText: `You're all set! Your Umrah360 demo has been rescheduled to ${slotLabel}.\n\n• Google Meet Link: ${resched.booking.googleMeetLink}\n• Company: ${companyName}\n• Attendee: ${leadName} (${leadEmail || 'Email invite updated'})\n• Timezone: Asia/Kolkata (IST)\n\nWe look forward to demonstrating how Umrah360 automates your pilgrimage operations!`,
+          replyText: `You're all set! Your Umrah360 demo has been rescheduled to ${slotLabel}.\n\n• Google Meet Link: ${resched.booking.googleMeetLink}\n• Company: ${companyName}\n• Attendee: ${leadName} (${leadEmail || 'Email invite updated'})\n• Timezone: Asia/Kolkata (IST)\n\nWe have sent the updated calendar invitation to your email. We look forward to demonstrating how Umrah360 automates your pilgrimage operations!`,
         };
       }
     }
 
-    // New booking creation with Google Calendar & Google Meet
-    bookingResult = await createGoogleCalendarDemoBooking({
+    // New booking creation with Google Calendar & Google Meet (sends invite once)
+    const bookingResult = await createGoogleCalendarDemoBooking({
       leadId: leadContext.leadId,
       contactId: leadContext.contactId,
       campaignId: leadContext.campaignId,
@@ -1312,6 +1487,7 @@ Analyze the conversation and latest message. Output JSON only:
       dateString: targetDateStr,
       startTime: startTimeStr,
       endTime: endTimeStr,
+      accessToken,
     });
 
     if (bookingResult.success && bookingResult.booking) {
@@ -1337,26 +1513,29 @@ Analyze the conversation and latest message. Output JSON only:
         replyText,
       };
     } else if (bookingResult.conflict) {
-      // Caught double-booking race condition!
+      // Slot was booked in a race condition
       const alternatives = await findNextAvailableSlots({
         preferredDate: targetDateStr,
         maxSlotsToReturn: 3,
+        accessToken,
       });
       const altText = alternatives.map((s) => `• ${s.label}`).join('\n');
 
       return {
         handled: true,
         action: 'OFFERED_ALTERNATIVES',
-        replyText: `That slot was just booked by another attendee. Let me offer these next available options instead:\n\n${altText}\n\nWhich one would you prefer?`,
+        replyText: `That slot was just booked by another attendee. Here are our earliest available slots instead:\n\n${altText}\n\nWhich one would you prefer?`,
       };
     }
   }
 
-  // 11. IF SLOT IS OCCUPIED: Retrieve fresh alternatives from Google Calendar
+  // 11. REQUIREMENT 2: IF SLOT IS OCCUPIED ON GOOGLE CALENDAR:
+  // Reply that slot is already booked and suggest earliest available slots from Google Calendar!
   const slotLabel = formatSlotLabel(targetDateStr, startH);
   const alternatives = await findNextAvailableSlots({
     preferredDate: targetDateStr,
     maxSlotsToReturn: 4,
+    accessToken,
   });
 
   const altList = alternatives.map((s) => `• ${s.label}`).join('\n');
@@ -1364,7 +1543,7 @@ Analyze the conversation and latest message. Output JSON only:
   return {
     handled: true,
     action: 'OFFERED_ALTERNATIVES',
-    replyText: `${slotLabel} is already booked on our calendar. I can offer these available slots instead:\n\n${altList}\n\nWhich one would you prefer?`,
+    replyText: `${slotLabel} is already booked on our calendar. Here are our earliest available slots instead:\n\n${altList}\n\nWhich one would you prefer?`,
   };
 }
 

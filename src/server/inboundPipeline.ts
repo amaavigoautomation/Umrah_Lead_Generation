@@ -1819,15 +1819,39 @@ export async function processLiveInboundEmail(payload: {
   }
 }
 
+let isImapPollingActive = false;
+let lastImapPollTimestamp = 0;
+const IMAP_POLL_MIN_INTERVAL_MS = 15000; // 15s cooldown to prevent IMAP and proxy rate limit exceeding
+
 /**
  * Polls IMAP inbox automation@amaavigo.com, processes all new emails, and dispatches real SMTP replies!
  */
-export async function pollAndProcessImapMailbox(): Promise<{
+export async function pollAndProcessImapMailbox(force = false): Promise<{
   success: boolean;
   polledCount: number;
   results: ProcessedInboundEmailResult[];
   error?: string;
 }> {
+  const now = Date.now();
+  if (isImapPollingActive) {
+    return {
+      success: true,
+      polledCount: 0,
+      results: recentProcessedEmails.slice(0, 10),
+    };
+  }
+
+  if (!force && now - lastImapPollTimestamp < IMAP_POLL_MIN_INTERVAL_MS) {
+    return {
+      success: true,
+      polledCount: 0,
+      results: recentProcessedEmails.slice(0, 10),
+    };
+  }
+
+  isImapPollingActive = true;
+  lastImapPollTimestamp = now;
+
   try {
     const imapResult = await pollUnreadEmails(true);
 
@@ -1863,12 +1887,14 @@ export async function pollAndProcessImapMailbox(): Promise<{
       results: processedResults,
     };
   } catch (err: any) {
-    console.error('[IMAP Pipeline Error]:', err);
+    console.error('[IMAP Inbound] Error during scheduled mailbox poll:', err?.message || err);
     return {
       success: false,
       polledCount: 0,
       results: [],
-      error: err.message || 'Error processing IMAP inbox',
+      error: err?.message || 'IMAP polling failed',
     };
+  } finally {
+    isImapPollingActive = false;
   }
 }

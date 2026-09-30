@@ -592,11 +592,62 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                   loadedLeads.push(data);
                 }
               });
+
+              // Map leads by campaign to synchronize metrics across all campaign cards
+              const leadsByCamp = new Map<string, CampaignLead[]>();
+              loadedLeads.forEach((l) => {
+                if (!leadsByCamp.has(l.campaignId)) leadsByCamp.set(l.campaignId, []);
+                leadsByCamp.get(l.campaignId)!.push(l);
+              });
+
+              setCampaigns((prev) =>
+                prev.map((c) => {
+                  const cLeads = leadsByCamp.get(c.campaignId);
+                  if (!cLeads || cLeads.length === 0) return c;
+                  const total = cLeads.length;
+                  const sent = cLeads.filter((l) => l.sendStatus === 'SENT').length;
+                  const pending = cLeads.filter((l) => l.sendStatus === 'PENDING' && l.replyStatus !== 'REPLIED').length;
+                  const failed = cLeads.filter((l) => l.sendStatus === 'FAILED').length;
+                  const replied = cLeads.filter((l) => l.replyStatus === 'REPLIED').length;
+                  const demoBooked = cLeads.filter((l) => l.demoStatus === 'BOOKED').length;
+                  return {
+                    ...c,
+                    totalLeads: total,
+                    sentCount: sent,
+                    pendingCount: pending,
+                    failedCount: failed,
+                    repliedCount: replied,
+                    demoBookedCount: demoBooked,
+                    stats: { totalLeads: total, sent, pending, failed, replied, demoBooked },
+                  };
+                })
+              );
+
               const activeId = selectedCampaignIdRef.current;
               if (activeId) {
                 const matching = loadedLeads.filter((l) => l.campaignId === activeId);
                 matching.sort((a, b) => (a.rowNumber || 0) - (b.rowNumber || 0));
                 setCampaignLeads(matching);
+
+                setSelectedCampaign((prev) => {
+                  if (!prev || prev.campaignId !== activeId) return prev;
+                  const total = matching.length;
+                  const sent = matching.filter((l) => l.sendStatus === 'SENT').length;
+                  const pending = matching.filter((l) => l.sendStatus === 'PENDING' && l.replyStatus !== 'REPLIED').length;
+                  const failed = matching.filter((l) => l.sendStatus === 'FAILED').length;
+                  const replied = matching.filter((l) => l.replyStatus === 'REPLIED').length;
+                  const demoBooked = matching.filter((l) => l.demoStatus === 'BOOKED').length;
+                  return {
+                    ...prev,
+                    totalLeads: total > 0 ? total : prev.totalLeads,
+                    sentCount: sent,
+                    pendingCount: pending,
+                    failedCount: failed,
+                    repliedCount: replied,
+                    demoBookedCount: demoBooked,
+                    stats: { total: total > 0 ? total : prev.totalLeads, totalLeads: total > 0 ? total : prev.totalLeads, sent, pending, failed, replied, demoBooked },
+                  };
+                });
               }
             }
           },
@@ -632,10 +683,8 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
             loadData();
             if (activeId) loadSelectedCampaignDetails(activeId);
           });
-      } else {
-        loadData();
       }
-    }, 4000);
+    }, 15000);
 
     const handleFocusOrVisible = () => {
       if (document.visibilityState === 'visible') {
@@ -785,6 +834,45 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
   // Update lead reply status (e.g. when manually qualifying or syncing lead state)
   const handleToggleReplyStatus = async (lead: CampaignLead) => {
     const nextStatus = lead.replyStatus === 'REPLIED' ? 'NOT_REPLIED' : 'REPLIED';
+    const nowIso = new Date().toISOString();
+
+    // 1. Optimistic local state update
+    setCampaignLeads((prev) =>
+      prev.map((l) =>
+        l.campaignLeadId === lead.campaignLeadId
+          ? { ...l, replyStatus: nextStatus, repliedAt: nextStatus === 'REPLIED' ? nowIso : undefined, updatedAt: nowIso }
+          : l
+      )
+    );
+
+    // 2. Direct Firestore write
+    if (isFirebaseConfigured && db) {
+      try {
+        await setDoc(
+          doc(db, 'campaign_leads', lead.campaignLeadId),
+          {
+            replyStatus: nextStatus,
+            repliedAt: nextStatus === 'REPLIED' ? nowIso : null,
+            updatedAt: nowIso,
+          },
+          { merge: true }
+        );
+        if (lead.leadId) {
+          await setDoc(
+            doc(db, 'leads', lead.leadId),
+            {
+              replyStatus: nextStatus,
+              repliedAt: nextStatus === 'REPLIED' ? nowIso : null,
+              updatedAt: nowIso,
+            },
+            { merge: true }
+          ).catch(() => {});
+        }
+      } catch (err) {
+        console.warn('Direct Firestore reply update notice:', err);
+      }
+    }
+
     try {
       const res = await fetch(`/api/campaigns/lead/${lead.campaignLeadId}/status`, {
         method: 'PATCH',
@@ -852,6 +940,54 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
   // Toggle Demo Status (Automatic or Manual single source of truth)
   const handleToggleDemoStatus = async (lead: CampaignLead) => {
     const nextStatus: DemoStatus = lead.demoStatus === 'BOOKED' ? 'NOT_BOOKED' : 'BOOKED';
+    const nowIso = new Date().toISOString();
+
+    // 1. Optimistic local state update
+    setCampaignLeads((prev) =>
+      prev.map((l) =>
+        l.campaignLeadId === lead.campaignLeadId
+          ? {
+              ...l,
+              demoStatus: nextStatus,
+              demoSource: 'MANUAL',
+              demoBookedAt: nextStatus === 'BOOKED' ? nowIso : undefined,
+              updatedAt: nowIso,
+            }
+          : l
+      )
+    );
+
+    // 2. Direct Firestore write
+    if (isFirebaseConfigured && db) {
+      try {
+        await setDoc(
+          doc(db, 'campaign_leads', lead.campaignLeadId),
+          {
+            demoStatus: nextStatus,
+            demoSource: 'MANUAL',
+            demoBookedAt: nextStatus === 'BOOKED' ? nowIso : null,
+            updatedAt: nowIso,
+          },
+          { merge: true }
+        );
+        if (lead.leadId) {
+          await setDoc(
+            doc(db, 'leads', lead.leadId),
+            {
+              demoStatus: nextStatus,
+              demoSource: 'MANUAL',
+              demoBookedAt: nextStatus === 'BOOKED' ? nowIso : null,
+              status: nextStatus === 'BOOKED' ? 'DEMO_BOOKED' : 'ENGAGED',
+              updatedAt: nowIso,
+            },
+            { merge: true }
+          ).catch(() => {});
+        }
+      } catch (err) {
+        console.warn('Direct Firestore demo update notice:', err);
+      }
+    }
+
     try {
       const res = await fetch(`/api/campaigns/lead/${lead.campaignLeadId}/demo-status`, {
         method: 'PATCH',
@@ -1476,7 +1612,11 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
               ) : (
                 campaigns.map((camp) => {
                   const isSelected = camp.campaignId === selectedCampaignId;
-                  const percentSent = camp.totalLeads > 0 ? Math.round((camp.sentCount / camp.totalLeads) * 100) : 0;
+                  const liveCampTotal = isSelected && campaignLeads.length > 0 ? campaignLeads.length : camp.totalLeads;
+                  const liveCampSent = isSelected && campaignLeads.length > 0 ? campaignLeads.filter((l) => l.sendStatus === 'SENT').length : camp.sentCount;
+                  const liveCampReplied = isSelected && campaignLeads.length > 0 ? campaignLeads.filter((l) => l.replyStatus === 'REPLIED').length : camp.repliedCount;
+                  const liveCampDemo = isSelected && campaignLeads.length > 0 ? campaignLeads.filter((l) => l.demoStatus === 'BOOKED').length : (camp.demoBookedCount || 0);
+                  const percentSent = liveCampTotal > 0 ? Math.round((liveCampSent / liveCampTotal) * 100) : 0;
                   return (
                     <div
                       key={camp.campaignId}
@@ -1538,7 +1678,7 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                       </div>
 
                       <div className="mt-2 text-xs text-slate-400 flex items-center justify-between">
-                        <span>{camp.totalLeads} Leads</span>
+                        <span>{liveCampTotal} Leads</span>
                         <span>{percentSent}% Sent</span>
                       </div>
 
@@ -1554,15 +1694,15 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                       <div className="mt-2.5 pt-2 border-t border-slate-800/70 flex items-center justify-between text-[11px] text-slate-400">
                         <span className="flex items-center gap-1">
                           <CheckCircle2 className="w-3 h-3 text-emerald-400" />
-                          <span>{camp.sentCount}</span>
+                          <span>{liveCampSent}</span>
                         </span>
                         <span className="flex items-center gap-1">
                           <MessageSquare className="w-3 h-3 text-sky-400" />
-                          <span>{camp.repliedCount}</span>
+                          <span>{liveCampReplied}</span>
                         </span>
                         <span className="flex items-center gap-1 text-emerald-400 font-medium">
                           <Sparkles className="w-3 h-3" />
-                          <span>{camp.demoBookedCount} Demos</span>
+                          <span>{liveCampDemo} Demos</span>
                         </span>
                       </div>
                     </div>
@@ -1696,76 +1836,82 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                 </div>
 
                 {/* Real-time Metric Cards Grid */}
-                <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
-                  <div className="p-4 bg-slate-900/90 border border-slate-800 rounded-xl">
-                    <p className="text-xs text-slate-400">Total Leads</p>
-                    <p className="text-2xl font-bold text-slate-100 mt-1">{selectedCampaign.totalLeads}</p>
-                    <p className="text-[11px] text-slate-400 mt-1">Uploaded prospect pool</p>
-                  </div>
+                {(() => {
+                  const liveTotalLeads = campaignLeads.length > 0 ? campaignLeads.length : selectedCampaign.totalLeads;
+                  const liveSentCount = campaignLeads.length > 0 ? campaignLeads.filter((l) => l.sendStatus === 'SENT').length : selectedCampaign.sentCount;
+                  const livePendingCount = campaignLeads.length > 0 ? campaignLeads.filter((l) => l.sendStatus === 'PENDING' && l.replyStatus !== 'REPLIED').length : selectedCampaign.pendingCount;
+                  const liveFailedCount = campaignLeads.length > 0 ? campaignLeads.filter((l) => l.sendStatus === 'FAILED').length : (selectedCampaign.failedCount || 0);
+                  const liveRepliedCount = campaignLeads.length > 0 ? campaignLeads.filter((l) => l.replyStatus === 'REPLIED').length : selectedCampaign.repliedCount;
+                  const liveDemoCount = campaignLeads.length > 0 ? campaignLeads.filter((l) => l.demoStatus === 'BOOKED').length : (selectedCampaign.demoBookedCount || 0);
+                  const percentSent = liveTotalLeads > 0 ? Math.round((liveSentCount / liveTotalLeads) * 100) : 0;
 
-                  <div className="p-4 bg-slate-900/90 border border-slate-800 rounded-xl">
-                    <p className="text-xs text-slate-400">Emails Sent</p>
-                    <div className="flex items-baseline gap-1 mt-1">
-                      <p className="text-2xl font-bold text-emerald-400">{selectedCampaign.sentCount}</p>
-                      <span className="text-xs text-slate-400">
-                        / {selectedCampaign.totalLeads}
-                      </span>
-                    </div>
-                    <div className="mt-2 w-full bg-slate-800 rounded-full h-1 overflow-hidden">
-                      <div
-                        className="bg-emerald-500 h-full rounded-full"
-                        style={{
-                          width: `${
-                            selectedCampaign.totalLeads > 0
-                              ? Math.round((selectedCampaign.sentCount / selectedCampaign.totalLeads) * 100)
-                              : 0
-                          }%`,
-                        }}
-                      />
-                    </div>
-                  </div>
+                  return (
+                    <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
+                      <div className="p-4 bg-slate-900/90 border border-slate-800 rounded-xl">
+                        <p className="text-xs text-slate-400">Total Leads</p>
+                        <p className="text-2xl font-bold text-slate-100 mt-1">{liveTotalLeads}</p>
+                        <p className="text-[11px] text-slate-400 mt-1">Uploaded prospect pool</p>
+                      </div>
 
-                  <div className="p-4 bg-slate-900/90 border border-slate-800 rounded-xl">
-                    <p className="text-xs text-slate-400">Pending</p>
-                    <p className="text-2xl font-bold text-amber-400 mt-1">{selectedCampaign.pendingCount}</p>
-                    <p className="text-[11px] text-slate-400 mt-1">Awaiting dispatch</p>
-                  </div>
+                      <div className="p-4 bg-slate-900/90 border border-slate-800 rounded-xl">
+                        <p className="text-xs text-slate-400">Emails Sent</p>
+                        <div className="flex items-baseline gap-1 mt-1">
+                          <p className="text-2xl font-bold text-emerald-400">{liveSentCount}</p>
+                          <span className="text-xs text-slate-400">
+                            / {liveTotalLeads}
+                          </span>
+                        </div>
+                        <div className="mt-2 w-full bg-slate-800 rounded-full h-1 overflow-hidden">
+                          <div
+                            className="bg-emerald-500 h-full rounded-full transition-all duration-500"
+                            style={{ width: `${percentSent}%` }}
+                          />
+                        </div>
+                      </div>
 
-                  <div className="p-4 bg-slate-900/90 border border-slate-800 rounded-xl">
-                    <p className="text-xs text-slate-400">Failed / Errors</p>
-                    <p className="text-2xl font-bold text-rose-400 mt-1">{selectedCampaign.failedCount || 0}</p>
-                    <p className="text-[11px] text-slate-400 mt-1">SMTP errors / bounced</p>
-                  </div>
+                      <div className="p-4 bg-slate-900/90 border border-slate-800 rounded-xl">
+                        <p className="text-xs text-slate-400">Pending</p>
+                        <p className="text-2xl font-bold text-amber-400 mt-1">{livePendingCount}</p>
+                        <p className="text-[11px] text-slate-400 mt-1">Awaiting dispatch</p>
+                      </div>
 
-                  <div className="p-4 bg-slate-900/90 border border-slate-800 rounded-xl">
-                    <p className="text-xs text-slate-400">Replies</p>
-                    <div className="flex items-baseline gap-1.5 mt-1">
-                      <p className="text-2xl font-bold text-sky-400">{selectedCampaign.repliedCount}</p>
-                      <span className="text-xs text-sky-300">
-                        {selectedCampaign.sentCount > 0
-                          ? `(${Math.round((selectedCampaign.repliedCount / selectedCampaign.sentCount) * 100)}%)`
-                          : '(0%)'}
-                      </span>
-                    </div>
-                    <p className="text-[11px] text-slate-400 mt-1">Inbound replies received</p>
-                  </div>
+                      <div className="p-4 bg-slate-900/90 border border-slate-800 rounded-xl">
+                        <p className="text-xs text-slate-400">Failed / Errors</p>
+                        <p className="text-2xl font-bold text-rose-400 mt-1">{liveFailedCount}</p>
+                        <p className="text-[11px] text-slate-400 mt-1">SMTP errors / bounced</p>
+                      </div>
 
-                  <div className="p-4 bg-emerald-950/20 border border-emerald-500/30 rounded-xl relative overflow-hidden">
-                    <div className="flex items-center justify-between">
-                      <p className="text-xs font-semibold text-emerald-400">Demo Booked</p>
-                      <Sparkles className="w-4 h-4 text-emerald-400" />
+                      <div className="p-4 bg-slate-900/90 border border-slate-800 rounded-xl">
+                        <p className="text-xs text-slate-400">Replies</p>
+                        <div className="flex items-baseline gap-1.5 mt-1">
+                          <p className="text-2xl font-bold text-sky-400">{liveRepliedCount}</p>
+                          <span className="text-xs text-sky-300">
+                            {liveSentCount > 0
+                              ? `(${Math.round((liveRepliedCount / liveSentCount) * 100)}%)`
+                              : '(0%)'}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-400 mt-1">Inbound replies received</p>
+                      </div>
+
+                      <div className="p-4 bg-emerald-950/20 border border-emerald-500/30 rounded-xl relative overflow-hidden">
+                        <div className="flex items-center justify-between">
+                          <p className="text-xs font-semibold text-emerald-400">Demo Booked</p>
+                          <Sparkles className="w-4 h-4 text-emerald-400" />
+                        </div>
+                        <div className="flex items-baseline gap-1.5 mt-1">
+                          <p className="text-2xl font-bold text-emerald-300">{liveDemoCount}</p>
+                          <span className="text-xs text-emerald-400">
+                            {liveSentCount > 0
+                              ? `(${Math.round((liveDemoCount / liveSentCount) * 100)}%)`
+                              : '(0%)'}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-emerald-400 mt-1">Automatic + Manual</p>
+                      </div>
                     </div>
-                    <div className="flex items-baseline gap-1.5 mt-1">
-                      <p className="text-2xl font-bold text-emerald-300">{selectedCampaign.demoBookedCount}</p>
-                      <span className="text-xs text-emerald-400">
-                        {selectedCampaign.sentCount > 0
-                          ? `(${Math.round((selectedCampaign.demoBookedCount / selectedCampaign.sentCount) * 100)}%)`
-                          : '(0%)'}
-                      </span>
-                    </div>
-                    <p className="text-[11px] text-emerald-400 mt-1">Automatic + Manual</p>
-                  </div>
-                </div>
+                  );
+                })()}
 
                 {/* Runs History Accordion / Bar if multiple runs exist */}
                 {campaignRuns.length > 0 && (

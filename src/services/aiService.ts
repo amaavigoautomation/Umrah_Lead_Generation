@@ -107,6 +107,65 @@ export async function generateOmnichannelResponse(params: {
   const knowledgeChunks = retrieveRelevantKnowledge(incomingMessage, knowledgeDocs, 3);
   const knowledgeSources = knowledgeChunks.map((c) => c.title);
 
+  // Step 1.5: If demo scheduling intent is detected, attempt central calendar scheduling turn
+  const isDemoIntent = /(demo|schedule|book\s+(a\s+)?(call|meeting|slot)|walkthrough|reschedule)/i.test(incomingMessage);
+  if (isDemoIntent) {
+    try {
+      const schedRes = await fetch('/api/calendar/schedule-turn', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messageText: incomingMessage,
+          conversationHistory: recentMessages.map((m) => ({
+            role: m.senderType === 'CUSTOMER' || m.senderType === 'PROSPECT' ? 'user' : 'assistant',
+            content: m.text,
+          })),
+          leadContext: {
+            leadId: lead?.leadId,
+            contactId: contact.contactId,
+            leadName: `${contact.firstName} ${contact.lastName}`.trim(),
+            leadEmail: contact.email,
+            leadPhone: contact.phone,
+            companyName: contact.companyName,
+            channel: conversation.channel,
+            conversationId: conversation.conversationId,
+          },
+        }),
+      });
+
+      if (schedRes.ok) {
+        const schedData = await schedRes.json();
+        if (schedData.handled && schedData.replyText) {
+          return {
+            responseText: schedData.replyText,
+            confidence: 0.98,
+            knowledgeSources: ['Google Calendar Real-Time Availability Engine'],
+            humanHandoffTriggered: false,
+            classification: 'DEMO_REQUEST',
+            leadQualification: {
+              isLead: true,
+              leadScore: schedData.action === 'CONFIRMED_BOOKING' ? 98 : 90,
+              intent: 'HIGH',
+              buyingStage: 'DECISION',
+              requirements: [...(lead?.requirements || []), 'Platform Walkthrough'],
+              budget: lead?.budget || null,
+              timeline: 'Immediate',
+              nextAction: schedData.action === 'CONFIRMED_BOOKING' ? 'Attend booked Google Meet walkthrough' : 'Coordinate demo slot selection',
+            },
+            memoryUpdate: {
+              customerFacts: [`Requested demo for ${contact.companyName}`],
+              requirements: [...(lead?.requirements || []), 'Demo Scheduled'],
+              buyingStage: 'DECISION',
+              nextAction: 'Platform Demo',
+            },
+          };
+        }
+      }
+    } catch (schedErr) {
+      console.warn('Direct /api/calendar/schedule-turn call notice:', schedErr);
+    }
+  }
+
   // Step 2: Human handoff check
   const handoffCheck = checkHumanHandoffConditions(incomingMessage, conversation, knowledgeChunks);
 

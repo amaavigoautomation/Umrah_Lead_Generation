@@ -1,9 +1,10 @@
-import { initializeApp, getApps, getApp } from 'firebase/app';
+import { initializeApp, getApps } from 'firebase/app';
 import { getFirestore, Firestore, doc, getDocFromServer } from 'firebase/firestore';
 import { getAuth, Auth } from 'firebase/auth';
 import firebaseConfigJson from '../../firebase-applet-config.json';
 
-const fallbackConfig = {
+// Project gen-lang-client-0376069258 is the provisioned Firestore host for database ai-studio-379c884e-3360-468a-ad55-8105acbd3214
+const firestoreProjectConfig = {
   projectId: "gen-lang-client-0376069258",
   appId: "1:280237761588:web:1e0633ce031a5a49f15661",
   apiKey: "AIzaSyAcr6lIIH50XWD7CcmclWh9lxbPKO7TzBk",
@@ -13,8 +14,6 @@ const fallbackConfig = {
   messagingSenderId: "280237761588",
 };
 
-// If firebase-applet-config.json points to another project without Firestore enabled (e.g. dedicated OAuth project),
-// use the provisioned Firestore database project to ensure Firestore operations succeed.
 // Safely detect environment variables in both Vite browser client and Node serverless functions
 const envProjectId =
   (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_FIREBASE_PROJECT_ID) ||
@@ -26,19 +25,17 @@ const envApiKey =
   (typeof process !== 'undefined' && process.env?.VITE_FIREBASE_API_KEY) ||
   (typeof process !== 'undefined' && process.env?.FIREBASE_API_KEY);
 
-const activeProjectId = envProjectId || fallbackConfig.projectId;
-const activeApiKey = envApiKey || fallbackConfig.apiKey;
-
-const isUsingFallbackProject = activeProjectId === fallbackConfig.projectId;
+const activeProjectId = envProjectId || firestoreProjectConfig.projectId;
+const activeApiKey = envApiKey || firestoreProjectConfig.apiKey;
 
 export const firebaseConfig = {
   apiKey: activeApiKey,
-  authDomain: isUsingFallbackProject ? fallbackConfig.authDomain : ((firebaseConfigJson as any)?.authDomain || fallbackConfig.authDomain),
+  authDomain: firestoreProjectConfig.authDomain,
   projectId: activeProjectId,
-  storageBucket: isUsingFallbackProject ? fallbackConfig.storageBucket : ((firebaseConfigJson as any)?.storageBucket || fallbackConfig.storageBucket),
-  messagingSenderId: isUsingFallbackProject ? fallbackConfig.messagingSenderId : ((firebaseConfigJson as any)?.messagingSenderId || fallbackConfig.messagingSenderId),
-  appId: isUsingFallbackProject ? fallbackConfig.appId : ((firebaseConfigJson as any)?.appId || fallbackConfig.appId),
-  firestoreDatabaseId: (firebaseConfigJson as any)?.firestoreDatabaseId || fallbackConfig.firestoreDatabaseId,
+  storageBucket: firestoreProjectConfig.storageBucket,
+  messagingSenderId: firestoreProjectConfig.messagingSenderId,
+  appId: firestoreProjectConfig.appId,
+  firestoreDatabaseId: firestoreProjectConfig.firestoreDatabaseId,
 };
 
 // Initialize Firebase App singleton for Firestore
@@ -49,7 +46,7 @@ export const db: Firestore = firebaseConfig.firestoreDatabaseId
   ? getFirestore(app, firebaseConfig.firestoreDatabaseId)
   : getFirestore(app);
 
-// Auth configuration uses OAuth project credentials from firebase-applet-config.json
+// Auth configuration uses OAuth credentials
 const oauthProjectConfig = {
   apiKey: (firebaseConfigJson as any)?.apiKey || activeApiKey,
   authDomain: (firebaseConfigJson as any)?.authDomain || "gen-lang-client-0295687148.firebaseapp.com",
@@ -62,7 +59,6 @@ export const authApp =
     ? app
     : (getApps().find((a) => a.name === 'authApp') || initializeApp(oauthProjectConfig, 'authApp'));
 
-// Initialize Auth with the OAuth-enabled app
 export const auth: Auth = getAuth(authApp);
 
 export const isFirebaseConfigured = Boolean(firebaseConfig.projectId && firebaseConfig.apiKey);
@@ -80,3 +76,5 @@ async function testFirestoreConnection() {
   }
 }
 testFirestoreConnection();
+
+

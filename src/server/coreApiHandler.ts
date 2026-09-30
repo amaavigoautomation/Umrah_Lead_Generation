@@ -63,6 +63,7 @@ import {
   cancelDemoBooking,
   getAllBookings,
   processSchedulingConversationTurn,
+  verifyGoogleCalendarConnection,
 } from './demoSchedulingService.js';
 import { db, isFirebaseConfigured } from '../firebase/config.js';
 import { doc } from 'firebase/firestore';
@@ -233,11 +234,13 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
   }
 
   if (url === '/api/calendar/status' && req.method === 'GET') {
-    const liveToken = await getLiveCalendarToken();
+    const liveToken = await getLiveCalendarToken(requestBearerToken || undefined);
+    const verification = liveToken ? await verifyGoogleCalendarConnection(liveToken) : { connected: false };
     res.statusCode = 200;
     res.end(
       JSON.stringify({
         configured: Boolean(liveToken),
+        connected: verification.connected,
         targetAccount: TARGET_CALENDAR_EMAIL,
         timezone: SCHEDULING_TIMEZONE,
         workingDays: 'Monday – Friday (Saturday & Sunday closed)',
@@ -260,6 +263,7 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
       preferredDate,
       preferredPeriod,
       maxSlotsToReturn: count,
+      accessToken: requestBearerToken || undefined,
     });
 
     res.statusCode = 200;
@@ -325,7 +329,8 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
       newEndIso,
       newDateString,
       newStartTime,
-      newEndTime
+      newEndTime,
+      body.accessToken || requestBearerToken || undefined
     );
     res.statusCode = result.success ? 200 : 400;
     res.end(JSON.stringify(result));
@@ -334,7 +339,11 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
 
   if (url === '/api/calendar/schedule-turn' && req.method === 'POST') {
     try {
-      const result = await processSchedulingConversationTurn(body);
+      const turnPayload = {
+        ...body,
+        accessToken: body.accessToken || requestBearerToken || undefined,
+      };
+      const result = await processSchedulingConversationTurn(turnPayload);
       res.statusCode = 200;
       res.end(JSON.stringify(result));
     } catch (err: any) {
@@ -961,12 +970,23 @@ Generate a helpful, grounded response.`;
     return true;
   }
 
-  // 7. Inbound Email Webhook
-  if (url === '/api/inbound/history' && req.method === 'GET') {
+  // 7. Inbound Email Webhook & Mailbox Sync
+  if ((url === '/api/inbound/sync' || url === '/api/inbound/history') && (req.method === 'GET' || req.method === 'POST')) {
+    // Poll IMAP mailbox on demand if configured
+    const imapCfg = getImapConfig();
+    if (imapCfg.configured) {
+      await pollAndProcessImapMailbox().catch((err) => {
+        console.warn('IMAP on-demand poll notice in /api/inbound/sync:', err);
+      });
+    }
+
     res.statusCode = 200;
+    res.setHeader('Content-Type', 'application/json');
     res.end(
       JSON.stringify({
+        success: true,
         history: getRecentProcessedEmails(),
+        allThreadMessages: getAllThreadMessages(),
         turnStates: getConversationTurnStates(),
         timestamp: new Date().toISOString(),
       })

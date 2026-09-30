@@ -176,7 +176,11 @@ export const DemoSchedulingView: React.FC<DemoSchedulingViewProps> = ({ leads = 
         fetchBookings();
       }
     } catch (err: any) {
-      setAuthError(err?.message || 'Failed to authenticate Google Calendar. Ensure popups are allowed or use Manual Token option.');
+      const msg = err?.message || 'Failed to authenticate Google Calendar. Ensure popups are allowed or use Manual Token option.';
+      setAuthError(msg);
+      if (msg.includes('unauthorized-domain') || msg.includes('Unauthorized Domain')) {
+        setShowManualTokenInput(true);
+      }
     } finally {
       setIsAuthenticating(false);
     }

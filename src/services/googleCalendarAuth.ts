@@ -111,6 +111,12 @@ export const signInWithGoogleCalendar = async (): Promise<{ user: User; accessTo
     return { user: result.user, accessToken: cachedAccessToken };
   } catch (error: any) {
     console.error('[Google Calendar Auth Error]:', error);
+    if (error?.code === 'auth/unauthorized-domain' || error?.message?.includes('unauthorized-domain')) {
+      const currentDomain = typeof window !== 'undefined' ? window.location.hostname : 'leadgeneration-sable.vercel.app';
+      throw new Error(
+        `Firebase Unauthorized Domain Error: "${currentDomain}" is not whitelisted in Firebase Console. Add "${currentDomain}" to Firebase Console -> Authentication -> Settings -> Authorized domains. Alternatively, paste your access token below.`
+      );
+    }
     throw error;
   } finally {
     isSigningIn = false;

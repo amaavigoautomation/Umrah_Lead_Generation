@@ -261,164 +261,9 @@ www.umrah360.in`,
   },
 ];
 
-export const DEFAULT_CAMPAIGNS: Campaign[] = [
-  {
-    campaignId: 'camp-umrah-1448',
-    name: 'Indian Umrah Operators 2026',
-    type: 'EMAIL',
-    campaignMode: 'PREDEFINED',
-    deliveryMode: 'LIVE_SMTP',
-    status: 'RUNNING',
-    templateId: 'tpl-b2b-portal',
-    templateName: 'B2B Pilgrimage Portal & Sub-Agent Automation',
-    sourceFileName: '5_Sample_Pilgrimage_Tour_Operators.csv',
-    totalLeads: 5,
-    sentCount: 3,
-    pendingCount: 2,
-    failedCount: 0,
-    repliedCount: 2,
-    demoBookedCount: 1,
-    currentRunId: 'run-umrah-1448-1',
-    lastRunNumber: 1,
-    createdAt: '2026-09-12T10:00:00Z',
-    updatedAt: '2026-09-15T12:00:00Z',
-    startedAt: '2026-09-12T10:05:00Z',
-    stats: {
-      totalLeads: 5,
-      sent: 3,
-      pending: 2,
-      failed: 0,
-      replied: 2,
-      demoBooked: 1,
-    },
-  },
-];
-
-export const DEFAULT_CAMPAIGN_LEADS: CampaignLead[] = [
-  {
-    campaignLeadId: 'clead-umrah-1',
-    campaignId: 'camp-umrah-1448',
-    leadId: 'lead-tariq-mansoor',
-    name: 'Tariq Al-Mansoor',
-    firstName: 'Tariq',
-    lastName: 'Al-Mansoor',
-    companyName: 'Al-Mansoor Hajj & Umrah Services',
-    email: 'tariq@mansoorhajj.com',
-    phone: '+91 98201 11222',
-    designation: 'Managing Director',
-    sourceFile: '5_Sample_Pilgrimage_Tour_Operators.csv',
-    rowNumber: 1,
-    sendStatus: 'SENT',
-    replyStatus: 'REPLIED',
-    demoStatus: 'BOOKED',
-    demoIntent: true,
-    demoSource: 'AUTOMATIC',
-    demoBookedAt: '2026-09-14T11:00:00Z',
-    sendCount: 1,
-    lastSentAt: '2026-09-13T10:15:00Z',
-    repliedAt: '2026-09-14T09:30:00Z',
-    createdAt: '2026-09-12T10:00:00Z',
-    updatedAt: '2026-09-14T11:00:00Z',
-  },
-  {
-    campaignLeadId: 'clead-umrah-2',
-    campaignId: 'camp-umrah-1448',
-    leadId: 'lead-rashid-farooqui',
-    name: 'Rashid Farooqui',
-    firstName: 'Rashid',
-    lastName: 'Farooqui',
-    companyName: 'Haramain Journeys Mumbai',
-    email: 'rashid@haramainjourneys.in',
-    phone: '+91 98202 33445',
-    designation: 'Owner / Partner',
-    sourceFile: '5_Sample_Pilgrimage_Tour_Operators.csv',
-    rowNumber: 2,
-    sendStatus: 'SENT',
-    replyStatus: 'REPLIED',
-    demoStatus: 'NOT_BOOKED',
-    sendCount: 1,
-    lastSentAt: '2026-09-13T10:20:00Z',
-    repliedAt: '2026-09-14T14:10:00Z',
-    createdAt: '2026-09-12T10:00:00Z',
-    updatedAt: '2026-09-14T14:10:00Z',
-  },
-  {
-    campaignLeadId: 'clead-umrah-3',
-    campaignId: 'camp-umrah-1448',
-    leadId: 'lead-zeeshan-malik',
-    name: 'Zeeshan Malik',
-    firstName: 'Zeeshan',
-    lastName: 'Malik',
-    companyName: 'Malik Pilgrimages UK',
-    email: 'zeeshan@malikpilgrimages.co.uk',
-    phone: '+44 7700 900123',
-    designation: 'Operations Director',
-    sourceFile: '5_Sample_Pilgrimage_Tour_Operators.csv',
-    rowNumber: 3,
-    sendStatus: 'SENT',
-    replyStatus: 'NOT_REPLIED',
-    demoStatus: 'NOT_BOOKED',
-    sendCount: 1,
-    lastSentAt: '2026-09-13T10:25:00Z',
-    createdAt: '2026-09-12T10:00:00Z',
-    updatedAt: '2026-09-13T10:25:00Z',
-  },
-  {
-    campaignLeadId: 'clead-umrah-4',
-    campaignId: 'camp-umrah-1448',
-    leadId: 'lead-bilal-qureshi',
-    name: 'Bilal Qureshi',
-    firstName: 'Bilal',
-    lastName: 'Qureshi',
-    companyName: 'Al-Noor Tours Dubai',
-    email: 'bilal@alnoortravels.ae',
-    phone: '+971 50 123 4567',
-    designation: 'General Manager',
-    sourceFile: '5_Sample_Pilgrimage_Tour_Operators.csv',
-    rowNumber: 4,
-    sendStatus: 'PENDING',
-    replyStatus: 'NOT_REPLIED',
-    demoStatus: 'NOT_BOOKED',
-    sendCount: 0,
-    createdAt: '2026-09-12T10:00:00Z',
-    updatedAt: '2026-09-12T10:00:00Z',
-  },
-  {
-    campaignLeadId: 'clead-umrah-5',
-    campaignId: 'camp-umrah-1448',
-    leadId: 'lead-irfan-siddiqui',
-    name: 'Irfan Siddiqui',
-    firstName: 'Irfan',
-    lastName: 'Siddiqui',
-    companyName: 'Delhi Pilgrimage Consolidators',
-    email: 'irfan@delhiumrah.in',
-    phone: '+91 98111 55667',
-    designation: 'CEO / Founder',
-    sourceFile: '5_Sample_Pilgrimage_Tour_Operators.csv',
-    rowNumber: 5,
-    sendStatus: 'PENDING',
-    replyStatus: 'NOT_REPLIED',
-    demoStatus: 'NOT_BOOKED',
-    sendCount: 0,
-    createdAt: '2026-09-12T10:00:00Z',
-    updatedAt: '2026-09-12T10:00:00Z',
-  },
-];
-
-export const DEFAULT_CAMPAIGN_RUNS: CampaignRun[] = [
-  {
-    runId: 'run-umrah-1448-1',
-    campaignId: 'camp-umrah-1448',
-    runNumber: 1,
-    status: 'RUNNING',
-    templateId: 'tpl-b2b-portal',
-    templateSubject: 'Umrah360 for {{company}} - Automate B2B Packages & Sub-Agent Bookings',
-    totalLeads: 5,
-    sentCount: 3,
-    startedAt: '2026-09-12T10:05:00Z',
-    createdAt: '2026-09-12T10:05:00Z',
-  },
-];
+export const DEFAULT_CAMPAIGNS: Campaign[] = [];
+export const DEFAULT_CAMPAIGN_LEADS: CampaignLead[] = [];
+export const DEFAULT_CAMPAIGN_RUNS: CampaignRun[] = [];
 
 // In-Memory state caches
 const campaignsMap = new Map<string, Campaign>();
@@ -500,7 +345,19 @@ export async function syncCampaignStoreFromFirestore(): Promise<void> {
         campSnap.forEach((d) => {
           const data = d.data() as Campaign;
           if (data && data.campaignId) {
-            campaignsMap.set(data.campaignId, data);
+            const cleanName = (data.name || '').toLowerCase().trim();
+            if (
+              data.campaignId === 'camp-umrah-1448' ||
+              data.campaignId === 'camp-indian-umrah-operators' ||
+              data.campaignId === 'test' ||
+              cleanName === 'test' ||
+              cleanName === 'indian umrah operators 2026'
+            ) {
+              deleteDoc(doc(db, 'campaigns', d.id)).catch(() => {});
+              deleteDoc(doc(db, 'outbound_campaigns', d.id)).catch(() => {});
+            } else {
+              campaignsMap.set(data.campaignId, data);
+            }
           }
         });
       }
@@ -833,7 +690,10 @@ export async function deleteCampaign(campaignId: string): Promise<boolean> {
   // 5. Delete campaign from memory and Firestore
   campaignsMap.delete(campaignId);
   if (isFirebaseConfigured && db) {
-    await deleteDoc(doc(db, 'campaigns', campaignId)).catch(() => {});
+    await Promise.all([
+      deleteDoc(doc(db, 'campaigns', campaignId)).catch(() => {}),
+      deleteDoc(doc(db, 'outbound_campaigns', campaignId)).catch(() => {}),
+    ]);
   }
 
   console.log(`[Campaign Engine] Successfully deleted campaign ${campaignId} (${leads.length} leads, ${runs.length} runs).`);

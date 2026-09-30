@@ -43,39 +43,6 @@ export const OutboundCampaigns: React.FC<OutboundCampaignsProps> = ({
   onToggleCampaignStatus,
   onSelectProspectConversation,
 }) => {
-  const fallbackCampaign: OutboundCampaign = {
-    campaignId: 'camp-indian-umrah-operators',
-    name: 'Indian Umrah Operators 2026',
-    description: 'Outbound campaign targeting Founders & Directors of pilgrimage agencies in India',
-    targetIndustry: 'Pilgrimage, Hajj & Umrah, Leisure Travel',
-    targetLocation: 'India (Delhi NCR, Mumbai, Hyderabad, Bangalore, Lucknow)',
-    targetJobTitles: ['Founder', 'Owner', 'Managing Director', 'CEO', 'Director'],
-    targetCompanySize: '1-50 employees',
-    apolloSearchConfiguration: {
-      q_organization_keyword_tags: ['umrah', 'hajj', 'pilgrimage', 'travel agency'],
-      person_titles: ['Founder', 'Owner', 'Managing Director', 'Director'],
-      person_locations: ['India'],
-      organization_num_employees_ranges: ['1,10', '11,20', '21,50'],
-    },
-    emailAccountId: 'sales@umrah360.in',
-    emailSubjectTemplate: 'Umrah360 for {{companyName}} - Automate B2B Packages & Visa Operations',
-    emailBodyTemplate: `Hi {{firstName}},\n\nI noticed you are leading operations at {{companyName}}. We work with top Umrah operators across India to automate their dynamic package costing, Makkah/Madinah room allocations, and sub-agent B2B voucher distribution.\n\nUmrah360 gives your agency an automated B2B portal with live supplier costs and compliant invoicing.\n\nWould you be open to exploring how this could streamline your upcoming season?\n\nRegards,\nUmrah360 Growth Team`,
-    status: 'RUNNING',
-    stats: {
-      prospectsFound: prospects.length,
-      prospectsQualified: prospects.filter((p) => p.qualificationStatus === 'QUALIFIED').length,
-      emailsSent: prospects.filter((p) => p.status !== 'PROSPECTED').length,
-      replies: prospects.filter((p) => p.status === 'REPLIED' || p.status === 'ENGAGED' || p.status === 'QUALIFIED').length,
-      engaged: prospects.filter((p) => p.status === 'ENGAGED' || p.status === 'QUALIFIED').length,
-      qualifiedLeads: prospects.filter((p) => p.status === 'QUALIFIED').length,
-      meetingsRequested: 5,
-      unsubscribes: 1,
-      bounces: 0,
-    },
-    createdAt: '2026-09-10T08:00:00Z',
-    updatedAt: '2026-09-15T10:00:00Z',
-  };
-
   const allCampaigns = campaigns || [];
   const [selectedCampaignId, setSelectedCampaignId] = useState<string>(() => allCampaigns[0]?.campaignId || '');
 
@@ -122,7 +89,7 @@ export const OutboundCampaigns: React.FC<OutboundCampaignsProps> = ({
 
   // Filter prospects (by campaign and search query)
   const filteredProspects = prospects.filter((p) => {
-    const matchesCampaign = !activeCampaign?.campaignId || p.campaignId === activeCampaign.campaignId || p.campaignId === 'camp-indian-umrah-operators';
+    const matchesCampaign = !activeCampaign?.campaignId || p.campaignId === activeCampaign.campaignId;
     if (!matchesCampaign) return false;
     if (!searchFilter.trim()) return true;
     const q = searchFilter.toLowerCase();
@@ -136,7 +103,7 @@ export const OutboundCampaigns: React.FC<OutboundCampaignsProps> = ({
 
   // Calculate campaign metrics
   const campaignProspects = prospects.filter(
-    (p) => !activeCampaign?.campaignId || p.campaignId === activeCampaign.campaignId || p.campaignId === 'camp-indian-umrah-operators'
+    (p) => !activeCampaign?.campaignId || p.campaignId === activeCampaign.campaignId
   );
   const stats = {
     prospectsFound: campaignProspects.length,
@@ -177,7 +144,7 @@ export const OutboundCampaigns: React.FC<OutboundCampaignsProps> = ({
     const prospectId = `prospect-${Date.now()}`;
     const prospect: OutboundProspect = {
       prospectId,
-      campaignId: activeCampaign?.campaignId || 'camp-indian-umrah-operators',
+      campaignId: activeCampaign?.campaignId || '',
       apolloPersonId: `ap_${Math.floor(1000000 + Math.random() * 9000000)}`,
       firstName: newProspect.firstName,
       lastName: newProspect.lastName,

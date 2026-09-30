@@ -877,6 +877,7 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
       if (isFirebaseConfigured && db) {
         try {
           await deleteDoc(doc(db, 'campaigns', campaignId));
+          await deleteDoc(doc(db, 'outbound_campaigns', campaignId)).catch(() => {});
           const leadsToDelete = campaignLeads.filter((l) => l.campaignId === campaignId);
           for (const cl of leadsToDelete) {
             deleteDoc(doc(db, 'campaign_leads', cl.campaignLeadId)).catch(() => {});
@@ -2127,7 +2128,7 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
       {activeTab === 'PROSPECTS' && (
         <div className="flex-1 overflow-y-auto bg-slate-950">
           <OutboundCampaigns
-            campaigns={outboundCampaigns && outboundCampaigns.length > 0 ? outboundCampaigns : [INITIAL_CAMPAIGN]}
+            campaigns={outboundCampaigns || []}
             prospects={prospects}
             contacts={contacts}
             onAddProspect={onAddProspect || (() => {})}

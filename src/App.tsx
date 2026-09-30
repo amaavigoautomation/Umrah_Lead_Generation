@@ -142,7 +142,7 @@ export default function App() {
     });
   };
   const messages = messagesState;
-  const [campaigns, setCampaigns] = useState<OutboundCampaign[]>(() => isFirebaseConfigured ? [] : [INITIAL_CAMPAIGN]);
+  const [campaigns, setCampaigns] = useState<OutboundCampaign[]>([]);
   const [prospects, setProspects] = useState<OutboundProspect[]>(() => isFirebaseConfigured ? [] : INITIAL_PROSPECTS);
   const [activities, setActivities] = useState<LeadActivity[]>(() => isFirebaseConfigured ? [] : INITIAL_ACTIVITIES);
   const [knowledgeDocs, setKnowledgeDocs] = useState<KnowledgeDocument[]>(() => isFirebaseConfigured ? [] : INITIAL_KNOWLEDGE_DOCUMENTS);
@@ -234,7 +234,6 @@ export default function App() {
             for (const kb of INITIAL_KNOWLEDGE_DOCUMENTS) {
               await setDoc(doc(db, 'knowledge_documents', kb.id), kb);
             }
-            await setDoc(doc(db, 'outbound_campaigns', INITIAL_CAMPAIGN.campaignId), INITIAL_CAMPAIGN);
             for (const p of INITIAL_PROSPECTS) {
               await setDoc(doc(db, 'outbound_prospects', p.prospectId), p);
             }
@@ -259,13 +258,34 @@ export default function App() {
           getDocs(collection(db, 'outbound_prospects')),
         ]);
 
+        // Filter and purge legacy test/default campaigns from Firestore
+        const validCampaigns: OutboundCampaign[] = [];
+        if (campSnap && !campSnap.empty) {
+          campSnap.docs.forEach((d) => {
+            const data = d.data() as OutboundCampaign;
+            const cleanName = (data.name || '').toLowerCase().trim();
+            if (
+              data.campaignId === 'camp-umrah-1448' ||
+              data.campaignId === 'camp-indian-umrah-operators' ||
+              data.campaignId === 'test' ||
+              cleanName === 'test' ||
+              cleanName === 'indian umrah operators 2026'
+            ) {
+              deleteDoc(doc(db, 'outbound_campaigns', d.id)).catch(() => {});
+              deleteDoc(doc(db, 'campaigns', d.id)).catch(() => {});
+            } else {
+              validCampaigns.push(data);
+            }
+          });
+        }
+
         // Always set the exact documents present in Firestore (if user deleted documents, reflects empty/subset)
         setConversations(convsSnap.docs.map((d) => d.data() as Conversation));
         setMessages(msgsSnap.docs.map((d) => d.data() as Message));
         setLeads(leadsSnap.docs.map((d) => sanitizeLead(d.data())));
         setContacts(contsSnap.docs.map((d) => sanitizeContact(d.data())));
         setKnowledgeDocs(kbSnap.docs.map((d) => d.data() as KnowledgeDocument));
-        setCampaigns(campSnap ? campSnap.docs.map((d) => d.data() as OutboundCampaign) : []);
+        setCampaigns(validCampaigns);
         setProspects(prospectsSnap ? prospectsSnap.docs.map((d) => d.data() as OutboundProspect) : []);
 
         // Initialize / sync users
@@ -316,9 +336,24 @@ export default function App() {
         });
 
         unsubOutboundCamps = onSnapshot(collection(db, 'outbound_campaigns'), (snap) => {
-          if (!snap.empty) {
-            setCampaigns(snap.docs.map((d) => d.data() as OutboundCampaign));
-          }
+          const list: OutboundCampaign[] = [];
+          snap.docs.forEach((d) => {
+            const data = d.data() as OutboundCampaign;
+            const cleanName = (data.name || '').toLowerCase().trim();
+            if (
+              data.campaignId === 'camp-umrah-1448' ||
+              data.campaignId === 'camp-indian-umrah-operators' ||
+              data.campaignId === 'test' ||
+              cleanName === 'test' ||
+              cleanName === 'indian umrah operators 2026'
+            ) {
+              deleteDoc(doc(db, 'outbound_campaigns', d.id)).catch(() => {});
+              deleteDoc(doc(db, 'campaigns', d.id)).catch(() => {});
+            } else {
+              list.push(data);
+            }
+          });
+          setCampaigns(list);
         });
 
         unsubOutboundProspects = onSnapshot(collection(db, 'outbound_prospects'), (snap) => {
@@ -1407,7 +1442,7 @@ export default function App() {
     setLeads(INITIAL_LEADS);
     setConversations(INITIAL_CONVERSATIONS);
     setMessages(INITIAL_MESSAGES);
-    setCampaigns([INITIAL_CAMPAIGN]);
+    setCampaigns([]);
     setProspects(INITIAL_PROSPECTS);
     setActivities(INITIAL_ACTIVITIES);
     setKnowledgeDocs(INITIAL_KNOWLEDGE_DOCUMENTS);

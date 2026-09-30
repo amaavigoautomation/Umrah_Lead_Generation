@@ -38,28 +38,16 @@ export const firebaseConfig = {
   firestoreDatabaseId: firestoreProjectConfig.firestoreDatabaseId,
 };
 
-// Initialize Firebase App singleton for Firestore
+// Initialize Firebase App singleton for Firestore & Authentication (gen-lang-client-0376069258)
 export const app = getApps().find((a) => a.name === '[DEFAULT]') || initializeApp(firebaseConfig);
 
-// Initialize Firestore with specific database ID if provided
+// Initialize Firestore with specific database ID
 export const db: Firestore = firebaseConfig.firestoreDatabaseId
   ? getFirestore(app, firebaseConfig.firestoreDatabaseId)
   : getFirestore(app);
 
-// Auth configuration uses OAuth credentials
-const oauthProjectConfig = {
-  apiKey: (firebaseConfigJson as any)?.apiKey || activeApiKey,
-  authDomain: (firebaseConfigJson as any)?.authDomain || "gen-lang-client-0295687148.firebaseapp.com",
-  projectId: (firebaseConfigJson as any)?.projectId || "gen-lang-client-0295687148",
-  appId: (firebaseConfigJson as any)?.appId || "1:27669323758:web:ca139ff1b786c339b1b8ff",
-};
-
-export const authApp =
-  oauthProjectConfig.projectId === firebaseConfig.projectId
-    ? app
-    : (getApps().find((a) => a.name === 'authApp') || initializeApp(oauthProjectConfig, 'authApp'));
-
-export const auth: Auth = getAuth(authApp);
+// Auth configuration uses the provisioned project (gen-lang-client-0376069258)
+export const auth: Auth = getAuth(app);
 
 export const isFirebaseConfigured = Boolean(firebaseConfig.projectId && firebaseConfig.apiKey);
 

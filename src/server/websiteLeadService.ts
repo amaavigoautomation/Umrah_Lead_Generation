@@ -183,6 +183,22 @@ export interface ProcessedLeadResult {
 function flattenAllFields(obj: any, target: Record<string, string> = {}): Record<string, string> {
   if (!obj || typeof obj !== 'object') return target;
 
+  const setOrAppend = (k: string, v: any) => {
+    if (v === null || v === undefined) return;
+    const cleanK = String(k).trim();
+    const cleanV = String(v).trim();
+    if (!cleanK || !cleanV) return;
+
+    if (target[cleanK]) {
+      const existing = target[cleanK];
+      if (!existing.toLowerCase().includes(cleanV.toLowerCase())) {
+        target[cleanK] = `${existing}, ${cleanV}`;
+      }
+    } else {
+      target[cleanK] = cleanV;
+    }
+  };
+
   if (Array.isArray(obj)) {
     for (let i = 0; i < obj.length; i++) {
       const item = obj[i];
@@ -190,11 +206,15 @@ function flattenAllFields(obj: any, target: Record<string, string> = {}): Record
         const itemKey = item.id || item.name || item.field_id || item.key || item.label || `item_${i}`;
         const itemVal = item.value ?? item.val ?? item.raw_value ?? item.text ?? '';
         if (typeof itemVal === 'string' || typeof itemVal === 'number' || typeof itemVal === 'boolean') {
-          target[String(itemKey)] = String(itemVal).trim();
+          setOrAppend(String(itemKey), itemVal);
+        } else if (Array.isArray(itemVal)) {
+          for (const subVal of itemVal) {
+            setOrAppend(String(itemKey), subVal);
+          }
         }
         flattenAllFields(item, target);
       } else if (typeof item === 'string' || typeof item === 'number') {
-        target[`item_${i}`] = String(item).trim();
+        setOrAppend(`item_${i}`, item);
       }
     }
     return target;
@@ -207,41 +227,52 @@ function flattenAllFields(obj: any, target: Record<string, string> = {}): Record
 
     // Prevent Elementor/WordPress form metadata objects from polluting root keys like "name" or "id"
     if (lowerK === 'form' && typeof rawV === 'object' && rawV !== null) {
-      if ((rawV as any).id) target['form_id'] = String((rawV as any).id).trim();
-      if ((rawV as any).name) target['form_name'] = String((rawV as any).name).trim();
+      if ((rawV as any).id) setOrAppend('form_id', (rawV as any).id);
+      if ((rawV as any).name) setOrAppend('form_name', (rawV as any).name);
       continue;
     }
     if ((lowerK === 'post' || lowerK === 'page') && typeof rawV === 'object' && rawV !== null) {
-      if ((rawV as any).id) target[`${lowerK}_id`] = String((rawV as any).id).trim();
-      if ((rawV as any).title) target[`${lowerK}_title`] = String((rawV as any).title).trim();
+      if ((rawV as any).id) setOrAppend(`${lowerK}_id`, (rawV as any).id);
+      if ((rawV as any).title) setOrAppend(`${lowerK}_title`, (rawV as any).title);
       continue;
     }
 
-    if (typeof rawV === 'string' || typeof rawV === 'number' || typeof rawV === 'boolean') {
+    if (Array.isArray(rawV)) {
+      for (const arrItem of rawV) {
+        if (typeof arrItem === 'string' || typeof arrItem === 'number' || typeof arrItem === 'boolean') {
+          setOrAppend(rawK, arrItem);
+        } else if (arrItem && typeof arrItem === 'object') {
+          const itemVal = arrItem.value ?? arrItem.val ?? arrItem.raw_value ?? arrItem.text;
+          if (itemVal) setOrAppend(rawK, itemVal);
+          flattenAllFields(arrItem, target);
+        }
+      }
+    } else if (typeof rawV === 'string' || typeof rawV === 'number' || typeof rawV === 'boolean') {
       const strVal = String(rawV).trim();
 
       // If key is form_name or form-name, store under form_name, NOT name
       if (lowerK === 'form_name' || lowerK === 'form-name' || lowerK === 'formname' || lowerK === 'form_title') {
-        target['form_name'] = strVal;
+        setOrAppend('form_name', strVal);
         continue;
       }
 
-      target[rawK] = strVal;
+      setOrAppend(rawK, strVal);
 
       // Extract bracket key e.g. "form_fields[name]" -> also set "name"
       const bracketMatch = rawK.match(/(?:form_fields|fields|entry|wpforms)\[([^\]]+)\]/i);
       if (bracketMatch && bracketMatch[1]) {
-        target[bracketMatch[1]] = strVal;
+        setOrAppend(bracketMatch[1], strVal);
       }
     } else if (typeof rawV === 'object') {
       const nestedVal = (rawV as any).value ?? (rawV as any).val ?? (rawV as any).raw_value ?? (rawV as any).text;
       if (typeof nestedVal === 'string' || typeof nestedVal === 'number' || typeof nestedVal === 'boolean') {
-        target[rawK] = String(nestedVal).trim();
-        if ((rawV as any).id) target[String((rawV as any).id)] = String(nestedVal).trim();
-        if ((rawV as any).name && String((rawV as any).name).toLowerCase() !== 'form') {
-          target[String((rawV as any).name)] = String(nestedVal).trim();
+        setOrAppend(rawK, nestedVal);
+        if ((rawV as any).id) setOrAppend(String((rawV as any).id), nestedVal);
+        const innerName = String((rawV as any).name || '').trim();
+        if (innerName && innerName.toLowerCase() !== 'form' && innerName.length > 2) {
+          setOrAppend(innerName, nestedVal);
         }
-        if ((rawV as any).label) target[String((rawV as any).label)] = String(nestedVal).trim();
+        if ((rawV as any).label) setOrAppend(String((rawV as any).label), nestedVal);
       }
       flattenAllFields(rawV, target);
     }
@@ -250,40 +281,30 @@ function flattenAllFields(obj: any, target: Record<string, string> = {}): Record
   return target;
 }
 
-// Detects whether a string is a product name, form title, or software feature rather than an actual human name
+// Detects whether a string is a product name, designation, form title, or software feature rather than an actual human name
 function isInvalidHumanName(val: string): boolean {
   if (!val || typeof val !== 'string') return true;
   const s = val.trim();
   if (s.length < 2) return true;
-  const productOrFormKeywords = [
-    'crm',
-    'booking',
-    'management',
-    'group series',
-    'erp',
-    'portal',
-    'software',
-    'package',
-    'solution',
-    'license',
-    'b2b',
-    'allotment',
-    'request demo',
-    'demo request',
-    'demo form',
-    'inquiry form',
-    'contact form',
-    'series',
-    'pilgrim',
-    'agency leader',
-    'tour operator',
-    'partner',
-    'system',
-    'platform',
-    'app',
-    'application',
-  ];
+
+  // Single-word 2-letter designations or role titles that are NOT human names
+  const designationsAndTitles = new Set([
+    'vp', 'ceo', 'cto', 'cfo', 'coo', 'md', 'gm', 'hr', 'it', 'pr',
+    'director', 'manager', 'founder', 'owner', 'partner', 'head', 'executive',
+    'president', 'proprietor', 'admin', 'lead', 'officer', 'chief', 'agent'
+  ]);
+
   const lower = s.toLowerCase();
+  if (designationsAndTitles.has(lower)) return true;
+
+  const productOrFormKeywords = [
+    'crm', 'booking', 'management', 'group series', 'erp', 'portal', 'software',
+    'package', 'solution', 'license', 'b2b', 'allotment', 'request demo',
+    'demo request', 'demo form', 'inquiry form', 'contact form', 'series',
+    'pilgrim', 'agency leader', 'tour operator', 'partner', 'system', 'platform',
+    'app', 'application', 'vice president', 'head of sales', 'decision maker'
+  ];
+
   for (const kw of productOrFormKeywords) {
     if (lower.includes(kw)) return true;
   }
@@ -338,18 +359,23 @@ export async function processWebsiteLeadSubmission(
   let rawFullName = findValue([
     /^fullname$/,
     /^yourfullname$/,
+    /^your_full_name$/,
     /^yourname$/,
+    /^your_name$/,
     /^clientname$/,
     /^contactname$/,
     /^leadname$/,
     /^username$/,
-    /^author$/,
+    /^personname$/,
+    /^applicantname$/,
   ]).trim();
 
-  // If candidate is a product or form name, reject it and preserve it as detected product
+  // If candidate is a product, designation or form title, reject it
   let detectedProductFromField = '';
   if (rawFullName && isInvalidHumanName(rawFullName)) {
-    detectedProductFromField = rawFullName;
+    if (isInvalidHumanName(rawFullName)) {
+      detectedProductFromField = rawFullName;
+    }
     rawFullName = '';
   }
 
@@ -365,7 +391,7 @@ export async function processWebsiteLeadSubmission(
 
   // Next try standard name key if not yet resolved
   if (!rawFullName) {
-    const candidateName = findValue([/^name$/]).trim();
+    const candidateName = findValue([/^name$/, /^full_name$/]).trim();
     if (candidateName && !isInvalidHumanName(candidateName)) {
       rawFullName = candidateName;
     } else if (candidateName && isInvalidHumanName(candidateName) && !detectedProductFromField) {
@@ -373,22 +399,21 @@ export async function processWebsiteLeadSubmission(
     }
   }
 
-  // If still not resolved or invalid, scan all flatFields entries for a genuine person name (e.g. wasim saikh)
+  // Fallback scan across flatFields for genuine person name, skipping keys that are designations or metadata
   if (!rawFullName || isInvalidHumanName(rawFullName)) {
     for (const [k, v] of Object.entries(flatFields)) {
       if (!v) continue;
       const cleanK = k.toLowerCase().replace(/[-_\[\]\.\s]/g, '');
       if (
-        /email|mail|phone|mobile|tel|city|country|state|zip|product|service|company|agency|message|query|remark|note|size|team|branch|form|post|page|nonce|token|url|ref|recaptcha/i.test(
+        /email|mail|phone|mobile|tel|city|country|state|zip|product|service|company|agency|message|query|remark|note|size|team|branch|form|post|page|nonce|token|url|ref|recaptcha|designation|job|title|role|position/i.test(
           cleanK
         )
       ) {
         continue;
       }
       const trimmedV = v.trim();
-      // Check if value matches genuine human name characteristics (2-40 chars, alpha, no digits, no @, not product)
       if (
-        trimmedV.length >= 2 &&
+        trimmedV.length >= 3 &&
         trimmedV.length <= 40 &&
         !trimmedV.includes('@') &&
         !/\d/.test(trimmedV) &&
@@ -449,7 +474,7 @@ export async function processWebsiteLeadSubmission(
     }
   }
 
-  const rawCountryCode = findValue([/^countrycode$/, /^code$/]).trim();
+  const rawCountryCode = findValue([/^countrycode$/, /^callingcode$/, /^code$/]).trim();
   let fullPhone = rawPhone;
   if (fullPhone && rawCountryCode && !fullPhone.startsWith('+')) {
     const cleanCode = rawCountryCode.startsWith('+') ? rawCountryCode : `+${rawCountryCode}`;
@@ -458,16 +483,67 @@ export async function processWebsiteLeadSubmission(
 
   // 4. Resolve Designation & Location
   const designation = (
-    findValue([/^designation$/, /^jobtitle$/, /^job$/, /^role$/, /^position$/, /^title$/]) ||
+    findValue([/^designation$/, /^jobtitle$/, /^job_title$/, /^job$/, /^role$/, /^position$/, /^title$/]) ||
     'Tour Operator / Agency Leader'
   ).trim();
 
-  const country = (
-    findValue([/^country$/, /^selectcountry$/, /^yourcountry$/, /^nation$/, /country/]) ||
-    'India'
-  ).trim();
+  const city = findValue([/^city$/, /^yourcity$/, /^your_city$/, /^town$/, /city/]).trim();
 
-  const city = findValue([/^city$/, /^yourcity$/, /^town$/, /city/]).trim();
+  // Explicit country name keys check FIRST
+  let country = findValue([
+    /^countryname$/,
+    /^country_name$/,
+    /^yourcountryname$/,
+    /^selectcountryname$/,
+    /^nationname$/,
+    /^countrytext$/,
+    /^country_text$/
+  ]).trim();
+
+  if (!country) {
+    country = findValue([
+      /^country$/,
+      /^selectcountry$/,
+      /^yourcountry$/,
+      /^nation$/
+    ]).trim();
+  }
+
+  // Country ID / Calling code lookup map
+  const numericCountryMap: Record<string, string> = {
+    '101': 'India',
+    '194': 'Saudi Arabia',
+    '221': 'United Arab Emirates',
+    '232': 'United Kingdom',
+    '233': 'United States',
+    '163': 'Pakistan',
+    '100': 'Indonesia',
+    '132': 'Malaysia',
+    '18': 'Bangladesh',
+    '58': 'Egypt',
+    '220': 'Turkey',
+    '91': 'India',
+    '+91': 'India',
+    '1': 'United States',
+    '+1': 'United States',
+    '44': 'United Kingdom',
+    '+44': 'United Kingdom',
+    '966': 'Saudi Arabia',
+    '+966': 'Saudi Arabia',
+    '971': 'United Arab Emirates',
+    '+971': 'United Arab Emirates',
+  };
+
+  if (!country || /^\+?\d+$/.test(country)) {
+    const altCountryName = findValue([/countryname/i, /country_name/i, /countrytext/i]);
+    if (altCountryName && !/^\+?\d+$/.test(altCountryName)) {
+      country = altCountryName.trim();
+    } else if (country && numericCountryMap[country]) {
+      country = numericCountryMap[country];
+    } else {
+      country = 'India';
+    }
+  }
 
   // 5. Resolve Company Info
   let companyName = findValue([
@@ -507,19 +583,43 @@ export async function processWebsiteLeadSubmission(
       ? 'No'
       : 'No';
 
-  // 6. Resolve Product & Team Size
-  let product = (
-    findValue([
-      /^product$/,
-      /^products$/,
-      /^selectproducts$/,
-      /^productinterest$/,
-      /^serviceinterest$/,
-      /^solution$/,
-      /^interest$/,
-      /product/,
-    ]) || 'Umrah360 ERP & B2B Sub-Agent Portal'
-  ).trim();
+  // 6. Resolve Product & Team Size (gathering ALL selected products)
+  const productValues: string[] = [];
+  for (const [k, v] of Object.entries(flatFields)) {
+    if (!v) continue;
+    const lowerK = k.toLowerCase().replace(/[-_\[\]\.\s]/g, '');
+    if (
+      /product|products|selectproduct|serviceinterest|productinterest|solution|interest/i.test(lowerK)
+    ) {
+      const parts = String(v).split(/[,;\n]/).map((p) => p.trim()).filter(Boolean);
+      for (const p of parts) {
+        if (
+          p &&
+          !productValues.some((pv) => pv.toLowerCase() === p.toLowerCase()) &&
+          !/select|choose|default/i.test(p)
+        ) {
+          productValues.push(p);
+        }
+      }
+    }
+  }
+
+  let product = productValues.length > 0 ? productValues.join(', ') : '';
+
+  if (!product) {
+    product = (
+      findValue([
+        /^product$/,
+        /^products$/,
+        /^selectproducts$/,
+        /^productinterest$/,
+        /^serviceinterest$/,
+        /^solution$/,
+        /^interest$/,
+        /product/,
+      ]) || 'Umrah360 ERP & B2B Sub-Agent Portal'
+    ).trim();
+  }
 
   if (product === 'Umrah360 ERP & B2B Sub-Agent Portal' || !product) {
     if (detectedProductFromField) {
@@ -663,7 +763,7 @@ export async function processWebsiteLeadSubmission(
     leadId,
     contactId,
     source: 'WEBSITE',
-    leadType: 'INBOUND',
+    leadType: 'OUTBOUND',
     status: 'DEMO_SCHEDULED',
     leadScore,
     intent: 'HIGH',
@@ -712,7 +812,7 @@ export async function processWebsiteLeadSubmission(
   const inboundLines = [
     `🕋 INBOUND DEMO REQUEST from umrah360.in/request-demo:`,
     ``,
-    `• Name: ${rawFullName} (${designation})`,
+    `• Name: ${rawFullName}${designation && designation.toLowerCase() !== rawFullName.toLowerCase() ? ` (${designation})` : ''}`,
     `• Company: ${companyName}${website ? ` (${website})` : ''}`,
     `• Email: ${email || 'Not provided'}`,
     `• Phone: ${fullPhone || 'Not provided'}`,

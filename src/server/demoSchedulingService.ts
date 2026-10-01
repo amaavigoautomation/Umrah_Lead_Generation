@@ -482,7 +482,7 @@ export async function findNextAvailableSlots(
   } = {}
 ): Promise<Array<{ date: string; startHour: number; label: string; startIso: string; endIso: string }>> {
   const {
-    targetDaysCount = 5,
+    targetDaysCount = 10,
     maxSlotsToReturn = 4,
     preferredDate,
     preferredPeriod = 'ANY',
@@ -492,14 +492,8 @@ export async function findNextAvailableSlots(
   const nowIst = getNowInIst();
   const availableSlots: Array<{ date: string; startHour: number; label: string; startIso: string; endIso: string }> = [];
 
-  // Determine starting date offset
-  let startOffset = 0;
-  if (preferredDate) {
-    const targetDate = new Date(`${preferredDate}T12:00:00+05:30`);
-    const todayDate = new Date(`${nowIst.dateString}T12:00:00+05:30`);
-    const diffDays = Math.round((targetDate.getTime() - todayDate.getTime()) / (1000 * 60 * 60 * 24));
-    startOffset = Math.max(0, diffDays);
-  }
+  // Always start scanning from TODAY (0) to guarantee the EARLIEST upcoming available slots
+  let currentOffset = 0;
 
   // Define hour ranges based on preferred period
   let allowedHours = VALID_SLOT_START_HOURS;
@@ -514,7 +508,6 @@ export async function findNextAvailableSlots(
   if (allowedHours.length === 0) allowedHours = VALID_SLOT_START_HOURS;
 
   let daysChecked = 0;
-  let currentOffset = startOffset;
 
   while (daysChecked < targetDaysCount && availableSlots.length < maxSlotsToReturn && currentOffset < 14) {
     const checkDate = new Date();
@@ -1341,8 +1334,18 @@ Analyze the conversation and latest message. Output JSON only:
   if (!nlpResult.hasSpecificSlot) {
     const lower = messageText.toLowerCase();
 
-    // 1. Date resolution (today, tomorrow, weekdays)
-    if (lower.includes('today') || lower.includes('tonight') || lower.includes('this evening') || lower.includes('this afternoon')) {
+    // 1. Date resolution (today, tomorrow, weekdays, earliest requests)
+    if (
+      lower.includes('earliest') ||
+      lower.includes('asap') ||
+      lower.includes('soonest') ||
+      lower.includes('next available') ||
+      lower.includes('first available') ||
+      lower.includes('available slots')
+    ) {
+      nlpResult.dateString = nowIst.dateString;
+      nlpResult.isDemoIntent = true;
+    } else if (lower.includes('today') || lower.includes('tonight') || lower.includes('this evening') || lower.includes('this afternoon')) {
       nlpResult.dateString = nowIst.dateString;
       nlpResult.isDemoIntent = true;
     } else if (lower.includes('tomorrow')) {
@@ -1357,7 +1360,12 @@ Analyze the conversation and latest message. Output JSON only:
         if (lower.includes(weekdays[i])) {
           nlpResult.isDemoIntent = true;
           let diff = i - nowIst.dayOfWeek;
-          if (diff <= 0) diff += 7;
+          if (diff === 0) {
+            // Same weekday as today
+            diff = nowIst.hour < 18 ? 0 : 7;
+          } else if (diff < 0) {
+            diff += 7;
+          }
           const targetD = new Date();
           targetD.setDate(targetD.getDate() + diff);
           const f = new Intl.DateTimeFormat('en-CA', { timeZone: SCHEDULING_TIMEZONE });

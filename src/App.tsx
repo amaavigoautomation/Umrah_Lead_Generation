@@ -322,7 +322,18 @@ export default function App() {
         });
 
         unsubLeads = onSnapshot(collection(db, 'leads'), (snap) => {
-          const list = snap.docs.map((d) => sanitizeLead(d.data()));
+          const list: Lead[] = [];
+          snap.docs.forEach((d) => {
+            const data = d.data();
+            const lead = sanitizeLead(data);
+            const isCampaignLead = Boolean(lead.campaignId || lead.campaignLeadId || (lead.leadType === 'OUTBOUND' && lead.source === 'EMAIL'));
+            if (isCampaignLead && lead.replyStatus !== 'REPLIED') {
+              // Delete unreplied campaign lead document from CRM leads collection
+              deleteDoc(doc(db, 'leads', d.id)).catch(() => {});
+            } else {
+              list.push(lead);
+            }
+          });
           setLeads(list);
         });
 

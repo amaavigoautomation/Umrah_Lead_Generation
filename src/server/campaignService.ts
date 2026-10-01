@@ -947,9 +947,9 @@ export async function createCampaign(params: {
   if (isFirebaseConfigured && db) {
     try {
       await safeSetDoc(doc(db, 'campaigns', campaignId), initialCampaign);
-      // Batch write leads concurrently
-      const leadPromises = createdLeads.map((cl) => safeSetDoc(doc(db, 'campaign_leads', cl.campaignLeadId), cl));
-      await Promise.allSettled(leadPromises);
+      // Batch write campaign_leads ONLY (unreplied leads remain in campaign module only, not CRM)
+      const promises = createdLeads.map((cl) => safeSetDoc(doc(db, 'campaign_leads', cl.campaignLeadId), cl));
+      await Promise.allSettled(promises);
     } catch (e) {
       console.warn('Firestore write notice during campaign creation:', e);
     }
@@ -2042,7 +2042,7 @@ export async function handleIncomingCampaignLeadReply(params: {
   body?: string;
   gmailMessageId?: string;
   gmailThreadId?: string;
-}): Promise<{ isCampaignLead: boolean; campaignLead?: CampaignLead; demoDetected?: boolean }> {
+}): Promise<{ isCampaignLead: boolean; campaignLead?: CampaignLead; campaignId?: string; campaignName?: string; demoDetected?: boolean }> {
   await initCampaignStore();
 
   const cleanFromEmail = params.fromEmail ? extractCleanEmail(params.fromEmail) : '';
@@ -2101,6 +2101,7 @@ export async function handleIncomingCampaignLeadReply(params: {
   const hasConfirmedBooking = /calendar.*confirmed|appointment.*scheduled|booked for|demo scheduled|meeting invite accepted/i.test(text);
 
   const affectedCampaignIds = new Set<string>();
+  let primaryCampaignName = 'Outbound Campaign';
 
   for (const matchedLead of matchedLeads) {
     matchedLead.replyStatus = 'REPLIED';
@@ -2121,11 +2122,37 @@ export async function handleIncomingCampaignLeadReply(params: {
     campaignLeadsMap.set(matchedLead.campaignLeadId, matchedLead);
     affectedCampaignIds.add(matchedLead.campaignId);
 
+    const cObj = campaignsMap.get(matchedLead.campaignId);
+    if (cObj?.name) {
+      primaryCampaignName = cObj.name;
+    }
+
     if (isFirebaseConfigured && db) {
       try {
         safeSetDoc(doc(db, 'campaign_leads', matchedLead.campaignLeadId), matchedLead, { merge: true }).catch(() => {});
+        const contactId = `contact-${matchedLead.email.replace(/[^a-z0-9]/gi, '_')}`;
+        safeSetDoc(doc(db, 'contacts', contactId), {
+          contactId,
+          firstName: matchedLead.firstName || matchedLead.name.split(' ')[0],
+          lastName: matchedLead.lastName || matchedLead.name.split(' ').slice(1).join(' '),
+          email: matchedLead.email,
+          phone: matchedLead.phone || '',
+          companyName: matchedLead.companyName,
+          jobTitle: matchedLead.designation || 'Director / Owner',
+          createdAt: now,
+          updatedAt: now,
+          lastActivityAt: now,
+        }, { merge: true }).catch(() => {});
+
         if (matchedLead.leadId) {
           safeSetDoc(doc(db, 'leads', matchedLead.leadId), {
+            leadId: matchedLead.leadId,
+            contactId,
+            source: 'EMAIL',
+            leadType: 'OUTBOUND',
+            campaignId: matchedLead.campaignId,
+            campaignName: primaryCampaignName,
+            campaignLeadId: matchedLead.campaignLeadId,
             replyStatus: 'REPLIED',
             repliedAt: now,
             status: matchedLead.demoStatus === 'BOOKED' ? 'DEMO_BOOKED' : 'ENGAGED',
@@ -2147,6 +2174,8 @@ export async function handleIncomingCampaignLeadReply(params: {
   return {
     isCampaignLead: true,
     campaignLead: matchedLeads[0],
+    campaignId: matchedLeads[0]?.campaignId,
+    campaignName: primaryCampaignName,
     demoDetected: matchedLeads.some((l) => l.demoStatus === 'BOOKED'),
   };
 }

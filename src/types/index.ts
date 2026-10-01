@@ -240,7 +240,10 @@ export interface Lead {
   aiRecommendation?: string;
   ownerId?: string;
   campaignId?: string;
+  campaignName?: string;
   campaignLeadId?: string;
+  replyStatus?: CampaignReplyStatus;
+  repliedAt?: string;
   demoStatus?: DemoStatus;
   demoSource?: DemoSource;
   demoBookedAt?: string;

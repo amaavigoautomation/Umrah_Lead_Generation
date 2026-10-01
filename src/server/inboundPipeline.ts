@@ -1464,8 +1464,9 @@ export async function processLiveInboundEmail(payload: {
     });
 
     // Hook into Outbound Campaign System: track lead reply and detect demo booking intent
+    let campaignReplyResult: { isCampaignLead: boolean; campaignLead?: any; campaignId?: string; campaignName?: string; demoDetected?: boolean } = { isCampaignLead: false };
     try {
-      await handleIncomingCampaignLeadReply({
+      campaignReplyResult = await handleIncomingCampaignLeadReply({
         fromEmail: payload.from,
         fromPhone: payload.phone,
         subject: payload.subject,
@@ -1682,6 +1683,20 @@ export async function processLiveInboundEmail(payload: {
     // =========================================================================
     // RULE 10: BUILD FULL CRM ENTITIES
     // =========================================================================
+    const isOutboundCampaignMatch = campaignReplyResult.isCampaignLead ||
+      matched.lead?.leadType === 'OUTBOUND' ||
+      Boolean(matched.lead?.campaignId) ||
+      Boolean(matched.conversation?.campaignId);
+
+    const effectiveCampaignId = campaignReplyResult.campaignId ||
+      campaignReplyResult.campaignLead?.campaignId ||
+      matched.lead?.campaignId ||
+      matched.conversation?.campaignId;
+
+    const effectiveCampaignName = campaignReplyResult.campaignName ||
+      matched.lead?.campaignName ||
+      'Outbound Campaign';
+
     const crmEntities: InboundCrmEntities = {
       contact: {
         ...(matched.contact || {}),
@@ -1700,14 +1715,16 @@ export async function processLiveInboundEmail(payload: {
         leadId,
         contactId,
         source: matched.lead?.source || 'EMAIL',
-        leadType: 'INBOUND',
+        leadType: isOutboundCampaignMatch ? 'OUTBOUND' : (matched.lead?.leadType || 'INBOUND'),
+        campaignId: effectiveCampaignId,
+        campaignName: isOutboundCampaignMatch ? effectiveCampaignName : matched.lead?.campaignName,
         status: matched.lead?.status || (aiResult.handoffTriggered ? 'HUMAN_HANDOFF' : 'ENGAGED'),
         leadScore: Math.max(matched.lead?.leadScore || 75, aiResult.leadScore),
         intent: 'HIGH',
         buyingStage: matched.lead?.buyingStage || aiResult.buyingStage,
-        serviceInterest: matched.lead?.serviceInterest || payload.subject,
+        serviceInterest: matched.lead?.serviceInterest || (isOutboundCampaignMatch ? `Outbound Campaign: ${effectiveCampaignName}` : payload.subject),
         requirements: matched.lead?.requirements || [payload.subject],
-        aiSummary: matched.lead?.aiSummary || `Inbound email to ${targetMailbox}: "${payload.subject}". Intent: HIGH, Score: ${aiResult.leadScore}/100.`,
+        aiSummary: matched.lead?.aiSummary || (isOutboundCampaignMatch ? `Outbound campaign reply received for "${effectiveCampaignName}".` : `Inbound email to ${targetMailbox}: "${payload.subject}". Intent: HIGH, Score: ${aiResult.leadScore}/100.`),
         createdAt: matched.lead?.createdAt || nowIso,
         updatedAt: nowIso,
         lastActivityAt: nowIso,
@@ -1717,6 +1734,7 @@ export async function processLiveInboundEmail(payload: {
         conversationId,
         contactId,
         leadId,
+        campaignId: effectiveCampaignId,
         channel: matched.conversation?.channel || 'EMAIL',
         direction: 'INBOUND',
         status: pipelineConfig.emailMode === 'REVIEW' ? 'REVIEW' : 'ACTIVE',

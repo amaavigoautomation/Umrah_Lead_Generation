@@ -101,6 +101,12 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
   // Filtered and Sorted Leads
   const processedLeads = useMemo(() => {
     let result = leads.filter((l) => {
+      // Outbound campaign leads MUST ONLY be shown in CRM if they have replied
+      const isCampaignLead = Boolean(l.campaignId || l.campaignLeadId || (l.leadType === 'OUTBOUND' && l.source === 'EMAIL'));
+      if (isCampaignLead && l.replyStatus !== 'REPLIED') {
+        return false;
+      }
+
       const contact = contacts.find((c) => c.contactId === l.contactId);
       if (typeFilter !== 'ALL' && l.leadType !== typeFilter) return false;
       if (statusFilter !== 'ALL' && l.status !== statusFilter) return false;
@@ -111,7 +117,8 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
         const matchCompany = contact?.companyName?.toLowerCase().includes(q);
         const matchEmail = contact?.email?.toLowerCase().includes(q);
         const matchSource = l.source?.toLowerCase().includes(q);
-        if (!matchName && !matchCompany && !matchEmail && !matchSource) return false;
+        const matchCampaign = l.campaignName?.toLowerCase().includes(q);
+        if (!matchName && !matchCompany && !matchEmail && !matchSource && !matchCampaign) return false;
       }
       return true;
     });
@@ -343,18 +350,24 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
                         </div>
                       </div>
 
-                      <div className="flex items-center justify-between mt-2 pt-2 border-t border-slate-100 text-[10px]">
+                      <div className="flex items-center justify-between mt-2 pt-2 border-t border-slate-100 text-[10px] gap-1 flex-wrap">
                         <span
                           className={`px-2 py-0.5 rounded-full font-bold ${
                             lead.leadType === 'OUTBOUND'
-                              ? 'bg-slate-900 text-white'
+                              ? 'bg-purple-900 text-purple-100 border border-purple-700'
                               : 'bg-orange-100 text-orange-800 border border-orange-200'
                           }`}
                         >
-                          {lead.source}
+                          {lead.leadType} ({lead.source})
                         </span>
 
-                        <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 font-bold border border-slate-200">
+                        {lead.campaignName && (
+                          <span className="px-2 py-0.5 rounded-full bg-purple-100 text-purple-800 font-bold border border-purple-200 truncate max-w-[130px]">
+                            {lead.campaignName}
+                          </span>
+                        )}
+
+                        <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 font-bold border border-slate-200 ml-auto">
                           {lead.status}
                         </span>
                       </div>
@@ -481,23 +494,30 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
 
                         {/* Type & Source */}
                         <td className="p-3.5">
-                          <div className="flex items-center space-x-1.5">
-                            <span
-                              className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                                lead.leadType === 'OUTBOUND'
-                                  ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30'
-                                  : 'bg-teal-500/20 text-teal-300 border border-teal-500/30'
-                              }`}
-                            >
-                              {lead.leadType}
-                            </span>
-                            {lead.source === 'WEBSITE' ? (
-                              <span className="text-[11px] text-emerald-400 font-semibold flex items-center gap-1 bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">
-                                <Globe className="w-3 h-3" />
-                                <span>Website Demo</span>
+                          <div className="flex flex-col gap-1">
+                            <div className="flex items-center space-x-1.5">
+                              <span
+                                className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                                  lead.leadType === 'OUTBOUND'
+                                    ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30'
+                                    : 'bg-teal-500/20 text-teal-300 border border-teal-500/30'
+                                }`}
+                              >
+                                {lead.leadType}
                               </span>
-                            ) : (
-                              <span className="text-[11px] text-slate-400">{lead.source}</span>
+                              {lead.source === 'WEBSITE' ? (
+                                <span className="text-[11px] text-emerald-400 font-semibold flex items-center gap-1 bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">
+                                  <Globe className="w-3 h-3" />
+                                  <span>Website Demo</span>
+                                </span>
+                              ) : (
+                                <span className="text-[11px] text-slate-400">{lead.source}</span>
+                              )}
+                            </div>
+                            {lead.campaignName && (
+                              <span className="text-[10px] text-purple-300 font-bold bg-purple-950/60 border border-purple-500/30 px-1.5 py-0.5 rounded w-fit">
+                                {lead.campaignName}
+                              </span>
                             )}
                           </div>
                         </td>
@@ -659,7 +679,7 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
                     </div>
 
                     {/* Meta badges */}
-                    <div className="flex items-center space-x-1.5 mt-3 text-[10px]">
+                    <div className="flex items-center space-x-1.5 mt-3 text-[10px] flex-wrap gap-y-1">
                       <span
                         className={`px-2 py-0.5 rounded font-bold ${
                           lead.leadType === 'OUTBOUND'
@@ -669,6 +689,12 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
                       >
                         {lead.leadType} ({lead.source})
                       </span>
+
+                      {lead.campaignName && (
+                        <span className="px-2 py-0.5 rounded bg-purple-500/20 text-purple-300 border border-purple-500/30 font-bold">
+                          {lead.campaignName}
+                        </span>
+                      )}
 
                       <span
                         className={`px-2 py-0.5 rounded font-semibold ${
@@ -891,6 +917,39 @@ function renderLeadDetail(
           </span>
         </div>
       </div>
+
+      {/* Outbound Campaign Details Card */}
+      {(selectedLead.leadType === 'OUTBOUND' || selectedLead.campaignName || selectedLead.campaignId) && (
+        <div className="bg-gradient-to-br from-purple-950/40 via-slate-900 to-slate-900 border border-purple-500/40 rounded-xl p-4 space-y-3 shadow-md">
+          <div className="flex items-center justify-between border-b border-purple-500/20 pb-2.5">
+            <div className="flex items-center gap-2">
+              <Send className="w-4 h-4 text-purple-400" />
+              <span className="text-xs font-bold text-white uppercase tracking-wider">
+                Outbound Campaign Outreach
+              </span>
+            </div>
+            <span className="text-[10px] font-semibold text-purple-300 bg-purple-500/20 px-2.5 py-0.5 rounded-full border border-purple-500/40 flex items-center gap-1.5 font-mono">
+              <span className="w-2 h-2 rounded-full bg-purple-400 animate-pulse"></span>
+              <span>OUTBOUND</span>
+            </span>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3 text-xs">
+            <div>
+              <span className="text-[10px] text-slate-400 block font-medium">Campaign Name</span>
+              <span className="text-purple-200 font-extrabold text-sm block">
+                {selectedLead.campaignName || 'Outbound Campaign'}
+              </span>
+            </div>
+            <div>
+              <span className="text-[10px] text-slate-400 block font-medium">Campaign ID</span>
+              <span className="text-slate-300 font-mono text-[11px]">
+                {selectedLead.campaignId || 'N/A'}
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Website Demo Request Details Card */}
       {(selectedLead.source === 'WEBSITE' || selectedLead.queryMessage || selectedContact.website || selectedContact.city) && (

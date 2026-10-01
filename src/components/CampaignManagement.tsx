@@ -1841,6 +1841,11 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                         <Pause className="w-4 h-4" />
                         <span>Pause Sending</span>
                       </button>
+                    ) : selectedCampaign.status === 'COMPLETED' ? (
+                      <div className="flex items-center gap-2 px-3.5 py-2 bg-emerald-950/60 border border-emerald-800/80 text-emerald-400 rounded-xl text-xs font-semibold">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                        <span>Campaign Completed</span>
+                      </div>
                     ) : (
                       <button
                         id="start-campaign-btn"

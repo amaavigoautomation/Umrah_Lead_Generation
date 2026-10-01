@@ -256,26 +256,28 @@ export const OutboundCampaigns: React.FC<OutboundCampaignsProps> = ({
             </div>
 
             <div className="flex items-center space-x-3">
-              <button
-                onClick={() => onToggleCampaignStatus(activeCampaign.campaignId)}
-                className={`flex items-center space-x-1.5 px-4 py-2 rounded-lg text-xs font-semibold transition ${
-                  activeCampaign.status === 'RUNNING'
-                    ? 'bg-amber-600 hover:bg-amber-500 text-white'
-                    : 'bg-emerald-600 hover:bg-emerald-500 text-white'
-                }`}
-              >
-                {activeCampaign.status === 'RUNNING' ? (
-                  <>
-                    <Pause className="w-4 h-4" />
-                    <span>Pause Campaign</span>
-                  </>
-                ) : (
-                  <>
-                    <Play className="w-4 h-4" />
-                    <span>Resume Outreach</span>
-                  </>
-                )}
-              </button>
+              {activeCampaign.status === 'RUNNING' ? (
+                <button
+                  onClick={() => onToggleCampaignStatus(activeCampaign.campaignId)}
+                  className="flex items-center space-x-1.5 px-4 py-2 rounded-lg bg-amber-600 hover:bg-amber-500 text-white text-xs font-semibold transition"
+                >
+                  <Pause className="w-4 h-4" />
+                  <span>Pause Campaign</span>
+                </button>
+              ) : activeCampaign.status === 'COMPLETED' ? (
+                <div className="flex items-center space-x-1.5 px-3.5 py-2 bg-emerald-950/60 border border-emerald-800/80 text-emerald-400 rounded-lg text-xs font-semibold">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                  <span>Campaign Completed</span>
+                </div>
+              ) : (
+                <button
+                  onClick={() => onToggleCampaignStatus(activeCampaign.campaignId)}
+                  className="flex items-center space-x-1.5 px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold transition"
+                >
+                  <Play className="w-4 h-4" />
+                  <span>{activeCampaign.status === 'PAUSED' ? 'Resume Outreach' : 'Start Outreach'}</span>
+                </button>
+              )}
 
               <button
                 onClick={() => setShowAddModal(true)}

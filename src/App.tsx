@@ -155,9 +155,9 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState<AppUser | null>(() => {
     try {
       const saved = localStorage.getItem('umrah360_user_session');
-      return saved ? JSON.parse(saved) : null;
+      return saved ? JSON.parse(saved) : INITIAL_USERS[0];
     } catch {
-      return null;
+      return INITIAL_USERS[0];
     }
   });
 
@@ -267,7 +267,9 @@ export default function App() {
             if (
               data.campaignId === 'camp-umrah-1448' ||
               data.campaignId === 'camp-indian-umrah-operators' ||
-              cleanName === 'indian umrah operators 2026'
+              cleanName === 'indian umrah operators 2026' ||
+              data.campaignId === 'camp-1790758967982-7his' ||
+              cleanName === 'test'
             ) {
               deleteDoc(doc(db, 'outbound_campaigns', d.id)).catch(() => {});
               deleteDoc(doc(db, 'campaigns', d.id)).catch(() => {});
@@ -341,7 +343,9 @@ export default function App() {
             if (
               data.campaignId === 'camp-umrah-1448' ||
               data.campaignId === 'camp-indian-umrah-operators' ||
-              cleanName === 'indian umrah operators 2026'
+              cleanName === 'indian umrah operators 2026' ||
+              data.campaignId === 'camp-1790758967982-7his' ||
+              cleanName === 'test'
             ) {
               deleteDoc(doc(db, 'outbound_campaigns', d.id)).catch(() => {});
               deleteDoc(doc(db, 'campaigns', d.id)).catch(() => {});

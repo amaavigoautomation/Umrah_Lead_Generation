@@ -83,11 +83,18 @@ import {
  * 2. Vercel Production Serverless Functions (via api/index.ts or api/inbound/whatsapp.ts)
  */
 export async function handleCoreApi(req: any, res: any): Promise<boolean> {
-  // Normalize URL
-  let url = req.url || '';
-  if (!url.startsWith('/api/') && !url.startsWith('/api')) {
-    const cleanUrl = url.startsWith('/') ? url : '/' + url;
-    url = '/api' + cleanUrl;
+  // Normalize URL by parsing pathname and stripping query parameters & trailing slashes
+  let rawUrl = req.url || '';
+  let url = rawUrl;
+  try {
+    const parsed = new URL(rawUrl, 'http://localhost');
+    url = parsed.pathname;
+  } catch {
+    url = rawUrl.split('?')[0];
+  }
+  url = url.replace(/\/+$/, '') || '/';
+  if (!url.startsWith('/api/') && url !== '/api') {
+    url = '/api' + (url.startsWith('/') ? url : '/' + url);
   }
 
   // Set standard API headers and CORS
@@ -1208,7 +1215,7 @@ Generate a helpful, grounded response.`;
 
   // Campaigns endpoints
   if (url === '/api/campaigns' && req.method === 'GET') {
-    await initCampaignStore();
+    await initCampaignStore(true);
     res.statusCode = 200;
     res.end(JSON.stringify({ success: true, campaigns: getAllCampaigns() }));
     return true;

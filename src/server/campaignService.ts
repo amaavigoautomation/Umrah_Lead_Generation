@@ -280,11 +280,7 @@ let isCampaignStoreInitialized = false;
 let hasLoadedInitialDefaults = false;
 
 function ensureDefaultsInMemory() {
-  for (const tpl of DEFAULT_EMAIL_TEMPLATES) {
-    if (!emailTemplatesMap.has(tpl.templateId)) {
-      emailTemplatesMap.set(tpl.templateId, tpl);
-    }
-  }
+  // Only maintain active in-memory collections; do not forcibly re-inject deleted templates
   if (!hasLoadedInitialDefaults) {
     hasLoadedInitialDefaults = true;
     for (const c of DEFAULT_CAMPAIGNS) {
@@ -301,8 +297,8 @@ function ensureDefaultsInMemory() {
 
 /**
  * Synchronizes the in-memory campaign stores directly from Firestore.
- * Guarantees that all templates (predefined + custom) are preserved,
- * and any newly updated documents in Firestore are accurately reflected.
+ * Firestore is the single source of truth: documents deleted from the database
+ * are immediately purged from in-memory maps.
  */
 export async function syncCampaignStoreFromFirestore(): Promise<void> {
   ensureDefaultsInMemory();
@@ -324,24 +320,38 @@ export async function syncCampaignStoreFromFirestore(): Promise<void> {
       ]);
 
       if (tplSnap) {
-        const firestoreTplIds = new Set<string>();
+        const firestoreTpls: EmailTemplate[] = [];
         tplSnap.forEach((d) => {
           const data = d.data() as EmailTemplate;
           if (data && data.templateId) {
-            firestoreTplIds.add(data.templateId);
-            emailTemplatesMap.set(data.templateId, data);
+            firestoreTpls.push(data);
           }
         });
 
-        // Seed default predefined templates to Firestore if not already present
-        for (const tpl of DEFAULT_EMAIL_TEMPLATES) {
-          if (!firestoreTplIds.has(tpl.templateId)) {
-            safeSetDoc(doc(db, 'email_templates', tpl.templateId), tpl, { merge: true }).catch(() => {});
+        // Check if database was ever initialized for templates
+        const metaDocRef = doc(db, 'system_metadata', 'templates_initialized');
+        const metaDocSnap = await getDoc(metaDocRef).catch(() => null);
+
+        if (!metaDocSnap?.exists()) {
+          // Brand new database initialization ONLY: seed default templates once
+          if (firestoreTpls.length === 0) {
+            for (const tpl of DEFAULT_EMAIL_TEMPLATES) {
+              await safeSetDoc(doc(db, 'email_templates', tpl.templateId), tpl, { merge: true }).catch(() => {});
+              firestoreTpls.push(tpl);
+            }
           }
+          await safeSetDoc(metaDocRef, { initialized: true, initializedAt: new Date().toISOString() }).catch(() => {});
+        }
+
+        // In-memory templates map strictly mirrors Firestore database
+        emailTemplatesMap.clear();
+        for (const tpl of firestoreTpls) {
+          emailTemplatesMap.set(tpl.templateId, tpl);
         }
       }
 
       if (campSnap) {
+        campaignsMap.clear();
         campSnap.forEach((d) => {
           const data = d.data() as Campaign;
           if (data && data.campaignId) {
@@ -361,6 +371,7 @@ export async function syncCampaignStoreFromFirestore(): Promise<void> {
       }
 
       if (leadsSnap) {
+        campaignLeadsMap.clear();
         leadsSnap.forEach((d) => {
           const data = d.data() as CampaignLead;
           if (data && data.campaignLeadId) {
@@ -370,6 +381,7 @@ export async function syncCampaignStoreFromFirestore(): Promise<void> {
       }
 
       if (runsSnap) {
+        campaignRunsMap.clear();
         runsSnap.forEach((d) => {
           const data = d.data() as CampaignRun;
           if (data && data.runId) {
@@ -379,6 +391,7 @@ export async function syncCampaignStoreFromFirestore(): Promise<void> {
       }
 
       if (historySnap) {
+        sendHistorySet.clear();
         historySnap.forEach((d) => {
           const data = d.data() as CampaignSendHistory;
           if (data && data.campaignId && data.email && data.status === 'SENT') {
@@ -400,11 +413,6 @@ export async function syncCampaignStoreFromFirestore(): Promise<void> {
 export async function initCampaignStore(forceSync: boolean = false) {
   if (!isCampaignStoreInitialized || forceSync) {
     isCampaignStoreInitialized = true;
-    DEFAULT_EMAIL_TEMPLATES.forEach((tpl) => {
-      if (!emailTemplatesMap.has(tpl.templateId)) {
-        emailTemplatesMap.set(tpl.templateId, tpl);
-      }
-    });
     await syncCampaignStoreFromFirestore();
   }
 }
@@ -416,6 +424,7 @@ export async function getTemplatesFromDbOrCache(): Promise<EmailTemplate[]> {
   if (isFirebaseConfigured && db) {
     try {
       const snap = await getDocs(collection(db, 'email_templates'));
+      emailTemplatesMap.clear();
       if (!snap.empty) {
         snap.forEach((d) => {
           const t = d.data() as EmailTemplate;
@@ -440,6 +449,9 @@ export async function getTemplateFromDbById(templateId: string): Promise<EmailTe
         const t = snap.data() as EmailTemplate;
         emailTemplatesMap.set(templateId, t);
         return t;
+      } else {
+        emailTemplatesMap.delete(templateId);
+        return undefined;
       }
     } catch (err) {
       console.warn('[getTemplateFromDbById] DB lookup error:', err);
@@ -449,12 +461,6 @@ export async function getTemplateFromDbById(templateId: string): Promise<EmailTe
 }
 
 export function getAllTemplates(): EmailTemplate[] {
-  // Always ensure default templates are included
-  for (const tpl of DEFAULT_EMAIL_TEMPLATES) {
-    if (!emailTemplatesMap.has(tpl.templateId)) {
-      emailTemplatesMap.set(tpl.templateId, tpl);
-    }
-  }
   return Array.from(emailTemplatesMap.values()).sort(
     (a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
   );
@@ -462,11 +468,7 @@ export function getAllTemplates(): EmailTemplate[] {
 
 export function getTemplateById(templateId: string): EmailTemplate | undefined {
   if (!templateId) return undefined;
-  const inMap = emailTemplatesMap.get(templateId);
-  if (inMap) return inMap;
-  const inDefault = DEFAULT_EMAIL_TEMPLATES.find((t) => t.templateId === templateId);
-  if (inDefault) return inDefault;
-  return getAllTemplates().find((t) => t.templateId === templateId);
+  return emailTemplatesMap.get(templateId);
 }
 
 export async function saveTemplate(template: Partial<EmailTemplate>): Promise<EmailTemplate> {
@@ -646,12 +648,10 @@ export function getCampaignRuns(campaignId: string): CampaignRun[] {
 }
 
 /**
- * Deletes a campaign and all associated leads, runs, and send history
+ * Deletes a campaign and all associated leads, runs, send history, prospects, and conversations
  */
 export async function deleteCampaign(campaignId: string): Promise<boolean> {
-  await ensureCampaignInStore(campaignId);
-
-  // 1. If campaign is currently running, halt background execution
+  // 1. If campaign is currently running, halt background execution immediately
   const abortCtrl = activeCampaignAbortControllers.get(campaignId);
   if (abortCtrl) {
     try {
@@ -660,54 +660,120 @@ export async function deleteCampaign(campaignId: string): Promise<boolean> {
     activeCampaignAbortControllers.delete(campaignId);
   }
 
-  // 2. Delete all leads belonging to this campaign
-  const leads = getCampaignLeads(campaignId);
-  for (const lead of leads) {
-    campaignLeadsMap.delete(lead.campaignLeadId);
-    if (isFirebaseConfigured && db) {
-      deleteDoc(doc(db, 'campaign_leads', lead.campaignLeadId)).catch(() => {});
+  // 2. Clear memory caches immediately
+  campaignsMap.delete(campaignId);
+  for (const [id, lead] of Array.from(campaignLeadsMap.entries())) {
+    if (lead.campaignId === campaignId) {
+      campaignLeadsMap.delete(id);
     }
   }
-  if (isFirebaseConfigured && db) {
-    try {
-      const snap = await getDocs(collection(db, 'campaign_leads'));
-      if (!snap.empty) {
-        snap.forEach((d) => {
-          const lData = d.data();
-          if (lData && lData.campaignId === campaignId) {
-            deleteDoc(doc(db, 'campaign_leads', d.id)).catch(() => {});
-          }
-        });
-      }
-    } catch {}
-  }
-
-  // 3. Delete all runs belonging to this campaign
-  const runs = getCampaignRuns(campaignId);
-  for (const run of runs) {
-    campaignRunsMap.delete(run.runId);
-    if (isFirebaseConfigured && db) {
-      deleteDoc(doc(db, 'campaign_runs', run.runId)).catch(() => {});
+  for (const [id, run] of Array.from(campaignRunsMap.entries())) {
+    if (run.campaignId === campaignId) {
+      campaignRunsMap.delete(id);
     }
   }
-
-  // 4. Clean up send history set for this campaign
   for (const key of Array.from(sendHistorySet)) {
     if (key.startsWith(`${campaignId}_`)) {
       sendHistorySet.delete(key);
     }
   }
 
-  // 5. Delete campaign from memory and Firestore
-  campaignsMap.delete(campaignId);
+  // 3. Directly delete every detail from Firestore database
   if (isFirebaseConfigured && db) {
-    await Promise.all([
-      deleteDoc(doc(db, 'campaigns', campaignId)).catch(() => {}),
-      deleteDoc(doc(db, 'outbound_campaigns', campaignId)).catch(() => {}),
-    ]);
+    try {
+      const deletePromises: Promise<any>[] = [];
+
+      // A. Delete campaign document from 'campaigns' and 'outbound_campaigns'
+      deletePromises.push(deleteDoc(doc(db, 'campaigns', campaignId)).catch(() => {}));
+      deletePromises.push(deleteDoc(doc(db, 'outbound_campaigns', campaignId)).catch(() => {}));
+
+      // B. Delete all leads belonging to this campaign
+      const leadsSnap = await getDocs(collection(db, 'campaign_leads')).catch(() => null);
+      if (leadsSnap && !leadsSnap.empty) {
+        leadsSnap.forEach((d) => {
+          const lData = d.data();
+          if (lData && lData.campaignId === campaignId) {
+            deletePromises.push(deleteDoc(doc(db, 'campaign_leads', d.id)).catch(() => {}));
+          }
+        });
+      }
+
+      // C. Delete all runs belonging to this campaign
+      const runsSnap = await getDocs(collection(db, 'campaign_runs')).catch(() => null);
+      if (runsSnap && !runsSnap.empty) {
+        runsSnap.forEach((d) => {
+          const rData = d.data();
+          if (rData && rData.campaignId === campaignId) {
+            deletePromises.push(deleteDoc(doc(db, 'campaign_runs', d.id)).catch(() => {}));
+          }
+        });
+      }
+
+      // D. Delete all send history belonging to this campaign
+      const histSnap = await getDocs(collection(db, 'campaign_send_history')).catch(() => null);
+      if (histSnap && !histSnap.empty) {
+        histSnap.forEach((d) => {
+          const hData = d.data();
+          if (hData && hData.campaignId === campaignId) {
+            deletePromises.push(deleteDoc(doc(db, 'campaign_send_history', d.id)).catch(() => {}));
+          }
+        });
+      }
+
+      // E. Delete any outbound_prospects belonging to this campaign
+      const prospectSnap = await getDocs(collection(db, 'outbound_prospects')).catch(() => null);
+      if (prospectSnap && !prospectSnap.empty) {
+        prospectSnap.forEach((d) => {
+          const pData = d.data();
+          if (pData && pData.campaignId === campaignId) {
+            deletePromises.push(deleteDoc(doc(db, 'outbound_prospects', d.id)).catch(() => {}));
+          }
+        });
+      }
+
+      // F. Delete any conversations and messages linked to this campaign
+      const convSnap = await getDocs(collection(db, 'conversations')).catch(() => null);
+      if (convSnap && !convSnap.empty) {
+        const convIdsToDelete: string[] = [];
+        convSnap.forEach((d) => {
+          const cData = d.data();
+          if (cData && cData.campaignId === campaignId) {
+            convIdsToDelete.push(d.id);
+            deletePromises.push(deleteDoc(doc(db, 'conversations', d.id)).catch(() => {}));
+          }
+        });
+        if (convIdsToDelete.length > 0) {
+          const msgsSnap = await getDocs(collection(db, 'messages')).catch(() => null);
+          if (msgsSnap && !msgsSnap.empty) {
+            msgsSnap.forEach((d) => {
+              const mData = d.data();
+              if (mData && convIdsToDelete.includes(mData.conversationId)) {
+                deletePromises.push(deleteDoc(doc(db, 'messages', d.id)).catch(() => {}));
+              }
+            });
+          }
+        }
+      }
+
+      // G. Delete any CRM leads linked to this campaign
+      const crmLeadsSnap = await getDocs(collection(db, 'leads')).catch(() => null);
+      if (crmLeadsSnap && !crmLeadsSnap.empty) {
+        crmLeadsSnap.forEach((d) => {
+          const lData = d.data();
+          if (lData && lData.campaignId === campaignId) {
+            deletePromises.push(deleteDoc(doc(db, 'leads', d.id)).catch(() => {}));
+          }
+        });
+      }
+
+      // Strictly await all database deletions
+      await Promise.allSettled(deletePromises);
+    } catch (fsErr) {
+      console.warn('[deleteCampaign] Database cascade deletion error:', fsErr);
+    }
   }
 
-  console.log(`[Campaign Engine] Successfully deleted campaign ${campaignId} (${leads.length} leads, ${runs.length} runs).`);
+  console.log(`[Campaign Engine] Successfully deleted campaign ${campaignId} and all details from database.`);
   return true;
 }
 

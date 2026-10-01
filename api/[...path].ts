@@ -15,10 +15,17 @@ export default async function handler(req: IncomingMessage & { body?: any }, res
   }
 
   // Normalize URL in case Vercel rewrote to catch-all query parameter
-  if (req.url?.includes('[...path]') && (req as any).query?.path) {
-    const pathParam = (req as any).query.path;
-    const pathStr = Array.isArray(pathParam) ? pathParam.join('/') : pathParam;
-    req.url = `/api/${pathStr}`;
+  if (req.url) {
+    try {
+      const parsedUrl = new URL(req.url, 'http://localhost');
+      if (parsedUrl.pathname.includes('[...path]')) {
+        const pathParam = (req as any).query?.path || parsedUrl.searchParams.get('path');
+        if (pathParam) {
+          const pathStr = Array.isArray(pathParam) ? pathParam.join('/') : pathParam;
+          req.url = `/api/${pathStr.replace(/^\/+/, '')}`;
+        }
+      }
+    } catch {}
   }
 
   if (req.url === '/api/health' || req.url?.startsWith('/api/health?')) {

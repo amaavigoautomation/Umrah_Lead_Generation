@@ -142,64 +142,37 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
     selectedTemplateIdRef.current = selectedTemplateId;
   }, [selectedTemplateId]);
 
-  // Merge template arrays by templateId, preserving newest updates and never dropping items
-  const mergeTemplates = (incoming: EmailTemplate[], existing: EmailTemplate[]): EmailTemplate[] => {
-    const map = new Map<string, EmailTemplate>();
-    // Add existing
-    for (const t of existing) {
-      if (t && t.templateId) map.set(t.templateId, t);
-    }
-    // Overlay incoming
-    for (const t of incoming) {
-      if (t && t.templateId) {
-        const prev = map.get(t.templateId);
-        if (!prev) {
-          map.set(t.templateId, t);
-        } else {
-          const prevTime = new Date(prev.updatedAt || prev.createdAt || 0).getTime();
-          const nextTime = new Date(t.updatedAt || t.createdAt || 0).getTime();
-          if (nextTime >= prevTime) {
-            map.set(t.templateId, { ...prev, ...t });
-          }
-        }
-      }
-    }
-    return Array.from(map.values()).sort(
-      (a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
-    );
-  };
-
-  // Fetch all templates directly from Firestore DB & API and merge them
+  // Fetch all templates directly from Firestore DB & API
   const fetchTemplatesDirectlyFromDb = async (): Promise<EmailTemplate[]> => {
-    let combined: EmailTemplate[] = [];
+    let list: EmailTemplate[] = [];
     try {
       if (isFirebaseConfigured && db) {
         const snap = await getDocs(collection(db, 'email_templates'));
-        if (!snap.empty) {
-          const dbTpls: EmailTemplate[] = [];
-          snap.forEach((d) => {
-            const data = d.data() as EmailTemplate;
-            if (data && data.templateId) dbTpls.push(data);
-          });
-          combined = mergeTemplates(dbTpls, combined);
-        }
+        const dbTpls: EmailTemplate[] = [];
+        snap.forEach((d) => {
+          const data = d.data() as EmailTemplate;
+          if (data && data.templateId) dbTpls.push(data);
+        });
+        list = dbTpls;
       }
     } catch (e) {
       console.warn('[DB Template] Note fetching templates from Firestore DB:', e);
     }
-    try {
-      const res = await fetch('/api/templates');
-      const data = await res.json();
-      if (data.templates && Array.isArray(data.templates) && data.templates.length > 0) {
-        combined = mergeTemplates(data.templates, combined);
-      }
-    } catch (e) {}
+    if (list.length === 0) {
+      try {
+        const res = await fetch('/api/templates');
+        const data = await res.json();
+        if (data.templates && Array.isArray(data.templates)) {
+          list = data.templates;
+        }
+      } catch (e) {}
+    }
 
-    setTemplates((prev) => {
-      const finalMerged = mergeTemplates(combined, prev);
-      return finalMerged;
-    });
-    return combined;
+    const sorted = list.sort(
+      (a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
+    );
+    setTemplates(sorted);
+    return sorted;
   };
 
   // Fetch a specific template document directly from Firestore DB
@@ -241,7 +214,7 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
     setCampaignMode('PREDEFINED');
     setIsCreateModalOpen(true);
     const dbTpls = await fetchTemplatesDirectlyFromDb();
-    const allAvailable = mergeTemplates(dbTpls, templates);
+    const allAvailable = dbTpls.length > 0 ? dbTpls : templates;
     const targetId =
       preferredTemplateId ||
       (selectedTemplateId && allAvailable.some((t) => t.templateId === selectedTemplateId)
@@ -426,8 +399,8 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
         }
       }
 
-      if (tplData.templates && tplData.templates.length > 0) {
-        setTemplates((prev) => mergeTemplates(tplData.templates, prev));
+      if (tplData.templates && Array.isArray(tplData.templates)) {
+        setTemplates(tplData.templates);
         setSelectedTemplateId((curr) => {
           if (curr && tplData.templates.some((t: EmailTemplate) => t.templateId === curr)) {
             selectedTemplateIdRef.current = curr;
@@ -436,7 +409,7 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
           if (selectedTemplateIdRef.current && tplData.templates.some((t: EmailTemplate) => t.templateId === selectedTemplateIdRef.current)) {
             return selectedTemplateIdRef.current;
           }
-          const firstId = tplData.templates[0].templateId;
+          const firstId = tplData.templates[0]?.templateId || '';
           selectedTemplateIdRef.current = firstId;
           return firstId;
         });
@@ -507,16 +480,17 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
         const unsubTemplates = onSnapshot(
           collection(db, 'email_templates'),
           (snapshot) => {
-            if (!snapshot.empty) {
-              const loadedTpls: EmailTemplate[] = [];
-              snapshot.forEach((docSnap) => {
-                const data = docSnap.data() as EmailTemplate;
-                if (data && data.templateId) {
-                  loadedTpls.push(data);
-                }
-              });
-              setTemplates((prev) => mergeTemplates(loadedTpls, prev));
-            }
+            const loadedTpls: EmailTemplate[] = [];
+            snapshot.forEach((docSnap) => {
+              const data = docSnap.data() as EmailTemplate;
+              if (data && data.templateId) {
+                loadedTpls.push(data);
+              }
+            });
+            loadedTpls.sort(
+              (a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
+            );
+            setTemplates(loadedTpls);
           },
           (err) => console.warn('Notice from Firestore email_templates listener:', err)
         );
@@ -874,19 +848,101 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
     try {
       setIsDeletingCampaign(true);
 
+      // 1. Direct cascade deletion of every detail from Firestore database
       if (isFirebaseConfigured && db) {
         try {
-          await deleteDoc(doc(db, 'campaigns', campaignId));
-          await deleteDoc(doc(db, 'outbound_campaigns', campaignId)).catch(() => {});
-          const leadsToDelete = campaignLeads.filter((l) => l.campaignId === campaignId);
-          for (const cl of leadsToDelete) {
-            deleteDoc(doc(db, 'campaign_leads', cl.campaignLeadId)).catch(() => {});
+          const deletePromises: Promise<any>[] = [];
+
+          // Delete campaign doc
+          deletePromises.push(deleteDoc(doc(db, 'campaigns', campaignId)).catch(() => {}));
+          deletePromises.push(deleteDoc(doc(db, 'outbound_campaigns', campaignId)).catch(() => {}));
+
+          // Delete all campaign_leads belonging to this campaign
+          const leadsSnap = await getDocs(collection(db, 'campaign_leads')).catch(() => null);
+          if (leadsSnap && !leadsSnap.empty) {
+            leadsSnap.forEach((d) => {
+              const lData = d.data();
+              if (lData && lData.campaignId === campaignId) {
+                deletePromises.push(deleteDoc(doc(db, 'campaign_leads', d.id)).catch(() => {}));
+              }
+            });
           }
+
+          // Delete all campaign_runs belonging to this campaign
+          const runsSnap = await getDocs(collection(db, 'campaign_runs')).catch(() => null);
+          if (runsSnap && !runsSnap.empty) {
+            runsSnap.forEach((d) => {
+              const rData = d.data();
+              if (rData && rData.campaignId === campaignId) {
+                deletePromises.push(deleteDoc(doc(db, 'campaign_runs', d.id)).catch(() => {}));
+              }
+            });
+          }
+
+          // Delete all send history belonging to this campaign
+          const histSnap = await getDocs(collection(db, 'campaign_send_history')).catch(() => null);
+          if (histSnap && !histSnap.empty) {
+            histSnap.forEach((d) => {
+              const hData = d.data();
+              if (hData && hData.campaignId === campaignId) {
+                deletePromises.push(deleteDoc(doc(db, 'campaign_send_history', d.id)).catch(() => {}));
+              }
+            });
+          }
+
+          // Delete all prospects belonging to this campaign
+          const prosSnap = await getDocs(collection(db, 'outbound_prospects')).catch(() => null);
+          if (prosSnap && !prosSnap.empty) {
+            prosSnap.forEach((d) => {
+              const pData = d.data();
+              if (pData && pData.campaignId === campaignId) {
+                deletePromises.push(deleteDoc(doc(db, 'outbound_prospects', d.id)).catch(() => {}));
+              }
+            });
+          }
+
+          // Delete all conversations & messages created for this campaign
+          const convSnap = await getDocs(collection(db, 'conversations')).catch(() => null);
+          if (convSnap && !convSnap.empty) {
+            const convIds: string[] = [];
+            convSnap.forEach((d) => {
+              const cData = d.data();
+              if (cData && cData.campaignId === campaignId) {
+                convIds.push(d.id);
+                deletePromises.push(deleteDoc(doc(db, 'conversations', d.id)).catch(() => {}));
+              }
+            });
+            if (convIds.length > 0) {
+              const msgsSnap = await getDocs(collection(db, 'messages')).catch(() => null);
+              if (msgsSnap && !msgsSnap.empty) {
+                msgsSnap.forEach((d) => {
+                  const mData = d.data();
+                  if (mData && convIds.includes(mData.conversationId)) {
+                    deletePromises.push(deleteDoc(doc(db, 'messages', d.id)).catch(() => {}));
+                  }
+                });
+              }
+            }
+          }
+
+          // Delete all CRM leads linked to this campaign
+          const crmLeadsSnap = await getDocs(collection(db, 'leads')).catch(() => null);
+          if (crmLeadsSnap && !crmLeadsSnap.empty) {
+            crmLeadsSnap.forEach((d) => {
+              const lData = d.data();
+              if (lData && lData.campaignId === campaignId) {
+                deletePromises.push(deleteDoc(doc(db, 'leads', d.id)).catch(() => {}));
+              }
+            });
+          }
+
+          await Promise.allSettled(deletePromises);
         } catch (fsErr) {
-          console.warn('Browser Firestore delete note:', fsErr);
+          console.warn('Browser Firestore cascade delete note:', fsErr);
         }
       }
 
+      // 2. Call backend DELETE endpoint to clear memory caches & background execution
       try {
         await fetch(`/api/campaigns/${campaignId}`, { method: 'DELETE' });
       } catch (e) {}
@@ -894,15 +950,18 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
       setIsDeleteModalOpen(false);
       setCampaignToDelete(null);
 
+      // 3. Immediately clear from local frontend state
       setCampaigns((prev) => {
         const next = prev.filter((c) => c.campaignId !== campaignId);
         if (selectedCampaignId === campaignId) {
           if (next.length > 0) {
             setSelectedCampaignId(next[0].campaignId);
+            selectedCampaignIdRef.current = next[0].campaignId;
             setSelectedCampaign(next[0]);
             loadSelectedCampaignDetails(next[0].campaignId);
           } else {
             setSelectedCampaignId(null);
+            selectedCampaignIdRef.current = null;
             setSelectedCampaign(null);
             setCampaignLeads([]);
             setCampaignRuns([]);
@@ -1306,8 +1365,11 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
       const data = await res.json();
       const savedTpl: EmailTemplate = (data && data.success && data.template) ? data.template : fullPayload;
 
-      // 3. Update local templates state with the new template at the very top
-      setTemplates((prev) => mergeTemplates([savedTpl], prev));
+      // 3. Update local templates state with the new/updated template
+      setTemplates((prev) => {
+        const filtered = prev.filter((t) => t.templateId !== savedTpl.templateId);
+        return [savedTpl, ...filtered];
+      });
 
       // 4. CRITICAL: Automatically pre-select this newly saved template immediately for the next campaign!
       setSelectedTemplateId(savedTpl.templateId);
@@ -1325,7 +1387,6 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
           : `New template "${savedTpl.name}" saved to database and selected for your next campaign!`
       );
       setTimeout(() => setTemplateSaveFeedback(null), 5000);
-      loadData();
     } catch (e: any) {
       console.error('Error saving template:', e);
       setTemplateFormError(`Failed to save template: ${e?.message || 'Unknown error'}`);
@@ -1358,10 +1419,12 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
       // 2. Delete via API
       await fetch(`/api/templates/${targetId}`, { method: 'DELETE' });
 
-      // 3. Optimistic local state update
+      // 3. Local state update
       setTemplates((prev) => prev.filter((t) => t.templateId !== targetId));
-      if (selectedTemplateId === targetId) {
+      if (selectedTemplateId === targetId || selectedTemplateIdRef.current === targetId) {
         setSelectedTemplateId('');
+        selectedTemplateIdRef.current = '';
+        setSelectedTemplateFromDb(null);
       }
       if (editingTemplate?.templateId === targetId) {
         setIsTemplateModalOpen(false);
@@ -1372,7 +1435,6 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
       setTemplateToDelete(null);
       setTemplateSaveFeedback('Email template deleted from database.');
       setTimeout(() => setTemplateSaveFeedback(null), 3500);
-      loadData();
     } catch (e: any) {
       console.error('Error deleting template:', e);
       alert(`Failed to delete template: ${e?.message || e}`);

@@ -1,7 +1,6 @@
 import { initializeApp, getApps } from 'firebase/app';
 import { getFirestore, Firestore, doc, getDocFromServer } from 'firebase/firestore';
 import { getAuth, Auth } from 'firebase/auth';
-import firebaseConfigJson from '../../firebase-applet-config.json';
 
 // Project gen-lang-client-0376069258 is the provisioned Firestore host for database ai-studio-379c884e-3360-468a-ad55-8105acbd3214
 const firestoreProjectConfig = {

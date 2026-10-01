@@ -763,7 +763,7 @@ export async function processWebsiteLeadSubmission(
     leadId,
     contactId,
     source: 'WEBSITE',
-    leadType: 'OUTBOUND',
+    leadType: 'INBOUND',
     status: 'DEMO_SCHEDULED',
     leadScore,
     intent: 'HIGH',

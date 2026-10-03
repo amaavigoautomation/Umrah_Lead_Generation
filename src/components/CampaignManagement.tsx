@@ -41,7 +41,8 @@ import {
   File,
   Users,
 } from 'lucide-react';
-import { collection, doc, setDoc, deleteDoc, onSnapshot, getDoc, getDocs } from 'firebase/firestore';
+import { collection, doc, setDoc, deleteDoc, onSnapshot, getDoc, getDocs, query, where } from 'firebase/firestore';
+import { getSessionUser } from '../services/session';
 import { db, isFirebaseConfigured } from '../firebase/config.js';
 import {
   Campaign,
@@ -424,6 +425,7 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
   // Load selected campaign details (leads and runs)
   const loadSelectedCampaignDetails = async (campaignId: string) => {
     if (!campaignId) return;
+    let apiLeadsOk = false;
     try {
       const [campRes, leadsRes, runsRes] = await Promise.all([
         fetch(`/api/campaigns/${campaignId}`).catch(() => null),
@@ -439,6 +441,7 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
       }
       if (leadsData.leads && Array.isArray(leadsData.leads) && selectedCampaignIdRef.current === campaignId) {
         setCampaignLeads(leadsData.leads);
+        apiLeadsOk = leadsData.leads.length > 0;
       }
       if (runsData.runs && selectedCampaignIdRef.current === campaignId) {
         setCampaignRuns(runsData.runs);
@@ -450,8 +453,8 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
     // Direct Firestore lookup fallback if API returned empty leads
     if (isFirebaseConfigured && db) {
       try {
-        const snap = await getDocs(collection(db, 'campaign_leads')).catch(() => null);
-        if (snap && !snap.empty) {
+        const snap = await getDocs(query(collection(db, 'campaign_leads'), where('campaignId', '==', campaignId))).catch(() => null);
+        if (snap && !snap.empty && !apiLeadsOk) {
           const fsLeads: CampaignLead[] = [];
           snap.forEach((d) => {
             const l = d.data() as CampaignLead;
@@ -477,8 +480,9 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
   useEffect(() => {
     if (isFirebaseConfigured && db) {
       try {
+        const tenantId = getSessionUser()?.clientId;
         const unsubTemplates = onSnapshot(
-          collection(db, 'email_templates'),
+          tenantId ? query(collection(db, 'email_templates'), where('clientId', '==', tenantId)) : collection(db, 'email_templates'),
           (snapshot) => {
             const loadedTpls: EmailTemplate[] = [];
             snapshot.forEach((docSnap) => {
@@ -496,7 +500,7 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
         );
 
         const unsubCampaigns = onSnapshot(
-          collection(db, 'campaigns'),
+          tenantId ? query(collection(db, 'campaigns'), where('clientId', '==', tenantId)) : collection(db, 'campaigns'),
           (snapshot) => {
             const loadedCamps: Campaign[] = [];
             if (!snapshot.empty) {
@@ -534,83 +538,19 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
           (err) => console.warn('Notice from Firestore campaigns listener:', err)
         );
 
-        const unsubLeads = onSnapshot(
-          collection(db, 'campaign_leads'),
-          (snapshot) => {
-            if (!snapshot.empty) {
-              const loadedLeads: CampaignLead[] = [];
-              snapshot.forEach((docSnap) => {
-                const data = docSnap.data() as CampaignLead;
-                if (data && data.campaignLeadId) {
-                  loadedLeads.push(data);
-                }
-              });
-
-              // Map leads by campaign to synchronize metrics across all campaign cards
-              const leadsByCamp = new Map<string, CampaignLead[]>();
-              loadedLeads.forEach((l) => {
-                if (!leadsByCamp.has(l.campaignId)) leadsByCamp.set(l.campaignId, []);
-                leadsByCamp.get(l.campaignId)!.push(l);
-              });
-
-              setCampaigns((prev) =>
-                prev.map((c) => {
-                  const cLeads = leadsByCamp.get(c.campaignId);
-                  if (!cLeads || cLeads.length === 0) return c;
-                  const total = cLeads.length;
-                  const sent = cLeads.filter((l) => l.sendStatus === 'SENT').length;
-                  const pending = cLeads.filter((l) => l.sendStatus === 'PENDING' && l.replyStatus !== 'REPLIED').length;
-                  const failed = cLeads.filter((l) => l.sendStatus === 'FAILED').length;
-                  const replied = cLeads.filter((l) => l.replyStatus === 'REPLIED').length;
-                  const demoBooked = cLeads.filter((l) => l.demoStatus === 'BOOKED').length;
-                  return {
-                    ...c,
-                    totalLeads: total,
-                    sentCount: sent,
-                    pendingCount: pending,
-                    failedCount: failed,
-                    repliedCount: replied,
-                    demoBookedCount: demoBooked,
-                    stats: { totalLeads: total, sent, pending, failed, replied, demoBooked },
-                  };
-                })
-              );
-
-              const activeId = selectedCampaignIdRef.current;
-              if (activeId) {
-                const matching = loadedLeads.filter((l) => l.campaignId === activeId);
-                matching.sort((a, b) => (a.rowNumber || 0) - (b.rowNumber || 0));
-                setCampaignLeads(matching);
-
-                setSelectedCampaign((prev) => {
-                  if (!prev || prev.campaignId !== activeId) return prev;
-                  const total = matching.length;
-                  const sent = matching.filter((l) => l.sendStatus === 'SENT').length;
-                  const pending = matching.filter((l) => l.sendStatus === 'PENDING' && l.replyStatus !== 'REPLIED').length;
-                  const failed = matching.filter((l) => l.sendStatus === 'FAILED').length;
-                  const replied = matching.filter((l) => l.replyStatus === 'REPLIED').length;
-                  const demoBooked = matching.filter((l) => l.demoStatus === 'BOOKED').length;
-                  return {
-                    ...prev,
-                    totalLeads: total > 0 ? total : prev.totalLeads,
-                    sentCount: sent,
-                    pendingCount: pending,
-                    failedCount: failed,
-                    repliedCount: replied,
-                    demoBookedCount: demoBooked,
-                    stats: { total: total > 0 ? total : prev.totalLeads, totalLeads: total > 0 ? total : prev.totalLeads, sent, pending, failed, replied, demoBooked },
-                  };
-                });
-              }
-            }
-          },
-          (err) => console.warn('Notice from Firestore campaign_leads listener:', err)
-        );
+        // Leads are NOT streamed from Firestore (a 50k-lead campaign would re-download on every send).
+        // The selected campaign's leads are refreshed from the API every 10 seconds instead.
+        const leadsTimer = setInterval(() => {
+          const activeId = selectedCampaignIdRef.current;
+          if (activeId && document.visibilityState === 'visible') {
+            loadSelectedCampaignDetails(activeId);
+          }
+        }, 10000);
 
         return () => {
           unsubTemplates();
           unsubCampaigns();
-          unsubLeads();
+          clearInterval(leadsTimer);
         };
       } catch (e) {
         console.warn('Firestore subscription setup note:', e);

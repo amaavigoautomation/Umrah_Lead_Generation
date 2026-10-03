@@ -47,6 +47,8 @@ export interface EmailTemplate {
   format?: 'text' | 'html';
   isHtml?: boolean;
   attachments?: TemplateAttachment[];
+  /** Owning client (tenant). Undefined = platform-owned template. */
+  clientId?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -56,6 +58,12 @@ export interface CampaignLead {
   campaignId: string;
   leadId: string;
   campaignRunId?: string;
+  /** Owning client (tenant) — copied from the campaign. */
+  clientId?: string;
+  /** Sending identity (domain/from address) this lead is bound to; follow-ups reuse it. */
+  identityId?: string;
+  /** Set while a send batch has claimed the lead; stale claims are released automatically. */
+  claimedAt?: string;
   name: string;
   firstName?: string;
   lastName?: string;
@@ -130,6 +138,10 @@ export interface Campaign {
   type: CampaignType;
   campaignMode?: 'PREDEFINED' | 'AI_GENERATED';
   deliveryMode?: 'LIVE_IMAP' | 'SIMULATED' | 'SMTP' | string;
+  /** Owning client (tenant). Undefined = platform campaign. */
+  clientId?: string;
+  /** Sending identities this campaign may rotate across. Empty/undefined = all active identities of the client. */
+  identityIds?: string[];
   status: 'DRAFT' | 'RUNNING' | 'PAUSED' | 'COMPLETED' | 'FAILED';
   templateId?: string;
   templateName?: string;
@@ -488,11 +500,17 @@ export interface AppUser {
   userId: string;
   email: string;
   username?: string;
-  password: string;
+  /**
+   * Legacy plaintext field. It is cleared server-side on first login and is never returned by the API.
+   * New/changed passwords are sent to POST /api/users once and stored hashed in `user_credentials`.
+   */
+  password?: string;
   name: string;
   role: UserRole;
   accessLevel: UserAccessLevel;
   allowedModules: string[]; // Module IDs: 'inbox', 'campaigns', 'crm', 'knowledge', 'playground', 'scenarios', 'settings', 'live-mailbox'
+  /** Client (tenant) the user belongs to. Undefined = platform staff. */
+  clientId?: string;
   isActive?: boolean;
   createdAt: string;
   updatedAt: string;
@@ -538,3 +556,37 @@ export interface Booking {
 }
 
 
+
+// ---------------------------------------------------------------------------
+// Multi-client sending (Resend)
+// ---------------------------------------------------------------------------
+
+export interface Client {
+  clientId: string;
+  name: string;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** A from-address on a domain verified in the Resend account. Campaigns rotate across a client's active identities. */
+export interface SendingIdentity {
+  identityId: string;
+  clientId: string;
+  label: string;
+  domain: string;
+  fromEmail: string;
+  fromName: string;
+  replyTo?: string;
+  /** Max emails per UTC day through this identity (use low numbers while a domain warms up). */
+  dailyCap: number;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SendingIdentityWithUsage extends SendingIdentity {
+  sentToday: number;
+}
+
+export type SuppressionReason = 'unsubscribed' | 'bounced' | 'complained' | 'manual';

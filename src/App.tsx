@@ -11,6 +11,7 @@ import { SettingsView } from './components/SettingsView';
 import { LiveMailboxCenter } from './components/LiveMailboxCenter';
 import { DemoSchedulingView } from './components/DemoSchedulingView';
 import { LoginView } from './components/LoginView';
+import { getSessionUser, clearSession, AUTH_EXPIRED_EVENT } from './services/session';
 import { LockedModuleView } from './components/LockedModuleView';
 import {
   Contact,
@@ -152,14 +153,26 @@ export default function App() {
 
   // Users & Authentication State
   const [users, setUsers] = useState<AppUser[]>(INITIAL_USERS);
-  const [currentUser, setCurrentUser] = useState<AppUser | null>(() => {
-    try {
-      const saved = localStorage.getItem('umrah360_user_session');
-      return saved ? JSON.parse(saved) : INITIAL_USERS[0];
-    } catch {
-      return INITIAL_USERS[0];
+  // The session (signed token + profile) is created by POST /api/auth/login; no auto-login.
+  const [currentUser, setCurrentUser] = useState<AppUser | null>(() => getSessionUser());
+
+  // Platform staff load the full CRM from Firestore; client (tenant) users never do — they only use campaigns + sending domains.
+  const isPlatformSession = Boolean(currentUser && !currentUser.clientId);
+
+  // Client users land on the campaigns module.
+  useEffect(() => {
+    if (currentUser?.clientId && !(currentUser.allowedModules || []).includes(activeTab)) {
+      setActiveTab(((currentUser.allowedModules || [])[0] as ActiveTab) || 'campaigns');
     }
-  });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUser?.userId]);
+
+  // A 401 from the API means the session expired: go back to the login screen.
+  useEffect(() => {
+    const onExpired = () => setCurrentUser(null);
+    window.addEventListener(AUTH_EXPIRED_EVENT, onExpired);
+    return () => window.removeEventListener(AUTH_EXPIRED_EVENT, onExpired);
+  }, []);
 
   // Initialize Firestore seeding & loading on startup
   useEffect(() => {
@@ -173,6 +186,8 @@ export default function App() {
     let unsubOutboundProspects: (() => void) | undefined;
 
     async function initFirestore() {
+      if (!isPlatformSession) return;
+
       // Initialize Google Calendar authentication & sync token to backend
       initCalendarAuth();
 
@@ -289,14 +304,8 @@ export default function App() {
         setProspects(prospectsSnap ? prospectsSnap.docs.map((d) => d.data() as OutboundProspect) : []);
 
         // Initialize / sync users
-        if (usersSnap.empty) {
-          for (const u of INITIAL_USERS) {
-            await setDoc(doc(db, 'app_users', u.userId), u);
-          }
-          setUsers(INITIAL_USERS);
-        } else {
-          setUsers(usersSnap.docs.map((d) => d.data() as AppUser));
-        }
+        // (users are created on the server — INITIAL_ADMIN_EMAIL / INITIAL_ADMIN_PASSWORD — never seeded from the browser)
+        setUsers(usersSnap.docs.map((d) => d.data() as AppUser));
 
         // Attach realtime listeners for Firestore updates (handles adds, updates, and deletes immediately)
         unsubConvs = onSnapshot(collection(db, 'conversations'), (snap) => {
@@ -376,18 +385,7 @@ export default function App() {
         unsubUsers = onSnapshot(collection(db, 'app_users'), (snap) => {
           if (!snap.empty) {
             const list = snap.docs.map((d) => d.data() as AppUser);
-            setUsers(list);
-            setCurrentUser((prev) => {
-              if (!prev) return null;
-              const updated = list.find((u) => u.userId === prev.userId || u.email.toLowerCase() === prev.email.toLowerCase());
-              if (updated) {
-                try {
-                  localStorage.setItem('umrah360_user_session', JSON.stringify(updated));
-                } catch {}
-                return updated;
-              }
-              return prev;
-            });
+            setUsers(list.map((u) => ({ ...u, password: '' })));
           }
         });
 
@@ -409,7 +407,7 @@ export default function App() {
       if (unsubOutboundCamps) unsubOutboundCamps();
       if (unsubOutboundProspects) unsubOutboundProspects();
     };
-  }, []);
+  }, [isPlatformSession]);
 
   // Track message IDs ingested from backend to prevent duplicates
   const ingestedBackendMsgIds = useRef<Set<string>>(new Set());
@@ -1690,57 +1688,49 @@ export default function App() {
   // User Authentication Handlers
   const handleLogin = (user: AppUser) => {
     setCurrentUser(user);
-    try {
-      localStorage.setItem('umrah360_user_session', JSON.stringify(user));
-    } catch {}
-    if (user.accessLevel !== 'ALL' && user.role !== 'ADMIN' && !user.allowedModules.includes(activeTab)) {
-      setActiveTab((user.allowedModules[0] as ActiveTab) || 'knowledge');
+    const modules = user.allowedModules || [];
+    if (user.accessLevel !== 'ALL' && user.role !== 'ADMIN' && !modules.includes(activeTab)) {
+      setActiveTab((modules[0] as ActiveTab) || 'knowledge');
     }
   };
 
   const handleLogout = () => {
+    clearSession();
     setCurrentUser(null);
-    try {
-      localStorage.removeItem('umrah360_user_session');
-    } catch {}
   };
 
+  // Users are created/edited/deleted by the server (passwords are hashed there and never stored in app_users).
   const handleSaveUser = async (userToSave: AppUser) => {
+    const res = await fetch('/api/users', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(userToSave),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data?.success) {
+      alert(data?.error || 'Could not save the user.');
+      return;
+    }
+    const saved = data.user as AppUser;
     setUsers((prev) => {
-      const idx = prev.findIndex((u) => u.userId === userToSave.userId);
+      const idx = prev.findIndex((u) => u.userId === saved.userId);
       if (idx >= 0) {
         const next = [...prev];
-        next[idx] = userToSave;
+        next[idx] = saved;
         return next;
       }
-      return [...prev, userToSave];
+      return [...prev, saved];
     });
-
-    if (currentUser?.userId === userToSave.userId) {
-      setCurrentUser(userToSave);
-      try {
-        localStorage.setItem('umrah360_user_session', JSON.stringify(userToSave));
-      } catch {}
-    }
-
-    if (db && isFirebaseConfigured) {
-      try {
-        await setDoc(doc(db, 'app_users', userToSave.userId), userToSave, { merge: true });
-      } catch (err) {
-        console.warn('Firestore user save error:', err);
-      }
-    }
   };
 
   const handleDeleteUser = async (userId: string) => {
-    setUsers((prev) => prev.filter((u) => u.userId !== userId));
-    if (db && isFirebaseConfigured) {
-      try {
-        await deleteDoc(doc(db, 'app_users', userId));
-      } catch (err) {
-        console.warn('Firestore user delete error:', err);
-      }
+    const res = await fetch(`/api/users/${encodeURIComponent(userId)}`, { method: 'DELETE' });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data?.success) {
+      alert(data?.error || 'Could not delete the user.');
+      return;
     }
+    setUsers((prev) => prev.filter((u) => u.userId !== userId));
   };
 
   if (!currentUser) {
@@ -1754,9 +1744,8 @@ export default function App() {
   }
 
   const isCurrentTabAllowed =
-    currentUser.accessLevel === 'ALL' ||
-    currentUser.role === 'ADMIN' ||
-    currentUser.allowedModules.includes(activeTab);
+    (!currentUser.clientId && (currentUser.accessLevel === 'ALL' || currentUser.role === 'ADMIN')) ||
+    (currentUser.allowedModules || []).includes(activeTab);
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col">
@@ -1900,6 +1889,7 @@ export default function App() {
                 users={users}
                 onSaveUser={handleSaveUser}
                 onDeleteUser={handleDeleteUser}
+                currentUser={currentUser}
               />
             )}
 

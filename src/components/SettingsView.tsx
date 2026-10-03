@@ -13,8 +13,9 @@ import {
   Database,
   RefreshCw,
 } from 'lucide-react';
-import { SystemSettings, Channel, ChannelMode, AppUser } from '../types';
+import { SystemSettings, Channel, ChannelMode, AppUser, Client } from '../types';
 import { UserManagementView } from './UserManagementView';
+import { SendingDomainsPanel } from './SendingDomainsPanel';
 
 interface SettingsViewProps {
   settings: SystemSettings;
@@ -23,6 +24,7 @@ interface SettingsViewProps {
   users?: AppUser[];
   onSaveUser?: (user: AppUser) => Promise<void>;
   onDeleteUser?: (userId: string) => Promise<void>;
+  currentUser?: AppUser | null;
 }
 
 export const SettingsView: React.FC<SettingsViewProps> = ({
@@ -32,7 +34,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   users,
   onSaveUser,
   onDeleteUser,
+  currentUser,
 }) => {
+  const [clientsForUsers, setClientsForUsers] = useState<Client[]>([]);
   const [formData, setFormData] = useState<SystemSettings>(settings);
   const [isSaved, setIsSaved] = useState(false);
   const [openAiKeyInput, setOpenAiKeyInput] = useState('');
@@ -102,6 +106,17 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     setIsSaved(true);
     setTimeout(() => setIsSaved(false), 2500);
   };
+
+  // Client (tenant) users only manage their own sending domains.
+  if (currentUser?.clientId) {
+    return (
+      <div className="max-w-5xl mx-auto p-4 space-y-6 font-sans">
+        <SendingDomainsPanel isPlatformAdmin={false} />
+      </div>
+    );
+  }
+
+  const isPlatformAdmin = Boolean(currentUser && !currentUser.clientId && currentUser.role === 'ADMIN');
 
   return (
     <div className="max-w-5xl mx-auto p-4 space-y-6 font-sans">
@@ -343,12 +358,16 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         </div>
       </div>
 
+      {/* Sending domains (Resend) + clients */}
+      <SendingDomainsPanel isPlatformAdmin={isPlatformAdmin} onClientsLoaded={setClientsForUsers} />
+
       {/* User Management & Access Control (Firestore app_users) */}
       {users && onSaveUser && onDeleteUser && (
         <UserManagementView
           users={users}
           onSaveUser={onSaveUser}
           onDeleteUser={onDeleteUser}
+          clients={clientsForUsers}
         />
       )}
 

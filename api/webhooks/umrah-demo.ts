@@ -1,5 +1,4 @@
 import type { IncomingMessage, ServerResponse } from 'http';
-import nodemailer from 'nodemailer';
 
 /**
  * Production-Ready Standalone Vercel Serverless Function for Website Demo Inbound Webhook
@@ -101,40 +100,14 @@ async function checkEmailAlreadyReceivedThankYou(cleanEmail: string): Promise<bo
   return false;
 }
 
-// Helper to retrieve live SMTP credentials from environment, Firestore settings/smtp, or verified system fallback
-async function getLiveSmtpCredentials() {
-  let host = process.env.SMTP_HOST || 'smtp.gmail.com';
-  let port = parseInt(process.env.SMTP_PORT || '587', 10);
-  let secure = process.env.SMTP_SECURE === 'true' || port === 465;
-  let user = process.env.SMTP_USER || 'amaavigo@gmail.com';
-  let rawPass = process.env.SMTP_PASS || '';
-
-  // 1. If environment variable is missing, fetch from Firestore settings/smtp
-  try {
-    const url = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/${FIRESTORE_DATABASE_ID}/documents/settings/smtp?key=${FIREBASE_API_KEY}`;
-    const res = await fetch(url, { headers: { 'Content-Type': 'application/json' } });
-    if (res.ok) {
-      const docData = await res.json();
-      const f = docData.fields || {};
-      if (f.pass?.stringValue) rawPass = f.pass.stringValue;
-      if (f.user?.stringValue) user = f.user.stringValue;
-      if (f.host?.stringValue) host = f.host.stringValue;
-      if (f.port?.integerValue) port = parseInt(f.port.integerValue, 10);
-      secure = port === 465;
-    }
-  } catch (e) {
-    console.warn('[SMTP Credentials Fetch Notice]:', e);
-  }
-
-  // 2. Production fallback password for amaavigo@gmail.com to guarantee serverless delivery
-  if (!rawPass) {
-    rawPass = 'czzkspuwwpxccceb';
-  }
-
-  const cleanPass = rawPass.replace(/\s+/g, '');
-  const configured = Boolean(user && cleanPass);
-
-  return { host, port, secure, user, pass: cleanPass, configured };
+// Sender for this auto-reply (platform mail). Uses the Resend account: set RESEND_API_KEY and RESEND_FROM_EMAIL
+// (an address on a domain verified in Resend). RESEND_FROM_NAME / RESEND_REPLY_TO are optional.
+function getResendSender() {
+  const apiKey = (process.env.RESEND_API_KEY || '').trim();
+  const fromEmail = (process.env.RESEND_FROM_EMAIL || '').trim();
+  const fromName = (process.env.RESEND_FROM_NAME || 'Umrah360 Team').replace(/["<>\r\n]/g, '').trim();
+  const replyTo = (process.env.RESEND_REPLY_TO || fromEmail).trim();
+  return { apiKey, fromEmail, fromName, replyTo, configured: Boolean(apiKey && fromEmail) };
 }
 
 // Helper to send live auto-reply email via direct SMTP with multi-port fallback
@@ -149,7 +122,7 @@ async function sendAutoReplyEmail(
   branches: string,
   phone: string
 ) {
-  const creds = await getLiveSmtpCredentials();
+  const sender = getResendSender();
 
   const firstName = fullName.split(/\s+/)[0] || 'there';
   const subject = `We have received your Umrah360 Demo Request - ${companyName || 'Umrah360'}`;
@@ -174,54 +147,42 @@ async function sendAutoReplyEmail(
     `https://umrah360.in`,
   ].join('\n');
 
-  if (!creds.configured) {
-    console.error('[Auto-Reply SMTP Error] SMTP credentials not configured for sending.');
-    return { sent: false, error: 'SMTP credentials not configured', subject, textBody };
+  if (!sender.configured) {
+    console.error('[Auto-Reply] RESEND_API_KEY / RESEND_FROM_EMAIL are not configured.');
+    return { sent: false, error: 'Resend is not configured (RESEND_API_KEY, RESEND_FROM_EMAIL)', subject, textBody };
   }
 
-  // Dual-port strategy for Vercel Serverless / AWS Lambda (Port 587 STARTTLS IPv4 is most reliable)
-  const attempts = [
-    { port: 587, secure: false, requireTLS: true, label: 'Port 587 (STARTTLS, IPv4)' },
-    { port: 465, secure: true, requireTLS: false, label: 'Port 465 (SMTPS, IPv4)' },
-    { port: 2525, secure: false, requireTLS: true, label: 'Port 2525 (Alternative, IPv4)' },
-  ];
-
-  let lastError = '';
-
-  for (const transportOpt of attempts) {
-    try {
-      console.log(`[Auto-Reply Webhook] Dispatching email to ${toEmail} via ${transportOpt.label}...`);
-      const transporter = nodemailer.createTransport({
-        host: creds.host,
-        port: transportOpt.port,
-        secure: transportOpt.secure,
-        requireTLS: transportOpt.requireTLS,
-        family: 4, // CRITICAL: forces IPv4 to avoid AWS Lambda/Vercel IPv6 unreachable socket drop
-        auth: { user: creds.user, pass: creds.pass },
-        tls: { rejectUnauthorized: false },
-        connectionTimeout: 8000,
-        greetingTimeout: 6000,
-        socketTimeout: 10000,
-      } as any);
-
-      const info = await transporter.sendMail({
-        from: `Umrah360 Team <${creds.user}>`,
-        to: toEmail,
+  try {
+    const htmlBody = textBody
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/\n/g, '<br/>');
+    const resp = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${sender.apiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        from: `"${sender.fromName}" <${sender.fromEmail}>`,
+        to: [toEmail],
         subject,
         text: textBody,
-        replyTo: creds.user,
-      });
-
-      console.log(`[Auto-Reply Success] Delivered demo confirmation to ${toEmail} via ${transportOpt.label} (ID: ${info.messageId})`);
-      return { sent: true, messageId: info.messageId, subject, textBody };
-    } catch (err: any) {
-      lastError = err?.message || String(err);
-      console.warn(`[Auto-Reply SMTP ${transportOpt.label} Notice] Transmission attempt failed:`, lastError);
+        html: htmlBody,
+        reply_to: sender.replyTo,
+      }),
+    });
+    const json: any = await resp.json().catch(() => ({}));
+    if (resp.ok && json?.id) {
+      console.log(`[Auto-Reply Success] Delivered demo confirmation to ${toEmail} via Resend (ID: ${json.id})`);
+      return { sent: true, messageId: String(json.id), subject, textBody };
     }
+    const msg = json?.message || `HTTP ${resp.status}`;
+    console.error('[Auto-Reply Failed] Resend rejected the email for:', toEmail, msg);
+    return { sent: false, error: `Resend error: ${msg}`, subject, textBody };
+  } catch (err: any) {
+    const msg = err?.message || String(err);
+    console.error('[Auto-Reply Failed] Resend request error for:', toEmail, msg);
+    return { sent: false, error: `Could not deliver auto-reply email via Resend: ${msg}`, subject, textBody };
   }
-
-  console.error('[Auto-Reply Webhook Failed] Exhausted all direct SMTP ports for:', toEmail, 'Error:', lastError);
-  return { sent: false, error: `Could not deliver auto-reply email via direct SMTP: ${lastError}`, subject, textBody };
 }
 
 // Parse multipart/form-data text into a flat key-value dictionary

@@ -1,5 +1,17 @@
 import OpenAI from 'openai';
 import { verifySmtpConnection, sendLiveEmail, getSmtpConfig, updateSmtpConfig } from './smtpService.js';
+import {
+  authenticateRequest,
+  isCronAuthorized,
+  loginWithPassword,
+  getUserById,
+  saveUserServer,
+  deleteUserServer,
+} from './authService.js';
+import { listClients, saveClient } from './clientService.js';
+import { listIdentities, saveIdentity, deleteIdentity, PLATFORM_CLIENT_ID } from './sendingIdentities.js';
+import { isResendConfigured, listResendDomains } from './resendService.js';
+import { addSuppression, parseUnsubscribeToken } from './emailSuppression.js';
 import { checkImapStatus, getImapConfig, updateImapConfig } from './imapService.js';
 import {
   processLiveInboundEmail,
@@ -100,8 +112,8 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
   // Set standard API headers and CORS
   res.setHeader('Content-Type', 'application/json');
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PATCH, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Auth-Token');
 
   if (req.method === 'OPTIONS') {
     res.statusCode = 204;
@@ -209,6 +221,184 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
       })
     );
     return true;
+  }
+
+  // =========================================================================
+  // AUTH, TENANCY & PUBLIC ENDPOINTS
+  // =========================================================================
+  const sendJson = (status: number, payload: any) => {
+    res.statusCode = status;
+    res.end(JSON.stringify(payload));
+    return true;
+  };
+
+  // Public: login
+  if (url === '/api/auth/login' && req.method === 'POST') {
+    const result = await loginWithPassword(String(body.identifier || body.email || body.username || ''), String(body.password || ''));
+    if (!result.ok) return sendJson(result.status, { success: false, error: result.error });
+    return sendJson(200, { success: true, token: result.token, user: result.user });
+  }
+
+  // Public: unsubscribe link (GET shows a confirmation page, POST — also used by mail clients' one-click — unsubscribes)
+  if (url === '/api/unsubscribe') {
+    let token = '';
+    try {
+      token = new URL(req.url || '', 'http://localhost').searchParams.get('t') || '';
+    } catch {}
+    const payload = parseUnsubscribeToken(token);
+    const page = (title: string, message: string, button?: string) => {
+      res.statusCode = payload ? 200 : 400;
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      res.end(
+        `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title}</title></head>` +
+          `<body style="font-family:system-ui,sans-serif;background:#f6f6f6;margin:0;display:flex;min-height:100vh;align-items:center;justify-content:center">` +
+          `<div style="background:#fff;padding:32px;border-radius:12px;max-width:420px;text-align:center;box-shadow:0 2px 12px rgba(0,0,0,.08)">` +
+          `<h2 style="margin:0 0 12px">${title}</h2><p style="color:#555">${message}</p>${button || ''}</div></body></html>`
+      );
+      return true;
+    };
+    if (!payload) return page('Link not valid', 'This unsubscribe link is invalid or has been altered.');
+
+    if (req.method === 'POST') {
+      await addSuppression({
+        clientId: payload.c === '*' ? undefined : payload.c,
+        email: payload.e,
+        reason: 'unsubscribed',
+        source: payload.k ? `campaign:${payload.k}` : 'unsubscribe-link',
+      }).catch((e: any) => console.warn('[Unsubscribe] failed:', e));
+      return page('You have been unsubscribed', 'You will no longer receive emails from us at this address.');
+    }
+    if (req.method === 'GET') {
+      return page(
+        'Unsubscribe',
+        `Stop sending emails to <b>${String(payload.e).replace(/[<>&"]/g, '')}</b>?`,
+        `<form method="POST" action="/api/unsubscribe?t=${encodeURIComponent(token)}"><button type="submit" style="margin-top:16px;padding:10px 20px;border:0;border-radius:8px;background:#f97316;color:#fff;font-size:15px;cursor:pointer">Confirm unsubscribe</button></form>`
+      );
+    }
+  }
+
+  // Everything else needs a valid session — except inbound webhooks called by external systems.
+  const auth = authenticateRequest(req);
+  const isCampaignCron = url === '/api/campaigns/process-active' || url === '/api/campaigns/cron';
+  const isPublicWebhook =
+    url === '/api/webhooks/umrah-demo' ||
+    url === '/api/leads/webhook' ||
+    url === '/api/leads/inbound' ||
+    url === '/api/inbound/whatsapp' ||
+    url === '/api/whatsapp/inbound' ||
+    url === '/api/whatsapp/webhook' ||
+    url === '/api/whatsapp/status' ||
+    url === '/api/inbound/whatsapp/status';
+
+  if (!auth && !isPublicWebhook && !(isCampaignCron && isCronAuthorized(req))) {
+    return sendJson(401, { success: false, error: 'Authentication required. Please sign in.' });
+  }
+
+  // Client (tenant) users can only reach campaigns, templates, sending identities and their own profile.
+  if (auth && !auth.isPlatformAdmin && auth.clientId) {
+    const allowed =
+      url === '/api/auth/me' ||
+      url === '/api/campaigns' ||
+      url.startsWith('/api/campaigns/') ||
+      url === '/api/templates' ||
+      url.startsWith('/api/templates/') ||
+      url === '/api/campaign-templates' ||
+      url.startsWith('/api/campaign-templates/') ||
+      url === '/api/sending-identities';
+    const blockedLeadAdmin = url.startsWith('/api/campaigns/lead/');
+    if (!allowed || blockedLeadAdmin) {
+      return sendJson(403, { success: false, error: 'Your account does not have access to this resource.' });
+    }
+  }
+
+  const tenantClientId: string | undefined = auth?.clientId;
+  const ownsRecord = (recordClientId?: string) => !tenantClientId || (recordClientId || '') === tenantClientId;
+  /** Sends 404 and returns false when a client user asks for another client's campaign. */
+  const requireCampaignAccess = async (campaignId: string): Promise<boolean> => {
+    if (!tenantClientId) return true;
+    await initCampaignStore();
+    const camp = await getCampaignByIdAsync(campaignId);
+    if (!camp || !ownsRecord(camp.clientId)) {
+      sendJson(404, { error: 'Campaign not found' });
+      return false;
+    }
+    return true;
+  };
+
+  if (url === '/api/auth/me' && req.method === 'GET') {
+    const user = auth ? await getUserById(auth.userId) : null;
+    if (!user || user.isActive === false) return sendJson(401, { success: false, error: 'Session is no longer valid.' });
+    return sendJson(200, { success: true, user });
+  }
+
+  // Users (platform admin only — enforced in saveUserServer / deleteUserServer)
+  if (url === '/api/users' && req.method === 'POST') {
+    try {
+      const user = await saveUserServer(body, auth!);
+      return sendJson(200, { success: true, user });
+    } catch (err: any) {
+      return sendJson(400, { success: false, error: err?.message || 'Failed to save user' });
+    }
+  }
+  const userDeleteMatch = url.match(/^\/api\/users\/([a-zA-Z0-9_-]+)$/);
+  if (userDeleteMatch && req.method === 'DELETE') {
+    try {
+      await deleteUserServer(userDeleteMatch[1], auth!);
+      return sendJson(200, { success: true });
+    } catch (err: any) {
+      return sendJson(400, { success: false, error: err?.message || 'Failed to delete user' });
+    }
+  }
+
+  // Clients (platform admin only)
+  if (url === '/api/clients') {
+    if (!auth?.isPlatformAdmin) return sendJson(403, { success: false, error: 'Only platform administrators can manage clients.' });
+    if (req.method === 'GET') return sendJson(200, { success: true, clients: await listClients() });
+    if (req.method === 'POST') {
+      try {
+        return sendJson(200, { success: true, client: await saveClient(body) });
+      } catch (err: any) {
+        return sendJson(400, { success: false, error: err?.message || 'Failed to save client' });
+      }
+    }
+  }
+
+  // Sending identities (sender addresses on domains verified in the shared Resend account)
+  if (url === '/api/sending-identities') {
+    if (req.method === 'GET') {
+      let reqUrl: URL | null = null;
+      try {
+        reqUrl = new URL(req.url || '', 'http://localhost');
+      } catch {}
+      const scope = tenantClientId ? tenantClientId : auth?.isPlatformAdmin ? undefined : PLATFORM_CLIENT_ID;
+      const payload: any = {
+        success: true,
+        resendConfigured: isResendConfigured(),
+        identities: await listIdentities(scope),
+      };
+      if (auth?.isPlatformAdmin) payload.clients = await listClients();
+      if (reqUrl?.searchParams.get('domains') === '1') payload.domains = await listResendDomains();
+      return sendJson(200, payload);
+    }
+    if (!tenantClientId && !auth?.isPlatformAdmin) {
+      return sendJson(403, { success: false, error: 'Only administrators can change sending identities.' });
+    }
+    if (req.method === 'POST') {
+      try {
+        const identity = await saveIdentity(body, tenantClientId || null);
+        return sendJson(200, { success: true, identity });
+      } catch (err: any) {
+        return sendJson(400, { success: false, error: err?.message || 'Failed to save sending identity' });
+      }
+    }
+    if (req.method === 'DELETE') {
+      try {
+        await deleteIdentity(String(body.identityId || ''), tenantClientId || null);
+        return sendJson(200, { success: true });
+      } catch (err: any) {
+        return sendJson(400, { success: false, error: err?.message || 'Failed to delete sending identity' });
+      }
+    }
   }
 
   // =========================================================================
@@ -872,6 +1062,8 @@ Generate a helpful, grounded response.`;
         from: config.from,
         passConfigured: Boolean(config.pass),
         hasPassword: Boolean(config.pass),
+        provider: 'resend',
+        resendConfigured: isResendConfigured(),
       })
     );
     return true;
@@ -1164,7 +1356,7 @@ Generate a helpful, grounded response.`;
   // Templates endpoints (supports both /api/templates and /api/campaign-templates)
   if ((url === '/api/templates' || url === '/api/campaign-templates') && req.method === 'GET') {
     await initCampaignStore();
-    const tpls = await getTemplatesFromDbOrCache();
+    const tpls = (await getTemplatesFromDbOrCache()).filter((t) => ownsRecord(t.clientId));
     res.statusCode = 200;
     res.end(JSON.stringify({ success: true, templates: tpls }));
     return true;
@@ -1173,7 +1365,15 @@ Generate a helpful, grounded response.`;
   if ((url === '/api/templates' || url === '/api/campaign-templates') && req.method === 'POST') {
     try {
       await initCampaignStore();
-      const saved = await saveTemplate(body);
+      if (body.templateId) {
+        const existingTpl = getTemplateById(body.templateId);
+        if (existingTpl && !ownsRecord(existingTpl.clientId)) {
+          res.statusCode = 403;
+          res.end(JSON.stringify({ error: 'You cannot modify this template.' }));
+          return true;
+        }
+      }
+      const saved = await saveTemplate({ ...body, clientId: tenantClientId ?? body.clientId });
       res.statusCode = 200;
       res.end(JSON.stringify({ success: true, template: saved }));
     } catch (err: any) {
@@ -1190,7 +1390,7 @@ Generate a helpful, grounded response.`;
 
     if (req.method === 'GET') {
       const tpl = await getTemplateFromDbById(templateId);
-      if (!tpl) {
+      if (!tpl || !ownsRecord(tpl.clientId)) {
         res.statusCode = 404;
         res.end(JSON.stringify({ error: 'Template not found' }));
       } else {
@@ -1202,6 +1402,12 @@ Generate a helpful, grounded response.`;
 
     if (req.method === 'DELETE') {
       try {
+        const tplToDelete = await getTemplateFromDbById(templateId);
+        if (tplToDelete && !ownsRecord(tplToDelete.clientId)) {
+          res.statusCode = 403;
+          res.end(JSON.stringify({ error: 'You cannot delete this template.' }));
+          return true;
+        }
         await deleteTemplate(templateId);
         res.statusCode = 200;
         res.end(JSON.stringify({ success: true, deletedTemplateId: templateId }));
@@ -1217,13 +1423,16 @@ Generate a helpful, grounded response.`;
   if (url === '/api/campaigns' && req.method === 'GET') {
     await initCampaignStore(true);
     res.statusCode = 200;
-    res.end(JSON.stringify({ success: true, campaigns: getAllCampaigns() }));
+    res.end(JSON.stringify({ success: true, campaigns: getAllCampaigns().filter((c) => ownsRecord(c.clientId)) }));
     return true;
   }
 
   if (url === '/api/campaigns' && req.method === 'POST') {
     try {
-      const created = await createCampaign(body);
+      const created = await createCampaign({
+        ...body,
+        clientId: tenantClientId || (auth?.isPlatformAdmin && body.clientId ? String(body.clientId) : undefined),
+      });
       res.statusCode = 201;
       res.end(JSON.stringify({ success: true, campaign: created.campaign, leads: created.leads }));
     } catch (err: any) {
@@ -1247,7 +1456,7 @@ Generate a helpful, grounded response.`;
 
   if ((url === '/api/campaigns/process-active' || url === '/api/campaigns/cron') && (req.method === 'POST' || req.method === 'GET')) {
     try {
-      const result = await processActiveRunningCampaignsBatch(3);
+      const result = await processActiveRunningCampaignsBatch();
       res.statusCode = 200;
       res.setHeader('Content-Type', 'application/json');
       res.end(JSON.stringify({ success: true, ...result }));
@@ -1262,6 +1471,7 @@ Generate a helpful, grounded response.`;
   const campaignStartMatch = url.match(/^\/api\/campaigns\/([a-zA-Z0-9_-]+)\/start$/);
   if (campaignStartMatch && req.method === 'POST') {
     const campaignId = campaignStartMatch[1];
+    if (!(await requireCampaignAccess(campaignId))) return true;
     try {
       const started = await startCampaign(campaignId);
       res.statusCode = 200;
@@ -1276,8 +1486,9 @@ Generate a helpful, grounded response.`;
   const campaignProcessMatch = url.match(/^\/api\/campaigns\/([a-zA-Z0-9_-]+)\/process$/);
   if (campaignProcessMatch && req.method === 'POST') {
     const campaignId = campaignProcessMatch[1];
+    if (!(await requireCampaignAccess(campaignId))) return true;
     try {
-      const batchResult = await processNextCampaignSendBatch(campaignId, 3);
+      const batchResult = await processNextCampaignSendBatch(campaignId);
       res.statusCode = 200;
       res.end(JSON.stringify({ success: true, ...batchResult }));
     } catch (err: any) {
@@ -1290,6 +1501,7 @@ Generate a helpful, grounded response.`;
   const campaignPauseMatch = url.match(/^\/api\/campaigns\/([a-zA-Z0-9_-]+)\/pause$/);
   if (campaignPauseMatch && req.method === 'POST') {
     const campaignId = campaignPauseMatch[1];
+    if (!(await requireCampaignAccess(campaignId))) return true;
     try {
       const paused = await pauseCampaign(campaignId);
       res.statusCode = 200;
@@ -1304,6 +1516,7 @@ Generate a helpful, grounded response.`;
   const campaignRestartPreviewMatch = url.match(/^\/api\/campaigns\/([a-zA-Z0-9_-]+)\/restart-preview$/);
   if (campaignRestartPreviewMatch && req.method === 'GET') {
     const campaignId = campaignRestartPreviewMatch[1];
+    if (!(await requireCampaignAccess(campaignId))) return true;
     await initCampaignStore();
     const camp = getCampaignById(campaignId);
     if (!camp) {
@@ -1337,6 +1550,7 @@ Generate a helpful, grounded response.`;
   const campaignRestartMatch = url.match(/^\/api\/campaigns\/([a-zA-Z0-9_-]+)\/restart$/);
   if (campaignRestartMatch && req.method === 'POST') {
     const campaignId = campaignRestartMatch[1];
+    if (!(await requireCampaignAccess(campaignId))) return true;
     try {
       const restarted = await restartCampaign(campaignId, body);
       res.statusCode = 200;
@@ -1361,16 +1575,28 @@ Generate a helpful, grounded response.`;
   const campaignLeadsMatch = url.match(/^\/api\/campaigns\/([a-zA-Z0-9_-]+)\/leads$/);
   if (campaignLeadsMatch && req.method === 'GET') {
     const campaignId = campaignLeadsMatch[1];
+    if (!(await requireCampaignAccess(campaignId))) return true;
     await initCampaignStore();
-    const leads = await getCampaignLeadsFromDb(campaignId);
+    const allLeads = await getCampaignLeadsFromDb(campaignId);
+    let limit = 5000;
+    let offset = 0;
+    try {
+      const q = new URL(req.url || '', 'http://localhost').searchParams;
+      const l = Number(q.get('limit'));
+      const o = Number(q.get('offset'));
+      if (Number.isFinite(l) && l > 0) limit = Math.min(Math.floor(l), 60000);
+      if (Number.isFinite(o) && o > 0) offset = Math.floor(o);
+    } catch {}
+    const leads = allLeads.slice(offset, offset + limit);
     res.statusCode = 200;
-    res.end(JSON.stringify({ success: true, leads }));
+    res.end(JSON.stringify({ success: true, leads, total: allLeads.length, truncated: offset + leads.length < allLeads.length }));
     return true;
   }
 
   const campaignRunsMatch = url.match(/^\/api\/campaigns\/([a-zA-Z0-9_-]+)\/runs$/);
   if (campaignRunsMatch && req.method === 'GET') {
     const campaignId = campaignRunsMatch[1];
+    if (!(await requireCampaignAccess(campaignId))) return true;
     await initCampaignStore();
     res.statusCode = 200;
     res.end(JSON.stringify({ success: true, runs: getCampaignRuns(campaignId) }));
@@ -1380,6 +1606,7 @@ Generate a helpful, grounded response.`;
   const campaignSingleMatch = url.match(/^\/api\/campaigns\/([a-zA-Z0-9_-]+)$/);
   if (campaignSingleMatch) {
     const campaignId = campaignSingleMatch[1];
+    if (!(await requireCampaignAccess(campaignId))) return true;
     await initCampaignStore();
 
     if (req.method === 'GET') {

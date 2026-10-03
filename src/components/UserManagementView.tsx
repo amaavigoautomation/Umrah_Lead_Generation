@@ -20,12 +20,15 @@ interface UserManagementViewProps {
   users: AppUser[];
   onSaveUser: (user: AppUser) => Promise<void>;
   onDeleteUser: (userId: string) => Promise<void>;
+  /** Clients (tenants) a user can be assigned to. Users without a client are platform staff. */
+  clients?: Array<{ clientId: string; name: string }>;
 }
 
 export const UserManagementView: React.FC<UserManagementViewProps> = ({
   users,
   onSaveUser,
   onDeleteUser,
+  clients = [],
 }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<Partial<AppUser>>({
@@ -59,7 +62,9 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!editingUser.name || !editingUser.email || !editingUser.password) return;
+    const isNewUser = !editingUser.userId;
+    if (!editingUser.name || !editingUser.email) return;
+    if (isNewUser && !(editingUser.password || '').trim()) return;
 
     setIsSaving(true);
     try {
@@ -68,10 +73,11 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
         name: editingUser.name.trim(),
         email: editingUser.email.trim().toLowerCase(),
         username: editingUser.username?.trim().toLowerCase() || editingUser.email.split('@')[0].toLowerCase(),
-        password: editingUser.password.trim(),
+        password: (editingUser.password || '').trim(), // empty when editing = keep the current password
+        clientId: editingUser.clientId || '',
         role: editingUser.role || 'SPECIALIST',
         accessLevel:
-          editingUser.role === 'ADMIN' || editingUser.allowedModules?.length === PLATFORM_MODULES.length
+          !editingUser.clientId && (editingUser.role === 'ADMIN' || editingUser.allowedModules?.length === PLATFORM_MODULES.length)
             ? 'ALL'
             : 'CUSTOM',
         allowedModules:
@@ -86,7 +92,7 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
       };
 
       await onSaveUser(userToSave);
-      setToast(`User "${userToSave.name}" saved to Firestore database.`);
+      setToast(`User "${userToSave.name}" saved.`);
       setIsModalOpen(false);
       setTimeout(() => setToast(null), 3500);
     } catch (err) {
@@ -158,10 +164,15 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
                   <td className="p-3">
                     <div className="font-semibold text-slate-900">{u.name}</div>
                     <div className="text-[11px] text-slate-500 font-mono">{u.email}</div>
+                    {u.clientId && (
+                      <div className="text-[10px] text-orange-600 font-bold">
+                        Client: {clients.find((c) => c.clientId === u.clientId)?.name || u.clientId}
+                      </div>
+                    )}
                   </td>
                   <td className="p-3 font-mono text-slate-600">
                     <span className="bg-slate-100 px-2 py-1 rounded border border-slate-200 text-[11px] font-mono text-slate-700">
-                      {u.password}
+                      ••••••••
                     </span>
                   </td>
                   <td className="p-3">
@@ -267,15 +278,18 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
                 </div>
 
                 <div>
-                  <label className="text-slate-700 block mb-1 font-medium">Password *</label>
+                  <label className="text-slate-700 block mb-1 font-medium">
+                    Password {editingUser.userId ? '(leave empty to keep)' : '*'}
+                  </label>
                   <div className="relative">
                     <input
                       type={showPassword ? 'text' : 'password'}
                       value={editingUser.password || ''}
                       onChange={(e) => setEditingUser({ ...editingUser, password: e.target.value })}
-                      placeholder="Password"
+                      placeholder={editingUser.userId ? '••••••••' : 'At least 8 characters'}
                       className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 pr-8 text-slate-800 focus:outline-none focus:border-orange-500"
-                      required
+                      required={!editingUser.userId}
+                      minLength={editingUser.userId ? undefined : 8}
                     />
                     <button
                       type="button"
@@ -286,6 +300,25 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
                     </button>
                   </div>
                 </div>
+              </div>
+
+              <div>
+                <label className="text-slate-700 block mb-1 font-medium">Client (tenant)</label>
+                <select
+                  value={editingUser.clientId || ''}
+                  onChange={(e) => setEditingUser({ ...editingUser, clientId: e.target.value })}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-slate-800 focus:outline-none focus:border-orange-500"
+                >
+                  <option value="">Platform staff (no client)</option>
+                  {clients.map((c) => (
+                    <option key={c.clientId} value={c.clientId}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-[10px] text-slate-500 mt-1">
+                  Client users only see Campaigns and Sending Domains, and only their own data.
+                </p>
               </div>
 
               <div>

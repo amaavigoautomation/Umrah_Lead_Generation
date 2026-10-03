@@ -6,6 +6,7 @@ import { pollAndProcessImapMailbox } from './src/server/inboundPipeline.js';
 import { getImapConfig } from './src/server/imapService.js';
 import { checkAndDispatchPendingWebsiteLeadEmails } from './src/server/websiteLeadAutoResponder.js';
 import { processActiveRunningCampaignsBatch } from './src/server/campaignService.js';
+import { handleResendWebhook } from './src/server/resendWebhook.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -13,9 +14,21 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT: number = Number(process.env.PORT) || 3000;
 
-// Body parsers
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+// Resend webhook needs the raw body for signature verification — register before the JSON parser.
+app.post('/api/webhooks/resend', express.raw({ type: '*/*', limit: '5mb' }), async (req, res) => {
+  try {
+    const raw = Buffer.isBuffer(req.body) ? req.body.toString('utf-8') : '';
+    const result = await handleResendWebhook(raw, req.headers as any);
+    res.status(result.status).json(result.body);
+  } catch (err: any) {
+    console.error('[Resend Webhook] Error:', err);
+    res.status(500).json({ error: err?.message || 'Webhook failed' });
+  }
+});
+
+// Body parsers (large limit: a 50k-lead campaign upload is a big JSON payload)
+app.use(express.json({ limit: '60mb' }));
+app.use(express.urlencoded({ extended: true, limit: '60mb' }));
 
 // Background poller for inbound email, website leads, and outbound campaigns
 let isBackgroundPolling = false;
@@ -33,7 +46,7 @@ const safeBackgroundPoll = async () => {
     }
 
     // 3. Process active campaign batches
-    await processActiveRunningCampaignsBatch(3).catch(() => {});
+    await processActiveRunningCampaignsBatch().catch(() => {});
   } catch (e) {
     // ignore background errors
   } finally {

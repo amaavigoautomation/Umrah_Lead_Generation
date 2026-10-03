@@ -24,6 +24,10 @@
       "destination": "/api/webhooks/umrah-demo"
     },
     {
+      "source": "/api/webhooks/resend",
+      "destination": "/api/webhooks/resend"
+    },
+    {
       "source": "/api/leads/inbound",
       "destination": "/api/leads/inbound"
     },

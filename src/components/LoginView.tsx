@@ -13,16 +13,16 @@ import {
 } from 'lucide-react';
 import { AppUser } from '../types';
 import { Umrah360Logo } from './Umrah360Logo';
+import { saveSession } from '../services/session';
 
 interface LoginViewProps {
   onLogin: (user: AppUser) => void;
-  users: AppUser[];
+  users?: AppUser[]; // kept for compatibility; no longer used (login is verified on the server)
   isFirebaseActive: boolean;
 }
 
 export const LoginView: React.FC<LoginViewProps> = ({
   onLogin,
-  users,
   isFirebaseActive,
 }) => {
   const [identifier, setIdentifier] = useState('');
@@ -31,43 +31,35 @@ export const LoginView: React.FC<LoginViewProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    setIsLoading(true);
 
-    const cleanIdentifier = identifier.trim().toLowerCase();
+    const cleanIdentifier = identifier.trim();
     const cleanPassword = password.trim();
-
     if (!cleanIdentifier || !cleanPassword) {
       setError('Please enter both email/username and password.');
-      setIsLoading(false);
       return;
     }
 
-    // Lookup user in the DB users list
-    const foundUser = users.find(
-      (u) =>
-        (u.email.toLowerCase() === cleanIdentifier ||
-          (u.username && u.username.toLowerCase() === cleanIdentifier)) &&
-        u.password === cleanPassword
-    );
-
-    if (foundUser) {
-      if (foundUser.isActive === false) {
-        setError('This account has been deactivated in the database.');
-        setIsLoading(false);
+    setIsLoading(true);
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ identifier: cleanIdentifier, password: cleanPassword }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data?.success) {
+        setError(data?.error || 'Sign in failed. Please try again.');
         return;
       }
-      setTimeout(() => {
-        setIsLoading(false);
-        onLogin(foundUser);
-      }, 300);
-    } else {
-      setTimeout(() => {
-        setIsLoading(false);
-        setError('Invalid credentials. Please check your email and password.');
-      }, 300);
+      saveSession(data.token, data.user);
+      onLogin(data.user as AppUser);
+    } catch {
+      setError('Could not reach the server. Check your connection and try again.');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -161,27 +153,6 @@ export const LoginView: React.FC<LoginViewProps> = ({
               )}
             </button>
           </form>
-
-          {/* Preset User Quick Fill */}
-          <div className="pt-2 border-t border-slate-100">
-            <div className="text-[11px] font-bold text-slate-500 mb-2">Quick Sign-in (Demo Accounts):</div>
-            <div className="grid grid-cols-2 gap-2">
-              {users.slice(0, 2).map((u) => (
-                <button
-                  key={u.userId}
-                  type="button"
-                  onClick={() => {
-                    setIdentifier(u.email);
-                    setPassword(u.password || 'admin123');
-                  }}
-                  className="p-2 text-left bg-slate-50 hover:bg-orange-50 hover:border-orange-200 border border-slate-200 rounded-xl transition text-[11px]"
-                >
-                  <div className="font-bold text-slate-800">{u.name}</div>
-                  <div className="text-[10px] text-slate-500">{u.role}</div>
-                </button>
-              ))}
-            </div>
-          </div>
         </div>
       </div>
     </div>

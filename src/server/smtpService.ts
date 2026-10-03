@@ -1,8 +1,21 @@
-import nodemailer from 'nodemailer';
 import fs from 'fs';
 import path from 'path';
 import { doc, getDoc } from 'firebase/firestore';
 import { db, isFirebaseConfigured } from '../firebase/config.js';
+
+/**
+ * Outgoing email is sent through Resend (https://resend.com) instead of SMTP.
+ * The exported names/shapes are unchanged so every existing caller keeps working:
+ *   sendLiveEmail()        -> sends one email via Resend
+ *   verifySmtpConnection() -> checks the Resend API key
+ *   getSmtpConfig()        -> `configured` now means "RESEND_API_KEY is set"
+ *
+ * Env vars:
+ *   RESEND_API_KEY      required
+ *   RESEND_FROM_EMAIL   required — an address on a domain verified in Resend, e.g. hello@yourdomain.com
+ *   RESEND_FROM_NAME    optional — display name (default "Umrah360 Automation")
+ *   RESEND_REPLY_TO     optional — where replies go (default: the existing IMAP/SMTP_USER mailbox)
+ */
 
 export interface SmtpStatus {
   configured: boolean;
@@ -46,10 +59,12 @@ export interface SendMailResult {
   isDailyLimitExceeded?: boolean;
 }
 
+const RESEND_API_BASE = 'https://api.resend.com';
+
 // In-memory status cache
 let cachedSmtpStatus: SmtpStatus | null = null;
 
-// Runtime in-memory config override
+// Runtime in-memory config override (kept for the existing /api/smtp/config route; only used for display/reply-to now)
 let runtimeSmtpConfig: {
   host?: string;
   port?: number;
@@ -105,291 +120,251 @@ export function updateSmtpConfig(newConfig: {
   return getSmtpConfig();
 }
 
-const DEFAULT_SMTP_USER = 'amaavigo@gmail.com';
-const DEFAULT_SMTP_PASS = 'czzk spuw wpxc cceb';
+function getResendApiKey(): string {
+  return (process.env.RESEND_API_KEY || '').trim();
+}
 
+function formatFrom(name: string, email: string): string {
+  const cleanName = (name || '').replace(/["<>\r\n]/g, '').trim();
+  return cleanName ? `"${cleanName}" <${email}>` : email;
+}
+
+/**
+ * Legacy-shaped config. `configured` is true when RESEND_API_KEY is set.
+ * `user` is still the mailbox replies are read from (IMAP) and is the default Reply-To.
+ */
 export function getSmtpConfig() {
   const saved = loadSavedCredentials()?.smtp;
-  const host = runtimeSmtpConfig?.host || saved?.host || process.env.SMTP_HOST || 'smtp.gmail.com';
-  const port = runtimeSmtpConfig?.port || saved?.port || parseInt(process.env.SMTP_PORT || '465', 10);
-  const secure = runtimeSmtpConfig?.secure !== undefined
-    ? runtimeSmtpConfig.secure
-    : saved?.secure !== undefined
-    ? saved.secure
-    : (process.env.SMTP_SECURE === 'true' || port === 465);
-  const user = runtimeSmtpConfig?.user || saved?.user || process.env.SMTP_USER || process.env.GMAIL_USER || process.env.IMAP_USER || DEFAULT_SMTP_USER;
-  const rawPass = runtimeSmtpConfig?.pass || saved?.pass || process.env.SMTP_PASS || process.env.IMAP_PASS || process.env.GMAIL_APP_PASSWORD || process.env.GMAIL_PASS || DEFAULT_SMTP_PASS;
-  const pass = rawPass.trim();
-  const from = runtimeSmtpConfig?.from || saved?.from || process.env.SMTP_FROM || `Umrah360 Automation <${user}>`;
+  const host = 'api.resend.com';
+  const port = 443;
+  const secure = true;
 
-  const configured = Boolean(host && pass);
+  const user =
+    runtimeSmtpConfig?.user ||
+    saved?.user ||
+    process.env.SMTP_USER ||
+    process.env.GMAIL_USER ||
+    process.env.IMAP_USER ||
+    'amaavigo@gmail.com';
+  const pass = ''; // no mail password is needed for sending any more
+
+  const fromEmail = (process.env.RESEND_FROM_EMAIL || '').trim();
+  const fromName = (process.env.RESEND_FROM_NAME || 'Umrah360 Automation').trim();
+  const from = fromEmail ? formatFrom(fromName, fromEmail) : `Umrah360 Automation <${user}>`;
+
+  const configured = Boolean(getResendApiKey());
 
   return { host, port, secure, user, pass, from, configured };
 }
 
+/** Kept for compatibility with callers that refresh SMTP settings from Firestore. Resend needs nothing from there. */
 export async function fetchFirestoreSmtpConfig() {
   if (isFirebaseConfigured && db) {
     try {
-      const settingsRef = doc(db, 'system_settings', 'default');
-      const settingsSnap = await getDoc(settingsRef);
-      if (settingsSnap.exists()) {
-        const data = settingsSnap.data() as any;
-        const smtp = data.smtp || {};
-        const hostToUse = data.smtpHost || smtp.host;
-        const userToUse = data.smtpUser || smtp.user;
-        const passToUse = data.smtpPass || smtp.pass;
-        const fromToUse = data.smtpFrom || smtp.from;
-
-        // Only update runtime config if passToUse is a valid non-empty password
-        if (passToUse && typeof passToUse === 'string' && passToUse.trim().length > 3) {
-          updateSmtpConfig({
-            host: hostToUse,
-            port: data.smtpPort || smtp.port,
-            secure: data.smtpSecure !== undefined ? data.smtpSecure : smtp.secure,
-            user: userToUse,
-            pass: passToUse.trim(),
-            from: fromToUse,
-          });
-        }
-      }
+      await getDoc(doc(db, 'system_settings', 'default'));
     } catch (e) {
-      console.warn('[SMTP Service] Error reading Firestore SMTP config:', e);
+      // ignore
     }
   }
   return getSmtpConfig();
 }
 
-export function createTransporter(customPort?: number, customSecure?: boolean) {
-  const config = getSmtpConfig();
-
-  if (!config.configured) {
-    return null;
-  }
-
-  const port = customPort ?? config.port;
-  const isGmail = config.host.toLowerCase().includes('gmail') || config.user.toLowerCase().includes('gmail.com');
-  // Clean password of any spaces (standard Gmail App Password formatted with spaces)
-  const cleanPass = config.pass.replace(/\s+/g, '');
-
-  if (isGmail && (!customPort || customPort === 465 || customPort === 587)) {
-    if (port === 587) {
-      return nodemailer.createTransport({
-        host: 'smtp.gmail.com',
-        port: 587,
-        secure: false, // STARTTLS
-        auth: {
-          user: config.user,
-          pass: cleanPass,
-        },
-        tls: {
-          rejectUnauthorized: false,
-        },
-        connectionTimeout: 10000,
-        greetingTimeout: 8000,
-        socketTimeout: 10000,
-      });
-    }
-
-    // Gmail service transport (Optimized for Vercel Serverless AWS Lambda runtime)
-    return nodemailer.createTransport({
-      service: 'gmail',
-      auth: {
-        user: config.user,
-        pass: cleanPass,
-      },
-      tls: {
-        rejectUnauthorized: false,
-      },
-      connectionTimeout: 10000,
-      greetingTimeout: 8000,
-      socketTimeout: 10000,
-    });
-  }
-
-  const secure = customSecure !== undefined ? customSecure : (config.secure && port === 465);
-
-  return nodemailer.createTransport({
-    host: config.host,
-    port,
-    secure,
-    auth: {
-      user: config.user,
-      pass: cleanPass,
-    },
-    tls: {
-      rejectUnauthorized: false, // Prevents self-signed cert blocks on custom mail hosts
-    },
-    connectionTimeout: 10000,
-    greetingTimeout: 8000,
-    socketTimeout: 10000,
-  });
-}
-
+/** Checks the Resend API key. */
 export async function verifySmtpConnection(): Promise<SmtpStatus> {
   const config = getSmtpConfig();
   const now = new Date().toISOString();
+  const base = {
+    host: config.host,
+    port: config.port,
+    secure: config.secure,
+    user: config.user,
+    from: config.from,
+    lastChecked: now,
+  };
 
   if (!config.configured) {
     cachedSmtpStatus = {
+      ...base,
       configured: false,
-      host: config.host || '(not set)',
-      port: config.port,
-      secure: config.secure,
-      user: config.user,
-      from: config.from,
       verified: false,
-      lastChecked: now,
-      lastError: 'SMTP_HOST or SMTP_PASS environment variable is missing. Set these to enable live email dispatch.',
+      lastError: 'RESEND_API_KEY is not set. Add it to your environment to enable email sending.',
+    };
+    return cachedSmtpStatus;
+  }
+
+  if (!(process.env.RESEND_FROM_EMAIL || '').trim()) {
+    cachedSmtpStatus = {
+      ...base,
+      configured: true,
+      verified: false,
+      lastError: 'RESEND_FROM_EMAIL is not set. Use an address on a domain verified in Resend.',
     };
     return cachedSmtpStatus;
   }
 
   try {
-    const transporter = createTransporter();
-    if (!transporter) {
-      throw new Error('Failed to instantiate SMTP transporter');
+    const res = await fetch(`${RESEND_API_BASE}/domains`, {
+      headers: { Authorization: `Bearer ${getResendApiKey()}` },
+    });
+    let json: any = null;
+    try {
+      json = await res.json();
+    } catch {
+      json = null;
     }
-
-    await transporter.verify();
-
+    // A "sending access" key cannot list domains but is still a valid key for sending.
+    const valid = res.ok || json?.name === 'restricted_api_key';
     cachedSmtpStatus = {
+      ...base,
       configured: true,
-      host: config.host,
-      port: config.port,
-      secure: config.secure,
-      user: config.user,
-      from: config.from,
-      verified: true,
-      lastChecked: now,
+      verified: valid,
+      lastError: valid ? undefined : json?.message || `Resend rejected the API key (HTTP ${res.status}).`,
     };
     return cachedSmtpStatus;
   } catch (err: any) {
-    console.error('SMTP Connection verification failed:', err);
     cachedSmtpStatus = {
+      ...base,
       configured: true,
-      host: config.host,
-      port: config.port,
-      secure: config.secure,
-      user: config.user,
-      from: config.from,
       verified: false,
-      lastChecked: now,
-      lastError: err.message || 'Failed to authenticate or connect with SMTP server',
+      lastError: err?.message || 'Could not reach the Resend API.',
     };
     return cachedSmtpStatus;
   }
 }
 
+function toResendAttachments(
+  attachments?: EmailAttachmentParam[]
+): Array<{ filename: string; content: string; content_type?: string }> | undefined {
+  if (!attachments || !Array.isArray(attachments) || attachments.length === 0) return undefined;
+  const out: Array<{ filename: string; content: string; content_type?: string }> = [];
+
+  for (const att of attachments) {
+    let base64: string | undefined;
+    let contentType = att.contentType;
+
+    if (att.dataUrl && !att.content) {
+      const m = att.dataUrl.match(/^data:([^;]+);base64,(.+)$/);
+      if (m) {
+        contentType = contentType || m[1];
+        base64 = m[2];
+      }
+    }
+    if (!base64 && att.content !== undefined) {
+      if (Buffer.isBuffer(att.content)) base64 = att.content.toString('base64');
+      else if (typeof att.content === 'string') {
+        base64 = att.encoding === 'base64' ? att.content : Buffer.from(att.content, 'utf-8').toString('base64');
+      }
+    }
+    if (!base64 && att.path) {
+      try {
+        base64 = fs.readFileSync(att.path).toString('base64');
+      } catch {
+        // skip unreadable attachment
+      }
+    }
+    if (!base64) continue;
+
+    out.push({
+      filename: att.filename || 'attachment',
+      content: base64,
+      ...(contentType ? { content_type: contentType } : {}),
+    });
+  }
+  return out.length > 0 ? out : undefined;
+}
+
+function wait(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/** Sends one email through Resend. */
 export async function sendLiveEmail(params: SendMailParams): Promise<SendMailResult> {
-  await fetchFirestoreSmtpConfig().catch(() => {});
+  const apiKey = getResendApiKey();
   const config = getSmtpConfig();
 
-  // If SMTP is configured, attempt real SMTP transmission
-  if (config.configured) {
-    try {
-      const transporter = createTransporter();
-      if (!transporter) {
-        throw new Error('SMTP transporter creation failed');
-      }
-
-      // Process attachments if present
-      let formattedAttachments: any[] | undefined = undefined;
-      if (params.attachments && Array.isArray(params.attachments) && params.attachments.length > 0) {
-        formattedAttachments = params.attachments.map((att) => {
-          if (att.dataUrl && !att.content) {
-            const matches = att.dataUrl.match(/^data:([^;]+);base64,(.+)$/);
-            if (matches) {
-              return {
-                filename: att.filename,
-                contentType: att.contentType || matches[1],
-                content: Buffer.from(matches[2], 'base64'),
-              };
-            }
-          }
-          if (att.content && typeof att.content === 'string' && att.encoding === 'base64') {
-            return {
-              filename: att.filename,
-              contentType: att.contentType,
-              content: Buffer.from(att.content, 'base64'),
-            };
-          }
-          return {
-            filename: att.filename,
-            contentType: att.contentType,
-            content: att.content,
-            path: att.path,
-          };
-        });
-      }
-
-      const mailOptions: any = {
-        from: config.from,
-        to: params.to,
-        replyTo: params.replyTo || config.user,
-        subject: params.subject,
-        text: params.text,
-        html: params.html || params.text.replace(/\n/g, '<br/>'),
-        inReplyTo: params.inReplyTo,
-        references: params.references ? params.references.join(' ') : params.inReplyTo,
-        headers: {
-          'X-Mailer': 'Umrah360-AI-Automated-Platform',
-          'X-Automated-By': config.user,
-          ...(params.headers || {}),
-        },
-      };
-
-      if (formattedAttachments && formattedAttachments.length > 0) {
-        mailOptions.attachments = formattedAttachments;
-      }
-
-      let info: any;
-      try {
-        info = await transporter.sendMail(mailOptions);
-      } catch (firstErr: any) {
-        console.warn(`[SMTP Live] Primary transport error (${firstErr?.code || firstErr?.message}), trying fallback port 587/465...`);
-        try {
-          const fallback587 = createTransporter(587, false);
-          if (fallback587) {
-            info = await fallback587.sendMail(mailOptions);
-          } else {
-            throw firstErr;
-          }
-        } catch (secondErr: any) {
-          try {
-            const fallback465 = createTransporter(465, true);
-            if (fallback465) {
-              info = await fallback465.sendMail(mailOptions);
-            } else {
-              throw secondErr;
-            }
-          } catch (thirdErr: any) {
-            throw firstErr;
-          }
-        }
-      }
-
-      console.log(`[SMTP Live] Successfully sent email to ${params.to}, messageId: ${info.messageId}`);
-
-      return {
-        success: true,
-        messageId: info.messageId,
-        response: info.response,
-        simulated: false,
-      };
-    } catch (err: any) {
-      console.error(`[SMTP Live] Error sending email to ${params.to}:`, err);
-      return {
-        success: false,
-        error: `SMTP error: ${err.message || 'Unknown SMTP error'}`,
-        simulated: false,
-      };
-    }
+  if (!apiKey) {
+    return {
+      success: false,
+      error: 'RESEND_API_KEY is not set, so no emails can be sent.',
+      simulated: false,
+    };
+  }
+  if (!(process.env.RESEND_FROM_EMAIL || '').trim()) {
+    return {
+      success: false,
+      error: 'RESEND_FROM_EMAIL is not set. Use an address on a domain verified in Resend.',
+      simulated: false,
+    };
   }
 
-  // If SMTP credentials not provided yet in environment
-  return {
-    success: false,
-    error: `SMTP is not yet configured in environment. Set SMTP_HOST, SMTP_USER, and SMTP_PASS to dispatch real outgoing emails.`,
-    simulated: false,
+  const headers: Record<string, string> = {
+    'X-Mailer': 'Umrah360-AI-Automated-Platform',
+    'X-Automated-By': config.user,
+    ...(params.headers || {}),
   };
+  if (params.inReplyTo) {
+    headers['In-Reply-To'] = params.inReplyTo;
+    headers['References'] = params.references && params.references.length > 0 ? params.references.join(' ') : params.inReplyTo;
+  }
+
+  const body: Record<string, any> = {
+    from: config.from,
+    to: [params.to],
+    subject: params.subject,
+    text: params.text,
+    html: params.html || (params.text || '').replace(/\n/g, '<br/>'),
+    reply_to: params.replyTo || (process.env.RESEND_REPLY_TO || '').trim() || config.user,
+    headers,
+  };
+  const attachments = toResendAttachments(params.attachments);
+  if (attachments) body.attachments = attachments;
+
+  try {
+    let attempt = 0;
+    while (true) {
+      const res = await fetch(`${RESEND_API_BASE}/emails`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      let json: any = null;
+      try {
+        json = await res.json();
+      } catch {
+        json = null;
+      }
+
+      if (res.ok && json?.id) {
+        console.log(`[Resend] Sent email to ${params.to}, id: ${json.id}`);
+        return { success: true, messageId: String(json.id), simulated: false };
+      }
+
+      const name: string | undefined = json?.name;
+      const isQuota = name === 'daily_quota_exceeded' || name === 'monthly_quota_exceeded';
+
+      // Plain rate limit (too many requests per second): wait and retry a couple of times
+      if (res.status === 429 && !isQuota && attempt < 2) {
+        attempt++;
+        const retryAfter = Number(res.headers.get('retry-after'));
+        await wait(Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter * 1000 : 1000 * attempt);
+        continue;
+      }
+
+      const message = json?.message || `HTTP ${res.status}`;
+      console.error(`[Resend] Error sending email to ${params.to}:`, message);
+      return {
+        success: false,
+        error: `Resend error: ${message}`,
+        simulated: false,
+        isDailyLimitExceeded: isQuota,
+      };
+    }
+  } catch (err: any) {
+    console.error(`[Resend] Request failed for ${params.to}:`, err);
+    return {
+      success: false,
+      error: `Resend request failed: ${err?.message || 'Unknown error'}`,
+      simulated: false,
+    };
+  }
 }

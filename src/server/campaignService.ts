@@ -1,3 +1,4 @@
+import { stripQuotedEmailHistory } from './quotedText.js';
 import { tenantRepo } from './tenantRepo.js';
 import type { TenantContext } from '../types/tenant.js';
 import crypto from 'crypto';
@@ -411,6 +412,40 @@ const activeCampaignAbortControllers = {
   delete: (k: string) => getTenantCampaignStore(activeCampaignCtx.tenantId).activeCampaignAbortControllers.delete(k),
 };
 
+
+// -------------------------------------------------------------
+// DELETE TOMBSTONES: a deleted campaign can never be re-created by a stale
+// server instance that still holds it in memory.
+// -------------------------------------------------------------
+async function isCampaignTombstoned(campaignId: string): Promise<boolean> {
+  if (!isFirebaseConfigured || !db) return false;
+  try {
+    const snap = await getDoc(tenantRepo(getCampaignActiveCtx()).doc('deleted_campaigns', campaignId));
+    return snap.exists();
+  } catch {
+    return false;
+  }
+}
+
+function purgeCampaignFromMemory(campaignId: string) {
+  campaignsMap.delete(campaignId);
+  for (const [id, lead] of Array.from(campaignLeadsMap.entries())) {
+    if (lead.campaignId === campaignId) campaignLeadsMap.delete(id);
+  }
+  for (const [id, run] of Array.from(campaignRunsMap.entries())) {
+    if (run.campaignId === campaignId) campaignRunsMap.delete(id);
+  }
+  for (const key of Array.from(sendHistorySet)) {
+    if (key.startsWith(`${campaignId}_`)) sendHistorySet.delete(key);
+  }
+  pausedCampaignsSet.delete(campaignId);
+  const ctrl = activeCampaignAbortControllers.get(campaignId);
+  if (ctrl) {
+    try { ctrl.abort(); } catch {}
+    activeCampaignAbortControllers.delete(campaignId);
+  }
+}
+
 let isCampaignStoreInitialized = false;
 
 let hasLoadedInitialDefaults = false;
@@ -486,9 +521,17 @@ export async function syncCampaignStoreFromFirestore(): Promise<void> {
         }
       }
 
+      const tombSnap = await getDocs(tenantRepo(getCampaignActiveCtx()).collection('deleted_campaigns')).catch(() => null);
+      const tombstoned = new Set<string>();
+      if (tombSnap) tombSnap.forEach((t) => tombstoned.add(t.id));
+
       if (campSnap) {
         campSnap.forEach((d) => {
           const data = d.data() as Campaign;
+          if (data && data.campaignId && tombstoned.has(data.campaignId)) {
+            deleteDoc(tenantRepo(getCampaignActiveCtx()).campaignDoc(d.id)).catch(() => {});
+            return;
+          }
           if (data && data.campaignId) {
             const cleanName = (data.name || '').toLowerCase().trim();
             if (
@@ -519,9 +562,26 @@ export async function syncCampaignStoreFromFirestore(): Promise<void> {
         });
       }
 
+      // Reconcile: Firestore is the source of truth. Drop in-memory campaigns that no longer exist there.
+      if (campSnap) {
+        const liveIds = new Set<string>();
+        campSnap.forEach((d) => liveIds.add(d.id));
+        const recentCutoff = Date.now() - 60_000;
+        for (const [id, c] of Array.from(campaignsMap.entries())) {
+          const touched = new Date(c.updatedAt || c.createdAt || 0).getTime();
+          if ((!liveIds.has(id) && touched < recentCutoff) || tombstoned.has(id)) {
+            purgeCampaignFromMemory(id);
+          }
+        }
+      }
+
       if (leadsSnap) {
         leadsSnap.forEach((d) => {
           const data = d.data() as CampaignLead;
+          if (data && data.campaignLeadId && tombstoned.has(data.campaignId)) {
+            deleteDoc(tenantRepo(getCampaignActiveCtx()).campaignLeadDoc(d.id)).catch(() => {});
+            return;
+          }
           if (data && data.campaignLeadId) {
             const existing = campaignLeadsMap.get(data.campaignLeadId);
             if (existing) {
@@ -812,6 +872,14 @@ export function getCampaignRuns(campaignId: string): CampaignRun[] {
  * Deletes a campaign and all associated leads, runs, send history, prospects, and conversations
  */
 export async function deleteCampaign(campaignId: string): Promise<boolean> {
+  // 0. Tombstone first, so nothing can bring this campaign back while we clean up
+  if (isFirebaseConfigured && db) {
+    await safeSetDoc(tenantRepo(getCampaignActiveCtx()).doc('deleted_campaigns', campaignId), {
+      campaignId,
+      deletedAt: new Date().toISOString(),
+    });
+  }
+
   // 1. If campaign is currently running, halt background execution immediately
   const abortCtrl = activeCampaignAbortControllers.get(campaignId);
   if (abortCtrl) {
@@ -1491,6 +1559,10 @@ export async function processNextCampaignSendBatch(
   processedCount: number;
   remainingPendingCount: number;
 }> {
+  if (await isCampaignTombstoned(campaignId)) {
+    purgeCampaignFromMemory(campaignId);
+    throw new Error(`Campaign ${campaignId} was deleted`);
+  }
   const campaign = await ensureCampaignInStore(campaignId);
   if (!campaign) throw new Error(`Campaign ${campaignId} not found`);
 
@@ -2233,6 +2305,10 @@ export function recalculateCampaignMetrics(campaignId: string): Campaign | undef
  * Asynchronously loads leads from DB and recalculates metrics and persists to Firestore
  */
 export async function recalculateAndPersistCampaignMetrics(campaignId: string): Promise<Campaign | undefined> {
+  if (await isCampaignTombstoned(campaignId)) {
+    purgeCampaignFromMemory(campaignId);
+    return undefined;
+  }
   const camp = await ensureCampaignInStore(campaignId);
   if (!camp) return undefined;
 
@@ -2399,7 +2475,7 @@ export async function handleIncomingCampaignLeadReply(params: {
   }
 
   const now = new Date().toISOString();
-  const text = `${params.subject || ''} ${params.body || ''}`.toLowerCase();
+  const text = stripQuotedEmailHistory(params.body || '').toLowerCase();
   const hasDemoIntent = /book a demo|schedule a demo|demo tomorrow|book the demo|yes.*demo|interested in a demo|platform walkthrough|live demo/i.test(text);
   const hasConfirmedBooking = /calendar.*confirmed|appointment.*scheduled|booked for|demo scheduled|meeting invite accepted/i.test(text);
 

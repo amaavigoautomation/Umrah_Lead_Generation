@@ -697,104 +697,16 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
     try {
       setIsDeletingCampaign(true);
 
-      // 1. Direct cascade deletion of every detail from Firestore database
-      if (isFirebaseConfigured && db) {
-        try {
-          const deletePromises: Promise<any>[] = [];
-
-          // Delete campaign doc
-          deletePromises.push(deleteDoc(doc(db, 'campaigns', campaignId)).catch(() => {}));
-          deletePromises.push(deleteDoc(doc(db, 'outbound_campaigns', campaignId)).catch(() => {}));
-
-          // Delete all campaign_leads belonging to this campaign
-          const leadsSnap = await getDocs(collection(db, 'campaign_leads')).catch(() => null);
-          if (leadsSnap && !leadsSnap.empty) {
-            leadsSnap.forEach((d) => {
-              const lData = d.data();
-              if (lData && lData.campaignId === campaignId) {
-                deletePromises.push(deleteDoc(doc(db, 'campaign_leads', d.id)).catch(() => {}));
-              }
-            });
-          }
-
-          // Delete all campaign_runs belonging to this campaign
-          const runsSnap = await getDocs(collection(db, 'campaign_runs')).catch(() => null);
-          if (runsSnap && !runsSnap.empty) {
-            runsSnap.forEach((d) => {
-              const rData = d.data();
-              if (rData && rData.campaignId === campaignId) {
-                deletePromises.push(deleteDoc(doc(db, 'campaign_runs', d.id)).catch(() => {}));
-              }
-            });
-          }
-
-          // Delete all send history belonging to this campaign
-          const histSnap = await getDocs(collection(db, 'campaign_send_history')).catch(() => null);
-          if (histSnap && !histSnap.empty) {
-            histSnap.forEach((d) => {
-              const hData = d.data();
-              if (hData && hData.campaignId === campaignId) {
-                deletePromises.push(deleteDoc(doc(db, 'campaign_send_history', d.id)).catch(() => {}));
-              }
-            });
-          }
-
-          // Delete all prospects belonging to this campaign
-          const prosSnap = await getDocs(collection(db, 'outbound_prospects')).catch(() => null);
-          if (prosSnap && !prosSnap.empty) {
-            prosSnap.forEach((d) => {
-              const pData = d.data();
-              if (pData && pData.campaignId === campaignId) {
-                deletePromises.push(deleteDoc(doc(db, 'outbound_prospects', d.id)).catch(() => {}));
-              }
-            });
-          }
-
-          // Delete all conversations & messages created for this campaign
-          const convSnap = await getDocs(collection(db, 'conversations')).catch(() => null);
-          if (convSnap && !convSnap.empty) {
-            const convIds: string[] = [];
-            convSnap.forEach((d) => {
-              const cData = d.data();
-              if (cData && cData.campaignId === campaignId) {
-                convIds.push(d.id);
-                deletePromises.push(deleteDoc(doc(db, 'conversations', d.id)).catch(() => {}));
-              }
-            });
-            if (convIds.length > 0) {
-              const msgsSnap = await getDocs(collection(db, 'messages')).catch(() => null);
-              if (msgsSnap && !msgsSnap.empty) {
-                msgsSnap.forEach((d) => {
-                  const mData = d.data();
-                  if (mData && convIds.includes(mData.conversationId)) {
-                    deletePromises.push(deleteDoc(doc(db, 'messages', d.id)).catch(() => {}));
-                  }
-                });
-              }
-            }
-          }
-
-          // Delete all CRM leads linked to this campaign
-          const crmLeadsSnap = await getDocs(collection(db, 'leads')).catch(() => null);
-          if (crmLeadsSnap && !crmLeadsSnap.empty) {
-            crmLeadsSnap.forEach((d) => {
-              const lData = d.data();
-              if (lData && lData.campaignId === campaignId) {
-                deletePromises.push(deleteDoc(doc(db, 'leads', d.id)).catch(() => {}));
-              }
-            });
-          }
-
-          await Promise.allSettled(deletePromises);
-        } catch (fsErr) {
-          console.warn('Browser Firestore cascade delete note:', fsErr);
-        }
-      }
-
       // 2. Call backend DELETE endpoint to clear memory caches & background execution
+      let deleteOk = false;
       try {
-        await fetch(`/api/campaigns/${campaignId}`, { method: 'DELETE' });
+        const delRes = await fetch(`/api/campaigns/${campaignId}`, { method: 'DELETE' });
+        deleteOk = delRes.ok;
       } catch (e) {}
+      if (!deleteOk) {
+        alert('Could not delete the campaign. Please try again.');
+        return;
+      }
 
       setIsDeleteModalOpen(false);
       setCampaignToDelete(null);

@@ -198,10 +198,12 @@ export default async function handler(req: IncomingMessage & { body?: any; query
       // Fallback response if Gemini wasn't available
       if (!replyText) {
         if (isPricing) {
-          replyText = `Assalamu Alaikum ${senderName},\n\nHere are our official Umrah360 subscription tiers:\n• Starter Plan: $199/month (up to 3 users) - includes B2C CRM, FIT package builder, and invoicing.\n• Growth Plan: $499/month (up to 10 users) - includes full B2B Sub-Agent Portal, dynamic multi-currency costing, and automated alerts.\n• Enterprise Plan: For 20+ users, custom volume pricing with dedicated infrastructure.\n\nHow many team members would be using the system at your agency?\n\nRegards,\nUmrah360 Team`;
+          replyText = `Dear ${senderName},\n\nHere are our official Umrah360 subscription tiers:\n• Starter Plan: $199/month (up to 3 users) - includes B2C CRM, FIT package builder, and invoicing.\n• Growth Plan: $499/month (up to 10 users) - includes full B2B Sub-Agent Portal, dynamic multi-currency costing, and automated alerts.\n• Enterprise Plan: For 20+ users, custom volume pricing with dedicated infrastructure.\n\nHow many team members would be using the system at your agency?\n\nRegards,\nUmrah360 Team`;
         } else {
-          replyText = `Assalamu Alaikum ${senderName},\n\nThank you for contacting Umrah360 (www.umrah360.in)!\n\nUmrah360 is an all-in-one cloud ERP and CRM platform purpose-built for Hajj and Umrah tour operators. It unifies lead management, FIT and group package creation, dynamic costing, Saudi visa tracking, and sub-agent B2B networks into a single interface.\n\nAre you currently handling your operations through spreadsheets or looking to upgrade from another system?\n\nRegards,\nUmrah360 Team`;
+          replyText = `Dear ${senderName},\n\nThank you for contacting Umrah360 (www.umrah360.in)!\n\nUmrah360 is an all-in-one cloud ERP and CRM platform purpose-built for Hajj and Umrah tour operators. It unifies lead management, FIT and group package creation, dynamic costing, Saudi visa tracking, and sub-agent B2B networks into a single interface.\n\nAre you currently handling your operations through spreadsheets or looking to upgrade from another system?\n\nRegards,\nUmrah360 Team`;
         }
+      } else {
+        replyText = replyText.replaceAll('**', '').replace(/^(Assalamu\s+Alaikum|Walaikum\s+Assalam|Salam)[,\s!]*/i, `Dear ${senderName},\n\n`);
       }
 
       // Dispatch Outbound WhatsApp Message via Meta Cloud API

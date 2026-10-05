@@ -308,7 +308,7 @@ export async function dispatchThankYouEmailForConversation(conversationId: strin
 
     const subject = `We have received your Umrah360 Demo Request - ${companyName}`;
     const emailBody = [
-      `As-salamu alaykum ${firstName},`,
+      `Dear ${firstName},`,
       ``,
       `Thank you for requesting a live demo of Umrah360 for ${companyName}!`,
       ``,

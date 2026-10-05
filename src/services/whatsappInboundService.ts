@@ -65,7 +65,7 @@ export const PRESET_INBOUND_WHATSAPP: {
       fromName: 'Tariq Khan',
       companyName: 'Al Baraka Tours & Travels',
       to: WHATSAPP_BUSINESS_NUMBER,
-      body: `Assalamu Alaikum,\nWe are a wholesale tour operator based in Mumbai with 35 sub-agents across Maharashtra. Does Umrah360 provide a white-label B2B sub-agent portal where our agents can issue branded vouchers with their own agency logo and credit wallets?\nAlso, can we upload our own offline negotiated Makkah hotel allotments with blackout dates?`,
+      body: `Hello Team,\nWe are a wholesale tour operator based in Mumbai with 35 sub-agents across Maharashtra. Does Umrah360 provide a white-label B2B sub-agent portal where our agents can issue branded vouchers with their own agency logo and credit wallets?\nAlso, can we upload our own offline negotiated Makkah hotel allotments with blackout dates?`,
     },
   },
   {
@@ -91,7 +91,7 @@ export const PRESET_INBOUND_WHATSAPP: {
       fromName: 'Dr. Salman Qureshi',
       companyName: 'Noor Al-Haram Tours Hyderabad',
       to: WHATSAPP_BUSINESS_NUMBER,
-      body: `Assalamu Alaikum Team,\nWe organize 1,200 pilgrims annually for Umrah and Ramzan departures. Does the software automatically calculate dynamic bus and Haramain high-speed train seat costing per pax with buffer margins? How fast can we generate a PDF quote for an FIT family of 6?`,
+      body: `Hello Team,\nWe organize 1,200 pilgrims annually for Umrah and Ramzan departures. Does the software automatically calculate dynamic bus and Haramain high-speed train seat costing per pax with buffer margins? How fast can we generate a PDF quote for an FIT family of 6?`,
     },
   },
   {
@@ -104,7 +104,7 @@ export const PRESET_INBOUND_WHATSAPP: {
       fromName: 'Fatima Begum',
       companyName: 'Begum Family (Pilgrims)',
       to: WHATSAPP_BUSINESS_NUMBER,
-      body: `Assalamu Alaikum,\nWe are planning an Umrah trip for our family of 6 (4 adults, 2 seniors) during the last 10 days of Ramadan. Can your partner agency arrange Swissotel Makkah Haram view quad rooms, direct VIP GMC transfers, and Saudi tourist evisas with biometric support?`,
+      body: `Hello,\nWe are planning an Umrah trip for our family of 6 (4 adults, 2 seniors) during the last 10 days of Ramadan. Can your partner agency arrange Swissotel Makkah Haram view quad rooms, direct VIP GMC transfers, and Saudi tourist evisas with biometric support?`,
     },
   },
 ];
@@ -409,11 +409,11 @@ export async function processInboundWhatsAppMessage(params: {
   // If backend didn't produce reply, generate locally
   if (!replyText) {
     if (handoffTriggered) {
-      replyText = `Assalamu Alaikum ${contact.firstName},\n\nThank you for contacting Umrah360 WhatsApp Business (+91 98202 52434)!\n\nFor team deployments with 20+ user seats, we provide custom Enterprise volume pricing, dedicated cloud hosting, and priority API rate limits.\n\nOur Senior Enterprise Solutions Manager has been notified and will contact you directly with a personalized quotation.\n\nBest regards,\nUmrah360 Enterprise Team\nWhatsApp: +91 98202 52434\nwww.umrah360.in`;
+      replyText = `Dear ${contact.firstName || 'Customer'},\n\nThank you for contacting Umrah360 WhatsApp Business (+91 98202 52434)!\n\nFor team deployments with 20+ user seats, we provide custom Enterprise volume pricing, dedicated cloud hosting, and priority API rate limits.\n\nOur Senior Enterprise Solutions Manager has been notified and will contact you directly with a personalized quotation.\n\nBest regards,\nUmrah360 Enterprise Team\nWhatsApp: +91 98202 52434\nwww.umrah360.in`;
     } else if (isB2b) {
-      replyText = `Assalamu Alaikum ${contact.firstName},\n\nThank you for messaging Umrah360 on WhatsApp (+91 98202 52434)!\n\nYes, Umrah360 includes a complete B2B Sub-Agent Distribution Portal:\n• White-label agent portals with custom agency logos on PDF vouchers\n• Credit wallets with automated ceilings and booking controls\n• Contracted Makkah & Madinah hotel room block allotments\n• Tiered markup & commission structures\n\nWould you like to schedule a 15-minute live screen share walkthrough?\n\nWarm regards,\nUmrah360 AI Assistant\nWhatsApp: +91 98202 52434\nwww.umrah360.in`;
+      replyText = `Dear ${contact.firstName || 'Customer'},\n\nThank you for messaging Umrah360 on WhatsApp (+91 98202 52434)!\n\nYes, Umrah360 includes a complete B2B Sub-Agent Distribution Portal:\n• White-label agent portals with custom agency logos on PDF vouchers\n• Credit wallets with automated ceilings and booking controls\n• Contracted Makkah & Madinah hotel room block allotments\n• Tiered markup & commission structures\n\nWould you like to schedule a 15-minute live screen share walkthrough?\n\nWarm regards,\nUmrah360 AI Assistant\nWhatsApp: +91 98202 52434\nwww.umrah360.in`;
     } else {
-      replyText = `Assalamu Alaikum ${contact.firstName},\n\nThank you for reaching out to Umrah360 on WhatsApp (+91 98202 52434)!\n\nUmrah360 automates dynamic package costing, Haramain rail bookings, and Saudi eVisa operations for top travel operators.\n\nHow can we assist ${contact.companyName} today?\n\nBest regards,\nUmrah360 AI Assistant\nWhatsApp: +91 98202 52434\nwww.umrah360.in`;
+      replyText = `Dear ${contact.firstName || 'Customer'},\n\nThank you for reaching out to Umrah360 on WhatsApp (+91 98202 52434)!\n\nUmrah360 automates dynamic package costing, Haramain rail bookings, and Saudi eVisa operations for top travel operators.\n\nHow can we assist ${contact.companyName} today?\n\nBest regards,\nUmrah360 AI Assistant\nWhatsApp: +91 98202 52434\nwww.umrah360.in`;
     }
   }
 

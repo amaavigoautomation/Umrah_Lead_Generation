@@ -1,4 +1,5 @@
 import OpenAI from 'openai';
+import { sanitizeAiEmailText } from './emailSanitizer.js';
 import { verifySmtpConnection, sendLiveEmail, getSmtpConfig, updateSmtpConfig } from './smtpService.js';
 import { checkImapStatus, getImapConfig, updateImapConfig } from './imapService.js';
 import {
@@ -483,7 +484,7 @@ CRITICAL RULES:
 3. Keep your reply concise, professional, warm, and helpful.
 4. Channel: ${conversation?.channel || 'EMAIL'}.
 5. Match the customer's language and tone. Do not repeat greeting if already mid-thread.
-6. EMAIL FORMATTING RULE (MANDATORY): Never use Markdown symbols in email replies. Do NOT use **, ##, ###, *, backticks, or similar formatting symbols. Write emails as natural, professional plain text with simple paragraphs and numbered lists where needed. The final email must look human-written, not AI-generated.
+6. EMAIL FORMATTING & GREETING RULES (MANDATORY): Never use Markdown symbols in email replies. Do NOT use **, ##, ###, *, backticks, or similar formatting symbols. Write emails as natural, professional plain text. ALWAYS use formal professional greetings (e.g., "Dear [Name]," or "Hello [Name],"). NEVER use Muslim/religious greetings such as "Assalamu Alaikum", "Walaikum Assalam", "Salam", etc.
 7. Sign off with: ${signature || 'Regards,\nUmrah360 Team'}`;
 
         const contextPrompt = `
@@ -531,6 +532,7 @@ Generate a helpful, accurate, grounded response adhering to all rules.`;
         }
 
         if (generatedText) {
+          generatedText = sanitizeAiEmailText(generatedText, contact?.firstName);
           res.statusCode = 200;
           res.end(
             JSON.stringify({
@@ -571,7 +573,7 @@ Generate a helpful, accurate, grounded response adhering to all rules.`;
     let responseText = '';
 
     if (isPilgrimRetail) {
-      responseText = `Assalamu Alaikum ${contact?.firstName || ''},\n\nThank you for reaching out to Umrah360!\n\n1. Platform Role: Umrah360 (www.umrah360.in) is the core travel technology and dynamic booking platform that powers licensed Hajj and Umrah travel agencies and tour operators.\n\n2. Real-Time Booking: Travel agencies running on Umrah360 provide online portals where pilgrims can customize complete packages in real time (flights, 3/4/5-star Makkah and Madinah hotels, Haramain train / private VIP GMC transfers, meals, and Saudi e-visas) with live pricing and secure online payments.\n\n3. Booking Fulfillment: Because Umrah360 provides the software to licensed tour operators rather than selling directly as a retail travel agency, packages are fulfilled through our verified partner agencies. We would be delighted to connect you with one of our top certified partner travel agencies in your city!\n\n${signature || 'Regards,\nUmrah360 Team'}`;
+      responseText = `Dear ${contact?.firstName || 'Customer'},\n\nThank you for reaching out to Umrah360!\n\n1. Platform Role: Umrah360 (www.umrah360.in) is the core travel technology and dynamic booking platform that powers licensed Hajj and Umrah travel agencies and tour operators.\n\n2. Real-Time Booking: Travel agencies running on Umrah360 provide online portals where pilgrims can customize complete packages in real time (flights, 3/4/5-star Makkah and Madinah hotels, Haramain train / private VIP GMC transfers, meals, and Saudi e-visas) with live pricing and secure online payments.\n\n3. Booking Fulfillment: Because Umrah360 provides the software to licensed tour operators rather than selling directly as a retail travel agency, packages are fulfilled through our verified partner agencies. We would be delighted to connect you with one of our top certified partner travel agencies in your city!\n\n${signature || 'Regards,\nUmrah360 Team'}`;
     } else if (isB2b) {
       responseText = `Yes! Umrah360 provides a complete white-label B2B Sub-Agent Portal. It allows tour operators to distribute packages to external travel agents, manage custom multi-tier markups, establish real-time credit wallets, and enable agents to generate branded PDF vouchers instantly with their own agency logo.\n\nWould you like to see how sub-agent allotments and credit limits are configured?\n\n${signature || 'Regards,\nUmrah360 Team'}`;
     } else if (isPricing) {
@@ -590,6 +592,8 @@ Are you currently handling your operations through spreadsheets or looking to up
 
 ${signature || 'Regards,\nUmrah360 Team'}`;
     }
+
+    responseText = sanitizeAiEmailText(responseText, contact?.firstName);
 
     res.statusCode = 200;
     res.end(
@@ -1247,7 +1251,7 @@ Generate a helpful, grounded response.`;
 
   if ((url === '/api/campaigns/process-active' || url === '/api/campaigns/cron') && (req.method === 'POST' || req.method === 'GET')) {
     try {
-      const result = await processActiveRunningCampaignsBatch(3);
+      const result = await processActiveRunningCampaignsBatch(500);
       res.statusCode = 200;
       res.setHeader('Content-Type', 'application/json');
       res.end(JSON.stringify({ success: true, ...result }));
@@ -1277,7 +1281,7 @@ Generate a helpful, grounded response.`;
   if (campaignProcessMatch && req.method === 'POST') {
     const campaignId = campaignProcessMatch[1];
     try {
-      const batchResult = await processNextCampaignSendBatch(campaignId, 3);
+      const batchResult = await processNextCampaignSendBatch(campaignId, 500);
       res.statusCode = 200;
       res.end(JSON.stringify({ success: true, ...batchResult }));
     } catch (err: any) {

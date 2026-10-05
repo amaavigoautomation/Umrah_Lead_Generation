@@ -120,7 +120,7 @@ export const InteractiveScenarios: React.FC<InteractiveScenariosProps> = ({
     {
       step: 1,
       title: `Inbound WhatsApp Arrives at ${WHATSAPP_BUSINESS_NUMBER_FORMATTED}`,
-      desc: `A prospective partner sends a WhatsApp message to ${WHATSAPP_BUSINESS_NUMBER_FORMATTED}: "Assalamu Alaikum, we need a B2B portal for our Umrah agency in Mumbai."`,
+      desc: `A prospective partner sends a WhatsApp message to ${WHATSAPP_BUSINESS_NUMBER_FORMATTED}: "Hello, we need a B2B portal for our Umrah agency in Mumbai."`,
       badge: `To: ${WHATSAPP_BUSINESS_NUMBER_FORMATTED}`,
     },
     {
@@ -589,7 +589,7 @@ export const InteractiveScenarios: React.FC<InteractiveScenariosProps> = ({
                   <span className="text-slate-600">From (Customer):</span> +91 98201 11223 (Al-Haramain Travels)
                 </div>
                 <div className="pt-2 text-slate-300 font-sans border-t border-slate-800/80 whitespace-pre-wrap">
-                  Assalamu Alaikum! We operate Umrah tours from Bangalore with 200 pilgrims every Ramadan. Does Umrah360 support custom hotel room blocks in Makkah and instant sub-agent credit limits?
+                  Hello! We operate Umrah tours from Bangalore with 200 pilgrims every Ramadan. Does Umrah360 support custom hotel room blocks in Makkah and instant sub-agent credit limits?
                 </div>
               </div>
             )}
@@ -663,7 +663,7 @@ export const InteractiveScenarios: React.FC<InteractiveScenariosProps> = ({
               <div className="p-4 bg-emerald-950/30 rounded-xl border border-emerald-800/60 text-xs space-y-2">
                 <div className="font-bold text-emerald-300">WhatsApp Native Tone Guidelines Enforced</div>
                 <ul className="list-disc list-inside text-emerald-100 space-y-1 text-xs font-sans">
-                  <li>Warm, professional, respectful Islamic greeting (Wa Alaikum Assalam).</li>
+                  <li>Warm, professional, respectful formal greeting (Dear Customer / Hello).</li>
                   <li>WhatsApp formatting with <strong>*bold highlights*</strong> for legibility on mobile screens.</li>
                   <li>Concise, action-oriented responses without overly long essay blocks.</li>
                 </ul>
@@ -968,7 +968,7 @@ export const InteractiveScenarios: React.FC<InteractiveScenariosProps> = ({
                   <span className="text-slate-600">Subject:</span> Inquiry: B2B Sub-Agent Portal & Hotel Allotments for Umrah 2026
                 </div>
                 <div className="pt-2 text-slate-300 font-sans border-t border-slate-800/80 whitespace-pre-wrap">
-                  Assalamu Alaikum,{'\n\n'}We are a wholesale tour operator based in Mumbai with 35 sub-agents across Maharashtra. Does Umrah360 provide a white-label B2B sub-agent portal where our agents can issue branded vouchers with their own agency logo and credit wallets? Also, can we upload our own offline negotiated Makkah hotel allotments with blackout dates?{'\n\n'}Regards,{'\n'}Tariq Khan (MD, Al Baraka Tours)
+                  Hello,{'\n\n'}We are a wholesale tour operator based in Mumbai with 35 sub-agents across Maharashtra. Does Umrah360 provide a white-label B2B sub-agent portal where our agents can issue branded vouchers with their own agency logo and credit wallets? Also, can we upload our own offline negotiated Makkah hotel allotments with blackout dates?{'\n\n'}Regards,{'\n'}Tariq Khan (MD, Al Baraka Tours)
                 </div>
               </div>
             )}
@@ -1009,7 +1009,7 @@ export const InteractiveScenarios: React.FC<InteractiveScenariosProps> = ({
                   </span>
                 </div>
                 <div className="text-slate-300 whitespace-pre-wrap font-sans">
-                  Assalamu Alaikum Tariq,{'\n\n'}Thank you for contacting Umrah360!{'\n\n'}Yes, Umrah360 provides a complete white-label B2B Sub-Agent Portal built specifically for tour operators like Al Baraka Tours & Travels. With the B2B portal, you can:{'\n'}• Set custom markup & commission tiers per sub-agent category{'\n'}• Manage live credit limits, wallets, and ledger deposits{'\n'}• Allow sub-agents to search contracted inventory and instantly issue branded PDF vouchers with their own agency logo{'\n'}• Upload custom negotiated hotel blocks and transport contracts with blackout dates alongside online inventory{'\n\n'}Would you like to schedule a 15-minute live platform walkthrough to see how sub-agent allotments and credit limits are managed?{'\n\n'}Regards,{'\n'}Umrah360 Automation Team{'\n'}automation@amaavigo.com
+                  Dear Tariq,{'\n\n'}Thank you for contacting Umrah360!{'\n\n'}Yes, Umrah360 provides a complete white-label B2B Sub-Agent Portal built specifically for tour operators like Al Baraka Tours & Travels. With the B2B portal, you can:{'\n'}• Set custom markup & commission tiers per sub-agent category{'\n'}• Manage live credit limits, wallets, and ledger deposits{'\n'}• Allow sub-agents to search contracted inventory and instantly issue branded PDF vouchers with their own agency logo{'\n'}• Upload custom negotiated hotel blocks and transport contracts with blackout dates alongside online inventory{'\n\n'}Would you like to schedule a 15-minute live platform walkthrough to see how sub-agent allotments and credit limits are managed?{'\n\n'}Regards,{'\n'}Umrah360 Automation Team{'\n'}automation@amaavigo.com
                 </div>
               </div>
             )}

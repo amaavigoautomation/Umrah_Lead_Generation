@@ -424,6 +424,7 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
   // Load selected campaign details (leads and runs)
   const loadSelectedCampaignDetails = async (campaignId: string) => {
     if (!campaignId) return;
+    let hasLoadedApiLeads = false;
     try {
       const [campRes, leadsRes, runsRes] = await Promise.all([
         fetch(`/api/campaigns/${campaignId}`).catch(() => null),
@@ -437,8 +438,9 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
       if (campData.campaign && selectedCampaignIdRef.current === campaignId) {
         setSelectedCampaign(campData.campaign);
       }
-      if (leadsData.leads && Array.isArray(leadsData.leads) && selectedCampaignIdRef.current === campaignId) {
+      if (leadsData.leads && Array.isArray(leadsData.leads) && leadsData.leads.length > 0 && selectedCampaignIdRef.current === campaignId) {
         setCampaignLeads(leadsData.leads);
+        hasLoadedApiLeads = true;
       }
       if (runsData.runs && selectedCampaignIdRef.current === campaignId) {
         setCampaignRuns(runsData.runs);
@@ -447,8 +449,8 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
       console.warn('Error loading campaign leads/runs from API:', e);
     }
 
-    // Direct Firestore lookup fallback if API returned empty leads
-    if (isFirebaseConfigured && db) {
+    // Direct Firestore lookup fallback ONLY IF API returned empty leads
+    if (!hasLoadedApiLeads && isFirebaseConfigured && db) {
       try {
         const snap = await getDocs(collection(db, 'campaign_leads')).catch(() => null);
         if (snap && !snap.empty) {
@@ -637,7 +639,7 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
             if (activeId) loadSelectedCampaignDetails(activeId);
           });
       }
-    }, 15000);
+    }, 4000);
 
     const handleFocusOrVisible = () => {
       if (document.visibilityState === 'visible') {
@@ -668,6 +670,9 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
     setCampaigns((prev) =>
       prev.map((c) => (c.campaignId === campaignId ? { ...c, status: 'RUNNING', updatedAt: nowIso } : c))
     );
+    campaignsRef.current = campaignsRef.current.map((c) =>
+      c.campaignId === campaignId ? { ...c, status: 'RUNNING', updatedAt: nowIso } : c
+    );
     if (selectedCampaign?.campaignId === campaignId) {
       setSelectedCampaign((prev) => (prev ? { ...prev, status: 'RUNNING', updatedAt: nowIso } : null));
     }
@@ -697,6 +702,9 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
     const nowIso = new Date().toISOString();
     setCampaigns((prev) =>
       prev.map((c) => (c.campaignId === campaignId ? { ...c, status: 'PAUSED', updatedAt: nowIso } : c))
+    );
+    campaignsRef.current = campaignsRef.current.map((c) =>
+      c.campaignId === campaignId ? { ...c, status: 'PAUSED', updatedAt: nowIso } : c
     );
     if (selectedCampaign?.campaignId === campaignId) {
       setSelectedCampaign((prev) => (prev ? { ...prev, status: 'PAUSED', updatedAt: nowIso } : null));
@@ -1884,28 +1892,56 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
 
                 {/* Real-time Metric Cards Grid */}
                 {(() => {
+                  const currentRunNum = selectedCampaign.lastRunNumber || 1;
+                  const isRestartRun = currentRunNum > 1;
+
                   const liveTotalLeads = campaignLeads.length > 0 ? campaignLeads.length : selectedCampaign.totalLeads;
-                  const liveSentCount = campaignLeads.length > 0 ? campaignLeads.filter((l) => l.sendStatus === 'SENT').length : selectedCampaign.sentCount;
-                  const livePendingCount = campaignLeads.length > 0 ? campaignLeads.filter((l) => l.sendStatus === 'PENDING' && l.replyStatus !== 'REPLIED').length : selectedCampaign.pendingCount;
-                  const liveFailedCount = campaignLeads.length > 0 ? campaignLeads.filter((l) => l.sendStatus === 'FAILED').length : (selectedCampaign.failedCount || 0);
+                  
+                  // For restart follow-up runs, target pool is unreplied leads receiving follow-ups
+                  const unrepliedLeads = campaignLeads.filter((l) => l.replyStatus !== 'REPLIED');
+                  const targetLeadsForRun = isRestartRun ? unrepliedLeads : campaignLeads;
+                  const runTargetCount = isRestartRun ? targetLeadsForRun.length : liveTotalLeads;
+
+                  const liveSentCount = isRestartRun
+                    ? targetLeadsForRun.filter((l) => l.sendStatus === 'SENT').length
+                    : (campaignLeads.length > 0 ? campaignLeads.filter((l) => l.sendStatus === 'SENT').length : selectedCampaign.sentCount);
+
+                  const livePendingCount = isRestartRun
+                    ? targetLeadsForRun.filter((l) => l.sendStatus === 'PENDING').length
+                    : (campaignLeads.length > 0 ? campaignLeads.filter((l) => l.sendStatus === 'PENDING' && l.replyStatus !== 'REPLIED').length : selectedCampaign.pendingCount);
+
+                  const liveFailedCount = isRestartRun
+                    ? targetLeadsForRun.filter((l) => l.sendStatus === 'FAILED').length
+                    : (campaignLeads.length > 0 ? campaignLeads.filter((l) => l.sendStatus === 'FAILED').length : (selectedCampaign.failedCount || 0));
+
                   const liveRepliedCount = campaignLeads.length > 0 ? campaignLeads.filter((l) => l.replyStatus === 'REPLIED').length : selectedCampaign.repliedCount;
                   const liveDemoCount = campaignLeads.length > 0 ? campaignLeads.filter((l) => l.demoStatus === 'BOOKED').length : (selectedCampaign.demoBookedCount || 0);
-                  const percentSent = liveTotalLeads > 0 ? Math.round((liveSentCount / liveTotalLeads) * 100) : 0;
+
+                  const percentSent = runTargetCount > 0 ? Math.round((liveSentCount / runTargetCount) * 100) : 0;
 
                   return (
                     <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
                       <div className="p-4 bg-slate-900/90 border border-slate-800 rounded-xl">
                         <p className="text-xs text-slate-400">Total Leads</p>
                         <p className="text-2xl font-bold text-slate-100 mt-1">{liveTotalLeads}</p>
-                        <p className="text-[11px] text-slate-400 mt-1">Uploaded prospect pool</p>
+                        <p className="text-[11px] text-slate-400 mt-1">
+                          {isRestartRun ? `Run #${currentRunNum} Target: ${runTargetCount} unreplied` : 'Uploaded prospect pool'}
+                        </p>
                       </div>
 
                       <div className="p-4 bg-slate-900/90 border border-slate-800 rounded-xl">
-                        <p className="text-xs text-slate-400">Emails Sent</p>
+                        <div className="flex items-center justify-between">
+                          <p className="text-xs text-slate-400">Emails Sent</p>
+                          {isRestartRun && (
+                            <span className="text-[10px] font-semibold text-sky-400 bg-sky-950/80 px-1.5 py-0.5 rounded border border-sky-800/60">
+                              Run #{currentRunNum}
+                            </span>
+                          )}
+                        </div>
                         <div className="flex items-baseline gap-1 mt-1">
                           <p className="text-2xl font-bold text-emerald-400">{liveSentCount}</p>
                           <span className="text-xs text-slate-400">
-                            / {liveTotalLeads}
+                            / {runTargetCount}
                           </span>
                         </div>
                         <div className="mt-2 w-full bg-slate-800 rounded-full h-1 overflow-hidden">
@@ -1919,13 +1955,17 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                       <div className="p-4 bg-slate-900/90 border border-slate-800 rounded-xl">
                         <p className="text-xs text-slate-400">Pending</p>
                         <p className="text-2xl font-bold text-amber-400 mt-1">{livePendingCount}</p>
-                        <p className="text-[11px] text-slate-400 mt-1">Awaiting dispatch</p>
+                        <p className="text-[11px] text-slate-400 mt-1">
+                          {isRestartRun ? `Run #${currentRunNum} queued sends` : 'Awaiting dispatch'}
+                        </p>
                       </div>
 
                       <div className="p-4 bg-slate-900/90 border border-slate-800 rounded-xl">
                         <p className="text-xs text-slate-400">Failed / Errors</p>
                         <p className="text-2xl font-bold text-rose-400 mt-1">{liveFailedCount}</p>
-                        <p className="text-[11px] text-slate-400 mt-1">SMTP errors / bounced</p>
+                        <p className="text-[11px] text-slate-400 mt-1">
+                          {isRestartRun ? `Run #${currentRunNum} delivery errors` : 'SMTP errors / bounced'}
+                        </p>
                       </div>
 
                       <div className="p-4 bg-slate-900/90 border border-slate-800 rounded-xl">

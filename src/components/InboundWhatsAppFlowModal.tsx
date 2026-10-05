@@ -66,7 +66,7 @@ export const InboundWhatsAppFlowModal: React.FC<InboundWhatsAppFlowModalProps> =
     fromName: 'Tariq Khan',
     to: WHATSAPP_BUSINESS_NUMBER,
     companyName: 'Al Baraka Tours & Travels',
-    body: 'Assalamu Alaikum, does Umrah360 provide a white-label B2B sub-agent portal and Makkah hotel offline allotments?',
+    body: 'Hello, does Umrah360 provide a white-label B2B sub-agent portal and Makkah hotel offline allotments?',
   });
 
   const [isExecuting, setIsExecuting] = useState<boolean>(false);

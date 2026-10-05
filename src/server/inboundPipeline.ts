@@ -28,6 +28,7 @@ import {
   detectDemoSchedulingIntent,
   processSchedulingConversationTurn,
 } from './demoSchedulingService.js';
+import { sanitizeAiEmailText } from './emailSanitizer.js';
 
 export interface ProcessedMessageRecord {
   gmailMessageId: string;
@@ -940,9 +941,9 @@ CRITICAL INSTRUCTIONS FOR AI ANALYSIS & REPLY:
      • Maintain natural conversational continuity with the earlier messages in this thread.
      • DO NOT restart with a generic welcome ("Thank you for reaching out to Umrah360") or repetitive platform definitions if already covered.
      • Directly answer the customer's specific follow-up questions (e.g. recommending partner travel agencies in Mumbai/Delhi/Bangalore, explaining how packages are customized, providing dates or booking instructions).
-     • Greet briefly and warmly: "Walaikum Assalam ${senderGreetingName},"
+     • Greet with a formal professional greeting: "Dear ${senderGreetingName},"
    - If this is TURN 1 (Brand new customer inquiry):
-     • Greet with: "Assalamu Alaikum ${senderGreetingName},"
+     • Greet with a formal professional greeting: "Dear ${senderGreetingName},"
      • Clearly explain that Umrah360 is the enterprise technology platform that powers licensed travel agencies, and on partner agencies' websites pilgrims can customize real-time hotels, flights, and Saudi e-visas.
 2. ACCURACY & POLICIES:
    - Ground all answers strictly in the Umrah360 knowledge base.
@@ -950,7 +951,7 @@ CRITICAL INSTRUCTIONS FOR AI ANALYSIS & REPLY:
    - If travel agency asking about B2B/SaaS plans: Mention Lite ($15/user/month billed annually) and Growth.
    - If 20+ users: Explicitly mention Enterprise volume licensing and senior specialist follow-up.
 3. Keep the response polite, helpful, crisp, and professional.
-4. EMAIL FORMATTING RULE (MANDATORY): Never use Markdown symbols in email replies. Do NOT use **, ##, ###, *, backticks, or similar formatting symbols. Write emails as natural, professional plain text with simple paragraphs and numbered lists where needed. The final email must look human-written, not AI-generated.
+4. FORMATTING & GREETING RULES (MANDATORY): Never use Markdown symbols in email replies. Do NOT use **, ##, ###, *, backticks, or similar formatting symbols. Write emails as natural, professional plain text. Use formal greetings ONLY (e.g., "Dear [Name]," or "Hello [Name],"). NEVER use Muslim/religious greetings such as "Assalamu Alaikum", "Walaikum Assalam", "Salam", etc.
 5. Conclude with:
 Regards,
 Umrah360 Automation Team
@@ -966,8 +967,9 @@ www.umrah360.in`;
             temperature: 0.3,
           });
 
-          const replyText = completion.choices[0]?.message?.content?.trim() || '';
-          if (replyText.length > 30) {
+          const rawText = completion.choices[0]?.message?.content?.trim() || '';
+          if (rawText.length > 30) {
+            const replyText = sanitizeAiEmailText(rawText, senderGreetingName);
             return {
               replyText,
               handoffTriggered,
@@ -990,7 +992,7 @@ www.umrah360.in`;
 
   if (isFollowUpTurn) {
     if (/mumbai|delhi|bangalore|hyderabad|chennai|kolkata|lucknow|ahmedabad|kashmir|london|dubai|partner|agency|agencies|recommend|which/i.test(combinedText)) {
-      replyText = `Walaikum Assalam ${senderGreetingName},
+      replyText = `Dear ${senderGreetingName},
 
 Thank you for your follow-up!
 
@@ -1013,7 +1015,7 @@ Umrah360 Automation Team
 ${targetMailbox}
 www.umrah360.in`;
     } else {
-      replyText = `Walaikum Assalam ${senderGreetingName},
+      replyText = `Dear ${senderGreetingName},
 
 Thank you for following up!
 
@@ -1027,7 +1029,7 @@ ${targetMailbox}
 www.umrah360.in`;
     }
   } else if (isIndividualPilgrimOrFamily) {
-    replyText = `Assalamu Alaikum ${senderGreetingName},
+    replyText = `Dear ${senderGreetingName},
 
 Thank you for reaching out to Umrah360!
 
@@ -1053,7 +1055,7 @@ Umrah360 Automation Team
 ${targetMailbox}
 www.umrah360.in`;
   } else if (isTwentyUsers) {
-    replyText = `Assalamu Alaikum ${senderGreetingName},
+    replyText = `Dear ${senderGreetingName},
 
 Thank you for your interest in Umrah360!
 
@@ -1066,7 +1068,7 @@ Umrah360 Automation Team
 ${targetMailbox}
 www.umrah360.in`;
   } else if (isB2bPortal) {
-    replyText = `Assalamu Alaikum ${senderGreetingName},
+    replyText = `Dear ${senderGreetingName},
 
 Thank you for contacting Umrah360!
 
@@ -1083,7 +1085,7 @@ Umrah360 Automation Team
 ${targetMailbox}
 www.umrah360.in`;
   } else if (isSaaSPricing) {
-    replyText = `Assalamu Alaikum ${senderGreetingName},
+    replyText = `Dear ${senderGreetingName},
 
 Thank you for reaching out to Umrah360!
 
@@ -1099,7 +1101,7 @@ Umrah360 Automation Team
 ${targetMailbox}
 www.umrah360.in`;
   } else {
-    replyText = `Assalamu Alaikum ${senderGreetingName},
+    replyText = `Dear ${senderGreetingName},
 
 Thank you for contacting Umrah360!
 
@@ -1112,6 +1114,8 @@ Umrah360 Automation Team
 ${targetMailbox}
 www.umrah360.in`;
   }
+
+  replyText = sanitizeAiEmailText(replyText, senderGreetingName);
 
   return {
     replyText,

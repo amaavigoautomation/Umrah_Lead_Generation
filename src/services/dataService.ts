@@ -646,7 +646,7 @@ export const INITIAL_MESSAGES: Message[] = [
     sentAt: '2026-09-14T09:18:00Z',
     receivedAt: '2026-09-14T09:18:00Z',
     createdAt: '2026-09-14T09:18:00Z',
-    text: 'Assalamu Alaikum Rahul! Yes, Umrah360 features automated WhatsApp dispatch where confirmed B2B bookings trigger instant PDF vouchers and payment receipts directly to sub-agent WhatsApp numbers with your agency branding.',
+    text: 'Hello Rahul! Yes, Umrah360 features automated WhatsApp dispatch where confirmed B2B bookings trigger instant PDF vouchers and payment receipts directly to sub-agent WhatsApp numbers with your agency branding.',
     timestamp: '2026-09-14T09:18:00Z',
     aiProcessed: true,
     aiGenerated: true,

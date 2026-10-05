@@ -27,7 +27,7 @@ export function umrah360ApiPlugin(): Plugin {
           }
 
           // 3. Autonomously dispatch active running campaigns in server background
-          await processActiveRunningCampaignsBatch(3);
+          await processActiveRunningCampaignsBatch(500);
         } catch (e) {
           // ignore background poller errors
         } finally {

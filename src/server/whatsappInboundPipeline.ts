@@ -11,6 +11,7 @@ import {
   processSchedulingConversationTurn,
 } from './demoSchedulingService.js';
 import { handleIncomingCampaignLeadReply } from './campaignService.js';
+import { sanitizeAiEmailText } from './emailSanitizer.js';
 
 export const TARGET_WHATSAPP_NUMBER = '+919820252434';
 export const TARGET_WHATSAPP_NUMBER_DISPLAY = '+91 98202 52434';
@@ -495,7 +496,7 @@ export async function generateWhatsAppAutoReplyText(params: {
     buyingStage = 'CONSIDERATION';
   }
 
-  const senderGreetingName = fromName ? fromName.split(' ')[0] : 'Brother / Sister';
+  const senderGreetingName = fromName ? fromName.split(' ')[0] : 'there';
 
   // Dynamic knowledge base grounding summary from published docs
   const publishedDocs = getPublishedKnowledgeDocs();
@@ -532,8 +533,8 @@ Company: ${companyName || 'Not specified'}
 Message: "${body}"
 
 INSTRUCTIONS FOR WHATSAPP RESPONSE:
-1. Greet warmly with polite Islamic greeting: "Assalamu Alaikum ${senderGreetingName},"
-2. Tone: Professional, warm, crisp, and direct. Format specifically for WhatsApp (use clean short paragraphs, bullet points with emojis like 🕋 ✈️ 🏨 📋, bold key terms with single asterisks *like this*).
+1. Greet warmly with formal greeting: "Dear ${senderGreetingName}," or "Hello ${senderGreetingName},"
+2. Tone: Professional, warm, crisp, and direct. Format specifically for WhatsApp (use clean short paragraphs, bullet points with emojis like 🕋 ✈️ 🏨 📋, bold key terms with single asterisks *like this*). NEVER use double asterisks (**).
 3. If asking about B2B Sub-Agent Portal: Explain agent credit wallets, custom markup tiers, white-label PDF vouchers with agency logos, and offline Makkah hotel allotment management.
 4. If asking about Dynamic Costing / Rail / Visas: Explain real-time Haramain train costing, automated Saudi eVisa status tracking, and multi-currency SAR/USD exchange rate hedging.
 5. If asking about 20+ users / enterprise: Acknowledge their team size warmly, state that 20+ seat deployments receive customized volume rates and a dedicated account manager, and offer to schedule a live Zoom walkthrough.
@@ -552,8 +553,9 @@ www.umrah360.in"`;
             temperature: 0.3,
           });
 
-          const replyText = completion.choices[0]?.message?.content?.trim() || '';
-          if (replyText.length > 30) {
+          const rawText = completion.choices[0]?.message?.content?.trim() || '';
+          if (rawText.length > 30) {
+            const replyText = sanitizeAiEmailText(rawText, senderGreetingName);
             return {
               replyText,
               handoffTriggered,
@@ -575,7 +577,7 @@ www.umrah360.in"`;
   let replyText = '';
 
   if (isTwentyUsers) {
-    replyText = `Assalamu Alaikum ${senderGreetingName},
+    replyText = `Dear ${senderGreetingName},
 
 Thank you for contacting Umrah360 WhatsApp Business (+91 98202 52434)!
 
@@ -593,7 +595,7 @@ Best regards,
 WhatsApp: +91 98202 52434
 www.umrah360.in`;
   } else if (isB2bPortal) {
-    replyText = `Assalamu Alaikum ${senderGreetingName},
+    replyText = `Dear ${senderGreetingName},
 
 Thank you for contacting Umrah360 (+91 98202 52434)!
 
@@ -611,7 +613,7 @@ Warm regards,
 WhatsApp: +91 98202 52434
 www.umrah360.in`;
   } else if (isDynamicCosting || isVisa) {
-    replyText = `Assalamu Alaikum ${senderGreetingName},
+    replyText = `Dear ${senderGreetingName},
 
 Thank you for messaging Umrah360 on WhatsApp (+91 98202 52434)!
 
@@ -632,7 +634,7 @@ Warm regards,
 WhatsApp: +91 98202 52434
 www.umrah360.in`;
   } else if (isIndividualPilgrimOrFamily) {
-    replyText = `Assalamu Alaikum ${senderGreetingName},
+    replyText = `Dear ${senderGreetingName},
 
 Thank you for reaching out to Umrah360 on WhatsApp (+91 98202 52434)!
 
@@ -653,7 +655,7 @@ Best regards,
 WhatsApp: +91 98202 52434
 www.umrah360.in`;
   } else {
-    replyText = `Assalamu Alaikum ${senderGreetingName},
+    replyText = `Dear ${senderGreetingName},
 
 Thank you for connecting with Umrah360 on WhatsApp (+91 98202 52434)!
 
@@ -670,6 +672,8 @@ Warm regards,
 WhatsApp: +91 98202 52434
 www.umrah360.in`;
   }
+
+  replyText = sanitizeAiEmailText(replyText, senderGreetingName);
 
   return {
     replyText,

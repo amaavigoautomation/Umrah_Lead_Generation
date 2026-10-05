@@ -47,7 +47,7 @@ export const InboundEmailFlowModal: React.FC<InboundEmailFlowModalProps> = ({
   const [customCompany, setCustomCompany] = useState<string>('Al-Qudsi Travel');
   const [customSubject, setCustomSubject] = useState<string>('Umrah Group Costing & Visa Integration');
   const [customBody, setCustomBody] = useState<string>(
-    'Assalamu Alaikum,\n\nWe organize group Umrah departures from Cairo and Dubai. Does Umrah360 support automated Saudi visa tracking and dynamic group costing with multi-currency SAR/USD?\n\nRegards,\nAhmed Al-Qudsi'
+    'Hello,\n\nWe organize group Umrah departures from Cairo and Dubai. Does Umrah360 support automated Saudi visa tracking and dynamic group costing with multi-currency SAR/USD?\n\nRegards,\nAhmed Al-Qudsi'
   );
 
   const [isExecuting, setIsExecuting] = useState<boolean>(false);

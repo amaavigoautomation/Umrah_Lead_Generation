@@ -169,7 +169,7 @@ export const LiveMailboxCenter: React.FC<LiveMailboxCenterProps> = ({
   const [showWaModal, setShowWaModal] = useState<boolean>(false);
   const [waModalTestPhone, setWaModalTestPhone] = useState<string>('+919876543210');
   const [waModalTestName, setWaModalTestName] = useState<string>('Haji Farooq');
-  const [waModalTestBody, setWaModalTestBody] = useState<string>('Assalamu Alaikum, we need package pricing for 25 pilgrims in Shawwal 2026.');
+  const [waModalTestBody, setWaModalTestBody] = useState<string>('Hello, we need package pricing for 25 pilgrims in Shawwal 2026.');
   const [isSendingWaModalTest, setIsSendingWaModalTest] = useState<boolean>(false);
   const [waModalTestResult, setWaModalTestResult] = useState<any>(null);
 
@@ -177,7 +177,7 @@ export const LiveMailboxCenter: React.FC<LiveMailboxCenterProps> = ({
   const [testTo, setTestTo] = useState<string>('amaavigo@gmail.com');
   const [testSubject, setTestSubject] = useState<string>('Umrah360 Live SMTP Auto-Reply Test');
   const [testBody, setTestBody] = useState<string>(
-    'Assalamu Alaikum,\n\nThis is a live test email dispatched via Umrah360 SMTP connection to confirm live mail delivery.\n\nBest regards,\nUmrah360 Automation Team'
+    'Hello,\n\nThis is a live test email dispatched via Umrah360 SMTP connection to confirm live mail delivery.\n\nBest regards,\nUmrah360 Automation Team'
   );
   const [isSendingLiveTest, setIsSendingLiveTest] = useState<boolean>(false);
   const [liveSendResult, setLiveSendResult] = useState<{ success: boolean; messageId?: string; error?: string } | null>(null);
@@ -187,7 +187,7 @@ export const LiveMailboxCenter: React.FC<LiveMailboxCenterProps> = ({
   const [inboundSenderName, setInboundSenderName] = useState<string>('Al-Noor Pilgrimage Tours');
   const [inboundSubject, setInboundSubject] = useState<string>('Inquiry: B2B Portal & Hotel Allotments for Umrah 2026');
   const [inboundBody, setInboundBody] = useState<string>(
-    'Assalamu Alaikum,\n\nWe are a pilgrimage tour agency with 8 staff members in Hyderabad. Does Umrah360 support custom hotel allotments and sub-agent credit limits?\n\nRegards,\nAl-Noor Pilgrimage Operations'
+    'Hello,\n\nWe are a pilgrimage tour agency with 8 staff members in Hyderabad. Does Umrah360 support custom hotel allotments and sub-agent credit limits?\n\nRegards,\nAl-Noor Pilgrimage Operations'
   );
   const [isCustomerFollowUp, setIsCustomerFollowUp] = useState<boolean>(false);
   const [isIngestingInbound, setIsIngestingInbound] = useState<boolean>(false);

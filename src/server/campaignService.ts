@@ -13,6 +13,7 @@ import { db, isFirebaseConfigured } from '../firebase/config.js';
 import { safeSetDoc } from './firestoreUtils.js';
 import { sendLiveEmail, getSmtpConfig } from './smtpService.js';
 import { appendOutboundMessageToThread } from './inboundPipeline.js';
+import { sanitizeAiEmailText } from './emailSanitizer.js';
 import {
   Campaign,
   CampaignLead,
@@ -103,9 +104,10 @@ INSTRUCTIONS:
 3. Select 1-3 genuine Umrah360 capabilities from the knowledge base that directly address the pain point.
 4. Generate 2-3 candidate subject lines internally and pick the single strongest, most natural, short, catchy, professional subject line.
 5. Write a personalized opening demonstrating relevance to THIS company (avoiding generic "hope you're doing well", "I wanted to reach out", etc.).
-6. Write a concise email body (80-180 words), professional, conversational, helpful, plain text ONLY (no markdown headings, no bullet points unless necessary).
-7. Include a low-friction CTA (e.g. "Would you be open to a 15-minute walkthrough?").
-8. Perform a quality check ensuring factual consistency, human tone, and clear CTA.
+6. Write a concise email body (80-180 words), professional, conversational, helpful, plain text ONLY (no markdown headings, no asterisks (**), no markdown bolding).
+7. Greeting MUST be formal (e.g., "Dear [Name]," or "Hello [Name],"). NEVER use Muslim/religious greetings such as "Assalamu Alaikum", "Walaikum Assalam", "Salam", etc.
+8. Include a low-friction CTA (e.g. "Would you be open to a 15-minute walkthrough?").
+9. Perform a quality check ensuring factual consistency, human tone, and clear CTA.
 
 Output your response strictly as a JSON object:
 {
@@ -147,9 +149,11 @@ Output your response strictly as a JSON object:
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     if (jsonMatch) {
       const parsed = JSON.parse(jsonMatch[0]);
+      const rawSubject = parsed.subject || `Streamlining Operations for ${company}`;
+      const rawBody = parsed.body || `Dear ${leadName},\n\nI noticed your work at ${company}...`;
       const result = {
-        subject: parsed.subject || `Streamlining Operations for ${company}`,
-        body: parsed.body || `Hi ${leadName},\n\nI noticed your work at ${company}...`,
+        subject: sanitizeAiEmailText(rawSubject, leadName),
+        body: sanitizeAiEmailText(rawBody, leadName),
         researchData: parsed.researchData || {
           companySummary: `${company} pilgrimage operations.`,
           relevantSignals: ['Umrah travel agency'],
@@ -170,7 +174,7 @@ Output your response strictly as a JSON object:
 
   const fallback = {
     subject: `Streamlining Operations & B2B Bookings for ${company}`,
-    body: `Hi ${leadName},\n\nI noticed your operations at ${company}. Umrah360 provides tour operators with automated dynamic package builders, Makkah/Madinah hotel allotments, and B2B sub-agent portals.\n\nWould you be open to a 15-minute walkthrough this week?\n\nBest regards,\nUmrah360 Growth Team\nwww.umrah360.in`,
+    body: `Dear ${leadName},\n\nI noticed your operations at ${company}. Umrah360 provides tour operators with automated dynamic package builders, Makkah/Madinah hotel allotments, and B2B sub-agent portals.\n\nWould you be open to a 15-minute walkthrough this week?\n\nBest regards,\nUmrah360 Growth Team\nwww.umrah360.in`,
     researchData: {
       companySummary: `${company} operating in Hajj & Umrah pilgrimage travel.`,
       relevantSignals: ['Umrah travel agency'],
@@ -191,7 +195,7 @@ function generateEmailWithCachedResearch(lead: any, researchData: any) {
   const company = lead.companyName || `${leadName}'s Agency`;
   return {
     subject: `Streamlining ${researchData.companyType || 'Pilgrimage'} Operations for ${company}`,
-    body: `Hi ${leadName},\n\nGiven your focus on ${researchData.relevantSignals?.[0] || 'Umrah operations'} at ${company}, I wanted to share how Umrah360 automates dynamic package costing, hotel allotments, and B2B agent distribution.\n\nWould you be open to a quick 15-minute walkthrough this week?\n\nBest regards,\nUmrah360 Growth Team\nwww.umrah360.in`,
+    body: `Dear ${leadName},\n\nGiven your focus on ${researchData.relevantSignals?.[0] || 'Umrah operations'} at ${company}, I wanted to share how Umrah360 automates dynamic package costing, hotel allotments, and B2B agent distribution.\n\nWould you be open to a quick 15-minute walkthrough this week?\n\nBest regards,\nUmrah360 Growth Team\nwww.umrah360.in`,
     researchData,
     selectedPainPoint: 'Operational coordination and manual package creation',
     selectedCapabilities: ['Dynamic Package Builder', 'B2B Sub-Agent Portal'],
@@ -206,7 +210,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplate[] = [
     templateId: 'tpl-b2b-portal',
     name: 'B2B Pilgrimage Portal & Sub-Agent Automation',
     subject: 'Umrah360 for {{company}} - Automate B2B Packages & Sub-Agent Bookings',
-    body: `Hi {{name}},
+    body: `Dear {{name}},
 
 I noticed you are leading operations at {{company}}. We work with top Umrah and Hajj tour operators across India to automate their dynamic package costing, Makkah & Madinah room allocations, and sub-agent B2B voucher distribution.
 
@@ -224,7 +228,7 @@ www.umrah360.in`,
     templateId: 'tpl-visa-allotments',
     name: 'Saudi Umrah Visa & Dynamic Hotel Costing',
     subject: 'Streamline Saudi Visa & Hotel Allotments for {{company}}',
-    body: `Assalamu Alaikum {{name}},
+    body: `Dear {{name}},
 
 Managing fluctuating Makkah Clock Tower allotments, Haramain train vouchers, and Saudi tourist/Umrah eVisas during peak season can overwhelm manual operations.
 
@@ -270,7 +274,9 @@ const campaignsMap = new Map<string, Campaign>();
 const campaignLeadsMap = new Map<string, CampaignLead>(); // key: campaignLeadId
 const campaignRunsMap = new Map<string, CampaignRun>(); // key: runId
 const emailTemplatesMap = new Map<string, EmailTemplate>(); // key: templateId
-const sendHistorySet = new Set<string>(); // key: `${campaignId}_${email.toLowerCase()}`
+const sendHistorySet = new Set<string>(); // key: `${campaignId}_${email.toLowerCase()}` or `${campaignId}_${runId}_${email.toLowerCase()}`
+const inFlightLeadSendsSet = new Set<string>(); // key: `${campaignId}_${runId}_${email.toLowerCase()}`
+const pausedCampaignsSet = new Set<string>(); // explicitly paused campaign IDs
 
 // Active sending abort flags per campaign
 const activeCampaignAbortControllers = new Map<string, AbortController>();
@@ -351,7 +357,6 @@ export async function syncCampaignStoreFromFirestore(): Promise<void> {
       }
 
       if (campSnap) {
-        campaignsMap.clear();
         campSnap.forEach((d) => {
           const data = d.data() as Campaign;
           if (data && data.campaignId) {
@@ -364,6 +369,20 @@ export async function syncCampaignStoreFromFirestore(): Promise<void> {
               deleteDoc(doc(db, 'campaigns', d.id)).catch(() => {});
               deleteDoc(doc(db, 'outbound_campaigns', d.id)).catch(() => {});
             } else {
+              const existing = campaignsMap.get(data.campaignId);
+              if (existing) {
+                const existingTime = new Date(existing.updatedAt || 0).getTime();
+                const fsTime = new Date(data.updatedAt || 0).getTime();
+                if (pausedCampaignsSet.has(data.campaignId)) {
+                  existing.status = 'PAUSED';
+                }
+                if (existingTime > fsTime) {
+                  return; // Preserve newer memory campaign state
+                }
+              }
+              if (pausedCampaignsSet.has(data.campaignId)) {
+                data.status = 'PAUSED';
+              }
               campaignsMap.set(data.campaignId, data);
             }
           }
@@ -371,10 +390,18 @@ export async function syncCampaignStoreFromFirestore(): Promise<void> {
       }
 
       if (leadsSnap) {
-        campaignLeadsMap.clear();
         leadsSnap.forEach((d) => {
           const data = d.data() as CampaignLead;
           if (data && data.campaignLeadId) {
+            const existing = campaignLeadsMap.get(data.campaignLeadId);
+            if (existing) {
+              const existingTime = new Date(existing.updatedAt || 0).getTime();
+              const fsTime = new Date(data.updatedAt || 0).getTime();
+              // Preserve memory lead if it is currently PENDING or if memory is newer
+              if (existing.sendStatus === 'PENDING' || existingTime > fsTime) {
+                return;
+              }
+            }
             campaignLeadsMap.set(data.campaignLeadId, data);
           }
         });
@@ -395,7 +422,11 @@ export async function syncCampaignStoreFromFirestore(): Promise<void> {
         historySnap.forEach((d) => {
           const data = d.data() as CampaignSendHistory;
           if (data && data.campaignId && data.email && data.status === 'SENT') {
-            sendHistorySet.add(`${data.campaignId}_${data.email.toLowerCase()}`);
+            const emailLower = data.email.toLowerCase();
+            sendHistorySet.add(`${data.campaignId}_${emailLower}`);
+            if (data.campaignRunId) {
+              sendHistorySet.add(`${data.campaignId}_${data.campaignRunId}_${emailLower}`);
+            }
           }
         });
       }
@@ -972,6 +1003,8 @@ export async function startCampaign(campaignId: string): Promise<Campaign> {
   const campaign = await ensureCampaignInStore(campaignId);
   if (!campaign) throw new Error(`Campaign ${campaignId} not found`);
 
+  pausedCampaignsSet.delete(campaignId);
+
   // If campaign was COMPLETED or DRAFT without run, create a run
   const now = new Date().toISOString();
   let currentRunId = campaign.currentRunId;
@@ -1030,13 +1063,10 @@ export async function startCampaign(campaignId: string): Promise<Campaign> {
   }
 
   // Synchronously process initial batch for immediate dispatch on Vercel & dev server
-  const batchRes = await processNextCampaignSendBatch(campaignId, 3).catch((err) => {
+  const batchRes = await processNextCampaignSendBatch(campaignId, 500).catch((err) => {
     console.warn(`[Campaign Engine] Note processing initial batch on start:`, err);
     return null;
   });
-
-  // Also trigger background sending engine for dev environment
-  executeCampaignSendingEngine(campaignId).catch(() => {});
 
   return batchRes?.campaign || recalculateCampaignMetrics(campaignId) || campaign;
 }
@@ -1047,6 +1077,8 @@ export async function startCampaign(campaignId: string): Promise<Campaign> {
 export async function pauseCampaign(campaignId: string): Promise<Campaign> {
   const campaign = await ensureCampaignInStore(campaignId);
   if (!campaign) throw new Error(`Campaign ${campaignId} not found`);
+
+  pausedCampaignsSet.add(campaignId);
 
   // Trigger abort controller to stop further sends
   const abortCtrl = activeCampaignAbortControllers.get(campaignId);
@@ -1064,7 +1096,7 @@ export async function pauseCampaign(campaignId: string): Promise<Campaign> {
     if (run && run.status === 'RUNNING') {
       run.status = 'PAUSED';
       if (isFirebaseConfigured && db) {
-        setDoc(doc(db, 'campaign_runs', run.runId), run, { merge: true }).catch(() => {});
+        safeSetDoc(doc(db, 'campaign_runs', run.runId), run, { merge: true }).catch(() => {});
       }
     }
   }
@@ -1072,7 +1104,7 @@ export async function pauseCampaign(campaignId: string): Promise<Campaign> {
   campaignsMap.set(campaignId, campaign);
 
   if (isFirebaseConfigured && db) {
-    setDoc(doc(db, 'campaigns', campaignId), campaign, { merge: true }).catch(() => {});
+    await safeSetDoc(doc(db, 'campaigns', campaignId), campaign, { merge: true }).catch(() => {});
   }
 
   return campaign;
@@ -1101,6 +1133,8 @@ export async function restartCampaign(
 }> {
   const campaign = await ensureCampaignInStore(campaignId);
   if (!campaign) throw new Error(`Campaign ${campaignId} not found`);
+
+  pausedCampaignsSet.delete(campaignId);
 
   // Halt any currently active send loops for this campaign
   const existingAbort = activeCampaignAbortControllers.get(campaignId);
@@ -1179,6 +1213,13 @@ export async function restartCampaign(
     };
   }
 
+  // Clear any active in-flight locks for this campaign
+  for (const key of Array.from(inFlightLeadSendsSet)) {
+    if (key.startsWith(`${campaignId}_`)) {
+      inFlightLeadSendsSet.delete(key);
+    }
+  }
+
   // Queue unreplied leads for the new follow-up run
   const leadSavePromises: Promise<any>[] = [];
   unrepliedLeads.forEach((l) => {
@@ -1243,13 +1284,10 @@ export async function restartCampaign(
   console.log(`[Campaign Engine] ${message}`);
 
   // Synchronously process initial batch for immediate dispatch on Vercel & dev server
-  const batchRes = await processNextCampaignSendBatch(campaignId, 3).catch((err) => {
+  const batchRes = await processNextCampaignSendBatch(campaignId, 500).catch((err) => {
     console.warn(`[Campaign Engine] Note processing initial batch on restart:`, err);
     return null;
   });
-
-  // Also trigger background sending engine for dev environment
-  executeCampaignSendingEngine(campaignId, newRunId).catch(() => {});
 
   const finalCampaignState = (await recalculateAndPersistCampaignMetrics(campaignId)) || batchRes?.campaign || campaign;
 
@@ -1270,7 +1308,7 @@ export async function restartCampaign(
  */
 export async function processNextCampaignSendBatch(
   campaignId: string,
-  maxBatchSize: number = 3
+  maxBatchSize: number = 500
 ): Promise<{
   campaign: Campaign;
   processedCount: number;
@@ -1279,62 +1317,107 @@ export async function processNextCampaignSendBatch(
   const campaign = await ensureCampaignInStore(campaignId);
   if (!campaign) throw new Error(`Campaign ${campaignId} not found`);
 
-  const currentRunId = campaign.currentRunId || `run-${campaignId}-1`;
-  const selectedTplId = campaign.templateId || '';
-  let template = getTemplateById(selectedTplId);
-  if (!template && selectedTplId && isFirebaseConfigured && db) {
-    try {
-      const snap = await getDoc(doc(db, 'email_templates', selectedTplId));
-      if (snap.exists()) {
-        template = snap.data() as EmailTemplate;
-        emailTemplatesMap.set(selectedTplId, template);
+  // 1. Immediately abort if campaign is PAUSED, DRAFT, or COMPLETED
+  if (pausedCampaignsSet.has(campaignId) || campaign.status !== 'RUNNING') {
+    console.log(`[Campaign Engine] Campaign ${campaignId} status is "${campaign.status}" (or explicitly paused). Skipping processNextCampaignSendBatch.`);
+    if (pausedCampaignsSet.has(campaignId)) campaign.status = 'PAUSED';
+    const leads = await getCampaignLeadsFromDb(campaignId);
+    const pendingLeads = leads.filter((l) => l.sendStatus === 'PENDING' && l.replyStatus !== 'REPLIED');
+    return { campaign, processedCount: 0, remainingPendingCount: pendingLeads.length };
+  }
+
+  // 2. Register/Retrieve AbortController for instant pause cancellation
+  let abortCtrl = activeCampaignAbortControllers.get(campaignId);
+  if (!abortCtrl) {
+    abortCtrl = new AbortController();
+    activeCampaignAbortControllers.set(campaignId, abortCtrl);
+  }
+
+  try {
+    const currentRunId = campaign.currentRunId || `run-${campaignId}-1`;
+    const selectedTplId = campaign.templateId || '';
+    let template = getTemplateById(selectedTplId);
+    if (!template && selectedTplId && isFirebaseConfigured && db) {
+      try {
+        const snap = await getDoc(doc(db, 'email_templates', selectedTplId));
+        if (snap.exists()) {
+          template = snap.data() as EmailTemplate;
+          emailTemplatesMap.set(selectedTplId, template);
+        }
+      } catch (err) {}
+    }
+    if (!template) {
+      template = DEFAULT_EMAIL_TEMPLATES.find((t) => t.templateId === selectedTplId) || DEFAULT_EMAIL_TEMPLATES[0];
+    }
+
+    const leads = await getCampaignLeadsFromDb(campaignId);
+    const pendingLeads = leads.filter((l) => l.sendStatus === 'PENDING' && l.replyStatus !== 'REPLIED');
+
+    if (pendingLeads.length === 0) {
+      const now = new Date().toISOString();
+      campaign.status = 'COMPLETED';
+      campaign.completedAt = now;
+      campaign.updatedAt = now;
+
+      const run = campaignRunsMap.get(currentRunId);
+      if (run) {
+        run.status = 'COMPLETED';
+        run.completedAt = now;
+        if (isFirebaseConfigured && db) {
+          safeSetDoc(doc(db, 'campaign_runs', run.runId), run, { merge: true }).catch(() => {});
+        }
       }
-    } catch (err) {}
-  }
-  if (!template) {
-    template = DEFAULT_EMAIL_TEMPLATES.find((t) => t.templateId === selectedTplId) || DEFAULT_EMAIL_TEMPLATES[0];
-  }
 
-  const leads = await getCampaignLeadsFromDb(campaignId);
-  const pendingLeads = leads.filter((l) => l.sendStatus === 'PENDING' && l.replyStatus !== 'REPLIED');
-
-  if (pendingLeads.length === 0) {
-    const now = new Date().toISOString();
-    campaign.status = 'COMPLETED';
-    campaign.completedAt = now;
-    campaign.updatedAt = now;
-
-    const run = campaignRunsMap.get(currentRunId);
-    if (run) {
-      run.status = 'COMPLETED';
-      run.completedAt = now;
       if (isFirebaseConfigured && db) {
-        safeSetDoc(doc(db, 'campaign_runs', run.runId), run, { merge: true }).catch(() => {});
+        safeSetDoc(doc(db, 'campaigns', campaignId), campaign, { merge: true }).catch(() => {});
       }
+
+      const finalCamp = recalculateCampaignMetrics(campaignId) || campaign;
+      return { campaign: finalCamp, processedCount: 0, remainingPendingCount: 0 };
     }
 
-    if (isFirebaseConfigured && db) {
-      safeSetDoc(doc(db, 'campaigns', campaignId), campaign, { merge: true }).catch(() => {});
-    }
+    const batchToProcess = pendingLeads.slice(0, maxBatchSize);
+    let processedCount = 0;
 
-    const finalCamp = recalculateCampaignMetrics(campaignId) || campaign;
-    return { campaign: finalCamp, processedCount: 0, remainingPendingCount: 0 };
-  }
+    for (const lead of batchToProcess) {
+      // INSTANT PAUSE CHECK: Check abort signal and campaign status before each email send
+      if (pausedCampaignsSet.has(campaignId) || abortCtrl.signal.aborted) {
+        console.log(`[Campaign Engine] Abort signal or pause active for campaign ${campaignId}. Halting send batch.`);
+        break;
+      }
 
-  const batchToProcess = pendingLeads.slice(0, maxBatchSize);
-  let processedCount = 0;
+      const currentCampState = campaignsMap.get(campaignId) || campaign;
+      if (currentCampState.status !== 'RUNNING') {
+        console.log(`[Campaign Engine] Campaign ${campaignId} status is "${currentCampState.status}". Halting send batch immediately.`);
+        break;
+      }
 
-  for (const lead of batchToProcess) {
-    if (lead.replyStatus === 'REPLIED') {
-      lead.sendStatus = 'SENT';
+      if (lead.replyStatus === 'REPLIED') {
+        lead.sendStatus = 'SENT';
+        continue;
+      }
+
+    const emailLower = lead.email.toLowerCase();
+    const runHistoryKey = `${campaignId}_${currentRunId}_${emailLower}`;
+    const campaignHistoryKey = `${campaignId}_${emailLower}`;
+
+    // STRICT DEDUPLICATION:
+    // If lead is already SENT, SENDING, in send history, or in-flight, skip immediately!
+    if (
+      lead.sendStatus === 'SENT' ||
+      lead.sendStatus === 'SENDING' ||
+      sendHistorySet.has(runHistoryKey) ||
+      inFlightLeadSendsSet.has(runHistoryKey)
+    ) {
+      if (lead.sendStatus !== 'SENT') {
+        lead.sendStatus = 'SENT';
+      }
       continue;
     }
 
-    const runHistoryKey = `${campaignId}_${currentRunId}_${lead.email.toLowerCase()}`;
-    if (sendHistorySet.has(runHistoryKey)) {
-      lead.sendStatus = 'SENT';
-      continue;
-    }
+    // Reserve in-flight lock
+    inFlightLeadSendsSet.add(runHistoryKey);
+    inFlightLeadSendsSet.add(campaignHistoryKey);
 
     let subject = '';
     let body = '';
@@ -1493,6 +1576,9 @@ export async function processNextCampaignSendBatch(
       if (isFirebaseConfigured && db) {
         safeSetDoc(doc(db, 'campaign_leads', lead.campaignLeadId), lead, { merge: true }).catch(() => {});
       }
+    } finally {
+      inFlightLeadSendsSet.delete(runHistoryKey);
+      inFlightLeadSendsSet.delete(campaignHistoryKey);
     }
   }
 
@@ -1525,6 +1611,9 @@ export async function processNextCampaignSendBatch(
     processedCount,
     remainingPendingCount: remainingPending.length,
   };
+  } finally {
+    activeCampaignAbortControllers.delete(campaignId);
+  }
 }
 
 /**
@@ -1607,12 +1696,25 @@ async function executeCampaignSendingEngine(campaignId: string, expectedRunId?: 
       }
 
       // 3. Prevent duplicate send within the SAME run
-      const runHistoryKey = `${campaignId}_${currentRunId}_${lead.email.toLowerCase()}`;
-      if (sendHistorySet.has(runHistoryKey)) {
-        console.log(`[Campaign Engine] SKIPPING already-sent lead ${lead.email} for run ${currentRunId}.`);
-        lead.sendStatus = 'SENT';
+      const emailLower = lead.email.toLowerCase();
+      const runHistoryKey = `${campaignId}_${currentRunId}_${emailLower}`;
+      const campaignHistoryKey = `${campaignId}_${emailLower}`;
+
+      if (
+        lead.sendStatus === 'SENT' ||
+        lead.sendStatus === 'SENDING' ||
+        sendHistorySet.has(runHistoryKey) ||
+        inFlightLeadSendsSet.has(runHistoryKey)
+      ) {
+        console.log(`[Campaign Engine] SKIPPING already-sent or in-flight lead ${lead.email} for run ${currentRunId}.`);
+        if (lead.sendStatus !== 'SENT') {
+          lead.sendStatus = 'SENT';
+        }
         continue;
       }
+
+      inFlightLeadSendsSet.add(runHistoryKey);
+      inFlightLeadSendsSet.add(campaignHistoryKey);
 
       // 4. Subject and Body generation (Predefined vs AI Generated)
       let subject = '';
@@ -1802,6 +1904,9 @@ async function executeCampaignSendingEngine(campaignId: string, expectedRunId?: 
           safeSetDoc(doc(db, 'campaign_leads', lead.campaignLeadId), lead, { merge: true }).catch(() => {});
         }
         console.error(`[Campaign Engine] Error sending to ${lead.email}:`, err);
+      } finally {
+        inFlightLeadSendsSet.delete(runHistoryKey);
+        inFlightLeadSendsSet.delete(campaignHistoryKey);
       }
 
       // Recalculate metrics
@@ -1865,12 +1970,12 @@ export function personalizeTemplate(
       .replace(/\{\{\s*email\s*\}\}/gi, lead.email);
   };
 
-  const subject = replaceVars(template.subject);
+  const subject = sanitizeAiEmailText(replaceVars(template.subject), name);
   const rawBody = template.body || '';
-  const body = replaceVars(rawBody);
+  const body = sanitizeAiEmailText(replaceVars(rawBody), name);
 
   const rawHtml = template.htmlBody || (template.isHtml || template.format === 'html' ? template.body : undefined);
-  const html = rawHtml ? replaceVars(rawHtml) : undefined;
+  const html = rawHtml ? sanitizeAiEmailText(replaceVars(rawHtml), name) : undefined;
 
   return {
     subject,
@@ -2271,7 +2376,7 @@ export async function updateCampaignLeadStatus(params: {
  * This runs continuously on the server regardless of whether a browser client is open.
  */
 let isAutoProcessingCampaigns = false;
-export async function processActiveRunningCampaignsBatch(batchSize: number = 3): Promise<{
+export async function processActiveRunningCampaignsBatch(batchSize: number = 500): Promise<{
   activeCount: number;
   processedCampaigns: Array<{ campaignId: string; processedCount: number; remainingPendingCount: number }>;
 }> {
@@ -2301,8 +2406,11 @@ export async function processActiveRunningCampaignsBatch(batchSize: number = 3):
           snap.forEach((d) => {
             const c = d.data() as Campaign;
             if (c && c.campaignId) {
+              if (pausedCampaignsSet.has(c.campaignId)) {
+                c.status = 'PAUSED';
+              }
               campaignsMap.set(c.campaignId, c);
-              if (c.status === 'RUNNING') {
+              if (c.status === 'RUNNING' && !pausedCampaignsSet.has(c.campaignId)) {
                 runningCampaignsMap.set(c.campaignId, c);
               }
             }

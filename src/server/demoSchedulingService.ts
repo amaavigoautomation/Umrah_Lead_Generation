@@ -13,6 +13,7 @@ import {
 import { safeSetDoc } from './firestoreUtils.js';
 import { Booking, BookingStatus, Channel, Lead } from '../types/index.js';
 import { updateCampaignLeadStatus } from './campaignService.js';
+import { sendLiveEmail, getSmtpConfig } from './smtpService.js';
 
 export const TARGET_CALENDAR_EMAIL = 'amaavigo@gmail.com';
 export const SCHEDULING_TIMEZONE = 'Asia/Kolkata'; // IST (UTC +05:30)
@@ -1059,6 +1060,257 @@ export async function rescheduleDemoBooking(
   }
 }
 
+function stripQuotedEmailHistory(text: string): string {
+  if (!text) return '';
+  let cleaned = text;
+  cleaned = cleaned.replace(/On\s+[\s\S]*?\s+wrote:[\s\S]*/gi, '');
+  cleaned = cleaned.replace(/From:\s+[\s\S]*/gi, '');
+  cleaned = cleaned.replace(/^>.*$/gm, '');
+  return cleaned.trim();
+}
+
+/**
+ * Adds one or more attendee emails to an existing demo booking:
+ * 1. Updates Google Calendar event via Google Calendar API PATCH with sendUpdates=all
+ * 2. Dispatches live email invitations directly via SMTP to the newly added attendees
+ * 3. Updates the booking record in Firestore with the new attendees list
+ */
+export async function addAttendeeToDemoBooking(params: {
+  bookingId?: string;
+  leadId?: string;
+  leadEmail?: string;
+  conversationId?: string;
+  attendeeEmail?: string;
+  attendeeEmails?: string[];
+  attendeeName?: string;
+  accessToken?: string;
+}): Promise<{
+  success: boolean;
+  booking?: Booking;
+  googleMeetLink?: string;
+  calendarInviteSent?: boolean;
+  error?: string;
+  addedEmails?: string[];
+}> {
+  if (!isFirebaseConfigured || !db) {
+    return { success: false, error: 'Database not initialized' };
+  }
+
+  const rawList: string[] = [];
+  if (params.attendeeEmail) rawList.push(params.attendeeEmail);
+  if (Array.isArray(params.attendeeEmails)) rawList.push(...params.attendeeEmails);
+
+  const smtpCfg = getSmtpConfig();
+  const hostEmails = Array.from(
+    new Set([
+      TARGET_CALENDAR_EMAIL.toLowerCase().trim(),
+      (smtpCfg.user || '').toLowerCase().trim(),
+      (smtpCfg.from || '').toLowerCase().trim(),
+      'sales@umrah360.in',
+      'support@umrah360.in',
+    ])
+  ).filter((e) => e.length > 0);
+
+  const primaryLeadEmail = (params.leadEmail || '').toLowerCase().trim();
+
+  const emailsToAdd = Array.from(
+    new Set(
+      rawList
+        .map((e) => (e || '').trim().toLowerCase())
+        .filter(
+          (e) =>
+            e.includes('@') &&
+            e.length > 3 &&
+            e !== primaryLeadEmail &&
+            !hostEmails.includes(e)
+        )
+    )
+  );
+
+  if (emailsToAdd.length === 0) {
+    return { success: false, error: 'Please provide at least one valid attendee email address.' };
+  }
+
+  try {
+    let bookingDocRef: any = null;
+    let booking: Booking | null = null;
+
+    if (params.bookingId) {
+      bookingDocRef = doc(db, 'bookings', params.bookingId);
+      const snap = await getDoc(bookingDocRef).catch(() => null);
+      if (snap && snap.exists()) {
+        booking = snap.data() as Booking;
+      }
+    }
+
+    if (!booking) {
+      const snap = await getDocs(collection(db, 'bookings')).catch(() => null);
+      if (snap && !snap.empty) {
+        snap.forEach((d) => {
+          if (booking) return;
+          const b = d.data() as Booking;
+          if (b && b.status !== 'CANCELLED') {
+            if (
+              (params.leadId && b.leadId === params.leadId) ||
+              (params.leadEmail && b.leadEmail?.toLowerCase() === params.leadEmail.toLowerCase()) ||
+              (params.conversationId && b.conversationId === params.conversationId)
+            ) {
+              booking = b;
+              bookingDocRef = doc(db, 'bookings', b.bookingId);
+            }
+          }
+        });
+      }
+    }
+
+    if (!booking || !bookingDocRef) {
+      return { success: false, error: 'No active demo booking found for this lead.' };
+    }
+
+    const currentAttendees = Array.from(
+      new Set(
+        (Array.isArray(booking.attendees) ? booking.attendees : [])
+          .map((e) => (e || '').trim().toLowerCase())
+          .filter((e) => e.length > 0)
+      )
+    );
+
+    const newlyAdded: string[] = [];
+    for (const em of emailsToAdd) {
+      if (em !== booking.leadEmail?.toLowerCase().trim() && !currentAttendees.includes(em)) {
+        currentAttendees.push(em);
+        newlyAdded.push(em);
+      }
+    }
+
+    let calendarInviteSent = false;
+    let googleMeetLink = booking.googleMeetLink;
+
+    if (booking.calendarEventId && !booking.calendarEventId.startsWith('mock-')) {
+      const token = await getLiveCalendarToken(params.accessToken);
+      if (token) {
+        try {
+          const getRes = await fetch(
+            `https://www.googleapis.com/calendar/v3/calendars/primary/events/${encodeURIComponent(
+              booking.calendarEventId
+            )}`,
+            {
+              headers: { Authorization: `Bearer ${token}` },
+            }
+          );
+
+          if (getRes.ok) {
+            const eventData = await getRes.json();
+            const existingGcalAttendees: Array<{ email: string; displayName?: string }> =
+              Array.isArray(eventData.attendees) ? eventData.attendees : [];
+
+            for (const em of emailsToAdd) {
+              if (!existingGcalAttendees.some((a) => a.email?.toLowerCase() === em)) {
+                existingGcalAttendees.push({
+                  email: em,
+                  displayName: params.attendeeName || undefined,
+                });
+              }
+            }
+
+            const patchRes = await fetch(
+              `https://www.googleapis.com/calendar/v3/calendars/primary/events/${encodeURIComponent(
+                booking.calendarEventId
+              )}?sendUpdates=all`,
+              {
+                method: 'PATCH',
+                headers: {
+                  Authorization: `Bearer ${token}`,
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                  attendees: existingGcalAttendees,
+                }),
+              }
+            );
+
+            if (patchRes.ok) {
+              const patchedEvent = await patchRes.json();
+              googleMeetLink = patchedEvent.hangoutLink || patchedEvent.htmlLink || googleMeetLink;
+              calendarInviteSent = true;
+              console.log(`[Google Calendar] Updated event ${booking.calendarEventId} with attendees: ${emailsToAdd.join(', ')}`);
+            }
+          }
+        } catch (calErr) {
+          console.warn('[Calendar Add Attendee Error]:', calErr);
+        }
+      }
+    }
+
+    const smtpConfig = getSmtpConfig();
+    for (const targetEmail of emailsToAdd) {
+      try {
+        const inviteSubject = `[Calendar Invite] Umrah360 Demo Walkthrough - ${booking.date} at ${booking.startTime} IST`;
+        const inviteHtml = `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; color: #1e293b; padding: 20px; border: 1px solid #e2e8f0; border-radius: 12px;">
+            <h2 style="color: #0d9488; margin-bottom: 8px;">Umrah360 Demo Invitation</h2>
+            <p style="font-size: 15px; color: #334155;">
+              You have been added as an attendee for the live product walkthrough of <strong>Umrah360</strong>.
+            </p>
+            <div style="background-color: #f8fafc; padding: 16px; border-radius: 8px; margin: 16px 0;">
+              <p style="margin: 4px 0;"><strong>Company:</strong> ${booking.companyName}</p>
+              <p style="margin: 4px 0;"><strong>Primary Contact:</strong> ${booking.leadName} (${booking.leadEmail})</p>
+              <p style="margin: 4px 0;"><strong>Date:</strong> ${booking.date}</p>
+              <p style="margin: 4px 0;"><strong>Time:</strong> ${booking.startTime} – ${booking.endTime} IST (Asia/Kolkata)</p>
+              <p style="margin: 12px 0 4px 0;"><strong>Google Meet Video Link:</strong></p>
+              <a href="${googleMeetLink}" style="display: inline-block; background-color: #0d9488; color: #ffffff; padding: 10px 18px; text-decoration: none; border-radius: 6px; font-weight: bold;">
+                Join Google Meet
+              </a>
+            </div>
+            <p style="font-size: 13px; color: #64748b; margin-top: 20px;">
+              Looking forward to demonstrating how Umrah360 automates pilgrimage group costing, visa tracking, and sub-agent portals!
+            </p>
+          </div>
+        `;
+
+        await sendLiveEmail({
+          to: targetEmail,
+          subject: inviteSubject,
+          text: `You have been added to the Umrah360 Demo Walkthrough on ${booking.date} from ${booking.startTime} – ${booking.endTime} IST.\n\nJoin Google Meet: ${googleMeetLink}\n\nPrimary Contact: ${booking.leadName} (${booking.leadEmail})`,
+          html: inviteHtml,
+        }).catch((e) => console.warn(`[SMTP Invite Warning for ${targetEmail}]:`, e));
+
+        calendarInviteSent = true;
+      } catch (mailErr) {
+        console.warn(`[Email Invitation Dispatch Note]:`, mailErr);
+      }
+    }
+
+    const nowIso = new Date().toISOString();
+    const updatedBooking: Booking = {
+      ...booking,
+      attendees: currentAttendees,
+      googleMeetLink,
+      updatedAt: nowIso,
+    };
+
+    await safeSetDoc(bookingDocRef, { attendees: currentAttendees, googleMeetLink, updatedAt: nowIso }, { merge: true });
+
+    if (booking.leadId) {
+      await safeSetDoc(
+        doc(db, 'leads', booking.leadId),
+        { attendees: currentAttendees, updatedAt: nowIso },
+        { merge: true }
+      ).catch(() => {});
+    }
+
+    return {
+      success: true,
+      booking: updatedBooking,
+      googleMeetLink,
+      calendarInviteSent,
+      addedEmails: emailsToAdd,
+    };
+  } catch (err: any) {
+    return { success: false, error: err?.message || 'Failed to add attendee' };
+  }
+}
+
 // -----------------------------------------------------------------------------
 // Central Conversational Intent & Slot Parser Agent
 // -----------------------------------------------------------------------------
@@ -1076,6 +1328,9 @@ export interface SchedulingTurnResult {
     | 'CANCELLED'
     | 'WEEKEND_NOT_ALLOWED'
     | 'HOURS_NOT_ALLOWED'
+    | 'ATTENDEE_ADDED'
+    | 'ASKED_ATTENDEE_EMAIL'
+    | 'ADD_ATTENDEE_FAILED'
     | 'NOT_DEMO_INTENT';
 }
 
@@ -1253,6 +1508,104 @@ export async function processSchedulingConversationTurn(params: {
 
   // 3. Rescheduling Intent
   const isRescheduleIntent = /reschedule|change\s+(the\s+)?(time|date|slot|demo|meeting)/i.test(lowerText);
+
+  // 3b. Add Attendee Intent
+  const cleanMsgText = stripQuotedEmailHistory(messageText);
+  const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
+  const rawEmailsInMsg = cleanMsgText.match(emailRegex) || [];
+  
+  const primaryLeadEmail = (
+    leadEmail ||
+    activeBooking?.leadEmail ||
+    ctx.leadEmail ||
+    ''
+  ).toLowerCase().trim();
+
+  const activeSmtpCfg = getSmtpConfig();
+  const hostEmails = Array.from(
+    new Set([
+      TARGET_CALENDAR_EMAIL.toLowerCase().trim(),
+      (activeSmtpCfg.user || '').toLowerCase().trim(),
+      (activeSmtpCfg.from || '').toLowerCase().trim(),
+      'sales@umrah360.in',
+      'support@umrah360.in',
+    ])
+  ).filter((e) => e.length > 0);
+
+  // Extract only NEW, distinct emails provided in THIS user message that are NOT the primary lead or host emails
+  const freshEmailsInMsg = Array.from(
+    new Set(
+      rawEmailsInMsg
+        .map((e) => e.toLowerCase().trim())
+        .filter((e) => e !== primaryLeadEmail && !hostEmails.includes(e))
+    )
+  );
+
+  const isAddAttendeeIntent =
+    /add\s+(an?\s+)?(attendee|colleague|guest|member|participant|person|email|team)/i.test(lowerText) ||
+    /invite\s+(my\s+)?(colleague|team|manager|co-worker|guest|person)/i.test(lowerText) ||
+    /include\s+(my\s+)?(colleague|team|manager|co-worker|guest|person|email)/i.test(lowerText) ||
+    /send\s+(the\s+)?(invite|calendar\s+invite|invitation)\s+to/i.test(lowerText) ||
+    /add\s+my\s+team/i.test(lowerText) ||
+    /team\s+members?/i.test(lowerText) ||
+    /their\s+email\s+is/i.test(lowerText);
+
+  if (isAddAttendeeIntent || freshEmailsInMsg.length > 0) {
+    if (freshEmailsInMsg.length === 0) {
+      // Lead requested adding attendee / team members, BUT provided no new email address in this message
+      return {
+        handled: true,
+        action: 'ASKED_ATTENDEE_EMAIL',
+        replyText: `I would be glad to add your team members to the demo calendar invitation! Could you please share their email address(es)?`,
+      };
+    }
+
+    // Lead provided new attendee email address(es)!
+    if (activeBooking) {
+      const addRes = await addAttendeeToDemoBooking({
+        bookingId: activeBooking.bookingId,
+        leadId,
+        leadEmail,
+        conversationId,
+        attendeeEmails: freshEmailsInMsg,
+        accessToken,
+      });
+
+      if (addRes.success && addRes.booking) {
+        const slotLabel = formatSlotLabel(
+          addRes.booking.date,
+          parseInt((addRes.booking.startTime || '15:00').split(':')[0], 10)
+        );
+        const meetLink = addRes.booking.googleMeetLink || activeBooking.googleMeetLink;
+
+        const uniqueAttendeesList = Array.from(
+          new Set([
+            `${addRes.booking.leadName || 'Primary Contact'} (${addRes.booking.leadEmail || leadEmail})`,
+            ...(addRes.booking.attendees || []),
+          ])
+        ).join(', ');
+
+        return {
+          handled: true,
+          action: 'ATTENDEE_ADDED',
+          booking: addRes.booking,
+          replyText: `You're all set! I have added ${freshEmailsInMsg.join(', ')} as an attendee to your Umrah360 demo on ${slotLabel}.\n\n• Google Meet Link: ${meetLink}\n• Date & Time: ${addRes.booking.date} from ${addRes.booking.startTime} – ${addRes.booking.endTime} IST\n• Attendees: ${uniqueAttendeesList}\n\nI have updated Google Calendar and sent the invitation directly to ${freshEmailsInMsg.join(', ')}. We look forward to demonstrating Umrah360 to your team!`,
+        };
+      } else {
+        return {
+          handled: true,
+          action: 'ADD_ATTENDEE_FAILED',
+          replyText: `I encountered an issue adding ${freshEmailsInMsg.join(', ')} to the calendar event. ${addRes.error || ''} Please confirm their email address.`,
+        };
+      }
+    } else {
+      return {
+        handled: true,
+        action: 'ASKED_AVAILABILITY',
+        replyText: `I'd be glad to invite ${freshEmailsInMsg.join(', ')} to the demo! Let's select a date and time for your walkthrough first. What day and time between 10:00 AM and 7:00 PM IST (Monday to Friday) works best for you? Once booked, I'll send the calendar invitation to both you and ${freshEmailsInMsg.join(', ')}.`,
+      };
+    }
+  }
 
   // 4. Use AI to extract intent and slot parameters from the full conversation
   let nlpResult: {

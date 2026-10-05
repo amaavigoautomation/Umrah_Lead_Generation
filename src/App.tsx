@@ -618,6 +618,8 @@ export default function App() {
 
   // Poll backend inbound mailbox and trigger active campaign dispatches safely (25s interval)
   useEffect(() => {
+    // Only poll once signed in to a workspace (requests need the Firebase token).
+    if (!currentUser || !currentTenantId) return;
     syncWithBackendInbound();
     triggerActiveCampaignsDispatch();
     const interval = setInterval(() => {
@@ -641,7 +643,7 @@ export default function App() {
       document.removeEventListener('visibilitychange', handleVisibility);
       window.removeEventListener('focus', handleVisibility);
     };
-  }, [syncWithBackendInbound, triggerActiveCampaignsDispatch]);
+  }, [syncWithBackendInbound, triggerActiveCampaignsDispatch, currentUser?.userId, currentTenantId]);
 
   // Active AI Auto-Reply Engine: checks for any unreplied inbound customer messages in AI-enabled threads
   const autoRepliedTurnsRef = useRef<Set<string>>(new Set());

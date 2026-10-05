@@ -1,0 +1,1391 @@
+diff --git a/package.json b/package.json
+index a1072ed..f7aa465 100644
+--- a/package.json
++++ b/package.json
+@@ -12,6 +12,8 @@
+     "check:isolation": "tsx scripts/check-isolation.ts",
+     "migrate:dry-run": "tsx scripts/migrate-to-tenants.ts --dry-run",
+     "migrate": "tsx scripts/migrate-to-tenants.ts",
++    "bootstrap:admin": "tsx scripts/bootstrap-platform-admin.ts",
++    "migrate:users": "tsx scripts/migrate-users-to-auth.ts",
+     "lint": "tsc --noEmit"
+   },
+   "dependencies": {
+diff --git a/scripts/bootstrap-platform-admin.ts b/scripts/bootstrap-platform-admin.ts
+new file mode 100644
+index 0000000..d4ad763
+--- /dev/null
++++ b/scripts/bootstrap-platform-admin.ts
+@@ -0,0 +1,80 @@
++/**
++ * Creates (or promotes) the platform admin: the person who creates client
++ * workspaces. Run ONCE per platform admin, from your own machine.
++ *
++ *   npx tsx scripts/bootstrap-platform-admin.ts --email you@example.com          # preview
++ *   npx tsx scripts/bootstrap-platform-admin.ts --email you@example.com --apply  # do it
++ *
++ * Requires FIREBASE_SERVICE_ACCOUNT_JSON (and FIRESTORE_DATABASE_ID if not default).
++ *
++ * What it writes (nothing else is touched):
++ *   1. Firebase Auth: the user account (created if missing) + custom claims
++ *      { platformAdmin: true, role: 'platformAdmin' }
++ *   2. Firestore: one document users/{uid}
++ * It prints a password-setup link. No password is ever typed or stored.
++ */
++import 'dotenv/config';
++import { getAdminAuth, getAdminFirestore, setTenantUserClaims, createPasswordSetupLink } from '../src/server/firebaseAdmin.js';
++import { randomBytes } from 'node:crypto';
++
++function arg(name: string): string | undefined {
++  const i = process.argv.indexOf(`--${name}`);
++  return i >= 0 ? process.argv[i + 1] : undefined;
++}
++
++async function main() {
++  const email = arg('email')?.trim().toLowerCase();
++  const apply = process.argv.includes('--apply');
++  if (!email || !email.includes('@')) {
++    console.error('Usage: bootstrap-platform-admin --email <email> [--apply]');
++    process.exit(1);
++  }
++
++  const auth = getAdminAuth();
++  let existing = null as Awaited<ReturnType<typeof auth.getUserByEmail>> | null;
++  try {
++    existing = await auth.getUserByEmail(email);
++  } catch (e: any) {
++    if (e?.code !== 'auth/user-not-found') throw e;
++  }
++
++  console.log(`Email:            ${email}`);
++  console.log(`Auth account:     ${existing ? `exists (uid ${existing.uid})` : 'will be created'}`);
++  console.log('Claims:           platformAdmin=true, role=platformAdmin (no tenant)');
++  console.log(`Firestore write:  users/${existing?.uid || '<new uid>'}`);
++
++  if (!apply) {
++    console.log('\nDRY RUN: nothing was changed. Re-run with --apply to proceed.');
++    return;
++  }
++
++  const user =
++    existing ||
++    (await auth.createUser({
++      email,
++      password: randomBytes(24).toString('base64url') + 'aA1!',
++      emailVerified: true,
++      displayName: email.split('@')[0],
++    }));
++
++  await setTenantUserClaims(user.uid, { platformAdmin: true, role: 'platformAdmin' });
++
++  const now = new Date().toISOString();
++  await getAdminFirestore()
++    .collection('users')
++    .doc(user.uid)
++    .set(
++      { uid: user.uid, email, name: user.displayName || email.split('@')[0], role: 'platformAdmin', active: true, createdAt: now, updatedAt: now },
++      { merge: true }
++    );
++
++  const link = await createPasswordSetupLink(email);
++  console.log('\nDone. Open this link to set your password (treat it like a password):\n');
++  console.log(link);
++  console.log('\nThen sign in at the app login page with this email.');
++}
++
++main().catch((e) => {
++  console.error('Failed:', e?.message || e);
++  process.exit(1);
++});
+diff --git a/scripts/migrate-users-to-auth.ts b/scripts/migrate-users-to-auth.ts
+new file mode 100644
+index 0000000..b2c459d
+--- /dev/null
++++ b/scripts/migrate-users-to-auth.ts
+@@ -0,0 +1,88 @@
++/**
++ * Moves existing app users (Firestore `app_users`, plaintext passwords) into
++ * Firebase Auth for one tenant. Passwords are NOT carried over: each user gets
++ * a password-setup link.
++ *
++ *   npx tsx scripts/migrate-users-to-auth.ts --tenant umrah360            # preview
++ *   npx tsx scripts/migrate-users-to-auth.ts --tenant umrah360 --apply
++ *
++ * Skips the seeded demo accounts (@umrah360.com with known passwords) unless
++ * --include-demo is passed. Safe to re-run. `app_users` is NOT modified or
++ * deleted; delete it yourself once everyone has signed in.
++ */
++import 'dotenv/config';
++import { getAdminAuth, getAdminFirestore, setTenantUserClaims, createPasswordSetupLink } from '../src/server/firebaseAdmin.js';
++import { randomBytes } from 'node:crypto';
++
++function arg(name: string): string | undefined {
++  const i = process.argv.indexOf(`--${name}`);
++  return i >= 0 ? process.argv[i + 1] : undefined;
++}
++
++const DEMO_EMAILS = new Set(['admin@umrah360.com', 'tester@umrah360.com']);
++
++async function main() {
++  const tenantId = arg('tenant');
++  const apply = process.argv.includes('--apply');
++  const includeDemo = process.argv.includes('--include-demo');
++  if (!tenantId) {
++    console.error('Usage: migrate-users-to-auth --tenant <tenantId> [--apply] [--include-demo]');
++    process.exit(1);
++  }
++
++  const fs = getAdminFirestore();
++  const auth = getAdminAuth();
++
++  const tenantSnap = await fs.collection('tenants').doc(tenantId).get();
++  if (!tenantSnap.exists) {
++    console.error(`Tenant "${tenantId}" does not exist in Firestore. Create/migrate it first.`);
++    process.exit(1);
++  }
++
++  const snap = await fs.collection('app_users').get();
++  console.log(`Found ${snap.size} app_users. Mode: ${apply ? 'APPLY' : 'DRY RUN'}\n`);
++
++  for (const d of snap.docs) {
++    const u = d.data() as any;
++    const email = String(u.email || '').trim().toLowerCase();
++    if (!email.includes('@')) { console.log(`- skip (no email): ${d.id}`); continue; }
++    if (!includeDemo && DEMO_EMAILS.has(email)) { console.log(`- skip (demo account): ${email}`); continue; }
++
++    const role = u.role === 'ADMIN' || u.role === 'admin' ? 'admin' : 'member';
++    console.log(`- ${email}  ->  tenant=${tenantId} role=${role}`);
++    if (!apply) continue;
++
++    let rec;
++    try {
++      rec = await auth.getUserByEmail(email);
++      const c = (rec.customClaims || {}) as any;
++      if (c.tenantId && c.tenantId !== tenantId) {
++        console.log(`  ! already in tenant ${c.tenantId}, skipped`);
++        continue;
++      }
++    } catch (e: any) {
++      if (e?.code !== 'auth/user-not-found') throw e;
++      rec = await auth.createUser({
++        email,
++        password: randomBytes(24).toString('base64url') + 'aA1!',
++        displayName: u.name || email.split('@')[0],
++        emailVerified: false,
++      });
++    }
++
++    await setTenantUserClaims(rec.uid, { tenantId, role });
++    const now = new Date().toISOString();
++    await fs.collection('users').doc(rec.uid).set(
++      {
++        uid: rec.uid, email, name: u.name || email.split('@')[0], tenantId, role, active: u.isActive !== false,
++        allowedModules: u.allowedModules || ['inbox', 'campaigns', 'crm', 'scheduling', 'knowledge', 'settings'],
++        createdAt: u.createdAt || now, updatedAt: now,
++      },
++      { merge: true }
++    );
++    console.log(`  setup link: ${await createPasswordSetupLink(email)}`);
++  }
++  if (!apply) console.log('\nDRY RUN: nothing changed. Re-run with --apply.');
++}
++
++main().catch((e) => { console.error('Failed:', e?.message || e); process.exit(1); });
+diff --git a/src/App.tsx b/src/App.tsx
+index 592b645..03874ac 100644
+--- a/src/App.tsx
++++ b/src/App.tsx
+@@ -11,6 +11,7 @@ import { SettingsView } from './components/SettingsView';
+ import { LiveMailboxCenter } from './components/LiveMailboxCenter';
+ import { DemoSchedulingView } from './components/DemoSchedulingView';
+ import { LoginView } from './components/LoginView';
++import { onSession, signOutUser, installAuthFetch, type SessionInfo } from './services/authService';
+ import { LockedModuleView } from './components/LockedModuleView';
+ import {
+   Contact,
+@@ -33,7 +34,6 @@ import {
+   INITIAL_PROSPECTS,
+   INITIAL_ACTIVITIES,
+   DEFAULT_SETTINGS,
+-  INITIAL_USERS,
+ } from './services/dataService';
+ import { INITIAL_KNOWLEDGE_DOCUMENTS } from './services/knowledgeData';
+ import { generateOmnichannelResponse } from './services/aiService';
+@@ -151,7 +151,7 @@ export default function App() {
+   const [isFirebaseActive, setIsFirebaseActive] = useState<boolean>(isFirebaseConfigured);
+ 
+   // Multi-Tenant Context & Workspace State
+-  const [currentTenantId, setCurrentTenantId] = useState<string>('umrah360');
++  const [currentTenantId, setCurrentTenantId] = useState<string>('');
+   const [currentTenant, setCurrentTenant] = useState<any>({
+     id: 'umrah360',
+     name: 'Umrah360 Flagship',
+@@ -166,30 +166,48 @@ export default function App() {
+   const tCol = useCallback((colName: string) => collection(db, 'tenants', currentTenantId, colName), [currentTenantId]);
+   const tDoc = useCallback((colName: string, docId: string) => doc(db, 'tenants', currentTenantId, colName, docId), [currentTenantId]);
+ 
+-  // Load Tenants list
++  // Users & Authentication State (Firebase Auth is the single source of truth)
++  const [users, setUsers] = useState<AppUser[]>([]);
++  const [currentUser, setCurrentUser] = useState<AppUser | null>(null);
++  const [session, setSession] = useState<SessionInfo | null>(null);
++  const [authLoading, setAuthLoading] = useState(true);
++  const [authError, setAuthError] = useState<string | null>(null);
++
+   useEffect(() => {
+-    fetch('/api/tenants')
+-      .then((r) => r.json())
+-      .then((data) => {
+-        if (Array.isArray(data?.tenants) && data.tenants.length > 0) {
+-          setAllTenants(data.tenants);
+-          const matched = data.tenants.find((t: any) => t.id === currentTenantId);
+-          if (matched) setCurrentTenant(matched);
+-        }
+-      })
+-      .catch(() => {});
+-  }, [currentTenantId]);
++    installAuthFetch();
++    return onSession((s, err) => {
++      setSession(s);
++      setCurrentUser(s ? s.appUser : null);
++      setCurrentTenantId(s?.tenantId || '');
++      if (err) setAuthError(err.message);
++      else if (s) setAuthError(null);
++      setAuthLoading(false);
++    });
++  }, []);
+ 
+-  // Users & Authentication State
+-  const [users, setUsers] = useState<AppUser[]>(INITIAL_USERS);
+-  const [currentUser, setCurrentUser] = useState<AppUser | null>(() => {
+-    try {
+-      const saved = localStorage.getItem('umrah360_user_session');
+-      return saved ? JSON.parse(saved) : INITIAL_USERS[0];
+-    } catch {
+-      return INITIAL_USERS[0];
++  // Load tenant info for the signed-in user's workspace (platform admins list all)
++  useEffect(() => {
++    if (!session) return;
++    if (session.isPlatformAdmin) {
++      fetch('/api/tenants')
++        .then((r) => r.json())
++        .then((data) => {
++          if (Array.isArray(data?.tenants)) setAllTenants(data.tenants);
++        })
++        .catch(() => {});
++    } else if (currentTenantId) {
++      fetch(`/api/tenants/${currentTenantId}`)
++        .then((r) => r.json())
++        .then((data) => {
++          const t = data?.tenant || data;
++          if (t?.id) {
++            setCurrentTenant(t);
++            setAllTenants([t]);
++          }
++        })
++        .catch(() => {});
+     }
+-  });
++  }, [session, currentTenantId]);
+ 
+   // Initialize Firestore seeding & loading on startup
+   useEffect(() => {
+@@ -202,6 +220,8 @@ export default function App() {
+     let unsubOutboundCamps: (() => void) | undefined;
+     let unsubOutboundProspects: (() => void) | undefined;
+ 
++    if (!currentUser || !currentTenantId) return;
++
+     async function initFirestore() {
+       // Initialize Google Calendar authentication & sync token to backend
+       initCalendarAuth();
+@@ -320,7 +340,7 @@ export default function App() {
+ 
+         // Initialize / sync users
+         if (!usersSnap || usersSnap.empty) {
+-          setUsers(INITIAL_USERS);
++          setUsers([]);
+         } else {
+           const tenantUsers = usersSnap.docs
+             .map((d) => d.data())
+@@ -336,7 +356,7 @@ export default function App() {
+               allowedModules: u.allowedModules || ['inbox', 'campaigns', 'crm', 'scheduling', 'knowledge', 'settings'],
+               createdAt: u.createdAt || new Date().toISOString(),
+             })) as AppUser[];
+-          setUsers(tenantUsers.length > 0 ? tenantUsers : INITIAL_USERS);
++          setUsers(tenantUsers);
+         }
+ 
+         // Attach realtime listeners for Firestore updates
+@@ -449,7 +469,7 @@ export default function App() {
+       if (unsubOutboundCamps) unsubOutboundCamps();
+       if (unsubOutboundProspects) unsubOutboundProspects();
+     };
+-  }, []);
++  }, [currentUser?.userId, currentTenantId]);
+ 
+   // Track message IDs ingested from backend to prevent duplicates
+   const ingestedBackendMsgIds = useRef<Set<string>>(new Set());
+@@ -1728,21 +1748,11 @@ export default function App() {
+   );
+ 
+   // User Authentication Handlers
+-  const handleLogin = (user: AppUser) => {
+-    setCurrentUser(user);
+-    try {
+-      localStorage.setItem('umrah360_user_session', JSON.stringify(user));
+-    } catch {}
+-    if (user.accessLevel !== 'ALL' && user.role !== 'ADMIN' && !user.allowedModules.includes(activeTab)) {
+-      setActiveTab((user.allowedModules[0] as ActiveTab) || 'knowledge');
+-    }
+-  };
+-
+-  const handleLogout = () => {
++  const handleLogout = async () => {
++    await signOutUser().catch(() => {});
+     setCurrentUser(null);
+-    try {
+-      localStorage.removeItem('umrah360_user_session');
+-    } catch {}
++    setSession(null);
++    setCurrentTenantId('');
+   };
+ 
+   const handleSaveUser = async (userToSave: AppUser) => {
+@@ -1758,9 +1768,6 @@ export default function App() {
+ 
+     if (currentUser?.userId === userToSave.userId) {
+       setCurrentUser(userToSave);
+-      try {
+-        localStorage.setItem('umrah360_user_session', JSON.stringify(userToSave));
+-      } catch {}
+     }
+ 
+     if (db && isFirebaseConfigured) {
+@@ -1783,13 +1790,44 @@ export default function App() {
+     }
+   };
+ 
++  if (authLoading) {
++    return (
++      <div className="min-h-screen flex items-center justify-center bg-slate-50 text-slate-500 text-sm">
++        Loading…
++      </div>
++    );
++  }
++
+   if (!currentUser) {
++    return <LoginView isFirebaseActive={isFirebaseActive} initialError={authError} />;
++  }
++
++  if (session?.isPlatformAdmin) {
+     return (
+-      <LoginView
+-        onLogin={handleLogin}
+-        users={users}
+-        isFirebaseActive={isFirebaseActive}
+-      />
++      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 text-slate-800 gap-3 p-6 text-center">
++        <h1 className="text-lg font-bold">Platform admin</h1>
++        <p className="text-sm text-slate-600 max-w-md">
++          Signed in as {currentUser.email}. The platform console (create workspaces, invite users)
++          is built in a later phase. Authentication is working.
++        </p>
++        <button
++          onClick={handleLogout}
++          className="px-4 py-2 rounded-lg bg-orange-500 text-white text-sm font-bold"
++        >
++          Sign out
++        </button>
++      </div>
++    );
++  }
++
++  if (!currentTenantId) {
++    return (
++      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 text-slate-700 gap-3 p-6 text-center">
++        <p className="text-sm">Your account is not assigned to a workspace yet. Contact your administrator.</p>
++        <button onClick={handleLogout} className="px-4 py-2 rounded-lg bg-orange-500 text-white text-sm font-bold">
++          Sign out
++        </button>
++      </div>
+     );
+   }
+ 
+diff --git a/src/components/DemoSchedulingView.tsx b/src/components/DemoSchedulingView.tsx
+index e17701c..ef09bff 100644
+--- a/src/components/DemoSchedulingView.tsx
++++ b/src/components/DemoSchedulingView.tsx
+@@ -107,7 +107,7 @@ export const DemoSchedulingView: React.FC<DemoSchedulingViewProps> = ({ leads =
+     try {
+       const token = await getCalendarAccessToken();
+       const headers: Record<string, string> = {};
+-      if (token) headers['Authorization'] = `Bearer ${token}`;
++      if (token) headers['X-Google-Access-Token'] = token;
+ 
+       const res = await fetch('/api/calendar/availability?count=8', { headers });
+       if (res.status === 401) {
+@@ -219,7 +219,7 @@ export const DemoSchedulingView: React.FC<DemoSchedulingViewProps> = ({ leads =
+       }
+ 
+       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+-      if (token) headers['Authorization'] = `Bearer ${token}`;
++      if (token) headers['X-Google-Access-Token'] = token;
+ 
+       const bookRes = await fetch('/api/calendar/book', {
+         method: 'POST',
+@@ -263,7 +263,7 @@ export const DemoSchedulingView: React.FC<DemoSchedulingViewProps> = ({ leads =
+     try {
+       const token = await getCalendarAccessToken();
+       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+-      if (token) headers['Authorization'] = `Bearer ${token}`;
++      if (token) headers['X-Google-Access-Token'] = token;
+ 
+       const startH = selectedSlot.startHour;
+       const startTime = `${String(startH).padStart(2, '0')}:00`;
+@@ -328,7 +328,7 @@ export const DemoSchedulingView: React.FC<DemoSchedulingViewProps> = ({ leads =
+     try {
+       const token = await getCalendarAccessToken();
+       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+-      if (token) headers['Authorization'] = `Bearer ${token}`;
++      if (token) headers['X-Google-Access-Token'] = token;
+ 
+       const startH = slot.startHour;
+       const startTime = `${String(startH).padStart(2, '0')}:00`;
+@@ -369,7 +369,7 @@ export const DemoSchedulingView: React.FC<DemoSchedulingViewProps> = ({ leads =
+     try {
+       const token = await getCalendarAccessToken();
+       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+-      if (token) headers['Authorization'] = `Bearer ${token}`;
++      if (token) headers['X-Google-Access-Token'] = token;
+ 
+       const rawEmails = newAttendeeEmailInput
+         .split(/[,;\s]+/)
+@@ -419,7 +419,7 @@ export const DemoSchedulingView: React.FC<DemoSchedulingViewProps> = ({ leads =
+     try {
+       const token = await getCalendarAccessToken();
+       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+-      if (token) headers['Authorization'] = `Bearer ${token}`;
++      if (token) headers['X-Google-Access-Token'] = token;
+ 
+       const res = await fetch('/api/calendar/schedule-turn', {
+         method: 'POST',
+diff --git a/src/components/LoginView.tsx b/src/components/LoginView.tsx
+index 0308498..464ffcf 100644
+--- a/src/components/LoginView.tsx
++++ b/src/components/LoginView.tsx
+@@ -11,64 +11,55 @@ import {
+   Shield,
+   Sparkles,
+ } from 'lucide-react';
+-import { AppUser } from '../types';
+ import { Umrah360Logo } from './Umrah360Logo';
++import { signIn, requestPasswordReset, friendlyAuthError } from '../services/authService';
+ 
+ interface LoginViewProps {
+-  onLogin: (user: AppUser) => void;
+-  users: AppUser[];
+   isFirebaseActive: boolean;
++  initialError?: string | null;
+ }
+ 
+-export const LoginView: React.FC<LoginViewProps> = ({
+-  onLogin,
+-  users,
+-  isFirebaseActive,
+-}) => {
++export const LoginView: React.FC<LoginViewProps> = ({ isFirebaseActive, initialError }) => {
+   const [identifier, setIdentifier] = useState('');
+   const [password, setPassword] = useState('');
+   const [showPassword, setShowPassword] = useState(false);
+-  const [error, setError] = useState<string | null>(null);
++  const [error, setError] = useState<string | null>(initialError || null);
++  const [info, setInfo] = useState<string | null>(null);
+   const [isLoading, setIsLoading] = useState(false);
+ 
+-  const handleSubmit = (e: React.FormEvent) => {
++  // On success, onAuthStateChanged in App takes over; nothing to call here.
++  const handleSubmit = async (e: React.FormEvent) => {
+     e.preventDefault();
+     setError(null);
++    setInfo(null);
++    const email = identifier.trim();
++    if (!email || !password) {
++      setError('Please enter both email and password.');
++      return;
++    }
+     setIsLoading(true);
+-
+-    const cleanIdentifier = identifier.trim().toLowerCase();
+-    const cleanPassword = password.trim();
+-
+-    if (!cleanIdentifier || !cleanPassword) {
+-      setError('Please enter both email/username and password.');
++    try {
++      await signIn(email, password);
++    } catch (err) {
++      setError(friendlyAuthError(err));
+       setIsLoading(false);
+-      return;
+     }
++  };
+ 
+-    // Lookup user in the DB users list
+-    const foundUser = users.find(
+-      (u) =>
+-        (u.email.toLowerCase() === cleanIdentifier ||
+-          (u.username && u.username.toLowerCase() === cleanIdentifier)) &&
+-        u.password === cleanPassword
+-    );
+-
+-    if (foundUser) {
+-      if (foundUser.isActive === false) {
+-        setError('This account has been deactivated in the database.');
+-        setIsLoading(false);
+-        return;
+-      }
+-      setTimeout(() => {
+-        setIsLoading(false);
+-        onLogin(foundUser);
+-      }, 300);
+-    } else {
+-      setTimeout(() => {
+-        setIsLoading(false);
+-        setError('Invalid credentials. Please check your email and password.');
+-      }, 300);
++  const handleForgot = async () => {
++    setError(null);
++    setInfo(null);
++    const email = identifier.trim();
++    if (!email) {
++      setError('Enter your email above first, then click "Forgot password".');
++      return;
+     }
++    try {
++      await requestPasswordReset(email);
++    } catch {
++      // Same message either way, so we never reveal which emails have accounts.
++    }
++    setInfo('If an account exists for that email, a reset link has been sent.');
+   };
+ 
+   return (
+@@ -101,6 +92,12 @@ export const LoginView: React.FC<LoginViewProps> = ({
+             </div>
+           </div>
+ 
++          {info && (
++            <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-800 text-xs">
++              {info}
++            </div>
++          )}
++
+           {error && (
+             <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-red-800 text-xs flex items-center space-x-2">
+               <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
+@@ -110,14 +107,15 @@ export const LoginView: React.FC<LoginViewProps> = ({
+ 
+           <form onSubmit={handleSubmit} className="space-y-4 text-xs">
+             <div>
+-              <label className="text-slate-700 block mb-1.5 font-bold">Email or Username</label>
++              <label className="text-slate-700 block mb-1.5 font-bold">Email</label>
+               <div className="relative">
+                 <Mail className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
+                 <input
+-                  type="text"
++                  type="email"
++                  autoComplete="username"
+                   value={identifier}
+                   onChange={(e) => setIdentifier(e.target.value)}
+-                  placeholder="name@umrah360.com"
++                  placeholder="you@company.com"
+                   className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-3 py-2.5 text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 font-medium transition"
+                   required
+                 />
+@@ -130,6 +128,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
+                 <Lock className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
+                 <input
+                   type={showPassword ? 'text' : 'password'}
++                  autoComplete="current-password"
+                   value={password}
+                   onChange={(e) => setPassword(e.target.value)}
+                   placeholder="••••••••"
+@@ -155,32 +154,21 @@ export const LoginView: React.FC<LoginViewProps> = ({
+                 <span>Verifying credentials...</span>
+               ) : (
+                 <>
+-                  <span>Sign In to Umrah 360</span>
++                  <span>Sign In</span>
+                   <ArrowRight className="w-4 h-4" />
+                 </>
+               )}
+             </button>
+           </form>
+ 
+-          {/* Preset User Quick Fill */}
+-          <div className="pt-2 border-t border-slate-100">
+-            <div className="text-[11px] font-bold text-slate-500 mb-2">Quick Sign-in (Demo Accounts):</div>
+-            <div className="grid grid-cols-2 gap-2">
+-              {users.slice(0, 2).map((u) => (
+-                <button
+-                  key={u.userId}
+-                  type="button"
+-                  onClick={() => {
+-                    setIdentifier(u.email);
+-                    setPassword(u.password || 'admin123');
+-                  }}
+-                  className="p-2 text-left bg-slate-50 hover:bg-orange-50 hover:border-orange-200 border border-slate-200 rounded-xl transition text-[11px]"
+-                >
+-                  <div className="font-bold text-slate-800">{u.name}</div>
+-                  <div className="text-[10px] text-slate-500">{u.role}</div>
+-                </button>
+-              ))}
+-            </div>
++          <div className="pt-2 border-t border-slate-100 text-center">
++            <button
++              type="button"
++              onClick={handleForgot}
++              className="text-[11px] font-bold text-orange-600 hover:text-orange-700"
++            >
++              Forgot password?
++            </button>
+           </div>
+         </div>
+       </div>
+diff --git a/src/server/authMiddleware.ts b/src/server/authMiddleware.ts
+index 4895576..c7f0f69 100644
+--- a/src/server/authMiddleware.ts
++++ b/src/server/authMiddleware.ts
+@@ -1,11 +1,8 @@
+ import type { Request, Response, NextFunction } from 'express';
+-import { getAdminAuth } from './firebaseAdmin.js';
+-import { globalTenantDoc, globalUserDoc } from './tenantRepo.js';
+-import { getDoc } from 'firebase/firestore';
++import { getAdminAuth, getAdminFirestore } from './firebaseAdmin.js';
+ import type { TenantContext, UserRole } from '../types/tenant.js';
+ import { createTenantLogger } from './logger.js';
+ 
+-// Extend Express Request type with TenantContext for vercel
+ declare global {
+   namespace Express {
+     interface Request {
+@@ -14,167 +11,131 @@ declare global {
+   }
+ }
+ 
+-// In-memory tenant status cache to avoid hitting Firestore on every single request
+-const tenantStatusCache = new Map<string, { status: 'active' | 'suspended'; cachedAt: number }>();
+-const CACHE_TTL_MS = 60_000; // 1 minute
++const PLATFORM_TENANT_ID = 'platform';
+ 
+-async function getCachedTenantStatus(tenantId: string): Promise<'active' | 'suspended'> {
++// (Not a discriminated union: this project compiles without strictNullChecks,
++// where union narrowing on `ok` does not work.)
++export interface AuthResult {
++  ok: boolean;
++  ctx?: TenantContext;
++  status?: number;
++  error?: string;
++  code?: string;
++}
++
++// Short cache so we don't read Firestore on every request. Fails CLOSED.
++const tenantStatusCache = new Map<string, { status: 'active' | 'suspended' | 'missing'; cachedAt: number }>();
++const CACHE_TTL_MS = 30_000;
++
++async function getTenantStatus(tenantId: string): Promise<'active' | 'suspended' | 'missing'> {
+   const cached = tenantStatusCache.get(tenantId);
+   const now = Date.now();
+-  if (cached && now - cached.cachedAt < CACHE_TTL_MS) {
+-    return cached.status;
+-  }
+-
+-  try {
+-    const snap = await getDoc(globalTenantDoc(tenantId));
+-    if (snap.exists()) {
+-      const data = snap.data();
+-      const status = data.status === 'suspended' ? 'suspended' : 'active';
+-      tenantStatusCache.set(tenantId, { status, cachedAt: now });
+-      return status;
+-    }
+-    // If tenant record does not exist yet (e.g. bootstrap/migration phase), default to active
+-    return 'active';
+-  } catch (err) {
+-    console.warn(`[AuthMiddleware] Error fetching tenant status for ${tenantId}:`, err);
+-    return 'active';
+-  }
++  if (cached && now - cached.cachedAt < CACHE_TTL_MS) return cached.status;
++
++  const snap = await getAdminFirestore().collection('tenants').doc(tenantId).get();
++  const status: 'active' | 'suspended' | 'missing' = !snap.exists
++    ? 'missing'
++    : snap.data()?.status === 'suspended'
++      ? 'suspended'
++      : 'active';
++  tenantStatusCache.set(tenantId, { status, cachedAt: now });
++  return status;
+ }
+ 
+ export function invalidateTenantStatusCache(tenantId: string) {
+   tenantStatusCache.delete(tenantId);
+ }
+ 
+-/**
+- * Extracts Bearer token from Authorization header
+- */
+-function extractBearerToken(req: Request): string | null {
+-  const authHeader = req.headers.authorization;
+-  if (!authHeader) return null;
+-  const parts = authHeader.split(' ');
++export function extractBearerToken(req: { headers: Record<string, any> }): string | null {
++  const header = req.headers['authorization'];
++  if (typeof header !== 'string') return null;
++  const parts = header.split(' ');
+   if (parts.length === 2 && /^bearer$/i.test(parts[0])) {
+-    return parts[1].trim();
++    const t = parts[1].trim();
++    return t && t !== 'null' && t !== 'undefined' ? t : null;
+   }
+   return null;
+ }
+ 
+ /**
+- * Core requireAuth Middleware
++ * Framework-agnostic authentication. Verifies the Firebase ID token (including
++ * revocation / disabled-user check) and builds the TenantContext from the
++ * token's custom claims ONLY. Nothing in the request (headers, body, query)
++ * can change which tenant the caller belongs to.
+  */
+-export async function requireAuth(req: Request, res: Response, next: NextFunction): Promise<void> {
++export async function authenticateRequest(req: { headers: Record<string, any> }): Promise<AuthResult> {
+   const token = extractBearerToken(req);
+-
+   if (!token) {
+-    res.status(401).json({
+-      error: 'Unauthorized: Missing or invalid Authorization header with Bearer token',
+-    });
+-    return;
++    return { ok: false, status: 401, error: 'Authentication required', code: 'AUTH_MISSING' };
+   }
+ 
++  let decoded: any;
+   try {
+-    const auth = getAdminAuth();
+-    let decodedToken: any;
++    decoded = await getAdminAuth().verifyIdToken(token, true);
++  } catch (err: any) {
++    const code = err?.code || 'AUTH_TOKEN_INVALID';
++    return { ok: false, status: 401, error: 'Invalid or expired session', code };
++  }
++
++  const isPlatformAdmin = decoded.platformAdmin === true;
++  const tenantId: string | undefined = isPlatformAdmin ? PLATFORM_TENANT_ID : decoded.tenantId;
+ 
++  if (!tenantId || typeof tenantId !== 'string') {
++    return { ok: false, status: 403, error: 'User is not assigned to a workspace', code: 'NO_TENANT_ASSIGNED' };
++  }
++
++  if (!isPlatformAdmin) {
+     try {
+-      decodedToken = await auth.verifyIdToken(token);
+-    } catch (verifyErr: any) {
+-      // In development or test environments, check for development/service token
+-      if (process.env.NODE_ENV !== 'production' && token.startsWith('dev-tenant-')) {
+-        const parts = token.split(':');
+-        decodedToken = {
+-          uid: parts[1] || 'dev-user',
+-          email: 'dev@umrah360.in',
+-          tenantId: parts[2] || 'umrah360',
+-          role: (parts[3] as UserRole) || 'admin',
+-          platformAdmin: parts[3] === 'platformAdmin',
+-        };
+-      } else {
+-        res.status(401).json({
+-          error: 'Unauthorized: Invalid or expired Firebase ID token',
+-          code: verifyErr?.code || 'AUTH_TOKEN_INVALID',
+-        });
+-        return;
++      const status = await getTenantStatus(tenantId);
++      if (status === 'suspended') {
++        return { ok: false, status: 403, error: 'This workspace is suspended', code: 'TENANT_SUSPENDED' };
+       }
+-    }
+-
+-    const isPlatformAdmin = Boolean(decodedToken.platformAdmin);
+-    let tenantId = decodedToken.tenantId;
+-    let role: UserRole = decodedToken.role || 'member';
+-
+-    // If platformAdmin and requesting a specific tenant via header, scope to that tenant
+-    if (isPlatformAdmin) {
+-      const targetTenantHeader = req.headers['x-tenant-id'];
+-      if (typeof targetTenantHeader === 'string' && targetTenantHeader.trim()) {
+-        tenantId = targetTenantHeader.trim();
+-      } else if (!tenantId) {
+-        tenantId = 'platform';
++      if (status === 'missing') {
++        return { ok: false, status: 403, error: 'Workspace not found', code: 'TENANT_NOT_FOUND' };
+       }
+-      role = 'platformAdmin';
+-    }
+-
+-    if (!tenantId) {
+-      res.status(403).json({
+-        error: 'Forbidden: User is not assigned to any tenant',
+-        code: 'NO_TENANT_ASSIGNED',
+-      });
+-      return;
++    } catch (err) {
++      createTenantLogger('system').error({ err }, 'Tenant status lookup failed');
++      return { ok: false, status: 503, error: 'Could not verify workspace', code: 'TENANT_LOOKUP_FAILED' };
+     }
++  }
+ 
+-    // Check if tenant is suspended
+-    if (!isPlatformAdmin && tenantId !== 'platform') {
+-      const tenantStatus = await getCachedTenantStatus(tenantId);
+-      if (tenantStatus === 'suspended') {
+-        res.status(403).json({
+-          error: 'Forbidden: Tenant workspace is currently suspended',
+-          code: 'TENANT_SUSPENDED',
+-        });
+-        return;
+-      }
+-    }
++  const role: UserRole = isPlatformAdmin
++    ? 'platformAdmin'
++    : decoded.role === 'admin'
++      ? 'admin'
++      : 'member';
+ 
+-    const ctx: TenantContext = {
++  return {
++    ok: true,
++    ctx: {
+       tenantId,
+-      uid: decodedToken.uid,
+-      email: decodedToken.email || '',
++      uid: decoded.uid,
++      email: decoded.email || '',
+       role,
+       isPlatformAdmin,
+-    };
+-
+-    req.tenantCtx = ctx;
+-    next();
+-  } catch (error: any) {
+-    const logger = createTenantLogger('system');
+-    logger.error({ err: error }, 'Authentication verification failed');
+-    res.status(401).json({
+-      error: 'Unauthorized: Authentication failed',
+-      details: error?.message || 'Token verification error',
+-    });
++    },
++  };
++}
++
++/** Express middleware wrapper. */
++export async function requireAuth(req: Request, res: Response, next: NextFunction): Promise<void> {
++  const result = await authenticateRequest(req as any);
++  if (!result.ok) {
++    res.status(result.status).json({ error: result.error, code: result.code });
++    return;
+   }
++  req.tenantCtx = result.ctx!;
++  next();
+ }
+ 
+-/**
+- * Middleware factory for role-based authorization
+- */
+ export function requireRole(...allowedRoles: UserRole[]) {
+   return (req: Request, res: Response, next: NextFunction): void => {
+     const ctx = req.tenantCtx;
+     if (!ctx) {
+-      res.status(401).json({ error: 'Unauthorized: Missing tenant context' });
++      res.status(401).json({ error: 'Authentication required' });
+       return;
+     }
+-
+-    if (ctx.isPlatformAdmin) {
+-      return next();
+-    }
+-
+-    if (!allowedRoles.includes(ctx.role)) {
+-      res.status(403).json({
+-        error: `Forbidden: Requires one of [${allowedRoles.join(', ')}] role`,
+-        userRole: ctx.role,
+-      });
+-      return;
+-    }
+-
+-    next();
++    if (ctx.isPlatformAdmin || allowedRoles.includes(ctx.role)) return next();
++    res.status(403).json({ error: 'Insufficient permissions' });
+   };
+ }
+diff --git a/src/server/coreApiHandler.ts b/src/server/coreApiHandler.ts
+index b3237e4..a13355d 100644
+--- a/src/server/coreApiHandler.ts
++++ b/src/server/coreApiHandler.ts
+@@ -88,6 +88,7 @@ import {
+   globalDomainRouteDoc,
+ } from './tenantRepo.js';
+ import { getAdminAuth } from './firebaseAdmin.js';
++import { authenticateRequest } from './authMiddleware.js';
+ import { encryptSecret, decryptSecret } from './cryptoUtils.js';
+ import { getTenantCurrentUsage, recordTenantUsage, checkTenantQuota } from './usageService.js';
+ import {
+@@ -129,7 +130,7 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
+   res.setHeader('Content-Type', 'application/json');
+   res.setHeader('Access-Control-Allow-Origin', '*');
+   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PATCH, DELETE, OPTIONS');
+-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
++  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Google-Access-Token');
+ 
+   if (req.method === 'OPTIONS') {
+     res.statusCode = 204;
+@@ -193,51 +194,50 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
+ 
+   if (!body || typeof body !== 'object') body = {};
+ 
+-  // Automatically extract and register Google Calendar OAuth bearer token from Authorization header if present
+-  const rawAuthHeader = req.headers.authorization || req.headers.Authorization;
+-  let requestBearerToken: string | null = null;
+-  if (typeof rawAuthHeader === 'string' && rawAuthHeader.toLowerCase().startsWith('bearer ')) {
+-    const candidate = rawAuthHeader.slice(7).trim();
+-    if (candidate && candidate !== 'null' && candidate !== 'undefined') {
+-      requestBearerToken = candidate;
+-      setServerCalendarAccessToken(candidate);
+-    }
+-  }
++  // Google Calendar OAuth token travels in its own header. `Authorization`
++  // carries ONLY the Firebase ID token.
++  const rawCalendarToken = req.headers['x-google-access-token'];
++  let requestBearerToken: string | null =
++    typeof rawCalendarToken === 'string' &&
++    rawCalendarToken.trim() &&
++    rawCalendarToken !== 'null' &&
++    rawCalendarToken !== 'undefined'
++      ? rawCalendarToken.trim()
++      : null;
++  if (requestBearerToken) setServerCalendarAccessToken(requestBearerToken);
+ 
+-  // Also register if accessToken was passed in body
+-  if (body?.accessToken && typeof body.accessToken === 'string' && body.accessToken.trim()) {
+-    const bodyToken = body.accessToken.trim();
+-    if (bodyToken && bodyToken !== 'null' && bodyToken !== 'undefined') {
+-      requestBearerToken = requestBearerToken || bodyToken;
+-      setServerCalendarAccessToken(bodyToken);
+-    }
+-  }
++  // =========================================================================
++  // AUTHENTICATION GATE: everything under /api requires a verified Firebase
++  // session, except the explicit public allowlist below. Tenant identity comes
++  // ONLY from the verified token claims. No header/body/query can override it.
++  // =========================================================================
++  const isPublicPath =
++    url === '/api/health' ||
++    url.startsWith('/api/webhooks/') ||
++    url === '/api/inbound/whatsapp' ||
++    url === '/api/leads/inbound' ||
++    url === '/api/campaigns/cron' ||
++    url === '/api/campaigns/process-active';
+ 
+-  // Resolve Multi-Tenant Context
+-  let resolvedTenantId = 'umrah360';
++  let resolvedTenantId = '';
+   let userUid = 'anonymous';
+   let userEmail = '';
+-  let userRole: UserRole = 'admin';
++  let userRole: UserRole = 'member';
+   let isPlatformAdmin = false;
+ 
+-  if (requestBearerToken) {
+-    try {
+-      const adminAuth = getAdminAuth();
+-      const decoded = await adminAuth.verifyIdToken(requestBearerToken).catch(() => null);
+-      if (decoded) {
+-        userUid = decoded.uid;
+-        userEmail = decoded.email || '';
+-        if (decoded.tenantId) resolvedTenantId = decoded.tenantId;
+-        if (decoded.role) userRole = decoded.role as UserRole;
+-        if (decoded.platformAdmin) isPlatformAdmin = true;
+-      }
+-    } catch {}
+-  }
+-
+-  // Header or query override
+-  const tenantHeader = req.headers['x-tenant-id'] || req.headers['x-tenant'];
+-  if (typeof tenantHeader === 'string' && tenantHeader.trim()) {
+-    resolvedTenantId = tenantHeader.trim();
++  if (!isPublicPath) {
++    const auth = await authenticateRequest(req);
++    if (!auth.ok) {
++      res.statusCode = auth.status;
++      res.end(JSON.stringify({ error: auth.error, code: auth.code }));
++      return true;
++    }
++    const c = auth.ctx!;
++    resolvedTenantId = c.tenantId;
++    userUid = c.uid;
++    userEmail = c.email;
++    userRole = c.role;
++    isPlatformAdmin = Boolean(c.isPlatformAdmin);
+   }
+ 
+   const activeTenantCtx: TenantContext = {
+@@ -248,10 +248,14 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
+     isPlatformAdmin,
+   };
+ 
+-  setCampaignActiveContext(activeTenantCtx);
+-  setSchedulingActiveContext(activeTenantCtx);
+-  setInboundActiveContext(activeTenantCtx);
+-  setWhatsAppActiveContext(activeTenantCtx);
++  // TEMPORARY: global active-context setters (removed in the "explicit ctx"
++  // phase). Only set for authenticated requests, never for public paths.
++  if (!isPublicPath) {
++    setCampaignActiveContext(activeTenantCtx);
++    setSchedulingActiveContext(activeTenantCtx);
++    setInboundActiveContext(activeTenantCtx);
++    setWhatsAppActiveContext(activeTenantCtx);
++  }
+ 
+   // =========================================================================
+   // MULTI-TENANT INBOUND WEBHOOK ROUTING (Phase P3)
+@@ -323,82 +327,26 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
+     return true;
+   }
+ 
+-  if (url === '/api/auth/login' && req.method === 'POST') {
+-    const { idToken, email, displayName, photoURL } = body;
+-    if (!idToken) {
+-      res.statusCode = 400;
+-      res.end(JSON.stringify({ error: 'idToken is required' }));
+-      return true;
++  // =========================================================================
++  // MULTI-TENANT PLATFORM & TENANT MANAGEMENT (Phase P1 / P4 / P6)
++  // =========================================================================
++  if (url === '/api/tenants' || url.startsWith('/api/tenants/')) {
++    const tm = url.match(/^\/api\/tenants\/([^/?]+)/);
++    const targetId = tm ? tm[1] : null;
++    let denied: string | null = null;
++    if (!isPlatformAdmin) {
++      if (!targetId) denied = 'Platform admin only';
++      else if (targetId !== resolvedTenantId) denied = 'Forbidden';
++      else if (req.method !== 'GET' && userRole !== 'admin') denied = 'Workspace admin only';
++      else if (/\/(secrets|routes)$/.test(url) && userRole !== 'admin') denied = 'Workspace admin only';
+     }
+-
+-    try {
+-      const adminAuth = getAdminAuth();
+-      const decoded = await adminAuth.verifyIdToken(idToken);
+-      const uid = decoded.uid;
+-      const userMail = decoded.email || email || '';
+-
+-      let assignedTenant = decoded.tenantId || 'umrah360';
+-      let assignedRole: UserRole = decoded.role || (userMail === 'amaavigo@gmail.com' ? 'admin' : 'member');
+-      const isPlatform = decoded.platformAdmin || userMail === 'amaavigo@gmail.com';
+-
+-      if (isFirebaseConfigured && db) {
+-        const userDocRef = globalUserDoc(uid);
+-        const userSnap = await getDoc(userDocRef);
+-
+-        if (userSnap.exists()) {
+-          const existingData = userSnap.data() as GlobalUser;
+-          assignedTenant = existingData.tenantId || assignedTenant;
+-          assignedRole = existingData.role || assignedRole;
+-        } else {
+-          // Create new global user record
+-          const newUser: GlobalUser = {
+-            uid,
+-            email: userMail,
+-            name: displayName || userMail.split('@')[0],
+-            tenantId: assignedTenant,
+-            role: assignedRole,
+-            active: true,
+-            photoURL: photoURL || '',
+-            allowedModules: ['inbox', 'campaigns', 'crm', 'scheduling', 'knowledge', 'settings'],
+-            createdAt: new Date().toISOString(),
+-            updatedAt: new Date().toISOString(),
+-          };
+-          await safeSetDoc(userDocRef, newUser, { merge: true });
+-        }
+-
+-        // Set or refresh Custom Claims
+-        await adminAuth.setCustomUserClaims(uid, {
+-          tenantId: assignedTenant,
+-          role: assignedRole,
+-          platformAdmin: isPlatform,
+-        });
+-      }
+-
+-      res.statusCode = 200;
+-      res.end(
+-        JSON.stringify({
+-          success: true,
+-          user: {
+-            uid,
+-            email: userMail,
+-            tenantId: assignedTenant,
+-            role: assignedRole,
+-            platformAdmin: isPlatform,
+-          },
+-        })
+-      );
+-      return true;
+-    } catch (err: any) {
+-      console.error('[Auth Login Error]:', err);
+-      res.statusCode = 401;
+-      res.end(JSON.stringify({ error: err?.message || 'Login verification failed' }));
++    if (denied) {
++      res.statusCode = 403;
++      res.end(JSON.stringify({ error: denied }));
+       return true;
+     }
+   }
+ 
+-  // =========================================================================
+-  // MULTI-TENANT PLATFORM & TENANT MANAGEMENT (Phase P1 / P4 / P6)
+-  // =========================================================================
+   if (url === '/api/tenants' && req.method === 'GET') {
+     if (isFirebaseConfigured && db) {
+       try {
+@@ -1675,6 +1623,18 @@ Generate a helpful, grounded response.`;
+   }
+ 
+   if ((url === '/api/campaigns/process-active' || url === '/api/campaigns/cron') && (req.method === 'POST' || req.method === 'GET')) {
++    const cronSecret = process.env.CRON_SECRET;
++    const presented = (req.headers['authorization'] || '').toString().replace(/^Bearer\s+/i, '');
++    let cronAllowed = Boolean(cronSecret) && presented === cronSecret;
++    if (!cronAllowed) {
++      const a = await authenticateRequest(req);
++      cronAllowed = a.ok && Boolean(a.ctx?.isPlatformAdmin);
++    }
++    if (!cronAllowed) {
++      res.statusCode = 401;
++      res.end(JSON.stringify({ error: 'Unauthorized' }));
++      return true;
++    }
+     try {
+       const result = await processActiveRunningCampaignsBatch(500);
+       res.statusCode = 200;
+diff --git a/src/server/firebaseAdmin.ts b/src/server/firebaseAdmin.ts
+index f4d9c10..30680b2 100644
+--- a/src/server/firebaseAdmin.ts
++++ b/src/server/firebaseAdmin.ts
+@@ -1,6 +1,7 @@
+ import { initializeApp, getApps, cert, applicationDefault, App } from 'firebase-admin/app';
+ import { getAuth, Auth, UserRecord } from 'firebase-admin/auth';
+ import { getFirestore, Firestore } from 'firebase-admin/firestore';
++import { randomBytes } from 'node:crypto';
+ import rawConfig from '../../firebase-applet-config.json';
+ import type { AuthClaims, UserRole } from '../types/tenant.js';
+ 
+@@ -81,7 +82,10 @@ export async function setTenantUserClaims(
+ }
+ 
+ /**
+- * Creates or updates a user in Firebase Auth and assigns claims
++ * Creates a user in Firebase Auth and assigns claims.
++ * - An existing account is never silently moved to another tenant.
++ * - With no password, a random one is generated; the user sets their own via
++ *   the password-reset link (see createPasswordSetupLink).
+  */
+ export async function createTenantUser(params: {
+   email: string;
+@@ -91,30 +95,28 @@ export async function createTenantUser(params: {
+   role: UserRole;
+ }): Promise<UserRecord> {
+   const auth = getAdminAuth();
++  const email = params.email.trim().toLowerCase();
+   let userRecord: UserRecord;
+ 
+   try {
+-    userRecord = await auth.getUserByEmail(params.email);
+-    if (params.password) {
+-      userRecord = await auth.updateUser(userRecord.uid, {
+-        password: params.password,
+-        displayName: params.displayName || userRecord.displayName,
+-      });
++    userRecord = await auth.getUserByEmail(email);
++    const existing = (userRecord.customClaims || {}) as AuthClaims;
++    if (existing.tenantId && existing.tenantId !== params.tenantId) {
++      throw new Error('This email already belongs to another workspace');
+     }
+   } catch (error: any) {
+-    if (error.code === 'auth/user-not-found') {
++    if (error?.code === 'auth/user-not-found') {
+       userRecord = await auth.createUser({
+-        email: params.email,
+-        password: params.password || Math.random().toString(36).substring(2, 14) + '!A9',
+-        displayName: params.displayName || params.email.split('@')[0],
+-        emailVerified: true,
++        email,
++        password: params.password || randomBytes(18).toString('base64url') + 'aA1!',
++        displayName: params.displayName || email.split('@')[0],
++        emailVerified: false,
+       });
+     } else {
+       throw error;
+     }
+   }
+ 
+-  // Assign claims
+   await setTenantUserClaims(userRecord.uid, {
+     tenantId: params.tenantId,
+     role: params.role,
+@@ -123,3 +125,16 @@ export async function createTenantUser(params: {
+ 
+   return userRecord;
+ }
++
++/** Link the user opens to set their own password (used for invites). */
++export async function createPasswordSetupLink(email: string, continueUrl?: string): Promise<string> {
++  return getAdminAuth().generatePasswordResetLink(
++    email,
++    continueUrl ? { url: continueUrl } : undefined
++  );
++}
++
++/** Force all existing sessions of a user to re-authenticate. */
++export async function revokeUserSessions(uid: string): Promise<void> {
++  await getAdminAuth().revokeRefreshTokens(uid);
++}
+diff --git a/src/services/authService.ts b/src/services/authService.ts
+new file mode 100644
+index 0000000..107aaa4
+--- /dev/null
++++ b/src/services/authService.ts
+@@ -0,0 +1,131 @@
++import {
++  signInWithEmailAndPassword,
++  signOut,
++  onAuthStateChanged,
++  sendPasswordResetEmail,
++  type User as FirebaseUser,
++} from 'firebase/auth';
++import { doc, getDoc } from 'firebase/firestore';
++import { auth, db, isFirebaseConfigured } from '../firebase/config';
++import type { AppUser } from '../types';
++
++export interface SessionInfo {
++  appUser: AppUser;
++  tenantId: string | null; // null for platform admins (they have no workspace)
++  isPlatformAdmin: boolean;
++  isTenantAdmin: boolean;
++}
++
++const DEFAULT_MODULES = ['inbox', 'campaigns', 'crm', 'scheduling', 'knowledge', 'settings'];
++
++export async function signIn(email: string, password: string): Promise<void> {
++  await signInWithEmailAndPassword(auth, email.trim(), password);
++}
++
++export async function signOutUser(): Promise<void> {
++  await signOut(auth);
++}
++
++export async function requestPasswordReset(email: string): Promise<void> {
++  await sendPasswordResetEmail(auth, email.trim());
++}
++
++/** Fresh ID token (auto-refreshed by the SDK when near expiry). */
++export async function getIdToken(forceRefresh = false): Promise<string | null> {
++  const u = auth.currentUser;
++  return u ? u.getIdToken(forceRefresh) : null;
++}
++
++/** Turn a Firebase user + its server-set claims into the app's session model. */
++export async function buildSession(fbUser: FirebaseUser): Promise<SessionInfo> {
++  // forceRefresh so freshly-set claims (e.g. right after an invite) are seen
++  const tokenResult = await fbUser.getIdTokenResult(true);
++  const claims = tokenResult.claims as { tenantId?: string; role?: string; platformAdmin?: boolean };
++  const isPlatformAdmin = claims.platformAdmin === true;
++  const tenantId = isPlatformAdmin ? null : claims.tenantId || null;
++  const isTenantAdmin = isPlatformAdmin || claims.role === 'admin';
++
++  let allowedModules = DEFAULT_MODULES;
++  let name = fbUser.displayName || (fbUser.email || '').split('@')[0] || 'User';
++  if (isFirebaseConfigured && db && !isPlatformAdmin) {
++    try {
++      const snap = await getDoc(doc(db, 'users', fbUser.uid));
++      if (snap.exists()) {
++        const d = snap.data() as any;
++        if (Array.isArray(d.allowedModules) && d.allowedModules.length) allowedModules = d.allowedModules;
++        if (d.name) name = d.name;
++        if (d.active === false) throw new Error('This account has been deactivated.');
++      }
++    } catch (e: any) {
++      if (e?.message?.includes('deactivated')) throw e;
++      // rules may not allow the read yet; fall back to defaults
++    }
++  }
++
++  const now = new Date().toISOString();
++  return {
++    tenantId,
++    isPlatformAdmin,
++    isTenantAdmin,
++    appUser: {
++      userId: fbUser.uid,
++      email: fbUser.email || '',
++      username: (fbUser.email || '').split('@')[0],
++      password: '', // passwords are never held client-side
++      name,
++      role: isTenantAdmin ? 'ADMIN' : 'SPECIALIST',
++      accessLevel: isTenantAdmin ? 'ALL' : 'CUSTOM',
++      allowedModules,
++      isActive: true,
++      createdAt: fbUser.metadata.creationTime || now,
++      updatedAt: now,
++    },
++  };
++}
++
++/** Subscribe to sign-in / sign-out. Callback gets null when signed out. */
++export function onSession(cb: (s: SessionInfo | null, err?: Error) => void): () => void {
++  return onAuthStateChanged(auth, async (fbUser) => {
++    if (!fbUser) return cb(null);
++    try {
++      cb(await buildSession(fbUser));
++    } catch (e: any) {
++      await signOut(auth).catch(() => {});
++      cb(null, e);
++    }
++  });
++}
++
++/** Human-friendly message for Firebase auth errors (no account enumeration). */
++export function friendlyAuthError(e: any): string {
++  const code = e?.code || '';
++  if (code === 'auth/too-many-requests') return 'Too many attempts. Try again later or reset your password.';
++  if (code === 'auth/user-disabled') return 'This account has been disabled.';
++  if (code === 'auth/network-request-failed') return 'Network error. Check your connection.';
++  if (e?.message?.includes('deactivated')) return e.message;
++  return 'Invalid email or password.';
++}
++
++let fetchPatched = false;
++/**
++ * Attach the Firebase ID token to every same-origin /api/ request.
++ * Call once at startup. (Authorization carries ONLY the Firebase token; the
++ * Google Calendar token goes in X-Google-Access-Token.)
++ */
++export function installAuthFetch(): void {
++  if (fetchPatched || typeof window === 'undefined') return;
++  fetchPatched = true;
++  const original = window.fetch.bind(window);
++  window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
++    const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
++    const isApi = url.startsWith('/api/') || url.startsWith(`${window.location.origin}/api/`);
++    if (!isApi) return original(input, init);
++
++    const token = await getIdToken().catch(() => null);
++    if (!token) return original(input, init);
++
++    const headers = new Headers(init?.headers || (input instanceof Request ? input.headers : undefined));
++    headers.set('Authorization', `Bearer ${token}`);
++    return original(input, { ...init, headers });
++  };
++}

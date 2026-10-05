@@ -11,6 +11,7 @@ import { SettingsView } from './components/SettingsView';
 import { LiveMailboxCenter } from './components/LiveMailboxCenter';
 import { DemoSchedulingView } from './components/DemoSchedulingView';
 import { LoginView } from './components/LoginView';
+import { onSession, signOutUser, installAuthFetch, type SessionInfo } from './services/authService';
 import { LockedModuleView } from './components/LockedModuleView';
 import {
   Contact,
@@ -33,7 +34,6 @@ import {
   INITIAL_PROSPECTS,
   INITIAL_ACTIVITIES,
   DEFAULT_SETTINGS,
-  INITIAL_USERS,
 } from './services/dataService';
 import { INITIAL_KNOWLEDGE_DOCUMENTS } from './services/knowledgeData';
 import { generateOmnichannelResponse } from './services/aiService';
@@ -151,7 +151,7 @@ export default function App() {
   const [isFirebaseActive, setIsFirebaseActive] = useState<boolean>(isFirebaseConfigured);
 
   // Multi-Tenant Context & Workspace State
-  const [currentTenantId, setCurrentTenantId] = useState<string>('umrah360');
+  const [currentTenantId, setCurrentTenantId] = useState<string>('');
   const [currentTenant, setCurrentTenant] = useState<any>({
     id: 'umrah360',
     name: 'Umrah360 Flagship',
@@ -166,30 +166,48 @@ export default function App() {
   const tCol = useCallback((colName: string) => collection(db, 'tenants', currentTenantId, colName), [currentTenantId]);
   const tDoc = useCallback((colName: string, docId: string) => doc(db, 'tenants', currentTenantId, colName, docId), [currentTenantId]);
 
-  // Load Tenants list
-  useEffect(() => {
-    fetch('/api/tenants')
-      .then((r) => r.json())
-      .then((data) => {
-        if (Array.isArray(data?.tenants) && data.tenants.length > 0) {
-          setAllTenants(data.tenants);
-          const matched = data.tenants.find((t: any) => t.id === currentTenantId);
-          if (matched) setCurrentTenant(matched);
-        }
-      })
-      .catch(() => {});
-  }, [currentTenantId]);
+  // Users & Authentication State (Firebase Auth is the single source of truth)
+  const [users, setUsers] = useState<AppUser[]>([]);
+  const [currentUser, setCurrentUser] = useState<AppUser | null>(null);
+  const [session, setSession] = useState<SessionInfo | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [authError, setAuthError] = useState<string | null>(null);
 
-  // Users & Authentication State
-  const [users, setUsers] = useState<AppUser[]>(INITIAL_USERS);
-  const [currentUser, setCurrentUser] = useState<AppUser | null>(() => {
-    try {
-      const saved = localStorage.getItem('umrah360_user_session');
-      return saved ? JSON.parse(saved) : INITIAL_USERS[0];
-    } catch {
-      return INITIAL_USERS[0];
+  useEffect(() => {
+    installAuthFetch();
+    return onSession((s, err) => {
+      setSession(s);
+      setCurrentUser(s ? s.appUser : null);
+      setCurrentTenantId(s?.tenantId || '');
+      if (err) setAuthError(err.message);
+      else if (s) setAuthError(null);
+      setAuthLoading(false);
+    });
+  }, []);
+
+  // Load tenant info for the signed-in user's workspace (platform admins list all)
+  useEffect(() => {
+    if (!session) return;
+    if (session.isPlatformAdmin) {
+      fetch('/api/tenants')
+        .then((r) => r.json())
+        .then((data) => {
+          if (Array.isArray(data?.tenants)) setAllTenants(data.tenants);
+        })
+        .catch(() => {});
+    } else if (currentTenantId) {
+      fetch(`/api/tenants/${currentTenantId}`)
+        .then((r) => r.json())
+        .then((data) => {
+          const t = data?.tenant || data;
+          if (t?.id) {
+            setCurrentTenant(t);
+            setAllTenants([t]);
+          }
+        })
+        .catch(() => {});
     }
-  });
+  }, [session, currentTenantId]);
 
   // Initialize Firestore seeding & loading on startup
   useEffect(() => {
@@ -201,6 +219,8 @@ export default function App() {
     let unsubUsers: (() => void) | undefined;
     let unsubOutboundCamps: (() => void) | undefined;
     let unsubOutboundProspects: (() => void) | undefined;
+
+    if (!currentUser || !currentTenantId) return;
 
     async function initFirestore() {
       // Initialize Google Calendar authentication & sync token to backend
@@ -320,7 +340,7 @@ export default function App() {
 
         // Initialize / sync users
         if (!usersSnap || usersSnap.empty) {
-          setUsers(INITIAL_USERS);
+          setUsers([]);
         } else {
           const tenantUsers = usersSnap.docs
             .map((d) => d.data())
@@ -336,7 +356,7 @@ export default function App() {
               allowedModules: u.allowedModules || ['inbox', 'campaigns', 'crm', 'scheduling', 'knowledge', 'settings'],
               createdAt: u.createdAt || new Date().toISOString(),
             })) as AppUser[];
-          setUsers(tenantUsers.length > 0 ? tenantUsers : INITIAL_USERS);
+          setUsers(tenantUsers);
         }
 
         // Attach realtime listeners for Firestore updates
@@ -449,7 +469,7 @@ export default function App() {
       if (unsubOutboundCamps) unsubOutboundCamps();
       if (unsubOutboundProspects) unsubOutboundProspects();
     };
-  }, []);
+  }, [currentUser?.userId, currentTenantId]);
 
   // Track message IDs ingested from backend to prevent duplicates
   const ingestedBackendMsgIds = useRef<Set<string>>(new Set());
@@ -1728,21 +1748,11 @@ export default function App() {
   );
 
   // User Authentication Handlers
-  const handleLogin = (user: AppUser) => {
-    setCurrentUser(user);
-    try {
-      localStorage.setItem('umrah360_user_session', JSON.stringify(user));
-    } catch {}
-    if (user.accessLevel !== 'ALL' && user.role !== 'ADMIN' && !user.allowedModules.includes(activeTab)) {
-      setActiveTab((user.allowedModules[0] as ActiveTab) || 'knowledge');
-    }
-  };
-
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    await signOutUser().catch(() => {});
     setCurrentUser(null);
-    try {
-      localStorage.removeItem('umrah360_user_session');
-    } catch {}
+    setSession(null);
+    setCurrentTenantId('');
   };
 
   const handleSaveUser = async (userToSave: AppUser) => {
@@ -1758,9 +1768,6 @@ export default function App() {
 
     if (currentUser?.userId === userToSave.userId) {
       setCurrentUser(userToSave);
-      try {
-        localStorage.setItem('umrah360_user_session', JSON.stringify(userToSave));
-      } catch {}
     }
 
     if (db && isFirebaseConfigured) {
@@ -1783,13 +1790,44 @@ export default function App() {
     }
   };
 
-  if (!currentUser) {
+  if (authLoading) {
     return (
-      <LoginView
-        onLogin={handleLogin}
-        users={users}
-        isFirebaseActive={isFirebaseActive}
-      />
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 text-slate-500 text-sm">
+        Loading…
+      </div>
+    );
+  }
+
+  if (!currentUser) {
+    return <LoginView isFirebaseActive={isFirebaseActive} initialError={authError} />;
+  }
+
+  if (session?.isPlatformAdmin) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 text-slate-800 gap-3 p-6 text-center">
+        <h1 className="text-lg font-bold">Platform admin</h1>
+        <p className="text-sm text-slate-600 max-w-md">
+          Signed in as {currentUser.email}. The platform console (create workspaces, invite users)
+          is built in a later phase. Authentication is working.
+        </p>
+        <button
+          onClick={handleLogout}
+          className="px-4 py-2 rounded-lg bg-orange-500 text-white text-sm font-bold"
+        >
+          Sign out
+        </button>
+      </div>
+    );
+  }
+
+  if (!currentTenantId) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 text-slate-700 gap-3 p-6 text-center">
+        <p className="text-sm">Your account is not assigned to a workspace yet. Contact your administrator.</p>
+        <button onClick={handleLogout} className="px-4 py-2 rounded-lg bg-orange-500 text-white text-sm font-bold">
+          Sign out
+        </button>
+      </div>
     );
   }
 

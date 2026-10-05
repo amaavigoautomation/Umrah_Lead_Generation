@@ -12,6 +12,8 @@
     "check:isolation": "tsx scripts/check-isolation.ts",
     "migrate:dry-run": "tsx scripts/migrate-to-tenants.ts --dry-run",
     "migrate": "tsx scripts/migrate-to-tenants.ts",
+    "bootstrap:admin": "tsx scripts/bootstrap-platform-admin.ts",
+    "migrate:users": "tsx scripts/migrate-users-to-auth.ts",
     "lint": "tsc --noEmit"
   },
   "dependencies": {

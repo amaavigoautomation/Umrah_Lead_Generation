@@ -1,11 +1,8 @@
 import type { Request, Response, NextFunction } from 'express';
-import { getAdminAuth } from './firebaseAdmin.js';
-import { globalTenantDoc, globalUserDoc } from './tenantRepo.js';
-import { getDoc } from 'firebase/firestore';
+import { getAdminAuth, getAdminFirestore } from './firebaseAdmin.js';
 import type { TenantContext, UserRole } from '../types/tenant.js';
 import { createTenantLogger } from './logger.js';
 
-// Extend Express Request type with TenantContext for vercel
 declare global {
   namespace Express {
     interface Request {
@@ -14,167 +11,131 @@ declare global {
   }
 }
 
-// In-memory tenant status cache to avoid hitting Firestore on every single request
-const tenantStatusCache = new Map<string, { status: 'active' | 'suspended'; cachedAt: number }>();
-const CACHE_TTL_MS = 60_000; // 1 minute
+const PLATFORM_TENANT_ID = 'platform';
 
-async function getCachedTenantStatus(tenantId: string): Promise<'active' | 'suspended'> {
+// (Not a discriminated union: this project compiles without strictNullChecks,
+// where union narrowing on `ok` does not work.)
+export interface AuthResult {
+  ok: boolean;
+  ctx?: TenantContext;
+  status?: number;
+  error?: string;
+  code?: string;
+}
+
+// Short cache so we don't read Firestore on every request. Fails CLOSED.
+const tenantStatusCache = new Map<string, { status: 'active' | 'suspended' | 'missing'; cachedAt: number }>();
+const CACHE_TTL_MS = 30_000;
+
+async function getTenantStatus(tenantId: string): Promise<'active' | 'suspended' | 'missing'> {
   const cached = tenantStatusCache.get(tenantId);
   const now = Date.now();
-  if (cached && now - cached.cachedAt < CACHE_TTL_MS) {
-    return cached.status;
-  }
+  if (cached && now - cached.cachedAt < CACHE_TTL_MS) return cached.status;
 
-  try {
-    const snap = await getDoc(globalTenantDoc(tenantId));
-    if (snap.exists()) {
-      const data = snap.data();
-      const status = data.status === 'suspended' ? 'suspended' : 'active';
-      tenantStatusCache.set(tenantId, { status, cachedAt: now });
-      return status;
-    }
-    // If tenant record does not exist yet (e.g. bootstrap/migration phase), default to active
-    return 'active';
-  } catch (err) {
-    console.warn(`[AuthMiddleware] Error fetching tenant status for ${tenantId}:`, err);
-    return 'active';
-  }
+  const snap = await getAdminFirestore().collection('tenants').doc(tenantId).get();
+  const status: 'active' | 'suspended' | 'missing' = !snap.exists
+    ? 'missing'
+    : snap.data()?.status === 'suspended'
+      ? 'suspended'
+      : 'active';
+  tenantStatusCache.set(tenantId, { status, cachedAt: now });
+  return status;
 }
 
 export function invalidateTenantStatusCache(tenantId: string) {
   tenantStatusCache.delete(tenantId);
 }
 
-/**
- * Extracts Bearer token from Authorization header
- */
-function extractBearerToken(req: Request): string | null {
-  const authHeader = req.headers.authorization;
-  if (!authHeader) return null;
-  const parts = authHeader.split(' ');
+export function extractBearerToken(req: { headers: Record<string, any> }): string | null {
+  const header = req.headers['authorization'];
+  if (typeof header !== 'string') return null;
+  const parts = header.split(' ');
   if (parts.length === 2 && /^bearer$/i.test(parts[0])) {
-    return parts[1].trim();
+    const t = parts[1].trim();
+    return t && t !== 'null' && t !== 'undefined' ? t : null;
   }
   return null;
 }
 
 /**
- * Core requireAuth Middleware
+ * Framework-agnostic authentication. Verifies the Firebase ID token (including
+ * revocation / disabled-user check) and builds the TenantContext from the
+ * token's custom claims ONLY. Nothing in the request (headers, body, query)
+ * can change which tenant the caller belongs to.
  */
-export async function requireAuth(req: Request, res: Response, next: NextFunction): Promise<void> {
+export async function authenticateRequest(req: { headers: Record<string, any> }): Promise<AuthResult> {
   const token = extractBearerToken(req);
-
   if (!token) {
-    res.status(401).json({
-      error: 'Unauthorized: Missing or invalid Authorization header with Bearer token',
-    });
-    return;
+    return { ok: false, status: 401, error: 'Authentication required', code: 'AUTH_MISSING' };
   }
 
+  let decoded: any;
   try {
-    const auth = getAdminAuth();
-    let decodedToken: any;
+    decoded = await getAdminAuth().verifyIdToken(token, true);
+  } catch (err: any) {
+    const code = err?.code || 'AUTH_TOKEN_INVALID';
+    return { ok: false, status: 401, error: 'Invalid or expired session', code };
+  }
 
+  const isPlatformAdmin = decoded.platformAdmin === true;
+  const tenantId: string | undefined = isPlatformAdmin ? PLATFORM_TENANT_ID : decoded.tenantId;
+
+  if (!tenantId || typeof tenantId !== 'string') {
+    return { ok: false, status: 403, error: 'User is not assigned to a workspace', code: 'NO_TENANT_ASSIGNED' };
+  }
+
+  if (!isPlatformAdmin) {
     try {
-      decodedToken = await auth.verifyIdToken(token);
-    } catch (verifyErr: any) {
-      // In development or test environments, check for development/service token
-      if (process.env.NODE_ENV !== 'production' && token.startsWith('dev-tenant-')) {
-        const parts = token.split(':');
-        decodedToken = {
-          uid: parts[1] || 'dev-user',
-          email: 'dev@umrah360.in',
-          tenantId: parts[2] || 'umrah360',
-          role: (parts[3] as UserRole) || 'admin',
-          platformAdmin: parts[3] === 'platformAdmin',
-        };
-      } else {
-        res.status(401).json({
-          error: 'Unauthorized: Invalid or expired Firebase ID token',
-          code: verifyErr?.code || 'AUTH_TOKEN_INVALID',
-        });
-        return;
+      const status = await getTenantStatus(tenantId);
+      if (status === 'suspended') {
+        return { ok: false, status: 403, error: 'This workspace is suspended', code: 'TENANT_SUSPENDED' };
       }
-    }
-
-    const isPlatformAdmin = Boolean(decodedToken.platformAdmin);
-    let tenantId = decodedToken.tenantId;
-    let role: UserRole = decodedToken.role || 'member';
-
-    // If platformAdmin and requesting a specific tenant via header, scope to that tenant
-    if (isPlatformAdmin) {
-      const targetTenantHeader = req.headers['x-tenant-id'];
-      if (typeof targetTenantHeader === 'string' && targetTenantHeader.trim()) {
-        tenantId = targetTenantHeader.trim();
-      } else if (!tenantId) {
-        tenantId = 'platform';
+      if (status === 'missing') {
+        return { ok: false, status: 403, error: 'Workspace not found', code: 'TENANT_NOT_FOUND' };
       }
-      role = 'platformAdmin';
+    } catch (err) {
+      createTenantLogger('system').error({ err }, 'Tenant status lookup failed');
+      return { ok: false, status: 503, error: 'Could not verify workspace', code: 'TENANT_LOOKUP_FAILED' };
     }
+  }
 
-    if (!tenantId) {
-      res.status(403).json({
-        error: 'Forbidden: User is not assigned to any tenant',
-        code: 'NO_TENANT_ASSIGNED',
-      });
-      return;
-    }
+  const role: UserRole = isPlatformAdmin
+    ? 'platformAdmin'
+    : decoded.role === 'admin'
+      ? 'admin'
+      : 'member';
 
-    // Check if tenant is suspended
-    if (!isPlatformAdmin && tenantId !== 'platform') {
-      const tenantStatus = await getCachedTenantStatus(tenantId);
-      if (tenantStatus === 'suspended') {
-        res.status(403).json({
-          error: 'Forbidden: Tenant workspace is currently suspended',
-          code: 'TENANT_SUSPENDED',
-        });
-        return;
-      }
-    }
-
-    const ctx: TenantContext = {
+  return {
+    ok: true,
+    ctx: {
       tenantId,
-      uid: decodedToken.uid,
-      email: decodedToken.email || '',
+      uid: decoded.uid,
+      email: decoded.email || '',
       role,
       isPlatformAdmin,
-    };
-
-    req.tenantCtx = ctx;
-    next();
-  } catch (error: any) {
-    const logger = createTenantLogger('system');
-    logger.error({ err: error }, 'Authentication verification failed');
-    res.status(401).json({
-      error: 'Unauthorized: Authentication failed',
-      details: error?.message || 'Token verification error',
-    });
-  }
+    },
+  };
 }
 
-/**
- * Middleware factory for role-based authorization
- */
+/** Express middleware wrapper. */
+export async function requireAuth(req: Request, res: Response, next: NextFunction): Promise<void> {
+  const result = await authenticateRequest(req as any);
+  if (!result.ok) {
+    res.status(result.status).json({ error: result.error, code: result.code });
+    return;
+  }
+  req.tenantCtx = result.ctx!;
+  next();
+}
+
 export function requireRole(...allowedRoles: UserRole[]) {
   return (req: Request, res: Response, next: NextFunction): void => {
     const ctx = req.tenantCtx;
     if (!ctx) {
-      res.status(401).json({ error: 'Unauthorized: Missing tenant context' });
+      res.status(401).json({ error: 'Authentication required' });
       return;
     }
-
-    if (ctx.isPlatformAdmin) {
-      return next();
-    }
-
-    if (!allowedRoles.includes(ctx.role)) {
-      res.status(403).json({
-        error: `Forbidden: Requires one of [${allowedRoles.join(', ')}] role`,
-        userRole: ctx.role,
-      });
-      return;
-    }
-
-    next();
+    if (ctx.isPlatformAdmin || allowedRoles.includes(ctx.role)) return next();
+    res.status(403).json({ error: 'Insufficient permissions' });
   };
 }

@@ -107,7 +107,7 @@ export const DemoSchedulingView: React.FC<DemoSchedulingViewProps> = ({ leads = 
     try {
       const token = await getCalendarAccessToken();
       const headers: Record<string, string> = {};
-      if (token) headers['Authorization'] = `Bearer ${token}`;
+      if (token) headers['X-Google-Access-Token'] = token;
 
       const res = await fetch('/api/calendar/availability?count=8', { headers });
       if (res.status === 401) {
@@ -219,7 +219,7 @@ export const DemoSchedulingView: React.FC<DemoSchedulingViewProps> = ({ leads = 
       }
 
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-      if (token) headers['Authorization'] = `Bearer ${token}`;
+      if (token) headers['X-Google-Access-Token'] = token;
 
       const bookRes = await fetch('/api/calendar/book', {
         method: 'POST',
@@ -263,7 +263,7 @@ export const DemoSchedulingView: React.FC<DemoSchedulingViewProps> = ({ leads = 
     try {
       const token = await getCalendarAccessToken();
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-      if (token) headers['Authorization'] = `Bearer ${token}`;
+      if (token) headers['X-Google-Access-Token'] = token;
 
       const startH = selectedSlot.startHour;
       const startTime = `${String(startH).padStart(2, '0')}:00`;
@@ -328,7 +328,7 @@ export const DemoSchedulingView: React.FC<DemoSchedulingViewProps> = ({ leads = 
     try {
       const token = await getCalendarAccessToken();
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-      if (token) headers['Authorization'] = `Bearer ${token}`;
+      if (token) headers['X-Google-Access-Token'] = token;
 
       const startH = slot.startHour;
       const startTime = `${String(startH).padStart(2, '0')}:00`;
@@ -369,7 +369,7 @@ export const DemoSchedulingView: React.FC<DemoSchedulingViewProps> = ({ leads = 
     try {
       const token = await getCalendarAccessToken();
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-      if (token) headers['Authorization'] = `Bearer ${token}`;
+      if (token) headers['X-Google-Access-Token'] = token;
 
       const rawEmails = newAttendeeEmailInput
         .split(/[,;\s]+/)
@@ -419,7 +419,7 @@ export const DemoSchedulingView: React.FC<DemoSchedulingViewProps> = ({ leads = 
     try {
       const token = await getCalendarAccessToken();
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-      if (token) headers['Authorization'] = `Bearer ${token}`;
+      if (token) headers['X-Google-Access-Token'] = token;
 
       const res = await fetch('/api/calendar/schedule-turn', {
         method: 'POST',

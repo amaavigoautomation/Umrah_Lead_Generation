@@ -88,6 +88,7 @@ import {
   globalDomainRouteDoc,
 } from './tenantRepo.js';
 import { getAdminAuth } from './firebaseAdmin.js';
+import { authenticateRequest } from './authMiddleware.js';
 import { encryptSecret, decryptSecret } from './cryptoUtils.js';
 import { getTenantCurrentUsage, recordTenantUsage, checkTenantQuota } from './usageService.js';
 import {
@@ -129,7 +130,7 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
   res.setHeader('Content-Type', 'application/json');
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PATCH, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Google-Access-Token');
 
   if (req.method === 'OPTIONS') {
     res.statusCode = 204;
@@ -193,51 +194,50 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
 
   if (!body || typeof body !== 'object') body = {};
 
-  // Automatically extract and register Google Calendar OAuth bearer token from Authorization header if present
-  const rawAuthHeader = req.headers.authorization || req.headers.Authorization;
-  let requestBearerToken: string | null = null;
-  if (typeof rawAuthHeader === 'string' && rawAuthHeader.toLowerCase().startsWith('bearer ')) {
-    const candidate = rawAuthHeader.slice(7).trim();
-    if (candidate && candidate !== 'null' && candidate !== 'undefined') {
-      requestBearerToken = candidate;
-      setServerCalendarAccessToken(candidate);
-    }
-  }
+  // Google Calendar OAuth token travels in its own header. `Authorization`
+  // carries ONLY the Firebase ID token.
+  const rawCalendarToken = req.headers['x-google-access-token'];
+  let requestBearerToken: string | null =
+    typeof rawCalendarToken === 'string' &&
+    rawCalendarToken.trim() &&
+    rawCalendarToken !== 'null' &&
+    rawCalendarToken !== 'undefined'
+      ? rawCalendarToken.trim()
+      : null;
+  if (requestBearerToken) setServerCalendarAccessToken(requestBearerToken);
 
-  // Also register if accessToken was passed in body
-  if (body?.accessToken && typeof body.accessToken === 'string' && body.accessToken.trim()) {
-    const bodyToken = body.accessToken.trim();
-    if (bodyToken && bodyToken !== 'null' && bodyToken !== 'undefined') {
-      requestBearerToken = requestBearerToken || bodyToken;
-      setServerCalendarAccessToken(bodyToken);
-    }
-  }
+  // =========================================================================
+  // AUTHENTICATION GATE: everything under /api requires a verified Firebase
+  // session, except the explicit public allowlist below. Tenant identity comes
+  // ONLY from the verified token claims. No header/body/query can override it.
+  // =========================================================================
+  const isPublicPath =
+    url === '/api/health' ||
+    url.startsWith('/api/webhooks/') ||
+    url === '/api/inbound/whatsapp' ||
+    url === '/api/leads/inbound' ||
+    url === '/api/campaigns/cron' ||
+    url === '/api/campaigns/process-active';
 
-  // Resolve Multi-Tenant Context
-  let resolvedTenantId = 'umrah360';
+  let resolvedTenantId = '';
   let userUid = 'anonymous';
   let userEmail = '';
-  let userRole: UserRole = 'admin';
+  let userRole: UserRole = 'member';
   let isPlatformAdmin = false;
 
-  if (requestBearerToken) {
-    try {
-      const adminAuth = getAdminAuth();
-      const decoded = await adminAuth.verifyIdToken(requestBearerToken).catch(() => null);
-      if (decoded) {
-        userUid = decoded.uid;
-        userEmail = decoded.email || '';
-        if (decoded.tenantId) resolvedTenantId = decoded.tenantId;
-        if (decoded.role) userRole = decoded.role as UserRole;
-        if (decoded.platformAdmin) isPlatformAdmin = true;
-      }
-    } catch {}
-  }
-
-  // Header or query override
-  const tenantHeader = req.headers['x-tenant-id'] || req.headers['x-tenant'];
-  if (typeof tenantHeader === 'string' && tenantHeader.trim()) {
-    resolvedTenantId = tenantHeader.trim();
+  if (!isPublicPath) {
+    const auth = await authenticateRequest(req);
+    if (!auth.ok) {
+      res.statusCode = auth.status;
+      res.end(JSON.stringify({ error: auth.error, code: auth.code }));
+      return true;
+    }
+    const c = auth.ctx!;
+    resolvedTenantId = c.tenantId;
+    userUid = c.uid;
+    userEmail = c.email;
+    userRole = c.role;
+    isPlatformAdmin = Boolean(c.isPlatformAdmin);
   }
 
   const activeTenantCtx: TenantContext = {
@@ -248,10 +248,14 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
     isPlatformAdmin,
   };
 
-  setCampaignActiveContext(activeTenantCtx);
-  setSchedulingActiveContext(activeTenantCtx);
-  setInboundActiveContext(activeTenantCtx);
-  setWhatsAppActiveContext(activeTenantCtx);
+  // TEMPORARY: global active-context setters (removed in the "explicit ctx"
+  // phase). Only set for authenticated requests, never for public paths.
+  if (!isPublicPath) {
+    setCampaignActiveContext(activeTenantCtx);
+    setSchedulingActiveContext(activeTenantCtx);
+    setInboundActiveContext(activeTenantCtx);
+    setWhatsAppActiveContext(activeTenantCtx);
+  }
 
   // =========================================================================
   // MULTI-TENANT INBOUND WEBHOOK ROUTING (Phase P3)
@@ -323,82 +327,26 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
     return true;
   }
 
-  if (url === '/api/auth/login' && req.method === 'POST') {
-    const { idToken, email, displayName, photoURL } = body;
-    if (!idToken) {
-      res.statusCode = 400;
-      res.end(JSON.stringify({ error: 'idToken is required' }));
-      return true;
+  // =========================================================================
+  // MULTI-TENANT PLATFORM & TENANT MANAGEMENT (Phase P1 / P4 / P6)
+  // =========================================================================
+  if (url === '/api/tenants' || url.startsWith('/api/tenants/')) {
+    const tm = url.match(/^\/api\/tenants\/([^/?]+)/);
+    const targetId = tm ? tm[1] : null;
+    let denied: string | null = null;
+    if (!isPlatformAdmin) {
+      if (!targetId) denied = 'Platform admin only';
+      else if (targetId !== resolvedTenantId) denied = 'Forbidden';
+      else if (req.method !== 'GET' && userRole !== 'admin') denied = 'Workspace admin only';
+      else if (/\/(secrets|routes)$/.test(url) && userRole !== 'admin') denied = 'Workspace admin only';
     }
-
-    try {
-      const adminAuth = getAdminAuth();
-      const decoded = await adminAuth.verifyIdToken(idToken);
-      const uid = decoded.uid;
-      const userMail = decoded.email || email || '';
-
-      let assignedTenant = decoded.tenantId || 'umrah360';
-      let assignedRole: UserRole = decoded.role || (userMail === 'amaavigo@gmail.com' ? 'admin' : 'member');
-      const isPlatform = decoded.platformAdmin || userMail === 'amaavigo@gmail.com';
-
-      if (isFirebaseConfigured && db) {
-        const userDocRef = globalUserDoc(uid);
-        const userSnap = await getDoc(userDocRef);
-
-        if (userSnap.exists()) {
-          const existingData = userSnap.data() as GlobalUser;
-          assignedTenant = existingData.tenantId || assignedTenant;
-          assignedRole = existingData.role || assignedRole;
-        } else {
-          // Create new global user record
-          const newUser: GlobalUser = {
-            uid,
-            email: userMail,
-            name: displayName || userMail.split('@')[0],
-            tenantId: assignedTenant,
-            role: assignedRole,
-            active: true,
-            photoURL: photoURL || '',
-            allowedModules: ['inbox', 'campaigns', 'crm', 'scheduling', 'knowledge', 'settings'],
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-          };
-          await safeSetDoc(userDocRef, newUser, { merge: true });
-        }
-
-        // Set or refresh Custom Claims
-        await adminAuth.setCustomUserClaims(uid, {
-          tenantId: assignedTenant,
-          role: assignedRole,
-          platformAdmin: isPlatform,
-        });
-      }
-
-      res.statusCode = 200;
-      res.end(
-        JSON.stringify({
-          success: true,
-          user: {
-            uid,
-            email: userMail,
-            tenantId: assignedTenant,
-            role: assignedRole,
-            platformAdmin: isPlatform,
-          },
-        })
-      );
-      return true;
-    } catch (err: any) {
-      console.error('[Auth Login Error]:', err);
-      res.statusCode = 401;
-      res.end(JSON.stringify({ error: err?.message || 'Login verification failed' }));
+    if (denied) {
+      res.statusCode = 403;
+      res.end(JSON.stringify({ error: denied }));
       return true;
     }
   }
 
-  // =========================================================================
-  // MULTI-TENANT PLATFORM & TENANT MANAGEMENT (Phase P1 / P4 / P6)
-  // =========================================================================
   if (url === '/api/tenants' && req.method === 'GET') {
     if (isFirebaseConfigured && db) {
       try {
@@ -1675,6 +1623,18 @@ Generate a helpful, grounded response.`;
   }
 
   if ((url === '/api/campaigns/process-active' || url === '/api/campaigns/cron') && (req.method === 'POST' || req.method === 'GET')) {
+    const cronSecret = process.env.CRON_SECRET;
+    const presented = (req.headers['authorization'] || '').toString().replace(/^Bearer\s+/i, '');
+    let cronAllowed = Boolean(cronSecret) && presented === cronSecret;
+    if (!cronAllowed) {
+      const a = await authenticateRequest(req);
+      cronAllowed = a.ok && Boolean(a.ctx?.isPlatformAdmin);
+    }
+    if (!cronAllowed) {
+      res.statusCode = 401;
+      res.end(JSON.stringify({ error: 'Unauthorized' }));
+      return true;
+    }
     try {
       const result = await processActiveRunningCampaignsBatch(500);
       res.statusCode = 200;

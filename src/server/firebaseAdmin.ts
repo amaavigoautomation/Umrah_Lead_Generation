@@ -1,6 +1,7 @@
 import { initializeApp, getApps, cert, applicationDefault, App } from 'firebase-admin/app';
 import { getAuth, Auth, UserRecord } from 'firebase-admin/auth';
 import { getFirestore, Firestore } from 'firebase-admin/firestore';
+import { randomBytes } from 'node:crypto';
 import rawConfig from '../../firebase-applet-config.json';
 import type { AuthClaims, UserRole } from '../types/tenant.js';
 
@@ -81,7 +82,10 @@ export async function setTenantUserClaims(
 }
 
 /**
- * Creates or updates a user in Firebase Auth and assigns claims
+ * Creates a user in Firebase Auth and assigns claims.
+ * - An existing account is never silently moved to another tenant.
+ * - With no password, a random one is generated; the user sets their own via
+ *   the password-reset link (see createPasswordSetupLink).
  */
 export async function createTenantUser(params: {
   email: string;
@@ -91,30 +95,28 @@ export async function createTenantUser(params: {
   role: UserRole;
 }): Promise<UserRecord> {
   const auth = getAdminAuth();
+  const email = params.email.trim().toLowerCase();
   let userRecord: UserRecord;
 
   try {
-    userRecord = await auth.getUserByEmail(params.email);
-    if (params.password) {
-      userRecord = await auth.updateUser(userRecord.uid, {
-        password: params.password,
-        displayName: params.displayName || userRecord.displayName,
-      });
+    userRecord = await auth.getUserByEmail(email);
+    const existing = (userRecord.customClaims || {}) as AuthClaims;
+    if (existing.tenantId && existing.tenantId !== params.tenantId) {
+      throw new Error('This email already belongs to another workspace');
     }
   } catch (error: any) {
-    if (error.code === 'auth/user-not-found') {
+    if (error?.code === 'auth/user-not-found') {
       userRecord = await auth.createUser({
-        email: params.email,
-        password: params.password || Math.random().toString(36).substring(2, 14) + '!A9',
-        displayName: params.displayName || params.email.split('@')[0],
-        emailVerified: true,
+        email,
+        password: params.password || randomBytes(18).toString('base64url') + 'aA1!',
+        displayName: params.displayName || email.split('@')[0],
+        emailVerified: false,
       });
     } else {
       throw error;
     }
   }
 
-  // Assign claims
   await setTenantUserClaims(userRecord.uid, {
     tenantId: params.tenantId,
     role: params.role,
@@ -122,4 +124,17 @@ export async function createTenantUser(params: {
   });
 
   return userRecord;
+}
+
+/** Link the user opens to set their own password (used for invites). */
+export async function createPasswordSetupLink(email: string, continueUrl?: string): Promise<string> {
+  return getAdminAuth().generatePasswordResetLink(
+    email,
+    continueUrl ? { url: continueUrl } : undefined
+  );
+}
+
+/** Force all existing sessions of a user to re-authenticate. */
+export async function revokeUserSessions(uid: string): Promise<void> {
+  await getAdminAuth().revokeRefreshTokens(uid);
 }

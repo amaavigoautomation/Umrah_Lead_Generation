@@ -11,64 +11,55 @@ import {
   Shield,
   Sparkles,
 } from 'lucide-react';
-import { AppUser } from '../types';
 import { Umrah360Logo } from './Umrah360Logo';
+import { signIn, requestPasswordReset, friendlyAuthError } from '../services/authService';
 
 interface LoginViewProps {
-  onLogin: (user: AppUser) => void;
-  users: AppUser[];
   isFirebaseActive: boolean;
+  initialError?: string | null;
 }
 
-export const LoginView: React.FC<LoginViewProps> = ({
-  onLogin,
-  users,
-  isFirebaseActive,
-}) => {
+export const LoginView: React.FC<LoginViewProps> = ({ isFirebaseActive, initialError }) => {
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(initialError || null);
+  const [info, setInfo] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  // On success, onAuthStateChanged in App takes over; nothing to call here.
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    setIsLoading(true);
-
-    const cleanIdentifier = identifier.trim().toLowerCase();
-    const cleanPassword = password.trim();
-
-    if (!cleanIdentifier || !cleanPassword) {
-      setError('Please enter both email/username and password.');
-      setIsLoading(false);
+    setInfo(null);
+    const email = identifier.trim();
+    if (!email || !password) {
+      setError('Please enter both email and password.');
       return;
     }
-
-    // Lookup user in the DB users list
-    const foundUser = users.find(
-      (u) =>
-        (u.email.toLowerCase() === cleanIdentifier ||
-          (u.username && u.username.toLowerCase() === cleanIdentifier)) &&
-        u.password === cleanPassword
-    );
-
-    if (foundUser) {
-      if (foundUser.isActive === false) {
-        setError('This account has been deactivated in the database.');
-        setIsLoading(false);
-        return;
-      }
-      setTimeout(() => {
-        setIsLoading(false);
-        onLogin(foundUser);
-      }, 300);
-    } else {
-      setTimeout(() => {
-        setIsLoading(false);
-        setError('Invalid credentials. Please check your email and password.');
-      }, 300);
+    setIsLoading(true);
+    try {
+      await signIn(email, password);
+    } catch (err) {
+      setError(friendlyAuthError(err));
+      setIsLoading(false);
     }
+  };
+
+  const handleForgot = async () => {
+    setError(null);
+    setInfo(null);
+    const email = identifier.trim();
+    if (!email) {
+      setError('Enter your email above first, then click "Forgot password".');
+      return;
+    }
+    try {
+      await requestPasswordReset(email);
+    } catch {
+      // Same message either way, so we never reveal which emails have accounts.
+    }
+    setInfo('If an account exists for that email, a reset link has been sent.');
   };
 
   return (
@@ -101,6 +92,12 @@ export const LoginView: React.FC<LoginViewProps> = ({
             </div>
           </div>
 
+          {info && (
+            <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-800 text-xs">
+              {info}
+            </div>
+          )}
+
           {error && (
             <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-red-800 text-xs flex items-center space-x-2">
               <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
@@ -110,14 +107,15 @@ export const LoginView: React.FC<LoginViewProps> = ({
 
           <form onSubmit={handleSubmit} className="space-y-4 text-xs">
             <div>
-              <label className="text-slate-700 block mb-1.5 font-bold">Email or Username</label>
+              <label className="text-slate-700 block mb-1.5 font-bold">Email</label>
               <div className="relative">
                 <Mail className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
                 <input
-                  type="text"
+                  type="email"
+                  autoComplete="username"
                   value={identifier}
                   onChange={(e) => setIdentifier(e.target.value)}
-                  placeholder="name@umrah360.com"
+                  placeholder="you@company.com"
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-3 py-2.5 text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 font-medium transition"
                   required
                 />
@@ -130,6 +128,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
                 <Lock className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
                 <input
                   type={showPassword ? 'text' : 'password'}
+                  autoComplete="current-password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
@@ -155,32 +154,21 @@ export const LoginView: React.FC<LoginViewProps> = ({
                 <span>Verifying credentials...</span>
               ) : (
                 <>
-                  <span>Sign In to Umrah 360</span>
+                  <span>Sign In</span>
                   <ArrowRight className="w-4 h-4" />
                 </>
               )}
             </button>
           </form>
 
-          {/* Preset User Quick Fill */}
-          <div className="pt-2 border-t border-slate-100">
-            <div className="text-[11px] font-bold text-slate-500 mb-2">Quick Sign-in (Demo Accounts):</div>
-            <div className="grid grid-cols-2 gap-2">
-              {users.slice(0, 2).map((u) => (
-                <button
-                  key={u.userId}
-                  type="button"
-                  onClick={() => {
-                    setIdentifier(u.email);
-                    setPassword(u.password || 'admin123');
-                  }}
-                  className="p-2 text-left bg-slate-50 hover:bg-orange-50 hover:border-orange-200 border border-slate-200 rounded-xl transition text-[11px]"
-                >
-                  <div className="font-bold text-slate-800">{u.name}</div>
-                  <div className="text-[10px] text-slate-500">{u.role}</div>
-                </button>
-              ))}
-            </div>
+          <div className="pt-2 border-t border-slate-100 text-center">
+            <button
+              type="button"
+              onClick={handleForgot}
+              className="text-[11px] font-bold text-orange-600 hover:text-orange-700"
+            >
+              Forgot password?
+            </button>
           </div>
         </div>
       </div>

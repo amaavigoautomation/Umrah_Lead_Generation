@@ -11,7 +11,13 @@
  *   1. Firebase Auth: the user account (created if missing) + custom claims
  *      { platformAdmin: true, role: 'platformAdmin' }
  *   2. Firestore: one document users/{uid}
- * It prints a password-setup link. No password is ever typed or stored.
+ *
+ * Password: either
+ *   - set ADMIN_PASSWORD in the environment for this one run (min 12 chars) and
+ *     the script sets it directly, or
+ *   - leave it unset and the script prints a one-time password-setup link.
+ *
+ *   ADMIN_PASSWORD='your-long-password' npx tsx scripts/bootstrap-platform-admin.ts --email you@example.com --apply
  */
 import 'dotenv/config';
 import { getAdminAuth, getAdminFirestore, setTenantUserClaims, createPasswordSetupLink } from '../src/server/firebaseAdmin.js';
@@ -67,6 +73,17 @@ async function main() {
       { uid: user.uid, email, name: user.displayName || email.split('@')[0], role: 'platformAdmin', active: true, createdAt: now, updatedAt: now },
       { merge: true }
     );
+
+  const directPassword = process.env.ADMIN_PASSWORD;
+  if (directPassword) {
+    if (directPassword.length < 12) {
+      console.error('ADMIN_PASSWORD must be at least 12 characters. Claims were set; re-run with a longer password.');
+      process.exit(1);
+    }
+    await auth.updateUser(user.uid, { password: directPassword, emailVerified: true });
+    console.log('\nDone. Password set. Sign in at the app login page with this email and that password.');
+    return;
+  }
 
   const link = await createPasswordSetupLink(email);
   console.log('\nDone. Open this link to set your password (treat it like a password):\n');

@@ -7,7 +7,7 @@ import type { IncomingMessage, ServerResponse } from 'http';
 export default async function handler(req: IncomingMessage & { body?: any }, res: ServerResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PATCH, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Google-Access-Token');
 
   if (req.method === 'OPTIONS') {
     res.statusCode = 204;
@@ -40,24 +40,25 @@ export default async function handler(req: IncomingMessage & { body?: any }, res
     );
   }
 
+  let handleCoreApi: any;
+  const loadErrors: string[] = [];
   try {
-    let handleCoreApi: any;
     // 1. Try bundled server module in /api
     try {
       // @ts-ignore
-      const serverMod = await import('./core-server.bundle.js').catch(() => null);
+      const serverMod = await import('./core-server.bundle.js');
       handleCoreApi = serverMod?.handleCoreApi;
-    } catch {}
+    } catch (e: any) {
+      loadErrors.push(`bundle: ${e?.message || e}`);
+    }
 
     // 2. Direct fallback to TypeScript source if bundle not present in serverless runtime
     if (!handleCoreApi) {
       try {
-        const directMod =
-          (await import('../src/server/coreApiHandler.js').catch(() => null)) ||
-          (await import('../src/server/coreApiHandler').catch(() => null));
+        const directMod = await import('../src/server/coreApiHandler.js');
         handleCoreApi = directMod?.handleCoreApi;
-      } catch (directErr) {
-        console.warn('[API Catch-all] Direct coreApiHandler import notice:', directErr);
+      } catch (e: any) {
+        loadErrors.push(`source: ${e?.message || e}`);
       }
     }
 
@@ -75,10 +76,14 @@ export default async function handler(req: IncomingMessage & { body?: any }, res
   }
 
   if (!res.writableEnded) {
-    res.statusCode = 200;
     res.setHeader('Content-Type', 'application/json');
-    res.end(JSON.stringify({ status: 'ok', url: req.url, message: 'Endpoint acknowledged' }));
+    if (!handleCoreApi) {
+      // Never pretend success when the API code failed to load.
+      console.error('[API Catch-all] Core API handler failed to load:', loadErrors);
+      res.statusCode = 500;
+      return res.end(JSON.stringify({ error: 'API failed to start', details: loadErrors }));
+    }
+    res.statusCode = 404;
+    res.end(JSON.stringify({ error: 'Not found', url: req.url }));
   }
 }
-
-

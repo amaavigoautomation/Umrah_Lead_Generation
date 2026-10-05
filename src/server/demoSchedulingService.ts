@@ -16,7 +16,8 @@ function getSchedCtx(): TenantContext {
   return activeSchedulingCtx;
 }
 import OpenAI from 'openai';
-import { db, isFirebaseConfigured } from '../firebase/config.js';
+import { isFirebaseConfigured } from '../firebase/config.js';
+import { db } from './adminFirestore.js';
 import {
   collection,
   doc,
@@ -26,7 +27,7 @@ import {
   where,
   limit,
   orderBy,
-} from 'firebase/firestore';
+} from './adminFirestore.js';
 import { safeSetDoc } from './firestoreUtils.js';
 import { Booking, BookingStatus, Channel, Lead } from '../types/index.js';
 import { updateCampaignLeadStatus } from './campaignService.js';

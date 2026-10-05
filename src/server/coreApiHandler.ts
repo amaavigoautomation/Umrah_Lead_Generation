@@ -66,8 +66,9 @@ import {
   processSchedulingConversationTurn,
   verifyGoogleCalendarConnection,
 } from './demoSchedulingService.js';
-import { db, isFirebaseConfigured } from '../firebase/config.js';
-import { getDoc, getDocs, setDoc, updateDoc, deleteDoc, collection, doc } from 'firebase/firestore';
+import { isFirebaseConfigured } from '../firebase/config.js';
+import { db } from './adminFirestore.js';
+import { getDoc, getDocs, setDoc, updateDoc, deleteDoc, collection, doc } from './adminFirestore.js';
 import { safeSetDoc } from './firestoreUtils.js';
 import {
   setCampaignActiveContext,
@@ -1623,23 +1624,42 @@ Generate a helpful, grounded response.`;
   }
 
   if ((url === '/api/campaigns/process-active' || url === '/api/campaigns/cron') && (req.method === 'POST' || req.method === 'GET')) {
+    // Who is calling?
+    //  - cron (CRON_SECRET) or platform admin -> process EVERY active workspace, one at a time
+    //  - a signed-in workspace user           -> process ONLY their own workspace
     const cronSecret = process.env.CRON_SECRET;
     const presented = (req.headers['authorization'] || '').toString().replace(/^Bearer\s+/i, '');
-    let cronAllowed = Boolean(cronSecret) && presented === cronSecret;
-    if (!cronAllowed) {
+    const isCron = Boolean(cronSecret) && presented === cronSecret;
+    let callerCtx: TenantContext | null = null;
+    let runAll = isCron;
+    if (!isCron) {
       const a = await authenticateRequest(req);
-      cronAllowed = a.ok && Boolean(a.ctx?.isPlatformAdmin);
+      if (!a.ok) {
+        res.statusCode = a.status || 401;
+        res.end(JSON.stringify({ error: a.error || 'Unauthorized', code: a.code }));
+        return true;
+      }
+      callerCtx = a.ctx!;
+      runAll = Boolean(callerCtx.isPlatformAdmin);
     }
-    if (!cronAllowed) {
-      res.statusCode = 401;
-      res.end(JSON.stringify({ error: 'Unauthorized' }));
-      return true;
-    }
+
     try {
-      const result = await processActiveRunningCampaignsBatch(500);
+      const results: any[] = [];
+      if (runAll) {
+        const snap = await getDocs(globalTenantsCol());
+        for (const t of snap.docs) {
+          const data: any = t.data();
+          if (data?.status === 'suspended') continue;
+          setCampaignActiveContext({ tenantId: t.id, uid: 'system-cron', email: '', role: 'admin' });
+          results.push({ tenantId: t.id, ...(await processActiveRunningCampaignsBatch(500)) });
+        }
+      } else {
+        setCampaignActiveContext(callerCtx!);
+        results.push({ tenantId: callerCtx!.tenantId, ...(await processActiveRunningCampaignsBatch(500)) });
+      }
       res.statusCode = 200;
       res.setHeader('Content-Type', 'application/json');
-      res.end(JSON.stringify({ success: true, ...result }));
+      res.end(JSON.stringify({ success: true, results }));
     } catch (err: any) {
       res.statusCode = 500;
       res.setHeader('Content-Type', 'application/json');

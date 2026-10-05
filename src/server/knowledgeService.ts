@@ -1,5 +1,6 @@
-import { getDocs, deleteDoc } from 'firebase/firestore';
-import { isFirebaseConfigured, db } from '../firebase/config.js';
+import { getDocs, deleteDoc } from './adminFirestore.js';
+import { isFirebaseConfigured } from '../firebase/config.js';
+import { db } from './adminFirestore.js';
 import { safeSetDoc } from './firestoreUtils.js';
 import { INITIAL_KNOWLEDGE_DOCUMENTS } from '../services/knowledgeData.js';
 import { KnowledgeDocument } from '../types/index.js';

@@ -1,6 +1,7 @@
 import OpenAI from 'openai';
-import { db, isFirebaseConfigured } from '../firebase/config.js';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { isFirebaseConfigured } from '../firebase/config.js';
+import { db } from './adminFirestore.js';
+import { doc, getDoc, setDoc } from './adminFirestore.js';
 
 let memoryOpenAIApiKey = process.env.OPENAI_API_KEY || '';
 

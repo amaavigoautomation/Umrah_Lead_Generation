@@ -53,17 +53,27 @@ export function getAdminAuth(): Auth {
   return getAuth(app);
 }
 
+let firestoreConfigured = false;
+
 export function getAdminFirestore(): Firestore {
   const app = getFirebaseAdminApp();
   const dbId = process.env.FIRESTORE_DATABASE_ID || rawConfig.firestoreDatabaseId;
+  let fs: Firestore;
   if (dbId && dbId !== '(default)') {
     try {
-      return (getFirestore as any)(app, dbId);
+      fs = (getFirestore as any)(app, dbId);
     } catch {
-      return getFirestore(app);
+      fs = getFirestore(app);
     }
+  } else {
+    fs = getFirestore(app);
   }
-  return getFirestore(app);
+  if (!firestoreConfigured) {
+    // Match the old client-SDK behaviour: skip `undefined` fields instead of throwing.
+    try { fs.settings({ ignoreUndefinedProperties: true }); } catch {}
+    firestoreConfigured = true;
+  }
+  return fs;
 }
 
 /**

@@ -1,6 +1,7 @@
 import os from 'os';
-import { getDoc, setDoc, updateDoc } from 'firebase/firestore';
-import { db, isFirebaseConfigured } from '../firebase/config.js';
+import { getDoc, setDoc, updateDoc } from './adminFirestore.js';
+import { isFirebaseConfigured } from '../firebase/config.js';
+import { db } from './adminFirestore.js';
 import { tenantRepo } from './tenantRepo.js';
 import type { TenantContext, TenantJobLease } from '../types/tenant.js';
 

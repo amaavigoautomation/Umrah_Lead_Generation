@@ -5,8 +5,9 @@ import {
   query,
   where,
   limit,
-} from 'firebase/firestore';
-import { isFirebaseConfigured, db } from '../firebase/config.js';
+} from './adminFirestore.js';
+import { isFirebaseConfigured } from '../firebase/config.js';
+import { db } from './adminFirestore.js';
 import { safeSetDoc } from './firestoreUtils.js';
 import { tenantRepo } from './tenantRepo.js';
 import type { TenantContext } from '../types/tenant.js';

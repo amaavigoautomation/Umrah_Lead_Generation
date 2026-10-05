@@ -29,7 +29,8 @@ import {
   normalizeIdentifier,
 } from './firestorePersistence.js';
 import { handleIncomingCampaignLeadReply } from './campaignService.js';
-import { db, isFirebaseConfigured } from '../firebase/config.js';
+import { isFirebaseConfigured } from '../firebase/config.js';
+import { db } from './adminFirestore.js';
 import {
   collection,
   doc,
@@ -39,7 +40,7 @@ import {
   orderBy,
   query,
   where,
-} from 'firebase/firestore';
+} from './adminFirestore.js';
 import { safeSetDoc } from './firestoreUtils.js';
 import {
   detectDemoSchedulingIntent,

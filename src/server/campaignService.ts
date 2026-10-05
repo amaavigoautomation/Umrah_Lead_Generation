@@ -10,8 +10,9 @@ import {
   getDoc,
   setDoc,
   deleteDoc,
-} from 'firebase/firestore';
-import { db, isFirebaseConfigured } from '../firebase/config.js';
+} from './adminFirestore.js';
+import { isFirebaseConfigured } from '../firebase/config.js';
+import { db } from './adminFirestore.js';
 import { safeSetDoc } from './firestoreUtils.js';
 import { sendLiveEmail, getSmtpConfig } from './smtpService.js';
 import { appendOutboundMessageToThread } from './inboundPipeline.js';

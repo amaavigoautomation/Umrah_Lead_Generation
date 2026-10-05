@@ -1,4 +1,4 @@
-import { setDoc, DocumentReference, SetOptions } from 'firebase/firestore';
+import { setDoc, DocumentReference, SetOptions } from './adminFirestore.js';
 
 /**
  * Sanitizes objects recursively for Firestore by stripping undefined values.

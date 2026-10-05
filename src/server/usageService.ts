@@ -1,5 +1,6 @@
-import { getDoc, setDoc, updateDoc, increment } from 'firebase/firestore';
-import { db, isFirebaseConfigured } from '../firebase/config.js';
+import { getDoc, setDoc, updateDoc, increment } from './adminFirestore.js';
+import { isFirebaseConfigured } from '../firebase/config.js';
+import { db } from './adminFirestore.js';
 import { tenantRepo, globalTenantDoc } from './tenantRepo.js';
 import type { TenantContext, Tenant, TenantMonthlyUsage } from '../types/tenant.js';
 

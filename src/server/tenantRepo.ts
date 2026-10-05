@@ -4,8 +4,8 @@ import {
   CollectionReference,
   DocumentReference,
   DocumentData,
-} from 'firebase/firestore';
-import { db } from '../firebase/config.js';
+} from './adminFirestore.js';
+import { db } from './adminFirestore.js';
 import type { TenantContext } from '../types/tenant.js';
 
 /**

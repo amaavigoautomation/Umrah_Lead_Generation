@@ -1,5 +1,6 @@
-import { getDoc, getDocs, limit, query, where } from 'firebase/firestore';
-import { db, isFirebaseConfigured } from '../firebase/config.js';
+import { getDoc, getDocs, limit, query, where } from './adminFirestore.js';
+import { isFirebaseConfigured } from '../firebase/config.js';
+import { db } from './adminFirestore.js';
 import { safeSetDoc } from './firestoreUtils.js';
 import { Contact, Lead, Conversation, Message } from '../types/index.js';
 import { sendLiveEmail, getSmtpConfig, fetchFirestoreSmtpConfig } from './smtpService.js';

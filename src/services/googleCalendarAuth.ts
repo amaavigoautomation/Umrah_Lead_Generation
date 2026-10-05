@@ -1,7 +1,7 @@
 import { GoogleAuthProvider, signInWithPopup, onAuthStateChanged, User, signOut } from 'firebase/auth';
 import { auth, db, isFirebaseConfigured } from '../firebase/config.js';
 import { doc, getDoc } from 'firebase/firestore';
-import { safeSetDoc } from '../server/firestoreUtils.js';
+import { safeSetDoc } from './clientFirestoreUtils.js';
 
 export const CALENDAR_TARGET_ACCOUNT = 'amaavigo@gmail.com';
 export const CALENDAR_SCOPES = [

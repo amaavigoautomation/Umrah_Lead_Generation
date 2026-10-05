@@ -20,8 +20,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { getPublishedKnowledgeDocs } from './knowledgeService.js';
-import { db, isFirebaseConfigured } from '../firebase/config.js';
-import { doc } from 'firebase/firestore';
+import { isFirebaseConfigured } from '../firebase/config.js';
+import { db } from './adminFirestore.js';
+import { doc } from './adminFirestore.js';
 import { safeSetDoc } from './firestoreUtils.js';
 import {
   detectDemoSchedulingIntent,

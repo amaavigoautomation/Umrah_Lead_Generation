@@ -19,8 +19,9 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 import { runWithJobLease } from './src/server/jobLeaseService.js';
 import { globalTenantsCol } from './src/server/tenantRepo.js';
-import { getDocs } from 'firebase/firestore';
-import { db, isFirebaseConfigured } from './src/firebase/config.js';
+import { getDocs } from './src/server/adminFirestore.js';
+import { isFirebaseConfigured } from './src/firebase/config.js';
+import { db } from './src/server/adminFirestore.js';
 import type { TenantContext } from './src/types/tenant.js';
 
 // Background poller for inbound email, website leads, and outbound campaigns with distributed leasing

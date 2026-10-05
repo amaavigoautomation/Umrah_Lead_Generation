@@ -1,5 +1,6 @@
-import { getDoc } from 'firebase/firestore';
-import { db, isFirebaseConfigured } from '../firebase/config.js';
+import { getDoc } from './adminFirestore.js';
+import { isFirebaseConfigured } from '../firebase/config.js';
+import { db } from './adminFirestore.js';
 import {
   globalWebhookRouteDoc,
   globalChannelRouteDoc,

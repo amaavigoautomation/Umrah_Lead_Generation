@@ -1,8 +1,9 @@
 import nodemailer from 'nodemailer';
 import fs from 'fs';
 import path from 'path';
-import { doc, getDoc } from 'firebase/firestore';
-import { db, isFirebaseConfigured } from '../firebase/config.js';
+import { doc, getDoc } from './adminFirestore.js';
+import { isFirebaseConfigured } from '../firebase/config.js';
+import { db } from './adminFirestore.js';
 
 export interface SmtpStatus {
   configured: boolean;

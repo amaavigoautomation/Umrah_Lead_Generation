@@ -1,3 +1,20 @@
+import { tenantRepo } from './tenantRepo.js';
+import type { TenantContext } from '../types/tenant.js';
+
+const DEFAULT_UMRAH_CTX: TenantContext = {
+  tenantId: 'umrah360',
+  uid: 'system',
+  email: 'system@umrah360.in',
+  role: 'admin',
+};
+
+let activeInboundCtx: TenantContext = DEFAULT_UMRAH_CTX;
+export function setInboundActiveContext(ctx: TenantContext) {
+  activeInboundCtx = ctx;
+}
+function getInboundCtx(): TenantContext {
+  return activeInboundCtx;
+}
 import OpenAI from 'openai';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -195,9 +212,8 @@ const repliedMessageIds = new Set<string>();
 const conversationTurnMap = new Map<string, ConversationTurnState>();
 
 // =========================================================================
-// PERSISTENT GMAIL IDEMPOTENCY STORE
+// PERSISTENT GMAIL IDEMPOTENCY STORE (In-Memory + Firestore)
 // =========================================================================
-const IDEMPOTENCY_FILE = path.join(process.cwd(), '.processed_gmail_messages.json');
 const processedRecordsMap = new Map<string, ProcessedMessageRecord>();
 const inFlightMessageIds = new Set<string>();
 
@@ -282,45 +298,12 @@ for (const seed of INITIAL_PROCESSED_SEEDS) {
   }
 }
 
-// Load persisted state from disk and Firestore
-try {
-  if (fs.existsSync(IDEMPOTENCY_FILE)) {
-    const raw = fs.readFileSync(IDEMPOTENCY_FILE, 'utf-8');
-    const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed)) {
-      for (const item of parsed) {
-        if (item && item.gmailMessageId) {
-          processedRecordsMap.set(item.gmailMessageId, item);
-          if (item.aiReplied) {
-            repliedMessageIds.add(item.gmailMessageId);
-          }
-        }
-      }
-    }
-  } else {
-    // Write initial seed records to disk
-    const items = Array.from(processedRecordsMap.values());
-    fs.writeFileSync(IDEMPOTENCY_FILE, JSON.stringify(items, null, 2), 'utf-8');
-  }
-} catch (err) {
-  console.warn('[Idempotency Store] Warning loading idempotency file:', err);
-}
-
 // Background sync from persistent Firestore ledger on module startup
 initPersistentIdempotencyStore().then((stats) => {
   console.log(`[Inbound Pipeline] Idempotency store initialized with ${stats.totalLoaded} records (${stats.repliedCount} replied) from Firestore.`);
 }).catch((err) => {
   console.warn('[Inbound Pipeline] Notice initializing Firestore idempotency store:', err);
 });
-
-function saveProcessedRecordsToDisk(): void {
-  try {
-    const items = Array.from(processedRecordsMap.values());
-    fs.writeFileSync(IDEMPOTENCY_FILE, JSON.stringify(items, null, 2), 'utf-8');
-  } catch (err) {
-    console.warn('[Idempotency Store] Warning persisting idempotency file:', err);
-  }
-}
 
 export function recordProcessedMessage(record: ProcessedMessageRecord): void {
   const existing = processedRecordsMap.get(record.gmailMessageId);
@@ -331,7 +314,6 @@ export function recordProcessedMessage(record: ProcessedMessageRecord): void {
   if (record.aiReplied) {
     repliedMessageIds.add(record.gmailMessageId);
   }
-  saveProcessedRecordsToDisk();
 
   // Persist to Firestore so server restarts / version restores retain idempotency
   recordProcessedInboundEmail({
@@ -379,7 +361,6 @@ export function markMessageAsReplied(gmailMessageId: string, replyMessageId?: st
       firstSeenAt: nowIso,
     });
   }
-  saveProcessedRecordsToDisk();
 
   // Persist to Firestore immediately
   recordProcessedInboundEmail({
@@ -602,7 +583,7 @@ export async function findExistingConversationForInboundEmail(params: {
 
         // Check messages collection for smtpMessageId
         const msgSnap = await getDocs(
-          query(collection(db, 'messages'), where('smtpMessageId', '==', candId), limit(1))
+          query(tenantRepo(getInboundCtx()).messages(), where('smtpMessageId', '==', candId), limit(1))
         );
         if (!msgSnap.empty) {
           const docData = msgSnap.docs[0].data();
@@ -616,7 +597,7 @@ export async function findExistingConversationForInboundEmail(params: {
 
         // Check messages collection for gmailMessageId
         const gmailSnap = await getDocs(
-          query(collection(db, 'messages'), where('gmailMessageId', '==', candId), limit(1))
+          query(tenantRepo(getInboundCtx()).messages(), where('gmailMessageId', '==', candId), limit(1))
         );
         if (!gmailSnap.empty) {
           const docData = gmailSnap.docs[0].data();
@@ -630,7 +611,7 @@ export async function findExistingConversationForInboundEmail(params: {
 
         // Check conversations collection for thankYouSmtpMessageId
         const convSnap = await getDocs(
-          query(collection(db, 'conversations'), where('thankYouSmtpMessageId', '==', candId), limit(1))
+          query(tenantRepo(getInboundCtx()).conversations(), where('thankYouSmtpMessageId', '==', candId), limit(1))
         );
         if (!convSnap.empty) {
           matchedConvId = convSnap.docs[0].id;
@@ -641,7 +622,7 @@ export async function findExistingConversationForInboundEmail(params: {
 
         // Check conversations collection for emailThreadId
         const threadSnap = await getDocs(
-          query(collection(db, 'conversations'), where('emailThreadId', '==', candId), limit(1))
+          query(tenantRepo(getInboundCtx()).conversations(), where('emailThreadId', '==', candId), limit(1))
         );
         if (!threadSnap.empty) {
           matchedConvId = threadSnap.docs[0].id;
@@ -659,7 +640,7 @@ export async function findExistingConversationForInboundEmail(params: {
   if (!matchedConvId && isFirebaseConfigured && db && cleanEmail) {
     try {
       const emailSnap = await getDocs(
-        query(collection(db, 'conversations'), where('customerEmail', '==', cleanEmail), limit(5))
+        query(tenantRepo(getInboundCtx()).conversations(), where('customerEmail', '==', cleanEmail), limit(5))
       );
 
       if (!emailSnap.empty) {
@@ -697,13 +678,13 @@ export async function findExistingConversationForInboundEmail(params: {
   if (isFirebaseConfigured && db && cleanEmail) {
     try {
       const contactSnap = await getDocs(
-        query(collection(db, 'contacts'), where('email', '==', cleanEmail), limit(1))
+        query(tenantRepo(getInboundCtx()).contacts(), where('email', '==', cleanEmail), limit(1))
       );
       if (!contactSnap.empty) {
         foundContactDoc = { id: contactSnap.docs[0].id, ...contactSnap.docs[0].data() };
         if (!matchedConvId) {
           const convByContactSnap = await getDocs(
-            query(collection(db, 'conversations'), where('contactId', '==', foundContactDoc.id), limit(5))
+            query(tenantRepo(getInboundCtx()).conversations(), where('contactId', '==', foundContactDoc.id), limit(5))
           );
           if (!convByContactSnap.empty) {
             const list = convByContactSnap.docs.map((d) => ({ id: d.id, ...d.data() } as any));
@@ -748,7 +729,7 @@ export async function findExistingConversationForInboundEmail(params: {
 
   if (matchedConvId && isFirebaseConfigured && db) {
     try {
-      const cSnap = await getDoc(doc(db, 'conversations', matchedConvId));
+      const cSnap = await getDoc(tenantRepo(getInboundCtx()).conversationDoc(matchedConvId));
       if (cSnap.exists()) {
         loadedConversation = { id: cSnap.id, ...cSnap.data() };
       }
@@ -764,7 +745,7 @@ export async function findExistingConversationForInboundEmail(params: {
 
   if (effectiveContactId && !foundContactDoc && isFirebaseConfigured && db) {
     try {
-      const cSnap = await getDoc(doc(db, 'contacts', effectiveContactId));
+      const cSnap = await getDoc(tenantRepo(getInboundCtx()).contactDoc(effectiveContactId));
       if (cSnap.exists()) {
         foundContactDoc = { id: cSnap.id, ...cSnap.data() };
       }
@@ -773,7 +754,7 @@ export async function findExistingConversationForInboundEmail(params: {
 
   if (effectiveLeadId && isFirebaseConfigured && db) {
     try {
-      const lSnap = await getDoc(doc(db, 'leads', effectiveLeadId));
+      const lSnap = await getDoc(tenantRepo(getInboundCtx()).leadDoc(effectiveLeadId));
       if (lSnap.exists()) {
         loadedLead = { id: lSnap.id, ...lSnap.data() };
       }
@@ -787,7 +768,7 @@ export async function findExistingConversationForInboundEmail(params: {
   if ((!thread || thread.length === 0) && isFirebaseConfigured && db && matchedConvId) {
     try {
       const msgsSnap = await getDocs(
-        query(collection(db, 'messages'), where('conversationId', '==', finalConvId))
+        query(tenantRepo(getInboundCtx()).messages(), where('conversationId', '==', finalConvId))
       );
       const loaded: any[] = [];
       msgsSnap.forEach((d) => loaded.push({ id: d.id, ...d.data() }));
@@ -1813,22 +1794,22 @@ export async function processLiveInboundEmail(payload: {
     if (isFirebaseConfigured && db && crmEntities) {
       try {
         if (crmEntities.contact) {
-          safeSetDoc(doc(db, 'contacts', crmEntities.contact.contactId), crmEntities.contact, { merge: true }).catch(() => {});
+          safeSetDoc(tenantRepo(getInboundCtx()).contactDoc(crmEntities.contact.contactId), crmEntities.contact, { merge: true }).catch(() => {});
         }
         if (crmEntities.lead) {
-          safeSetDoc(doc(db, 'leads', crmEntities.lead.leadId), crmEntities.lead, { merge: true }).catch(() => {});
+          safeSetDoc(tenantRepo(getInboundCtx()).leadDoc(crmEntities.lead.leadId), crmEntities.lead, { merge: true }).catch(() => {});
         }
         if (crmEntities.conversation) {
-          safeSetDoc(doc(db, 'conversations', crmEntities.conversation.conversationId), crmEntities.conversation, { merge: true }).catch(() => {});
+          safeSetDoc(tenantRepo(getInboundCtx()).conversationDoc(crmEntities.conversation.conversationId), crmEntities.conversation, { merge: true }).catch(() => {});
         }
         if (crmEntities.incomingMessage) {
-          safeSetDoc(doc(db, 'messages', crmEntities.incomingMessage.messageId), crmEntities.incomingMessage, { merge: true }).catch(() => {});
+          safeSetDoc(tenantRepo(getInboundCtx()).messageDoc(crmEntities.incomingMessage.messageId), crmEntities.incomingMessage, { merge: true }).catch(() => {});
         }
         if (crmEntities.aiReplyMessage) {
-          safeSetDoc(doc(db, 'messages', crmEntities.aiReplyMessage.messageId), crmEntities.aiReplyMessage, { merge: true }).catch(() => {});
+          safeSetDoc(tenantRepo(getInboundCtx()).messageDoc(crmEntities.aiReplyMessage.messageId), crmEntities.aiReplyMessage, { merge: true }).catch(() => {});
         }
         if (crmEntities.activity) {
-          safeSetDoc(doc(db, 'lead_activities', crmEntities.activity.activityId), crmEntities.activity).catch(() => {});
+          safeSetDoc(tenantRepo(getInboundCtx()).leadActivityDoc(crmEntities.activity.activityId), crmEntities.activity).catch(() => {});
         }
       } catch (err) {
         console.warn('[Inbound Pipeline] Notice syncing CRM entities to Firestore:', err);

@@ -17,23 +17,60 @@ const PORT: number = Number(process.env.PORT) || 3000;
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Background poller for inbound email, website leads, and outbound campaigns
+import { runWithJobLease } from './src/server/jobLeaseService.js';
+import { globalTenantsCol } from './src/server/tenantRepo.js';
+import { getDocs } from 'firebase/firestore';
+import { db, isFirebaseConfigured } from './src/firebase/config.js';
+import type { TenantContext } from './src/types/tenant.js';
+
+// Background poller for inbound email, website leads, and outbound campaigns with distributed leasing
 let isBackgroundPolling = false;
 const safeBackgroundPoll = async () => {
   if (isBackgroundPolling) return;
   isBackgroundPolling = true;
-  try {
-    // 1. Inbound website demo lead responder
-    await checkAndDispatchPendingWebsiteLeadEmails().catch(() => {});
 
-    // 2. Poll IMAP if configured
-    const cfg = getImapConfig();
-    if (cfg && cfg.configured) {
-      await pollAndProcessImapMailbox().catch(() => {});
+  try {
+    // 1. Discover all active tenants
+    const tenantIds: string[] = ['umrah360'];
+    if (isFirebaseConfigured && db) {
+      try {
+        const snap = await getDocs(globalTenantsCol());
+        snap.forEach((d) => {
+          const t = d.data();
+          if (t.id && t.status !== 'suspended' && !tenantIds.includes(t.id)) {
+            tenantIds.push(t.id);
+          }
+        });
+      } catch {}
     }
 
-    // 3. Process active campaign batches
-    await processActiveRunningCampaignsBatch(3).catch(() => {});
+    // 2. Process background tasks per tenant under distributed lease
+    for (const tId of tenantIds) {
+      const ctx: TenantContext = {
+        tenantId: tId,
+        uid: 'system-worker',
+        email: `worker@${tId}.in`,
+        role: 'admin',
+      };
+
+      // A. Inbound website demo lead auto-responder
+      await runWithJobLease(tId, 'website_leads_worker', 15_000, async () => {
+        await checkAndDispatchPendingWebsiteLeadEmails(ctx).catch(() => {});
+      }).catch(() => {});
+
+      // B. Poll IMAP if configured
+      const cfg = getImapConfig();
+      if (cfg && cfg.configured) {
+        await runWithJobLease(tId, 'imap_poller_worker', 30_000, async () => {
+          await pollAndProcessImapMailbox(ctx).catch(() => {});
+        }).catch(() => {});
+      }
+
+      // C. Process active campaign batches
+      await runWithJobLease(tId, 'campaign_dispatch_worker', 20_000, async () => {
+        await processActiveRunningCampaignsBatch(3, ctx).catch(() => {});
+      }).catch(() => {});
+    }
   } catch (e) {
     // ignore background errors
   } finally {

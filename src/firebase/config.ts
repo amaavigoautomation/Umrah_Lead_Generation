@@ -1,17 +1,7 @@
 import { initializeApp, getApps } from 'firebase/app';
 import { getFirestore, Firestore, doc, getDocFromServer } from 'firebase/firestore';
 import { getAuth, Auth } from 'firebase/auth';
-
-// Project gen-lang-client-0376069258 is the provisioned Firestore host for database ai-studio-379c884e-3360-468a-ad55-8105acbd3214
-const firestoreProjectConfig = {
-  projectId: "gen-lang-client-0376069258",
-  appId: "1:280237761588:web:1e0633ce031a5a49f15661",
-  apiKey: "AIzaSyAcr6lIIH50XWD7CcmclWh9lxbPKO7TzBk",
-  authDomain: "gen-lang-client-0376069258.firebaseapp.com",
-  firestoreDatabaseId: "ai-studio-379c884e-3360-468a-ad55-8105acbd3214",
-  storageBucket: "gen-lang-client-0376069258.firebasestorage.app",
-  messagingSenderId: "280237761588",
-};
+import rawFirebaseConfig from '../../firebase-applet-config.json';
 
 // Safely detect environment variables in both Vite browser client and Node serverless functions
 const envProjectId =
@@ -24,17 +14,10 @@ const envApiKey =
   (typeof process !== 'undefined' && process.env?.VITE_FIREBASE_API_KEY) ||
   (typeof process !== 'undefined' && process.env?.FIREBASE_API_KEY);
 
-const activeProjectId = envProjectId || firestoreProjectConfig.projectId;
-const activeApiKey = envApiKey || firestoreProjectConfig.apiKey;
-
 export const firebaseConfig = {
-  apiKey: activeApiKey,
-  authDomain: firestoreProjectConfig.authDomain,
-  projectId: activeProjectId,
-  storageBucket: firestoreProjectConfig.storageBucket,
-  messagingSenderId: firestoreProjectConfig.messagingSenderId,
-  appId: firestoreProjectConfig.appId,
-  firestoreDatabaseId: firestoreProjectConfig.firestoreDatabaseId,
+  ...rawFirebaseConfig,
+  projectId: envProjectId || rawFirebaseConfig.projectId,
+  apiKey: envApiKey || rawFirebaseConfig.apiKey,
 };
 
 // Initialize Firebase App singleton for Firestore & Authentication (gen-lang-client-0376069258)

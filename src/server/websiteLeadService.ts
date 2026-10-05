@@ -1,54 +1,86 @@
-import { collection, doc, getDoc, getDocs, limit, query, where } from 'firebase/firestore';
+import { getDoc, getDocs, limit, query, where } from 'firebase/firestore';
 import { db, isFirebaseConfigured } from '../firebase/config.js';
 import { safeSetDoc } from './firestoreUtils.js';
 import { Contact, Lead, Conversation, Message } from '../types/index.js';
 import { sendLiveEmail, getSmtpConfig, fetchFirestoreSmtpConfig } from './smtpService.js';
 import { handleIncomingCampaignLeadReply } from './campaignService.js';
+import { tenantRepo } from './tenantRepo.js';
+import type { TenantContext } from '../types/tenant.js';
 
-// In-memory cache + in-flight locks to guarantee strict single thank-you email delivery
-const sentThankYouEmailsCache = new Set<string>();
-const inFlightThankYouSends = new Set<string>();
+const DEFAULT_UMRAH_CTX: TenantContext = {
+  tenantId: 'umrah360',
+  uid: 'system',
+  email: 'system@umrah360.in',
+  role: 'admin',
+};
+
+// In-memory cache + in-flight locks keyed by tenant to guarantee strict single thank-you email delivery
+const tenantSentThankYouCaches = new Map<string, Set<string>>();
+const tenantInFlightThankYouSends = new Map<string, Set<string>>();
+
+function getSentCache(tenantId: string): Set<string> {
+  let cache = tenantSentThankYouCaches.get(tenantId);
+  if (!cache) {
+    cache = new Set<string>();
+    tenantSentThankYouCaches.set(tenantId, cache);
+  }
+  return cache;
+}
+
+function getInFlightSet(tenantId: string): Set<string> {
+  let set = tenantInFlightThankYouSends.get(tenantId);
+  if (!set) {
+    set = new Set<string>();
+    tenantInFlightThankYouSends.set(tenantId, set);
+  }
+  return set;
+}
 
 /**
  * Checks whether a given lead email has already received a Thank You / Demo Walkthrough email.
  * Checks in-memory cache, the website_lead_thankyou_history collection, and conversations.
  */
-export async function hasThankYouEmailBeenSent(rawEmail: string): Promise<boolean> {
+export async function hasThankYouEmailBeenSent(
+  rawEmail: string,
+  ctx: TenantContext = DEFAULT_UMRAH_CTX
+): Promise<boolean> {
   const clean = rawEmail?.trim().toLowerCase() || '';
   if (!clean || !clean.includes('@') || clean.endsWith('@umrah360.in')) return true;
 
-  if (sentThankYouEmailsCache.has(clean)) {
+  const sentCache = getSentCache(ctx.tenantId);
+  if (sentCache.has(clean)) {
     return true;
   }
 
   if (!isFirebaseConfigured || !db) return false;
 
   try {
+    const repo = tenantRepo(ctx);
     // 1. Check dedicated website_lead_thankyou_history document
     const emailKey = clean.replace(/[^a-z0-9_.-]/g, '_');
-    const historyRef = doc(db, 'website_lead_thankyou_history', emailKey);
+    const historyRef = repo.websiteLeadThankYouHistoryDoc(emailKey);
     const historySnap = await getDoc(historyRef);
     if (historySnap.exists()) {
-      sentThankYouEmailsCache.add(clean);
+      sentCache.add(clean);
       return true;
     }
 
     // 2. Check if any conversation with this email already has thankYouEmailSent == true
     const convQ = query(
-      collection(db, 'conversations'),
+      repo.conversations(),
       where('customerEmail', '==', clean),
       where('thankYouEmailSent', '==', true),
       limit(1)
     );
     const convSnap = await getDocs(convQ);
     if (!convSnap.empty) {
-      sentThankYouEmailsCache.add(clean);
+      sentCache.add(clean);
       return true;
     }
 
     // 3. Check if any contact with this email has thankYouEmailSent == true
     const contactQ = query(
-      collection(db, 'contacts'),
+      repo.contacts(),
       where('email', '==', clean),
       limit(1)
     );
@@ -56,12 +88,12 @@ export async function hasThankYouEmailBeenSent(rawEmail: string): Promise<boolea
     if (!contactSnap.empty) {
       const cData = contactSnap.docs[0].data() as any;
       if (cData.thankYouEmailSent) {
-        sentThankYouEmailsCache.add(clean);
+        sentCache.add(clean);
         return true;
       }
     }
   } catch (e) {
-    console.warn('[Website Lead] Notice checking thank you history in Firestore:', e);
+    console.warn(`[Website Lead] Notice checking thank you history for tenant ${ctx.tenantId}:`, e);
   }
 
   return false;
@@ -73,19 +105,22 @@ export async function hasThankYouEmailBeenSent(rawEmail: string): Promise<boolea
  */
 export async function recordThankYouEmailSent(
   rawEmail: string,
-  meta: { leadId?: string; conversationId?: string; smtpMessageId?: string }
+  meta: { leadId?: string; conversationId?: string; smtpMessageId?: string },
+  ctx: TenantContext = DEFAULT_UMRAH_CTX
 ): Promise<void> {
   const clean = rawEmail?.trim().toLowerCase() || '';
   if (!clean) return;
-  sentThankYouEmailsCache.add(clean);
+  const sentCache = getSentCache(ctx.tenantId);
+  sentCache.add(clean);
 
   if (!isFirebaseConfigured || !db) return;
 
   try {
+    const repo = tenantRepo(ctx);
     const emailKey = clean.replace(/[^a-z0-9_.-]/g, '_');
     const nowIso = new Date().toISOString();
     await safeSetDoc(
-      doc(db, 'website_lead_thankyou_history', emailKey),
+      repo.websiteLeadThankYouHistoryDoc(emailKey),
       {
         email: clean,
         leadId: meta.leadId || '',
@@ -97,7 +132,7 @@ export async function recordThankYouEmailSent(
       { merge: true }
     );
   } catch (e) {
-    console.warn('[Website Lead] Notice recording thank you history:', e);
+    console.warn(`[Website Lead] Notice recording thank you history for ${ctx.tenantId}:`, e);
   }
 }
 
@@ -315,7 +350,8 @@ function isInvalidHumanName(val: string): boolean {
  * Normalizes input from web forms, WordPress, Elementor, CF7, Webflow, or custom HTML forms.
  */
 export async function processWebsiteLeadSubmission(
-  rawInput: any
+  rawInput: any,
+  ctx: TenantContext = DEFAULT_UMRAH_CTX
 ): Promise<ProcessedLeadResult> {
   const flatFields = flattenAllFields(rawInput || {});
 
@@ -709,13 +745,14 @@ export async function processWebsiteLeadSubmission(
 
   if (isFirebaseConfigured && db) {
     try {
-      const q = query(collection(db, 'contacts'), where('email', '==', email));
+      const repo = tenantRepo(ctx);
+      const q = query(repo.contacts(), where('email', '==', email));
       const snap = await getDocs(q);
       if (!snap.empty) {
         const found = snap.docs[0].data() as Contact;
         contactId = found.contactId;
         existingContactData = found;
-        console.log(`[Website Lead] Matching existing contact found: ${contactId} (${email})`);
+        console.log(`[Website Lead] Matching existing contact found: ${contactId} (${email}) for tenant ${ctx.tenantId}`);
       }
     } catch (e) {
       console.warn('[Website Lead] Note looking up existing contact:', e);
@@ -838,9 +875,10 @@ export async function processWebsiteLeadSubmission(
   // -----------------------------------------------------------------
   let alreadySent = false;
   let isInFlight = false;
+  const inFlightSet = getInFlightSet(ctx.tenantId);
   if (cleanEmail && cleanEmail.includes('@')) {
-    alreadySent = await hasThankYouEmailBeenSent(cleanEmail);
-    isInFlight = inFlightThankYouSends.has(cleanEmail);
+    alreadySent = await hasThankYouEmailBeenSent(cleanEmail, ctx);
+    isInFlight = inFlightSet.has(cleanEmail);
   }
 
   const shouldSendThankYou = Boolean(
@@ -905,7 +943,7 @@ export async function processWebsiteLeadSubmission(
   let autoReplyMessage: Message | null = null;
 
   if (shouldSendThankYou) {
-    inFlightThankYouSends.add(cleanEmail);
+    inFlightSet.add(cleanEmail);
     try {
       await fetchFirestoreSmtpConfig();
       const smtpConfig = getSmtpConfig();
@@ -981,7 +1019,7 @@ export async function processWebsiteLeadSubmission(
             leadId,
             conversationId,
             smtpMessageId: mailResult.messageId,
-          });
+          }, ctx);
         } else {
           console.warn(`[Website Lead Warning] SMTP delivery attempt to ${cleanEmail} failed:`, mailResult.error);
         }
@@ -991,7 +1029,7 @@ export async function processWebsiteLeadSubmission(
     } catch (smtpErr) {
       console.warn('[Website Lead] Notice sending auto-confirmation email:', smtpErr);
     } finally {
-      inFlightThankYouSends.delete(cleanEmail);
+      inFlightSet.delete(cleanEmail);
     }
   }
 
@@ -1000,21 +1038,22 @@ export async function processWebsiteLeadSubmission(
   // -----------------------------------------------------------------
   if (isFirebaseConfigured && db) {
     try {
+      const repo = tenantRepo(ctx);
       const writes: Promise<any>[] = [
-        safeSetDoc(doc(db, 'contacts', contact.contactId), contact, { merge: true }),
-        safeSetDoc(doc(db, 'leads', lead.leadId), lead, { merge: true }),
-        safeSetDoc(doc(db, 'conversations', conversation.conversationId), conversation, { merge: true }),
-        safeSetDoc(doc(db, 'messages', initialMessage.messageId), initialMessage, { merge: true }),
+        safeSetDoc(repo.contactDoc(contact.contactId), contact, { merge: true }),
+        safeSetDoc(repo.leadDoc(lead.leadId), lead, { merge: true }),
+        safeSetDoc(repo.conversationDoc(conversation.conversationId), conversation, { merge: true }),
+        safeSetDoc(repo.messageDoc(initialMessage.messageId), initialMessage, { merge: true }),
       ];
 
       if (autoReplyMessage) {
-        writes.push(safeSetDoc(doc(db, 'messages', autoReplyMessage.messageId), autoReplyMessage, { merge: true }));
+        writes.push(safeSetDoc(repo.messageDoc(autoReplyMessage.messageId), autoReplyMessage, { merge: true }));
       }
 
       await Promise.all(writes);
-      console.log(`[Website Lead] Successfully stored Lead "${companyName}" (${leadId}) directly into Firestore DB!`);
+      console.log(`[Website Lead] Successfully stored Lead "${companyName}" (${leadId}) directly into Firestore DB for tenant ${ctx.tenantId}!`);
     } catch (dbErr) {
-      console.error('[Website Lead] Error writing to Firestore DB:', dbErr);
+      console.error(`[Website Lead] Error writing to Firestore DB for ${ctx.tenantId}:`, dbErr);
     }
   }
 

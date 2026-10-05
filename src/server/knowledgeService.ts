@@ -1,93 +1,118 @@
-import { collection, doc, getDocs, deleteDoc } from 'firebase/firestore';
-import { db, isFirebaseConfigured } from '../firebase/config.js';
+import { getDocs, deleteDoc } from 'firebase/firestore';
+import { isFirebaseConfigured, db } from '../firebase/config.js';
 import { safeSetDoc } from './firestoreUtils.js';
 import { INITIAL_KNOWLEDGE_DOCUMENTS } from '../services/knowledgeData.js';
 import { KnowledgeDocument } from '../types/index.js';
+import { tenantRepo } from './tenantRepo.js';
+import type { TenantContext } from '../types/tenant.js';
 
-// In-memory knowledge cache for ultra-fast (0ms) RAG retrieval and zero impact on reply latency
-const knowledgeDocsCache = new Map<string, KnowledgeDocument>();
-let isInitialized = false;
+const DEFAULT_UMRAH_CTX: TenantContext = {
+  tenantId: 'umrah360',
+  uid: 'system',
+  email: 'system@umrah360.in',
+  role: 'admin',
+};
+
+// In-memory knowledge cache keyed strictly by tenantId (prevents cross-tenant RAG leaks)
+const tenantKnowledgeCaches = new Map<string, Map<string, KnowledgeDocument>>();
+const tenantInitialized = new Set<string>();
+
+function getTenantCache(tenantId: string): Map<string, KnowledgeDocument> {
+  let cache = tenantKnowledgeCaches.get(tenantId);
+  if (!cache) {
+    cache = new Map<string, KnowledgeDocument>();
+    tenantKnowledgeCaches.set(tenantId, cache);
+  }
+  return cache;
+}
 
 /**
- * Initializes the in-memory knowledge store from Firestore on startup,
- * seeding default documentation if Firestore is newly initialized.
+ * Initializes the in-memory knowledge store from Firestore for the specific tenant
  */
-export async function initKnowledgeStore(): Promise<number> {
-  // Always pre-populate in-memory cache with standard knowledge base first
-  for (const docItem of INITIAL_KNOWLEDGE_DOCUMENTS) {
-    knowledgeDocsCache.set(docItem.id, { ...docItem });
+export async function initKnowledgeStore(ctx: TenantContext = DEFAULT_UMRAH_CTX): Promise<number> {
+  const cache = getTenantCache(ctx.tenantId);
+
+  // Pre-populate with standard template knowledge base if empty
+  if (cache.size === 0) {
+    for (const docItem of INITIAL_KNOWLEDGE_DOCUMENTS) {
+      cache.set(docItem.id, { ...docItem });
+    }
   }
 
   if (!isFirebaseConfigured || !db) {
-    console.log(`[Knowledge Store] In-memory KB initialized with ${knowledgeDocsCache.size} documents.`);
-    isInitialized = true;
-    return knowledgeDocsCache.size;
+    tenantInitialized.add(ctx.tenantId);
+    return cache.size;
   }
 
   try {
-    const colRef = collection(db, 'knowledge_documents');
+    const repo = tenantRepo(ctx);
+    const colRef = repo.knowledgeDocuments();
     const snap = await getDocs(colRef);
 
     if (!snap.empty) {
-      // Load user customized / published docs from Firestore
-      knowledgeDocsCache.clear();
+      cache.clear();
       snap.forEach((d) => {
         const item = d.data() as KnowledgeDocument;
         if (item && item.id) {
-          knowledgeDocsCache.set(item.id, item);
+          cache.set(item.id, item);
         }
       });
-      console.log(`[Knowledge Store] Successfully loaded ${knowledgeDocsCache.size} knowledge articles from Firestore.`);
+      console.log(`[Knowledge Store] Successfully loaded ${cache.size} articles for tenant ${ctx.tenantId}.`);
     } else {
-      // Seed Firestore with initial knowledge documents
+      // Seed tenant with initial knowledge documents
       for (const docItem of INITIAL_KNOWLEDGE_DOCUMENTS) {
-        await safeSetDoc(doc(db, 'knowledge_documents', docItem.id), docItem, { merge: true });
+        await safeSetDoc(repo.knowledgeDocumentDoc(docItem.id), docItem, { merge: true });
       }
-      console.log(`[Knowledge Store] Seeded ${INITIAL_KNOWLEDGE_DOCUMENTS.length} initial articles into Firestore.`);
+      console.log(`[Knowledge Store] Seeded ${INITIAL_KNOWLEDGE_DOCUMENTS.length} initial articles for tenant ${ctx.tenantId}.`);
     }
 
-    isInitialized = true;
-    return knowledgeDocsCache.size;
+    tenantInitialized.add(ctx.tenantId);
+    return cache.size;
   } catch (err) {
-    console.warn('[Knowledge Store] Warning during Firestore KB sync, using in-memory baseline:', err);
-    isInitialized = true;
-    return knowledgeDocsCache.size;
+    console.warn(`[Knowledge Store] Warning during Firestore KB sync for ${ctx.tenantId}:`, err);
+    tenantInitialized.add(ctx.tenantId);
+    return cache.size;
   }
 }
 
 /**
- * Returns all knowledge documents from in-memory cache (0ms latency)
+ * Returns all knowledge documents for a tenant
  */
-export function getAllKnowledgeDocs(): KnowledgeDocument[] {
-  if (!isInitialized && knowledgeDocsCache.size === 0) {
+export function getAllKnowledgeDocs(ctx: TenantContext = DEFAULT_UMRAH_CTX): KnowledgeDocument[] {
+  const cache = getTenantCache(ctx.tenantId);
+  if (!tenantInitialized.has(ctx.tenantId) && cache.size === 0) {
     for (const docItem of INITIAL_KNOWLEDGE_DOCUMENTS) {
-      knowledgeDocsCache.set(docItem.id, { ...docItem });
+      cache.set(docItem.id, { ...docItem });
     }
   }
-  return Array.from(knowledgeDocsCache.values()).sort(
+  return Array.from(cache.values()).sort(
     (a, b) => new Date(b.updatedAt || 0).getTime() - new Date(a.updatedAt || 0).getTime()
   );
 }
 
 /**
- * Returns only PUBLISHED knowledge documents active in RAG
+ * Returns only PUBLISHED knowledge documents active in RAG for the tenant
  */
-export function getPublishedKnowledgeDocs(): KnowledgeDocument[] {
-  return getAllKnowledgeDocs().filter((d) => d.status === 'PUBLISHED');
+export function getPublishedKnowledgeDocs(ctx: TenantContext = DEFAULT_UMRAH_CTX): KnowledgeDocument[] {
+  return getAllKnowledgeDocs(ctx).filter((d) => d.status === 'PUBLISHED');
 }
 
 /**
- * Returns a single knowledge document by ID
+ * Returns a single knowledge document by ID for a tenant
  */
-export function getKnowledgeDocById(id: string): KnowledgeDocument | undefined {
-  return knowledgeDocsCache.get(id);
+export function getKnowledgeDocById(id: string, ctx: TenantContext = DEFAULT_UMRAH_CTX): KnowledgeDocument | undefined {
+  const cache = getTenantCache(ctx.tenantId);
+  return cache.get(id);
 }
 
 /**
- * Saves or updates a knowledge document in memory and persists to Firestore.
- * Memory is updated instantly, ensuring 0ms latency for subsequent auto-replies.
+ * Saves or updates a knowledge document in memory and persists to tenant's Firestore
  */
-export async function saveKnowledgeDoc(docData: KnowledgeDocument): Promise<KnowledgeDocument> {
+export async function saveKnowledgeDoc(
+  docData: KnowledgeDocument,
+  ctx: TenantContext = DEFAULT_UMRAH_CTX
+): Promise<KnowledgeDocument> {
+  const cache = getTenantCache(ctx.tenantId);
   const sanitizedDoc: KnowledgeDocument = {
     ...docData,
     id: docData.id || `kb-${Date.now()}`,
@@ -102,17 +127,16 @@ export async function saveKnowledgeDoc(docData: KnowledgeDocument): Promise<Know
     updatedAt: new Date().toISOString(),
   };
 
-  // 1. Update in-memory cache immediately (0ms)
-  knowledgeDocsCache.set(sanitizedDoc.id, sanitizedDoc);
-  console.log(`[Knowledge Store] Saved doc "${sanitizedDoc.title}" (status: ${sanitizedDoc.status}, version: ${sanitizedDoc.version}) to memory cache.`);
+  // 1. Update tenant cache immediately
+  cache.set(sanitizedDoc.id, sanitizedDoc);
 
-  // 2. Persist to Firestore asynchronously
+  // 2. Persist to Firestore scoped under tenant
   if (isFirebaseConfigured && db) {
     try {
-      await safeSetDoc(doc(db, 'knowledge_documents', sanitizedDoc.id), sanitizedDoc, { merge: true });
-      console.log(`[Knowledge Store] Persisted doc "${sanitizedDoc.id}" to Firestore collection knowledge_documents.`);
+      const repo = tenantRepo(ctx);
+      await safeSetDoc(repo.knowledgeDocumentDoc(sanitizedDoc.id), sanitizedDoc, { merge: true });
     } catch (err) {
-      console.error(`[Knowledge Store] Error saving doc ${sanitizedDoc.id} to Firestore:`, err);
+      console.error(`[Knowledge Store] Error saving doc ${sanitizedDoc.id} in tenant ${ctx.tenantId}:`, err);
     }
   }
 
@@ -120,22 +144,20 @@ export async function saveKnowledgeDoc(docData: KnowledgeDocument): Promise<Know
 }
 
 /**
- * Deletes a knowledge document from memory and Firestore
+ * Deletes a knowledge document from tenant memory and Firestore
  */
-export async function deleteKnowledgeDoc(id: string): Promise<boolean> {
+export async function deleteKnowledgeDoc(id: string, ctx: TenantContext = DEFAULT_UMRAH_CTX): Promise<boolean> {
   if (!id) return false;
 
-  // 1. Remove from memory
-  knowledgeDocsCache.delete(id);
-  console.log(`[Knowledge Store] Deleted doc "${id}" from memory cache.`);
+  const cache = getTenantCache(ctx.tenantId);
+  cache.delete(id);
 
-  // 2. Remove from Firestore
   if (isFirebaseConfigured && db) {
     try {
-      await deleteDoc(doc(db, 'knowledge_documents', id));
-      console.log(`[Knowledge Store] Deleted doc "${id}" from Firestore.`);
+      const repo = tenantRepo(ctx);
+      await deleteDoc(repo.knowledgeDocumentDoc(id));
     } catch (err) {
-      console.warn(`[Knowledge Store] Error deleting doc ${id} from Firestore:`, err);
+      console.warn(`[Knowledge Store] Error deleting doc ${id} for tenant ${ctx.tenantId}:`, err);
     }
   }
 
@@ -151,14 +173,14 @@ export interface RetrievedChunk {
 }
 
 /**
- * Fast in-memory RAG retrieval using published knowledge documents.
- * Scored using keyword frequency, n-gram matching, domain intent weightings, and title matches.
+ * Fast in-memory RAG retrieval using published knowledge documents for a tenant
  */
 export function retrieveRelevantKnowledge(
   query: string,
-  maxResults: number = 3
+  maxResults: number = 3,
+  ctx: TenantContext = DEFAULT_UMRAH_CTX
 ): RetrievedChunk[] {
-  const publishedDocs = getPublishedKnowledgeDocs();
+  const publishedDocs = getPublishedKnowledgeDocs(ctx);
 
   if (!query || query.trim() === '') {
     return [];

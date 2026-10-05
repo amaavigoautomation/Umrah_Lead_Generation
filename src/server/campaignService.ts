@@ -1,3 +1,5 @@
+import { tenantRepo } from './tenantRepo.js';
+import type { TenantContext } from '../types/tenant.js';
 import crypto from 'crypto';
 import OpenAI from 'openai';
 import { INITIAL_KNOWLEDGE_DOCUMENTS } from '../services/knowledgeData.js';
@@ -269,17 +271,142 @@ export const DEFAULT_CAMPAIGNS: Campaign[] = [];
 export const DEFAULT_CAMPAIGN_LEADS: CampaignLead[] = [];
 export const DEFAULT_CAMPAIGN_RUNS: CampaignRun[] = [];
 
-// In-Memory state caches
-const campaignsMap = new Map<string, Campaign>();
-const campaignLeadsMap = new Map<string, CampaignLead>(); // key: campaignLeadId
-const campaignRunsMap = new Map<string, CampaignRun>(); // key: runId
-const emailTemplatesMap = new Map<string, EmailTemplate>(); // key: templateId
-const sendHistorySet = new Set<string>(); // key: `${campaignId}_${email.toLowerCase()}` or `${campaignId}_${runId}_${email.toLowerCase()}`
-const inFlightLeadSendsSet = new Set<string>(); // key: `${campaignId}_${runId}_${email.toLowerCase()}`
-const pausedCampaignsSet = new Set<string>(); // explicitly paused campaign IDs
+const DEFAULT_UMRAH_CTX: TenantContext = {
+  tenantId: 'umrah360',
+  uid: 'system',
+  email: 'system@umrah360.in',
+  role: 'admin',
+};
 
-// Active sending abort flags per campaign
-const activeCampaignAbortControllers = new Map<string, AbortController>();
+let activeCampaignCtx: TenantContext = DEFAULT_UMRAH_CTX;
+export function setCampaignActiveContext(ctx: TenantContext) {
+  activeCampaignCtx = ctx;
+}
+export function getCampaignActiveCtx(): TenantContext {
+  return activeCampaignCtx;
+}
+
+export interface TenantCampaignStore {
+  campaignsMap: Map<string, Campaign>;
+  campaignLeadsMap: Map<string, CampaignLead>;
+  campaignRunsMap: Map<string, CampaignRun>;
+  emailTemplatesMap: Map<string, EmailTemplate>;
+  sendHistorySet: Set<string>;
+  inFlightLeadSendsSet: Set<string>;
+  pausedCampaignsSet: Set<string>;
+  activeCampaignAbortControllers: Map<string, AbortController>;
+  isInitialized: boolean;
+}
+
+const tenantCampaignStores = new Map<string, TenantCampaignStore>();
+
+export function getTenantCampaignStore(tenantId: string = 'umrah360'): TenantCampaignStore {
+  let store = tenantCampaignStores.get(tenantId);
+  if (!store) {
+    store = {
+      campaignsMap: new Map(),
+      campaignLeadsMap: new Map(),
+      campaignRunsMap: new Map(),
+      emailTemplatesMap: new Map(),
+      sendHistorySet: new Set(),
+      inFlightLeadSendsSet: new Set(),
+      pausedCampaignsSet: new Set(),
+      activeCampaignAbortControllers: new Map(),
+      isInitialized: false,
+    };
+    tenantCampaignStores.set(tenantId, store);
+  }
+  return store;
+}
+
+// Proxies mapping legacy globals to tenant-scoped stores
+const campaignsMap = {
+  get: (k: string) => getTenantCampaignStore(activeCampaignCtx.tenantId).campaignsMap.get(k),
+  set: (k: string, v: Campaign) => getTenantCampaignStore(activeCampaignCtx.tenantId).campaignsMap.set(k, v),
+  has: (k: string) => getTenantCampaignStore(activeCampaignCtx.tenantId).campaignsMap.has(k),
+  delete: (k: string) => getTenantCampaignStore(activeCampaignCtx.tenantId).campaignsMap.delete(k),
+  values: () => getTenantCampaignStore(activeCampaignCtx.tenantId).campaignsMap.values(),
+  keys: () => getTenantCampaignStore(activeCampaignCtx.tenantId).campaignsMap.keys(),
+  entries: () => getTenantCampaignStore(activeCampaignCtx.tenantId).campaignsMap.entries(),
+  clear: () => getTenantCampaignStore(activeCampaignCtx.tenantId).campaignsMap.clear(),
+  get size() { return getTenantCampaignStore(activeCampaignCtx.tenantId).campaignsMap.size; },
+};
+
+const campaignLeadsMap = {
+  get: (k: string) => getTenantCampaignStore(activeCampaignCtx.tenantId).campaignLeadsMap.get(k),
+  set: (k: string, v: CampaignLead) => getTenantCampaignStore(activeCampaignCtx.tenantId).campaignLeadsMap.set(k, v),
+  has: (k: string) => getTenantCampaignStore(activeCampaignCtx.tenantId).campaignLeadsMap.has(k),
+  delete: (k: string) => getTenantCampaignStore(activeCampaignCtx.tenantId).campaignLeadsMap.delete(k),
+  values: () => getTenantCampaignStore(activeCampaignCtx.tenantId).campaignLeadsMap.values(),
+  keys: () => getTenantCampaignStore(activeCampaignCtx.tenantId).campaignLeadsMap.keys(),
+  entries: () => getTenantCampaignStore(activeCampaignCtx.tenantId).campaignLeadsMap.entries(),
+  clear: () => getTenantCampaignStore(activeCampaignCtx.tenantId).campaignLeadsMap.clear(),
+  get size() { return getTenantCampaignStore(activeCampaignCtx.tenantId).campaignLeadsMap.size; },
+};
+
+const campaignRunsMap = {
+  get: (k: string) => getTenantCampaignStore(activeCampaignCtx.tenantId).campaignRunsMap.get(k),
+  set: (k: string, v: CampaignRun) => getTenantCampaignStore(activeCampaignCtx.tenantId).campaignRunsMap.set(k, v),
+  has: (k: string) => getTenantCampaignStore(activeCampaignCtx.tenantId).campaignRunsMap.has(k),
+  delete: (k: string) => getTenantCampaignStore(activeCampaignCtx.tenantId).campaignRunsMap.delete(k),
+  values: () => getTenantCampaignStore(activeCampaignCtx.tenantId).campaignRunsMap.values(),
+  keys: () => getTenantCampaignStore(activeCampaignCtx.tenantId).campaignRunsMap.keys(),
+  entries: () => getTenantCampaignStore(activeCampaignCtx.tenantId).campaignRunsMap.entries(),
+  clear: () => getTenantCampaignStore(activeCampaignCtx.tenantId).campaignRunsMap.clear(),
+  get size() { return getTenantCampaignStore(activeCampaignCtx.tenantId).campaignRunsMap.size; },
+};
+
+const emailTemplatesMap = {
+  get: (k: string) => getTenantCampaignStore(activeCampaignCtx.tenantId).emailTemplatesMap.get(k),
+  set: (k: string, v: EmailTemplate) => getTenantCampaignStore(activeCampaignCtx.tenantId).emailTemplatesMap.set(k, v),
+  has: (k: string) => getTenantCampaignStore(activeCampaignCtx.tenantId).emailTemplatesMap.has(k),
+  delete: (k: string) => getTenantCampaignStore(activeCampaignCtx.tenantId).emailTemplatesMap.delete(k),
+  values: () => getTenantCampaignStore(activeCampaignCtx.tenantId).emailTemplatesMap.values(),
+  keys: () => getTenantCampaignStore(activeCampaignCtx.tenantId).emailTemplatesMap.keys(),
+  entries: () => getTenantCampaignStore(activeCampaignCtx.tenantId).emailTemplatesMap.entries(),
+  clear: () => getTenantCampaignStore(activeCampaignCtx.tenantId).emailTemplatesMap.clear(),
+  get size() { return getTenantCampaignStore(activeCampaignCtx.tenantId).emailTemplatesMap.size; },
+};
+
+const sendHistorySet = {
+  add: (k: string) => getTenantCampaignStore(activeCampaignCtx.tenantId).sendHistorySet.add(k),
+  has: (k: string) => getTenantCampaignStore(activeCampaignCtx.tenantId).sendHistorySet.has(k),
+  delete: (k: string) => getTenantCampaignStore(activeCampaignCtx.tenantId).sendHistorySet.delete(k),
+  clear: () => getTenantCampaignStore(activeCampaignCtx.tenantId).sendHistorySet.clear(),
+  get size() { return getTenantCampaignStore(activeCampaignCtx.tenantId).sendHistorySet.size; },
+  [Symbol.iterator]: function* (): Generator<string, void, unknown> {
+    yield* getTenantCampaignStore(activeCampaignCtx.tenantId).sendHistorySet;
+  },
+};
+
+const inFlightLeadSendsSet = {
+  add: (k: string) => getTenantCampaignStore(activeCampaignCtx.tenantId).inFlightLeadSendsSet.add(k),
+  has: (k: string) => getTenantCampaignStore(activeCampaignCtx.tenantId).inFlightLeadSendsSet.has(k),
+  delete: (k: string) => getTenantCampaignStore(activeCampaignCtx.tenantId).inFlightLeadSendsSet.delete(k),
+  clear: () => getTenantCampaignStore(activeCampaignCtx.tenantId).inFlightLeadSendsSet.clear(),
+  get size() { return getTenantCampaignStore(activeCampaignCtx.tenantId).inFlightLeadSendsSet.size; },
+  [Symbol.iterator]: function* (): Generator<string, void, unknown> {
+    yield* getTenantCampaignStore(activeCampaignCtx.tenantId).inFlightLeadSendsSet;
+  },
+};
+
+const pausedCampaignsSet = {
+  add: (k: string) => getTenantCampaignStore(activeCampaignCtx.tenantId).pausedCampaignsSet.add(k),
+  has: (k: string) => getTenantCampaignStore(activeCampaignCtx.tenantId).pausedCampaignsSet.has(k),
+  delete: (k: string) => getTenantCampaignStore(activeCampaignCtx.tenantId).pausedCampaignsSet.delete(k),
+  clear: () => getTenantCampaignStore(activeCampaignCtx.tenantId).pausedCampaignsSet.clear(),
+  get size() { return getTenantCampaignStore(activeCampaignCtx.tenantId).pausedCampaignsSet.size; },
+  [Symbol.iterator]: function* (): Generator<string, void, unknown> {
+    yield* getTenantCampaignStore(activeCampaignCtx.tenantId).pausedCampaignsSet;
+  },
+};
+
+const activeCampaignAbortControllers = {
+  get: (k: string) => getTenantCampaignStore(activeCampaignCtx.tenantId).activeCampaignAbortControllers.get(k),
+  set: (k: string, v: AbortController) => getTenantCampaignStore(activeCampaignCtx.tenantId).activeCampaignAbortControllers.set(k, v),
+  has: (k: string) => getTenantCampaignStore(activeCampaignCtx.tenantId).activeCampaignAbortControllers.has(k),
+  delete: (k: string) => getTenantCampaignStore(activeCampaignCtx.tenantId).activeCampaignAbortControllers.delete(k),
+};
 
 let isCampaignStoreInitialized = false;
 
@@ -318,11 +445,11 @@ export async function syncCampaignStoreFromFirestore(): Promise<void> {
     try {
       // Execute all 5 Firestore queries concurrently in parallel
       const [tplSnap, campSnap, leadsSnap, runsSnap, historySnap] = await Promise.all([
-        getDocs(collection(db, 'email_templates')).catch(() => null),
-        getDocs(collection(db, 'campaigns')).catch(() => null),
-        getDocs(collection(db, 'campaign_leads')).catch(() => null),
-        getDocs(collection(db, 'campaign_runs')).catch(() => null),
-        getDocs(collection(db, 'campaign_send_history')).catch(() => null),
+        getDocs(tenantRepo(getCampaignActiveCtx()).emailTemplates()).catch(() => null),
+        getDocs(tenantRepo(getCampaignActiveCtx()).campaigns()).catch(() => null),
+        getDocs(tenantRepo(getCampaignActiveCtx()).campaignLeads()).catch(() => null),
+        getDocs(tenantRepo(getCampaignActiveCtx()).campaignRuns()).catch(() => null),
+        getDocs(tenantRepo(getCampaignActiveCtx()).campaignSendHistory()).catch(() => null),
       ]);
 
       if (tplSnap) {
@@ -335,14 +462,14 @@ export async function syncCampaignStoreFromFirestore(): Promise<void> {
         });
 
         // Check if database was ever initialized for templates
-        const metaDocRef = doc(db, 'system_metadata', 'templates_initialized');
+        const metaDocRef = tenantRepo(getCampaignActiveCtx()).settingsDoc('templates_initialized');
         const metaDocSnap = await getDoc(metaDocRef).catch(() => null);
 
         if (!metaDocSnap?.exists()) {
           // Brand new database initialization ONLY: seed default templates once
           if (firestoreTpls.length === 0) {
             for (const tpl of DEFAULT_EMAIL_TEMPLATES) {
-              await safeSetDoc(doc(db, 'email_templates', tpl.templateId), tpl, { merge: true }).catch(() => {});
+              await safeSetDoc(tenantRepo(getCampaignActiveCtx()).emailTemplateDoc(tpl.templateId), tpl, { merge: true }).catch(() => {});
               firestoreTpls.push(tpl);
             }
           }
@@ -366,8 +493,8 @@ export async function syncCampaignStoreFromFirestore(): Promise<void> {
               data.campaignId === 'camp-indian-umrah-operators' ||
               cleanName === 'indian umrah operators 2026'
             ) {
-              deleteDoc(doc(db, 'campaigns', d.id)).catch(() => {});
-              deleteDoc(doc(db, 'outbound_campaigns', d.id)).catch(() => {});
+              deleteDoc(tenantRepo(getCampaignActiveCtx()).campaignDoc(d.id)).catch(() => {});
+              deleteDoc(tenantRepo(getCampaignActiveCtx()).outboundCampaignDoc(d.id)).catch(() => {});
             } else {
               const existing = campaignsMap.get(data.campaignId);
               if (existing) {
@@ -454,7 +581,7 @@ export async function initCampaignStore(forceSync: boolean = false) {
 export async function getTemplatesFromDbOrCache(): Promise<EmailTemplate[]> {
   if (isFirebaseConfigured && db) {
     try {
-      const snap = await getDocs(collection(db, 'email_templates'));
+      const snap = await getDocs(tenantRepo(getCampaignActiveCtx()).emailTemplates());
       emailTemplatesMap.clear();
       if (!snap.empty) {
         snap.forEach((d) => {
@@ -475,7 +602,7 @@ export async function getTemplateFromDbById(templateId: string): Promise<EmailTe
   if (!templateId) return undefined;
   if (isFirebaseConfigured && db) {
     try {
-      const snap = await getDoc(doc(db, 'email_templates', templateId));
+      const snap = await getDoc(tenantRepo(getCampaignActiveCtx()).emailTemplateDoc(templateId));
       if (snap.exists()) {
         const t = snap.data() as EmailTemplate;
         emailTemplatesMap.set(templateId, t);
@@ -527,7 +654,7 @@ export async function saveTemplate(template: Partial<EmailTemplate>): Promise<Em
   // 1. First: Directly persist to Firestore DB
   if (isFirebaseConfigured && db) {
     try {
-      await safeSetDoc(doc(db, 'email_templates', tpl.templateId), tpl, { merge: true });
+      await safeSetDoc(tenantRepo(getCampaignActiveCtx()).emailTemplateDoc(tpl.templateId), tpl, { merge: true });
       console.log(`[saveTemplate] Successfully stored template "${tpl.name}" (${tpl.templateId}) directly to DB with ${tpl.attachments?.length || 0} attachments.`);
     } catch (e) {
       console.warn('Failed to save template to Firestore:', e);
@@ -544,7 +671,7 @@ export async function deleteTemplate(templateId: string): Promise<boolean> {
   emailTemplatesMap.delete(templateId);
   if (isFirebaseConfigured && db) {
     try {
-      await deleteDoc(doc(db, 'email_templates', templateId));
+      await deleteDoc(tenantRepo(getCampaignActiveCtx()).emailTemplateDoc(templateId));
     } catch (err) {
       console.warn(`Failed to delete template ${templateId} from Firestore:`, err);
     }
@@ -596,7 +723,7 @@ export async function ensureCampaignInStore(campaignId: string): Promise<Campaig
   let camp = campaignsMap.get(campaignId);
   if (!camp && isFirebaseConfigured && db) {
     try {
-      const snap = await getDoc(doc(db, 'campaigns', campaignId));
+      const snap = await getDoc(tenantRepo(getCampaignActiveCtx()).campaignDoc(campaignId));
       if (snap.exists()) {
         camp = snap.data() as Campaign;
         campaignsMap.set(campaignId, camp);
@@ -651,7 +778,7 @@ export async function getCampaignLeadsFromDb(campaignId: string): Promise<Campai
 
   if (leads.length === 0 && isFirebaseConfigured && db) {
     try {
-      const snap = await getDocs(collection(db, 'campaign_leads')).catch(() => null);
+      const snap = await getDocs(tenantRepo(getCampaignActiveCtx()).campaignLeads()).catch(() => null);
       if (snap && !snap.empty) {
         snap.forEach((d) => {
           const l = d.data() as CampaignLead;
@@ -715,71 +842,71 @@ export async function deleteCampaign(campaignId: string): Promise<boolean> {
       const deletePromises: Promise<any>[] = [];
 
       // A. Delete campaign document from 'campaigns' and 'outbound_campaigns'
-      deletePromises.push(deleteDoc(doc(db, 'campaigns', campaignId)).catch(() => {}));
-      deletePromises.push(deleteDoc(doc(db, 'outbound_campaigns', campaignId)).catch(() => {}));
+      deletePromises.push(deleteDoc(tenantRepo(getCampaignActiveCtx()).campaignDoc(campaignId)).catch(() => {}));
+      deletePromises.push(deleteDoc(tenantRepo(getCampaignActiveCtx()).outboundCampaignDoc(campaignId)).catch(() => {}));
 
       // B. Delete all leads belonging to this campaign
-      const leadsSnap = await getDocs(collection(db, 'campaign_leads')).catch(() => null);
+      const leadsSnap = await getDocs(tenantRepo(getCampaignActiveCtx()).campaignLeads()).catch(() => null);
       if (leadsSnap && !leadsSnap.empty) {
         leadsSnap.forEach((d) => {
           const lData = d.data();
           if (lData && lData.campaignId === campaignId) {
-            deletePromises.push(deleteDoc(doc(db, 'campaign_leads', d.id)).catch(() => {}));
+            deletePromises.push(deleteDoc(tenantRepo(getCampaignActiveCtx()).campaignLeadDoc(d.id)).catch(() => {}));
           }
         });
       }
 
       // C. Delete all runs belonging to this campaign
-      const runsSnap = await getDocs(collection(db, 'campaign_runs')).catch(() => null);
+      const runsSnap = await getDocs(tenantRepo(getCampaignActiveCtx()).campaignRuns()).catch(() => null);
       if (runsSnap && !runsSnap.empty) {
         runsSnap.forEach((d) => {
           const rData = d.data();
           if (rData && rData.campaignId === campaignId) {
-            deletePromises.push(deleteDoc(doc(db, 'campaign_runs', d.id)).catch(() => {}));
+            deletePromises.push(deleteDoc(tenantRepo(getCampaignActiveCtx()).campaignRunDoc(d.id)).catch(() => {}));
           }
         });
       }
 
       // D. Delete all send history belonging to this campaign
-      const histSnap = await getDocs(collection(db, 'campaign_send_history')).catch(() => null);
+      const histSnap = await getDocs(tenantRepo(getCampaignActiveCtx()).campaignSendHistory()).catch(() => null);
       if (histSnap && !histSnap.empty) {
         histSnap.forEach((d) => {
           const hData = d.data();
           if (hData && hData.campaignId === campaignId) {
-            deletePromises.push(deleteDoc(doc(db, 'campaign_send_history', d.id)).catch(() => {}));
+            deletePromises.push(deleteDoc(tenantRepo(getCampaignActiveCtx()).campaignSendHistoryDoc(d.id)).catch(() => {}));
           }
         });
       }
 
       // E. Delete any outbound_prospects belonging to this campaign
-      const prospectSnap = await getDocs(collection(db, 'outbound_prospects')).catch(() => null);
+      const prospectSnap = await getDocs(tenantRepo(getCampaignActiveCtx()).outboundProspects()).catch(() => null);
       if (prospectSnap && !prospectSnap.empty) {
         prospectSnap.forEach((d) => {
           const pData = d.data();
           if (pData && pData.campaignId === campaignId) {
-            deletePromises.push(deleteDoc(doc(db, 'outbound_prospects', d.id)).catch(() => {}));
+            deletePromises.push(deleteDoc(tenantRepo(getCampaignActiveCtx()).outboundProspectDoc(d.id)).catch(() => {}));
           }
         });
       }
 
       // F. Delete any conversations and messages linked to this campaign
-      const convSnap = await getDocs(collection(db, 'conversations')).catch(() => null);
+      const convSnap = await getDocs(tenantRepo(getCampaignActiveCtx()).conversations()).catch(() => null);
       if (convSnap && !convSnap.empty) {
         const convIdsToDelete: string[] = [];
         convSnap.forEach((d) => {
           const cData = d.data();
           if (cData && cData.campaignId === campaignId) {
             convIdsToDelete.push(d.id);
-            deletePromises.push(deleteDoc(doc(db, 'conversations', d.id)).catch(() => {}));
+            deletePromises.push(deleteDoc(tenantRepo(getCampaignActiveCtx()).conversationDoc(d.id)).catch(() => {}));
           }
         });
         if (convIdsToDelete.length > 0) {
-          const msgsSnap = await getDocs(collection(db, 'messages')).catch(() => null);
+          const msgsSnap = await getDocs(tenantRepo(getCampaignActiveCtx()).messages()).catch(() => null);
           if (msgsSnap && !msgsSnap.empty) {
             msgsSnap.forEach((d) => {
               const mData = d.data();
               if (mData && convIdsToDelete.includes(mData.conversationId)) {
-                deletePromises.push(deleteDoc(doc(db, 'messages', d.id)).catch(() => {}));
+                deletePromises.push(deleteDoc(tenantRepo(getCampaignActiveCtx()).messageDoc(d.id)).catch(() => {}));
               }
             });
           }
@@ -787,12 +914,12 @@ export async function deleteCampaign(campaignId: string): Promise<boolean> {
       }
 
       // G. Delete any CRM leads linked to this campaign
-      const crmLeadsSnap = await getDocs(collection(db, 'leads')).catch(() => null);
+      const crmLeadsSnap = await getDocs(tenantRepo(getCampaignActiveCtx()).leads()).catch(() => null);
       if (crmLeadsSnap && !crmLeadsSnap.empty) {
         crmLeadsSnap.forEach((d) => {
           const lData = d.data();
           if (lData && lData.campaignId === campaignId) {
-            deletePromises.push(deleteDoc(doc(db, 'leads', d.id)).catch(() => {}));
+            deletePromises.push(deleteDoc(tenantRepo(getCampaignActiveCtx()).leadDoc(d.id)).catch(() => {}));
           }
         });
       }
@@ -855,7 +982,7 @@ export async function createCampaign(params: {
   if (params.templateId) {
     if (isFirebaseConfigured && db) {
       try {
-        const snap = await getDoc(doc(db, 'email_templates', params.templateId));
+        const snap = await getDoc(tenantRepo(getCampaignActiveCtx()).emailTemplateDoc(params.templateId));
         if (snap.exists()) {
           selectedTemplate = snap.data() as EmailTemplate;
           emailTemplatesMap.set(params.templateId, selectedTemplate);
@@ -882,7 +1009,7 @@ export async function createCampaign(params: {
     };
     emailTemplatesMap.set(params.templateId, selectedTemplate);
     if (isFirebaseConfigured && db) {
-      safeSetDoc(doc(db, 'email_templates', params.templateId), selectedTemplate).catch(() => {});
+      safeSetDoc(tenantRepo(getCampaignActiveCtx()).emailTemplateDoc(params.templateId), selectedTemplate).catch(() => {});
     }
   }
 
@@ -977,9 +1104,9 @@ export async function createCampaign(params: {
   // Sync to Firestore synchronously before responding
   if (isFirebaseConfigured && db) {
     try {
-      await safeSetDoc(doc(db, 'campaigns', campaignId), initialCampaign);
+      await safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignDoc(campaignId), initialCampaign);
       // Batch write campaign_leads ONLY (unreplied leads remain in campaign module only, not CRM)
-      const promises = createdLeads.map((cl) => safeSetDoc(doc(db, 'campaign_leads', cl.campaignLeadId), cl));
+      const promises = createdLeads.map((cl) => safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignLeadDoc(cl.campaignLeadId), cl));
       await Promise.allSettled(promises);
     } catch (e) {
       console.warn('Firestore write notice during campaign creation:', e);
@@ -1030,7 +1157,7 @@ export async function startCampaign(campaignId: string): Promise<Campaign> {
     campaign.lastRunNumber = nextRunNumber;
 
     if (isFirebaseConfigured && db) {
-      safeSetDoc(doc(db, 'campaign_runs', currentRunId), newRun).catch(() => {});
+      safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignRunDoc(currentRunId), newRun).catch(() => {});
     }
   }
 
@@ -1047,7 +1174,7 @@ export async function startCampaign(campaignId: string): Promise<Campaign> {
         fl.lastError = undefined;
         fl.updatedAt = now;
         if (isFirebaseConfigured && db) {
-          safeSetDoc(doc(db, 'campaign_leads', fl.campaignLeadId), fl, { merge: true }).catch(() => {});
+          safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignLeadDoc(fl.campaignLeadId), fl, { merge: true }).catch(() => {});
         }
       }
     }
@@ -1059,7 +1186,7 @@ export async function startCampaign(campaignId: string): Promise<Campaign> {
   campaignsMap.set(campaignId, campaign);
 
   if (isFirebaseConfigured && db) {
-    safeSetDoc(doc(db, 'campaigns', campaignId), campaign, { merge: true }).catch(() => {});
+    safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignDoc(campaignId), campaign, { merge: true }).catch(() => {});
   }
 
   // Synchronously process initial batch for immediate dispatch on Vercel & dev server
@@ -1096,7 +1223,7 @@ export async function pauseCampaign(campaignId: string): Promise<Campaign> {
     if (run && run.status === 'RUNNING') {
       run.status = 'PAUSED';
       if (isFirebaseConfigured && db) {
-        safeSetDoc(doc(db, 'campaign_runs', run.runId), run, { merge: true }).catch(() => {});
+        safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignRunDoc(run.runId), run, { merge: true }).catch(() => {});
       }
     }
   }
@@ -1104,7 +1231,7 @@ export async function pauseCampaign(campaignId: string): Promise<Campaign> {
   campaignsMap.set(campaignId, campaign);
 
   if (isFirebaseConfigured && db) {
-    await safeSetDoc(doc(db, 'campaigns', campaignId), campaign, { merge: true }).catch(() => {});
+    await safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignDoc(campaignId), campaign, { merge: true }).catch(() => {});
   }
 
   return campaign;
@@ -1156,7 +1283,7 @@ export async function restartCampaign(
       prevRun.status = 'COMPLETED';
       prevRun.completedAt = now;
       if (isFirebaseConfigured && db) {
-        setDoc(doc(db, 'campaign_runs', prevRun.runId), prevRun, { merge: true }).catch(() => {});
+        setDoc(tenantRepo(getCampaignActiveCtx()).campaignRunDoc(prevRun.runId), prevRun, { merge: true }).catch(() => {});
       }
     }
   }
@@ -1197,8 +1324,8 @@ export async function restartCampaign(
     campaignsMap.set(campaignId, campaign);
 
     if (isFirebaseConfigured && db) {
-      setDoc(doc(db, 'campaigns', campaignId), campaign, { merge: true }).catch(() => {});
-      setDoc(doc(db, 'campaign_runs', newRunId), newRun).catch(() => {});
+      setDoc(tenantRepo(getCampaignActiveCtx()).campaignDoc(campaignId), campaign, { merge: true }).catch(() => {});
+      setDoc(tenantRepo(getCampaignActiveCtx()).campaignRunDoc(newRunId), newRun).catch(() => {});
     }
 
     recalculateCampaignMetrics(campaignId);
@@ -1230,7 +1357,7 @@ export async function restartCampaign(
     targetLeadsCount++;
     campaignLeadsMap.set(l.campaignLeadId, l);
     if (isFirebaseConfigured && db) {
-      leadSavePromises.push(safeSetDoc(doc(db, 'campaign_leads', l.campaignLeadId), l, { merge: true }));
+      leadSavePromises.push(safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignLeadDoc(l.campaignLeadId), l, { merge: true }));
     }
   });
 
@@ -1243,7 +1370,7 @@ export async function restartCampaign(
     l.updatedAt = now;
     campaignLeadsMap.set(l.campaignLeadId, l);
     if (isFirebaseConfigured && db) {
-      leadSavePromises.push(safeSetDoc(doc(db, 'campaign_leads', l.campaignLeadId), l, { merge: true }));
+      leadSavePromises.push(safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignLeadDoc(l.campaignLeadId), l, { merge: true }));
     }
   });
 
@@ -1273,8 +1400,8 @@ export async function restartCampaign(
 
   if (isFirebaseConfigured && db) {
     await Promise.allSettled([
-      safeSetDoc(doc(db, 'campaigns', campaignId), campaign, { merge: true }),
-      safeSetDoc(doc(db, 'campaign_runs', newRunId), newRun),
+      safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignDoc(campaignId), campaign, { merge: true }),
+      safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignRunDoc(newRunId), newRun),
     ]).catch(() => {});
   }
 
@@ -1339,7 +1466,7 @@ export async function processNextCampaignSendBatch(
     let template = getTemplateById(selectedTplId);
     if (!template && selectedTplId && isFirebaseConfigured && db) {
       try {
-        const snap = await getDoc(doc(db, 'email_templates', selectedTplId));
+        const snap = await getDoc(tenantRepo(getCampaignActiveCtx()).emailTemplateDoc(selectedTplId));
         if (snap.exists()) {
           template = snap.data() as EmailTemplate;
           emailTemplatesMap.set(selectedTplId, template);
@@ -1364,12 +1491,12 @@ export async function processNextCampaignSendBatch(
         run.status = 'COMPLETED';
         run.completedAt = now;
         if (isFirebaseConfigured && db) {
-          safeSetDoc(doc(db, 'campaign_runs', run.runId), run, { merge: true }).catch(() => {});
+          safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignRunDoc(run.runId), run, { merge: true }).catch(() => {});
         }
       }
 
       if (isFirebaseConfigured && db) {
-        safeSetDoc(doc(db, 'campaigns', campaignId), campaign, { merge: true }).catch(() => {});
+        safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignDoc(campaignId), campaign, { merge: true }).catch(() => {});
       }
 
       const finalCamp = recalculateCampaignMetrics(campaignId) || campaign;
@@ -1542,10 +1669,10 @@ export async function processNextCampaignSendBatch(
         });
 
         if (isFirebaseConfigured && db) {
-          safeSetDoc(doc(db, 'campaign_leads', lead.campaignLeadId), lead, { merge: true }).catch(() => {});
-          safeSetDoc(doc(db, 'campaign_send_history', historyRecord.historyId), historyRecord).catch(() => {});
+          safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignLeadDoc(lead.campaignLeadId), lead, { merge: true }).catch(() => {});
+          safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignSendHistoryDoc(historyRecord.historyId), historyRecord).catch(() => {});
           if (currentRun) {
-            safeSetDoc(doc(db, 'campaign_runs', currentRun.runId), currentRun, { merge: true }).catch(() => {});
+            safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignRunDoc(currentRun.runId), currentRun, { merge: true }).catch(() => {});
           }
         }
         processedCount++;
@@ -1555,7 +1682,7 @@ export async function processNextCampaignSendBatch(
         lead.updatedAt = now;
 
         if (isFirebaseConfigured && db) {
-          safeSetDoc(doc(db, 'campaign_leads', lead.campaignLeadId), lead, { merge: true }).catch(() => {});
+          safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignLeadDoc(lead.campaignLeadId), lead, { merge: true }).catch(() => {});
         }
 
         if (sendResult.isDailyLimitExceeded) {
@@ -1563,7 +1690,7 @@ export async function processNextCampaignSendBatch(
           campaign.lastError = 'Gmail Daily Sending Limit reached. Campaign paused.';
           campaign.updatedAt = now;
           if (isFirebaseConfigured && db) {
-            safeSetDoc(doc(db, 'campaigns', campaignId), campaign, { merge: true }).catch(() => {});
+            safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignDoc(campaignId), campaign, { merge: true }).catch(() => {});
           }
           break;
         }
@@ -1574,7 +1701,7 @@ export async function processNextCampaignSendBatch(
       lead.updatedAt = new Date().toISOString();
 
       if (isFirebaseConfigured && db) {
-        safeSetDoc(doc(db, 'campaign_leads', lead.campaignLeadId), lead, { merge: true }).catch(() => {});
+        safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignLeadDoc(lead.campaignLeadId), lead, { merge: true }).catch(() => {});
       }
     } finally {
       inFlightLeadSendsSet.delete(runHistoryKey);
@@ -1596,12 +1723,12 @@ export async function processNextCampaignSendBatch(
       run.status = 'COMPLETED';
       run.completedAt = now;
       if (isFirebaseConfigured && db) {
-        safeSetDoc(doc(db, 'campaign_runs', run.runId), run, { merge: true }).catch(() => {});
+        safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignRunDoc(run.runId), run, { merge: true }).catch(() => {});
       }
     }
 
     if (isFirebaseConfigured && db) {
-      safeSetDoc(doc(db, 'campaigns', campaignId), campaign, { merge: true }).catch(() => {});
+      safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignDoc(campaignId), campaign, { merge: true }).catch(() => {});
     }
   }
 
@@ -1632,7 +1759,7 @@ async function executeCampaignSendingEngine(campaignId: string, expectedRunId?: 
     let template = getTemplateById(selectedTplId);
     if (!template && selectedTplId && isFirebaseConfigured && db) {
       try {
-        const snap = await getDoc(doc(db, 'email_templates', selectedTplId));
+        const snap = await getDoc(tenantRepo(getCampaignActiveCtx()).emailTemplateDoc(selectedTplId));
         if (snap.exists()) {
           template = snap.data() as EmailTemplate;
           emailTemplatesMap.set(selectedTplId, template);
@@ -1664,12 +1791,12 @@ async function executeCampaignSendingEngine(campaignId: string, expectedRunId?: 
         run.status = 'COMPLETED';
         run.completedAt = now;
         if (isFirebaseConfigured && db) {
-          safeSetDoc(doc(db, 'campaign_runs', run.runId), run, { merge: true }).catch(() => {});
+          safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignRunDoc(run.runId), run, { merge: true }).catch(() => {});
         }
       }
 
       if (isFirebaseConfigured && db) {
-        safeSetDoc(doc(db, 'campaigns', campaignId), campaign, { merge: true }).catch(() => {});
+        safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignDoc(campaignId), campaign, { merge: true }).catch(() => {});
       }
       return;
     }
@@ -1746,7 +1873,7 @@ async function executeCampaignSendingEngine(campaignId: string, expectedRunId?: 
         let activeTpl = getTemplateById(targetTplId);
         if (!activeTpl && targetTplId && isFirebaseConfigured && db) {
           try {
-            const snap = await getDoc(doc(db, 'email_templates', targetTplId));
+            const snap = await getDoc(tenantRepo(getCampaignActiveCtx()).emailTemplateDoc(targetTplId));
             if (snap.exists()) {
               activeTpl = snap.data() as EmailTemplate;
               emailTemplatesMap.set(targetTplId, activeTpl);
@@ -1865,10 +1992,10 @@ async function executeCampaignSendingEngine(campaignId: string, expectedRunId?: 
 
           // Sync lead & history to Firestore
           if (isFirebaseConfigured && db) {
-            safeSetDoc(doc(db, 'campaign_leads', lead.campaignLeadId), lead, { merge: true }).catch(() => {});
-            safeSetDoc(doc(db, 'campaign_send_history', historyRecord.historyId), historyRecord).catch(() => {});
+            safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignLeadDoc(lead.campaignLeadId), lead, { merge: true }).catch(() => {});
+            safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignSendHistoryDoc(historyRecord.historyId), historyRecord).catch(() => {});
             if (currentRun) {
-              safeSetDoc(doc(db, 'campaign_runs', currentRun.runId), currentRun, { merge: true }).catch(() => {});
+              safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignRunDoc(currentRun.runId), currentRun, { merge: true }).catch(() => {});
             }
           }
 
@@ -1879,7 +2006,7 @@ async function executeCampaignSendingEngine(campaignId: string, expectedRunId?: 
           lead.updatedAt = now;
 
           if (isFirebaseConfigured && db) {
-            safeSetDoc(doc(db, 'campaign_leads', lead.campaignLeadId), lead, { merge: true }).catch(() => {});
+            safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignLeadDoc(lead.campaignLeadId), lead, { merge: true }).catch(() => {});
           }
           console.warn(`[Campaign Engine] Failed to dispatch to ${lead.email}: ${sendResult.error}`);
 
@@ -1890,7 +2017,7 @@ async function executeCampaignSendingEngine(campaignId: string, expectedRunId?: 
             campaign.lastError = 'Gmail Daily Sending Limit (550 5.4.5) reached on amaavigo@gmail.com. Campaign paused. Resets automatically in 24 hours, or you can run in Test Simulation mode.';
             campaign.updatedAt = now;
             if (isFirebaseConfigured && db) {
-              safeSetDoc(doc(db, 'campaigns', campaignId), campaign, { merge: true }).catch(() => {});
+              safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignDoc(campaignId), campaign, { merge: true }).catch(() => {});
             }
             break;
           }
@@ -1901,7 +2028,7 @@ async function executeCampaignSendingEngine(campaignId: string, expectedRunId?: 
         lead.updatedAt = new Date().toISOString();
 
         if (isFirebaseConfigured && db) {
-          safeSetDoc(doc(db, 'campaign_leads', lead.campaignLeadId), lead, { merge: true }).catch(() => {});
+          safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignLeadDoc(lead.campaignLeadId), lead, { merge: true }).catch(() => {});
         }
         console.error(`[Campaign Engine] Error sending to ${lead.email}:`, err);
       } finally {
@@ -1930,13 +2057,13 @@ async function executeCampaignSendingEngine(campaignId: string, expectedRunId?: 
           run.status = 'COMPLETED';
           run.completedAt = now;
           if (isFirebaseConfigured && db) {
-            safeSetDoc(doc(db, 'campaign_runs', run.runId), run, { merge: true }).catch(() => {});
+            safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignRunDoc(run.runId), run, { merge: true }).catch(() => {});
           }
         }
       }
 
       if (isFirebaseConfigured && db) {
-        safeSetDoc(doc(db, 'campaigns', campaignId), campaign, { merge: true }).catch(() => {});
+        safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignDoc(campaignId), campaign, { merge: true }).catch(() => {});
       }
       console.log(`[Campaign Engine] Campaign ${campaign.name} [Run: ${currentRunId}] marked COMPLETED.`);
     }
@@ -2025,7 +2152,7 @@ export function recalculateCampaignMetrics(campaignId: string): Campaign | undef
   };
 
   if (isFirebaseConfigured && db) {
-    safeSetDoc(doc(db, 'campaigns', campaignId), camp, { merge: true }).catch(() => {});
+    safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignDoc(campaignId), camp, { merge: true }).catch(() => {});
   }
 
   return camp;
@@ -2065,7 +2192,7 @@ export async function recalculateAndPersistCampaignMetrics(campaignId: string): 
 
   if (isFirebaseConfigured && db) {
     try {
-      await safeSetDoc(doc(db, 'campaigns', campaignId), camp, { merge: true });
+      await safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignDoc(campaignId), camp, { merge: true });
     } catch (e) {
       console.warn('[recalculateAndPersistCampaignMetrics] Firestore save note:', e);
     }
@@ -2090,12 +2217,12 @@ export async function updateLeadDemoStatus(params: {
 
   if (!targetLead && isFirebaseConfigured && db) {
     try {
-      const snap = await getDoc(doc(db, 'campaign_leads', params.leadId));
+      const snap = await getDoc(tenantRepo(getCampaignActiveCtx()).campaignLeadDoc(params.leadId));
       if (snap.exists()) {
         targetLead = snap.data() as CampaignLead;
         campaignLeadsMap.set(targetLead.campaignLeadId, targetLead);
       } else {
-        const querySnap = await getDocs(collection(db, 'campaign_leads'));
+        const querySnap = await getDocs(tenantRepo(getCampaignActiveCtx()).campaignLeads());
         querySnap.forEach((d) => {
           const l = d.data() as CampaignLead;
           if (l && (l.leadId === params.leadId || l.campaignLeadId === params.leadId)) {
@@ -2118,8 +2245,8 @@ export async function updateLeadDemoStatus(params: {
 
   if (isFirebaseConfigured && db) {
     try {
-      await safeSetDoc(doc(db, 'campaign_leads', targetLead.campaignLeadId), targetLead, { merge: true });
-      await safeSetDoc(doc(db, 'leads', targetLead.leadId), {
+      await safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignLeadDoc(targetLead.campaignLeadId), targetLead, { merge: true });
+      await safeSetDoc(tenantRepo(getCampaignActiveCtx()).leadDoc(targetLead.leadId), {
         demoStatus: params.demoStatus,
         demoSource: params.demoSource,
         demoBookedAt: targetLead.demoBookedAt,
@@ -2161,7 +2288,7 @@ export async function handleIncomingCampaignLeadReply(params: {
   // Ensure DB store is populated so serverless instances have all leads
   if (isFirebaseConfigured && db) {
     try {
-      const snap = await getDocs(collection(db, 'campaign_leads')).catch(() => null);
+      const snap = await getDocs(tenantRepo(getCampaignActiveCtx()).campaignLeads()).catch(() => null);
       if (snap && !snap.empty) {
         snap.forEach((d) => {
           const l = d.data() as CampaignLead;
@@ -2234,9 +2361,9 @@ export async function handleIncomingCampaignLeadReply(params: {
 
     if (isFirebaseConfigured && db) {
       try {
-        safeSetDoc(doc(db, 'campaign_leads', matchedLead.campaignLeadId), matchedLead, { merge: true }).catch(() => {});
+        safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignLeadDoc(matchedLead.campaignLeadId), matchedLead, { merge: true }).catch(() => {});
         const contactId = `contact-${matchedLead.email.replace(/[^a-z0-9]/gi, '_')}`;
-        safeSetDoc(doc(db, 'contacts', contactId), {
+        safeSetDoc(tenantRepo(getCampaignActiveCtx()).contactDoc(contactId), {
           contactId,
           firstName: matchedLead.firstName || matchedLead.name.split(' ')[0],
           lastName: matchedLead.lastName || matchedLead.name.split(' ').slice(1).join(' '),
@@ -2250,7 +2377,7 @@ export async function handleIncomingCampaignLeadReply(params: {
         }, { merge: true }).catch(() => {});
 
         if (matchedLead.leadId) {
-          safeSetDoc(doc(db, 'leads', matchedLead.leadId), {
+          safeSetDoc(tenantRepo(getCampaignActiveCtx()).leadDoc(matchedLead.leadId), {
             leadId: matchedLead.leadId,
             contactId,
             source: 'EMAIL',
@@ -2304,12 +2431,12 @@ export async function updateCampaignLeadStatus(params: {
 
   if (!targetLead && isFirebaseConfigured && db) {
     try {
-      const snap = await getDoc(doc(db, 'campaign_leads', params.leadId));
+      const snap = await getDoc(tenantRepo(getCampaignActiveCtx()).campaignLeadDoc(params.leadId));
       if (snap.exists()) {
         targetLead = snap.data() as CampaignLead;
         campaignLeadsMap.set(targetLead.campaignLeadId, targetLead);
       } else {
-        const querySnap = await getDocs(collection(db, 'campaign_leads'));
+        const querySnap = await getDocs(tenantRepo(getCampaignActiveCtx()).campaignLeads());
         querySnap.forEach((d) => {
           const l = d.data() as CampaignLead;
           if (l && (l.leadId === params.leadId || l.campaignLeadId === params.leadId)) {
@@ -2359,7 +2486,7 @@ export async function updateCampaignLeadStatus(params: {
 
   if (isFirebaseConfigured && db) {
     try {
-      await safeSetDoc(doc(db, 'campaign_leads', targetLead.campaignLeadId), targetLead, { merge: true });
+      await safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignLeadDoc(targetLead.campaignLeadId), targetLead, { merge: true });
     } catch (e) {
       console.warn('Firestore update warning for lead status:', e);
     }
@@ -2401,7 +2528,7 @@ export async function processActiveRunningCampaignsBatch(batchSize: number = 500
     // 2. Also check Firestore in case a campaign was started from another instance or browser
     if (isFirebaseConfigured && db) {
       try {
-        const snap = await getDocs(collection(db, 'campaigns')).catch(() => null);
+        const snap = await getDocs(tenantRepo(getCampaignActiveCtx()).campaigns()).catch(() => null);
         if (snap && !snap.empty) {
           snap.forEach((d) => {
             const c = d.data() as Campaign;

@@ -42,6 +42,9 @@ interface NavbarProps {
   isFirebaseActive: boolean;
   currentUser?: AppUser | null;
   onLogout?: () => void;
+  currentTenant?: { id: string; name: string; plan?: string; status?: string } | null;
+  allTenants?: { id: string; name: string; plan?: string; status?: string }[];
+  onSwitchTenant?: (tenantId: string) => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -53,6 +56,9 @@ export const Navbar: React.FC<NavbarProps> = ({
   isFirebaseActive,
   currentUser,
   onLogout,
+  currentTenant,
+  allTenants = [],
+  onSwitchTenant,
 }) => {
   const [activeMailbox, setActiveMailbox] = useState<string>('amaavigo@gmail.com');
 
@@ -95,20 +101,31 @@ export const Navbar: React.FC<NavbarProps> = ({
 
           {/* System Status Indicators */}
           <div className="hidden lg:flex items-center space-x-3 text-xs">
-            <div
-              className={`flex items-center space-x-1.5 px-2.5 py-1 rounded-md border ${
-                isFirebaseActive
-                  ? 'bg-emerald-950/60 border-emerald-800 text-emerald-300'
-                  : 'bg-amber-950/60 border-amber-800 text-amber-300'
-              }`}
-            >
-              <Database className="w-3.5 h-3.5" />
-              <span>Firestore: gen-lang-client-0376069258</span>
+            {/* Tenant Switcher & Plan Badge */}
+            <div className="flex items-center space-x-1.5 px-2.5 py-1 rounded-md bg-indigo-950/70 border border-indigo-800 text-indigo-300">
+              <Shield className="w-3.5 h-3.5 text-indigo-400" />
+              {allTenants.length > 1 && onSwitchTenant ? (
+                <select
+                  value={currentTenant?.id || 'umrah360'}
+                  onChange={(e) => onSwitchTenant(e.target.value)}
+                  className="bg-transparent text-xs font-semibold focus:outline-none cursor-pointer text-indigo-200"
+                >
+                  {allTenants.map((t) => (
+                    <option key={t.id} value={t.id} className="bg-slate-900 text-white">
+                      {t.name} ({t.plan || 'growth'})
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <span className="font-semibold">
+                  {currentTenant?.name || 'Umrah360 Flagship'} ({currentTenant?.plan || 'enterprise'})
+                </span>
+              )}
             </div>
 
             <div className="flex items-center space-x-1.5 px-2.5 py-1 rounded-md bg-emerald-950/70 border border-emerald-800 text-emerald-300">
               <Bot className="w-3.5 h-3.5 text-emerald-400" />
-              <span>OpenAI GPT-4o</span>
+              <span>Multi-Tenant Engine</span>
             </div>
 
             {isModuleAccessible('live-mailbox') && (

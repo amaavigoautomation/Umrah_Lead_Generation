@@ -1,3 +1,20 @@
+import { tenantRepo } from './tenantRepo.js';
+import type { TenantContext } from '../types/tenant.js';
+
+const DEFAULT_UMRAH_CTX: TenantContext = {
+  tenantId: 'umrah360',
+  uid: 'system',
+  email: 'system@umrah360.in',
+  role: 'admin',
+};
+
+let activeWhatsAppCtx: TenantContext = DEFAULT_UMRAH_CTX;
+export function setWhatsAppActiveContext(ctx: TenantContext) {
+  activeWhatsAppCtx = ctx;
+}
+function getWACtx(): TenantContext {
+  return activeWhatsAppCtx;
+}
 import OpenAI from 'openai';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -1075,22 +1092,22 @@ export async function processLiveInboundWhatsApp(payload: {
   if (isFirebaseConfigured && db && crmEntities) {
     try {
       if (crmEntities.contact) {
-        safeSetDoc(doc(db, 'contacts', crmEntities.contact.contactId), crmEntities.contact, { merge: true }).catch(() => {});
+        safeSetDoc(tenantRepo(getWACtx()).contactDoc(crmEntities.contact.contactId), crmEntities.contact, { merge: true }).catch(() => {});
       }
       if (crmEntities.lead) {
-        safeSetDoc(doc(db, 'leads', crmEntities.lead.leadId), crmEntities.lead, { merge: true }).catch(() => {});
+        safeSetDoc(tenantRepo(getWACtx()).leadDoc(crmEntities.lead.leadId), crmEntities.lead, { merge: true }).catch(() => {});
       }
       if (crmEntities.conversation) {
-        safeSetDoc(doc(db, 'conversations', crmEntities.conversation.conversationId), crmEntities.conversation, { merge: true }).catch(() => {});
+        safeSetDoc(tenantRepo(getWACtx()).conversationDoc(crmEntities.conversation.conversationId), crmEntities.conversation, { merge: true }).catch(() => {});
       }
       if (crmEntities.incomingMessage) {
-        safeSetDoc(doc(db, 'messages', crmEntities.incomingMessage.messageId), crmEntities.incomingMessage, { merge: true }).catch(() => {});
+        safeSetDoc(tenantRepo(getWACtx()).messageDoc(crmEntities.incomingMessage.messageId), crmEntities.incomingMessage, { merge: true }).catch(() => {});
       }
       if (crmEntities.aiReplyMessage) {
-        safeSetDoc(doc(db, 'messages', crmEntities.aiReplyMessage.messageId), crmEntities.aiReplyMessage, { merge: true }).catch(() => {});
+        safeSetDoc(tenantRepo(getWACtx()).messageDoc(crmEntities.aiReplyMessage.messageId), crmEntities.aiReplyMessage, { merge: true }).catch(() => {});
       }
       if (crmEntities.activity) {
-        safeSetDoc(doc(db, 'lead_activities', crmEntities.activity.activityId), crmEntities.activity, { merge: true }).catch(() => {});
+        safeSetDoc(tenantRepo(getWACtx()).leadActivityDoc(crmEntities.activity.activityId), crmEntities.activity, { merge: true }).catch(() => {});
       }
     } catch (fsErr) {
       console.error('[WhatsApp Pipeline] Firestore persistence warning:', fsErr);

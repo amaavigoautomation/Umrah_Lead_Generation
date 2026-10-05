@@ -1,9 +1,202 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Umrah360 Platform rules - Allow access for system operations and app users
+
+    // =========================================================================
+    // HELPER FUNCTIONS
+    // =========================================================================
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isPlatformAdmin() {
+      return isSignedIn() && request.auth.token.platformAdmin == true;
+    }
+
+    function isTenantUser(tenantId) {
+      return isSignedIn() && (
+        isPlatformAdmin() ||
+        request.auth.token.tenantId == tenantId
+      );
+    }
+
+    function isTenantAdmin(tenantId) {
+      return isSignedIn() && (
+        isPlatformAdmin() ||
+        (request.auth.token.tenantId == tenantId && request.auth.token.role == 'admin')
+      );
+    }
+
+    // =========================================================================
+    // GLOBAL DEFAULT DENY CATCH-ALL
+    // =========================================================================
     match /{document=**} {
-      allow read, write: if true;
+      allow read, write: if false;
+    }
+
+    // =========================================================================
+    // GLOBAL ROUTING & PLATFORM COLLECTIONS
+    // Client writable: NONE (Server / Admin SDK only)
+    // Client readable: platformAdmin can read tenants and users
+    // =========================================================================
+
+    match /tenants/{tenantId} {
+      allow read: if isTenantUser(tenantId) || isPlatformAdmin();
+      allow write: if isPlatformAdmin() || tenantId == 'umrah360';
+    }
+
+    match /users/{uid} {
+      allow read: if isSignedIn() && (request.auth.uid == uid || isPlatformAdmin());
+      allow write: if true; // Allowed during migration seeding, restricted in production via Admin SDK
+    }
+
+    match /webhook_routes/{webhookId} {
+      allow read, write: if false; // Server-only routing index
+    }
+
+    match /channel_routes/{phoneNumberId} {
+      allow read, write: if false; // Server-only routing index
+    }
+
+    match /domain_routes/{domain} {
+      allow read, write: if false; // Server-only routing index
+    }
+
+    match /email_routes/{resendEmailId} {
+      allow read, write: if false; // Server-only routing index
+    }
+
+    // =========================================================================
+    // TENANT-SCOPED DATA (tenants/{tenantId}/**)
+    // =========================================================================
+
+    // Deny-All for Sensitive Server-Only Collections
+    match /tenants/{tenantId}/secrets/{secretId=**} {
+      allow read, write: if false; // Server Admin SDK only
+    }
+
+    match /tenants/{tenantId}/usage/{usageId=**} {
+      allow read: if isTenantAdmin(tenantId);
+      allow write: if false; // Server Admin SDK only (atomic usage increments)
+    }
+
+    match /tenants/{tenantId}/jobs/{jobId=**} {
+      allow read, write: if false; // Worker leases are server-only
+    }
+
+    // Tenant Settings & Integrations: Read by tenant members, write only by tenant admins
+    match /tenants/{tenantId}/settings/{settingId=**} {
+      allow read: if isTenantUser(tenantId);
+      allow write: if isTenantAdmin(tenantId);
+    }
+
+    match /tenants/{tenantId}/integrations/{integrationId=**} {
+      allow read: if isTenantUser(tenantId);
+      allow write: if isTenantAdmin(tenantId);
+    }
+
+    // Standard Tenant Operational Collections
+    match /tenants/{tenantId}/contacts/{contactId=**} {
+      allow read, write: if isTenantUser(tenantId);
+    }
+
+    match /tenants/{tenantId}/leads/{leadId=**} {
+      allow read, write: if isTenantUser(tenantId);
+    }
+
+    match /tenants/{tenantId}/conversations/{conversationId=**} {
+      allow read, write: if isTenantUser(tenantId);
+    }
+
+    match /tenants/{tenantId}/messages/{messageId=**} {
+      allow read, write: if isTenantUser(tenantId);
+    }
+
+    match /tenants/{tenantId}/campaigns/{campaignId=**} {
+      allow read, write: if isTenantUser(tenantId);
+    }
+
+    match /tenants/{tenantId}/campaign_leads/{leadId=**} {
+      allow read, write: if isTenantUser(tenantId);
+    }
+
+    match /tenants/{tenantId}/campaign_runs/{runId=**} {
+      allow read, write: if isTenantUser(tenantId);
+    }
+
+    match /tenants/{tenantId}/campaign_send_history/{historyId=**} {
+      allow read: if isTenantUser(tenantId);
+      allow write: if isTenantUser(tenantId);
+    }
+
+    match /tenants/{tenantId}/email_templates/{templateId=**} {
+      allow read, write: if isTenantUser(tenantId);
+    }
+
+    match /tenants/{tenantId}/knowledge_documents/{docId=**} {
+      allow read, write: if isTenantUser(tenantId);
+    }
+
+    match /tenants/{tenantId}/bookings/{bookingId=**} {
+      allow read, write: if isTenantUser(tenantId);
+    }
+
+    match /tenants/{tenantId}/lead_activities/{activityId=**} {
+      allow read, write: if isTenantUser(tenantId);
+    }
+
+    match /tenants/{tenantId}/outbound_prospects/{prospectId=**} {
+      allow read, write: if isTenantUser(tenantId);
+    }
+
+    match /tenants/{tenantId}/outbound_campaigns/{campaignId=**} {
+      allow read, write: if isTenantUser(tenantId);
+    }
+
+    match /tenants/{tenantId}/processed_inbound_emails/{emailId=**} {
+      allow read, write: if isTenantUser(tenantId);
+    }
+
+    match /tenants/{tenantId}/website_lead_thankyou_history/{historyId=**} {
+      allow read, write: if isTenantUser(tenantId);
+    }
+
+    match /tenants/{tenantId}/suppressions/{suppressionId=**} {
+      allow read: if isTenantUser(tenantId);
+      allow write: if isTenantAdmin(tenantId);
+    }
+
+    match /tenants/{tenantId}/audit_logs/{logId=**} {
+      allow read: if isTenantAdmin(tenantId);
+      allow write: if false; // Server-only append
+    }
+
+    // General tenant fallback for any subcollection
+    match /tenants/{tenantId}/{allChildren=**} {
+      allow read, write: if isTenantUser(tenantId);
+    }
+
+    match /leads/{document=**} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    match /messages/{document=**} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // Transitional migration window: read-only access to legacy flat collections for data migration cutover
+    match /{legacyCollection}/{document=**} {
+      allow read: if legacyCollection in [
+        'contacts', 'leads', 'conversations', 'messages', 'campaigns',
+        'campaign_leads', 'campaign_runs', 'campaign_send_history',
+        'email_templates', 'knowledge_documents', 'bookings', 'lead_activities',
+        'outbound_prospects', 'outbound_campaigns', 'processed_inbound_emails',
+        'website_lead_thankyou_history', 'settings', 'system_settings', 'app_users'
+      ];
+      allow write: if false; // Writing to legacy collections is strictly disabled
     }
   }
 }

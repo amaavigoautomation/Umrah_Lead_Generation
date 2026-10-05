@@ -67,8 +67,35 @@ import {
   verifyGoogleCalendarConnection,
 } from './demoSchedulingService.js';
 import { db, isFirebaseConfigured } from '../firebase/config.js';
-import { doc } from 'firebase/firestore';
+import { getDoc, getDocs, setDoc, updateDoc, deleteDoc, collection, doc } from 'firebase/firestore';
 import { safeSetDoc } from './firestoreUtils.js';
+import {
+  setCampaignActiveContext,
+  getCampaignActiveCtx,
+} from './campaignService.js';
+import { setSchedulingActiveContext } from './demoSchedulingService.js';
+import { setInboundActiveContext } from './inboundPipeline.js';
+import { setWhatsAppActiveContext } from './whatsappInboundPipeline.js';
+import {
+  tenantRepo,
+  globalTenantDoc,
+  globalTenantsCol,
+  globalUserDoc,
+  globalUsersCol,
+  globalWebhookRouteDoc,
+  globalWebhookRoutesCol,
+  globalChannelRouteDoc,
+  globalDomainRouteDoc,
+} from './tenantRepo.js';
+import { getAdminAuth } from './firebaseAdmin.js';
+import { encryptSecret, decryptSecret } from './cryptoUtils.js';
+import { getTenantCurrentUsage, recordTenantUsage, checkTenantQuota } from './usageService.js';
+import {
+  routeWebsiteLeadWebhook,
+  routeWhatsAppWebhook,
+  routeResendWebhook,
+} from './webhookRouter.js';
+import type { TenantContext, Tenant, GlobalUser, UserRole, WebhookRoute, ChannelRoute, DomainRoute } from '../types/tenant.js';
 import {
   initKnowledgeStore,
   getAllKnowledgeDocs,
@@ -186,6 +213,403 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
     }
   }
 
+  // Resolve Multi-Tenant Context
+  let resolvedTenantId = 'umrah360';
+  let userUid = 'anonymous';
+  let userEmail = '';
+  let userRole: UserRole = 'admin';
+  let isPlatformAdmin = false;
+
+  if (requestBearerToken) {
+    try {
+      const adminAuth = getAdminAuth();
+      const decoded = await adminAuth.verifyIdToken(requestBearerToken).catch(() => null);
+      if (decoded) {
+        userUid = decoded.uid;
+        userEmail = decoded.email || '';
+        if (decoded.tenantId) resolvedTenantId = decoded.tenantId;
+        if (decoded.role) userRole = decoded.role as UserRole;
+        if (decoded.platformAdmin) isPlatformAdmin = true;
+      }
+    } catch {}
+  }
+
+  // Header or query override
+  const tenantHeader = req.headers['x-tenant-id'] || req.headers['x-tenant'];
+  if (typeof tenantHeader === 'string' && tenantHeader.trim()) {
+    resolvedTenantId = tenantHeader.trim();
+  }
+
+  const activeTenantCtx: TenantContext = {
+    tenantId: resolvedTenantId,
+    uid: userUid,
+    email: userEmail,
+    role: userRole,
+    isPlatformAdmin,
+  };
+
+  setCampaignActiveContext(activeTenantCtx);
+  setSchedulingActiveContext(activeTenantCtx);
+  setInboundActiveContext(activeTenantCtx);
+  setWhatsAppActiveContext(activeTenantCtx);
+
+  // =========================================================================
+  // MULTI-TENANT INBOUND WEBHOOK ROUTING (Phase P3)
+  // =========================================================================
+  if (url.startsWith('/api/webhooks/website/')) {
+    const webhookId = url.replace('/api/webhooks/website/', '').split('/')[0];
+    return await routeWebsiteLeadWebhook(req, res, webhookId);
+  }
+  if (url === '/api/webhooks/umrah-demo' || url === '/api/leads/inbound') {
+    return await routeWebsiteLeadWebhook(req, res, 'umrah-demo');
+  }
+  if (url === '/api/webhooks/whatsapp' || url === '/api/inbound/whatsapp') {
+    return await routeWhatsAppWebhook(req, res);
+  }
+  if (url === '/api/webhooks/email/resend') {
+    return await routeResendWebhook(req, res);
+  }
+
+  // =========================================================================
+  // MULTI-TENANT AUTH & USER ROUTING (Phase P1 / P6)
+  // =========================================================================
+  if (url === '/api/auth/me' && req.method === 'GET') {
+    let globalUser: GlobalUser | null = null;
+    let tenantInfo: Tenant | null = null;
+
+    if (isFirebaseConfigured && db && userUid !== 'anonymous') {
+      try {
+        const uSnap = await getDoc(globalUserDoc(userUid));
+        if (uSnap.exists()) globalUser = uSnap.data() as GlobalUser;
+
+        const tSnap = await getDoc(globalTenantDoc(resolvedTenantId));
+        if (tSnap.exists()) tenantInfo = tSnap.data() as Tenant;
+      } catch (e) {}
+    }
+
+    res.statusCode = 200;
+    res.end(
+      JSON.stringify({
+        authenticated: userUid !== 'anonymous',
+        user: globalUser || {
+          uid: userUid,
+          email: userEmail || 'operator@umrah360.in',
+          tenantId: resolvedTenantId,
+          role: userRole,
+          active: true,
+          createdAt: new Date().toISOString(),
+        },
+        tenant: tenantInfo || {
+          id: resolvedTenantId,
+          name: resolvedTenantId === 'umrah360' ? 'Umrah360 Flagship' : resolvedTenantId,
+          slug: resolvedTenantId,
+          status: 'active',
+          plan: 'enterprise',
+          limits: {
+            monthlyAiTokens: 5_000_000,
+            dailyOutboundSends: 10_000,
+            hourlyOutboundSends: 1_000,
+            seats: 25,
+          },
+          createdAt: new Date().toISOString(),
+        },
+        claims: {
+          tenantId: resolvedTenantId,
+          role: userRole,
+          platformAdmin: isPlatformAdmin,
+        },
+      })
+    );
+    return true;
+  }
+
+  if (url === '/api/auth/login' && req.method === 'POST') {
+    const { idToken, email, displayName, photoURL } = body;
+    if (!idToken) {
+      res.statusCode = 400;
+      res.end(JSON.stringify({ error: 'idToken is required' }));
+      return true;
+    }
+
+    try {
+      const adminAuth = getAdminAuth();
+      const decoded = await adminAuth.verifyIdToken(idToken);
+      const uid = decoded.uid;
+      const userMail = decoded.email || email || '';
+
+      let assignedTenant = decoded.tenantId || 'umrah360';
+      let assignedRole: UserRole = decoded.role || (userMail === 'amaavigo@gmail.com' ? 'admin' : 'member');
+      const isPlatform = decoded.platformAdmin || userMail === 'amaavigo@gmail.com';
+
+      if (isFirebaseConfigured && db) {
+        const userDocRef = globalUserDoc(uid);
+        const userSnap = await getDoc(userDocRef);
+
+        if (userSnap.exists()) {
+          const existingData = userSnap.data() as GlobalUser;
+          assignedTenant = existingData.tenantId || assignedTenant;
+          assignedRole = existingData.role || assignedRole;
+        } else {
+          // Create new global user record
+          const newUser: GlobalUser = {
+            uid,
+            email: userMail,
+            name: displayName || userMail.split('@')[0],
+            tenantId: assignedTenant,
+            role: assignedRole,
+            active: true,
+            photoURL: photoURL || '',
+            allowedModules: ['inbox', 'campaigns', 'crm', 'scheduling', 'knowledge', 'settings'],
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          };
+          await safeSetDoc(userDocRef, newUser, { merge: true });
+        }
+
+        // Set or refresh Custom Claims
+        await adminAuth.setCustomUserClaims(uid, {
+          tenantId: assignedTenant,
+          role: assignedRole,
+          platformAdmin: isPlatform,
+        });
+      }
+
+      res.statusCode = 200;
+      res.end(
+        JSON.stringify({
+          success: true,
+          user: {
+            uid,
+            email: userMail,
+            tenantId: assignedTenant,
+            role: assignedRole,
+            platformAdmin: isPlatform,
+          },
+        })
+      );
+      return true;
+    } catch (err: any) {
+      console.error('[Auth Login Error]:', err);
+      res.statusCode = 401;
+      res.end(JSON.stringify({ error: err?.message || 'Login verification failed' }));
+      return true;
+    }
+  }
+
+  // =========================================================================
+  // MULTI-TENANT PLATFORM & TENANT MANAGEMENT (Phase P1 / P4 / P6)
+  // =========================================================================
+  if (url === '/api/tenants' && req.method === 'GET') {
+    if (isFirebaseConfigured && db) {
+      try {
+        const snap = await getDocs(globalTenantsCol());
+        const tenants = snap.docs.map((d) => d.data() as Tenant);
+        res.statusCode = 200;
+        res.end(JSON.stringify({ tenants }));
+        return true;
+      } catch (err: any) {
+        res.statusCode = 500;
+        res.end(JSON.stringify({ error: err?.message }));
+        return true;
+      }
+    }
+    res.statusCode = 200;
+    res.end(JSON.stringify({ tenants: [] }));
+    return true;
+  }
+
+  if (url === '/api/tenants' && req.method === 'POST') {
+    const { id, name, plan, contactEmail, timezone, defaultCurrency } = body;
+    const tenantId = (id || name || '').toLowerCase().replace(/[^a-z0-9_-]/g, '-').trim();
+
+    if (!tenantId) {
+      res.statusCode = 400;
+      res.end(JSON.stringify({ error: 'Valid tenant id or name required' }));
+      return true;
+    }
+
+    const limitsMap: Record<string, any> = {
+      starter: { monthlyAiTokens: 500_000, dailyOutboundSends: 500, hourlyOutboundSends: 100, seats: 3 },
+      growth: { monthlyAiTokens: 2_000_000, dailyOutboundSends: 3_000, hourlyOutboundSends: 500, seats: 10 },
+      enterprise: { monthlyAiTokens: 5_000_000, dailyOutboundSends: 10_000, hourlyOutboundSends: 1_000, seats: 25 },
+    };
+
+    const newTenant: Tenant = {
+      id: tenantId,
+      name: name || tenantId,
+      slug: tenantId,
+      status: 'active',
+      plan: plan || 'growth',
+      limits: limitsMap[plan || 'growth'] || limitsMap.growth,
+      contactEmail: contactEmail || '',
+      timezone: timezone || 'Asia/Kolkata',
+      defaultCurrency: defaultCurrency || 'USD',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    if (isFirebaseConfigured && db) {
+      await safeSetDoc(globalTenantDoc(tenantId), newTenant, { merge: true });
+    }
+
+    res.statusCode = 201;
+    res.end(JSON.stringify({ success: true, tenant: newTenant }));
+    return true;
+  }
+
+  const tenantMatch = url.match(/^\/api\/tenants\/([^/?]+)$/);
+  if (tenantMatch) {
+    const tId = tenantMatch[1];
+    if (req.method === 'GET') {
+      if (isFirebaseConfigured && db) {
+        const snap = await getDoc(globalTenantDoc(tId));
+        if (snap.exists()) {
+          res.statusCode = 200;
+          res.end(JSON.stringify(snap.data()));
+          return true;
+        }
+      }
+      res.statusCode = 404;
+      res.end(JSON.stringify({ error: 'Tenant not found' }));
+      return true;
+    }
+
+    if (req.method === 'PATCH') {
+      if (isFirebaseConfigured && db) {
+        const updates = { ...body, updatedAt: new Date().toISOString() };
+        await updateDoc(globalTenantDoc(tId), updates);
+        res.statusCode = 200;
+        res.end(JSON.stringify({ success: true, updated: updates }));
+        return true;
+      }
+    }
+  }
+
+  // Tenant Usage Metrics: /api/tenants/:tenantId/usage
+  const usageMatch = url.match(/^\/api\/tenants\/([^/?]+)\/usage$/);
+  if (usageMatch && req.method === 'GET') {
+    const tId = usageMatch[1];
+    const usage = await getTenantCurrentUsage(tId);
+    let limits = {
+      monthlyAiTokens: 5_000_000,
+      dailyOutboundSends: 10_000,
+      hourlyOutboundSends: 1_000,
+      seats: 25,
+    };
+    if (isFirebaseConfigured && db) {
+      const snap = await getDoc(globalTenantDoc(tId));
+      if (snap.exists()) {
+        const t = snap.data() as Tenant;
+        if (t.limits) limits = t.limits;
+      }
+    }
+
+    res.statusCode = 200;
+    res.end(
+      JSON.stringify({
+        usage,
+        limits,
+        percentages: {
+          aiTokens: Math.min(100, Math.round(((usage.aiTotalTokens || 0) / limits.monthlyAiTokens) * 100)),
+          dailySends: Math.min(100, Math.round(((usage.coldEmailCount || 0) / limits.dailyOutboundSends) * 100)),
+        },
+      })
+    );
+    return true;
+  }
+
+  // Tenant Encrypted Secrets: /api/tenants/:tenantId/secrets
+  const secretsMatch = url.match(/^\/api\/tenants\/([^/?]+)\/secrets$/);
+  if (secretsMatch) {
+    const tId = secretsMatch[1];
+    const repo = tenantRepo({ tenantId: tId, uid: userUid, email: userEmail, role: userRole });
+
+    if (req.method === 'GET') {
+      if (isFirebaseConfigured && db) {
+        const snap = await getDocs(repo.secretsCol());
+        const secretSummaries = snap.docs.map((d) => {
+          const data = d.data();
+          return {
+            name: d.id,
+            keyVersion: data.keyVersion,
+            createdAt: data.createdAt,
+            updatedAt: data.updatedAt,
+            configured: true,
+          };
+        });
+        res.statusCode = 200;
+        res.end(JSON.stringify({ secrets: secretSummaries }));
+        return true;
+      }
+      res.statusCode = 200;
+      res.end(JSON.stringify({ secrets: [] }));
+      return true;
+    }
+
+    if (req.method === 'POST') {
+      const { name, secretValue } = body;
+      if (!name || !secretValue) {
+        res.statusCode = 400;
+        res.end(JSON.stringify({ error: 'Secret name and secretValue required' }));
+        return true;
+      }
+      const encrypted = encryptSecret(secretValue);
+      const secretPayload = {
+        name,
+        ...encrypted,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      if (isFirebaseConfigured && db) {
+        await safeSetDoc(repo.secretDoc(name), secretPayload, { merge: true });
+      }
+      res.statusCode = 200;
+      res.end(JSON.stringify({ success: true, message: `Secret '${name}' encrypted and saved.` }));
+      return true;
+    }
+  }
+
+  // Tenant Routes Registration: /api/tenants/:tenantId/routes
+  const routesMatch = url.match(/^\/api\/tenants\/([^/?]+)\/routes$/);
+  if (routesMatch) {
+    const tId = routesMatch[1];
+    if (req.method === 'POST') {
+      const { type, routeKey, allowedOrigins } = body;
+      if (!type || !routeKey) {
+        res.statusCode = 400;
+        res.end(JSON.stringify({ error: 'type and routeKey required' }));
+        return true;
+      }
+      if (isFirebaseConfigured && db) {
+        if (type === 'website') {
+          await safeSetDoc(globalWebhookRouteDoc(routeKey), {
+            webhookId: routeKey,
+            tenantId: tId,
+            type: 'website',
+            allowedOrigins: allowedOrigins || [],
+            createdAt: new Date().toISOString(),
+          }, { merge: true });
+        } else if (type === 'whatsapp') {
+          await safeSetDoc(globalChannelRouteDoc(routeKey), {
+            phoneNumberId: routeKey,
+            tenantId: tId,
+            createdAt: new Date().toISOString(),
+          }, { merge: true });
+        } else if (type === 'domain') {
+          await safeSetDoc(globalDomainRouteDoc(routeKey), {
+            domain: routeKey.toLowerCase().trim(),
+            tenantId: tId,
+            verified: true,
+            createdAt: new Date().toISOString(),
+          }, { merge: true });
+        }
+      }
+      res.statusCode = 200;
+      res.end(JSON.stringify({ success: true, message: `Route registered for tenant ${tId}` }));
+      return true;
+    }
+  }
+
   // 1. Health check
   if (url === '/api/health' || url.startsWith('/api/health?')) {
     res.statusCode = 200;
@@ -193,6 +617,7 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
       JSON.stringify({
         status: 'healthy',
         service: 'Umrah360 AI Omnichannel Engine',
+        tenantId: resolvedTenantId,
         openaiModel: 'gpt-4o-mini',
         openaiKeyPresent: Boolean(process.env.OPENAI_API_KEY || process.env.GEMINI_API_KEY),
         whatsAppGateway: getWhatsAppGatewayStatus(),
@@ -221,7 +646,7 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
       setServerCalendarAccessToken(accessToken, expiresIn || 3600);
       if (isFirebaseConfigured && db) {
         await safeSetDoc(
-          doc(db, 'settings', 'calendar_auth'),
+          tenantRepo(activeTenantCtx).settingsDoc('calendar_auth'),
           {
             accessToken,
             email: email || TARGET_CALENDAR_EMAIL,

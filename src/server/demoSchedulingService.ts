@@ -1,3 +1,20 @@
+import { tenantRepo } from './tenantRepo.js';
+import type { TenantContext } from '../types/tenant.js';
+
+const DEFAULT_UMRAH_CTX: TenantContext = {
+  tenantId: 'umrah360',
+  uid: 'system',
+  email: 'system@umrah360.in',
+  role: 'admin',
+};
+
+let activeSchedulingCtx: TenantContext = DEFAULT_UMRAH_CTX;
+export function setSchedulingActiveContext(ctx: TenantContext) {
+  activeSchedulingCtx = ctx;
+}
+function getSchedCtx(): TenantContext {
+  return activeSchedulingCtx;
+}
 import OpenAI from 'openai';
 import { db, isFirebaseConfigured } from '../firebase/config.js';
 import {
@@ -38,7 +55,7 @@ export async function handleExpiredCalendarToken() {
   if (isFirebaseConfigured && db) {
     try {
       await safeSetDoc(
-        doc(db, 'settings', 'calendar_auth'),
+        tenantRepo(getSchedCtx()).settingsDoc('calendar_auth'),
         {
           accessToken: null,
           active: false,
@@ -81,7 +98,7 @@ export async function getLiveCalendarToken(explicitToken?: string): Promise<stri
   // 1. Try Firestore settings/calendar_auth
   if (isFirebaseConfigured && db) {
     try {
-      const snap = await getDoc(doc(db, 'settings', 'calendar_auth'));
+      const snap = await getDoc(tenantRepo(getSchedCtx()).settingsDoc('calendar_auth'));
       if (snap.exists()) {
         const data = snap.data();
 
@@ -115,7 +132,7 @@ export async function getLiveCalendarToken(explicitToken?: string): Promise<stri
               if (tokenData.access_token) {
                 setServerCalendarAccessToken(tokenData.access_token, tokenData.expires_in || 3600);
                 await safeSetDoc(
-                  doc(db, 'settings', 'calendar_auth'),
+                  tenantRepo(getSchedCtx()).settingsDoc('calendar_auth'),
                   {
                     accessToken: tokenData.access_token,
                     active: true,
@@ -440,7 +457,7 @@ export async function checkFirestoreBookingsConflict(
   if (!isFirebaseConfigured || !db) return false;
   try {
     const q = query(
-      collection(db, 'bookings'),
+      tenantRepo(getSchedCtx()).bookings(),
       where('status', 'in', ['BOOKED', 'RESCHEDULED']),
       limit(50)
     );
@@ -634,7 +651,7 @@ export async function createGoogleCalendarDemoBooking(
   let token = await getLiveCalendarToken(accessToken);
   if (!token && isFirebaseConfigured && db) {
     try {
-      const snap = await getDoc(doc(db, 'settings', 'calendar_auth'));
+      const snap = await getDoc(tenantRepo(getSchedCtx()).settingsDoc('calendar_auth'));
       if (snap.exists() && snap.data()?.accessToken) {
         token = snap.data().accessToken;
         setServerCalendarAccessToken(token!);
@@ -816,12 +833,12 @@ export async function createGoogleCalendarDemoBooking(
 
   if (isFirebaseConfigured && db) {
     try {
-      await safeSetDoc(doc(db, 'bookings', bookingId), booking, { merge: true });
+      await safeSetDoc(tenantRepo(getSchedCtx()).bookingDoc(bookingId), booking, { merge: true });
 
       // 4. Update CRM Lead record
       if (leadId) {
         await safeSetDoc(
-          doc(db, 'leads', leadId),
+          tenantRepo(getSchedCtx()).leadDoc(leadId),
           {
             status: 'DEMO_BOOKED',
             demoStatus: 'BOOKED',
@@ -875,7 +892,7 @@ export async function cancelDemoBooking(
   }
 
   try {
-    const bookingRef = doc(db, 'bookings', bookingId);
+    const bookingRef = tenantRepo(getSchedCtx()).bookingDoc(bookingId);
     const snap = await getDoc(bookingRef);
     if (!snap.exists()) {
       return { success: false, error: 'Booking not found' };
@@ -919,7 +936,7 @@ export async function cancelDemoBooking(
     // 3. Update Lead status
     if (booking.leadId) {
       await safeSetDoc(
-        doc(db, 'leads', booking.leadId),
+        tenantRepo(getSchedCtx()).leadDoc(booking.leadId),
         {
           demoStatus: 'NOT_BOOKED',
           status: 'QUALIFIED',
@@ -966,7 +983,7 @@ export async function rescheduleDemoBooking(
   }
 
   try {
-    const bookingRef = doc(db, 'bookings', bookingId);
+    const bookingRef = tenantRepo(getSchedCtx()).bookingDoc(bookingId);
     const snap = await getDoc(bookingRef);
     if (!snap.exists()) {
       return { success: false, error: 'Booking not found' };
@@ -1040,7 +1057,7 @@ export async function rescheduleDemoBooking(
 
     if (booking.leadId) {
       await safeSetDoc(
-        doc(db, 'leads', booking.leadId),
+        tenantRepo(getSchedCtx()).leadDoc(booking.leadId),
         {
           demoDate: newDateString,
           demoStartTime: newStartTime,
@@ -1136,7 +1153,7 @@ export async function addAttendeeToDemoBooking(params: {
     let booking: Booking | null = null;
 
     if (params.bookingId) {
-      bookingDocRef = doc(db, 'bookings', params.bookingId);
+      bookingDocRef = tenantRepo(getSchedCtx()).bookingDoc(params.bookingId);
       const snap = await getDoc(bookingDocRef).catch(() => null);
       if (snap && snap.exists()) {
         booking = snap.data() as Booking;
@@ -1144,7 +1161,7 @@ export async function addAttendeeToDemoBooking(params: {
     }
 
     if (!booking) {
-      const snap = await getDocs(collection(db, 'bookings')).catch(() => null);
+      const snap = await getDocs(tenantRepo(getSchedCtx()).bookings()).catch(() => null);
       if (snap && !snap.empty) {
         snap.forEach((d) => {
           if (booking) return;
@@ -1156,7 +1173,7 @@ export async function addAttendeeToDemoBooking(params: {
               (params.conversationId && b.conversationId === params.conversationId)
             ) {
               booking = b;
-              bookingDocRef = doc(db, 'bookings', b.bookingId);
+              bookingDocRef = tenantRepo(getSchedCtx()).bookingDoc(b.bookingId);
             }
           }
         });
@@ -1293,7 +1310,7 @@ export async function addAttendeeToDemoBooking(params: {
 
     if (booking.leadId) {
       await safeSetDoc(
-        doc(db, 'leads', booking.leadId),
+        tenantRepo(getSchedCtx()).leadDoc(booking.leadId),
         { attendees: currentAttendees, updatedAt: nowIso },
         { merge: true }
       ).catch(() => {});
@@ -1346,7 +1363,7 @@ export async function getActiveBookingForLeadOrConversation(
   try {
     if (leadEmail && leadEmail.includes('@')) {
       const q = query(
-        collection(db, 'bookings'),
+        tenantRepo(getSchedCtx()).bookings(),
         where('leadEmail', '==', leadEmail.trim().toLowerCase()),
         where('status', 'in', ['BOOKED', 'RESCHEDULED']),
         limit(1)
@@ -1359,7 +1376,7 @@ export async function getActiveBookingForLeadOrConversation(
 
     if (leadId) {
       const q = query(
-        collection(db, 'bookings'),
+        tenantRepo(getSchedCtx()).bookings(),
         where('leadId', '==', leadId),
         where('status', 'in', ['BOOKED', 'RESCHEDULED']),
         limit(1)
@@ -1372,7 +1389,7 @@ export async function getActiveBookingForLeadOrConversation(
 
     if (conversationId) {
       const q = query(
-        collection(db, 'bookings'),
+        tenantRepo(getSchedCtx()).bookings(),
         where('conversationId', '==', conversationId),
         where('status', 'in', ['BOOKED', 'RESCHEDULED']),
         limit(1)
@@ -1960,7 +1977,7 @@ Analyze the conversation and latest message. Output JSON only:
 export async function getAllBookings(): Promise<Booking[]> {
   if (!isFirebaseConfigured || !db) return [];
   try {
-    const q = query(collection(db, 'bookings'), orderBy('createdAt', 'desc'), limit(100));
+    const q = query(tenantRepo(getSchedCtx()).bookings(), orderBy('createdAt', 'desc'), limit(100));
     const snap = await getDocs(q);
     return snap.docs.map((d) => d.data() as Booking);
   } catch (e) {

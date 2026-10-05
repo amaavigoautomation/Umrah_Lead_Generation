@@ -1,8 +1,92 @@
 {
   "entities": {
+    "Tenant": {
+      "title": "Tenant",
+      "description": "Multi-tenant company organization profile and tier quotas",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 256 },
+        "slug": { "type": "string", "maxLength": 128 },
+        "status": { "type": "string", "enum": ["active", "suspended"] },
+        "plan": { "type": "string", "enum": ["starter", "growth", "enterprise"] },
+        "limits": { "type": "object" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" },
+        "contactEmail": { "type": "string", "format": "email", "maxLength": 256 },
+        "timezone": { "type": "string", "maxLength": 128 }
+      },
+      "required": ["id", "name", "slug", "status", "plan", "createdAt"]
+    },
+    "GlobalUser": {
+      "title": "GlobalUser",
+      "description": "Global user identity linking auth uid to a tenant workspace and role",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "maxLength": 128 },
+        "email": { "type": "string", "format": "email", "maxLength": 256 },
+        "tenantId": { "type": "string", "maxLength": 128 },
+        "role": { "type": "string", "enum": ["platformAdmin", "admin", "member"] },
+        "active": { "type": "boolean" },
+        "name": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["uid", "email", "tenantId", "role", "active", "createdAt"]
+    },
+    "WebhookRoute": {
+      "title": "WebhookRoute",
+      "description": "Global routing index resolving unguessable webhook tokens to tenant workspaces",
+      "type": "object",
+      "properties": {
+        "webhookId": { "type": "string", "maxLength": 128 },
+        "tenantId": { "type": "string", "maxLength": 128 },
+        "type": { "type": "string", "enum": ["website", "whatsapp"] },
+        "secretHash": { "type": "string", "maxLength": 256 },
+        "createdAt": { "type": "string" },
+        "rotatedAt": { "type": "string" }
+      },
+      "required": ["webhookId", "tenantId", "type", "secretHash", "createdAt"]
+    },
+    "ChannelRoute": {
+      "title": "ChannelRoute",
+      "description": "Global index routing WhatsApp phone number IDs to tenant workspaces",
+      "type": "object",
+      "properties": {
+        "phoneNumberId": { "type": "string", "maxLength": 128 },
+        "tenantId": { "type": "string", "maxLength": 128 },
+        "businessAccountId": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["phoneNumberId", "tenantId", "createdAt"]
+    },
+    "DomainRoute": {
+      "title": "DomainRoute",
+      "description": "Global index mapping verified outbound email domains to tenant workspaces",
+      "type": "object",
+      "properties": {
+        "domain": { "type": "string", "maxLength": 256 },
+        "tenantId": { "type": "string", "maxLength": 128 },
+        "resendDomainId": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["domain", "tenantId", "createdAt"]
+    },
+    "EmailRoute": {
+      "title": "EmailRoute",
+      "description": "Short-lived routing index mapping outbound Resend email IDs to tenant for webhook event resolution",
+      "type": "object",
+      "properties": {
+        "resendEmailId": { "type": "string", "maxLength": 128 },
+        "tenantId": { "type": "string", "maxLength": 128 },
+        "messageId": { "type": "string", "maxLength": 128 },
+        "expiresAt": { "type": "number" }
+      },
+      "required": ["resendEmailId", "tenantId", "messageId", "expiresAt"]
+    },
     "Contact": {
       "title": "Contact",
-      "description": "Pilgrimage agency contact profile",
+      "description": "Tenant-scoped agency contact profile",
       "type": "object",
       "properties": {
         "contactId": { "type": "string", "maxLength": 128 },
@@ -13,14 +97,13 @@
         "companyName": { "type": "string", "maxLength": 256 },
         "jobTitle": { "type": "string", "maxLength": 128 },
         "createdAt": { "type": "string" },
-        "updatedAt": { "type": "string" },
-        "lastActivityAt": { "type": "string" }
+        "updatedAt": { "type": "string" }
       },
       "required": ["contactId", "firstName", "email", "companyName"]
     },
     "Lead": {
       "title": "Lead",
-      "description": "Qualified tour operator lead record",
+      "description": "Tenant-scoped qualified tour operator lead record",
       "type": "object",
       "properties": {
         "leadId": { "type": "string", "maxLength": 128 },
@@ -39,7 +122,7 @@
     },
     "Conversation": {
       "title": "Conversation",
-      "description": "Cross-channel conversation session",
+      "description": "Tenant-scoped cross-channel conversation session",
       "type": "object",
       "properties": {
         "conversationId": { "type": "string", "maxLength": 128 },
@@ -50,12 +133,7 @@
         "status": { "type": "string" },
         "aiEnabled": { "type": "boolean" },
         "humanHandoff": { "type": "boolean" },
-        "managementMode": { "type": "string", "enum": ["AI", "HUMAN"] },
-        "emailThreadId": { "type": "string", "maxLength": 128 },
-        "gmailThreadId": { "type": "string", "maxLength": 256 },
         "isRead": { "type": "boolean" },
-        "unread": { "type": "boolean" },
-        "unreadCount": { "type": "number" },
         "startedAt": { "type": "string" },
         "lastMessageAt": { "type": "string" },
         "lastMessageText": { "type": "string", "maxLength": 4096 }
@@ -64,7 +142,7 @@
     },
     "Message": {
       "title": "Message",
-      "description": "Conversation message record",
+      "description": "Tenant-scoped message record in a conversation",
       "type": "object",
       "properties": {
         "messageId": { "type": "string", "maxLength": 128 },
@@ -75,271 +153,105 @@
         "senderEmail": { "type": "string", "maxLength": 256 },
         "text": { "type": "string", "maxLength": 8192 },
         "timestamp": { "type": "string" },
-        "gmailMessageId": { "type": "string", "maxLength": 256 },
-        "gmailThreadId": { "type": "string", "maxLength": 256 },
-        "direction": { "type": "string", "enum": ["INBOUND", "OUTBOUND"] },
-        "sentAt": { "type": "string" },
-        "receivedAt": { "type": "string" },
-        "createdAt": { "type": "string" },
-        "aiProcessed": { "type": "boolean" },
-        "confidence": { "type": "number" }
+        "direction": { "type": "string", "enum": ["INBOUND", "OUTBOUND"] }
       },
       "required": ["messageId", "conversationId", "senderType", "text"]
     },
-    "LeadActivity": {
-      "title": "LeadActivity",
-      "description": "Audit and timeline activity item",
-      "type": "object",
-      "properties": {
-        "activityId": { "type": "string", "maxLength": 128 },
-        "leadId": { "type": "string", "maxLength": 128 },
-        "contactId": { "type": "string", "maxLength": 128 },
-        "type": { "type": "string" },
-        "title": { "type": "string", "maxLength": 256 },
-        "description": { "type": "string", "maxLength": 1024 },
-        "timestamp": { "type": "string" }
-      },
-      "required": ["activityId", "leadId", "title", "timestamp"]
-    },
-    "ProcessedInboundEmail": {
-      "title": "ProcessedInboundEmail",
-      "description": "Cross-session and cross-restore persistent email idempotency ledger to prevent duplicate outbound replies",
-      "type": "object",
-      "properties": {
-        "messageId": { "type": "string", "maxLength": 512 },
-        "cleanKey": { "type": "string", "maxLength": 512 },
-        "fromEmail": { "type": "string", "format": "email", "maxLength": 256 },
-        "subject": { "type": "string", "maxLength": 512 },
-        "aiReplied": { "type": "boolean" },
-        "repliedAt": { "type": "string" },
-        "replyMessageId": { "type": "string", "maxLength": 512 },
-        "status": { "type": "string", "enum": ["PROCESSED", "REPLIED", "SKIPPED", "BASELINE"] },
-        "reason": { "type": "string", "maxLength": 512 },
-        "timestamp": { "type": "string" }
-      },
-      "required": ["messageId", "status", "timestamp"]
-    },
-    "WebsiteLeadThankYouHistory": {
-      "title": "WebsiteLeadThankYouHistory",
-      "description": "Persistent cross-session idempotency ledger ensuring website demo leads receive exactly one thank you email",
-      "type": "object",
-      "properties": {
-        "email": { "type": "string", "format": "email", "maxLength": 256 },
-        "leadId": { "type": "string", "maxLength": 128 },
-        "conversationId": { "type": "string", "maxLength": 128 },
-        "sentAt": { "type": "string" },
-        "smtpMessageId": { "type": "string", "maxLength": 256 },
-        "status": { "type": "string", "enum": ["SENT", "DELIVERED", "SUPPRESSED_DUPLICATE"] }
-      },
-      "required": ["email", "sentAt", "status"]
-    },
-    "EmailTemplate": {
-      "title": "EmailTemplate",
-      "description": "Predefined outbound email templates with variable substitution, styling, HTML, and attachments",
-      "type": "object",
-      "properties": {
-        "templateId": { "type": "string", "maxLength": 128 },
-        "name": { "type": "string", "maxLength": 256 },
-        "subject": { "type": "string", "maxLength": 512 },
-        "body": { "type": "string", "maxLength": 65536 },
-        "htmlBody": { "type": "string", "maxLength": 65536 },
-        "format": { "type": "string", "enum": ["text", "html"] },
-        "isHtml": { "type": "boolean" },
-        "attachments": { "type": "array" },
-        "createdAt": { "type": "string" },
-        "updatedAt": { "type": "string" }
-      },
-      "required": ["templateId", "name", "subject", "body"]
-    },
     "Campaign": {
       "title": "Campaign",
-      "description": "Outbound sales campaign record",
+      "description": "Tenant-scoped outbound sales campaign record",
       "type": "object",
       "properties": {
         "campaignId": { "type": "string", "maxLength": 128 },
         "name": { "type": "string", "maxLength": 256 },
         "type": { "type": "string", "enum": ["EMAIL", "WHATSAPP", "WHATSAPP_EMAIL"] },
         "status": { "type": "string", "enum": ["DRAFT", "RUNNING", "PAUSED", "COMPLETED", "FAILED"] },
-        "templateId": { "type": "string", "maxLength": 128 },
-        "templateName": { "type": "string", "maxLength": 256 },
-        "sourceFileName": { "type": "string", "maxLength": 256 },
         "totalLeads": { "type": "number" },
         "sentCount": { "type": "number" },
-        "pendingCount": { "type": "number" },
-        "failedCount": { "type": "number" },
-        "repliedCount": { "type": "number" },
-        "demoBookedCount": { "type": "number" },
-        "currentRunId": { "type": "string", "maxLength": 128 },
         "createdAt": { "type": "string" },
         "updatedAt": { "type": "string" }
       },
       "required": ["campaignId", "name", "type", "status"]
     },
-    "CampaignLead": {
-      "title": "CampaignLead",
-      "description": "Lead member uploaded and linked to an outbound campaign",
+    "EmailTemplate": {
+      "title": "EmailTemplate",
+      "description": "Tenant-scoped outbound email templates",
       "type": "object",
       "properties": {
-        "campaignLeadId": { "type": "string", "maxLength": 128 },
-        "campaignId": { "type": "string", "maxLength": 128 },
-        "leadId": { "type": "string", "maxLength": 128 },
-        "campaignRunId": { "type": "string", "maxLength": 128 },
-        "name": { "type": "string", "maxLength": 256 },
-        "companyName": { "type": "string", "maxLength": 256 },
-        "email": { "type": "string", "format": "email", "maxLength": 256 },
-        "phone": { "type": "string", "maxLength": 64 },
-        "designation": { "type": "string", "maxLength": 128 },
-        "sourceFile": { "type": "string", "maxLength": 256 },
-        "rowNumber": { "type": "number" },
-        "sendStatus": { "type": "string", "enum": ["PENDING", "SENDING", "SENT", "FAILED", "PAUSED", "COMPLETED"] },
-        "replyStatus": { "type": "string", "enum": ["NOT_REPLIED", "REPLIED"] },
-        "demoStatus": { "type": "string", "enum": ["NOT_BOOKED", "BOOKED"] },
-        "demoIntent": { "type": "boolean" },
-        "demoSource": { "type": "string", "enum": ["AUTOMATIC", "MANUAL"] },
-        "demoBookedAt": { "type": "string" },
-        "lastSentAt": { "type": "string" },
-        "repliedAt": { "type": "string" },
-        "sendCount": { "type": "number" },
-        "lastError": { "type": "string", "maxLength": 1024 },
-        "gmailMessageId": { "type": "string", "maxLength": 256 },
-        "gmailThreadId": { "type": "string", "maxLength": 256 },
-        "conversationId": { "type": "string", "maxLength": 128 },
-        "createdAt": { "type": "string" },
-        "updatedAt": { "type": "string" }
-      },
-      "required": ["campaignLeadId", "campaignId", "email", "sendStatus"]
-    },
-    "CampaignRun": {
-      "title": "CampaignRun",
-      "description": "Execution instance tracking history of campaign runs and restarts",
-      "type": "object",
-      "properties": {
-        "runId": { "type": "string", "maxLength": 128 },
-        "campaignId": { "type": "string", "maxLength": 128 },
-        "runNumber": { "type": "number" },
-        "status": { "type": "string", "enum": ["RUNNING", "PAUSED", "COMPLETED", "FAILED"] },
         "templateId": { "type": "string", "maxLength": 128 },
-        "totalLeads": { "type": "number" },
-        "sentCount": { "type": "number" },
-        "startedAt": { "type": "string" },
-        "completedAt": { "type": "string" },
+        "name": { "type": "string", "maxLength": 256 },
+        "subject": { "type": "string", "maxLength": 512 },
+        "body": { "type": "string", "maxLength": 65536 },
         "createdAt": { "type": "string" }
       },
-      "required": ["runId", "campaignId", "runNumber", "status"]
-    },
-    "CampaignSendHistory": {
-      "title": "CampaignSendHistory",
-      "description": "Send audit log and persistent duplicate protection for cold outreach",
-      "type": "object",
-      "properties": {
-        "historyId": { "type": "string", "maxLength": 128 },
-        "campaignId": { "type": "string", "maxLength": 128 },
-        "campaignRunId": { "type": "string", "maxLength": 128 },
-        "campaignLeadId": { "type": "string", "maxLength": 128 },
-        "email": { "type": "string", "format": "email", "maxLength": 256 },
-        "templateId": { "type": "string", "maxLength": 128 },
-        "subject": { "type": "string", "maxLength": 512 },
-        "gmailMessageId": { "type": "string", "maxLength": 256 },
-        "sentAt": { "type": "string" },
-        "status": { "type": "string", "enum": ["SENT", "FAILED"] },
-        "error": { "type": "string", "maxLength": 512 }
-      },
-      "required": ["historyId", "campaignId", "email", "sentAt", "status"]
+      "required": ["templateId", "name", "subject", "body"]
     },
     "KnowledgeDocument": {
       "title": "KnowledgeDocument",
-      "description": "Verified domain knowledge article used for RAG grounding in AI auto-replies",
+      "description": "Tenant-scoped verified knowledge base article for AI grounding",
       "type": "object",
       "properties": {
         "id": { "type": "string", "maxLength": 128 },
         "title": { "type": "string", "maxLength": 256 },
-        "category": { "type": "string", "enum": ["PRODUCT", "MODULES", "PRICING", "B2B", "OPERATIONS", "FAQS", "INTEGRATIONS"] },
         "content": { "type": "string", "maxLength": 65536 },
-        "tags": { "type": "array" },
-        "status": { "type": "string", "enum": ["DRAFT", "REVIEW", "APPROVED", "PUBLISHED"] },
-        "version": { "type": "number" },
-        "author": { "type": "string", "maxLength": 128 },
-        "createdAt": { "type": "string" },
-        "updatedAt": { "type": "string" }
+        "status": { "type": "string", "enum": ["DRAFT", "PUBLISHED"] },
+        "createdAt": { "type": "string" }
       },
-      "required": ["id", "title", "category", "content", "status"]
-    },
-    "AppUser": {
-      "title": "AppUser",
-      "description": "User accounts with module-based access control stored directly in Firestore database",
-      "type": "object",
-      "properties": {
-        "userId": { "type": "string", "maxLength": 128 },
-        "email": { "type": "string", "format": "email", "maxLength": 256 },
-        "username": { "type": "string", "maxLength": 128 },
-        "password": { "type": "string", "maxLength": 256 },
-        "name": { "type": "string", "maxLength": 128 },
-        "role": { "type": "string", "enum": ["ADMIN", "OPERATOR", "SPECIALIST", "CUSTOM"] },
-        "accessLevel": { "type": "string", "enum": ["ALL", "CUSTOM"] },
-        "allowedModules": { "type": "array" },
-        "isActive": { "type": "boolean" },
-        "createdAt": { "type": "string" },
-        "updatedAt": { "type": "string" }
-      },
-      "required": ["userId", "email", "password", "name", "role", "accessLevel", "allowedModules"]
+      "required": ["id", "title", "content", "status"]
     }
   },
   "firestore": {
-    "/app_users/{userId}": {
-      "schema": "AppUser",
-      "description": "Platform user credentials and module permissions"
+    "/tenants/{tenantId}": {
+      "schema": "Tenant",
+      "description": "Global tenant registration and plan configurations"
     },
-    "/knowledge_documents/{docId}": {
-      "schema": "KnowledgeDocument",
-      "description": "Ground truth knowledge base articles"
+    "/users/{uid}": {
+      "schema": "GlobalUser",
+      "description": "Global user accounts mapping Auth UIDs to tenants and roles"
     },
-    "/contacts/{contactId}": {
+    "/webhook_routes/{webhookId}": {
+      "schema": "WebhookRoute",
+      "description": "Global routing registry for website and whatsapp webhooks"
+    },
+    "/channel_routes/{phoneNumberId}": {
+      "schema": "ChannelRoute",
+      "description": "Global routing registry for incoming WhatsApp phone numbers"
+    },
+    "/domain_routes/{domain}": {
+      "schema": "DomainRoute",
+      "description": "Global routing registry for verified sender email domains"
+    },
+    "/email_routes/{resendEmailId}": {
+      "schema": "EmailRoute",
+      "description": "Global routing registry for tracking outbound Resend delivery webhooks"
+    },
+    "/tenants/{tenantId}/contacts/{contactId}": {
       "schema": "Contact",
-      "description": "Pilgrimage tour operator contacts"
+      "description": "Tenant isolated customer and agency contacts"
     },
-    "/leads/{leadId}": {
+    "/tenants/{tenantId}/leads/{leadId}": {
       "schema": "Lead",
-      "description": "Tour operator sales leads"
+      "description": "Tenant isolated sales leads"
     },
-    "/conversations/{conversationId}": {
+    "/tenants/{tenantId}/conversations/{conversationId}": {
       "schema": "Conversation",
-      "description": "Inbound and outbound omnichannel threads"
+      "description": "Tenant isolated omnichannel conversations"
     },
-    "/messages/{messageId}": {
+    "/tenants/{tenantId}/conversations/{conversationId}/messages/{messageId}": {
       "schema": "Message",
-      "description": "Individual messages in conversations"
+      "description": "Tenant isolated conversation messages"
     },
-    "/lead_activities/{activityId}": {
-      "schema": "LeadActivity",
-      "description": "Chronological CRM and lead timeline activities"
-    },
-    "/processed_inbound_emails/{docId}": {
-      "schema": "ProcessedInboundEmail",
-      "description": "Persistent cross-restore idempotency ledger preventing duplicate email dispatch"
-    },
-    "/website_lead_thankyou_history/{emailKey}": {
-      "schema": "WebsiteLeadThankYouHistory",
-      "description": "Idempotency ledger ensuring website thank-you emails are dispatched strictly once per lead email"
-    },
-    "/email_templates/{templateId}": {
-      "schema": "EmailTemplate",
-      "description": "Predefined cold outreach email templates"
-    },
-    "/campaigns/{campaignId}": {
+    "/tenants/{tenantId}/campaigns/{campaignId}": {
       "schema": "Campaign",
-      "description": "Outbound prospecting campaigns"
+      "description": "Tenant isolated outbound prospecting campaigns"
     },
-    "/campaign_leads/{campaignLeadId}": {
-      "schema": "CampaignLead",
-      "description": "Campaign leads uploaded via CSV/XLS/XLSX"
+    "/tenants/{tenantId}/email_templates/{templateId}": {
+      "schema": "EmailTemplate",
+      "description": "Tenant isolated email templates"
     },
-    "/campaign_runs/{runId}": {
-      "schema": "CampaignRun",
-      "description": "Historical and active run executions per campaign"
-    },
-    "/campaign_send_history/{historyId}": {
-      "schema": "CampaignSendHistory",
-      "description": "Cross-restart and cross-session email send ledger ensuring no duplicates"
+    "/tenants/{tenantId}/knowledge_documents/{docId}": {
+      "schema": "KnowledgeDocument",
+      "description": "Tenant isolated knowledge base articles"
     }
   }
 }

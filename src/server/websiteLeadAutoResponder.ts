@@ -1,11 +1,8 @@
 import {
-  collection,
-  doc,
   getDoc,
   getDocs,
   query,
   where,
-  limit,
   deleteDoc,
 } from 'firebase/firestore';
 import { db, isFirebaseConfigured } from '../firebase/config.js';
@@ -13,20 +10,41 @@ import { safeSetDoc } from './firestoreUtils.js';
 import { sendLiveEmail, getSmtpConfig, fetchFirestoreSmtpConfig } from './smtpService.js';
 import { Conversation, Contact, Message } from '../types/index.js';
 import { hasThankYouEmailBeenSent, recordThankYouEmailSent } from './websiteLeadService.js';
+import { tenantRepo } from './tenantRepo.js';
+import type { TenantContext } from '../types/tenant.js';
 
-let isRunningCheck = false;
-const inFlightDispatches = new Set<string>();
+const DEFAULT_UMRAH_CTX: TenantContext = {
+  tenantId: 'umrah360',
+  uid: 'system',
+  email: 'system@umrah360.in',
+  role: 'admin',
+};
+
+// Isolated per-tenant state tracking (no cross-tenant singletons)
+const tenantRunningChecks = new Set<string>();
+const tenantInFlightDispatches = new Map<string, Set<string>>();
+
+function getInFlightSet(tenantId: string): Set<string> {
+  let set = tenantInFlightDispatches.get(tenantId);
+  if (!set) {
+    set = new Set<string>();
+    tenantInFlightDispatches.set(tenantId, set);
+  }
+  return set;
+}
 
 /**
- * Checks all website demo leads that have arrived in the Unified Inbox.
+ * Checks all website demo leads that have arrived in the Unified Inbox for the given tenant.
  * If a lead has an email address and has not received a verified live Thank You email over SMTP,
  * it automatically dispatches the live personalized email and records the delivery metadata in Firestore.
  */
-export async function checkAndDispatchPendingWebsiteLeadEmails(): Promise<{
+export async function checkAndDispatchPendingWebsiteLeadEmails(
+  ctx: TenantContext = DEFAULT_UMRAH_CTX
+): Promise<{
   processedCount: number;
   dispatchedCount: number;
 }> {
-  if (isRunningCheck) {
+  if (tenantRunningChecks.has(ctx.tenantId)) {
     return { processedCount: 0, dispatchedCount: 0 };
   }
 
@@ -34,21 +52,22 @@ export async function checkAndDispatchPendingWebsiteLeadEmails(): Promise<{
     return { processedCount: 0, dispatchedCount: 0 };
   }
 
-  isRunningCheck = true;
+  tenantRunningChecks.add(ctx.tenantId);
   let processedCount = 0;
   let dispatchedCount = 0;
 
   try {
+    const repo = tenantRepo(ctx);
+
     // 1. Ensure SMTP config is ready
     await fetchFirestoreSmtpConfig();
     const smtpCfg = getSmtpConfig();
     if (!smtpCfg.configured) {
-      // SMTP not configured yet, skip this run
       return { processedCount: 0, dispatchedCount: 0 };
     }
 
-    // 2. Query conversations
-    const convsSnap = await getDocs(collection(db, 'conversations'));
+    // 2. Query tenant conversations
+    const convsSnap = await getDocs(repo.conversations());
     const candidateConvs: Conversation[] = [];
 
     for (const d of convsSnap.docs) {
@@ -66,19 +85,22 @@ export async function checkAndDispatchPendingWebsiteLeadEmails(): Promise<{
         continue;
       }
 
-      // CRITICAL: Prevent race condition with live webhook or direct submission.
       // Allow 45 seconds for live webhook SMTP delivery to complete before considering it pending.
-      const createdAtMs = conv.createdAt ? new Date(conv.createdAt).getTime() : (conv.startedAt ? new Date(conv.startedAt).getTime() : 0);
+      const createdAtMs = conv.createdAt
+        ? new Date(conv.createdAt).getTime()
+        : conv.startedAt
+        ? new Date(conv.startedAt).getTime()
+        : 0;
       if (createdAtMs > 0 && Date.now() - createdAtMs < 45000) {
         continue;
       }
 
       // If customerEmail is present and has already received a thank-you email, mark conversation as sent and skip
       if (conv.customerEmail && conv.customerEmail.includes('@')) {
-        const alreadySent = await hasThankYouEmailBeenSent(conv.customerEmail);
+        const alreadySent = await hasThankYouEmailBeenSent(conv.customerEmail, ctx);
         if (alreadySent) {
           safeSetDoc(
-            doc(db, 'conversations', conv.conversationId),
+            repo.conversationDoc(conv.conversationId),
             {
               thankYouEmailSent: true,
               thankYouSmtpMessageId: conv.thankYouSmtpMessageId || 'ALREADY_SENT_PREVIOUSLY',
@@ -94,26 +116,28 @@ export async function checkAndDispatchPendingWebsiteLeadEmails(): Promise<{
 
     for (const conv of candidateConvs) {
       processedCount++;
-      const result = await dispatchThankYouEmailForConversation(conv.conversationId);
+      const result = await dispatchThankYouEmailForConversation(conv.conversationId, ctx);
       if (result.success) {
         dispatchedCount++;
       }
     }
-  } catch (err) {
-    console.warn('[Website Auto-Responder Notice]:', err);
-  } finally {
-    isRunningCheck = false;
-  }
 
-  return { processedCount, dispatchedCount };
+    return { processedCount, dispatchedCount };
+  } catch (err) {
+    console.error(`[Website Auto-Responder] Error running check for tenant ${ctx.tenantId}:`, err);
+    return { processedCount, dispatchedCount };
+  } finally {
+    tenantRunningChecks.delete(ctx.tenantId);
+  }
 }
 
 /**
- * Dispatches a personalized Thank You / Demo Walkthrough confirmation email
- * directly to the email address of a lead in a specific conversation.
- * GUARANTEE: Exactly ONCE per email address across the entire platform.
+ * Dispatches a Thank You confirmation email for a specific website conversation
  */
-export async function dispatchThankYouEmailForConversation(conversationId: string): Promise<{
+export async function dispatchThankYouEmailForConversation(
+  conversationId: string,
+  ctx: TenantContext = DEFAULT_UMRAH_CTX
+): Promise<{
   success: boolean;
   messageId?: string;
   error?: string;
@@ -123,11 +147,13 @@ export async function dispatchThankYouEmailForConversation(conversationId: strin
     return { success: false, error: 'Database is not initialized.' };
   }
 
-  if (inFlightDispatches.has(conversationId)) {
+  const inFlight = getInFlightSet(ctx.tenantId);
+  if (inFlight.has(conversationId)) {
     return { success: true, messageId: 'IN_FLIGHT' };
   }
 
   try {
+    const repo = tenantRepo(ctx);
     await fetchFirestoreSmtpConfig();
     const smtpCfg = getSmtpConfig();
     if (!smtpCfg.configured) {
@@ -135,10 +161,10 @@ export async function dispatchThankYouEmailForConversation(conversationId: strin
     }
 
     // 1. Fetch conversation
-    const convRef = doc(db, 'conversations', conversationId);
+    const convRef = repo.conversationDoc(conversationId);
     const convSnap = await getDoc(convRef);
     if (!convSnap.exists()) {
-      return { success: false, error: `Conversation ${conversationId} not found.` };
+      return { success: false, error: `Conversation ${conversationId} not found in tenant ${ctx.tenantId}.` };
     }
     const conv = convSnap.data() as Conversation;
 
@@ -148,7 +174,7 @@ export async function dispatchThankYouEmailForConversation(conversationId: strin
     }
 
     // 2. Check if a real delivered email or outbound message already exists for this conversation
-    const msgsQuery = query(collection(db, 'messages'), where('conversationId', '==', conversationId));
+    const msgsQuery = query(repo.messages(), where('conversationId', '==', conversationId));
     const msgsSnap = await getDocs(msgsQuery);
 
     let alreadyDelivered = Boolean(conv.thankYouEmailSent);
@@ -195,11 +221,9 @@ export async function dispatchThankYouEmailForConversation(conversationId: strin
         }
       }
 
-      // If we don't have targetEmail yet, check text or recipientEmail
       if (!targetEmail && m.recipientEmail && m.recipientEmail.includes('@')) {
         targetEmail = m.recipientEmail;
       }
-      // Extract from inbound text if present
       if (m.direction === 'INBOUND' && m.text) {
         const emailMatch = m.text.match(/•\s*Email:\s*([^\s\n\r]+@[^\s\n\r]+)/i);
         if (emailMatch && emailMatch[1]) {
@@ -230,7 +254,7 @@ export async function dispatchThankYouEmailForConversation(conversationId: strin
     let contact: Contact | null = null;
     if ((!targetEmail || !targetEmail.includes('@')) && conv.contactId) {
       try {
-        const contactRef = doc(db, 'contacts', conv.contactId);
+        const contactRef = repo.contactDoc(conv.contactId);
         const contactSnap = await getDoc(contactRef);
         if (contactSnap.exists()) {
           contact = contactSnap.data() as Contact;
@@ -239,29 +263,27 @@ export async function dispatchThankYouEmailForConversation(conversationId: strin
           }
         }
       } catch (cErr) {
-        console.warn(`[Website Auto-Responder] Notice loading contact ${conv.contactId}:`, cErr);
+        console.warn(`[Website Auto-Responder] Notice loading contact ${conv.contactId} for ${ctx.tenantId}:`, cErr);
       }
     }
 
-    // 4. Strict Idempotency: Check if this email already received a thank-you email ANYWHERE
+    // 4. Strict Idempotency: Check if this email already received a thank-you email for this tenant
     if (targetEmail && targetEmail.includes('@')) {
-      const emailAlreadySent = await hasThankYouEmailBeenSent(targetEmail);
+      const emailAlreadySent = await hasThankYouEmailBeenSent(targetEmail, ctx);
       if (emailAlreadySent) {
-        console.log(`[Website Auto-Responder] Recipient ${targetEmail} has already received a thank-you email. Suppressing duplicate.`);
+        console.log(`[Website Auto-Responder] Recipient ${targetEmail} has already received a thank-you email for ${ctx.tenantId}. Suppressing duplicate.`);
         alreadyDelivered = true;
       }
     }
 
     if (alreadyDelivered) {
-      // Clean up any stale pending or duplicate unverified messages so only the delivered one remains
       if (pendingMsgDocId) {
-        deleteDoc(doc(db, 'messages', pendingMsgDocId)).catch(() => {});
+        deleteDoc(repo.messageDoc(pendingMsgDocId)).catch(() => {});
       }
       for (const dupId of staleDuplicateDocIds) {
-        deleteDoc(doc(db, 'messages', dupId)).catch(() => {});
+        deleteDoc(repo.messageDoc(dupId)).catch(() => {});
       }
 
-      // Ensure conversation is flagged as sent
       if (!conv.thankYouEmailSent) {
         safeSetDoc(
           convRef,
@@ -284,12 +306,12 @@ export async function dispatchThankYouEmailForConversation(conversationId: strin
       };
     }
 
-    if (inFlightDispatches.has(targetEmail)) {
+    if (inFlight.has(targetEmail)) {
       return { success: true, messageId: 'IN_FLIGHT_EMAIL', email: targetEmail };
     }
 
-    inFlightDispatches.add(conversationId);
-    inFlightDispatches.add(targetEmail);
+    inFlight.add(conversationId);
+    inFlight.add(targetEmail);
 
     // 5. Construct personalized Thank You message
     const firstName =
@@ -327,7 +349,7 @@ export async function dispatchThankYouEmailForConversation(conversationId: strin
       `https://umrah360.in`,
     ].join('\n');
 
-    console.log(`[Website Auto-Responder] Dispatching single Thank You email to ${targetEmail} for ${companyName}...`);
+    console.log(`[Website Auto-Responder] Dispatching single Thank You email to ${targetEmail} for ${companyName} (${ctx.tenantId})...`);
 
     // 6. Send Live Email via verified SMTP service
     const mailResult = await sendLiveEmail({
@@ -338,6 +360,7 @@ export async function dispatchThankYouEmailForConversation(conversationId: strin
         'X-Conversation-Id': conversationId,
         'X-Lead-Id': conv.leadId || '',
         'X-Contact-Id': conv.contactId || '',
+        'X-Tenant-Id': ctx.tenantId,
       },
     });
 
@@ -349,7 +372,7 @@ export async function dispatchThankYouEmailForConversation(conversationId: strin
     const nowIso = new Date().toISOString();
     const autoReplyMsgId = pendingMsgDocId || `msg-thankyou-${conversationId}`;
 
-    // 7. Record the verified outbound message in Firestore
+    // 7. Record the verified outbound message in tenant Firestore
     const outboundMessage: Message = {
       messageId: autoReplyMsgId,
       conversationId,
@@ -369,12 +392,12 @@ export async function dispatchThankYouEmailForConversation(conversationId: strin
       emailDeliveredAt: nowIso,
     };
 
-    await safeSetDoc(doc(db, 'messages', autoReplyMsgId), outboundMessage, { merge: true });
+    await safeSetDoc(repo.messageDoc(autoReplyMsgId), outboundMessage, { merge: true });
 
     // Clean up any other duplicate doc IDs in Firestore
     for (const dupId of staleDuplicateDocIds) {
       if (dupId !== autoReplyMsgId) {
-        deleteDoc(doc(db, 'messages', dupId)).catch(() => {});
+        deleteDoc(repo.messageDoc(dupId)).catch(() => {});
       }
     }
 
@@ -393,14 +416,18 @@ export async function dispatchThankYouEmailForConversation(conversationId: strin
       { merge: true }
     );
 
-    // 9. Record in global persistent idempotency ledger
-    await recordThankYouEmailSent(targetEmail, {
-      leadId: conv.leadId,
-      conversationId,
-      smtpMessageId: mailResult.messageId,
-    });
+    // 9. Record in tenant persistent idempotency ledger
+    await recordThankYouEmailSent(
+      targetEmail,
+      {
+        leadId: conv.leadId,
+        conversationId,
+        smtpMessageId: mailResult.messageId,
+      },
+      ctx
+    );
 
-    console.log(`[Website Auto-Responder Success] ✓ Real Thank You email delivered to ${targetEmail} (Message ID: ${mailResult.messageId})!`);
+    console.log(`[Website Auto-Responder Success] ✓ Real Thank You email delivered to ${targetEmail} (Message ID: ${mailResult.messageId}) for tenant ${ctx.tenantId}!`);
 
     return {
       success: true,
@@ -408,10 +435,9 @@ export async function dispatchThankYouEmailForConversation(conversationId: strin
       email: targetEmail,
     };
   } catch (err: any) {
-    console.error(`[Website Auto-Responder Exception] Error dispatching for ${conversationId}:`, err);
+    console.error(`[Website Auto-Responder Exception] Error dispatching for ${conversationId} in tenant ${ctx.tenantId}:`, err);
     return { success: false, error: err?.message || 'Internal error' };
   } finally {
-    inFlightDispatches.delete(conversationId);
+    inFlight.delete(conversationId);
   }
 }
-

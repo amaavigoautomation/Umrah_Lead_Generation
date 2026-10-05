@@ -59,30 +59,6 @@ let runtimeSmtpConfig: {
   from?: string;
 } | null = null;
 
-const CREDENTIALS_FILE = path.join(process.cwd(), '.mail_credentials.json');
-
-function loadSavedCredentials(): any {
-  try {
-    if (fs.existsSync(CREDENTIALS_FILE)) {
-      const data = fs.readFileSync(CREDENTIALS_FILE, 'utf-8');
-      return JSON.parse(data);
-    }
-  } catch (e) {
-    // ignore
-  }
-  return null;
-}
-
-function saveCredentialsToFile(creds: any) {
-  try {
-    const existing = loadSavedCredentials() || {};
-    const updated = { ...existing, ...creds };
-    fs.writeFileSync(CREDENTIALS_FILE, JSON.stringify(updated, null, 2), 'utf-8');
-  } catch (e) {
-    // ignore
-  }
-}
-
 export function updateSmtpConfig(newConfig: {
   host?: string;
   port?: number;
@@ -101,28 +77,21 @@ export function updateSmtpConfig(newConfig: {
     from: newConfig.from !== undefined ? newConfig.from : current.from,
   };
   cachedSmtpStatus = null;
-  saveCredentialsToFile({ smtp: runtimeSmtpConfig });
   return getSmtpConfig();
 }
 
-const DEFAULT_SMTP_USER = 'amaavigo@gmail.com';
-const DEFAULT_SMTP_PASS = 'czzk spuw wpxc cceb';
-
 export function getSmtpConfig() {
-  const saved = loadSavedCredentials()?.smtp;
-  const host = runtimeSmtpConfig?.host || saved?.host || process.env.SMTP_HOST || 'smtp.gmail.com';
-  const port = runtimeSmtpConfig?.port || saved?.port || parseInt(process.env.SMTP_PORT || '465', 10);
+  const host = runtimeSmtpConfig?.host || process.env.SMTP_HOST || 'smtp.gmail.com';
+  const port = runtimeSmtpConfig?.port || parseInt(process.env.SMTP_PORT || '465', 10);
   const secure = runtimeSmtpConfig?.secure !== undefined
     ? runtimeSmtpConfig.secure
-    : saved?.secure !== undefined
-    ? saved.secure
     : (process.env.SMTP_SECURE === 'true' || port === 465);
-  const user = runtimeSmtpConfig?.user || saved?.user || process.env.SMTP_USER || process.env.GMAIL_USER || process.env.IMAP_USER || DEFAULT_SMTP_USER;
-  const rawPass = runtimeSmtpConfig?.pass || saved?.pass || process.env.SMTP_PASS || process.env.IMAP_PASS || process.env.GMAIL_APP_PASSWORD || process.env.GMAIL_PASS || DEFAULT_SMTP_PASS;
+  const user = runtimeSmtpConfig?.user || process.env.SMTP_USER || process.env.GMAIL_USER || process.env.IMAP_USER || '';
+  const rawPass = runtimeSmtpConfig?.pass || process.env.SMTP_PASS || process.env.IMAP_PASS || process.env.GMAIL_APP_PASSWORD || process.env.GMAIL_PASS || '';
   const pass = rawPass.trim();
-  const from = runtimeSmtpConfig?.from || saved?.from || process.env.SMTP_FROM || `Umrah360 Automation <${user}>`;
+  const from = runtimeSmtpConfig?.from || process.env.SMTP_FROM || (user ? `Umrah360 Automation <${user}>` : 'Umrah360 Automation');
 
-  const configured = Boolean(host && pass);
+  const configured = Boolean(host && pass && user);
 
   return { host, port, secure, user, pass, from, configured };
 }

@@ -35,30 +35,6 @@ export interface ImapPollResult {
 import fs from 'fs';
 import path from 'path';
 
-const CREDENTIALS_FILE = path.join(process.cwd(), '.mail_credentials.json');
-
-function loadSavedCredentials(): any {
-  try {
-    if (fs.existsSync(CREDENTIALS_FILE)) {
-      const data = fs.readFileSync(CREDENTIALS_FILE, 'utf-8');
-      return JSON.parse(data);
-    }
-  } catch (e) {
-    // ignore
-  }
-  return null;
-}
-
-function saveCredentialsToFile(creds: any) {
-  try {
-    const existing = loadSavedCredentials() || {};
-    const updated = { ...existing, ...creds };
-    fs.writeFileSync(CREDENTIALS_FILE, JSON.stringify(updated, null, 2), 'utf-8');
-  } catch (e) {
-    // ignore
-  }
-}
-
 let runtimeImapConfig: {
   host?: string;
   port?: number;
@@ -82,23 +58,19 @@ export function updateImapConfig(newConfig: {
     user: newConfig.user !== undefined ? newConfig.user : current.user,
     pass: newConfig.pass !== undefined ? newConfig.pass : current.pass,
   };
-  saveCredentialsToFile({ imap: runtimeImapConfig });
   return getImapConfig();
 }
 
 export function getImapConfig() {
-  const saved = loadSavedCredentials()?.imap || loadSavedCredentials()?.smtp;
-  const host = runtimeImapConfig?.host || saved?.host?.replace('smtp.', 'imap.') || process.env.IMAP_HOST || (process.env.SMTP_HOST ? process.env.SMTP_HOST.replace('smtp.', 'imap.') : 'imap.gmail.com');
-  const port = runtimeImapConfig?.port || saved?.port || parseInt(process.env.IMAP_PORT || '993', 10);
+  const host = runtimeImapConfig?.host || process.env.IMAP_HOST || (process.env.SMTP_HOST ? process.env.SMTP_HOST.replace('smtp.', 'imap.') : 'imap.gmail.com');
+  const port = runtimeImapConfig?.port || parseInt(process.env.IMAP_PORT || '993', 10);
   const secure = runtimeImapConfig?.secure !== undefined
     ? runtimeImapConfig.secure
-    : saved?.secure !== undefined
-    ? saved.secure
     : process.env.IMAP_SECURE !== 'false';
-  const user = runtimeImapConfig?.user || saved?.user || process.env.IMAP_USER || process.env.SMTP_USER || 'amaavigo@gmail.com';
-  const pass = (runtimeImapConfig?.pass || saved?.pass || process.env.IMAP_PASS || process.env.SMTP_PASS || 'czzk spuw wpxc cceb').trim();
+  const user = runtimeImapConfig?.user || process.env.IMAP_USER || process.env.SMTP_USER || '';
+  const pass = (runtimeImapConfig?.pass || process.env.IMAP_PASS || process.env.SMTP_PASS || '').trim();
 
-  const configured = Boolean(host && pass);
+  const configured = Boolean(host && pass && user);
 
   return { host, port, secure, user, pass, configured };
 }

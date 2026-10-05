@@ -150,6 +150,36 @@ export default function App() {
   const [selectedLeadIdForCrm, setSelectedLeadIdForCrm] = useState<string | null>(null);
   const [isFirebaseActive, setIsFirebaseActive] = useState<boolean>(isFirebaseConfigured);
 
+  // Multi-Tenant Context & Workspace State
+  const [currentTenantId, setCurrentTenantId] = useState<string>('umrah360');
+  const [currentTenant, setCurrentTenant] = useState<any>({
+    id: 'umrah360',
+    name: 'Umrah360 Flagship',
+    slug: 'umrah360',
+    status: 'active',
+    plan: 'enterprise',
+    limits: { monthlyAiTokens: 5000000, dailyOutboundSends: 10000, hourlyOutboundSends: 1000, seats: 25 },
+    createdAt: new Date().toISOString(),
+  });
+  const [allTenants, setAllTenants] = useState<any[]>([]);
+
+  const tCol = useCallback((colName: string) => collection(db, 'tenants', currentTenantId, colName), [currentTenantId]);
+  const tDoc = useCallback((colName: string, docId: string) => doc(db, 'tenants', currentTenantId, colName, docId), [currentTenantId]);
+
+  // Load Tenants list
+  useEffect(() => {
+    fetch('/api/tenants')
+      .then((r) => r.json())
+      .then((data) => {
+        if (Array.isArray(data?.tenants) && data.tenants.length > 0) {
+          setAllTenants(data.tenants);
+          const matched = data.tenants.find((t: any) => t.id === currentTenantId);
+          if (matched) setCurrentTenant(matched);
+        }
+      })
+      .catch(() => {});
+  }, [currentTenantId]);
+
   // Users & Authentication State
   const [users, setUsers] = useState<AppUser[]>(INITIAL_USERS);
   const [currentUser, setCurrentUser] = useState<AppUser | null>(() => {
@@ -197,45 +227,45 @@ export default function App() {
 
       if (!isFirebaseConfigured || !db) return;
       try {
-        // Load or seed settings in Firestore
-        const settingsRef = doc(db, 'system_settings', 'default');
+        // Load or seed settings in Firestore tenant scope
+        const settingsRef = tDoc('settings', 'default');
         const settingsSnap = await getDoc(settingsRef);
         if (settingsSnap.exists()) {
           const loadedSettings = settingsSnap.data() as SystemSettings;
           setSettings(loadedSettings);
         } else {
-          await setDoc(settingsRef, DEFAULT_SETTINGS);
+          await setDoc(settingsRef, DEFAULT_SETTINGS).catch(() => {});
         }
 
-        // Check if database was ever initialized before
-        const initMarkerRef = doc(db, 'system_metadata', 'db_initialized');
+        // Check if database was ever initialized before for this tenant
+        const initMarkerRef = tDoc('settings', 'db_initialized');
         const initMarkerSnap = await getDoc(initMarkerRef);
 
         if (!initMarkerSnap.exists()) {
-          // Check if any contacts or leads already exist in Firestore
-          const contactsSnap = await getDocs(collection(db, 'contacts'));
-          const leadsSnap = await getDocs(collection(db, 'leads'));
-          const convsSnap = await getDocs(collection(db, 'conversations'));
+          // Check if any contacts or leads already exist in Firestore for this tenant
+          const contactsSnap = await getDocs(tCol('contacts')).catch(() => null);
+          const leadsSnap = await getDocs(tCol('leads')).catch(() => null);
+          const convsSnap = await getDocs(tCol('conversations')).catch(() => null);
 
-          if (contactsSnap.empty && leadsSnap.empty && convsSnap.empty) {
+          if (!contactsSnap || (contactsSnap.empty && leadsSnap?.empty && convsSnap?.empty)) {
             // Seed initial data ONLY on brand-new setup
             for (const c of INITIAL_CONTACTS) {
-              await setDoc(doc(db, 'contacts', c.contactId), c);
+              await setDoc(tDoc('contacts', c.contactId), c).catch(() => {});
             }
             for (const l of INITIAL_LEADS) {
-              await setDoc(doc(db, 'leads', l.leadId), l);
+              await setDoc(tDoc('leads', l.leadId), l).catch(() => {});
             }
             for (const conv of INITIAL_CONVERSATIONS) {
-              await setDoc(doc(db, 'conversations', conv.conversationId), conv);
+              await setDoc(tDoc('conversations', conv.conversationId), conv).catch(() => {});
             }
             for (const m of INITIAL_MESSAGES) {
-              await setDoc(doc(db, 'messages', m.messageId), m);
+              await setDoc(tDoc('messages', m.messageId), m).catch(() => {});
             }
             for (const kb of INITIAL_KNOWLEDGE_DOCUMENTS) {
-              await setDoc(doc(db, 'knowledge_documents', kb.id), kb);
+              await setDoc(tDoc('knowledge_documents', kb.id), kb).catch(() => {});
             }
             for (const p of INITIAL_PROSPECTS) {
-              await setDoc(doc(db, 'outbound_prospects', p.prospectId), p);
+              await setDoc(tDoc('outbound_prospects', p.prospectId), p).catch(() => {});
             }
           }
 
@@ -243,19 +273,19 @@ export default function App() {
           await setDoc(initMarkerRef, {
             initialized: true,
             initializedAt: new Date().toISOString(),
-          });
+          }).catch(() => {});
         }
 
         // Load persisted entities from Firestore so state reflects actual database state
         const [convsSnap, msgsSnap, leadsSnap, contsSnap, kbSnap, campSnap, usersSnap, prospectsSnap] = await Promise.all([
-          getDocs(query(collection(db, 'conversations'), orderBy('lastMessageAt', 'desc'))),
-          getDocs(query(collection(db, 'messages'), orderBy('sentAt', 'asc'))),
-          getDocs(collection(db, 'leads')),
-          getDocs(collection(db, 'contacts')),
-          getDocs(collection(db, 'knowledge_documents')),
-          getDocs(collection(db, 'outbound_campaigns')),
-          getDocs(collection(db, 'app_users')),
-          getDocs(collection(db, 'outbound_prospects')),
+          getDocs(query(tCol('conversations'), orderBy('lastMessageAt', 'desc'))).catch(() => null),
+          getDocs(query(tCol('messages'), orderBy('sentAt', 'asc'))).catch(() => null),
+          getDocs(tCol('leads')).catch(() => null),
+          getDocs(tCol('contacts')).catch(() => null),
+          getDocs(tCol('knowledge_documents')).catch(() => null),
+          getDocs(tCol('outbound_campaigns')).catch(() => null),
+          getDocs(collection(db, 'users')).catch(() => null),
+          getDocs(tCol('outbound_prospects')).catch(() => null),
         ]);
 
         // Filter and purge legacy test/default campaigns from Firestore
@@ -271,8 +301,8 @@ export default function App() {
               data.campaignId === 'camp-1790758967982-7his' ||
               cleanName === 'test'
             ) {
-              deleteDoc(doc(db, 'outbound_campaigns', d.id)).catch(() => {});
-              deleteDoc(doc(db, 'campaigns', d.id)).catch(() => {});
+              deleteDoc(tDoc('outbound_campaigns', d.id)).catch(() => {});
+              deleteDoc(tDoc('campaigns', d.id)).catch(() => {});
             } else {
               validCampaigns.push(data);
             }
@@ -280,26 +310,37 @@ export default function App() {
         }
 
         // Always set the exact documents present in Firestore (if user deleted documents, reflects empty/subset)
-        setConversations(convsSnap.docs.map((d) => d.data() as Conversation));
-        setMessages(msgsSnap.docs.map((d) => d.data() as Message));
-        setLeads(leadsSnap.docs.map((d) => sanitizeLead(d.data())));
-        setContacts(contsSnap.docs.map((d) => sanitizeContact(d.data())));
-        setKnowledgeDocs(kbSnap.docs.map((d) => d.data() as KnowledgeDocument));
+        if (convsSnap) setConversations(convsSnap.docs.map((d) => d.data() as Conversation));
+        if (msgsSnap) setMessages(msgsSnap.docs.map((d) => d.data() as Message));
+        if (leadsSnap) setLeads(leadsSnap.docs.map((d) => sanitizeLead(d.data())));
+        if (contsSnap) setContacts(contsSnap.docs.map((d) => sanitizeContact(d.data())));
+        if (kbSnap) setKnowledgeDocs(kbSnap.docs.map((d) => d.data() as KnowledgeDocument));
         setCampaigns(validCampaigns);
         setProspects(prospectsSnap ? prospectsSnap.docs.map((d) => d.data() as OutboundProspect) : []);
 
         // Initialize / sync users
-        if (usersSnap.empty) {
-          for (const u of INITIAL_USERS) {
-            await setDoc(doc(db, 'app_users', u.userId), u);
-          }
+        if (!usersSnap || usersSnap.empty) {
           setUsers(INITIAL_USERS);
         } else {
-          setUsers(usersSnap.docs.map((d) => d.data() as AppUser));
+          const tenantUsers = usersSnap.docs
+            .map((d) => d.data())
+            .filter((u) => u.tenantId === currentTenantId || !u.tenantId)
+            .map((u) => ({
+              userId: u.uid || u.userId,
+              name: u.name || u.email?.split('@')[0] || 'Operator',
+              email: u.email || '',
+              username: u.username || u.email?.split('@')[0] || '',
+              password: u.password || '******',
+              role: u.role === 'admin' || u.role === 'ADMIN' ? 'ADMIN' : 'SPECIALIST',
+              accessLevel: 'ALL',
+              allowedModules: u.allowedModules || ['inbox', 'campaigns', 'crm', 'scheduling', 'knowledge', 'settings'],
+              createdAt: u.createdAt || new Date().toISOString(),
+            })) as AppUser[];
+          setUsers(tenantUsers.length > 0 ? tenantUsers : INITIAL_USERS);
         }
 
-        // Attach realtime listeners for Firestore updates (handles adds, updates, and deletes immediately)
-        unsubConvs = onSnapshot(collection(db, 'conversations'), (snap) => {
+        // Attach realtime listeners for Firestore updates
+        unsubConvs = onSnapshot(tCol('conversations'), (snap) => {
           const list = snap.docs.map((d) => d.data() as Conversation);
           setConversations(
             list.sort(
@@ -308,9 +349,9 @@ export default function App() {
                 new Date(a.lastMessageAt || a.createdAt || 0).getTime()
             )
           );
-        });
+        }, () => {});
 
-        unsubMsgs = onSnapshot(collection(db, 'messages'), (snap) => {
+        unsubMsgs = onSnapshot(tCol('messages'), (snap) => {
           const list = snap.docs.map((d) => d.data() as Message);
           setMessages(
             list.sort(
@@ -319,34 +360,33 @@ export default function App() {
                 new Date(b.sentAt || b.timestamp || b.createdAt || 0).getTime()
             )
           );
-        });
+        }, () => {});
 
-        unsubLeads = onSnapshot(collection(db, 'leads'), (snap) => {
+        unsubLeads = onSnapshot(tCol('leads'), (snap) => {
           const list: Lead[] = [];
           snap.docs.forEach((d) => {
             const data = d.data();
             const lead = sanitizeLead(data);
             const isCampaignLead = Boolean(lead.campaignId || lead.campaignLeadId || (lead.leadType === 'OUTBOUND' && lead.source === 'EMAIL'));
             if (isCampaignLead && lead.replyStatus !== 'REPLIED') {
-              // Delete unreplied campaign lead document from CRM leads collection
-              deleteDoc(doc(db, 'leads', d.id)).catch(() => {});
+              deleteDoc(tDoc('leads', d.id)).catch(() => {});
             } else {
               list.push(lead);
             }
           });
           setLeads(list);
-        });
+        }, () => {});
 
-        unsubContacts = onSnapshot(collection(db, 'contacts'), (snap) => {
+        unsubContacts = onSnapshot(tCol('contacts'), (snap) => {
           const list = snap.docs.map((d) => sanitizeContact(d.data()));
           setContacts(list);
-        });
+        }, () => {});
 
-        unsubKb = onSnapshot(collection(db, 'knowledge_documents'), (snap) => {
+        unsubKb = onSnapshot(tCol('knowledge_documents'), (snap) => {
           setKnowledgeDocs(snap.docs.map((d) => d.data() as KnowledgeDocument));
-        });
+        }, () => {});
 
-        unsubOutboundCamps = onSnapshot(collection(db, 'outbound_campaigns'), (snap) => {
+        unsubOutboundCamps = onSnapshot(tCol('outbound_campaigns'), (snap) => {
           const list: OutboundCampaign[] = [];
           snap.docs.forEach((d) => {
             const data = d.data() as OutboundCampaign;
@@ -358,20 +398,20 @@ export default function App() {
               data.campaignId === 'camp-1790758967982-7his' ||
               cleanName === 'test'
             ) {
-              deleteDoc(doc(db, 'outbound_campaigns', d.id)).catch(() => {});
-              deleteDoc(doc(db, 'campaigns', d.id)).catch(() => {});
+              deleteDoc(tDoc('outbound_campaigns', d.id)).catch(() => {});
+              deleteDoc(tDoc('campaigns', d.id)).catch(() => {});
             } else {
               list.push(data);
             }
           });
           setCampaigns(list);
-        });
+        }, () => {});
 
-        unsubOutboundProspects = onSnapshot(collection(db, 'outbound_prospects'), (snap) => {
+        unsubOutboundProspects = onSnapshot(tCol('outbound_prospects'), (snap) => {
           if (!snap.empty) {
             setProspects(snap.docs.map((d) => d.data() as OutboundProspect));
           }
-        });
+        }, () => {});
 
         unsubUsers = onSnapshot(collection(db, 'app_users'), (snap) => {
           if (!snap.empty) {
@@ -1769,6 +1809,9 @@ export default function App() {
         isFirebaseActive={isFirebaseActive}
         currentUser={currentUser}
         onLogout={handleLogout}
+        currentTenant={currentTenant}
+        allTenants={allTenants}
+        onSwitchTenant={(tenantId) => setCurrentTenantId(tenantId)}
       />
 
       <main className="flex-1">

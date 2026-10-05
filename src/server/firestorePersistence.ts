@@ -2,6 +2,7 @@ import crypto from 'crypto';
 import {
   getDoc,
   getDocs,
+  setDoc,
   query,
   where,
   limit,
@@ -316,4 +317,38 @@ export async function recordBaselineInboxMessages(
     }
   }
   return count;
+}
+
+
+/**
+ * Mailbox baseline (persisted, per tenant).
+ *
+ * Emails that arrived BEFORE the baseline are treated as history and are never
+ * auto-processed (so connecting or restoring a mailbox does not blast replies
+ * to old prospects). Emails after it are real replies and are ingested.
+ *
+ * It is stored in Firestore, NOT derived from the server's boot time: on a
+ * serverless host every cold start is a "new boot", which used to silently
+ * discard every reply that arrived since the previous invocation.
+ *
+ * Override with IMAP_BASELINE_ISO (e.g. 2026-10-05T00:00:00Z) to ingest replies
+ * that arrived after that moment. Throws if Firestore is unreachable, so a poll
+ * fails visibly instead of dropping mail.
+ */
+export async function getOrCreateImapBaseline(ctx: TenantContext = DEFAULT_UMRAH_CTX): Promise<number> {
+  const fromEnv = process.env.IMAP_BASELINE_ISO;
+  if (fromEnv) {
+    const ms = Date.parse(fromEnv);
+    if (!Number.isNaN(ms)) return ms;
+    console.warn(`[IMAP Baseline] Ignoring invalid IMAP_BASELINE_ISO="${fromEnv}"`);
+  }
+  const ref = tenantRepo(ctx).settingsDoc('imap_baseline');
+  const snap = await getDoc(ref);
+  const existing = snap.exists() ? snap.data()?.baselineAt : null;
+  if (existing && !Number.isNaN(Date.parse(existing))) return Date.parse(existing);
+
+  const baselineAt = new Date().toISOString();
+  await setDoc(ref, { baselineAt, createdAt: baselineAt }, { merge: true });
+  console.log(`[IMAP Baseline] First poll for tenant ${ctx.tenantId}: baseline set to ${baselineAt}`);
+  return Date.parse(baselineAt);
 }

@@ -5,6 +5,7 @@ import {
   isMessageAlreadyProcessed,
   recordProcessedInboundEmail,
   normalizeIdentifier,
+  getOrCreateImapBaseline,
 } from './firestorePersistence.js';
 
 export interface FetchedInboundEmail {
@@ -78,8 +79,6 @@ export function getImapConfig() {
 // In-memory set of already processed message IDs & UIDs to prevent duplicate ingestion
 const processedEmailIdentifiers = new Set<string>();
 
-// Startup timestamp tracking to guarantee version restores / restarts never re-send historical emails
-const SERVER_BOOT_TIMESTAMP = Date.now();
 let isFirestoreSynced = false;
 let isFirstPollCycleCompleted = false;
 
@@ -282,6 +281,9 @@ export async function pollUnreadEmails(markAsSeen: boolean = true): Promise<Imap
         }
       }
 
+      // Persisted baseline (throws if Firestore is down, so the poll fails visibly)
+      const baselineMs = await getOrCreateImapBaseline();
+
       // Inspect the latest 30 messages in the mailbox, prioritizing the newest sequence numbers first
       const rawCandidates: { seq: number; msgId: string; uidStr: string }[] = [];
       const inspectCount = Math.min(30, totalMessages);
@@ -327,13 +329,12 @@ export async function pollUnreadEmails(markAsSeen: boolean = true): Promise<Imap
           continue;
         }
 
-        // 5. Version Restore / Cold-Start Protection:
-        // On the very first poll cycle after server restart or version restore,
-        // any existing inbox message that arrived before server boot is baselined
-        // and suppressed so historical prospects never receive duplicate email blasts!
+        // 5. History protection: anything that arrived before the persisted mailbox
+        // baseline is historical and is baselined (never auto-replied to). The baseline
+        // lives in Firestore so it survives restarts and serverless cold starts.
         const msgInternalTime = message.internalDate ? new Date(message.internalDate).getTime() : 0;
-        if (!isFirstPollCycleCompleted && msgInternalTime > 0 && msgInternalTime < SERVER_BOOT_TIMESTAMP - 15000) {
-          console.log(`[IMAP Guard] Baselining historical email ${msgId} from ${fromAddress} (arrived before server boot/restore).`);
+        if (msgInternalTime > 0 && msgInternalTime < baselineMs) {
+          console.log(`[IMAP Guard] Baselining historical email ${msgId} from ${fromAddress} (arrived before the mailbox baseline).`);
           processedEmailIdentifiers.add(normId);
           processedEmailIdentifiers.add(msgId);
           processedEmailIdentifiers.add(uidStr);
@@ -343,7 +344,7 @@ export async function pollUnreadEmails(markAsSeen: boolean = true): Promise<Imap
             subject,
             aiReplied: false,
             status: 'BASELINE',
-            reason: 'Historical email baselined on server start/restore to prevent re-sending',
+            reason: 'Historical email (before mailbox baseline) baselined to prevent re-sending',
             timestamp: message.internalDate ? new Date(message.internalDate).toISOString() : new Date().toISOString(),
           });
           if (markAsSeen) {

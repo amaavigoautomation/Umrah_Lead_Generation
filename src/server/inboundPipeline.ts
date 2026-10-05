@@ -1794,24 +1794,28 @@ export async function processLiveInboundEmail(payload: {
     // Persist CRM entities to Firestore once at arrival time
     if (isFirebaseConfigured && db && crmEntities) {
       try {
+        // Await every write: on serverless hosts the function can be frozen right after the
+        // response is sent, which would silently drop un-awaited writes (reply never saved).
+        const writes: Promise<unknown>[] = [];
         if (crmEntities.contact) {
-          safeSetDoc(tenantRepo(getInboundCtx()).contactDoc(crmEntities.contact.contactId), crmEntities.contact, { merge: true }).catch(() => {});
+          writes.push(safeSetDoc(tenantRepo(getInboundCtx()).contactDoc(crmEntities.contact.contactId), crmEntities.contact, { merge: true }));
         }
         if (crmEntities.lead) {
-          safeSetDoc(tenantRepo(getInboundCtx()).leadDoc(crmEntities.lead.leadId), crmEntities.lead, { merge: true }).catch(() => {});
+          writes.push(safeSetDoc(tenantRepo(getInboundCtx()).leadDoc(crmEntities.lead.leadId), crmEntities.lead, { merge: true }));
         }
         if (crmEntities.conversation) {
-          safeSetDoc(tenantRepo(getInboundCtx()).conversationDoc(crmEntities.conversation.conversationId), crmEntities.conversation, { merge: true }).catch(() => {});
+          writes.push(safeSetDoc(tenantRepo(getInboundCtx()).conversationDoc(crmEntities.conversation.conversationId), crmEntities.conversation, { merge: true }));
         }
         if (crmEntities.incomingMessage) {
-          safeSetDoc(tenantRepo(getInboundCtx()).messageDoc(crmEntities.incomingMessage.messageId), crmEntities.incomingMessage, { merge: true }).catch(() => {});
+          writes.push(safeSetDoc(tenantRepo(getInboundCtx()).messageDoc(crmEntities.incomingMessage.messageId), crmEntities.incomingMessage, { merge: true }));
         }
         if (crmEntities.aiReplyMessage) {
-          safeSetDoc(tenantRepo(getInboundCtx()).messageDoc(crmEntities.aiReplyMessage.messageId), crmEntities.aiReplyMessage, { merge: true }).catch(() => {});
+          writes.push(safeSetDoc(tenantRepo(getInboundCtx()).messageDoc(crmEntities.aiReplyMessage.messageId), crmEntities.aiReplyMessage, { merge: true }));
         }
         if (crmEntities.activity) {
-          safeSetDoc(tenantRepo(getInboundCtx()).leadActivityDoc(crmEntities.activity.activityId), crmEntities.activity).catch(() => {});
+          writes.push(safeSetDoc(tenantRepo(getInboundCtx()).leadActivityDoc(crmEntities.activity.activityId), crmEntities.activity));
         }
+        await Promise.all(writes);
       } catch (err) {
         console.warn('[Inbound Pipeline] Notice syncing CRM entities to Firestore:', err);
       }

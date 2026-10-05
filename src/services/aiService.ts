@@ -31,6 +31,27 @@ export interface AiResponseResult {
 }
 
 /**
+ * Returns only what the sender newly wrote: removes quoted earlier messages
+ * ("On ... wrote:", "> ..." lines, Outlook "From:" headers, "Original Message")
+ * and the sign-off/signature. Intent detection must run on this, never on the
+ * full email body, because our own campaign email ("15-minute walkthrough",
+ * "demo") is quoted inside every reply.
+ * (Client-side copy of src/server/quotedText.ts)
+ */
+function stripQuotedEmailHistory(text: string): string {
+  if (!text) return '';
+  let t = String(text).replace(/\r\n/g, '\n');
+  t = t.replace(/\n?On\s[\s\S]{0,300}?\swrote:[\s\S]*$/i, '');
+  t = t.replace(/\n?-{2,}\s*(Original Message|Forwarded message)[\s\S]*$/i, '');
+  t = t.replace(/\n?_{5,}[\s\S]*$/, '');
+  t = t.replace(/\n?From:\s.*\n(?:Sent|Date|To|Subject):[\s\S]*$/i, '');
+  t = t.replace(/^>.*$/gm, '');
+  t = t.replace(/\n--\s*\n[\s\S]*$/, '');
+  t = t.replace(/\n\s*(Regards|Best regards|Kind regards|Thanks|Thank you|Warm regards|Sincerely|Cheers),?\s*\n[\s\S]*$/i, '');
+  return t.trim();
+}
+
+/**
  * Evaluates whether human handoff should be triggered immediately based on business rules
  */
 export function checkHumanHandoffConditions(
@@ -91,6 +112,10 @@ export function checkHumanHandoffConditions(
 
 /**
  * Generates an omnichannel AI response using server-side OpenAI or verified domain knowledge engine.
+ *
+ * allowBooking (default FALSE): when true, a demo-intent message is sent to the
+ * calendar scheduling agent, which may create a real Google Calendar event + Meet
+ * link. Automatic reply flows (App.tsx auto-reply engine) must NEVER set this.
  */
 export async function generateOmnichannelResponse(params: {
   incomingMessage: string;
@@ -100,25 +125,43 @@ export async function generateOmnichannelResponse(params: {
   recentMessages: Message[];
   knowledgeDocs: KnowledgeDocument[];
   signature?: string;
+  allowBooking?: boolean;
 }): Promise<AiResponseResult> {
-  const { incomingMessage, contact, lead, conversation, recentMessages, knowledgeDocs, signature = 'Regards,\nUmrah360 Team' } = params;
+  const {
+    incomingMessage,
+    contact,
+    lead,
+    conversation,
+    recentMessages,
+    knowledgeDocs,
+    signature = 'Regards,\nUmrah360 Team',
+    allowBooking = false,
+  } = params;
+
+  // Only what the customer newly wrote (no quoted campaign email / signature).
+  // Falls back to the full text if stripping leaves nothing.
+  const freshMessage = stripQuotedEmailHistory(incomingMessage) || incomingMessage;
 
   // Step 1: Intent detection & Knowledge retrieval (RAG)
   const knowledgeChunks = retrieveRelevantKnowledge(incomingMessage, knowledgeDocs, 3);
   const knowledgeSources = knowledgeChunks.map((c) => c.title);
 
-  // Step 1.5: If demo scheduling intent is detected, attempt central calendar scheduling turn
-  const isDemoIntent = /(demo|schedule|book\s+(a\s+)?(call|meeting|slot)|walkthrough|reschedule)/i.test(incomingMessage);
+  // Step 1.5: Demo scheduling via the calendar agent. OFF unless allowBooking is explicitly true.
+  const isDemoIntent =
+    allowBooking &&
+    /(schedule\s+(a\s+)?(demo|meeting|call|walkthrough)|book\s+(a\s+)?(demo|call|meeting|slot)|want\s+(a\s+)?(demo|walkthrough)|give\s+me\s+(a\s+)?demo|reschedule|cancel\s+(the\s+)?(demo|meeting|call))/i.test(
+      freshMessage
+    );
   if (isDemoIntent) {
     try {
       const schedRes = await fetch('/api/calendar/schedule-turn', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          messageText: incomingMessage,
+          messageText: freshMessage,
           conversationHistory: recentMessages.map((m) => ({
             role: m.senderType === 'CUSTOMER' || m.senderType === 'PROSPECT' ? 'user' : 'assistant',
-            content: m.text,
+            content: stripQuotedEmailHistory(m.text) || m.text,
           })),
           leadContext: {
             leadId: lead?.leadId,
@@ -166,8 +209,8 @@ export async function generateOmnichannelResponse(params: {
     }
   }
 
-  // Step 2: Human handoff check
-  const handoffCheck = checkHumanHandoffConditions(incomingMessage, conversation, knowledgeChunks);
+  // Step 2: Human handoff check (on the customer's new text only)
+  const handoffCheck = checkHumanHandoffConditions(freshMessage, conversation, knowledgeChunks);
 
   // Try calling the server-side API first
   try {
@@ -195,7 +238,7 @@ export async function generateOmnichannelResponse(params: {
   }
 
   // Rule-based Domain Knowledge Engine (strictly grounded in approved Umrah360 documentation)
-  const lowerMsg = incomingMessage.toLowerCase();
+  const lowerMsg = freshMessage.toLowerCase();
 
   // If handoff is triggered
   if (handoffCheck.shouldHandoff) {

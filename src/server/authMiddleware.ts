@@ -5,7 +5,7 @@ import { getDoc } from 'firebase/firestore';
 import type { TenantContext, UserRole } from '../types/tenant.js';
 import { createTenantLogger } from './logger.js';
 
-// Extend Express Request type with TenantContext
+// Extend Express Request type with TenantContext for vercel
 declare global {
   namespace Express {
     interface Request {

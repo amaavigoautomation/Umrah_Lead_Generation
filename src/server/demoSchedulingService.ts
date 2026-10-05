@@ -1466,8 +1466,14 @@ export async function processSchedulingConversationTurn(params: {
     accessToken?: string;
   };
   accessToken?: string;
+  /** True when called from the inbound email / WhatsApp pipelines (no human in the loop). */
+  automated?: boolean;
   [key: string]: any;
 }): Promise<SchedulingTurnResult> {
+  // Replies must never book demos on their own unless explicitly enabled.
+  if (params.automated && process.env.AUTO_DEMO_BOOKING !== 'true') {
+    return { handled: false, replyText: '', action: 'NOT_DEMO_INTENT' };
+  }
   const messageText = params.messageText || '';
   const conversationHistory = Array.isArray(params.conversationHistory) ? params.conversationHistory : [];
   const ctx: any = params.leadContext || {};

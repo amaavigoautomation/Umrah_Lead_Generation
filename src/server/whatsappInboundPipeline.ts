@@ -460,6 +460,7 @@ export async function generateWhatsAppAutoReplyText(params: {
       }));
 
       const schedulingTurn = await processSchedulingConversationTurn({
+        automated: true,
         messageText: body,
         conversationHistory: historyTurns,
         leadContext: {

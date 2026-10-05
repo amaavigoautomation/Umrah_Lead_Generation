@@ -449,212 +449,53 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
       console.warn('Error loading campaign leads/runs from API:', e);
     }
 
-    // Direct Firestore lookup fallback ONLY IF API returned empty leads
-    if (!hasLoadedApiLeads && isFirebaseConfigured && db) {
-      try {
-        const snap = await getDocs(collection(db, 'campaign_leads')).catch(() => null);
-        if (snap && !snap.empty) {
-          const fsLeads: CampaignLead[] = [];
-          snap.forEach((d) => {
-            const l = d.data() as CampaignLead;
-            if (l && l.campaignLeadId && l.campaignId === campaignId) {
-              fsLeads.push(l);
-            }
-          });
-          if (fsLeads.length > 0 && selectedCampaignIdRef.current === campaignId) {
-            fsLeads.sort((a, b) => (a.rowNumber || 0) - (b.rowNumber || 0));
-            setCampaignLeads(fsLeads);
-          }
-        }
-      } catch (fsErr) {
-        console.warn('Firestore leads lookup note:', fsErr);
-      }
-    }
-
     // Default sample leads fallback if still empty for default campaign
     setCampaignLeads((curr) => curr);
   };
 
-  // Real-time Firestore sync for email templates and campaigns
+  // Single sequential poller: never overlaps itself, slows down when idle.
   useEffect(() => {
-    if (isFirebaseConfigured && db) {
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let busy = false;
+
+    const tick = async () => {
+      if (cancelled) return;
+      if (busy || document.visibilityState !== 'visible') {
+        timer = setTimeout(tick, 5000);
+        return;
+      }
+      busy = true;
+      let running = false;
       try {
-        const unsubTemplates = onSnapshot(
-          collection(db, 'email_templates'),
-          (snapshot) => {
-            const loadedTpls: EmailTemplate[] = [];
-            snapshot.forEach((docSnap) => {
-              const data = docSnap.data() as EmailTemplate;
-              if (data && data.templateId) {
-                loadedTpls.push(data);
-              }
-            });
-            loadedTpls.sort(
-              (a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
-            );
-            setTemplates(loadedTpls);
-          },
-          (err) => console.warn('Notice from Firestore email_templates listener:', err)
-        );
-
-        const unsubCampaigns = onSnapshot(
-          collection(db, 'campaigns'),
-          (snapshot) => {
-            const loadedCamps: Campaign[] = [];
-            if (!snapshot.empty) {
-              snapshot.forEach((docSnap) => {
-                const data = docSnap.data() as Campaign;
-                if (data && data.campaignId) {
-                  loadedCamps.push(data);
-                }
-              });
-            }
-            const sortedCamps = loadedCamps.sort(
-              (a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
-            );
-            setCampaigns(sortedCamps);
-            campaignsRef.current = sortedCamps;
-
-            const activeId = selectedCampaignIdRef.current;
-            if (activeId) {
-              const matching = sortedCamps.find((c) => c.campaignId === activeId);
-              if (matching) {
-                setSelectedCampaign((prev) => (prev ? { ...prev, ...matching } : matching));
-              } else {
-                setSelectedCampaign(null);
-              }
-            } else if (sortedCamps.length > 0) {
-              const first = sortedCamps[0];
-              setSelectedCampaignId(first.campaignId);
-              selectedCampaignIdRef.current = first.campaignId;
-              setSelectedCampaign(first);
-              loadSelectedCampaignDetails(first.campaignId);
-            } else {
-              setSelectedCampaign(null);
-            }
-          },
-          (err) => console.warn('Notice from Firestore campaigns listener:', err)
-        );
-
-        const unsubLeads = onSnapshot(
-          collection(db, 'campaign_leads'),
-          (snapshot) => {
-            if (!snapshot.empty) {
-              const loadedLeads: CampaignLead[] = [];
-              snapshot.forEach((docSnap) => {
-                const data = docSnap.data() as CampaignLead;
-                if (data && data.campaignLeadId) {
-                  loadedLeads.push(data);
-                }
-              });
-
-              // Map leads by campaign to synchronize metrics across all campaign cards
-              const leadsByCamp = new Map<string, CampaignLead[]>();
-              loadedLeads.forEach((l) => {
-                if (!leadsByCamp.has(l.campaignId)) leadsByCamp.set(l.campaignId, []);
-                leadsByCamp.get(l.campaignId)!.push(l);
-              });
-
-              setCampaigns((prev) =>
-                prev.map((c) => {
-                  const cLeads = leadsByCamp.get(c.campaignId);
-                  if (!cLeads || cLeads.length === 0) return c;
-                  const total = cLeads.length;
-                  const sent = cLeads.filter((l) => l.sendStatus === 'SENT').length;
-                  const pending = cLeads.filter((l) => l.sendStatus === 'PENDING' && l.replyStatus !== 'REPLIED').length;
-                  const failed = cLeads.filter((l) => l.sendStatus === 'FAILED').length;
-                  const replied = cLeads.filter((l) => l.replyStatus === 'REPLIED').length;
-                  const demoBooked = cLeads.filter((l) => l.demoStatus === 'BOOKED').length;
-                  return {
-                    ...c,
-                    totalLeads: total,
-                    sentCount: sent,
-                    pendingCount: pending,
-                    failedCount: failed,
-                    repliedCount: replied,
-                    demoBookedCount: demoBooked,
-                    stats: { totalLeads: total, sent, pending, failed, replied, demoBooked },
-                  };
-                })
-              );
-
-              const activeId = selectedCampaignIdRef.current;
-              if (activeId) {
-                const matching = loadedLeads.filter((l) => l.campaignId === activeId);
-                matching.sort((a, b) => (a.rowNumber || 0) - (b.rowNumber || 0));
-                setCampaignLeads(matching);
-
-                setSelectedCampaign((prev) => {
-                  if (!prev || prev.campaignId !== activeId) return prev;
-                  const total = matching.length;
-                  const sent = matching.filter((l) => l.sendStatus === 'SENT').length;
-                  const pending = matching.filter((l) => l.sendStatus === 'PENDING' && l.replyStatus !== 'REPLIED').length;
-                  const failed = matching.filter((l) => l.sendStatus === 'FAILED').length;
-                  const replied = matching.filter((l) => l.replyStatus === 'REPLIED').length;
-                  const demoBooked = matching.filter((l) => l.demoStatus === 'BOOKED').length;
-                  return {
-                    ...prev,
-                    totalLeads: total > 0 ? total : prev.totalLeads,
-                    sentCount: sent,
-                    pendingCount: pending,
-                    failedCount: failed,
-                    repliedCount: replied,
-                    demoBookedCount: demoBooked,
-                    stats: { total: total > 0 ? total : prev.totalLeads, totalLeads: total > 0 ? total : prev.totalLeads, sent, pending, failed, replied, demoBooked },
-                  };
-                });
-              }
-            }
-          },
-          (err) => console.warn('Notice from Firestore campaign_leads listener:', err)
-        );
-
-        return () => {
-          unsubTemplates();
-          unsubCampaigns();
-          unsubLeads();
-        };
-      } catch (e) {
-        console.warn('Firestore subscription setup note:', e);
-      }
-    }
-  }, []);
-
-  // Stable periodic polling without infinite re-render loop
-  useEffect(() => {
-    loadData();
-    const interval = setInterval(() => {
-      const activeId = selectedCampaignIdRef.current;
-      const runningCamp = campaignsRef.current.find((c) => c.status === 'RUNNING');
-      if (runningCamp) {
-        fetch(`/api/campaigns/${runningCamp.campaignId}/process`, { method: 'POST' })
-          .then(() => {
-            loadData();
-            if (activeId) {
-              loadSelectedCampaignDetails(activeId);
-            }
-          })
-          .catch(() => {
-            loadData();
-            if (activeId) loadSelectedCampaignDetails(activeId);
-          });
-      }
-    }, 4000);
-
-    const handleFocusOrVisible = () => {
-      if (document.visibilityState === 'visible') {
-        loadData();
+        const runningCamp = campaignsRef.current.find((c) => c.status === 'RUNNING');
+        running = !!runningCamp;
+        if (runningCamp) {
+          await fetch(`/api/campaigns/${runningCamp.campaignId}/process`, { method: 'POST' }).catch(() => null);
+        }
+        await loadData();
         const activeId = selectedCampaignIdRef.current;
-        if (activeId) loadSelectedCampaignDetails(activeId);
+        if (activeId) await loadSelectedCampaignDetails(activeId);
+      } finally {
+        busy = false;
+        if (!cancelled) timer = setTimeout(tick, running ? 5000 : 15000);
       }
     };
-    document.addEventListener('visibilitychange', handleFocusOrVisible);
-    window.addEventListener('focus', handleFocusOrVisible);
+
+    tick();
+
+    const handleVisible = () => {
+      if (document.visibilityState === 'visible' && !busy) {
+        if (timer) clearTimeout(timer);
+        tick();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisible);
 
     return () => {
-      clearInterval(interval);
-      document.removeEventListener('visibilitychange', handleFocusOrVisible);
-      window.removeEventListener('focus', handleFocusOrVisible);
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+      document.removeEventListener('visibilitychange', handleVisible);
     };
   }, []);
 

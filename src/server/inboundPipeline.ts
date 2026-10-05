@@ -820,6 +820,7 @@ export async function generateAutoReplyText(params: {
       }));
 
       const schedulingTurn = await processSchedulingConversationTurn({
+        automated: true,
         messageText: `${subject}\n${body}`,
         conversationHistory: historyTurns,
         leadContext: {

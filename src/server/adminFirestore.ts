@@ -80,6 +80,11 @@ export async function setDoc(ref: DocumentReference, data: any, options?: SetOpt
   else await ref.set(data);
 }
 
+/** Atomic create: throws (code 6 / ALREADY_EXISTS) if the document already exists. */
+export async function createDoc(ref: DocumentReference, data: any): Promise<void> {
+  await ref.create(data);
+}
+
 export async function updateDoc(ref: DocumentReference, data: any): Promise<void> {
   await ref.update(data);
 }

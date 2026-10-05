@@ -10,6 +10,8 @@ import {
   getDoc,
   setDoc,
   deleteDoc,
+  createDoc,
+  updateDoc,
 } from './adminFirestore.js';
 import { isFirebaseConfigured } from '../firebase/config.js';
 import { db } from './adminFirestore.js';
@@ -470,11 +472,11 @@ export async function syncCampaignStoreFromFirestore(): Promise<void> {
           // Brand new database initialization ONLY: seed default templates once
           if (firestoreTpls.length === 0) {
             for (const tpl of DEFAULT_EMAIL_TEMPLATES) {
-              await safeSetDoc(tenantRepo(getCampaignActiveCtx()).emailTemplateDoc(tpl.templateId), tpl, { merge: true }).catch(() => {});
+              await await safeSetDoc(tenantRepo(getCampaignActiveCtx()).emailTemplateDoc(tpl.templateId), tpl, { merge: true });
               firestoreTpls.push(tpl);
             }
           }
-          await safeSetDoc(metaDocRef, { initialized: true, initializedAt: new Date().toISOString() }).catch(() => {});
+          await await safeSetDoc(metaDocRef, { initialized: true, initializedAt: new Date().toISOString() });
         }
 
         // In-memory templates map strictly mirrors Firestore database
@@ -1010,7 +1012,7 @@ export async function createCampaign(params: {
     };
     emailTemplatesMap.set(params.templateId, selectedTemplate);
     if (isFirebaseConfigured && db) {
-      safeSetDoc(tenantRepo(getCampaignActiveCtx()).emailTemplateDoc(params.templateId), selectedTemplate).catch(() => {});
+      await safeSetDoc(tenantRepo(getCampaignActiveCtx()).emailTemplateDoc(params.templateId), selectedTemplate);
     }
   }
 
@@ -1158,7 +1160,7 @@ export async function startCampaign(campaignId: string): Promise<Campaign> {
     campaign.lastRunNumber = nextRunNumber;
 
     if (isFirebaseConfigured && db) {
-      safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignRunDoc(currentRunId), newRun).catch(() => {});
+      await safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignRunDoc(currentRunId), newRun);
     }
   }
 
@@ -1175,7 +1177,7 @@ export async function startCampaign(campaignId: string): Promise<Campaign> {
         fl.lastError = undefined;
         fl.updatedAt = now;
         if (isFirebaseConfigured && db) {
-          safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignLeadDoc(fl.campaignLeadId), fl, { merge: true }).catch(() => {});
+          await safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignLeadDoc(fl.campaignLeadId), fl, { merge: true });
         }
       }
     }
@@ -1187,7 +1189,7 @@ export async function startCampaign(campaignId: string): Promise<Campaign> {
   campaignsMap.set(campaignId, campaign);
 
   if (isFirebaseConfigured && db) {
-    safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignDoc(campaignId), campaign, { merge: true }).catch(() => {});
+    await safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignDoc(campaignId), campaign, { merge: true });
   }
 
   // Synchronously process initial batch for immediate dispatch on Vercel & dev server
@@ -1224,7 +1226,7 @@ export async function pauseCampaign(campaignId: string): Promise<Campaign> {
     if (run && run.status === 'RUNNING') {
       run.status = 'PAUSED';
       if (isFirebaseConfigured && db) {
-        safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignRunDoc(run.runId), run, { merge: true }).catch(() => {});
+        await safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignRunDoc(run.runId), run, { merge: true });
       }
     }
   }
@@ -1232,7 +1234,7 @@ export async function pauseCampaign(campaignId: string): Promise<Campaign> {
   campaignsMap.set(campaignId, campaign);
 
   if (isFirebaseConfigured && db) {
-    await safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignDoc(campaignId), campaign, { merge: true }).catch(() => {});
+    await await safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignDoc(campaignId), campaign, { merge: true });
   }
 
   return campaign;
@@ -1401,9 +1403,9 @@ export async function restartCampaign(
 
   if (isFirebaseConfigured && db) {
     await Promise.allSettled([
-      safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignDoc(campaignId), campaign, { merge: true }),
+      await safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignDoc(campaignId), campaign, { merge: true }),
       safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignRunDoc(newRunId), newRun),
-    ]).catch(() => {});
+    ]);
   }
 
   await recalculateAndPersistCampaignMetrics(campaignId);
@@ -1434,6 +1436,53 @@ export async function restartCampaign(
  * Built for Vercel Serverless Function lifecycle: each call processes up to `maxBatchSize` leads,
  * dispatches emails via SMTP/Simulation, updates Firestore, and returns updated campaign state.
  */
+/**
+ * Cross-instance send claim. In-memory sets cannot stop two serverless instances (or two
+ * overlapping requests) from both reading a lead as PENDING and both emailing it. This
+ * takes an atomic claim in Firestore (create fails if it already exists) BEFORE sending.
+ * Returns true only for the single caller allowed to send.
+ */
+const SEND_CLAIM_STALE_MS = 10 * 60 * 1000;
+function sendClaimRef(key: string) {
+  return tenantRepo(getCampaignActiveCtx()).doc('send_claims', key.replace(/\//g, '_'));
+}
+async function claimLeadSend(key: string): Promise<boolean> {
+  if (!isFirebaseConfigured || !db) return true;
+  const ref = sendClaimRef(key);
+  const now = new Date().toISOString();
+  try {
+    await createDoc(ref, { key, status: 'SENDING', claimedAt: now });
+    return true;
+  } catch (err: any) {
+    const code = err?.code;
+    if (code !== 6 && !String(err?.message || '').includes('ALREADY_EXISTS')) {
+      // Firestore unavailable: refuse to send rather than risk a duplicate.
+      console.warn('[Campaign Engine] Send claim failed (not sending):', err?.message || err);
+      return false;
+    }
+  }
+  // Someone already claimed it. Allow a takeover only if that claim is stale and never completed.
+  try {
+    const snap = await getDoc(ref);
+    const d: any = snap.exists() ? snap.data() : null;
+    if (d && d.status === 'SENDING' && Date.now() - Date.parse(d.claimedAt || '') > SEND_CLAIM_STALE_MS) {
+      await updateDoc(ref, { claimedAt: now, takenOverAt: now });
+      return true;
+    }
+  } catch {}
+  return false;
+}
+async function finishLeadClaim(key: string, sent: boolean): Promise<void> {
+  if (!isFirebaseConfigured || !db) return;
+  try {
+    const ref = sendClaimRef(key);
+    if (sent) await updateDoc(ref, { status: 'SENT', sentAt: new Date().toISOString() });
+    else await deleteDoc(ref); // not sent: release so a retry is possible
+  } catch (err: any) {
+    console.warn('[Campaign Engine] finishLeadClaim note:', err?.message || err);
+  }
+}
+
 export async function processNextCampaignSendBatch(
   campaignId: string,
   maxBatchSize: number = 500
@@ -1492,12 +1541,12 @@ export async function processNextCampaignSendBatch(
         run.status = 'COMPLETED';
         run.completedAt = now;
         if (isFirebaseConfigured && db) {
-          safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignRunDoc(run.runId), run, { merge: true }).catch(() => {});
+          await safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignRunDoc(run.runId), run, { merge: true });
         }
       }
 
       if (isFirebaseConfigured && db) {
-        safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignDoc(campaignId), campaign, { merge: true }).catch(() => {});
+        await safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignDoc(campaignId), campaign, { merge: true });
       }
 
       const finalCamp = recalculateCampaignMetrics(campaignId) || campaign;
@@ -1546,6 +1595,12 @@ export async function processNextCampaignSendBatch(
     // Reserve in-flight lock
     inFlightLeadSendsSet.add(runHistoryKey);
     inFlightLeadSendsSet.add(campaignHistoryKey);
+    if (!(await claimLeadSend(runHistoryKey))) {
+      inFlightLeadSendsSet.delete(runHistoryKey);
+      inFlightLeadSendsSet.delete(campaignHistoryKey);
+      console.log(`[Campaign Engine] Skipping ${lead.email}: send already claimed by another run.`);
+      continue;
+    }
 
     let subject = '';
     let body = '';
@@ -1670,10 +1725,10 @@ export async function processNextCampaignSendBatch(
         });
 
         if (isFirebaseConfigured && db) {
-          safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignLeadDoc(lead.campaignLeadId), lead, { merge: true }).catch(() => {});
-          safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignSendHistoryDoc(historyRecord.historyId), historyRecord).catch(() => {});
+          await safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignLeadDoc(lead.campaignLeadId), lead, { merge: true });
+          await safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignSendHistoryDoc(historyRecord.historyId), historyRecord);
           if (currentRun) {
-            safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignRunDoc(currentRun.runId), currentRun, { merge: true }).catch(() => {});
+            await safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignRunDoc(currentRun.runId), currentRun, { merge: true });
           }
         }
         processedCount++;
@@ -1683,7 +1738,7 @@ export async function processNextCampaignSendBatch(
         lead.updatedAt = now;
 
         if (isFirebaseConfigured && db) {
-          safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignLeadDoc(lead.campaignLeadId), lead, { merge: true }).catch(() => {});
+          await safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignLeadDoc(lead.campaignLeadId), lead, { merge: true });
         }
 
         if (sendResult.isDailyLimitExceeded) {
@@ -1691,7 +1746,7 @@ export async function processNextCampaignSendBatch(
           campaign.lastError = 'Gmail Daily Sending Limit reached. Campaign paused.';
           campaign.updatedAt = now;
           if (isFirebaseConfigured && db) {
-            safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignDoc(campaignId), campaign, { merge: true }).catch(() => {});
+            await safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignDoc(campaignId), campaign, { merge: true });
           }
           break;
         }
@@ -1702,9 +1757,10 @@ export async function processNextCampaignSendBatch(
       lead.updatedAt = new Date().toISOString();
 
       if (isFirebaseConfigured && db) {
-        safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignLeadDoc(lead.campaignLeadId), lead, { merge: true }).catch(() => {});
+        await safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignLeadDoc(lead.campaignLeadId), lead, { merge: true });
       }
     } finally {
+      await finishLeadClaim(runHistoryKey, lead.sendStatus === 'SENT');
       inFlightLeadSendsSet.delete(runHistoryKey);
       inFlightLeadSendsSet.delete(campaignHistoryKey);
     }
@@ -1724,12 +1780,12 @@ export async function processNextCampaignSendBatch(
       run.status = 'COMPLETED';
       run.completedAt = now;
       if (isFirebaseConfigured && db) {
-        safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignRunDoc(run.runId), run, { merge: true }).catch(() => {});
+        await safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignRunDoc(run.runId), run, { merge: true });
       }
     }
 
     if (isFirebaseConfigured && db) {
-      safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignDoc(campaignId), campaign, { merge: true }).catch(() => {});
+      await safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignDoc(campaignId), campaign, { merge: true });
     }
   }
 
@@ -1792,12 +1848,12 @@ async function executeCampaignSendingEngine(campaignId: string, expectedRunId?: 
         run.status = 'COMPLETED';
         run.completedAt = now;
         if (isFirebaseConfigured && db) {
-          safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignRunDoc(run.runId), run, { merge: true }).catch(() => {});
+          await safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignRunDoc(run.runId), run, { merge: true });
         }
       }
 
       if (isFirebaseConfigured && db) {
-        safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignDoc(campaignId), campaign, { merge: true }).catch(() => {});
+        await safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignDoc(campaignId), campaign, { merge: true });
       }
       return;
     }
@@ -1843,6 +1899,18 @@ async function executeCampaignSendingEngine(campaignId: string, expectedRunId?: 
 
       inFlightLeadSendsSet.add(runHistoryKey);
       inFlightLeadSendsSet.add(campaignHistoryKey);
+
+      if (!(await claimLeadSend(runHistoryKey))) {
+
+        inFlightLeadSendsSet.delete(runHistoryKey);
+
+        inFlightLeadSendsSet.delete(campaignHistoryKey);
+
+        console.log(`[Campaign Engine] Skipping ${lead.email}: send already claimed by another run.`);
+
+        continue;
+
+      }
 
       // 4. Subject and Body generation (Predefined vs AI Generated)
       let subject = '';
@@ -1993,10 +2061,10 @@ async function executeCampaignSendingEngine(campaignId: string, expectedRunId?: 
 
           // Sync lead & history to Firestore
           if (isFirebaseConfigured && db) {
-            safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignLeadDoc(lead.campaignLeadId), lead, { merge: true }).catch(() => {});
-            safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignSendHistoryDoc(historyRecord.historyId), historyRecord).catch(() => {});
+            await safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignLeadDoc(lead.campaignLeadId), lead, { merge: true });
+            await safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignSendHistoryDoc(historyRecord.historyId), historyRecord);
             if (currentRun) {
-              safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignRunDoc(currentRun.runId), currentRun, { merge: true }).catch(() => {});
+              await safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignRunDoc(currentRun.runId), currentRun, { merge: true });
             }
           }
 
@@ -2007,7 +2075,7 @@ async function executeCampaignSendingEngine(campaignId: string, expectedRunId?: 
           lead.updatedAt = now;
 
           if (isFirebaseConfigured && db) {
-            safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignLeadDoc(lead.campaignLeadId), lead, { merge: true }).catch(() => {});
+            await safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignLeadDoc(lead.campaignLeadId), lead, { merge: true });
           }
           console.warn(`[Campaign Engine] Failed to dispatch to ${lead.email}: ${sendResult.error}`);
 
@@ -2018,7 +2086,7 @@ async function executeCampaignSendingEngine(campaignId: string, expectedRunId?: 
             campaign.lastError = 'Gmail Daily Sending Limit (550 5.4.5) reached on amaavigo@gmail.com. Campaign paused. Resets automatically in 24 hours, or you can run in Test Simulation mode.';
             campaign.updatedAt = now;
             if (isFirebaseConfigured && db) {
-              safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignDoc(campaignId), campaign, { merge: true }).catch(() => {});
+              await safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignDoc(campaignId), campaign, { merge: true });
             }
             break;
           }
@@ -2029,10 +2097,11 @@ async function executeCampaignSendingEngine(campaignId: string, expectedRunId?: 
         lead.updatedAt = new Date().toISOString();
 
         if (isFirebaseConfigured && db) {
-          safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignLeadDoc(lead.campaignLeadId), lead, { merge: true }).catch(() => {});
+          await safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignLeadDoc(lead.campaignLeadId), lead, { merge: true });
         }
         console.error(`[Campaign Engine] Error sending to ${lead.email}:`, err);
       } finally {
+        await finishLeadClaim(runHistoryKey, lead.sendStatus === 'SENT');
         inFlightLeadSendsSet.delete(runHistoryKey);
         inFlightLeadSendsSet.delete(campaignHistoryKey);
       }
@@ -2058,13 +2127,13 @@ async function executeCampaignSendingEngine(campaignId: string, expectedRunId?: 
           run.status = 'COMPLETED';
           run.completedAt = now;
           if (isFirebaseConfigured && db) {
-            safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignRunDoc(run.runId), run, { merge: true }).catch(() => {});
+            await safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignRunDoc(run.runId), run, { merge: true });
           }
         }
       }
 
       if (isFirebaseConfigured && db) {
-        safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignDoc(campaignId), campaign, { merge: true }).catch(() => {});
+        await safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignDoc(campaignId), campaign, { merge: true });
       }
       console.log(`[Campaign Engine] Campaign ${campaign.name} [Run: ${currentRunId}] marked COMPLETED.`);
     }
@@ -2153,7 +2222,8 @@ export function recalculateCampaignMetrics(campaignId: string): Campaign | undef
   };
 
   if (isFirebaseConfigured && db) {
-    safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignDoc(campaignId), camp, { merge: true }).catch(() => {});
+    // Synchronous helper: cannot await. Callers that must persist use recalculateAndPersistCampaignMetrics.
+    void safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignDoc(campaignId), camp, { merge: true });
   }
 
   return camp;
@@ -2362,9 +2432,9 @@ export async function handleIncomingCampaignLeadReply(params: {
 
     if (isFirebaseConfigured && db) {
       try {
-        safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignLeadDoc(matchedLead.campaignLeadId), matchedLead, { merge: true }).catch(() => {});
+        await safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignLeadDoc(matchedLead.campaignLeadId), matchedLead, { merge: true });
         const contactId = `contact-${matchedLead.email.replace(/[^a-z0-9]/gi, '_')}`;
-        safeSetDoc(tenantRepo(getCampaignActiveCtx()).contactDoc(contactId), {
+        await safeSetDoc(tenantRepo(getCampaignActiveCtx()).contactDoc(contactId), {
           contactId,
           firstName: matchedLead.firstName || matchedLead.name.split(' ')[0],
           lastName: matchedLead.lastName || matchedLead.name.split(' ').slice(1).join(' '),
@@ -2375,10 +2445,10 @@ export async function handleIncomingCampaignLeadReply(params: {
           createdAt: now,
           updatedAt: now,
           lastActivityAt: now,
-        }, { merge: true }).catch(() => {});
+        }, { merge: true });
 
         if (matchedLead.leadId) {
-          safeSetDoc(tenantRepo(getCampaignActiveCtx()).leadDoc(matchedLead.leadId), {
+          await safeSetDoc(tenantRepo(getCampaignActiveCtx()).leadDoc(matchedLead.leadId), {
             leadId: matchedLead.leadId,
             contactId,
             source: 'EMAIL',
@@ -2391,7 +2461,7 @@ export async function handleIncomingCampaignLeadReply(params: {
             status: matchedLead.demoStatus === 'BOOKED' ? 'DEMO_BOOKED' : 'ENGAGED',
             demoStatus: matchedLead.demoStatus,
             updatedAt: now,
-          }, { merge: true }).catch(() => {});
+          }, { merge: true });
         }
       } catch (e) {
         console.warn('Error syncing lead reply to Firestore:', e);

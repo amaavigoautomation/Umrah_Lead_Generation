@@ -425,6 +425,7 @@ export const DemoSchedulingView: React.FC<DemoSchedulingViewProps> = ({ leads = 
         method: 'POST',
         headers,
         body: JSON.stringify({
+          manual: true,
           messageText: simMessage,
           conversationHistory: [],
           accessToken: token || undefined,

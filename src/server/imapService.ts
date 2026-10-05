@@ -33,9 +33,6 @@ export interface ImapPollResult {
   timestamp: string;
 }
 
-import fs from 'fs';
-import path from 'path';
-
 let runtimeImapConfig: {
   host?: string;
   port?: number;
@@ -43,6 +40,47 @@ let runtimeImapConfig: {
   user?: string;
   pass?: string;
 } | null = null;
+
+// ---------------------------------------------------------------------------
+// Failure backoff: after a failed poll, wait before opening another connection.
+// Hammering Gmail with a fresh login every few seconds makes throttling worse.
+// ---------------------------------------------------------------------------
+let consecutiveFailures = 0;
+let imapBackoffUntil = 0;
+let lastImapErrorText = '';
+
+function registerImapFailure(errorText: string) {
+  consecutiveFailures += 1;
+  lastImapErrorText = errorText;
+  // 15s, 30s, 60s, 120s, 240s, then capped at 5 minutes
+  const waitMs = Math.min(5 * 60_000, 15_000 * Math.pow(2, consecutiveFailures - 1));
+  imapBackoffUntil = Date.now() + waitMs;
+}
+
+function registerImapSuccess() {
+  consecutiveFailures = 0;
+  imapBackoffUntil = 0;
+  lastImapErrorText = '';
+}
+
+/**
+ * imapflow reports almost every server rejection as the generic "Command failed".
+ * The real reason lives in extra fields on the error object. This collects them
+ * (never the full command text, which could contain credentials).
+ */
+export function describeImapError(err: any): string {
+  if (!err) return 'Unknown IMAP error';
+  const parts: string[] = [err.message || String(err)];
+  if (err.responseText) parts.push(`server said: ${err.responseText}`);
+  if (err.serverResponseCode) parts.push(`response code: ${err.serverResponseCode}`);
+  if (err.code) parts.push(`error code: ${err.code}`);
+  if (err.authenticationFailed) parts.push('authentication failed');
+  if (err.executedCommand) {
+    const verb = String(err.executedCommand).trim().split(/\s+/)[0];
+    if (verb) parts.push(`command: ${verb}`);
+  }
+  return parts.join(' | ');
+}
 
 export function updateImapConfig(newConfig: {
   host?: string;
@@ -59,6 +97,8 @@ export function updateImapConfig(newConfig: {
     user: newConfig.user !== undefined ? newConfig.user : current.user,
     pass: newConfig.pass !== undefined ? newConfig.pass : current.pass,
   };
+  // New credentials / settings: allow an immediate retry
+  registerImapSuccess();
   return getImapConfig();
 }
 
@@ -111,7 +151,7 @@ export function createResilientImapClient(config: ReturnType<typeof getImapConfi
 
   // CRITICAL: Attach 'error' handler immediately to prevent unhandled EventEmitter error crashes
   client.on('error', (err: any) => {
-    console.warn('[Resilient IMAP Client Notice]:', err?.message || err);
+    console.warn('[Resilient IMAP Client Notice]:', describeImapError(err));
   });
 
   return client;
@@ -155,6 +195,7 @@ export async function checkImapStatus(): Promise<{
   try {
     await client.connect();
     await safeCloseClient(client);
+    registerImapSuccess();
     return {
       configured: true,
       host: config.host,
@@ -164,7 +205,8 @@ export async function checkImapStatus(): Promise<{
       verified: true,
     };
   } catch (err: any) {
-    console.error('[IMAP Status] Connection check failed:', err?.message || err);
+    const detail = describeImapError(err);
+    console.error('[IMAP Status] Connection check failed:', detail);
     await safeCloseClient(client);
     return {
       configured: true,
@@ -173,7 +215,7 @@ export async function checkImapStatus(): Promise<{
       secure: config.secure,
       user: config.user,
       verified: false,
-      error: err.message || 'Failed to authenticate with IMAP server',
+      error: detail || 'Failed to authenticate with IMAP server',
     };
   }
 }
@@ -244,6 +286,20 @@ export async function pollUnreadEmails(markAsSeen: boolean = true): Promise<Imap
     };
   }
 
+  // Back off after a failure instead of opening a new login every few seconds
+  if (Date.now() < imapBackoffUntil) {
+    const waitSec = Math.ceil((imapBackoffUntil - Date.now()) / 1000);
+    return {
+      success: false,
+      configured: true,
+      checkedMailbox: config.user,
+      messagesFound: 0,
+      emails: [],
+      error: `IMAP polling paused for ${waitSec}s after a failure. Last error: ${lastImapErrorText}`,
+      timestamp: now,
+    };
+  }
+
   const client = createResilientImapClient(config);
   const fetchedEmails: FetchedInboundEmail[] = [];
 
@@ -254,13 +310,13 @@ export async function pollUnreadEmails(markAsSeen: boolean = true): Promise<Imap
     const lock = await client.getMailboxLock('INBOX');
 
     try {
-      // Get total messages count
-      const mailboxStatus = await client.status('INBOX', { messages: true, unseen: true });
-      const totalMessages = mailboxStatus.messages || 0;
+      // Total messages from the already-selected mailbox (no extra STATUS command needed)
+      const totalMessages = Number((client.mailbox as any)?.exists) || 0;
 
       if (totalMessages === 0) {
         lock.release();
         await safeCloseClient(client);
+        registerImapSuccess();
         return {
           success: true,
           configured: true,
@@ -290,7 +346,27 @@ export async function pollUnreadEmails(markAsSeen: boolean = true): Promise<Imap
       const startSeq = Math.max(1, totalMessages - inspectCount + 1);
       const range = `${startSeq}:*`;
 
+      // STEP 1: collect message headers only. No other IMAP commands and no Firestore
+      // calls inside this loop (imapflow does not allow commands while a FETCH is streaming).
+      const headerBatch: Array<{
+        seq: number;
+        uid: number;
+        envelope: any;
+        flags: Set<string> | undefined;
+        internalDate: Date | string | undefined;
+      }> = [];
       for await (const message of client.fetch(range, { envelope: true, flags: true, uid: true, internalDate: true })) {
+        headerBatch.push({
+          seq: message.seq,
+          uid: message.uid,
+          envelope: message.envelope,
+          flags: message.flags as any,
+          internalDate: message.internalDate as any,
+        });
+      }
+
+      // STEP 2: evaluate each header (Firestore + flag updates are safe now)
+      for (const message of headerBatch) {
         const msgId = message.envelope?.messageId || `seq-${message.seq}`;
         const uidStr = String(message.uid);
         const normId = normalizeIdentifier(msgId);
@@ -449,7 +525,7 @@ export async function pollUnreadEmails(markAsSeen: boolean = true): Promise<Imap
             } catch {}
           }
         } catch (msgErr) {
-          console.error(`[IMAP Poll] Error processing message seq ${seq}:`, msgErr);
+          console.error(`[IMAP Poll] Error processing message seq ${seq}:`, describeImapError(msgErr));
         }
       }
     } finally {
@@ -457,6 +533,7 @@ export async function pollUnreadEmails(markAsSeen: boolean = true): Promise<Imap
     }
 
     await safeCloseClient(client);
+    registerImapSuccess();
 
     return {
       success: true,
@@ -467,8 +544,10 @@ export async function pollUnreadEmails(markAsSeen: boolean = true): Promise<Imap
       timestamp: now,
     };
   } catch (err: any) {
-    console.error('[IMAP Poll] Connection or polling error:', err?.message || err);
+    const detail = describeImapError(err);
+    console.error('[IMAP Poll] Connection or polling error:', detail);
     await safeCloseClient(client);
+    registerImapFailure(detail);
 
     return {
       success: false,
@@ -476,7 +555,7 @@ export async function pollUnreadEmails(markAsSeen: boolean = true): Promise<Imap
       checkedMailbox: config.user,
       messagesFound: 0,
       emails: [],
-      error: err.message || 'IMAP connection failed',
+      error: detail || 'IMAP connection failed',
       timestamp: now,
     };
   }

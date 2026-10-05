@@ -1411,7 +1411,10 @@ export async function getActiveBookingForLeadOrConversation(
  */
 export function detectDemoSchedulingIntent(text: string): boolean {
   if (!text || typeof text !== 'string') return false;
-  const t = text.toLowerCase();
+  // Only what the sender newly wrote. Quoted headers such as
+  // "Sent: Monday, October 5, 2026 6:20 PM" must never count as scheduling intent.
+  const t = stripQuotedEmailHistory(text).toLowerCase();
+  if (!t) return false;
 
   const patterns = [
     /schedule\s+(a\s+)?(demo|meeting|call|walkthrough|session)/i,
@@ -1434,10 +1437,11 @@ export function detectDemoSchedulingIntent(text: string): boolean {
     if (p.test(t)) return true;
   }
 
-  // Also check if text specifies days/times in context of a demo reply
+  // A day + a time only counts when it is also about meeting / a demo
   if (
     /(monday|tuesday|wednesday|thursday|friday|tomorrow|next\s+week)/i.test(t) &&
-    /(\d{1,2}\s*(am|pm)|morning|afternoon|evening|\d{1,2}:\d{2})/i.test(t)
+    /(\d{1,2}\s*(am|pm)|morning|afternoon|evening|\d{1,2}:\d{2})/i.test(t) &&
+    /(demo|meeting|call|walkthrough|slot|schedule|available|availability|connect|talk|meet)/i.test(t)
   ) {
     return true;
   }
@@ -1470,8 +1474,11 @@ export async function processSchedulingConversationTurn(params: {
   automated?: boolean;
   [key: string]: any;
 }): Promise<SchedulingTurnResult> {
-  // Replies must never book demos on their own unless explicitly enabled.
-  if (params.automated && process.env.AUTO_DEMO_BOOKING !== 'true') {
+  // HARD RULE: only an explicit manual call (the Demo Scheduling tab sends manual: true)
+  // may book, reschedule or cancel a demo. Every automated path (inbound email, WhatsApp,
+  // browser auto-reply, old cached clients) falls through to the normal AI reply.
+  // No environment flag can override this.
+  if (params.manual !== true) {
     return { handled: false, replyText: '', action: 'NOT_DEMO_INTENT' };
   }
   const messageText = params.messageText || '';

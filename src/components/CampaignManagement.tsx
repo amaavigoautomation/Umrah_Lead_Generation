@@ -365,21 +365,45 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
     setSelectedCampaign(camp);
     setSearchQuery('');
     setLeadStatusFilter('ALL');
-    loadSelectedCampaignDetails(camp.campaignId);
+    setCampaignLeads([]);
+    setCampaignRuns([]);
+    // details are loaded by the selectedCampaignId effect
   };
 
-  // Fetch all campaigns and templates
+  // fetch with a hard timeout so a slow/hung server call can never freeze the page or the poller
+  const fetchJsonWithTimeout = async (url: string, init?: RequestInit, timeoutMs = 12000): Promise<any> => {
+    const controller = new AbortController();
+    const t = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const res = await fetch(url, { ...init, signal: controller.signal });
+      if (!res.ok) return null;
+      return await res.json().catch(() => null);
+    } catch {
+      return null;
+    } finally {
+      clearTimeout(t);
+    }
+  };
+
+  const templatesLoadedRef = useRef(false);
+  const loadSeqRef = useRef(0);
+  const detailsSeqRef = useRef(0);
+
+  // Fetch all campaigns (and templates only once - they rarely change)
   const loadData = async () => {
+    const seq = ++loadSeqRef.current;
     try {
       setRefreshing(true);
-      const [campRes, tplRes] = await Promise.all([
-        fetch('/api/campaigns').catch(() => null),
-        fetch('/api/templates').catch(() => null),
+      const needTemplates = !templatesLoadedRef.current;
+      const [campData, tplData] = await Promise.all([
+        fetchJsonWithTimeout('/api/campaigns'),
+        needTemplates ? fetchJsonWithTimeout('/api/templates') : Promise.resolve(null),
       ]);
-      const campData = campRes && campRes.ok ? await campRes.json().catch(() => ({})) : {};
-      const tplData = tplRes && tplRes.ok ? await tplRes.json().catch(() => ({})) : {};
 
-      if (campData.campaigns && Array.isArray(campData.campaigns)) {
+      // A newer request has already been issued: drop this (possibly stale) response
+      if (seq !== loadSeqRef.current) return;
+
+      if (campData && campData.campaigns && Array.isArray(campData.campaigns)) {
         setCampaigns(campData.campaigns);
         campaignsRef.current = campData.campaigns;
 
@@ -395,11 +419,11 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
           setSelectedCampaignId(firstCamp.campaignId);
           selectedCampaignIdRef.current = firstCamp.campaignId;
           setSelectedCampaign(firstCamp);
-          loadSelectedCampaignDetails(firstCamp.campaignId);
         }
       }
 
-      if (tplData.templates && Array.isArray(tplData.templates)) {
+      if (tplData && tplData.templates && Array.isArray(tplData.templates)) {
+        templatesLoadedRef.current = true;
         setTemplates(tplData.templates);
         setSelectedTemplateId((curr) => {
           if (curr && tplData.templates.some((t: EmailTemplate) => t.templateId === curr)) {
@@ -417,40 +441,33 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
     } catch (e) {
       console.warn('Error loading campaigns/templates:', e);
     } finally {
-      setRefreshing(false);
+      if (seq === loadSeqRef.current) setRefreshing(false);
     }
   };
 
-  // Load selected campaign details (leads and runs)
+  // Load selected campaign details (leads and runs). The campaign object itself comes from the list call.
   const loadSelectedCampaignDetails = async (campaignId: string) => {
     if (!campaignId) return;
-    let hasLoadedApiLeads = false;
+    const seq = ++detailsSeqRef.current;
     try {
-      const [campRes, leadsRes, runsRes] = await Promise.all([
-        fetch(`/api/campaigns/${campaignId}`).catch(() => null),
-        fetch(`/api/campaigns/${campaignId}/leads`).catch(() => null),
-        fetch(`/api/campaigns/${campaignId}/runs`).catch(() => null),
+      const [leadsData, runsData] = await Promise.all([
+        fetchJsonWithTimeout(`/api/campaigns/${campaignId}/leads`),
+        fetchJsonWithTimeout(`/api/campaigns/${campaignId}/runs`),
       ]);
-      const campData = campRes && campRes.ok ? await campRes.json().catch(() => ({})) : {};
-      const leadsData = leadsRes && leadsRes.ok ? await leadsRes.json().catch(() => ({})) : {};
-      const runsData = runsRes && runsRes.ok ? await runsRes.json().catch(() => ({})) : {};
 
-      if (campData.campaign && selectedCampaignIdRef.current === campaignId) {
-        setSelectedCampaign(campData.campaign);
-      }
-      if (leadsData.leads && Array.isArray(leadsData.leads) && leadsData.leads.length > 0 && selectedCampaignIdRef.current === campaignId) {
+      // Ignore out-of-order responses and responses for a campaign that is no longer selected
+      if (seq !== detailsSeqRef.current || selectedCampaignIdRef.current !== campaignId) return;
+
+      // Accept empty arrays too, otherwise the previous campaign's leads (or stale statuses) stay on screen
+      if (leadsData && Array.isArray(leadsData.leads)) {
         setCampaignLeads(leadsData.leads);
-        hasLoadedApiLeads = true;
       }
-      if (runsData.runs && selectedCampaignIdRef.current === campaignId) {
+      if (runsData && Array.isArray(runsData.runs)) {
         setCampaignRuns(runsData.runs);
       }
     } catch (e) {
       console.warn('Error loading campaign leads/runs from API:', e);
     }
-
-    // Default sample leads fallback if still empty for default campaign
-    setCampaignLeads((curr) => curr);
   };
 
   // Single sequential poller: never overlaps itself, slows down when idle.
@@ -471,7 +488,7 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
         const runningCamp = campaignsRef.current.find((c) => c.status === 'RUNNING');
         running = !!runningCamp;
         if (runningCamp) {
-          await fetch(`/api/campaigns/${runningCamp.campaignId}/process`, { method: 'POST' }).catch(() => null);
+          await fetchJsonWithTimeout(`/api/campaigns/${runningCamp.campaignId}/process`, { method: 'POST' }, 20000);
         }
         await loadData();
         const activeId = selectedCampaignIdRef.current;

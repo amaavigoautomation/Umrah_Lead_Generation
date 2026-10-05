@@ -13,6 +13,8 @@ import {
   deleteDoc,
   createDoc,
   updateDoc,
+  query,
+  where,
 } from './adminFirestore.js';
 import { isFirebaseConfigured } from '../firebase/config.js';
 import { db } from './adminFirestore.js';
@@ -446,7 +448,12 @@ function purgeCampaignFromMemory(campaignId: string) {
   }
 }
 
-let isCampaignStoreInitialized = false;
+// Per-tenant sync bookkeeping (the in-memory stores are per tenant, so is this).
+const initializedTenants = new Set<string>();
+const syncState = new Map<string, { inFlight: Promise<void> | null; lastSyncAt: number }>();
+const SYNC_MIN_INTERVAL_MS = 8_000;   // background / non-forced callers
+const SYNC_FORCED_MIN_GAP_MS = 3_000; // even a forced refresh never re-scans more often than this
+const SYNC_RESPONSE_BUDGET_MS = 6_000; // max time a request waits for a sync before answering
 
 let hasLoadedInitialDefaults = false;
 
@@ -471,14 +478,37 @@ function ensureDefaultsInMemory() {
  * Firestore is the single source of truth: documents deleted from the database
  * are immediately purged from in-memory maps.
  */
-export async function syncCampaignStoreFromFirestore(): Promise<void> {
+export async function syncCampaignStoreFromFirestore(force: boolean = true): Promise<void> {
   ensureDefaultsInMemory();
 
   if (!isFirebaseConfigured || !db) return;
 
-  // Add 2.5s timeout wrapper to prevent hanging serverless responses on Vercel
-  const timeoutPromise = new Promise<void>((resolve) => setTimeout(resolve, 2500));
+  const tenantId = getCampaignActiveCtx().tenantId;
+  let state = syncState.get(tenantId);
+  if (!state) {
+    state = { inFlight: null, lastSyncAt: 0 };
+    syncState.set(tenantId, state);
+  }
 
+  // Share ONE scan between concurrent requests, and never re-scan the whole
+  // database more often than the minimum gap (the page polls every few seconds).
+  if (!state.inFlight) {
+    const minGap = force ? SYNC_FORCED_MIN_GAP_MS : SYNC_MIN_INTERVAL_MS;
+    if (Date.now() - state.lastSyncAt < minGap) return;
+    const st = state;
+    st.inFlight = runCampaignStoreSync().finally(() => {
+      st.inFlight = null;
+      st.lastSyncAt = Date.now();
+    });
+  }
+
+  // Don't hang a serverless response forever; the scan keeps running and later
+  // requests share it instead of starting another one.
+  const timeoutPromise = new Promise<void>((resolve) => setTimeout(resolve, SYNC_RESPONSE_BUDGET_MS));
+  await Promise.race([state.inFlight, timeoutPromise]);
+}
+
+async function runCampaignStoreSync(): Promise<void> {
   const syncPromise = (async () => {
     try {
       // Execute all 5 Firestore queries concurrently in parallel
@@ -587,8 +617,10 @@ export async function syncCampaignStoreFromFirestore(): Promise<void> {
             if (existing) {
               const existingTime = new Date(existing.updatedAt || 0).getTime();
               const fsTime = new Date(data.updatedAt || 0).getTime();
-              // Preserve memory lead if it is currently PENDING or if memory is newer
-              if (existing.sendStatus === 'PENDING' || existingTime > fsTime) {
+              // Memory wins ONLY if it is genuinely newer, or the lead is being sent right now.
+              // (It used to also win whenever memory said PENDING, which pinned leads to
+              // "pending" forever on any server instance that had loaded them early.)
+              if (existingTime > fsTime || existing.sendStatus === 'SENDING') {
                 return;
               }
             }
@@ -625,16 +657,17 @@ export async function syncCampaignStoreFromFirestore(): Promise<void> {
     }
   })();
 
-  await Promise.race([syncPromise, timeoutPromise]);
+  await syncPromise;
 }
 
 /**
  * Initializes campaign data from Firestore, ensuring idempotency and cross-restart safety
  */
 export async function initCampaignStore(forceSync: boolean = false) {
-  if (!isCampaignStoreInitialized || forceSync) {
-    isCampaignStoreInitialized = true;
-    await syncCampaignStoreFromFirestore();
+  const tenantId = getCampaignActiveCtx().tenantId;
+  if (!initializedTenants.has(tenantId) || forceSync) {
+    initializedTenants.add(tenantId);
+    await syncCampaignStoreFromFirestore(forceSync);
   }
 }
 
@@ -776,8 +809,9 @@ export function getAllCampaigns(): Campaign[] {
     ensureDefaultsInMemory();
   }
   const campaigns = Array.from(campaignsMap.values());
-  // Recalculate metrics on the fly from leads
-  return campaigns.map((camp) => recalculateCampaignMetrics(camp.campaignId) || camp).sort(
+  // Recalculate metrics on the fly from leads. READ path: never write to Firestore here
+  // (a stale server instance used to overwrite correct counts/status on every poll).
+  return campaigns.map((camp) => recalculateCampaignMetrics(camp.campaignId, false) || camp).sort(
     (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
   );
 }
@@ -810,7 +844,7 @@ export function getCampaignById(campaignId: string): Campaign | undefined {
     ensureDefaultsInMemory();
   }
   const camp = campaignsMap.get(campaignId);
-  return camp ? recalculateCampaignMetrics(campaignId) : undefined;
+  return camp ? recalculateCampaignMetrics(campaignId, false) : undefined;
 }
 
 export async function getCampaignByIdAsync(campaignId: string): Promise<Campaign | undefined> {
@@ -821,7 +855,7 @@ export async function getCampaignByIdAsync(campaignId: string): Promise<Campaign
   if (!camp) {
     camp = await ensureCampaignInStore(campaignId);
   }
-  return camp ? recalculateCampaignMetrics(campaignId) : undefined;
+  return camp ? recalculateCampaignMetrics(campaignId, false) : undefined;
 }
 
 export function getCampaignLeads(campaignId: string): CampaignLead[] {
@@ -841,7 +875,10 @@ export async function getCampaignLeadsFromDb(campaignId: string): Promise<Campai
 
   if (leads.length === 0 && isFirebaseConfigured && db) {
     try {
-      const snap = await getDocs(tenantRepo(getCampaignActiveCtx()).campaignLeads()).catch(() => null);
+      // Only this campaign's leads (was: a scan of EVERY lead of every campaign)
+      const snap = await getDocs(
+        query(tenantRepo(getCampaignActiveCtx()).campaignLeads(), where('campaignId', '==', campaignId))
+      ).catch(() => null);
       if (snap && !snap.empty) {
         snap.forEach((d) => {
           const l = d.data() as CampaignLead;
@@ -2266,7 +2303,7 @@ export function extractCleanEmail(raw: string): string {
 /**
  * Recalculates metrics for a campaign from its leads and persists to Firestore
  */
-export function recalculateCampaignMetrics(campaignId: string): Campaign | undefined {
+export function recalculateCampaignMetrics(campaignId: string, persist: boolean = true): Campaign | undefined {
   const camp = campaignsMap.get(campaignId);
   if (!camp) return undefined;
 
@@ -2293,8 +2330,9 @@ export function recalculateCampaignMetrics(campaignId: string): Campaign | undef
     demoBooked,
   };
 
-  if (isFirebaseConfigured && db) {
+  if (persist && isFirebaseConfigured && db) {
     // Synchronous helper: cannot await. Callers that must persist use recalculateAndPersistCampaignMetrics.
+    // Read endpoints pass persist=false so a GET never writes to the database.
     void safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignDoc(campaignId), camp, { merge: true });
   }
 
@@ -2721,4 +2759,3 @@ export async function processActiveRunningCampaignsBatch(batchSize: number = 500
     isAutoProcessingCampaigns = false;
   }
 }
-

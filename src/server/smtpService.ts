@@ -4,6 +4,7 @@ import fs from 'fs';
 import path from 'path';
 import { doc, getDoc, setDoc } from './adminFirestore.js';
 import { globalEmailRouteDoc } from './tenantRepo.js';
+import { resolveTenantSender } from './tenantEmailService.js';
 import { isFirebaseConfigured } from '../firebase/config.js';
 import { db } from './adminFirestore.js';
 
@@ -425,7 +426,7 @@ function toResendAttachments(list?: EmailAttachmentParam[]): any[] | undefined {
 
 type ResendOutcome = SendMailResult & { definiteRejection?: boolean };
 
-async function sendViaResend(params: SendMailParams): Promise<ResendOutcome> {
+async function sendViaResend(params: SendMailParams, override?: { from: string; replyTo?: string }): Promise<ResendOutcome> {
   const cfg = getResendConfig();
   try {
     const resend = getResendClient(cfg.apiKey);
@@ -438,10 +439,12 @@ async function sendViaResend(params: SendMailParams): Promise<ResendOutcome> {
     };
 
     // Replies must come back to the mailbox we poll over IMAP, not to the Resend sending address.
-    const replyTo = params.replyTo || (process.env.RESEND_REPLY_TO || '').trim() || getSmtpConfig().user || undefined;
+    const replyTo = override
+      ? params.replyTo || override.replyTo || undefined
+      : params.replyTo || (process.env.RESEND_REPLY_TO || '').trim() || getSmtpConfig().user || undefined;
 
     const { data, error } = await resend.emails.send({
-      from: cfg.from,
+      from: override?.from || cfg.from,
       to: params.to,
       subject: params.subject,
       text: params.text,
@@ -484,6 +487,22 @@ async function sendViaResend(params: SendMailParams): Promise<ResendOutcome> {
  */
 export async function sendLiveEmail(params: SendMailParams): Promise<SendMailResult> {
   const cfg = getResendConfig();
+
+  // Workspace-scoped sends: the From address must come from the workspace's own verified domain.
+  // Never fall back to SMTP here (that would send as the platform's shared Gmail mailbox).
+  const forceSmtp = (process.env.EMAIL_PROVIDER || '').trim().toLowerCase() === 'smtp';
+  if (params.tenantId && cfg.apiKey && !forceSmtp) {
+    const sender = await resolveTenantSender(params.tenantId);
+    if (sender.ok === false) {
+      console.warn(`[Email] Blocked send for tenant ${params.tenantId}: ${sender.error}`);
+      return { success: false, error: sender.error, simulated: false, provider: 'resend' };
+    }
+    if (sender.source === 'tenant') {
+      const { definiteRejection: _d, ...r } = await sendViaResend(params, { from: sender.from, replyTo: sender.replyTo });
+      return r;
+    }
+    // source === 'platform' (grandfathered tenant): continue with the platform sender below.
+  }
   if (!cfg.configured) {
     return sendViaSmtp(params);
   }

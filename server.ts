@@ -15,6 +15,18 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT: number = Number(process.env.PORT) || 3000;
 
+// Stripe webhook needs the raw body for signature verification, so it is registered BEFORE the JSON parser.
+app.post('/api/webhooks/stripe', express.raw({ type: '*/*', limit: '2mb' }), async (req, res) => {
+  try {
+    const { handleStripeWebhook } = await import('./src/server/billingService.js');
+    const result = await handleStripeWebhook(req.body as Buffer, req.headers['stripe-signature'] as string | undefined);
+    res.status(result.status).json({ message: result.message });
+  } catch (err) {
+    console.error('[Stripe webhook error]:', err);
+    res.status(500).json({ error: 'webhook handler failed' });
+  }
+});
+
 // Body parsers
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));

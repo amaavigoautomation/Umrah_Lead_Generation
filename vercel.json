@@ -28,6 +28,10 @@
       "destination": "/api/webhooks/umrah-demo"
     },
     {
+      "source": "/api/webhooks/stripe",
+      "destination": "/api/webhooks/stripe"
+    },
+    {
       "source": "/api/leads/inbound",
       "destination": "/api/leads/inbound"
     },

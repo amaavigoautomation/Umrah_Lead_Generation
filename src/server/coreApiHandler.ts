@@ -79,6 +79,7 @@ import { setSchedulingActiveContext } from './demoSchedulingService.js';
 import { setInboundActiveContext } from './inboundPipeline.js';
 import { getEntitlements, hasFeature, featureForUrl, listPlans, savePlan, getEffectiveLimits, invalidateEntitlements } from './entitlements.js';
 import { FEATURES, LIMITS } from '../shared/features.js';
+import { createCheckout, createPortal, syncCheckoutSession, billingConfig, BillingError } from './billingService.js';
 import { setWhatsAppActiveContext } from './whatsappInboundPipeline.js';
 import {
   tenantRepo,
@@ -295,13 +296,81 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
     }
   }
 
+  // Payment lock: a workspace that has not paid (or whose grace period ended) can only reach billing.
+  if (!isPublicPath && !isPlatformAdmin) {
+    const ent = await getEntitlements(resolvedTenantId).catch(() => null);
+    const billingOpen =
+      url === '/api/entitlements' ||
+      url === '/api/plans' ||
+      url === '/api/auth/me' ||
+      url === '/api/health' ||
+      url.startsWith('/api/billing') ||
+      (req.method === 'GET' && url === `/api/tenants/${resolvedTenantId}`);
+    if (ent?.billing.locked && !billingOpen) {
+      res.statusCode = 402;
+      res.setHeader('Content-Type', 'application/json');
+      res.end(JSON.stringify({ error: 'Payment required. Choose or fix your plan to continue.', code: 'billing_required', billingStatus: ent.billing.status }));
+      return true;
+    }
+  }
+
+  // Billing (workspace admins): /api/billing, /checkout, /portal, /sync
+  if (url === '/api/billing' || url.startsWith('/api/billing/')) {
+    res.setHeader('Content-Type', 'application/json');
+    if (isPlatformAdmin || userRole !== 'admin') {
+      res.statusCode = 403;
+      res.end(JSON.stringify({ error: 'Workspace admin only' }));
+      return true;
+    }
+    const origin = String(req.headers?.origin || process.env.APP_URL || `https://${req.headers?.host}`).replace(/\/+$/, '');
+    try {
+      if (url === '/api/billing' && req.method === 'GET') {
+        const ent = await getEntitlements(resolvedTenantId, { fresh: true });
+        const tSnap = await getDoc(globalTenantDoc(resolvedTenantId));
+        const t: any = tSnap.exists() ? tSnap.data() : {};
+        res.statusCode = 200;
+        res.end(
+          JSON.stringify({
+            billing: ent.billing,
+            planId: ent.planId,
+            planName: ent.planName,
+            hasCustomer: Boolean(t.stripeCustomerId),
+            stripeConfigured: Boolean(billingConfig().secretKey),
+            plans: (await listPlans()).filter((p) => p.active).map((p) => ({ id: p.id, name: p.name, priceMonthly: p.priceMonthly, currency: p.currency, features: p.features, limits: p.limits, purchasable: Boolean(p.stripePriceId) })),
+          })
+        );
+        return true;
+      }
+      if (url === '/api/billing/checkout' && req.method === 'POST') {
+        res.statusCode = 200;
+        res.end(JSON.stringify(await createCheckout({ tenantId: resolvedTenantId, planId: String(body?.planId || ''), email: userEmail, origin })));
+        return true;
+      }
+      if (url === '/api/billing/portal' && req.method === 'POST') {
+        res.statusCode = 200;
+        res.end(JSON.stringify(await createPortal({ tenantId: resolvedTenantId, origin })));
+        return true;
+      }
+      if (url === '/api/billing/sync' && req.method === 'POST') {
+        const result = await syncCheckoutSession(resolvedTenantId, String(body?.sessionId || ''));
+        res.statusCode = 200;
+        res.end(JSON.stringify({ ...result, entitlements: await getEntitlements(resolvedTenantId, { fresh: true }) }));
+        return true;
+      }
+    } catch (err: any) {
+      res.statusCode = err instanceof BillingError ? err.status : 500;
+      res.end(JSON.stringify({ error: err?.message || 'Billing request failed' }));
+      return true;
+    }
+  }
+
   if (url === '/api/entitlements' && req.method === 'GET') {
     res.setHeader('Content-Type', 'application/json');
     res.statusCode = 200;
     if (isPlatformAdmin) {
-      res.end(JSON.stringify({ planId: 'platform', planName: 'Platform', features: Object.fromEntries(FEATURES.map((f) => [f.key, true])), limits: {} }));
+      res.end(JSON.stringify({ planId: 'platform', planName: 'Platform', features: Object.fromEntries(FEATURES.map((f) => [f.key, true])), limits: {}, billing: { status: 'active', locked: false, planSource: 'manual' } }));
     } else {
-      res.end(JSON.stringify(await getEntitlements(resolvedTenantId)));
+      res.end(JSON.stringify(await getEntitlements(resolvedTenantId, { fresh: String(rawUrl).includes('fresh=1') })));
     }
     return true;
   }
@@ -447,7 +516,7 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
   }
 
   if (url === '/api/tenants' && req.method === 'POST') {
-    const { id, name, plan, contactEmail, timezone, defaultCurrency } = body;
+    const { id, name, plan, contactEmail, timezone, defaultCurrency, billing, planId: newPlanId } = body;
     const tenantId = (id || name || '').toLowerCase().replace(/[^a-z0-9_-]/g, '-').trim();
 
     if (!tenantId) {
@@ -462,7 +531,21 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
       enterprise: { monthlyAiTokens: 5_000_000, dailyOutboundSends: 10_000, hourlyOutboundSends: 1_000, seats: 25 },
     };
 
-    const newTenant: Tenant = {
+    // Billing: by default the customer must pick and pay for a plan (locked until then).
+    // 'manual' = super admin grants a plan directly (demo, free, invoiced outside Stripe).
+    let billingFields: Record<string, any> = { billingStatus: 'awaiting_plan', planSource: 'stripe' };
+    if (billing === 'manual') {
+      const known = (await listPlans()).some((p) => p.id === newPlanId);
+      if (!known) {
+        res.statusCode = 400;
+        res.end(JSON.stringify({ error: 'Choose a plan for a manually granted workspace' }));
+        return true;
+      }
+      billingFields = { billingStatus: 'manual', planSource: 'manual', planId: newPlanId };
+    }
+
+    const newTenant: Tenant & Record<string, any> = {
+      ...billingFields,
       id: tenantId,
       name: name || tenantId,
       slug: tenantId,
@@ -528,6 +611,18 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
             }
             updates.planId = b.planId;
           }
+          const BILLING_STATUSES = ['awaiting_plan', 'trialing', 'active', 'past_due', 'canceled', 'manual'];
+          if (typeof b.billingStatus === 'string' && BILLING_STATUSES.includes(b.billingStatus)) {
+            updates.billingStatus = b.billingStatus;
+            if (b.billingStatus !== 'past_due') updates.pastDueSince = null;
+          }
+          if (updates.planId && updates.billingStatus === undefined) {
+            // Setting a plan by hand is a manual grant that Stripe events will not overwrite.
+            updates.billingStatus = 'manual';
+            updates.planSource = 'manual';
+          }
+          if (b.planSource === 'manual' || b.planSource === 'stripe') updates.planSource = b.planSource;
+          if (b.billingStatus === 'manual') updates.planSource = 'manual';
           if (b.overrides && typeof b.overrides === 'object') {
             const ov: { features: Record<string, boolean>; limits: Record<string, number> } = { features: {}, limits: {} };
             for (const f of FEATURES) if (typeof b.overrides.features?.[f.key] === 'boolean') ov.features[f.key] = b.overrides.features[f.key];

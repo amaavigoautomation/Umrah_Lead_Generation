@@ -68,7 +68,7 @@ import {
 } from './demoSchedulingService.js';
 import { isFirebaseConfigured } from '../firebase/config.js';
 import { db } from './adminFirestore.js';
-import { getDoc, getDocs, setDoc, updateDoc, deleteDoc, collection, doc } from './adminFirestore.js';
+import { getDoc, getDocs, setDoc, updateDoc, deleteDoc, collection, doc, query as fsQuery, where as fsWhere } from './adminFirestore.js';
 import { safeSetDoc } from './firestoreUtils.js';
 import {
   setCampaignActiveContext,
@@ -88,7 +88,7 @@ import {
   globalChannelRouteDoc,
   globalDomainRouteDoc,
 } from './tenantRepo.js';
-import { getAdminAuth } from './firebaseAdmin.js';
+import { getAdminAuth, createTenantUser, createPasswordSetupLink } from './firebaseAdmin.js';
 import { authenticateRequest } from './authMiddleware.js';
 import {
   handleEnableAutoFollowUp,
@@ -120,6 +120,12 @@ import {
  * 1. Vite Development Server (via connect middleware in vite-plugin-api.ts)
  * 2. Vercel Production Serverless Functions (via api/index.ts or api/inbound/whatsapp.ts)
  */
+const PLAN_LIMITS: Record<string, { monthlyAiTokens: number; dailyOutboundSends: number; hourlyOutboundSends: number; seats: number }> = {
+  starter: { monthlyAiTokens: 500_000, dailyOutboundSends: 500, hourlyOutboundSends: 100, seats: 3 },
+  growth: { monthlyAiTokens: 2_000_000, dailyOutboundSends: 3_000, hourlyOutboundSends: 500, seats: 10 },
+  enterprise: { monthlyAiTokens: 5_000_000, dailyOutboundSends: 10_000, hourlyOutboundSends: 1_000, seats: 25 },
+};
+
 export async function handleCoreApi(req: any, res: any): Promise<boolean> {
   // Normalize URL by parsing pathname and stripping query parameters & trailing slashes
   let rawUrl = req.url || '';
@@ -407,6 +413,12 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
     };
 
     if (isFirebaseConfigured && db) {
+      const existing = await getDoc(globalTenantDoc(tenantId));
+      if (existing.exists()) {
+        res.statusCode = 409;
+        res.end(JSON.stringify({ error: `A workspace with id "${tenantId}" already exists` }));
+        return true;
+      }
       await safeSetDoc(globalTenantDoc(tenantId), newTenant, { merge: true });
     }
 
@@ -434,12 +446,118 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
 
     if (req.method === 'PATCH') {
       if (isFirebaseConfigured && db) {
-        const updates = { ...body, updatedAt: new Date().toISOString() };
+        // Whitelist: workspace admins may edit profile fields only. Plan, status and
+        // limits are platform-admin only (a workspace admin must not raise their own limits).
+        const b = body || {};
+        const updates: Record<string, any> = {};
+        for (const k of ['name', 'contactEmail', 'contactPhone', 'timezone', 'defaultCurrency']) {
+          if (typeof b[k] === 'string') updates[k] = b[k].trim();
+        }
+        if (isPlatformAdmin) {
+          if (b.status === 'active' || b.status === 'suspended') updates.status = b.status;
+          if (typeof b.plan === 'string' && PLAN_LIMITS[b.plan]) {
+            updates.plan = b.plan;
+            updates.limits = PLAN_LIMITS[b.plan];
+          }
+          if (b.limits && typeof b.limits === 'object') {
+            const base = updates.limits || (await getDoc(globalTenantDoc(tId))).data()?.limits || PLAN_LIMITS.growth;
+            const merged: Record<string, number> = { ...base };
+            for (const k of ['monthlyAiTokens', 'dailyOutboundSends', 'hourlyOutboundSends', 'seats']) {
+              const n = Number(b.limits[k]);
+              if (Number.isFinite(n) && n >= 0) merged[k] = Math.floor(n);
+            }
+            updates.limits = merged;
+          }
+        }
+        if (Object.keys(updates).length === 0) {
+          res.statusCode = 400;
+          res.end(JSON.stringify({ error: 'No valid fields to update' }));
+          return true;
+        }
+        updates.updatedAt = new Date().toISOString();
         await updateDoc(globalTenantDoc(tId), updates);
         res.statusCode = 200;
         res.end(JSON.stringify({ success: true, updated: updates }));
         return true;
       }
+    }
+  }
+
+  // Workspace users (platform admin only): /api/tenants/:tenantId/users
+  const tenantUsersMatch = url.match(/^\/api\/tenants\/([^/?]+)\/users$/);
+  if (tenantUsersMatch) {
+    const tId = tenantUsersMatch[1];
+    res.setHeader('Content-Type', 'application/json');
+    if (!isPlatformAdmin) {
+      res.statusCode = 403;
+      res.end(JSON.stringify({ error: 'Platform admin only' }));
+      return true;
+    }
+
+    if (req.method === 'GET') {
+      try {
+        const snap = await getDocs(fsQuery(globalUsersCol(), fsWhere('tenantId', '==', tId)));
+        const users = snap.docs.map((d) => {
+          const u: any = d.data();
+          return {
+            uid: d.id,
+            email: u.email,
+            name: u.name || u.displayName || '',
+            role: u.role || 'member',
+            active: u.active !== false,
+            createdAt: u.createdAt,
+          };
+        });
+        res.statusCode = 200;
+        res.end(JSON.stringify({ users }));
+      } catch (err: any) {
+        res.statusCode = 500;
+        res.end(JSON.stringify({ error: err?.message || 'Failed to list users' }));
+      }
+      return true;
+    }
+
+    if (req.method === 'POST') {
+      const email = String(body?.email || '').trim().toLowerCase();
+      const role = body?.role === 'admin' ? 'admin' : 'member';
+      const name = String(body?.name || '').trim();
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        res.statusCode = 400;
+        res.end(JSON.stringify({ error: 'A valid email is required' }));
+        return true;
+      }
+      try {
+        const tSnap = await getDoc(globalTenantDoc(tId));
+        if (!tSnap.exists()) {
+          res.statusCode = 404;
+          res.end(JSON.stringify({ error: 'Workspace not found' }));
+          return true;
+        }
+        const rec = await createTenantUser({ email, displayName: name || undefined, tenantId: tId, role });
+        const nowIso = new Date().toISOString();
+        await setDoc(
+          globalUserDoc(rec.uid),
+          {
+            uid: rec.uid,
+            email,
+            name: name || rec.displayName || email.split('@')[0],
+            tenantId: tId,
+            role,
+            active: true,
+            createdAt: nowIso,
+            updatedAt: nowIso,
+          },
+          { merge: true }
+        );
+        const setupLink = await createPasswordSetupLink(email);
+        res.statusCode = 201;
+        res.end(JSON.stringify({ success: true, user: { uid: rec.uid, email, role }, setupLink }));
+      } catch (err: any) {
+        const msg = err?.message || 'Failed to invite user';
+        res.statusCode = /another workspace/i.test(msg) ? 409 : 500;
+        res.end(JSON.stringify({ error: msg }));
+      }
+      return true;
     }
   }
 

@@ -812,8 +812,8 @@ export async function processWebsiteLeadSubmission(
     timeline: 'Immediate / Upcoming Season',
     aiSummary,
     aiRecommendation,
-    demoStatus: 'BOOKED',
-    demoSource: 'AUTOMATIC',
+    demoStatus: 'NOT_BOOKED',
+    demoSource: undefined,
     demoBookedAt: nowIso,
     country,
     city,
@@ -952,7 +952,7 @@ export async function processWebsiteLeadSubmission(
       if (smtpConfig.configured) {
         const emailSubject = `We have received your Umrah360 Demo Request - ${companyName}`;
         const emailBody = [
-          `As-salamu alaykum ${firstName},`,
+          `Hello ${firstName},`,
           ``,
           `Thank you for requesting a live demo of Umrah360 for ${companyName}!`,
           ``,

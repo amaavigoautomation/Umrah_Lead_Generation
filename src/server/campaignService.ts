@@ -1,4 +1,5 @@
 import { stripQuotedEmailHistory } from './quotedText.js';
+import { hasFeature } from './entitlements.js';
 import { tenantRepo } from './tenantRepo.js';
 import type { TenantContext } from '../types/tenant.js';
 import crypto from 'crypto';
@@ -2695,6 +2696,10 @@ export async function processActiveRunningCampaignsBatch(batchSize: number = 500
   processedCampaigns: Array<{ campaignId: string; processedCount: number; remainingPendingCount: number }>;
 }> {
   if (isAutoProcessingCampaigns) {
+    return { activeCount: 0, processedCampaigns: [] };
+  }
+  // Plan gate: a workspace whose plan has no campaigns must not send anything.
+  if (!(await hasFeature(getCampaignActiveCtx().tenantId, 'campaigns'))) {
     return { activeCount: 0, processedCampaigns: [] };
   }
   isAutoProcessingCampaigns = true;

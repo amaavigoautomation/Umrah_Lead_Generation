@@ -7,6 +7,7 @@ import { getImapConfig } from './src/server/imapService.js';
 import { checkAndDispatchPendingWebsiteLeadEmails } from './src/server/websiteLeadAutoResponder.js';
 import { processActiveRunningCampaignsBatch } from './src/server/campaignService.js';
 import { runAutoFollowUpWorkerCycle, isFollowUpWorkerDue } from './src/server/autoFollowUpService.js';
+import { hasFeature } from './src/server/entitlements.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -69,13 +70,15 @@ const safeBackgroundPoll = async () => {
       }
 
       // C. Process active campaign batches
-      await runWithJobLease(tId, 'campaign_dispatch_worker', 20_000, async () => {
-        await processActiveRunningCampaignsBatch(3, ctx).catch(() => {});
-      }).catch(() => {});
+      if (await hasFeature(tId, 'campaigns')) {
+        await runWithJobLease(tId, 'campaign_dispatch_worker', 20_000, async () => {
+          await processActiveRunningCampaignsBatch(3, ctx).catch(() => {});
+        }).catch(() => {});
+      }
 
       // D. AI Auto Follow-Up (cheap: reads only this tenant's scheduled jobs, and skips
       //    the read entirely until a job could be due)
-      if (isFollowUpWorkerDue(tId)) {
+      if (isFollowUpWorkerDue(tId) && (await hasFeature(tId, 'auto_followup'))) {
         await runWithJobLease(tId, 'auto_followup_worker', 30_000, async () => {
           await runAutoFollowUpWorkerCycle(ctx).catch(() => {});
         }).catch(() => {});

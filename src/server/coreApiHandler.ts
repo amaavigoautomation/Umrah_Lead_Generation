@@ -77,6 +77,8 @@ import {
 } from './campaignService.js';
 import { setSchedulingActiveContext } from './demoSchedulingService.js';
 import { setInboundActiveContext } from './inboundPipeline.js';
+import { getEntitlements, hasFeature, featureForUrl, listPlans, savePlan, getEffectiveLimits, invalidateEntitlements } from './entitlements.js';
+import { FEATURES, LIMITS } from '../shared/features.js';
 import { setWhatsAppActiveContext } from './whatsappInboundPipeline.js';
 import {
   tenantRepo,
@@ -275,6 +277,67 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
   }
 
   // =========================================================================
+  // PLAN ENTITLEMENTS: one gate for every plan-restricted API route
+  // =========================================================================
+  if (!isPublicPath && !isPlatformAdmin) {
+    const gatedFeature = featureForUrl(url);
+    if (gatedFeature && !(await hasFeature(resolvedTenantId, gatedFeature))) {
+      res.statusCode = 402;
+      res.setHeader('Content-Type', 'application/json');
+      res.end(
+        JSON.stringify({
+          error: 'Your plan does not include this feature. Upgrade to use it.',
+          code: 'upgrade_required',
+          feature: gatedFeature,
+        })
+      );
+      return true;
+    }
+  }
+
+  if (url === '/api/entitlements' && req.method === 'GET') {
+    res.setHeader('Content-Type', 'application/json');
+    res.statusCode = 200;
+    if (isPlatformAdmin) {
+      res.end(JSON.stringify({ planId: 'platform', planName: 'Platform', features: Object.fromEntries(FEATURES.map((f) => [f.key, true])), limits: {} }));
+    } else {
+      res.end(JSON.stringify(await getEntitlements(resolvedTenantId)));
+    }
+    return true;
+  }
+
+  if (url === '/api/plans' || /^\/api\/plans\/[^/]+$/.test(url)) {
+    res.setHeader('Content-Type', 'application/json');
+    if (req.method === 'GET' && url === '/api/plans') {
+      if (!isPlatformAdmin && userRole !== 'admin') {
+        res.statusCode = 403;
+        res.end(JSON.stringify({ error: 'Admin only' }));
+        return true;
+      }
+      const all = await listPlans();
+      res.statusCode = 200;
+      res.end(JSON.stringify({ plans: isPlatformAdmin ? all : all.filter((p) => p.active), features: FEATURES, limits: LIMITS }));
+      return true;
+    }
+    if ((req.method === 'PUT' || req.method === 'POST') && url !== '/api/plans') {
+      if (!isPlatformAdmin) {
+        res.statusCode = 403;
+        res.end(JSON.stringify({ error: 'Platform admin only' }));
+        return true;
+      }
+      try {
+        const plan = await savePlan({ ...(body || {}), id: url.split('/').pop() as string });
+        res.statusCode = 200;
+        res.end(JSON.stringify({ plan }));
+      } catch (err: any) {
+        res.statusCode = 400;
+        res.end(JSON.stringify({ error: err?.message || 'Could not save plan' }));
+      }
+      return true;
+    }
+  }
+
+  // =========================================================================
   // MULTI-TENANT INBOUND WEBHOOK ROUTING (Phase P3)
   // =========================================================================
   if (url.startsWith('/api/webhooks/website/')) {
@@ -456,6 +519,24 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
         }
         if (isPlatformAdmin) {
           if (b.status === 'active' || b.status === 'suspended') updates.status = b.status;
+          if (typeof b.planId === 'string' && b.planId) {
+            const known = (await listPlans()).some((p) => p.id === b.planId);
+            if (!known) {
+              res.statusCode = 400;
+              res.end(JSON.stringify({ error: `Unknown plan "${b.planId}"` }));
+              return true;
+            }
+            updates.planId = b.planId;
+          }
+          if (b.overrides && typeof b.overrides === 'object') {
+            const ov: { features: Record<string, boolean>; limits: Record<string, number> } = { features: {}, limits: {} };
+            for (const f of FEATURES) if (typeof b.overrides.features?.[f.key] === 'boolean') ov.features[f.key] = b.overrides.features[f.key];
+            for (const l of LIMITS) {
+              const n = Number(b.overrides.limits?.[l.key]);
+              if (b.overrides.limits?.[l.key] !== undefined && b.overrides.limits?.[l.key] !== null && Number.isFinite(n) && n >= 0) ov.limits[l.key] = Math.floor(n);
+            }
+            updates.overrides = ov;
+          }
           if (typeof b.plan === 'string' && PLAN_LIMITS[b.plan]) {
             updates.plan = b.plan;
             updates.limits = PLAN_LIMITS[b.plan];
@@ -477,6 +558,7 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
         }
         updates.updatedAt = new Date().toISOString();
         await updateDoc(globalTenantDoc(tId), updates);
+        invalidateEntitlements(tId);
         res.statusCode = 200;
         res.end(JSON.stringify({ success: true, updated: updates }));
         return true;
@@ -539,6 +621,17 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
           res.statusCode = 404;
           res.end(JSON.stringify({ error: 'Workspace not found' }));
           return true;
+        }
+        // Seat limit (plan + overrides). Re-adding an existing member never counts as a new seat.
+        const seatLimit = (await getEffectiveLimits(tId)).seats;
+        if (Number.isFinite(seatLimit)) {
+          const existingSnap = await getDocs(fsQuery(globalUsersCol(), fsWhere('tenantId', '==', tId)));
+          const already = existingSnap.docs.some((d) => String((d.data() as any).email || '').toLowerCase() === email);
+          if (!already && existingSnap.docs.filter((d) => (d.data() as any).active !== false).length >= seatLimit) {
+            res.statusCode = 402;
+            res.end(JSON.stringify({ error: `Your plan allows ${seatLimit} team seat${seatLimit === 1 ? '' : 's'}. Upgrade to add more people.`, code: 'upgrade_required', limit: 'seats' }));
+            return true;
+          }
         }
         const rec = await createTenantUser({ email, password, displayName: name || undefined, tenantId: tId, role });
         const nowIso = new Date().toISOString();

@@ -13,6 +13,7 @@
  *  - respects the suppression list and the tenant's daily outbound quota
  */
 import { getDoc, getDocs, setDoc, query, where, orderBy, limit } from './adminFirestore.js';
+import { hasFeature } from './entitlements.js';
 import { isFirebaseConfigured } from '../firebase/config.js';
 import { db } from './adminFirestore.js';
 import type { Channel, Lead, Conversation, Message, LeadStatus } from '../types/index.js';
@@ -1172,6 +1173,7 @@ export async function runAutoFollowUpWorkerCycle(
   opts: { force?: boolean } = {}
 ): Promise<{ processedCount: number; results: any[] }> {
   try {
+    if (!(await hasFeature(ctx.tenantId, 'auto_followup'))) return { processedCount: 0, results: [] };
     return await processDueFollowUpJobs(ctx, opts);
   } catch (err) {
     console.warn('[AutoFollowUp] Worker cycle error:', err);

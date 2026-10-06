@@ -103,16 +103,30 @@ export async function createTenantUser(params: {
   displayName?: string;
   tenantId: string;
   role: UserRole;
-}): Promise<UserRecord> {
+}): Promise<UserRecord & { existed?: boolean; passwordSet?: boolean }> {
   const auth = getAdminAuth();
   const email = params.email.trim().toLowerCase();
   let userRecord: UserRecord;
+  let existed = false;
+  let passwordSet = Boolean(params.password);
 
   try {
     userRecord = await auth.getUserByEmail(email);
+    existed = true;
     const existing = (userRecord.customClaims || {}) as AuthClaims;
+    if (existing.platformAdmin) {
+      throw new Error('This email belongs to a platform administrator');
+    }
     if (existing.tenantId && existing.tenantId !== params.tenantId) {
       throw new Error('This email already belongs to another workspace');
+    }
+    // An admin re-adding someone from the same workspace sets their password (the account already exists,
+    // so without this the typed password would be silently ignored). Accounts that are not yet in this
+    // workspace are never modified.
+    if (params.password && existing.tenantId === params.tenantId) {
+      await auth.updateUser(userRecord.uid, { password: params.password });
+    } else {
+      passwordSet = false;
     }
   } catch (error: any) {
     if (error?.code === 'auth/user-not-found') {
@@ -133,7 +147,7 @@ export async function createTenantUser(params: {
     platformAdmin: params.role === 'platformAdmin',
   });
 
-  return userRecord;
+  return Object.assign(userRecord, { existed, passwordSet });
 }
 
 /** Link the user opens to set their own password (used for invites). */

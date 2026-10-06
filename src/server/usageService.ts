@@ -1,4 +1,5 @@
 import { getDoc, setDoc, updateDoc, increment } from './adminFirestore.js';
+import { getEffectiveLimits } from './entitlements.js';
 import { isFirebaseConfigured } from '../firebase/config.js';
 import { db } from './adminFirestore.js';
 import { tenantRepo, globalTenantDoc } from './tenantRepo.js';
@@ -137,7 +138,8 @@ export async function checkTenantQuota(
     }
 
     const tenant = tenantSnap.data() as Tenant;
-    const limits = tenant.limits || {
+    // Limits come from the workspace's plan (+ overrides); legacy workspaces keep their own stored limits.
+    const limits = (await getEffectiveLimits(tenantId).catch(() => null)) || tenant.limits || {
       monthlyAiTokens: 2_000_000,
       dailyOutboundSends: 3_000,
       hourlyOutboundSends: 500,

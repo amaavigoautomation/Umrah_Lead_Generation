@@ -46,6 +46,8 @@ interface NavbarProps {
   currentTenant?: { id: string; name: string; plan?: string; status?: string } | null;
   allTenants?: { id: string; name: string; plan?: string; status?: string }[];
   onSwitchTenant?: (tenantId: string) => void;
+  /** True when the workspace's plan does not include this tab. */
+  planLocked?: (tabId: ActiveTab) => boolean;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -60,6 +62,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   currentTenant,
   allTenants = [],
   onSwitchTenant,
+  planLocked,
 }) => {
   const [activeMailbox, setActiveMailbox] = useState<string>('amaavigo@gmail.com');
 
@@ -73,9 +76,10 @@ export const Navbar: React.FC<NavbarProps> = ({
   }, []);
 
   const isModuleAccessible = (tabId: ActiveTab): boolean => {
+    if (planLocked?.(tabId)) return false;
     if (!currentUser) return true;
     if (currentUser.accessLevel === 'ALL' || currentUser.role === 'ADMIN') return true;
-    return currentUser.allowedModules.includes(tabId);
+    return (currentUser.allowedModules || []).includes(tabId);
   };
 
   return (

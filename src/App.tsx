@@ -15,6 +15,8 @@ import { PlatformConsole } from './components/PlatformConsole';
 import { LoginView } from './components/LoginView';
 import { onSession, signOutUser, installAuthFetch, type SessionInfo } from './services/authService';
 import { LockedModuleView } from './components/LockedModuleView';
+import { UpgradeRequiredView } from './components/UpgradeRequiredView';
+import { FEATURES, FEATURE_BY_TAB } from './shared/features';
 import {
   Contact,
   Lead,
@@ -225,6 +227,33 @@ export default function App() {
         .catch(() => {});
     }
   }, [session, currentTenantId]);
+
+  // What the workspace's plan includes (the server enforces it too; this only drives the UI).
+  const [entitlements, setEntitlements] = useState<{ planName: string; features: Record<string, boolean> } | null>(null);
+  useEffect(() => {
+    if (!session || session.isPlatformAdmin || !currentTenantId) return;
+    let cancelled = false;
+    const load = () =>
+      fetch('/api/entitlements')
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => {
+          if (!cancelled && d?.features) setEntitlements({ planName: d.planName, features: d.features });
+        })
+        .catch(() => {});
+    load();
+    const t = setInterval(load, 60_000);
+    return () => {
+      cancelled = true;
+      clearInterval(t);
+    };
+  }, [session, currentTenantId]);
+  const planLocked = useCallback(
+    (tab: string) => {
+      const feature = FEATURE_BY_TAB[tab];
+      return Boolean(feature && entitlements && entitlements.features[feature] === false);
+    },
+    [entitlements]
+  );
 
   // Initialize Firestore seeding & loading on startup
   useEffect(() => {
@@ -1837,6 +1866,7 @@ export default function App() {
       <Navbar
         activeTab={activeTab}
         setActiveTab={setActiveTab}
+        planLocked={planLocked}
         unreadCount={unreadCount}
         handoffCount={handoffCount}
         onResetSeedData={handleResetSeedData}
@@ -1849,7 +1879,14 @@ export default function App() {
       />
 
       <main className="flex-1">
-        {!isCurrentTabAllowed ? (
+        {planLocked(activeTab) ? (
+          <UpgradeRequiredView
+            featureLabel={FEATURES.find((f) => f.key === FEATURE_BY_TAB[activeTab])?.label || 'This feature'}
+            planName={entitlements?.planName}
+            isAdmin={currentUser.role === 'ADMIN'}
+            onBack={() => setActiveTab('inbox')}
+          />
+        ) : !isCurrentTabAllowed ? (
           <LockedModuleView
             currentUser={currentUser}
             attemptedTab={activeTab}

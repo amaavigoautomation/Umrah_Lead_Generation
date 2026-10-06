@@ -1,6 +1,6 @@
 import OpenAI from 'openai';
 import { sanitizeAiEmailText } from './emailSanitizer.js';
-import { verifySmtpConnection, sendLiveEmail, getSmtpConfig, updateSmtpConfig } from './smtpService.js';
+import { verifySmtpConnection, sendLiveEmail, getSmtpConfig, updateSmtpConfig, getResendConfig } from './smtpService.js';
 import { checkImapStatus, getImapConfig, updateImapConfig } from './imapService.js';
 import {
   processLiveInboundEmail,
@@ -1330,6 +1330,7 @@ Generate a helpful, grounded response.`;
           user: config.user,
           from: config.from,
           hasPassword: Boolean(config.pass),
+          emailProvider: getResendConfig().configured ? 'resend' : 'smtp',
         })
       );
       return true;
@@ -1377,6 +1378,7 @@ Generate a helpful, grounded response.`;
         from: config.from,
         passConfigured: Boolean(config.pass),
         hasPassword: Boolean(config.pass),
+        emailProvider: getResendConfig().configured ? 'resend' : 'smtp',
       })
     );
     return true;
@@ -1398,6 +1400,7 @@ Generate a helpful, grounded response.`;
     }
 
     const sendResult = await sendLiveEmail({
+      tenantId: activeTenantCtx.tenantId,
       to,
       subject,
       html,

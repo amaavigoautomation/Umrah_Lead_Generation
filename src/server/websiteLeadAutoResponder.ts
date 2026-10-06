@@ -354,6 +354,7 @@ export async function dispatchThankYouEmailForConversation(
 
     // 6. Send Live Email via verified SMTP service
     const mailResult = await sendLiveEmail({
+      tenantId: ctx.tenantId,
       to: targetEmail,
       subject,
       text: emailBody,

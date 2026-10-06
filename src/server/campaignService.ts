@@ -1769,6 +1769,7 @@ export async function processNextCampaignSendBatch(
             simulated: true,
           }
         : await sendLiveEmail({
+            tenantId: getCampaignActiveCtx().tenantId,
             to: lead.email,
             subject: subject,
             text: body,
@@ -2101,6 +2102,7 @@ async function executeCampaignSendingEngine(campaignId: string, expectedRunId?: 
               simulated: true,
             }
           : await sendLiveEmail({
+              tenantId: getCampaignActiveCtx().tenantId,
               to: lead.email,
               subject: subject,
               text: body,

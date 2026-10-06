@@ -14,8 +14,8 @@ import {
   Mail,
   AlertCircle,
   RefreshCw,
+  ShieldCheck,
 } from 'lucide-react';
-import { Umrah360Logo } from './Umrah360Logo';
 
 type Plan = 'starter' | 'growth' | 'enterprise';
 type Status = 'active' | 'suspended';
@@ -49,6 +49,9 @@ interface Props {
   email: string;
   onLogout: () => void;
 }
+
+// Neutral on purpose: tenants (e.g. Umrah360) must not brand the platform owner's console.
+const CONSOLE_NAME = 'Platform Console';
 
 const PLAN_LABEL: Record<Plan, string> = { starter: 'Starter', growth: 'Growth', enterprise: 'Enterprise' };
 const PLAN_STYLE: Record<Plan, string> = {
@@ -118,11 +121,11 @@ export const PlatformConsole: React.FC<Props> = ({ email, onLogout }) => {
       {/* Header */}
       <header className="bg-white border-b border-slate-200">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Umrah360Logo size="sm" showSubtitle={false} />
-            <span className="hidden sm:inline text-xs font-semibold text-slate-500 border-l border-slate-200 pl-3">
-              Platform Console
-            </span>
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-slate-900 flex items-center justify-center">
+              <ShieldCheck className="w-4.5 h-4.5 text-white" />
+            </div>
+            <span className="text-sm font-bold text-slate-900">{CONSOLE_NAME}</span>
           </div>
           <div className="flex items-center gap-3">
             <span className="hidden sm:inline text-xs text-slate-500">{email}</span>

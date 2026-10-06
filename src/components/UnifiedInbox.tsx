@@ -28,6 +28,7 @@ import {
   Key,
   Settings,
   ExternalLink,
+  Clock,
 } from 'lucide-react';
 import {
   Conversation,
@@ -67,6 +68,7 @@ interface UnifiedInboxProps {
   onProcessInboundEmail?: (payload: InboundEmailPayload) => Promise<InboundProcessingResult>;
   onProcessInboundWhatsApp?: (payload: InboundWhatsAppPayload) => Promise<InboundWhatsAppProcessingResult>;
   onSyncNow?: () => void;
+  onAutoFollowUpChanged?: (leadId: string, autoFollowUp: any) => void;
 }
 
 export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
@@ -84,6 +86,7 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
   onProcessInboundEmail,
   onProcessInboundWhatsApp,
   onSyncNow,
+  onAutoFollowUpChanged,
 }) => {
   const [selectedConversationId, setSelectedConversationId] = useState<string>(
     conversations[0]?.conversationId || ''
@@ -119,6 +122,7 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
   const [isSavingSmtp, setIsSavingSmtp] = useState<boolean>(false);
   const [smtpSaveMessage, setSmtpSaveMessage] = useState<{ success: boolean; text: string } | null>(null);
   const [retryingMessageId, setRetryingMessageId] = useState<string | null>(null);
+  const [isTogglingAutoFollowUp, setIsTogglingAutoFollowUp] = useState<boolean>(false);
 
   // Fetch SMTP status on load
   const fetchSmtpConfig = async () => {
@@ -422,6 +426,38 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
     }
   };
 
+  // Toggle Auto Follow-Up on/off for the active lead
+  const handleToggleAutoFollowUp = async (enabled: boolean) => {
+    if (!activeLead || !activeConversation) return;
+    setIsTogglingAutoFollowUp(true);
+    try {
+      const res = await fetch('/api/auto-followup/toggle', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          lead: activeLead,
+          conversation: activeConversation,
+          // Only the recent thread is needed to decide whether a follow-up is due
+          messages: displayMessages.filter((m) => m.conversationId === activeConversation.conversationId).slice(-30),
+          enabled,
+          userName: 'Team Member',
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && data.lead) {
+          activeLead.autoFollowUp = data.lead.autoFollowUp;
+          if (onAutoFollowUpChanged) onAutoFollowUpChanged(activeLead.leadId, data.lead.autoFollowUp);
+          if (onSyncNow) onSyncNow();
+        }
+      }
+    } catch (err) {
+      console.error('Error toggling auto follow-up:', err);
+    } finally {
+      setIsTogglingAutoFollowUp(false);
+    }
+  };
+
   return (
     <div className="flex flex-col lg:flex-row h-[calc(100vh-8rem)] bg-slate-950 text-slate-100 overflow-hidden border border-slate-800 rounded-xl m-2 sm:m-4 shadow-2xl relative">
       {/* 1. LEFT COLUMN: Conversation List & Filters (Width: 340px) */}
@@ -716,6 +752,23 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
                   </button>
                 )}
 
+                {/* Auto Follow-Up Toggle Button */}
+                {activeLead && (activeLead.leadType === 'INBOUND' || activeLead.leadType === 'OUTBOUND') && (
+                  <button
+                    onClick={() => handleToggleAutoFollowUp(!activeLead?.autoFollowUp?.enabled)}
+                    disabled={isTogglingAutoFollowUp}
+                    className={`flex items-center space-x-1.5 px-2.5 py-1 rounded-md text-xs font-semibold border transition ${
+                      activeLead?.autoFollowUp?.enabled
+                        ? 'bg-emerald-950/80 border-emerald-500 text-emerald-300 hover:bg-emerald-900'
+                        : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700'
+                    }`}
+                    title="Toggle AI Auto Follow-Up for this lead"
+                  >
+                    <Clock className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>Auto Follow-Up [{activeLead?.autoFollowUp?.enabled ? ' ON ' : ' OFF '}]</span>
+                  </button>
+                )}
+
                 {activeConversation.humanHandoff ? (
                   <button
                     onClick={() => onToggleAi(activeConversation.conversationId, true)}
@@ -755,6 +808,36 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
                 </div>
               </div>
             </div>
+
+            {/* Compact Auto Follow-Up Status Bar */}
+            {activeLead && (activeLead.leadType === 'INBOUND' || activeLead.leadType === 'OUTBOUND') && (
+              <div className="px-3.5 py-1.5 bg-slate-900/90 border-b border-slate-800 text-xs flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <span className="flex items-center space-x-1.5">
+                    <span className={`w-2 h-2 rounded-full ${activeLead.autoFollowUp?.enabled ? 'bg-emerald-400 animate-pulse' : 'bg-slate-500'}`} />
+                    <span className="font-semibold text-slate-200">Auto Follow-Up:</span>
+                  </span>
+                  {activeLead.demoStatus === 'BOOKED' || activeLead.status === 'DEMO_BOOKED' ? (
+                    <span className="text-amber-400 font-medium">[ OFF ] — Demo booked</span>
+                  ) : activeLead.autoFollowUp?.enabled ? (
+                    activeLead.autoFollowUp.nextScheduledAt ? (
+                      new Date(activeLead.autoFollowUp.nextScheduledAt).getTime() <= Date.now() ? (
+                        <span className="text-amber-300 font-medium animate-pulse">[ ON ] — Due now (processing follow-up...)</span>
+                      ) : (
+                        <span className="text-emerald-300 font-medium">
+                          [ ON ] — Next follow-up: {new Date(activeLead.autoFollowUp.nextScheduledAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })}
+                        </span>
+                      )
+                    ) : (
+                      <span className="text-blue-300 font-medium">[ ON ] — Waiting for our next message</span>
+                    )
+                  ) : (
+                    <span className="text-slate-400 font-medium">[ OFF ] — No automatic follow-up</span>
+                  )}
+                </div>
+                <span className="text-[10px] text-slate-500 font-mono">Human Control Layer</span>
+              </div>
+            )}
 
             {/* Omnichannel Platform Navigation Tabs (Section 55 - Unified Multi-Platform Conversations) */}
             <div className="px-3.5 py-2 bg-slate-900/90 border-b border-slate-800 flex items-center justify-between gap-2 overflow-x-auto">

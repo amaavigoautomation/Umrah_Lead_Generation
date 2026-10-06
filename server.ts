@@ -6,6 +6,7 @@ import { pollAndProcessImapMailbox } from './src/server/inboundPipeline.js';
 import { getImapConfig } from './src/server/imapService.js';
 import { checkAndDispatchPendingWebsiteLeadEmails } from './src/server/websiteLeadAutoResponder.js';
 import { processActiveRunningCampaignsBatch } from './src/server/campaignService.js';
+import { runAutoFollowUpWorkerCycle, isFollowUpWorkerDue } from './src/server/autoFollowUpService.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -71,6 +72,14 @@ const safeBackgroundPoll = async () => {
       await runWithJobLease(tId, 'campaign_dispatch_worker', 20_000, async () => {
         await processActiveRunningCampaignsBatch(3, ctx).catch(() => {});
       }).catch(() => {});
+
+      // D. AI Auto Follow-Up (cheap: reads only this tenant's scheduled jobs, and skips
+      //    the read entirely until a job could be due)
+      if (isFollowUpWorkerDue(tId)) {
+        await runWithJobLease(tId, 'auto_followup_worker', 30_000, async () => {
+          await runAutoFollowUpWorkerCycle(ctx).catch(() => {});
+        }).catch(() => {});
+      }
     }
   } catch (e) {
     // ignore background errors

@@ -41,6 +41,7 @@ export const PLATFORM_MODULES: PlatformModule[] = [
   { id: 'scenarios', name: 'E2E Walkthroughs', description: 'Interactive simulated omnichannel scenarios' },
   { id: 'settings', name: 'Channels & Settings', description: 'Autopilot rules, email signatures, and integrations' },
   { id: 'live-mailbox', name: 'Live Mailbox & SMTP', description: 'IMAP live polling & SMTP credentials management' },
+  { id: 'auto-followup', name: 'Auto Follow-Up', description: 'AI follow-ups for leads who stop replying' },
 ];
 
 // Initial pre-configured users stored in Firestore DB

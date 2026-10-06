@@ -31,7 +31,8 @@ export type ActiveTab =
   | 'playground'
   | 'scenarios'
   | 'settings'
-  | 'live-mailbox';
+  | 'live-mailbox'
+  | 'auto-followup';
 
 interface NavbarProps {
   activeTab: ActiveTab;
@@ -226,6 +227,22 @@ export const Navbar: React.FC<NavbarProps> = ({
                 {unreadCount}
               </span>
             ) : null}
+          </button>
+
+          {/* 1.5 Auto Follow-Up Agent */}
+          <button
+            onClick={() => setActiveTab('auto-followup')}
+            className={`flex items-center space-x-2 px-3.5 py-1.5 rounded-md font-medium whitespace-nowrap transition ${
+              !isModuleAccessible('auto-followup')
+                ? 'opacity-40 text-slate-500 hover:opacity-70 bg-slate-900/40 cursor-pointer'
+                : activeTab === 'auto-followup'
+                ? 'bg-emerald-600 text-white shadow-sm'
+                : 'text-emerald-400 hover:text-white hover:bg-slate-800'
+            }`}
+          >
+            <Bot className="w-4 h-4 text-emerald-400" />
+            <span>Auto Follow-Up</span>
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
           </button>
 
           {/* 2. Campaigns */}

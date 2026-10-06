@@ -1465,6 +1465,15 @@ export async function processLiveInboundEmail(payload: {
       console.warn('[Unified Inbox] Campaign lead tracking hook notice:', campaignErr);
     }
 
+    // Auto Follow-Up: the lead replied, so any pending follow-up for this conversation is cancelled.
+    // Dynamic import avoids a circular dependency (the follow-up service imports this module).
+    try {
+      const { handleLeadReplyEvent } = await import('./autoFollowUpService.js');
+      await handleLeadReplyEvent(getInboundCtx(), { leadId, conversationId });
+    } catch (fuErr) {
+      console.warn('[Unified Inbox] Auto follow-up cancel hook notice:', fuErr);
+    }
+
     // =========================================================================
     // HUMAN TAKEOVER CHECK (TAKE OVER / HUMAN MODE)
     // If conversation is in HUMAN mode (humanHandoff=true or aiEnabled=false):

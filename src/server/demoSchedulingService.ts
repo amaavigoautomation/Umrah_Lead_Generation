@@ -851,10 +851,26 @@ export async function createGoogleCalendarDemoBooking(
             demoTimezone: SCHEDULING_TIMEZONE,
             calendarEventId,
             googleMeetLink,
+            autoFollowUp: {
+              enabled: false,
+              disabledBy: 'System Demo Booking',
+              disabledAt: nowIso,
+              disabledReason: 'demo_booked',
+              activeFollowUpId: null,
+              nextScheduledAt: null,
+            },
             updatedAt: nowIso,
           },
           { merge: true }
         );
+
+        // Hard stop: cancel any scheduled follow-up jobs for this lead.
+        try {
+          const { cancelFollowUpsForLead } = await import('./autoFollowUpService.js');
+          await cancelFollowUpsForLead(getSchedCtx(), leadId, 'demo_booked');
+        } catch (fuErr) {
+          console.warn('[Demo Booking] Auto follow-up cancel notice:', fuErr);
+        }
       }
 
       // 5. Update Campaign analytics if lead originated from outbound campaign

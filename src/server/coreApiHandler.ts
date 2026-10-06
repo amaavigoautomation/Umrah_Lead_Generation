@@ -90,6 +90,14 @@ import {
 } from './tenantRepo.js';
 import { getAdminAuth } from './firebaseAdmin.js';
 import { authenticateRequest } from './authMiddleware.js';
+import {
+  handleEnableAutoFollowUp,
+  handleDisableAutoFollowUp,
+  getAutoFollowUpDashboardData,
+  getAutoFollowUpConfig,
+  updateAutoFollowUpConfig,
+  runAutoFollowUpWorkerCycle,
+} from './autoFollowUpService.js';
 import { encryptSecret, decryptSecret } from './cryptoUtils.js';
 import { getTenantCurrentUsage, recordTenantUsage, checkTenantQuota } from './usageService.js';
 import {
@@ -218,7 +226,8 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
     url === '/api/inbound/whatsapp' ||
     url === '/api/leads/inbound' ||
     url === '/api/campaigns/cron' ||
-    url === '/api/campaigns/process-active';
+    url === '/api/campaigns/process-active' ||
+    url === '/api/auto-followup/trigger';
 
   let resolvedTenantId = '';
   let userUid = 'anonymous';
@@ -1619,6 +1628,160 @@ Generate a helpful, grounded response.`;
     } catch (err: any) {
       res.statusCode = 400;
       res.end(JSON.stringify({ error: err?.message || 'Failed to generate AI previews' }));
+    }
+    return true;
+  }
+
+  // =========================================================================
+  // AI AUTO FOLLOW-UP (tenant-scoped; every route below requires a signed-in workspace user,
+  // except /trigger which also accepts the cron secret)
+  // =========================================================================
+  if (url === '/api/auto-followup/toggle' && req.method === 'POST') {
+    const { lead, conversation, messages, enabled, userName, delayOverride, reason } = body || {};
+    if (!lead || !lead.leadId) {
+      res.statusCode = 400;
+      res.setHeader('Content-Type', 'application/json');
+      res.end(JSON.stringify({ success: false, error: 'lead is required' }));
+      return true;
+    }
+    const badId = (v: any) => typeof v !== 'string' || !v || v.includes('/') || v.length > 200;
+    if (badId(lead.leadId) || (conversation?.conversationId !== undefined && badId(conversation.conversationId))) {
+      res.statusCode = 400;
+      res.setHeader('Content-Type', 'application/json');
+      res.end(JSON.stringify({ success: false, error: 'invalid lead or conversation id' }));
+      return true;
+    }
+    try {
+      const actor = userEmail || userName || 'Team Member';
+      let result: any;
+      if (enabled) {
+        if (!conversation || !conversation.conversationId) {
+          res.statusCode = 400;
+          res.setHeader('Content-Type', 'application/json');
+          res.end(JSON.stringify({ success: false, error: 'conversation is required to enable follow-up' }));
+          return true;
+        }
+        result = await handleEnableAutoFollowUp(activeTenantCtx, {
+          lead,
+          conversation,
+          messages: Array.isArray(messages) ? messages.slice(-50) : [],
+          userName: actor,
+          delayOverride: delayOverride || null,
+        });
+      } else {
+        result = await handleDisableAutoFollowUp(activeTenantCtx, {
+          lead,
+          conversationId: conversation?.conversationId,
+          userName: actor,
+          reason: reason || 'manual',
+        });
+      }
+      res.statusCode = 200;
+      res.setHeader('Content-Type', 'application/json');
+      res.end(JSON.stringify({ success: true, lead, ...result }));
+    } catch (err: any) {
+      res.statusCode = 500;
+      res.setHeader('Content-Type', 'application/json');
+      res.end(JSON.stringify({ success: false, error: err?.message || 'Failed to toggle auto follow-up' }));
+    }
+    return true;
+  }
+
+  if (url === '/api/auto-followup/dashboard' && req.method === 'GET') {
+    try {
+      const data = await getAutoFollowUpDashboardData(activeTenantCtx);
+      res.statusCode = 200;
+      res.setHeader('Content-Type', 'application/json');
+      res.end(JSON.stringify({ success: true, ...data }));
+    } catch (err: any) {
+      res.statusCode = 500;
+      res.setHeader('Content-Type', 'application/json');
+      res.end(JSON.stringify({ success: false, error: err?.message || 'Failed to load dashboard' }));
+    }
+    return true;
+  }
+
+  if (url === '/api/auto-followup/config') {
+    try {
+      if (req.method === 'GET') {
+        const config = await getAutoFollowUpConfig(activeTenantCtx);
+        res.statusCode = 200;
+        res.setHeader('Content-Type', 'application/json');
+        res.end(JSON.stringify({ success: true, config }));
+        return true;
+      }
+      if (req.method === 'POST' || req.method === 'PATCH') {
+        if (userRole !== 'admin' && !isPlatformAdmin) {
+          res.statusCode = 403;
+          res.setHeader('Content-Type', 'application/json');
+          res.end(JSON.stringify({ success: false, error: 'Only workspace admins can change follow-up settings' }));
+          return true;
+        }
+        const config = await updateAutoFollowUpConfig(activeTenantCtx, body || {});
+        res.statusCode = 200;
+        res.setHeader('Content-Type', 'application/json');
+        res.end(JSON.stringify({ success: true, config }));
+        return true;
+      }
+    } catch (err: any) {
+      res.statusCode = 500;
+      res.setHeader('Content-Type', 'application/json');
+      res.end(JSON.stringify({ success: false, error: err?.message || 'Failed to handle config' }));
+      return true;
+    }
+  }
+
+  if (url === '/api/auto-followup/trigger-now' && req.method === 'POST') {
+    try {
+      const result = await runAutoFollowUpWorkerCycle(activeTenantCtx, { force: true });
+      res.statusCode = 200;
+      res.setHeader('Content-Type', 'application/json');
+      res.end(JSON.stringify({ success: true, ...result }));
+    } catch (err: any) {
+      res.statusCode = 500;
+      res.setHeader('Content-Type', 'application/json');
+      res.end(JSON.stringify({ success: false, error: err?.message || 'Failed to run follow-ups' }));
+    }
+    return true;
+  }
+
+  // Cron / serverless worker: CRON_SECRET (all workspaces) or a signed-in user (own workspace)
+  if (url === '/api/auto-followup/trigger' && (req.method === 'POST' || req.method === 'GET')) {
+    const cronSecret = process.env.CRON_SECRET;
+    const presented = (req.headers['authorization'] || '').toString().replace(/^Bearer\s+/i, '');
+    const isCron = Boolean(cronSecret) && presented === cronSecret;
+    let callerCtx: TenantContext | null = null;
+    let runAll = isCron;
+    if (!isCron) {
+      const a = await authenticateRequest(req);
+      if (!a.ok) {
+        res.statusCode = a.status || 401;
+        res.end(JSON.stringify({ error: a.error || 'Unauthorized', code: a.code }));
+        return true;
+      }
+      callerCtx = a.ctx!;
+      runAll = Boolean(callerCtx.isPlatformAdmin);
+    }
+    try {
+      const results: any[] = [];
+      if (runAll) {
+        const snap = await getDocs(globalTenantsCol());
+        for (const t of snap.docs) {
+          const data: any = t.data();
+          if (data?.status === 'suspended') continue;
+          const ctx: TenantContext = { tenantId: t.id, uid: 'system-cron', email: '', role: 'admin' };
+          results.push({ tenantId: t.id, ...(await runAutoFollowUpWorkerCycle(ctx, { force: true })) });
+        }
+      } else {
+        results.push({ tenantId: callerCtx!.tenantId, ...(await runAutoFollowUpWorkerCycle(callerCtx!, { force: true })) });
+      }
+      res.statusCode = 200;
+      res.setHeader('Content-Type', 'application/json');
+      res.end(JSON.stringify({ success: true, results }));
+    } catch (err: any) {
+      res.statusCode = 500;
+      res.setHeader('Content-Type', 'application/json');
+      res.end(JSON.stringify({ success: false, error: err?.message || 'Failed to run follow-ups' }));
     }
     return true;
   }

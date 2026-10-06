@@ -112,6 +112,7 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
     user: string;
     from: string;
     hasPassword: boolean;
+    emailProvider?: 'resend' | 'smtp';
   } | null>(null);
   const [showSmtpModal, setShowSmtpModal] = useState<boolean>(false);
   const [smtpHostInput, setSmtpHostInput] = useState<string>('smtp.gmail.com');
@@ -748,7 +749,7 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
                     title="Configure SMTP Delivery & Gmail App Password"
                   >
                     <Key className="w-3 h-3" />
-                    <span>{smtpStatus?.configured ? 'SMTP Live' : 'Configure SMTP'}</span>
+                    <span>{smtpStatus?.emailProvider === 'resend' ? 'Resend Live' : smtpStatus?.configured ? 'SMTP Live' : 'Configure SMTP'}</span>
                   </button>
                 )}
 

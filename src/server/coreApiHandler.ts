@@ -1,6 +1,6 @@
 import OpenAI from 'openai';
 import { sanitizeAiEmailText } from './emailSanitizer.js';
-import { verifySmtpConnection, sendLiveEmail, getSmtpConfig, updateSmtpConfig } from './smtpService.js';
+import { verifySmtpConnection, sendLiveEmail, getSmtpConfig, updateSmtpConfig, getResendConfig } from './smtpService.js';
 import { checkImapStatus, getImapConfig, updateImapConfig } from './imapService.js';
 import {
   processLiveInboundEmail,
@@ -354,7 +354,7 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
       if (!targetId) denied = 'Platform admin only';
       else if (targetId !== resolvedTenantId) denied = 'Forbidden';
       else if (req.method !== 'GET' && userRole !== 'admin') denied = 'Workspace admin only';
-      else if (/\/(secrets|routes)$/.test(url) && userRole !== 'admin') denied = 'Workspace admin only';
+      else if (/\/(secrets|routes|email(\/.*)?)$/.test(url.split('?')[0]) && userRole !== 'admin') denied = 'Workspace admin only';
     }
     if (denied) {
       res.statusCode = 403;
@@ -641,6 +641,33 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
       }
       res.statusCode = 200;
       res.end(JSON.stringify({ success: true, message: `Secret '${name}' encrypted and saved.` }));
+      return true;
+    }
+  }
+
+  // Tenant email identity (Phase 1): /api/tenants/:tenantId/email[/domain|/verify|/sender]
+  const emailMatch = url.split('?')[0].match(/^\/api\/tenants\/([^/]+)\/email(?:\/(domain|verify|sender))?$/);
+  if (emailMatch) {
+    const tId = emailMatch[1];
+    const action = emailMatch[2];
+    try {
+      const svc = await import('./tenantEmailService.js');
+      if (!action && req.method === 'GET') {
+        res.statusCode = 200;
+        res.end(JSON.stringify(await svc.getEmailSettingsView(tId)));
+        return true;
+      }
+      if (req.method === 'POST' && action) {
+        if (action === 'domain') await svc.addTenantDomain(tId, body?.domain);
+        else if (action === 'verify') await svc.verifyTenantDomain(tId);
+        else await svc.setTenantSender(tId, { fromName: body?.fromName, fromLocalPart: body?.fromLocalPart, replyTo: body?.replyTo });
+        res.statusCode = 200;
+        res.end(JSON.stringify(await svc.getEmailSettingsView(tId)));
+        return true;
+      }
+    } catch (err: any) {
+      res.statusCode = err?.status || 500;
+      res.end(JSON.stringify({ error: err?.message || 'Email settings request failed' }));
       return true;
     }
   }
@@ -1330,6 +1357,7 @@ Generate a helpful, grounded response.`;
           user: config.user,
           from: config.from,
           hasPassword: Boolean(config.pass),
+          emailProvider: getResendConfig().configured ? 'resend' : 'smtp',
         })
       );
       return true;
@@ -1377,6 +1405,7 @@ Generate a helpful, grounded response.`;
         from: config.from,
         passConfigured: Boolean(config.pass),
         hasPassword: Boolean(config.pass),
+        emailProvider: getResendConfig().configured ? 'resend' : 'smtp',
       })
     );
     return true;
@@ -1398,6 +1427,7 @@ Generate a helpful, grounded response.`;
     }
 
     const sendResult = await sendLiveEmail({
+      tenantId: activeTenantCtx.tenantId,
       to,
       subject,
       html,

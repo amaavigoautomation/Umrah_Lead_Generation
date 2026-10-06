@@ -1588,6 +1588,7 @@ export async function processLiveInboundEmail(payload: {
 
     if (shouldSendAutoReply) {
       smtpResult = await sendLiveEmail({
+        tenantId: getInboundCtx().tenantId,
         to: payload.from,
         subject: replySubject,
         text: aiResult.replyText,

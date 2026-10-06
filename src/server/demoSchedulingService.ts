@@ -1303,6 +1303,7 @@ export async function addAttendeeToDemoBooking(params: {
         `;
 
         await sendLiveEmail({
+          tenantId: getSchedCtx().tenantId,
           to: targetEmail,
           subject: inviteSubject,
           text: `You have been added to the Umrah360 Demo Walkthrough on ${booking.date} from ${booking.startTime} – ${booking.endTime} IST.\n\nJoin Google Meet: ${googleMeetLink}\n\nPrimary Contact: ${booking.leadName} (${booking.leadEmail})`,

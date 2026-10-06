@@ -1017,6 +1017,7 @@ async function processOneJob(
   const inReplyTo = lastMsg?.gmailMessageId && !String(lastMsg.gmailMessageId).startsWith('<out-') ? lastMsg.gmailMessageId : undefined;
 
   const sendRes = await sendLiveEmail({
+    tenantId: ctx.tenantId,
     to: recipient,
     subject,
     text: evalResult.generatedMessage,

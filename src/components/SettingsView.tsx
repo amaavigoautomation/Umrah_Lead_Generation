@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { SystemSettings, Channel, ChannelMode, AppUser } from '../types';
 import { UserManagementView } from './UserManagementView';
+import { EmailSettingsPanel } from './EmailSettingsPanel';
 
 interface SettingsViewProps {
   settings: SystemSettings;
@@ -23,6 +24,8 @@ interface SettingsViewProps {
   users?: AppUser[];
   onSaveUser?: (user: AppUser) => Promise<void>;
   onDeleteUser?: (userId: string) => Promise<void>;
+  tenantId?: string;
+  canEditEmail?: boolean;
 }
 
 export const SettingsView: React.FC<SettingsViewProps> = ({
@@ -32,6 +35,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   users,
   onSaveUser,
   onDeleteUser,
+  tenantId,
+  canEditEmail,
 }) => {
   const [formData, setFormData] = useState<SystemSettings>(settings);
   const [isSaved, setIsSaved] = useState(false);
@@ -342,6 +347,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           </div>
         </div>
       </div>
+
+      {tenantId && <EmailSettingsPanel tenantId={tenantId} canEdit={Boolean(canEditEmail)} />}
 
       {/* User Management & Access Control (Firestore app_users) */}
       {users && onSaveUser && onDeleteUser && (

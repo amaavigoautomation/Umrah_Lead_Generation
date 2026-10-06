@@ -973,6 +973,7 @@ export async function processWebsiteLeadSubmission(
 
         console.log(`[Website Lead] Dispatching single Thank You email to ${cleanEmail} for ${companyName}...`);
         const mailResult = await sendLiveEmail({
+          tenantId: ctx.tenantId,
           to: cleanEmail,
           subject: emailSubject,
           text: emailBody,

@@ -1977,6 +1977,8 @@ export default function App() {
                 users={users}
                 onSaveUser={handleSaveUser}
                 onDeleteUser={handleDeleteUser}
+                tenantId={currentTenantId}
+                canEditEmail={currentUser.role === 'ADMIN'}
               />
             )}
 

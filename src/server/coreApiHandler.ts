@@ -483,14 +483,14 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
     }
   }
 
-  // Workspace users (platform admin only): /api/tenants/:tenantId/users
+  // Workspace users (platform admin, or an admin of that same workspace): /api/tenants/:tenantId/users
   const tenantUsersMatch = url.match(/^\/api\/tenants\/([^/?]+)\/users$/);
   if (tenantUsersMatch) {
     const tId = tenantUsersMatch[1];
     res.setHeader('Content-Type', 'application/json');
-    if (!isPlatformAdmin) {
+    if (!isPlatformAdmin && (tId !== resolvedTenantId || userRole !== 'admin')) {
       res.statusCode = 403;
-      res.end(JSON.stringify({ error: 'Platform admin only' }));
+      res.end(JSON.stringify({ error: 'Workspace admin only' }));
       return true;
     }
 
@@ -521,9 +521,15 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
       const email = String(body?.email || '').trim().toLowerCase();
       const role = body?.role === 'admin' ? 'admin' : 'member';
       const name = String(body?.name || '').trim();
+      const password = typeof body?.password === 'string' && body.password ? body.password : undefined;
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
         res.statusCode = 400;
         res.end(JSON.stringify({ error: 'A valid email is required' }));
+        return true;
+      }
+      if (password && password.length < 8) {
+        res.statusCode = 400;
+        res.end(JSON.stringify({ error: 'Password must be at least 8 characters' }));
         return true;
       }
       try {
@@ -533,7 +539,7 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
           res.end(JSON.stringify({ error: 'Workspace not found' }));
           return true;
         }
-        const rec = await createTenantUser({ email, displayName: name || undefined, tenantId: tId, role });
+        const rec = await createTenantUser({ email, password, displayName: name || undefined, tenantId: tId, role });
         const nowIso = new Date().toISOString();
         await setDoc(
           globalUserDoc(rec.uid),
@@ -549,7 +555,24 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
           },
           { merge: true }
         );
-        const setupLink = await createPasswordSetupLink(email);
+        // Profile used by the in-app Team list (no password is ever stored here).
+        await setDoc(
+          doc(db, 'app_users', rec.uid),
+          {
+            uid: rec.uid,
+            userId: rec.uid,
+            email,
+            name: name || rec.displayName || email.split('@')[0],
+            tenantId: tId,
+            role,
+            ...(Array.isArray(body?.allowedModules) ? { allowedModules: body.allowedModules.filter((m: any) => typeof m === 'string') } : {}),
+            isActive: true,
+            createdAt: nowIso,
+            updatedAt: nowIso,
+          },
+          { merge: true }
+        );
+        const setupLink = password ? undefined : await createPasswordSetupLink(email);
         res.statusCode = 201;
         res.end(JSON.stringify({ success: true, user: { uid: rec.uid, email, role }, setupLink }));
       } catch (err: any) {

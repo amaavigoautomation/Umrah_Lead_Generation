@@ -1760,23 +1760,37 @@ export default function App() {
   };
 
   const handleSaveUser = async (userToSave: AppUser) => {
-    setUsers((prev) => {
-      const idx = prev.findIndex((u) => u.userId === userToSave.userId);
-      if (idx >= 0) {
-        const next = [...prev];
-        next[idx] = userToSave;
-        return next;
-      }
-      return [...prev, userToSave];
-    });
+    const isNew = !users.some((u) => u.userId === userToSave.userId);
 
+    if (isNew) {
+      // A new teammate needs a real login (Firebase Auth) – saving only a database row cannot sign anyone in.
+      const res = await fetch(`/api/tenants/${encodeURIComponent(currentTenantId)}/users`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: userToSave.email,
+          name: userToSave.name,
+          role: userToSave.role === 'ADMIN' ? 'admin' : 'member',
+          password: userToSave.password,
+          allowedModules: userToSave.allowedModules,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || `Could not create user (${res.status})`);
+      setUsers((prev) => [...prev, { ...userToSave, userId: data.user.uid, password: '******' }]);
+      return;
+    }
+
+    setUsers((prev) => prev.map((u) => (u.userId === userToSave.userId ? { ...userToSave, password: '******' } : u)));
     if (currentUser?.userId === userToSave.userId) {
       setCurrentUser(userToSave);
     }
 
     if (db && isFirebaseConfigured) {
       try {
-        await setDoc(doc(db, 'app_users', userToSave.userId), userToSave, { merge: true });
+        // Never write a password into Firestore.
+        const { password: _pw, ...profile } = userToSave;
+        await setDoc(doc(db, 'app_users', userToSave.userId), profile, { merge: true });
       } catch (err) {
         console.warn('Firestore user save error:', err);
       }

@@ -574,7 +574,7 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
         );
         const setupLink = password ? undefined : await createPasswordSetupLink(email);
         res.statusCode = 201;
-        res.end(JSON.stringify({ success: true, user: { uid: rec.uid, email, role }, setupLink }));
+        res.end(JSON.stringify({ success: true, user: { uid: rec.uid, email, role }, existed: Boolean(rec.existed), passwordSet: Boolean(rec.passwordSet), setupLink }));
       } catch (err: any) {
         const msg = err?.message || 'Failed to invite user';
         res.statusCode = /another workspace/i.test(msg) ? 409 : 500;

@@ -1777,7 +1777,10 @@ export default function App() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error || `Could not create user (${res.status})`);
-      setUsers((prev) => [...prev, { ...userToSave, userId: data.user.uid, password: '******' }]);
+      setUsers((prev) => [...prev.filter((u) => u.userId !== data.user.uid), { ...userToSave, userId: data.user.uid, password: '******' }]);
+      if (data.existed && !data.passwordSet) {
+        throw new Error('This email already had an account, so its password was NOT changed. Use "Forgot password" on the login page to set a new one.');
+      }
       return;
     }
 

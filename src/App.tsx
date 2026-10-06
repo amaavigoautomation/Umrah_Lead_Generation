@@ -335,7 +335,9 @@ export default function App() {
           const leadsSnap = await getDocs(tCol('leads')).catch(() => null);
           const convsSnap = await getDocs(tCol('conversations')).catch(() => null);
 
-          if (!contactsSnap || (contactsSnap.empty && leadsSnap?.empty && convsSnap?.empty)) {
+          // Sample data (including the Umrah360 knowledge articles) belongs to the Umrah360 workspace only.
+          // Every other workspace starts empty.
+          if (currentTenantId === 'umrah360' && (!contactsSnap || (contactsSnap.empty && leadsSnap?.empty && convsSnap?.empty))) {
             // Seed initial data ONLY on brand-new setup
             for (const c of INITIAL_CONTACTS) {
               await setDoc(tDoc('contacts', c.contactId), c).catch(() => {});
@@ -1742,7 +1744,7 @@ export default function App() {
     // 2. Persist to Firestore
     if (isFirebaseConfigured && db) {
       try {
-        await setDoc(doc(db, 'knowledge_documents', docItem.id), docItem, { merge: true });
+        await setDoc(tDoc('knowledge_documents', docItem.id), docItem, { merge: true });
       } catch (err) {
         console.warn('Firestore KB save error:', err);
       }
@@ -1768,7 +1770,7 @@ export default function App() {
     // 2. Remove from Firestore
     if (isFirebaseConfigured && db) {
       try {
-        await deleteDoc(doc(db, 'knowledge_documents', id));
+        await deleteDoc(tDoc('knowledge_documents', id));
       } catch (err) {
         console.warn('Firestore KB delete error:', err);
       }
@@ -1990,6 +1992,7 @@ export default function App() {
                 onOpenConversation={(convId) => {
                   setActiveTab('inbox');
                 }}
+                tenantId={currentTenantId}
               />
             )}
 

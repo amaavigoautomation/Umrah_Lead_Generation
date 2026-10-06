@@ -535,8 +535,9 @@ async function runCampaignStoreSync(): Promise<void> {
         const metaDocSnap = await getDoc(metaDocRef).catch(() => null);
 
         if (!metaDocSnap?.exists()) {
-          // Brand new database initialization ONLY: seed default templates once
-          if (firestoreTpls.length === 0) {
+          // Brand new database initialization ONLY: seed default templates once.
+          // The built-in templates are Umrah360-branded, so only that workspace gets them.
+          if (firestoreTpls.length === 0 && getCampaignActiveCtx().tenantId === 'umrah360') {
             for (const tpl of DEFAULT_EMAIL_TEMPLATES) {
               await await safeSetDoc(tenantRepo(getCampaignActiveCtx()).emailTemplateDoc(tpl.templateId), tpl, { merge: true });
               firestoreTpls.push(tpl);

@@ -1394,10 +1394,10 @@ ${signature || 'Regards,\nUmrah360 Team'}`;
 
   // 4. Knowledge Base CRUD & Synchronization (/api/knowledge)
   if (url === '/api/knowledge' || url.startsWith('/api/knowledge?') || url.startsWith('/api/knowledge/')) {
-    await initKnowledgeStore();
+    await initKnowledgeStore(activeTenantCtx);
 
     if (req.method === 'GET') {
-      const documents = getAllKnowledgeDocs();
+      const documents = getAllKnowledgeDocs(activeTenantCtx);
       res.statusCode = 200;
       res.end(JSON.stringify({ success: true, documents, count: documents.length }));
       return true;
@@ -1405,7 +1405,7 @@ ${signature || 'Regards,\nUmrah360 Team'}`;
 
     if (req.method === 'POST' || req.method === 'PUT') {
       try {
-        const saved = await saveKnowledgeDoc(body);
+        const saved = await saveKnowledgeDoc(body, activeTenantCtx);
         res.statusCode = 200;
         res.end(JSON.stringify({ success: true, document: saved, message: 'Article successfully saved and active in RAG' }));
       } catch (err: any) {
@@ -1434,7 +1434,7 @@ ${signature || 'Regards,\nUmrah360 Team'}`;
         return true;
       }
 
-      const deleted = await deleteKnowledgeDoc(docId);
+      const deleted = await deleteKnowledgeDoc(docId, activeTenantCtx);
       res.statusCode = 200;
       res.end(JSON.stringify({ success: deleted, deletedId: docId }));
       return true;

@@ -71,6 +71,7 @@ interface CampaignManagementProps {
   onAddProspect?: (prospect: OutboundProspect) => void;
   onSendColdEmail?: (prospectId: string, customSubject?: string, customBody?: string) => void;
   onToggleCampaignStatus?: (campaignId: string) => void;
+  tenantId?: string;
 }
 
 export const CampaignManagement: React.FC<CampaignManagementProps> = ({
@@ -83,7 +84,11 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
   onAddProspect,
   onSendColdEmail,
   onToggleCampaignStatus,
+  tenantId = '',
 }) => {
+  // Email templates live under the workspace, never in a shared root collection.
+  const tplCol = () => collection(db, 'tenants', tenantId, 'email_templates');
+  const tplDoc = (id: string) => doc(db, 'tenants', tenantId, 'email_templates', id);
   // Navigation sub-tabs
   const [activeTab, setActiveTab] = useState<'CAMPAIGNS' | 'PROSPECTS' | 'TEMPLATES'>('CAMPAIGNS');
 
@@ -146,8 +151,8 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
   const fetchTemplatesDirectlyFromDb = async (): Promise<EmailTemplate[]> => {
     let list: EmailTemplate[] = [];
     try {
-      if (isFirebaseConfigured && db) {
-        const snap = await getDocs(collection(db, 'email_templates'));
+      if (isFirebaseConfigured && db && tenantId) {
+        const snap = await getDocs(tplCol());
         const dbTpls: EmailTemplate[] = [];
         snap.forEach((d) => {
           const data = d.data() as EmailTemplate;
@@ -180,8 +185,8 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
     if (!templateId) return null;
     setIsLoadingTemplateFromDb(true);
     try {
-      if (isFirebaseConfigured && db) {
-        const snap = await getDoc(doc(db, 'email_templates', templateId));
+      if (isFirebaseConfigured && db && tenantId) {
+        const snap = await getDoc(tplDoc(templateId));
         if (snap.exists()) {
           const tpl = snap.data() as EmailTemplate;
           setSelectedTemplateFromDb(tpl);
@@ -1125,9 +1130,9 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
 
     try {
       // 1. PRIMARY: Store directly into Firestore Database
-      if (isFirebaseConfigured && db) {
+      if (isFirebaseConfigured && db && tenantId) {
         try {
-          await setDoc(doc(db, 'email_templates', templateId), fullPayload, { merge: true });
+          await setDoc(tplDoc(templateId), fullPayload, { merge: true });
           console.log('[DB Storage] Successfully saved template with attachments directly to Firestore DB:', templateId);
         } catch (fsErr) {
           console.error('[DB Storage] Direct Firestore write note:', fsErr);
@@ -1186,9 +1191,9 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
 
     try {
       // 1. Direct Firestore deletion
-      if (isFirebaseConfigured && db) {
+      if (isFirebaseConfigured && db && tenantId) {
         try {
-          await deleteDoc(doc(db, 'email_templates', targetId));
+          await deleteDoc(tplDoc(targetId));
         } catch (fsErr) {
           console.warn('Firestore delete template note:', fsErr);
         }

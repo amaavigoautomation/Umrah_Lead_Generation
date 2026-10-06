@@ -19,7 +19,7 @@ import OpenAI from 'openai';
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import { getPublishedKnowledgeDocs } from './knowledgeService.js';
+import { getPublishedKnowledgeDocs, initKnowledgeStore } from './knowledgeService.js';
 import { isFirebaseConfigured } from '../firebase/config.js';
 import { db } from './adminFirestore.js';
 import { doc } from './adminFirestore.js';
@@ -518,7 +518,8 @@ export async function generateWhatsAppAutoReplyText(params: {
   const senderGreetingName = fromName ? fromName.split(' ')[0] : 'there';
 
   // Dynamic knowledge base grounding summary from published docs
-  const publishedDocs = getPublishedKnowledgeDocs();
+  await initKnowledgeStore(getWACtx()).catch(() => 0);
+  const publishedDocs = getPublishedKnowledgeDocs(getWACtx());
   const kbGroundingText = publishedDocs.map(
     (doc) => `[DOCUMENT: ${doc.title} (${doc.category})]\n${doc.content}`
   ).join('\n\n');

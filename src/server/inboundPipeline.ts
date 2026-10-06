@@ -36,7 +36,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { sendLiveEmail, SendMailResult, getSmtpConfig } from './smtpService.js';
 import { pollUnreadEmails, FetchedInboundEmail } from './imapService.js';
-import { getPublishedKnowledgeDocs } from './knowledgeService.js';
+import { getPublishedKnowledgeDocs, initKnowledgeStore } from './knowledgeService.js';
 import {
   initPersistentIdempotencyStore,
   isMessageAlreadyProcessed,
@@ -921,7 +921,8 @@ export async function generateAutoReplyText(params: {
   const senderGreetingName = fromName ? fromName.split(' ')[0] : from.split('@')[0];
 
   // Prepare full knowledgebase grounding text from dynamic published knowledge documents
-  const publishedDocs = getPublishedKnowledgeDocs();
+  await initKnowledgeStore(getInboundCtx()).catch(() => 0);
+  const publishedDocs = getPublishedKnowledgeDocs(getInboundCtx());
   const kbGroundingText = publishedDocs.map(
     (doc) => `=== [${doc.category}] ${doc.title} ===\n${doc.content}`
   ).join('\n\n');

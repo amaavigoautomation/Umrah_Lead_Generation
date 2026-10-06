@@ -33,8 +33,11 @@ function getTenantCache(tenantId: string): Map<string, KnowledgeDocument> {
 export async function initKnowledgeStore(ctx: TenantContext = DEFAULT_UMRAH_CTX): Promise<number> {
   const cache = getTenantCache(ctx.tenantId);
 
+  // The built-in articles are Umrah360 product content: only that workspace gets them.
+  const seedsDefaults = ctx.tenantId === DEFAULT_UMRAH_CTX.tenantId;
+
   // Pre-populate with standard template knowledge base if empty
-  if (cache.size === 0) {
+  if (seedsDefaults && cache.size === 0) {
     for (const docItem of INITIAL_KNOWLEDGE_DOCUMENTS) {
       cache.set(docItem.id, { ...docItem });
     }
@@ -60,11 +63,14 @@ export async function initKnowledgeStore(ctx: TenantContext = DEFAULT_UMRAH_CTX)
       });
       console.log(`[Knowledge Store] Successfully loaded ${cache.size} articles for tenant ${ctx.tenantId}.`);
     } else {
-      // Seed tenant with initial knowledge documents
-      for (const docItem of INITIAL_KNOWLEDGE_DOCUMENTS) {
-        await safeSetDoc(repo.knowledgeDocumentDoc(docItem.id), docItem, { merge: true });
+      if (seedsDefaults) {
+        for (const docItem of INITIAL_KNOWLEDGE_DOCUMENTS) {
+          await safeSetDoc(repo.knowledgeDocumentDoc(docItem.id), docItem, { merge: true });
+        }
+        console.log(`[Knowledge Store] Seeded ${INITIAL_KNOWLEDGE_DOCUMENTS.length} initial articles for tenant ${ctx.tenantId}.`);
+      } else {
+        cache.clear();
       }
-      console.log(`[Knowledge Store] Seeded ${INITIAL_KNOWLEDGE_DOCUMENTS.length} initial articles for tenant ${ctx.tenantId}.`);
     }
 
     tenantInitialized.add(ctx.tenantId);
@@ -81,7 +87,7 @@ export async function initKnowledgeStore(ctx: TenantContext = DEFAULT_UMRAH_CTX)
  */
 export function getAllKnowledgeDocs(ctx: TenantContext = DEFAULT_UMRAH_CTX): KnowledgeDocument[] {
   const cache = getTenantCache(ctx.tenantId);
-  if (!tenantInitialized.has(ctx.tenantId) && cache.size === 0) {
+  if (ctx.tenantId === DEFAULT_UMRAH_CTX.tenantId && !tenantInitialized.has(ctx.tenantId) && cache.size === 0) {
     for (const docItem of INITIAL_KNOWLEDGE_DOCUMENTS) {
       cache.set(docItem.id, { ...docItem });
     }

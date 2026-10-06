@@ -86,11 +86,13 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
       };
 
       await onSaveUser(userToSave);
-      setToast(`User "${userToSave.name}" saved to Firestore database.`);
+      setToast(`User "${userToSave.name}" created. They can now sign in with this email and password.`);
       setIsModalOpen(false);
       setTimeout(() => setToast(null), 3500);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error saving user to DB:', err);
+      setToast(err?.message || 'Could not save user');
+      setTimeout(() => setToast(null), 5000);
     } finally {
       setIsSaving(false);
     }

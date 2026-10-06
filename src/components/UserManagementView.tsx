@@ -151,7 +151,7 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
           </thead>
           <tbody className="divide-y divide-slate-100 bg-white">
             {users.map((u) => {
-              const hasAllAccess = u.role === 'ADMIN' || u.accessLevel === 'ALL' || u.allowedModules.length >= 8;
+              const hasAllAccess = u.role === 'ADMIN' || u.accessLevel === 'ALL' || u.allowedModules.length >= PLATFORM_MODULES.length;
 
               return (
                 <tr key={u.userId} className="hover:bg-slate-50 transition">

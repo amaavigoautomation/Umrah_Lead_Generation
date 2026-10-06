@@ -7,7 +7,8 @@ export type ActiveTab =
   | 'playground'
   | 'scenarios'
   | 'settings'
-  | 'live-mailbox';
+  | 'live-mailbox'
+  | 'auto-followup';
 
 export type Channel = 'WEBSITE' | 'WHATSAPP' | 'INSTAGRAM' | 'FACEBOOK' | 'LINKEDIN' | 'EMAIL';
 
@@ -223,6 +224,19 @@ export interface Contact {
   lastActivityAt?: string;
 }
 
+export interface AutoFollowUpState {
+  enabled: boolean;
+  enabledBy?: string | null;
+  enabledAt?: string | null;
+  disabledBy?: string | null;
+  disabledAt?: string | null;
+  disabledReason?: 'manual' | 'demo_booked' | 'lead_closed' | 'lead_lost' | 'do_not_contact' | 'spam' | 'opted_out' | 'admin_disabled' | null;
+  activeFollowUpId?: string | null;
+  attemptCount?: number;
+  nextScheduledAt?: string | null;
+  channelDelayOverride?: { value: number; unit: 'minute' | 'hour' | 'day' } | null;
+}
+
 export interface Lead {
   leadId: string;
   contactId: string;
@@ -262,6 +276,7 @@ export interface Lead {
   queryMessage?: string;
   notes?: string;
   sourceUrl?: string;
+  autoFollowUp?: AutoFollowUpState;
   createdAt: string;
   updatedAt: string;
   lastActivityAt: string;

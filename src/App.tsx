@@ -10,6 +10,7 @@ import { InteractiveScenarios } from './components/InteractiveScenarios';
 import { SettingsView } from './components/SettingsView';
 import { LiveMailboxCenter } from './components/LiveMailboxCenter';
 import { DemoSchedulingView } from './components/DemoSchedulingView';
+import { AutoFollowUpDashboard } from './components/AutoFollowUpDashboard';
 import { LoginView } from './components/LoginView';
 import { onSession, signOutUser, installAuthFetch, type SessionInfo } from './services/authService';
 import { LockedModuleView } from './components/LockedModuleView';
@@ -1885,6 +1886,12 @@ export default function App() {
                 onProcessInboundEmail={handleProcessInboundEmail}
                 onProcessInboundWhatsApp={handleProcessInboundWhatsApp}
                 onSyncNow={syncWithBackendInbound}
+                onAutoFollowUpChanged={(leadId, autoFollowUp) => {
+                  setLeads((prev) => prev.map((l) => (l.leadId === leadId ? { ...l, autoFollowUp } : l)));
+                  if (isFirebaseConfigured && db) {
+                    updateDoc(doc(db, 'leads', leadId), { autoFollowUp }).catch(() => {});
+                  }
+                }}
               />
             )}
 
@@ -1983,6 +1990,18 @@ export default function App() {
                 users={users}
                 onSaveUser={handleSaveUser}
                 onDeleteUser={handleDeleteUser}
+              />
+            )}
+
+            {activeTab === 'auto-followup' && (
+              <AutoFollowUpDashboard
+                leads={leads}
+                conversations={conversations}
+                messages={messages}
+                onSelectConversation={() => {
+                  setActiveTab('inbox');
+                }}
+                onRefresh={syncWithBackendInbound}
               />
             )}
 

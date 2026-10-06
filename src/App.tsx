@@ -52,7 +52,7 @@ import {
   WHATSAPP_BUSINESS_NUMBER_FORMATTED,
 } from './services/whatsappInboundService';
 import { db, isFirebaseConfigured } from './firebase/config';
-import { collection, doc, setDoc, getDoc, getDocs, updateDoc, deleteDoc, query, orderBy, onSnapshot } from 'firebase/firestore';
+import { collection, doc, setDoc, getDoc, getDocs, updateDoc, deleteDoc, query, where, orderBy, onSnapshot } from 'firebase/firestore';
 import { initCalendarAuth } from './services/googleCalendarAuth';
 
 function sanitizeDoc(obj: any): any {
@@ -129,6 +129,21 @@ function sanitizeContact(c: any): Contact {
     phone: c.phone || '',
     tags: Array.isArray(c.tags) ? c.tags : [],
   };
+}
+
+function toAppUser(u: any): AppUser {
+  return {
+    userId: u.uid || u.userId,
+    name: u.name || u.email?.split('@')[0] || 'Operator',
+    email: u.email || '',
+    username: u.username || u.email?.split('@')[0] || '',
+    password: '******',
+    role: u.role === 'admin' || u.role === 'ADMIN' ? 'ADMIN' : 'SPECIALIST',
+    accessLevel: 'ALL',
+    allowedModules: Array.isArray(u.allowedModules) ? u.allowedModules : ['inbox', 'campaigns', 'crm', 'scheduling', 'knowledge', 'settings'],
+    createdAt: u.createdAt || new Date().toISOString(),
+    updatedAt: u.updatedAt || u.createdAt || new Date().toISOString(),
+  } as AppUser;
 }
 
 export default function App() {
@@ -306,7 +321,7 @@ export default function App() {
           getDocs(tCol('contacts')).catch(() => null),
           getDocs(tCol('knowledge_documents')).catch(() => null),
           getDocs(tCol('outbound_campaigns')).catch(() => null),
-          getDocs(collection(db, 'users')).catch(() => null),
+          getDocs(query(collection(db, 'users'), where('tenantId', '==', currentTenantId))).catch(() => null),
           getDocs(tCol('outbound_prospects')).catch(() => null),
         ]);
 
@@ -344,21 +359,7 @@ export default function App() {
         if (!usersSnap || usersSnap.empty) {
           setUsers([]);
         } else {
-          const tenantUsers = usersSnap.docs
-            .map((d) => d.data())
-            .filter((u) => u.tenantId === currentTenantId || !u.tenantId)
-            .map((u) => ({
-              userId: u.uid || u.userId,
-              name: u.name || u.email?.split('@')[0] || 'Operator',
-              email: u.email || '',
-              username: u.username || u.email?.split('@')[0] || '',
-              password: u.password || '******',
-              role: u.role === 'admin' || u.role === 'ADMIN' ? 'ADMIN' : 'SPECIALIST',
-              accessLevel: 'ALL',
-              allowedModules: u.allowedModules || ['inbox', 'campaigns', 'crm', 'scheduling', 'knowledge', 'settings'],
-              createdAt: u.createdAt || new Date().toISOString(),
-            })) as AppUser[];
-          setUsers(tenantUsers);
+          setUsers(usersSnap.docs.map((d) => toAppUser(d.data())));
         }
 
         // Attach realtime listeners for Firestore updates
@@ -435,23 +436,11 @@ export default function App() {
           }
         }, () => {});
 
-        unsubUsers = onSnapshot(collection(db, 'app_users'), (snap) => {
-          if (!snap.empty) {
-            const list = snap.docs.map((d) => d.data() as AppUser);
-            setUsers(list);
-            setCurrentUser((prev) => {
-              if (!prev) return null;
-              const updated = list.find((u) => u.userId === prev.userId || u.email.toLowerCase() === prev.email.toLowerCase());
-              if (updated) {
-                try {
-                  localStorage.setItem('umrah360_user_session', JSON.stringify(updated));
-                } catch {}
-                return updated;
-              }
-              return prev;
-            });
-          }
-        });
+        // Team list: only this workspace's users. The signed-in user's identity and role always come
+        // from the verified session, never from a database row.
+        unsubUsers = onSnapshot(query(collection(db, 'users'), where('tenantId', '==', currentTenantId)), (snap) => {
+          setUsers(snap.docs.map((d) => toAppUser(d.data())));
+        }, () => {});
 
         setIsFirebaseActive(true);
       } catch (err) {
@@ -1793,7 +1782,7 @@ export default function App() {
       try {
         // Never write a password into Firestore.
         const { password: _pw, ...profile } = userToSave;
-        await setDoc(doc(db, 'app_users', userToSave.userId), profile, { merge: true });
+        await setDoc(doc(db, 'users', userToSave.userId), profile, { merge: true });
       } catch (err) {
         console.warn('Firestore user save error:', err);
       }
@@ -1804,7 +1793,7 @@ export default function App() {
     setUsers((prev) => prev.filter((u) => u.userId !== userId));
     if (db && isFirebaseConfigured) {
       try {
-        await deleteDoc(doc(db, 'app_users', userId));
+        await deleteDoc(doc(db, 'users', userId));
       } catch (err) {
         console.warn('Firestore user delete error:', err);
       }
@@ -1841,7 +1830,7 @@ export default function App() {
   const isCurrentTabAllowed =
     currentUser.accessLevel === 'ALL' ||
     currentUser.role === 'ADMIN' ||
-    currentUser.allowedModules.includes(activeTab);
+    (currentUser.allowedModules || []).includes(activeTab);
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col">

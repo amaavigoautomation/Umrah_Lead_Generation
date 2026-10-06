@@ -5,6 +5,7 @@ import { checkImapStatus, getImapConfig, updateImapConfig } from './imapService.
 import {
   processLiveInboundEmail,
   pollAndProcessImapMailbox,
+  getImapOwnerTenantId,
   getRecentProcessedEmails,
   getConversationTurnStates,
   getAllThreadMessages,
@@ -550,6 +551,7 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
             tenantId: tId,
             role,
             active: true,
+            ...(Array.isArray(body?.allowedModules) ? { allowedModules: body.allowedModules.filter((m: any) => typeof m === 'string') } : {}),
             createdAt: nowIso,
             updatedAt: nowIso,
           },
@@ -1366,6 +1368,19 @@ Generate a helpful, grounded response.`;
     return true;
   }
 
+  // The shared SMTP/IMAP mailbox settings belong to one workspace (see getImapOwnerTenantId).
+  // Other workspaces must never read or change them.
+  if (
+    /^\/api\/(smtp\/(config|status|verify)|imap\/(config|status|verify|poll))(\?|$)/.test(url) &&
+    !isPlatformAdmin &&
+    resolvedTenantId !== getImapOwnerTenantId()
+  ) {
+    res.statusCode = 403;
+    res.setHeader('Content-Type', 'application/json');
+    res.end(JSON.stringify({ error: 'Mailbox settings are not available for this workspace' }));
+    return true;
+  }
+
   // 5. SMTP & Email Sending Operations
   if (url === '/api/smtp/config') {
     if (req.method === 'GET') {
@@ -1540,7 +1555,7 @@ Generate a helpful, grounded response.`;
   }
 
   if (url === '/api/imap/poll' && req.method === 'POST') {
-    const result = await pollAndProcessImapMailbox();
+    const result = await pollAndProcessImapMailbox(activeTenantCtx);
     res.statusCode = result.success ? 200 : 500;
     res.end(JSON.stringify(result));
     return true;
@@ -1551,7 +1566,7 @@ Generate a helpful, grounded response.`;
     // Poll IMAP mailbox on demand if configured
     const imapCfg = getImapConfig();
     if (imapCfg.configured) {
-      await pollAndProcessImapMailbox().catch((err) => {
+      await pollAndProcessImapMailbox(activeTenantCtx).catch((err) => {
         console.warn('IMAP on-demand poll notice in /api/inbound/sync:', err);
       });
     }
@@ -1561,9 +1576,9 @@ Generate a helpful, grounded response.`;
     res.end(
       JSON.stringify({
         success: true,
-        history: getRecentProcessedEmails(),
-        allThreadMessages: getAllThreadMessages(),
-        turnStates: getConversationTurnStates(),
+        history: getRecentProcessedEmails(activeTenantCtx.tenantId),
+        allThreadMessages: getAllThreadMessages(activeTenantCtx.tenantId),
+        turnStates: getConversationTurnStates(activeTenantCtx.tenantId),
         timestamp: new Date().toISOString(),
       })
     );

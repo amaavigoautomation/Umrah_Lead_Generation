@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { tenantRepo } from './tenantRepo.js';
 import type { TenantContext } from '../types/tenant.js';
 
@@ -12,8 +13,22 @@ let activeInboundCtx: TenantContext = DEFAULT_UMRAH_CTX;
 export function setInboundActiveContext(ctx: TenantContext) {
   activeInboundCtx = ctx;
 }
+// Per-call tenant scope. Work started with runWithInboundCtx() always sees its own tenant, even if
+// another request changes the global active context while it is awaiting.
+const inboundCtxStore = new AsyncLocalStorage<TenantContext>();
+export function runWithInboundCtx<T>(ctx: TenantContext, fn: () => Promise<T>): Promise<T> {
+  return inboundCtxStore.run(ctx, fn);
+}
 function getInboundCtx(): TenantContext {
-  return activeInboundCtx;
+  return inboundCtxStore.getStore() ?? activeInboundCtx;
+}
+
+/**
+ * The shared IMAP mailbox (IMAP_* / SMTP_* env) belongs to exactly one workspace. Until per-workspace
+ * mailboxes exist, only that workspace may poll it, read its results or change its settings.
+ */
+export function getImapOwnerTenantId(): string {
+  return (process.env.IMAP_OWNER_TENANT_ID || 'umrah360').trim();
 }
 import OpenAI from 'openai';
 import fs from 'node:fs';
@@ -186,6 +201,7 @@ export interface ProcessedInboundEmailResult {
   intent: string;
   buyingStage: string;
   timestamp: string;
+  tenantId?: string;
   crmEntities: InboundCrmEntities;
 }
 
@@ -470,13 +486,23 @@ export function appendOutboundMessageToThread(conversationId: string, message: a
   return [...thread];
 }
 
-export function getRecentProcessedEmails(): ProcessedInboundEmailResult[] {
-  return [...recentProcessedEmails];
+export function getRecentProcessedEmails(tenantId?: string): ProcessedInboundEmailResult[] {
+  return tenantId ? recentProcessedEmails.filter((r) => r.tenantId === tenantId) : [...recentProcessedEmails];
 }
 
-export function getConversationTurnStates(): Record<string, ConversationTurnState> {
+function conversationIdsForTenant(tenantId: string): Set<string> {
+  const ids = new Set<string>();
+  for (const r of recentProcessedEmails) {
+    if (r.tenantId === tenantId && r.crmEntities?.conversation?.conversationId) ids.add(r.crmEntities.conversation.conversationId);
+  }
+  return ids;
+}
+
+export function getConversationTurnStates(tenantId?: string): Record<string, ConversationTurnState> {
   const result: Record<string, ConversationTurnState> = {};
+  const allowed = tenantId ? conversationIdsForTenant(tenantId) : null;
   for (const [k, v] of conversationTurnMap.entries()) {
+    if (allowed && !allowed.has(k)) continue;
     result[k] = v;
   }
   return result;
@@ -486,9 +512,11 @@ export function getThreadMessages(conversationId: string): any[] {
   return [...(conversationThreadMessagesMap.get(conversationId) || [])];
 }
 
-export function getAllThreadMessages(): Record<string, any[]> {
+export function getAllThreadMessages(tenantId?: string): Record<string, any[]> {
   const result: Record<string, any[]> = {};
+  const allowed = tenantId ? conversationIdsForTenant(tenantId) : null;
   for (const [k, v] of conversationThreadMessagesMap.entries()) {
+    if (allowed && !allowed.has(k)) continue;
     result[k] = [...v];
   }
   return result;
@@ -1794,6 +1822,7 @@ export async function processLiveInboundEmail(payload: {
       intent: 'HIGH',
       buyingStage: aiResult.buyingStage,
       timestamp: nowIso,
+      tenantId: getInboundCtx().tenantId,
       crmEntities,
     };
 
@@ -1846,7 +1875,24 @@ const IMAP_POLL_MIN_INTERVAL_MS = 15000; // 15s cooldown to prevent IMAP and pro
 /**
  * Polls IMAP inbox automation@amaavigo.com, processes all new emails, and dispatches real SMTP replies!
  */
-export async function pollAndProcessImapMailbox(force = false): Promise<{
+export async function pollAndProcessImapMailbox(forceOrCtx: boolean | TenantContext = false): Promise<{
+  success: boolean;
+  polledCount: number;
+  results: ProcessedInboundEmailResult[];
+  error?: string;
+}> {
+  const force = forceOrCtx === true;
+  const callerCtx = typeof forceOrCtx === 'object' ? forceOrCtx : getInboundCtx();
+
+  // The shared mailbox only ever belongs to its owner workspace. Any other workspace is a no-op,
+  // otherwise its login would pull the owner's customer emails into the wrong tenant.
+  if (callerCtx.tenantId !== getImapOwnerTenantId()) {
+    return { success: true, polledCount: 0, results: [] };
+  }
+  return runWithInboundCtx(callerCtx, () => pollImapForOwner(force));
+}
+
+async function pollImapForOwner(force: boolean): Promise<{
   success: boolean;
   polledCount: number;
   results: ProcessedInboundEmailResult[];
@@ -1857,7 +1903,7 @@ export async function pollAndProcessImapMailbox(force = false): Promise<{
     return {
       success: true,
       polledCount: 0,
-      results: recentProcessedEmails.slice(0, 10),
+      results: getRecentProcessedEmails(getInboundCtx().tenantId).slice(0, 10),
     };
   }
 
@@ -1865,7 +1911,7 @@ export async function pollAndProcessImapMailbox(force = false): Promise<{
     return {
       success: true,
       polledCount: 0,
-      results: recentProcessedEmails.slice(0, 10),
+      results: getRecentProcessedEmails(getInboundCtx().tenantId).slice(0, 10),
     };
   }
 

@@ -1491,12 +1491,14 @@ export async function processSchedulingConversationTurn(params: {
   automated?: boolean;
   [key: string]: any;
 }): Promise<SchedulingTurnResult> {
-  // HARD RULE: only an explicit manual call (the Demo Scheduling tab sends manual: true)
-  // may book, reschedule or cancel a demo. Every automated path (inbound email, WhatsApp,
-  // browser auto-reply, old cached clients) falls through to the normal AI reply.
-  // No environment flag can override this.
+  // Booking only happens when the sender actually asks for it. Manual calls (Demo Scheduling tab)
+  // always proceed; automated calls (inbound email / WhatsApp) proceed only on real booking intent,
+  // judged on the sender's new text with quoted history stripped.
   if (params.manual !== true) {
-    return { handled: false, replyText: '', action: 'NOT_DEMO_INTENT' };
+    const newText = String(params.messageText || '');
+    if (!detectDemoSchedulingIntent(newText)) {
+      return { handled: false, replyText: '', action: 'NOT_DEMO_INTENT' };
+    }
   }
   const messageText = params.messageText || '';
   const conversationHistory = Array.isArray(params.conversationHistory) ? params.conversationHistory : [];

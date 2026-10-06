@@ -16,6 +16,7 @@ import {
 import { SystemSettings, Channel, ChannelMode, AppUser } from '../types';
 import { UserManagementView } from './UserManagementView';
 import { EmailSettingsPanel } from './EmailSettingsPanel';
+import { BillingView } from './BillingView';
 
 interface SettingsViewProps {
   settings: SystemSettings;
@@ -347,6 +348,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           </div>
         </div>
       </div>
+
+      {tenantId && canEditEmail && <BillingView />}
 
       {tenantId && <EmailSettingsPanel tenantId={tenantId} canEdit={Boolean(canEditEmail)} />}
 

@@ -17,6 +17,8 @@ import {
   ShieldCheck,
 } from 'lucide-react';
 
+import { PlansManager, type Catalog } from './PlansManager';
+
 type Plan = 'starter' | 'growth' | 'enterprise';
 type Status = 'active' | 'suspended';
 
@@ -24,7 +26,12 @@ interface Tenant {
   id: string;
   name: string;
   status: Status;
-  plan: Plan;
+  plan?: Plan;
+  planId?: string;
+  billingStatus?: string;
+  planSource?: string;
+  overrides?: { features?: Record<string, boolean>; limits?: Record<string, number> };
+  currentPeriodEnd?: string;
   contactEmail?: string;
   timezone?: string;
   createdAt?: string;
@@ -85,6 +92,19 @@ export const PlatformConsole: React.FC<Props> = ({ email, onLogout }) => {
   const [search, setSearch] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
+  const [view, setView] = useState<'workspaces' | 'plans'>('workspaces');
+  const [catalog, setCatalog] = useState<Catalog>({ plans: [], features: [], limits: [] });
+  const loadCatalog = useCallback(async () => {
+    try {
+      setCatalog(await api<Catalog>('/api/plans'));
+    } catch {
+      /* the Plans tab shows an empty state */
+    }
+  }, []);
+  useEffect(() => {
+    loadCatalog();
+  }, [loadCatalog]);
+  const planName = (t: Tenant) => catalog.plans.find((p) => p.id === t.planId)?.name || (t.planId ? t.planId : t.billingStatus ? 'No plan yet' : 'Legacy');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -139,6 +159,27 @@ export const PlatformConsole: React.FC<Props> = ({ email, onLogout }) => {
         </div>
       </header>
 
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 pt-5">
+        <div className="inline-flex rounded-lg bg-slate-200/60 p-1 text-sm font-semibold">
+          {(['workspaces', 'plans'] as const).map((v) => (
+            <button
+              key={v}
+              onClick={() => setView(v)}
+              className={`px-4 py-1.5 rounded-md capitalize ${view === v ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
+            >
+              {v}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {view === 'plans' && (
+        <main className="max-w-6xl mx-auto px-4 sm:px-6 py-6">
+          <PlansManager catalog={catalog} onChanged={loadCatalog} />
+        </main>
+      )}
+
+      {view === 'workspaces' && (
       <main className="max-w-6xl mx-auto px-4 sm:px-6 py-6 space-y-5">
         {/* Stats */}
         <div className="grid grid-cols-3 gap-3">
@@ -224,9 +265,8 @@ export const PlatformConsole: React.FC<Props> = ({ email, onLogout }) => {
                       <div className="text-xs text-slate-500 font-mono">{t.id}</div>
                     </td>
                     <td className="px-4 py-3">
-                      <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${PLAN_STYLE[t.plan] || PLAN_STYLE.starter}`}>
-                        {PLAN_LABEL[t.plan] || t.plan}
-                      </span>
+                      <div className="font-semibold text-slate-800">{planName(t)}</div>
+                      <BillingPill status={t.billingStatus} />
                     </td>
                     <td className="px-4 py-3">
                       <span
@@ -247,9 +287,11 @@ export const PlatformConsole: React.FC<Props> = ({ email, onLogout }) => {
           )}
         </div>
       </main>
+      )}
 
       {showCreate && (
         <CreateWorkspaceModal
+          catalog={catalog}
           onClose={() => setShowCreate(false)}
           onCreated={(t) => {
             setTenants((prev) => [t, ...prev]);
@@ -263,6 +305,7 @@ export const PlatformConsole: React.FC<Props> = ({ email, onLogout }) => {
         <WorkspacePanel
           key={selected.id}
           tenant={selected}
+          catalog={catalog}
           onClose={() => setSelectedId(null)}
           onChanged={(patch) => patchLocal(selected.id, patch)}
         />
@@ -275,9 +318,23 @@ export const PlatformConsole: React.FC<Props> = ({ email, onLogout }) => {
 /* Create workspace                                                    */
 /* ------------------------------------------------------------------ */
 
-const CreateWorkspaceModal: React.FC<{ onClose: () => void; onCreated: (t: Tenant) => void }> = ({ onClose, onCreated }) => {
+const BILLING_LABEL: Record<string, { label: string; cls: string }> = {
+  awaiting_plan: { label: 'Awaiting payment', cls: 'text-amber-600' },
+  trialing: { label: 'Trial', cls: 'text-sky-600' },
+  active: { label: 'Paid', cls: 'text-emerald-600' },
+  past_due: { label: 'Payment failed', cls: 'text-red-600' },
+  canceled: { label: 'Canceled', cls: 'text-slate-500' },
+  manual: { label: 'Granted manually', cls: 'text-indigo-600' },
+};
+const BillingPill: React.FC<{ status?: string }> = ({ status }) => {
+  const b = status ? BILLING_LABEL[status] : null;
+  return <div className={`text-xs font-semibold ${b ? b.cls : 'text-slate-400'}`}>{b ? b.label : 'Existing customer'}</div>;
+};
+
+const CreateWorkspaceModal: React.FC<{ catalog: Catalog; onClose: () => void; onCreated: (t: Tenant) => void }> = ({ catalog, onClose, onCreated }) => {
+  const [billing, setBilling] = useState<'stripe' | 'manual'>('stripe');
+  const [planId, setPlanId] = useState('');
   const [name, setName] = useState('');
-  const [plan, setPlan] = useState<Plan>('growth');
   const [contactEmail, setContactEmail] = useState('');
   const [timezone, setTimezone] = useState('Asia/Kolkata');
   const [busy, setBusy] = useState(false);
@@ -291,7 +348,7 @@ const CreateWorkspaceModal: React.FC<{ onClose: () => void; onCreated: (t: Tenan
     try {
       const data = await api<{ tenant: Tenant }>('/api/tenants', {
         method: 'POST',
-        body: JSON.stringify({ name: name.trim(), plan, contactEmail: contactEmail.trim(), timezone }),
+        body: JSON.stringify({ name: name.trim(), billing, planId: billing === 'manual' ? planId : undefined, contactEmail: contactEmail.trim(), timezone }),
       });
       onCreated(data.tenant);
     } catch (e: any) {
@@ -322,11 +379,10 @@ const CreateWorkspaceModal: React.FC<{ onClose: () => void; onCreated: (t: Tenan
 
         <div className="grid grid-cols-2 gap-3">
           <label className="block text-sm">
-            <span className="font-semibold text-slate-700">Plan</span>
-            <select value={plan} onChange={(e) => setPlan(e.target.value as Plan)} className={`${inputCls} mt-1`}>
-              <option value="starter">Starter</option>
-              <option value="growth">Growth</option>
-              <option value="enterprise">Enterprise</option>
+            <span className="font-semibold text-slate-700">Billing</span>
+            <select value={billing} onChange={(e) => setBilling(e.target.value as 'stripe' | 'manual')} className={`${inputCls} mt-1`}>
+              <option value="stripe">Customer pays online</option>
+              <option value="manual">Grant a plan (no payment)</option>
             </select>
           </label>
           <label className="block text-sm">
@@ -340,6 +396,22 @@ const CreateWorkspaceModal: React.FC<{ onClose: () => void; onCreated: (t: Tenan
             </select>
           </label>
         </div>
+
+        {billing === 'manual' ? (
+          <label className="block text-sm">
+            <span className="font-semibold text-slate-700">Plan to grant</span>
+            <select value={planId} onChange={(e) => setPlanId(e.target.value)} className={`${inputCls} mt-1`}>
+              <option value="">Choose a plan…</option>
+              {catalog.plans.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : (
+          <p className="text-xs text-slate-500">The workspace stays locked until its admin chooses a plan and pays on the Billing screen.</p>
+        )}
 
         <label className="block text-sm">
           <span className="font-semibold text-slate-700">Contact email (optional)</span>
@@ -358,7 +430,7 @@ const CreateWorkspaceModal: React.FC<{ onClose: () => void; onCreated: (t: Tenan
           </button>
           <button
             type="submit"
-            disabled={busy || !name.trim()}
+            disabled={busy || !name.trim() || (billing === 'manual' && !planId)}
             className="px-4 py-2 rounded-lg bg-orange-500 hover:bg-orange-600 disabled:opacity-50 text-white text-sm font-bold flex items-center gap-2"
           >
             {busy && <Loader2 className="w-4 h-4 animate-spin" />} Create
@@ -373,14 +445,18 @@ const CreateWorkspaceModal: React.FC<{ onClose: () => void; onCreated: (t: Tenan
 /* Workspace detail panel                                              */
 /* ------------------------------------------------------------------ */
 
-const WorkspacePanel: React.FC<{ tenant: Tenant; onClose: () => void; onChanged: (patch: Partial<Tenant>) => void }> = ({
+const WorkspacePanel: React.FC<{ tenant: Tenant; catalog: Catalog; onClose: () => void; onChanged: (patch: Partial<Tenant>) => void }> = ({
+  catalog,
   tenant,
   onClose,
   onChanged,
 }) => {
   const [usage, setUsage] = useState<Usage | null>(null);
   const [users, setUsers] = useState<TenantUser[]>([]);
-  const [plan, setPlan] = useState<Plan>(tenant.plan);
+  const [planId, setPlanId] = useState<string>(tenant.planId || '');
+  const [billingStatus, setBillingStatus] = useState<string>(tenant.billingStatus || '');
+  const [ovFeatures, setOvFeatures] = useState<Record<string, boolean | undefined>>({ ...(tenant.overrides?.features || {}) });
+  const [ovLimits, setOvLimits] = useState<Record<string, string>>(Object.fromEntries(Object.entries(tenant.overrides?.limits || {}).map(([k, v]) => [k, String(v)])));
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
@@ -410,7 +486,7 @@ const WorkspacePanel: React.FC<{ tenant: Tenant; onClose: () => void; onChanged:
     try {
       await api(`/api/tenants/${tenant.id}`, { method: 'PATCH', body: JSON.stringify(body) });
       onChanged(local);
-      if (body.plan) loadDetail();
+      if (body.planId || body.overrides) loadDetail();
     } catch (e: any) {
       setErr(e.message);
     } finally {
@@ -516,24 +592,99 @@ const WorkspacePanel: React.FC<{ tenant: Tenant; onClose: () => void; onChanged:
             </div>
           </section>
 
-          {/* Plan */}
-          <section className="space-y-2">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">Plan</h3>
+          {/* Plan & billing */}
+          <section className="space-y-3">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">Plan & billing</h3>
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-slate-600">Billing</span>
+              <BillingPill status={tenant.billingStatus} />
+            </div>
+            {tenant.currentPeriodEnd && <div className="text-xs text-slate-500">Renews / ends {fmtDate(tenant.currentPeriodEnd)}</div>}
             <div className="flex gap-2">
-              <select value={plan} onChange={(e) => setPlan(e.target.value as Plan)} className={inputCls}>
-                <option value="starter">Starter</option>
-                <option value="growth">Growth</option>
-                <option value="enterprise">Enterprise</option>
+              <select value={planId} onChange={(e) => setPlanId(e.target.value)} className={inputCls}>
+                <option value="">{tenant.billingStatus ? 'No plan yet' : 'Legacy (all features)'}</option>
+                {catalog.plans.filter((p) => p.id !== 'legacy').map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
               </select>
               <button
-                disabled={plan === tenant.plan || busy === 'plan'}
-                onClick={() => patch({ plan }, 'plan', { plan })}
+                disabled={!planId || planId === tenant.planId || busy === 'plan'}
+                onClick={() => patch({ planId }, 'plan', { planId, billingStatus: 'manual', planSource: 'manual' })}
                 className="px-4 py-2 rounded-lg bg-slate-900 text-white text-sm font-semibold disabled:opacity-40"
               >
-                {busy === 'plan' ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Save'}
+                {busy === 'plan' ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Grant'}
               </button>
             </div>
-            <p className="text-xs text-slate-500">Changing the plan resets the limits to that plan's defaults.</p>
+            <p className="text-xs text-slate-500">Granting a plan by hand marks the workspace as “granted manually”; Stripe events will never overwrite it.</p>
+            <div className="flex gap-2">
+              <select value={billingStatus} onChange={(e) => setBillingStatus(e.target.value)} className={inputCls}>
+                <option value="">Existing customer (never locked)</option>
+                {Object.entries(BILLING_LABEL).map(([k, v]) => (
+                  <option key={k} value={k}>
+                    {v.label}
+                  </option>
+                ))}
+              </select>
+              <button
+                disabled={!billingStatus || billingStatus === tenant.billingStatus || busy === 'billing'}
+                onClick={() => patch({ billingStatus }, 'billing', { billingStatus })}
+                className="px-4 py-2 rounded-lg bg-slate-900 text-white text-sm font-semibold disabled:opacity-40"
+              >
+                {busy === 'billing' ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Set'}
+              </button>
+            </div>
+          </section>
+
+          {/* Overrides */}
+          <section className="space-y-3">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">Overrides for this workspace</h3>
+            <p className="text-xs text-slate-500">Leave on “Plan default” to follow the plan. Use this for special deals.</p>
+            {catalog.features.map((f) => (
+              <div key={f.key} className="flex items-center justify-between gap-3 text-sm">
+                <span className="text-slate-700">{f.label}</span>
+                <select
+                  value={ovFeatures[f.key] === undefined ? '' : ovFeatures[f.key] ? 'on' : 'off'}
+                  onChange={(e) => setOvFeatures({ ...ovFeatures, [f.key]: e.target.value === '' ? undefined : e.target.value === 'on' })}
+                  className="border border-slate-200 rounded-lg px-2 py-1 text-sm bg-white"
+                >
+                  <option value="">Plan default</option>
+                  <option value="on">Always on</option>
+                  <option value="off">Always off</option>
+                </select>
+              </div>
+            ))}
+            {catalog.limits.map((l) => (
+              <div key={l.key} className="flex items-center justify-between gap-3 text-sm">
+                <span className="text-slate-700">{l.label}</span>
+                <input
+                  type="number"
+                  min={0}
+                  placeholder="Plan default"
+                  value={ovLimits[l.key] ?? ''}
+                  onChange={(e) => setOvLimits({ ...ovLimits, [l.key]: e.target.value })}
+                  className="w-32 border border-slate-200 rounded-lg px-2 py-1 text-sm"
+                />
+              </div>
+            ))}
+            <button
+              disabled={busy === 'overrides'}
+              onClick={() => {
+                const features: Record<string, boolean> = {};
+                Object.entries(ovFeatures).forEach(([k, v]) => {
+                  if (v !== undefined) features[k] = v;
+                });
+                const limits: Record<string, number> = {};
+                Object.entries(ovLimits).forEach(([k, v]) => {
+                  if (v !== '' && Number.isFinite(Number(v))) limits[k] = Number(v);
+                });
+                patch({ overrides: { features, limits } }, 'overrides', { overrides: { features, limits } });
+              }}
+              className="px-4 py-2 rounded-lg bg-slate-900 text-white text-sm font-semibold disabled:opacity-40"
+            >
+              {busy === 'overrides' ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Save overrides'}
+            </button>
           </section>
 
           {/* Users */}

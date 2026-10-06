@@ -16,6 +16,7 @@ import { LoginView } from './components/LoginView';
 import { onSession, signOutUser, installAuthFetch, type SessionInfo } from './services/authService';
 import { LockedModuleView } from './components/LockedModuleView';
 import { UpgradeRequiredView } from './components/UpgradeRequiredView';
+import { BillingView } from './components/BillingView';
 import { FEATURES, FEATURE_BY_TAB } from './shared/features';
 import {
   Contact,
@@ -229,7 +230,9 @@ export default function App() {
   }, [session, currentTenantId]);
 
   // What the workspace's plan includes (the server enforces it too; this only drives the UI).
-  const [entitlements, setEntitlements] = useState<{ planName: string; features: Record<string, boolean> } | null>(null);
+  const [entitlements, setEntitlements] = useState<{ planName: string; features: Record<string, boolean>; billing?: { status: string; locked: boolean; graceEndsAt?: string } } | null>(null);
+  const [activatingPlan, setActivatingPlan] = useState(false);
+  const [entitlementsLoaded, setEntitlementsLoaded] = useState(false);
   useEffect(() => {
     if (!session || session.isPlatformAdmin || !currentTenantId) return;
     let cancelled = false;
@@ -237,10 +240,29 @@ export default function App() {
       fetch('/api/entitlements')
         .then((r) => (r.ok ? r.json() : null))
         .then((d) => {
-          if (!cancelled && d?.features) setEntitlements({ planName: d.planName, features: d.features });
+          if (!cancelled && d?.features) setEntitlements({ planName: d.planName, features: d.features, billing: d.billing });
         })
-        .catch(() => {});
-    load();
+        .catch(() => {})
+        .finally(() => setEntitlementsLoaded(true));
+    // Back from Stripe Checkout: activate the plan right away instead of waiting for the webhook.
+    const params = new URLSearchParams(window.location.search);
+    const checkoutSession = params.get('session_id');
+    if (params.get('billing') === 'success' && checkoutSession) {
+      setActivatingPlan(true);
+      fetch('/api/billing/sync', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: checkoutSession }) })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => {
+          if (d?.entitlements?.features) setEntitlements({ planName: d.entitlements.planName, features: d.entitlements.features, billing: d.entitlements.billing });
+        })
+        .catch(() => {})
+        .finally(() => {
+          window.history.replaceState({}, '', window.location.pathname);
+          setActivatingPlan(false);
+          load();
+        });
+    } else {
+      load();
+    }
     const t = setInterval(load, 60_000);
     return () => {
       cancelled = true;
@@ -1856,6 +1878,23 @@ export default function App() {
     );
   }
 
+  if (activatingPlan || !entitlementsLoaded) {
+    return <div className="min-h-screen flex items-center justify-center bg-slate-50 text-slate-500 text-sm">{activatingPlan ? 'Activating your plan…' : 'Loading…'}</div>;
+  }
+
+  if (entitlements?.billing?.locked) {
+    return currentUser.role === 'ADMIN' ? (
+      <BillingView fullScreen onLogout={handleLogout} email={currentUser.email} />
+    ) : (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 text-slate-700 gap-3 p-6 text-center">
+        <p className="text-sm">Your workspace needs an active plan. Ask your workspace admin to complete billing.</p>
+        <button onClick={handleLogout} className="px-4 py-2 rounded-lg bg-orange-500 text-white text-sm font-bold">
+          Sign out
+        </button>
+      </div>
+    );
+  }
+
   const isCurrentTabAllowed =
     currentUser.accessLevel === 'ALL' ||
     currentUser.role === 'ADMIN' ||
@@ -1879,6 +1918,19 @@ export default function App() {
       />
 
       <main className="flex-1">
+        {entitlements?.billing?.status === 'past_due' && (
+          <div className="mb-3 flex items-center justify-between gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-800">
+            <span>
+              Your last payment failed.
+              {entitlements.billing.graceEndsAt ? ` Access continues until ${new Date(entitlements.billing.graceEndsAt).toLocaleDateString()}.` : ''}
+            </span>
+            {currentUser.role === 'ADMIN' && (
+              <button onClick={() => setActiveTab('settings')} className="font-bold underline">
+                Fix payment
+              </button>
+            )}
+          </div>
+        )}
         {planLocked(activeTab) ? (
           <UpgradeRequiredView
             featureLabel={FEATURES.find((f) => f.key === FEATURE_BY_TAB[activeTab])?.label || 'This feature'}

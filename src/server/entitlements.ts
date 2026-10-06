@@ -22,11 +22,44 @@ export interface PlanDoc {
   updatedAt?: string;
 }
 
+export type BillingStatus = 'awaiting_plan' | 'trialing' | 'active' | 'past_due' | 'canceled' | 'manual';
+
+export interface BillingInfo {
+  status: BillingStatus;
+  /** True when the workspace must pay (or fix payment) before using the app. */
+  locked: boolean;
+  planSource: 'stripe' | 'manual' | 'legacy';
+  currentPeriodEnd?: string;
+  graceEndsAt?: string;
+}
+
 export interface Entitlements {
   planId: string;
   planName: string;
   features: Record<string, boolean>;
   limits: Record<string, number>;
+  billing: BillingInfo;
+}
+
+const graceDays = () => {
+  const n = Number(process.env.BILLING_GRACE_DAYS);
+  return Number.isFinite(n) && n >= 0 ? n : 7;
+};
+
+/** Pure: billing state of a workspace document. Workspaces without billingStatus are legacy and never locked. */
+export function computeBilling(tenant: any, now: number = Date.now()): BillingInfo {
+  const status: BillingStatus = (tenant?.billingStatus as BillingStatus) || 'active';
+  const planSource: BillingInfo['planSource'] = tenant?.billingStatus ? (tenant?.planSource === 'stripe' ? 'stripe' : 'manual') : 'legacy';
+  let locked = false;
+  let graceEndsAt: string | undefined;
+  if (status === 'awaiting_plan' || status === 'canceled') locked = true;
+  if (status === 'past_due') {
+    const since = tenant?.pastDueSince ? new Date(tenant.pastDueSince).getTime() : now;
+    const end = since + graceDays() * 86_400_000;
+    graceEndsAt = new Date(end).toISOString();
+    locked = now > end;
+  }
+  return { status, locked, planSource, currentPeriodEnd: tenant?.currentPeriodEnd, graceEndsAt };
 }
 
 export class EntitlementError extends Error {
@@ -161,7 +194,7 @@ export async function savePlan(input: Partial<PlanDoc> & { id: string }): Promis
 /** Pure merge, exported for tests. */
 export function computeEntitlements(
   plan: PlanDoc | undefined,
-  tenant: { planId?: string; overrides?: { features?: Record<string, boolean>; limits?: Record<string, number> }; limits?: Record<string, number> } | undefined
+  tenant: any
 ): Entitlements {
   const features: Record<string, boolean> = {};
   for (const f of FEATURES) {
@@ -182,12 +215,21 @@ export function computeEntitlements(
     if (ol !== undefined) v = ol;
     limits[l.key] = v;
   }
-  return { planId: plan?.id || tenant?.planId || LEGACY_PLAN_ID, planName: plan?.name || 'Legacy', features, limits };
+  const billing = computeBilling(tenant);
+  const hasPlan = Boolean(plan && (tenant?.planId || !tenant?.billingStatus));
+  return {
+    planId: plan?.id || tenant?.planId || LEGACY_PLAN_ID,
+    planName: tenant?.billingStatus === 'awaiting_plan' && !tenant?.planId ? 'No plan yet' : hasPlan ? plan!.name : 'Legacy',
+    features,
+    limits,
+    billing,
+  };
 }
 
-export async function getEntitlements(tenantId: string): Promise<Entitlements> {
+export async function getEntitlements(tenantId: string, opts: { fresh?: boolean } = {}): Promise<Entitlements> {
   const cached = entCache.get(tenantId);
-  if (cached && Date.now() - cached.at < CACHE_MS) return cached.value;
+  if (!opts.fresh && cached && Date.now() - cached.at < CACHE_MS) return cached.value;
+  if (opts.fresh) plansCache = null;
   let value: Entitlements;
   if (!isFirebaseConfigured || !db || !tenantId) {
     value = computeEntitlements(SEED_PLANS[0], undefined);

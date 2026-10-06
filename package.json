@@ -9,6 +9,7 @@
     "start": "tsx server.ts",
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
+    "clean:seeded-kb": "tsx scripts/clean-seeded-knowledge.ts",
     "check:isolation": "tsx scripts/check-isolation.ts",
     "migrate:dry-run": "tsx scripts/migrate-to-tenants.ts --dry-run",
     "migrate": "tsx scripts/migrate-to-tenants.ts",

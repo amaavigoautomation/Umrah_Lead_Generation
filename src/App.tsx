@@ -11,6 +11,7 @@ import { SettingsView } from './components/SettingsView';
 import { LiveMailboxCenter } from './components/LiveMailboxCenter';
 import { DemoSchedulingView } from './components/DemoSchedulingView';
 import { AutoFollowUpDashboard } from './components/AutoFollowUpDashboard';
+import { PlatformConsole } from './components/PlatformConsole';
 import { LoginView } from './components/LoginView';
 import { onSession, signOutUser, installAuthFetch, type SessionInfo } from './services/authService';
 import { LockedModuleView } from './components/LockedModuleView';
@@ -1806,21 +1807,7 @@ export default function App() {
   }
 
   if (session?.isPlatformAdmin) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 text-slate-800 gap-3 p-6 text-center">
-        <h1 className="text-lg font-bold">Platform admin</h1>
-        <p className="text-sm text-slate-600 max-w-md">
-          Signed in as {currentUser.email}. The platform console (create workspaces, invite users)
-          is built in a later phase. Authentication is working.
-        </p>
-        <button
-          onClick={handleLogout}
-          className="px-4 py-2 rounded-lg bg-orange-500 text-white text-sm font-bold"
-        >
-          Sign out
-        </button>
-      </div>
-    );
+    return <PlatformConsole email={currentUser.email} onLogout={handleLogout} />;
   }
 
   if (!currentTenantId) {

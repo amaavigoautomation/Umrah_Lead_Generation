@@ -1281,12 +1281,6 @@ var init_streaming = __esm({
       [(_Stream_client = /* @__PURE__ */ new WeakMap(), _Stream_isTeeBranch = /* @__PURE__ */ new WeakMap(), _Stream_instances = /* @__PURE__ */ new WeakSet(), Symbol.asyncIterator)]() {
         return this.iterator();
       }
-      /** Beta-only iterator decoration for Agents helpers, preserving custom stream identity.
-       * @internal
-       */
-      __betaTransformIterator(transform2) {
-        this.iterator = transform2(this.iterator.bind(this));
-      }
       /**
        * Splits the stream into two streams which can be
        * independently read from at different speeds.
@@ -1506,7 +1500,7 @@ var init_parse = __esm({
 var VERSION;
 var init_version = __esm({
   "node_modules/openai/version.mjs"() {
-    VERSION = "7.27.0";
+    VERSION = "7.23.0";
   }
 });
 
@@ -12094,7 +12088,7 @@ var init_speech = __esm({
        * const speech = await client.audio.speech.create({
        *   input: 'input',
        *   model: 'tts-1',
-       *   voice: 'ash',
+       *   voice: 'alloy',
        * });
        *
        * const content = await speech.blob();
@@ -12482,101 +12476,18 @@ var init_realtime = __esm({
   }
 });
 
-// node_modules/openai/lib/beta/agents/files.mjs
-function validateAgentFilePath(path3) {
-  const parts = path3.split("/");
-  const root = parts[2] ?? "";
-  if (!path3.startsWith("/workspace/") || path3.includes("\\") || path3.includes("\0") || parts.slice(1).some((part) => part === "" || part === "." || part === "..") || root === ".codex" || root === ".managed-agents" || root.startsWith(".managed-agents-") || path3 === "/workspace/outputs") {
-    throw new OpenAIError("Agent files require a non-reserved absolute file path inside /workspace");
-  }
-}
-function preflight(files, options2) {
-  const entries = Object.entries(files);
-  const headers = buildHeaders([options2.headers]);
-  if (entries.length > 1 && (headers.values.has("idempotency-key") || !headers.nulls.has("idempotency-key") && options2?.idempotencyKey !== void 0)) {
-    throw new OpenAIError("Do not reuse an Idempotency-Key across multiple file uploads");
-  }
-  const paths = new Set(entries.map(([path3]) => path3));
-  for (const [path3] of entries) {
-    validateAgentFilePath(path3);
-    for (let slash = path3.lastIndexOf("/"); slash > 0; slash = path3.lastIndexOf("/", slash - 1)) {
-      if (paths.has(path3.slice(0, slash))) {
-        throw new OpenAIError("Agent file destinations conflict");
-      }
-    }
-  }
-  return entries;
-}
-async function prepareAgentFiles(client2, files, options2) {
-  const requestOptions = { ...options2 };
-  const headers = buildHeaders([client2["_options"].defaultHeaders, requestOptions.headers]);
-  requestOptions.headers = headers;
-  const entries = preflight(files, requestOptions);
-  if (entries.length > 1) {
-    headers.nulls.add("idempotency-key");
-  }
-  const prepared = { files: [], uploadedFiles: [] };
-  try {
-    for (const [path3, file] of entries) {
-      const uploaded = await client2.files.create({ file, purpose: "user_data" }, requestOptions);
-      prepared.uploadedFiles.push(uploaded);
-      prepared.files.push({ type: "file_id", file_id: uploaded.id, path: path3 });
-    }
-    return prepared;
-  } catch (error) {
-    throw new AgentFileUploadError(prepared.uploadedFiles, error);
-  }
-}
-async function uploadAgentFile(client2, resource, environmentID, params, options2) {
-  const prepared = await prepareAgentFiles(client2, { [params.path]: params.file }, options2);
-  const [reference] = prepared.files;
-  const [uploadedFile] = prepared.uploadedFiles;
-  if (!reference || !uploadedFile) {
-    throw new OpenAIError("Missing prepared agent file");
-  }
-  try {
-    return { uploadedFile, environmentFile: await resource.create(environmentID, reference, options2) };
-  } catch (error) {
-    throw new AgentFileUploadError(prepared.uploadedFiles, error);
-  }
-}
-var AgentFileUploadError;
-var init_files = __esm({
-  "node_modules/openai/lib/beta/agents/files.mjs"() {
-    init_error();
-    init_headers();
-    AgentFileUploadError = class extends OpenAIError {
-      constructor(uploadedFiles, cause) {
-        super("Agent file preparation or staging failed; uploaded files remain caller-owned.");
-        this.name = "AgentFileUploadError";
-        this.uploadedFiles = uploadedFiles;
-        Object.defineProperty(this, "cause", { value: cause, configurable: true });
-      }
-    };
-  }
-});
-
 // node_modules/openai/resources/beta/agents/environments/files.mjs
 function resolveResourceRequestOptions39(options2, buildOptions) {
   return Promise.resolve(options2).then(buildOptions);
 }
 var Files;
-var init_files2 = __esm({
+var init_files = __esm({
   "node_modules/openai/resources/beta/agents/environments/files.mjs"() {
-    init_files();
     init_resource();
     init_pagination();
     init_headers();
     init_path();
     Files = class extends APIResource {
-      /** Beta: prepare initial hosted file references; uploaded Files API objects remain caller-owned. */
-      prepare(files, options2) {
-        return prepareAgentFiles(this._client, files, options2);
-      }
-      /** Beta: upload one local file and stage its reference in a live environment. */
-      upload(environmentID, params, options2) {
-        return uploadAgentFile(this._client, this, environmentID, params, options2);
-      }
       /**
        * Copies inline bytes or a Files API file into a connected execution environment.
        * See
@@ -12789,8 +12700,8 @@ var Environments;
 var init_environments = __esm({
   "node_modules/openai/resources/beta/agents/environments/environments.mjs"() {
     init_resource();
-    init_files2();
-    init_files2();
+    init_files();
+    init_files();
     init_templates();
     init_templates();
     init_headers();
@@ -12881,385 +12792,7 @@ var init_turn_state = __esm({
   }
 });
 
-// node_modules/openai/lib/agents/output-text.mjs
-function outputText(message2) {
-  return message2.content.map((block) => block.type === "output_text" ? block.text : "").join("");
-}
-var init_output_text = __esm({
-  "node_modules/openai/lib/agents/output-text.mjs"() {
-  }
-});
-
-// node_modules/openai/lib/beta/agents/agent-turn-result.mjs
-var AgentTurnResult;
-var init_agent_turn_result = __esm({
-  "node_modules/openai/lib/beta/agents/agent-turn-result.mjs"() {
-    init_output_text();
-    AgentTurnResult = class {
-      constructor(turn, messages) {
-        this.turn = turn;
-        this.messages = messages;
-      }
-      get session_id() {
-        return this.turn.session_id;
-      }
-      get turn_id() {
-        return this.turn.id;
-      }
-      get output_text() {
-        return this.messages.map(outputText).join("");
-      }
-    };
-  }
-});
-
-// node_modules/openai/lib/beta/agents/parsed-agent-turn-result.mjs
-var ParsedAgentTurnResult;
-var init_parsed_agent_turn_result = __esm({
-  "node_modules/openai/lib/beta/agents/parsed-agent-turn-result.mjs"() {
-    init_agent_turn_result();
-    ParsedAgentTurnResult = class extends AgentTurnResult {
-      constructor(result, parsed) {
-        super(result.turn, result.messages);
-        this.raw_result = result;
-        this.output_parsed = parsed;
-      }
-    };
-  }
-});
-
-// node_modules/openai/lib/beta/agents/output-parse-error.mjs
-var _AgentOutputParseError_rawResult, AgentOutputParseError;
-var init_output_parse_error = __esm({
-  "node_modules/openai/lib/beta/agents/output-parse-error.mjs"() {
-    init_tslib();
-    init_error();
-    AgentOutputParseError = class extends OpenAIError {
-      constructor(result) {
-        super("The completed agent output could not be parsed");
-        this.name = "AgentOutputParseError";
-        _AgentOutputParseError_rawResult.set(this, void 0);
-        __classPrivateFieldSet(this, _AgentOutputParseError_rawResult, result, "f");
-      }
-      /** Inspect the completed output explicitly; ordinary error logging omits it. */
-      get raw_result() {
-        return __classPrivateFieldGet(this, _AgentOutputParseError_rawResult, "f");
-      }
-    };
-    _AgentOutputParseError_rawResult = /* @__PURE__ */ new WeakMap();
-  }
-});
-
-// node_modules/openai/lib/beta/agents/parse-result.mjs
-function parseAgentResult(result, format) {
-  try {
-    if (!format) {
-      return result;
-    }
-    let first;
-    for (const message2 of result.messages) {
-      for (const content of message2.content) {
-        if (content.type === "output_text") {
-          const value = format.$parseRaw(content.text);
-          first ?? (first = { value });
-        }
-      }
-    }
-    if (!first) {
-      throw new AgentOutputParseError(result);
-    }
-    return new ParsedAgentTurnResult(result, first.value);
-  } catch {
-    throw new AgentOutputParseError(result);
-  }
-}
-function ownJSONValue(object, key) {
-  const descriptor = object && Object.getOwnPropertyDescriptor(object, key);
-  return descriptor?.enumerable && "value" in descriptor ? descriptor.value : void 0;
-}
-function agentFormatParser(format) {
-  if (!format) {
-    return void 0;
-  }
-  const descriptor = Object.getOwnPropertyDescriptor(format, "$parseRaw");
-  if (!descriptor || !("value" in descriptor) || typeof descriptor.value !== "function") {
-    return void 0;
-  }
-  const schema = ownJSONValue(format, "schema");
-  if (ownJSONValue(format, "type") !== "json_schema" || !schema) {
-    throw new OpenAIError("Typed agent formats require own enumerable type and schema data properties");
-  }
-  const parse = descriptor.value;
-  return { type: "json_schema", schema, $parseRaw: (text) => parse.call(format, text) };
-}
-function snapshotJSONProperty(object, key, capture = (value) => value) {
-  const descriptor = Object.getOwnPropertyDescriptor(object, key);
-  if (!descriptor?.enumerable) {
-    return object;
-  }
-  const value = capture(object[key]);
-  if ("value" in descriptor && value === descriptor.value) {
-    return object;
-  }
-  return Object.create(Object.getPrototypeOf(object), {
-    ...Object.getOwnPropertyDescriptors(object),
-    [key]: { value, enumerable: true, configurable: descriptor.configurable, writable: true }
-  });
-}
-function captureAgentOutput(input, options2) {
-  const body = snapshotJSONProperty(input, "agent", (agent2) => agent2 ? snapshotJSONProperty(agent2, "text", (text2) => text2 ? snapshotJSONProperty(text2, "format") : text2) : agent2);
-  const agent = ownJSONValue(body, "agent");
-  const text = ownJSONValue(agent, "text");
-  const format = agentFormatParser(ownJSONValue(text, "format"));
-  if (!format) {
-    return { body, options: options2 };
-  }
-  const schema = structuredClone(format.schema);
-  for (const envelope of [body, agent, text]) {
-    if (envelope && "toJSON" in envelope) {
-      throw new OpenAIError("Typed agent requests cannot customize body, agent, or text serialization");
-    }
-  }
-  const capturedOptions = { ...options2 };
-  if (ownJSONValue(capturedOptions, "body") !== void 0) {
-    throw new OpenAIError("Typed agent requests cannot override the body in request options");
-  }
-  delete capturedOptions.body;
-  return {
-    options: capturedOptions,
-    body: {
-      ...body,
-      agent: {
-        ...agent,
-        text: { ...text, format: { type: "json_schema", schema } }
-      }
-    },
-    format
-  };
-}
-async function parseAgentResultPromise(result, format) {
-  return parseAgentResult(await result, format);
-}
-var init_parse_result = __esm({
-  "node_modules/openai/lib/beta/agents/parse-result.mjs"() {
-    init_error();
-    init_parsed_agent_turn_result();
-    init_output_parse_error();
-  }
-});
-
-// node_modules/openai/lib/beta/agents/agent-turn-result-error.mjs
-var AgentTurnResultError;
-var init_agent_turn_result_error = __esm({
-  "node_modules/openai/lib/beta/agents/agent-turn-result-error.mjs"() {
-    init_error();
-    AgentTurnResultError = class extends OpenAIError {
-      constructor(reason, session_id, turn, messages, required_actions = [], cause) {
-        super(`Could not collect the agent turn result: ${reason}`);
-        this.name = "AgentTurnResultError";
-        this.reason = reason;
-        this.session_id = session_id;
-        this.turn = turn;
-        this.messages = messages;
-        this.required_actions = required_actions;
-        this.cause = cause;
-      }
-      get turn_id() {
-        return this.turn?.id;
-      }
-    };
-  }
-});
-
-// node_modules/openai/lib/beta/agents/agent-turn-result-collector.mjs
-var _AgentTurnResultCollector_instances, _AgentTurnResultCollector_sessionID, _AgentTurnResultCollector_turn, _AgentTurnResultCollector_messages, _AgentTurnResultCollector_requiredActions, _AgentTurnResultCollector_sessionFailed, _AgentTurnResultCollector_terminal, _AgentTurnResultCollector_idle, _AgentTurnResultCollector_acceptTurn, _AgentTurnResultCollector_acceptOutput, _AgentTurnResultCollector_finalMessages, AgentTurnResultCollector;
-var init_agent_turn_result_collector = __esm({
-  "node_modules/openai/lib/beta/agents/agent-turn-result-collector.mjs"() {
-    init_tslib();
-    init_agent_turn_result();
-    init_agent_turn_result_error();
-    AgentTurnResultCollector = class {
-      constructor(sessionID) {
-        _AgentTurnResultCollector_instances.add(this);
-        _AgentTurnResultCollector_sessionID.set(this, void 0);
-        _AgentTurnResultCollector_turn.set(this, void 0);
-        _AgentTurnResultCollector_messages.set(this, /* @__PURE__ */ new Map());
-        _AgentTurnResultCollector_requiredActions.set(this, []);
-        _AgentTurnResultCollector_sessionFailed.set(this, false);
-        _AgentTurnResultCollector_terminal.set(this, false);
-        _AgentTurnResultCollector_idle.set(this, false);
-        __classPrivateFieldSet(this, _AgentTurnResultCollector_sessionID, sessionID, "f");
-      }
-      accept(event) {
-        if (this.ready) {
-          return;
-        }
-        if ("session" in event) {
-          __classPrivateFieldSet(this, _AgentTurnResultCollector_sessionID, __classPrivateFieldGet(this, _AgentTurnResultCollector_sessionID, "f") ?? event.session.id, "f");
-          __classPrivateFieldSet(this, _AgentTurnResultCollector_requiredActions, structuredClone(event.session.required_actions ?? []), "f");
-          __classPrivateFieldSet(this, _AgentTurnResultCollector_sessionFailed, __classPrivateFieldGet(this, _AgentTurnResultCollector_sessionFailed, "f") || event.type === "agent.session.failed", "f");
-          __classPrivateFieldSet(this, _AgentTurnResultCollector_idle, __classPrivateFieldGet(this, _AgentTurnResultCollector_idle, "f") || event.type === "agent.session.idle" && __classPrivateFieldGet(this, _AgentTurnResultCollector_terminal, "f"), "f");
-        }
-        if (event.type === "agent.session.turn.created" && event.turn.subagent_id === null && !__classPrivateFieldGet(this, _AgentTurnResultCollector_turn, "f")) {
-          __classPrivateFieldSet(this, _AgentTurnResultCollector_turn, structuredClone(event.turn), "f");
-          __classPrivateFieldSet(this, _AgentTurnResultCollector_sessionID, event.turn.session_id, "f");
-        }
-        let turnID = "turn_id" in event ? event.turn_id : void 0;
-        if ("item" in event) {
-          turnID = event.item.turn_id;
-        }
-        if (!__classPrivateFieldGet(this, _AgentTurnResultCollector_turn, "f") || turnID !== __classPrivateFieldGet(this, _AgentTurnResultCollector_turn, "f").id) {
-          return;
-        }
-        __classPrivateFieldGet(this, _AgentTurnResultCollector_instances, "m", _AgentTurnResultCollector_acceptTurn).call(this, event);
-      }
-      error(reason, cause) {
-        return new AgentTurnResultError(reason, __classPrivateFieldGet(this, _AgentTurnResultCollector_sessionID, "f"), __classPrivateFieldGet(this, _AgentTurnResultCollector_turn, "f"), __classPrivateFieldGet(this, _AgentTurnResultCollector_instances, "m", _AgentTurnResultCollector_finalMessages).call(this), __classPrivateFieldGet(this, _AgentTurnResultCollector_requiredActions, "f"), cause);
-      }
-      checkAction(canHandle) {
-        if (__classPrivateFieldGet(this, _AgentTurnResultCollector_sessionFailed, "f") || __classPrivateFieldGet(this, _AgentTurnResultCollector_turn, "f")?.status === "failed") {
-          throw this.error("failed");
-        }
-        if (__classPrivateFieldGet(this, _AgentTurnResultCollector_turn, "f")?.status === "cancelled") {
-          throw this.error("cancelled");
-        }
-        if (__classPrivateFieldGet(this, _AgentTurnResultCollector_requiredActions, "f").some((action) => action.type !== "function_call" || !canHandle(action.name))) {
-          throw this.error("requires_action");
-        }
-      }
-      get ready() {
-        return __classPrivateFieldGet(this, _AgentTurnResultCollector_terminal, "f") && __classPrivateFieldGet(this, _AgentTurnResultCollector_idle, "f");
-      }
-      release() {
-        __classPrivateFieldGet(this, _AgentTurnResultCollector_messages, "f").clear();
-        __classPrivateFieldSet(this, _AgentTurnResultCollector_requiredActions, [], "f");
-      }
-      finish() {
-        this.checkAction(() => this.ready);
-        if (!__classPrivateFieldGet(this, _AgentTurnResultCollector_terminal, "f") || __classPrivateFieldGet(this, _AgentTurnResultCollector_turn, "f")?.status !== "completed" || !__classPrivateFieldGet(this, _AgentTurnResultCollector_idle, "f")) {
-          throw this.error("observation");
-        }
-        return new AgentTurnResult(__classPrivateFieldGet(this, _AgentTurnResultCollector_turn, "f"), __classPrivateFieldGet(this, _AgentTurnResultCollector_instances, "m", _AgentTurnResultCollector_finalMessages).call(this));
-      }
-    };
-    _AgentTurnResultCollector_sessionID = /* @__PURE__ */ new WeakMap(), _AgentTurnResultCollector_turn = /* @__PURE__ */ new WeakMap(), _AgentTurnResultCollector_messages = /* @__PURE__ */ new WeakMap(), _AgentTurnResultCollector_requiredActions = /* @__PURE__ */ new WeakMap(), _AgentTurnResultCollector_sessionFailed = /* @__PURE__ */ new WeakMap(), _AgentTurnResultCollector_terminal = /* @__PURE__ */ new WeakMap(), _AgentTurnResultCollector_idle = /* @__PURE__ */ new WeakMap(), _AgentTurnResultCollector_instances = /* @__PURE__ */ new WeakSet(), _AgentTurnResultCollector_acceptTurn = function _AgentTurnResultCollector_acceptTurn2(event) {
-      if ("turn" in event) {
-        __classPrivateFieldSet(this, _AgentTurnResultCollector_turn, structuredClone(event.turn), "f");
-        __classPrivateFieldSet(this, _AgentTurnResultCollector_terminal, __classPrivateFieldGet(this, _AgentTurnResultCollector_terminal, "f") || (event.type === "agent.session.turn.completed" || event.type === "agent.session.turn.failed" || event.type === "agent.session.turn.cancelled"), "f");
-      }
-      __classPrivateFieldGet(this, _AgentTurnResultCollector_instances, "m", _AgentTurnResultCollector_acceptOutput).call(this, event);
-    }, _AgentTurnResultCollector_acceptOutput = function _AgentTurnResultCollector_acceptOutput2(event) {
-      if (event.type !== "agent.session.turn.item.done" || event.item.type !== "message" || event.item.status !== "completed" || event.item.phase === "commentary" || __classPrivateFieldGet(this, _AgentTurnResultCollector_messages, "f").has(event.item.id)) {
-        return;
-      }
-      __classPrivateFieldGet(this, _AgentTurnResultCollector_messages, "f").set(event.item.id, { index: event.output_index, message: structuredClone(event.item) });
-    }, _AgentTurnResultCollector_finalMessages = function _AgentTurnResultCollector_finalMessages2() {
-      return [...__classPrivateFieldGet(this, _AgentTurnResultCollector_messages, "f").values()].sort((a, b) => a.index - b.index).map(({ message: message2 }) => message2);
-    };
-  }
-});
-
-// node_modules/openai/lib/beta/agents/result-collection.mjs
-var _ResultCollection_instances, _ResultCollection_iterator, _ResultCollection_ended, _ResultCollection_enabled, _ResultCollection_uncollectedEvents, _ResultCollection_error, _ResultCollection_result, _ResultCollection_source, _ResultCollection_signal, _ResultCollection_canHandle, _ResultCollection_observe, _ResultCollection_collect, ResultCollection;
-var init_result_collection = __esm({
-  "node_modules/openai/lib/beta/agents/result-collection.mjs"() {
-    init_tslib();
-    init_error();
-    init_agent_turn_result_collector();
-    init_agent_turn_result_error();
-    ResultCollection = class {
-      constructor(source, canHandle = () => false, sessionID, signal) {
-        _ResultCollection_instances.add(this);
-        _ResultCollection_iterator.set(this, void 0);
-        _ResultCollection_ended.set(this, false);
-        _ResultCollection_enabled.set(this, false);
-        _ResultCollection_uncollectedEvents.set(this, false);
-        _ResultCollection_error.set(this, void 0);
-        _ResultCollection_result.set(this, void 0);
-        _ResultCollection_source.set(this, void 0);
-        _ResultCollection_signal.set(this, void 0);
-        _ResultCollection_canHandle.set(this, void 0);
-        __classPrivateFieldSet(this, _ResultCollection_source, source, "f");
-        __classPrivateFieldSet(this, _ResultCollection_signal, signal, "f");
-        __classPrivateFieldSet(this, _ResultCollection_canHandle, canHandle, "f");
-        this.collector = new AgentTurnResultCollector(sessionID);
-      }
-      enable() {
-        if (!__classPrivateFieldGet(this, _ResultCollection_enabled, "f") && __classPrivateFieldGet(this, _ResultCollection_uncollectedEvents, "f")) {
-          throw new OpenAIError("Call withResultCollection() before consuming events, or call finalResult() on a fresh stream.");
-        }
-        __classPrivateFieldSet(this, _ResultCollection_enabled, true, "f");
-      }
-      iterate() {
-        if (__classPrivateFieldGet(this, _ResultCollection_iterator, "f")) {
-          throw new OpenAIError("An agent result stream can only be consumed once");
-        }
-        return __classPrivateFieldSet(this, _ResultCollection_iterator, __classPrivateFieldGet(this, _ResultCollection_instances, "m", _ResultCollection_observe).call(this), "f");
-      }
-      finalResult() {
-        return __classPrivateFieldSet(this, _ResultCollection_result, __classPrivateFieldGet(this, _ResultCollection_result, "f") ?? __classPrivateFieldGet(this, _ResultCollection_instances, "m", _ResultCollection_collect).call(this), "f");
-      }
-    };
-    _ResultCollection_iterator = /* @__PURE__ */ new WeakMap(), _ResultCollection_ended = /* @__PURE__ */ new WeakMap(), _ResultCollection_enabled = /* @__PURE__ */ new WeakMap(), _ResultCollection_uncollectedEvents = /* @__PURE__ */ new WeakMap(), _ResultCollection_error = /* @__PURE__ */ new WeakMap(), _ResultCollection_result = /* @__PURE__ */ new WeakMap(), _ResultCollection_source = /* @__PURE__ */ new WeakMap(), _ResultCollection_signal = /* @__PURE__ */ new WeakMap(), _ResultCollection_canHandle = /* @__PURE__ */ new WeakMap(), _ResultCollection_instances = /* @__PURE__ */ new WeakSet(), _ResultCollection_observe = async function* _ResultCollection_observe2() {
-      const iterator = __classPrivateFieldGet(this, _ResultCollection_source, "f").call(this);
-      let done = false;
-      try {
-        while (true) {
-          const next = await iterator.next();
-          if (next.done) {
-            done = true;
-            return;
-          }
-          if (__classPrivateFieldGet(this, _ResultCollection_enabled, "f")) {
-            this.collector.accept(next.value);
-          } else {
-            __classPrivateFieldSet(this, _ResultCollection_uncollectedEvents, true, "f");
-          }
-          yield next.value;
-        }
-      } catch (error) {
-        if (__classPrivateFieldGet(this, _ResultCollection_enabled, "f")) {
-          __classPrivateFieldSet(this, _ResultCollection_error, error, "f");
-        }
-        throw error;
-      } finally {
-        __classPrivateFieldSet(this, _ResultCollection_ended, true, "f");
-        if (!done) {
-          await iterator.return?.();
-        }
-      }
-    }, _ResultCollection_collect = async function _ResultCollection_collect2() {
-      this.enable();
-      try {
-        const iterator = __classPrivateFieldGet(this, _ResultCollection_iterator, "f") ?? this.iterate();
-        while (!__classPrivateFieldGet(this, _ResultCollection_ended, "f") && !this.collector.ready) {
-          this.collector.checkAction(__classPrivateFieldGet(this, _ResultCollection_canHandle, "f"));
-          const next = await iterator.next();
-          if (next.done) {
-            break;
-          }
-        }
-        if (__classPrivateFieldGet(this, _ResultCollection_error, "f") !== void 0 && !this.collector.ready) {
-          throw __classPrivateFieldGet(this, _ResultCollection_error, "f");
-        }
-        if (!this.collector.ready && __classPrivateFieldGet(this, _ResultCollection_signal, "f")?.aborted) {
-          throw this.collector.error("observation", __classPrivateFieldGet(this, _ResultCollection_signal, "f").reason);
-        }
-        return this.collector.finish();
-      } catch (error) {
-        throw error instanceof AgentTurnResultError ? error : this.collector.error("observation", error);
-      } finally {
-        try {
-          await __classPrivateFieldGet(this, _ResultCollection_iterator, "f")?.return();
-        } finally {
-          this.collector.release();
-        }
-      }
-    };
-  }
-});
-
-// node_modules/openai/lib/beta/agents/tool-output.mjs
+// node_modules/openai/lib/agents/agent-session-stream.mjs
 function isInputContent(value) {
   if (!isObj(value)) {
     return false;
@@ -13275,13 +12808,6 @@ function isInputContent(value) {
   }
   return hasOwn(content, "type") && hasOwn(content, field2) && typeof content[field2] === "string";
 }
-var init_tool_output = __esm({
-  "node_modules/openai/lib/beta/agents/tool-output.mjs"() {
-    init_values();
-  }
-});
-
-// node_modules/openai/lib/agents/agent-session-stream.mjs
 function normalizedOutput(value) {
   if (value === null) {
     return null;
@@ -13311,27 +12837,21 @@ async function cancelBody(response) {
   } catch {
   }
 }
-var _AgentSessionStream_instances, _AgentSessionStream_consumed, _AgentSessionStream_format, _AgentSessionStream_parsedResult, _AgentSessionStream_collection, _AgentSessionStream_stream, _AgentSessionStream_response, _AgentSessionStream_reading, _AgentSessionStream_sessions, _AgentSessionStream_sessionID, _AgentSessionStream_input, _AgentSessionStream_handlers, _AgentSessionStream_inputKey, _AgentSessionStream_options, _AgentSessionStream_iterate, _AgentSessionStream_result, _AgentSessionStream_checkAbort, _AgentSessionStream_abortError, _AgentSessionStream_wait, _AgentSessionStream_submit, AgentSessionStream;
+var _AgentSessionStream_instances, _AgentSessionStream_consumed, _AgentSessionStream_stream, _AgentSessionStream_response, _AgentSessionStream_reading, _AgentSessionStream_sessions, _AgentSessionStream_sessionID, _AgentSessionStream_input, _AgentSessionStream_handlers, _AgentSessionStream_inputKey, _AgentSessionStream_options, _AgentSessionStream_iterate, _AgentSessionStream_result, _AgentSessionStream_checkAbort, _AgentSessionStream_abortError, _AgentSessionStream_wait, _AgentSessionStream_submit, AgentSessionStream;
 var init_agent_session_stream = __esm({
   "node_modules/openai/lib/agents/agent-session-stream.mjs"() {
     init_tslib();
     init_turn_state();
-    init_parse_result();
-    init_result_collection();
     init_error();
     init_headers();
     init_uuid();
     init_values();
-    init_tool_output();
     AgentSessionStream = class {
       /** Creates an unstarted helper. Prefer client.beta.agents.sessions.stream(). */
       constructor(sessions, sessionID, params, options2) {
         _AgentSessionStream_instances.add(this);
         this.controller = new AbortController();
         _AgentSessionStream_consumed.set(this, false);
-        _AgentSessionStream_format.set(this, void 0);
-        _AgentSessionStream_parsedResult.set(this, void 0);
-        _AgentSessionStream_collection.set(this, void 0);
         _AgentSessionStream_stream.set(this, void 0);
         _AgentSessionStream_response.set(this, void 0);
         _AgentSessionStream_reading.set(this, false);
@@ -13345,10 +12865,6 @@ var init_agent_session_stream = __esm({
         if (params.input.length === 0) {
           throw new OpenAIError("input must not be empty");
         }
-        __classPrivateFieldSet(this, _AgentSessionStream_format, agentFormatParser(params.outputFormat), "f");
-        if (params.outputFormat && !__classPrivateFieldGet(this, _AgentSessionStream_format, "f")) {
-          throw new OpenAIError("outputFormat must have its own parser function");
-        }
         __classPrivateFieldSet(this, _AgentSessionStream_sessions, sessions, "f");
         __classPrivateFieldSet(this, _AgentSessionStream_sessionID, sessionID, "f");
         __classPrivateFieldSet(this, _AgentSessionStream_input, { type: "agent.session.input.message", input }, "f");
@@ -13359,7 +12875,6 @@ var init_agent_session_stream = __esm({
         headers.nulls.delete("idempotency-key");
         const { idempotencyKey: _key, ...rest } = options2 ?? {};
         __classPrivateFieldSet(this, _AgentSessionStream_options, { ...rest, headers }, "f");
-        __classPrivateFieldSet(this, _AgentSessionStream_collection, new ResultCollection(() => __classPrivateFieldGet(this, _AgentSessionStream_instances, "m", _AgentSessionStream_iterate).call(this), (name5) => __classPrivateFieldGet(this, _AgentSessionStream_handlers, "f").has(name5), sessionID), "f");
       }
       /** Closes local requests without cancelling the turn; an optional reason becomes the abort error's cause. */
       abort(reason) {
@@ -13370,21 +12885,12 @@ var init_agent_session_stream = __esm({
         }
       }
       /** Starts iteration once; use for await to ensure early exits close the connection. */
-      [(_AgentSessionStream_consumed = /* @__PURE__ */ new WeakMap(), _AgentSessionStream_format = /* @__PURE__ */ new WeakMap(), _AgentSessionStream_parsedResult = /* @__PURE__ */ new WeakMap(), _AgentSessionStream_collection = /* @__PURE__ */ new WeakMap(), _AgentSessionStream_stream = /* @__PURE__ */ new WeakMap(), _AgentSessionStream_response = /* @__PURE__ */ new WeakMap(), _AgentSessionStream_reading = /* @__PURE__ */ new WeakMap(), _AgentSessionStream_sessions = /* @__PURE__ */ new WeakMap(), _AgentSessionStream_sessionID = /* @__PURE__ */ new WeakMap(), _AgentSessionStream_input = /* @__PURE__ */ new WeakMap(), _AgentSessionStream_handlers = /* @__PURE__ */ new WeakMap(), _AgentSessionStream_inputKey = /* @__PURE__ */ new WeakMap(), _AgentSessionStream_options = /* @__PURE__ */ new WeakMap(), _AgentSessionStream_instances = /* @__PURE__ */ new WeakSet(), Symbol.asyncIterator)]() {
+      [(_AgentSessionStream_consumed = /* @__PURE__ */ new WeakMap(), _AgentSessionStream_stream = /* @__PURE__ */ new WeakMap(), _AgentSessionStream_response = /* @__PURE__ */ new WeakMap(), _AgentSessionStream_reading = /* @__PURE__ */ new WeakMap(), _AgentSessionStream_sessions = /* @__PURE__ */ new WeakMap(), _AgentSessionStream_sessionID = /* @__PURE__ */ new WeakMap(), _AgentSessionStream_input = /* @__PURE__ */ new WeakMap(), _AgentSessionStream_handlers = /* @__PURE__ */ new WeakMap(), _AgentSessionStream_inputKey = /* @__PURE__ */ new WeakMap(), _AgentSessionStream_options = /* @__PURE__ */ new WeakMap(), _AgentSessionStream_instances = /* @__PURE__ */ new WeakSet(), Symbol.asyncIterator)]() {
         if (__classPrivateFieldGet(this, _AgentSessionStream_consumed, "f")) {
           throw new OpenAIError("An AgentSessionStream can only be consumed once");
         }
         __classPrivateFieldSet(this, _AgentSessionStream_consumed, true, "f");
-        return __classPrivateFieldGet(this, _AgentSessionStream_collection, "f").iterate();
-      }
-      /** Beta: opt into retaining completed final messages before iterating progress events. */
-      withResultCollection() {
-        __classPrivateFieldGet(this, _AgentSessionStream_collection, "f").enable();
-        return this;
-      }
-      /** Beta: drain this turn, dispatch registered tools, and collect its final assistant messages. */
-      finalResult() {
-        return __classPrivateFieldSet(this, _AgentSessionStream_parsedResult, __classPrivateFieldGet(this, _AgentSessionStream_parsedResult, "f") ?? parseAgentResultPromise(__classPrivateFieldGet(this, _AgentSessionStream_collection, "f").finalResult(), __classPrivateFieldGet(this, _AgentSessionStream_format, "f")), "f");
+        return __classPrivateFieldGet(this, _AgentSessionStream_instances, "m", _AgentSessionStream_iterate).call(this);
       }
     };
     _AgentSessionStream_iterate = async function* _AgentSessionStream_iterate2() {
@@ -13520,116 +13026,6 @@ var init_agent_session_stream = __esm({
   }
 });
 
-// node_modules/openai/lib/beta/agents/agent-session-create-stream.mjs
-function withAgentTurnResult(stream, format) {
-  let collection7;
-  stream.__betaTransformIterator((source) => {
-    collection7 = new ResultCollection(source, void 0, void 0, stream.controller.signal);
-    return () => collection7.iterate();
-  });
-  let parsed;
-  const result = Object.assign(stream, {
-    finalResult: () => parsed ?? (parsed = parseAgentResultPromise(collection7.finalResult(), format)),
-    withResultCollection: () => {
-      collection7.enable();
-      return result;
-    }
-  });
-  return result;
-}
-var init_agent_session_create_stream = __esm({
-  "node_modules/openai/lib/beta/agents/agent-session-create-stream.mjs"() {
-    init_parse_result();
-    init_result_collection();
-  }
-});
-
-// node_modules/openai/lib/beta/agents/pages.mjs
-async function* agentItems(load) {
-  let after;
-  while (true) {
-    const page = await load(after);
-    yield* page.data;
-    if (!page.has_more) {
-      return;
-    }
-    const body = page["body"];
-    const last = page.data[page.data.length - 1];
-    const cursor = isObj(body) && typeof body["last_id"] === "string" ? body["last_id"] : last?.id;
-    if (!cursor || cursor === after) {
-      throw new OpenAIError("Agent pagination cannot advance to the next page");
-    }
-    after = cursor;
-  }
-}
-var init_pages = __esm({
-  "node_modules/openai/lib/beta/agents/pages.mjs"() {
-    init_error();
-    init_values();
-  }
-});
-
-// node_modules/openai/lib/beta/agents/result-artifacts.mjs
-var _AgentResultArtifacts_resource, _AgentResultArtifacts_sessionID, _AgentResultArtifacts_turnID, AgentResultArtifacts;
-var init_result_artifacts = __esm({
-  "node_modules/openai/lib/beta/agents/result-artifacts.mjs"() {
-    init_tslib();
-    init_pages();
-    init_error();
-    AgentResultArtifacts = class {
-      constructor(resource, result) {
-        _AgentResultArtifacts_resource.set(this, void 0);
-        _AgentResultArtifacts_sessionID.set(this, void 0);
-        _AgentResultArtifacts_turnID.set(this, void 0);
-        __classPrivateFieldSet(this, _AgentResultArtifacts_resource, resource, "f");
-        __classPrivateFieldSet(this, _AgentResultArtifacts_sessionID, result.session_id, "f");
-        __classPrivateFieldSet(this, _AgentResultArtifacts_turnID, result.turn_id, "f");
-      }
-      /** Find one immutable artifact by its exact hosted path, across all pages. */
-      async retrieve(path3, options2) {
-        let selected;
-        for await (const artifact of agentItems((after) => __classPrivateFieldGet(this, _AgentResultArtifacts_resource, "f").list(__classPrivateFieldGet(this, _AgentResultArtifacts_sessionID, "f"), {}, { ...options2, query: { ...options2?.query, after, environment_id: void 0 } }))) {
-          if (artifact.session_id === __classPrivateFieldGet(this, _AgentResultArtifacts_sessionID, "f") && artifact.turn_id === __classPrivateFieldGet(this, _AgentResultArtifacts_turnID, "f") && artifact.path === path3) {
-            if (selected) {
-              throw new OpenAIError("Multiple artifacts match this result and path");
-            }
-            selected = artifact;
-          }
-        }
-        if (!selected) {
-          throw new OpenAIError("No artifact matches this result and path");
-        }
-        return selected;
-      }
-      /** Return the native binary response for this result's exact artifact path. */
-      async content(path3, options2) {
-        const artifact = await this.retrieve(path3, options2);
-        return __classPrivateFieldGet(this, _AgentResultArtifacts_resource, "f").content(artifact.id, { session_id: __classPrivateFieldGet(this, _AgentResultArtifacts_sessionID, "f") }, options2);
-      }
-      /** Stream bytes to a caller-chosen destination; the hosted path never selects a local path. */
-      async download(params, options2) {
-        const { path: path3, to } = params;
-        const artifact = await this.retrieve(path3, options2);
-        const response = await __classPrivateFieldGet(this, _AgentResultArtifacts_resource, "f").content(artifact.id, { session_id: __classPrivateFieldGet(this, _AgentResultArtifacts_sessionID, "f") }, options2);
-        if (!response.body) {
-          throw new OpenAIError("Artifact response has no content stream");
-        }
-        try {
-          await response.body.pipeTo(to, options2?.signal ? { signal: options2.signal } : {});
-        } catch (error) {
-          try {
-            await response.body.cancel();
-          } catch {
-          }
-          throw error;
-        }
-        return artifact;
-      }
-    };
-    _AgentResultArtifacts_resource = /* @__PURE__ */ new WeakMap(), _AgentResultArtifacts_sessionID = /* @__PURE__ */ new WeakMap(), _AgentResultArtifacts_turnID = /* @__PURE__ */ new WeakMap();
-  }
-});
-
 // node_modules/openai/resources/beta/agents/sessions/artifacts.mjs
 function resolveResourceRequestOptions42(options2, buildOptions) {
   return Promise.resolve(options2).then(buildOptions);
@@ -13657,7 +13053,6 @@ function normalizeRequestOptionsForQuery27(value, queryKeys, options2) {
 var normalizeRequestOptionsForQueryKeys27, Artifacts;
 var init_artifacts = __esm({
   "node_modules/openai/resources/beta/agents/sessions/artifacts.mjs"() {
-    init_result_artifacts();
     init_resource();
     init_pagination();
     init_headers();
@@ -13684,10 +13079,6 @@ var init_artifacts = __esm({
       "__synthesizeEventData"
     ]);
     Artifacts = class extends APIResource {
-      /** Beta: bind artifact lookup and downloads to a completed result's exact session and turn. */
-      forResult(result) {
-        return new AgentResultArtifacts(this, result);
-      }
       /**
        * Retrieves immutable metadata for one durable session artifact. See
        * [session artifacts](https://developers.openai.com/api/docs/guides/agents-api/environments/files#openai-hosted-artifacts).
@@ -13790,12 +13181,11 @@ var init_events = __esm({
     init_path();
     Events = class extends APIResource {
       /**
-       * Submits message, cancellation, tool-result, or computer-use approval-response
-       * events to a managed agent session. Cancellation can recover a still-open turn
-       * whose backend execution has ended by marking it cancelled and abandoning
-       * unpublished outputs. Saved results, published files, and existing terminal
-       * outcomes are preserved. HTTP 202 confirms acceptance, not durable completion.
-       * See
+       * Submits message, cancellation, or tool-result events to a managed agent session.
+       * Cancellation can recover a still-open turn whose backend execution has ended by
+       * marking it cancelled and abandoning unpublished outputs. Saved results,
+       * published files, and existing terminal outcomes are preserved. HTTP 202 confirms
+       * acceptance, not durable completion. See
        * [session events](https://developers.openai.com/api/docs/guides/agents-api/sessions/events).
        *
        * @example
@@ -13805,16 +13195,13 @@ var init_events = __esm({
        *   {
        *     events: [
        *       {
-       *         request_id: 'request_id',
-       *         response: {
-       *           action: 'submit',
-       *           fields: [
-       *             { field_id: 'field_id', value: 'value' },
-       *           ],
-       *           type: 'browser_authentication',
-       *         },
-       *         type:
-       *           'agent.session.input.computer_use_approval_request_result',
+       *         input: [
+       *           {
+       *             content: [{ text: 'text', type: 'input_text' }],
+       *             role: 'user',
+       *           },
+       *         ],
+       *         type: 'agent.session.input.message',
        *       },
        *     ],
        *   },
@@ -13935,7 +13322,7 @@ var init_items = __esm({
   }
 });
 
-// node_modules/openai/resources/beta/agents/sessions/traces.mjs
+// node_modules/openai/resources/beta/agents/sessions/turns.mjs
 function resolveResourceRequestOptions45(options2, buildOptions) {
   return Promise.resolve(options2).then(buildOptions);
 }
@@ -13959,85 +13346,14 @@ function normalizeRequestOptionsForQuery29(value, queryKeys, options2) {
     return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
   }));
 }
-var normalizeRequestOptionsForQueryKeys29, Traces;
-var init_traces = __esm({
-  "node_modules/openai/resources/beta/agents/sessions/traces.mjs"() {
-    init_resource();
-    init_pagination();
-    init_headers();
-    init_path();
-    normalizeRequestOptionsForQueryKeys29 = /* @__PURE__ */ new Set([
-      "method",
-      "path",
-      "query",
-      "body",
-      "headers",
-      "maxRetries",
-      "stream",
-      "timeout",
-      "httpAgent",
-      "fetchOptions",
-      "signal",
-      "idempotencyKey",
-      "defaultBaseURL",
-      "__metadata",
-      "__binaryRequest",
-      "__binaryResponse",
-      "__streamClass",
-      "__security",
-      "__synthesizeEventData"
-    ]);
-    Traces = class extends APIResource {
-      list(sessionID, query2 = {}, options2) {
-        const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery29(query2, ["after", "limit", "order"], options2);
-        if (normalizeRequestOptionsForQueryOptions !== void 0) {
-          options2 = normalizeRequestOptionsForQueryOptions;
-          query2 = {};
-        }
-        query2 = query2;
-        return this._client.getAPIList(path`/agents/sessions/${sessionID}/traces`, CursorPage, resolveResourceRequestOptions45(options2, (options3) => ({
-          query: query2,
-          ...options3,
-          headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options3?.headers]),
-          __security: { bearerAuth: true }
-        })));
-      }
-    };
-  }
-});
-
-// node_modules/openai/resources/beta/agents/sessions/turns.mjs
-function resolveResourceRequestOptions46(options2, buildOptions) {
-  return Promise.resolve(options2).then(buildOptions);
-}
-function normalizeRequestOptionsForQuery30(value, queryKeys, options2) {
-  if (typeof value !== "object" || value === null)
-    return void 0;
-  const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
-  const keys = entries.map(([key]) => key);
-  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys30.has(key) && !queryKeys.includes(key));
-  if (!requestOnly)
-    return void 0;
-  if (options2 !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys30.has(key) || queryKeys.includes(key))) {
-    throw new TypeError("Query parameters and request options must be passed as separate arguments.");
-  }
-  if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
-    throw new TypeError("Pass transport overrides in the explicit request options argument.");
-  }
-  return Object.fromEntries(entries.map(([key, descriptor]) => {
-    if ("value" in descriptor)
-      return [key, descriptor.value];
-    return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
-  }));
-}
-var normalizeRequestOptionsForQueryKeys30, Turns;
+var normalizeRequestOptionsForQueryKeys29, Turns;
 var init_turns = __esm({
   "node_modules/openai/resources/beta/agents/sessions/turns.mjs"() {
     init_resource();
     init_pagination();
     init_headers();
     init_path();
-    normalizeRequestOptionsForQueryKeys30 = /* @__PURE__ */ new Set([
+    normalizeRequestOptionsForQueryKeys29 = /* @__PURE__ */ new Set([
       "method",
       "path",
       "query",
@@ -14075,20 +13391,20 @@ var init_turns = __esm({
        */
       retrieve(turnID, params, options2) {
         const { session_id } = params;
-        return this._client.get(path`/agents/sessions/${session_id}/turns/${turnID}`, resolveResourceRequestOptions46(options2, (options3) => ({
+        return this._client.get(path`/agents/sessions/${session_id}/turns/${turnID}`, resolveResourceRequestOptions45(options2, (options3) => ({
           ...options3,
           headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options3?.headers]),
           __security: { bearerAuth: true }
         })));
       }
       list(sessionID, query2 = {}, options2) {
-        const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery30(query2, ["after", "limit", "order"], options2);
+        const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery29(query2, ["after", "limit", "order"], options2);
         if (normalizeRequestOptionsForQueryOptions !== void 0) {
           options2 = normalizeRequestOptionsForQueryOptions;
           query2 = {};
         }
         query2 = query2;
-        return this._client.getAPIList(path`/agents/sessions/${sessionID}/turns`, CursorPage, resolveResourceRequestOptions46(options2, (options3) => ({
+        return this._client.getAPIList(path`/agents/sessions/${sessionID}/turns`, CursorPage, resolveResourceRequestOptions45(options2, (options3) => ({
           query: query2,
           ...options3,
           headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options3?.headers]),
@@ -14100,7 +13416,7 @@ var init_turns = __esm({
 });
 
 // node_modules/openai/resources/beta/agents/sessions/subagents/items.mjs
-function resolveResourceRequestOptions47(options2, buildOptions) {
+function resolveResourceRequestOptions46(options2, buildOptions) {
   return Promise.resolve(options2).then(buildOptions);
 }
 var Items2;
@@ -14128,7 +13444,7 @@ var init_items2 = __esm({
        */
       list(subagentID, params, options2) {
         const { session_id, ...query2 } = params;
-        return this._client.getAPIList(path`/agents/sessions/${session_id}/subagents/${subagentID}/items`, CursorPage, resolveResourceRequestOptions47(options2, (options3) => ({
+        return this._client.getAPIList(path`/agents/sessions/${session_id}/subagents/${subagentID}/items`, CursorPage, resolveResourceRequestOptions46(options2, (options3) => ({
           query: query2,
           ...options3,
           headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options3?.headers]),
@@ -14140,7 +13456,7 @@ var init_items2 = __esm({
 });
 
 // node_modules/openai/resources/beta/agents/sessions/subagents/turns/items.mjs
-function resolveResourceRequestOptions48(options2, buildOptions) {
+function resolveResourceRequestOptions47(options2, buildOptions) {
   return Promise.resolve(options2).then(buildOptions);
 }
 var Items3;
@@ -14168,7 +13484,7 @@ var init_items3 = __esm({
        */
       list(turnID, params, options2) {
         const { session_id, subagent_id, ...query2 } = params;
-        return this._client.getAPIList(path`/agents/sessions/${session_id}/subagents/${subagent_id}/turns/${turnID}/items`, CursorPage, resolveResourceRequestOptions48(options2, (options3) => ({
+        return this._client.getAPIList(path`/agents/sessions/${session_id}/subagents/${subagent_id}/turns/${turnID}/items`, CursorPage, resolveResourceRequestOptions47(options2, (options3) => ({
           query: query2,
           ...options3,
           headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options3?.headers]),
@@ -14180,7 +13496,7 @@ var init_items3 = __esm({
 });
 
 // node_modules/openai/resources/beta/agents/sessions/subagents/turns/turns.mjs
-function resolveResourceRequestOptions49(options2, buildOptions) {
+function resolveResourceRequestOptions48(options2, buildOptions) {
   return Promise.resolve(options2).then(buildOptions);
 }
 var Turns2;
@@ -14215,7 +13531,7 @@ var init_turns2 = __esm({
        */
       retrieve(turnID, params, options2) {
         const { session_id, subagent_id } = params;
-        return this._client.get(path`/agents/sessions/${session_id}/subagents/${subagent_id}/turns/${turnID}`, resolveResourceRequestOptions49(options2, (options3) => ({
+        return this._client.get(path`/agents/sessions/${session_id}/subagents/${subagent_id}/turns/${turnID}`, resolveResourceRequestOptions48(options2, (options3) => ({
           ...options3,
           headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options3?.headers]),
           __security: { bearerAuth: true }
@@ -14238,7 +13554,7 @@ var init_turns2 = __esm({
        */
       list(subagentID, params, options2) {
         const { session_id, ...query2 } = params;
-        return this._client.getAPIList(path`/agents/sessions/${session_id}/subagents/${subagentID}/turns`, CursorPage, resolveResourceRequestOptions49(options2, (options3) => ({
+        return this._client.getAPIList(path`/agents/sessions/${session_id}/subagents/${subagentID}/turns`, CursorPage, resolveResourceRequestOptions48(options2, (options3) => ({
           query: query2,
           ...options3,
           headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options3?.headers]),
@@ -14251,18 +13567,18 @@ var init_turns2 = __esm({
 });
 
 // node_modules/openai/resources/beta/agents/sessions/subagents/subagents.mjs
-function resolveResourceRequestOptions50(options2, buildOptions) {
+function resolveResourceRequestOptions49(options2, buildOptions) {
   return Promise.resolve(options2).then(buildOptions);
 }
-function normalizeRequestOptionsForQuery31(value, queryKeys, options2) {
+function normalizeRequestOptionsForQuery30(value, queryKeys, options2) {
   if (typeof value !== "object" || value === null)
     return void 0;
   const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
   const keys = entries.map(([key]) => key);
-  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys31.has(key) && !queryKeys.includes(key));
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys30.has(key) && !queryKeys.includes(key));
   if (!requestOnly)
     return void 0;
-  if (options2 !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys31.has(key) || queryKeys.includes(key))) {
+  if (options2 !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys30.has(key) || queryKeys.includes(key))) {
     throw new TypeError("Query parameters and request options must be passed as separate arguments.");
   }
   if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
@@ -14274,7 +13590,7 @@ function normalizeRequestOptionsForQuery31(value, queryKeys, options2) {
     return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
   }));
 }
-var normalizeRequestOptionsForQueryKeys31, Subagents;
+var normalizeRequestOptionsForQueryKeys30, Subagents;
 var init_subagents = __esm({
   "node_modules/openai/resources/beta/agents/sessions/subagents/subagents.mjs"() {
     init_resource();
@@ -14285,7 +13601,7 @@ var init_subagents = __esm({
     init_pagination();
     init_headers();
     init_path();
-    normalizeRequestOptionsForQueryKeys31 = /* @__PURE__ */ new Set([
+    normalizeRequestOptionsForQueryKeys30 = /* @__PURE__ */ new Set([
       "method",
       "path",
       "query",
@@ -14327,20 +13643,20 @@ var init_subagents = __esm({
        */
       retrieve(subagentID, params, options2) {
         const { session_id } = params;
-        return this._client.get(path`/agents/sessions/${session_id}/subagents/${subagentID}`, resolveResourceRequestOptions50(options2, (options3) => ({
+        return this._client.get(path`/agents/sessions/${session_id}/subagents/${subagentID}`, resolveResourceRequestOptions49(options2, (options3) => ({
           ...options3,
           headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options3?.headers]),
           __security: { bearerAuth: true }
         })));
       }
       list(sessionID, query2 = {}, options2) {
-        const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery31(query2, ["after", "limit", "order"], options2);
+        const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery30(query2, ["after", "limit", "order"], options2);
         if (normalizeRequestOptionsForQueryOptions !== void 0) {
           options2 = normalizeRequestOptionsForQueryOptions;
           query2 = {};
         }
         query2 = query2;
-        return this._client.getAPIList(path`/agents/sessions/${sessionID}/subagents`, CursorPage, resolveResourceRequestOptions50(options2, (options3) => ({
+        return this._client.getAPIList(path`/agents/sessions/${sessionID}/subagents`, CursorPage, resolveResourceRequestOptions49(options2, (options3) => ({
           query: query2,
           ...options3,
           headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options3?.headers]),
@@ -14354,18 +13670,18 @@ var init_subagents = __esm({
 });
 
 // node_modules/openai/resources/beta/agents/sessions/sessions.mjs
-function resolveResourceRequestOptions51(options2, buildOptions) {
+function resolveResourceRequestOptions50(options2, buildOptions) {
   return Promise.resolve(options2).then(buildOptions);
 }
-function normalizeRequestOptionsForQuery32(value, queryKeys, options2) {
+function normalizeRequestOptionsForQuery31(value, queryKeys, options2) {
   if (typeof value !== "object" || value === null)
     return void 0;
   const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
   const keys = entries.map(([key]) => key);
-  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys32.has(key) && !queryKeys.includes(key));
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys31.has(key) && !queryKeys.includes(key));
   if (!requestOnly)
     return void 0;
-  if (options2 !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys32.has(key) || queryKeys.includes(key))) {
+  if (options2 !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys31.has(key) || queryKeys.includes(key))) {
     throw new TypeError("Query parameters and request options must be passed as separate arguments.");
   }
   if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
@@ -14377,12 +13693,10 @@ function normalizeRequestOptionsForQuery32(value, queryKeys, options2) {
     return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
   }));
 }
-var normalizeRequestOptionsForQueryKeys32, Sessions2;
+var normalizeRequestOptionsForQueryKeys31, Sessions2;
 var init_sessions2 = __esm({
   "node_modules/openai/resources/beta/agents/sessions/sessions.mjs"() {
     init_agent_session_stream();
-    init_agent_session_create_stream();
-    init_parse_result();
     init_resource();
     init_artifacts();
     init_artifacts();
@@ -14390,8 +13704,6 @@ var init_sessions2 = __esm({
     init_events();
     init_items();
     init_items();
-    init_traces();
-    init_traces();
     init_turns();
     init_turns();
     init_subagents();
@@ -14399,7 +13711,7 @@ var init_sessions2 = __esm({
     init_pagination();
     init_headers();
     init_path();
-    normalizeRequestOptionsForQueryKeys32 = /* @__PURE__ */ new Set([
+    normalizeRequestOptionsForQueryKeys31 = /* @__PURE__ */ new Set([
       "method",
       "path",
       "query",
@@ -14427,7 +13739,6 @@ var init_sessions2 = __esm({
         this.artifacts = new Artifacts(this._client);
         this.items = new Items(this._client);
         this.events = new Events(this._client);
-        this.traces = new Traces(this._client);
         this.turns = new Turns(this._client);
       }
       /** Stream one turn on an idle session with a single input writer. See AgentSessionStream for lifecycle and tool handling. */
@@ -14435,17 +13746,13 @@ var init_sessions2 = __esm({
         return new AgentSessionStream(this, sessionID, params, options2);
       }
       create(body, options2) {
-        const output = captureAgentOutput(body, options2);
-        return this._client.post("/agents/sessions", resolveResourceRequestOptions51(output.options, (options3) => ({
-          body: output.body,
+        return this._client.post("/agents/sessions", resolveResourceRequestOptions50(options2, (options3) => ({
+          body,
           ...options3,
           headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options3?.headers]),
-          stream: output.body.stream ?? false,
+          stream: body.stream ?? false,
           __security: { bearerAuth: true }
-        })))._thenUnwrap((data, { options: options3 }) => (
-          // SAFETY: defaultParseResponse uses this same resolved flag to return the configured stream instance.
-          options3.stream ? withAgentTurnResult(data, output.format) : data
-        ));
+        })));
       }
       /**
        * Retrieves the current state of a managed agent session. See
@@ -14458,7 +13765,7 @@ var init_sessions2 = __esm({
        * ```
        */
       retrieve(sessionID, options2) {
-        return this._client.get(path`/agents/sessions/${sessionID}`, resolveResourceRequestOptions51(options2, (options3) => ({
+        return this._client.get(path`/agents/sessions/${sessionID}`, resolveResourceRequestOptions50(options2, (options3) => ({
           ...options3,
           headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options3?.headers]),
           __security: { bearerAuth: true }
@@ -14476,7 +13783,7 @@ var init_sessions2 = __esm({
        * ```
        */
       update(sessionID, body = {}, options2) {
-        return this._client.post(path`/agents/sessions/${sessionID}`, resolveResourceRequestOptions51(options2, (options3) => ({
+        return this._client.post(path`/agents/sessions/${sessionID}`, resolveResourceRequestOptions50(options2, (options3) => ({
           body,
           ...options3,
           headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options3?.headers]),
@@ -14484,13 +13791,13 @@ var init_sessions2 = __esm({
         })));
       }
       list(query2 = {}, options2) {
-        const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery32(query2, ["after", "agent_id", "limit", "order"], options2);
+        const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery31(query2, ["after", "agent_id", "limit", "order"], options2);
         if (normalizeRequestOptionsForQueryOptions !== void 0) {
           options2 = normalizeRequestOptionsForQueryOptions;
           query2 = {};
         }
         query2 = query2;
-        return this._client.getAPIList("/agents/sessions", CursorPage, resolveResourceRequestOptions51(options2, (options3) => ({
+        return this._client.getAPIList("/agents/sessions", CursorPage, resolveResourceRequestOptions50(options2, (options3) => ({
           query: query2,
           ...options3,
           headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options3?.headers]),
@@ -14511,7 +13818,7 @@ var init_sessions2 = __esm({
        * ```
        */
       delete(sessionID, options2) {
-        return this._client.delete(path`/agents/sessions/${sessionID}`, resolveResourceRequestOptions51(options2, (options3) => ({
+        return this._client.delete(path`/agents/sessions/${sessionID}`, resolveResourceRequestOptions50(options2, (options3) => ({
           ...options3,
           headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options3?.headers]),
           __security: { bearerAuth: true }
@@ -14522,24 +13829,23 @@ var init_sessions2 = __esm({
     Sessions2.Artifacts = Artifacts;
     Sessions2.Items = Items;
     Sessions2.Events = Events;
-    Sessions2.Traces = Traces;
     Sessions2.Turns = Turns;
   }
 });
 
 // node_modules/openai/resources/beta/agents/vaults/credentials.mjs
-function resolveResourceRequestOptions52(options2, buildOptions) {
+function resolveResourceRequestOptions51(options2, buildOptions) {
   return Promise.resolve(options2).then(buildOptions);
 }
-function normalizeRequestOptionsForQuery33(value, queryKeys, options2) {
+function normalizeRequestOptionsForQuery32(value, queryKeys, options2) {
   if (typeof value !== "object" || value === null)
     return void 0;
   const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
   const keys = entries.map(([key]) => key);
-  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys33.has(key) && !queryKeys.includes(key));
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys32.has(key) && !queryKeys.includes(key));
   if (!requestOnly)
     return void 0;
-  if (options2 !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys33.has(key) || queryKeys.includes(key))) {
+  if (options2 !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys32.has(key) || queryKeys.includes(key))) {
     throw new TypeError("Query parameters and request options must be passed as separate arguments.");
   }
   if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
@@ -14551,14 +13857,14 @@ function normalizeRequestOptionsForQuery33(value, queryKeys, options2) {
     return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
   }));
 }
-var normalizeRequestOptionsForQueryKeys33, Credentials;
+var normalizeRequestOptionsForQueryKeys32, Credentials;
 var init_credentials = __esm({
   "node_modules/openai/resources/beta/agents/vaults/credentials.mjs"() {
     init_resource();
     init_pagination();
     init_headers();
     init_path();
-    normalizeRequestOptionsForQueryKeys33 = /* @__PURE__ */ new Set([
+    normalizeRequestOptionsForQueryKeys32 = /* @__PURE__ */ new Set([
       "method",
       "path",
       "query",
@@ -14602,7 +13908,7 @@ var init_credentials = __esm({
        * ```
        */
       create(vaultID, body, options2) {
-        return this._client.post(path`/vaults/${vaultID}/credentials`, resolveResourceRequestOptions52(options2, (options3) => ({
+        return this._client.post(path`/vaults/${vaultID}/credentials`, resolveResourceRequestOptions51(options2, (options3) => ({
           body,
           ...options3,
           headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options3?.headers]),
@@ -14624,14 +13930,15 @@ var init_credentials = __esm({
        */
       retrieve(credentialID, params, options2) {
         const { vault_id } = params;
-        return this._client.get(path`/vaults/${vault_id}/credentials/${credentialID}`, resolveResourceRequestOptions52(options2, (options3) => ({
+        return this._client.get(path`/vaults/${vault_id}/credentials/${credentialID}`, resolveResourceRequestOptions51(options2, (options3) => ({
           ...options3,
           headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options3?.headers]),
           __security: { bearerAuth: true }
         })));
       }
       /**
-       * Updates credential metadata or rotates its write-only secret. See
+       * Rotates a vault credential's write-only secret and returns only credential
+       * metadata. See
        * [vaults](https://developers.openai.com/api/docs/guides/agents-api/tools/vaults).
        *
        * @example
@@ -14639,13 +13946,16 @@ var init_credentials = __esm({
        * const credential =
        *   await client.beta.agents.vaults.credentials.update(
        *     'credential_id',
-       *     { vault_id: 'vault_id', metadata: {} },
+       *     {
+       *       vault_id: 'vault_id',
+       *       auth: { type: 'mcp_oauth' },
+       *     },
        *   );
        * ```
        */
       update(credentialID, params, options2) {
         const { vault_id, ...body } = params;
-        return this._client.post(path`/vaults/${vault_id}/credentials/${credentialID}`, resolveResourceRequestOptions52(options2, (options3) => ({
+        return this._client.post(path`/vaults/${vault_id}/credentials/${credentialID}`, resolveResourceRequestOptions51(options2, (options3) => ({
           body,
           ...options3,
           headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options3?.headers]),
@@ -14653,13 +13963,13 @@ var init_credentials = __esm({
         })));
       }
       list(vaultID, query2 = {}, options2) {
-        const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery33(query2, ["after", "limit", "order", "status"], options2);
+        const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery32(query2, ["after", "limit", "order", "status"], options2);
         if (normalizeRequestOptionsForQueryOptions !== void 0) {
           options2 = normalizeRequestOptionsForQueryOptions;
           query2 = {};
         }
         query2 = query2;
-        return this._client.getAPIList(path`/vaults/${vaultID}/credentials`, CursorPage, resolveResourceRequestOptions52(options2, (options3) => ({
+        return this._client.getAPIList(path`/vaults/${vaultID}/credentials`, CursorPage, resolveResourceRequestOptions51(options2, (options3) => ({
           query: query2,
           ...options3,
           headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options3?.headers]),
@@ -14681,7 +13991,7 @@ var init_credentials = __esm({
        */
       delete(credentialID, params, options2) {
         const { vault_id } = params;
-        return this._client.delete(path`/vaults/${vault_id}/credentials/${credentialID}`, resolveResourceRequestOptions52(options2, (options3) => ({
+        return this._client.delete(path`/vaults/${vault_id}/credentials/${credentialID}`, resolveResourceRequestOptions51(options2, (options3) => ({
           ...options3,
           headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options3?.headers]),
           __security: { bearerAuth: true }
@@ -14692,18 +14002,18 @@ var init_credentials = __esm({
 });
 
 // node_modules/openai/resources/beta/agents/vaults/vaults.mjs
-function resolveResourceRequestOptions53(options2, buildOptions) {
+function resolveResourceRequestOptions52(options2, buildOptions) {
   return Promise.resolve(options2).then(buildOptions);
 }
-function normalizeRequestOptionsForQuery34(value, queryKeys, options2) {
+function normalizeRequestOptionsForQuery33(value, queryKeys, options2) {
   if (typeof value !== "object" || value === null)
     return void 0;
   const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
   const keys = entries.map(([key]) => key);
-  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys34.has(key) && !queryKeys.includes(key));
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys33.has(key) && !queryKeys.includes(key));
   if (!requestOnly)
     return void 0;
-  if (options2 !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys34.has(key) || queryKeys.includes(key))) {
+  if (options2 !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys33.has(key) || queryKeys.includes(key))) {
     throw new TypeError("Query parameters and request options must be passed as separate arguments.");
   }
   if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
@@ -14715,7 +14025,7 @@ function normalizeRequestOptionsForQuery34(value, queryKeys, options2) {
     return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
   }));
 }
-var normalizeRequestOptionsForQueryKeys34, Vaults;
+var normalizeRequestOptionsForQueryKeys33, Vaults;
 var init_vaults = __esm({
   "node_modules/openai/resources/beta/agents/vaults/vaults.mjs"() {
     init_resource();
@@ -14724,7 +14034,7 @@ var init_vaults = __esm({
     init_pagination();
     init_headers();
     init_path();
-    normalizeRequestOptionsForQueryKeys34 = /* @__PURE__ */ new Set([
+    normalizeRequestOptionsForQueryKeys33 = /* @__PURE__ */ new Set([
       "method",
       "path",
       "query",
@@ -14760,7 +14070,7 @@ var init_vaults = __esm({
        * ```
        */
       create(body = {}, options2) {
-        return this._client.post("/vaults", resolveResourceRequestOptions53(options2, (options3) => ({
+        return this._client.post("/vaults", resolveResourceRequestOptions52(options2, (options3) => ({
           body,
           ...options3,
           headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options3?.headers]),
@@ -14779,20 +14089,20 @@ var init_vaults = __esm({
        * ```
        */
       retrieve(vaultID, options2) {
-        return this._client.get(path`/vaults/${vaultID}`, resolveResourceRequestOptions53(options2, (options3) => ({
+        return this._client.get(path`/vaults/${vaultID}`, resolveResourceRequestOptions52(options2, (options3) => ({
           ...options3,
           headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options3?.headers]),
           __security: { bearerAuth: true }
         })));
       }
       list(query2 = {}, options2) {
-        const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery34(query2, ["after", "limit", "order", "status"], options2);
+        const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery33(query2, ["after", "limit", "order", "status"], options2);
         if (normalizeRequestOptionsForQueryOptions !== void 0) {
           options2 = normalizeRequestOptionsForQueryOptions;
           query2 = {};
         }
         query2 = query2;
-        return this._client.getAPIList("/vaults", CursorPage, resolveResourceRequestOptions53(options2, (options3) => ({
+        return this._client.getAPIList("/vaults", CursorPage, resolveResourceRequestOptions52(options2, (options3) => ({
           query: query2,
           ...options3,
           headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options3?.headers]),
@@ -14811,7 +14121,7 @@ var init_vaults = __esm({
        * ```
        */
       delete(vaultID, options2) {
-        return this._client.delete(path`/vaults/${vaultID}`, resolveResourceRequestOptions53(options2, (options3) => ({
+        return this._client.delete(path`/vaults/${vaultID}`, resolveResourceRequestOptions52(options2, (options3) => ({
           ...options3,
           headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options3?.headers]),
           __security: { bearerAuth: true }
@@ -14823,18 +14133,18 @@ var init_vaults = __esm({
 });
 
 // node_modules/openai/resources/beta/agents/agents.mjs
-function resolveResourceRequestOptions54(options2, buildOptions) {
+function resolveResourceRequestOptions53(options2, buildOptions) {
   return Promise.resolve(options2).then(buildOptions);
 }
-function normalizeRequestOptionsForQuery35(value, queryKeys, options2) {
+function normalizeRequestOptionsForQuery34(value, queryKeys, options2) {
   if (typeof value !== "object" || value === null)
     return void 0;
   const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
   const keys = entries.map(([key]) => key);
-  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys35.has(key) && !queryKeys.includes(key));
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys34.has(key) && !queryKeys.includes(key));
   if (!requestOnly)
     return void 0;
-  if (options2 !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys35.has(key) || queryKeys.includes(key))) {
+  if (options2 !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys34.has(key) || queryKeys.includes(key))) {
     throw new TypeError("Query parameters and request options must be passed as separate arguments.");
   }
   if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
@@ -14846,7 +14156,7 @@ function normalizeRequestOptionsForQuery35(value, queryKeys, options2) {
     return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
   }));
 }
-var normalizeRequestOptionsForQueryKeys35, Agents;
+var normalizeRequestOptionsForQueryKeys34, Agents;
 var init_agents = __esm({
   "node_modules/openai/resources/beta/agents/agents.mjs"() {
     init_resource();
@@ -14859,7 +14169,7 @@ var init_agents = __esm({
     init_pagination();
     init_headers();
     init_path();
-    normalizeRequestOptionsForQueryKeys35 = /* @__PURE__ */ new Set([
+    normalizeRequestOptionsForQueryKeys34 = /* @__PURE__ */ new Set([
       "method",
       "path",
       "query",
@@ -14899,7 +14209,7 @@ var init_agents = __esm({
        * ```
        */
       create(body, options2) {
-        return this._client.post("/agents", resolveResourceRequestOptions54(options2, (options3) => ({
+        return this._client.post("/agents", resolveResourceRequestOptions53(options2, (options3) => ({
           body,
           ...options3,
           headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options3?.headers]),
@@ -14916,7 +14226,7 @@ var init_agents = __esm({
        * ```
        */
       retrieve(agentID, options2) {
-        return this._client.get(path`/agents/${agentID}`, resolveResourceRequestOptions54(options2, (options3) => ({
+        return this._client.get(path`/agents/${agentID}`, resolveResourceRequestOptions53(options2, (options3) => ({
           ...options3,
           headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options3?.headers]),
           __security: { bearerAuth: true }
@@ -14932,7 +14242,7 @@ var init_agents = __esm({
        * ```
        */
       update(agentID, body = {}, options2) {
-        return this._client.post(path`/agents/${agentID}`, resolveResourceRequestOptions54(options2, (options3) => ({
+        return this._client.post(path`/agents/${agentID}`, resolveResourceRequestOptions53(options2, (options3) => ({
           body,
           ...options3,
           headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options3?.headers]),
@@ -14940,13 +14250,13 @@ var init_agents = __esm({
         })));
       }
       list(query2 = {}, options2) {
-        const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery35(query2, ["after", "limit", "order"], options2);
+        const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery34(query2, ["after", "limit", "order"], options2);
         if (normalizeRequestOptionsForQueryOptions !== void 0) {
           options2 = normalizeRequestOptionsForQueryOptions;
           query2 = {};
         }
         query2 = query2;
-        return this._client.getAPIList("/agents", CursorPage, resolveResourceRequestOptions54(options2, (options3) => ({
+        return this._client.getAPIList("/agents", CursorPage, resolveResourceRequestOptions53(options2, (options3) => ({
           query: query2,
           ...options3,
           headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options3?.headers]),
@@ -14965,7 +14275,7 @@ var init_agents = __esm({
        * ```
        */
       delete(agentID, options2) {
-        return this._client.delete(path`/agents/${agentID}`, resolveResourceRequestOptions54(options2, (options3) => ({
+        return this._client.delete(path`/agents/${agentID}`, resolveResourceRequestOptions53(options2, (options3) => ({
           ...options3,
           headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options3?.headers]),
           __security: { bearerAuth: true }
@@ -14979,7 +14289,7 @@ var init_agents = __esm({
 });
 
 // node_modules/openai/resources/beta/chatkit/sessions.mjs
-function resolveResourceRequestOptions55(options2, buildOptions) {
+function resolveResourceRequestOptions54(options2, buildOptions) {
   return Promise.resolve(options2).then(buildOptions);
 }
 var Sessions3;
@@ -15002,7 +14312,7 @@ var init_sessions3 = __esm({
        * ```
        */
       create(body, options2) {
-        return this._client.post("/chatkit/sessions", resolveResourceRequestOptions55(options2, (options3) => ({
+        return this._client.post("/chatkit/sessions", resolveResourceRequestOptions54(options2, (options3) => ({
           body,
           ...options3,
           headers: buildHeaders([{ "OpenAI-Beta": "chatkit_beta=v1" }, options3?.headers]),
@@ -15021,7 +14331,7 @@ var init_sessions3 = __esm({
        * ```
        */
       cancel(sessionID, options2) {
-        return this._client.post(path`/chatkit/sessions/${sessionID}/cancel`, resolveResourceRequestOptions55(options2, (options3) => ({
+        return this._client.post(path`/chatkit/sessions/${sessionID}/cancel`, resolveResourceRequestOptions54(options2, (options3) => ({
           ...options3,
           headers: buildHeaders([{ "OpenAI-Beta": "chatkit_beta=v1" }, options3?.headers]),
           __security: { bearerAuth: true }
@@ -15032,18 +14342,18 @@ var init_sessions3 = __esm({
 });
 
 // node_modules/openai/resources/beta/chatkit/threads.mjs
-function resolveResourceRequestOptions56(options2, buildOptions) {
+function resolveResourceRequestOptions55(options2, buildOptions) {
   return Promise.resolve(options2).then(buildOptions);
 }
-function normalizeRequestOptionsForQuery36(value, queryKeys, options2) {
+function normalizeRequestOptionsForQuery35(value, queryKeys, options2) {
   if (typeof value !== "object" || value === null)
     return void 0;
   const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
   const keys = entries.map(([key]) => key);
-  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys36.has(key) && !queryKeys.includes(key));
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys35.has(key) && !queryKeys.includes(key));
   if (!requestOnly)
     return void 0;
-  if (options2 !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys36.has(key) || queryKeys.includes(key))) {
+  if (options2 !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys35.has(key) || queryKeys.includes(key))) {
     throw new TypeError("Query parameters and request options must be passed as separate arguments.");
   }
   if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
@@ -15055,14 +14365,14 @@ function normalizeRequestOptionsForQuery36(value, queryKeys, options2) {
     return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
   }));
 }
-var normalizeRequestOptionsForQueryKeys36, Threads;
+var normalizeRequestOptionsForQueryKeys35, Threads;
 var init_threads = __esm({
   "node_modules/openai/resources/beta/chatkit/threads.mjs"() {
     init_resource();
     init_pagination();
     init_headers();
     init_path();
-    normalizeRequestOptionsForQueryKeys36 = /* @__PURE__ */ new Set([
+    normalizeRequestOptionsForQueryKeys35 = /* @__PURE__ */ new Set([
       "method",
       "path",
       "query",
@@ -15094,20 +14404,20 @@ var init_threads = __esm({
        * ```
        */
       retrieve(threadID, options2) {
-        return this._client.get(path`/chatkit/threads/${threadID}`, resolveResourceRequestOptions56(options2, (options3) => ({
+        return this._client.get(path`/chatkit/threads/${threadID}`, resolveResourceRequestOptions55(options2, (options3) => ({
           ...options3,
           headers: buildHeaders([{ "OpenAI-Beta": "chatkit_beta=v1" }, options3?.headers]),
           __security: { bearerAuth: true }
         })));
       }
       list(query2 = {}, options2) {
-        const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery36(query2, ["after", "before", "limit", "order", "user"], options2);
+        const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery35(query2, ["after", "before", "limit", "order", "user"], options2);
         if (normalizeRequestOptionsForQueryOptions !== void 0) {
           options2 = normalizeRequestOptionsForQueryOptions;
           query2 = {};
         }
         query2 = query2;
-        return this._client.getAPIList("/chatkit/threads", ConversationCursorPage, resolveResourceRequestOptions56(options2, (options3) => ({
+        return this._client.getAPIList("/chatkit/threads", ConversationCursorPage, resolveResourceRequestOptions55(options2, (options3) => ({
           query: query2,
           ...options3,
           headers: buildHeaders([{ "OpenAI-Beta": "chatkit_beta=v1" }, options3?.headers]),
@@ -15125,20 +14435,20 @@ var init_threads = __esm({
        * ```
        */
       delete(threadID, options2) {
-        return this._client.delete(path`/chatkit/threads/${threadID}`, resolveResourceRequestOptions56(options2, (options3) => ({
+        return this._client.delete(path`/chatkit/threads/${threadID}`, resolveResourceRequestOptions55(options2, (options3) => ({
           ...options3,
           headers: buildHeaders([{ "OpenAI-Beta": "chatkit_beta=v1" }, options3?.headers]),
           __security: { bearerAuth: true }
         })));
       }
       listItems(threadID, query2 = {}, options2) {
-        const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery36(query2, ["after", "before", "limit", "order"], options2);
+        const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery35(query2, ["after", "before", "limit", "order"], options2);
         if (normalizeRequestOptionsForQueryOptions !== void 0) {
           options2 = normalizeRequestOptionsForQueryOptions;
           query2 = {};
         }
         query2 = query2;
-        return this._client.getAPIList(path`/chatkit/threads/${threadID}/items`, ConversationCursorPage, resolveResourceRequestOptions56(options2, (options3) => ({
+        return this._client.getAPIList(path`/chatkit/threads/${threadID}/items`, ConversationCursorPage, resolveResourceRequestOptions55(options2, (options3) => ({
           query: query2,
           ...options3,
           headers: buildHeaders([{ "OpenAI-Beta": "chatkit_beta=v1" }, options3?.headers]),
@@ -15171,18 +14481,18 @@ var init_chatkit = __esm({
 });
 
 // node_modules/openai/resources/beta/responses/input-items.mjs
-function resolveResourceRequestOptions57(options2, buildOptions) {
+function resolveResourceRequestOptions56(options2, buildOptions) {
   return Promise.resolve(options2).then(buildOptions);
 }
-function normalizeRequestOptionsForQuery37(value, queryKeys, options2) {
+function normalizeRequestOptionsForQuery36(value, queryKeys, options2) {
   if (typeof value !== "object" || value === null)
     return void 0;
   const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
   const keys = entries.map(([key]) => key);
-  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys37.has(key) && !queryKeys.includes(key));
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys36.has(key) && !queryKeys.includes(key));
   if (!requestOnly)
     return void 0;
-  if (options2 !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys37.has(key) || queryKeys.includes(key))) {
+  if (options2 !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys36.has(key) || queryKeys.includes(key))) {
     throw new TypeError("Query parameters and request options must be passed as separate arguments.");
   }
   if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
@@ -15194,14 +14504,14 @@ function normalizeRequestOptionsForQuery37(value, queryKeys, options2) {
     return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
   }));
 }
-var normalizeRequestOptionsForQueryKeys37, InputItems;
+var normalizeRequestOptionsForQueryKeys36, InputItems;
 var init_input_items = __esm({
   "node_modules/openai/resources/beta/responses/input-items.mjs"() {
     init_resource();
     init_pagination();
     init_headers();
     init_path();
-    normalizeRequestOptionsForQueryKeys37 = /* @__PURE__ */ new Set([
+    normalizeRequestOptionsForQueryKeys36 = /* @__PURE__ */ new Set([
       "method",
       "path",
       "query",
@@ -15224,14 +14534,14 @@ var init_input_items = __esm({
     ]);
     InputItems = class extends APIResource {
       list(responseID, params = {}, options2) {
-        const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery37(params, ["after", "betas", "include", "limit", "order"], options2);
+        const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery36(params, ["after", "betas", "include", "limit", "order"], options2);
         if (normalizeRequestOptionsForQueryOptions !== void 0) {
           options2 = normalizeRequestOptionsForQueryOptions;
           params = {};
         }
         params = params;
         const { betas, ...query2 } = params ?? {};
-        return this._client.getAPIList(path`/responses/${responseID}/input_items?beta=true`, CursorPage, resolveResourceRequestOptions57(options2, (options3) => ({
+        return this._client.getAPIList(path`/responses/${responseID}/input_items?beta=true`, CursorPage, resolveResourceRequestOptions56(options2, (options3) => ({
           query: query2,
           ...options3,
           headers: buildHeaders([
@@ -15246,7 +14556,7 @@ var init_input_items = __esm({
 });
 
 // node_modules/openai/resources/beta/responses/input-tokens.mjs
-function resolveResourceRequestOptions58(options2, buildOptions) {
+function resolveResourceRequestOptions57(options2, buildOptions) {
   return Promise.resolve(options2).then(buildOptions);
 }
 var InputTokens;
@@ -15269,7 +14579,7 @@ var init_input_tokens = __esm({
        */
       count(params = {}, options2) {
         const { betas, ...body } = params ?? {};
-        return this._client.post("/responses/input_tokens?beta=true", resolveResourceRequestOptions58(options2, (options3) => ({
+        return this._client.post("/responses/input_tokens?beta=true", resolveResourceRequestOptions57(options2, (options3) => ({
           body,
           ...options3,
           headers: buildHeaders([
@@ -15284,18 +14594,18 @@ var init_input_tokens = __esm({
 });
 
 // node_modules/openai/resources/beta/responses/responses.mjs
-function resolveResourceRequestOptions59(options2, buildOptions) {
+function resolveResourceRequestOptions58(options2, buildOptions) {
   return Promise.resolve(options2).then(buildOptions);
 }
-function normalizeRequestOptionsForQuery38(value, queryKeys, options2) {
+function normalizeRequestOptionsForQuery37(value, queryKeys, options2) {
   if (typeof value !== "object" || value === null)
     return void 0;
   const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
   const keys = entries.map(([key]) => key);
-  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys38.has(key) && !queryKeys.includes(key));
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys37.has(key) && !queryKeys.includes(key));
   if (!requestOnly)
     return void 0;
-  if (options2 !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys38.has(key) || queryKeys.includes(key))) {
+  if (options2 !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys37.has(key) || queryKeys.includes(key))) {
     throw new TypeError("Query parameters and request options must be passed as separate arguments.");
   }
   if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
@@ -15307,7 +14617,7 @@ function normalizeRequestOptionsForQuery38(value, queryKeys, options2) {
     return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
   }));
 }
-var normalizeRequestOptionsForQueryKeys38, Responses;
+var normalizeRequestOptionsForQueryKeys37, Responses;
 var init_responses = __esm({
   "node_modules/openai/resources/beta/responses/responses.mjs"() {
     init_resource();
@@ -15317,7 +14627,7 @@ var init_responses = __esm({
     init_input_tokens();
     init_headers();
     init_path();
-    normalizeRequestOptionsForQueryKeys38 = /* @__PURE__ */ new Set([
+    normalizeRequestOptionsForQueryKeys37 = /* @__PURE__ */ new Set([
       "method",
       "path",
       "query",
@@ -15346,7 +14656,7 @@ var init_responses = __esm({
       }
       create(params, options2) {
         const { betas, ...body } = params;
-        return this._client.post("/responses?beta=true", resolveResourceRequestOptions59(options2, (options3) => ({
+        return this._client.post("/responses?beta=true", resolveResourceRequestOptions58(options2, (options3) => ({
           body,
           ...options3,
           headers: buildHeaders([
@@ -15358,14 +14668,14 @@ var init_responses = __esm({
         })));
       }
       retrieve(responseID, params = {}, options2) {
-        const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery38(params, ["betas", "include", "include_obfuscation", "starting_after", "stream"], options2);
+        const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery37(params, ["betas", "include", "include_obfuscation", "starting_after", "stream"], options2);
         if (normalizeRequestOptionsForQueryOptions !== void 0) {
           options2 = normalizeRequestOptionsForQueryOptions;
           params = {};
         }
         params = params;
         const { betas, ...query2 } = params ?? {};
-        return this._client.get(path`/responses/${responseID}?beta=true`, resolveResourceRequestOptions59(options2, (options3) => ({
+        return this._client.get(path`/responses/${responseID}?beta=true`, resolveResourceRequestOptions58(options2, (options3) => ({
           query: query2,
           ...options3,
           headers: buildHeaders([
@@ -15388,7 +14698,7 @@ var init_responses = __esm({
        */
       delete(responseID, params = {}, options2) {
         const { betas } = params ?? {};
-        return this._client.delete(path`/responses/${responseID}?beta=true`, resolveResourceRequestOptions59(options2, (options3) => ({
+        return this._client.delete(path`/responses/${responseID}?beta=true`, resolveResourceRequestOptions58(options2, (options3) => ({
           ...options3,
           headers: buildHeaders([
             {
@@ -15414,7 +14724,7 @@ var init_responses = __esm({
        */
       cancel(responseID, params = {}, options2) {
         const { betas } = params ?? {};
-        return this._client.post(path`/responses/${responseID}/cancel?beta=true`, resolveResourceRequestOptions59(options2, (options3) => ({
+        return this._client.post(path`/responses/${responseID}/cancel?beta=true`, resolveResourceRequestOptions58(options2, (options3) => ({
           ...options3,
           headers: buildHeaders([
             { ...betas?.toString() != null ? { "openai-beta": betas?.toString() } : void 0 },
@@ -15441,7 +14751,7 @@ var init_responses = __esm({
        */
       compact(params, options2) {
         const { betas, ...body } = params;
-        return this._client.post("/responses/compact?beta=true", resolveResourceRequestOptions59(options2, (options3) => ({
+        return this._client.post("/responses/compact?beta=true", resolveResourceRequestOptions58(options2, (options3) => ({
           body,
           ...options3,
           headers: buildHeaders([
@@ -15458,18 +14768,18 @@ var init_responses = __esm({
 });
 
 // node_modules/openai/resources/beta/threads/messages.mjs
-function resolveResourceRequestOptions60(options2, buildOptions) {
+function resolveResourceRequestOptions59(options2, buildOptions) {
   return Promise.resolve(options2).then(buildOptions);
 }
-function normalizeRequestOptionsForQuery39(value, queryKeys, options2) {
+function normalizeRequestOptionsForQuery38(value, queryKeys, options2) {
   if (typeof value !== "object" || value === null)
     return void 0;
   const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
   const keys = entries.map(([key]) => key);
-  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys39.has(key) && !queryKeys.includes(key));
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys38.has(key) && !queryKeys.includes(key));
   if (!requestOnly)
     return void 0;
-  if (options2 !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys39.has(key) || queryKeys.includes(key))) {
+  if (options2 !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys38.has(key) || queryKeys.includes(key))) {
     throw new TypeError("Query parameters and request options must be passed as separate arguments.");
   }
   if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
@@ -15481,14 +14791,14 @@ function normalizeRequestOptionsForQuery39(value, queryKeys, options2) {
     return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
   }));
 }
-var normalizeRequestOptionsForQueryKeys39, Messages2;
+var normalizeRequestOptionsForQueryKeys38, Messages2;
 var init_messages2 = __esm({
   "node_modules/openai/resources/beta/threads/messages.mjs"() {
     init_resource();
     init_pagination();
     init_headers();
     init_path();
-    normalizeRequestOptionsForQueryKeys39 = /* @__PURE__ */ new Set([
+    normalizeRequestOptionsForQueryKeys38 = /* @__PURE__ */ new Set([
       "method",
       "path",
       "query",
@@ -15516,7 +14826,7 @@ var init_messages2 = __esm({
        * @deprecated The Assistants API is deprecated in favor of the Responses API
        */
       create(threadID, body, options2) {
-        return this._client.post(path`/threads/${threadID}/messages`, resolveResourceRequestOptions60(options2, (options3) => ({
+        return this._client.post(path`/threads/${threadID}/messages`, resolveResourceRequestOptions59(options2, (options3) => ({
           body,
           ...options3,
           headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options3?.headers]),
@@ -15530,7 +14840,7 @@ var init_messages2 = __esm({
        */
       retrieve(messageID, params, options2) {
         const { thread_id } = params;
-        return this._client.get(path`/threads/${thread_id}/messages/${messageID}`, resolveResourceRequestOptions60(options2, (options3) => ({
+        return this._client.get(path`/threads/${thread_id}/messages/${messageID}`, resolveResourceRequestOptions59(options2, (options3) => ({
           ...options3,
           headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options3?.headers]),
           __security: { bearerAuth: true }
@@ -15543,7 +14853,7 @@ var init_messages2 = __esm({
        */
       update(messageID, params, options2) {
         const { thread_id, ...body } = params;
-        return this._client.post(path`/threads/${thread_id}/messages/${messageID}`, resolveResourceRequestOptions60(options2, (options3) => ({
+        return this._client.post(path`/threads/${thread_id}/messages/${messageID}`, resolveResourceRequestOptions59(options2, (options3) => ({
           body,
           ...options3,
           headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options3?.headers]),
@@ -15551,13 +14861,13 @@ var init_messages2 = __esm({
         })));
       }
       list(threadID, query2 = {}, options2) {
-        const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery39(query2, ["after", "before", "limit", "order", "run_id"], options2);
+        const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery38(query2, ["after", "before", "limit", "order", "run_id"], options2);
         if (normalizeRequestOptionsForQueryOptions !== void 0) {
           options2 = normalizeRequestOptionsForQueryOptions;
           query2 = {};
         }
         query2 = query2;
-        return this._client.getAPIList(path`/threads/${threadID}/messages`, CursorPage, resolveResourceRequestOptions60(options2, (options3) => ({
+        return this._client.getAPIList(path`/threads/${threadID}/messages`, CursorPage, resolveResourceRequestOptions59(options2, (options3) => ({
           query: query2,
           ...options3,
           headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options3?.headers]),
@@ -15571,7 +14881,7 @@ var init_messages2 = __esm({
        */
       delete(messageID, params, options2) {
         const { thread_id } = params;
-        return this._client.delete(path`/threads/${thread_id}/messages/${messageID}`, resolveResourceRequestOptions60(options2, (options3) => ({
+        return this._client.delete(path`/threads/${thread_id}/messages/${messageID}`, resolveResourceRequestOptions59(options2, (options3) => ({
           ...options3,
           headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options3?.headers]),
           __security: { bearerAuth: true }
@@ -15582,7 +14892,7 @@ var init_messages2 = __esm({
 });
 
 // node_modules/openai/resources/beta/threads/runs/steps.mjs
-function resolveResourceRequestOptions61(options2, buildOptions) {
+function resolveResourceRequestOptions60(options2, buildOptions) {
   return Promise.resolve(options2).then(buildOptions);
 }
 var Steps;
@@ -15600,7 +14910,7 @@ var init_steps = __esm({
        */
       retrieve(stepID, params, options2) {
         const { thread_id, run_id, ...query2 } = params;
-        return this._client.get(path`/threads/${thread_id}/runs/${run_id}/steps/${stepID}`, resolveResourceRequestOptions61(options2, (options3) => ({
+        return this._client.get(path`/threads/${thread_id}/runs/${run_id}/steps/${stepID}`, resolveResourceRequestOptions60(options2, (options3) => ({
           query: query2,
           ...options3,
           headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options3?.headers]),
@@ -15614,7 +14924,7 @@ var init_steps = __esm({
        */
       list(runID, params, options2) {
         const { thread_id, ...query2 } = params;
-        return this._client.getAPIList(path`/threads/${thread_id}/runs/${runID}/steps`, CursorPage, resolveResourceRequestOptions61(options2, (options3) => ({
+        return this._client.getAPIList(path`/threads/${thread_id}/runs/${runID}/steps`, CursorPage, resolveResourceRequestOptions60(options2, (options3) => ({
           query: query2,
           ...options3,
           headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options3?.headers]),
@@ -16790,18 +16100,18 @@ var init_assistant_run_polling = __esm({
 });
 
 // node_modules/openai/resources/beta/threads/runs/runs.mjs
-function resolveResourceRequestOptions62(options2, buildOptions) {
+function resolveResourceRequestOptions61(options2, buildOptions) {
   return Promise.resolve(options2).then(buildOptions);
 }
-function normalizeRequestOptionsForQuery40(value, queryKeys, options2) {
+function normalizeRequestOptionsForQuery39(value, queryKeys, options2) {
   if (typeof value !== "object" || value === null)
     return void 0;
   const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
   const keys = entries.map(([key]) => key);
-  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys40.has(key) && !queryKeys.includes(key));
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys39.has(key) && !queryKeys.includes(key));
   if (!requestOnly)
     return void 0;
-  if (options2 !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys40.has(key) || queryKeys.includes(key))) {
+  if (options2 !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys39.has(key) || queryKeys.includes(key))) {
     throw new TypeError("Query parameters and request options must be passed as separate arguments.");
   }
   if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
@@ -16813,7 +16123,7 @@ function normalizeRequestOptionsForQuery40(value, queryKeys, options2) {
     return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
   }));
 }
-var normalizeRequestOptionsForQueryKeys40, Runs;
+var normalizeRequestOptionsForQueryKeys39, Runs;
 var init_runs = __esm({
   "node_modules/openai/resources/beta/threads/runs/runs.mjs"() {
     init_resource();
@@ -16824,7 +16134,7 @@ var init_runs = __esm({
     init_AssistantStream();
     init_assistant_run_polling();
     init_path();
-    normalizeRequestOptionsForQueryKeys40 = /* @__PURE__ */ new Set([
+    normalizeRequestOptionsForQueryKeys39 = /* @__PURE__ */ new Set([
       "method",
       "path",
       "query",
@@ -16852,7 +16162,7 @@ var init_runs = __esm({
       }
       create(threadID, params, options2) {
         const { include, ...body } = params;
-        return this._client.post(path`/threads/${threadID}/runs`, resolveResourceRequestOptions62(options2, (options3) => ({
+        return this._client.post(path`/threads/${threadID}/runs`, resolveResourceRequestOptions61(options2, (options3) => ({
           query: { include },
           body,
           ...options3,
@@ -16869,7 +16179,7 @@ var init_runs = __esm({
        */
       retrieve(runID, params, options2) {
         const { thread_id } = params;
-        return this._client.get(path`/threads/${thread_id}/runs/${runID}`, resolveResourceRequestOptions62(options2, (options3) => ({
+        return this._client.get(path`/threads/${thread_id}/runs/${runID}`, resolveResourceRequestOptions61(options2, (options3) => ({
           ...options3,
           headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options3?.headers]),
           __security: { bearerAuth: true }
@@ -16882,7 +16192,7 @@ var init_runs = __esm({
        */
       update(runID, params, options2) {
         const { thread_id, ...body } = params;
-        return this._client.post(path`/threads/${thread_id}/runs/${runID}`, resolveResourceRequestOptions62(options2, (options3) => ({
+        return this._client.post(path`/threads/${thread_id}/runs/${runID}`, resolveResourceRequestOptions61(options2, (options3) => ({
           body,
           ...options3,
           headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options3?.headers]),
@@ -16890,13 +16200,13 @@ var init_runs = __esm({
         })));
       }
       list(threadID, query2 = {}, options2) {
-        const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery40(query2, ["after", "before", "limit", "order"], options2);
+        const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery39(query2, ["after", "before", "limit", "order"], options2);
         if (normalizeRequestOptionsForQueryOptions !== void 0) {
           options2 = normalizeRequestOptionsForQueryOptions;
           query2 = {};
         }
         query2 = query2;
-        return this._client.getAPIList(path`/threads/${threadID}/runs`, CursorPage, resolveResourceRequestOptions62(options2, (options3) => ({
+        return this._client.getAPIList(path`/threads/${threadID}/runs`, CursorPage, resolveResourceRequestOptions61(options2, (options3) => ({
           query: query2,
           ...options3,
           headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options3?.headers]),
@@ -16910,7 +16220,7 @@ var init_runs = __esm({
        */
       cancel(runID, params, options2) {
         const { thread_id } = params;
-        return this._client.post(path`/threads/${thread_id}/runs/${runID}/cancel`, resolveResourceRequestOptions62(options2, (options3) => ({
+        return this._client.post(path`/threads/${thread_id}/runs/${runID}/cancel`, resolveResourceRequestOptions61(options2, (options3) => ({
           ...options3,
           headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options3?.headers]),
           __security: { bearerAuth: true }
@@ -16949,7 +16259,7 @@ var init_runs = __esm({
       }
       submitToolOutputs(runID, params, options2) {
         const { thread_id, ...body } = params;
-        return this._client.post(path`/threads/${thread_id}/runs/${runID}/submit_tool_outputs`, resolveResourceRequestOptions62(options2, (options3) => ({
+        return this._client.post(path`/threads/${thread_id}/runs/${runID}/submit_tool_outputs`, resolveResourceRequestOptions61(options2, (options3) => ({
           body,
           ...options3,
           headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options3?.headers]),
@@ -16981,7 +16291,7 @@ var init_runs = __esm({
 });
 
 // node_modules/openai/resources/beta/threads/threads.mjs
-function resolveResourceRequestOptions63(options2, buildOptions) {
+function resolveResourceRequestOptions62(options2, buildOptions) {
   return Promise.resolve(options2).then(buildOptions);
 }
 var Threads2;
@@ -17007,7 +16317,7 @@ var init_threads2 = __esm({
        * @deprecated The Assistants API is deprecated in favor of the Responses API
        */
       create(body = {}, options2) {
-        return this._client.post("/threads", resolveResourceRequestOptions63(options2, (options3) => ({
+        return this._client.post("/threads", resolveResourceRequestOptions62(options2, (options3) => ({
           body,
           ...options3,
           headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options3?.headers]),
@@ -17020,7 +16330,7 @@ var init_threads2 = __esm({
        * @deprecated The Assistants API is deprecated in favor of the Responses API
        */
       retrieve(threadID, options2) {
-        return this._client.get(path`/threads/${threadID}`, resolveResourceRequestOptions63(options2, (options3) => ({
+        return this._client.get(path`/threads/${threadID}`, resolveResourceRequestOptions62(options2, (options3) => ({
           ...options3,
           headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options3?.headers]),
           __security: { bearerAuth: true }
@@ -17032,7 +16342,7 @@ var init_threads2 = __esm({
        * @deprecated The Assistants API is deprecated in favor of the Responses API
        */
       update(threadID, body, options2) {
-        return this._client.post(path`/threads/${threadID}`, resolveResourceRequestOptions63(options2, (options3) => ({
+        return this._client.post(path`/threads/${threadID}`, resolveResourceRequestOptions62(options2, (options3) => ({
           body,
           ...options3,
           headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options3?.headers]),
@@ -17045,14 +16355,14 @@ var init_threads2 = __esm({
        * @deprecated The Assistants API is deprecated in favor of the Responses API
        */
       delete(threadID, options2) {
-        return this._client.delete(path`/threads/${threadID}`, resolveResourceRequestOptions63(options2, (options3) => ({
+        return this._client.delete(path`/threads/${threadID}`, resolveResourceRequestOptions62(options2, (options3) => ({
           ...options3,
           headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options3?.headers]),
           __security: { bearerAuth: true }
         })));
       }
       createAndRun(body, options2) {
-        return this._client.post("/threads/runs", resolveResourceRequestOptions63(options2, (options3) => ({
+        return this._client.post("/threads/runs", resolveResourceRequestOptions62(options2, (options3) => ({
           body,
           ...options3,
           headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options3?.headers]),
@@ -17120,7 +16430,7 @@ var init_beta = __esm({
 });
 
 // node_modules/openai/resources/completions.mjs
-function resolveResourceRequestOptions64(options2, buildOptions) {
+function resolveResourceRequestOptions63(options2, buildOptions) {
   return Promise.resolve(options2).then(buildOptions);
 }
 var Completions2;
@@ -17129,7 +16439,7 @@ var init_completions3 = __esm({
     init_resource();
     Completions2 = class extends APIResource {
       create(body, options2) {
-        return this._client.post("/completions", resolveResourceRequestOptions64(options2, (options3) => ({
+        return this._client.post("/completions", resolveResourceRequestOptions63(options2, (options3) => ({
           body,
           ...options3,
           stream: body.stream ?? false,
@@ -17141,7 +16451,7 @@ var init_completions3 = __esm({
 });
 
 // node_modules/openai/resources/containers/files/content.mjs
-function resolveResourceRequestOptions65(options2, buildOptions) {
+function resolveResourceRequestOptions64(options2, buildOptions) {
   return Promise.resolve(options2).then(buildOptions);
 }
 var Content;
@@ -17156,7 +16466,7 @@ var init_content = __esm({
        */
       retrieve(fileID, params, options2) {
         const { container_id } = params;
-        return this._client.get(path`/containers/${container_id}/files/${fileID}/content`, resolveResourceRequestOptions65(options2, (options3) => ({
+        return this._client.get(path`/containers/${container_id}/files/${fileID}/content`, resolveResourceRequestOptions64(options2, (options3) => ({
           ...options3,
           headers: buildHeaders([{ Accept: "application/binary" }, options3?.headers]),
           __security: { bearerAuth: true },
@@ -17168,18 +16478,18 @@ var init_content = __esm({
 });
 
 // node_modules/openai/resources/containers/files/files.mjs
-function resolveResourceRequestOptions66(options2, buildOptions) {
+function resolveResourceRequestOptions65(options2, buildOptions) {
   return Promise.resolve(options2).then(buildOptions);
 }
-function normalizeRequestOptionsForQuery41(value, queryKeys, options2) {
+function normalizeRequestOptionsForQuery40(value, queryKeys, options2) {
   if (typeof value !== "object" || value === null)
     return void 0;
   const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
   const keys = entries.map(([key]) => key);
-  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys41.has(key) && !queryKeys.includes(key));
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys40.has(key) && !queryKeys.includes(key));
   if (!requestOnly)
     return void 0;
-  if (options2 !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys41.has(key) || queryKeys.includes(key))) {
+  if (options2 !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys40.has(key) || queryKeys.includes(key))) {
     throw new TypeError("Query parameters and request options must be passed as separate arguments.");
   }
   if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
@@ -17191,8 +16501,8 @@ function normalizeRequestOptionsForQuery41(value, queryKeys, options2) {
     return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
   }));
 }
-var normalizeRequestOptionsForQueryKeys41, Files2;
-var init_files3 = __esm({
+var normalizeRequestOptionsForQueryKeys40, Files2;
+var init_files2 = __esm({
   "node_modules/openai/resources/containers/files/files.mjs"() {
     init_resource();
     init_content();
@@ -17201,7 +16511,7 @@ var init_files3 = __esm({
     init_headers();
     init_uploads();
     init_path();
-    normalizeRequestOptionsForQueryKeys41 = /* @__PURE__ */ new Set([
+    normalizeRequestOptionsForQueryKeys40 = /* @__PURE__ */ new Set([
       "method",
       "path",
       "query",
@@ -17234,23 +16544,23 @@ var init_files3 = __esm({
        * a JSON request with a file ID.
        */
       create(containerID, body, options2) {
-        return this._client.post(path`/containers/${containerID}/files`, resolveResourceRequestOptions66(options2, (options3) => maybeMultipartFormRequestOptions({ body, ...options3, __security: { bearerAuth: true } }, this._client)));
+        return this._client.post(path`/containers/${containerID}/files`, resolveResourceRequestOptions65(options2, (options3) => maybeMultipartFormRequestOptions({ body, ...options3, __security: { bearerAuth: true } }, this._client)));
       }
       /**
        * Retrieve Container File
        */
       retrieve(fileID, params, options2) {
         const { container_id } = params;
-        return this._client.get(path`/containers/${container_id}/files/${fileID}`, resolveResourceRequestOptions66(options2, (options3) => ({ ...options3, __security: { bearerAuth: true } })));
+        return this._client.get(path`/containers/${container_id}/files/${fileID}`, resolveResourceRequestOptions65(options2, (options3) => ({ ...options3, __security: { bearerAuth: true } })));
       }
       list(containerID, query2 = {}, options2) {
-        const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery41(query2, ["after", "limit", "order"], options2);
+        const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery40(query2, ["after", "limit", "order"], options2);
         if (normalizeRequestOptionsForQueryOptions !== void 0) {
           options2 = normalizeRequestOptionsForQueryOptions;
           query2 = {};
         }
         query2 = query2;
-        return this._client.getAPIList(path`/containers/${containerID}/files`, CursorPage, resolveResourceRequestOptions66(options2, (options3) => ({
+        return this._client.getAPIList(path`/containers/${containerID}/files`, CursorPage, resolveResourceRequestOptions65(options2, (options3) => ({
           query: query2,
           ...options3,
           __security: { bearerAuth: true }
@@ -17261,7 +16571,7 @@ var init_files3 = __esm({
        */
       delete(fileID, params, options2) {
         const { container_id } = params;
-        return this._client.delete(path`/containers/${container_id}/files/${fileID}`, resolveResourceRequestOptions66(options2, (options3) => ({
+        return this._client.delete(path`/containers/${container_id}/files/${fileID}`, resolveResourceRequestOptions65(options2, (options3) => ({
           ...options3,
           headers: buildHeaders([{ Accept: "*/*" }, options3?.headers]),
           __security: { bearerAuth: true }
@@ -17273,18 +16583,18 @@ var init_files3 = __esm({
 });
 
 // node_modules/openai/resources/containers/containers.mjs
-function resolveResourceRequestOptions67(options2, buildOptions) {
+function resolveResourceRequestOptions66(options2, buildOptions) {
   return Promise.resolve(options2).then(buildOptions);
 }
-function normalizeRequestOptionsForQuery42(value, queryKeys, options2) {
+function normalizeRequestOptionsForQuery41(value, queryKeys, options2) {
   if (typeof value !== "object" || value === null)
     return void 0;
   const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
   const keys = entries.map(([key]) => key);
-  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys42.has(key) && !queryKeys.includes(key));
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys41.has(key) && !queryKeys.includes(key));
   if (!requestOnly)
     return void 0;
-  if (options2 !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys42.has(key) || queryKeys.includes(key))) {
+  if (options2 !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys41.has(key) || queryKeys.includes(key))) {
     throw new TypeError("Query parameters and request options must be passed as separate arguments.");
   }
   if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
@@ -17296,16 +16606,16 @@ function normalizeRequestOptionsForQuery42(value, queryKeys, options2) {
     return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
   }));
 }
-var normalizeRequestOptionsForQueryKeys42, Containers;
+var normalizeRequestOptionsForQueryKeys41, Containers;
 var init_containers = __esm({
   "node_modules/openai/resources/containers/containers.mjs"() {
     init_resource();
-    init_files3();
-    init_files3();
+    init_files2();
+    init_files2();
     init_pagination();
     init_headers();
     init_path();
-    normalizeRequestOptionsForQueryKeys42 = /* @__PURE__ */ new Set([
+    normalizeRequestOptionsForQueryKeys41 = /* @__PURE__ */ new Set([
       "method",
       "path",
       "query",
@@ -17335,7 +16645,7 @@ var init_containers = __esm({
        * Create Container
        */
       create(body, options2) {
-        return this._client.post("/containers", resolveResourceRequestOptions67(options2, (options3) => ({
+        return this._client.post("/containers", resolveResourceRequestOptions66(options2, (options3) => ({
           body,
           ...options3,
           __security: { bearerAuth: true }
@@ -17345,16 +16655,16 @@ var init_containers = __esm({
        * Retrieve Container
        */
       retrieve(containerID, options2) {
-        return this._client.get(path`/containers/${containerID}`, resolveResourceRequestOptions67(options2, (options3) => ({ ...options3, __security: { bearerAuth: true } })));
+        return this._client.get(path`/containers/${containerID}`, resolveResourceRequestOptions66(options2, (options3) => ({ ...options3, __security: { bearerAuth: true } })));
       }
       list(query2 = {}, options2) {
-        const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery42(query2, ["after", "limit", "name", "order"], options2);
+        const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery41(query2, ["after", "limit", "name", "order"], options2);
         if (normalizeRequestOptionsForQueryOptions !== void 0) {
           options2 = normalizeRequestOptionsForQueryOptions;
           query2 = {};
         }
         query2 = query2;
-        return this._client.getAPIList("/containers", CursorPage, resolveResourceRequestOptions67(options2, (options3) => ({
+        return this._client.getAPIList("/containers", CursorPage, resolveResourceRequestOptions66(options2, (options3) => ({
           query: query2,
           ...options3,
           __security: { bearerAuth: true }
@@ -17364,7 +16674,7 @@ var init_containers = __esm({
        * Delete Container
        */
       delete(containerID, options2) {
-        return this._client.delete(path`/containers/${containerID}`, resolveResourceRequestOptions67(options2, (options3) => ({
+        return this._client.delete(path`/containers/${containerID}`, resolveResourceRequestOptions66(options2, (options3) => ({
           ...options3,
           headers: buildHeaders([{ Accept: "*/*" }, options3?.headers]),
           __security: { bearerAuth: true }
@@ -17376,7 +16686,7 @@ var init_containers = __esm({
 });
 
 // node_modules/openai/resources/content-provenance-checks.mjs
-function resolveResourceRequestOptions68(options2, buildOptions) {
+function resolveResourceRequestOptions67(options2, buildOptions) {
   return Promise.resolve(options2).then(buildOptions);
 }
 var ContentProvenanceChecks;
@@ -17397,25 +16707,25 @@ var init_content_provenance_checks = __esm({
        * company's model, which the tool currently does not detect.
        */
       create(body, options2) {
-        return this._client.post("/content_provenance_checks", resolveResourceRequestOptions68(options2, (options3) => multipartFormRequestOptions({ body, ...options3, __security: { bearerAuth: true } }, this._client)));
+        return this._client.post("/content_provenance_checks", resolveResourceRequestOptions67(options2, (options3) => multipartFormRequestOptions({ body, ...options3, __security: { bearerAuth: true } }, this._client)));
       }
     };
   }
 });
 
 // node_modules/openai/resources/conversations/items.mjs
-function resolveResourceRequestOptions69(options2, buildOptions) {
+function resolveResourceRequestOptions68(options2, buildOptions) {
   return Promise.resolve(options2).then(buildOptions);
 }
-function normalizeRequestOptionsForQuery43(value, queryKeys, options2) {
+function normalizeRequestOptionsForQuery42(value, queryKeys, options2) {
   if (typeof value !== "object" || value === null)
     return void 0;
   const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
   const keys = entries.map(([key]) => key);
-  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys43.has(key) && !queryKeys.includes(key));
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys42.has(key) && !queryKeys.includes(key));
   if (!requestOnly)
     return void 0;
-  if (options2 !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys43.has(key) || queryKeys.includes(key))) {
+  if (options2 !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys42.has(key) || queryKeys.includes(key))) {
     throw new TypeError("Query parameters and request options must be passed as separate arguments.");
   }
   if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
@@ -17427,13 +16737,13 @@ function normalizeRequestOptionsForQuery43(value, queryKeys, options2) {
     return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
   }));
 }
-var normalizeRequestOptionsForQueryKeys43, Items4;
+var normalizeRequestOptionsForQueryKeys42, Items4;
 var init_items4 = __esm({
   "node_modules/openai/resources/conversations/items.mjs"() {
     init_resource();
     init_pagination();
     init_path();
-    normalizeRequestOptionsForQueryKeys43 = /* @__PURE__ */ new Set([
+    normalizeRequestOptionsForQueryKeys42 = /* @__PURE__ */ new Set([
       "method",
       "path",
       "query",
@@ -17460,7 +16770,7 @@ var init_items4 = __esm({
        */
       create(conversationID, params, options2) {
         const { include, ...body } = params;
-        return this._client.post(path`/conversations/${conversationID}/items`, resolveResourceRequestOptions69(options2, (options3) => ({
+        return this._client.post(path`/conversations/${conversationID}/items`, resolveResourceRequestOptions68(options2, (options3) => ({
           query: { include },
           body,
           ...options3,
@@ -17472,20 +16782,20 @@ var init_items4 = __esm({
        */
       retrieve(itemID, params, options2) {
         const { conversation_id, ...query2 } = params;
-        return this._client.get(path`/conversations/${conversation_id}/items/${itemID}`, resolveResourceRequestOptions69(options2, (options3) => ({
+        return this._client.get(path`/conversations/${conversation_id}/items/${itemID}`, resolveResourceRequestOptions68(options2, (options3) => ({
           query: query2,
           ...options3,
           __security: { bearerAuth: true }
         })));
       }
       list(conversationID, query2 = {}, options2) {
-        const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery43(query2, ["after", "include", "limit", "order"], options2);
+        const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery42(query2, ["after", "include", "limit", "order"], options2);
         if (normalizeRequestOptionsForQueryOptions !== void 0) {
           options2 = normalizeRequestOptionsForQueryOptions;
           query2 = {};
         }
         query2 = query2;
-        return this._client.getAPIList(path`/conversations/${conversationID}/items`, ConversationCursorPage, resolveResourceRequestOptions69(options2, (options3) => ({
+        return this._client.getAPIList(path`/conversations/${conversationID}/items`, ConversationCursorPage, resolveResourceRequestOptions68(options2, (options3) => ({
           query: query2,
           ...options3,
           __security: { bearerAuth: true }
@@ -17496,14 +16806,14 @@ var init_items4 = __esm({
        */
       delete(itemID, params, options2) {
         const { conversation_id } = params;
-        return this._client.delete(path`/conversations/${conversation_id}/items/${itemID}`, resolveResourceRequestOptions69(options2, (options3) => ({ ...options3, __security: { bearerAuth: true } })));
+        return this._client.delete(path`/conversations/${conversation_id}/items/${itemID}`, resolveResourceRequestOptions68(options2, (options3) => ({ ...options3, __security: { bearerAuth: true } })));
       }
     };
   }
 });
 
 // node_modules/openai/resources/conversations/conversations.mjs
-function resolveResourceRequestOptions70(options2, buildOptions) {
+function resolveResourceRequestOptions69(options2, buildOptions) {
   return Promise.resolve(options2).then(buildOptions);
 }
 var Conversations;
@@ -17522,7 +16832,7 @@ var init_conversations = __esm({
        * Create a conversation.
        */
       create(body = {}, options2) {
-        return this._client.post("/conversations", resolveResourceRequestOptions70(options2, (options3) => ({
+        return this._client.post("/conversations", resolveResourceRequestOptions69(options2, (options3) => ({
           body,
           ...options3,
           __security: { bearerAuth: true }
@@ -17532,13 +16842,13 @@ var init_conversations = __esm({
        * Get a conversation
        */
       retrieve(conversationID, options2) {
-        return this._client.get(path`/conversations/${conversationID}`, resolveResourceRequestOptions70(options2, (options3) => ({ ...options3, __security: { bearerAuth: true } })));
+        return this._client.get(path`/conversations/${conversationID}`, resolveResourceRequestOptions69(options2, (options3) => ({ ...options3, __security: { bearerAuth: true } })));
       }
       /**
        * Update a conversation
        */
       update(conversationID, body, options2) {
-        return this._client.post(path`/conversations/${conversationID}`, resolveResourceRequestOptions70(options2, (options3) => ({
+        return this._client.post(path`/conversations/${conversationID}`, resolveResourceRequestOptions69(options2, (options3) => ({
           body,
           ...options3,
           __security: { bearerAuth: true }
@@ -17548,7 +16858,7 @@ var init_conversations = __esm({
        * Delete a conversation. Items in the conversation will not be deleted.
        */
       delete(conversationID, options2) {
-        return this._client.delete(path`/conversations/${conversationID}`, resolveResourceRequestOptions70(options2, (options3) => ({ ...options3, __security: { bearerAuth: true } })));
+        return this._client.delete(path`/conversations/${conversationID}`, resolveResourceRequestOptions69(options2, (options3) => ({ ...options3, __security: { bearerAuth: true } })));
       }
     };
     Conversations.Items = Items4;
@@ -17615,7 +16925,7 @@ var init_embeddings2 = __esm({
 });
 
 // node_modules/openai/resources/evals/runs/output-items.mjs
-function resolveResourceRequestOptions71(options2, buildOptions) {
+function resolveResourceRequestOptions70(options2, buildOptions) {
   return Promise.resolve(options2).then(buildOptions);
 }
 var OutputItems;
@@ -17630,14 +16940,14 @@ var init_output_items = __esm({
        */
       retrieve(outputItemID, params, options2) {
         const { eval_id, run_id } = params;
-        return this._client.get(path`/evals/${eval_id}/runs/${run_id}/output_items/${outputItemID}`, resolveResourceRequestOptions71(options2, (options3) => ({ ...options3, __security: { bearerAuth: true } })));
+        return this._client.get(path`/evals/${eval_id}/runs/${run_id}/output_items/${outputItemID}`, resolveResourceRequestOptions70(options2, (options3) => ({ ...options3, __security: { bearerAuth: true } })));
       }
       /**
        * Get a list of output items for an evaluation run.
        */
       list(runID, params, options2) {
         const { eval_id, ...query2 } = params;
-        return this._client.getAPIList(path`/evals/${eval_id}/runs/${runID}/output_items`, CursorPage, resolveResourceRequestOptions71(options2, (options3) => ({
+        return this._client.getAPIList(path`/evals/${eval_id}/runs/${runID}/output_items`, CursorPage, resolveResourceRequestOptions70(options2, (options3) => ({
           query: query2,
           ...options3,
           __security: { bearerAuth: true }
@@ -17648,18 +16958,18 @@ var init_output_items = __esm({
 });
 
 // node_modules/openai/resources/evals/runs/runs.mjs
-function resolveResourceRequestOptions72(options2, buildOptions) {
+function resolveResourceRequestOptions71(options2, buildOptions) {
   return Promise.resolve(options2).then(buildOptions);
 }
-function normalizeRequestOptionsForQuery44(value, queryKeys, options2) {
+function normalizeRequestOptionsForQuery43(value, queryKeys, options2) {
   if (typeof value !== "object" || value === null)
     return void 0;
   const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
   const keys = entries.map(([key]) => key);
-  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys44.has(key) && !queryKeys.includes(key));
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys43.has(key) && !queryKeys.includes(key));
   if (!requestOnly)
     return void 0;
-  if (options2 !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys44.has(key) || queryKeys.includes(key))) {
+  if (options2 !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys43.has(key) || queryKeys.includes(key))) {
     throw new TypeError("Query parameters and request options must be passed as separate arguments.");
   }
   if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
@@ -17671,7 +16981,7 @@ function normalizeRequestOptionsForQuery44(value, queryKeys, options2) {
     return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
   }));
 }
-var normalizeRequestOptionsForQueryKeys44, Runs2;
+var normalizeRequestOptionsForQueryKeys43, Runs2;
 var init_runs2 = __esm({
   "node_modules/openai/resources/evals/runs/runs.mjs"() {
     init_resource();
@@ -17679,7 +16989,7 @@ var init_runs2 = __esm({
     init_output_items();
     init_pagination();
     init_path();
-    normalizeRequestOptionsForQueryKeys44 = /* @__PURE__ */ new Set([
+    normalizeRequestOptionsForQueryKeys43 = /* @__PURE__ */ new Set([
       "method",
       "path",
       "query",
@@ -17711,7 +17021,7 @@ var init_runs2 = __esm({
        * schema specified in the config of the evaluation.
        */
       create(evalID, body, options2) {
-        return this._client.post(path`/evals/${evalID}/runs`, resolveResourceRequestOptions72(options2, (options3) => ({
+        return this._client.post(path`/evals/${evalID}/runs`, resolveResourceRequestOptions71(options2, (options3) => ({
           body,
           ...options3,
           __security: { bearerAuth: true }
@@ -17722,16 +17032,16 @@ var init_runs2 = __esm({
        */
       retrieve(runID, params, options2) {
         const { eval_id } = params;
-        return this._client.get(path`/evals/${eval_id}/runs/${runID}`, resolveResourceRequestOptions72(options2, (options3) => ({ ...options3, __security: { bearerAuth: true } })));
+        return this._client.get(path`/evals/${eval_id}/runs/${runID}`, resolveResourceRequestOptions71(options2, (options3) => ({ ...options3, __security: { bearerAuth: true } })));
       }
       list(evalID, query2 = {}, options2) {
-        const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery44(query2, ["after", "limit", "order", "status"], options2);
+        const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery43(query2, ["after", "limit", "order", "status"], options2);
         if (normalizeRequestOptionsForQueryOptions !== void 0) {
           options2 = normalizeRequestOptionsForQueryOptions;
           query2 = {};
         }
         query2 = query2;
-        return this._client.getAPIList(path`/evals/${evalID}/runs`, CursorPage, resolveResourceRequestOptions72(options2, (options3) => ({
+        return this._client.getAPIList(path`/evals/${evalID}/runs`, CursorPage, resolveResourceRequestOptions71(options2, (options3) => ({
           query: query2,
           ...options3,
           __security: { bearerAuth: true }
@@ -17742,14 +17052,14 @@ var init_runs2 = __esm({
        */
       delete(runID, params, options2) {
         const { eval_id } = params;
-        return this._client.delete(path`/evals/${eval_id}/runs/${runID}`, resolveResourceRequestOptions72(options2, (options3) => ({ ...options3, __security: { bearerAuth: true } })));
+        return this._client.delete(path`/evals/${eval_id}/runs/${runID}`, resolveResourceRequestOptions71(options2, (options3) => ({ ...options3, __security: { bearerAuth: true } })));
       }
       /**
        * Cancel an ongoing evaluation run.
        */
       cancel(runID, params, options2) {
         const { eval_id } = params;
-        return this._client.post(path`/evals/${eval_id}/runs/${runID}/cancel`, resolveResourceRequestOptions72(options2, (options3) => ({ ...options3, __security: { bearerAuth: true } })));
+        return this._client.post(path`/evals/${eval_id}/runs/${runID}`, resolveResourceRequestOptions71(options2, (options3) => ({ ...options3, __security: { bearerAuth: true } })));
       }
     };
     Runs2.OutputItems = OutputItems;
@@ -17757,18 +17067,18 @@ var init_runs2 = __esm({
 });
 
 // node_modules/openai/resources/evals/evals.mjs
-function resolveResourceRequestOptions73(options2, buildOptions) {
+function resolveResourceRequestOptions72(options2, buildOptions) {
   return Promise.resolve(options2).then(buildOptions);
 }
-function normalizeRequestOptionsForQuery45(value, queryKeys, options2) {
+function normalizeRequestOptionsForQuery44(value, queryKeys, options2) {
   if (typeof value !== "object" || value === null)
     return void 0;
   const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
   const keys = entries.map(([key]) => key);
-  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys45.has(key) && !queryKeys.includes(key));
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys44.has(key) && !queryKeys.includes(key));
   if (!requestOnly)
     return void 0;
-  if (options2 !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys45.has(key) || queryKeys.includes(key))) {
+  if (options2 !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys44.has(key) || queryKeys.includes(key))) {
     throw new TypeError("Query parameters and request options must be passed as separate arguments.");
   }
   if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
@@ -17780,7 +17090,7 @@ function normalizeRequestOptionsForQuery45(value, queryKeys, options2) {
     return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
   }));
 }
-var normalizeRequestOptionsForQueryKeys45, Evals;
+var normalizeRequestOptionsForQueryKeys44, Evals;
 var init_evals = __esm({
   "node_modules/openai/resources/evals/evals.mjs"() {
     init_resource();
@@ -17788,7 +17098,7 @@ var init_evals = __esm({
     init_runs2();
     init_pagination();
     init_path();
-    normalizeRequestOptionsForQueryKeys45 = /* @__PURE__ */ new Set([
+    normalizeRequestOptionsForQueryKeys44 = /* @__PURE__ */ new Set([
       "method",
       "path",
       "query",
@@ -17823,7 +17133,7 @@ var init_evals = __esm({
        * the [Evals guide](https://developers.openai.com/api/docs/guides/evals).
        */
       create(body, options2) {
-        return this._client.post("/evals", resolveResourceRequestOptions73(options2, (options3) => ({
+        return this._client.post("/evals", resolveResourceRequestOptions72(options2, (options3) => ({
           body,
           ...options3,
           __security: { bearerAuth: true }
@@ -17833,26 +17143,26 @@ var init_evals = __esm({
        * Get an evaluation by ID.
        */
       retrieve(evalID, options2) {
-        return this._client.get(path`/evals/${evalID}`, resolveResourceRequestOptions73(options2, (options3) => ({ ...options3, __security: { bearerAuth: true } })));
+        return this._client.get(path`/evals/${evalID}`, resolveResourceRequestOptions72(options2, (options3) => ({ ...options3, __security: { bearerAuth: true } })));
       }
       /**
        * Update certain properties of an evaluation.
        */
       update(evalID, body, options2) {
-        return this._client.post(path`/evals/${evalID}`, resolveResourceRequestOptions73(options2, (options3) => ({
+        return this._client.post(path`/evals/${evalID}`, resolveResourceRequestOptions72(options2, (options3) => ({
           body,
           ...options3,
           __security: { bearerAuth: true }
         })));
       }
       list(query2 = {}, options2) {
-        const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery45(query2, ["after", "limit", "order", "order_by"], options2);
+        const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery44(query2, ["after", "limit", "order", "order_by"], options2);
         if (normalizeRequestOptionsForQueryOptions !== void 0) {
           options2 = normalizeRequestOptionsForQueryOptions;
           query2 = {};
         }
         query2 = query2;
-        return this._client.getAPIList("/evals", CursorPage, resolveResourceRequestOptions73(options2, (options3) => ({
+        return this._client.getAPIList("/evals", CursorPage, resolveResourceRequestOptions72(options2, (options3) => ({
           query: query2,
           ...options3,
           __security: { bearerAuth: true }
@@ -17862,7 +17172,7 @@ var init_evals = __esm({
        * Delete an evaluation.
        */
       delete(evalID, options2) {
-        return this._client.delete(path`/evals/${evalID}`, resolveResourceRequestOptions73(options2, (options3) => ({ ...options3, __security: { bearerAuth: true } })));
+        return this._client.delete(path`/evals/${evalID}`, resolveResourceRequestOptions72(options2, (options3) => ({ ...options3, __security: { bearerAuth: true } })));
       }
     };
     Evals.Runs = Runs2;
@@ -17893,18 +17203,18 @@ var init_file_processing = __esm({
 });
 
 // node_modules/openai/resources/files.mjs
-function resolveResourceRequestOptions74(options2, buildOptions) {
+function resolveResourceRequestOptions73(options2, buildOptions) {
   return Promise.resolve(options2).then(buildOptions);
 }
-function normalizeRequestOptionsForQuery46(value, queryKeys, options2) {
+function normalizeRequestOptionsForQuery45(value, queryKeys, options2) {
   if (typeof value !== "object" || value === null)
     return void 0;
   const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
   const keys = entries.map(([key]) => key);
-  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys46.has(key) && !queryKeys.includes(key));
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys45.has(key) && !queryKeys.includes(key));
   if (!requestOnly)
     return void 0;
-  if (options2 !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys46.has(key) || queryKeys.includes(key))) {
+  if (options2 !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys45.has(key) || queryKeys.includes(key))) {
     throw new TypeError("Query parameters and request options must be passed as separate arguments.");
   }
   if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
@@ -17916,8 +17226,8 @@ function normalizeRequestOptionsForQuery46(value, queryKeys, options2) {
     return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
   }));
 }
-var normalizeRequestOptionsForQueryKeys46, Files3;
-var init_files4 = __esm({
+var normalizeRequestOptionsForQueryKeys45, Files3;
+var init_files3 = __esm({
   "node_modules/openai/resources/files.mjs"() {
     init_resource();
     init_pagination();
@@ -17925,7 +17235,7 @@ var init_files4 = __esm({
     init_uploads();
     init_file_processing();
     init_path();
-    normalizeRequestOptionsForQueryKeys46 = /* @__PURE__ */ new Set([
+    normalizeRequestOptionsForQueryKeys45 = /* @__PURE__ */ new Set([
       "method",
       "path",
       "query",
@@ -17977,22 +17287,22 @@ var init_files4 = __esm({
        * storage limits.
        */
       create(body, options2) {
-        return this._client.post("/files", resolveResourceRequestOptions74(options2, (options3) => multipartFormRequestOptions({ body, ...options3, __security: { bearerAuth: true } }, this._client)));
+        return this._client.post("/files", resolveResourceRequestOptions73(options2, (options3) => multipartFormRequestOptions({ body, ...options3, __security: { bearerAuth: true } }, this._client)));
       }
       /**
        * Returns information about a specific file.
        */
       retrieve(fileID, options2) {
-        return this._client.get(path`/files/${fileID}`, resolveResourceRequestOptions74(options2, (options3) => ({ ...options3, __security: { bearerAuth: true } })));
+        return this._client.get(path`/files/${fileID}`, resolveResourceRequestOptions73(options2, (options3) => ({ ...options3, __security: { bearerAuth: true } })));
       }
       list(query2 = {}, options2) {
-        const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery46(query2, ["after", "limit", "order", "purpose"], options2);
+        const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery45(query2, ["after", "limit", "order", "purpose"], options2);
         if (normalizeRequestOptionsForQueryOptions !== void 0) {
           options2 = normalizeRequestOptionsForQueryOptions;
           query2 = {};
         }
         query2 = query2;
-        return this._client.getAPIList("/files", CursorPage, resolveResourceRequestOptions74(options2, (options3) => ({
+        return this._client.getAPIList("/files", CursorPage, resolveResourceRequestOptions73(options2, (options3) => ({
           query: query2,
           ...options3,
           __security: { bearerAuth: true }
@@ -18002,13 +17312,13 @@ var init_files4 = __esm({
        * Delete a file and remove it from all vector stores.
        */
       delete(fileID, options2) {
-        return this._client.delete(path`/files/${fileID}`, resolveResourceRequestOptions74(options2, (options3) => ({ ...options3, __security: { bearerAuth: true } })));
+        return this._client.delete(path`/files/${fileID}`, resolveResourceRequestOptions73(options2, (options3) => ({ ...options3, __security: { bearerAuth: true } })));
       }
       /**
        * Returns a response containing the contents of the specified file.
        */
       content(fileID, options2) {
-        return this._client.get(path`/files/${fileID}/content`, resolveResourceRequestOptions74(options2, (options3) => ({
+        return this._client.get(path`/files/${fileID}/content`, resolveResourceRequestOptions73(options2, (options3) => ({
           ...options3,
           headers: buildHeaders([{ Accept: "application/binary" }, options3?.headers]),
           __security: { bearerAuth: true },
@@ -18036,7 +17346,7 @@ var init_methods = __esm({
 });
 
 // node_modules/openai/resources/fine-tuning/alpha/graders.mjs
-function resolveResourceRequestOptions75(options2, buildOptions) {
+function resolveResourceRequestOptions74(options2, buildOptions) {
   return Promise.resolve(options2).then(buildOptions);
 }
 var Graders;
@@ -18062,7 +17372,7 @@ var init_graders = __esm({
        * ```
        */
       run(body, options2) {
-        return this._client.post("/fine_tuning/alpha/graders/run", resolveResourceRequestOptions75(options2, (options3) => ({
+        return this._client.post("/fine_tuning/alpha/graders/run", resolveResourceRequestOptions74(options2, (options3) => ({
           body,
           ...options3,
           __security: { bearerAuth: true }
@@ -18086,7 +17396,7 @@ var init_graders = __esm({
        * ```
        */
       validate(body, options2) {
-        return this._client.post("/fine_tuning/alpha/graders/validate", resolveResourceRequestOptions75(options2, (options3) => ({
+        return this._client.post("/fine_tuning/alpha/graders/validate", resolveResourceRequestOptions74(options2, (options3) => ({
           body,
           ...options3,
           __security: { bearerAuth: true }
@@ -18114,18 +17424,18 @@ var init_alpha = __esm({
 });
 
 // node_modules/openai/resources/fine-tuning/checkpoints/permissions.mjs
-function resolveResourceRequestOptions76(options2, buildOptions) {
+function resolveResourceRequestOptions75(options2, buildOptions) {
   return Promise.resolve(options2).then(buildOptions);
 }
-function normalizeRequestOptionsForQuery47(value, queryKeys, options2) {
+function normalizeRequestOptionsForQuery46(value, queryKeys, options2) {
   if (typeof value !== "object" || value === null)
     return void 0;
   const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
   const keys = entries.map(([key]) => key);
-  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys47.has(key) && !queryKeys.includes(key));
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys46.has(key) && !queryKeys.includes(key));
   if (!requestOnly)
     return void 0;
-  if (options2 !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys47.has(key) || queryKeys.includes(key))) {
+  if (options2 !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys46.has(key) || queryKeys.includes(key))) {
     throw new TypeError("Query parameters and request options must be passed as separate arguments.");
   }
   if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
@@ -18137,13 +17447,13 @@ function normalizeRequestOptionsForQuery47(value, queryKeys, options2) {
     return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
   }));
 }
-var normalizeRequestOptionsForQueryKeys47, Permissions;
+var normalizeRequestOptionsForQueryKeys46, Permissions;
 var init_permissions = __esm({
   "node_modules/openai/resources/fine-tuning/checkpoints/permissions.mjs"() {
     init_resource();
     init_pagination();
     init_path();
-    normalizeRequestOptionsForQueryKeys47 = /* @__PURE__ */ new Set([
+    normalizeRequestOptionsForQueryKeys46 = /* @__PURE__ */ new Set([
       "method",
       "path",
       "query",
@@ -18184,7 +17494,7 @@ var init_permissions = __esm({
        * ```
        */
       create(fineTunedModelCheckpoint, body, options2) {
-        return this._client.getAPIList(path`/fine_tuning/checkpoints/${fineTunedModelCheckpoint}/permissions`, Page, resolveResourceRequestOptions76(options2, (options3) => ({
+        return this._client.getAPIList(path`/fine_tuning/checkpoints/${fineTunedModelCheckpoint}/permissions`, Page, resolveResourceRequestOptions75(options2, (options3) => ({
           body,
           method: "post",
           ...options3,
@@ -18192,26 +17502,26 @@ var init_permissions = __esm({
         })));
       }
       retrieve(fineTunedModelCheckpoint, query2 = {}, options2) {
-        const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery47(query2, ["after", "limit", "order", "project_id"], options2);
+        const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery46(query2, ["after", "limit", "order", "project_id"], options2);
         if (normalizeRequestOptionsForQueryOptions !== void 0) {
           options2 = normalizeRequestOptionsForQueryOptions;
           query2 = {};
         }
         query2 = query2;
-        return this._client.get(path`/fine_tuning/checkpoints/${fineTunedModelCheckpoint}/permissions`, resolveResourceRequestOptions76(options2, (options3) => ({
+        return this._client.get(path`/fine_tuning/checkpoints/${fineTunedModelCheckpoint}/permissions`, resolveResourceRequestOptions75(options2, (options3) => ({
           query: query2,
           ...options3,
           __security: { adminAPIKeyAuth: true }
         })));
       }
       list(fineTunedModelCheckpoint, query2 = {}, options2) {
-        const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery47(query2, ["after", "limit", "order", "project_id"], options2);
+        const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery46(query2, ["after", "limit", "order", "project_id"], options2);
         if (normalizeRequestOptionsForQueryOptions !== void 0) {
           options2 = normalizeRequestOptionsForQueryOptions;
           query2 = {};
         }
         query2 = query2;
-        return this._client.getAPIList(path`/fine_tuning/checkpoints/${fineTunedModelCheckpoint}/permissions`, ConversationCursorPage, resolveResourceRequestOptions76(options2, (options3) => ({
+        return this._client.getAPIList(path`/fine_tuning/checkpoints/${fineTunedModelCheckpoint}/permissions`, ConversationCursorPage, resolveResourceRequestOptions75(options2, (options3) => ({
           query: query2,
           ...options3,
           __security: { adminAPIKeyAuth: true }
@@ -18238,7 +17548,7 @@ var init_permissions = __esm({
        */
       delete(permissionID, params, options2) {
         const { fine_tuned_model_checkpoint } = params;
-        return this._client.delete(path`/fine_tuning/checkpoints/${fine_tuned_model_checkpoint}/permissions/${permissionID}`, resolveResourceRequestOptions76(options2, (options3) => ({
+        return this._client.delete(path`/fine_tuning/checkpoints/${fine_tuned_model_checkpoint}/permissions/${permissionID}`, resolveResourceRequestOptions75(options2, (options3) => ({
           ...options3,
           __security: { adminAPIKeyAuth: true }
         })));
@@ -18265,6 +17575,75 @@ var init_checkpoints = __esm({
 });
 
 // node_modules/openai/resources/fine-tuning/jobs/checkpoints.mjs
+function resolveResourceRequestOptions76(options2, buildOptions) {
+  return Promise.resolve(options2).then(buildOptions);
+}
+function normalizeRequestOptionsForQuery47(value, queryKeys, options2) {
+  if (typeof value !== "object" || value === null)
+    return void 0;
+  const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
+  const keys = entries.map(([key]) => key);
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys47.has(key) && !queryKeys.includes(key));
+  if (!requestOnly)
+    return void 0;
+  if (options2 !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys47.has(key) || queryKeys.includes(key))) {
+    throw new TypeError("Query parameters and request options must be passed as separate arguments.");
+  }
+  if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
+    throw new TypeError("Pass transport overrides in the explicit request options argument.");
+  }
+  return Object.fromEntries(entries.map(([key, descriptor]) => {
+    if ("value" in descriptor)
+      return [key, descriptor.value];
+    return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
+  }));
+}
+var normalizeRequestOptionsForQueryKeys47, Checkpoints2;
+var init_checkpoints2 = __esm({
+  "node_modules/openai/resources/fine-tuning/jobs/checkpoints.mjs"() {
+    init_resource();
+    init_pagination();
+    init_path();
+    normalizeRequestOptionsForQueryKeys47 = /* @__PURE__ */ new Set([
+      "method",
+      "path",
+      "query",
+      "body",
+      "headers",
+      "maxRetries",
+      "stream",
+      "timeout",
+      "httpAgent",
+      "fetchOptions",
+      "signal",
+      "idempotencyKey",
+      "defaultBaseURL",
+      "__metadata",
+      "__binaryRequest",
+      "__binaryResponse",
+      "__streamClass",
+      "__security",
+      "__synthesizeEventData"
+    ]);
+    Checkpoints2 = class extends APIResource {
+      list(fineTuningJobID, query2 = {}, options2) {
+        const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery47(query2, ["after", "limit"], options2);
+        if (normalizeRequestOptionsForQueryOptions !== void 0) {
+          options2 = normalizeRequestOptionsForQueryOptions;
+          query2 = {};
+        }
+        query2 = query2;
+        return this._client.getAPIList(path`/fine_tuning/jobs/${fineTuningJobID}/checkpoints`, CursorPage, resolveResourceRequestOptions76(options2, (options3) => ({
+          query: query2,
+          ...options3,
+          __security: { bearerAuth: true }
+        })));
+      }
+    };
+  }
+});
+
+// node_modules/openai/resources/fine-tuning/jobs/jobs.mjs
 function resolveResourceRequestOptions77(options2, buildOptions) {
   return Promise.resolve(options2).then(buildOptions);
 }
@@ -18288,76 +17667,7 @@ function normalizeRequestOptionsForQuery48(value, queryKeys, options2) {
     return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
   }));
 }
-var normalizeRequestOptionsForQueryKeys48, Checkpoints2;
-var init_checkpoints2 = __esm({
-  "node_modules/openai/resources/fine-tuning/jobs/checkpoints.mjs"() {
-    init_resource();
-    init_pagination();
-    init_path();
-    normalizeRequestOptionsForQueryKeys48 = /* @__PURE__ */ new Set([
-      "method",
-      "path",
-      "query",
-      "body",
-      "headers",
-      "maxRetries",
-      "stream",
-      "timeout",
-      "httpAgent",
-      "fetchOptions",
-      "signal",
-      "idempotencyKey",
-      "defaultBaseURL",
-      "__metadata",
-      "__binaryRequest",
-      "__binaryResponse",
-      "__streamClass",
-      "__security",
-      "__synthesizeEventData"
-    ]);
-    Checkpoints2 = class extends APIResource {
-      list(fineTuningJobID, query2 = {}, options2) {
-        const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery48(query2, ["after", "limit"], options2);
-        if (normalizeRequestOptionsForQueryOptions !== void 0) {
-          options2 = normalizeRequestOptionsForQueryOptions;
-          query2 = {};
-        }
-        query2 = query2;
-        return this._client.getAPIList(path`/fine_tuning/jobs/${fineTuningJobID}/checkpoints`, CursorPage, resolveResourceRequestOptions77(options2, (options3) => ({
-          query: query2,
-          ...options3,
-          __security: { bearerAuth: true }
-        })));
-      }
-    };
-  }
-});
-
-// node_modules/openai/resources/fine-tuning/jobs/jobs.mjs
-function resolveResourceRequestOptions78(options2, buildOptions) {
-  return Promise.resolve(options2).then(buildOptions);
-}
-function normalizeRequestOptionsForQuery49(value, queryKeys, options2) {
-  if (typeof value !== "object" || value === null)
-    return void 0;
-  const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
-  const keys = entries.map(([key]) => key);
-  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys49.has(key) && !queryKeys.includes(key));
-  if (!requestOnly)
-    return void 0;
-  if (options2 !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys49.has(key) || queryKeys.includes(key))) {
-    throw new TypeError("Query parameters and request options must be passed as separate arguments.");
-  }
-  if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
-    throw new TypeError("Pass transport overrides in the explicit request options argument.");
-  }
-  return Object.fromEntries(entries.map(([key, descriptor]) => {
-    if ("value" in descriptor)
-      return [key, descriptor.value];
-    return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
-  }));
-}
-var normalizeRequestOptionsForQueryKeys49, Jobs;
+var normalizeRequestOptionsForQueryKeys48, Jobs;
 var init_jobs = __esm({
   "node_modules/openai/resources/fine-tuning/jobs/jobs.mjs"() {
     init_resource();
@@ -18365,7 +17675,7 @@ var init_jobs = __esm({
     init_checkpoints2();
     init_pagination();
     init_path();
-    normalizeRequestOptionsForQueryKeys49 = /* @__PURE__ */ new Set([
+    normalizeRequestOptionsForQueryKeys48 = /* @__PURE__ */ new Set([
       "method",
       "path",
       "query",
@@ -18409,7 +17719,7 @@ var init_jobs = __esm({
        * ```
        */
       create(body, options2) {
-        return this._client.post("/fine_tuning/jobs", resolveResourceRequestOptions78(options2, (options3) => ({
+        return this._client.post("/fine_tuning/jobs", resolveResourceRequestOptions77(options2, (options3) => ({
           body,
           ...options3,
           __security: { bearerAuth: true }
@@ -18428,16 +17738,16 @@ var init_jobs = __esm({
        * ```
        */
       retrieve(fineTuningJobID, options2) {
-        return this._client.get(path`/fine_tuning/jobs/${fineTuningJobID}`, resolveResourceRequestOptions78(options2, (options3) => ({ ...options3, __security: { bearerAuth: true } })));
+        return this._client.get(path`/fine_tuning/jobs/${fineTuningJobID}`, resolveResourceRequestOptions77(options2, (options3) => ({ ...options3, __security: { bearerAuth: true } })));
       }
       list(query2 = {}, options2) {
-        const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery49(query2, ["after", "limit", "metadata"], options2);
+        const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery48(query2, ["after", "limit", "metadata"], options2);
         if (normalizeRequestOptionsForQueryOptions !== void 0) {
           options2 = normalizeRequestOptionsForQueryOptions;
           query2 = {};
         }
         query2 = query2;
-        return this._client.getAPIList("/fine_tuning/jobs", CursorPage, resolveResourceRequestOptions78(options2, (options3) => ({
+        return this._client.getAPIList("/fine_tuning/jobs", CursorPage, resolveResourceRequestOptions77(options2, (options3) => ({
           query: query2,
           ...options3,
           __security: { bearerAuth: true }
@@ -18454,16 +17764,16 @@ var init_jobs = __esm({
        * ```
        */
       cancel(fineTuningJobID, options2) {
-        return this._client.post(path`/fine_tuning/jobs/${fineTuningJobID}/cancel`, resolveResourceRequestOptions78(options2, (options3) => ({ ...options3, __security: { bearerAuth: true } })));
+        return this._client.post(path`/fine_tuning/jobs/${fineTuningJobID}/cancel`, resolveResourceRequestOptions77(options2, (options3) => ({ ...options3, __security: { bearerAuth: true } })));
       }
       listEvents(fineTuningJobID, query2 = {}, options2) {
-        const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery49(query2, ["after", "limit"], options2);
+        const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery48(query2, ["after", "limit"], options2);
         if (normalizeRequestOptionsForQueryOptions !== void 0) {
           options2 = normalizeRequestOptionsForQueryOptions;
           query2 = {};
         }
         query2 = query2;
-        return this._client.getAPIList(path`/fine_tuning/jobs/${fineTuningJobID}/events`, CursorPage, resolveResourceRequestOptions78(options2, (options3) => ({
+        return this._client.getAPIList(path`/fine_tuning/jobs/${fineTuningJobID}/events`, CursorPage, resolveResourceRequestOptions77(options2, (options3) => ({
           query: query2,
           ...options3,
           __security: { bearerAuth: true }
@@ -18480,7 +17790,7 @@ var init_jobs = __esm({
        * ```
        */
       pause(fineTuningJobID, options2) {
-        return this._client.post(path`/fine_tuning/jobs/${fineTuningJobID}/pause`, resolveResourceRequestOptions78(options2, (options3) => ({ ...options3, __security: { bearerAuth: true } })));
+        return this._client.post(path`/fine_tuning/jobs/${fineTuningJobID}/pause`, resolveResourceRequestOptions77(options2, (options3) => ({ ...options3, __security: { bearerAuth: true } })));
       }
       /**
        * Resume a fine-tune job.
@@ -18493,7 +17803,7 @@ var init_jobs = __esm({
        * ```
        */
       resume(fineTuningJobID, options2) {
-        return this._client.post(path`/fine_tuning/jobs/${fineTuningJobID}/resume`, resolveResourceRequestOptions78(options2, (options3) => ({ ...options3, __security: { bearerAuth: true } })));
+        return this._client.post(path`/fine_tuning/jobs/${fineTuningJobID}/resume`, resolveResourceRequestOptions77(options2, (options3) => ({ ...options3, __security: { bearerAuth: true } })));
       }
     };
     Jobs.Checkpoints = Checkpoints2;
@@ -18557,7 +17867,7 @@ var init_graders2 = __esm({
 });
 
 // node_modules/openai/resources/images.mjs
-function resolveResourceRequestOptions79(options2, buildOptions) {
+function resolveResourceRequestOptions78(options2, buildOptions) {
   return Promise.resolve(options2).then(buildOptions);
 }
 var Images;
@@ -18577,10 +17887,10 @@ var init_images = __esm({
        * ```
        */
       createVariation(body, options2) {
-        return this._client.post("/images/variations", resolveResourceRequestOptions79(options2, (options3) => multipartFormRequestOptions({ body, ...options3, __security: { bearerAuth: true } }, this._client)));
+        return this._client.post("/images/variations", resolveResourceRequestOptions78(options2, (options3) => multipartFormRequestOptions({ body, ...options3, __security: { bearerAuth: true } }, this._client)));
       }
       edit(body, options2) {
-        return this._client.post("/images/edits", resolveResourceRequestOptions79(options2, (options3) => multipartFormRequestOptions({
+        return this._client.post("/images/edits", resolveResourceRequestOptions78(options2, (options3) => multipartFormRequestOptions({
           body,
           ...options3,
           stream: body.stream ?? false,
@@ -18589,7 +17899,7 @@ var init_images = __esm({
         }, this._client)));
       }
       generate(body, options2) {
-        return this._client.post("/images/generations", resolveResourceRequestOptions79(options2, (options3) => ({
+        return this._client.post("/images/generations", resolveResourceRequestOptions78(options2, (options3) => ({
           body,
           ...options3,
           stream: body.stream ?? false,
@@ -18601,7 +17911,7 @@ var init_images = __esm({
 });
 
 // node_modules/openai/resources/live/sessions.mjs
-function resolveResourceRequestOptions80(options2, buildOptions) {
+function resolveResourceRequestOptions79(options2, buildOptions) {
   return Promise.resolve(options2).then(buildOptions);
 }
 var Sessions4;
@@ -18626,7 +17936,7 @@ var init_sessions4 = __esm({
        * ```
        */
       accept(sessionID, body, options2) {
-        return this._client.post(path`/live/sessions/${sessionID}/accept`, resolveResourceRequestOptions80(options2, (options3) => ({
+        return this._client.post(path`/live/sessions/${sessionID}/accept`, resolveResourceRequestOptions79(options2, (options3) => ({
           body,
           ...options3,
           headers: buildHeaders([{ Accept: "*/*" }, options3?.headers]),
@@ -18646,7 +17956,7 @@ var init_sessions4 = __esm({
        * ```
        */
       downloadRecording(sessionID, options2) {
-        return this._client.get(path`/live/sessions/${sessionID}/content`, resolveResourceRequestOptions80(options2, (options3) => ({
+        return this._client.get(path`/live/sessions/${sessionID}/content`, resolveResourceRequestOptions79(options2, (options3) => ({
           ...options3,
           headers: buildHeaders([{ Accept: "application/binary" }, options3?.headers]),
           __security: { bearerAuth: true },
@@ -18665,7 +17975,7 @@ var init_sessions4 = __esm({
        * ```
        */
       fork(sessionID, body, options2) {
-        return this._client.post(path`/live/sessions/${sessionID}/fork`, resolveResourceRequestOptions80(options2, (options3) => ({
+        return this._client.post(path`/live/sessions/${sessionID}/fork`, resolveResourceRequestOptions79(options2, (options3) => ({
           body,
           ...options3,
           __security: { bearerAuth: true }
@@ -18680,7 +17990,7 @@ var init_sessions4 = __esm({
        * ```
        */
       hangup(sessionID, options2) {
-        return this._client.post(path`/live/sessions/${sessionID}/hangup`, resolveResourceRequestOptions80(options2, (options3) => ({
+        return this._client.post(path`/live/sessions/${sessionID}/hangup`, resolveResourceRequestOptions79(options2, (options3) => ({
           ...options3,
           headers: buildHeaders([{ Accept: "*/*" }, options3?.headers]),
           __security: { bearerAuth: true }
@@ -18698,7 +18008,7 @@ var init_sessions4 = __esm({
        * ```
        */
       refer(sessionID, body, options2) {
-        return this._client.post(path`/live/sessions/${sessionID}/refer`, resolveResourceRequestOptions80(options2, (options3) => ({
+        return this._client.post(path`/live/sessions/${sessionID}/refer`, resolveResourceRequestOptions79(options2, (options3) => ({
           body,
           ...options3,
           headers: buildHeaders([{ Accept: "*/*" }, options3?.headers]),
@@ -18717,7 +18027,7 @@ var init_sessions4 = __esm({
        * ```
        */
       reject(sessionID, body, options2) {
-        return this._client.post(path`/live/sessions/${sessionID}/reject`, resolveResourceRequestOptions80(options2, (options3) => ({
+        return this._client.post(path`/live/sessions/${sessionID}/reject`, resolveResourceRequestOptions79(options2, (options3) => ({
           body,
           ...options3,
           headers: buildHeaders([{ Accept: "*/*" }, options3?.headers]),
@@ -18749,7 +18059,7 @@ var init_sideband = __esm({
 });
 
 // node_modules/openai/resources/live/live.mjs
-function resolveResourceRequestOptions81(options2, buildOptions) {
+function resolveResourceRequestOptions80(options2, buildOptions) {
   return Promise.resolve(options2).then(buildOptions);
 }
 var Live;
@@ -18782,7 +18092,7 @@ var init_live = __esm({
        * ```
        */
       create(body, options2) {
-        return this._client.post("/live/sessions", resolveResourceRequestOptions81(options2, (options3) => ({
+        return this._client.post("/live/sessions", resolveResourceRequestOptions80(options2, (options3) => ({
           body,
           ...options3,
           __security: { bearerAuth: true }
@@ -18796,7 +18106,7 @@ var init_live = __esm({
 });
 
 // node_modules/openai/resources/models.mjs
-function resolveResourceRequestOptions82(options2, buildOptions) {
+function resolveResourceRequestOptions81(options2, buildOptions) {
   return Promise.resolve(options2).then(buildOptions);
 }
 var Models;
@@ -18811,28 +18121,28 @@ var init_models = __esm({
        * the owner and permissioning.
        */
       retrieve(model, options2) {
-        return this._client.get(path`/models/${model}`, resolveResourceRequestOptions82(options2, (options3) => ({ ...options3, __security: { bearerAuth: true } })));
+        return this._client.get(path`/models/${model}`, resolveResourceRequestOptions81(options2, (options3) => ({ ...options3, __security: { bearerAuth: true } })));
       }
       /**
        * Lists the currently available models, and provides basic information about each
        * one such as the owner and availability.
        */
       list(options2) {
-        return this._client.getAPIList("/models", Page, resolveResourceRequestOptions82(options2, (options3) => ({ ...options3, __security: { bearerAuth: true } })));
+        return this._client.getAPIList("/models", Page, resolveResourceRequestOptions81(options2, (options3) => ({ ...options3, __security: { bearerAuth: true } })));
       }
       /**
        * Delete a fine-tuned model. You must have the Owner role in your organization to
        * delete a model.
        */
       delete(model, options2) {
-        return this._client.delete(path`/models/${model}`, resolveResourceRequestOptions82(options2, (options3) => ({ ...options3, __security: { bearerAuth: true } })));
+        return this._client.delete(path`/models/${model}`, resolveResourceRequestOptions81(options2, (options3) => ({ ...options3, __security: { bearerAuth: true } })));
       }
     };
   }
 });
 
 // node_modules/openai/resources/moderations.mjs
-function resolveResourceRequestOptions83(options2, buildOptions) {
+function resolveResourceRequestOptions82(options2, buildOptions) {
   return Promise.resolve(options2).then(buildOptions);
 }
 var Moderations;
@@ -18846,7 +18156,7 @@ var init_moderations = __esm({
        * [moderation guide](https://developers.openai.com/api/docs/guides/moderation).
        */
       create(body, options2) {
-        return this._client.post("/moderations", resolveResourceRequestOptions83(options2, (options3) => ({
+        return this._client.post("/moderations", resolveResourceRequestOptions82(options2, (options3) => ({
           body,
           ...options3,
           __security: { bearerAuth: true }
@@ -18905,7 +18215,7 @@ var init_multipart_encoding = __esm({
 });
 
 // node_modules/openai/resources/realtime/calls.mjs
-function resolveResourceRequestOptions84(options2, buildOptions) {
+function resolveResourceRequestOptions83(options2, buildOptions) {
   return Promise.resolve(options2).then(buildOptions);
 }
 var Calls;
@@ -18928,7 +18238,7 @@ var init_calls = __esm({
        * ```
        */
       create(body, options2) {
-        return this._client.post("/realtime/calls", resolveResourceRequestOptions84(options2, (options3) => encodedMultipartFormRequestOptions({
+        return this._client.post("/realtime/calls", resolveResourceRequestOptions83(options2, (options3) => encodedMultipartFormRequestOptions({
           body,
           ...options3,
           headers: buildHeaders([{ Accept: "application/sdp" }, options3?.headers]),
@@ -18951,7 +18261,7 @@ var init_calls = __esm({
        * ```
        */
       accept(callID, body, options2) {
-        return this._client.post(path`/realtime/calls/${callID}/accept`, resolveResourceRequestOptions84(options2, (options3) => ({
+        return this._client.post(path`/realtime/calls/${callID}/accept`, resolveResourceRequestOptions83(options2, (options3) => ({
           body,
           ...options3,
           headers: buildHeaders([{ Accept: "*/*" }, options3?.headers]),
@@ -18967,7 +18277,7 @@ var init_calls = __esm({
        * ```
        */
       hangup(callID, options2) {
-        return this._client.post(path`/realtime/calls/${callID}/hangup`, resolveResourceRequestOptions84(options2, (options3) => ({
+        return this._client.post(path`/realtime/calls/${callID}/hangup`, resolveResourceRequestOptions83(options2, (options3) => ({
           ...options3,
           headers: buildHeaders([{ Accept: "*/*" }, options3?.headers]),
           __security: { bearerAuth: true }
@@ -18984,7 +18294,7 @@ var init_calls = __esm({
        * ```
        */
       refer(callID, body, options2) {
-        return this._client.post(path`/realtime/calls/${callID}/refer`, resolveResourceRequestOptions84(options2, (options3) => ({
+        return this._client.post(path`/realtime/calls/${callID}/refer`, resolveResourceRequestOptions83(options2, (options3) => ({
           body,
           ...options3,
           headers: buildHeaders([{ Accept: "*/*" }, options3?.headers]),
@@ -19000,7 +18310,7 @@ var init_calls = __esm({
        * ```
        */
       reject(callID, body = {}, options2) {
-        return this._client.post(path`/realtime/calls/${callID}/reject`, resolveResourceRequestOptions84(options2, (options3) => ({
+        return this._client.post(path`/realtime/calls/${callID}/reject`, resolveResourceRequestOptions83(options2, (options3) => ({
           body,
           ...options3,
           headers: buildHeaders([{ Accept: "*/*" }, options3?.headers]),
@@ -19012,7 +18322,7 @@ var init_calls = __esm({
 });
 
 // node_modules/openai/resources/realtime/client-secrets.mjs
-function resolveResourceRequestOptions85(options2, buildOptions) {
+function resolveResourceRequestOptions84(options2, buildOptions) {
   return Promise.resolve(options2).then(buildOptions);
 }
 var ClientSecrets;
@@ -19044,70 +18354,13 @@ var init_client_secrets = __esm({
        * ```
        */
       create(body, options2) {
-        return this._client.post("/realtime/client_secrets", resolveResourceRequestOptions85(options2, (options3) => ({
+        return this._client.post("/realtime/client_secrets", resolveResourceRequestOptions84(options2, (options3) => ({
           body,
           ...options3,
           __security: { bearerAuth: true }
         })));
       }
     };
-  }
-});
-
-// node_modules/openai/resources/realtime/translations/client-secrets.mjs
-function resolveResourceRequestOptions86(options2, buildOptions) {
-  return Promise.resolve(options2).then(buildOptions);
-}
-var ClientSecrets2;
-var init_client_secrets2 = __esm({
-  "node_modules/openai/resources/realtime/translations/client-secrets.mjs"() {
-    init_resource();
-    ClientSecrets2 = class extends APIResource {
-      /**
-       * Create a Realtime translation client secret with an associated translation
-       * session configuration.
-       *
-       * Client secrets are short-lived tokens that can be passed to a client app, such
-       * as a web frontend or mobile client, which grants access to the Realtime
-       * Translation API without leaking your main API key. You can configure a custom
-       * TTL for each client secret.
-       *
-       * Returns the created client secret and the effective translation session object.
-       * The client secret is a string that looks like `ek_1234`.
-       *
-       * @example
-       * ```ts
-       * const realtimeTranslationClientSecretCreateResponse =
-       *   await client.realtime.translations.clientSecrets.create(
-       *     { session: { model: 'model' } },
-       *   );
-       * ```
-       */
-      create(body, options2) {
-        return this._client.post("/realtime/translations/client_secrets", resolveResourceRequestOptions86(options2, (options3) => ({
-          body,
-          ...options3,
-          __security: { bearerAuth: true }
-        })));
-      }
-    };
-  }
-});
-
-// node_modules/openai/resources/realtime/translations/translations.mjs
-var Translations2;
-var init_translations2 = __esm({
-  "node_modules/openai/resources/realtime/translations/translations.mjs"() {
-    init_resource();
-    init_client_secrets2();
-    init_client_secrets2();
-    Translations2 = class extends APIResource {
-      constructor() {
-        super(...arguments);
-        this.clientSecrets = new ClientSecrets2(this._client);
-      }
-    };
-    Translations2.ClientSecrets = ClientSecrets2;
   }
 });
 
@@ -19120,19 +18373,15 @@ var init_realtime2 = __esm({
     init_calls();
     init_client_secrets();
     init_client_secrets();
-    init_translations2();
-    init_translations2();
     Realtime2 = class extends APIResource {
       constructor() {
         super(...arguments);
         this.clientSecrets = new ClientSecrets(this._client);
         this.calls = new Calls(this._client);
-        this.translations = new Translations2(this._client);
       }
     };
     Realtime2.ClientSecrets = ClientSecrets;
     Realtime2.Calls = Calls;
-    Realtime2.Translations = Translations2;
   }
 });
 
@@ -19368,19 +18617,15 @@ function getOutputText(context2, output) {
   return text;
 }
 function ensureCanonicalOutputText(context2, snapshot) {
-  if (context2.deferOutputText) {
-    context2.canonicalSnapshot = void 0;
-    return;
-  }
   if (context2.canonicalSnapshot === snapshot) {
     return;
   }
   const outputTextIndex = new OutputTextIndex();
   let text = "";
   for (const output of snapshot.output) {
-    const outputText2 = getOutputText(context2, output);
-    text += outputText2;
-    outputTextIndex.append(outputText2.length);
+    const outputText = getOutputText(context2, output);
+    text += outputText;
+    outputTextIndex.append(outputText.length);
   }
   snapshot.output_text = text;
   context2.outputTextIndex = outputTextIndex;
@@ -19399,9 +18644,6 @@ function cloneResponse(context2, response) {
   return snapshot;
 }
 function updateCachedOutputTextLength(context2, output, outputIndex, previousText, nextText) {
-  if (context2.deferOutputText) {
-    return;
-  }
   const length = context2.outputTextLengths.get(output);
   if (length !== void 0) {
     const nextLength = length - previousText.length + nextText.length;
@@ -19442,10 +18684,6 @@ function getPrecedingContentTextLength(context2, output, contentIndex, nextText)
 }
 function updateOutputText(context2, snapshot, outputIndex, previousText, nextText, contentIndex) {
   if (previousText === nextText) {
-    return;
-  }
-  if (context2.deferOutputText) {
-    context2.outputTextDirty = true;
     return;
   }
   const output = snapshot.output[outputIndex];
@@ -19695,11 +18933,7 @@ function accumulateOutputItemEvent(event, snapshot, context2) {
         context2.outputTextIndex.append(text.length);
       }
       if (text) {
-        if (context2.deferOutputText) {
-          context2.outputTextDirty = true;
-        } else {
-          snapshot.output_text += text;
-        }
+        snapshot.output_text += text;
       }
       return true;
     }
@@ -19786,31 +19020,6 @@ function accumulateContentPartDoneEvent(event, snapshot, context2) {
     }
   }
 }
-function isLogprobWithBytes(value) {
-  return isObj(value) && typeof value["token"] === "string" && typeof value["logprob"] === "number" && Array.isArray(value["bytes"]) && // oxlint-disable-next-line anti-slop/no-runtime-typeof -- This boundary checks each byte against the generated final-output contract before exposing a typed SSE snapshot.
-  value["bytes"].every((byte) => typeof byte === "number");
-}
-function isOutputLogprobs(value) {
-  return Array.isArray(value) && value.every((entry) => isLogprobWithBytes(entry) && "top_logprobs" in entry && Array.isArray(entry.top_logprobs) && entry.top_logprobs.every(isLogprobWithBytes));
-}
-function accumulateOutputLogprobs(content, event) {
-  const logprobs = structuredClone(event.logprobs);
-  if (!isOutputLogprobs(logprobs)) {
-    return;
-  }
-  if (event.type === "response.output_text.done") {
-    if (logprobs.length > 0 || Array.isArray(content.logprobs) && content.logprobs.length > 0) {
-      content.logprobs = logprobs;
-    }
-  } else if (logprobs.length > 0) {
-    if (!Array.isArray(content.logprobs)) {
-      content.logprobs = [];
-    }
-    for (const logprob of logprobs) {
-      content.logprobs.push(logprob);
-    }
-  }
-}
 function accumulateOutputTextEvent(event, snapshot, context2) {
   switch (event.type) {
     case "response.output_text.delta": {
@@ -19820,19 +19029,12 @@ function accumulateOutputTextEvent(event, snapshot, context2) {
         if (content.type !== "output_text") {
           throw new OpenAIError(`expected content to be 'output_text', got ${content.type}`);
         }
-        accumulateOutputLogprobs(content, event);
         const previousText = content.text;
         ensureCanonicalOutputText(context2, snapshot);
         content.text = previousText + event.delta;
         updateCachedOutputTextLength(context2, output, event.output_index, previousText, content.text);
         if (event.output_index === snapshot.output.length - 1 && event.content_index === output.content.length - 1) {
-          if (context2.deferOutputText) {
-            if (event.delta !== "") {
-              context2.outputTextDirty = true;
-            }
-          } else {
-            snapshot.output_text += event.delta;
-          }
+          snapshot.output_text += event.delta;
         } else {
           updateOutputText(context2, snapshot, event.output_index, previousText, content.text, event.content_index);
         }
@@ -19846,7 +19048,6 @@ function accumulateOutputTextEvent(event, snapshot, context2) {
         if (content.type !== "output_text") {
           throw new OpenAIError(`expected content to be 'output_text', got ${content.type}`);
         }
-        accumulateOutputLogprobs(content, event);
         const previousText = content.text;
         ensureCanonicalOutputText(context2, snapshot);
         content.text = event.text;
@@ -20231,43 +19432,6 @@ function isIgnoredResponseEvent(event) {
 function createResponseContext() {
   return createCanonicalResponseContext();
 }
-function accumulateResponseOutput(dispatchEvent, snapshot, context2, rejectInvalidShellTargets) {
-  validateOutputItemIdentity(dispatchEvent, snapshot, rejectInvalidShellTargets);
-  if (accumulateOutputItemEvent(dispatchEvent, snapshot, context2)) {
-    return true;
-  }
-  if (accumulateContentPartAddedEvent(dispatchEvent, snapshot, context2)) {
-    return true;
-  }
-  if (accumulateContentPartDoneEvent(dispatchEvent, snapshot, context2)) {
-    return true;
-  }
-  if (accumulateOutputTextEvent(dispatchEvent, snapshot, context2)) {
-    return true;
-  }
-  if (accumulateRefusalAndArgumentsEvent(dispatchEvent, snapshot)) {
-    return true;
-  }
-  if (accumulateShellEvent(dispatchEvent, snapshot)) {
-    return true;
-  }
-  if (accumulateReasoningEvent(dispatchEvent, snapshot)) {
-    return true;
-  }
-  if (accumulateCodeInterpreterEvent(dispatchEvent, snapshot)) {
-    return true;
-  }
-  if (accumulateSearchStatusEvent(dispatchEvent, snapshot)) {
-    return true;
-  }
-  if (accumulateImageAndMcpStatusEvent(dispatchEvent, snapshot)) {
-    return true;
-  }
-  if (isIgnoredResponseEvent(dispatchEvent)) {
-    return true;
-  }
-  return false;
-}
 function accumulateResponseWithContext(event, snapshot, context2, rejectInvalidShellTargets = false, onSanitizedEvent) {
   const dispatchEvent = sanitizeResponseEvent(event);
   if (onSanitizedEvent && dispatchEvent.type !== "keepalive") {
@@ -20279,11 +19443,42 @@ function accumulateResponseWithContext(event, snapshot, context2, rejectInvalidS
     }
     return cloneValidatedResponse(context2, dispatchEvent.response);
   }
-  if (accumulateResponseOutput(dispatchEvent, snapshot, context2, rejectInvalidShellTargets)) {
+  validateOutputItemIdentity(dispatchEvent, snapshot, rejectInvalidShellTargets);
+  if (accumulateOutputItemEvent(dispatchEvent, snapshot, context2)) {
+    return snapshot;
+  }
+  if (accumulateContentPartAddedEvent(dispatchEvent, snapshot, context2)) {
+    return snapshot;
+  }
+  if (accumulateContentPartDoneEvent(dispatchEvent, snapshot, context2)) {
+    return snapshot;
+  }
+  if (accumulateOutputTextEvent(dispatchEvent, snapshot, context2)) {
+    return snapshot;
+  }
+  if (accumulateRefusalAndArgumentsEvent(dispatchEvent, snapshot)) {
+    return snapshot;
+  }
+  if (accumulateShellEvent(dispatchEvent, snapshot)) {
+    return snapshot;
+  }
+  if (accumulateReasoningEvent(dispatchEvent, snapshot)) {
+    return snapshot;
+  }
+  if (accumulateCodeInterpreterEvent(dispatchEvent, snapshot)) {
+    return snapshot;
+  }
+  if (accumulateSearchStatusEvent(dispatchEvent, snapshot)) {
+    return snapshot;
+  }
+  if (accumulateImageAndMcpStatusEvent(dispatchEvent, snapshot)) {
     return snapshot;
   }
   if (isResponseLifecycleEvent(dispatchEvent)) {
     return cloneValidatedResponse(context2, dispatchEvent.response);
+  }
+  if (isIgnoredResponseEvent(dispatchEvent)) {
+    return snapshot;
   }
   return assertNever3(dispatchEvent);
 }
@@ -20292,7 +19487,6 @@ var init_response_accumulator = __esm({
   "node_modules/openai/internal/responses/response-accumulator.mjs"() {
     init_error2();
     init_utils2();
-    init_values();
     init_canonical_output_text();
     responseOutputIdentityIndexes = /* @__PURE__ */ new WeakMap();
     expectedOutputItemTypes = {
@@ -20597,6 +19791,106 @@ var init_ResponseStream = __esm({
 });
 
 // node_modules/openai/resources/responses/input-items.mjs
+function resolveResourceRequestOptions85(options2, buildOptions) {
+  return Promise.resolve(options2).then(buildOptions);
+}
+function normalizeRequestOptionsForQuery49(value, queryKeys, options2) {
+  if (typeof value !== "object" || value === null)
+    return void 0;
+  const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
+  const keys = entries.map(([key]) => key);
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys49.has(key) && !queryKeys.includes(key));
+  if (!requestOnly)
+    return void 0;
+  if (options2 !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys49.has(key) || queryKeys.includes(key))) {
+    throw new TypeError("Query parameters and request options must be passed as separate arguments.");
+  }
+  if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
+    throw new TypeError("Pass transport overrides in the explicit request options argument.");
+  }
+  return Object.fromEntries(entries.map(([key, descriptor]) => {
+    if ("value" in descriptor)
+      return [key, descriptor.value];
+    return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
+  }));
+}
+var normalizeRequestOptionsForQueryKeys49, InputItems2;
+var init_input_items2 = __esm({
+  "node_modules/openai/resources/responses/input-items.mjs"() {
+    init_resource();
+    init_pagination();
+    init_path();
+    normalizeRequestOptionsForQueryKeys49 = /* @__PURE__ */ new Set([
+      "method",
+      "path",
+      "query",
+      "body",
+      "headers",
+      "maxRetries",
+      "stream",
+      "timeout",
+      "httpAgent",
+      "fetchOptions",
+      "signal",
+      "idempotencyKey",
+      "defaultBaseURL",
+      "__metadata",
+      "__binaryRequest",
+      "__binaryResponse",
+      "__streamClass",
+      "__security",
+      "__synthesizeEventData"
+    ]);
+    InputItems2 = class extends APIResource {
+      list(responseID, query2 = {}, options2) {
+        const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery49(query2, ["after", "include", "limit", "order"], options2);
+        if (normalizeRequestOptionsForQueryOptions !== void 0) {
+          options2 = normalizeRequestOptionsForQueryOptions;
+          query2 = {};
+        }
+        query2 = query2;
+        return this._client.getAPIList(path`/responses/${responseID}/input_items`, CursorPage, resolveResourceRequestOptions85(options2, (options3) => ({
+          query: query2,
+          ...options3,
+          __security: { bearerAuth: true }
+        })));
+      }
+    };
+  }
+});
+
+// node_modules/openai/resources/responses/input-tokens.mjs
+function resolveResourceRequestOptions86(options2, buildOptions) {
+  return Promise.resolve(options2).then(buildOptions);
+}
+var InputTokens2;
+var init_input_tokens2 = __esm({
+  "node_modules/openai/resources/responses/input-tokens.mjs"() {
+    init_resource();
+    InputTokens2 = class extends APIResource {
+      /**
+       * Returns input token counts of the request.
+       *
+       * Returns an object with `object` set to `response.input_tokens` and an
+       * `input_tokens` count.
+       *
+       * @example
+       * ```ts
+       * const response = await client.responses.inputTokens.count();
+       * ```
+       */
+      count(body = {}, options2) {
+        return this._client.post("/responses/input_tokens", resolveResourceRequestOptions86(options2, (options3) => ({
+          body,
+          ...options3,
+          __security: { bearerAuth: true }
+        })));
+      }
+    };
+  }
+});
+
+// node_modules/openai/resources/responses/responses.mjs
 function resolveResourceRequestOptions87(options2, buildOptions) {
   return Promise.resolve(options2).then(buildOptions);
 }
@@ -20620,107 +19914,7 @@ function normalizeRequestOptionsForQuery50(value, queryKeys, options2) {
     return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
   }));
 }
-var normalizeRequestOptionsForQueryKeys50, InputItems2;
-var init_input_items2 = __esm({
-  "node_modules/openai/resources/responses/input-items.mjs"() {
-    init_resource();
-    init_pagination();
-    init_path();
-    normalizeRequestOptionsForQueryKeys50 = /* @__PURE__ */ new Set([
-      "method",
-      "path",
-      "query",
-      "body",
-      "headers",
-      "maxRetries",
-      "stream",
-      "timeout",
-      "httpAgent",
-      "fetchOptions",
-      "signal",
-      "idempotencyKey",
-      "defaultBaseURL",
-      "__metadata",
-      "__binaryRequest",
-      "__binaryResponse",
-      "__streamClass",
-      "__security",
-      "__synthesizeEventData"
-    ]);
-    InputItems2 = class extends APIResource {
-      list(responseID, query2 = {}, options2) {
-        const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery50(query2, ["after", "include", "limit", "order"], options2);
-        if (normalizeRequestOptionsForQueryOptions !== void 0) {
-          options2 = normalizeRequestOptionsForQueryOptions;
-          query2 = {};
-        }
-        query2 = query2;
-        return this._client.getAPIList(path`/responses/${responseID}/input_items`, CursorPage, resolveResourceRequestOptions87(options2, (options3) => ({
-          query: query2,
-          ...options3,
-          __security: { bearerAuth: true }
-        })));
-      }
-    };
-  }
-});
-
-// node_modules/openai/resources/responses/input-tokens.mjs
-function resolveResourceRequestOptions88(options2, buildOptions) {
-  return Promise.resolve(options2).then(buildOptions);
-}
-var InputTokens2;
-var init_input_tokens2 = __esm({
-  "node_modules/openai/resources/responses/input-tokens.mjs"() {
-    init_resource();
-    InputTokens2 = class extends APIResource {
-      /**
-       * Returns input token counts of the request.
-       *
-       * Returns an object with `object` set to `response.input_tokens` and an
-       * `input_tokens` count.
-       *
-       * @example
-       * ```ts
-       * const response = await client.responses.inputTokens.count();
-       * ```
-       */
-      count(body = {}, options2) {
-        return this._client.post("/responses/input_tokens", resolveResourceRequestOptions88(options2, (options3) => ({
-          body,
-          ...options3,
-          __security: { bearerAuth: true }
-        })));
-      }
-    };
-  }
-});
-
-// node_modules/openai/resources/responses/responses.mjs
-function resolveResourceRequestOptions89(options2, buildOptions) {
-  return Promise.resolve(options2).then(buildOptions);
-}
-function normalizeRequestOptionsForQuery51(value, queryKeys, options2) {
-  if (typeof value !== "object" || value === null)
-    return void 0;
-  const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
-  const keys = entries.map(([key]) => key);
-  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys51.has(key) && !queryKeys.includes(key));
-  if (!requestOnly)
-    return void 0;
-  if (options2 !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys51.has(key) || queryKeys.includes(key))) {
-    throw new TypeError("Query parameters and request options must be passed as separate arguments.");
-  }
-  if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
-    throw new TypeError("Pass transport overrides in the explicit request options argument.");
-  }
-  return Object.fromEntries(entries.map(([key, descriptor]) => {
-    if ("value" in descriptor)
-      return [key, descriptor.value];
-    return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
-  }));
-}
-var normalizeRequestOptionsForQueryKeys51, Responses2;
+var normalizeRequestOptionsForQueryKeys50, Responses2;
 var init_responses2 = __esm({
   "node_modules/openai/resources/responses/responses.mjs"() {
     init_ResponsesParser();
@@ -20732,7 +19926,7 @@ var init_responses2 = __esm({
     init_input_tokens2();
     init_headers();
     init_path();
-    normalizeRequestOptionsForQueryKeys51 = /* @__PURE__ */ new Set([
+    normalizeRequestOptionsForQueryKeys50 = /* @__PURE__ */ new Set([
       "method",
       "path",
       "query",
@@ -20760,7 +19954,7 @@ var init_responses2 = __esm({
         this.inputTokens = new InputTokens2(this._client);
       }
       create(body, options2) {
-        return this._client.post("/responses", resolveResourceRequestOptions89(options2, (options3) => ({
+        return this._client.post("/responses", resolveResourceRequestOptions87(options2, (options3) => ({
           body,
           ...options3,
           stream: body.stream ?? false,
@@ -20773,13 +19967,13 @@ var init_responses2 = __esm({
         });
       }
       retrieve(responseID, query2 = {}, options2) {
-        const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery51(query2, ["include", "include_obfuscation", "starting_after", "stream"], options2);
+        const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery50(query2, ["include", "include_obfuscation", "starting_after", "stream"], options2);
         if (normalizeRequestOptionsForQueryOptions !== void 0) {
           options2 = normalizeRequestOptionsForQueryOptions;
           query2 = {};
         }
         query2 = query2;
-        return this._client.get(path`/responses/${responseID}`, resolveResourceRequestOptions89(options2, (options3) => ({
+        return this._client.get(path`/responses/${responseID}`, resolveResourceRequestOptions87(options2, (options3) => ({
           query: query2,
           ...options3,
           stream: query2?.stream ?? false,
@@ -20802,7 +19996,7 @@ var init_responses2 = __esm({
        * ```
        */
       delete(responseID, options2) {
-        return this._client.delete(path`/responses/${responseID}`, resolveResourceRequestOptions89(options2, (options3) => ({
+        return this._client.delete(path`/responses/${responseID}`, resolveResourceRequestOptions87(options2, (options3) => ({
           ...options3,
           headers: buildHeaders([{ Accept: "*/*" }, options3?.headers]),
           __security: { bearerAuth: true }
@@ -20830,7 +20024,7 @@ var init_responses2 = __esm({
        * ```
        */
       cancel(responseID, options2) {
-        return this._client.post(path`/responses/${responseID}/cancel`, resolveResourceRequestOptions89(options2, (options3) => ({ ...options3, __security: { bearerAuth: true } })));
+        return this._client.post(path`/responses/${responseID}/cancel`, resolveResourceRequestOptions87(options2, (options3) => ({ ...options3, __security: { bearerAuth: true } })));
       }
       /**
        * Compact a conversation. Returns a compacted response object.
@@ -20848,7 +20042,7 @@ var init_responses2 = __esm({
        * ```
        */
       compact(body, options2) {
-        return this._client.post("/responses/compact", resolveResourceRequestOptions89(options2, (options3) => ({
+        return this._client.post("/responses/compact", resolveResourceRequestOptions87(options2, (options3) => ({
           body,
           ...options3,
           __security: { bearerAuth: true }
@@ -20861,7 +20055,7 @@ var init_responses2 = __esm({
 });
 
 // node_modules/openai/resources/safety/alerts.mjs
-function resolveResourceRequestOptions90(options2, buildOptions) {
+function resolveResourceRequestOptions88(options2, buildOptions) {
   return Promise.resolve(options2).then(buildOptions);
 }
 var Alerts;
@@ -20874,14 +20068,14 @@ var init_alerts = __esm({
        * Get a safety alert belonging to the authenticated API project.
        */
       retrieve(id, options2) {
-        return this._client.get(path`/safety/alerts/${id}`, resolveResourceRequestOptions90(options2, (options3) => ({ ...options3, __security: { bearerAuth: true } })));
+        return this._client.get(path`/safety/alerts/${id}`, resolveResourceRequestOptions88(options2, (options3) => ({ ...options3, __security: { bearerAuth: true } })));
       }
     };
   }
 });
 
 // node_modules/openai/resources/safety/cases.mjs
-function resolveResourceRequestOptions91(options2, buildOptions) {
+function resolveResourceRequestOptions89(options2, buildOptions) {
   return Promise.resolve(options2).then(buildOptions);
 }
 var Cases;
@@ -20894,7 +20088,7 @@ var init_cases = __esm({
        * Get a safety case by ID.
        */
       retrieve(id, options2) {
-        return this._client.get(path`/safety/cases/${id}`, resolveResourceRequestOptions91(options2, (options3) => ({ ...options3, __security: { bearerAuth: true } })));
+        return this._client.get(path`/safety/cases/${id}`, resolveResourceRequestOptions89(options2, (options3) => ({ ...options3, __security: { bearerAuth: true } })));
       }
     };
   }
@@ -20922,7 +20116,7 @@ var init_safety = __esm({
 });
 
 // node_modules/openai/resources/skills/content.mjs
-function resolveResourceRequestOptions92(options2, buildOptions) {
+function resolveResourceRequestOptions90(options2, buildOptions) {
   return Promise.resolve(options2).then(buildOptions);
 }
 var Content2;
@@ -20936,7 +20130,7 @@ var init_content2 = __esm({
        * Download a skill zip bundle by its ID.
        */
       retrieve(skillID, options2) {
-        return this._client.get(path`/skills/${skillID}/content`, resolveResourceRequestOptions92(options2, (options3) => ({
+        return this._client.get(path`/skills/${skillID}/content`, resolveResourceRequestOptions90(options2, (options3) => ({
           ...options3,
           headers: buildHeaders([{ Accept: "application/binary" }, options3?.headers]),
           __security: { bearerAuth: true },
@@ -20948,7 +20142,7 @@ var init_content2 = __esm({
 });
 
 // node_modules/openai/resources/skills/versions/content.mjs
-function resolveResourceRequestOptions93(options2, buildOptions) {
+function resolveResourceRequestOptions91(options2, buildOptions) {
   return Promise.resolve(options2).then(buildOptions);
 }
 var Content3;
@@ -20963,7 +20157,7 @@ var init_content3 = __esm({
        */
       retrieve(version7, params, options2) {
         const { skill_id } = params;
-        return this._client.get(path`/skills/${skill_id}/versions/${version7}/content`, resolveResourceRequestOptions93(options2, (options3) => ({
+        return this._client.get(path`/skills/${skill_id}/versions/${version7}/content`, resolveResourceRequestOptions91(options2, (options3) => ({
           ...options3,
           headers: buildHeaders([{ Accept: "application/binary" }, options3?.headers]),
           __security: { bearerAuth: true },
@@ -20975,18 +20169,18 @@ var init_content3 = __esm({
 });
 
 // node_modules/openai/resources/skills/versions/versions.mjs
-function resolveResourceRequestOptions94(options2, buildOptions) {
+function resolveResourceRequestOptions92(options2, buildOptions) {
   return Promise.resolve(options2).then(buildOptions);
 }
-function normalizeRequestOptionsForQuery52(value, queryKeys, options2) {
+function normalizeRequestOptionsForQuery51(value, queryKeys, options2) {
   if (typeof value !== "object" || value === null)
     return void 0;
   const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
   const keys = entries.map(([key]) => key);
-  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys52.has(key) && !queryKeys.includes(key));
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys51.has(key) && !queryKeys.includes(key));
   if (!requestOnly)
     return void 0;
-  if (options2 !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys52.has(key) || queryKeys.includes(key))) {
+  if (options2 !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys51.has(key) || queryKeys.includes(key))) {
     throw new TypeError("Query parameters and request options must be passed as separate arguments.");
   }
   if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
@@ -20998,7 +20192,7 @@ function normalizeRequestOptionsForQuery52(value, queryKeys, options2) {
     return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
   }));
 }
-var normalizeRequestOptionsForQueryKeys52, Versions;
+var normalizeRequestOptionsForQueryKeys51, Versions;
 var init_versions = __esm({
   "node_modules/openai/resources/skills/versions/versions.mjs"() {
     init_resource();
@@ -21007,7 +20201,7 @@ var init_versions = __esm({
     init_pagination();
     init_uploads();
     init_path();
-    normalizeRequestOptionsForQueryKeys52 = /* @__PURE__ */ new Set([
+    normalizeRequestOptionsForQueryKeys51 = /* @__PURE__ */ new Set([
       "method",
       "path",
       "query",
@@ -21046,16 +20240,16 @@ var init_versions = __esm({
        */
       retrieve(version7, params, options2) {
         const { skill_id } = params;
-        return this._client.get(path`/skills/${skill_id}/versions/${version7}`, resolveResourceRequestOptions94(options2, (options3) => ({ ...options3, __security: { bearerAuth: true } })));
+        return this._client.get(path`/skills/${skill_id}/versions/${version7}`, resolveResourceRequestOptions92(options2, (options3) => ({ ...options3, __security: { bearerAuth: true } })));
       }
       list(skillID, query2 = {}, options2) {
-        const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery52(query2, ["after", "limit", "order"], options2);
+        const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery51(query2, ["after", "limit", "order"], options2);
         if (normalizeRequestOptionsForQueryOptions !== void 0) {
           options2 = normalizeRequestOptionsForQueryOptions;
           query2 = {};
         }
         query2 = query2;
-        return this._client.getAPIList(path`/skills/${skillID}/versions`, CursorPage, resolveResourceRequestOptions94(options2, (options3) => ({
+        return this._client.getAPIList(path`/skills/${skillID}/versions`, CursorPage, resolveResourceRequestOptions92(options2, (options3) => ({
           query: query2,
           ...options3,
           __security: { bearerAuth: true }
@@ -21066,7 +20260,7 @@ var init_versions = __esm({
        */
       delete(version7, params, options2) {
         const { skill_id } = params;
-        return this._client.delete(path`/skills/${skill_id}/versions/${version7}`, resolveResourceRequestOptions94(options2, (options3) => ({ ...options3, __security: { bearerAuth: true } })));
+        return this._client.delete(path`/skills/${skill_id}/versions/${version7}`, resolveResourceRequestOptions92(options2, (options3) => ({ ...options3, __security: { bearerAuth: true } })));
       }
     };
     Versions.Content = Content3;
@@ -21074,18 +20268,18 @@ var init_versions = __esm({
 });
 
 // node_modules/openai/resources/skills/skills.mjs
-function resolveResourceRequestOptions95(options2, buildOptions) {
+function resolveResourceRequestOptions93(options2, buildOptions) {
   return Promise.resolve(options2).then(buildOptions);
 }
-function normalizeRequestOptionsForQuery53(value, queryKeys, options2) {
+function normalizeRequestOptionsForQuery52(value, queryKeys, options2) {
   if (typeof value !== "object" || value === null)
     return void 0;
   const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
   const keys = entries.map(([key]) => key);
-  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys53.has(key) && !queryKeys.includes(key));
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys52.has(key) && !queryKeys.includes(key));
   if (!requestOnly)
     return void 0;
-  if (options2 !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys53.has(key) || queryKeys.includes(key))) {
+  if (options2 !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys52.has(key) || queryKeys.includes(key))) {
     throw new TypeError("Query parameters and request options must be passed as separate arguments.");
   }
   if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
@@ -21097,7 +20291,7 @@ function normalizeRequestOptionsForQuery53(value, queryKeys, options2) {
     return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
   }));
 }
-var normalizeRequestOptionsForQueryKeys53, Skills;
+var normalizeRequestOptionsForQueryKeys52, Skills;
 var init_skills = __esm({
   "node_modules/openai/resources/skills/skills.mjs"() {
     init_resource();
@@ -21108,7 +20302,7 @@ var init_skills = __esm({
     init_pagination();
     init_uploads();
     init_path();
-    normalizeRequestOptionsForQueryKeys53 = /* @__PURE__ */ new Set([
+    normalizeRequestOptionsForQueryKeys52 = /* @__PURE__ */ new Set([
       "method",
       "path",
       "query",
@@ -21147,26 +20341,26 @@ var init_skills = __esm({
        * Get a skill by its ID.
        */
       retrieve(skillID, options2) {
-        return this._client.get(path`/skills/${skillID}`, resolveResourceRequestOptions95(options2, (options3) => ({ ...options3, __security: { bearerAuth: true } })));
+        return this._client.get(path`/skills/${skillID}`, resolveResourceRequestOptions93(options2, (options3) => ({ ...options3, __security: { bearerAuth: true } })));
       }
       /**
        * Update the default version pointer for a skill.
        */
       update(skillID, body, options2) {
-        return this._client.post(path`/skills/${skillID}`, resolveResourceRequestOptions95(options2, (options3) => ({
+        return this._client.post(path`/skills/${skillID}`, resolveResourceRequestOptions93(options2, (options3) => ({
           body,
           ...options3,
           __security: { bearerAuth: true }
         })));
       }
       list(query2 = {}, options2) {
-        const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery53(query2, ["after", "limit", "order"], options2);
+        const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery52(query2, ["after", "limit", "order"], options2);
         if (normalizeRequestOptionsForQueryOptions !== void 0) {
           options2 = normalizeRequestOptionsForQueryOptions;
           query2 = {};
         }
         query2 = query2;
-        return this._client.getAPIList("/skills", CursorPage, resolveResourceRequestOptions95(options2, (options3) => ({
+        return this._client.getAPIList("/skills", CursorPage, resolveResourceRequestOptions93(options2, (options3) => ({
           query: query2,
           ...options3,
           __security: { bearerAuth: true }
@@ -21176,7 +20370,7 @@ var init_skills = __esm({
        * Delete a skill by its ID.
        */
       delete(skillID, options2) {
-        return this._client.delete(path`/skills/${skillID}`, resolveResourceRequestOptions95(options2, (options3) => ({ ...options3, __security: { bearerAuth: true } })));
+        return this._client.delete(path`/skills/${skillID}`, resolveResourceRequestOptions93(options2, (options3) => ({ ...options3, __security: { bearerAuth: true } })));
       }
     };
     Skills.Content = Content2;
@@ -21185,7 +20379,7 @@ var init_skills = __esm({
 });
 
 // node_modules/openai/resources/uploads/parts.mjs
-function resolveResourceRequestOptions96(options2, buildOptions) {
+function resolveResourceRequestOptions94(options2, buildOptions) {
   return Promise.resolve(options2).then(buildOptions);
 }
 var Parts;
@@ -21210,14 +20404,14 @@ var init_parts = __esm({
        * [complete the Upload](https://developers.openai.com/api/reference/resources/uploads/methods/complete).
        */
       create(uploadID, body, options2) {
-        return this._client.post(path`/uploads/${uploadID}/parts`, resolveResourceRequestOptions96(options2, (options3) => multipartFormRequestOptions({ body, ...options3, __security: { bearerAuth: true } }, this._client)));
+        return this._client.post(path`/uploads/${uploadID}/parts`, resolveResourceRequestOptions94(options2, (options3) => multipartFormRequestOptions({ body, ...options3, __security: { bearerAuth: true } }, this._client)));
       }
     };
   }
 });
 
 // node_modules/openai/resources/uploads/uploads.mjs
-function resolveResourceRequestOptions97(options2, buildOptions) {
+function resolveResourceRequestOptions95(options2, buildOptions) {
   return Promise.resolve(options2).then(buildOptions);
 }
 var Uploads;
@@ -21256,7 +20450,7 @@ var init_uploads3 = __esm({
        * Returns the Upload object with status `pending`.
        */
       create(body, options2) {
-        return this._client.post("/uploads", resolveResourceRequestOptions97(options2, (options3) => ({
+        return this._client.post("/uploads", resolveResourceRequestOptions95(options2, (options3) => ({
           body,
           ...options3,
           __security: { bearerAuth: true }
@@ -21268,7 +20462,7 @@ var init_uploads3 = __esm({
        * Returns the Upload object with status `cancelled`.
        */
       cancel(uploadID, options2) {
-        return this._client.post(path`/uploads/${uploadID}/cancel`, resolveResourceRequestOptions97(options2, (options3) => ({ ...options3, __security: { bearerAuth: true } })));
+        return this._client.post(path`/uploads/${uploadID}/cancel`, resolveResourceRequestOptions95(options2, (options3) => ({ ...options3, __security: { bearerAuth: true } })));
       }
       /**
        * Completes the
@@ -21288,7 +20482,7 @@ var init_uploads3 = __esm({
        * object.
        */
       complete(uploadID, body, options2) {
-        return this._client.post(path`/uploads/${uploadID}/complete`, resolveResourceRequestOptions97(options2, (options3) => ({
+        return this._client.post(path`/uploads/${uploadID}/complete`, resolveResourceRequestOptions95(options2, (options3) => ({
           body,
           ...options3,
           __security: { bearerAuth: true }
@@ -21370,7 +20564,7 @@ var init_vector_store_upload = __esm({
 });
 
 // node_modules/openai/resources/vector-stores/file-batches.mjs
-function resolveResourceRequestOptions98(options2, buildOptions) {
+function resolveResourceRequestOptions96(options2, buildOptions) {
   return Promise.resolve(options2).then(buildOptions);
 }
 var FileBatches;
@@ -21387,7 +20581,7 @@ var init_file_batches = __esm({
        * Create a vector store file batch.
        */
       create(vectorStoreID, body, options2) {
-        return this._client.post(path`/vector_stores/${vectorStoreID}/file_batches`, resolveResourceRequestOptions98(options2, (options3) => ({
+        return this._client.post(path`/vector_stores/${vectorStoreID}/file_batches`, resolveResourceRequestOptions96(options2, (options3) => ({
           body,
           ...options3,
           headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options3?.headers]),
@@ -21399,7 +20593,7 @@ var init_file_batches = __esm({
        */
       retrieve(batchID, params, options2) {
         const { vector_store_id } = params;
-        return this._client.get(path`/vector_stores/${vector_store_id}/file_batches/${batchID}`, resolveResourceRequestOptions98(options2, (options3) => ({
+        return this._client.get(path`/vector_stores/${vector_store_id}/file_batches/${batchID}`, resolveResourceRequestOptions96(options2, (options3) => ({
           ...options3,
           headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options3?.headers]),
           __security: { bearerAuth: true }
@@ -21411,7 +20605,7 @@ var init_file_batches = __esm({
        */
       cancel(batchID, params, options2) {
         const { vector_store_id } = params;
-        return this._client.post(path`/vector_stores/${vector_store_id}/file_batches/${batchID}/cancel`, resolveResourceRequestOptions98(options2, (options3) => ({
+        return this._client.post(path`/vector_stores/${vector_store_id}/file_batches/${batchID}/cancel`, resolveResourceRequestOptions96(options2, (options3) => ({
           ...options3,
           headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options3?.headers]),
           __security: { bearerAuth: true }
@@ -21429,7 +20623,7 @@ var init_file_batches = __esm({
        */
       listFiles(batchID, params, options2) {
         const { vector_store_id, ...query2 } = params;
-        return this._client.getAPIList(path`/vector_stores/${vector_store_id}/file_batches/${batchID}/files`, CursorPage, resolveResourceRequestOptions98(options2, (options3) => ({
+        return this._client.getAPIList(path`/vector_stores/${vector_store_id}/file_batches/${batchID}/files`, CursorPage, resolveResourceRequestOptions96(options2, (options3) => ({
           query: query2,
           ...options3,
           headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options3?.headers]),
@@ -21458,18 +20652,18 @@ var init_file_batches = __esm({
 });
 
 // node_modules/openai/resources/vector-stores/files.mjs
-function resolveResourceRequestOptions99(options2, buildOptions) {
+function resolveResourceRequestOptions97(options2, buildOptions) {
   return Promise.resolve(options2).then(buildOptions);
 }
-function normalizeRequestOptionsForQuery54(value, queryKeys, options2) {
+function normalizeRequestOptionsForQuery53(value, queryKeys, options2) {
   if (typeof value !== "object" || value === null)
     return void 0;
   const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
   const keys = entries.map(([key]) => key);
-  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys54.has(key) && !queryKeys.includes(key));
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys53.has(key) && !queryKeys.includes(key));
   if (!requestOnly)
     return void 0;
-  if (options2 !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys54.has(key) || queryKeys.includes(key))) {
+  if (options2 !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys53.has(key) || queryKeys.includes(key))) {
     throw new TypeError("Query parameters and request options must be passed as separate arguments.");
   }
   if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
@@ -21481,15 +20675,15 @@ function normalizeRequestOptionsForQuery54(value, queryKeys, options2) {
     return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
   }));
 }
-var normalizeRequestOptionsForQueryKeys54, Files4;
-var init_files5 = __esm({
+var normalizeRequestOptionsForQueryKeys53, Files4;
+var init_files4 = __esm({
   "node_modules/openai/resources/vector-stores/files.mjs"() {
     init_resource();
     init_pagination();
     init_headers();
     init_vector_store_polling();
     init_path();
-    normalizeRequestOptionsForQueryKeys54 = /* @__PURE__ */ new Set([
+    normalizeRequestOptionsForQueryKeys53 = /* @__PURE__ */ new Set([
       "method",
       "path",
       "query",
@@ -21517,7 +20711,7 @@ var init_files5 = __esm({
        * [vector store](https://developers.openai.com/api/reference/resources/vector_stores).
        */
       create(vectorStoreID, body, options2) {
-        return this._client.post(path`/vector_stores/${vectorStoreID}/files`, resolveResourceRequestOptions99(options2, (options3) => ({
+        return this._client.post(path`/vector_stores/${vectorStoreID}/files`, resolveResourceRequestOptions97(options2, (options3) => ({
           body,
           ...options3,
           headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options3?.headers]),
@@ -21529,7 +20723,7 @@ var init_files5 = __esm({
        */
       retrieve(fileID, params, options2) {
         const { vector_store_id } = params;
-        return this._client.get(path`/vector_stores/${vector_store_id}/files/${fileID}`, resolveResourceRequestOptions99(options2, (options3) => ({
+        return this._client.get(path`/vector_stores/${vector_store_id}/files/${fileID}`, resolveResourceRequestOptions97(options2, (options3) => ({
           ...options3,
           headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options3?.headers]),
           __security: { bearerAuth: true }
@@ -21540,7 +20734,7 @@ var init_files5 = __esm({
        */
       update(fileID, params, options2) {
         const { vector_store_id, ...body } = params;
-        return this._client.post(path`/vector_stores/${vector_store_id}/files/${fileID}`, resolveResourceRequestOptions99(options2, (options3) => ({
+        return this._client.post(path`/vector_stores/${vector_store_id}/files/${fileID}`, resolveResourceRequestOptions97(options2, (options3) => ({
           body,
           ...options3,
           headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options3?.headers]),
@@ -21548,13 +20742,13 @@ var init_files5 = __esm({
         })));
       }
       list(vectorStoreID, query2 = {}, options2) {
-        const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery54(query2, ["after", "before", "filter", "limit", "order"], options2);
+        const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery53(query2, ["after", "before", "filter", "limit", "order"], options2);
         if (normalizeRequestOptionsForQueryOptions !== void 0) {
           options2 = normalizeRequestOptionsForQueryOptions;
           query2 = {};
         }
         query2 = query2;
-        return this._client.getAPIList(path`/vector_stores/${vectorStoreID}/files`, CursorPage, resolveResourceRequestOptions99(options2, (options3) => ({
+        return this._client.getAPIList(path`/vector_stores/${vectorStoreID}/files`, CursorPage, resolveResourceRequestOptions97(options2, (options3) => ({
           query: query2,
           ...options3,
           headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options3?.headers]),
@@ -21569,7 +20763,7 @@ var init_files5 = __esm({
        */
       delete(fileID, params, options2) {
         const { vector_store_id } = params;
-        return this._client.delete(path`/vector_stores/${vector_store_id}/files/${fileID}`, resolveResourceRequestOptions99(options2, (options3) => ({
+        return this._client.delete(path`/vector_stores/${vector_store_id}/files/${fileID}`, resolveResourceRequestOptions97(options2, (options3) => ({
           ...options3,
           headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options3?.headers]),
           __security: { bearerAuth: true }
@@ -21613,7 +20807,7 @@ var init_files5 = __esm({
        */
       content(fileID, params, options2) {
         const { vector_store_id } = params;
-        return this._client.getAPIList(path`/vector_stores/${vector_store_id}/files/${fileID}/content`, Page, resolveResourceRequestOptions99(options2, (options3) => ({
+        return this._client.getAPIList(path`/vector_stores/${vector_store_id}/files/${fileID}/content`, Page, resolveResourceRequestOptions97(options2, (options3) => ({
           ...options3,
           headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options3?.headers]),
           __security: { bearerAuth: true }
@@ -21624,18 +20818,18 @@ var init_files5 = __esm({
 });
 
 // node_modules/openai/resources/vector-stores/vector-stores.mjs
-function resolveResourceRequestOptions100(options2, buildOptions) {
+function resolveResourceRequestOptions98(options2, buildOptions) {
   return Promise.resolve(options2).then(buildOptions);
 }
-function normalizeRequestOptionsForQuery55(value, queryKeys, options2) {
+function normalizeRequestOptionsForQuery54(value, queryKeys, options2) {
   if (typeof value !== "object" || value === null)
     return void 0;
   const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
   const keys = entries.map(([key]) => key);
-  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys55.has(key) && !queryKeys.includes(key));
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys54.has(key) && !queryKeys.includes(key));
   if (!requestOnly)
     return void 0;
-  if (options2 !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys55.has(key) || queryKeys.includes(key))) {
+  if (options2 !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys54.has(key) || queryKeys.includes(key))) {
     throw new TypeError("Query parameters and request options must be passed as separate arguments.");
   }
   if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
@@ -21647,18 +20841,18 @@ function normalizeRequestOptionsForQuery55(value, queryKeys, options2) {
     return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
   }));
 }
-var normalizeRequestOptionsForQueryKeys55, VectorStores;
+var normalizeRequestOptionsForQueryKeys54, VectorStores;
 var init_vector_stores = __esm({
   "node_modules/openai/resources/vector-stores/vector-stores.mjs"() {
     init_resource();
     init_file_batches();
     init_file_batches();
-    init_files5();
-    init_files5();
+    init_files4();
+    init_files4();
     init_pagination();
     init_headers();
     init_path();
-    normalizeRequestOptionsForQueryKeys55 = /* @__PURE__ */ new Set([
+    normalizeRequestOptionsForQueryKeys54 = /* @__PURE__ */ new Set([
       "method",
       "path",
       "query",
@@ -21689,7 +20883,7 @@ var init_vector_stores = __esm({
        * Create a vector store.
        */
       create(body, options2) {
-        return this._client.post("/vector_stores", resolveResourceRequestOptions100(options2, (options3) => ({
+        return this._client.post("/vector_stores", resolveResourceRequestOptions98(options2, (options3) => ({
           body,
           ...options3,
           headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options3?.headers]),
@@ -21700,7 +20894,7 @@ var init_vector_stores = __esm({
        * Retrieves a vector store.
        */
       retrieve(vectorStoreID, options2) {
-        return this._client.get(path`/vector_stores/${vectorStoreID}`, resolveResourceRequestOptions100(options2, (options3) => ({
+        return this._client.get(path`/vector_stores/${vectorStoreID}`, resolveResourceRequestOptions98(options2, (options3) => ({
           ...options3,
           headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options3?.headers]),
           __security: { bearerAuth: true }
@@ -21710,7 +20904,7 @@ var init_vector_stores = __esm({
        * Modifies a vector store.
        */
       update(vectorStoreID, body, options2) {
-        return this._client.post(path`/vector_stores/${vectorStoreID}`, resolveResourceRequestOptions100(options2, (options3) => ({
+        return this._client.post(path`/vector_stores/${vectorStoreID}`, resolveResourceRequestOptions98(options2, (options3) => ({
           body,
           ...options3,
           headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options3?.headers]),
@@ -21718,13 +20912,13 @@ var init_vector_stores = __esm({
         })));
       }
       list(query2 = {}, options2) {
-        const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery55(query2, ["after", "before", "limit", "order"], options2);
+        const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery54(query2, ["after", "before", "limit", "order"], options2);
         if (normalizeRequestOptionsForQueryOptions !== void 0) {
           options2 = normalizeRequestOptionsForQueryOptions;
           query2 = {};
         }
         query2 = query2;
-        return this._client.getAPIList("/vector_stores", CursorPage, resolveResourceRequestOptions100(options2, (options3) => ({
+        return this._client.getAPIList("/vector_stores", CursorPage, resolveResourceRequestOptions98(options2, (options3) => ({
           query: query2,
           ...options3,
           headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options3?.headers]),
@@ -21735,7 +20929,7 @@ var init_vector_stores = __esm({
        * Delete a vector store.
        */
       delete(vectorStoreID, options2) {
-        return this._client.delete(path`/vector_stores/${vectorStoreID}`, resolveResourceRequestOptions100(options2, (options3) => ({
+        return this._client.delete(path`/vector_stores/${vectorStoreID}`, resolveResourceRequestOptions98(options2, (options3) => ({
           ...options3,
           headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options3?.headers]),
           __security: { bearerAuth: true }
@@ -21746,7 +20940,7 @@ var init_vector_stores = __esm({
        * filter.
        */
       search(vectorStoreID, body, options2) {
-        return this._client.getAPIList(path`/vector_stores/${vectorStoreID}/search`, Page, resolveResourceRequestOptions100(options2, (options3) => ({
+        return this._client.getAPIList(path`/vector_stores/${vectorStoreID}/search`, Page, resolveResourceRequestOptions98(options2, (options3) => ({
           body,
           method: "post",
           ...options3,
@@ -21761,18 +20955,18 @@ var init_vector_stores = __esm({
 });
 
 // node_modules/openai/resources/videos.mjs
-function resolveResourceRequestOptions101(options2, buildOptions) {
+function resolveResourceRequestOptions99(options2, buildOptions) {
   return Promise.resolve(options2).then(buildOptions);
 }
-function normalizeRequestOptionsForQuery56(value, queryKeys, options2) {
+function normalizeRequestOptionsForQuery55(value, queryKeys, options2) {
   if (typeof value !== "object" || value === null)
     return void 0;
   const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
   const keys = entries.map(([key]) => key);
-  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys56.has(key) && !queryKeys.includes(key));
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys55.has(key) && !queryKeys.includes(key));
   if (!requestOnly)
     return void 0;
-  if (options2 !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys56.has(key) || queryKeys.includes(key))) {
+  if (options2 !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys55.has(key) || queryKeys.includes(key))) {
     throw new TypeError("Query parameters and request options must be passed as separate arguments.");
   }
   if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
@@ -21784,7 +20978,7 @@ function normalizeRequestOptionsForQuery56(value, queryKeys, options2) {
     return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
   }));
 }
-var normalizeRequestOptionsForQueryKeys56, Videos;
+var normalizeRequestOptionsForQueryKeys55, Videos;
 var init_videos = __esm({
   "node_modules/openai/resources/videos.mjs"() {
     init_resource();
@@ -21792,7 +20986,7 @@ var init_videos = __esm({
     init_headers();
     init_uploads();
     init_path();
-    normalizeRequestOptionsForQueryKeys56 = /* @__PURE__ */ new Set([
+    normalizeRequestOptionsForQueryKeys55 = /* @__PURE__ */ new Set([
       "method",
       "path",
       "query",
@@ -21820,7 +21014,7 @@ var init_videos = __esm({
        * @deprecated The Sora API is scheduled to permanently shut down on September 24, 2026.
        */
       create(body, options2) {
-        return this._client.post("/videos", resolveResourceRequestOptions101(options2, (options3) => multipartFormRequestOptions({ body, ...options3, __security: { bearerAuth: true } }, this._client)));
+        return this._client.post("/videos", resolveResourceRequestOptions99(options2, (options3) => multipartFormRequestOptions({ body, ...options3, __security: { bearerAuth: true } }, this._client)));
       }
       /**
        * Fetch the latest metadata for a generated video.
@@ -21828,16 +21022,16 @@ var init_videos = __esm({
        * @deprecated The Sora API is scheduled to permanently shut down on September 24, 2026.
        */
       retrieve(videoID, options2) {
-        return this._client.get(path`/videos/${videoID}`, resolveResourceRequestOptions101(options2, (options3) => ({ ...options3, __security: { bearerAuth: true } })));
+        return this._client.get(path`/videos/${videoID}`, resolveResourceRequestOptions99(options2, (options3) => ({ ...options3, __security: { bearerAuth: true } })));
       }
       list(query2 = {}, options2) {
-        const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery56(query2, ["after", "limit", "order"], options2);
+        const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery55(query2, ["after", "limit", "order"], options2);
         if (normalizeRequestOptionsForQueryOptions !== void 0) {
           options2 = normalizeRequestOptionsForQueryOptions;
           query2 = {};
         }
         query2 = query2;
-        return this._client.getAPIList("/videos", ConversationCursorPage, resolveResourceRequestOptions101(options2, (options3) => ({
+        return this._client.getAPIList("/videos", ConversationCursorPage, resolveResourceRequestOptions99(options2, (options3) => ({
           query: query2,
           ...options3,
           __security: { bearerAuth: true }
@@ -21849,7 +21043,7 @@ var init_videos = __esm({
        * @deprecated The Sora API is scheduled to permanently shut down on September 24, 2026.
        */
       delete(videoID, options2) {
-        return this._client.delete(path`/videos/${videoID}`, resolveResourceRequestOptions101(options2, (options3) => ({ ...options3, __security: { bearerAuth: true } })));
+        return this._client.delete(path`/videos/${videoID}`, resolveResourceRequestOptions99(options2, (options3) => ({ ...options3, __security: { bearerAuth: true } })));
       }
       /**
        * Create a character from an uploaded video.
@@ -21857,16 +21051,16 @@ var init_videos = __esm({
        * @deprecated The Sora API is scheduled to permanently shut down on September 24, 2026.
        */
       createCharacter(body, options2) {
-        return this._client.post("/videos/characters", resolveResourceRequestOptions101(options2, (options3) => multipartFormRequestOptions({ body, ...options3, __security: { bearerAuth: true } }, this._client)));
+        return this._client.post("/videos/characters", resolveResourceRequestOptions99(options2, (options3) => multipartFormRequestOptions({ body, ...options3, __security: { bearerAuth: true } }, this._client)));
       }
       downloadContent(videoID, query2 = {}, options2) {
-        const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery56(query2, ["variant"], options2);
+        const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery55(query2, ["variant"], options2);
         if (normalizeRequestOptionsForQueryOptions !== void 0) {
           options2 = normalizeRequestOptionsForQueryOptions;
           query2 = {};
         }
         query2 = query2;
-        return this._client.get(path`/videos/${videoID}/content`, resolveResourceRequestOptions101(options2, (options3) => ({
+        return this._client.get(path`/videos/${videoID}/content`, resolveResourceRequestOptions99(options2, (options3) => ({
           query: query2,
           ...options3,
           headers: buildHeaders([{ Accept: "application/binary" }, options3?.headers]),
@@ -21881,7 +21075,7 @@ var init_videos = __esm({
        * @deprecated The Sora API is scheduled to permanently shut down on September 24, 2026.
        */
       edit(body, options2) {
-        return this._client.post("/videos/edits", resolveResourceRequestOptions101(options2, (options3) => multipartFormRequestOptions({ body, ...options3, __security: { bearerAuth: true } }, this._client)));
+        return this._client.post("/videos/edits", resolveResourceRequestOptions99(options2, (options3) => multipartFormRequestOptions({ body, ...options3, __security: { bearerAuth: true } }, this._client)));
       }
       /**
        * Create an extension of a completed video.
@@ -21889,7 +21083,7 @@ var init_videos = __esm({
        * @deprecated The Sora API is scheduled to permanently shut down on September 24, 2026.
        */
       extend(body, options2) {
-        return this._client.post("/videos/extensions", resolveResourceRequestOptions101(options2, (options3) => multipartFormRequestOptions({ body, ...options3, __security: { bearerAuth: true } }, this._client)));
+        return this._client.post("/videos/extensions", resolveResourceRequestOptions99(options2, (options3) => multipartFormRequestOptions({ body, ...options3, __security: { bearerAuth: true } }, this._client)));
       }
       /**
        * Fetch a character.
@@ -21897,7 +21091,7 @@ var init_videos = __esm({
        * @deprecated The Sora API is scheduled to permanently shut down on September 24, 2026.
        */
       getCharacter(characterID, options2) {
-        return this._client.get(path`/videos/characters/${characterID}`, resolveResourceRequestOptions101(options2, (options3) => ({ ...options3, __security: { bearerAuth: true } })));
+        return this._client.get(path`/videos/characters/${characterID}`, resolveResourceRequestOptions99(options2, (options3) => ({ ...options3, __security: { bearerAuth: true } })));
       }
       /**
        * Create a remix of a completed video using a refreshed prompt.
@@ -21905,7 +21099,7 @@ var init_videos = __esm({
        * @deprecated The Sora API is scheduled to permanently shut down on September 24, 2026.
        */
       remix(videoID, body, options2) {
-        return this._client.post(path`/videos/${videoID}/remix`, resolveResourceRequestOptions101(options2, (options3) => maybeMultipartFormRequestOptions({ body, ...options3, __security: { bearerAuth: true } }, this._client)));
+        return this._client.post(path`/videos/${videoID}/remix`, resolveResourceRequestOptions99(options2, (options3) => maybeMultipartFormRequestOptions({ body, ...options3, __security: { bearerAuth: true } }, this._client)));
       }
     };
   }
@@ -22017,7 +21211,7 @@ var init_webhook_signature = __esm({
 });
 
 // node_modules/openai/resources/webhooks/event-types.mjs
-function resolveResourceRequestOptions102(options2, buildOptions) {
+function resolveResourceRequestOptions100(options2, buildOptions) {
   return Promise.resolve(options2).then(buildOptions);
 }
 var EventTypes;
@@ -22035,25 +21229,25 @@ var init_event_types = __esm({
        * ```
        */
       list(options2) {
-        return this._client.get("/webhook_event_types", resolveResourceRequestOptions102(options2, (options3) => ({ ...options3, __security: { bearerAuth: true } })));
+        return this._client.get("/webhook_event_types", resolveResourceRequestOptions100(options2, (options3) => ({ ...options3, __security: { bearerAuth: true } })));
       }
     };
   }
 });
 
 // node_modules/openai/resources/webhooks/webhooks.mjs
-function resolveResourceRequestOptions103(options2, buildOptions) {
+function resolveResourceRequestOptions101(options2, buildOptions) {
   return Promise.resolve(options2).then(buildOptions);
 }
-function normalizeRequestOptionsForQuery57(value, queryKeys, options2) {
+function normalizeRequestOptionsForQuery56(value, queryKeys, options2) {
   if (typeof value !== "object" || value === null)
     return void 0;
   const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
   const keys = entries.map(([key]) => key);
-  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys57.has(key) && !queryKeys.includes(key));
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys56.has(key) && !queryKeys.includes(key));
   if (!requestOnly)
     return void 0;
-  if (options2 !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys57.has(key) || queryKeys.includes(key))) {
+  if (options2 !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys56.has(key) || queryKeys.includes(key))) {
     throw new TypeError("Query parameters and request options must be passed as separate arguments.");
   }
   if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
@@ -22065,7 +21259,7 @@ function normalizeRequestOptionsForQuery57(value, queryKeys, options2) {
     return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
   }));
 }
-var _Webhooks_instances, _Webhooks_validateSecret, _Webhooks_getRequiredHeader, normalizeRequestOptionsForQueryKeys57, Webhooks;
+var _Webhooks_instances, _Webhooks_validateSecret, _Webhooks_getRequiredHeader, normalizeRequestOptionsForQueryKeys56, Webhooks;
 var init_webhooks = __esm({
   "node_modules/openai/resources/webhooks/webhooks.mjs"() {
     init_tslib();
@@ -22076,7 +21270,7 @@ var init_webhooks = __esm({
     init_event_types();
     init_pagination();
     init_path();
-    normalizeRequestOptionsForQueryKeys57 = /* @__PURE__ */ new Set([
+    normalizeRequestOptionsForQueryKeys56 = /* @__PURE__ */ new Set([
       "method",
       "path",
       "query",
@@ -22117,7 +21311,7 @@ var init_webhooks = __esm({
        * ```
        */
       create(body, options2) {
-        return this._client.post("/webhook_endpoints", resolveResourceRequestOptions103(options2, (options3) => ({
+        return this._client.post("/webhook_endpoints", resolveResourceRequestOptions101(options2, (options3) => ({
           body,
           ...options3,
           __security: { bearerAuth: true }
@@ -22134,7 +21328,7 @@ var init_webhooks = __esm({
        * ```
        */
       retrieve(webhookEndpointID, options2) {
-        return this._client.get(path`/webhook_endpoints/${webhookEndpointID}`, resolveResourceRequestOptions103(options2, (options3) => ({ ...options3, __security: { bearerAuth: true } })));
+        return this._client.get(path`/webhook_endpoints/${webhookEndpointID}`, resolveResourceRequestOptions101(options2, (options3) => ({ ...options3, __security: { bearerAuth: true } })));
       }
       /**
        * Updates a webhook endpoint for the authenticated project.
@@ -22145,20 +21339,20 @@ var init_webhooks = __esm({
        * ```
        */
       update(webhookEndpointID, body = {}, options2) {
-        return this._client.post(path`/webhook_endpoints/${webhookEndpointID}`, resolveResourceRequestOptions103(options2, (options3) => ({
+        return this._client.post(path`/webhook_endpoints/${webhookEndpointID}`, resolveResourceRequestOptions101(options2, (options3) => ({
           body,
           ...options3,
           __security: { bearerAuth: true }
         })));
       }
       list(query2 = {}, options2) {
-        const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery57(query2, ["after", "limit"], options2);
+        const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery56(query2, ["after", "limit"], options2);
         if (normalizeRequestOptionsForQueryOptions !== void 0) {
           options2 = normalizeRequestOptionsForQueryOptions;
           query2 = {};
         }
         query2 = query2;
-        return this._client.getAPIList("/webhook_endpoints", CursorPage, resolveResourceRequestOptions103(options2, (options3) => ({
+        return this._client.getAPIList("/webhook_endpoints", CursorPage, resolveResourceRequestOptions101(options2, (options3) => ({
           query: query2,
           ...options3,
           __security: { bearerAuth: true }
@@ -22175,7 +21369,7 @@ var init_webhooks = __esm({
        * ```
        */
       delete(webhookEndpointID, options2) {
-        return this._client.delete(path`/webhook_endpoints/${webhookEndpointID}`, resolveResourceRequestOptions103(options2, (options3) => ({ ...options3, __security: { bearerAuth: true } })));
+        return this._client.delete(path`/webhook_endpoints/${webhookEndpointID}`, resolveResourceRequestOptions101(options2, (options3) => ({ ...options3, __security: { bearerAuth: true } })));
       }
       /**
        * Rotates the signing secret for a webhook endpoint in the authenticated project.
@@ -22187,7 +21381,7 @@ var init_webhooks = __esm({
        * ```
        */
       rotateSecret(webhookEndpointID, body = {}, options2) {
-        return this._client.post(path`/webhook_endpoints/${webhookEndpointID}/rotate_secret`, resolveResourceRequestOptions103(options2, (options3) => ({
+        return this._client.post(path`/webhook_endpoints/${webhookEndpointID}/rotate_secret`, resolveResourceRequestOptions101(options2, (options3) => ({
           body,
           ...options3,
           __security: { bearerAuth: true }
@@ -22205,7 +21399,7 @@ var init_webhooks = __esm({
        * ```
        */
       test(webhookEndpointID, body, options2) {
-        return this._client.post(path`/webhook_endpoints/${webhookEndpointID}/test`, resolveResourceRequestOptions103(options2, (options3) => ({
+        return this._client.post(path`/webhook_endpoints/${webhookEndpointID}/test`, resolveResourceRequestOptions101(options2, (options3) => ({
           body,
           ...options3,
           __security: { bearerAuth: true }
@@ -22276,7 +21470,7 @@ var init_resources = __esm({
     init_conversations();
     init_embeddings2();
     init_evals();
-    init_files4();
+    init_files3();
     init_fine_tuning();
     init_graders2();
     init_images();
@@ -22294,88 +21488,16 @@ var init_resources = __esm({
   }
 });
 
-// node_modules/openai/internal/bedrock.mjs
-function assertValidBedrockBearerCredential(credential) {
-  if (/^[\t ]|[\t ]$/.test(credential)) {
-    throw new TypeError("Bedrock bearer credential contains an invalid HTTP header value.");
-  }
-  for (const character of credential) {
-    const value = character.codePointAt(0) ?? 0;
-    if (value < 32 && value !== 9 || value === 127 || value > 255) {
-      throw new TypeError("Bedrock bearer credential contains an invalid HTTP header value.");
-    }
-  }
-}
-var brand_privateBedrockClient;
-var init_bedrock = __esm({
-  "node_modules/openai/internal/bedrock.mjs"() {
-    init_error2();
-    init_utils2();
-    brand_privateBedrockClient = Symbol.for("openai.privateBedrockClient");
-  }
-});
-
 // node_modules/openai/internal/realtime-credentials.mjs
-function getDeferredRealtimeAPIKeyCache(client2) {
-  const deferred = client2[realtimeCacheContext]?.getStore();
-  return deferred?.client === client2 ? deferred : void 0;
-}
-function validateCapturedAPIKey(client2, credential) {
-  if (credential !== null && brand_privateBedrockClient in client2) {
-    assertValidBedrockBearerCredential(credential);
-  }
-  return credential;
-}
-async function resolveRealtimeAPIKey(client2, deferCache = false) {
+async function resolveRealtimeAPIKey(client2) {
   let apiKey;
-  const current = {
-    client: client2,
-    commit: () => apiKey === void 0 ? client2.apiKey : apiKey
-  };
-  const capture = (resolved) => {
+  const isProvider = await client2._callApiKey((resolved) => {
     apiKey = resolved;
-  };
-  const invoke = () => client2._callApiKey(capture);
-  const context2 = client2[realtimeCacheContext] ?? cacheContext;
-  if (deferCache && context2 && !client2[realtimeCacheContext]) {
-    Object.defineProperty(client2, realtimeCacheContext, { value: context2 });
-  }
-  const isProvider = await (context2 ? context2.run(deferCache ? current : void 0, invoke) : invoke());
-  return {
-    apiKey: apiKey === void 0 ? client2.apiKey : apiKey,
-    isProvider,
-    commit: () => {
-      const hookKey = current.providerKey !== void 0 && apiKey !== void 0 && apiKey !== current.providerKey ? validateCapturedAPIKey(client2, apiKey) : void 0;
-      const cached = current.commit();
-      return hookKey === void 0 ? validateCapturedAPIKey(client2, cached) : hookKey;
-    }
-  };
+  });
+  return { apiKey: apiKey === void 0 ? client2.apiKey : apiKey, isProvider };
 }
-var realtimeCacheContext, cacheContext;
 var init_realtime_credentials = __esm({
   "node_modules/openai/internal/realtime-credentials.mjs"() {
-    init_bedrock();
-    realtimeCacheContext = Symbol.for("openai.realtimeAPIKeyCacheContext");
-  }
-});
-
-// node_modules/openai/internal/ws.mjs
-function mergeWebSocketAuthHeaders(options2, authHeaders, removedHeaders) {
-  const headers = new Map(Object.entries(authHeaders).map(([name5, value]) => [name5.toLowerCase(), value]));
-  for (const name5 of removedHeaders) {
-    headers.delete(name5);
-  }
-  for (const [name5, value] of Object.entries(options2.headers ?? {})) {
-    headers.set(name5, value);
-  }
-  return { ...options2, headers: Object.fromEntries(headers) };
-}
-var webSocketHeaderRemovals;
-var init_ws = __esm({
-  "node_modules/openai/internal/ws.mjs"() {
-    init_bytes();
-    init_error();
-    webSocketHeaderRemovals = /* @__PURE__ */ new WeakMap();
   }
 });
 
@@ -22476,7 +21598,7 @@ var init_client = __esm({
     init_completions3();
     init_content_provenance_checks();
     init_embeddings2();
-    init_files4();
+    init_files3();
     init_images();
     init_models();
     init_moderations();
@@ -22500,7 +21622,6 @@ var init_client = __esm({
     init_webhooks();
     init_detect_platform();
     init_headers();
-    init_ws();
     init_provider();
     init_env();
     init_log();
@@ -22534,8 +21655,6 @@ var init_client = __esm({
         _OpenAI_x509Fetch.set(this, void 0);
         _OpenAI_explicitDataResidency.set(this, false);
         _OpenAI_responseAttempts.set(this, /* @__PURE__ */ new WeakMap());
-        this._apiKeyInvocation = 0;
-        this._lastCachedAPIKeyInvocation = 0;
         this.completions = new Completions2(this);
         this.chat = new Chat(this);
         this.embeddings = new Embeddings(this);
@@ -22713,12 +21832,8 @@ var init_client = __esm({
         return this._options.defaultQuery;
       }
       /** @internal Client request headers for each new WebSocket handshake. */
-      _buildWebSocketHeaders(authHeaders, removedHeaders) {
-        const context2 = webSocketHeaderRemovals.get(this);
-        if (context2?.baseHeaders) {
-          return mergeWebSocketAuthHeaders({ headers: context2.baseHeaders }, authHeaders, context2.removedHeaders ?? /* @__PURE__ */ new Set()).headers;
-        }
-        const headers = buildHeaders([
+      _buildWebSocketHeaders(authHeaders) {
+        return Object.fromEntries(buildHeaders([
           {
             "User-Agent": this.getUserAgent(),
             "OpenAI-Organization": this.organization,
@@ -22726,13 +21841,7 @@ var init_client = __esm({
           },
           authHeaders,
           this._options.defaultHeaders
-        ]);
-        headers.nulls.forEach((name5) => (removedHeaders ?? context2?.removedHeaders)?.add(name5));
-        const result = Object.fromEntries(headers.values);
-        if (context2) {
-          context2.baseHeaders = { ...result };
-        }
-        return result;
+        ]).values);
       }
       validateHeaders({ values, nulls }, schemes = {
         bearerAuth: true,
@@ -22812,8 +21921,11 @@ var init_client = __esm({
         return typeof this._options.apiKey === "function";
       }
       /**
-       * Resolves and retains a provider key, returning whether a provider was invoked.
-       * Overrides should forward `capture` (or call it with their resolved key) for local credentials.
+       * Resolves a function-based API key and retains the resolved value on this client.
+       * Returns whether a provider was invoked. Internal callers can capture this
+       * invocation's key before another request updates the shared `apiKey` property.
+       * Overrides should forward `capture` or invoke it with their own resolved key
+       * to preserve invocation-local credentials in concurrent requests and Realtime factories.
        * @internal
        */
       async _callApiKey(capture) {
@@ -22826,8 +21938,6 @@ var init_client = __esm({
           capture?.(this.apiKey);
           return false;
         }
-        const deferredCache = getDeferredRealtimeAPIKeyCache(this);
-        const invocation = ++this._apiKeyInvocation;
         let token;
         try {
           token = await apiKey();
@@ -22843,74 +21953,20 @@ var init_client = __esm({
         if (typeof token !== "string" || !token) {
           throw new OpenAIError(`Expected 'apiKey' function argument to return a string but it returned ${token}`);
         }
-        const resolvedToken = token;
-        const commit = () => {
-          if (capture)
-            validateCapturedAPIKey(this, resolvedToken);
-          if (invocation < this._lastCachedAPIKeyInvocation) {
-            return resolvedToken;
-          }
-          this.apiKey = resolvedToken;
-          const cached2 = capture ? this.apiKey : resolvedToken;
-          this._lastCachedAPIKeyInvocation = invocation;
-          return cached2;
-        };
-        if (deferredCache) {
-          deferredCache.providerKey = resolvedToken;
-          deferredCache.commit = commit;
-        }
-        const cached = deferredCache ? validateCapturedAPIKey(this, resolvedToken) : commit();
-        capture?.(cached);
+        this.apiKey = token;
+        capture?.(this.apiKey);
         return true;
       }
       buildURL(path3, query2, defaultBaseURL) {
         const baseURL = !__classPrivateFieldGet(this, _OpenAI_instances, "m", _OpenAI_baseURLOverridden).call(this) && defaultBaseURL || this.baseURL;
-        let url;
-        let baseQuery = {};
-        let baseParams;
-        if (isAbsoluteURL(path3)) {
-          url = new URL(path3);
-        } else if (baseURL.includes("?")) {
-          const base = new URL(baseURL);
-          baseParams = new URLSearchParams(base.search);
-          baseQuery = Object.fromEntries(baseParams);
-          base.search = "";
-          base.hash = "";
-          url = new URL(base.toString() + (base.pathname.endsWith("/") && path3.startsWith("/") ? path3.slice(1) : path3));
-        } else {
-          url = new URL(baseURL + (baseURL.endsWith("/") && path3.startsWith("/") ? path3.slice(1) : path3));
-        }
+        const url = isAbsoluteURL(path3) ? new URL(path3) : new URL(baseURL + (baseURL.endsWith("/") && path3.startsWith("/") ? path3.slice(1) : path3));
         const defaultQuery = this.defaultQuery();
         const pathQuery = Object.fromEntries(url.searchParams);
-        let overridingQuery;
-        if (!isEmptyObj(baseQuery) || !isEmptyObj(defaultQuery) || !isEmptyObj(pathQuery)) {
-          overridingQuery = { ...pathQuery, ...defaultQuery, ...query2 };
-          query2 = { ...baseQuery, ...overridingQuery };
+        if (!isEmptyObj(defaultQuery) || !isEmptyObj(pathQuery)) {
+          query2 = { ...pathQuery, ...defaultQuery, ...query2 };
         }
         if (typeof query2 === "object" && query2 && !Array.isArray(query2)) {
           url.search = this.stringifyQuery(query2);
-          if (baseParams && overridingQuery) {
-            const seen = /* @__PURE__ */ new Set();
-            const repeated = /* @__PURE__ */ new Set();
-            for (const key of baseParams.keys()) {
-              if (seen.has(key) && !hasOwn(overridingQuery, key)) {
-                repeated.add(key);
-              }
-              seen.add(key);
-            }
-            if (repeated.size) {
-              const merged = new URLSearchParams();
-              for (const [key, value] of url.searchParams) {
-                if (!repeated.has(key))
-                  merged.append(key, value);
-              }
-              for (const [key, value] of baseParams) {
-                if (repeated.has(key))
-                  merged.append(key, value);
-              }
-              url.search = merged.toString();
-            }
-          }
         }
         return url.toString();
       }
@@ -23913,6 +22969,16 @@ var init_azure = __esm({
     init_path();
     init_client();
     init_data_residency();
+  }
+});
+
+// node_modules/openai/internal/bedrock.mjs
+var brand_privateBedrockClient;
+var init_bedrock = __esm({
+  "node_modules/openai/internal/bedrock.mjs"() {
+    init_error2();
+    init_utils2();
+    brand_privateBedrockClient = Symbol.for("openai.privateBedrockClient");
   }
 });
 
@@ -30644,9 +29710,9 @@ var require_interceptor = __commonJS({
   }
 });
 
-// node_modules/ms/index.js
+// node_modules/https-proxy-agent/node_modules/debug/node_modules/ms/index.js
 var require_ms = __commonJS({
-  "node_modules/ms/index.js"(exports, module) {
+  "node_modules/https-proxy-agent/node_modules/debug/node_modules/ms/index.js"(exports, module) {
     var s2 = 1e3;
     var m2 = s2 * 60;
     var h2 = m2 * 60;
@@ -30760,9 +29826,9 @@ var require_ms = __commonJS({
   }
 });
 
-// node_modules/debug/src/common.js
+// node_modules/https-proxy-agent/node_modules/debug/src/common.js
 var require_common2 = __commonJS({
-  "node_modules/debug/src/common.js"(exports, module) {
+  "node_modules/https-proxy-agent/node_modules/debug/src/common.js"(exports, module) {
     function setup(env) {
       createDebug.debug = createDebug;
       createDebug.default = createDebug;
@@ -30937,9 +30003,9 @@ var require_common2 = __commonJS({
   }
 });
 
-// node_modules/debug/src/browser.js
+// node_modules/https-proxy-agent/node_modules/debug/src/browser.js
 var require_browser = __commonJS({
-  "node_modules/debug/src/browser.js"(exports, module) {
+  "node_modules/https-proxy-agent/node_modules/debug/src/browser.js"(exports, module) {
     exports.formatArgs = formatArgs;
     exports.save = save;
     exports.load = load;
@@ -31107,9 +30173,9 @@ var require_browser = __commonJS({
   }
 });
 
-// node_modules/debug/src/node.js
+// node_modules/https-proxy-agent/node_modules/debug/src/node.js
 var require_node = __commonJS({
-  "node_modules/debug/src/node.js"(exports, module) {
+  "node_modules/https-proxy-agent/node_modules/debug/src/node.js"(exports, module) {
     var tty = __require("tty");
     var util = __require("util");
     exports.init = init;
@@ -31281,9 +30347,9 @@ var require_node = __commonJS({
   }
 });
 
-// node_modules/debug/src/index.js
+// node_modules/https-proxy-agent/node_modules/debug/src/index.js
 var require_src = __commonJS({
-  "node_modules/debug/src/index.js"(exports, module) {
+  "node_modules/https-proxy-agent/node_modules/debug/src/index.js"(exports, module) {
     if (typeof process === "undefined" || process.type === "renderer" || process.browser === true || process.__nwjs) {
       module.exports = require_browser();
     } else {
@@ -40524,9 +39590,9 @@ var require_json_bigint = __commonJS({
   }
 });
 
-// node_modules/firebase-admin/node_modules/gcp-metadata/build/src/gcp-residency.js
+// node_modules/firebase-admin/node_modules/google-auth-library/node_modules/gcp-metadata/build/src/gcp-residency.js
 var require_gcp_residency = __commonJS({
-  "node_modules/firebase-admin/node_modules/gcp-metadata/build/src/gcp-residency.js"(exports) {
+  "node_modules/firebase-admin/node_modules/google-auth-library/node_modules/gcp-metadata/build/src/gcp-residency.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.GCE_LINUX_BIOS_PATHS = void 0;
@@ -40584,9 +39650,9 @@ var require_gcp_residency = __commonJS({
   }
 });
 
-// node_modules/firebase-admin/node_modules/google-logging-utils/build/src/colours.js
+// node_modules/firebase-admin/node_modules/google-auth-library/node_modules/google-logging-utils/build/src/colours.js
 var require_colours = __commonJS({
-  "node_modules/firebase-admin/node_modules/google-logging-utils/build/src/colours.js"(exports) {
+  "node_modules/firebase-admin/node_modules/google-auth-library/node_modules/google-logging-utils/build/src/colours.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.Colours = void 0;
@@ -40645,9 +39711,9 @@ var require_colours = __commonJS({
   }
 });
 
-// node_modules/firebase-admin/node_modules/google-logging-utils/build/src/types.js
+// node_modules/firebase-admin/node_modules/google-auth-library/node_modules/google-logging-utils/build/src/types.js
 var require_types = __commonJS({
-  "node_modules/firebase-admin/node_modules/google-logging-utils/build/src/types.js"(exports) {
+  "node_modules/firebase-admin/node_modules/google-auth-library/node_modules/google-logging-utils/build/src/types.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.LogSeverity = void 0;
@@ -40662,9 +39728,9 @@ var require_types = __commonJS({
   }
 });
 
-// node_modules/firebase-admin/node_modules/google-logging-utils/build/src/logging-utils.js
+// node_modules/firebase-admin/node_modules/google-auth-library/node_modules/google-logging-utils/build/src/logging-utils.js
 var require_logging_utils = __commonJS({
-  "node_modules/firebase-admin/node_modules/google-logging-utils/build/src/logging-utils.js"(exports) {
+  "node_modules/firebase-admin/node_modules/google-auth-library/node_modules/google-logging-utils/build/src/logging-utils.js"(exports) {
     "use strict";
     var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m2, k, k2) {
       if (k2 === void 0) k2 = k;
@@ -40945,9 +40011,9 @@ var require_logging_utils = __commonJS({
   }
 });
 
-// node_modules/firebase-admin/node_modules/google-logging-utils/build/src/index.js
+// node_modules/firebase-admin/node_modules/google-auth-library/node_modules/google-logging-utils/build/src/index.js
 var require_src3 = __commonJS({
-  "node_modules/firebase-admin/node_modules/google-logging-utils/build/src/index.js"(exports) {
+  "node_modules/firebase-admin/node_modules/google-auth-library/node_modules/google-logging-utils/build/src/index.js"(exports) {
     "use strict";
     var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m2, k, k2) {
       if (k2 === void 0) k2 = k;
@@ -40970,9 +40036,9 @@ var require_src3 = __commonJS({
   }
 });
 
-// node_modules/firebase-admin/node_modules/gcp-metadata/build/src/index.js
+// node_modules/firebase-admin/node_modules/google-auth-library/node_modules/gcp-metadata/build/src/index.js
 var require_src4 = __commonJS({
-  "node_modules/firebase-admin/node_modules/gcp-metadata/build/src/index.js"(exports) {
+  "node_modules/firebase-admin/node_modules/google-auth-library/node_modules/gcp-metadata/build/src/index.js"(exports) {
     "use strict";
     var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m2, k, k2) {
       if (k2 === void 0) k2 = k;
@@ -50123,9 +49189,9 @@ var require_protos = __commonJS({
   }
 });
 
-// node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/constants.js
+// node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/constants.js
 var require_constants = __commonJS({
-  "node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/constants.js"(exports) {
+  "node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/constants.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.DEFAULT_MAX_RECEIVE_MESSAGE_LENGTH = exports.DEFAULT_MAX_SEND_MESSAGE_LENGTH = exports.Propagate = exports.LogVerbosity = exports.Status = void 0;
@@ -50169,9 +49235,9 @@ var require_constants = __commonJS({
   }
 });
 
-// node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/package.json
+// node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/package.json
 var require_package4 = __commonJS({
-  "node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/package.json"(exports, module) {
+  "node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/package.json"(exports, module) {
     module.exports = {
       name: "@grpc/grpc-js",
       version: "1.14.5",
@@ -50264,9 +49330,9 @@ var require_package4 = __commonJS({
   }
 });
 
-// node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/logging.js
+// node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/logging.js
 var require_logging = __commonJS({
-  "node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/logging.js"(exports) {
+  "node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/logging.js"(exports) {
     "use strict";
     var _a5;
     var _b;
@@ -50372,9 +49438,9 @@ var require_logging = __commonJS({
   }
 });
 
-// node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/error.js
+// node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/error.js
 var require_error4 = __commonJS({
-  "node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/error.js"(exports) {
+  "node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/error.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.getErrorMessage = getErrorMessage;
@@ -50396,9 +49462,9 @@ var require_error4 = __commonJS({
   }
 });
 
-// node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/metadata.js
+// node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/metadata.js
 var require_metadata = __commonJS({
-  "node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/metadata.js"(exports) {
+  "node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/metadata.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.Metadata = void 0;
@@ -50640,9 +49706,9 @@ var require_metadata = __commonJS({
   }
 });
 
-// node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/call-credentials.js
+// node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/call-credentials.js
 var require_call_credentials = __commonJS({
-  "node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/call-credentials.js"(exports) {
+  "node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/call-credentials.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.CallCredentials = void 0;
@@ -50773,9 +49839,9 @@ var require_call_credentials = __commonJS({
   }
 });
 
-// node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/tls-helpers.js
+// node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/tls-helpers.js
 var require_tls_helpers = __commonJS({
-  "node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/tls-helpers.js"(exports) {
+  "node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/tls-helpers.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.CIPHER_SUITES = void 0;
@@ -50796,9 +49862,9 @@ var require_tls_helpers = __commonJS({
   }
 });
 
-// node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/uri-parser.js
+// node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/uri-parser.js
 var require_uri_parser = __commonJS({
-  "node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/uri-parser.js"(exports) {
+  "node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/uri-parser.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.parseUri = parseUri;
@@ -50890,9 +49956,9 @@ var require_uri_parser = __commonJS({
   }
 });
 
-// node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/resolver.js
+// node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/resolver.js
 var require_resolver = __commonJS({
-  "node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/resolver.js"(exports) {
+  "node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/resolver.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.CHANNEL_ARGS_CONFIG_SELECTOR_KEY = void 0;
@@ -50942,9 +50008,9 @@ var require_resolver = __commonJS({
   }
 });
 
-// node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/channel-credentials.js
+// node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/channel-credentials.js
 var require_channel_credentials = __commonJS({
-  "node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/channel-credentials.js"(exports) {
+  "node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/channel-credentials.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.ChannelCredentials = void 0;
@@ -51338,9 +50404,9 @@ var require_channel_credentials = __commonJS({
   }
 });
 
-// node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/load-balancer.js
+// node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/load-balancer.js
 var require_load_balancer = __commonJS({
-  "node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/load-balancer.js"(exports) {
+  "node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/load-balancer.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.createChildChannelControlHelper = createChildChannelControlHelper;
@@ -51429,9 +50495,9 @@ var require_load_balancer = __commonJS({
   }
 });
 
-// node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/service-config.js
+// node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/service-config.js
 var require_service_config = __commonJS({
-  "node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/service-config.js"(exports) {
+  "node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/service-config.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.validateRetryThrottling = validateRetryThrottling;
@@ -51772,9 +50838,9 @@ var require_service_config = __commonJS({
   }
 });
 
-// node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/connectivity-state.js
+// node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/connectivity-state.js
 var require_connectivity_state = __commonJS({
-  "node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/connectivity-state.js"(exports) {
+  "node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/connectivity-state.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.ConnectivityState = void 0;
@@ -51789,9 +50855,9 @@ var require_connectivity_state = __commonJS({
   }
 });
 
-// node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/picker.js
+// node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/picker.js
 var require_picker = __commonJS({
-  "node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/picker.js"(exports) {
+  "node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/picker.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.QueuePicker = exports.UnavailablePicker = exports.PickResultType = void 0;
@@ -51850,9 +50916,9 @@ var require_picker = __commonJS({
   }
 });
 
-// node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/backoff-timeout.js
+// node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/backoff-timeout.js
 var require_backoff_timeout = __commonJS({
-  "node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/backoff-timeout.js"(exports) {
+  "node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/backoff-timeout.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.BackoffTimeout = void 0;
@@ -52007,9 +51073,9 @@ var require_backoff_timeout = __commonJS({
   }
 });
 
-// node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/load-balancer-child-handler.js
+// node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/load-balancer-child-handler.js
 var require_load_balancer_child_handler = __commonJS({
-  "node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/load-balancer-child-handler.js"(exports) {
+  "node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/load-balancer-child-handler.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.ChildLoadBalancerHandler = void 0;
@@ -52137,9 +51203,9 @@ var require_load_balancer_child_handler = __commonJS({
   }
 });
 
-// node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/resolving-load-balancer.js
+// node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/resolving-load-balancer.js
 var require_resolving_load_balancer = __commonJS({
-  "node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/resolving-load-balancer.js"(exports) {
+  "node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/resolving-load-balancer.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.ResolvingLoadBalancer = void 0;
@@ -52386,9 +51452,9 @@ var require_resolving_load_balancer = __commonJS({
   }
 });
 
-// node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/channel-options.js
+// node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/channel-options.js
 var require_channel_options = __commonJS({
-  "node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/channel-options.js"(exports) {
+  "node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/channel-options.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.recognizedOptions = void 0;
@@ -52444,9 +51510,9 @@ var require_channel_options = __commonJS({
   }
 });
 
-// node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/subchannel-address.js
+// node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/subchannel-address.js
 var require_subchannel_address = __commonJS({
-  "node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/subchannel-address.js"(exports) {
+  "node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/subchannel-address.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.EndpointMap = void 0;
@@ -53423,9 +52489,9 @@ var require_cjs = __commonJS({
   }
 });
 
-// node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/admin.js
+// node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/admin.js
 var require_admin = __commonJS({
-  "node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/admin.js"(exports) {
+  "node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/admin.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.registerAdminService = registerAdminService;
@@ -53442,9 +52508,9 @@ var require_admin = __commonJS({
   }
 });
 
-// node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/call.js
+// node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/call.js
 var require_call = __commonJS({
-  "node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/call.js"(exports) {
+  "node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/call.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.ClientDuplexStreamImpl = exports.ClientWritableStreamImpl = exports.ClientReadableStreamImpl = exports.ClientUnaryCallImpl = void 0;
@@ -53579,9 +52645,9 @@ ${callerStack}`;
   }
 });
 
-// node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/call-interface.js
+// node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/call-interface.js
 var require_call_interface = __commonJS({
-  "node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/call-interface.js"(exports) {
+  "node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/call-interface.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.InterceptingListenerImpl = void 0;
@@ -53663,9 +52729,9 @@ var require_call_interface = __commonJS({
   }
 });
 
-// node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/client-interceptors.js
+// node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/client-interceptors.js
 var require_client_interceptors = __commonJS({
-  "node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/client-interceptors.js"(exports) {
+  "node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/client-interceptors.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.InterceptingCall = exports.RequesterBuilder = exports.ListenerBuilder = exports.InterceptorConfigurationError = void 0;
@@ -54016,9 +53082,9 @@ var require_client_interceptors = __commonJS({
   }
 });
 
-// node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/client.js
+// node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/client.js
 var require_client = __commonJS({
-  "node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/client.js"(exports) {
+  "node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/client.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.Client = void 0;
@@ -54390,9 +53456,9 @@ var require_client = __commonJS({
   }
 });
 
-// node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/make-client.js
+// node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/make-client.js
 var require_make_client = __commonJS({
-  "node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/make-client.js"(exports) {
+  "node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/make-client.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.makeClientConstructor = makeClientConstructor;
@@ -63771,9 +62837,9 @@ var require_type2 = __commonJS({
   }
 });
 
-// node_modules/@google-cloud/firestore-api/node_modules/@grpc/proto-loader/build/src/util.js
+// node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/proto-loader/build/src/util.js
 var require_util4 = __commonJS({
-  "node_modules/@google-cloud/firestore-api/node_modules/@grpc/proto-loader/build/src/util.js"(exports) {
+  "node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/proto-loader/build/src/util.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.addCommonProtos = exports.loadProtosWithOptionsSync = exports.loadProtosWithOptions = void 0;
@@ -63841,9 +62907,9 @@ var require_util4 = __commonJS({
   }
 });
 
-// node_modules/@google-cloud/firestore-api/node_modules/@grpc/proto-loader/build/src/index.js
+// node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/proto-loader/build/src/index.js
 var require_src7 = __commonJS({
-  "node_modules/@google-cloud/firestore-api/node_modules/@grpc/proto-loader/build/src/index.js"(exports) {
+  "node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/proto-loader/build/src/index.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.loadFileDescriptorSetFromObject = exports.loadFileDescriptorSetFromBuffer = exports.fromJSON = exports.loadSync = exports.load = exports.IdempotencyLevel = exports.isAnyExtension = exports.Long = void 0;
@@ -64031,9 +63097,9 @@ var require_src7 = __commonJS({
   }
 });
 
-// node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/channelz.js
+// node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/channelz.js
 var require_channelz = __commonJS({
-  "node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/channelz.js"(exports) {
+  "node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/channelz.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.registerChannelzSocket = exports.registerChannelzServer = exports.registerChannelzSubchannel = exports.registerChannelzChannel = exports.ChannelzCallTrackerStub = exports.ChannelzCallTracker = exports.ChannelzChildrenTrackerStub = exports.ChannelzChildrenTracker = exports.ChannelzTrace = exports.ChannelzTraceStub = void 0;
@@ -64615,9 +63681,9 @@ var require_channelz = __commonJS({
   }
 });
 
-// node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/call-number.js
+// node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/call-number.js
 var require_call_number = __commonJS({
-  "node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/call-number.js"(exports) {
+  "node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/call-number.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.getNextCallNumber = getNextCallNumber;
@@ -64628,9 +63694,9 @@ var require_call_number = __commonJS({
   }
 });
 
-// node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/compression-algorithms.js
+// node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/compression-algorithms.js
 var require_compression_algorithms = __commonJS({
-  "node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/compression-algorithms.js"(exports) {
+  "node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/compression-algorithms.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.CompressionAlgorithms = void 0;
@@ -64643,9 +63709,9 @@ var require_compression_algorithms = __commonJS({
   }
 });
 
-// node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/filter.js
+// node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/filter.js
 var require_filter = __commonJS({
-  "node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/filter.js"(exports) {
+  "node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/filter.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.BaseFilter = void 0;
@@ -64670,9 +63736,9 @@ var require_filter = __commonJS({
   }
 });
 
-// node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/compression-filter.js
+// node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/compression-filter.js
 var require_compression_filter = __commonJS({
-  "node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/compression-filter.js"(exports) {
+  "node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/compression-filter.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.CompressionFilterFactory = exports.CompressionFilter = void 0;
@@ -64939,9 +64005,9 @@ var require_compression_filter = __commonJS({
   }
 });
 
-// node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/control-plane-status.js
+// node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/control-plane-status.js
 var require_control_plane_status = __commonJS({
-  "node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/control-plane-status.js"(exports) {
+  "node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/control-plane-status.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.restrictControlPlaneStatusCode = restrictControlPlaneStatusCode;
@@ -64969,9 +64035,9 @@ var require_control_plane_status = __commonJS({
   }
 });
 
-// node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/deadline.js
+// node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/deadline.js
 var require_deadline = __commonJS({
-  "node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/deadline.js"(exports) {
+  "node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/deadline.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.minDeadline = minDeadline;
@@ -65040,9 +64106,9 @@ var require_deadline = __commonJS({
   }
 });
 
-// node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/filter-stack.js
+// node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/filter-stack.js
 var require_filter_stack = __commonJS({
-  "node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/filter-stack.js"(exports) {
+  "node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/filter-stack.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.FilterStackFactory = exports.FilterStack = void 0;
@@ -65111,9 +64177,9 @@ var require_filter_stack = __commonJS({
   }
 });
 
-// node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/single-subchannel-channel.js
+// node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/single-subchannel-channel.js
 var require_single_subchannel_channel = __commonJS({
-  "node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/single-subchannel-channel.js"(exports) {
+  "node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/single-subchannel-channel.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.SingleSubchannelChannel = void 0;
@@ -65331,9 +64397,9 @@ var require_single_subchannel_channel = __commonJS({
   }
 });
 
-// node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/subchannel.js
+// node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/subchannel.js
 var require_subchannel = __commonJS({
-  "node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/subchannel.js"(exports) {
+  "node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/subchannel.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.Subchannel = void 0;
@@ -65677,9 +64743,9 @@ var require_subchannel = __commonJS({
   }
 });
 
-// node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/environment.js
+// node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/environment.js
 var require_environment = __commonJS({
-  "node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/environment.js"(exports) {
+  "node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/environment.js"(exports) {
     "use strict";
     var _a5;
     var _b;
@@ -65690,9 +64756,9 @@ var require_environment = __commonJS({
   }
 });
 
-// node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/resolver-dns.js
+// node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/resolver-dns.js
 var require_resolver_dns = __commonJS({
-  "node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/resolver-dns.js"(exports) {
+  "node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/resolver-dns.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.DEFAULT_PORT = void 0;
@@ -65978,9 +65044,9 @@ var require_resolver_dns = __commonJS({
   }
 });
 
-// node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/http_proxy.js
+// node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/http_proxy.js
 var require_http_proxy = __commonJS({
-  "node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/http_proxy.js"(exports) {
+  "node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/http_proxy.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.parseCIDR = parseCIDR;
@@ -66197,9 +65263,9 @@ var require_http_proxy = __commonJS({
   }
 });
 
-// node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/stream-decoder.js
+// node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/stream-decoder.js
 var require_stream_decoder = __commonJS({
-  "node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/stream-decoder.js"(exports) {
+  "node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/stream-decoder.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.StreamDecoder = void 0;
@@ -66282,9 +65348,9 @@ var require_stream_decoder = __commonJS({
   }
 });
 
-// node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/subchannel-call.js
+// node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/subchannel-call.js
 var require_subchannel_call = __commonJS({
-  "node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/subchannel-call.js"(exports) {
+  "node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/subchannel-call.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.Http2SubchannelCall = void 0;
@@ -66728,9 +65794,9 @@ var require_subchannel_call = __commonJS({
   }
 });
 
-// node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/transport.js
+// node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/transport.js
 var require_transport = __commonJS({
-  "node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/transport.js"(exports) {
+  "node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/transport.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.Http2SubchannelConnector = void 0;
@@ -67306,9 +66372,9 @@ var require_transport = __commonJS({
   }
 });
 
-// node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/subchannel-pool.js
+// node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/subchannel-pool.js
 var require_subchannel_pool = __commonJS({
-  "node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/subchannel-pool.js"(exports) {
+  "node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/subchannel-pool.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.SubchannelPool = void 0;
@@ -67404,9 +66470,9 @@ var require_subchannel_pool = __commonJS({
   }
 });
 
-// node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/load-balancing-call.js
+// node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/load-balancing-call.js
 var require_load_balancing_call = __commonJS({
-  "node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/load-balancing-call.js"(exports) {
+  "node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/load-balancing-call.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.LoadBalancingCall = void 0;
@@ -67669,9 +66735,9 @@ var require_load_balancing_call = __commonJS({
   }
 });
 
-// node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/resolving-call.js
+// node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/resolving-call.js
 var require_resolving_call = __commonJS({
-  "node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/resolving-call.js"(exports) {
+  "node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/resolving-call.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.ResolvingCall = void 0;
@@ -67974,9 +67040,9 @@ var require_resolving_call = __commonJS({
   }
 });
 
-// node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/retrying-call.js
+// node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/retrying-call.js
 var require_retrying_call = __commonJS({
-  "node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/retrying-call.js"(exports) {
+  "node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/retrying-call.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.RetryingCall = exports.MessageBufferTracker = exports.RetryThrottler = void 0;
@@ -68629,9 +67695,9 @@ var require_retrying_call = __commonJS({
   }
 });
 
-// node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/subchannel-interface.js
+// node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/subchannel-interface.js
 var require_subchannel_interface = __commonJS({
-  "node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/subchannel-interface.js"(exports) {
+  "node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/subchannel-interface.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.BaseSubchannelWrapper = void 0;
@@ -68728,9 +67794,9 @@ var require_subchannel_interface = __commonJS({
   }
 });
 
-// node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/internal-channel.js
+// node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/internal-channel.js
 var require_internal_channel = __commonJS({
-  "node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/internal-channel.js"(exports) {
+  "node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/internal-channel.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.InternalChannel = exports.SUBCHANNEL_ARGS_EXCLUDE_KEY_PREFIX = void 0;
@@ -69265,9 +68331,9 @@ var require_internal_channel = __commonJS({
   }
 });
 
-// node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/channel.js
+// node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/channel.js
 var require_channel = __commonJS({
-  "node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/channel.js"(exports) {
+  "node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/channel.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.ChannelImplementation = void 0;
@@ -69322,9 +68388,9 @@ var require_channel = __commonJS({
   }
 });
 
-// node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/server-call.js
+// node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/server-call.js
 var require_server_call = __commonJS({
-  "node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/server-call.js"(exports) {
+  "node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/server-call.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.ServerDuplexStreamImpl = exports.ServerWritableStreamImpl = exports.ServerReadableStreamImpl = exports.ServerUnaryCallImpl = void 0;
@@ -69531,9 +68597,9 @@ var require_server_call = __commonJS({
   }
 });
 
-// node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/server-credentials.js
+// node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/server-credentials.js
 var require_server_credentials = __commonJS({
-  "node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/server-credentials.js"(exports) {
+  "node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/server-credentials.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.ServerCredentials = void 0;
@@ -69821,9 +68887,9 @@ var require_server_credentials = __commonJS({
   }
 });
 
-// node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/duration.js
+// node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/duration.js
 var require_duration = __commonJS({
-  "node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/duration.js"(exports) {
+  "node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/duration.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.durationMessageToDuration = durationMessageToDuration;
@@ -69882,9 +68948,9 @@ var require_duration = __commonJS({
   }
 });
 
-// node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/orca.js
+// node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/orca.js
 var require_orca = __commonJS({
-  "node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/orca.js"(exports) {
+  "node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/orca.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.OrcaOobMetricsSubchannelWrapper = exports.GRPC_METRICS_HEADER = exports.ServerMetricRecorder = exports.PerRequestMetricRecorder = void 0;
@@ -70177,9 +69243,9 @@ var require_orca = __commonJS({
   }
 });
 
-// node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/server-interceptors.js
+// node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/server-interceptors.js
 var require_server_interceptors = __commonJS({
-  "node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/server-interceptors.js"(exports) {
+  "node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/server-interceptors.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.BaseServerInterceptingCall = exports.ServerInterceptingCall = exports.ResponderBuilder = exports.ServerListenerBuilder = void 0;
@@ -70931,9 +69997,9 @@ var require_server_interceptors = __commonJS({
   }
 });
 
-// node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/server.js
+// node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/server.js
 var require_server = __commonJS({
-  "node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/server.js"(exports) {
+  "node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/server.js"(exports) {
     "use strict";
     var __runInitializers = exports && exports.__runInitializers || function(thisArg, initializers, value) {
       var useValue = arguments.length > 2;
@@ -72406,9 +71472,9 @@ var require_server = __commonJS({
   }
 });
 
-// node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/status-builder.js
+// node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/status-builder.js
 var require_status_builder = __commonJS({
-  "node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/status-builder.js"(exports) {
+  "node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/status-builder.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.StatusBuilder = void 0;
@@ -72460,9 +71526,9 @@ var require_status_builder = __commonJS({
   }
 });
 
-// node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/load-balancer-pick-first.js
+// node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/load-balancer-pick-first.js
 var require_load_balancer_pick_first = __commonJS({
-  "node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/load-balancer-pick-first.js"(exports) {
+  "node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/load-balancer-pick-first.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.LeafLoadBalancer = exports.PickFirstLoadBalancer = exports.PickFirstLoadBalancingConfig = void 0;
@@ -72879,9 +71945,9 @@ var require_load_balancer_pick_first = __commonJS({
   }
 });
 
-// node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/certificate-provider.js
+// node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/certificate-provider.js
 var require_certificate_provider = __commonJS({
-  "node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/certificate-provider.js"(exports) {
+  "node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/certificate-provider.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.FileWatcherCertificateProvider = void 0;
@@ -73002,9 +72068,9 @@ var require_certificate_provider = __commonJS({
   }
 });
 
-// node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/experimental.js
+// node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/experimental.js
 var require_experimental = __commonJS({
-  "node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/experimental.js"(exports) {
+  "node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/experimental.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.SUBCHANNEL_ARGS_EXCLUDE_KEY_PREFIX = exports.createCertificateProviderChannelCredentials = exports.FileWatcherCertificateProvider = exports.createCertificateProviderServerCredentials = exports.createServerCredentialsWithInterceptors = exports.BaseSubchannelWrapper = exports.registerAdminService = exports.FilterStackFactory = exports.BaseFilter = exports.statusOrFromError = exports.statusOrFromValue = exports.PickResultType = exports.QueuePicker = exports.UnavailablePicker = exports.ChildLoadBalancerHandler = exports.EndpointMap = exports.endpointHasAddress = exports.endpointToString = exports.subchannelAddressToString = exports.LeafLoadBalancer = exports.isLoadBalancerNameRegistered = exports.parseLoadBalancingConfig = exports.selectLbConfigFromList = exports.registerLoadBalancerType = exports.createChildChannelControlHelper = exports.BackoffTimeout = exports.parseDuration = exports.durationToMs = exports.splitHostPort = exports.uriToString = exports.CHANNEL_ARGS_CONFIG_SELECTOR_KEY = exports.createResolver = exports.registerResolver = exports.log = exports.trace = void 0;
@@ -73135,9 +72201,9 @@ var require_experimental = __commonJS({
   }
 });
 
-// node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/resolver-uds.js
+// node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/resolver-uds.js
 var require_resolver_uds = __commonJS({
-  "node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/resolver-uds.js"(exports) {
+  "node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/resolver-uds.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.setup = setup;
@@ -73175,9 +72241,9 @@ var require_resolver_uds = __commonJS({
   }
 });
 
-// node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/resolver-ip.js
+// node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/resolver-ip.js
 var require_resolver_ip = __commonJS({
-  "node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/resolver-ip.js"(exports) {
+  "node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/resolver-ip.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.setup = setup;
@@ -73266,9 +72332,9 @@ var require_resolver_ip = __commonJS({
   }
 });
 
-// node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/load-balancer-round-robin.js
+// node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/load-balancer-round-robin.js
 var require_load_balancer_round_robin = __commonJS({
-  "node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/load-balancer-round-robin.js"(exports) {
+  "node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/load-balancer-round-robin.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.RoundRobinLoadBalancer = void 0;
@@ -73441,9 +72507,9 @@ var require_load_balancer_round_robin = __commonJS({
   }
 });
 
-// node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/load-balancer-outlier-detection.js
+// node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/load-balancer-outlier-detection.js
 var require_load_balancer_outlier_detection = __commonJS({
-  "node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/load-balancer-outlier-detection.js"(exports) {
+  "node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/load-balancer-outlier-detection.js"(exports) {
     "use strict";
     var _a5;
     Object.defineProperty(exports, "__esModule", { value: true });
@@ -73938,9 +73004,9 @@ var require_load_balancer_outlier_detection = __commonJS({
   }
 });
 
-// node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/priority-queue.js
+// node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/priority-queue.js
 var require_priority_queue = __commonJS({
-  "node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/priority-queue.js"(exports) {
+  "node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/priority-queue.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.PriorityQueue = void 0;
@@ -74042,9 +73108,9 @@ var require_priority_queue = __commonJS({
   }
 });
 
-// node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/load-balancer-weighted-round-robin.js
+// node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/load-balancer-weighted-round-robin.js
 var require_load_balancer_weighted_round_robin = __commonJS({
-  "node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/load-balancer-weighted-round-robin.js"(exports) {
+  "node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/load-balancer-weighted-round-robin.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.WeightedRoundRobinLoadBalancingConfig = void 0;
@@ -74394,9 +73460,9 @@ var require_load_balancer_weighted_round_robin = __commonJS({
   }
 });
 
-// node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/index.js
+// node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/index.js
 var require_src8 = __commonJS({
-  "node_modules/@google-cloud/firestore-api/node_modules/@grpc/grpc-js/build/src/index.js"(exports) {
+  "node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/@grpc/grpc-js/build/src/index.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.experimental = exports.ServerMetricRecorder = exports.ServerInterceptingCall = exports.ResponderBuilder = exports.ServerListenerBuilder = exports.addAdminServicesToServer = exports.getChannelzHandlers = exports.getChannelzServiceDefinition = exports.InterceptorConfigurationError = exports.InterceptingCall = exports.RequesterBuilder = exports.ListenerBuilder = exports.StatusBuilder = exports.getClientChannel = exports.ServerCredentials = exports.Server = exports.setLogVerbosity = exports.setLogger = exports.load = exports.loadObject = exports.CallCredentials = exports.ChannelCredentials = exports.waitForClientReady = exports.closeClient = exports.Channel = exports.makeGenericClientConstructor = exports.makeClientConstructor = exports.loadPackageDefinition = exports.Client = exports.compressionAlgorithms = exports.propagate = exports.connectivityState = exports.status = exports.logVerbosity = exports.Metadata = exports.credentials = void 0;
@@ -75262,9 +74328,9 @@ var require_src10 = __commonJS({
   }
 });
 
-// node_modules/@google-cloud/firestore-api/node_modules/google-auth-library/build/src/crypto/shared.js
+// node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/google-auth-library/build/src/crypto/shared.js
 var require_shared3 = __commonJS({
-  "node_modules/@google-cloud/firestore-api/node_modules/google-auth-library/build/src/crypto/shared.js"(exports) {
+  "node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/google-auth-library/build/src/crypto/shared.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.fromArrayBufferToHex = fromArrayBufferToHex;
@@ -75277,9 +74343,9 @@ var require_shared3 = __commonJS({
   }
 });
 
-// node_modules/@google-cloud/firestore-api/node_modules/google-auth-library/build/src/crypto/browser/crypto.js
+// node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/google-auth-library/build/src/crypto/browser/crypto.js
 var require_crypto4 = __commonJS({
-  "node_modules/@google-cloud/firestore-api/node_modules/google-auth-library/build/src/crypto/browser/crypto.js"(exports) {
+  "node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/google-auth-library/build/src/crypto/browser/crypto.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.BrowserCrypto = void 0;
@@ -75373,9 +74439,9 @@ var require_crypto4 = __commonJS({
   }
 });
 
-// node_modules/@google-cloud/firestore-api/node_modules/google-auth-library/build/src/crypto/node/crypto.js
+// node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/google-auth-library/build/src/crypto/node/crypto.js
 var require_crypto5 = __commonJS({
-  "node_modules/@google-cloud/firestore-api/node_modules/google-auth-library/build/src/crypto/node/crypto.js"(exports) {
+  "node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/google-auth-library/build/src/crypto/node/crypto.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.NodeCrypto = void 0;
@@ -75437,9 +74503,9 @@ var require_crypto5 = __commonJS({
   }
 });
 
-// node_modules/@google-cloud/firestore-api/node_modules/google-auth-library/build/src/crypto/crypto.js
+// node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/google-auth-library/build/src/crypto/crypto.js
 var require_crypto6 = __commonJS({
-  "node_modules/@google-cloud/firestore-api/node_modules/google-auth-library/build/src/crypto/crypto.js"(exports) {
+  "node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/google-auth-library/build/src/crypto/crypto.js"(exports) {
     "use strict";
     var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m2, k, k2) {
       if (k2 === void 0) k2 = k;
@@ -75475,9 +74541,9 @@ var require_crypto6 = __commonJS({
   }
 });
 
-// node_modules/@google-cloud/firestore-api/node_modules/google-auth-library/build/src/util.js
+// node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/google-auth-library/build/src/util.js
 var require_util5 = __commonJS({
-  "node_modules/@google-cloud/firestore-api/node_modules/google-auth-library/build/src/util.js"(exports) {
+  "node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/google-auth-library/build/src/util.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.LRUCache = void 0;
@@ -75590,9 +74656,9 @@ var require_util5 = __commonJS({
   }
 });
 
-// node_modules/@google-cloud/firestore-api/node_modules/google-auth-library/package.json
+// node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/google-auth-library/package.json
 var require_package5 = __commonJS({
-  "node_modules/@google-cloud/firestore-api/node_modules/google-auth-library/package.json"(exports, module) {
+  "node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/google-auth-library/package.json"(exports, module) {
     module.exports = {
       name: "google-auth-library",
       version: "10.5.0",
@@ -75684,9 +74750,9 @@ var require_package5 = __commonJS({
   }
 });
 
-// node_modules/@google-cloud/firestore-api/node_modules/google-auth-library/build/src/shared.cjs
+// node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/google-auth-library/build/src/shared.cjs
 var require_shared4 = __commonJS({
-  "node_modules/@google-cloud/firestore-api/node_modules/google-auth-library/build/src/shared.cjs"(exports) {
+  "node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/google-auth-library/build/src/shared.cjs"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.USER_AGENT = exports.PRODUCT_NAME = exports.pkg = void 0;
@@ -75699,9 +74765,9 @@ var require_shared4 = __commonJS({
   }
 });
 
-// node_modules/@google-cloud/firestore-api/node_modules/google-auth-library/build/src/auth/authclient.js
+// node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/google-auth-library/build/src/auth/authclient.js
 var require_authclient2 = __commonJS({
-  "node_modules/@google-cloud/firestore-api/node_modules/google-auth-library/build/src/auth/authclient.js"(exports) {
+  "node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/google-auth-library/build/src/auth/authclient.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.AuthClient = exports.DEFAULT_EAGER_REFRESH_THRESHOLD_MILLIS = exports.DEFAULT_UNIVERSE = void 0;
@@ -75934,9 +75000,9 @@ var require_authclient2 = __commonJS({
   }
 });
 
-// node_modules/@google-cloud/firestore-api/node_modules/google-auth-library/build/src/auth/loginticket.js
+// node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/google-auth-library/build/src/auth/loginticket.js
 var require_loginticket2 = __commonJS({
-  "node_modules/@google-cloud/firestore-api/node_modules/google-auth-library/build/src/auth/loginticket.js"(exports) {
+  "node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/google-auth-library/build/src/auth/loginticket.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.LoginTicket = void 0;
@@ -75986,9 +75052,9 @@ var require_loginticket2 = __commonJS({
   }
 });
 
-// node_modules/@google-cloud/firestore-api/node_modules/google-auth-library/build/src/auth/oauth2client.js
+// node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/google-auth-library/build/src/auth/oauth2client.js
 var require_oauth2client2 = __commonJS({
-  "node_modules/@google-cloud/firestore-api/node_modules/google-auth-library/build/src/auth/oauth2client.js"(exports) {
+  "node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/google-auth-library/build/src/auth/oauth2client.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.OAuth2Client = exports.ClientAuthentication = exports.CertificateFormat = exports.CodeChallengeMethod = void 0;
@@ -76667,9 +75733,9 @@ var require_oauth2client2 = __commonJS({
   }
 });
 
-// node_modules/@google-cloud/firestore-api/node_modules/google-auth-library/build/src/auth/computeclient.js
+// node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/google-auth-library/build/src/auth/computeclient.js
 var require_computeclient2 = __commonJS({
-  "node_modules/@google-cloud/firestore-api/node_modules/google-auth-library/build/src/auth/computeclient.js"(exports) {
+  "node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/google-auth-library/build/src/auth/computeclient.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.Compute = void 0;
@@ -76759,9 +75825,9 @@ var require_computeclient2 = __commonJS({
   }
 });
 
-// node_modules/@google-cloud/firestore-api/node_modules/google-auth-library/build/src/auth/idtokenclient.js
+// node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/google-auth-library/build/src/auth/idtokenclient.js
 var require_idtokenclient2 = __commonJS({
-  "node_modules/@google-cloud/firestore-api/node_modules/google-auth-library/build/src/auth/idtokenclient.js"(exports) {
+  "node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/google-auth-library/build/src/auth/idtokenclient.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.IdTokenClient = void 0;
@@ -76805,9 +75871,9 @@ var require_idtokenclient2 = __commonJS({
   }
 });
 
-// node_modules/@google-cloud/firestore-api/node_modules/google-auth-library/build/src/auth/envDetect.js
+// node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/google-auth-library/build/src/auth/envDetect.js
 var require_envDetect2 = __commonJS({
-  "node_modules/@google-cloud/firestore-api/node_modules/google-auth-library/build/src/auth/envDetect.js"(exports) {
+  "node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/google-auth-library/build/src/auth/envDetect.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.GCPEnv = void 0;
@@ -76882,9 +75948,9 @@ var require_envDetect2 = __commonJS({
   }
 });
 
-// node_modules/gtoken/build/cjs/src/index.cjs
+// node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/google-auth-library/node_modules/gtoken/build/cjs/src/index.cjs
 var require_src11 = __commonJS({
-  "node_modules/gtoken/build/cjs/src/index.cjs"(exports) {
+  "node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/google-auth-library/node_modules/gtoken/build/cjs/src/index.cjs"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", {
       value: true
@@ -77521,9 +76587,9 @@ var require_src11 = __commonJS({
   }
 });
 
-// node_modules/@google-cloud/firestore-api/node_modules/google-auth-library/build/src/auth/jwtaccess.js
+// node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/google-auth-library/build/src/auth/jwtaccess.js
 var require_jwtaccess2 = __commonJS({
-  "node_modules/@google-cloud/firestore-api/node_modules/google-auth-library/build/src/auth/jwtaccess.js"(exports) {
+  "node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/google-auth-library/build/src/auth/jwtaccess.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.JWTAccess = void 0;
@@ -77691,9 +76757,9 @@ var require_jwtaccess2 = __commonJS({
   }
 });
 
-// node_modules/@google-cloud/firestore-api/node_modules/google-auth-library/build/src/auth/jwtclient.js
+// node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/google-auth-library/build/src/auth/jwtclient.js
 var require_jwtclient2 = __commonJS({
-  "node_modules/@google-cloud/firestore-api/node_modules/google-auth-library/build/src/auth/jwtclient.js"(exports) {
+  "node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/google-auth-library/build/src/auth/jwtclient.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.JWT = void 0;
@@ -77962,9 +77028,9 @@ var require_jwtclient2 = __commonJS({
   }
 });
 
-// node_modules/@google-cloud/firestore-api/node_modules/google-auth-library/build/src/auth/refreshclient.js
+// node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/google-auth-library/build/src/auth/refreshclient.js
 var require_refreshclient2 = __commonJS({
-  "node_modules/@google-cloud/firestore-api/node_modules/google-auth-library/build/src/auth/refreshclient.js"(exports) {
+  "node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/google-auth-library/build/src/auth/refreshclient.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.UserRefreshClient = exports.USER_REFRESH_ACCOUNT_TYPE = void 0;
@@ -78089,9 +77155,9 @@ var require_refreshclient2 = __commonJS({
   }
 });
 
-// node_modules/@google-cloud/firestore-api/node_modules/google-auth-library/build/src/auth/impersonated.js
+// node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/google-auth-library/build/src/auth/impersonated.js
 var require_impersonated2 = __commonJS({
-  "node_modules/@google-cloud/firestore-api/node_modules/google-auth-library/build/src/auth/impersonated.js"(exports) {
+  "node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/google-auth-library/build/src/auth/impersonated.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.Impersonated = exports.IMPERSONATED_ACCOUNT_TYPE = void 0;
@@ -78268,9 +77334,9 @@ var require_impersonated2 = __commonJS({
   }
 });
 
-// node_modules/@google-cloud/firestore-api/node_modules/google-auth-library/build/src/auth/oauth2common.js
+// node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/google-auth-library/build/src/auth/oauth2common.js
 var require_oauth2common2 = __commonJS({
-  "node_modules/@google-cloud/firestore-api/node_modules/google-auth-library/build/src/auth/oauth2common.js"(exports) {
+  "node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/google-auth-library/build/src/auth/oauth2common.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.OAuthClientAuthHandler = void 0;
@@ -78416,9 +77482,9 @@ var require_oauth2common2 = __commonJS({
   }
 });
 
-// node_modules/@google-cloud/firestore-api/node_modules/google-auth-library/build/src/auth/stscredentials.js
+// node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/google-auth-library/build/src/auth/stscredentials.js
 var require_stscredentials2 = __commonJS({
-  "node_modules/@google-cloud/firestore-api/node_modules/google-auth-library/build/src/auth/stscredentials.js"(exports) {
+  "node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/google-auth-library/build/src/auth/stscredentials.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.StsCredentials = void 0;
@@ -78503,9 +77569,9 @@ var require_stscredentials2 = __commonJS({
   }
 });
 
-// node_modules/@google-cloud/firestore-api/node_modules/google-auth-library/build/src/auth/baseexternalclient.js
+// node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/google-auth-library/build/src/auth/baseexternalclient.js
 var require_baseexternalclient2 = __commonJS({
-  "node_modules/@google-cloud/firestore-api/node_modules/google-auth-library/build/src/auth/baseexternalclient.js"(exports) {
+  "node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/google-auth-library/build/src/auth/baseexternalclient.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.BaseExternalAccountClient = exports.CLOUD_RESOURCE_MANAGER = exports.EXTERNAL_ACCOUNT_TYPE = exports.EXPIRATION_TIME_OFFSET = void 0;
@@ -78880,9 +77946,9 @@ var require_baseexternalclient2 = __commonJS({
   }
 });
 
-// node_modules/@google-cloud/firestore-api/node_modules/google-auth-library/build/src/auth/filesubjecttokensupplier.js
+// node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/google-auth-library/build/src/auth/filesubjecttokensupplier.js
 var require_filesubjecttokensupplier2 = __commonJS({
-  "node_modules/@google-cloud/firestore-api/node_modules/google-auth-library/build/src/auth/filesubjecttokensupplier.js"(exports) {
+  "node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/google-auth-library/build/src/auth/filesubjecttokensupplier.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.FileSubjectTokenSupplier = void 0;
@@ -78945,9 +78011,9 @@ var require_filesubjecttokensupplier2 = __commonJS({
   }
 });
 
-// node_modules/@google-cloud/firestore-api/node_modules/google-auth-library/build/src/auth/urlsubjecttokensupplier.js
+// node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/google-auth-library/build/src/auth/urlsubjecttokensupplier.js
 var require_urlsubjecttokensupplier2 = __commonJS({
-  "node_modules/@google-cloud/firestore-api/node_modules/google-auth-library/build/src/auth/urlsubjecttokensupplier.js"(exports) {
+  "node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/google-auth-library/build/src/auth/urlsubjecttokensupplier.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.UrlSubjectTokenSupplier = void 0;
@@ -79002,9 +78068,9 @@ var require_urlsubjecttokensupplier2 = __commonJS({
   }
 });
 
-// node_modules/@google-cloud/firestore-api/node_modules/google-auth-library/build/src/auth/certificatesubjecttokensupplier.js
+// node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/google-auth-library/build/src/auth/certificatesubjecttokensupplier.js
 var require_certificatesubjecttokensupplier2 = __commonJS({
-  "node_modules/@google-cloud/firestore-api/node_modules/google-auth-library/build/src/auth/certificatesubjecttokensupplier.js"(exports) {
+  "node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/google-auth-library/build/src/auth/certificatesubjecttokensupplier.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.CertificateSubjectTokenSupplier = exports.InvalidConfigurationError = exports.CertificateSourceUnavailableError = exports.CERTIFICATE_CONFIGURATION_ENV_VARIABLE = void 0;
@@ -79186,9 +78252,9 @@ var require_certificatesubjecttokensupplier2 = __commonJS({
   }
 });
 
-// node_modules/@google-cloud/firestore-api/node_modules/google-auth-library/build/src/auth/identitypoolclient.js
+// node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/google-auth-library/build/src/auth/identitypoolclient.js
 var require_identitypoolclient2 = __commonJS({
-  "node_modules/@google-cloud/firestore-api/node_modules/google-auth-library/build/src/auth/identitypoolclient.js"(exports) {
+  "node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/google-auth-library/build/src/auth/identitypoolclient.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.IdentityPoolClient = void 0;
@@ -79298,9 +78364,9 @@ var require_identitypoolclient2 = __commonJS({
   }
 });
 
-// node_modules/@google-cloud/firestore-api/node_modules/google-auth-library/build/src/auth/awsrequestsigner.js
+// node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/google-auth-library/build/src/auth/awsrequestsigner.js
 var require_awsrequestsigner2 = __commonJS({
-  "node_modules/@google-cloud/firestore-api/node_modules/google-auth-library/build/src/auth/awsrequestsigner.js"(exports) {
+  "node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/google-auth-library/build/src/auth/awsrequestsigner.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.AwsRequestSigner = void 0;
@@ -79448,9 +78514,9 @@ ${credentialScope}
   }
 });
 
-// node_modules/@google-cloud/firestore-api/node_modules/google-auth-library/build/src/auth/defaultawssecuritycredentialssupplier.js
+// node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/google-auth-library/build/src/auth/defaultawssecuritycredentialssupplier.js
 var require_defaultawssecuritycredentialssupplier2 = __commonJS({
-  "node_modules/@google-cloud/firestore-api/node_modules/google-auth-library/build/src/auth/defaultawssecuritycredentialssupplier.js"(exports) {
+  "node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/google-auth-library/build/src/auth/defaultawssecuritycredentialssupplier.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.DefaultAwsSecurityCredentialsSupplier = void 0;
@@ -79599,9 +78665,9 @@ var require_defaultawssecuritycredentialssupplier2 = __commonJS({
   }
 });
 
-// node_modules/@google-cloud/firestore-api/node_modules/google-auth-library/build/src/auth/awsclient.js
+// node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/google-auth-library/build/src/auth/awsclient.js
 var require_awsclient2 = __commonJS({
-  "node_modules/@google-cloud/firestore-api/node_modules/google-auth-library/build/src/auth/awsclient.js"(exports) {
+  "node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/google-auth-library/build/src/auth/awsclient.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.AwsClient = void 0;
@@ -79713,9 +78779,9 @@ var require_awsclient2 = __commonJS({
   }
 });
 
-// node_modules/@google-cloud/firestore-api/node_modules/google-auth-library/build/src/auth/executable-response.js
+// node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/google-auth-library/build/src/auth/executable-response.js
 var require_executable_response2 = __commonJS({
-  "node_modules/@google-cloud/firestore-api/node_modules/google-auth-library/build/src/auth/executable-response.js"(exports) {
+  "node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/google-auth-library/build/src/auth/executable-response.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.InvalidSubjectTokenError = exports.InvalidMessageFieldError = exports.InvalidCodeFieldError = exports.InvalidTokenTypeFieldError = exports.InvalidExpirationTimeFieldError = exports.InvalidSuccessFieldError = exports.InvalidVersionFieldError = exports.ExecutableResponseError = exports.ExecutableResponse = void 0;
@@ -79844,9 +78910,9 @@ var require_executable_response2 = __commonJS({
   }
 });
 
-// node_modules/@google-cloud/firestore-api/node_modules/google-auth-library/build/src/auth/pluggable-auth-handler.js
+// node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/google-auth-library/build/src/auth/pluggable-auth-handler.js
 var require_pluggable_auth_handler2 = __commonJS({
-  "node_modules/@google-cloud/firestore-api/node_modules/google-auth-library/build/src/auth/pluggable-auth-handler.js"(exports) {
+  "node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/google-auth-library/build/src/auth/pluggable-auth-handler.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.PluggableAuthHandler = exports.ExecutableError = void 0;
@@ -79985,9 +79051,9 @@ var require_pluggable_auth_handler2 = __commonJS({
   }
 });
 
-// node_modules/@google-cloud/firestore-api/node_modules/google-auth-library/build/src/auth/pluggable-auth-client.js
+// node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/google-auth-library/build/src/auth/pluggable-auth-client.js
 var require_pluggable_auth_client2 = __commonJS({
-  "node_modules/@google-cloud/firestore-api/node_modules/google-auth-library/build/src/auth/pluggable-auth-client.js"(exports) {
+  "node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/google-auth-library/build/src/auth/pluggable-auth-client.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.PluggableAuthClient = exports.ExecutableError = void 0;
@@ -80112,9 +79178,9 @@ var require_pluggable_auth_client2 = __commonJS({
   }
 });
 
-// node_modules/@google-cloud/firestore-api/node_modules/google-auth-library/build/src/auth/externalclient.js
+// node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/google-auth-library/build/src/auth/externalclient.js
 var require_externalclient2 = __commonJS({
-  "node_modules/@google-cloud/firestore-api/node_modules/google-auth-library/build/src/auth/externalclient.js"(exports) {
+  "node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/google-auth-library/build/src/auth/externalclient.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.ExternalAccountClient = void 0;
@@ -80161,9 +79227,9 @@ var require_externalclient2 = __commonJS({
   }
 });
 
-// node_modules/@google-cloud/firestore-api/node_modules/google-auth-library/build/src/auth/externalAccountAuthorizedUserClient.js
+// node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/google-auth-library/build/src/auth/externalAccountAuthorizedUserClient.js
 var require_externalAccountAuthorizedUserClient2 = __commonJS({
-  "node_modules/@google-cloud/firestore-api/node_modules/google-auth-library/build/src/auth/externalAccountAuthorizedUserClient.js"(exports) {
+  "node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/google-auth-library/build/src/auth/externalAccountAuthorizedUserClient.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.ExternalAccountAuthorizedUserClient = exports.EXTERNAL_ACCOUNT_AUTHORIZED_USER_TYPE = void 0;
@@ -80347,9 +79413,9 @@ var require_externalAccountAuthorizedUserClient2 = __commonJS({
   }
 });
 
-// node_modules/@google-cloud/firestore-api/node_modules/google-auth-library/build/src/auth/googleauth.js
+// node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/google-auth-library/build/src/auth/googleauth.js
 var require_googleauth2 = __commonJS({
-  "node_modules/@google-cloud/firestore-api/node_modules/google-auth-library/build/src/auth/googleauth.js"(exports) {
+  "node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/google-auth-library/build/src/auth/googleauth.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.GoogleAuth = exports.GoogleAuthExceptionMessages = void 0;
@@ -81137,9 +80203,9 @@ var require_googleauth2 = __commonJS({
   }
 });
 
-// node_modules/@google-cloud/firestore-api/node_modules/google-auth-library/build/src/auth/iam.js
+// node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/google-auth-library/build/src/auth/iam.js
 var require_iam2 = __commonJS({
-  "node_modules/@google-cloud/firestore-api/node_modules/google-auth-library/build/src/auth/iam.js"(exports) {
+  "node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/google-auth-library/build/src/auth/iam.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.IAMAuth = void 0;
@@ -81173,9 +80239,9 @@ var require_iam2 = __commonJS({
   }
 });
 
-// node_modules/@google-cloud/firestore-api/node_modules/google-auth-library/build/src/auth/downscopedclient.js
+// node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/google-auth-library/build/src/auth/downscopedclient.js
 var require_downscopedclient2 = __commonJS({
-  "node_modules/@google-cloud/firestore-api/node_modules/google-auth-library/build/src/auth/downscopedclient.js"(exports) {
+  "node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/google-auth-library/build/src/auth/downscopedclient.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.DownscopedClient = exports.EXPIRATION_TIME_OFFSET = exports.MAX_ACCESS_BOUNDARY_RULES_COUNT = void 0;
@@ -81358,9 +80424,9 @@ var require_downscopedclient2 = __commonJS({
   }
 });
 
-// node_modules/@google-cloud/firestore-api/node_modules/google-auth-library/build/src/auth/passthrough.js
+// node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/google-auth-library/build/src/auth/passthrough.js
 var require_passthrough2 = __commonJS({
-  "node_modules/@google-cloud/firestore-api/node_modules/google-auth-library/build/src/auth/passthrough.js"(exports) {
+  "node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/google-auth-library/build/src/auth/passthrough.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.PassThroughClient = void 0;
@@ -81403,9 +80469,9 @@ var require_passthrough2 = __commonJS({
   }
 });
 
-// node_modules/@google-cloud/firestore-api/node_modules/google-auth-library/build/src/index.js
+// node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/google-auth-library/build/src/index.js
 var require_src12 = __commonJS({
-  "node_modules/@google-cloud/firestore-api/node_modules/google-auth-library/build/src/index.js"(exports) {
+  "node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/google-auth-library/build/src/index.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.GoogleAuth = exports.auth = exports.PassThroughClient = exports.ExternalAccountAuthorizedUserClient = exports.EXTERNAL_ACCOUNT_AUTHORIZED_USER_TYPE = exports.ExecutableError = exports.PluggableAuthClient = exports.DownscopedClient = exports.BaseExternalAccountClient = exports.ExternalAccountClient = exports.IdentityPoolClient = exports.AwsRequestSigner = exports.AwsClient = exports.UserRefreshClient = exports.LoginTicket = exports.ClientAuthentication = exports.OAuth2Client = exports.CodeChallengeMethod = exports.Impersonated = exports.JWT = exports.JWTAccess = exports.IdTokenClient = exports.IAMAuth = exports.GCPEnv = exports.Compute = exports.DEFAULT_UNIVERSE = exports.AuthClient = exports.gaxios = exports.gcpMetadata = void 0;
@@ -92031,9 +91097,9 @@ var require_operations = __commonJS({
   }
 });
 
-// node_modules/@google-cloud/firestore-api/node_modules/proto3-json-serializer/build/src/bytes.js
+// node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/proto3-json-serializer/build/src/bytes.js
 var require_bytes = __commonJS({
-  "node_modules/@google-cloud/firestore-api/node_modules/proto3-json-serializer/build/src/bytes.js"(exports) {
+  "node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/proto3-json-serializer/build/src/bytes.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.bytesToProto3JSON = bytesToProto3JSON;
@@ -92051,9 +91117,9 @@ var require_bytes = __commonJS({
   }
 });
 
-// node_modules/@google-cloud/firestore-api/node_modules/proto3-json-serializer/build/src/enum.js
+// node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/proto3-json-serializer/build/src/enum.js
 var require_enum2 = __commonJS({
-  "node_modules/@google-cloud/firestore-api/node_modules/proto3-json-serializer/build/src/enum.js"(exports) {
+  "node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/proto3-json-serializer/build/src/enum.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.resolveEnumValueToString = resolveEnumValueToString;
@@ -92087,9 +91153,9 @@ var require_enum2 = __commonJS({
   }
 });
 
-// node_modules/@google-cloud/firestore-api/node_modules/proto3-json-serializer/build/src/util.js
+// node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/proto3-json-serializer/build/src/util.js
 var require_util7 = __commonJS({
-  "node_modules/@google-cloud/firestore-api/node_modules/proto3-json-serializer/build/src/util.js"(exports) {
+  "node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/proto3-json-serializer/build/src/util.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.wrapperTypes = void 0;
@@ -92122,9 +91188,9 @@ var require_util7 = __commonJS({
   }
 });
 
-// node_modules/@google-cloud/firestore-api/node_modules/proto3-json-serializer/build/src/value.js
+// node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/proto3-json-serializer/build/src/value.js
 var require_value = __commonJS({
-  "node_modules/@google-cloud/firestore-api/node_modules/proto3-json-serializer/build/src/value.js"(exports) {
+  "node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/proto3-json-serializer/build/src/value.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.googleProtobufStructToProto3JSON = googleProtobufStructToProto3JSON;
@@ -92210,9 +91276,9 @@ var require_value = __commonJS({
   }
 });
 
-// node_modules/@google-cloud/firestore-api/node_modules/proto3-json-serializer/build/src/duration.js
+// node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/proto3-json-serializer/build/src/duration.js
 var require_duration2 = __commonJS({
-  "node_modules/@google-cloud/firestore-api/node_modules/proto3-json-serializer/build/src/duration.js"(exports) {
+  "node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/proto3-json-serializer/build/src/duration.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.googleProtobufDurationToProto3JSON = googleProtobufDurationToProto3JSON;
@@ -92251,9 +91317,9 @@ var require_duration2 = __commonJS({
   }
 });
 
-// node_modules/@google-cloud/firestore-api/node_modules/proto3-json-serializer/build/src/timestamp.js
+// node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/proto3-json-serializer/build/src/timestamp.js
 var require_timestamp = __commonJS({
-  "node_modules/@google-cloud/firestore-api/node_modules/proto3-json-serializer/build/src/timestamp.js"(exports) {
+  "node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/proto3-json-serializer/build/src/timestamp.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.googleProtobufTimestampToProto3JSON = googleProtobufTimestampToProto3JSON;
@@ -92292,9 +91358,9 @@ var require_timestamp = __commonJS({
   }
 });
 
-// node_modules/@google-cloud/firestore-api/node_modules/proto3-json-serializer/build/src/wrappers.js
+// node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/proto3-json-serializer/build/src/wrappers.js
 var require_wrappers2 = __commonJS({
-  "node_modules/@google-cloud/firestore-api/node_modules/proto3-json-serializer/build/src/wrappers.js"(exports) {
+  "node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/proto3-json-serializer/build/src/wrappers.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.wrapperToProto3JSON = wrapperToProto3JSON;
@@ -92338,9 +91404,9 @@ var require_wrappers2 = __commonJS({
   }
 });
 
-// node_modules/@google-cloud/firestore-api/node_modules/proto3-json-serializer/build/src/fieldmask.js
+// node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/proto3-json-serializer/build/src/fieldmask.js
 var require_fieldmask = __commonJS({
-  "node_modules/@google-cloud/firestore-api/node_modules/proto3-json-serializer/build/src/fieldmask.js"(exports) {
+  "node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/proto3-json-serializer/build/src/fieldmask.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.googleProtobufFieldMaskToProto3JSON = googleProtobufFieldMaskToProto3JSON;
@@ -92356,9 +91422,9 @@ var require_fieldmask = __commonJS({
   }
 });
 
-// node_modules/@google-cloud/firestore-api/node_modules/proto3-json-serializer/build/src/fromproto3json.js
+// node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/proto3-json-serializer/build/src/fromproto3json.js
 var require_fromproto3json = __commonJS({
-  "node_modules/@google-cloud/firestore-api/node_modules/proto3-json-serializer/build/src/fromproto3json.js"(exports) {
+  "node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/proto3-json-serializer/build/src/fromproto3json.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.fromProto3JSONToInternalRepresentation = fromProto3JSONToInternalRepresentation;
@@ -92496,9 +91562,9 @@ var require_fromproto3json = __commonJS({
   }
 });
 
-// node_modules/@google-cloud/firestore-api/node_modules/proto3-json-serializer/build/src/any.js
+// node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/proto3-json-serializer/build/src/any.js
 var require_any = __commonJS({
-  "node_modules/@google-cloud/firestore-api/node_modules/proto3-json-serializer/build/src/any.js"(exports) {
+  "node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/proto3-json-serializer/build/src/any.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.googleProtobufAnyToProto3JSON = googleProtobufAnyToProto3JSON;
@@ -92573,9 +91639,9 @@ var require_any = __commonJS({
   }
 });
 
-// node_modules/@google-cloud/firestore-api/node_modules/proto3-json-serializer/build/src/toproto3json.js
+// node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/proto3-json-serializer/build/src/toproto3json.js
 var require_toproto3json = __commonJS({
-  "node_modules/@google-cloud/firestore-api/node_modules/proto3-json-serializer/build/src/toproto3json.js"(exports) {
+  "node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/proto3-json-serializer/build/src/toproto3json.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.toProto3JSON = toProto3JSON;
@@ -92702,9 +91768,9 @@ var require_toproto3json = __commonJS({
   }
 });
 
-// node_modules/@google-cloud/firestore-api/node_modules/proto3-json-serializer/build/src/index.js
+// node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/proto3-json-serializer/build/src/index.js
 var require_src13 = __commonJS({
-  "node_modules/@google-cloud/firestore-api/node_modules/proto3-json-serializer/build/src/index.js"(exports) {
+  "node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/proto3-json-serializer/build/src/index.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.fromProto3JSON = exports.toProto3JSON = void 0;
@@ -96463,9 +95529,9 @@ var require_duplexify = __commonJS({
   }
 });
 
-// node_modules/@google-cloud/firestore-api/node_modules/retry-request/index.js
+// node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/retry-request/index.js
 var require_retry_request = __commonJS({
-  "node_modules/@google-cloud/firestore-api/node_modules/retry-request/index.js"(exports, module) {
+  "node_modules/@google-cloud/firestore-api/node_modules/google-gax/node_modules/retry-request/index.js"(exports, module) {
     "use strict";
     var { PassThrough: PassThrough3 } = __require("stream");
     var extend = require_extend();
@@ -130435,9 +129501,9 @@ var require_routingHeader2 = __commonJS({
   }
 });
 
-// node_modules/google-gax/node_modules/gcp-metadata/build/src/gcp-residency.js
+// node_modules/google-gax/node_modules/google-auth-library/node_modules/gcp-metadata/build/src/gcp-residency.js
 var require_gcp_residency3 = __commonJS({
-  "node_modules/google-gax/node_modules/gcp-metadata/build/src/gcp-residency.js"(exports) {
+  "node_modules/google-gax/node_modules/google-auth-library/node_modules/gcp-metadata/build/src/gcp-residency.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.GCE_LINUX_BIOS_PATHS = void 0;
@@ -130881,9 +129947,9 @@ var require_src16 = __commonJS({
   }
 });
 
-// node_modules/google-gax/node_modules/gcp-metadata/build/src/index.js
+// node_modules/google-gax/node_modules/google-auth-library/node_modules/gcp-metadata/build/src/index.js
 var require_src17 = __commonJS({
-  "node_modules/google-gax/node_modules/gcp-metadata/build/src/index.js"(exports) {
+  "node_modules/google-gax/node_modules/google-auth-library/node_modules/gcp-metadata/build/src/index.js"(exports) {
     "use strict";
     var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m2, k, k2) {
       if (k2 === void 0) k2 = k;
@@ -216761,10 +215827,126 @@ var require_TokenExpiredError = __commonJS({
   }
 });
 
+// node_modules/jsonwebtoken/node_modules/ms/index.js
+var require_ms2 = __commonJS({
+  "node_modules/jsonwebtoken/node_modules/ms/index.js"(exports, module) {
+    var s2 = 1e3;
+    var m2 = s2 * 60;
+    var h2 = m2 * 60;
+    var d = h2 * 24;
+    var w = d * 7;
+    var y = d * 365.25;
+    module.exports = function(val, options2) {
+      options2 = options2 || {};
+      var type = typeof val;
+      if (type === "string" && val.length > 0) {
+        return parse(val);
+      } else if (type === "number" && isFinite(val)) {
+        return options2.long ? fmtLong(val) : fmtShort(val);
+      }
+      throw new Error(
+        "val is not a non-empty string or a valid number. val=" + JSON.stringify(val)
+      );
+    };
+    function parse(str) {
+      str = String(str);
+      if (str.length > 100) {
+        return;
+      }
+      var match = /^(-?(?:\d+)?\.?\d+) *(milliseconds?|msecs?|ms|seconds?|secs?|s|minutes?|mins?|m|hours?|hrs?|h|days?|d|weeks?|w|years?|yrs?|y)?$/i.exec(
+        str
+      );
+      if (!match) {
+        return;
+      }
+      var n = parseFloat(match[1]);
+      var type = (match[2] || "ms").toLowerCase();
+      switch (type) {
+        case "years":
+        case "year":
+        case "yrs":
+        case "yr":
+        case "y":
+          return n * y;
+        case "weeks":
+        case "week":
+        case "w":
+          return n * w;
+        case "days":
+        case "day":
+        case "d":
+          return n * d;
+        case "hours":
+        case "hour":
+        case "hrs":
+        case "hr":
+        case "h":
+          return n * h2;
+        case "minutes":
+        case "minute":
+        case "mins":
+        case "min":
+        case "m":
+          return n * m2;
+        case "seconds":
+        case "second":
+        case "secs":
+        case "sec":
+        case "s":
+          return n * s2;
+        case "milliseconds":
+        case "millisecond":
+        case "msecs":
+        case "msec":
+        case "ms":
+          return n;
+        default:
+          return void 0;
+      }
+    }
+    function fmtShort(ms) {
+      var msAbs = Math.abs(ms);
+      if (msAbs >= d) {
+        return Math.round(ms / d) + "d";
+      }
+      if (msAbs >= h2) {
+        return Math.round(ms / h2) + "h";
+      }
+      if (msAbs >= m2) {
+        return Math.round(ms / m2) + "m";
+      }
+      if (msAbs >= s2) {
+        return Math.round(ms / s2) + "s";
+      }
+      return ms + "ms";
+    }
+    function fmtLong(ms) {
+      var msAbs = Math.abs(ms);
+      if (msAbs >= d) {
+        return plural(ms, msAbs, d, "day");
+      }
+      if (msAbs >= h2) {
+        return plural(ms, msAbs, h2, "hour");
+      }
+      if (msAbs >= m2) {
+        return plural(ms, msAbs, m2, "minute");
+      }
+      if (msAbs >= s2) {
+        return plural(ms, msAbs, s2, "second");
+      }
+      return ms + " ms";
+    }
+    function plural(ms, msAbs, n, name5) {
+      var isPlural = msAbs >= n * 1.5;
+      return Math.round(ms / n) + " " + name5 + (isPlural ? "s" : "");
+    }
+  }
+});
+
 // node_modules/jsonwebtoken/lib/timespan.js
 var require_timespan = __commonJS({
   "node_modules/jsonwebtoken/lib/timespan.js"(exports, module) {
-    var ms = require_ms();
+    var ms = require_ms2();
     module.exports = function(time, iat) {
       var timestamp = iat || Math.floor(Date.now() / 1e3);
       if (typeof time === "string") {
@@ -219726,6 +218908,654 @@ var require_jsonwebtoken = __commonJS({
       NotBeforeError: require_NotBeforeError(),
       TokenExpiredError: require_TokenExpiredError()
     };
+  }
+});
+
+// node_modules/jwks-rsa/node_modules/debug/node_modules/ms/index.js
+var require_ms3 = __commonJS({
+  "node_modules/jwks-rsa/node_modules/debug/node_modules/ms/index.js"(exports, module) {
+    var s2 = 1e3;
+    var m2 = s2 * 60;
+    var h2 = m2 * 60;
+    var d = h2 * 24;
+    var w = d * 7;
+    var y = d * 365.25;
+    module.exports = function(val, options2) {
+      options2 = options2 || {};
+      var type = typeof val;
+      if (type === "string" && val.length > 0) {
+        return parse(val);
+      } else if (type === "number" && isFinite(val)) {
+        return options2.long ? fmtLong(val) : fmtShort(val);
+      }
+      throw new Error(
+        "val is not a non-empty string or a valid number. val=" + JSON.stringify(val)
+      );
+    };
+    function parse(str) {
+      str = String(str);
+      if (str.length > 100) {
+        return;
+      }
+      var match = /^(-?(?:\d+)?\.?\d+) *(milliseconds?|msecs?|ms|seconds?|secs?|s|minutes?|mins?|m|hours?|hrs?|h|days?|d|weeks?|w|years?|yrs?|y)?$/i.exec(
+        str
+      );
+      if (!match) {
+        return;
+      }
+      var n = parseFloat(match[1]);
+      var type = (match[2] || "ms").toLowerCase();
+      switch (type) {
+        case "years":
+        case "year":
+        case "yrs":
+        case "yr":
+        case "y":
+          return n * y;
+        case "weeks":
+        case "week":
+        case "w":
+          return n * w;
+        case "days":
+        case "day":
+        case "d":
+          return n * d;
+        case "hours":
+        case "hour":
+        case "hrs":
+        case "hr":
+        case "h":
+          return n * h2;
+        case "minutes":
+        case "minute":
+        case "mins":
+        case "min":
+        case "m":
+          return n * m2;
+        case "seconds":
+        case "second":
+        case "secs":
+        case "sec":
+        case "s":
+          return n * s2;
+        case "milliseconds":
+        case "millisecond":
+        case "msecs":
+        case "msec":
+        case "ms":
+          return n;
+        default:
+          return void 0;
+      }
+    }
+    function fmtShort(ms) {
+      var msAbs = Math.abs(ms);
+      if (msAbs >= d) {
+        return Math.round(ms / d) + "d";
+      }
+      if (msAbs >= h2) {
+        return Math.round(ms / h2) + "h";
+      }
+      if (msAbs >= m2) {
+        return Math.round(ms / m2) + "m";
+      }
+      if (msAbs >= s2) {
+        return Math.round(ms / s2) + "s";
+      }
+      return ms + "ms";
+    }
+    function fmtLong(ms) {
+      var msAbs = Math.abs(ms);
+      if (msAbs >= d) {
+        return plural(ms, msAbs, d, "day");
+      }
+      if (msAbs >= h2) {
+        return plural(ms, msAbs, h2, "hour");
+      }
+      if (msAbs >= m2) {
+        return plural(ms, msAbs, m2, "minute");
+      }
+      if (msAbs >= s2) {
+        return plural(ms, msAbs, s2, "second");
+      }
+      return ms + " ms";
+    }
+    function plural(ms, msAbs, n, name5) {
+      var isPlural = msAbs >= n * 1.5;
+      return Math.round(ms / n) + " " + name5 + (isPlural ? "s" : "");
+    }
+  }
+});
+
+// node_modules/jwks-rsa/node_modules/debug/src/common.js
+var require_common4 = __commonJS({
+  "node_modules/jwks-rsa/node_modules/debug/src/common.js"(exports, module) {
+    function setup(env) {
+      createDebug.debug = createDebug;
+      createDebug.default = createDebug;
+      createDebug.coerce = coerce;
+      createDebug.disable = disable;
+      createDebug.enable = enable;
+      createDebug.enabled = enabled;
+      createDebug.humanize = require_ms3();
+      createDebug.destroy = destroy;
+      Object.keys(env).forEach((key) => {
+        createDebug[key] = env[key];
+      });
+      createDebug.names = [];
+      createDebug.skips = [];
+      createDebug.formatters = {};
+      function selectColor(namespace) {
+        let hash = 0;
+        for (let i2 = 0; i2 < namespace.length; i2++) {
+          hash = (hash << 5) - hash + namespace.charCodeAt(i2);
+          hash |= 0;
+        }
+        return createDebug.colors[Math.abs(hash) % createDebug.colors.length];
+      }
+      createDebug.selectColor = selectColor;
+      function createDebug(namespace) {
+        let prevTime;
+        let enableOverride = null;
+        let namespacesCache;
+        let enabledCache;
+        function debug(...args) {
+          if (!debug.enabled) {
+            return;
+          }
+          const self2 = debug;
+          const curr = Number(/* @__PURE__ */ new Date());
+          const ms = curr - (prevTime || curr);
+          self2.diff = ms;
+          self2.prev = prevTime;
+          self2.curr = curr;
+          prevTime = curr;
+          args[0] = createDebug.coerce(args[0]);
+          if (typeof args[0] !== "string") {
+            args.unshift("%O");
+          }
+          let index = 0;
+          args[0] = args[0].replace(/%([a-zA-Z%])/g, (match, format) => {
+            if (match === "%%") {
+              return "%";
+            }
+            index++;
+            const formatter = createDebug.formatters[format];
+            if (typeof formatter === "function") {
+              const val = args[index];
+              match = formatter.call(self2, val);
+              args.splice(index, 1);
+              index--;
+            }
+            return match;
+          });
+          createDebug.formatArgs.call(self2, args);
+          const logFn = self2.log || createDebug.log;
+          logFn.apply(self2, args);
+        }
+        debug.namespace = namespace;
+        debug.useColors = createDebug.useColors();
+        debug.color = createDebug.selectColor(namespace);
+        debug.extend = extend;
+        debug.destroy = createDebug.destroy;
+        Object.defineProperty(debug, "enabled", {
+          enumerable: true,
+          configurable: false,
+          get: () => {
+            if (enableOverride !== null) {
+              return enableOverride;
+            }
+            if (namespacesCache !== createDebug.namespaces) {
+              namespacesCache = createDebug.namespaces;
+              enabledCache = createDebug.enabled(namespace);
+            }
+            return enabledCache;
+          },
+          set: (v) => {
+            enableOverride = v;
+          }
+        });
+        if (typeof createDebug.init === "function") {
+          createDebug.init(debug);
+        }
+        return debug;
+      }
+      function extend(namespace, delimiter) {
+        const newDebug = createDebug(this.namespace + (typeof delimiter === "undefined" ? ":" : delimiter) + namespace);
+        newDebug.log = this.log;
+        return newDebug;
+      }
+      function enable(namespaces) {
+        createDebug.save(namespaces);
+        createDebug.namespaces = namespaces;
+        createDebug.names = [];
+        createDebug.skips = [];
+        const split = (typeof namespaces === "string" ? namespaces : "").trim().replace(/\s+/g, ",").split(",").filter(Boolean);
+        for (const ns of split) {
+          if (ns[0] === "-") {
+            createDebug.skips.push(ns.slice(1));
+          } else {
+            createDebug.names.push(ns);
+          }
+        }
+      }
+      function matchesTemplate(search, template) {
+        let searchIndex = 0;
+        let templateIndex = 0;
+        let starIndex = -1;
+        let matchIndex = 0;
+        while (searchIndex < search.length) {
+          if (templateIndex < template.length && (template[templateIndex] === search[searchIndex] || template[templateIndex] === "*")) {
+            if (template[templateIndex] === "*") {
+              starIndex = templateIndex;
+              matchIndex = searchIndex;
+              templateIndex++;
+            } else {
+              searchIndex++;
+              templateIndex++;
+            }
+          } else if (starIndex !== -1) {
+            templateIndex = starIndex + 1;
+            matchIndex++;
+            searchIndex = matchIndex;
+          } else {
+            return false;
+          }
+        }
+        while (templateIndex < template.length && template[templateIndex] === "*") {
+          templateIndex++;
+        }
+        return templateIndex === template.length;
+      }
+      function disable() {
+        const namespaces = [
+          ...createDebug.names,
+          ...createDebug.skips.map((namespace) => "-" + namespace)
+        ].join(",");
+        createDebug.enable("");
+        return namespaces;
+      }
+      function enabled(name5) {
+        for (const skip of createDebug.skips) {
+          if (matchesTemplate(name5, skip)) {
+            return false;
+          }
+        }
+        for (const ns of createDebug.names) {
+          if (matchesTemplate(name5, ns)) {
+            return true;
+          }
+        }
+        return false;
+      }
+      function coerce(val) {
+        if (val instanceof Error) {
+          return val.stack || val.message;
+        }
+        return val;
+      }
+      function destroy() {
+        console.warn("Instance method `debug.destroy()` is deprecated and no longer does anything. It will be removed in the next major version of `debug`.");
+      }
+      createDebug.enable(createDebug.load());
+      return createDebug;
+    }
+    module.exports = setup;
+  }
+});
+
+// node_modules/jwks-rsa/node_modules/debug/src/browser.js
+var require_browser2 = __commonJS({
+  "node_modules/jwks-rsa/node_modules/debug/src/browser.js"(exports, module) {
+    exports.formatArgs = formatArgs;
+    exports.save = save;
+    exports.load = load;
+    exports.useColors = useColors;
+    exports.storage = localstorage();
+    exports.destroy = /* @__PURE__ */ (() => {
+      let warned = false;
+      return () => {
+        if (!warned) {
+          warned = true;
+          console.warn("Instance method `debug.destroy()` is deprecated and no longer does anything. It will be removed in the next major version of `debug`.");
+        }
+      };
+    })();
+    exports.colors = [
+      "#0000CC",
+      "#0000FF",
+      "#0033CC",
+      "#0033FF",
+      "#0066CC",
+      "#0066FF",
+      "#0099CC",
+      "#0099FF",
+      "#00CC00",
+      "#00CC33",
+      "#00CC66",
+      "#00CC99",
+      "#00CCCC",
+      "#00CCFF",
+      "#3300CC",
+      "#3300FF",
+      "#3333CC",
+      "#3333FF",
+      "#3366CC",
+      "#3366FF",
+      "#3399CC",
+      "#3399FF",
+      "#33CC00",
+      "#33CC33",
+      "#33CC66",
+      "#33CC99",
+      "#33CCCC",
+      "#33CCFF",
+      "#6600CC",
+      "#6600FF",
+      "#6633CC",
+      "#6633FF",
+      "#66CC00",
+      "#66CC33",
+      "#9900CC",
+      "#9900FF",
+      "#9933CC",
+      "#9933FF",
+      "#99CC00",
+      "#99CC33",
+      "#CC0000",
+      "#CC0033",
+      "#CC0066",
+      "#CC0099",
+      "#CC00CC",
+      "#CC00FF",
+      "#CC3300",
+      "#CC3333",
+      "#CC3366",
+      "#CC3399",
+      "#CC33CC",
+      "#CC33FF",
+      "#CC6600",
+      "#CC6633",
+      "#CC9900",
+      "#CC9933",
+      "#CCCC00",
+      "#CCCC33",
+      "#FF0000",
+      "#FF0033",
+      "#FF0066",
+      "#FF0099",
+      "#FF00CC",
+      "#FF00FF",
+      "#FF3300",
+      "#FF3333",
+      "#FF3366",
+      "#FF3399",
+      "#FF33CC",
+      "#FF33FF",
+      "#FF6600",
+      "#FF6633",
+      "#FF9900",
+      "#FF9933",
+      "#FFCC00",
+      "#FFCC33"
+    ];
+    function useColors() {
+      if (typeof window !== "undefined" && window.process && (window.process.type === "renderer" || window.process.__nwjs)) {
+        return true;
+      }
+      if (typeof navigator !== "undefined" && navigator.userAgent && navigator.userAgent.toLowerCase().match(/(edge|trident)\/(\d+)/)) {
+        return false;
+      }
+      let m2;
+      return typeof document !== "undefined" && document.documentElement && document.documentElement.style && document.documentElement.style.WebkitAppearance || // Is firebug? http://stackoverflow.com/a/398120/376773
+      typeof window !== "undefined" && window.console && (window.console.firebug || window.console.exception && window.console.table) || // Is firefox >= v31?
+      // https://developer.mozilla.org/en-US/docs/Tools/Web_Console#Styling_messages
+      typeof navigator !== "undefined" && navigator.userAgent && (m2 = navigator.userAgent.toLowerCase().match(/firefox\/(\d+)/)) && parseInt(m2[1], 10) >= 31 || // Double check webkit in userAgent just in case we are in a worker
+      typeof navigator !== "undefined" && navigator.userAgent && navigator.userAgent.toLowerCase().match(/applewebkit\/(\d+)/);
+    }
+    function formatArgs(args) {
+      args[0] = (this.useColors ? "%c" : "") + this.namespace + (this.useColors ? " %c" : " ") + args[0] + (this.useColors ? "%c " : " ") + "+" + module.exports.humanize(this.diff);
+      if (!this.useColors) {
+        return;
+      }
+      const c = "color: " + this.color;
+      args.splice(1, 0, c, "color: inherit");
+      let index = 0;
+      let lastC = 0;
+      args[0].replace(/%[a-zA-Z%]/g, (match) => {
+        if (match === "%%") {
+          return;
+        }
+        index++;
+        if (match === "%c") {
+          lastC = index;
+        }
+      });
+      args.splice(lastC, 0, c);
+    }
+    exports.log = console.debug || console.log || (() => {
+    });
+    function save(namespaces) {
+      try {
+        if (namespaces) {
+          exports.storage.setItem("debug", namespaces);
+        } else {
+          exports.storage.removeItem("debug");
+        }
+      } catch (error) {
+      }
+    }
+    function load() {
+      let r2;
+      try {
+        r2 = exports.storage.getItem("debug") || exports.storage.getItem("DEBUG");
+      } catch (error) {
+      }
+      if (!r2 && typeof process !== "undefined" && "env" in process) {
+        r2 = process.env.DEBUG;
+      }
+      return r2;
+    }
+    function localstorage() {
+      try {
+        return localStorage;
+      } catch (error) {
+      }
+    }
+    module.exports = require_common4()(exports);
+    var { formatters: formatters2 } = module.exports;
+    formatters2.j = function(v) {
+      try {
+        return JSON.stringify(v);
+      } catch (error) {
+        return "[UnexpectedJSONParseError]: " + error.message;
+      }
+    };
+  }
+});
+
+// node_modules/jwks-rsa/node_modules/debug/src/node.js
+var require_node3 = __commonJS({
+  "node_modules/jwks-rsa/node_modules/debug/src/node.js"(exports, module) {
+    var tty = __require("tty");
+    var util = __require("util");
+    exports.init = init;
+    exports.log = log;
+    exports.formatArgs = formatArgs;
+    exports.save = save;
+    exports.load = load;
+    exports.useColors = useColors;
+    exports.destroy = util.deprecate(
+      () => {
+      },
+      "Instance method `debug.destroy()` is deprecated and no longer does anything. It will be removed in the next major version of `debug`."
+    );
+    exports.colors = [6, 2, 3, 4, 5, 1];
+    try {
+      const supportsColor = __require("supports-color");
+      if (supportsColor && (supportsColor.stderr || supportsColor).level >= 2) {
+        exports.colors = [
+          20,
+          21,
+          26,
+          27,
+          32,
+          33,
+          38,
+          39,
+          40,
+          41,
+          42,
+          43,
+          44,
+          45,
+          56,
+          57,
+          62,
+          63,
+          68,
+          69,
+          74,
+          75,
+          76,
+          77,
+          78,
+          79,
+          80,
+          81,
+          92,
+          93,
+          98,
+          99,
+          112,
+          113,
+          128,
+          129,
+          134,
+          135,
+          148,
+          149,
+          160,
+          161,
+          162,
+          163,
+          164,
+          165,
+          166,
+          167,
+          168,
+          169,
+          170,
+          171,
+          172,
+          173,
+          178,
+          179,
+          184,
+          185,
+          196,
+          197,
+          198,
+          199,
+          200,
+          201,
+          202,
+          203,
+          204,
+          205,
+          206,
+          207,
+          208,
+          209,
+          214,
+          215,
+          220,
+          221
+        ];
+      }
+    } catch (error) {
+    }
+    exports.inspectOpts = Object.keys(process.env).filter((key) => {
+      return /^debug_/i.test(key);
+    }).reduce((obj, key) => {
+      const prop = key.substring(6).toLowerCase().replace(/_([a-z])/g, (_, k) => {
+        return k.toUpperCase();
+      });
+      let val = process.env[key];
+      if (/^(yes|on|true|enabled)$/i.test(val)) {
+        val = true;
+      } else if (/^(no|off|false|disabled)$/i.test(val)) {
+        val = false;
+      } else if (val === "null") {
+        val = null;
+      } else {
+        val = Number(val);
+      }
+      obj[prop] = val;
+      return obj;
+    }, {});
+    function useColors() {
+      return "colors" in exports.inspectOpts ? Boolean(exports.inspectOpts.colors) : tty.isatty(process.stderr.fd);
+    }
+    function formatArgs(args) {
+      const { namespace: name5, useColors: useColors2 } = this;
+      if (useColors2) {
+        const c = this.color;
+        const colorCode = "\x1B[3" + (c < 8 ? c : "8;5;" + c);
+        const prefix = `  ${colorCode};1m${name5} \x1B[0m`;
+        args[0] = prefix + args[0].split("\n").join("\n" + prefix);
+        args.push(colorCode + "m+" + module.exports.humanize(this.diff) + "\x1B[0m");
+      } else {
+        args[0] = getDate() + name5 + " " + args[0];
+      }
+    }
+    function getDate() {
+      if (exports.inspectOpts.hideDate) {
+        return "";
+      }
+      return (/* @__PURE__ */ new Date()).toISOString() + " ";
+    }
+    function log(...args) {
+      return process.stderr.write(util.formatWithOptions(exports.inspectOpts, ...args) + "\n");
+    }
+    function save(namespaces) {
+      if (namespaces) {
+        process.env.DEBUG = namespaces;
+      } else {
+        delete process.env.DEBUG;
+      }
+    }
+    function load() {
+      return process.env.DEBUG;
+    }
+    function init(debug) {
+      debug.inspectOpts = {};
+      const keys = Object.keys(exports.inspectOpts);
+      for (let i2 = 0; i2 < keys.length; i2++) {
+        debug.inspectOpts[keys[i2]] = exports.inspectOpts[keys[i2]];
+      }
+    }
+    module.exports = require_common4()(exports);
+    var { formatters: formatters2 } = module.exports;
+    formatters2.o = function(v) {
+      this.inspectOpts.colors = this.useColors;
+      return util.inspect(v, this.inspectOpts).split("\n").map((str) => str.trim()).join(" ");
+    };
+    formatters2.O = function(v) {
+      this.inspectOpts.colors = this.useColors;
+      return util.inspect(v, this.inspectOpts);
+    };
+  }
+});
+
+// node_modules/jwks-rsa/node_modules/debug/src/index.js
+var require_src24 = __commonJS({
+  "node_modules/jwks-rsa/node_modules/debug/src/index.js"(exports, module) {
+    if (typeof process === "undefined" || process.type === "renderer" || process.browser === true || process.__nwjs) {
+      module.exports = require_browser2();
+    } else {
+      module.exports = require_node3();
+    }
   }
 });
 
@@ -222749,9 +222579,9 @@ var require_request = __commonJS({
   }
 });
 
-// node_modules/lru-memoizer/node_modules/lru-cache/dist/commonjs/node/index.min.js
+// node_modules/lru-cache/dist/commonjs/node/index.min.js
 var require_index_min = __commonJS({
-  "node_modules/lru-memoizer/node_modules/lru-cache/dist/commonjs/node/index.min.js"(exports) {
+  "node_modules/lru-cache/dist/commonjs/node/index.min.js"(exports) {
     "use strict";
     var j = (u, t2) => () => (t2 || u((t2 = { exports: {} }).exports, t2), t2.exports);
     var I = j((O) => {
@@ -224204,618 +224034,12 @@ var require_lib = __commonJS({
   }
 });
 
-// node_modules/jwks-rsa/node_modules/lru-cache/dist/commonjs/node/index.min.js
-var require_index_min2 = __commonJS({
-  "node_modules/jwks-rsa/node_modules/lru-cache/dist/commonjs/node/index.min.js"(exports) {
-    "use strict";
-    var j = (u, t2) => () => (t2 || u((t2 = { exports: {} }).exports, t2), t2.exports);
-    var I = j((O) => {
-      "use strict";
-      Object.defineProperty(O, "__esModule", { value: true });
-      O.tracing = O.metrics = void 0;
-      var U = __require("node:diagnostics_channel");
-      O.metrics = (0, U.channel)("lru-cache:metrics");
-      O.tracing = (0, U.tracingChannel)("lru-cache");
-    });
-    var P = j((R) => {
-      "use strict";
-      Object.defineProperty(R, "__esModule", { value: true });
-      R.defaultPerf = void 0;
-      R.defaultPerf = typeof performance == "object" && performance && typeof performance.now == "function" ? performance : Date;
-    });
-    Object.defineProperty(exports, "__esModule", { value: true });
-    exports.LRUCache = void 0;
-    var g = I();
-    var N = P();
-    var C = () => g.metrics.hasSubscribers || g.tracing.hasSubscribers;
-    var k = /* @__PURE__ */ new Set();
-    var G = typeof process == "object" && process ? process : {};
-    var V = (u, t2, e2, i2) => {
-      typeof G.emitWarning == "function" ? G.emitWarning(u, t2, e2, i2) : console.error(`[${e2}] ${t2}: ${u}`);
-    };
-    var q = (u) => !k.has(u);
-    var T = (u) => !!u && u === Math.floor(u) && u > 0 && isFinite(u);
-    var H = (u) => T(u) ? u <= Math.pow(2, 8) ? Uint8Array : u <= Math.pow(2, 16) ? Uint16Array : u <= Math.pow(2, 32) ? Uint32Array : u <= Number.MAX_SAFE_INTEGER ? W : null : null;
-    var W = class extends Array {
-      constructor(t2) {
-        super(t2), this.fill(0);
-      }
-    };
-    var L = class u {
-      heap;
-      length;
-      static #o = false;
-      static create(t2) {
-        let e2 = H(t2);
-        if (!e2) return [];
-        u.#o = true;
-        let i2 = new u(t2, e2);
-        return u.#o = false, i2;
-      }
-      constructor(t2, e2) {
-        if (!u.#o) throw new TypeError("instantiate Stack using Stack.create(n)");
-        this.heap = new e2(t2), this.length = 0;
-      }
-      push(t2) {
-        this.heap[this.length++] = t2;
-      }
-      pop() {
-        return this.heap[--this.length];
-      }
-    };
-    var M = class u {
-      #o;
-      #c;
-      #m;
-      #W;
-      #S;
-      #x;
-      #j;
-      #w;
-      get perf() {
-        return this.#w;
-      }
-      ttl;
-      ttlResolution;
-      ttlAutopurge;
-      updateAgeOnGet;
-      updateAgeOnHas;
-      allowStale;
-      noDisposeOnSet;
-      noUpdateTTL;
-      maxEntrySize;
-      sizeCalculation;
-      noDeleteOnFetchRejection;
-      noDeleteOnStaleGet;
-      allowStaleOnFetchAbort;
-      allowStaleOnFetchRejection;
-      ignoreFetchAbort;
-      backgroundFetchSize;
-      #n;
-      #b;
-      #s;
-      #i;
-      #t;
-      #l;
-      #u;
-      #a;
-      #h;
-      #_;
-      #r;
-      #y;
-      #F;
-      #d;
-      #g;
-      #T;
-      #U;
-      #f;
-      #R;
-      static unsafeExposeInternals(t2) {
-        return { starts: t2.#F, ttls: t2.#d, autopurgeTimers: t2.#g, sizes: t2.#y, keyMap: t2.#s, keyList: t2.#i, valList: t2.#t, next: t2.#l, prev: t2.#u, get head() {
-          return t2.#a;
-        }, get tail() {
-          return t2.#h;
-        }, free: t2.#_, isBackgroundFetch: (e2) => t2.#e(e2), backgroundFetch: (e2, i2, s2, n) => t2.#G(e2, i2, s2, n), moveToTail: (e2) => t2.#M(e2), indexes: (e2) => t2.#A(e2), rindexes: (e2) => t2.#z(e2), isStale: (e2) => t2.#p(e2) };
-      }
-      get max() {
-        return this.#o;
-      }
-      get maxSize() {
-        return this.#c;
-      }
-      get calculatedSize() {
-        return this.#b;
-      }
-      get size() {
-        return this.#n;
-      }
-      get fetchMethod() {
-        return this.#x;
-      }
-      get memoMethod() {
-        return this.#j;
-      }
-      get dispose() {
-        return this.#m;
-      }
-      get onInsert() {
-        return this.#W;
-      }
-      get disposeAfter() {
-        return this.#S;
-      }
-      constructor(t2) {
-        let { max: e2 = 0, ttl: i2, ttlResolution: s2 = 1, ttlAutopurge: n, updateAgeOnGet: o, updateAgeOnHas: l, allowStale: h2, dispose: r2, onInsert: c, disposeAfter: w, noDisposeOnSet: y, noUpdateTTL: d, maxSize: p = 0, maxEntrySize: f3 = 0, sizeCalculation: _, fetchMethod: a, memoMethod: S2, noDeleteOnFetchRejection: F2, noDeleteOnStaleGet: b, allowStaleOnFetchRejection: m2, allowStaleOnFetchAbort: A2, ignoreFetchAbort: z, backgroundFetchSize: x2 = 1, perf: v } = t2;
-        if (this.backgroundFetchSize = x2, v !== void 0 && typeof v?.now != "function") throw new TypeError("perf option must have a now() method if specified");
-        if (this.#w = v ?? N.defaultPerf, e2 !== 0 && !T(e2)) throw new TypeError("max option must be a nonnegative integer");
-        let E = e2 ? H(e2) : Array;
-        if (!E) throw new Error("invalid max value: " + e2);
-        if (this.#o = e2, this.#c = p, this.maxEntrySize = f3 || this.#c, this.sizeCalculation = _, this.sizeCalculation) {
-          if (!this.#c && !this.maxEntrySize) throw new TypeError("cannot set sizeCalculation without setting maxSize or maxEntrySize");
-          if (typeof this.sizeCalculation != "function") throw new TypeError("sizeCalculation set to non-function");
-        }
-        if (S2 !== void 0 && typeof S2 != "function") throw new TypeError("memoMethod must be a function if defined");
-        if (this.#j = S2, a !== void 0 && typeof a != "function") throw new TypeError("fetchMethod must be a function if specified");
-        if (this.#x = a, this.#U = !!a, this.#s = /* @__PURE__ */ new Map(), this.#i = Array.from({ length: e2 }).fill(void 0), this.#t = Array.from({ length: e2 }).fill(void 0), this.#l = new E(e2), this.#u = new E(e2), this.#a = 0, this.#h = 0, this.#_ = L.create(e2), this.#n = 0, this.#b = 0, typeof r2 == "function" && (this.#m = r2), typeof c == "function" && (this.#W = c), typeof w == "function" ? (this.#S = w, this.#r = []) : (this.#S = void 0, this.#r = void 0), this.#T = !!this.#m, this.#R = !!this.#W, this.#f = !!this.#S, this.noDisposeOnSet = !!y, this.noUpdateTTL = !!d, this.noDeleteOnFetchRejection = !!F2, this.allowStaleOnFetchRejection = !!m2, this.allowStaleOnFetchAbort = !!A2, this.ignoreFetchAbort = !!z, this.maxEntrySize !== 0) {
-          if (this.#c !== 0 && !T(this.#c)) throw new TypeError("maxSize must be a positive integer if specified");
-          if (!T(this.maxEntrySize)) throw new TypeError("maxEntrySize must be a positive integer if specified");
-          this.#X();
-        }
-        if (this.allowStale = !!h2, this.noDeleteOnStaleGet = !!b, this.updateAgeOnGet = !!o, this.updateAgeOnHas = !!l, this.ttlResolution = T(s2) || s2 === 0 ? s2 : 1, this.ttlAutopurge = !!n, this.ttl = i2 || 0, this.ttl) {
-          if (!T(this.ttl)) throw new TypeError("ttl must be a positive integer if specified");
-          this.#k();
-        }
-        if (this.#o === 0 && this.ttl === 0 && this.#c === 0) throw new TypeError("At least one of max, maxSize, or ttl is required");
-        if (!this.ttlAutopurge && !this.#o && !this.#c) {
-          let D = "LRU_CACHE_UNBOUNDED";
-          q(D) && (k.add(D), V("TTL caching without ttlAutopurge, max, or maxSize can result in unbounded memory consumption.", "UnboundedCacheWarning", D, u));
-        }
-      }
-      getRemainingTTL(t2) {
-        return this.#s.has(t2) ? 1 / 0 : 0;
-      }
-      #k() {
-        let t2 = new W(this.#o), e2 = new W(this.#o);
-        this.#d = t2, this.#F = e2;
-        let i2 = this.ttlAutopurge ? Array.from({ length: this.#o }) : void 0;
-        this.#g = i2, this.#H = (h2, r2, c = this.#w.now()) => {
-          e2[h2] = r2 !== 0 ? c : 0, t2[h2] = r2, s2(h2, r2);
-        }, this.#D = (h2) => {
-          e2[h2] = t2[h2] !== 0 ? this.#w.now() : 0, s2(h2, t2[h2]);
-        };
-        let s2 = this.ttlAutopurge ? (h2, r2) => {
-          if (i2?.[h2] && (clearTimeout(i2[h2]), i2[h2] = void 0), r2 && r2 !== 0 && i2) {
-            let c = setTimeout(() => {
-              this.#p(h2) ? (this.#v(this.#i[h2], "expire"), i2[h2] = void 0) : s2(h2, l(h2));
-            }, r2 + 1);
-            c.unref && c.unref(), i2[h2] = c;
-          }
-        } : () => {
-        };
-        this.#E = (h2, r2) => {
-          if (t2[r2]) {
-            let c = t2[r2], w = e2[r2];
-            if (!c || !w) return;
-            h2.ttl = c, h2.start = w, h2.now = n || o();
-            let y = h2.now - w;
-            h2.remainingTTL = c - y;
-          }
-        };
-        let n = 0, o = () => {
-          let h2 = this.#w.now();
-          if (this.ttlResolution > 0) {
-            n = h2;
-            let r2 = setTimeout(() => n = 0, this.ttlResolution);
-            r2.unref && r2.unref();
-          }
-          return h2;
-        };
-        this.getRemainingTTL = (h2) => {
-          let r2 = this.#s.get(h2);
-          return r2 === void 0 ? 0 : l(r2);
-        };
-        let l = (h2) => {
-          let r2 = t2[h2], c = e2[h2];
-          if (!r2 || !c) return 1 / 0;
-          let w = (n || o()) - c;
-          return r2 - w;
-        };
-        this.#p = (h2) => {
-          let r2 = e2[h2], c = t2[h2];
-          return !!c && !!r2 && (n || o()) - r2 > c;
-        };
-      }
-      #D = () => {
-      };
-      #E = () => {
-      };
-      #H = () => {
-      };
-      #p = () => false;
-      #X() {
-        let t2 = new W(this.#o);
-        this.#b = 0, this.#y = t2, this.#C = (e2) => {
-          this.#b -= t2[e2], t2[e2] = 0;
-        }, this.#N = (e2, i2, s2, n) => {
-          if (!T(s2)) {
-            if (this.#e(i2)) return this.backgroundFetchSize;
-            if (n) {
-              if (typeof n != "function") throw new TypeError("sizeCalculation must be a function");
-              if (s2 = n(i2, e2), !T(s2)) throw new TypeError("sizeCalculation return invalid (expect positive integer)");
-            } else throw new TypeError("invalid size value (must be positive integer). When maxSize or maxEntrySize is used, sizeCalculation or size must be set.");
-          }
-          return s2;
-        }, this.#I = (e2, i2, s2) => {
-          if (t2[e2] = i2, this.#c) {
-            let n = this.#c - t2[e2];
-            for (; this.#b > n; ) this.#P(true);
-          }
-          this.#b += t2[e2], s2 && (s2.entrySize = i2, s2.totalCalculatedSize = this.#b);
-        };
-      }
-      #C = (t2) => {
-      };
-      #I = (t2, e2, i2) => {
-      };
-      #N = (t2, e2, i2, s2) => {
-        if (i2 || s2) throw new TypeError("cannot set size without setting maxSize or maxEntrySize on cache");
-        return 0;
-      };
-      *#A({ allowStale: t2 = this.allowStale } = {}) {
-        if (this.#n) for (let e2 = this.#h; this.#V(e2) && ((t2 || !this.#p(e2)) && (yield e2), e2 !== this.#a); ) e2 = this.#u[e2];
-      }
-      *#z({ allowStale: t2 = this.allowStale } = {}) {
-        if (this.#n) for (let e2 = this.#a; this.#V(e2) && ((t2 || !this.#p(e2)) && (yield e2), e2 !== this.#h); ) e2 = this.#l[e2];
-      }
-      #V(t2) {
-        return t2 !== void 0 && this.#s.get(this.#i[t2]) === t2;
-      }
-      *entries() {
-        for (let t2 of this.#A()) this.#t[t2] !== void 0 && this.#i[t2] !== void 0 && !this.#e(this.#t[t2]) && (yield [this.#i[t2], this.#t[t2]]);
-      }
-      *rentries() {
-        for (let t2 of this.#z()) this.#t[t2] !== void 0 && this.#i[t2] !== void 0 && !this.#e(this.#t[t2]) && (yield [this.#i[t2], this.#t[t2]]);
-      }
-      *keys() {
-        for (let t2 of this.#A()) {
-          let e2 = this.#i[t2];
-          e2 !== void 0 && !this.#e(this.#t[t2]) && (yield e2);
-        }
-      }
-      *rkeys() {
-        for (let t2 of this.#z()) {
-          let e2 = this.#i[t2];
-          e2 !== void 0 && !this.#e(this.#t[t2]) && (yield e2);
-        }
-      }
-      *values() {
-        for (let t2 of this.#A()) this.#t[t2] !== void 0 && !this.#e(this.#t[t2]) && (yield this.#t[t2]);
-      }
-      *rvalues() {
-        for (let t2 of this.#z()) this.#t[t2] !== void 0 && !this.#e(this.#t[t2]) && (yield this.#t[t2]);
-      }
-      [Symbol.iterator]() {
-        return this.entries();
-      }
-      [Symbol.toStringTag] = "LRUCache";
-      find(t2, e2 = {}) {
-        for (let i2 of this.#A()) {
-          let s2 = this.#t[i2], n = this.#e(s2) ? s2.__staleWhileFetching : s2;
-          if (n !== void 0 && t2(n, this.#i[i2], this)) return this.#L(this.#i[i2], e2);
-        }
-      }
-      forEach(t2, e2 = this) {
-        for (let i2 of this.#A()) {
-          let s2 = this.#t[i2], n = this.#e(s2) ? s2.__staleWhileFetching : s2;
-          n !== void 0 && t2.call(e2, n, this.#i[i2], this);
-        }
-      }
-      rforEach(t2, e2 = this) {
-        for (let i2 of this.#z()) {
-          let s2 = this.#t[i2], n = this.#e(s2) ? s2.__staleWhileFetching : s2;
-          n !== void 0 && t2.call(e2, n, this.#i[i2], this);
-        }
-      }
-      purgeStale() {
-        let t2 = false;
-        for (let e2 of this.#z({ allowStale: true })) this.#p(e2) && (this.#v(this.#i[e2], "expire"), t2 = true);
-        return t2;
-      }
-      info(t2) {
-        let e2 = this.#s.get(t2);
-        if (e2 === void 0) return;
-        let i2 = this.#t[e2], s2 = this.#e(i2) ? i2.__staleWhileFetching : i2;
-        if (s2 === void 0) return;
-        let n = { value: s2 };
-        if (this.#d && this.#F) {
-          let o = this.#d[e2], l = this.#F[e2];
-          if (o && l) {
-            let h2 = o - (this.#w.now() - l);
-            n.ttl = h2, n.start = Date.now();
-          }
-        }
-        return this.#y && (n.size = this.#y[e2]), n;
-      }
-      dump() {
-        let t2 = [];
-        for (let e2 of this.#A({ allowStale: true })) {
-          let i2 = this.#i[e2], s2 = this.#t[e2], n = this.#e(s2) ? s2.__staleWhileFetching : s2;
-          if (n === void 0 || i2 === void 0) continue;
-          let o = { value: n };
-          if (this.#d && this.#F) {
-            o.ttl = this.#d[e2];
-            let l = this.#w.now() - this.#F[e2];
-            o.start = Math.floor(Date.now() - l);
-          }
-          this.#y && (o.size = this.#y[e2]), t2.unshift([i2, o]);
-        }
-        return t2;
-      }
-      load(t2) {
-        this.clear();
-        for (let [e2, i2] of t2) {
-          if (i2.start) {
-            let s2 = Date.now() - i2.start;
-            i2.start = this.#w.now() - s2;
-          }
-          this.#O(e2, i2.value, i2);
-        }
-      }
-      set(t2, e2, i2 = {}) {
-        let { status: s2 = g.metrics.hasSubscribers ? {} : void 0 } = i2;
-        i2.status = s2, s2 && (s2.op = "set", s2.key = t2, e2 !== void 0 && (s2.value = e2), s2.cache = this);
-        let n = this.#O(t2, e2, i2);
-        return s2 && g.metrics.hasSubscribers && g.metrics.publish(s2), n;
-      }
-      #O(t2, e2, i2, s2) {
-        let { ttl: n = this.ttl, start: o, noDisposeOnSet: l = this.noDisposeOnSet, sizeCalculation: h2 = this.sizeCalculation, status: r2 } = i2, c = this.#e(e2);
-        if (e2 === void 0) return r2 && (r2.set = "deleted"), this.delete(t2), this;
-        let { noUpdateTTL: w = this.noUpdateTTL } = i2;
-        r2 && !c && (r2.value = e2);
-        let y = this.#N(t2, e2, i2.size || 0, h2, r2);
-        if (this.maxEntrySize && y > this.maxEntrySize) return this.#v(t2, "set"), r2 && (r2.set = "miss", r2.maxEntrySizeExceeded = true), this;
-        let d = this.#n === 0 ? void 0 : this.#s.get(t2);
-        if (d === void 0) d = this.#n === 0 ? this.#h : this.#_.length !== 0 ? this.#_.pop() : this.#n === this.#o ? this.#P(false) : this.#n, this.#i[d] = t2, this.#t[d] = e2, this.#s.set(t2, d), this.#l[this.#h] = d, this.#u[d] = this.#h, this.#h = d, this.#n++, this.#I(d, y, r2), r2 && (r2.set = "add"), w = false, this.#R && !c && this.#W?.(e2, t2, "add");
-        else {
-          this.#M(d);
-          let p = this.#t[d];
-          if (e2 !== p) {
-            if (!l) if (this.#e(p)) {
-              p !== s2 && p.__abortController.abort(new Error("replaced"));
-              let { __staleWhileFetching: f3 } = p;
-              f3 !== void 0 && f3 !== e2 && (this.#T && this.#m?.(f3, t2, "set"), this.#f && this.#r?.push([f3, t2, "set"]));
-            } else this.#T && this.#m?.(p, t2, "set"), this.#f && this.#r?.push([p, t2, "set"]);
-            if (this.#C(d), this.#I(d, y, r2), this.#t[d] = e2, !c) {
-              let f3 = p && this.#e(p) ? p.__staleWhileFetching : p, _ = f3 === void 0 ? "add" : e2 !== f3 ? "replace" : "update";
-              r2 && (r2.set = _, f3 !== void 0 && (r2.oldValue = f3)), this.#R && this.onInsert?.(e2, t2, _);
-            }
-          } else c || (r2 && (r2.set = "update"), this.#R && this.onInsert?.(e2, t2, "update"));
-        }
-        if (n !== 0 && !this.#d && this.#k(), this.#d && (w || this.#H(d, n, o), r2 && this.#E(r2, d)), !l && this.#f && this.#r) {
-          let p = this.#r, f3;
-          for (; f3 = p?.shift(); ) this.#S?.(...f3);
-        }
-        return this;
-      }
-      pop() {
-        try {
-          for (; this.#n; ) {
-            let t2 = this.#t[this.#a];
-            if (this.#P(true), this.#e(t2)) {
-              if (t2.__staleWhileFetching) return t2.__staleWhileFetching;
-            } else if (t2 !== void 0) return t2;
-          }
-        } finally {
-          if (this.#f && this.#r) {
-            let t2 = this.#r, e2;
-            for (; e2 = t2?.shift(); ) this.#S?.(...e2);
-          }
-        }
-      }
-      #P(t2) {
-        let e2 = this.#a, i2 = this.#i[e2], s2 = this.#t[e2], n = this.#e(s2);
-        n && s2.__abortController.abort(new Error("evicted"));
-        let o = n ? s2.__staleWhileFetching : s2;
-        return (this.#T || this.#f) && o !== void 0 && (this.#T && this.#m?.(o, i2, "evict"), this.#f && this.#r?.push([o, i2, "evict"])), this.#C(e2), this.#g?.[e2] && (clearTimeout(this.#g[e2]), this.#g[e2] = void 0), t2 && (this.#i[e2] = void 0, this.#t[e2] = void 0, this.#_.push(e2)), this.#n === 1 ? (this.#a = this.#h = 0, this.#_.length = 0) : this.#a = this.#l[e2], this.#s.delete(i2), this.#n--, e2;
-      }
-      has(t2, e2 = {}) {
-        let { status: i2 = g.metrics.hasSubscribers ? {} : void 0 } = e2;
-        e2.status = i2, i2 && (i2.op = "has", i2.key = t2, i2.cache = this);
-        let s2 = this.#Y(t2, e2);
-        return g.metrics.hasSubscribers && g.metrics.publish(i2), s2;
-      }
-      #Y(t2, e2 = {}) {
-        let { updateAgeOnHas: i2 = this.updateAgeOnHas, status: s2 } = e2, n = this.#s.get(t2);
-        if (n !== void 0) {
-          let o = this.#t[n];
-          if (this.#e(o) && o.__staleWhileFetching === void 0) return false;
-          if (this.#p(n)) s2 && (s2.has = "stale", this.#E(s2, n));
-          else return i2 && this.#D(n), s2 && (s2.has = "hit", this.#E(s2, n)), true;
-        } else s2 && (s2.has = "miss");
-        return false;
-      }
-      peek(t2, e2 = {}) {
-        let { status: i2 = C() ? {} : void 0 } = e2;
-        i2 && (i2.op = "peek", i2.key = t2, i2.cache = this), e2.status = i2;
-        let s2 = this.#J(t2, e2);
-        return g.metrics.hasSubscribers && g.metrics.publish(i2), s2;
-      }
-      #J(t2, e2) {
-        let { status: i2, allowStale: s2 = this.allowStale } = e2, n = this.#s.get(t2);
-        if (n === void 0 || !s2 && this.#p(n)) {
-          i2 && (i2.peek = n === void 0 ? "miss" : "stale");
-          return;
-        }
-        let o = this.#t[n], l = this.#e(o) ? o.__staleWhileFetching : o;
-        return i2 && (l !== void 0 ? (i2.peek = "hit", i2.value = l) : i2.peek = "miss"), l;
-      }
-      #G(t2, e2, i2, s2) {
-        let n = e2 === void 0 ? void 0 : this.#t[e2];
-        if (this.#e(n)) return n;
-        let o = new AbortController(), { signal: l } = i2;
-        l?.addEventListener("abort", () => o.abort(l.reason), { signal: o.signal });
-        let h2 = { signal: o.signal, options: i2, context: s2 }, r2 = (f3, _ = false) => {
-          let { aborted: a } = o.signal, S2 = i2.ignoreFetchAbort && f3 !== void 0, F2 = i2.ignoreFetchAbort || !!(i2.allowStaleOnFetchAbort && f3 !== void 0);
-          if (i2.status && (a && !_ ? (i2.status.fetchAborted = true, i2.status.fetchError = o.signal.reason, S2 && (i2.status.fetchAbortIgnored = true)) : i2.status.fetchResolved = true), a && !S2 && !_) return w(o.signal.reason, F2);
-          let b = d, m2 = this.#t[e2];
-          return (m2 === d || m2 === void 0 && S2 && _) && (f3 === void 0 ? b.__staleWhileFetching !== void 0 ? this.#t[e2] = b.__staleWhileFetching : this.#v(t2, "fetch") : (i2.status && (i2.status.fetchUpdated = true), this.#O(t2, f3, h2.options, b))), f3;
-        }, c = (f3) => (i2.status && (i2.status.fetchRejected = true, i2.status.fetchError = f3), w(f3, false)), w = (f3, _) => {
-          let { aborted: a } = o.signal, S2 = a && i2.allowStaleOnFetchAbort, F2 = S2 || i2.allowStaleOnFetchRejection, b = F2 || i2.noDeleteOnFetchRejection, m2 = d;
-          if (this.#t[e2] === d && (!b || !_ && m2.__staleWhileFetching === void 0 ? this.#v(t2, "fetch") : S2 || (this.#t[e2] = m2.__staleWhileFetching)), F2) return i2.status && m2.__staleWhileFetching !== void 0 && (i2.status.returnedStale = true), m2.__staleWhileFetching;
-          if (m2.__returned === m2) throw f3;
-        }, y = (f3, _) => {
-          let a = this.#x?.(t2, n, h2);
-          o.signal.addEventListener("abort", () => {
-            (!i2.ignoreFetchAbort || i2.allowStaleOnFetchAbort) && (f3(void 0), i2.allowStaleOnFetchAbort && (f3 = (S2) => r2(S2, true)));
-          }), a && a instanceof Promise ? a.then((S2) => f3(S2 === void 0 ? void 0 : S2), _) : a !== void 0 && f3(a);
-        };
-        i2.status && (i2.status.fetchDispatched = true);
-        let d = new Promise(y).then(r2, c), p = Object.assign(d, { __abortController: o, __staleWhileFetching: n, __returned: void 0 });
-        return e2 === void 0 ? (this.#O(t2, p, { ...h2.options, status: void 0 }), e2 = this.#s.get(t2)) : this.#t[e2] = p, p;
-      }
-      #e(t2) {
-        if (!this.#U) return false;
-        let e2 = t2;
-        return !!e2 && e2 instanceof Promise && e2.hasOwnProperty("__staleWhileFetching") && e2.__abortController instanceof AbortController;
-      }
-      fetch(t2, e2 = {}) {
-        let i2 = g.tracing.hasSubscribers, { status: s2 = C() ? {} : void 0 } = e2;
-        e2.status = s2, s2 && e2.context && (s2.context = e2.context);
-        let n = this.#q(t2, e2);
-        return s2 && i2 && (s2.trace = true, g.tracing.tracePromise(() => n, s2).catch(() => {
-        })), n;
-      }
-      async #q(t2, e2 = {}) {
-        let { allowStale: i2 = this.allowStale, updateAgeOnGet: s2 = this.updateAgeOnGet, noDeleteOnStaleGet: n = this.noDeleteOnStaleGet, ttl: o = this.ttl, noDisposeOnSet: l = this.noDisposeOnSet, size: h2 = 0, sizeCalculation: r2 = this.sizeCalculation, noUpdateTTL: c = this.noUpdateTTL, noDeleteOnFetchRejection: w = this.noDeleteOnFetchRejection, allowStaleOnFetchRejection: y = this.allowStaleOnFetchRejection, ignoreFetchAbort: d = this.ignoreFetchAbort, allowStaleOnFetchAbort: p = this.allowStaleOnFetchAbort, context: f3, forceRefresh: _ = false, status: a, signal: S2 } = e2;
-        if (a && (a.op = "fetch", a.key = t2, _ && (a.forceRefresh = true), a.cache = this), !this.#U) return a && (a.fetch = "get"), this.#L(t2, { allowStale: i2, updateAgeOnGet: s2, noDeleteOnStaleGet: n, status: a });
-        let F2 = { allowStale: i2, updateAgeOnGet: s2, noDeleteOnStaleGet: n, ttl: o, noDisposeOnSet: l, size: h2, sizeCalculation: r2, noUpdateTTL: c, noDeleteOnFetchRejection: w, allowStaleOnFetchRejection: y, allowStaleOnFetchAbort: p, ignoreFetchAbort: d, status: a, signal: S2 }, b = this.#s.get(t2);
-        if (b === void 0) {
-          a && (a.fetch = "miss");
-          let m2 = this.#G(t2, b, F2, f3);
-          return m2.__returned = m2;
-        } else {
-          let m2 = this.#t[b];
-          if (this.#e(m2)) {
-            let E = i2 && m2.__staleWhileFetching !== void 0;
-            return a && (a.fetch = "inflight", E && (a.returnedStale = true)), E ? m2.__staleWhileFetching : m2.__returned = m2;
-          }
-          let A2 = this.#p(b);
-          if (!_ && !A2) return a && (a.fetch = "hit"), this.#M(b), s2 && this.#D(b), a && this.#E(a, b), m2;
-          let z = this.#G(t2, b, F2, f3), v = z.__staleWhileFetching !== void 0 && i2;
-          return a && (a.fetch = A2 ? "stale" : "refresh", v && A2 && (a.returnedStale = true)), v ? z.__staleWhileFetching : z.__returned = z;
-        }
-      }
-      forceFetch(t2, e2 = {}) {
-        let i2 = g.tracing.hasSubscribers, { status: s2 = C() ? {} : void 0 } = e2;
-        e2.status = s2, s2 && e2.context && (s2.context = e2.context);
-        let n = this.#K(t2, e2);
-        return s2 && i2 && (s2.trace = true, g.tracing.tracePromise(() => n, s2).catch(() => {
-        })), n;
-      }
-      async #K(t2, e2 = {}) {
-        let i2 = await this.#q(t2, e2);
-        if (i2 === void 0) throw new Error("fetch() returned undefined");
-        return i2;
-      }
-      memo(t2, e2 = {}) {
-        let { status: i2 = g.metrics.hasSubscribers ? {} : void 0 } = e2;
-        e2.status = i2, i2 && (i2.op = "memo", i2.key = t2, e2.context && (i2.context = e2.context), i2.cache = this);
-        let s2 = this.#Q(t2, e2);
-        return i2 && (i2.value = s2), g.metrics.hasSubscribers && g.metrics.publish(i2), s2;
-      }
-      #Q(t2, e2 = {}) {
-        let i2 = this.#j;
-        if (!i2) throw new Error("no memoMethod provided to constructor");
-        let { context: s2, status: n, forceRefresh: o, ...l } = e2;
-        n && o && (n.forceRefresh = true);
-        let h2 = this.#L(t2, l), r2 = o || h2 === void 0;
-        if (n && (n.memo = r2 ? "miss" : "hit", r2 || (n.value = h2)), !r2) return h2;
-        let c = i2(t2, h2, { options: l, context: s2 });
-        return n && (n.value = c), this.#O(t2, c, l), c;
-      }
-      get(t2, e2 = {}) {
-        let { status: i2 = g.metrics.hasSubscribers ? {} : void 0 } = e2;
-        e2.status = i2, i2 && (i2.op = "get", i2.key = t2, i2.cache = this);
-        let s2 = this.#L(t2, e2);
-        return i2 && (s2 !== void 0 && (i2.value = s2), g.metrics.hasSubscribers && g.metrics.publish(i2)), s2;
-      }
-      #L(t2, e2 = {}) {
-        let { allowStale: i2 = this.allowStale, updateAgeOnGet: s2 = this.updateAgeOnGet, noDeleteOnStaleGet: n = this.noDeleteOnStaleGet, status: o } = e2, l = this.#s.get(t2);
-        if (l === void 0) {
-          o && (o.get = "miss");
-          return;
-        }
-        let h2 = this.#t[l], r2 = this.#e(h2);
-        return o && this.#E(o, l), this.#p(l) ? r2 ? (o && (o.get = "stale-fetching"), i2 && h2.__staleWhileFetching !== void 0 ? (o && (o.returnedStale = true), h2.__staleWhileFetching) : void 0) : (n || this.#v(t2, "expire"), o && (o.get = "stale"), i2 ? (o && (o.returnedStale = true), h2) : void 0) : (o && (o.get = r2 ? "fetching" : "hit"), this.#M(l), s2 && this.#D(l), r2 ? h2.__staleWhileFetching : h2);
-      }
-      #B(t2, e2) {
-        this.#u[e2] = t2, this.#l[t2] = e2;
-      }
-      #M(t2) {
-        t2 !== this.#h && (t2 === this.#a ? this.#a = this.#l[t2] : this.#B(this.#u[t2], this.#l[t2]), this.#B(this.#h, t2), this.#h = t2);
-      }
-      delete(t2) {
-        return this.#v(t2, "delete");
-      }
-      #v(t2, e2) {
-        g.metrics.hasSubscribers && g.metrics.publish({ op: "delete", delete: e2, key: t2, cache: this });
-        let i2 = false;
-        if (this.#n !== 0) {
-          let s2 = this.#s.get(t2);
-          if (s2 !== void 0) if (this.#g?.[s2] && (clearTimeout(this.#g[s2]), this.#g[s2] = void 0), i2 = true, this.#n === 1) this.#$(e2);
-          else {
-            this.#C(s2);
-            let n = this.#t[s2];
-            if (this.#e(n) ? n.__abortController.abort(new Error("deleted")) : (this.#T || this.#f) && (this.#T && this.#m?.(n, t2, e2), this.#f && this.#r?.push([n, t2, e2])), this.#s.delete(t2), this.#i[s2] = void 0, this.#t[s2] = void 0, s2 === this.#h) this.#h = this.#u[s2];
-            else if (s2 === this.#a) this.#a = this.#l[s2];
-            else {
-              let o = this.#u[s2];
-              this.#l[o] = this.#l[s2];
-              let l = this.#l[s2];
-              this.#u[l] = this.#u[s2];
-            }
-            this.#n--, this.#_.push(s2);
-          }
-        }
-        if (this.#f && this.#r?.length) {
-          let s2 = this.#r, n;
-          for (; n = s2?.shift(); ) this.#S?.(...n);
-        }
-        return i2;
-      }
-      clear() {
-        return this.#$("delete");
-      }
-      #$(t2) {
-        for (let e2 of this.#z({ allowStale: true })) {
-          let i2 = this.#t[e2];
-          if (this.#e(i2)) i2.__abortController.abort(new Error("deleted"));
-          else {
-            let s2 = this.#i[e2];
-            this.#T && this.#m?.(i2, s2, t2), this.#f && this.#r?.push([i2, s2, t2]);
-          }
-        }
-        if (this.#s.clear(), this.#t.fill(void 0), this.#i.fill(void 0), this.#d && this.#F) {
-          this.#d.fill(0), this.#F.fill(0);
-          for (let e2 of this.#g ?? []) e2 !== void 0 && clearTimeout(e2);
-          this.#g?.fill(void 0);
-        }
-        if (this.#y && this.#y.fill(0), this.#a = 0, this.#h = 0, this.#_.length = 0, this.#b = 0, this.#n = 0, this.#f && this.#r) {
-          let e2 = this.#r, i2;
-          for (; i2 = e2?.shift(); ) this.#S?.(...i2);
-        }
-      }
-    };
-    exports.LRUCache = M;
-  }
-});
-
 // node_modules/jwks-rsa/src/wrappers/cache.js
 var require_cache = __commonJS({
   "node_modules/jwks-rsa/src/wrappers/cache.js"(exports, module) {
-    var logger2 = require_src()("jwks");
+    var logger2 = require_src24()("jwks");
     var memoizer = require_lib();
-    var { LRUCache } = require_index_min2();
+    var { LRUCache } = require_index_min();
     var { promisify: promisify2, callbackify } = __require("util");
     function cacheWrapper(client2, { cacheMaxEntries = 5, cacheMaxAge = 6e5, cacheMaxAgeFallback, onStaleCacheFallback }) {
       logger2(`Configured caching of signing keys. Max: ${cacheMaxEntries} / Age: ${cacheMaxAge}${cacheMaxAgeFallback ? ` / Fallback: ${cacheMaxAgeFallback}` : ""}`);
@@ -225131,7 +224355,7 @@ var require_JwksRateLimitError = __commonJS({
 // node_modules/jwks-rsa/src/wrappers/rateLimit.js
 var require_rateLimit = __commonJS({
   "node_modules/jwks-rsa/src/wrappers/rateLimit.js"(exports, module) {
-    var logger2 = require_src()("jwks");
+    var logger2 = require_src24()("jwks");
     var { RateLimiter } = require_limiter();
     var JwksRateLimitError = require_JwksRateLimitError();
     function rateLimitWrapper(client2, { jwksRequestsPerMinute = 10 }) {
@@ -225236,7 +224460,7 @@ var require_SigningKeyNotFoundError = __commonJS({
 // node_modules/jwks-rsa/src/JwksClient.js
 var require_JwksClient = __commonJS({
   "node_modules/jwks-rsa/src/JwksClient.js"(exports, module) {
-    var logger2 = require_src()("jwks");
+    var logger2 = require_src24()("jwks");
     var { retrieveSigningKeys } = require_utils2();
     var { request, cacheSigningKey, rateLimitSigningKey, getKeysInterceptor, callbackSupport } = require_wrappers4();
     var JwksError = require_JwksError();
@@ -225529,7 +224753,7 @@ var require_passport = __commonJS({
 });
 
 // node_modules/jwks-rsa/src/index.js
-var require_src24 = __commonJS({
+var require_src25 = __commonJS({
   "node_modules/jwks-rsa/src/index.js"(exports, module) {
     var { JwksClient } = require_JwksClient();
     var errors = require_errors2();
@@ -225563,7 +224787,7 @@ var require_jwt = __commonJS({
     exports.decodeJwt = decodeJwt2;
     var validator = require_validator();
     var jwt = require_jsonwebtoken();
-    var jwks = require_src24();
+    var jwks = require_src25();
     var api_request_1 = require_api_request();
     exports.ALGORITHM_RS256 = "RS256";
     exports.ALGORITHM_ES256 = "ES256";
@@ -233466,7 +232690,7 @@ var require_util13 = __commonJS({
 });
 
 // node_modules/@grpc/proto-loader/build/src/index.js
-var require_src25 = __commonJS({
+var require_src26 = __commonJS({
   "node_modules/@grpc/proto-loader/build/src/index.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
@@ -234204,7 +233428,7 @@ var require_channelz3 = __commonJS({
       if (loadedChannelzDefinition) {
         return loadedChannelzDefinition;
       }
-      const loaderLoadSync = require_src25().loadSync;
+      const loaderLoadSync = require_src26().loadSync;
       const loadedProto = loaderLoadSync("channelz.proto", {
         keepCase: true,
         longs: String,
@@ -240838,7 +240062,7 @@ var require_load_balancer_round_robin3 = __commonJS({
 });
 
 // node_modules/@grpc/grpc-js/build/src/index.js
-var require_src26 = __commonJS({
+var require_src27 = __commonJS({
   "node_modules/@grpc/grpc-js/build/src/index.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
@@ -252272,8 +251496,8 @@ var init_common_BKJf2lb8_node = __esm({
     init_index_node_esm();
     init_bloom_blob_es2018();
     init_index_esm2();
-    grpc = __toESM(require_src26(), 1);
-    protoLoader = __toESM(require_src25(), 1);
+    grpc = __toESM(require_src27(), 1);
+    protoLoader = __toESM(require_src26(), 1);
     init_build2();
     version4 = "12.19.0";
     SDK_VERSION3 = version4;
@@ -269148,8 +268372,8 @@ var init_index_node = __esm({
     init_index_node_esm();
     init_bloom_blob_es2018();
     init_index_esm2();
-    import_grpc_js = __toESM(require_src26(), 1);
-    import_proto_loader = __toESM(require_src25(), 1);
+    import_grpc_js = __toESM(require_src27(), 1);
+    import_proto_loader = __toESM(require_src26(), 1);
     name$12 = "@firebase/firestore";
     version5 = "4.17.2";
     DocumentSnapshot$1 = class DocumentSnapshot2 {
@@ -274981,7 +274205,8 @@ function getTenantCache2(tenantId) {
 }
 async function initKnowledgeStore(ctx = DEFAULT_UMRAH_CTX2) {
   const cache2 = getTenantCache2(ctx.tenantId);
-  if (cache2.size === 0) {
+  const seedsDefaults = ctx.tenantId === DEFAULT_UMRAH_CTX2.tenantId;
+  if (seedsDefaults && cache2.size === 0) {
     for (const docItem of INITIAL_KNOWLEDGE_DOCUMENTS) {
       cache2.set(docItem.id, { ...docItem });
     }
@@ -275004,10 +274229,14 @@ async function initKnowledgeStore(ctx = DEFAULT_UMRAH_CTX2) {
       });
       console.log(`[Knowledge Store] Successfully loaded ${cache2.size} articles for tenant ${ctx.tenantId}.`);
     } else {
-      for (const docItem of INITIAL_KNOWLEDGE_DOCUMENTS) {
-        await safeSetDoc(repo.knowledgeDocumentDoc(docItem.id), docItem, { merge: true });
+      if (seedsDefaults) {
+        for (const docItem of INITIAL_KNOWLEDGE_DOCUMENTS) {
+          await safeSetDoc(repo.knowledgeDocumentDoc(docItem.id), docItem, { merge: true });
+        }
+        console.log(`[Knowledge Store] Seeded ${INITIAL_KNOWLEDGE_DOCUMENTS.length} initial articles for tenant ${ctx.tenantId}.`);
+      } else {
+        cache2.clear();
       }
-      console.log(`[Knowledge Store] Seeded ${INITIAL_KNOWLEDGE_DOCUMENTS.length} initial articles for tenant ${ctx.tenantId}.`);
     }
     tenantInitialized.add(ctx.tenantId);
     return cache2.size;
@@ -275019,7 +274248,7 @@ async function initKnowledgeStore(ctx = DEFAULT_UMRAH_CTX2) {
 }
 function getAllKnowledgeDocs(ctx = DEFAULT_UMRAH_CTX2) {
   const cache2 = getTenantCache2(ctx.tenantId);
-  if (!tenantInitialized.has(ctx.tenantId) && cache2.size === 0) {
+  if (ctx.tenantId === DEFAULT_UMRAH_CTX2.tenantId && !tenantInitialized.has(ctx.tenantId) && cache2.size === 0) {
     for (const docItem of INITIAL_KNOWLEDGE_DOCUMENTS) {
       cache2.set(docItem.id, { ...docItem });
     }
@@ -275689,7 +274918,7 @@ async function runCampaignStoreSync() {
         const metaDocRef = tenantRepo(getCampaignActiveCtx()).settingsDoc("templates_initialized");
         const metaDocSnap = await getDoc(metaDocRef).catch(() => null);
         if (!metaDocSnap?.exists()) {
-          if (firestoreTpls.length === 0) {
+          if (firestoreTpls.length === 0 && getCampaignActiveCtx().tenantId === "umrah360") {
             for (const tpl of DEFAULT_EMAIL_TEMPLATES) {
               await await safeSetDoc(tenantRepo(getCampaignActiveCtx()).emailTemplateDoc(tpl.templateId), tpl, { merge: true });
               firestoreTpls.push(tpl);
@@ -279549,7 +278778,10 @@ function detectDemoSchedulingIntent(text) {
 }
 async function processSchedulingConversationTurn(params) {
   if (params.manual !== true) {
-    return { handled: false, replyText: "", action: "NOT_DEMO_INTENT" };
+    const newText = String(params.messageText || "");
+    if (!detectDemoSchedulingIntent(newText)) {
+      return { handled: false, replyText: "", action: "NOT_DEMO_INTENT" };
+    }
   }
   const messageText = params.messageText || "";
   const conversationHistory = Array.isArray(params.conversationHistory) ? params.conversationHistory : [];
@@ -280463,7 +279695,8 @@ ${body}`;
   }
   const targetMailbox = process.env.SMTP_USER || process.env.IMAP_USER || "amaavigo@gmail.com";
   const senderGreetingName = fromName2 ? fromName2.split(" ")[0] : from.split("@")[0];
-  const publishedDocs = getPublishedKnowledgeDocs();
+  await initKnowledgeStore(getInboundCtx()).catch(() => 0);
+  const publishedDocs = getPublishedKnowledgeDocs(getInboundCtx());
   const kbGroundingText = publishedDocs.map(
     (doc6) => `=== [${doc6.category}] ${doc6.title} ===
 ${doc6.content}`
@@ -286212,7 +285445,8 @@ async function generateWhatsAppAutoReplyText(params) {
     buyingStage = "CONSIDERATION";
   }
   const senderGreetingName = fromName2 ? fromName2.split(" ")[0] : "there";
-  const publishedDocs = getPublishedKnowledgeDocs();
+  await initKnowledgeStore(getWACtx()).catch(() => 0);
+  const publishedDocs = getPublishedKnowledgeDocs(getWACtx());
   const kbGroundingText = publishedDocs.map(
     (doc6) => `[DOCUMENT: ${doc6.title} (${doc6.category})]
 ${doc6.content}`
@@ -287349,8 +286583,8 @@ async function processWebsiteLeadSubmission(rawInput, ctx = DEFAULT_UMRAH_CTX7) 
     timeline: "Immediate / Upcoming Season",
     aiSummary,
     aiRecommendation,
-    demoStatus: "BOOKED",
-    demoSource: "AUTOMATIC",
+    demoStatus: "NOT_BOOKED",
+    demoSource: void 0,
     demoBookedAt: nowIso,
     country,
     city,
@@ -287464,7 +286698,7 @@ async function processWebsiteLeadSubmission(rawInput, ctx = DEFAULT_UMRAH_CTX7) 
       if (smtpConfig.configured) {
         const emailSubject = `We have received your Umrah360 Demo Request - ${companyName}`;
         const emailBody = [
-          `As-salamu alaykum ${firstName},`,
+          `Hello ${firstName},`,
           ``,
           `Thank you for requesting a live demo of Umrah360 for ${companyName}!`,
           ``,
@@ -306254,7 +305488,7 @@ async function routeWebsiteLeadWebhook(req, res, webhookId) {
         message: "Lead processed and synced into CRM",
         leadId: result.lead?.leadId,
         contactId: result.contact?.contactId,
-        thankYouEmailSent: result.thankYouEmailSent
+        thankYouEmailSent: result.thankYouEmailSent ?? result.autoConfirmationSent
       })
     );
     return true;
@@ -306307,8 +305541,8 @@ async function routeWhatsAppWebhook(req, res) {
     role: "admin"
   };
   try {
-    const result = await processLiveInboundWhatsApp(body, tenantCtx);
-    if (result.processed) {
+    const result = await processLiveInboundWhatsApp(body);
+    if (result.messageId) {
       await recordTenantUsage(resolvedTenantId, { whatsappMessageCount: 1 }).catch(() => {
       });
     }
@@ -307500,16 +306734,16 @@ ${signature || "Regards,\nUmrah360 Team"}`;
     return true;
   }
   if (url === "/api/knowledge" || url.startsWith("/api/knowledge?") || url.startsWith("/api/knowledge/")) {
-    await initKnowledgeStore();
+    await initKnowledgeStore(activeTenantCtx);
     if (req.method === "GET") {
-      const documents = getAllKnowledgeDocs();
+      const documents = getAllKnowledgeDocs(activeTenantCtx);
       res.statusCode = 200;
       res.end(JSON.stringify({ success: true, documents, count: documents.length }));
       return true;
     }
     if (req.method === "POST" || req.method === "PUT") {
       try {
-        const saved = await saveKnowledgeDoc(body);
+        const saved = await saveKnowledgeDoc(body, activeTenantCtx);
         res.statusCode = 200;
         res.end(JSON.stringify({ success: true, document: saved, message: "Article successfully saved and active in RAG" }));
       } catch (err) {
@@ -307535,7 +306769,7 @@ ${signature || "Regards,\nUmrah360 Team"}`;
         res.end(JSON.stringify({ success: false, error: "Knowledge document ID required" }));
         return true;
       }
-      const deleted = await deleteKnowledgeDoc(docId);
+      const deleted = await deleteKnowledgeDoc(docId, activeTenantCtx);
       res.statusCode = 200;
       res.end(JSON.stringify({ success: deleted, deletedId: docId }));
       return true;

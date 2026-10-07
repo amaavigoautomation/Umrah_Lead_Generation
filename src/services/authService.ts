@@ -115,17 +115,46 @@ let fetchPatched = false;
 export function installAuthFetch(): void {
   if (fetchPatched || typeof window === 'undefined') return;
   fetchPatched = true;
-  const original = window.fetch.bind(window);
-  window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
-    const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
-    const isApi = url.startsWith('/api/') || url.startsWith(`${window.location.origin}/api/`);
-    if (!isApi) return original(input, init);
+  try {
+    const original = window.fetch ? window.fetch.bind(window) : null;
+    if (!original) return;
 
-    const token = await getIdToken().catch(() => null);
-    if (!token) return original(input, init);
+    const patchedFetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+      const origin = typeof window !== 'undefined' ? window.location.origin : '';
+      const isApi = url.startsWith('/api/') || (origin && url.startsWith(`${origin}/api/`));
+      if (!isApi) return original(input, init);
 
-    const headers = new Headers(init?.headers || (input instanceof Request ? input.headers : undefined));
-    headers.set('Authorization', `Bearer ${token}`);
-    return original(input, { ...init, headers });
-  };
+      const token = await getIdToken().catch(() => null);
+      if (!token) return original(input, init);
+
+      const headers = new Headers(init?.headers || (input instanceof Request ? input.headers : undefined));
+      headers.set('Authorization', `Bearer ${token}`);
+      return original(input, { ...init, headers });
+    };
+
+    try {
+      (window as any).fetch = patchedFetch;
+    } catch {
+      try {
+        Object.defineProperty(window, 'fetch', {
+          value: patchedFetch,
+          writable: true,
+          configurable: true,
+        });
+      } catch {
+        try {
+          Object.defineProperty(Object.getPrototypeOf(window), 'fetch', {
+            value: patchedFetch,
+            writable: true,
+            configurable: true,
+          });
+        } catch (e) {
+          console.warn('[installAuthFetch] Could not override window.fetch:', e);
+        }
+      }
+    }
+  } catch (e) {
+    console.warn('[installAuthFetch] Error setting up fetch interceptor:', e);
+  }
 }

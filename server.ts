@@ -84,7 +84,7 @@ const safeBackgroundPoll = async () => {
       // C. Process active campaign batches
       if (await hasFeature(tId, 'campaigns')) {
         await runWithJobLease(tId, 'campaign_dispatch_worker', 20_000, async () => {
-          await processActiveRunningCampaignsBatch(3, ctx).catch(() => {});
+          await processActiveRunningCampaignsBatch(3).catch(() => {});
         }).catch(() => {});
       }
 

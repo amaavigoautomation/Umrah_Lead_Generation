@@ -79,7 +79,7 @@ export async function routeWebsiteLeadWebhook(
         message: 'Lead processed and synced into CRM',
         leadId: result.lead?.leadId,
         contactId: result.contact?.contactId,
-        thankYouEmailSent: result.thankYouEmailSent,
+        thankYouEmailSent: (result as any).thankYouEmailSent ?? result.autoConfirmationSent,
       })
     );
     return true;
@@ -156,9 +156,9 @@ export async function routeWhatsAppWebhook(req: any, res: any): Promise<boolean>
   };
 
   try {
-    const result = await processLiveInboundWhatsApp(body, tenantCtx);
+    const result = await processLiveInboundWhatsApp(body);
     // Track message count for tenant usage
-    if (result.processed) {
+    if (result.messageId) {
       await recordTenantUsage(resolvedTenantId, { whatsappMessageCount: 1 }).catch(() => {});
     }
 

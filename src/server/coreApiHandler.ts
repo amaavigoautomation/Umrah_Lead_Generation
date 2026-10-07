@@ -860,7 +860,7 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
   }
 
   // Tenant email identity (Phase 1): /api/tenants/:tenantId/email[/domain|/verify|/sender]
-  const emailMatch = url.split('?')[0].match(/^\/api\/tenants\/([^/]+)\/email(?:\/(domain|verify|sender))?$/);
+  const emailMatch = url.split('?')[0].match(/^\/api\/tenants\/([^/]+)\/email(?:\/(domain|verify|refresh|sender))?$/);
   if (emailMatch) {
     const tId = emailMatch[1];
     const action = emailMatch[2];
@@ -879,6 +879,7 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
       if (req.method === 'POST' && action) {
         if (action === 'domain') await svc.addTenantDomain(tId, body?.domain);
         else if (action === 'verify') await svc.verifyTenantDomain(tId);
+        else if (action === 'refresh') await svc.refreshTenantDomain(tId);
         else await svc.setTenantSender(tId, { fromName: body?.fromName, fromLocalPart: body?.fromLocalPart, replyTo: body?.replyTo });
         res.statusCode = 200;
         res.end(JSON.stringify(await svc.getEmailSettingsView(tId)));

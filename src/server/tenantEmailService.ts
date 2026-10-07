@@ -177,6 +177,28 @@ export async function addTenantDomain(tenantId: string, rawDomain: string) {
   });
 }
 
+/**
+ * Reads the domain's CURRENT status from Resend and saves it. Unlike verifyTenantDomain this does not ask
+ * Resend to re-check DNS, so it never restarts a verification that is already running; it just shows
+ * whatever Resend currently says (e.g. it verified on its own a minute ago).
+ */
+export async function refreshTenantDomain(tenantId: string) {
+  const s = await getTenantEmailSettings(tenantId, { fresh: true });
+  if (!s.resendDomainId) throw new HttpError(400, 'Add a domain first');
+  const got = await resendClient().domains.get(s.resendDomainId);
+  if (got.error || !got.data) {
+    const code = Number((got.error as any)?.statusCode);
+    if (code === 404) throw new HttpError(404, 'This domain no longer exists in Resend. Remove it here and add it again.');
+    throw new HttpError(502, `Resend: ${got.error?.message || 'could not load domain'}`);
+  }
+  const status = got.data.status as TenantDomainStatus;
+  return saveSettings(tenantId, {
+    status,
+    records: mapRecords(got.data.records as any[]),
+    ...(status === 'verified' && s.status !== 'verified' ? { verifiedAt: new Date().toISOString() } : {}),
+  });
+}
+
 export async function verifyTenantDomain(tenantId: string) {
   const s = await getTenantEmailSettings(tenantId, { fresh: true });
   if (!s.resendDomainId) throw new HttpError(400, 'Add a domain first');

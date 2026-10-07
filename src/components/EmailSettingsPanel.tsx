@@ -296,10 +296,31 @@ export const EmailSettingsPanel: React.FC<{ tenantId: string; canEdit: boolean }
               </tbody>
             </table>
           </div>
-          {!verified && (
-            <button className={btnGhost} disabled={!canEdit || busy === 'verify'} onClick={() => run('verify', 'verify', {}, 'Checked. Status updated.')}>
-              {busy === 'verify' ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />} Verify DNS
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              className={btnGhost}
+              disabled={!canEdit || busy === 'refresh'}
+              title="Load the latest status from Resend without starting a new check"
+              onClick={() => run('refresh', 'refresh', {}, 'Status refreshed from Resend.')}
+            >
+              {busy === 'refresh' ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />} Refresh status
             </button>
+            {!verified && (
+              <button
+                className={btnGhost}
+                disabled={!canEdit || busy === 'verify'}
+                title="Ask Resend to check your DNS records again"
+                onClick={() => run('verify', 'verify', {}, 'Checked. Status updated.')}
+              >
+                {busy === 'verify' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />} Verify DNS
+              </button>
+            )}
+          </div>
+          {!verified && (
+            <p className="text-xs text-slate-500">
+              <strong>Refresh status</strong> just loads what Resend currently shows. <strong>Verify DNS</strong> asks Resend to re-check your DNS, so use it
+              once after adding records, then refresh while you wait.
+            </p>
           )}
         </section>
       )}

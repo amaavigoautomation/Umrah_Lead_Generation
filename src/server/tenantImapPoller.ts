@@ -231,10 +231,12 @@ async function runCycle(tenantId: string): Promise<TenantPollResult> {
   }
 
   let lastUid = Number(settings.lastUid) || 0;
+  console.log(`[Tenant IMAP] ${tenantId}: checked ${creds.user} — ${fetched.candidates.length} new message(s) after UID ${lastUid}${fetched.reset ? ' (UID reset)' : ''}`);
 
   for (const c of fetched.candidates) {
     try {
       if (c.skipReason) {
+        console.log(`[Tenant IMAP] ${tenantId}: UID ${c.uid} from ${c.from} skipped: ${c.skipReason}`);
         result.skipped++;
         await recordProcessedInboundEmail(
           { messageId: c.messageId || `<uid-${c.uid}>`, fromEmail: c.from || 'unknown', subject: c.subject, aiReplied: false, status: 'SKIPPED', reason: c.skipReason },
@@ -275,6 +277,7 @@ async function runCycle(tenantId: string): Promise<TenantPollResult> {
         }
       }
 
+      console.log(`[Tenant IMAP] ${tenantId}: UID ${c.uid} from ${c.from} "${(c.subject || '').slice(0, 60)}" -> ${allowed ? 'processing' : 'skipped (not a reply to a known conversation)'}`);
       if (!allowed) {
         result.skipped++;
         await recordProcessedInboundEmail(
@@ -343,8 +346,14 @@ export async function pollTenantMailbox(tenantId: string, opts: { force?: boolea
 
   const settings = await getInboundSettings(tenantId, { fresh: true });
   if (!settings.enabled || !settings.host || !settings.user) return idle;
-  if (settings.status === 'paused' || settings.status === 'not_configured') return idle;
-  if (!opts.force && settings.nextPollAt && new Date(settings.nextPollAt).getTime() > now) return idle;
+  if (settings.status === 'paused' || settings.status === 'not_configured') {
+    console.log(`[Tenant IMAP] ${tenantId}: not polling, status is ${settings.status}`);
+    return idle;
+  }
+  if (!opts.force && settings.nextPollAt && new Date(settings.nextPollAt).getTime() > now) {
+    console.log(`[Tenant IMAP] ${tenantId}: waiting until ${settings.nextPollAt} (last error: ${settings.lastError || 'none'})`);
+    return idle;
+  }
 
   lastAttempt.set(tenantId, now);
   const out = await runWithJobLease(tenantId, JOB_NAME, JOB_LEASE_MS, () => runCycle(tenantId));

@@ -1,0 +1,249 @@
+diff --git a/src/components/EmailSettingsPanel.tsx b/src/components/EmailSettingsPanel.tsx
+index 06906fe..fd4d752 100644
+--- a/src/components/EmailSettingsPanel.tsx
++++ b/src/components/EmailSettingsPanel.tsx
+@@ -1,5 +1,5 @@
+ import React, { useCallback, useEffect, useState } from 'react';
+-import { Mail, CheckCircle2, Clock, AlertTriangle, Copy, Check, RefreshCw, Loader2 } from 'lucide-react';
++import { Mail, CheckCircle2, Clock, AlertTriangle, Copy, Check, RefreshCw, Loader2, Trash2 } from 'lucide-react';
+ 
+ interface DnsRecord {
+   record: string;
+@@ -87,8 +87,24 @@ export const EmailSettingsPanel: React.FC<{ tenantId: string; canEdit: boolean }
+   const [fromName, setFromName] = useState('');
+   const [local, setLocal] = useState('');
+   const [replyTo, setReplyTo] = useState('');
++  const [confirmRemove, setConfirmRemove] = useState(false);
+ 
+-  const apply = (v: EmailView) => {
++  const removeDomain = async () => {
++    setBusy('remove');
++    setError(null);
++    setNotice(null);
++    try {
++      apply(await api<EmailView>(`${base}/domain`, { method: 'DELETE' }));
++      setNotice('Domain removed from your workspace and from Resend.');
++    } catch (e: any) {
++      setError(e.message);
++    } finally {
++      setConfirmRemove(false);
++      setBusy(null);
++    }
++  };
++
++  const apply =(v: EmailView) => {
+     setView(v);
+     setFromName(v.fromName || '');
+     setLocal(v.fromLocalPart || '');
+@@ -173,8 +189,45 @@ export const EmailSettingsPanel: React.FC<{ tenantId: string; canEdit: boolean }
+       <section className="space-y-3">
+         <h4 className="text-sm font-semibold text-slate-900">1. Your domain</h4>
+         {hasDomain ? (
+-          <div className="flex items-center justify-between bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
+-            <span className="text-sm font-medium text-slate-900">{view?.domain}</span>
++          <div className="space-y-2">
++            <div className="flex items-center justify-between gap-3 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
++              <span className="text-sm font-medium text-slate-900">{view?.domain}</span>
++              {canEdit && !confirmRemove && (
++                <button
++                  type="button"
++                  className="inline-flex items-center gap-1.5 text-sm font-semibold text-red-600 hover:text-red-700"
++                  onClick={() => setConfirmRemove(true)}
++                >
++                  <Trash2 className="w-4 h-4" /> Remove domain
++                </button>
++              )}
++            </div>
++            {confirmRemove && (
++              <div className="text-sm bg-red-50 border border-red-200 text-red-900 rounded-lg p-3 space-y-2">
++                <p>
++                  Remove <strong>{view?.domain}</strong>? It is deleted from Resend as well, so email from this domain stops sending
++                  {view?.canSend ? ' right away' : ''} until you add and verify a domain again. You'll need to re-add the DNS records if you add it back.
++                </p>
++                <div className="flex gap-2">
++                  <button
++                    type="button"
++                    className="inline-flex items-center gap-1.5 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white text-xs font-bold rounded-lg px-3 py-1.5"
++                    disabled={busy === 'remove'}
++                    onClick={removeDomain}
++                  >
++                    {busy === 'remove' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />} Yes, remove it
++                  </button>
++                  <button
++                    type="button"
++                    className="border border-red-200 text-red-800 hover:bg-red-100 text-xs font-semibold rounded-lg px-3 py-1.5"
++                    disabled={busy === 'remove'}
++                    onClick={() => setConfirmRemove(false)}
++                  >
++                    Keep it
++                  </button>
++                </div>
++              </div>
++            )}
+           </div>
+         ) : (
+           <div className="flex gap-2">
+@@ -243,10 +296,31 @@ export const EmailSettingsPanel: React.FC<{ tenantId: string; canEdit: boolean }
+               </tbody>
+             </table>
+           </div>
+-          {!verified && (
+-            <button className={btnGhost} disabled={!canEdit || busy === 'verify'} onClick={() => run('verify', 'verify', {}, 'Checked. Status updated.')}>
+-              {busy === 'verify' ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />} Verify DNS
++          <div className="flex flex-wrap items-center gap-2">
++            <button
++              className={btnGhost}
++              disabled={!canEdit || busy === 'refresh'}
++              title="Load the latest status from Resend without starting a new check"
++              onClick={() => run('refresh', 'refresh', {}, 'Status refreshed from Resend.')}
++            >
++              {busy === 'refresh' ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />} Refresh status
+             </button>
++            {!verified && (
++              <button
++                className={btnGhost}
++                disabled={!canEdit || busy === 'verify'}
++                title="Ask Resend to check your DNS records again"
++                onClick={() => run('verify', 'verify', {}, 'Checked. Status updated.')}
++              >
++                {busy === 'verify' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />} Verify DNS
++              </button>
++            )}
++          </div>
++          {!verified && (
++            <p className="text-xs text-slate-500">
++              <strong>Refresh status</strong> just loads what Resend currently shows. <strong>Verify DNS</strong> asks Resend to re-check your DNS, so use it
++              once after adding records, then refresh while you wait.
++            </p>
+           )}
+         </section>
+       )}
+diff --git a/src/server/coreApiHandler.ts b/src/server/coreApiHandler.ts
+index 97fb3c6..7b976ae 100644
+--- a/src/server/coreApiHandler.ts
++++ b/src/server/coreApiHandler.ts
+@@ -860,7 +860,7 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
+   }
+ 
+   // Tenant email identity (Phase 1): /api/tenants/:tenantId/email[/domain|/verify|/sender]
+-  const emailMatch = url.split('?')[0].match(/^\/api\/tenants\/([^/]+)\/email(?:\/(domain|verify|sender))?$/);
++  const emailMatch = url.split('?')[0].match(/^\/api\/tenants\/([^/]+)\/email(?:\/(domain|verify|refresh|sender))?$/);
+   if (emailMatch) {
+     const tId = emailMatch[1];
+     const action = emailMatch[2];
+@@ -871,9 +871,15 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
+         res.end(JSON.stringify(await svc.getEmailSettingsView(tId)));
+         return true;
+       }
++      if (req.method === 'DELETE' && action === 'domain') {
++        res.statusCode = 200;
++        res.end(JSON.stringify(await svc.removeTenantDomain(tId)));
++        return true;
++      }
+       if (req.method === 'POST' && action) {
+         if (action === 'domain') await svc.addTenantDomain(tId, body?.domain);
+         else if (action === 'verify') await svc.verifyTenantDomain(tId);
++        else if (action === 'refresh') await svc.refreshTenantDomain(tId);
+         else await svc.setTenantSender(tId, { fromName: body?.fromName, fromLocalPart: body?.fromLocalPart, replyTo: body?.replyTo });
+         res.statusCode = 200;
+         res.end(JSON.stringify(await svc.getEmailSettingsView(tId)));
+diff --git a/src/server/tenantEmailService.ts b/src/server/tenantEmailService.ts
+index 785b7a0..b581d31 100644
+--- a/src/server/tenantEmailService.ts
++++ b/src/server/tenantEmailService.ts
+@@ -1,5 +1,5 @@
+ import { Resend } from 'resend';
+-import { db, doc, getDoc, setDoc } from './adminFirestore.js';
++import { db, doc, getDoc, setDoc, deleteDoc } from './adminFirestore.js';
+ import { tenantRepo } from './tenantRepo.js';
+ import { isFirebaseConfigured } from '../firebase/config.js';
+ import { getConnectedMailboxAddress } from './tenantInboundService.js';
+@@ -177,6 +177,28 @@ export async function addTenantDomain(tenantId: string, rawDomain: string) {
+   });
+ }
+ 
++/**
++ * Reads the domain's CURRENT status from Resend and saves it. Unlike verifyTenantDomain this does not ask
++ * Resend to re-check DNS, so it never restarts a verification that is already running; it just shows
++ * whatever Resend currently says (e.g. it verified on its own a minute ago).
++ */
++export async function refreshTenantDomain(tenantId: string) {
++  const s = await getTenantEmailSettings(tenantId, { fresh: true });
++  if (!s.resendDomainId) throw new HttpError(400, 'Add a domain first');
++  const got = await resendClient().domains.get(s.resendDomainId);
++  if (got.error || !got.data) {
++    const code = Number((got.error as any)?.statusCode);
++    if (code === 404) throw new HttpError(404, 'This domain no longer exists in Resend. Remove it here and add it again.');
++    throw new HttpError(502, `Resend: ${got.error?.message || 'could not load domain'}`);
++  }
++  const status = got.data.status as TenantDomainStatus;
++  return saveSettings(tenantId, {
++    status,
++    records: mapRecords(got.data.records as any[]),
++    ...(status === 'verified' && s.status !== 'verified' ? { verifiedAt: new Date().toISOString() } : {}),
++  });
++}
++
+ export async function verifyTenantDomain(tenantId: string) {
+   const s = await getTenantEmailSettings(tenantId, { fresh: true });
+   if (!s.resendDomainId) throw new HttpError(400, 'Add a domain first');
+@@ -194,6 +216,59 @@ export async function verifyTenantDomain(tenantId: string) {
+   });
+ }
+ 
++/** Domain part of the platform-wide RESEND_FROM, e.g. `Name <sales@umrah360.in>` -> `umrah360.in`. */
++function platformFromDomain(): string {
++  const m = (process.env.RESEND_FROM || '').match(/@([a-z0-9.-]+)/i);
++  return m ? m[1].toLowerCase() : '';
++}
++
++/**
++ * Removes the workspace's sending domain from Resend AND from the app.
++ * Order matters: Resend first. If that fails the app keeps the domain, so the two never disagree
++ * (a domain left behind in Resend would be unreachable for re-adding).
++ * Refused when the domain is the one the platform itself sends from (RESEND_FROM), because deleting it in
++ * Resend would stop every grandfathered workspace from sending.
++ */
++export async function removeTenantDomain(tenantId: string) {
++  const s = await getTenantEmailSettings(tenantId, { fresh: true });
++  if (!s.domain) throw new HttpError(400, 'There is no domain to remove');
++  const domain = s.domain.toLowerCase();
++
++  if (platformFromDomain() === domain) {
++    throw new HttpError(409, `${domain} is the platform's own sending domain, so it can't be removed here.`);
++  }
++
++  if (s.resendDomainId) {
++    const resend = resendClient();
++    const res = await resend.domains.remove(s.resendDomainId);
++    if (res.error) {
++      const code = Number((res.error as any)?.statusCode);
++      // 404 = already gone in Resend (deleted from their dashboard): carry on and clean up our side.
++      if (code !== 404) throw new HttpError(502, `Resend: ${res.error.message || 'could not remove domain'}`);
++    }
++  }
++
++  // Release the global claim, only if it is ours.
++  try {
++    const claimRef = doc(db, 'email_domains', domain);
++    const claim = await getDoc(claimRef);
++    if (claim.exists() && claim.data()?.tenantId === tenantId) await deleteDoc(claimRef);
++  } catch (err: any) {
++    console.warn('[Tenant Email] could not release domain claim:', err?.message || err);
++  }
++
++  // Keep the display name and reply-to; the sender address belongs to the domain, so it goes with it.
++  await saveSettings(tenantId, {
++    domain: undefined,
++    resendDomainId: undefined,
++    status: undefined,
++    records: undefined,
++    verifiedAt: undefined,
++    fromLocalPart: undefined,
++  });
++  return getEmailSettingsView(tenantId);
++}
++
+ export async function setTenantSender(tenantId: string, input: { fromName?: string; fromLocalPart?: string; replyTo?: string }) {
+   const s = await getTenantEmailSettings(tenantId, { fresh: true });
+   if (!s.domain) throw new HttpError(400, 'Add a domain first');

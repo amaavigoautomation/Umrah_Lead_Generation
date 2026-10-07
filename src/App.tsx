@@ -229,6 +229,19 @@ export default function App() {
     }
   }, [session, currentTenantId]);
 
+  // Serverless hosts (Vercel) have no always-on poller: while the app is open, ask the server to
+  // check this company's own mailbox every minute so replies get ingested and answered.
+  useEffect(() => {
+    if (!session || session.isPlatformAdmin || !currentTenantId) return;
+    const tick = () => {
+      if (document.visibilityState === 'hidden') return;
+      fetch('/api/inbound-mail/cron', { method: 'POST' }).catch(() => {});
+    };
+    const first = setTimeout(tick, 5000);
+    const t = setInterval(tick, 60_000);
+    return () => { clearTimeout(first); clearInterval(t); };
+  }, [session, currentTenantId]);
+
   // What the workspace's plan includes (the server enforces it too; this only drives the UI).
   const [entitlements, setEntitlements] = useState<{ planName: string; features: Record<string, boolean>; billing?: { status: string; locked: boolean; graceEndsAt?: string } } | null>(null);
   const [activatingPlan, setActivatingPlan] = useState(false);

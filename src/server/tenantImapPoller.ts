@@ -1,7 +1,8 @@
 import { simpleParser } from 'mailparser';
 import { runWithJobLease } from './jobLeaseService.js';
 import { isFirebaseConfigured } from '../firebase/config.js';
-import { db } from './adminFirestore.js';
+import { db, getDocs, query, where, limit } from './adminFirestore.js';
+import { tenantRepo } from './tenantRepo.js';
 import { isMessageAlreadyProcessed, recordProcessedInboundEmail, normalizeIdentifier } from './firestorePersistence.js';
 import { isBotOrNewsletter } from './imapService.js';
 import { findExistingConversationForInboundEmail, processLiveInboundEmail, runWithInboundCtx } from './inboundPipeline.js';
@@ -262,6 +263,16 @@ async function runCycle(tenantId: string): Promise<TenantPollResult> {
           })
         );
         allowed = Boolean(match.isExisting && ['inReplyTo', 'references', 'customerEmail', 'contactEmail'].includes(match.matchedBy));
+        // A reply from someone this company emailed in a campaign counts as a known conversation.
+        if (!allowed && isFirebaseConfigured && db && c.from) {
+          try {
+            const from = c.from.toLowerCase().trim();
+            const snap = await getDocs(query(tenantRepo(ctx).campaignLeads(), where('email', '==', from), limit(1)));
+            allowed = !snap.empty;
+          } catch (e) {
+            console.warn('[Tenant IMAP] campaign lead lookup notice:', (e as any)?.message || e);
+          }
+        }
       }
 
       if (!allowed) {

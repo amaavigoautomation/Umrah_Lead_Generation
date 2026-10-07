@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { stripQuotedEmailHistory } from './quotedText.js';
 import { hasFeature } from './entitlements.js';
 import { tenantRepo } from './tenantRepo.js';
@@ -289,8 +290,13 @@ let activeCampaignCtx: TenantContext = DEFAULT_UMRAH_CTX;
 export function setCampaignActiveContext(ctx: TenantContext) {
   activeCampaignCtx = ctx;
 }
+// Per-call tenant scope (survives awaits); falls back to the legacy global set by API requests.
+const campaignCtxStore = new AsyncLocalStorage<TenantContext>();
+export function runWithCampaignCtx<T>(ctx: TenantContext, fn: () => Promise<T>): Promise<T> {
+  return campaignCtxStore.run(ctx, fn);
+}
 export function getCampaignActiveCtx(): TenantContext {
-  return activeCampaignCtx;
+  return campaignCtxStore.getStore() ?? activeCampaignCtx;
 }
 
 export interface TenantCampaignStore {
@@ -328,91 +334,91 @@ export function getTenantCampaignStore(tenantId: string = 'umrah360'): TenantCam
 
 // Proxies mapping legacy globals to tenant-scoped stores
 const campaignsMap = {
-  get: (k: string) => getTenantCampaignStore(activeCampaignCtx.tenantId).campaignsMap.get(k),
-  set: (k: string, v: Campaign) => getTenantCampaignStore(activeCampaignCtx.tenantId).campaignsMap.set(k, v),
-  has: (k: string) => getTenantCampaignStore(activeCampaignCtx.tenantId).campaignsMap.has(k),
-  delete: (k: string) => getTenantCampaignStore(activeCampaignCtx.tenantId).campaignsMap.delete(k),
-  values: () => getTenantCampaignStore(activeCampaignCtx.tenantId).campaignsMap.values(),
-  keys: () => getTenantCampaignStore(activeCampaignCtx.tenantId).campaignsMap.keys(),
-  entries: () => getTenantCampaignStore(activeCampaignCtx.tenantId).campaignsMap.entries(),
-  clear: () => getTenantCampaignStore(activeCampaignCtx.tenantId).campaignsMap.clear(),
-  get size() { return getTenantCampaignStore(activeCampaignCtx.tenantId).campaignsMap.size; },
+  get: (k: string) => getTenantCampaignStore(getCampaignActiveCtx().tenantId).campaignsMap.get(k),
+  set: (k: string, v: Campaign) => getTenantCampaignStore(getCampaignActiveCtx().tenantId).campaignsMap.set(k, v),
+  has: (k: string) => getTenantCampaignStore(getCampaignActiveCtx().tenantId).campaignsMap.has(k),
+  delete: (k: string) => getTenantCampaignStore(getCampaignActiveCtx().tenantId).campaignsMap.delete(k),
+  values: () => getTenantCampaignStore(getCampaignActiveCtx().tenantId).campaignsMap.values(),
+  keys: () => getTenantCampaignStore(getCampaignActiveCtx().tenantId).campaignsMap.keys(),
+  entries: () => getTenantCampaignStore(getCampaignActiveCtx().tenantId).campaignsMap.entries(),
+  clear: () => getTenantCampaignStore(getCampaignActiveCtx().tenantId).campaignsMap.clear(),
+  get size() { return getTenantCampaignStore(getCampaignActiveCtx().tenantId).campaignsMap.size; },
 };
 
 const campaignLeadsMap = {
-  get: (k: string) => getTenantCampaignStore(activeCampaignCtx.tenantId).campaignLeadsMap.get(k),
-  set: (k: string, v: CampaignLead) => getTenantCampaignStore(activeCampaignCtx.tenantId).campaignLeadsMap.set(k, v),
-  has: (k: string) => getTenantCampaignStore(activeCampaignCtx.tenantId).campaignLeadsMap.has(k),
-  delete: (k: string) => getTenantCampaignStore(activeCampaignCtx.tenantId).campaignLeadsMap.delete(k),
-  values: () => getTenantCampaignStore(activeCampaignCtx.tenantId).campaignLeadsMap.values(),
-  keys: () => getTenantCampaignStore(activeCampaignCtx.tenantId).campaignLeadsMap.keys(),
-  entries: () => getTenantCampaignStore(activeCampaignCtx.tenantId).campaignLeadsMap.entries(),
-  clear: () => getTenantCampaignStore(activeCampaignCtx.tenantId).campaignLeadsMap.clear(),
-  get size() { return getTenantCampaignStore(activeCampaignCtx.tenantId).campaignLeadsMap.size; },
+  get: (k: string) => getTenantCampaignStore(getCampaignActiveCtx().tenantId).campaignLeadsMap.get(k),
+  set: (k: string, v: CampaignLead) => getTenantCampaignStore(getCampaignActiveCtx().tenantId).campaignLeadsMap.set(k, v),
+  has: (k: string) => getTenantCampaignStore(getCampaignActiveCtx().tenantId).campaignLeadsMap.has(k),
+  delete: (k: string) => getTenantCampaignStore(getCampaignActiveCtx().tenantId).campaignLeadsMap.delete(k),
+  values: () => getTenantCampaignStore(getCampaignActiveCtx().tenantId).campaignLeadsMap.values(),
+  keys: () => getTenantCampaignStore(getCampaignActiveCtx().tenantId).campaignLeadsMap.keys(),
+  entries: () => getTenantCampaignStore(getCampaignActiveCtx().tenantId).campaignLeadsMap.entries(),
+  clear: () => getTenantCampaignStore(getCampaignActiveCtx().tenantId).campaignLeadsMap.clear(),
+  get size() { return getTenantCampaignStore(getCampaignActiveCtx().tenantId).campaignLeadsMap.size; },
 };
 
 const campaignRunsMap = {
-  get: (k: string) => getTenantCampaignStore(activeCampaignCtx.tenantId).campaignRunsMap.get(k),
-  set: (k: string, v: CampaignRun) => getTenantCampaignStore(activeCampaignCtx.tenantId).campaignRunsMap.set(k, v),
-  has: (k: string) => getTenantCampaignStore(activeCampaignCtx.tenantId).campaignRunsMap.has(k),
-  delete: (k: string) => getTenantCampaignStore(activeCampaignCtx.tenantId).campaignRunsMap.delete(k),
-  values: () => getTenantCampaignStore(activeCampaignCtx.tenantId).campaignRunsMap.values(),
-  keys: () => getTenantCampaignStore(activeCampaignCtx.tenantId).campaignRunsMap.keys(),
-  entries: () => getTenantCampaignStore(activeCampaignCtx.tenantId).campaignRunsMap.entries(),
-  clear: () => getTenantCampaignStore(activeCampaignCtx.tenantId).campaignRunsMap.clear(),
-  get size() { return getTenantCampaignStore(activeCampaignCtx.tenantId).campaignRunsMap.size; },
+  get: (k: string) => getTenantCampaignStore(getCampaignActiveCtx().tenantId).campaignRunsMap.get(k),
+  set: (k: string, v: CampaignRun) => getTenantCampaignStore(getCampaignActiveCtx().tenantId).campaignRunsMap.set(k, v),
+  has: (k: string) => getTenantCampaignStore(getCampaignActiveCtx().tenantId).campaignRunsMap.has(k),
+  delete: (k: string) => getTenantCampaignStore(getCampaignActiveCtx().tenantId).campaignRunsMap.delete(k),
+  values: () => getTenantCampaignStore(getCampaignActiveCtx().tenantId).campaignRunsMap.values(),
+  keys: () => getTenantCampaignStore(getCampaignActiveCtx().tenantId).campaignRunsMap.keys(),
+  entries: () => getTenantCampaignStore(getCampaignActiveCtx().tenantId).campaignRunsMap.entries(),
+  clear: () => getTenantCampaignStore(getCampaignActiveCtx().tenantId).campaignRunsMap.clear(),
+  get size() { return getTenantCampaignStore(getCampaignActiveCtx().tenantId).campaignRunsMap.size; },
 };
 
 const emailTemplatesMap = {
-  get: (k: string) => getTenantCampaignStore(activeCampaignCtx.tenantId).emailTemplatesMap.get(k),
-  set: (k: string, v: EmailTemplate) => getTenantCampaignStore(activeCampaignCtx.tenantId).emailTemplatesMap.set(k, v),
-  has: (k: string) => getTenantCampaignStore(activeCampaignCtx.tenantId).emailTemplatesMap.has(k),
-  delete: (k: string) => getTenantCampaignStore(activeCampaignCtx.tenantId).emailTemplatesMap.delete(k),
-  values: () => getTenantCampaignStore(activeCampaignCtx.tenantId).emailTemplatesMap.values(),
-  keys: () => getTenantCampaignStore(activeCampaignCtx.tenantId).emailTemplatesMap.keys(),
-  entries: () => getTenantCampaignStore(activeCampaignCtx.tenantId).emailTemplatesMap.entries(),
-  clear: () => getTenantCampaignStore(activeCampaignCtx.tenantId).emailTemplatesMap.clear(),
-  get size() { return getTenantCampaignStore(activeCampaignCtx.tenantId).emailTemplatesMap.size; },
+  get: (k: string) => getTenantCampaignStore(getCampaignActiveCtx().tenantId).emailTemplatesMap.get(k),
+  set: (k: string, v: EmailTemplate) => getTenantCampaignStore(getCampaignActiveCtx().tenantId).emailTemplatesMap.set(k, v),
+  has: (k: string) => getTenantCampaignStore(getCampaignActiveCtx().tenantId).emailTemplatesMap.has(k),
+  delete: (k: string) => getTenantCampaignStore(getCampaignActiveCtx().tenantId).emailTemplatesMap.delete(k),
+  values: () => getTenantCampaignStore(getCampaignActiveCtx().tenantId).emailTemplatesMap.values(),
+  keys: () => getTenantCampaignStore(getCampaignActiveCtx().tenantId).emailTemplatesMap.keys(),
+  entries: () => getTenantCampaignStore(getCampaignActiveCtx().tenantId).emailTemplatesMap.entries(),
+  clear: () => getTenantCampaignStore(getCampaignActiveCtx().tenantId).emailTemplatesMap.clear(),
+  get size() { return getTenantCampaignStore(getCampaignActiveCtx().tenantId).emailTemplatesMap.size; },
 };
 
 const sendHistorySet = {
-  add: (k: string) => getTenantCampaignStore(activeCampaignCtx.tenantId).sendHistorySet.add(k),
-  has: (k: string) => getTenantCampaignStore(activeCampaignCtx.tenantId).sendHistorySet.has(k),
-  delete: (k: string) => getTenantCampaignStore(activeCampaignCtx.tenantId).sendHistorySet.delete(k),
-  clear: () => getTenantCampaignStore(activeCampaignCtx.tenantId).sendHistorySet.clear(),
-  get size() { return getTenantCampaignStore(activeCampaignCtx.tenantId).sendHistorySet.size; },
+  add: (k: string) => getTenantCampaignStore(getCampaignActiveCtx().tenantId).sendHistorySet.add(k),
+  has: (k: string) => getTenantCampaignStore(getCampaignActiveCtx().tenantId).sendHistorySet.has(k),
+  delete: (k: string) => getTenantCampaignStore(getCampaignActiveCtx().tenantId).sendHistorySet.delete(k),
+  clear: () => getTenantCampaignStore(getCampaignActiveCtx().tenantId).sendHistorySet.clear(),
+  get size() { return getTenantCampaignStore(getCampaignActiveCtx().tenantId).sendHistorySet.size; },
   [Symbol.iterator]: function* (): Generator<string, void, unknown> {
-    yield* getTenantCampaignStore(activeCampaignCtx.tenantId).sendHistorySet;
+    yield* getTenantCampaignStore(getCampaignActiveCtx().tenantId).sendHistorySet;
   },
 };
 
 const inFlightLeadSendsSet = {
-  add: (k: string) => getTenantCampaignStore(activeCampaignCtx.tenantId).inFlightLeadSendsSet.add(k),
-  has: (k: string) => getTenantCampaignStore(activeCampaignCtx.tenantId).inFlightLeadSendsSet.has(k),
-  delete: (k: string) => getTenantCampaignStore(activeCampaignCtx.tenantId).inFlightLeadSendsSet.delete(k),
-  clear: () => getTenantCampaignStore(activeCampaignCtx.tenantId).inFlightLeadSendsSet.clear(),
-  get size() { return getTenantCampaignStore(activeCampaignCtx.tenantId).inFlightLeadSendsSet.size; },
+  add: (k: string) => getTenantCampaignStore(getCampaignActiveCtx().tenantId).inFlightLeadSendsSet.add(k),
+  has: (k: string) => getTenantCampaignStore(getCampaignActiveCtx().tenantId).inFlightLeadSendsSet.has(k),
+  delete: (k: string) => getTenantCampaignStore(getCampaignActiveCtx().tenantId).inFlightLeadSendsSet.delete(k),
+  clear: () => getTenantCampaignStore(getCampaignActiveCtx().tenantId).inFlightLeadSendsSet.clear(),
+  get size() { return getTenantCampaignStore(getCampaignActiveCtx().tenantId).inFlightLeadSendsSet.size; },
   [Symbol.iterator]: function* (): Generator<string, void, unknown> {
-    yield* getTenantCampaignStore(activeCampaignCtx.tenantId).inFlightLeadSendsSet;
+    yield* getTenantCampaignStore(getCampaignActiveCtx().tenantId).inFlightLeadSendsSet;
   },
 };
 
 const pausedCampaignsSet = {
-  add: (k: string) => getTenantCampaignStore(activeCampaignCtx.tenantId).pausedCampaignsSet.add(k),
-  has: (k: string) => getTenantCampaignStore(activeCampaignCtx.tenantId).pausedCampaignsSet.has(k),
-  delete: (k: string) => getTenantCampaignStore(activeCampaignCtx.tenantId).pausedCampaignsSet.delete(k),
-  clear: () => getTenantCampaignStore(activeCampaignCtx.tenantId).pausedCampaignsSet.clear(),
-  get size() { return getTenantCampaignStore(activeCampaignCtx.tenantId).pausedCampaignsSet.size; },
+  add: (k: string) => getTenantCampaignStore(getCampaignActiveCtx().tenantId).pausedCampaignsSet.add(k),
+  has: (k: string) => getTenantCampaignStore(getCampaignActiveCtx().tenantId).pausedCampaignsSet.has(k),
+  delete: (k: string) => getTenantCampaignStore(getCampaignActiveCtx().tenantId).pausedCampaignsSet.delete(k),
+  clear: () => getTenantCampaignStore(getCampaignActiveCtx().tenantId).pausedCampaignsSet.clear(),
+  get size() { return getTenantCampaignStore(getCampaignActiveCtx().tenantId).pausedCampaignsSet.size; },
   [Symbol.iterator]: function* (): Generator<string, void, unknown> {
-    yield* getTenantCampaignStore(activeCampaignCtx.tenantId).pausedCampaignsSet;
+    yield* getTenantCampaignStore(getCampaignActiveCtx().tenantId).pausedCampaignsSet;
   },
 };
 
 const activeCampaignAbortControllers = {
-  get: (k: string) => getTenantCampaignStore(activeCampaignCtx.tenantId).activeCampaignAbortControllers.get(k),
-  set: (k: string, v: AbortController) => getTenantCampaignStore(activeCampaignCtx.tenantId).activeCampaignAbortControllers.set(k, v),
-  has: (k: string) => getTenantCampaignStore(activeCampaignCtx.tenantId).activeCampaignAbortControllers.has(k),
-  delete: (k: string) => getTenantCampaignStore(activeCampaignCtx.tenantId).activeCampaignAbortControllers.delete(k),
+  get: (k: string) => getTenantCampaignStore(getCampaignActiveCtx().tenantId).activeCampaignAbortControllers.get(k),
+  set: (k: string, v: AbortController) => getTenantCampaignStore(getCampaignActiveCtx().tenantId).activeCampaignAbortControllers.set(k, v),
+  has: (k: string) => getTenantCampaignStore(getCampaignActiveCtx().tenantId).activeCampaignAbortControllers.has(k),
+  delete: (k: string) => getTenantCampaignStore(getCampaignActiveCtx().tenantId).activeCampaignAbortControllers.delete(k),
 };
 
 

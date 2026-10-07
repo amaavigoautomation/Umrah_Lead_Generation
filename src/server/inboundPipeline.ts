@@ -43,7 +43,7 @@ import {
   recordProcessedInboundEmail,
   normalizeIdentifier,
 } from './firestorePersistence.js';
-import { handleIncomingCampaignLeadReply } from './campaignService.js';
+import { handleIncomingCampaignLeadReply, runWithCampaignCtx } from './campaignService.js';
 import { isFirebaseConfigured } from '../firebase/config.js';
 import { db } from './adminFirestore.js';
 import {
@@ -1484,14 +1484,15 @@ export async function processLiveInboundEmail(payload: {
     // Hook into Outbound Campaign System: track lead reply and detect demo booking intent
     let campaignReplyResult: { isCampaignLead: boolean; campaignLead?: any; campaignId?: string; campaignName?: string; demoDetected?: boolean } = { isCampaignLead: false };
     try {
-      campaignReplyResult = await handleIncomingCampaignLeadReply({
+      // Match the lead inside THIS inbound's workspace, not whichever tenant last made an API call.
+      campaignReplyResult = await runWithCampaignCtx(getInboundCtx(), () => handleIncomingCampaignLeadReply({
         fromEmail: payload.from,
         fromPhone: payload.phone,
         subject: payload.subject,
         body: payload.body,
         gmailMessageId: incomingMsgId,
         gmailThreadId: threadId,
-      });
+      }));
     } catch (campaignErr) {
       console.warn('[Unified Inbox] Campaign lead tracking hook notice:', campaignErr);
     }

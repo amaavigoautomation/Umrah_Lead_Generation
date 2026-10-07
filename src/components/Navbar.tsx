@@ -8,7 +8,6 @@ import {
   Sparkles,
   PlayCircle,
   Settings,
-  Database,
   Bot,
   RefreshCw,
   Mail,
@@ -16,11 +15,11 @@ import {
   MessageSquare,
   Lock,
   LogOut,
-  User,
   Shield,
 } from 'lucide-react';
 import { WHATSAPP_BUSINESS_NUMBER_FORMATTED } from '../services/whatsappInboundService';
 import { AppUser } from '../types';
+import { Umrah360Logo } from './Umrah360Logo';
 
 export type ActiveTab =
   | 'inbox'
@@ -82,116 +81,116 @@ export const Navbar: React.FC<NavbarProps> = ({
     return (currentUser.allowedModules || []).includes(tabId);
   };
 
+  const getTabButtonClass = (tabId: ActiveTab) => {
+    const accessible = isModuleAccessible(tabId);
+    if (!accessible) {
+      return 'opacity-40 text-slate-400 hover:opacity-60 cursor-pointer flex items-center space-x-2 px-3 py-1.5 rounded-lg text-xs md:text-sm font-medium';
+    }
+    if (activeTab === tabId) {
+      return 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-xs font-semibold flex items-center space-x-2 px-3.5 py-1.5 rounded-lg text-xs md:text-sm transition-all';
+    }
+    return 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/80 font-medium flex items-center space-x-2 px-3 py-1.5 rounded-lg text-xs md:text-sm transition-colors';
+  };
+
   return (
-    <header className="bg-slate-900 text-white border-b border-slate-800 sticky top-0 z-40">
+    <header className="bg-white text-slate-800 border-b border-slate-200/90 sticky top-0 z-40 shadow-xs">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        {/* Top Header Row */}
         <div className="flex items-center justify-between h-16">
-          {/* Brand Logo & Tagline */}
-          <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 rounded-lg bg-emerald-600 flex items-center justify-center font-bold text-lg text-white shadow-md shadow-emerald-900/50">
-              U
-            </div>
-            <div>
-              <div className="flex items-center space-x-2">
-                <span className="font-bold text-lg tracking-tight text-white">Umrah360</span>
-                <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 font-medium border border-emerald-500/30">
-                  AI Platform
-                </span>
-              </div>
-              <p className="text-xs text-slate-400 hidden sm:block">
-                Inbound Lead Capture & Outbound Prospecting Engine
-              </p>
-            </div>
+          {/* Brand Logo & System Info */}
+          <div className="flex items-center space-x-4">
+            <Umrah360Logo size="md" systemName="Umrah360" systemBadge="AI Platform" />
           </div>
 
-          {/* System Status Indicators */}
-          <div className="hidden lg:flex items-center space-x-3 text-xs">
+          {/* System Status Indicators (Tenant, Mailbox, WhatsApp, Handoff) */}
+          <div className="hidden lg:flex items-center space-x-2.5 text-xs">
             {/* Tenant Switcher & Plan Badge */}
-            <div className="flex items-center space-x-1.5 px-2.5 py-1 rounded-md bg-indigo-950/70 border border-indigo-800 text-indigo-300">
-              <Shield className="w-3.5 h-3.5 text-indigo-400" />
+            <div className="flex items-center space-x-1.5 px-3 py-1 rounded-lg bg-slate-50 border border-slate-200 text-slate-700">
+              <Shield className="w-3.5 h-3.5 text-orange-500" />
               {allTenants.length > 1 && onSwitchTenant ? (
                 <select
                   value={currentTenant?.id || 'umrah360'}
                   onChange={(e) => onSwitchTenant(e.target.value)}
-                  className="bg-transparent text-xs font-semibold focus:outline-none cursor-pointer text-indigo-200"
+                  className="bg-transparent text-xs font-semibold focus:outline-none cursor-pointer text-slate-800"
                 >
                   {allTenants.map((t) => (
-                    <option key={t.id} value={t.id} className="bg-slate-900 text-white">
+                    <option key={t.id} value={t.id} className="bg-white text-slate-900">
                       {t.name} ({t.plan || 'growth'})
                     </option>
                   ))}
                 </select>
               ) : (
-                <span className="font-semibold">
-                  {currentTenant?.name || 'Umrah360 Flagship'} ({currentTenant?.plan || 'enterprise'})
+                <span className="font-semibold text-slate-800">
+                  {currentTenant?.name || 'Umrah360'}
                 </span>
               )}
-            </div>
-
-            <div className="flex items-center space-x-1.5 px-2.5 py-1 rounded-md bg-emerald-950/70 border border-emerald-800 text-emerald-300">
-              <Bot className="w-3.5 h-3.5 text-emerald-400" />
-              <span>Multi-Tenant Engine</span>
+              <span className="bg-orange-50 text-orange-700 border border-orange-200/70 text-[10px] font-bold px-1.5 py-0.2 rounded uppercase">
+                {currentTenant?.plan || 'Enterprise'}
+              </span>
             </div>
 
             {isModuleAccessible('live-mailbox') && (
               <button
                 onClick={() => setActiveTab('live-mailbox')}
-                className={`flex items-center space-x-1.5 px-2.5 py-1 rounded-md border text-xs transition ${
+                className={`flex items-center space-x-1.5 px-2.5 py-1 rounded-lg border text-xs transition ${
                   activeTab === 'live-mailbox'
-                    ? 'bg-blue-600 border-blue-500 text-white'
-                    : 'bg-blue-950/70 border-blue-800 text-blue-300 hover:bg-blue-900/60'
+                    ? 'bg-orange-500 border-orange-500 text-white shadow-xs'
+                    : 'bg-slate-50 border-slate-200 text-slate-600 hover:text-slate-900 hover:bg-slate-100'
                 }`}
                 title={`Live Mailbox & SMTP Connection for ${activeMailbox}`}
               >
-                <Radio className="w-3.5 h-3.5 text-blue-400 animate-pulse" />
-                <span className="font-mono">{activeMailbox}</span>
+                <Radio className={`w-3.5 h-3.5 ${activeTab === 'live-mailbox' ? 'text-white' : 'text-blue-500'} animate-pulse`} />
+                <span className="font-mono text-[11px] truncate max-w-[130px]">{activeMailbox}</span>
               </button>
             )}
 
             {isModuleAccessible('inbox') && (
               <button
                 onClick={() => setActiveTab('inbox')}
-                className="flex items-center space-x-1.5 px-2.5 py-1 rounded-md border text-xs transition bg-emerald-950/70 border-emerald-800 text-emerald-300 hover:bg-emerald-900/60"
+                className="flex items-center space-x-1.5 px-2.5 py-1 rounded-lg border text-xs transition bg-slate-50 border-slate-200 text-slate-600 hover:text-slate-900 hover:bg-slate-100"
                 title={`Live WhatsApp Business Inbound Line for ${WHATSAPP_BUSINESS_NUMBER_FORMATTED}`}
               >
-                <MessageSquare className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
-                <span className="font-mono">{WHATSAPP_BUSINESS_NUMBER_FORMATTED}</span>
+                <MessageSquare className="w-3.5 h-3.5 text-emerald-500 animate-pulse" />
+                <span className="font-mono text-[11px]">{WHATSAPP_BUSINESS_NUMBER_FORMATTED}</span>
               </button>
             )}
 
             {handoffCount > 0 && isModuleAccessible('inbox') && (
-              <div className="flex items-center space-x-1.5 px-2.5 py-1 rounded-md bg-amber-500/20 border border-amber-500/40 text-amber-300 font-medium">
-                <span>{handoffCount} Human Handoff</span>
+              <div className="flex items-center space-x-1.5 px-2.5 py-1 rounded-full bg-orange-50 border border-orange-200 text-orange-700 font-bold text-xs">
+                <span className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-ping"></span>
+                <span>{handoffCount} Handoff</span>
               </div>
             )}
           </div>
 
-          {/* Action to Seed / Reset Data + User Account Status */}
+          {/* Action to Seed / Reset Data + User Account Card */}
           <div className="flex items-center space-x-3">
             <button
               onClick={onResetSeedData}
-              title="Reset initial demo data (Campaigns, Rahul Sharma thread, Knowledge Base)"
-              className="hidden sm:flex items-center space-x-1.5 px-3 py-1.5 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium border border-slate-700 transition"
+              title="Reset initial demo data (Campaigns, Leads, Knowledge Base)"
+              className="hidden sm:flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs font-semibold border border-slate-200 shadow-xs transition"
             >
-              <RefreshCw className="w-3.5 h-3.5" />
+              <RefreshCw className="w-3.5 h-3.5 text-slate-500" />
               <span>Reset Demo</span>
             </button>
 
-            {/* Current User Badge & Logout */}
+            {/* Current User Badge & Status (Matches screenshot) */}
             {currentUser && (
-              <div className="flex items-center space-x-2 pl-2 sm:border-l border-slate-800">
-                <div className="flex items-center space-x-2 bg-slate-800/90 border border-slate-700/80 px-2.5 py-1 rounded-lg">
-                  <div className="w-6 h-6 rounded-full bg-emerald-600/30 text-emerald-300 border border-emerald-500/40 flex items-center justify-center font-bold text-xs">
-                    {currentUser.name.charAt(0)}
-                  </div>
-                  <div className="hidden md:block text-left">
-                    <div className="text-xs font-semibold text-white leading-tight truncate max-w-[120px]">
+              <div className="flex items-center space-x-2 pl-2 sm:border-l border-slate-200">
+                <div className="flex flex-col text-right">
+                  <div className="flex items-center justify-end space-x-1.5">
+                    <span className="text-xs font-bold text-slate-900 leading-tight">
                       {currentUser.name}
-                    </div>
-                    <div className="text-[10px] text-emerald-400 font-mono flex items-center space-x-1">
-                      <Shield className="w-2.5 h-2.5" />
-                      <span>{currentUser.role}</span>
-                    </div>
+                    </span>
+                    <span className="bg-orange-50 text-orange-700 border border-orange-200/80 text-[10px] font-bold px-1.5 py-0.2 rounded">
+                      {currentUser.role === 'ADMIN' ? 'ADMIN' : 'HR002'}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-end space-x-1 mt-0.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-orange-500"></span>
+                    <span className="text-[10px] text-slate-500 font-medium">
+                      {currentUser.role === 'ADMIN' ? 'Operations Specialist' : 'Lead Specialist'}
+                    </span>
                   </div>
                 </div>
 
@@ -199,7 +198,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                   <button
                     onClick={onLogout}
                     title="Sign Out"
-                    className="p-1.5 rounded-lg bg-slate-800 hover:bg-red-950/60 text-slate-400 hover:text-red-400 border border-slate-700 hover:border-red-800/60 transition"
+                    className="p-1.5 rounded-lg text-slate-400 hover:text-orange-600 hover:bg-orange-50 border border-transparent hover:border-orange-200 transition"
                   >
                     <LogOut className="w-4 h-4" />
                   </button>
@@ -209,175 +208,87 @@ export const Navbar: React.FC<NavbarProps> = ({
           </div>
         </div>
 
-        {/* Navigation Tabs with Lock State Detection */}
-        <div className="flex space-x-1 overflow-x-auto py-2 scrollbar-none text-sm border-t border-slate-800/60">
+        {/* Navigation Tabs Bar */}
+        <div className="flex space-x-1.5 overflow-x-auto py-2 scrollbar-none text-sm border-t border-slate-100">
           {/* 1. Unified Inbox */}
-          <button
-            onClick={() => setActiveTab('inbox')}
-            className={`flex items-center space-x-2 px-3.5 py-1.5 rounded-md font-medium whitespace-nowrap transition ${
-              !isModuleAccessible('inbox')
-                ? 'opacity-40 text-slate-500 hover:opacity-70 bg-slate-900/40 cursor-pointer'
-                : activeTab === 'inbox'
-                ? 'bg-emerald-600 text-white shadow-sm'
-                : 'text-slate-300 hover:text-white hover:bg-slate-800'
-            }`}
-          >
+          <button onClick={() => setActiveTab('inbox')} className={getTabButtonClass('inbox')}>
             <Inbox className="w-4 h-4" />
             <span>Unified Inbox</span>
             {!isModuleAccessible('inbox') ? (
-              <Lock className="w-3 h-3 text-amber-400 ml-1" />
+              <Lock className="w-3 h-3 text-orange-400 ml-1" />
             ) : unreadCount > 0 ? (
-              <span className="ml-1.5 px-1.5 py-0.2 bg-emerald-400 text-slate-900 text-xs font-bold rounded-full">
+              <span className="ml-1 px-1.5 py-0.2 bg-white text-orange-600 text-xs font-bold rounded-full">
                 {unreadCount}
               </span>
             ) : null}
           </button>
 
-          {/* 1.5 Auto Follow-Up Agent */}
-          <button
-            onClick={() => setActiveTab('auto-followup')}
-            className={`flex items-center space-x-2 px-3.5 py-1.5 rounded-md font-medium whitespace-nowrap transition ${
-              !isModuleAccessible('auto-followup')
-                ? 'opacity-40 text-slate-500 hover:opacity-70 bg-slate-900/40 cursor-pointer'
-                : activeTab === 'auto-followup'
-                ? 'bg-emerald-600 text-white shadow-sm'
-                : 'text-emerald-400 hover:text-white hover:bg-slate-800'
-            }`}
-          >
-            <Bot className="w-4 h-4 text-emerald-400" />
+          {/* 2. Auto Follow-Up Agent */}
+          <button onClick={() => setActiveTab('auto-followup')} className={getTabButtonClass('auto-followup')}>
+            <Bot className="w-4 h-4" />
             <span>Auto Follow-Up</span>
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+            {isModuleAccessible('auto-followup') && (
+              <span className={`w-2 h-2 rounded-full ${activeTab === 'auto-followup' ? 'bg-white' : 'bg-orange-500'} animate-pulse`} />
+            )}
           </button>
 
-          {/* 2. Campaigns */}
-          <button
-            onClick={() => setActiveTab('campaigns')}
-            className={`flex items-center space-x-2 px-3.5 py-1.5 rounded-md font-medium whitespace-nowrap transition ${
-              !isModuleAccessible('campaigns')
-                ? 'opacity-40 text-slate-500 hover:opacity-70 bg-slate-900/40 cursor-pointer'
-                : activeTab === 'campaigns'
-                ? 'bg-emerald-600 text-white shadow-sm'
-                : 'text-slate-300 hover:text-white hover:bg-slate-800'
-            }`}
-          >
+          {/* 3. Campaigns */}
+          <button onClick={() => setActiveTab('campaigns')} className={getTabButtonClass('campaigns')}>
             <Send className="w-4 h-4" />
             <span>Campaigns</span>
-            {!isModuleAccessible('campaigns') && <Lock className="w-3 h-3 text-amber-400 ml-1" />}
+            {!isModuleAccessible('campaigns') && <Lock className="w-3 h-3 text-orange-400 ml-1" />}
           </button>
 
-          {/* 3. CRM & Leads */}
-          <button
-            onClick={() => setActiveTab('crm')}
-            className={`flex items-center space-x-2 px-3.5 py-1.5 rounded-md font-medium whitespace-nowrap transition ${
-              !isModuleAccessible('crm')
-                ? 'opacity-40 text-slate-500 hover:opacity-70 bg-slate-900/40 cursor-pointer'
-                : activeTab === 'crm'
-                ? 'bg-emerald-600 text-white shadow-sm'
-                : 'text-slate-300 hover:text-white hover:bg-slate-800'
-            }`}
-          >
+          {/* 4. CRM & Leads */}
+          <button onClick={() => setActiveTab('crm')} className={getTabButtonClass('crm')}>
             <Users className="w-4 h-4" />
             <span>CRM & Leads</span>
-            {!isModuleAccessible('crm') && <Lock className="w-3 h-3 text-amber-400 ml-1" />}
+            {!isModuleAccessible('crm') && <Lock className="w-3 h-3 text-orange-400 ml-1" />}
           </button>
 
-          {/* 4. Demo Scheduling Agent */}
-          <button
-            onClick={() => setActiveTab('scheduling')}
-            className={`flex items-center space-x-2 px-3.5 py-1.5 rounded-md font-medium whitespace-nowrap transition ${
-              !isModuleAccessible('scheduling')
-                ? 'opacity-40 text-slate-500 hover:opacity-70 bg-slate-900/40 cursor-pointer'
-                : activeTab === 'scheduling'
-                ? 'bg-emerald-600 text-white shadow-sm'
-                : 'text-slate-300 hover:text-white hover:bg-slate-800'
-            }`}
-          >
+          {/* 5. Demo Scheduling Agent */}
+          <button onClick={() => setActiveTab('scheduling')} className={getTabButtonClass('scheduling')}>
             <Calendar className="w-4 h-4" />
             <span>Demo Scheduling</span>
-            {!isModuleAccessible('scheduling') && <Lock className="w-3 h-3 text-amber-400 ml-1" />}
+            {!isModuleAccessible('scheduling') && <Lock className="w-3 h-3 text-orange-400 ml-1" />}
           </button>
 
-          {/* 4. Knowledge Base (RAG) */}
-          <button
-            onClick={() => setActiveTab('knowledge')}
-            className={`flex items-center space-x-2 px-3.5 py-1.5 rounded-md font-medium whitespace-nowrap transition ${
-              !isModuleAccessible('knowledge')
-                ? 'opacity-40 text-slate-500 hover:opacity-70 bg-slate-900/40 cursor-pointer'
-                : activeTab === 'knowledge'
-                ? 'bg-emerald-600 text-white shadow-sm'
-                : 'text-slate-300 hover:text-white hover:bg-slate-800'
-            }`}
-          >
+          {/* 6. Knowledge Base (RAG) */}
+          <button onClick={() => setActiveTab('knowledge')} className={getTabButtonClass('knowledge')}>
             <BookOpen className="w-4 h-4" />
-            <span>Knowledge Base (RAG)</span>
-            {!isModuleAccessible('knowledge') && <Lock className="w-3 h-3 text-amber-400 ml-1" />}
+            <span>Knowledge Base</span>
+            {!isModuleAccessible('knowledge') && <Lock className="w-3 h-3 text-orange-400 ml-1" />}
           </button>
 
-          {/* 5. AI Testing */}
-          <button
-            onClick={() => setActiveTab('playground')}
-            className={`flex items-center space-x-2 px-3.5 py-1.5 rounded-md font-medium whitespace-nowrap transition ${
-              !isModuleAccessible('playground')
-                ? 'opacity-40 text-slate-500 hover:opacity-70 bg-slate-900/40 cursor-pointer'
-                : activeTab === 'playground'
-                ? 'bg-emerald-600 text-white shadow-sm'
-                : 'text-slate-300 hover:text-white hover:bg-slate-800'
-            }`}
-          >
+          {/* 7. AI Testing Playground */}
+          <button onClick={() => setActiveTab('playground')} className={getTabButtonClass('playground')}>
             <Sparkles className="w-4 h-4" />
             <span>AI Testing</span>
-            {!isModuleAccessible('playground') && <Lock className="w-3 h-3 text-amber-400 ml-1" />}
+            {!isModuleAccessible('playground') && <Lock className="w-3 h-3 text-orange-400 ml-1" />}
           </button>
 
-          {/* 6. E2E Walkthroughs */}
-          <button
-            onClick={() => setActiveTab('scenarios')}
-            className={`flex items-center space-x-2 px-3.5 py-1.5 rounded-md font-medium whitespace-nowrap transition ${
-              !isModuleAccessible('scenarios')
-                ? 'opacity-40 text-slate-500 hover:opacity-70 bg-slate-900/40 cursor-pointer'
-                : activeTab === 'scenarios'
-                ? 'bg-emerald-600 text-white shadow-sm'
-                : 'text-slate-300 hover:text-white hover:bg-slate-800'
-            }`}
-          >
+          {/* 8. E2E Walkthroughs */}
+          <button onClick={() => setActiveTab('scenarios')} className={getTabButtonClass('scenarios')}>
             <PlayCircle className="w-4 h-4" />
             <span>E2E Walkthroughs</span>
-            {!isModuleAccessible('scenarios') && <Lock className="w-3 h-3 text-amber-400 ml-1" />}
+            {!isModuleAccessible('scenarios') && <Lock className="w-3 h-3 text-orange-400 ml-1" />}
           </button>
 
-          {/* 7. Channels & Settings */}
-          <button
-            onClick={() => setActiveTab('settings')}
-            className={`flex items-center space-x-2 px-3.5 py-1.5 rounded-md font-medium whitespace-nowrap transition ${
-              !isModuleAccessible('settings')
-                ? 'opacity-40 text-slate-500 hover:opacity-70 bg-slate-900/40 cursor-pointer'
-                : activeTab === 'settings'
-                ? 'bg-emerald-600 text-white shadow-sm'
-                : 'text-slate-300 hover:text-white hover:bg-slate-800'
-            }`}
-          >
+          {/* 9. Channels & Settings */}
+          <button onClick={() => setActiveTab('settings')} className={getTabButtonClass('settings')}>
             <Settings className="w-4 h-4" />
-            <span>Channels & Settings</span>
-            {!isModuleAccessible('settings') && <Lock className="w-3 h-3 text-amber-400 ml-1" />}
+            <span>Settings</span>
+            {!isModuleAccessible('settings') && <Lock className="w-3 h-3 text-orange-400 ml-1" />}
           </button>
 
-          {/* 8. Live Mailbox & SMTP */}
-          <button
-            onClick={() => setActiveTab('live-mailbox')}
-            className={`flex items-center space-x-2 px-3.5 py-1.5 rounded-md font-medium whitespace-nowrap transition ${
-              !isModuleAccessible('live-mailbox')
-                ? 'opacity-40 text-slate-500 hover:opacity-70 bg-slate-900/40 cursor-pointer'
-                : activeTab === 'live-mailbox'
-                ? 'bg-blue-600 text-white shadow-sm'
-                : 'text-blue-300 hover:text-white hover:bg-blue-950/60 border border-blue-500/30'
-            }`}
-          >
-            <Mail className="w-4 h-4 text-blue-400" />
-            <span>Live Mailbox & SMTP</span>
+          {/* 10. Live Mailbox & SMTP */}
+          <button onClick={() => setActiveTab('live-mailbox')} className={getTabButtonClass('live-mailbox')}>
+            <Mail className="w-4 h-4" />
+            <span>Live Mailbox</span>
             {!isModuleAccessible('live-mailbox') ? (
-              <Lock className="w-3 h-3 text-amber-400 ml-1" />
+              <Lock className="w-3 h-3 text-orange-400 ml-1" />
             ) : (
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+              <span className={`w-2 h-2 rounded-full ${activeTab === 'live-mailbox' ? 'bg-white' : 'bg-emerald-500'} animate-pulse`} />
             )}
           </button>
         </div>
@@ -385,3 +296,4 @@ export const Navbar: React.FC<NavbarProps> = ({
     </header>
   );
 };
+export default Navbar;

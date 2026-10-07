@@ -15,6 +15,13 @@ import {
   Check,
   AlertCircle,
   Layers,
+  FileText,
+  AlertTriangle,
+  ChevronDown,
+  Filter,
+  Eye,
+  Columns,
+  Table as TableIcon,
 } from 'lucide-react';
 import { KnowledgeDocument, KnowledgeStatus } from '../types';
 import { retrieveRelevantKnowledge, RetrievedChunk } from '../services/ragService';
@@ -34,7 +41,9 @@ export const KnowledgeBaseView: React.FC<KnowledgeBaseViewProps> = ({
 }) => {
   const [selectedDocId, setSelectedDocId] = useState<string>(documents[0]?.id || '');
   const [categoryFilter, setCategoryFilter] = useState<string>('ALL');
+  const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const [viewLayout, setViewLayout] = useState<'DIRECTORY' | 'SPLIT'>('DIRECTORY');
   const [ragTestQuery, setRagTestQuery] = useState<string>('Does Umrah360 support B2B sub-agents?');
   const [ragResults, setRagResults] = useState<RetrievedChunk[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -54,21 +63,28 @@ export const KnowledgeBaseView: React.FC<KnowledgeBaseViewProps> = ({
 
   const selectedDoc = documents.find((d) => d.id === selectedDocId) || documents[0];
 
+  // Counts for metric cards (matching the screenshot)
+  const publishedCount = documents.filter((d) => d.status === 'PUBLISHED').length;
+  const inReviewCount = documents.filter((d) => d.status === 'REVIEW' || d.status === 'APPROVED').length;
+  const revisionRequiredCount = documents.filter((d) => d.status === 'DRAFT').length;
+  const supersededCount = Math.max(0, documents.length - publishedCount);
+
   // Filtered documents
   const filteredDocs = documents.filter((d) => {
     if (categoryFilter !== 'ALL' && d.category !== categoryFilter) return false;
+    if (statusFilter !== 'ALL' && d.status !== statusFilter) return false;
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
       return (
         d.title.toLowerCase().includes(q) ||
+        d.id.toLowerCase().includes(q) ||
         d.content.toLowerCase().includes(q) ||
+        d.category.toLowerCase().includes(q) ||
         d.tags.some((t) => t.toLowerCase().includes(q))
       );
     }
     return true;
   });
-
-  const publishedCount = documents.filter((d) => d.status === 'PUBLISHED').length;
 
   // Handle RAG retrieval test
   const handleTestRag = () => {
@@ -93,7 +109,7 @@ export const KnowledgeBaseView: React.FC<KnowledgeBaseViewProps> = ({
         setSaveToast(`Updated "${updatedDoc.title}" — Saved to Database & Active in RAG`);
       } else {
         const newDoc: KnowledgeDocument = {
-          id: `kb-${Date.now()}`,
+          id: `KB-${Date.now().toString().slice(-5)}`,
           title: editingDoc.title.trim(),
           category: editingDoc.category || 'PRODUCT',
           content: editingDoc.content.trim(),
@@ -132,7 +148,7 @@ export const KnowledgeBaseView: React.FC<KnowledgeBaseViewProps> = ({
     setTimeout(() => setSaveToast(null), 3500);
   };
 
-  // Handle Delete Confirmation (No window.confirm to avoid iframe blocking)
+  // Handle Delete Confirmation
   const handleConfirmDelete = async () => {
     if (!deleteCandidateDoc) return;
     const { id, title } = deleteCandidateDoc;
@@ -156,67 +172,54 @@ export const KnowledgeBaseView: React.FC<KnowledgeBaseViewProps> = ({
     }
   };
 
-  // Helper for status badge
-  const renderStatusBadge = (status: KnowledgeStatus) => {
-    switch (status) {
-      case 'PUBLISHED':
-        return (
-          <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center space-x-1">
-            <CheckCircle className="w-3 h-3" />
-            <span>PUBLISHED (Active in RAG & Auto-Replies)</span>
-          </span>
-        );
-      case 'APPROVED':
-        return (
-          <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-500/20 text-blue-400 border border-blue-500/30">
-            APPROVED
-          </span>
-        );
-      case 'REVIEW':
-        return (
-          <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-500/20 text-amber-400 border border-amber-500/30">
-            REVIEW
-          </span>
-        );
-      default:
-        return (
-          <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-700 text-slate-300">
-            DRAFT (Not in RAG)
-          </span>
-        );
-    }
+  const getDocDisplayId = (doc: KnowledgeDocument, index: number) => {
+    if (doc.id.startsWith('KB-') || doc.id.startsWith('AMA-')) return doc.id;
+    return `AMA-KB-POL-${String(index + 1).padStart(3, '0')}`;
   };
 
   return (
-    <div className="max-w-7xl mx-auto p-4 space-y-6">
+    <div className="max-w-7xl mx-auto p-4 sm:p-6 space-y-6">
       {/* Toast Notification */}
       {saveToast && (
-        <div className="fixed top-20 right-6 z-50 bg-emerald-950 border border-emerald-600 text-emerald-100 px-4 py-3 rounded-xl shadow-2xl flex items-center space-x-3 text-xs animate-in fade-in slide-in-from-top-4">
-          <Check className="w-4 h-4 text-emerald-400 shrink-0" />
-          <span className="font-medium">{saveToast}</span>
+        <div className="fixed top-20 right-6 z-50 bg-white border border-emerald-500 text-emerald-800 px-4 py-3 rounded-xl shadow-lg flex items-center space-x-3 text-xs animate-in fade-in slide-in-from-top-4">
+          <Check className="w-4 h-4 text-emerald-500 shrink-0" />
+          <span className="font-semibold">{saveToast}</span>
         </div>
       )}
 
-      {/* KB Header & Controls */}
-      <div className="bg-white border border-slate-200/90 rounded-2xl p-6 shadow-sm flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+      {/* 1. HERO HEADER CARD (Matches Screenshot exactly) */}
+      <div className="bg-white border border-slate-200/90 rounded-2xl p-6 md:p-7 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-5">
         <div>
-          <div className="flex items-center space-x-2">
-            <BookOpen className="w-6 h-6 text-orange-500" />
-            <h2 className="text-xl font-extrabold text-slate-900">Official Umrah 360 Knowledge Base</h2>
+          <div className="flex items-center space-x-2.5 flex-wrap gap-y-1">
+            <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">
+              Knowledge Creator Studio
+            </h1>
+            <span className="bg-orange-50 text-orange-700 border border-orange-200/80 rounded-full px-3 py-0.5 text-xs font-semibold inline-flex items-center">
+              Authoring & Revisions
+            </span>
           </div>
-          <p className="text-xs text-slate-500 mt-1 max-w-2xl font-medium">
-            Ground truth repository for all AI Inbound email auto-replies, WhatsApp dialogues, website leads, and AI testing.
-            All <span className="text-orange-600 font-bold">PUBLISHED</span> articles are automatically active in RAG with <span className="text-slate-900 font-bold">0ms in-memory latency</span>.
+          <p className="text-xs sm:text-sm text-slate-500 mt-1.5 font-medium max-w-3xl leading-relaxed">
+            Logged in as <strong className="text-slate-800 font-bold">Operations Lead</strong> • Maintain permanent Document Masters and draft structured version revisions for RAG & Inbound AI.
           </p>
         </div>
 
-        <div className="flex items-center space-x-3">
-          <div className="hidden sm:flex items-center space-x-2 px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200 text-xs">
-            <Database className="w-3.5 h-3.5 text-orange-500" />
-            <span className="text-slate-700 font-medium">
-              <span className="font-extrabold text-orange-600">{publishedCount}</span> / {documents.length} Published
-            </span>
-          </div>
+        {/* Action Buttons on Right */}
+        <div className="flex items-center space-x-3 shrink-0">
+          <button
+            onClick={() => {
+              if (selectedDoc) {
+                setEditingDoc({ ...selectedDoc, id: undefined, title: `${selectedDoc.title} (v${(selectedDoc.version || 1) + 1})` });
+                setIsModalOpen(true);
+              } else {
+                setEditingDoc({ title: '', category: 'PRODUCT', content: '', tags: ['umrah360'], status: 'PUBLISHED' });
+                setIsModalOpen(true);
+              }
+            }}
+            className="flex items-center space-x-1.5 px-4 py-2.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold shadow-xs transition-all"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span>Create New Version</span>
+          </button>
 
           <button
             onClick={() => {
@@ -224,309 +227,547 @@ export const KnowledgeBaseView: React.FC<KnowledgeBaseViewProps> = ({
                 title: '',
                 category: 'PRODUCT',
                 content: '',
-                tags: ['umrah', 'feature'],
+                tags: ['umrah360', 'crm'],
                 status: 'PUBLISHED',
               });
               setIsModalOpen(true);
             }}
-            className="flex items-center space-x-1.5 px-4 py-2 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-xs font-bold transition shadow-md shadow-orange-500/20"
+            className="flex items-center space-x-1.5 px-4 py-2.5 rounded-lg bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 text-white text-xs font-semibold shadow-xs transition-all"
           >
-            <Plus className="w-4 h-4" />
-            <span>Create Article</span>
+            <Plus className="w-3.5 h-3.5" />
+            <span>+ New Document Master</span>
           </button>
         </div>
       </div>
 
-      {/* Main Grid: Articles Browser & Article Inspector */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left 1 Col: Articles List */}
-        <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm flex flex-col h-[calc(100vh-20rem)]">
-          {/* Search & Category Filter */}
-          <div className="p-3.5 border-b border-slate-100 bg-slate-50 space-y-2">
-            <div className="relative">
-              <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
-              <input
-                type="text"
-                placeholder="Search KB by title or tag..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full bg-white border border-slate-200 rounded-xl pl-9 pr-3 py-1.5 text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-orange-500 font-medium"
-              />
-            </div>
+      {/* 2. FIVE METRIC STAT CARDS ROW (Matches Screenshot) */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5">
+        {/* Card 1: TOTAL MASTERS */}
+        <div className="bg-white border border-slate-200/90 rounded-2xl p-4 shadow-xs flex flex-col justify-between hover:border-orange-300 transition-all">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+              TOTAL MASTERS
+            </span>
+            <FileText className="w-4 h-4 text-slate-400" />
+          </div>
+          <div className="mt-2">
+            <span className="text-3xl font-extrabold text-slate-900 tabular-nums">
+              {documents.length}
+            </span>
+            <span className="block text-[11px] text-slate-500 font-medium mt-1">
+              Permanent Logical Records
+            </span>
+          </div>
+        </div>
 
-            <div className="flex space-x-1 overflow-x-auto text-[11px] scrollbar-none pb-1">
-              {['ALL', 'PRODUCT', 'B2B', 'MODULES', 'PRICING', 'OPERATIONS', 'FAQS', 'INTEGRATIONS'].map((cat) => (
-                <button
-                  key={cat}
-                  onClick={() => setCategoryFilter(cat)}
-                  className={`px-2.5 py-1 rounded-lg font-bold transition ${
-                    categoryFilter === cat
-                      ? 'bg-orange-500 text-white'
-                      : 'bg-white border border-slate-200 text-slate-600 hover:text-slate-900'
-                  }`}
-                >
-                  {cat}
-                </button>
-              ))}
+        {/* Card 2: PUBLISHED (LIVE) */}
+        <div className="bg-white border border-slate-200/90 rounded-2xl p-4 shadow-xs flex flex-col justify-between hover:border-orange-300 transition-all">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+              PUBLISHED (LIVE)
+            </span>
+            <CheckCircle className="w-4 h-4 text-orange-500" />
+          </div>
+          <div className="mt-2">
+            <span className="text-3xl font-extrabold text-slate-900 tabular-nums">
+              {publishedCount}
+            </span>
+            <span className="block text-[11px] text-slate-500 font-medium mt-1">
+              Active Operational Copies
+            </span>
+          </div>
+        </div>
+
+        {/* Card 3: IN REVIEW */}
+        <div className="bg-white border border-slate-200/90 rounded-2xl p-4 shadow-xs flex flex-col justify-between hover:border-orange-300 transition-all">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+              IN REVIEW
+            </span>
+            <Clock className="w-4 h-4 text-slate-400" />
+          </div>
+          <div className="mt-2">
+            <span className="text-3xl font-extrabold text-slate-900 tabular-nums">
+              {inReviewCount}
+            </span>
+            <span className="block text-[11px] text-slate-500 font-medium mt-1">
+              Waiting in Reviewer Queue
+            </span>
+          </div>
+        </div>
+
+        {/* Card 4: REVISION REQUIRED */}
+        <div className="bg-white border border-slate-200/90 rounded-2xl p-4 shadow-xs flex flex-col justify-between hover:border-orange-300 transition-all">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+              REVISION REQUIRED
+            </span>
+            <AlertTriangle className="w-4 h-4 text-orange-500" />
+          </div>
+          <div className="mt-2">
+            <span className="text-3xl font-extrabold text-orange-600 tabular-nums">
+              {revisionRequiredCount}
+            </span>
+            <span className="block text-[11px] text-slate-500 font-medium mt-1">
+              Reviewer Feedback Pending
+            </span>
+          </div>
+        </div>
+
+        {/* Card 5: SUPERSEDED */}
+        <div className="bg-white border border-slate-200/90 rounded-2xl p-4 shadow-xs flex flex-col justify-between hover:border-orange-300 transition-all">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+              SUPERSEDED
+            </span>
+            <Layers className="w-4 h-4 text-slate-400" />
+          </div>
+          <div className="mt-2">
+            <span className="text-3xl font-extrabold text-slate-900 tabular-nums">
+              {supersededCount}
+            </span>
+            <span className="block text-[11px] text-slate-500 font-medium mt-1">
+              Preserved Historical Revisions
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* 3. SEARCH & FILTER TOOLBAR (Matches Screenshot) */}
+      <div className="bg-white border border-slate-200/90 rounded-2xl p-3.5 shadow-xs flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
+        {/* Search Input */}
+        <div className="relative flex-1">
+          <Search className="w-4 h-4 absolute left-3.5 top-3 text-slate-400" />
+          <input
+            type="text"
+            placeholder="Search by Document ID, Title, Category, Department..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full bg-slate-50/70 border border-slate-200 rounded-xl pl-10 pr-4 py-2 text-xs md:text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30 focus:border-orange-500 font-medium"
+          />
+        </div>
+
+        {/* Filter Dropdowns and Layout Toggle */}
+        <div className="flex items-center space-x-2 flex-wrap">
+          {/* Category Dropdown */}
+          <div className="flex items-center space-x-1.5 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-700 font-semibold">
+            <Filter className="w-3.5 h-3.5 text-slate-400" />
+            <span>Category:</span>
+            <select
+              value={categoryFilter}
+              onChange={(e) => setCategoryFilter(e.target.value)}
+              className="bg-transparent text-slate-900 font-bold focus:outline-none cursor-pointer"
+            >
+              <option value="ALL">All Categories</option>
+              <option value="PRODUCT">PRODUCT</option>
+              <option value="B2B">B2B</option>
+              <option value="MODULES">MODULES</option>
+              <option value="PRICING">PRICING</option>
+              <option value="OPERATIONS">OPERATIONS</option>
+              <option value="FAQS">FAQS</option>
+              <option value="INTEGRATIONS">INTEGRATIONS</option>
+            </select>
+          </div>
+
+          {/* Status Dropdown */}
+          <div className="flex items-center space-x-1.5 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-700 font-semibold">
+            <span>Status:</span>
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="bg-transparent text-slate-900 font-bold focus:outline-none cursor-pointer"
+            >
+              <option value="ALL">All Statuses</option>
+              <option value="PUBLISHED">PUBLISHED</option>
+              <option value="APPROVED">APPROVED</option>
+              <option value="REVIEW">IN REVIEW</option>
+              <option value="DRAFT">DRAFT</option>
+            </select>
+          </div>
+
+          {/* View Toggle */}
+          <div className="flex items-center space-x-1 bg-slate-100 p-1 rounded-xl border border-slate-200">
+            <button
+              onClick={() => setViewLayout('DIRECTORY')}
+              className={`p-1.5 rounded-lg text-xs font-semibold transition ${
+                viewLayout === 'DIRECTORY' ? 'bg-white text-orange-600 shadow-2xs' : 'text-slate-600 hover:text-slate-900'
+              }`}
+              title="Table Directory View"
+            >
+              <TableIcon className="w-3.5 h-3.5" />
+            </button>
+            <button
+              onClick={() => setViewLayout('SPLIT')}
+              className={`p-1.5 rounded-lg text-xs font-semibold transition ${
+                viewLayout === 'SPLIT' ? 'bg-white text-orange-600 shadow-2xs' : 'text-slate-600 hover:text-slate-900'
+              }`}
+              title="Split Reader & RAG Sandbox"
+            >
+              <Columns className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* 4. MAIN CONTENT AREA: DOCUMENT MASTERS DIRECTORY (Matches Screenshot Table) */}
+      {viewLayout === 'DIRECTORY' ? (
+        <div className="bg-white border border-slate-200/90 rounded-2xl shadow-xs overflow-hidden">
+          {/* Table Header Bar */}
+          <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <h2 className="text-base font-extrabold text-slate-900">Document Masters Directory</h2>
+              <span className="bg-slate-100 text-slate-600 rounded-md px-2 py-0.5 text-xs font-semibold">
+                {filteredDocs.length} records
+              </span>
+            </div>
+            <div className="text-xs text-slate-400 font-medium hidden sm:block">
+              Click any row to inspect & edit document master
             </div>
           </div>
 
-          {/* List of articles */}
-          <div className="flex-1 overflow-y-auto divide-y divide-slate-100 bg-white">
-            {filteredDocs.length === 0 ? (
-              <div className="p-8 text-center text-slate-400 text-xs font-medium">
-                No matching articles found. Click &quot;Create Article&quot; to add one.
-              </div>
-            ) : (
-              filteredDocs.map((doc) => {
-                const isSelected = doc.id === selectedDoc?.id;
+          {/* Table */}
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-slate-50/70 border-b border-slate-200 text-slate-500 font-bold uppercase tracking-wider text-[11px]">
+                <tr>
+                  <th className="py-3.5 px-5">DOCUMENT ID</th>
+                  <th className="py-3.5 px-5">TITLE & CATEGORY</th>
+                  <th className="py-3.5 px-5">CURRENT PUBLISHED</th>
+                  <th className="py-3.5 px-5">STATUS</th>
+                  <th className="py-3.5 px-5">DEPARTMENT & OWNER</th>
+                  <th className="py-3.5 px-5">LAST UPDATED</th>
+                  <th className="py-3.5 px-5 text-right">ACTIONS</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 font-medium text-slate-800">
+                {filteredDocs.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="py-12 text-center text-slate-400 text-xs">
+                      No documents found matching the filter criteria.
+                    </td>
+                  </tr>
+                ) : (
+                  filteredDocs.map((doc, idx) => {
+                    const docId = getDocDisplayId(doc, idx);
+                    return (
+                      <tr
+                        key={doc.id}
+                        className="hover:bg-slate-50/70 transition-colors cursor-pointer group"
+                        onClick={() => {
+                          setSelectedDocId(doc.id);
+                          setViewLayout('SPLIT');
+                        }}
+                      >
+                        {/* 1. DOCUMENT ID */}
+                        <td className="py-4 px-5 whitespace-nowrap">
+                          <span className="inline-flex items-center px-2.5 py-1 rounded-md bg-slate-100 border border-slate-200 text-slate-800 font-mono text-xs font-bold">
+                            {docId}
+                          </span>
+                        </td>
 
+                        {/* 2. TITLE & CATEGORY */}
+                        <td className="py-4 px-5">
+                          <div className="flex flex-col space-y-1">
+                            <span className="font-extrabold text-slate-900 group-hover:text-orange-600 transition-colors">
+                              {doc.title}
+                            </span>
+                            <div className="flex items-center space-x-1.5">
+                              <span className="bg-emerald-50 text-emerald-700 border border-emerald-200/80 text-[10px] font-bold px-2 py-0.5 rounded-full inline-flex items-center gap-1">
+                                <Sparkles className="w-2.5 h-2.5 text-emerald-600" />
+                                <span>{doc.category}</span>
+                              </span>
+                              <span className="text-[10px] text-slate-400">v{doc.version || 1}</span>
+                            </div>
+                          </div>
+                        </td>
+
+                        {/* 3. CURRENT PUBLISHED */}
+                        <td className="py-4 px-5 text-slate-500 whitespace-nowrap">
+                          {doc.status === 'PUBLISHED' ? (
+                            <span className="text-emerald-700 font-semibold flex items-center gap-1">
+                              <CheckCircle className="w-3.5 h-3.5 text-emerald-600" />
+                              <span>Active in RAG</span>
+                            </span>
+                          ) : (
+                            <span className="italic text-slate-400">None Published Yet</span>
+                          )}
+                        </td>
+
+                        {/* 4. STATUS */}
+                        <td className="py-4 px-5 whitespace-nowrap">
+                          {doc.status === 'PUBLISHED' ? (
+                            <span className="bg-emerald-50 text-emerald-700 border border-emerald-200/80 rounded-full px-2.5 py-1 text-[11px] font-bold inline-flex items-center gap-1">
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                              <span>PUBLISHED</span>
+                            </span>
+                          ) : doc.status === 'REVIEW' || doc.status === 'APPROVED' ? (
+                            <span className="bg-orange-50 text-orange-700 border border-orange-200/80 rounded-full px-2.5 py-1 text-[11px] font-bold inline-flex items-center gap-1">
+                              <span className="w-1.5 h-1.5 rounded-full bg-orange-500"></span>
+                              <span>IN REVIEW</span>
+                            </span>
+                          ) : (
+                            <span className="bg-slate-100 text-slate-600 border border-slate-200 rounded-full px-2.5 py-1 text-[11px] font-bold inline-flex items-center gap-1">
+                              <span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
+                              <span>DRAFT</span>
+                            </span>
+                          )}
+                        </td>
+
+                        {/* 5. DEPARTMENT & OWNER */}
+                        <td className="py-4 px-5 text-slate-600 whitespace-nowrap">
+                          <div>
+                            <span className="font-semibold block text-slate-800">All Operations</span>
+                            <span className="text-[10px] text-slate-400">{doc.author || 'Admin Lead'}</span>
+                          </div>
+                        </td>
+
+                        {/* 6. LAST UPDATED */}
+                        <td className="py-4 px-5 text-slate-500 whitespace-nowrap">
+                          {new Date(doc.updatedAt || doc.createdAt).toLocaleDateString('en-GB', {
+                            day: '2-digit',
+                            month: 'short',
+                            year: 'numeric',
+                          })}
+                        </td>
+
+                        {/* 7. ACTIONS */}
+                        <td className="py-4 px-5 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                          <div className="flex items-center justify-end space-x-1.5">
+                            <button
+                              onClick={() => {
+                                setSelectedDocId(doc.id);
+                                setViewLayout('SPLIT');
+                              }}
+                              className="px-2.5 py-1.5 rounded-lg bg-slate-50 hover:bg-slate-100 text-slate-700 font-semibold border border-slate-200 flex items-center space-x-1 transition"
+                              title="Inspect Details & RAG"
+                            >
+                              <Eye className="w-3.5 h-3.5" />
+                              <span>History</span>
+                            </button>
+
+                            <button
+                              onClick={() => {
+                                setEditingDoc(doc);
+                                setIsModalOpen(true);
+                              }}
+                              className="px-2.5 py-1.5 rounded-lg bg-slate-50 hover:bg-orange-50 text-slate-700 hover:text-orange-600 font-semibold border border-slate-200 hover:border-orange-200 flex items-center space-x-1 transition"
+                              title="Edit Document"
+                            >
+                              <Edit2 className="w-3.5 h-3.5" />
+                              <span>Revise</span>
+                            </button>
+
+                            {onDeleteDocument && (
+                              <button
+                                onClick={() => setDeleteCandidateDoc(doc)}
+                                className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition"
+                                title="Delete Document"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ) : (
+        /* SPLIT VIEW (Inspector & RAG Sandbox) */
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Left Column: Quick Article List */}
+          <div className="bg-white border border-slate-200/90 rounded-2xl overflow-hidden shadow-xs flex flex-col h-[650px]">
+            <div className="p-3.5 border-b border-slate-100 bg-slate-50/70 flex items-center justify-between">
+              <span className="font-extrabold text-xs text-slate-900 uppercase tracking-wider">
+                Articles ({filteredDocs.length})
+              </span>
+              <button
+                onClick={() => setViewLayout('DIRECTORY')}
+                className="text-xs text-orange-600 font-bold hover:underline"
+              >
+                Back to Table
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto divide-y divide-slate-100">
+              {filteredDocs.map((doc) => {
+                const isSelected = doc.id === selectedDoc?.id;
                 return (
                   <div
                     key={doc.id}
                     onClick={() => setSelectedDocId(doc.id)}
                     className={`p-3.5 cursor-pointer transition ${
-                      isSelected
-                        ? 'bg-orange-50/80 border-l-4 border-orange-500'
-                        : 'hover:bg-slate-50'
+                      isSelected ? 'bg-orange-50/90 border-l-4 border-orange-500' : 'hover:bg-slate-50/80'
                     }`}
                   >
                     <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-bold text-orange-600 uppercase tracking-wider">
+                      <span className="text-[10px] font-extrabold text-orange-600 uppercase">
                         {doc.category}
                       </span>
-                      <span className="text-[10px] text-slate-400 font-medium">v{doc.version || 1}</span>
+                      <span className="text-[10px] text-slate-400 font-mono">v{doc.version || 1}</span>
                     </div>
-
-                    <h4 className="font-bold text-xs text-slate-900 mt-1 line-clamp-1">
-                      {doc.title}
-                    </h4>
-
-                    <p className="text-[11px] text-slate-500 mt-1 line-clamp-2 leading-relaxed font-medium">
+                    <h4 className="font-bold text-xs text-slate-900 mt-1 line-clamp-1">{doc.title}</h4>
+                    <p className="text-[11px] text-slate-500 mt-1 line-clamp-2 leading-relaxed">
                       {doc.content}
                     </p>
-
-                    <div className="flex items-center justify-between mt-2 pt-1 border-t border-slate-100 text-[10px]">
-                      <span
-                        className={`px-2 py-0.5 rounded-full font-bold ${
-                          doc.status === 'PUBLISHED'
-                            ? 'text-orange-700 bg-orange-100 border border-orange-200'
-                            : 'text-slate-600 bg-slate-100 border border-slate-200'
-                        }`}
-                      >
-                        {doc.status}
-                      </span>
-                      <span className="text-slate-400 font-medium">{doc.tags.slice(0, 2).join(', ')}</span>
-                    </div>
                   </div>
                 );
-              })
-            )}
+              })}
+            </div>
           </div>
-        </div>
 
-        {/* Right 2 Cols: Document Viewer & Live RAG Query Sandbox */}
-        <div className="lg:col-span-2 space-y-6">
-          {/* Article View Card */}
-          {selectedDoc ? (
-            <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-4">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-100 pb-4 gap-3">
-                <div>
-                  <div className="flex items-center space-x-3">
-                    <span className="text-xs font-extrabold text-orange-600 uppercase">
-                      {selectedDoc.category}
-                    </span>
-                    {renderStatusBadge(selectedDoc.status)}
-                  </div>
-                  <h3 className="text-lg font-extrabold text-slate-900 mt-1">{selectedDoc.title}</h3>
-                </div>
-
-                <div className="flex items-center space-x-2">
-                  <button
-                    onClick={() => handleToggleStatus(selectedDoc)}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition ${
-                      selectedDoc.status === 'PUBLISHED'
-                        ? 'bg-slate-100 hover:bg-slate-200 text-slate-800 border-slate-200'
-                        : 'bg-orange-500 hover:bg-orange-600 text-white border-orange-500'
-                    }`}
-                  >
-                    {selectedDoc.status === 'PUBLISHED' ? 'Set to Draft' : 'Publish to RAG'}
-                  </button>
-
-                  <button
-                    onClick={() => {
-                      setEditingDoc(selectedDoc);
-                      setIsModalOpen(true);
-                    }}
-                    className="flex items-center space-x-1 px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-black text-white text-xs font-bold transition"
-                  >
-                    <Edit2 className="w-3.5 h-3.5" />
-                    <span>Edit</span>
-                  </button>
-
-                  {onDeleteDocument && (
-                    <button
-                      onClick={() => setDeleteCandidateDoc(selectedDoc)}
-                      className="p-2 rounded-xl bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 transition flex items-center justify-center cursor-pointer"
-                      title="Delete Article"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              {/* Status information banner */}
-              {selectedDoc.status === 'PUBLISHED' ? (
-                <div className="p-3 bg-emerald-950/40 border border-emerald-800/50 rounded-lg text-emerald-200 text-xs flex items-center justify-between">
-                  <div className="flex items-center space-x-2">
-                    <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
-                    <span>
-                      <strong>Active in Live AI RAG</strong> — This article is automatically cited by OpenAI in the AI Testing Playground, Inbound Emails, WhatsApp, and Website leads.
-                    </span>
-                  </div>
-                  <span className="text-[10px] text-emerald-400/80 font-mono">0ms latency cache</span>
-                </div>
-              ) : (
-                <div className="p-3 bg-amber-950/30 border border-amber-800/40 rounded-lg text-amber-200 text-xs flex items-center space-x-2">
-                  <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
-                  <span>
-                    <strong>Draft Article</strong> — Click &quot;Publish to RAG&quot; to make this article active for AI answers and auto-replies.
-                  </span>
-                </div>
-              )}
-
-              {/* Tags */}
-              <div className="flex flex-wrap gap-1.5">
-                {selectedDoc.tags.map((tag, i) => (
-                  <span
-                    key={i}
-                    className="px-2 py-0.5 rounded bg-slate-800 text-slate-300 text-[11px] border border-slate-700 flex items-center space-x-1"
-                  >
-                    <Tag className="w-3 h-3 text-slate-400" />
-                    <span>{tag}</span>
-                  </span>
-                ))}
-              </div>
-
-              {/* Content Body */}
-              <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 text-xs leading-relaxed text-slate-200 whitespace-pre-wrap font-sans">
-                {selectedDoc.content}
-              </div>
-
-              <div className="flex items-center justify-between text-[11px] text-slate-500 pt-2 border-t border-slate-800/60">
-                <span className="flex items-center space-x-1">
-                  <Clock className="w-3 h-3" />
-                  <span>Last updated: {new Date(selectedDoc.updatedAt || selectedDoc.createdAt).toLocaleString()}</span>
-                </span>
-                <span>Document ID: <code className="text-slate-400 font-mono">{selectedDoc.id}</code></span>
-              </div>
-            </div>
-          ) : (
-            <div className="bg-slate-900 border border-slate-800 rounded-xl p-8 text-center text-slate-500 text-xs">
-              Select or create an article to view details.
-            </div>
-          )}
-
-          {/* RAG Retrieval Test Sandbox */}
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-lg space-y-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-2">
-                <Zap className="w-4 h-4 text-amber-400" />
-                <h4 className="font-semibold text-xs text-white uppercase tracking-wider">
-                  Live RAG Retrieval Test Sandbox
-                </h4>
-              </div>
-              <span className="text-[11px] text-slate-400">
-                Simulates real-time semantic RAG snippet extraction
-              </span>
-            </div>
-
-            <div className="flex space-x-2">
-              <input
-                type="text"
-                value={ragTestQuery}
-                onChange={(e) => setRagTestQuery(e.target.value)}
-                placeholder="Ask any pilgrim or travel agency question..."
-                className="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-emerald-500"
-              />
-              <button
-                onClick={handleTestRag}
-                className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold transition flex items-center space-x-1.5 shadow"
-              >
-                <Sparkles className="w-3.5 h-3.5" />
-                <span>Query RAG</span>
-              </button>
-            </div>
-
-            {ragResults.length > 0 && (
-              <div className="space-y-2 pt-2">
-                <span className="text-[11px] text-slate-400 font-medium block">
-                  Top Grounded Knowledge Chunks Retrieved:
-                </span>
-                {ragResults.map((chunk, idx) => (
-                  <div
-                    key={idx}
-                    className="p-3 bg-slate-800/80 rounded-lg border border-slate-700/80 text-xs space-y-1"
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="font-semibold text-emerald-400">{chunk.title}</span>
-                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-700 text-slate-300 font-mono">
-                        Relevance Score: {chunk.score}
+          {/* Right Column: Article Details & Live RAG Query Sandbox */}
+          <div className="lg:col-span-2 space-y-6">
+            {selectedDoc ? (
+              <div className="bg-white border border-slate-200/90 rounded-2xl p-6 shadow-xs space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-100 pb-4 gap-3">
+                  <div>
+                    <div className="flex items-center space-x-2">
+                      <span className="text-xs font-bold text-orange-600 uppercase">
+                        {selectedDoc.category}
+                      </span>
+                      <span className="bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full px-2.5 py-0.5 text-xs font-bold">
+                        {selectedDoc.status}
                       </span>
                     </div>
-                    <p className="text-slate-300 text-[11px] leading-relaxed">
-                      {chunk.relevantExcerpt}
-                    </p>
+                    <h3 className="text-lg font-extrabold text-slate-900 mt-1">{selectedDoc.title}</h3>
                   </div>
-                ))}
+
+                  <div className="flex items-center space-x-2">
+                    <button
+                      onClick={() => handleToggleStatus(selectedDoc)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition ${
+                        selectedDoc.status === 'PUBLISHED'
+                          ? 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200'
+                          : 'bg-orange-500 hover:bg-orange-600 text-white border-orange-500'
+                      }`}
+                    >
+                      {selectedDoc.status === 'PUBLISHED' ? 'Set to Draft' : 'Publish to RAG'}
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        setEditingDoc(selectedDoc);
+                        setIsModalOpen(true);
+                      }}
+                      className="flex items-center space-x-1 px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold shadow-xs transition"
+                    >
+                      <Edit2 className="w-3.5 h-3.5" />
+                      <span>Edit</span>
+                    </button>
+
+                    {onDeleteDocument && (
+                      <button
+                        onClick={() => setDeleteCandidateDoc(selectedDoc)}
+                        className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 border border-slate-200 transition"
+                        title="Delete"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Content */}
+                <div className="bg-slate-50/70 p-4 rounded-xl border border-slate-200 text-xs leading-relaxed text-slate-800 whitespace-pre-wrap font-sans">
+                  {selectedDoc.content}
+                </div>
+
+                <div className="flex items-center justify-between text-[11px] text-slate-400 pt-2 border-t border-slate-100">
+                  <span className="flex items-center space-x-1">
+                    <Clock className="w-3.5 h-3.5" />
+                    <span>Last updated: {new Date(selectedDoc.updatedAt || selectedDoc.createdAt).toLocaleString()}</span>
+                  </span>
+                  <span>ID: <code className="font-mono text-slate-600 font-semibold">{selectedDoc.id}</code></span>
+                </div>
               </div>
-            )}
+            ) : null}
+
+            {/* RAG Retrieval Sandbox */}
+            <div className="bg-white border border-slate-200/90 rounded-2xl p-5 shadow-xs space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <Zap className="w-4 h-4 text-orange-500" />
+                  <h4 className="font-extrabold text-xs text-slate-900 uppercase tracking-wider">
+                    Live RAG Semantic Retrieval Sandbox
+                  </h4>
+                </div>
+                <span className="text-xs text-slate-500">Instant in-memory semantic extraction</span>
+              </div>
+
+              <div className="flex space-x-2">
+                <input
+                  type="text"
+                  value={ragTestQuery}
+                  onChange={(e) => setRagTestQuery(e.target.value)}
+                  placeholder="Ask any pilgrim or travel agency inquiry..."
+                  className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-orange-500/30 focus:border-orange-500 font-medium"
+                />
+                <button
+                  onClick={handleTestRag}
+                  className="px-4 py-2 rounded-xl bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 text-white text-xs font-bold transition shadow-xs flex items-center space-x-1.5"
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>Query RAG</span>
+                </button>
+              </div>
+
+              {ragResults.length > 0 && (
+                <div className="space-y-2 pt-2">
+                  {ragResults.map((chunk, idx) => (
+                    <div key={idx} className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-orange-600">{chunk.title}</span>
+                        <span className="text-[10px] px-2 py-0.5 rounded bg-white border border-slate-200 text-slate-600 font-mono">
+                          Score: {chunk.score}
+                        </span>
+                      </div>
+                      <p className="text-slate-700 text-xs leading-relaxed">{chunk.relevantExcerpt}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* Modal for Add / Edit Article */}
       {isModalOpen && (
-        <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-xl max-w-2xl w-full p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <h3 className="font-bold text-white text-sm flex items-center space-x-2">
-                <BookOpen className="w-4 h-4 text-emerald-400" />
-                <span>{editingDoc.id ? 'Edit Knowledge Document' : 'Create New Knowledge Article'}</span>
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <div className="bg-white border border-slate-200 rounded-2xl max-w-2xl w-full p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <h3 className="font-extrabold text-slate-900 text-base flex items-center space-x-2">
+                <BookOpen className="w-5 h-5 text-orange-500" />
+                <span>{editingDoc.id ? 'Edit Knowledge Document Master' : 'New Document Master'}</span>
               </h3>
-              <button
-                onClick={() => setIsModalOpen(false)}
-                className="text-slate-400 hover:text-white"
-              >
+              <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-slate-600 text-lg">
                 ✕
               </button>
             </div>
 
-            <div className="space-y-3 text-xs">
+            <div className="space-y-3.5 text-xs">
               <div>
-                <label className="text-slate-400 block mb-1 font-medium">Article Title *</label>
+                <label className="text-slate-700 block mb-1 font-bold">Document Title *</label>
                 <input
                   type="text"
                   value={editingDoc.title || ''}
                   onChange={(e) => setEditingDoc({ ...editingDoc, title: e.target.value })}
-                  placeholder="e.g. Dynamic Costing & Saudi VAT Regulations"
-                  className="w-full bg-slate-800 border border-slate-700 rounded-md p-2 text-slate-200 focus:outline-none focus:border-emerald-500"
+                  placeholder="e.g. Saudi Ground Handling & Umrah ERP Package Policy"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-900 focus:outline-none focus:border-orange-500 font-medium"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-slate-400 block mb-1 font-medium">Category</label>
+                  <label className="text-slate-700 block mb-1 font-bold">Category</label>
                   <select
                     value={editingDoc.category || 'PRODUCT'}
-                    onChange={(e) =>
-                      setEditingDoc({
-                        ...editingDoc,
-                        category: e.target.value as any,
-                      })
-                    }
-                    className="w-full bg-slate-800 border border-slate-700 rounded-md p-2 text-slate-200"
+                    onChange={(e) => setEditingDoc({ ...editingDoc, category: e.target.value as any })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-900 font-semibold focus:outline-none"
                   >
                     <option value="PRODUCT">PRODUCT</option>
                     <option value="B2B">B2B</option>
@@ -539,121 +780,85 @@ export const KnowledgeBaseView: React.FC<KnowledgeBaseViewProps> = ({
                 </div>
 
                 <div>
-                  <label className="text-slate-400 block mb-1 font-medium">Publishing Status</label>
+                  <label className="text-slate-700 block mb-1 font-bold">Status</label>
                   <select
                     value={editingDoc.status || 'PUBLISHED'}
-                    onChange={(e) =>
-                      setEditingDoc({
-                        ...editingDoc,
-                        status: e.target.value as any,
-                      })
-                    }
-                    className="w-full bg-slate-800 border border-slate-700 rounded-md p-2 text-slate-200"
+                    onChange={(e) => setEditingDoc({ ...editingDoc, status: e.target.value as any })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-900 font-semibold focus:outline-none"
                   >
-                    <option value="PUBLISHED">PUBLISHED (Active in RAG & Auto-Replies)</option>
+                    <option value="PUBLISHED">PUBLISHED (Active in RAG)</option>
                     <option value="APPROVED">APPROVED</option>
-                    <option value="REVIEW">REVIEW</option>
+                    <option value="REVIEW">IN REVIEW</option>
                     <option value="DRAFT">DRAFT</option>
                   </select>
                 </div>
               </div>
 
               <div>
-                <label className="text-slate-400 block mb-1 font-medium">Tags (comma separated)</label>
-                <input
-                  type="text"
-                  value={(editingDoc.tags || []).join(', ')}
-                  onChange={(e) =>
-                    setEditingDoc({
-                      ...editingDoc,
-                      tags: e.target.value.split(',').map((t) => t.trim()).filter(Boolean),
-                    })
-                  }
-                  placeholder="b2b, vouchers, credit-limit"
-                  className="w-full bg-slate-800 border border-slate-700 rounded-md p-2 text-slate-200 focus:outline-none focus:border-emerald-500"
-                />
-              </div>
-
-              <div>
-                <label className="text-slate-400 block mb-1 font-medium">Knowledge Content (Factual documentation for RAG) *</label>
+                <label className="text-slate-700 block mb-1 font-bold">Content & Guidelines *</label>
                 <textarea
                   rows={8}
                   value={editingDoc.content || ''}
                   onChange={(e) => setEditingDoc({ ...editingDoc, content: e.target.value })}
-                  placeholder="Detailed factual documentation that OpenAI will cite..."
-                  className="w-full bg-slate-800 border border-slate-700 rounded-md p-2.5 text-slate-200 leading-relaxed resize-none focus:outline-none focus:border-emerald-500"
+                  placeholder="Factual documentation cited by AI in automated emails, WhatsApp, and leads..."
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-slate-900 leading-relaxed resize-none focus:outline-none focus:border-orange-500 font-medium"
                 />
               </div>
             </div>
 
-            <div className="flex items-center justify-between pt-3 border-t border-slate-800">
-              <span className="text-[11px] text-slate-400 flex items-center space-x-1">
-                <Database className="w-3.5 h-3.5 text-purple-400" />
-                <span>Persisted in DB with zero-latency memory cache</span>
-              </span>
-
-              <div className="flex items-center space-x-3">
+            <div className="flex items-center justify-between pt-3 border-t border-slate-100">
+              <span className="text-[11px] text-slate-400">Synchronized with database & 0ms in-memory RAG</span>
+              <div className="flex items-center space-x-2">
                 <button
                   onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 rounded-lg bg-slate-800 text-slate-300 text-xs font-medium hover:bg-slate-700"
+                  className="px-4 py-2 rounded-xl bg-slate-100 text-slate-700 text-xs font-semibold hover:bg-slate-200"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={handleSaveDoc}
                   disabled={isSaving || !editingDoc.title || !editingDoc.content}
-                  className="px-4 py-2 rounded-lg bg-emerald-600 text-white text-xs font-semibold hover:bg-emerald-500 disabled:opacity-50 flex items-center space-x-1.5 shadow"
+                  className="px-4 py-2 rounded-xl bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 text-white text-xs font-bold disabled:opacity-50 shadow-xs"
                 >
-                  {isSaving ? <span>Saving to DB...</span> : <span>Save & Activate in RAG</span>}
+                  {isSaving ? 'Saving...' : 'Save & Publish'}
                 </button>
               </div>
             </div>
           </div>
         </div>
       )}
+
       {/* Delete Confirmation Modal */}
       {deleteCandidateDoc && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-xl max-w-md w-full p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95">
-            <div className="flex items-center space-x-3 text-red-400">
-              <div className="p-2.5 bg-red-950/70 border border-red-800/60 rounded-xl">
-                <Trash2 className="w-5 h-5 text-red-400" />
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <div className="bg-white border border-slate-200 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95">
+            <div className="flex items-center space-x-3 text-red-600">
+              <div className="p-2.5 bg-red-50 border border-red-200 rounded-xl">
+                <Trash2 className="w-5 h-5 text-red-600" />
               </div>
               <div>
-                <h3 className="font-bold text-white text-sm">Delete Knowledge Article</h3>
-                <p className="text-[11px] text-slate-400">Deletes from Firestore Database & RAG</p>
+                <h3 className="font-bold text-slate-900 text-sm">Delete Knowledge Article</h3>
+                <p className="text-[11px] text-slate-500">Permanently removes document from Database & RAG</p>
               </div>
             </div>
 
-            <div className="bg-slate-950 p-3.5 rounded-lg border border-slate-800 text-xs space-y-1.5">
-              <p className="text-slate-300">
-                Are you sure you want to permanently delete:
-              </p>
-              <p className="font-semibold text-white text-xs bg-slate-900 p-2 rounded border border-slate-800">
-                &ldquo;{deleteCandidateDoc.title}&rdquo;
-              </p>
-              <p className="text-[11px] text-slate-400">
-                This will delete the document from Firestore and immediately remove it from AI auto-replies.
-              </p>
-            </div>
+            <p className="text-slate-600 text-xs">
+              Are you sure you want to delete <strong className="text-slate-900">&ldquo;{deleteCandidateDoc.title}&rdquo;</strong>?
+            </p>
 
-            <div className="flex items-center justify-end space-x-3 pt-2">
+            <div className="flex items-center justify-end space-x-2 pt-2">
               <button
-                type="button"
                 onClick={() => setDeleteCandidateDoc(null)}
-                disabled={isDeleting}
-                className="px-4 py-2 rounded-lg bg-slate-800 text-slate-300 text-xs font-medium hover:bg-slate-700 transition"
+                className="px-4 py-2 rounded-xl bg-slate-100 text-slate-700 text-xs font-semibold hover:bg-slate-200"
               >
                 Cancel
               </button>
               <button
-                type="button"
                 onClick={handleConfirmDelete}
                 disabled={isDeleting}
-                className="px-4 py-2 rounded-lg bg-red-600 text-white text-xs font-semibold hover:bg-red-500 disabled:opacity-50 flex items-center space-x-1.5 transition shadow"
+                className="px-4 py-2 rounded-xl bg-red-600 text-white text-xs font-semibold hover:bg-red-700"
               >
-                <Trash2 className="w-3.5 h-3.5" />
-                <span>{isDeleting ? 'Deleting from DB...' : 'Delete Permanently'}</span>
+                {isDeleting ? 'Deleting...' : 'Delete Permanently'}
               </button>
             </div>
           </div>
@@ -662,3 +867,5 @@ export const KnowledgeBaseView: React.FC<KnowledgeBaseViewProps> = ({
     </div>
   );
 };
+
+export default KnowledgeBaseView;

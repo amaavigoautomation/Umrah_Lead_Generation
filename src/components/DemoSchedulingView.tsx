@@ -454,25 +454,25 @@ export const DemoSchedulingView: React.FC<DemoSchedulingViewProps> = ({ leads = 
   return (
     <div className="space-y-6">
       {/* Top Banner / Calendar Integration Status */}
-      <div className="bg-gradient-to-r from-emerald-900/40 via-teal-900/30 to-slate-900/60 border border-emerald-500/30 rounded-2xl p-6 shadow-xl backdrop-blur-md">
+      <div className="bg-white border border-slate-200/90 rounded-2xl p-6 shadow-xs">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="space-y-2">
             <div className="flex items-center gap-2">
-              <span className="px-3 py-1 bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-xs font-semibold rounded-full flex items-center gap-1.5">
+              <span className="px-3 py-1 bg-orange-50 text-orange-700 border border-orange-200/80 text-xs font-bold rounded-full flex items-center gap-1.5">
                 <ShieldCheck className="w-3.5 h-3.5" />
                 CENTRAL DEMO SCHEDULING AGENT
               </span>
-              <span className="px-2.5 py-0.5 bg-blue-500/10 text-blue-400 border border-blue-500/20 text-xs rounded-full">
+              <span className="px-2.5 py-0.5 bg-slate-100 text-slate-600 border border-slate-200 text-xs rounded-full font-semibold">
                 Asia/Kolkata (IST)
               </span>
             </div>
-            <h2 className="text-xl md:text-2xl font-bold text-white flex items-center gap-2">
-              <CalendarIcon className="w-6 h-6 text-emerald-400" />
+            <h2 className="text-xl md:text-2xl font-extrabold text-slate-900 flex items-center gap-2">
+              <CalendarIcon className="w-6 h-6 text-orange-500" />
               Google Calendar Single Source of Truth
             </h2>
-            <p className="text-sm text-slate-300 max-w-2xl">
-              All demo requests across <strong>Website, Email, WhatsApp, and Campaigns</strong> are validated in
-              realtime against <strong>{CALENDAR_TARGET_ACCOUNT}</strong>. Bookings generate authentic Google Meet rooms
+            <p className="text-xs sm:text-sm text-slate-500 max-w-2xl font-medium leading-relaxed">
+              All demo requests across <strong className="text-slate-800">Website, Email, WhatsApp, and Campaigns</strong> are validated in
+              realtime against <strong className="text-slate-800">{CALENDAR_TARGET_ACCOUNT}</strong>. Bookings generate authentic Google Meet rooms
               and reserve slots directly on Google Calendar (Monday–Friday, 10:00 AM – 7:00 PM IST).
             </p>
           </div>

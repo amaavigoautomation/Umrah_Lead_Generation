@@ -32,6 +32,7 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 import { runWithJobLease } from './src/server/jobLeaseService.js';
+import { startTenantMailboxPoller } from './src/server/tenantImapPoller.js';
 import { globalTenantsCol } from './src/server/tenantRepo.js';
 import { getDocs } from './src/server/adminFirestore.js';
 import { isFirebaseConfigured } from './src/firebase/config.js';
@@ -104,6 +105,8 @@ const safeBackgroundPoll = async () => {
 };
 
 // Start background poller interval (every 4 seconds)
+// Each company's own connected mailbox (independent of the platform mailbox loop above)
+startTenantMailboxPoller();
 setTimeout(safeBackgroundPoll, 2000);
 setInterval(safeBackgroundPoll, 4000);
 

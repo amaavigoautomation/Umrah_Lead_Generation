@@ -342,7 +342,7 @@ export function recordProcessedMessage(record: ProcessedMessageRecord): void {
     status: record.aiReplied ? 'REPLIED' : 'PROCESSED',
     reason: record.aiReplied ? 'AI auto-reply dispatched' : 'Inbound email processed',
     timestamp: record.firstSeenAt || new Date().toISOString(),
-  }).catch((e) => console.warn('[Idempotency Store] Firestore record error:', e));
+  }, getInboundCtx()).catch((e) => console.warn('[Idempotency Store] Firestore record error:', e));
 }
 
 export function getProcessedMessageRecord(gmailMessageId: string): ProcessedMessageRecord | undefined {
@@ -389,7 +389,7 @@ export function markMessageAsReplied(gmailMessageId: string, replyMessageId?: st
     status: 'REPLIED',
     reason: 'AI auto-reply dispatched via SMTP',
     timestamp: nowIso,
-  }).catch((e) => console.warn('[Idempotency Store] Firestore markMessageAsReplied error:', e));
+  }, getInboundCtx()).catch((e) => console.warn('[Idempotency Store] Firestore markMessageAsReplied error:', e));
 }
 
 export function isGmailMessageReplied(gmailMessageId: string): boolean {
@@ -1158,8 +1158,10 @@ export async function processLiveInboundEmail(payload: {
   companyName?: string;
   phone?: string;
   isTestSimulation?: boolean;
+  /** The mailbox this email was read from (a workspace's own IMAP inbox). Defaults to the platform mailbox. */
+  ownMailbox?: string;
 }): Promise<ProcessedInboundEmailResult> {
-  const targetMailbox = process.env.SMTP_USER || process.env.IMAP_USER || 'amaavigo@gmail.com';
+  const targetMailbox = payload.ownMailbox || process.env.SMTP_USER || process.env.IMAP_USER || 'amaavigo@gmail.com';
   const incomingMsgId = resolveGmailMessageId(payload, targetMailbox);
   const replySubject = payload.subject.toLowerCase().startsWith('re:') ? payload.subject : `Re: ${payload.subject}`;
   const nowIso = new Date().toISOString();
@@ -1319,7 +1321,7 @@ export async function processLiveInboundEmail(payload: {
   );
 
   // Check persistent Firestore store
-  const firestoreCheck = await isMessageAlreadyProcessed(incomingMsgId, payload.from);
+  const firestoreCheck = await isMessageAlreadyProcessed(incomingMsgId, payload.from, getInboundCtx());
   const isFirestoreRepliedOrBaselined = Boolean(
     firestoreCheck.processed &&
     (firestoreCheck.replied || firestoreCheck.reason?.includes('BASELINE') || firestoreCheck.reason?.includes('status: REPLIED'))

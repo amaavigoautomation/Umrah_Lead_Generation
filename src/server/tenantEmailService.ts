@@ -2,6 +2,7 @@ import { Resend } from 'resend';
 import { db, doc, getDoc, setDoc } from './adminFirestore.js';
 import { tenantRepo } from './tenantRepo.js';
 import { isFirebaseConfigured } from '../firebase/config.js';
+import { getConnectedMailboxAddress } from './tenantInboundService.js';
 import type { TenantContext } from '../types/tenant.js';
 
 /**
@@ -226,7 +227,9 @@ export async function resolveTenantSender(tenantId: string): Promise<SenderResol
     return {
       ok: true,
       from: formatFrom(s.fromName, `${s.fromLocalPart}@${s.domain}`),
-      replyTo: s.replyTo || undefined,
+      // An explicit Reply-To wins; otherwise replies go to the mailbox this workspace connected for inbound,
+      // so customer answers land where the poller (and the team) can see them.
+      replyTo: s.replyTo || (await getConnectedMailboxAddress(tenantId)) || undefined,
       source: 'tenant',
     };
   }

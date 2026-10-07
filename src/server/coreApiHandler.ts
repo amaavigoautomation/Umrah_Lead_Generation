@@ -237,7 +237,8 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
     url === '/api/leads/inbound' ||
     url === '/api/campaigns/cron' ||
     url === '/api/campaigns/process-active' ||
-    url === '/api/auto-followup/trigger';
+    url === '/api/auto-followup/trigger' ||
+    url === '/api/inbound-mail/cron';
 
   let resolvedTenantId = '';
   let userUid = 'anonymous';
@@ -487,7 +488,7 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
       if (!targetId) denied = 'Platform admin only';
       else if (targetId !== resolvedTenantId) denied = 'Forbidden';
       else if (req.method !== 'GET' && userRole !== 'admin') denied = 'Workspace admin only';
-      else if (/\/(secrets|routes|email(\/.*)?)$/.test(url.split('?')[0]) && userRole !== 'admin') denied = 'Workspace admin only';
+      else if (/\/(secrets|routes|inbound(\/.*)?|email(\/.*)?)$/.test(url.split('?')[0]) && userRole !== 'admin') denied = 'Workspace admin only';
     }
     if (denied) {
       res.statusCode = 403;
@@ -883,6 +884,86 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
       res.end(JSON.stringify({ error: err?.message || 'Email settings request failed' }));
       return true;
     }
+  }
+
+  // Per-company inbound mailbox (IMAP): /api/tenants/:tenantId/inbound[/test|/options|/disconnect|/poll]
+  // Admin-only (enforced by the tenant guard above). The password is accepted here and never returned.
+  const inboundMatch = url.split('?')[0].match(/^\/api\/tenants\/([^/]+)\/inbound(?:\/(test|options|disconnect|poll))?$/);
+  if (inboundMatch) {
+    const tId = inboundMatch[1];
+    const action = inboundMatch[2];
+    try {
+      const svc = await import('./tenantInboundService.js');
+      if (!action && req.method === 'GET') {
+        res.statusCode = 200;
+        res.end(JSON.stringify(await svc.getInboundView(tId)));
+        return true;
+      }
+      if (req.method === 'POST') {
+        let view;
+        if (!action) {
+          view = await svc.connectInbound(tId, {
+            host: body?.host,
+            port: body?.port,
+            user: body?.user,
+            password: body?.password,
+            processNewInquiries: typeof body?.processNewInquiries === 'boolean' ? body.processNewInquiries : undefined,
+          });
+        } else if (action === 'test') {
+          view = await svc.testStoredInbound(tId);
+        } else if (action === 'options') {
+          view = await svc.setInboundOptions(tId, { enabled: body?.enabled, processNewInquiries: body?.processNewInquiries });
+        } else if (action === 'poll') {
+          const poller = await import('./tenantImapPoller.js');
+          await poller.pollTenantMailbox(tId, { force: true });
+          view = await svc.getInboundView(tId);
+        } else {
+          view = await svc.disconnectInbound(tId);
+        }
+        res.statusCode = 200;
+        res.end(JSON.stringify(view));
+        return true;
+      }
+    } catch (err: any) {
+      const status = err instanceof Error && typeof (err as any).status === 'number' ? (err as any).status : 500;
+      res.statusCode = status;
+      // Only our own InboundError messages are customer-readable; anything else stays generic.
+      res.end(JSON.stringify({ error: status < 500 ? err.message : 'Inbound mailbox request failed' }));
+      return true;
+    }
+  }
+
+  // Cron / serverless worker for every company's mailbox: CRON_SECRET (all) or platform admin (all) or signed-in user (own)
+  if (url === '/api/inbound-mail/cron' && (req.method === 'POST' || req.method === 'GET')) {
+    const cronSecret = process.env.CRON_SECRET;
+    const presented = (req.headers['authorization'] || '').toString().replace(/^Bearer\s+/i, '');
+    const isCron = Boolean(cronSecret) && presented === cronSecret;
+    let callerCtx: TenantContext | null = null;
+    let runAll = isCron;
+    if (!isCron) {
+      const a = await authenticateRequest(req);
+      if (!a.ok) {
+        res.statusCode = a.status || 401;
+        res.end(JSON.stringify({ error: a.error || 'Unauthorized', code: a.code }));
+        return true;
+      }
+      callerCtx = a.ctx!;
+      runAll = Boolean(callerCtx.isPlatformAdmin);
+    }
+    try {
+      const poller = await import('./tenantImapPoller.js');
+      const results = runAll
+        ? await poller.pollAllTenantMailboxes()
+        : [await poller.pollTenantMailbox(callerCtx!.tenantId)];
+      res.statusCode = 200;
+      res.setHeader('Content-Type', 'application/json');
+      res.end(JSON.stringify({ success: true, results }));
+    } catch (err: any) {
+      res.statusCode = 500;
+      res.setHeader('Content-Type', 'application/json');
+      res.end(JSON.stringify({ error: err?.message || 'Failed to poll mailboxes' }));
+    }
+    return true;
   }
 
   // Tenant Routes Registration: /api/tenants/:tenantId/routes

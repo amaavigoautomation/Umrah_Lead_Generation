@@ -220,7 +220,7 @@ export async function checkImapStatus(): Promise<{
   }
 }
 
-function isBotOrNewsletter(fromAddress: string, subject: string): boolean {
+export function isBotOrNewsletter(fromAddress: string, subject: string): boolean {
   const from = fromAddress.toLowerCase();
   const subj = subject.toLowerCase();
 

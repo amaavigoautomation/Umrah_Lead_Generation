@@ -871,6 +871,11 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
         res.end(JSON.stringify(await svc.getEmailSettingsView(tId)));
         return true;
       }
+      if (req.method === 'DELETE' && action === 'domain') {
+        res.statusCode = 200;
+        res.end(JSON.stringify(await svc.removeTenantDomain(tId)));
+        return true;
+      }
       if (req.method === 'POST' && action) {
         if (action === 'domain') await svc.addTenantDomain(tId, body?.domain);
         else if (action === 'verify') await svc.verifyTenantDomain(tId);

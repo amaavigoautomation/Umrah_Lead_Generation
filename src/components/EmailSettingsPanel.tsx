@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Mail, CheckCircle2, Clock, AlertTriangle, Copy, Check, RefreshCw, Loader2 } from 'lucide-react';
+import { Mail, CheckCircle2, Clock, AlertTriangle, Copy, Check, RefreshCw, Loader2, Trash2 } from 'lucide-react';
 
 interface DnsRecord {
   record: string;
@@ -87,8 +87,24 @@ export const EmailSettingsPanel: React.FC<{ tenantId: string; canEdit: boolean }
   const [fromName, setFromName] = useState('');
   const [local, setLocal] = useState('');
   const [replyTo, setReplyTo] = useState('');
+  const [confirmRemove, setConfirmRemove] = useState(false);
 
-  const apply = (v: EmailView) => {
+  const removeDomain = async () => {
+    setBusy('remove');
+    setError(null);
+    setNotice(null);
+    try {
+      apply(await api<EmailView>(`${base}/domain`, { method: 'DELETE' }));
+      setNotice('Domain removed from your workspace and from Resend.');
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setConfirmRemove(false);
+      setBusy(null);
+    }
+  };
+
+  const apply =(v: EmailView) => {
     setView(v);
     setFromName(v.fromName || '');
     setLocal(v.fromLocalPart || '');
@@ -173,8 +189,45 @@ export const EmailSettingsPanel: React.FC<{ tenantId: string; canEdit: boolean }
       <section className="space-y-3">
         <h4 className="text-sm font-semibold text-slate-900">1. Your domain</h4>
         {hasDomain ? (
-          <div className="flex items-center justify-between bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
-            <span className="text-sm font-medium text-slate-900">{view?.domain}</span>
+          <div className="space-y-2">
+            <div className="flex items-center justify-between gap-3 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
+              <span className="text-sm font-medium text-slate-900">{view?.domain}</span>
+              {canEdit && !confirmRemove && (
+                <button
+                  type="button"
+                  className="inline-flex items-center gap-1.5 text-sm font-semibold text-red-600 hover:text-red-700"
+                  onClick={() => setConfirmRemove(true)}
+                >
+                  <Trash2 className="w-4 h-4" /> Remove domain
+                </button>
+              )}
+            </div>
+            {confirmRemove && (
+              <div className="text-sm bg-red-50 border border-red-200 text-red-900 rounded-lg p-3 space-y-2">
+                <p>
+                  Remove <strong>{view?.domain}</strong>? It is deleted from Resend as well, so email from this domain stops sending
+                  {view?.canSend ? ' right away' : ''} until you add and verify a domain again. You'll need to re-add the DNS records if you add it back.
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-1.5 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white text-xs font-bold rounded-lg px-3 py-1.5"
+                    disabled={busy === 'remove'}
+                    onClick={removeDomain}
+                  >
+                    {busy === 'remove' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />} Yes, remove it
+                  </button>
+                  <button
+                    type="button"
+                    className="border border-red-200 text-red-800 hover:bg-red-100 text-xs font-semibold rounded-lg px-3 py-1.5"
+                    disabled={busy === 'remove'}
+                    onClick={() => setConfirmRemove(false)}
+                  >
+                    Keep it
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         ) : (
           <div className="flex gap-2">

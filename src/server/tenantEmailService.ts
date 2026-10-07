@@ -1,5 +1,5 @@
 import { Resend } from 'resend';
-import { db, doc, getDoc, setDoc } from './adminFirestore.js';
+import { db, doc, getDoc, setDoc, deleteDoc } from './adminFirestore.js';
 import { tenantRepo } from './tenantRepo.js';
 import { isFirebaseConfigured } from '../firebase/config.js';
 import { getConnectedMailboxAddress } from './tenantInboundService.js';
@@ -192,6 +192,59 @@ export async function verifyTenantDomain(tenantId: string) {
     records: mapRecords(got.data.records as any[]),
     ...(status === 'verified' && s.status !== 'verified' ? { verifiedAt: new Date().toISOString() } : {}),
   });
+}
+
+/** Domain part of the platform-wide RESEND_FROM, e.g. `Name <sales@umrah360.in>` -> `umrah360.in`. */
+function platformFromDomain(): string {
+  const m = (process.env.RESEND_FROM || '').match(/@([a-z0-9.-]+)/i);
+  return m ? m[1].toLowerCase() : '';
+}
+
+/**
+ * Removes the workspace's sending domain from Resend AND from the app.
+ * Order matters: Resend first. If that fails the app keeps the domain, so the two never disagree
+ * (a domain left behind in Resend would be unreachable for re-adding).
+ * Refused when the domain is the one the platform itself sends from (RESEND_FROM), because deleting it in
+ * Resend would stop every grandfathered workspace from sending.
+ */
+export async function removeTenantDomain(tenantId: string) {
+  const s = await getTenantEmailSettings(tenantId, { fresh: true });
+  if (!s.domain) throw new HttpError(400, 'There is no domain to remove');
+  const domain = s.domain.toLowerCase();
+
+  if (platformFromDomain() === domain) {
+    throw new HttpError(409, `${domain} is the platform's own sending domain, so it can't be removed here.`);
+  }
+
+  if (s.resendDomainId) {
+    const resend = resendClient();
+    const res = await resend.domains.remove(s.resendDomainId);
+    if (res.error) {
+      const code = Number((res.error as any)?.statusCode);
+      // 404 = already gone in Resend (deleted from their dashboard): carry on and clean up our side.
+      if (code !== 404) throw new HttpError(502, `Resend: ${res.error.message || 'could not remove domain'}`);
+    }
+  }
+
+  // Release the global claim, only if it is ours.
+  try {
+    const claimRef = doc(db, 'email_domains', domain);
+    const claim = await getDoc(claimRef);
+    if (claim.exists() && claim.data()?.tenantId === tenantId) await deleteDoc(claimRef);
+  } catch (err: any) {
+    console.warn('[Tenant Email] could not release domain claim:', err?.message || err);
+  }
+
+  // Keep the display name and reply-to; the sender address belongs to the domain, so it goes with it.
+  await saveSettings(tenantId, {
+    domain: undefined,
+    resendDomainId: undefined,
+    status: undefined,
+    records: undefined,
+    verifiedAt: undefined,
+    fromLocalPart: undefined,
+  });
+  return getEmailSettingsView(tenantId);
 }
 
 export async function setTenantSender(tenantId: string, input: { fromName?: string; fromLocalPart?: string; replyTo?: string }) {

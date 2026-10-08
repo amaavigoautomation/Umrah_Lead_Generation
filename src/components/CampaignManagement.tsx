@@ -2335,131 +2335,40 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                   </span>
                 </div>
 
-                <div className="flex items-center gap-1.5 p-1 bg-slate-100 border border-slate-200 rounded-xl mb-3">
-                  <button
-                    type="button"
-                    onClick={() => setLeadInputMethod('UPLOAD')}
-                    className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-semibold transition flex items-center justify-center gap-1.5 ${
-                      leadInputMethod === 'UPLOAD'
-                        ? 'bg-orange-500 text-white shadow-xs'
-                        : 'text-slate-600 hover:text-slate-900'
-                    }`}
-                  >
-                    <FileSpreadsheet className="w-3.5 h-3.5" />
-                    <span>Upload File</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setLeadInputMethod('PASTE')}
-                    className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-semibold transition flex items-center justify-center gap-1.5 ${
-                      leadInputMethod === 'PASTE'
-                        ? 'bg-orange-500 text-white shadow-xs'
-                        : 'text-slate-600 hover:text-slate-900'
-                    }`}
-                  >
-                    <Copy className="w-3.5 h-3.5" />
-                    <span>Paste Leads</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setLeadInputMethod('SAMPLE');
-                      handleLoadSampleLeads();
-                    }}
-                    className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-semibold transition flex items-center justify-center gap-1.5 ${
-                      leadInputMethod === 'SAMPLE'
-                        ? 'bg-orange-500 text-white shadow-xs'
-                        : 'text-slate-600 hover:text-slate-900'
-                    }`}
-                  >
-                    <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-                    <span>⚡ Sample Leads</span>
-                  </button>
-                </div>
-
                 {/* TAB 1: FILE UPLOAD */}
-                {leadInputMethod === 'UPLOAD' && (
-                  <div>
-                    <input
-                      type="file"
-                      ref={fileInputRef}
-                      onChange={handleFileChange}
-                      accept=".csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel"
-                      className="hidden"
-                    />
+                <div>
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    onChange={handleFileChange}
+                    accept=".csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel"
+                    className="hidden"
+                  />
 
-                    <div
-                      onClick={() => fileInputRef.current?.click()}
-                      className="border-2 border-dashed border-slate-300 hover:border-orange-500 rounded-xl p-5 text-center cursor-pointer bg-slate-50/50 transition group"
-                    >
-                      <FileSpreadsheet className="w-8 h-8 mx-auto mb-2 text-slate-400 group-hover:text-orange-500 transition" />
-                      {uploadedFileName && leadInputMethod === 'UPLOAD' ? (
-                        <div>
-                          <p className="text-sm font-semibold text-orange-600">{uploadedFileName}</p>
-                          <p className="text-xs text-slate-500 mt-1">
-                            Found {parsedPreviewLeads.length} valid rows. Click to change file.
-                          </p>
-                        </div>
-                      ) : (
-                        <div>
-                          <p className="text-sm font-medium text-slate-700">
-                            Click to select or drag and drop leads spreadsheet
-                          </p>
-                          <p className="text-xs text-slate-500 mt-1">
-                            Supports CSV, XLS, XLSX. Any column structure supported.
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {/* TAB 2: QUICK PASTE */}
-                {leadInputMethod === 'PASTE' && (
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between text-[11px] text-slate-500">
-                      <span>Paste lines with Email, Name, Company (comma, tab or newline separated):</span>
-                      <button
-                        type="button"
-                        onClick={() => handleParsePastedLeads(`tariq@mansoorhajj.com, Tariq Al-Mansoor, Al-Mansoor Hajj Mumbai\nrashid@haramainjourneys.in, Rashid Farooqui, Haramain Journeys\nfarhan@malikpilgrimages.co.uk, Farhan Malik, Malik Pilgrimages UK`)}
-                        className="text-orange-600 hover:underline text-[10px] font-semibold"
-                      >
-                        Paste Example Format
-                      </button>
-                    </div>
-                    <textarea
-                      rows={4}
-                      value={pastedLeadsText}
-                      onChange={(e) => handleParsePastedLeads(e.target.value)}
-                      placeholder={`e.g.:\nahmed@safwatravels.in, Ahmed Khan, Al-Safwa Travels\ncontact@delhiumrah.in, Irfan Siddiqui, Delhi Consolidators\nbooking@alnoortours.ae, Bilal Qureshi, Al-Noor Tours`}
-                      className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono text-slate-800 placeholder-slate-400 focus:outline-none focus:border-orange-500"
-                    />
-                  </div>
-                )}
-
-                {/* TAB 3: 1-CLICK SAMPLE LEADS */}
-                {leadInputMethod === 'SAMPLE' && (
-                  <div className="p-4 bg-orange-50/50 border border-orange-200 rounded-xl space-y-3">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <Sparkles className="w-4 h-4 text-orange-500" />
-                        <span className="text-xs font-bold text-slate-900">5 Verified Pilgrimage Tour Operator Leads</span>
+                  <div
+                    onClick={() => fileInputRef.current?.click()}
+                    className="border-2 border-dashed border-slate-300 hover:border-orange-500 rounded-xl p-5 text-center cursor-pointer bg-slate-50/50 transition group"
+                  >
+                    <FileSpreadsheet className="w-8 h-8 mx-auto mb-2 text-slate-400 group-hover:text-orange-500 transition" />
+                    {uploadedFileName ? (
+                      <div>
+                        <p className="text-sm font-semibold text-orange-600">{uploadedFileName}</p>
+                        <p className="text-xs text-slate-500 mt-1">
+                          Found {parsedPreviewLeads.length} valid rows. Click to change file.
+                        </p>
                       </div>
-                      <button
-                        type="button"
-                        onClick={handleLoadSampleLeads}
-                        className="px-3 py-1 bg-orange-500 hover:bg-orange-600 text-white rounded-lg text-xs font-semibold transition"
-                      >
-                        Reload 5 Leads
-                      </button>
-                    </div>
-                    <p className="text-[11px] text-slate-600">
-                      Pre-configured licensed agency contacts across Mumbai, Delhi, London, and Dubai ready for instant campaign dispatch.
-                    </p>
+                    ) : (
+                      <div>
+                        <p className="text-sm font-medium text-slate-700">
+                          Click to select or drag and drop leads spreadsheet
+                        </p>
+                        <p className="text-xs text-slate-500 mt-1">
+                          Supports CSV, XLS, XLSX. Any column structure supported.
+                        </p>
+                      </div>
+                    )}
                   </div>
-                )}
+                </div>
 
                 {uploadError && (
                   <p className="text-xs text-rose-600 mt-2 flex items-center gap-1 font-medium">

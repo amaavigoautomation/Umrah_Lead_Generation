@@ -7,6 +7,7 @@ import { sendLiveEmail, getSmtpConfig, fetchFirestoreSmtpConfig } from './smtpSe
 import { handleIncomingCampaignLeadReply } from './campaignService.js';
 import { tenantRepo } from './tenantRepo.js';
 import type { TenantContext } from '../types/tenant.js';
+import { dispatchLeadToExternalWebhook } from './leadWebhookService.js';
 
 const DEFAULT_UMRAH_CTX: TenantContext = {
   tenantId: 'umrah360',
@@ -1054,6 +1055,16 @@ export async function processWebsiteLeadSubmission(
 
       await Promise.all(writes);
       console.log(`[Website Lead] Successfully stored Lead "${companyName}" (${leadId}) directly into Firestore DB for tenant ${ctx.tenantId}!`);
+
+      // Forward new lead to client's external CRM webhook (if configured)
+      dispatchLeadToExternalWebhook(ctx.tenantId, {
+        lead,
+        contact,
+        conversation,
+        source: 'WEBSITE',
+      }).catch((whErr) => {
+        console.warn('[Website Lead] External CRM webhook dispatch notice:', whErr?.message || whErr);
+      });
     } catch (dbErr) {
       console.error(`[Website Lead] Error writing to Firestore DB for ${ctx.tenantId}:`, dbErr);
     }

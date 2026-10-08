@@ -1,6 +1,12 @@
 import OpenAI from 'openai';
 import { classifyInboundMessage } from './messageClassifier.js';
 import { sanitizeAiEmailText } from './emailSanitizer.js';
+import {
+  getCrmLeadWebhookConfig,
+  saveCrmLeadWebhookConfig,
+  testCrmLeadWebhook,
+  dispatchLeadToExternalWebhook,
+} from './leadWebhookService.js';
 import { verifySmtpConnection, sendLiveEmail, getSmtpConfig, updateSmtpConfig, getResendConfig } from './smtpService.js';
 import { checkImapStatus, getImapConfig, updateImapConfig } from './imapService.js';
 import {
@@ -924,6 +930,81 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
       res.statusCode = 200;
       res.end(JSON.stringify({ success: true, message: `Route registered for tenant ${tId}` }));
       return true;
+    }
+  }
+
+  // Tenant CRM Outbound Webhook: /api/tenants/:tenantId/crm-webhook
+  const crmWebhookMatch = url.match(/^\/api\/tenants\/([^/?]+)\/crm-webhook(\/.*)?$/);
+  if (crmWebhookMatch) {
+    const tId = crmWebhookMatch[1];
+    const subPath = crmWebhookMatch[2] || '';
+
+    // Test webhook endpoint
+    if (subPath === '/test' && req.method === 'POST') {
+      try {
+        const { webhookUrl, secret } = body || {};
+        const testResult = await testCrmLeadWebhook(tId, webhookUrl, secret);
+        res.statusCode = 200;
+        res.end(JSON.stringify(testResult));
+        return true;
+      } catch (err: any) {
+        res.statusCode = 400;
+        res.end(JSON.stringify({ success: false, error: err?.message || 'Failed to test webhook' }));
+        return true;
+      }
+    }
+
+    // Manual lead dispatch endpoint
+    if (subPath === '/dispatch' && req.method === 'POST') {
+      try {
+        const { lead, contact, conversation, source } = body || {};
+        if (!lead) {
+          res.statusCode = 400;
+          res.end(JSON.stringify({ error: 'Lead object required for dispatch' }));
+          return true;
+        }
+        const dispatchResult = await dispatchLeadToExternalWebhook(tId, {
+          lead,
+          contact,
+          conversation,
+          source: source || lead.source || 'MANUAL_DISPATCH',
+        });
+        res.statusCode = 200;
+        res.end(JSON.stringify(dispatchResult));
+        return true;
+      } catch (err: any) {
+        res.statusCode = 500;
+        res.end(JSON.stringify({ success: false, error: err?.message }));
+        return true;
+      }
+    }
+
+    // Get current config
+    if (req.method === 'GET') {
+      try {
+        const config = await getCrmLeadWebhookConfig(tId);
+        res.statusCode = 200;
+        res.end(JSON.stringify(config));
+        return true;
+      } catch (err: any) {
+        res.statusCode = 500;
+        res.end(JSON.stringify({ error: err?.message || 'Failed to get CRM webhook config' }));
+        return true;
+      }
+    }
+
+    // Update config
+    if (req.method === 'POST' || req.method === 'PUT') {
+      try {
+        const updated = await saveCrmLeadWebhookConfig(tId, body || {}, activeTenantCtx?.email);
+        res.statusCode = 200;
+        res.end(JSON.stringify({ success: true, config: updated }));
+        return true;
+      } catch (err: any) {
+        res.statusCode = 400;
+        res.end(JSON.stringify({ error: err?.message || 'Failed to save CRM webhook config' }));
+        return true;
+      }
     }
   }
 

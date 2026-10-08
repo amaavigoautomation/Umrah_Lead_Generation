@@ -2,6 +2,7 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import { tenantRepo } from './tenantRepo.js';
 import type { TenantContext } from '../types/tenant.js';
 import { classifyInboundMessage } from './messageClassifier.js';
+import { dispatchLeadToExternalWebhook } from './leadWebhookService.js';
 
 const DEFAULT_UMRAH_CTX: TenantContext = {
   tenantId: 'umrah360',
@@ -1872,6 +1873,18 @@ export async function processLiveInboundEmail(payload: {
             writes.push(safeSetDoc(tenantRepo(getInboundCtx()).leadActivityDoc(crmEntities.activity.activityId), crmEntities.activity));
           }
           await Promise.all(writes);
+
+          // Forward qualified lead to client's private external CRM webhook (if configured)
+          if (crmEntities.lead) {
+            dispatchLeadToExternalWebhook(getInboundCtx().tenantId, {
+              lead: crmEntities.lead,
+              contact: crmEntities.contact,
+              conversation: crmEntities.conversation,
+              source: 'EMAIL',
+            }).catch((whErr) => {
+              console.warn('[Inbound Pipeline] External CRM webhook dispatch notice:', whErr?.message || whErr);
+            });
+          }
         } catch (err) {
           console.warn('[Inbound Pipeline] Notice syncing CRM entities to Firestore:', err);
         }

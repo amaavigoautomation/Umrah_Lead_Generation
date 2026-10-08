@@ -38,6 +38,7 @@ import {
   LeadSource,
 } from '../types';
 import { WebsiteLeadIntegrationModal } from './WebsiteLeadIntegrationModal';
+import { CrmOutboundWebhookBanner } from './CrmOutboundWebhookBanner';
 
 interface CrmPipelineProps {
   leads: Lead[];
@@ -46,6 +47,7 @@ interface CrmPipelineProps {
   onOpenConversation: (conversationId?: string, leadId?: string) => void;
   selectedLeadId?: string | null;
   onUpdateLeadStatus?: (leadId: string, newStatus: LeadStatus) => void;
+  tenantId?: string;
 }
 
 type ViewMode = 'PIPELINE' | 'TABLE' | 'GRID';
@@ -58,6 +60,7 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
   onOpenConversation,
   selectedLeadId: initialSelectedLeadId,
   onUpdateLeadStatus,
+  tenantId = 'umrah360',
 }) => {
   const [viewMode, setViewMode] = useState<ViewMode>('PIPELINE');
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(
@@ -170,6 +173,9 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
 
   return (
     <div className="max-w-7xl mx-auto p-4 space-y-6">
+      {/* Client-Unique Outbound CRM Lead Webhook Forwarder */}
+      <CrmOutboundWebhookBanner tenantId={tenantId} />
+
       {/* Top CRM Dashboard Metrics (Section 56) */}
       <div className="grid grid-cols-2 sm:grid-cols-6 gap-3.5">
         <div className="bg-white border border-slate-200/80 p-4 rounded-2xl shadow-2xs hover:shadow-md hover:border-slate-300 transition-all duration-200 group">

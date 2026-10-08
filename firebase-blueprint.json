@@ -198,6 +198,23 @@
         "createdAt": { "type": "string" }
       },
       "required": ["id", "title", "content", "status"]
+    },
+    "CrmLeadWebhookConfig": {
+      "title": "CrmLeadWebhookConfig",
+      "description": "Tenant-scoped outbound webhook configuration for external CRM lead data forwarding",
+      "type": "object",
+      "properties": {
+        "webhookUrl": { "type": "string", "maxLength": 1024 },
+        "enabled": { "type": "boolean" },
+        "secret": { "type": "string", "maxLength": 256 },
+        "description": { "type": "string", "maxLength": 512 },
+        "lastTriggeredAt": { "type": "string" },
+        "lastStatus": { "type": "number" },
+        "lastStatusText": { "type": "string", "maxLength": 128 },
+        "totalForwardedCount": { "type": "number" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["webhookUrl", "enabled"]
     }
   },
   "firestore": {
@@ -252,6 +269,10 @@
     "/tenants/{tenantId}/knowledge_documents/{docId}": {
       "schema": "KnowledgeDocument",
       "description": "Tenant isolated knowledge base articles"
+    },
+    "/tenants/{tenantId}/settings/{settingId}": {
+      "schema": "CrmLeadWebhookConfig",
+      "description": "Tenant isolated integrations and lead forwarding configurations"
     }
   }
 }

@@ -2059,6 +2059,7 @@ export default function App() {
                     }).catch(() => {});
                   }
                 }}
+                tenantId={currentTenantId}
               />
             )}
 

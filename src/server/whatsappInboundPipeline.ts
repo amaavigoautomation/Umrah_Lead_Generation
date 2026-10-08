@@ -1,6 +1,7 @@
 import { tenantRepo } from './tenantRepo.js';
 import type { TenantContext } from '../types/tenant.js';
 import { classifyInboundMessage } from './messageClassifier.js';
+import { dispatchLeadToExternalWebhook } from './leadWebhookService.js';
 
 const DEFAULT_UMRAH_CTX: TenantContext = {
   tenantId: 'umrah360',
@@ -1147,6 +1148,18 @@ export async function processLiveInboundWhatsApp(payload: {
         }
         if (crmEntities.activity) {
           safeSetDoc(tenantRepo(getWACtx()).leadActivityDoc(crmEntities.activity.activityId), crmEntities.activity, { merge: true }).catch(() => {});
+        }
+
+        // Forward qualified lead to client's external CRM webhook (if configured)
+        if (crmEntities.lead) {
+          dispatchLeadToExternalWebhook(getWACtx().tenantId, {
+            lead: crmEntities.lead,
+            contact: crmEntities.contact,
+            conversation: crmEntities.conversation,
+            source: 'WHATSAPP',
+          }).catch((whErr) => {
+            console.warn('[WhatsApp Pipeline] External CRM webhook dispatch notice:', whErr?.message || whErr);
+          });
         }
       } catch (fsErr) {
         console.error('[WhatsApp Pipeline] Firestore persistence warning:', fsErr);

@@ -240,17 +240,17 @@ export const AutoFollowUpDashboard: React.FC<AutoFollowUpDashboardProps> = ({
   };
 
   return (
-    <div className="flex-1 p-6 bg-slate-50 dark:bg-slate-900 min-h-screen">
+    <div className="flex-1 p-6 bg-slate-50 min-h-screen text-slate-900 font-sans">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-bold text-slate-900 dark:text-white">AI Auto Follow-Up Agent</h1>
-            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700">
-              <Zap className="w-3 h-3 mr-1" /> Operational Control Active
+            <h1 className="text-2xl font-extrabold text-slate-900 font-display">AI Auto Follow-Up Agent</h1>
+            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-orange-50 text-orange-700 border border-orange-200">
+              <Zap className="w-3 h-3 mr-1 text-orange-500" /> Operational Control Active
             </span>
           </div>
-          <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
+          <p className="text-sm text-slate-500 mt-1">
             Dynamic, context-aware follow-up engine for Umrah360 inbound leads. Reads actual thread context and generates personalized replies.
           </p>
         </div>
@@ -259,76 +259,76 @@ export const AutoFollowUpDashboard: React.FC<AutoFollowUpDashboardProps> = ({
           <button
             onClick={handleManualTriggerNow}
             disabled={loading}
-            className="inline-flex items-center px-3.5 py-2 rounded-lg text-sm font-medium bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm transition-all disabled:opacity-50"
+            className="inline-flex items-center px-4 py-2 rounded-xl text-xs font-bold bg-orange-500 hover:bg-orange-600 text-white shadow-xs transition-all disabled:opacity-50"
           >
-            <Play className="w-4 h-4 mr-2" />
+            <Play className="w-3.5 h-3.5 mr-1.5" />
             Trigger Poller Cycle Now
           </button>
           <button
             onClick={fetchDashboard}
             disabled={loading}
-            className="inline-flex items-center p-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50 transition-all"
+            className="inline-flex items-center p-2 rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 transition-all shadow-2xs"
             title="Refresh Dashboard"
           >
-            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-orange-500' : ''}`} />
           </button>
         </div>
       </div>
 
       {/* Metrics Grid */}
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3 mb-6">
-        <div className="bg-white dark:bg-slate-800 p-3.5 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
-          <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Scheduled</p>
-          <p className="text-xl font-bold text-amber-600 dark:text-amber-400 mt-1">
+        <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-2xs">
+          <p className="text-xs font-medium text-slate-500">Scheduled</p>
+          <p className="text-xl font-bold text-amber-600 mt-1 font-display">
             {dashboardData?.metrics.scheduled ?? 0}
           </p>
         </div>
-        <div className="bg-white dark:bg-slate-800 p-3.5 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
-          <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Sent Today</p>
-          <p className="text-xl font-bold text-emerald-600 dark:text-emerald-400 mt-1">
+        <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-2xs">
+          <p className="text-xs font-medium text-slate-500">Sent Today</p>
+          <p className="text-xl font-bold text-orange-600 mt-1 font-display">
             {dashboardData?.metrics.sentToday ?? 0}
           </p>
         </div>
-        <div className="bg-white dark:bg-slate-800 p-3.5 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
-          <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Human Review</p>
-          <p className="text-xl font-bold text-purple-600 dark:text-purple-400 mt-1">
+        <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-2xs">
+          <p className="text-xs font-medium text-slate-500">Human Review</p>
+          <p className="text-xl font-bold text-indigo-600 mt-1 font-display">
             {dashboardData?.metrics.humanReview ?? 0}
           </p>
         </div>
-        <div className="bg-white dark:bg-slate-800 p-3.5 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
-          <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Skipped (No-Op)</p>
-          <p className="text-xl font-bold text-blue-600 dark:text-blue-400 mt-1">
+        <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-2xs">
+          <p className="text-xs font-medium text-slate-500">Skipped (No-Op)</p>
+          <p className="text-xl font-bold text-slate-600 mt-1 font-display">
             {dashboardData?.metrics.skipped ?? 0}
           </p>
         </div>
-        <div className="bg-white dark:bg-slate-800 p-3.5 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
-          <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Cancelled</p>
-          <p className="text-xl font-bold text-slate-600 dark:text-slate-400 mt-1">
+        <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-2xs">
+          <p className="text-xs font-medium text-slate-500">Cancelled</p>
+          <p className="text-xl font-bold text-slate-600 mt-1 font-display">
             {dashboardData?.metrics.cancelled ?? 0}
           </p>
         </div>
-        <div className="bg-white dark:bg-slate-800 p-3.5 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
-          <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Failed</p>
-          <p className="text-xl font-bold text-rose-600 dark:text-rose-400 mt-1">
+        <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-2xs">
+          <p className="text-xs font-medium text-slate-500">Failed</p>
+          <p className="text-xl font-bold text-rose-600 mt-1 font-display">
             {dashboardData?.metrics.failed ?? 0}
           </p>
         </div>
-        <div className="bg-white dark:bg-slate-800 p-3.5 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm col-span-2 lg:col-span-1">
-          <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Completed</p>
-          <p className="text-xl font-bold text-teal-600 dark:text-teal-400 mt-1">
+        <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-2xs col-span-2 lg:col-span-1">
+          <p className="text-xs font-medium text-slate-500">Completed</p>
+          <p className="text-xl font-bold text-emerald-600 mt-1 font-display">
             {dashboardData?.metrics.completed ?? 0}
           </p>
         </div>
       </div>
 
       {/* Tabs */}
-      <div className="flex border-b border-slate-200 dark:border-slate-700 mb-6 bg-white dark:bg-slate-800 rounded-t-xl px-4 pt-2">
+      <div className="flex border-b border-slate-200 mb-6 bg-white rounded-t-xl px-4 pt-2 shadow-2xs">
         <button
           onClick={() => setActiveTab('JOBS')}
-          className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-all ${
+          className={`flex items-center gap-2 px-4 py-3 text-xs font-bold border-b-2 transition-all ${
             activeTab === 'JOBS'
-              ? 'border-emerald-600 text-emerald-600 dark:text-emerald-400 font-semibold'
-              : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900'
+              ? 'border-orange-500 text-orange-600'
+              : 'border-transparent text-slate-600 hover:text-slate-900'
           }`}
         >
           <Clock className="w-4 h-4" />
@@ -336,10 +336,10 @@ export const AutoFollowUpDashboard: React.FC<AutoFollowUpDashboardProps> = ({
         </button>
         <button
           onClick={() => setActiveTab('SETTINGS')}
-          className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-all ${
+          className={`flex items-center gap-2 px-4 py-3 text-xs font-bold border-b-2 transition-all ${
             activeTab === 'SETTINGS'
-              ? 'border-emerald-600 text-emerald-600 dark:text-emerald-400 font-semibold'
-              : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900'
+              ? 'border-orange-500 text-orange-600'
+              : 'border-transparent text-slate-600 hover:text-slate-900'
           }`}
         >
           <Sliders className="w-4 h-4" />
@@ -347,10 +347,10 @@ export const AutoFollowUpDashboard: React.FC<AutoFollowUpDashboardProps> = ({
         </button>
         <button
           onClick={() => setActiveTab('LOGS')}
-          className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-all ${
+          className={`flex items-center gap-2 px-4 py-3 text-xs font-bold border-b-2 transition-all ${
             activeTab === 'LOGS'
-              ? 'border-emerald-600 text-emerald-600 dark:text-emerald-400 font-semibold'
-              : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900'
+              ? 'border-orange-500 text-orange-600'
+              : 'border-transparent text-slate-600 hover:text-slate-900'
           }`}
         >
           <FileText className="w-4 h-4" />
@@ -360,7 +360,7 @@ export const AutoFollowUpDashboard: React.FC<AutoFollowUpDashboardProps> = ({
 
       {/* TAB 1: JOBS TABLE */}
       {activeTab === 'JOBS' && (
-        <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm p-4">
+        <div className="bg-white rounded-xl border border-slate-200 shadow-2xs p-4">
           {/* Controls */}
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-4">
             <div className="flex items-center gap-2 flex-wrap">
@@ -368,7 +368,7 @@ export const AutoFollowUpDashboard: React.FC<AutoFollowUpDashboardProps> = ({
               <select
                 value={channelFilter}
                 onChange={(e) => setChannelFilter(e.target.value)}
-                className="text-xs bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-slate-800 dark:text-slate-200 focus:outline-none"
+                className="text-xs bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-slate-800 focus:outline-none focus:border-orange-500"
               >
                 <option value="ALL">All Channels</option>
                 <option value="WHATSAPP">WhatsApp</option>
@@ -382,7 +382,7 @@ export const AutoFollowUpDashboard: React.FC<AutoFollowUpDashboardProps> = ({
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
-                className="text-xs bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-slate-800 dark:text-slate-200 focus:outline-none"
+                className="text-xs bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-slate-800 focus:outline-none focus:border-orange-500"
               >
                 <option value="ALL">All Statuses</option>
                 <option value="scheduled">Scheduled</option>
@@ -400,7 +400,7 @@ export const AutoFollowUpDashboard: React.FC<AutoFollowUpDashboardProps> = ({
                 placeholder="Search lead or conversation..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full text-xs pl-8 pr-3 py-1.5 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-200 focus:outline-none"
+                className="w-full text-xs pl-8 pr-3 py-1.5 bg-white border border-slate-200 rounded-lg text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-orange-500"
               />
               <Filter className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5" />
             </div>
@@ -410,7 +410,7 @@ export const AutoFollowUpDashboard: React.FC<AutoFollowUpDashboardProps> = ({
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                <tr className="border-b border-slate-200 bg-slate-50 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
                   <th className="py-3 px-3">Lead / Company</th>
                   <th className="py-3 px-3">Channel</th>
                   <th className="py-3 px-3">Attempt</th>
@@ -420,10 +420,10 @@ export const AutoFollowUpDashboard: React.FC<AutoFollowUpDashboardProps> = ({
                   <th className="py-3 px-3 text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-xs">
+              <tbody className="divide-y divide-slate-100 text-xs">
                 {filteredJobs.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="text-center py-8 text-slate-500 dark:text-slate-400">
+                    <td colSpan={7} className="text-center py-8 text-slate-500">
                       No follow-up jobs match the active filters.
                     </td>
                   </tr>
@@ -434,22 +434,22 @@ export const AutoFollowUpDashboard: React.FC<AutoFollowUpDashboardProps> = ({
                     const leadName = lead?.serviceInterest || lead?.queryMessage?.slice(0, 30) || j.leadId;
 
                     return (
-                      <tr key={j.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
-                        <td className="py-3 px-3 font-medium text-slate-900 dark:text-white">
+                      <tr key={j.id} className="hover:bg-slate-50/80 transition-colors">
+                        <td className="py-3 px-3 font-medium text-slate-900">
                           <div>
-                            <p className="font-semibold text-slate-900 dark:text-slate-100">{leadName}</p>
-                            <p className="text-[11px] text-slate-500 dark:text-slate-400 font-mono">
+                            <p className="font-semibold text-slate-900">{leadName}</p>
+                            <p className="text-[11px] text-slate-500 font-mono">
                               {j.conversationId}
                             </p>
                           </div>
                         </td>
                         <td className="py-3 px-3">{getChannelBadge(j.channel)}</td>
-                        <td className="py-3 px-3 font-semibold text-slate-700 dark:text-slate-300">
+                        <td className="py-3 px-3 font-semibold text-slate-700">
                           #{j.attempt}
                         </td>
-                        <td className="py-3 px-3 text-slate-600 dark:text-slate-400 whitespace-nowrap">
+                        <td className="py-3 px-3 text-slate-600 whitespace-nowrap">
                           {j.status === 'scheduled' ? (
-                            <span className="font-medium text-amber-700 dark:text-amber-400">
+                            <span className="font-medium text-amber-700">
                               {new Date(j.scheduledAt).toLocaleString('en-US', {
                                 month: 'short',
                                 day: 'numeric',
@@ -476,16 +476,16 @@ export const AutoFollowUpDashboard: React.FC<AutoFollowUpDashboardProps> = ({
                         <td className="py-3 px-3 max-w-xs">
                           {j.audit ? (
                             <div>
-                              <p className="font-medium text-slate-800 dark:text-slate-200 line-clamp-1">
+                              <p className="font-medium text-slate-800 line-clamp-1">
                                 Objective: {j.audit.objective || j.audit.reason}
                               </p>
                               {j.audit.generatedMessage && (
-                                <p className="text-[11px] text-slate-500 dark:text-slate-400 line-clamp-2 italic mt-0.5">
+                                <p className="text-[11px] text-slate-500 line-clamp-2 italic mt-0.5">
                                   "{j.audit.generatedMessage}"
                                 </p>
                               )}
                               {j.audit.humanReviewReason && (
-                                <p className="text-[11px] text-purple-600 dark:text-purple-400 font-semibold mt-0.5">
+                                <p className="text-[11px] text-purple-600 font-semibold mt-0.5">
                                   Flag: {j.audit.humanReviewReason}
                                 </p>
                               )}
@@ -500,7 +500,7 @@ export const AutoFollowUpDashboard: React.FC<AutoFollowUpDashboardProps> = ({
                           {onSelectConversation && (
                             <button
                               onClick={() => onSelectConversation(j.conversationId)}
-                              className="text-xs font-semibold text-emerald-600 hover:text-emerald-700 dark:text-emerald-400 hover:underline"
+                              className="text-xs font-semibold text-orange-600 hover:text-orange-700 hover:underline"
                             >
                               Open Thread →
                             </button>
@@ -518,14 +518,14 @@ export const AutoFollowUpDashboard: React.FC<AutoFollowUpDashboardProps> = ({
 
       {/* TAB 2: SETTINGS */}
       {activeTab === 'SETTINGS' && (
-        <form onSubmit={handleSaveConfig} className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm p-6 max-w-4xl">
-          <h2 className="text-lg font-bold text-slate-900 dark:text-white mb-1">Channel-Specific Timing Configuration</h2>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mb-6">
+        <form onSubmit={handleSaveConfig} className="bg-white rounded-xl border border-slate-200 shadow-2xs p-6 max-w-4xl text-slate-900">
+          <h2 className="text-lg font-bold text-slate-900 mb-1 font-display">Channel-Specific Timing Configuration</h2>
+          <p className="text-xs text-slate-500 mb-6">
             Define independent follow-up delays for each communication channel. The team member enables Auto Follow-Up on a lead, and the agent uses these channel timings.
           </p>
 
           {saveSuccessMsg && (
-            <div className="mb-6 p-3 rounded-lg bg-emerald-50 dark:bg-emerald-950 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200 text-xs font-medium flex items-center gap-2">
+            <div className="mb-6 p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-medium flex items-center gap-2">
               <CheckCircle2 className="w-4 h-4 text-emerald-600" />
               {saveSuccessMsg}
             </div>
@@ -533,10 +533,10 @@ export const AutoFollowUpDashboard: React.FC<AutoFollowUpDashboardProps> = ({
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
             {/* WhatsApp */}
-            <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50">
+            <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/70">
               <div className="flex items-center gap-2 mb-3">
                 <MessageCircle className="w-5 h-5 text-emerald-600" />
-                <h3 className="font-bold text-sm text-slate-900 dark:text-white">WhatsApp Timing</h3>
+                <h3 className="font-bold text-sm text-slate-900">WhatsApp Timing</h3>
               </div>
               <p className="text-xs text-slate-500 mb-3">Default delay for WhatsApp inbound conversations</p>
               <div className="flex items-center gap-2">
@@ -545,12 +545,12 @@ export const AutoFollowUpDashboard: React.FC<AutoFollowUpDashboardProps> = ({
                   min="1"
                   value={whatsappDelayVal}
                   onChange={(e) => setWhatsappDelayVal(parseInt(e.target.value, 10) || 1)}
-                  className="w-20 text-xs p-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white"
+                  className="w-20 text-xs p-2 bg-white border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:border-orange-500"
                 />
                 <select
                   value={whatsappDelayUnit}
                   onChange={(e) => setWhatsappDelayUnit(e.target.value as any)}
-                  className="text-xs p-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white"
+                  className="text-xs p-2 bg-white border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:border-orange-500"
                 >
                   <option value="minute">Minutes (Testing / Rapid)</option>
                   <option value="hour">Hours</option>
@@ -560,10 +560,10 @@ export const AutoFollowUpDashboard: React.FC<AutoFollowUpDashboardProps> = ({
             </div>
 
             {/* Instagram */}
-            <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50">
+            <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/70">
               <div className="flex items-center gap-2 mb-3">
                 <Instagram className="w-5 h-5 text-pink-600" />
-                <h3 className="font-bold text-sm text-slate-900 dark:text-white">Instagram Timing</h3>
+                <h3 className="font-bold text-sm text-slate-900">Instagram Timing</h3>
               </div>
               <p className="text-xs text-slate-500 mb-3">Default delay for Instagram Direct Messages</p>
               <div className="flex items-center gap-2">
@@ -572,12 +572,12 @@ export const AutoFollowUpDashboard: React.FC<AutoFollowUpDashboardProps> = ({
                   min="1"
                   value={instagramDelayVal}
                   onChange={(e) => setInstagramDelayVal(parseInt(e.target.value, 10) || 1)}
-                  className="w-20 text-xs p-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white"
+                  className="w-20 text-xs p-2 bg-white border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:border-orange-500"
                 />
                 <select
                   value={instagramDelayUnit}
                   onChange={(e) => setInstagramDelayUnit(e.target.value as any)}
-                  className="text-xs p-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white"
+                  className="text-xs p-2 bg-white border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:border-orange-500"
                 >
                   <option value="minute">Minutes</option>
                   <option value="hour">Hours</option>
@@ -587,10 +587,10 @@ export const AutoFollowUpDashboard: React.FC<AutoFollowUpDashboardProps> = ({
             </div>
 
             {/* Facebook */}
-            <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50">
+            <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/70">
               <div className="flex items-center gap-2 mb-3">
-                <Facebook className="w-5 h-5 text-indigo-600" />
-                <h3 className="font-bold text-sm text-slate-900 dark:text-white">Facebook Timing</h3>
+                <Facebook className="w-5 h-5 text-blue-600" />
+                <h3 className="font-bold text-sm text-slate-900">Facebook Timing</h3>
               </div>
               <p className="text-xs text-slate-500 mb-3">Default delay for Facebook Messenger</p>
               <div className="flex items-center gap-2">
@@ -599,12 +599,12 @@ export const AutoFollowUpDashboard: React.FC<AutoFollowUpDashboardProps> = ({
                   min="1"
                   value={facebookDelayVal}
                   onChange={(e) => setFacebookDelayVal(parseInt(e.target.value, 10) || 1)}
-                  className="w-20 text-xs p-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white"
+                  className="w-20 text-xs p-2 bg-white border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:border-orange-500"
                 />
                 <select
                   value={facebookDelayUnit}
                   onChange={(e) => setFacebookDelayUnit(e.target.value as any)}
-                  className="text-xs p-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white"
+                  className="text-xs p-2 bg-white border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:border-orange-500"
                 >
                   <option value="minute">Minutes</option>
                   <option value="hour">Hours</option>
@@ -614,10 +614,10 @@ export const AutoFollowUpDashboard: React.FC<AutoFollowUpDashboardProps> = ({
             </div>
 
             {/* Email */}
-            <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50">
+            <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/70">
               <div className="flex items-center gap-2 mb-3">
-                <Mail className="w-5 h-5 text-blue-600" />
-                <h3 className="font-bold text-sm text-slate-900 dark:text-white">Email Timing</h3>
+                <Mail className="w-5 h-5 text-orange-600" />
+                <h3 className="font-bold text-sm text-slate-900">Email Timing</h3>
               </div>
               <p className="text-xs text-slate-500 mb-3">Default delay for Email threads</p>
               <div className="flex items-center gap-2">
@@ -626,12 +626,12 @@ export const AutoFollowUpDashboard: React.FC<AutoFollowUpDashboardProps> = ({
                   min="1"
                   value={emailDelayVal}
                   onChange={(e) => setEmailDelayVal(parseInt(e.target.value, 10) || 1)}
-                  className="w-20 text-xs p-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white"
+                  className="w-20 text-xs p-2 bg-white border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:border-orange-500"
                 />
                 <select
                   value={emailDelayUnit}
                   onChange={(e) => setEmailDelayUnit(e.target.value as any)}
-                  className="text-xs p-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white"
+                  className="text-xs p-2 bg-white border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:border-orange-500"
                 >
                   <option value="minute">Minutes</option>
                   <option value="hour">Hours</option>
@@ -641,12 +641,12 @@ export const AutoFollowUpDashboard: React.FC<AutoFollowUpDashboardProps> = ({
             </div>
           </div>
 
-          <hr className="border-slate-200 dark:border-slate-700 mb-6" />
+          <hr className="border-slate-200 mb-6" />
 
           {/* Sequence & Limits */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
             <div>
-              <label className="block text-xs font-bold text-slate-900 dark:text-white mb-1">
+              <label className="block text-xs font-bold text-slate-900 mb-1">
                 Maximum Follow-Up Attempts per Sequence
               </label>
               <p className="text-xs text-slate-500 mb-2">Default is 3 follow-ups before sequence completes</p>
@@ -656,12 +656,12 @@ export const AutoFollowUpDashboard: React.FC<AutoFollowUpDashboardProps> = ({
                 max="10"
                 value={maxFollowUps}
                 onChange={(e) => setMaxFollowUps(parseInt(e.target.value, 10) || 3)}
-                className="w-32 text-xs p-2 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white"
+                className="w-32 text-xs p-2 bg-white border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:border-orange-500"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-slate-900 dark:text-white mb-1">
+              <label className="block text-xs font-bold text-slate-900 mb-1">
                 Sequence Mode vs Simple Mode
               </label>
               <p className="text-xs text-slate-500 mb-2">
@@ -670,7 +670,7 @@ export const AutoFollowUpDashboard: React.FC<AutoFollowUpDashboardProps> = ({
               <select
                 value={sequenceMode}
                 onChange={(e) => setSequenceMode(e.target.value as any)}
-                className="w-full text-xs p-2 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white"
+                className="w-full text-xs p-2 bg-white border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:border-orange-500"
               >
                 <option value="SIMPLE">Simple Mode (Configured Channel Interval)</option>
                 <option value="SEQUENCE">Sequence Mode (1hr → 1day → 3days)</option>
@@ -679,17 +679,17 @@ export const AutoFollowUpDashboard: React.FC<AutoFollowUpDashboardProps> = ({
           </div>
 
           {/* Quiet Hours */}
-          <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 mb-8">
+          <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/70 mb-8">
             <div className="flex items-center justify-between mb-3">
               <div>
-                <h3 className="font-bold text-sm text-slate-900 dark:text-white">Quiet Hours Protection</h3>
+                <h3 className="font-bold text-sm text-slate-900">Quiet Hours Protection</h3>
                 <p className="text-xs text-slate-500">Prevent sending automated messages late at night. Automatically queues until morning.</p>
               </div>
               <input
                 type="checkbox"
                 checked={quietHoursEnabled}
                 onChange={(e) => setQuietHoursEnabled(e.target.checked)}
-                className="w-4 h-4 text-emerald-600 rounded"
+                className="w-4 h-4 accent-orange-500 rounded"
               />
             </div>
 
@@ -701,7 +701,7 @@ export const AutoFollowUpDashboard: React.FC<AutoFollowUpDashboardProps> = ({
                     type="time"
                     value={quietStart}
                     onChange={(e) => setQuietStart(e.target.value)}
-                    className="ml-2 text-xs p-1.5 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg"
+                    className="ml-2 text-xs p-1.5 bg-white border border-slate-200 rounded-lg focus:outline-none focus:border-orange-500"
                   />
                 </div>
                 <div>
@@ -710,7 +710,7 @@ export const AutoFollowUpDashboard: React.FC<AutoFollowUpDashboardProps> = ({
                     type="time"
                     value={quietEnd}
                     onChange={(e) => setQuietEnd(e.target.value)}
-                    className="ml-2 text-xs p-1.5 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg"
+                    className="ml-2 text-xs p-1.5 bg-white border border-slate-200 rounded-lg focus:outline-none focus:border-orange-500"
                   />
                 </div>
               </div>
@@ -720,7 +720,7 @@ export const AutoFollowUpDashboard: React.FC<AutoFollowUpDashboardProps> = ({
           <button
             type="submit"
             disabled={isSavingConfig}
-            className="px-5 py-2.5 rounded-lg text-sm font-semibold bg-emerald-600 hover:bg-emerald-700 text-white transition-all shadow-sm disabled:opacity-50"
+            className="px-5 py-2.5 rounded-xl text-xs font-bold bg-orange-500 hover:bg-orange-600 text-white transition-all shadow-xs disabled:opacity-50"
           >
             {isSavingConfig ? 'Saving Settings...' : 'Save Global Channel Rules'}
           </button>
@@ -729,8 +729,8 @@ export const AutoFollowUpDashboard: React.FC<AutoFollowUpDashboardProps> = ({
 
       {/* TAB 3: AUDIT LOGS */}
       {activeTab === 'LOGS' && (
-        <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm p-4">
-          <h2 className="text-sm font-bold text-slate-900 dark:text-white mb-3">Operational Activity Feed & Audit Trail</h2>
+        <div className="bg-white rounded-xl border border-slate-200 shadow-2xs p-4">
+          <h2 className="text-sm font-bold text-slate-900 mb-3 font-display">Operational Activity Feed & Audit Trail</h2>
           <div className="space-y-3">
             {(dashboardData?.logs || []).length === 0 ? (
               <p className="text-xs text-slate-500 py-4">No activity logs recorded yet.</p>
@@ -738,19 +738,19 @@ export const AutoFollowUpDashboard: React.FC<AutoFollowUpDashboardProps> = ({
               dashboardData?.logs.map((log: any) => (
                 <div
                   key={log.id}
-                  className="p-3 rounded-lg border border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/40 flex items-start gap-3"
+                  className="p-3 rounded-lg border border-slate-100 bg-slate-50/70 flex items-start gap-3"
                 >
                   <div className="mt-0.5">
                     {log.type === 'SENT' && <CheckCircle2 className="w-4 h-4 text-emerald-600" />}
                     {log.type === 'SCHEDULED' && <Clock className="w-4 h-4 text-amber-500" />}
                     {log.type === 'CANCELLED' && <XCircle className="w-4 h-4 text-slate-400" />}
                     {log.type === 'HUMAN_REVIEW' && <AlertTriangle className="w-4 h-4 text-purple-600" />}
-                    {log.type === 'ENABLED' && <Zap className="w-4 h-4 text-emerald-500" />}
+                    {log.type === 'ENABLED' && <Zap className="w-4 h-4 text-orange-500" />}
                     {log.type === 'DISABLED' && <XCircle className="w-4 h-4 text-rose-500" />}
                   </div>
                   <div className="flex-1">
                     <div className="flex items-center justify-between">
-                      <p className="text-xs font-bold text-slate-900 dark:text-white">{log.title}</p>
+                      <p className="text-xs font-bold text-slate-900">{log.title}</p>
                       <span className="text-[11px] text-slate-400">
                         {new Date(log.timestamp).toLocaleString('en-US', {
                           month: 'short',
@@ -760,7 +760,7 @@ export const AutoFollowUpDashboard: React.FC<AutoFollowUpDashboardProps> = ({
                         })}
                       </span>
                     </div>
-                    <p className="text-xs text-slate-600 dark:text-slate-300 mt-0.5">{log.description}</p>
+                    <p className="text-xs text-slate-600 mt-0.5">{log.description}</p>
                     {log.user && (
                       <p className="text-[11px] text-slate-400 mt-0.5 font-mono">Actor: {log.user}</p>
                     )}

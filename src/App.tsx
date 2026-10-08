@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Navbar, ActiveTab } from './components/Navbar';
+import { HeaderBar } from './components/HeaderBar';
 import { UnifiedInbox } from './components/UnifiedInbox';
 import { CampaignManagement } from './components/CampaignManagement';
 import { OutboundCampaigns } from './components/OutboundCampaigns';
@@ -151,6 +152,7 @@ function toAppUser(u: any): AppUser {
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<ActiveTab>('inbox');
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(false);
   const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ? [] : INITIAL_CONTACTS);
   const [leads, setLeads] = useState<Lead[]>(() => isFirebaseConfigured ? [] : INITIAL_LEADS);
   const [conversations, setConversations] = useState<Conversation[]>(() => isFirebaseConfigured ? [] : INITIAL_CONVERSATIONS);
@@ -1903,7 +1905,7 @@ export default function App() {
     (currentUser.allowedModules || []).includes(activeTab);
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col font-sans selection:bg-orange-500/20 selection:text-orange-950">
+    <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col md:flex-row font-sans selection:bg-orange-500/20 selection:text-orange-950">
       <Navbar
         activeTab={activeTab}
         setActiveTab={setActiveTab}
@@ -1917,9 +1919,24 @@ export default function App() {
         currentTenant={currentTenant}
         allTenants={allTenants}
         onSwitchTenant={(tenantId) => setCurrentTenantId(tenantId)}
+        isCollapsed={isSidebarCollapsed}
+        onToggleCollapse={() => setIsSidebarCollapsed((prev) => !prev)}
       />
 
-      <main className="flex-1">
+      <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
+        <HeaderBar
+          activeTab={activeTab}
+          setActiveTab={setActiveTab}
+          isCollapsed={isSidebarCollapsed}
+          onToggleCollapse={() => setIsSidebarCollapsed((prev) => !prev)}
+          unreadCount={unreadCount}
+          handoffCount={handoffCount}
+          onResetSeedData={handleResetSeedData}
+          currentUser={currentUser}
+          onLogout={handleLogout}
+        />
+
+        <main className={`flex-1 min-w-0 min-h-0 ${activeTab === 'inbox' ? 'p-0 h-full overflow-hidden flex flex-col' : 'p-3 sm:p-5 overflow-y-auto'}`}>
         {entitlements?.billing?.status === 'past_due' && (
           <div className="mb-3 flex items-center justify-between gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-800">
             <span>
@@ -2103,5 +2120,6 @@ export default function App() {
         )}
       </main>
     </div>
+  </div>
   );
 }

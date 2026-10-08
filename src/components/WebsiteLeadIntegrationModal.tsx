@@ -198,55 +198,55 @@ export const WebsiteLeadIntegrationModal: React.FC<WebsiteLeadIntegrationModalPr
   }'`;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-slate-900 border border-slate-700/80 rounded-2xl w-full max-w-4xl max-h-[92vh] flex flex-col shadow-2xl overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/50 backdrop-blur-xs animate-in fade-in duration-200">
+      <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-4xl max-h-[92vh] flex flex-col shadow-2xl overflow-hidden text-slate-900">
         {/* Header */}
-        <div className="px-6 py-4 border-b border-slate-800 bg-slate-950/80 flex items-center justify-between">
+        <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 shadow-inner">
+            <div className="w-10 h-10 rounded-xl bg-orange-50 border border-orange-200 flex items-center justify-center text-orange-600 shadow-2xs">
               <Globe className="w-5 h-5" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h2 className="text-base font-bold text-white">
+                <h2 className="text-base font-bold text-slate-900">
                   Website Form Lead Ingestion
                 </h2>
-                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-orange-50 text-orange-700 border border-orange-200">
+                  <span className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse"></span>
                   <span>Webhook Live</span>
                 </span>
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-500/20 text-blue-300 border border-blue-500/40">
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-50 text-blue-700 border border-blue-200">
                   <Database className="w-3 h-3" />
                   <span>Firestore Synced</span>
                 </span>
               </div>
-              <p className="text-xs text-slate-400 mt-0.5">
-                Automatically push demo requests from <code className="text-emerald-400">umrah360.in/request-demo</code> into your CRM
+              <p className="text-xs text-slate-500 mt-0.5">
+                Automatically push demo requests from <code className="text-orange-600 font-semibold">umrah360.in/request-demo</code> into your CRM
               </p>
             </div>
           </div>
 
           <button
             onClick={onClose}
-            className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition"
+            className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100 transition"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Webhook Endpoint Banner with Vercel Domain Selector */}
-        <div className="px-6 py-3 bg-slate-950 border-b border-slate-800 flex flex-col gap-2.5 text-xs">
+        <div className="px-6 py-3 bg-slate-50 border-b border-slate-200 flex flex-col gap-2.5 text-xs">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="flex items-center gap-2 overflow-hidden flex-1">
-              <span className="text-slate-400 font-semibold whitespace-nowrap">Live Webhook URL:</span>
-              <code className="text-emerald-400 font-mono bg-slate-900 px-2.5 py-1 rounded border border-slate-800 truncate select-all flex-1">
+              <span className="text-slate-600 font-semibold whitespace-nowrap">Live Webhook URL:</span>
+              <code className="text-orange-600 font-mono bg-white px-2.5 py-1 rounded border border-slate-200 truncate select-all flex-1 shadow-2xs">
                 {webhookUrl}
               </code>
             </div>
             <div className="flex items-center gap-2 shrink-0">
               <button
                 onClick={() => copyToClipboard(webhookUrl, 'url')}
-                className="flex items-center gap-1.5 px-3 py-1 bg-emerald-600/30 hover:bg-emerald-600/50 text-emerald-300 border border-emerald-500/30 rounded-lg text-xs font-semibold transition"
+                className="flex items-center gap-1.5 px-3 py-1 bg-orange-500 hover:bg-orange-600 text-white rounded-lg text-xs font-semibold transition shadow-2xs"
               >
                 {copiedUrl ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
                 <span>{copiedUrl ? 'Copied!' : 'Copy Webhook URL'}</span>
@@ -255,21 +255,21 @@ export const WebsiteLeadIntegrationModal: React.FC<WebsiteLeadIntegrationModalPr
           </div>
 
           {/* Vercel Host Override */}
-          <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-slate-900 text-[11px] text-slate-400">
-            <span className="text-slate-400 font-medium">Deploying to Vercel?</span>
-            <span className="text-slate-400">Set base URL:</span>
+          <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-slate-200 text-[11px] text-slate-500">
+            <span className="text-slate-600 font-medium">Deploying to Vercel?</span>
+            <span className="text-slate-500">Set base URL:</span>
             <input
               type="text"
               value={customOrigin}
               onChange={(e) => setCustomOrigin(e.target.value)}
               placeholder={detectedOrigin || "https://your-crm-name.vercel.app"}
-              className="px-2.5 py-1 bg-slate-900 border border-slate-800 rounded text-emerald-400 font-mono text-[11px] w-64 focus:outline-none focus:border-emerald-500"
+              className="px-2.5 py-1 bg-white border border-slate-200 rounded text-slate-800 font-mono text-[11px] w-64 focus:outline-none focus:border-orange-500 shadow-2xs"
             />
             {detectedOrigin && customOrigin !== detectedOrigin && (
               <button
                 type="button"
                 onClick={() => setCustomOrigin(detectedOrigin)}
-                className="text-[10px] text-slate-400 hover:text-slate-200 underline"
+                className="text-[10px] text-slate-500 hover:text-slate-800 underline"
               >
                 Reset to Current Origin
               </button>
@@ -278,13 +278,13 @@ export const WebsiteLeadIntegrationModal: React.FC<WebsiteLeadIntegrationModalPr
         </div>
 
         {/* Tab Navigation */}
-        <div className="flex border-b border-slate-800 bg-slate-950/40 px-6 gap-2 pt-2">
+        <div className="flex border-b border-slate-200 bg-slate-50/50 px-6 gap-2 pt-2">
           <button
             onClick={() => setActiveTab('SIMULATOR')}
             className={`px-4 py-2.5 text-xs font-bold border-b-2 flex items-center gap-2 transition ${
               activeTab === 'SIMULATOR'
-                ? 'border-emerald-500 text-emerald-400 bg-slate-900/60 rounded-t-lg'
-                : 'border-transparent text-slate-400 hover:text-slate-200'
+                ? 'border-orange-500 text-orange-600 bg-white rounded-t-lg'
+                : 'border-transparent text-slate-500 hover:text-slate-800'
             }`}
           >
             <Send className="w-3.5 h-3.5" />
@@ -295,8 +295,8 @@ export const WebsiteLeadIntegrationModal: React.FC<WebsiteLeadIntegrationModalPr
             onClick={() => setActiveTab('JS_SNIPPET')}
             className={`px-4 py-2.5 text-xs font-bold border-b-2 flex items-center gap-2 transition ${
               activeTab === 'JS_SNIPPET'
-                ? 'border-emerald-500 text-emerald-400 bg-slate-900/60 rounded-t-lg'
-                : 'border-transparent text-slate-400 hover:text-slate-200'
+                ? 'border-orange-500 text-orange-600 bg-white rounded-t-lg'
+                : 'border-transparent text-slate-500 hover:text-slate-800'
             }`}
           >
             <Code className="w-3.5 h-3.5" />
@@ -307,8 +307,8 @@ export const WebsiteLeadIntegrationModal: React.FC<WebsiteLeadIntegrationModalPr
             onClick={() => setActiveTab('WORDPRESS')}
             className={`px-4 py-2.5 text-xs font-bold border-b-2 flex items-center gap-2 transition ${
               activeTab === 'WORDPRESS'
-                ? 'border-emerald-500 text-emerald-400 bg-slate-900/60 rounded-t-lg'
-                : 'border-transparent text-slate-400 hover:text-slate-200'
+                ? 'border-orange-500 text-orange-600 bg-white rounded-t-lg'
+                : 'border-transparent text-slate-500 hover:text-slate-800'
             }`}
           >
             <Layers className="w-3.5 h-3.5" />
@@ -319,8 +319,8 @@ export const WebsiteLeadIntegrationModal: React.FC<WebsiteLeadIntegrationModalPr
             onClick={() => setActiveTab('CURL')}
             className={`px-4 py-2.5 text-xs font-bold border-b-2 flex items-center gap-2 transition ${
               activeTab === 'CURL'
-                ? 'border-emerald-500 text-emerald-400 bg-slate-900/60 rounded-t-lg'
-                : 'border-transparent text-slate-400 hover:text-slate-200'
+                ? 'border-orange-500 text-orange-600 bg-white rounded-t-lg'
+                : 'border-transparent text-slate-500 hover:text-slate-800'
             }`}
           >
             <ExternalLink className="w-3.5 h-3.5" />
@@ -621,7 +621,7 @@ export const WebsiteLeadIntegrationModal: React.FC<WebsiteLeadIntegrationModalPr
                   <button
                     type="submit"
                     disabled={isSubmitting}
-                    className="flex items-center gap-2 px-6 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition shadow-lg shadow-emerald-950/60 disabled:opacity-50"
+                    className="flex items-center gap-2 px-6 py-2.5 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-xs font-bold transition shadow-2xs disabled:opacity-50"
                   >
                     {isSubmitting ? (
                       <>
@@ -643,24 +643,24 @@ export const WebsiteLeadIntegrationModal: React.FC<WebsiteLeadIntegrationModalPr
           {/* TAB 2: HTML / JAVASCRIPT EMBED */}
           {activeTab === 'JS_SNIPPET' && (
             <div className="space-y-4">
-              <div className="p-4 bg-slate-950 border border-slate-800 rounded-xl space-y-2">
-                <h3 className="text-xs font-bold text-white uppercase tracking-wider">
+              <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
+                <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider">
                   How to embed on umrah360.in/request-demo
                 </h3>
-                <p className="text-xs text-slate-300 leading-relaxed">
-                  Add this small script right before the closing <code className="text-emerald-400">&lt;/body&gt;</code> tag on your website page. It intercepts the "Schedule my Free Demo" submit event, captures all filled fields, and delivers the lead directly into this CRM with zero server reload needed!
+                <p className="text-xs text-slate-600 leading-relaxed">
+                  Add this small script right before the closing <code className="text-orange-600 font-semibold">&lt;/body&gt;</code> tag on your website page. It intercepts the "Schedule my Free Demo" submit event, captures all filled fields, and delivers the lead directly into this CRM with zero server reload needed!
                 </p>
               </div>
 
               <div className="relative">
                 <button
                   onClick={() => copyToClipboard(jsEmbedSnippet, 'snippet')}
-                  className="absolute right-3 top-3 flex items-center gap-1.5 px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-lg text-xs font-medium transition"
+                  className="absolute right-3 top-3 flex items-center gap-1.5 px-3 py-1 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-lg text-xs font-medium transition shadow-2xs"
                 >
-                  {copiedSnippet ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                  {copiedSnippet ? <Check className="w-3.5 h-3.5 text-orange-600" /> : <Copy className="w-3.5 h-3.5" />}
                   <span>{copiedSnippet ? 'Copied!' : 'Copy Code'}</span>
                 </button>
-                <pre className="p-4 bg-slate-950 border border-slate-800 rounded-xl text-emerald-300 font-mono text-xs overflow-x-auto leading-relaxed">
+                <pre className="p-4 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 font-mono text-xs overflow-x-auto leading-relaxed">
                   {jsEmbedSnippet}
                 </pre>
               </div>
@@ -669,54 +669,54 @@ export const WebsiteLeadIntegrationModal: React.FC<WebsiteLeadIntegrationModalPr
 
           {/* TAB 3: WORDPRESS / ELEMENTOR */}
           {activeTab === 'WORDPRESS' && (
-            <div className="space-y-4 text-xs text-slate-300">
-              <div className="p-4 bg-slate-950 border border-slate-800 rounded-xl space-y-2">
-                <h3 className="text-xs font-bold text-white uppercase tracking-wider">
+            <div className="space-y-4 text-xs text-slate-700">
+              <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
+                <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider">
                   Connecting WordPress / Elementor Form
                 </h3>
-                <p className="text-slate-300 leading-relaxed">
-                  If your website <code className="text-emerald-400">umrah360.in</code> is built with WordPress + Elementor Pro, you can connect the form in 2 minutes:
+                <p className="text-slate-600 leading-relaxed">
+                  If your website <code className="text-orange-600 font-semibold">umrah360.in</code> is built with WordPress + Elementor Pro, you can connect the form in 2 minutes:
                 </p>
               </div>
 
-              <div className="space-y-3 p-4 bg-slate-950/60 border border-slate-800 rounded-xl">
+              <div className="space-y-3 p-4 bg-slate-50/60 border border-slate-200 rounded-xl">
                 <div className="flex items-start gap-3">
-                  <div className="w-6 h-6 rounded-full bg-emerald-500/20 text-emerald-400 font-bold flex items-center justify-center shrink-0">1</div>
+                  <div className="w-6 h-6 rounded-full bg-orange-50 text-orange-700 border border-orange-200 font-bold flex items-center justify-center shrink-0">1</div>
                   <div>
-                    <strong className="text-white block">Edit Form in Elementor:</strong>
+                    <strong className="text-slate-900 block">Edit Form in Elementor:</strong>
                     Open your <code>/request-demo</code> page in Elementor and click to select the form widget.
                   </div>
                 </div>
 
                 <div className="flex items-start gap-3">
-                  <div className="w-6 h-6 rounded-full bg-emerald-500/20 text-emerald-400 font-bold flex items-center justify-center shrink-0">2</div>
+                  <div className="w-6 h-6 rounded-full bg-orange-50 text-orange-700 border border-orange-200 font-bold flex items-center justify-center shrink-0">2</div>
                   <div>
-                    <strong className="text-white block">Add Webhook Action:</strong>
+                    <strong className="text-slate-900 block">Add Webhook Action:</strong>
                     Under <strong>Actions After Submit</strong>, add <strong>Webhook</strong>.
                   </div>
                 </div>
 
                 <div className="flex items-start gap-3">
-                  <div className="w-6 h-6 rounded-full bg-emerald-500/20 text-emerald-400 font-bold flex items-center justify-center shrink-0">3</div>
+                  <div className="w-6 h-6 rounded-full bg-orange-50 text-orange-700 border border-orange-200 font-bold flex items-center justify-center shrink-0">3</div>
                   <div>
-                    <strong className="text-white block">Paste Webhook URL:</strong>
+                    <strong className="text-slate-900 block">Paste Webhook URL:</strong>
                     In the Webhook settings tab, paste:
-                    <div className="mt-1 font-mono text-emerald-400 bg-slate-900 p-2 rounded border border-slate-800 select-all">
+                    <div className="mt-1 font-mono text-orange-600 bg-white p-2 rounded border border-slate-200 select-all shadow-2xs">
                       {webhookUrl}
                     </div>
                   </div>
                 </div>
 
                 <div className="flex items-start gap-3">
-                  <div className="w-6 h-6 rounded-full bg-emerald-500/20 text-emerald-400 font-bold flex items-center justify-center shrink-0">4</div>
+                  <div className="w-6 h-6 rounded-full bg-orange-50 text-orange-700 border border-orange-200 font-bold flex items-center justify-center shrink-0">4</div>
                   <div>
-                    <strong className="text-white block">Field Mapping:</strong>
+                    <strong className="text-slate-900 block">Field Mapping:</strong>
                     Elementor form field IDs map automatically:
                     <div className="grid grid-cols-2 gap-2 mt-2 font-mono text-[11px]">
-                      <div className="bg-slate-900 p-1.5 rounded text-slate-300">fullName: your name field</div>
-                      <div className="bg-slate-900 p-1.5 rounded text-slate-300">email: your email field</div>
-                      <div className="bg-slate-900 p-1.5 rounded text-slate-300">phone: your phone field</div>
-                      <div className="bg-slate-900 p-1.5 rounded text-slate-300">companyName: your company field</div>
+                      <div className="bg-white p-1.5 rounded text-slate-700 border border-slate-200">fullName: your name field</div>
+                      <div className="bg-white p-1.5 rounded text-slate-700 border border-slate-200">email: your email field</div>
+                      <div className="bg-white p-1.5 rounded text-slate-700 border border-slate-200">phone: your phone field</div>
+                      <div className="bg-white p-1.5 rounded text-slate-700 border border-slate-200">companyName: your company field</div>
                     </div>
                   </div>
                 </div>

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 
 interface Umrah360LogoProps {
   className?: string;
@@ -15,24 +15,26 @@ export const Umrah360Logo: React.FC<Umrah360LogoProps> = ({
   systemName = 'Umrah360',
   systemBadge = 'AI Platform',
 }) => {
+  const [imgError, setImgError] = useState(false);
+
   const sizeMap = {
     sm: {
-      icon: 'w-7 h-7 text-sm',
-      title: 'text-base',
-      subtitle: 'text-[9px]',
+      logoImg: 'h-6',
       badge: 'text-[10px] px-1.5 py-0.5',
+      subtitle: 'text-[9px]',
+      icon: 'w-5 h-5',
     },
     md: {
-      icon: 'w-8 h-8 text-base',
-      title: 'text-xl',
-      subtitle: 'text-[10px]',
+      logoImg: 'h-8',
       badge: 'text-xs px-2 py-0.5',
+      subtitle: 'text-[10px]',
+      icon: 'w-7 h-7',
     },
     lg: {
-      icon: 'w-11 h-11 text-xl',
-      title: 'text-2xl',
-      subtitle: 'text-xs',
+      logoImg: 'h-11',
       badge: 'text-xs px-2.5 py-1',
+      subtitle: 'text-xs',
+      icon: 'w-9 h-9',
     },
   };
 
@@ -40,57 +42,64 @@ export const Umrah360Logo: React.FC<Umrah360LogoProps> = ({
 
   return (
     <div className={`flex items-center space-x-3 select-none ${className}`}>
-      {/* Amaavigo Brand Mark Icon */}
-      <div
-        className={`relative flex-shrink-0 ${currentSize.icon} rounded-lg bg-white border border-orange-500/30 flex items-center justify-center shadow-xs text-orange-600 font-bold`}
-      >
-        <svg
-          viewBox="0 0 24 24"
-          className="w-5 h-5 text-orange-500"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <rect x="2" y="3" width="20" height="18" rx="4" />
-          <polyline points="9 8 15 12 9 16" />
-        </svg>
-      </div>
-
-      {/* Brand Text Lockup */}
-      <div className="flex flex-col justify-center">
-        <div className="flex items-center space-x-2">
-          {/* amaavigo Wordmark */}
-          <div className="flex items-baseline tracking-tight font-extrabold text-slate-900 text-lg leading-tight">
-            <span>amaavig</span>
-            <span className="text-orange-500">o</span>
-          </div>
-
-          {/* Separator / Product Tag */}
-          <div className="h-4 w-px bg-slate-200 mx-1 hidden sm:block" />
-
-          {systemName && (
-            <span className="text-sm font-bold text-slate-800 hidden sm:inline-block">
-              {systemName}
-            </span>
-          )}
-
-          {systemBadge && (
-            <span
-              className={`rounded-full bg-orange-50 text-orange-700 border border-orange-200/80 font-semibold tracking-wide hidden sm:inline-flex items-center ${currentSize.badge}`}
+      {/* Official Amaavigo Logo */}
+      <div className="flex items-center space-x-2">
+        {!imgError ? (
+          <img
+            src="/amaavigo-logo.png"
+            alt="Amaavigo"
+            className={`${currentSize.logoImg} w-auto object-contain`}
+            onError={() => setImgError(true)}
+          />
+        ) : (
+          <div className="flex items-center space-x-2">
+            <svg
+              className={`${currentSize.icon} text-[#ef741a]`}
+              viewBox="0 0 40 40"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
             >
-              {systemBadge}
+              <circle cx="20" cy="20" r="18" fill="#fef6f3" stroke="#fed7aa" strokeWidth="2" />
+              <path
+                d="M12 26C14 20 18 14 26 13C24 18 20 22 14 24"
+                stroke="#ef741a"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+              />
+              <path
+                d="M16 27C18 23 22 19 28 17C26 21 23 24 18 26"
+                stroke="#ea580c"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+              />
+            </svg>
+            <span className="font-display font-extrabold text-slate-900 tracking-tight text-lg">
+              amaavigo
             </span>
-          )}
-        </div>
+          </div>
+        )}
 
-        {showSubtitle && (
-          <p className={`text-slate-400 font-medium ${currentSize.subtitle} leading-none mt-0.5`}>
-            Where Brand takes Flight
-          </p>
+        {/* Separator / Product Tag */}
+        <div className="h-4 w-px bg-slate-200 mx-1 hidden sm:block" />
+
+        {systemName && (
+          <span className="text-sm font-bold text-slate-800 hidden sm:inline-block font-sans">
+            {systemName}
+          </span>
+        )}
+
+        {systemBadge && (
+          <span
+            className={`rounded-full bg-[#fef6f3] text-[#ef741a] border border-[#fed7aa] font-semibold tracking-wide hidden sm:inline-flex items-center ${currentSize.badge}`}
+          >
+            {systemBadge}
+          </span>
         )}
       </div>
+
+      {showSubtitle && (
+        <span className="sr-only">Where Brand takes Flight</span>
+      )}
     </div>
   );
 };

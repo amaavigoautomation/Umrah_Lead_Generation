@@ -392,22 +392,22 @@ export const LiveMailboxCenter: React.FC<LiveMailboxCenterProps> = ({
   return (
     <div className="max-w-7xl mx-auto p-4 sm:p-6 space-y-6">
       {/* Header Banner */}
-      <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-lg flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+      <div className="bg-white border border-slate-200/90 rounded-2xl p-5 sm:p-6 shadow-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div className="space-y-1">
           <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 rounded-lg bg-emerald-600/20 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
+            <div className="w-11 h-11 rounded-xl bg-[#fef6f3] border border-[#fed7aa] flex items-center justify-center text-[#ef741a]">
               <Mail className="w-5 h-5" />
             </div>
             <div>
               <div className="flex items-center space-x-2">
-                <h1 className="text-xl font-bold text-white">Live Inbound Email & SMTP Auto-Reply Hub</h1>
-                <span className="flex items-center space-x-1 text-xs px-2.5 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30">
-                  <Radio className="w-3 h-3 animate-pulse text-blue-400" />
+                <h1 className="text-xl font-extrabold text-slate-900 font-display">Live Inbound Email & SMTP Auto-Reply Hub</h1>
+                <span className="flex items-center space-x-1 text-xs px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200 font-semibold">
+                  <Radio className="w-3 h-3 animate-pulse text-[#0848ef]" />
                   <span>Real Mailbox Connection</span>
                 </span>
               </div>
-              <p className="text-xs text-slate-400">
-                Direct live synchronization with <strong className="text-slate-200">{INBOUND_MAILBOX}</strong> and SMTP delivery to personal mailboxes.
+              <p className="text-xs text-slate-500 font-medium mt-0.5">
+                Direct live synchronization with <strong className="text-slate-800">{INBOUND_MAILBOX}</strong> and SMTP delivery to personal mailboxes.
               </p>
             </div>
           </div>
@@ -417,7 +417,7 @@ export const LiveMailboxCenter: React.FC<LiveMailboxCenterProps> = ({
           <button
             onClick={fetchStatus}
             disabled={isLoadingStatus}
-            className="flex items-center space-x-1.5 px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium border border-slate-700 transition"
+            className="flex items-center space-x-1.5 px-3 py-2 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs font-semibold border border-slate-200 transition"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isLoadingStatus ? 'animate-spin' : ''}`} />
             <span>Refresh Status</span>
@@ -426,7 +426,7 @@ export const LiveMailboxCenter: React.FC<LiveMailboxCenterProps> = ({
           <button
             onClick={handlePollImap}
             disabled={isPollingImap}
-            className="flex items-center space-x-1.5 px-3.5 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium shadow-md shadow-emerald-900/30 transition"
+            className="flex items-center space-x-1.5 px-4 py-2 rounded-xl bg-gradient-to-r from-[#ef741a] to-[#f97316] hover:from-[#d9620b] hover:to-[#ea580c] text-white text-xs font-bold shadow-xs transition"
           >
             <Inbox className={`w-3.5 h-3.5 ${isPollingImap ? 'animate-bounce' : ''}`} />
             <span>{isPollingImap ? 'Checking Inbox...' : 'Check Inbox Now (IMAP Sync)'}</span>
@@ -437,34 +437,34 @@ export const LiveMailboxCenter: React.FC<LiveMailboxCenterProps> = ({
       {/* Status Cards (Omnichannel: Email & WhatsApp) */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Card 1: Mailbox Details */}
-        <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-3">
+        <div className="bg-white border border-slate-200/90 rounded-2xl p-5 space-y-3 shadow-xs">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Target Mailbox</span>
-            <span className="px-2 py-0.5 rounded text-[11px] font-medium bg-blue-500/20 text-blue-400 border border-blue-500/30">
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Target Mailbox</span>
+            <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-blue-50 text-[#0848ef] border border-blue-200">
               Email Line
             </span>
           </div>
           <div className="space-y-1">
-            <div className="text-base font-bold text-white font-mono break-all">{activeMailbox}</div>
-            <p className="text-xs text-slate-400">
+            <div className="text-base font-bold text-slate-900 font-mono break-all">{activeMailbox}</div>
+            <p className="text-xs text-slate-500">
               Pilgrim operators & agencies send their inquiries directly to this address.
             </p>
           </div>
-          <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between text-xs">
+          <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs">
             <span className="text-slate-400">Auto-Reply Sender:</span>
-            <span className="font-mono text-slate-300">{activeMailbox}</span>
+            <span className="font-mono text-slate-800 font-semibold">{activeMailbox}</span>
           </div>
         </div>
 
         {/* Card 2: WhatsApp Business Line */}
-        <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-3">
+        <div className="bg-white border border-slate-200/90 rounded-2xl p-5 space-y-3 shadow-xs">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">WhatsApp Line</span>
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-400">WhatsApp Line</span>
             <span
-              className={`px-2 py-0.5 rounded text-[11px] font-medium border ${
+              className={`px-2 py-0.5 rounded text-[11px] font-semibold border ${
                 waGatewayStatus?.configured
-                  ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
-                  : 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
+                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                  : 'bg-emerald-50 text-emerald-700 border-emerald-200'
               }`}
             >
               {waGatewayStatus?.configured
@@ -473,42 +473,42 @@ export const LiveMailboxCenter: React.FC<LiveMailboxCenterProps> = ({
             </span>
           </div>
           <div className="space-y-1">
-            <div className="text-base font-bold text-emerald-400 font-mono break-all">{WHATSAPP_BUSINESS_NUMBER_FORMATTED}</div>
-            <p className="text-xs text-slate-400">
+            <div className="text-base font-bold text-emerald-600 font-mono break-all">{WHATSAPP_BUSINESS_NUMBER_FORMATTED}</div>
+            <p className="text-xs text-slate-500">
               Direct live inbound channel for chat inquiries, quotes, and hotel allotments.
             </p>
           </div>
-          <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between text-xs">
+          <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs">
             <button
               onClick={() => setShowWaModal(true)}
-              className="text-xs text-emerald-400 hover:text-emerald-300 font-medium flex items-center space-x-1"
+              className="text-xs text-emerald-600 hover:text-emerald-700 font-bold flex items-center space-x-1"
             >
               <Smartphone className="w-3.5 h-3.5" />
               <span>Connect Physical Phone</span>
             </button>
-            <span className="font-mono text-emerald-300 flex items-center space-x-1 text-[11px]">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+            <span className="font-mono text-emerald-600 flex items-center space-x-1 text-[11px] font-medium">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
               <span>/api/inbound/whatsapp</span>
             </span>
           </div>
         </div>
 
         {/* Card 3: SMTP Outbound Auto-Reply */}
-        <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-3">
+        <div className="bg-white border border-slate-200/90 rounded-2xl p-5 space-y-3 shadow-xs">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">SMTP Connection</span>
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-400">SMTP Connection</span>
             <div className="flex items-center space-x-1.5">
               <button
                 onClick={() => setShowSmtpConfigModal(true)}
-                className="px-2 py-0.5 rounded text-[10px] font-semibold bg-blue-500/20 text-blue-300 border border-blue-500/30 hover:bg-blue-500/30 transition"
+                className="px-2 py-0.5 rounded text-[10px] font-semibold bg-blue-50 text-[#0848ef] border border-blue-200 hover:bg-blue-100 transition"
               >
                 Configure
               </button>
               <span
-                className={`px-2 py-0.5 rounded text-[11px] font-medium border ${
+                className={`px-2 py-0.5 rounded text-[11px] font-semibold border ${
                   smtpStatus?.configured
-                    ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
-                    : 'bg-amber-500/20 text-amber-300 border-amber-500/30'
+                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                    : 'bg-amber-50 text-amber-700 border-amber-200'
                 }`}
               >
                 {smtpStatus?.configured ? 'Configured' : 'Needs Password'}
@@ -516,34 +516,34 @@ export const LiveMailboxCenter: React.FC<LiveMailboxCenterProps> = ({
             </div>
           </div>
           <div className="space-y-1">
-            <div className="flex items-center space-x-2 text-xs text-slate-300 font-mono">
-              <Server className="w-3.5 h-3.5 text-blue-400" />
+            <div className="flex items-center space-x-2 text-xs text-slate-700 font-mono">
+              <Server className="w-3.5 h-3.5 text-[#0848ef]" />
               <span>{smtpStatus?.host || 'smtp.gmail.com'}</span>
               <span>:{smtpStatus?.port || 465}</span>
             </div>
-            <div className="flex items-center space-x-2 text-xs text-slate-400">
-              <Key className="w-3.5 h-3.5 text-amber-400" />
+            <div className="flex items-center space-x-2 text-xs text-slate-500">
+              <Key className="w-3.5 h-3.5 text-[#ef741a]" />
               <span>Auth User: {smtpStatus?.user || activeMailbox}</span>
             </div>
           </div>
-          <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between">
+          <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
             <button
               onClick={handleVerifySmtp}
               disabled={isVerifyingSmtp}
-              className="text-xs text-blue-400 hover:text-blue-300 font-medium flex items-center space-x-1"
+              className="text-xs text-[#0848ef] hover:underline font-semibold flex items-center space-x-1"
             >
               <ShieldCheck className="w-3.5 h-3.5" />
               <span>{isVerifyingSmtp ? 'Testing Auth...' : 'Test SMTP Connection'}</span>
             </button>
             {smtpStatus?.hasPassword ? (
-              <span className="text-[11px] text-emerald-400 flex items-center space-x-1">
+              <span className="text-[11px] text-emerald-600 font-semibold flex items-center space-x-1">
                 <CheckCircle2 className="w-3 h-3" />
                 <span>Password set</span>
               </span>
             ) : (
               <button
                 onClick={() => setShowSmtpConfigModal(true)}
-                className="text-[11px] text-amber-400 hover:underline flex items-center space-x-1"
+                className="text-[11px] text-amber-600 hover:underline flex items-center space-x-1 font-semibold"
               >
                 <AlertTriangle className="w-3 h-3" />
                 <span>Add App Password</span>
@@ -552,41 +552,41 @@ export const LiveMailboxCenter: React.FC<LiveMailboxCenterProps> = ({
           </div>
         </div>
 
-        {/* Card 3: IMAP Inbound Poller */}
-        <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-3">
+        {/* Card 4: IMAP Inbound Listener */}
+        <div className="bg-white border border-slate-200/90 rounded-2xl p-5 space-y-3 shadow-xs">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">IMAP Inbound Listener</span>
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-400">IMAP Inbound Listener</span>
             <span
-              className={`px-2 py-0.5 rounded text-[11px] font-medium border ${
+              className={`px-2 py-0.5 rounded text-[11px] font-semibold border ${
                 imapStatus?.configured
-                  ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
-                  : 'bg-amber-500/20 text-amber-300 border-amber-500/30'
+                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                  : 'bg-amber-50 text-amber-700 border-amber-200'
               }`}
             >
               {imapStatus?.configured ? 'Active Poller' : 'Needs Credentials'}
             </span>
           </div>
           <div className="space-y-1">
-            <div className="flex items-center space-x-2 text-xs text-slate-300 font-mono">
-              <Inbox className="w-3.5 h-3.5 text-emerald-400" />
+            <div className="flex items-center space-x-2 text-xs text-slate-700 font-mono">
+              <Inbox className="w-3.5 h-3.5 text-[#ef741a]" />
               <span>{imapStatus?.host || 'IMAP_HOST not set'}</span>
               <span>:{imapStatus?.port || 993}</span>
             </div>
-            <div className="flex items-center space-x-2 text-xs text-slate-400">
-              <Clock className="w-3.5 h-3.5 text-purple-400" />
+            <div className="flex items-center space-x-2 text-xs text-slate-500">
+              <Clock className="w-3.5 h-3.5 text-slate-400" />
               <span>Auto-poll: Every 30s background cycle</span>
             </div>
           </div>
-          <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between">
+          <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
             <button
               onClick={handlePollImap}
               disabled={isPollingImap}
-              className="text-xs text-emerald-400 hover:text-emerald-300 font-medium flex items-center space-x-1"
+              className="text-xs text-[#ef741a] hover:underline font-semibold flex items-center space-x-1"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${isPollingImap ? 'animate-spin' : ''}`} />
               <span>Sync Unread Now</span>
             </button>
-            <span className="text-[11px] text-slate-400">
+            <span className="text-[11px] text-slate-400 font-medium">
               {imapStatus?.configured ? 'Listening' : 'Waiting for host'}
             </span>
           </div>
@@ -596,16 +596,16 @@ export const LiveMailboxCenter: React.FC<LiveMailboxCenterProps> = ({
       {/* Action Alerts / Feedback */}
       {smtpVerifyResult && (
         <div
-          className={`p-3.5 rounded-xl border flex items-start space-x-3 text-xs ${
+          className={`p-4 rounded-2xl border flex items-start space-x-3 text-xs shadow-xs ${
             smtpVerifyResult.success
-              ? 'bg-emerald-950/40 border-emerald-500/40 text-emerald-200'
-              : 'bg-amber-950/40 border-amber-500/40 text-amber-200'
+              ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
+              : 'bg-amber-50 border-amber-200 text-amber-900'
           }`}
         >
           {smtpVerifyResult.success ? (
-            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
           ) : (
-            <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+            <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
           )}
           <div className="flex-1">
             <span className="font-bold block">
@@ -618,16 +618,16 @@ export const LiveMailboxCenter: React.FC<LiveMailboxCenterProps> = ({
 
       {pollResult && (
         <div
-          className={`p-3.5 rounded-xl border flex items-start space-x-3 text-xs ${
+          className={`p-4 rounded-2xl border flex items-start space-x-3 text-xs shadow-xs ${
             pollResult.success
-              ? 'bg-emerald-950/40 border-emerald-500/40 text-emerald-200'
-              : 'bg-amber-950/40 border-amber-500/40 text-amber-200'
+              ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
+              : 'bg-amber-50 border-amber-200 text-amber-900'
           }`}
         >
           {pollResult.success ? (
-            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
           ) : (
-            <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+            <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
           )}
           <div className="flex-1">
             <span className="font-bold block">
@@ -639,27 +639,27 @@ export const LiveMailboxCenter: React.FC<LiveMailboxCenterProps> = ({
       )}
 
       {/* Active Mailbox & Routing Notice */}
-      <div className="bg-slate-900 border border-emerald-500/30 rounded-xl p-4 text-xs space-y-2.5">
+      <div className="bg-[#fef6f3] border border-[#fed7aa] rounded-2xl p-5 text-xs space-y-2.5 shadow-xs">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
-          <div className="flex items-center space-x-2 text-emerald-400 font-bold">
-            <CheckCircle2 className="w-4 h-4 shrink-0" />
-            <span>Active Mailbox: {activeMailbox} (Gmail IMAP & SMTP)</span>
+          <div className="flex items-center space-x-2 text-[#c2410c] font-bold">
+            <CheckCircle2 className="w-4 h-4 shrink-0 text-[#ef741a]" />
+            <span className="text-sm font-display">Active Mailbox: {activeMailbox} (Gmail IMAP & SMTP)</span>
           </div>
-          <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-emerald-500/10 text-emerald-300 border border-emerald-500/30 w-fit">
+          <span className="px-2.5 py-0.5 rounded-full text-[11px] font-mono bg-white text-[#c2410c] border border-[#fed7aa] font-semibold w-fit">
             IMAP: imap.gmail.com:993 • SMTP: smtp.gmail.com:465
           </span>
         </div>
-        <p className="text-slate-300 leading-relaxed text-xs">
+        <p className="text-slate-700 leading-relaxed text-xs">
           The automation system is connected directly to <strong>{activeMailbox}</strong> using Gmail SSL/TLS. Any customer or tour operator inquiries received at this address will be automatically polled every 30s, analyzed by Gemini, pushed into CRM & Unified Inbox, and replied to with a personalized auto-reply.
         </p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-[11px] pt-1">
-          <div className="bg-slate-950/70 p-2.5 rounded-lg border border-slate-800">
-            <span className="font-semibold text-white block mb-0.5">1. Send Live Test from Outside</span>
-            <span className="text-slate-400">Send an email from another email account (e.g. personal Yahoo, Outlook, or another Gmail) to <code>{activeMailbox}</code>. Click "Check Inbox Now" or wait 30 seconds for automatic processing.</span>
+          <div className="bg-white p-3 rounded-xl border border-[#fed7aa]/70 shadow-2xs">
+            <span className="font-bold text-slate-900 block mb-0.5">1. Send Live Test from Outside</span>
+            <span className="text-slate-600">Send an email from another email account (e.g. personal Yahoo, Outlook, or another Gmail) to <code>{activeMailbox}</code>. Click "Check Inbox Now" or wait 30 seconds for automatic processing.</span>
           </div>
-          <div className="bg-slate-950/70 p-2.5 rounded-lg border border-slate-800">
-            <span className="font-semibold text-emerald-400 block mb-0.5">2. Live Inbound Simulator (Below)</span>
-            <span className="text-slate-400">You can also trigger a simulated inbound customer inquiry below. It tests the complete end-to-end pipeline, AI generation, and live SMTP delivery to the sender.</span>
+          <div className="bg-white p-3 rounded-xl border border-[#fed7aa]/70 shadow-2xs">
+            <span className="font-bold text-[#ef741a] block mb-0.5">2. Live Inbound Simulator (Below)</span>
+            <span className="text-slate-600">You can also trigger a simulated inbound customer inquiry below. It tests the complete end-to-end pipeline, AI generation, and live SMTP delivery to the sender.</span>
           </div>
         </div>
       </div>
@@ -667,25 +667,25 @@ export const LiveMailboxCenter: React.FC<LiveMailboxCenterProps> = ({
       {/* Grid: 1. Ingest Inbound Customer Email & Test Pipeline, 2. Dispatch Live Outbound via SMTP */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Box 1: Ingest Inbound Customer Email & Test Pipeline */}
-        <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4 shadow-lg flex flex-col justify-between">
+        <div className="bg-white border border-slate-200/90 rounded-2xl p-6 space-y-4 shadow-xs flex flex-col justify-between">
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-2">
-                <Inbox className="w-4 h-4 text-emerald-400" />
-                <h2 className="text-sm font-bold text-white">Live Inbound Ingestion & Auto-Reply Pipeline</h2>
+                <Inbox className="w-4 h-4 text-[#ef741a]" />
+                <h2 className="text-sm font-extrabold text-slate-900 font-display">Live Inbound Ingestion & Auto-Reply Pipeline</h2>
               </div>
-              <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-medium border border-emerald-500/30">
+              <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-[#fef6f3] text-[#ef741a] font-bold border border-[#fed7aa]">
                 1-Reply Per Turn Guardrail
               </span>
             </div>
-            <p className="text-xs text-slate-400">
-              Simulates receiving an email from your personal account into <strong className="text-slate-200">{INBOUND_MAILBOX}</strong>. Tests the complete pipeline: lead scoring, pushing contact/lead to CRM, thread to Unified Inbox, and <strong>sending a real SMTP auto-reply to your personal inbox</strong>.
+            <p className="text-xs text-slate-500 font-medium leading-relaxed">
+              Simulates receiving an email from your personal account into <strong className="text-slate-800">{INBOUND_MAILBOX}</strong>. Tests the complete pipeline: lead scoring, pushing contact/lead to CRM, thread to Unified Inbox, and <strong>sending a real SMTP auto-reply to your personal inbox</strong>.
             </p>
 
             <form onSubmit={handleIngestInboundTest} className="space-y-3 pt-1">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <div>
-                  <label className="block text-xs font-medium text-slate-300 mb-1">
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
                     Customer Email (Your Address)
                   </label>
                   <input
@@ -694,11 +694,11 @@ export const LiveMailboxCenter: React.FC<LiveMailboxCenterProps> = ({
                     value={inboundSender}
                     onChange={(e) => setInboundSender(e.target.value)}
                     placeholder="amaavigo@gmail.com"
-                    className="w-full bg-slate-800/90 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-emerald-500 transition font-mono"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-[#ef741a] focus:ring-2 focus:ring-[#ef741a]/20 transition font-mono"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-slate-300 mb-1">
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
                     Customer Name / Agency
                   </label>
                   <input
@@ -706,13 +706,13 @@ export const LiveMailboxCenter: React.FC<LiveMailboxCenterProps> = ({
                     value={inboundSenderName}
                     onChange={(e) => setInboundSenderName(e.target.value)}
                     placeholder="Amaavigo Travel"
-                    className="w-full bg-slate-800/90 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-emerald-500 transition"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-[#ef741a] focus:ring-2 focus:ring-[#ef741a]/20 transition"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-slate-300 mb-1">
+                <label className="block text-xs font-bold text-slate-700 mb-1">
                   Subject Line
                 </label>
                 <input
@@ -720,12 +720,12 @@ export const LiveMailboxCenter: React.FC<LiveMailboxCenterProps> = ({
                   required
                   value={inboundSubject}
                   onChange={(e) => setInboundSubject(e.target.value)}
-                  className="w-full bg-slate-800/90 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-emerald-500 transition"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-[#ef741a] focus:ring-2 focus:ring-[#ef741a]/20 transition"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-slate-300 mb-1">
+                <label className="block text-xs font-bold text-slate-700 mb-1">
                   Inquiry Message Body
                 </label>
                 <textarea
@@ -733,36 +733,36 @@ export const LiveMailboxCenter: React.FC<LiveMailboxCenterProps> = ({
                   required
                   value={inboundBody}
                   onChange={(e) => setInboundBody(e.target.value)}
-                  className="w-full bg-slate-800/90 border border-slate-700 rounded-lg p-2.5 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-emerald-500 transition font-sans"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-[#ef741a] focus:ring-2 focus:ring-[#ef741a]/20 transition font-sans"
                 />
               </div>
 
               {/* Turn Checkbox */}
-              <div className="bg-slate-950/80 p-2.5 rounded-lg border border-slate-800 flex items-start space-x-2.5">
+              <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 flex items-start space-x-2.5">
                 <input
                   type="checkbox"
                   id="followUpCheck"
                   checked={isCustomerFollowUp}
                   onChange={(e) => setIsCustomerFollowUp(e.target.checked)}
-                  className="mt-0.5 rounded border-slate-700 bg-slate-900 text-emerald-500 focus:ring-emerald-500"
+                  className="mt-0.5 rounded border-slate-300 text-[#ef741a] focus:ring-[#ef741a]"
                 />
-                <label htmlFor="followUpCheck" className="text-xs text-slate-300 cursor-pointer">
-                  <span className="font-semibold block text-slate-200">This is a customer follow-up reply</span>
-                  <span className="text-[11px] text-slate-400">
+                <label htmlFor="followUpCheck" className="text-xs text-slate-700 cursor-pointer">
+                  <span className="font-bold block text-slate-900">This is a customer follow-up reply</span>
+                  <span className="text-[11px] text-slate-500">
                     Tests the rule: <em>"only reply once to mail then if got reply then again then only reply"</em>. When unchecked, subsequent identical emails are blocked from re-replying.
                   </span>
                 </label>
               </div>
 
               <div className="flex items-center justify-between pt-1">
-                <span className="text-[11px] text-slate-400">
-                  Target: <strong className="text-slate-300">{INBOUND_MAILBOX}</strong>
+                <span className="text-[11px] text-slate-500">
+                  Target: <strong className="text-slate-800">{INBOUND_MAILBOX}</strong>
                 </span>
 
                 <button
                   type="submit"
                   disabled={isIngestingInbound}
-                  className="flex items-center space-x-1.5 px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium shadow-md shadow-emerald-900/30 transition disabled:opacity-50"
+                  className="flex items-center space-x-1.5 px-4 py-2 rounded-xl bg-gradient-to-r from-[#ef741a] to-[#f97316] hover:from-[#d9620b] hover:to-[#ea580c] text-white text-xs font-bold shadow-xs transition disabled:opacity-50"
                 >
                   <Inbox className={`w-3.5 h-3.5 ${isIngestingInbound ? 'animate-bounce' : ''}`} />
                   <span>{isIngestingInbound ? 'Processing Pipeline...' : 'Ingest & Trigger Real Auto-Reply'}</span>
@@ -772,20 +772,20 @@ export const LiveMailboxCenter: React.FC<LiveMailboxCenterProps> = ({
 
             {inboundIngestResult && (
               <div
-                className={`p-3 rounded-lg border text-xs ${
+                className={`p-3.5 rounded-xl border text-xs shadow-2xs ${
                   inboundIngestResult.success
                     ? inboundIngestResult.replied
-                      ? 'bg-emerald-950/50 border-emerald-500/40 text-emerald-200'
-                      : 'bg-amber-950/50 border-amber-500/40 text-amber-200'
-                    : 'bg-red-950/50 border-red-500/40 text-red-200'
+                      ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
+                      : 'bg-amber-50 border-amber-200 text-amber-900'
+                    : 'bg-red-50 border-red-200 text-red-900'
                 }`}
               >
                 <div className="space-y-1">
                   <div className="font-bold flex items-center space-x-1.5">
                     {inboundIngestResult.replied ? (
-                      <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
                     ) : (
-                      <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+                      <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
                     )}
                     <span>
                       {inboundIngestResult.replied
@@ -793,17 +793,17 @@ export const LiveMailboxCenter: React.FC<LiveMailboxCenterProps> = ({
                         : 'Inbound Ingested — Auto-Reply Filtered by Guardrail'}
                     </span>
                   </div>
-                  <p className="text-[11px] text-slate-300">
+                  <p className="text-[11px] text-slate-600">
                     <strong>Decision:</strong> {inboundIngestResult.reason}
                   </p>
-                  <p className="text-[11px] text-slate-400">
+                  <p className="text-[11px] text-slate-500">
                     <strong>SMTP Delivery:</strong> {inboundIngestResult.smtpStatus}
                   </p>
                   <div className="flex items-center space-x-3 pt-1">
                     {onNavigateToThread && (
                       <button
                         onClick={() => onNavigateToThread('')}
-                        className="text-emerald-400 hover:underline flex items-center space-x-1 text-[11px]"
+                        className="text-[#ef741a] hover:underline font-bold flex items-center space-x-1 text-[11px]"
                       >
                         <span>Open in Unified Inbox</span>
                         <ArrowRight className="w-3 h-3" />
@@ -812,7 +812,7 @@ export const LiveMailboxCenter: React.FC<LiveMailboxCenterProps> = ({
                     {onNavigateToCrm && (
                       <button
                         onClick={onNavigateToCrm}
-                        className="text-blue-400 hover:underline flex items-center space-x-1 text-[11px]"
+                        className="text-[#0848ef] hover:underline font-bold flex items-center space-x-1 text-[11px]"
                       >
                         <span>View in CRM Pipeline</span>
                         <ArrowRight className="w-3 h-3" />
@@ -826,19 +826,19 @@ export const LiveMailboxCenter: React.FC<LiveMailboxCenterProps> = ({
         </div>
 
         {/* Box 2: Dispatch Live Test Email via SMTP */}
-        <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4 shadow-lg flex flex-col justify-between">
+        <div className="bg-white border border-slate-200/90 rounded-2xl p-6 space-y-4 shadow-xs flex flex-col justify-between">
           <div className="space-y-2">
             <div className="flex items-center space-x-2">
-              <Send className="w-4 h-4 text-blue-400" />
-              <h2 className="text-sm font-bold text-white">Direct Outbound SMTP Send Test</h2>
+              <Send className="w-4 h-4 text-[#0848ef]" />
+              <h2 className="text-sm font-extrabold text-slate-900 font-display">Direct Outbound SMTP Send Test</h2>
             </div>
-            <p className="text-xs text-slate-400">
-              Dispatches an immediate outbound email through the live SMTP connection to verify direct delivery to your personal mailbox (e.g. <strong className="text-slate-200">amaavigo@gmail.com</strong>).
+            <p className="text-xs text-slate-500 font-medium leading-relaxed">
+              Dispatches an immediate outbound email through the live SMTP connection to verify direct delivery to your personal mailbox (e.g. <strong className="text-slate-800">amaavigo@gmail.com</strong>).
             </p>
 
             <form onSubmit={handleSendLiveTest} className="space-y-3 pt-1">
               <div>
-                <label className="block text-xs font-medium text-slate-300 mb-1">
+                <label className="block text-xs font-bold text-slate-700 mb-1">
                   Recipient Email (Your Personal Mailbox)
                 </label>
                 <input
@@ -847,12 +847,12 @@ export const LiveMailboxCenter: React.FC<LiveMailboxCenterProps> = ({
                   value={testTo}
                   onChange={(e) => setTestTo(e.target.value)}
                   placeholder="amaavigo@gmail.com"
-                  className="w-full bg-slate-800/90 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-emerald-500 transition font-mono"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-[#ef741a] focus:ring-2 focus:ring-[#ef741a]/20 transition font-mono"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-slate-300 mb-1">
+                <label className="block text-xs font-bold text-slate-700 mb-1">
                   Subject
                 </label>
                 <input
@@ -860,12 +860,12 @@ export const LiveMailboxCenter: React.FC<LiveMailboxCenterProps> = ({
                   required
                   value={testSubject}
                   onChange={(e) => setTestSubject(e.target.value)}
-                  className="w-full bg-slate-800/90 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-emerald-500 transition"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-[#ef741a] focus:ring-2 focus:ring-[#ef741a]/20 transition"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-slate-300 mb-1">
+                <label className="block text-xs font-bold text-slate-700 mb-1">
                   Message Body
                 </label>
                 <textarea
@@ -873,19 +873,19 @@ export const LiveMailboxCenter: React.FC<LiveMailboxCenterProps> = ({
                   required
                   value={testBody}
                   onChange={(e) => setTestBody(e.target.value)}
-                  className="w-full bg-slate-800/90 border border-slate-700 rounded-lg p-2.5 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-emerald-500 transition font-sans"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-[#ef741a] focus:ring-2 focus:ring-[#ef741a]/20 transition font-sans"
                 />
               </div>
 
               <div className="flex items-center justify-between pt-1">
-                <span className="text-[11px] text-slate-400">
-                  Sender: <strong className="text-slate-300">{INBOUND_MAILBOX}</strong>
+                <span className="text-[11px] text-slate-500">
+                  Sender: <strong className="text-slate-800">{INBOUND_MAILBOX}</strong>
                 </span>
 
                 <button
                   type="submit"
                   disabled={isSendingLiveTest}
-                  className="flex items-center space-x-1.5 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium shadow-md shadow-blue-900/30 transition disabled:opacity-50"
+                  className="flex items-center space-x-1.5 px-4 py-2 rounded-xl bg-gradient-to-r from-blue-600 to-[#0848ef] hover:from-blue-700 hover:to-blue-800 text-white text-xs font-bold shadow-xs transition disabled:opacity-50"
                 >
                   <Send className={`w-3.5 h-3.5 ${isSendingLiveTest ? 'animate-pulse' : ''}`} />
                   <span>{isSendingLiveTest ? 'Dispatching over SMTP...' : 'Send Live Email via SMTP'}</span>
@@ -895,33 +895,33 @@ export const LiveMailboxCenter: React.FC<LiveMailboxCenterProps> = ({
 
             {liveSendResult && (
               <div
-                className={`p-3 rounded-lg border text-xs ${
+                className={`p-3.5 rounded-xl border text-xs shadow-2xs ${
                   liveSendResult.success
-                    ? 'bg-emerald-950/50 border-emerald-500/40 text-emerald-200'
-                    : 'bg-red-950/50 border-red-500/40 text-red-200'
+                    ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
+                    : 'bg-red-50 border-red-200 text-red-900'
                 }`}
               >
                 {liveSendResult.success ? (
                   <div className="space-y-1">
-                    <div className="font-bold flex items-center space-x-1.5">
-                      <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                    <div className="font-bold flex items-center space-x-1.5 text-emerald-800">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600" />
                       <span>Email Successfully Dispatched via SMTP!</span>
                     </div>
-                    <p className="text-[11px] text-slate-300">
-                      Message ID: <span className="font-mono text-emerald-300">{liveSendResult.messageId}</span>
+                    <p className="text-[11px] text-slate-600">
+                      Message ID: <span className="font-mono text-emerald-700 font-bold">{liveSendResult.messageId}</span>
                     </p>
-                    <p className="text-[11px] text-slate-300">
-                      Check your personal inbox at <strong className="text-white">{testTo}</strong>.
+                    <p className="text-[11px] text-slate-600">
+                      Check your personal inbox at <strong className="text-slate-900">{testTo}</strong>.
                     </p>
                   </div>
                 ) : (
                   <div className="space-y-1">
-                    <div className="font-bold flex items-center space-x-1.5">
-                      <AlertTriangle className="w-4 h-4 text-red-400" />
+                    <div className="font-bold flex items-center space-x-1.5 text-red-800">
+                      <AlertTriangle className="w-4 h-4 text-red-600" />
                       <span>SMTP Delivery Failed</span>
                     </div>
-                    <p className="text-[11px] font-mono break-all">{liveSendResult.error}</p>
-                    <p className="text-[11px] text-slate-300 mt-1">
+                    <p className="text-[11px] font-mono break-all text-red-700">{liveSendResult.error}</p>
+                    <p className="text-[11px] text-slate-600 mt-1">
                       Verify your SMTP credentials in Settings &gt; Secrets.
                     </p>
                   </div>
@@ -932,93 +932,93 @@ export const LiveMailboxCenter: React.FC<LiveMailboxCenterProps> = ({
         </div>
       </div>
 
-        {/* Box 2: Live Mailbox Environment Credentials Checklist */}
-        <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4 shadow-lg">
-          <div className="flex items-center space-x-2">
-            <Key className="w-4 h-4 text-emerald-400" />
-            <h2 className="text-sm font-bold text-white">Live Connection Environment Setup</h2>
+      {/* Live Mailbox Environment Credentials Checklist */}
+      <div className="bg-white border border-slate-200/90 rounded-2xl p-6 space-y-4 shadow-xs">
+        <div className="flex items-center space-x-2">
+          <Key className="w-4 h-4 text-[#ef741a]" />
+          <h2 className="text-sm font-extrabold text-slate-900 font-display">Live Connection Environment Setup</h2>
+        </div>
+        <p className="text-xs text-slate-500">
+          To allow the application container to directly access your email host for <strong className="text-slate-800">{INBOUND_MAILBOX}</strong>, configure these variables in your project settings:
+        </p>
+
+        <div className="space-y-2 text-xs">
+          <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 font-mono space-y-1.5 text-slate-700">
+            <div className="text-slate-400 font-semibold font-sans"># SMTP Configuration (For Outbound Auto-Replies)</div>
+            <div className="flex justify-between">
+              <span>SMTP_HOST=</span>
+              <span className={smtpStatus?.host && smtpStatus.host !== '(not set)' ? 'text-emerald-700 font-bold' : 'text-amber-700 font-bold'}>
+                {smtpStatus?.host && smtpStatus.host !== '(not set)' ? smtpStatus.host : 'smtp.yourdomain.com'}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span>SMTP_PORT=</span>
+              <span className="text-slate-600">{smtpStatus?.port || 465}</span>
+            </div>
+            <div className="flex justify-between">
+              <span>SMTP_USER=</span>
+              <span className="text-emerald-700 font-bold">{INBOUND_MAILBOX}</span>
+            </div>
+            <div className="flex justify-between">
+              <span>SMTP_PASS=</span>
+              <span className={smtpStatus?.hasPassword ? 'text-emerald-700 font-bold' : 'text-amber-700 font-bold'}>
+                {smtpStatus?.hasPassword ? '••••••••' : '(your_mailbox_password)'}
+              </span>
+            </div>
+
+            <div className="text-slate-400 font-semibold font-sans pt-2 border-t border-slate-200"># IMAP Configuration (For Reading Inbound Emails)</div>
+            <div className="flex justify-between">
+              <span>IMAP_HOST=</span>
+              <span className={imapStatus?.host && imapStatus.host !== '(not set)' ? 'text-emerald-700 font-bold' : 'text-amber-700 font-bold'}>
+                {imapStatus?.host && imapStatus.host !== '(not set)' ? imapStatus.host : 'imap.yourdomain.com'}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span>IMAP_PORT=</span>
+              <span className="text-slate-600">{imapStatus?.port || 993}</span>
+            </div>
+            <div className="flex justify-between">
+              <span>IMAP_USER=</span>
+              <span className="text-emerald-700 font-bold">{INBOUND_MAILBOX}</span>
+            </div>
+            <div className="flex justify-between">
+              <span>IMAP_PASS=</span>
+              <span className={imapStatus?.configured ? 'text-emerald-700 font-bold' : 'text-amber-700 font-bold'}>
+                {imapStatus?.configured ? '••••••••' : '(your_mailbox_password)'}
+              </span>
+            </div>
           </div>
-          <p className="text-xs text-slate-400">
-            To allow the application container to directly access your email host for <strong className="text-slate-200">{INBOUND_MAILBOX}</strong>, configure these variables in your project settings:
-          </p>
 
-          <div className="space-y-2 text-xs">
-            <div className="bg-slate-950 p-3 rounded-lg border border-slate-800 font-mono space-y-1.5 text-slate-300">
-              <div className="text-slate-500"># SMTP Configuration (For Outbound Auto-Replies)</div>
-              <div className="flex justify-between">
-                <span>SMTP_HOST=</span>
-                <span className={smtpStatus?.host && smtpStatus.host !== '(not set)' ? 'text-emerald-400' : 'text-amber-400'}>
-                  {smtpStatus?.host && smtpStatus.host !== '(not set)' ? smtpStatus.host : 'smtp.yourdomain.com'}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span>SMTP_PORT=</span>
-                <span className="text-slate-400">{smtpStatus?.port || 465}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>SMTP_USER=</span>
-                <span className="text-emerald-400">{INBOUND_MAILBOX}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>SMTP_PASS=</span>
-                <span className={smtpStatus?.hasPassword ? 'text-emerald-400' : 'text-amber-400'}>
-                  {smtpStatus?.hasPassword ? '••••••••' : '(your_mailbox_password)'}
-                </span>
-              </div>
-
-              <div className="text-slate-500 pt-2 border-t border-slate-800/80"># IMAP Configuration (For Reading Inbound Emails)</div>
-              <div className="flex justify-between">
-                <span>IMAP_HOST=</span>
-                <span className={imapStatus?.host && imapStatus.host !== '(not set)' ? 'text-emerald-400' : 'text-amber-400'}>
-                  {imapStatus?.host && imapStatus.host !== '(not set)' ? imapStatus.host : 'imap.yourdomain.com'}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span>IMAP_PORT=</span>
-                <span className="text-slate-400">{imapStatus?.port || 993}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>IMAP_USER=</span>
-                <span className="text-emerald-400">{INBOUND_MAILBOX}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>IMAP_PASS=</span>
-                <span className={imapStatus?.configured ? 'text-emerald-400' : 'text-amber-400'}>
-                  {imapStatus?.configured ? '••••••••' : '(your_mailbox_password)'}
-                </span>
-              </div>
+          <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-[11px] text-blue-900 space-y-1">
+            <div className="font-bold flex items-center space-x-1.5 text-[#0848ef]">
+              <Info className="w-3.5 h-3.5" />
+              <span>How to set credentials in Google AI Studio:</span>
             </div>
-
-            <div className="bg-blue-950/30 border border-blue-500/20 rounded-lg p-3 text-[11px] text-blue-300 space-y-1">
-              <div className="font-semibold flex items-center space-x-1.5">
-                <Info className="w-3.5 h-3.5 text-blue-400" />
-                <span>How to set credentials in Google AI Studio:</span>
-              </div>
-              <p>
-                Open the <strong>Settings</strong> menu in AI Studio, go to <strong>Secrets / Environment Variables</strong>, and add the variables listed above. Once saved, click <strong>"Test SMTP Connection"</strong> or <strong>"Check Inbox Now"</strong>.
-              </p>
-            </div>
+            <p className="text-slate-600">
+              Open the <strong>Settings</strong> menu in AI Studio, go to <strong>Secrets / Environment Variables</strong>, and add the variables listed above. Once saved, click <strong>"Test SMTP Connection"</strong> or <strong>"Check Inbox Now"</strong>.
+            </p>
           </div>
         </div>
+      </div>
 
       {/* Inbound Email Activity & Auto-Reply Log */}
-      <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4 shadow-lg">
+      <div className="bg-white border border-slate-200/90 rounded-2xl p-6 space-y-4 shadow-xs">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-2">
-            <Clock className="w-4 h-4 text-emerald-400" />
-            <h2 className="text-sm font-bold text-white">Live Inbound Emails & Auto-Reply Dispatch Log</h2>
+            <Clock className="w-4 h-4 text-[#ef741a]" />
+            <h2 className="text-sm font-extrabold text-slate-900 font-display">Live Inbound Emails & Auto-Reply Dispatch Log</h2>
           </div>
-          <span className="text-xs text-slate-400">
+          <span className="text-xs text-slate-500 font-medium">
             {processedHistory.length} email(s) recorded in current session
           </span>
         </div>
 
         {processedHistory.length === 0 ? (
-          <div className="p-8 text-center bg-slate-950/60 rounded-xl border border-slate-800 space-y-2">
-            <Inbox className="w-8 h-8 text-slate-600 mx-auto" />
-            <p className="text-xs text-slate-300 font-medium">No live inbound emails captured yet</p>
+          <div className="p-8 text-center bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
+            <Inbox className="w-8 h-8 text-slate-400 mx-auto" />
+            <p className="text-xs text-slate-700 font-bold">No live inbound emails captured yet</p>
             <p className="text-xs text-slate-500 max-w-md mx-auto">
-              Once you send an email to <strong className="text-slate-400">{INBOUND_MAILBOX}</strong> and click "Check Inbox Now" (or let the 30-second background listener poll it), the email and its live SMTP auto-reply will appear here with full audit traces.
+              Once you send an email to <strong className="text-slate-700">{INBOUND_MAILBOX}</strong> and click "Check Inbox Now" (or let the 30-second background listener poll it), the email and its live SMTP auto-reply will appear here with full audit traces.
             </p>
           </div>
         ) : (
@@ -1026,32 +1026,32 @@ export const LiveMailboxCenter: React.FC<LiveMailboxCenterProps> = ({
             {processedHistory.map((item, idx) => (
               <div
                 key={item.messageId || idx}
-                className="bg-slate-950 border border-slate-800/90 rounded-xl p-4 space-y-3"
+                className="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-3"
               >
-                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 border-b border-slate-800/60 pb-3">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 border-b border-slate-200/80 pb-3">
                   <div className="space-y-0.5">
                     <div className="flex items-center space-x-2">
-                      <span className="font-bold text-sm text-white">{item.subject}</span>
-                      <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-medium border border-emerald-500/30">
+                      <span className="font-bold text-sm text-slate-900">{item.subject}</span>
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#fef6f3] text-[#ef741a] font-bold border border-[#fed7aa]">
                         Score: {item.leadScore}/100
                       </span>
                     </div>
-                    <div className="text-xs text-slate-400">
-                      From: <strong className="text-slate-200">{item.fromName}</strong> ({item.from}) → To: <span className="text-slate-300 font-mono">{item.to}</span>
+                    <div className="text-xs text-slate-500">
+                      From: <strong className="text-slate-800">{item.fromName}</strong> ({item.from}) → To: <span className="text-slate-700 font-mono">{item.to}</span>
                     </div>
                   </div>
 
                   <div className="flex items-center space-x-2">
-                    <span className="text-[11px] text-slate-500">
+                    <span className="text-[11px] text-slate-400 font-medium">
                       {new Date(item.timestamp).toLocaleTimeString()}
                     </span>
                     <span
-                      className={`text-[10px] px-2 py-0.5 rounded font-medium ${
+                      className={`text-[10px] px-2.5 py-0.5 rounded-full font-bold border ${
                         item.smtpDelivery?.success
-                          ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
                           : item.shouldSendAutoReply === false
-                          ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30'
-                          : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                          ? 'bg-purple-50 text-purple-700 border-purple-200'
+                          : 'bg-amber-50 text-amber-700 border-amber-200'
                       }`}
                     >
                       {item.smtpDelivery?.success
@@ -1064,13 +1064,13 @@ export const LiveMailboxCenter: React.FC<LiveMailboxCenterProps> = ({
                 </div>
 
                 {item.replyDecisionReason && (
-                  <div className="text-[11px] bg-slate-900/60 px-3 py-1.5 rounded-lg border border-slate-800 text-slate-400 flex items-center justify-between">
+                  <div className="text-[11px] bg-white px-3 py-1.5 rounded-xl border border-slate-200 text-slate-600 flex items-center justify-between">
                     <span><strong>Turn Decision:</strong> {item.replyDecisionReason}</span>
                     <div className="flex items-center space-x-2">
                       {onNavigateToThread && (
                         <button
                           onClick={() => onNavigateToThread('')}
-                          className="text-emerald-400 hover:underline text-[10px]"
+                          className="text-[#ef741a] hover:underline text-[10px] font-bold"
                         >
                           Inbox →
                         </button>
@@ -1078,7 +1078,7 @@ export const LiveMailboxCenter: React.FC<LiveMailboxCenterProps> = ({
                       {onNavigateToCrm && (
                         <button
                           onClick={onNavigateToCrm}
-                          className="text-blue-400 hover:underline text-[10px]"
+                          className="text-[#0848ef] hover:underline text-[10px] font-bold"
                         >
                           CRM →
                         </button>
@@ -1089,28 +1089,28 @@ export const LiveMailboxCenter: React.FC<LiveMailboxCenterProps> = ({
 
                 {/* Body and AI Reply */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
-                  <div className="bg-slate-900/80 p-3 rounded-lg border border-slate-800/80 space-y-1">
-                    <span className="text-[10px] uppercase font-bold tracking-wider text-slate-500 block">
+                  <div className="bg-white p-3 rounded-xl border border-slate-200 space-y-1">
+                    <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400 block">
                       Incoming Inquiry
                     </span>
-                    <p className="text-slate-300 whitespace-pre-wrap line-clamp-4 font-sans">
+                    <p className="text-slate-700 whitespace-pre-wrap line-clamp-4 font-sans leading-relaxed">
                       {item.incomingText}
                     </p>
                   </div>
 
-                  <div className="bg-slate-900/80 p-3 rounded-lg border border-slate-800/80 space-y-1">
+                  <div className="bg-white p-3 rounded-xl border border-slate-200 space-y-1">
                     <div className="flex items-center justify-between">
-                      <span className="text-[10px] uppercase font-bold tracking-wider text-emerald-400 flex items-center space-x-1">
+                      <span className="text-[10px] uppercase font-bold tracking-wider text-[#ef741a] flex items-center space-x-1">
                         <Bot className="w-3 h-3" />
                         <span>Dispatched Auto-Reply</span>
                       </span>
                       {item.handoffTriggered && (
-                        <span className="text-[10px] text-amber-400 font-bold">
+                        <span className="text-[10px] text-amber-700 font-bold bg-amber-50 px-1.5 py-0.2 rounded border border-amber-200">
                           Human Handoff
                         </span>
                       )}
                     </div>
-                    <p className="text-slate-300 whitespace-pre-wrap line-clamp-4 font-sans">
+                    <p className="text-slate-700 whitespace-pre-wrap line-clamp-4 font-sans leading-relaxed">
                       {item.replyText}
                     </p>
                   </div>
@@ -1123,53 +1123,53 @@ export const LiveMailboxCenter: React.FC<LiveMailboxCenterProps> = ({
 
       {/* WhatsApp Physical Phone Connection & Meta Setup Modal */}
       {showWaModal && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-200">
-          <div className="bg-slate-900 border border-slate-700 rounded-2xl max-w-2xl w-full p-6 space-y-5 shadow-2xl relative">
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-200">
+          <div className="bg-white border border-slate-200 rounded-2xl max-w-2xl w-full p-6 sm:p-8 space-y-5 shadow-2xl relative">
             <button
               onClick={() => setShowWaModal(false)}
-              className="absolute top-4 right-4 text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition"
+              className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 p-1.5 rounded-xl hover:bg-slate-100 transition"
             >
               <X className="w-5 h-5" />
             </button>
 
-            <div className="flex items-center space-x-3 border-b border-slate-800 pb-4">
-              <div className="w-10 h-10 rounded-xl bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
+            <div className="flex items-center space-x-3 border-b border-slate-100 pb-4">
+              <div className="w-11 h-11 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-600">
                 <Smartphone className="w-5 h-5" />
               </div>
               <div>
-                <h3 className="text-lg font-bold text-white">
+                <h3 className="text-lg font-extrabold text-slate-900 font-display">
                   WhatsApp Physical Line Connection ({WHATSAPP_BUSINESS_NUMBER_FORMATTED})
                 </h3>
-                <p className="text-xs text-slate-400">
+                <p className="text-xs text-slate-500 font-medium">
                   Live Meta Cloud API webhook bridge for real-world phone messaging & automated AI replies
                 </p>
               </div>
             </div>
 
-            <div className="space-y-3 text-xs text-slate-300">
-              <div className="p-3.5 bg-slate-950 rounded-xl border border-slate-800 space-y-2">
-                <div className="font-semibold text-emerald-400 flex items-center space-x-1.5">
-                  <CheckCircle2 className="w-4 h-4" />
+            <div className="space-y-3 text-xs text-slate-700">
+              <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
+                <div className="font-bold text-emerald-700 flex items-center space-x-1.5">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600" />
                   <span>How Physical WhatsApp Inbound Works:</span>
                 </div>
-                <p className="text-slate-300 leading-relaxed text-xs">
+                <p className="text-slate-600 leading-relaxed text-xs">
                   When a customer or tour operator opens WhatsApp on their mobile phone and texts <strong>{WHATSAPP_BUSINESS_NUMBER_FORMATTED}</strong>, Meta's global WhatsApp servers route the incoming chat to this app&apos;s webhook endpoint. The Umrah360 AI engine immediately extracts pilgrim requirements, calculates lead intent score, persists the contact and conversation to Firestore, and delivers an Islamic auto-reply back to the user&apos;s phone.
                 </p>
               </div>
 
               {/* Meta Webhook Credentials Card */}
               <div className="space-y-2">
-                <span className="font-bold text-white text-xs block">Meta WhatsApp Cloud API Webhook Parameters:</span>
+                <span className="font-bold text-slate-900 text-xs block">Meta WhatsApp Cloud API Webhook Parameters:</span>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 font-mono text-[11px]">
-                  <div className="bg-slate-950 p-2.5 rounded-lg border border-slate-800">
-                    <span className="text-slate-500 block text-[10px] uppercase font-sans font-semibold">Callback URL</span>
-                    <span className="text-emerald-400 break-all select-all">
+                  <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
+                    <span className="text-slate-400 block text-[10px] uppercase font-sans font-bold">Callback URL</span>
+                    <span className="text-emerald-700 font-semibold break-all select-all">
                       {typeof window !== 'undefined' ? `${window.location.origin}/api/inbound/whatsapp` : '/api/inbound/whatsapp'}
                     </span>
                   </div>
-                  <div className="bg-slate-950 p-2.5 rounded-lg border border-slate-800">
-                    <span className="text-slate-500 block text-[10px] uppercase font-sans font-semibold">Verify Token</span>
-                    <span className="text-amber-300 break-all select-all">
+                  <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
+                    <span className="text-slate-400 block text-[10px] uppercase font-sans font-bold">Verify Token</span>
+                    <span className="text-[#ef741a] font-semibold break-all select-all">
                       {waGatewayStatus?.verifyToken || 'umrah360_webhook_token'}
                     </span>
                   </div>
@@ -1177,54 +1177,54 @@ export const LiveMailboxCenter: React.FC<LiveMailboxCenterProps> = ({
               </div>
 
               {/* 3 Step Setup Guide */}
-              <div className="p-3.5 bg-slate-950 rounded-xl border border-slate-800 space-y-2">
-                <span className="font-bold text-white text-xs block">To Connect Your Physical Number via Meta Cloud API:</span>
-                <ol className="list-decimal list-inside space-y-1.5 text-slate-300 text-xs">
-                  <li>Log in to <strong className="text-white">developers.facebook.com</strong> and select your WhatsApp App.</li>
+              <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
+                <span className="font-bold text-slate-900 text-xs block">To Connect Your Physical Number via Meta Cloud API:</span>
+                <ol className="list-decimal list-inside space-y-1.5 text-slate-600 text-xs">
+                  <li>Log in to <strong className="text-slate-900">developers.facebook.com</strong> and select your WhatsApp App.</li>
                   <li>In WhatsApp &gt; Configuration &gt; Webhook, paste the Callback URL and Verify Token above.</li>
-                  <li>Subscribe to the <code className="bg-slate-800 px-1 py-0.5 rounded text-emerald-400 font-mono">messages</code> field.</li>
-                  <li>In app settings or environment, configure <code className="bg-slate-800 px-1 py-0.5 rounded text-slate-300 font-mono">WHATSAPP_API_TOKEN</code> and <code className="bg-slate-800 px-1 py-0.5 rounded text-slate-300 font-mono">WHATSAPP_PHONE_NUMBER_ID</code> to enable real-world outbound dispatch.</li>
+                  <li>Subscribe to the <code className="bg-white px-1.5 py-0.5 rounded border border-slate-200 text-emerald-700 font-mono">messages</code> field.</li>
+                  <li>In app settings or environment, configure <code className="bg-white px-1.5 py-0.5 rounded border border-slate-200 text-slate-800 font-mono">WHATSAPP_API_TOKEN</code> and <code className="bg-white px-1.5 py-0.5 rounded border border-slate-200 text-slate-800 font-mono">WHATSAPP_PHONE_NUMBER_ID</code> to enable real-world outbound dispatch.</li>
                 </ol>
               </div>
 
               {/* Test Simulator in Modal */}
-              <div className="p-4 bg-emerald-950/20 border border-emerald-500/30 rounded-xl space-y-3">
+              <div className="p-4 bg-[#fef6f3] border border-[#fed7aa] rounded-2xl space-y-3">
                 <div className="flex items-center justify-between">
-                  <span className="font-bold text-emerald-300 flex items-center space-x-1.5">
-                    <Bot className="w-4 h-4" />
+                  <span className="font-bold text-[#c2410c] flex items-center space-x-1.5">
+                    <Bot className="w-4 h-4 text-[#ef741a]" />
                     <span>Instant Live Inbound Test to {WHATSAPP_BUSINESS_NUMBER_FORMATTED}</span>
                   </span>
-                  <span className="text-[10px] text-slate-400">Tests exact AI parsing &amp; CRM storage</span>
+                  <span className="text-[10px] text-slate-500">Tests exact AI parsing &amp; CRM storage</span>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   <div>
-                    <label className="text-[11px] text-slate-400 block mb-1">Sender Phone</label>
+                    <label className="text-[11px] font-bold text-slate-700 block mb-1">Sender Phone</label>
                     <input
                       type="text"
                       value={waModalTestPhone}
                       onChange={(e) => setWaModalTestPhone(e.target.value)}
-                      className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white text-xs font-mono"
+                      className="w-full bg-white border border-slate-200 rounded-xl p-2 text-slate-900 text-xs font-mono focus:outline-none focus:border-[#ef741a]"
                     />
                   </div>
                   <div>
-                    <label className="text-[11px] text-slate-400 block mb-1">Sender Name</label>
+                    <label className="text-[11px] font-bold text-slate-700 block mb-1">Sender Name</label>
                     <input
                       type="text"
                       value={waModalTestName}
                       onChange={(e) => setWaModalTestName(e.target.value)}
-                      className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white text-xs"
+                      className="w-full bg-white border border-slate-200 rounded-xl p-2 text-slate-900 text-xs focus:outline-none focus:border-[#ef741a]"
                     />
                   </div>
                 </div>
 
                 <div>
-                  <label className="text-[11px] text-slate-400 block mb-1">Incoming Message Body</label>
+                  <label className="text-[11px] font-bold text-slate-700 block mb-1">Incoming Message Body</label>
                   <textarea
                     rows={2}
                     value={waModalTestBody}
                     onChange={(e) => setWaModalTestBody(e.target.value)}
-                    className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white text-xs"
+                    className="w-full bg-white border border-slate-200 rounded-xl p-2 text-slate-900 text-xs focus:outline-none focus:border-[#ef741a]"
                   />
                 </div>
 
@@ -1255,7 +1255,7 @@ export const LiveMailboxCenter: React.FC<LiveMailboxCenterProps> = ({
                       }
                     }}
                     disabled={isSendingWaModalTest}
-                    className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold flex items-center space-x-2 transition disabled:opacity-50"
+                    className="px-4 py-2 rounded-xl bg-gradient-to-r from-[#ef741a] to-[#f97316] hover:from-[#d9620b] hover:to-[#ea580c] text-white text-xs font-bold flex items-center space-x-2 transition disabled:opacity-50 shadow-xs"
                   >
                     {isSendingWaModalTest ? (
                       <>
@@ -1272,17 +1272,17 @@ export const LiveMailboxCenter: React.FC<LiveMailboxCenterProps> = ({
                 </div>
 
                 {waModalTestResult && (
-                  <div className="p-3 bg-slate-950 rounded-lg border border-slate-800 space-y-2 mt-2">
+                  <div className="p-3 bg-white rounded-xl border border-slate-200 space-y-2 mt-2 shadow-2xs">
                     <div className="flex items-center justify-between text-xs">
-                      <span className="font-bold text-emerald-400 flex items-center space-x-1">
-                        <CheckCircle2 className="w-3.5 h-3.5" />
+                      <span className="font-bold text-emerald-700 flex items-center space-x-1">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
                         <span>Inbound WhatsApp Processed &amp; Saved to CRM</span>
                       </span>
-                      <span className="text-[10px] text-slate-400 font-mono">
+                      <span className="text-[10px] text-slate-500 font-mono">
                         Score: {waModalTestResult.result?.leadScore || 85}/100
                       </span>
                     </div>
-                    <div className="p-2.5 bg-slate-900 rounded text-slate-200 whitespace-pre-wrap font-sans text-xs">
+                    <div className="p-2.5 bg-slate-50 rounded-lg text-slate-800 whitespace-pre-wrap font-sans text-xs">
                       {waModalTestResult.result?.replyText || 'Message ingested successfully.'}
                     </div>
                   </div>
@@ -1295,21 +1295,21 @@ export const LiveMailboxCenter: React.FC<LiveMailboxCenterProps> = ({
 
       {/* SMTP Configuration Modal */}
       {showSmtpConfigModal && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-lg p-6 shadow-2xl space-y-5">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-lg p-6 sm:p-8 shadow-2xl space-y-5">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div className="flex items-center space-x-2">
-                <div className="w-8 h-8 rounded-lg bg-blue-500/20 border border-blue-500/30 flex items-center justify-center text-blue-400">
+                <div className="w-9 h-9 rounded-xl bg-[#fef6f3] border border-[#fed7aa] flex items-center justify-center text-[#ef741a]">
                   <Mail className="w-4 h-4" />
                 </div>
                 <div>
-                  <h3 className="text-base font-bold text-white">Outbound SMTP Mailbox Configuration</h3>
-                  <p className="text-[11px] text-slate-400">Set up SMTP credentials for real outgoing auto-reply delivery.</p>
+                  <h3 className="text-base font-extrabold text-slate-900 font-display">Outbound SMTP Mailbox Configuration</h3>
+                  <p className="text-[11px] text-slate-500">Set up SMTP credentials for real outgoing auto-reply delivery.</p>
                 </div>
               </div>
               <button
                 onClick={() => setShowSmtpConfigModal(false)}
-                className="p-1 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition"
+                className="p-1.5 rounded-xl hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -1318,65 +1318,65 @@ export const LiveMailboxCenter: React.FC<LiveMailboxCenterProps> = ({
             <form onSubmit={handleSaveModalSmtp} className="space-y-4">
               <div className="grid grid-cols-3 gap-3">
                 <div className="col-span-2 space-y-1">
-                  <label className="text-xs font-semibold text-slate-300">SMTP Host</label>
+                  <label className="text-xs font-bold text-slate-700">SMTP Host</label>
                   <input
                     type="text"
                     required
                     value={modalSmtpHost}
                     onChange={(e) => setModalSmtpHost(e.target.value)}
                     placeholder="smtp.gmail.com"
-                    className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-xs text-white focus:outline-none focus:border-blue-500 font-mono"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-900 focus:outline-none focus:border-[#ef741a] font-mono"
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-xs font-semibold text-slate-300">Port</label>
+                  <label className="text-xs font-bold text-slate-700">Port</label>
                   <input
                     type="number"
                     required
                     value={modalSmtpPort}
                     onChange={(e) => setModalSmtpPort(parseInt(e.target.value, 10) || 465)}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-xs text-white focus:outline-none focus:border-blue-500 font-mono"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-900 focus:outline-none focus:border-[#ef741a] font-mono"
                   />
                 </div>
               </div>
 
               <div className="space-y-1">
-                <label className="text-xs font-semibold text-slate-300">SMTP User / Email</label>
+                <label className="text-xs font-bold text-slate-700">SMTP User / Email</label>
                 <input
                   type="email"
                   required
                   value={modalSmtpUser}
                   onChange={(e) => setModalSmtpUser(e.target.value)}
                   placeholder="amaavigo@gmail.com"
-                  className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-xs text-white focus:outline-none focus:border-blue-500 font-mono"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-900 focus:outline-none focus:border-[#ef741a] font-mono"
                 />
               </div>
 
               <div className="space-y-1">
                 <div className="flex items-center justify-between">
-                  <label className="text-xs font-semibold text-slate-300">Gmail App Password (16 chars)</label>
-                  <span className="text-[10px] text-blue-400">Required for live delivery</span>
+                  <label className="text-xs font-bold text-slate-700">Gmail App Password (16 chars)</label>
+                  <span className="text-[10px] text-[#0848ef] font-bold">Required for live delivery</span>
                 </div>
                 <input
                   type="password"
                   value={modalSmtpPass}
                   onChange={(e) => setModalSmtpPass(e.target.value)}
                   placeholder={smtpStatus?.hasPassword ? '•••••••••••••••• (Password saved)' : 'Enter 16-char Gmail App Password'}
-                  className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-xs text-white focus:outline-none focus:border-blue-500 font-mono"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-900 focus:outline-none focus:border-[#ef741a] font-mono"
                 />
-                <p className="text-[10px] text-slate-400 leading-normal pt-0.5">
-                  Go to <strong className="text-slate-200">myaccount.google.com/apppasswords</strong> &rarr; generate a 16-character App Password.
+                <p className="text-[10px] text-slate-500 leading-normal pt-0.5">
+                  Go to <strong className="text-slate-800">myaccount.google.com/apppasswords</strong> &rarr; generate a 16-character App Password.
                 </p>
               </div>
 
               <div className="space-y-1">
-                <label className="text-xs font-semibold text-slate-300">From Header</label>
+                <label className="text-xs font-bold text-slate-700">From Header</label>
                 <input
                   type="text"
                   value={modalSmtpFrom}
                   onChange={(e) => setModalSmtpFrom(e.target.value)}
                   placeholder="Umrah360 Automation <amaavigo@gmail.com>"
-                  className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-xs text-white focus:outline-none focus:border-blue-500 font-mono"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-900 focus:outline-none focus:border-[#ef741a] font-mono"
                 />
               </div>
 
@@ -1384,31 +1384,31 @@ export const LiveMailboxCenter: React.FC<LiveMailboxCenterProps> = ({
                 <div
                   className={`p-3 rounded-xl border flex items-start space-x-2 text-xs ${
                     modalSmtpSaveResult.success
-                      ? 'bg-emerald-950/40 border-emerald-500/40 text-emerald-200'
-                      : 'bg-amber-950/40 border-amber-500/40 text-amber-200'
+                      ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
+                      : 'bg-amber-50 border-amber-200 text-amber-900'
                   }`}
                 >
                   {modalSmtpSaveResult.success ? (
-                    <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
                   ) : (
-                    <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                    <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                   )}
-                  <div className="flex-1">{modalSmtpSaveResult.message}</div>
+                  <div className="flex-1 font-medium">{modalSmtpSaveResult.message}</div>
                 </div>
               )}
 
-              <div className="flex items-center justify-end space-x-2 pt-2 border-t border-slate-800">
+              <div className="flex items-center justify-end space-x-2 pt-2 border-t border-slate-100">
                 <button
                   type="button"
                   onClick={() => setShowSmtpConfigModal(false)}
-                  className="px-3.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium transition"
+                  className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition"
                 >
                   Close
                 </button>
                 <button
                   type="submit"
                   disabled={isSavingModalSmtp}
-                  className="px-4 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold flex items-center space-x-1.5 transition disabled:opacity-50 shadow-md"
+                  className="px-5 py-2 rounded-xl bg-gradient-to-r from-[#ef741a] to-[#f97316] hover:from-[#d9620b] hover:to-[#ea580c] text-white text-xs font-bold flex items-center space-x-1.5 transition disabled:opacity-50 shadow-xs"
                 >
                   <RefreshCw className={`w-3.5 h-3.5 ${isSavingModalSmtp ? 'animate-spin' : ''}`} />
                   <span>{isSavingModalSmtp ? 'Verifying...' : 'Save & Verify Connection'}</span>

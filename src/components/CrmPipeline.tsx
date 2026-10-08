@@ -171,46 +171,72 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
   return (
     <div className="max-w-7xl mx-auto p-4 space-y-6">
       {/* Top CRM Dashboard Metrics (Section 56) */}
-      <div className="grid grid-cols-2 sm:grid-cols-6 gap-3">
-        <div className="bg-white border border-slate-200/90 p-4 rounded-2xl shadow-sm">
-          <span className="text-xs text-slate-500 block font-bold uppercase tracking-wider">Total CRM Leads</span>
-          <span className="text-3xl font-extrabold text-slate-900 mt-1 block">{totalLeads}</span>
-        </div>
-        <div className="bg-white border border-slate-200/90 p-4 rounded-2xl shadow-sm">
-          <span className="text-xs text-slate-500 block font-bold uppercase tracking-wider">Inbound Leads</span>
-          <span className="text-3xl font-extrabold text-orange-600 mt-1 block">{inboundCount}</span>
-        </div>
-        <div className="bg-white border border-slate-200/90 p-4 rounded-2xl shadow-sm">
-          <span className="text-xs text-slate-500 block font-bold uppercase tracking-wider">Outbound Leads</span>
-          <span className="text-3xl font-extrabold text-slate-900 mt-1 block">{outboundCount}</span>
-        </div>
-        <div className="bg-white border border-slate-200/90 p-4 rounded-2xl shadow-sm">
-          <span className="text-xs text-slate-500 block font-bold uppercase tracking-wider">AI Qualified</span>
-          <span className="text-3xl font-extrabold text-emerald-600 mt-1 block">{qualifiedCount}</span>
-        </div>
-        <div className="bg-white border border-slate-200/90 p-4 rounded-2xl shadow-sm">
-          <span className="text-xs text-slate-500 block font-bold uppercase tracking-wider">High Intent</span>
-          <span className="text-3xl font-extrabold text-orange-500 mt-1 block">{highIntentCount}</span>
-        </div>
-        <div className="bg-orange-500 text-white border border-orange-600 p-4 rounded-2xl shadow-md shadow-orange-500/20">
-          <div className="flex items-center justify-between">
-            <span className="text-xs text-orange-100 block font-bold uppercase tracking-wider">Demo Booked</span>
-            <Sparkles className="w-4 h-4 text-white" />
+      <div className="grid grid-cols-2 sm:grid-cols-6 gap-3.5">
+        <div className="bg-white border border-slate-200/80 p-4 rounded-2xl shadow-2xs hover:shadow-md hover:border-slate-300 transition-all duration-200 group">
+          <div className="flex items-center justify-between text-slate-500 mb-1.5">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Total CRM Leads</span>
+            <Users className="w-4 h-4 text-slate-400 group-hover:text-slate-600 transition-colors" />
           </div>
-          <span className="text-3xl font-extrabold text-white mt-1 block">{demoBookedCount}</span>
+          <span className="text-3xl font-extrabold text-slate-900 tracking-tight font-mono tabular-nums">{totalLeads}</span>
+          <span className="text-[10px] text-slate-400 mt-1 block font-medium">All active database leads</span>
+        </div>
+
+        <div className="bg-white border border-slate-200/80 p-4 rounded-2xl shadow-2xs hover:shadow-md hover:border-orange-200 transition-all duration-200 group">
+          <div className="flex items-center justify-between text-slate-500 mb-1.5">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Inbound Leads</span>
+            <Globe className="w-4 h-4 text-orange-500 group-hover:scale-110 transition-transform" />
+          </div>
+          <span className="text-3xl font-extrabold text-orange-600 tracking-tight font-mono tabular-nums">{inboundCount}</span>
+          <span className="text-[10px] text-orange-600/80 mt-1 block font-medium">Web & Chat conversations</span>
+        </div>
+
+        <div className="bg-white border border-slate-200/80 p-4 rounded-2xl shadow-2xs hover:shadow-md hover:border-purple-200 transition-all duration-200 group">
+          <div className="flex items-center justify-between text-slate-500 mb-1.5">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Outbound Leads</span>
+            <Send className="w-4 h-4 text-purple-500 group-hover:scale-110 transition-transform" />
+          </div>
+          <span className="text-3xl font-extrabold text-purple-700 tracking-tight font-mono tabular-nums">{outboundCount}</span>
+          <span className="text-[10px] text-purple-600/80 mt-1 block font-medium">Campaign cold outreach</span>
+        </div>
+
+        <div className="bg-white border border-slate-200/80 p-4 rounded-2xl shadow-2xs hover:shadow-md hover:border-emerald-200 transition-all duration-200 group">
+          <div className="flex items-center justify-between text-slate-500 mb-1.5">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">AI Qualified</span>
+            <CheckCircle className="w-4 h-4 text-emerald-500 group-hover:scale-110 transition-transform" />
+          </div>
+          <span className="text-3xl font-extrabold text-emerald-600 tracking-tight font-mono tabular-nums">{qualifiedCount}</span>
+          <span className="text-[10px] text-emerald-600/80 mt-1 block font-medium">Score ≥ 80 or qualified</span>
+        </div>
+
+        <div className="bg-white border border-slate-200/80 p-4 rounded-2xl shadow-2xs hover:shadow-md hover:border-amber-200 transition-all duration-200 group">
+          <div className="flex items-center justify-between text-slate-500 mb-1.5">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">High Intent</span>
+            <Flame className="w-4 h-4 text-orange-500 group-hover:scale-110 transition-transform" />
+          </div>
+          <span className="text-3xl font-extrabold text-orange-500 tracking-tight font-mono tabular-nums">{highIntentCount}</span>
+          <span className="text-[10px] text-amber-600/80 mt-1 block font-medium">Immediate buy signal</span>
+        </div>
+
+        <div className="bg-gradient-to-br from-orange-500 to-orange-600 text-white border border-orange-600/80 p-4 rounded-2xl shadow-md shadow-orange-500/20 hover:shadow-lg hover:shadow-orange-500/30 transition-all duration-200 group">
+          <div className="flex items-center justify-between text-orange-100 mb-1.5">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-orange-100">Demo Booked</span>
+            <Sparkles className="w-4 h-4 text-white group-hover:rotate-12 transition-transform" />
+          </div>
+          <span className="text-3xl font-extrabold text-white tracking-tight font-mono tabular-nums">{demoBookedCount}</span>
+          <span className="text-[10px] text-orange-100/90 mt-1 block font-medium">Calendar meetings set</span>
         </div>
       </div>
 
       {/* Control Toolbar: View Mode Toggle, Filters, Search */}
-      <div className="bg-white border border-slate-200 p-4 rounded-2xl flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 shadow-sm">
+      <div className="bg-white border border-slate-200/90 p-3.5 rounded-2xl flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 shadow-2xs">
         {/* Left: View Switcher (Pipeline vs Table vs Grid) */}
-        <div className="flex items-center space-x-1 bg-slate-100 p-1 rounded-xl border border-slate-200 self-start">
+        <div className="flex items-center space-x-1 bg-slate-100/90 p-1 rounded-xl border border-slate-200/80 self-start">
           <button
             onClick={() => setViewMode('PIPELINE')}
-            className={`flex items-center space-x-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold transition ${
+            className={`flex items-center space-x-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
               viewMode === 'PIPELINE'
-                ? 'bg-orange-500 text-white shadow-sm'
-                : 'text-slate-600 hover:text-slate-900'
+                ? 'bg-orange-500 text-white shadow-2xs'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
             }`}
             title="Split Pipeline View"
           >
@@ -219,10 +245,10 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
           </button>
           <button
             onClick={() => setViewMode('TABLE')}
-            className={`flex items-center space-x-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold transition ${
+            className={`flex items-center space-x-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
               viewMode === 'TABLE'
-                ? 'bg-orange-500 text-white shadow-sm'
-                : 'text-slate-600 hover:text-slate-900'
+                ? 'bg-orange-500 text-white shadow-2xs'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
             }`}
             title="Full Data Grid / Table View"
           >
@@ -231,10 +257,10 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
           </button>
           <button
             onClick={() => setViewMode('GRID')}
-            className={`flex items-center space-x-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold transition ${
+            className={`flex items-center space-x-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
               viewMode === 'GRID'
-                ? 'bg-orange-500 text-white shadow-sm'
-                : 'text-slate-600 hover:text-slate-900'
+                ? 'bg-orange-500 text-white shadow-2xs'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
             }`}
             title="Card Grid View"
           >
@@ -247,25 +273,33 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
         <div className="flex flex-wrap items-center gap-2">
           {/* Search */}
           <div className="relative flex-1 sm:w-60">
-            <Search className="w-3.5 h-3.5 absolute left-3 top-3 text-slate-400" />
+            <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-400" />
             <input
               type="text"
               placeholder="Search leads, companies..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-8 pr-3 py-2 text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 font-medium"
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-8 pr-8 py-1.5 text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-orange-500 focus:bg-white focus:ring-1 focus:ring-orange-500 font-medium transition-all"
             />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="absolute right-2.5 top-2 text-slate-400 hover:text-slate-600"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
           </div>
 
-          {/* Lead Type Pill */}
-          <div className="flex items-center space-x-1 text-xs bg-slate-100 p-1 rounded-xl border border-slate-200">
+          {/* Lead Type Segment */}
+          <div className="flex items-center space-x-1 text-xs bg-slate-100/90 p-1 rounded-xl border border-slate-200/80">
             {(['ALL', 'INBOUND', 'OUTBOUND'] as const).map((t) => (
               <button
                 key={t}
                 onClick={() => setTypeFilter(t)}
-                className={`px-3 py-1 rounded-lg font-bold transition ${
+                className={`px-3 py-1 rounded-lg font-bold transition-all ${
                   typeFilter === t
-                    ? 'bg-slate-900 text-white'
+                    ? 'bg-slate-900 text-white shadow-2xs'
                     : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
@@ -278,7 +312,7 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="bg-slate-50 border border-slate-200 text-xs text-slate-800 font-bold rounded-xl px-3 py-2 focus:outline-none focus:border-orange-500"
+            className="bg-slate-50 border border-slate-200 text-xs text-slate-800 font-bold rounded-xl px-3 py-1.5 focus:outline-none focus:border-orange-500 focus:bg-white shadow-2xs"
           >
             <option value="ALL">All Statuses</option>
             <option value="NEW">NEW</option>
@@ -287,14 +321,14 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
             <option value="QUALIFIED">QUALIFIED</option>
             <option value="DEMO_SCHEDULED">DEMO SCHEDULED</option>
             <option value="DEMO_BOOKED">DEMO BOOKED</option>
-            <option value="HUMAN_HANDOFF">HUMAN_HANDOFF</option>
-            <option value="CLOSED_WON">CLOSED_WON</option>
+            <option value="HUMAN_HANDOFF">HUMAN HANDOFF</option>
+            <option value="CLOSED_WON">CLOSED WON</option>
           </select>
 
           {/* Website Form Webhook Integration Button */}
           <button
             onClick={() => setIsWebsiteModalOpen(true)}
-            className="flex items-center gap-1.5 px-3.5 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-xs font-bold transition shadow-md shadow-orange-500/20 shrink-0"
+            className="flex items-center gap-1.5 px-3.5 py-1.5 bg-orange-500 hover:bg-orange-600 active:bg-orange-700 text-white rounded-xl text-xs font-bold transition shadow-2xs shadow-orange-500/20 shrink-0"
             title="Connect your website demo form (umrah360.in/request-demo) to CRM"
           >
             <Globe className="w-3.5 h-3.5 text-white" />
@@ -308,14 +342,17 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
       {viewMode === 'PIPELINE' && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Left Column: Leads List */}
-          <div className="lg:col-span-1 bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm flex flex-col h-[calc(100vh-18rem)]">
-            <div className="p-3.5 border-b border-slate-100 flex items-center justify-between text-xs text-slate-500 font-bold bg-slate-50">
-              <span>Showing {processedLeads.length} leads</span>
-              <span className="text-[11px] text-slate-400">Sorted by score</span>
+          <div className="lg:col-span-1 bg-white border border-slate-200/90 rounded-2xl overflow-hidden shadow-2xs flex flex-col h-[calc(100vh-18rem)]">
+            <div className="p-3 border-b border-slate-100 flex items-center justify-between text-xs text-slate-500 font-bold bg-slate-50/80">
+              <span className="flex items-center gap-1.5">
+                <Users className="w-3.5 h-3.5 text-slate-400" />
+                <span>Showing {processedLeads.length} leads</span>
+              </span>
+              <span className="text-[11px] text-slate-400 font-medium">Sorted by score</span>
             </div>
 
             {/* Lead List Cards */}
-            <div className="flex-1 overflow-y-auto divide-y divide-slate-100">
+            <div className="flex-1 overflow-y-auto divide-y divide-slate-100/80">
               {processedLeads.length === 0 ? (
                 <div className="p-8 text-center text-slate-400 text-xs font-medium">No matching leads found.</div>
               ) : (
@@ -327,47 +364,58 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
                     <div
                       key={lead.leadId}
                       onClick={() => setSelectedLeadId(lead.leadId)}
-                      className={`p-3.5 cursor-pointer transition ${
+                      className={`p-3.5 cursor-pointer transition-all duration-150 group ${
                         isSelected
-                          ? 'bg-orange-50/80 border-l-4 border-orange-500'
-                          : 'hover:bg-slate-50'
+                          ? 'bg-orange-50/90 border-l-4 border-orange-500 shadow-2xs'
+                          : 'hover:bg-slate-50/80'
                       }`}
                     >
-                      <div className="flex items-start justify-between">
-                        <div>
-                          <h4 className="font-bold text-xs text-slate-900">
-                            {contact?.firstName} {contact?.lastName}
-                          </h4>
-                          <p className="text-[11px] text-slate-500 mt-0.5 font-medium">{contact?.companyName}</p>
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-center space-x-2.5 min-w-0">
+                          <div className={`w-8 h-8 rounded-full border flex items-center justify-center font-bold text-xs shrink-0 transition-colors ${
+                            isSelected ? 'bg-orange-500 text-white border-orange-600 shadow-2xs' : 'bg-slate-100 text-slate-700 border-slate-200'
+                          }`}>
+                            {contact?.firstName?.[0]}{contact?.lastName?.[0]}
+                          </div>
+                          <div className="min-w-0">
+                            <h4 className={`font-bold text-xs transition-colors truncate ${
+                              isSelected ? 'text-slate-900' : 'text-slate-800 group-hover:text-orange-600'
+                            }`}>
+                              {contact?.firstName} {contact?.lastName}
+                            </h4>
+                            <p className="text-[11px] text-slate-500 mt-0.5 font-medium truncate">{contact?.companyName}</p>
+                          </div>
                         </div>
 
-                        <div className="text-right">
-                          <div className="flex items-center space-x-1">
-                            <Flame className="w-3.5 h-3.5 text-orange-500" />
-                            <span className="font-extrabold text-xs text-slate-900">{lead.leadScore}</span>
+                        <div className="text-right shrink-0">
+                          <div className="flex items-center space-x-1 justify-end">
+                            <Flame className={`w-3.5 h-3.5 ${lead.leadScore >= 80 ? 'text-orange-500' : 'text-slate-400'}`} />
+                            <span className="font-extrabold text-xs text-slate-900 font-mono tabular-nums">{lead.leadScore}</span>
                           </div>
-                          <span className="text-[10px] text-slate-400 uppercase font-bold">{lead.intent}</span>
+                          <span className={`text-[10px] font-extrabold uppercase ${
+                            lead.intent === 'HIGH' ? 'text-emerald-600' : lead.intent === 'MEDIUM' ? 'text-amber-600' : 'text-slate-400'
+                          }`}>{lead.intent}</span>
                         </div>
                       </div>
 
                       <div className="flex items-center justify-between mt-2 pt-2 border-t border-slate-100 text-[10px] gap-1 flex-wrap">
                         <span
-                          className={`px-2 py-0.5 rounded-full font-bold ${
+                          className={`px-2 py-0.5 rounded-md font-bold text-[10px] ${
                             lead.leadType === 'OUTBOUND'
-                              ? 'bg-purple-900 text-purple-100 border border-purple-700'
-                              : 'bg-orange-100 text-orange-800 border border-orange-200'
+                              ? 'bg-purple-50 text-purple-700 border border-purple-200'
+                              : 'bg-orange-50 text-orange-700 border border-orange-200'
                           }`}
                         >
                           {lead.leadType} ({lead.source})
                         </span>
 
                         {lead.campaignName && (
-                          <span className="px-2 py-0.5 rounded-full bg-purple-100 text-purple-800 font-bold border border-purple-200 truncate max-w-[130px]">
+                          <span className="px-2 py-0.5 rounded-md bg-purple-100/70 text-purple-800 font-bold border border-purple-200 truncate max-w-[120px]">
                             {lead.campaignName}
                           </span>
                         )}
 
-                        <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 font-bold border border-slate-200 ml-auto">
+                        <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 font-bold border border-slate-200/80 ml-auto">
                           {lead.status}
                         </span>
                       </div>
@@ -379,7 +427,7 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
           </div>
 
           {/* Right Column: Lead 360 Profile & Timeline */}
-          <div className="lg:col-span-2 bg-white border border-slate-200 rounded-2xl p-6 shadow-sm overflow-y-auto h-[calc(100vh-18rem)] space-y-6">
+          <div className="lg:col-span-2 bg-white border border-slate-200/90 rounded-2xl p-5 sm:p-6 shadow-2xs overflow-y-auto h-[calc(100vh-18rem)] space-y-6">
             {renderLeadDetail(
               activeLead,
               activeContact,
@@ -463,31 +511,31 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
                     return (
                       <tr
                         key={lead.leadId}
-                        className="hover:bg-slate-800/50 transition cursor-pointer"
+                        className="hover:bg-slate-50 transition cursor-pointer"
                         onClick={() => setInspectModalLeadId(lead.leadId)}
                       >
                         {/* Lead / Contact */}
                         <td className="p-3.5">
                           <div className="flex items-center space-x-2.5">
-                            <div className="w-7 h-7 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center font-bold text-slate-300 text-xs">
+                            <div className="w-8 h-8 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center font-bold text-slate-800 text-xs shadow-2xs">
                               {contact?.firstName?.[0]}
                               {contact?.lastName?.[0]}
                             </div>
                             <div>
-                              <span className="font-semibold text-white block">
+                              <span className="font-bold text-slate-900 block">
                                 {contact?.firstName} {contact?.lastName}
                               </span>
-                              <span className="text-[11px] text-slate-500">{contact?.email}</span>
+                              <span className="text-[11px] text-slate-500 font-medium">{contact?.email}</span>
                             </div>
                           </div>
                         </td>
 
                         {/* Agency / Company */}
                         <td className="p-3.5">
-                          <span className="font-medium text-slate-200 block">
+                          <span className="font-bold text-slate-900 block">
                             {contact?.companyName}
                           </span>
-                          <span className="text-[11px] text-slate-400">
+                          <span className="text-[11px] text-slate-500 font-medium">
                             {contact?.jobTitle || 'Executive'}
                           </span>
                         </td>
@@ -499,23 +547,23 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
                               <span
                                 className={`px-2 py-0.5 rounded text-[10px] font-bold ${
                                   lead.leadType === 'OUTBOUND'
-                                    ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30'
-                                    : 'bg-teal-500/20 text-teal-300 border border-teal-500/30'
+                                    ? 'bg-purple-50 text-purple-700 border border-purple-200'
+                                    : 'bg-teal-50 text-teal-700 border border-teal-200'
                                 }`}
                               >
                                 {lead.leadType}
                               </span>
                               {lead.source === 'WEBSITE' ? (
-                                <span className="text-[11px] text-emerald-400 font-semibold flex items-center gap-1 bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">
-                                  <Globe className="w-3 h-3" />
+                                <span className="text-[11px] text-emerald-700 font-bold flex items-center gap-1 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                                  <Globe className="w-3 h-3 text-emerald-600" />
                                   <span>Website Demo</span>
                                 </span>
                               ) : (
-                                <span className="text-[11px] text-slate-400">{lead.source}</span>
+                                <span className="text-[11px] text-slate-600 font-medium">{lead.source}</span>
                               )}
                             </div>
                             {lead.campaignName && (
-                              <span className="text-[10px] text-purple-300 font-bold bg-purple-950/60 border border-purple-500/30 px-1.5 py-0.5 rounded w-fit">
+                              <span className="text-[10px] text-purple-800 font-bold bg-purple-50 border border-purple-200 px-1.5 py-0.5 rounded w-fit">
                                 {lead.campaignName}
                               </span>
                             )}
@@ -528,22 +576,22 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
                             <span
                               className={`font-bold text-xs ${
                                 lead.leadScore >= 80
-                                  ? 'text-emerald-400'
+                                  ? 'text-emerald-700'
                                   : lead.leadScore >= 50
-                                  ? 'text-amber-400'
-                                  : 'text-slate-400'
+                                  ? 'text-amber-700'
+                                  : 'text-slate-600'
                               }`}
                             >
                               {lead.leadScore}
                             </span>
-                            <div className="w-16 bg-slate-800 rounded-full h-1.5 overflow-hidden">
+                            <div className="w-16 bg-slate-100 rounded-full h-1.5 overflow-hidden border border-slate-200">
                               <div
                                 className={`h-1.5 rounded-full ${
                                   lead.leadScore >= 80
                                     ? 'bg-emerald-500'
                                     : lead.leadScore >= 50
                                     ? 'bg-amber-500'
-                                    : 'bg-slate-600'
+                                    : 'bg-slate-400'
                                 }`}
                                 style={{ width: `${lead.leadScore}%` }}
                               />
@@ -556,10 +604,10 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
                           <span
                             className={`px-2 py-0.5 rounded text-[10px] font-bold ${
                               lead.intent === 'HIGH'
-                                ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                                 : lead.intent === 'MEDIUM'
-                                ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
-                                : 'bg-slate-700/50 text-slate-400'
+                                ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                                : 'bg-slate-100 text-slate-600 border border-slate-200'
                             }`}
                           >
                             {lead.intent}
@@ -569,12 +617,12 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
                         {/* Status */}
                         <td className="p-3.5">
                           <div className="flex flex-col gap-1 items-start">
-                            <span className="px-2 py-0.5 rounded-md bg-slate-800 border border-slate-700 text-slate-200 text-[11px] font-medium">
+                            <span className="px-2 py-0.5 rounded-md bg-slate-100 border border-slate-200 text-slate-800 text-[11px] font-bold">
                               {lead.status}
                             </span>
                             {(lead.demoStatus === 'BOOKED' || lead.status === 'DEMO_BOOKED') && (
-                              <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 flex items-center gap-1">
-                                <Sparkles className="w-2.5 h-2.5 text-emerald-400" />
+                              <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200 flex items-center gap-1">
+                                <Sparkles className="w-2.5 h-2.5 text-emerald-600" />
                                 <span>Demo Booked</span>
                               </span>
                             )}
@@ -592,13 +640,13 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
                             ).slice(0, 2).map((req, i) => (
                               <span
                                 key={i}
-                                className="px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-300 border border-blue-500/20 text-[10px] truncate"
+                                className="px-2 py-0.5 rounded bg-orange-50 text-orange-900 border border-orange-200 text-[10px] font-semibold truncate"
                               >
                                 {req}
                               </span>
                             ))}
                             {(Array.isArray(lead.requirements) ? lead.requirements.length : 0) > 2 && (
-                              <span className="text-[10px] text-slate-500 font-medium">
+                              <span className="text-[10px] text-slate-500 font-semibold">
                                 +{(lead.requirements?.length || 0) - 2} more
                               </span>
                             )}
@@ -610,15 +658,15 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
                           <div className="flex items-center justify-end space-x-1.5">
                             <button
                               onClick={() => setInspectModalLeadId(lead.leadId)}
-                              className="px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-black text-white text-[11px] font-bold flex items-center space-x-1 transition shadow-xs"
+                              className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 text-[11px] font-bold flex items-center space-x-1 transition border border-slate-200 shadow-2xs"
                               title="Inspect 360 Profile"
                             >
-                              <Eye className="w-3 h-3 text-white" />
+                              <Eye className="w-3 h-3 text-slate-700" />
                               <span>360 Profile</span>
                             </button>
                             <button
                               onClick={() => onOpenConversation(undefined, lead.leadId)}
-                              className="px-2.5 py-1 rounded-lg bg-orange-500 hover:bg-orange-600 text-white text-[11px] font-bold flex items-center space-x-1 transition shadow-xs"
+                              className="px-2.5 py-1 rounded-lg bg-orange-500 hover:bg-orange-600 text-white text-[11px] font-bold flex items-center space-x-1 transition shadow-2xs"
                               title="Open Omnichannel Inbox"
                             >
                               <MessageCircle className="w-3 h-3" />
@@ -640,7 +688,7 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
       {viewMode === 'GRID' && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {processedLeads.length === 0 ? (
-            <div className="col-span-full p-12 text-center text-slate-500 text-xs bg-slate-900 border border-slate-800 rounded-xl">
+            <div className="col-span-full p-12 text-center text-slate-500 text-xs bg-white border border-slate-200 rounded-2xl">
               No leads match the selected filter criteria.
             </div>
           ) : (
@@ -650,31 +698,31 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
               return (
                 <div
                   key={lead.leadId}
-                  className="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-lg hover:border-slate-700 transition flex flex-col justify-between space-y-3"
+                  className="bg-white border border-slate-200/90 rounded-2xl p-4 shadow-2xs hover:border-slate-300 transition flex flex-col justify-between space-y-3"
                 >
                   {/* Card Header */}
                   <div>
                     <div className="flex items-start justify-between">
                       <div className="flex items-center space-x-2.5">
-                        <div className="w-9 h-9 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center font-bold text-slate-200 text-sm">
+                        <div className="w-9 h-9 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center font-bold text-slate-800 text-sm shadow-2xs">
                           {contact?.firstName?.[0]}
                           {contact?.lastName?.[0]}
                         </div>
                         <div>
-                          <h4 className="font-bold text-sm text-white">
+                          <h4 className="font-bold text-sm text-slate-900">
                             {contact?.firstName} {contact?.lastName}
                           </h4>
-                          <p className="text-xs text-slate-400">
+                          <p className="text-xs text-slate-500 font-medium">
                             {contact?.jobTitle || 'Executive'} •{' '}
-                            <span className="text-slate-300 font-medium">{contact?.companyName}</span>
+                            <span className="text-slate-800 font-bold">{contact?.companyName}</span>
                           </p>
                         </div>
                       </div>
 
                       {/* Lead Score Flame Badge */}
-                      <div className="flex items-center space-x-1 bg-slate-800/80 px-2 py-0.5 rounded-full border border-slate-700">
-                        <Flame className="w-3 h-3 text-amber-400" />
-                        <span className="font-bold text-xs text-emerald-400">{lead.leadScore}</span>
+                      <div className="flex items-center space-x-1 bg-orange-50 px-2.5 py-1 rounded-full border border-orange-200">
+                        <Flame className="w-3.5 h-3.5 text-orange-500" />
+                        <span className="font-extrabold text-xs text-orange-950">{lead.leadScore}</span>
                       </div>
                     </div>
 
@@ -683,15 +731,15 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
                       <span
                         className={`px-2 py-0.5 rounded font-bold ${
                           lead.leadType === 'OUTBOUND'
-                            ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30'
-                            : 'bg-teal-500/20 text-teal-300 border border-teal-500/30'
+                            ? 'bg-purple-50 text-purple-700 border border-purple-200'
+                            : 'bg-teal-50 text-teal-700 border border-teal-200'
                         }`}
                       >
                         {lead.leadType} ({lead.source})
                       </span>
 
                       {lead.campaignName && (
-                        <span className="px-2 py-0.5 rounded bg-purple-500/20 text-purple-300 border border-purple-500/30 font-bold">
+                        <span className="px-2 py-0.5 rounded bg-purple-50 text-purple-800 border border-purple-200 font-bold">
                           {lead.campaignName}
                         </span>
                       )}
@@ -699,20 +747,20 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
                       <span
                         className={`px-2 py-0.5 rounded font-semibold ${
                           lead.intent === 'HIGH'
-                            ? 'bg-emerald-500/20 text-emerald-400'
-                            : 'bg-amber-500/20 text-amber-400'
+                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                            : 'bg-amber-50 text-amber-700 border border-amber-200'
                         }`}
                       >
                         {lead.intent} Intent
                       </span>
 
-                      <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-medium">
+                      <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-800 font-bold border border-slate-200">
                         {lead.status}
                       </span>
                     </div>
 
                     {/* Requirements Tags */}
-                    <div className="mt-3 flex flex-wrap gap-1">
+                    <div className="mt-3 flex flex-wrap gap-1.5">
                       {(Array.isArray(lead.requirements)
                         ? lead.requirements
                         : typeof lead.requirements === 'string'
@@ -721,7 +769,7 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
                       ).slice(0, 3).map((req, i) => (
                         <span
                           key={i}
-                          className="px-2 py-0.5 rounded bg-blue-500/10 text-blue-300 border border-blue-500/20 text-[10px]"
+                          className="px-2.5 py-0.5 rounded-lg bg-orange-50 text-orange-950 border border-orange-200 text-[10px] font-semibold"
                         >
                           {req}
                         </span>
@@ -730,25 +778,25 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
 
                     {/* AI Insight Summary */}
                     {lead.aiSummary && (
-                      <p className="text-[11px] text-slate-400 mt-2 line-clamp-2 bg-slate-950/60 p-2 rounded-lg border border-slate-800/80 leading-relaxed">
-                        <Sparkles className="w-3 h-3 text-blue-400 inline mr-1" />
+                      <p className="text-[11px] text-slate-700 font-medium mt-2 line-clamp-2 bg-slate-50 p-2.5 rounded-xl border border-slate-200 leading-relaxed">
+                        <Sparkles className="w-3 h-3 text-orange-500 inline mr-1" />
                         {lead.aiSummary}
                       </p>
                     )}
                   </div>
 
                   {/* Card Actions */}
-                  <div className="pt-2 border-t border-slate-800 flex items-center justify-between gap-2">
+                  <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-2">
                     <button
                       onClick={() => setInspectModalLeadId(lead.leadId)}
-                      className="flex-1 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold flex items-center justify-center space-x-1.5 transition border border-slate-700"
+                      className="flex-1 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold flex items-center justify-center space-x-1.5 transition border border-slate-200 shadow-2xs"
                     >
-                      <Eye className="w-3.5 h-3.5" />
+                      <Eye className="w-3.5 h-3.5 text-slate-700" />
                       <span>Inspect 360</span>
                     </button>
                     <button
                       onClick={() => onOpenConversation(undefined, lead.leadId)}
-                      className="flex-1 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold flex items-center justify-center space-x-1.5 transition shadow-sm"
+                      className="flex-1 py-1.5 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-xs font-bold flex items-center justify-center space-x-1.5 transition shadow-2xs"
                     >
                       <MessageCircle className="w-3.5 h-3.5" />
                       <span>Omnichannel</span>
@@ -763,11 +811,11 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
 
       {/* MODAL: Lead 360 Inspector (When viewing from Table or Grid view) */}
       {inspectModalLeadId && activeLead && activeContact && (
-        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-700 rounded-2xl max-w-3xl w-full p-6 shadow-2xl space-y-6 max-h-[90vh] overflow-y-auto relative">
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-white border border-slate-200 rounded-2xl max-w-3xl w-full p-6 sm:p-8 shadow-2xl space-y-6 max-h-[92vh] overflow-y-auto relative text-slate-900">
             <button
               onClick={() => setInspectModalLeadId(null)}
-              className="absolute right-4 top-4 text-slate-400 hover:text-slate-200 p-1 rounded-lg bg-slate-800"
+              className="absolute right-4 top-4 text-slate-400 hover:text-slate-700 p-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 transition"
             >
               <X className="w-5 h-5" />
             </button>
@@ -822,49 +870,49 @@ function renderLeadDetail(
   return (
     <div className="space-y-6">
       {/* Header Profile */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-slate-800 gap-3">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-slate-100 gap-3">
         <div>
           <div className="flex items-center space-x-3">
-            <h3 className="text-xl font-bold text-white">
+            <h3 className="text-xl font-extrabold text-slate-900">
               {selectedContact.firstName} {selectedContact.lastName}
             </h3>
             <span
-              className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${
+              className={`px-3 py-0.5 rounded-full text-xs font-bold ${
                 selectedLead.status === 'QUALIFIED'
-                  ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                  ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
                   : selectedLead.status === 'DEMO_BOOKED'
-                  ? 'bg-emerald-500/30 text-emerald-300 border border-emerald-500/50'
-                  : 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
+                  ? 'bg-emerald-100 text-emerald-900 border border-emerald-300 font-extrabold'
+                  : 'bg-blue-50 text-blue-800 border border-blue-200'
               }`}
             >
               {selectedLead.status}
             </span>
           </div>
 
-          <p className="text-xs text-slate-300 mt-1 flex items-center space-x-2">
+          <p className="text-xs text-slate-600 mt-1 flex items-center space-x-2 font-medium">
             <span>{selectedContact.jobTitle || 'Executive'}</span>
             <span>•</span>
-            <span className="font-semibold text-white">{selectedContact.companyName}</span>
+            <span className="font-bold text-slate-900">{selectedContact.companyName}</span>
           </p>
         </div>
 
         <button
           onClick={() => onOpenConversation(undefined, selectedLead.leadId)}
-          className="flex items-center space-x-2 px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold transition shadow-md self-start sm:self-auto"
+          className="flex items-center space-x-2 px-4 py-2 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-xs font-bold transition shadow-2xs self-start sm:self-auto"
         >
-          <MessageCircle className="w-4 h-4" />
+          <MessageCircle className="w-4 h-4 text-white" />
           <span>Open Omnichannel Inbox</span>
         </button>
       </div>
 
       {/* CRM Status & Single Source of Truth Demo Booking Action Bar */}
-      <div className="p-3 bg-slate-800/60 rounded-xl border border-slate-700/60 flex flex-wrap items-center justify-between gap-3">
+      <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 shadow-2xs flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
-          <span className="text-xs font-semibold text-slate-400">Pipeline Status:</span>
+          <span className="text-xs font-bold text-slate-700">Pipeline Status:</span>
           <select
             value={selectedLead.status}
             onChange={(e) => onUpdateStatus?.(e.target.value as LeadStatus)}
-            className="px-2.5 py-1 bg-slate-900 border border-slate-700 rounded-lg text-xs font-semibold text-slate-200 focus:outline-none focus:border-emerald-500"
+            className="px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:outline-none focus:border-orange-500 shadow-2xs"
           >
             <option value="NEW">NEW</option>
             <option value="ENGAGED">ENGAGED</option>
@@ -883,13 +931,13 @@ function renderLeadDetail(
         <button
           type="button"
           onClick={onToggleDemo}
-          className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition flex items-center gap-1.5 border ${
+          className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 border shadow-2xs ${
             isDemoBooked
-              ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 hover:bg-emerald-500/30'
-              : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700 hover:text-white'
+              ? 'bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100'
+              : 'bg-orange-500 text-white border-orange-500 hover:bg-orange-600'
           }`}
         >
-          <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
+          <Sparkles className={`w-3.5 h-3.5 ${isDemoBooked ? 'text-emerald-600' : 'text-white'}`} />
           <span>
             {isDemoBooked
               ? `Demo Booked (${selectedLead.demoSource || 'Manual'}) - Click to Toggle`
@@ -899,20 +947,20 @@ function renderLeadDetail(
       </div>
 
       {/* Contact Information & Channels (Section 55 Unified View) */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs bg-slate-800/40 p-4 rounded-lg border border-slate-800">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs bg-slate-50 p-4 rounded-2xl border border-slate-200/90 shadow-2xs">
         <div>
-          <span className="text-slate-500 block">Email Address</span>
-          <span className="text-slate-200 font-medium">{selectedContact.email}</span>
+          <span className="text-slate-500 font-bold uppercase tracking-wider text-[10px] block">Email Address</span>
+          <span className="text-slate-900 font-bold">{selectedContact.email}</span>
         </div>
         <div>
-          <span className="text-slate-500 block">Phone / WhatsApp</span>
-          <span className="text-slate-200 font-medium">
+          <span className="text-slate-500 font-bold uppercase tracking-wider text-[10px] block">Phone / WhatsApp</span>
+          <span className="text-slate-900 font-bold">
             {selectedContact.phone || '+91 98100 23456'}
           </span>
         </div>
         <div>
-          <span className="text-slate-500 block">Lead Source & Type</span>
-          <span className="text-emerald-400 font-semibold">
+          <span className="text-slate-500 font-bold uppercase tracking-wider text-[10px] block">Lead Source & Type</span>
+          <span className="text-orange-600 font-extrabold">
             {selectedLead.source} ({selectedLead.leadType})
           </span>
         </div>
@@ -920,30 +968,30 @@ function renderLeadDetail(
 
       {/* Outbound Campaign Details Card */}
       {(selectedLead.leadType === 'OUTBOUND' || selectedLead.campaignName || selectedLead.campaignId) && (
-        <div className="bg-gradient-to-br from-purple-950/40 via-slate-900 to-slate-900 border border-purple-500/40 rounded-xl p-4 space-y-3 shadow-md">
-          <div className="flex items-center justify-between border-b border-purple-500/20 pb-2.5">
+        <div className="bg-purple-50/80 border border-purple-200 rounded-2xl p-4 space-y-3 shadow-2xs">
+          <div className="flex items-center justify-between border-b border-purple-200 pb-2.5">
             <div className="flex items-center gap-2">
-              <Send className="w-4 h-4 text-purple-400" />
-              <span className="text-xs font-bold text-white uppercase tracking-wider">
+              <Send className="w-4 h-4 text-purple-600" />
+              <span className="text-xs font-bold text-purple-950 uppercase tracking-wider">
                 Outbound Campaign Outreach
               </span>
             </div>
-            <span className="text-[10px] font-semibold text-purple-300 bg-purple-500/20 px-2.5 py-0.5 rounded-full border border-purple-500/40 flex items-center gap-1.5 font-mono">
-              <span className="w-2 h-2 rounded-full bg-purple-400 animate-pulse"></span>
+            <span className="text-[10px] font-bold text-purple-800 bg-purple-100 px-2.5 py-0.5 rounded-full border border-purple-300 flex items-center gap-1.5 font-mono">
+              <span className="w-2 h-2 rounded-full bg-purple-500 animate-pulse"></span>
               <span>OUTBOUND</span>
             </span>
           </div>
 
           <div className="grid grid-cols-2 gap-3 text-xs">
             <div>
-              <span className="text-[10px] text-slate-400 block font-medium">Campaign Name</span>
-              <span className="text-purple-200 font-extrabold text-sm block">
+              <span className="text-[10px] text-purple-700 block font-semibold">Campaign Name</span>
+              <span className="text-purple-900 font-extrabold text-sm block">
                 {selectedLead.campaignName || 'Outbound Campaign'}
               </span>
             </div>
             <div>
-              <span className="text-[10px] text-slate-400 block font-medium">Campaign ID</span>
-              <span className="text-slate-300 font-mono text-[11px]">
+              <span className="text-[10px] text-purple-700 block font-semibold">Campaign ID</span>
+              <span className="text-purple-900 font-mono text-xs font-bold">
                 {selectedLead.campaignId || 'N/A'}
               </span>
             </div>
@@ -953,62 +1001,62 @@ function renderLeadDetail(
 
       {/* Website Demo Request Details Card */}
       {(selectedLead.source === 'WEBSITE' || selectedLead.queryMessage || selectedContact.website || selectedContact.city) && (
-        <div className="bg-gradient-to-br from-emerald-950/40 via-slate-900 to-slate-900 border border-emerald-500/40 rounded-xl p-4 space-y-3 shadow-md">
-          <div className="flex items-center justify-between border-b border-emerald-500/20 pb-2.5">
+        <div className="bg-emerald-50/80 border border-emerald-200 rounded-2xl p-4 space-y-3 shadow-2xs">
+          <div className="flex items-center justify-between border-b border-emerald-200 pb-2.5">
             <div className="flex items-center gap-2">
-              <Globe className="w-4 h-4 text-emerald-400" />
-              <span className="text-xs font-bold text-white uppercase tracking-wider">
+              <Globe className="w-4 h-4 text-emerald-600" />
+              <span className="text-xs font-bold text-emerald-950 uppercase tracking-wider">
                 Website Demo Form (umrah360.in/request-demo)
               </span>
             </div>
-            <span className="text-[10px] font-semibold text-emerald-300 bg-emerald-500/20 px-2 py-0.5 rounded border border-emerald-500/40 flex items-center gap-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+            <span className="text-[10px] font-bold text-emerald-800 bg-emerald-100 px-2.5 py-0.5 rounded border border-emerald-300 flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
               <span>Inbound Webhook</span>
             </span>
           </div>
 
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
             <div>
-              <span className="text-[10px] text-slate-400 block font-medium">Designation</span>
-              <span className="text-slate-100 font-semibold">{selectedContact.jobTitle || 'Agency Executive'}</span>
+              <span className="text-[10px] text-emerald-700 block font-semibold">Designation</span>
+              <span className="text-slate-900 font-bold">{selectedContact.jobTitle || 'Agency Executive'}</span>
             </div>
             <div>
-              <span className="text-[10px] text-slate-400 block font-medium">Location</span>
-              <span className="text-slate-100 font-semibold">
+              <span className="text-[10px] text-emerald-700 block font-semibold">Location</span>
+              <span className="text-slate-900 font-bold">
                 {selectedContact.city ? `${selectedContact.city}, ` : ''}{selectedContact.country || 'India'}
               </span>
             </div>
             <div>
-              <span className="text-[10px] text-slate-400 block font-medium">Branches</span>
-              <span className="text-slate-100 font-semibold">{selectedContact.branches || selectedLead.branches || 'Single Office'}</span>
+              <span className="text-[10px] text-emerald-700 block font-semibold">Branches</span>
+              <span className="text-slate-900 font-bold">{selectedContact.branches || selectedLead.branches || 'Single Office'}</span>
             </div>
             <div>
-              <span className="text-[10px] text-slate-400 block font-medium">Team Size</span>
-              <span className="text-slate-100 font-semibold">{selectedContact.teamSize || selectedLead.teamSize || '5-10 Users'}</span>
+              <span className="text-[10px] text-emerald-700 block font-semibold">Team Size</span>
+              <span className="text-slate-900 font-bold">{selectedContact.teamSize || selectedLead.teamSize || '5-10 Users'}</span>
             </div>
           </div>
 
           {selectedContact.website && (
-            <div className="text-xs flex items-center gap-2 pt-1 border-t border-slate-800/80">
-              <span className="text-[10px] text-slate-400 font-medium">Agency Website:</span>
+            <div className="text-xs flex items-center gap-2 pt-2 border-t border-emerald-200">
+              <span className="text-[10px] text-emerald-800 font-bold">Agency Website:</span>
               <a
                 href={selectedContact.website.startsWith('http') ? selectedContact.website : `https://${selectedContact.website}`}
                 target="_blank"
                 rel="noreferrer"
-                className="text-emerald-400 hover:text-emerald-300 underline font-mono text-[11px] inline-flex items-center gap-1"
+                className="text-emerald-800 hover:text-emerald-900 underline font-mono text-xs font-bold inline-flex items-center gap-1"
               >
                 <span>{selectedContact.website}</span>
-                <ExternalLink className="w-3 h-3" />
+                <ExternalLink className="w-3.5 h-3.5" />
               </a>
             </div>
           )}
 
           {(selectedLead.queryMessage || selectedLead.notes) && (
-            <div className="pt-2 border-t border-slate-800/80">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
+            <div className="pt-2 border-t border-emerald-200">
+              <span className="text-[10px] font-bold text-emerald-800 uppercase tracking-wider block mb-1">
                 Customer Message / Query:
               </span>
-              <div className="bg-slate-950/90 p-3 rounded-lg border border-slate-800 text-slate-200 font-mono text-xs leading-relaxed whitespace-pre-wrap">
+              <div className="bg-white p-3 rounded-xl border border-emerald-200 text-slate-900 font-sans text-xs leading-relaxed whitespace-pre-wrap shadow-2xs font-medium">
                 {selectedLead.queryMessage || selectedLead.notes}
               </div>
             </div>
@@ -1017,22 +1065,22 @@ function renderLeadDetail(
       )}
 
       {/* AI Intelligence Summary & Recommendations */}
-      <div className="bg-slate-800/60 p-4 rounded-xl border border-slate-700/60 space-y-3">
-        <div className="flex items-center space-x-2 text-xs font-semibold text-slate-200">
-          <Sparkles className="w-4 h-4 text-blue-400" />
+      <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 shadow-2xs space-y-3">
+        <div className="flex items-center space-x-2 text-xs font-bold text-slate-900">
+          <Sparkles className="w-4 h-4 text-orange-500" />
           <span>AI Qualification & Conversation Analysis</span>
         </div>
 
-        <p className="text-xs text-slate-300 leading-relaxed">
+        <p className="text-xs text-slate-800 leading-relaxed font-medium">
           {selectedLead.aiSummary ||
             'Lead showed immediate interest in B2B sub-agent features and automated package generation.'}
         </p>
 
         {selectedLead.aiRecommendation && (
-          <div className="p-3 bg-emerald-950/40 rounded-lg border border-emerald-800/40 text-xs text-emerald-200 flex items-start space-x-2">
-            <CheckCircle className="w-4 h-4 text-emerald-400 mt-0.5 shrink-0" />
+          <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-200 text-xs text-emerald-950 flex items-start space-x-2 shadow-2xs">
+            <CheckCircle className="w-4 h-4 text-emerald-600 mt-0.5 shrink-0" />
             <div>
-              <span className="font-semibold block text-emerald-300">
+              <span className="font-bold block text-emerald-900">
                 AI Recommended Next Step:
               </span>
               {selectedLead.aiRecommendation}
@@ -1043,8 +1091,8 @@ function renderLeadDetail(
 
       {/* Requirements & Buying Profile */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div className="bg-slate-800/40 p-4 rounded-xl border border-slate-800 text-xs space-y-2">
-          <span className="text-slate-400 font-medium block">Identified Requirements:</span>
+        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-2xs text-xs space-y-2">
+          <span className="text-slate-500 font-bold block">Identified Requirements:</span>
           <div className="flex flex-wrap gap-1.5">
             {(Array.isArray(selectedLead.requirements)
               ? selectedLead.requirements
@@ -1054,7 +1102,7 @@ function renderLeadDetail(
             ).map((req, i) => (
               <span
                 key={i}
-                className="px-2.5 py-1 rounded bg-blue-500/10 text-blue-300 border border-blue-500/20 text-xs"
+                className="px-2.5 py-1 rounded-lg bg-orange-50 text-orange-950 border border-orange-200 text-xs font-bold"
               >
                 {req}
               </span>
@@ -1062,22 +1110,22 @@ function renderLeadDetail(
           </div>
         </div>
 
-        <div className="bg-slate-800/40 p-4 rounded-xl border border-slate-800 text-xs space-y-2">
-          <span className="text-slate-400 font-medium block">Commercial Profile:</span>
-          <div className="space-y-1 text-slate-300">
+        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-2xs text-xs space-y-2">
+          <span className="text-slate-500 font-bold block">Commercial Profile:</span>
+          <div className="space-y-1.5 text-slate-800 font-medium">
             <div>
               <span className="text-slate-500">Service Interest: </span>
-              <span className="font-medium text-white">
+              <span className="font-bold text-slate-900">
                 {selectedLead.serviceInterest || 'B2B Sub-Agent Portal'}
               </span>
             </div>
             <div>
               <span className="text-slate-500">Budget Range: </span>
-              <span className="font-medium text-white">{selectedLead.budget || 'Custom / Enterprise'}</span>
+              <span className="font-bold text-slate-900">{selectedLead.budget || 'Custom / Enterprise'}</span>
             </div>
             <div>
               <span className="text-slate-500">Timeline: </span>
-              <span className="font-medium text-white">
+              <span className="font-bold text-slate-900">
                 {selectedLead.timeline || 'Upcoming Season (Immediate)'}
               </span>
             </div>
@@ -1087,21 +1135,21 @@ function renderLeadDetail(
 
       {/* Section 54: Contact Timeline */}
       <div className="space-y-3 pt-2">
-        <div className="flex items-center space-x-2 text-xs font-semibold text-slate-300 uppercase tracking-wider">
-          <Clock className="w-4 h-4 text-slate-400" />
-          <span>Interaction Timeline (Section 54)</span>
+        <div className="flex items-center space-x-2 text-xs font-bold text-slate-800 uppercase tracking-wider">
+          <Clock className="w-4 h-4 text-orange-500" />
+          <span>Interaction Timeline</span>
         </div>
 
-        <div className="border-l-2 border-slate-800 ml-3 space-y-4 pl-4 text-xs">
+        <div className="border-l-2 border-slate-200 ml-3 space-y-4 pl-4 text-xs">
           {selectedActivities.length === 0 ? (
-            <div className="text-slate-500">No logged activities for this lead yet.</div>
+            <div className="text-slate-500 font-medium">No logged activities for this lead yet.</div>
           ) : (
             selectedActivities.map((act) => (
               <div key={act.activityId} className="relative">
-                <div className="absolute -left-[21px] top-1 w-2.5 h-2.5 rounded-full bg-emerald-500 ring-4 ring-slate-900" />
+                <div className="absolute -left-[21px] top-1 w-2.5 h-2.5 rounded-full bg-orange-500 ring-4 ring-white" />
                 <div className="flex items-center justify-between">
-                  <span className="font-semibold text-slate-200">{act.title}</span>
-                  <span className="text-[10px] text-slate-500">
+                  <span className="font-bold text-slate-900">{act.title}</span>
+                  <span className="text-[10px] text-slate-500 font-mono font-medium">
                     {new Date(act.timestamp).toLocaleDateString([], {
                       month: 'short',
                       day: 'numeric',
@@ -1110,7 +1158,7 @@ function renderLeadDetail(
                     })}
                   </span>
                 </div>
-                <p className="text-xs text-slate-400 mt-0.5 leading-relaxed">
+                <p className="text-xs text-slate-600 mt-0.5 leading-relaxed font-medium">
                   {act.description}
                 </p>
               </div>

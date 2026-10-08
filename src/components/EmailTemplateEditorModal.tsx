@@ -516,14 +516,14 @@ export const EmailTemplateEditorModal: React.FC<EmailTemplateEditorModalProps> =
 
               {/* RICH TEXT STYLING TOOLBAR (Visible in Visual Mode) */}
               {formatMode === 'VISUAL' && (
-                <div className="p-2 bg-slate-900/80 border-b border-slate-800/80 flex flex-wrap items-center gap-1 text-xs">
+                <div className="p-2 bg-slate-50 border-b border-slate-200 flex flex-wrap items-center gap-1 text-xs">
                   
                   {/* Headings & Text Size */}
-                  <div className="flex items-center gap-1 pr-1.5 border-r border-slate-800">
+                  <div className="flex items-center gap-1 pr-1.5 border-r border-slate-200">
                     <button
                       type="button"
                       onClick={() => applyFormatBlock('h1')}
-                      className="p-1.5 text-slate-300 hover:bg-slate-800 hover:text-white rounded transition font-bold text-xs"
+                      className="p-1.5 text-slate-700 hover:bg-slate-200 hover:text-slate-900 rounded transition font-bold text-xs"
                       title="Heading 1 (Large)"
                     >
                       H1
@@ -531,7 +531,7 @@ export const EmailTemplateEditorModal: React.FC<EmailTemplateEditorModalProps> =
                     <button
                       type="button"
                       onClick={() => applyFormatBlock('h2')}
-                      className="p-1.5 text-slate-300 hover:bg-slate-800 hover:text-white rounded transition font-bold text-xs"
+                      className="p-1.5 text-slate-700 hover:bg-slate-200 hover:text-slate-900 rounded transition font-bold text-xs"
                       title="Heading 2 (Medium)"
                     >
                       H2
@@ -539,7 +539,7 @@ export const EmailTemplateEditorModal: React.FC<EmailTemplateEditorModalProps> =
                     <button
                       type="button"
                       onClick={() => applyFormatBlock('p')}
-                      className="p-1.5 text-slate-300 hover:bg-slate-800 hover:text-white rounded transition text-xs"
+                      className="p-1.5 text-slate-700 hover:bg-slate-200 hover:text-slate-900 rounded transition text-xs"
                       title="Normal Paragraph"
                     >
                       Normal
@@ -547,7 +547,7 @@ export const EmailTemplateEditorModal: React.FC<EmailTemplateEditorModalProps> =
                     <select
                       onChange={(e) => applyFontSize(e.target.value)}
                       defaultValue="3"
-                      className="bg-slate-950 border border-slate-700 text-slate-200 text-[11px] rounded px-1.5 py-1 focus:outline-none focus:border-emerald-500"
+                      className="bg-white border border-slate-200 text-slate-700 text-[11px] rounded px-1.5 py-1 focus:outline-none focus:border-orange-500"
                     >
                       <option value="2">Small (12px)</option>
                       <option value="3">Regular (14px)</option>
@@ -558,11 +558,11 @@ export const EmailTemplateEditorModal: React.FC<EmailTemplateEditorModalProps> =
                   </div>
 
                   {/* Basic Formatting: Bold, Italic, Underline, Strike */}
-                  <div className="flex items-center gap-0.5 px-1.5 border-r border-slate-800">
+                  <div className="flex items-center gap-0.5 px-1.5 border-r border-slate-200">
                     <button
                       type="button"
                       onClick={() => executeCommand('bold')}
-                      className="p-1.5 text-slate-300 hover:bg-slate-800 hover:text-white rounded transition font-bold"
+                      className="p-1.5 text-slate-700 hover:bg-slate-200 hover:text-slate-900 rounded transition font-bold"
                       title="Bold (Ctrl+B)"
                     >
                       <Bold className="w-3.5 h-3.5" />
@@ -570,7 +570,7 @@ export const EmailTemplateEditorModal: React.FC<EmailTemplateEditorModalProps> =
                     <button
                       type="button"
                       onClick={() => executeCommand('italic')}
-                      className="p-1.5 text-slate-300 hover:bg-slate-800 hover:text-white rounded transition italic"
+                      className="p-1.5 text-slate-700 hover:bg-slate-200 hover:text-slate-900 rounded transition italic"
                       title="Italic (Ctrl+I)"
                     >
                       <Italic className="w-3.5 h-3.5" />
@@ -578,7 +578,7 @@ export const EmailTemplateEditorModal: React.FC<EmailTemplateEditorModalProps> =
                     <button
                       type="button"
                       onClick={() => executeCommand('underline')}
-                      className="p-1.5 text-slate-300 hover:bg-slate-800 hover:text-white rounded transition underline"
+                      className="p-1.5 text-slate-700 hover:bg-slate-200 hover:text-slate-900 rounded transition underline"
                       title="Underline (Ctrl+U)"
                     >
                       <Underline className="w-3.5 h-3.5" />
@@ -586,7 +586,7 @@ export const EmailTemplateEditorModal: React.FC<EmailTemplateEditorModalProps> =
                     <button
                       type="button"
                       onClick={() => executeCommand('strikeThrough')}
-                      className="p-1.5 text-slate-300 hover:bg-slate-800 hover:text-white rounded transition"
+                      className="p-1.5 text-slate-700 hover:bg-slate-200 hover:text-slate-900 rounded transition"
                       title="Strikethrough"
                     >
                       <Strikethrough className="w-3.5 h-3.5" />
@@ -594,11 +594,11 @@ export const EmailTemplateEditorModal: React.FC<EmailTemplateEditorModalProps> =
                   </div>
 
                   {/* Alignment */}
-                  <div className="flex items-center gap-0.5 px-1.5 border-r border-slate-800">
+                  <div className="flex items-center gap-0.5 px-1.5 border-r border-slate-200">
                     <button
                       type="button"
                       onClick={() => executeCommand('justifyLeft')}
-                      className="p-1.5 text-slate-300 hover:bg-slate-800 hover:text-white rounded transition"
+                      className="p-1.5 text-slate-700 hover:bg-slate-200 hover:text-slate-900 rounded transition"
                       title="Align Left"
                     >
                       <AlignLeft className="w-3.5 h-3.5" />
@@ -606,7 +606,7 @@ export const EmailTemplateEditorModal: React.FC<EmailTemplateEditorModalProps> =
                     <button
                       type="button"
                       onClick={() => executeCommand('justifyCenter')}
-                      className="p-1.5 text-slate-300 hover:bg-slate-800 hover:text-white rounded transition"
+                      className="p-1.5 text-slate-700 hover:bg-slate-200 hover:text-slate-900 rounded transition"
                       title="Align Center"
                     >
                       <AlignCenter className="w-3.5 h-3.5" />
@@ -614,7 +614,7 @@ export const EmailTemplateEditorModal: React.FC<EmailTemplateEditorModalProps> =
                     <button
                       type="button"
                       onClick={() => executeCommand('justifyRight')}
-                      className="p-1.5 text-slate-300 hover:bg-slate-800 hover:text-white rounded transition"
+                      className="p-1.5 text-slate-700 hover:bg-slate-200 hover:text-slate-900 rounded transition"
                       title="Align Right"
                     >
                       <AlignRight className="w-3.5 h-3.5" />
@@ -622,7 +622,7 @@ export const EmailTemplateEditorModal: React.FC<EmailTemplateEditorModalProps> =
                     <button
                       type="button"
                       onClick={() => executeCommand('justifyFull')}
-                      className="p-1.5 text-slate-300 hover:bg-slate-800 hover:text-white rounded transition"
+                      className="p-1.5 text-slate-700 hover:bg-slate-200 hover:text-slate-900 rounded transition"
                       title="Justify"
                     >
                       <AlignJustify className="w-3.5 h-3.5" />
@@ -630,11 +630,11 @@ export const EmailTemplateEditorModal: React.FC<EmailTemplateEditorModalProps> =
                   </div>
 
                   {/* Lists & Quotes */}
-                  <div className="flex items-center gap-0.5 px-1.5 border-r border-slate-800">
+                  <div className="flex items-center gap-0.5 px-1.5 border-r border-slate-200">
                     <button
                       type="button"
                       onClick={() => executeCommand('insertUnorderedList')}
-                      className="p-1.5 text-slate-300 hover:bg-slate-800 hover:text-white rounded transition"
+                      className="p-1.5 text-slate-700 hover:bg-slate-200 hover:text-slate-900 rounded transition"
                       title="Bullet List"
                     >
                       <List className="w-3.5 h-3.5" />
@@ -642,7 +642,7 @@ export const EmailTemplateEditorModal: React.FC<EmailTemplateEditorModalProps> =
                     <button
                       type="button"
                       onClick={() => executeCommand('insertOrderedList')}
-                      className="p-1.5 text-slate-300 hover:bg-slate-800 hover:text-white rounded transition"
+                      className="p-1.5 text-slate-700 hover:bg-slate-200 hover:text-slate-900 rounded transition"
                       title="Numbered List"
                     >
                       <ListOrdered className="w-3.5 h-3.5" />
@@ -650,7 +650,7 @@ export const EmailTemplateEditorModal: React.FC<EmailTemplateEditorModalProps> =
                     <button
                       type="button"
                       onClick={() => applyFormatBlock('blockquote')}
-                      className="p-1.5 text-slate-300 hover:bg-slate-800 hover:text-white rounded transition"
+                      className="p-1.5 text-slate-700 hover:bg-slate-200 hover:text-slate-900 rounded transition"
                       title="Quote Block"
                     >
                       <Quote className="w-3.5 h-3.5" />
@@ -658,7 +658,7 @@ export const EmailTemplateEditorModal: React.FC<EmailTemplateEditorModalProps> =
                     <button
                       type="button"
                       onClick={() => executeCommand('insertHorizontalRule')}
-                      className="p-1.5 text-slate-300 hover:bg-slate-800 hover:text-white rounded transition"
+                      className="p-1.5 text-slate-700 hover:bg-slate-200 hover:text-slate-900 rounded transition"
                       title="Horizontal Divider"
                     >
                       <Minus className="w-3.5 h-3.5" />
@@ -673,16 +673,16 @@ export const EmailTemplateEditorModal: React.FC<EmailTemplateEditorModalProps> =
                         setShowColorPicker(!showColorPicker);
                         setShowHighlightPicker(false);
                       }}
-                      className="p-1.5 text-slate-300 hover:bg-slate-800 hover:text-emerald-400 rounded transition flex items-center gap-1"
+                      className="p-1.5 text-slate-700 hover:bg-slate-200 hover:text-orange-600 rounded transition flex items-center gap-1"
                       title="Text Color"
                     >
-                      <Palette className="w-3.5 h-3.5 text-emerald-400" />
+                      <Palette className="w-3.5 h-3.5 text-orange-500" />
                       <span className="text-[10px]">Color</span>
                     </button>
 
                     {showColorPicker && (
-                      <div className="absolute top-full left-0 mt-1 z-20 bg-slate-900 border border-slate-700 p-2 rounded-xl shadow-xl space-y-1.5 w-44">
-                        <div className="text-[10px] text-slate-400 font-semibold uppercase">Text Color</div>
+                      <div className="absolute top-full left-0 mt-1 z-20 bg-white border border-slate-200 p-2 rounded-xl shadow-xl space-y-1.5 w-44">
+                        <div className="text-[10px] text-slate-500 font-semibold uppercase">Text Color</div>
                         <div className="grid grid-cols-4 gap-1.5">
                           {PRESET_COLORS.map((c) => (
                             <button
@@ -692,7 +692,7 @@ export const EmailTemplateEditorModal: React.FC<EmailTemplateEditorModalProps> =
                                 executeCommand('foreColor', c.value);
                                 setShowColorPicker(false);
                               }}
-                              className="w-7 h-7 rounded-lg border border-slate-700 flex items-center justify-center transition hover:scale-110"
+                              className="w-7 h-7 rounded-lg border border-slate-200 flex items-center justify-center transition hover:scale-110"
                               style={{ backgroundColor: c.value }}
                               title={c.label}
                             />
@@ -705,17 +705,17 @@ export const EmailTemplateEditorModal: React.FC<EmailTemplateEditorModalProps> =
                     <button
                       type="button"
                       onClick={() => setIsLinkPromptOpen(!isLinkPromptOpen)}
-                      className="p-1.5 text-slate-300 hover:bg-slate-800 hover:text-sky-400 rounded transition flex items-center gap-1"
+                      className="p-1.5 text-slate-700 hover:bg-slate-200 hover:text-orange-600 rounded transition flex items-center gap-1"
                       title="Insert Hyperlink"
                     >
-                      <Link2 className="w-3.5 h-3.5 text-sky-400" />
+                      <Link2 className="w-3.5 h-3.5 text-orange-500" />
                       <span className="text-[10px]">Link</span>
                     </button>
 
                     <button
                       type="button"
                       onClick={() => executeCommand('removeFormat')}
-                      className="p-1.5 text-slate-400 hover:bg-slate-800 hover:text-rose-400 rounded transition text-[10px]"
+                      className="p-1.5 text-slate-500 hover:bg-slate-200 hover:text-rose-600 rounded transition text-[10px]"
                       title="Clear Formatting"
                     >
                       Clear
@@ -726,14 +726,14 @@ export const EmailTemplateEditorModal: React.FC<EmailTemplateEditorModalProps> =
 
               {/* LINK INJECTION PROMPT */}
               {isLinkPromptOpen && (
-                <div className="p-2.5 bg-slate-900 border-b border-slate-800 flex items-center gap-2">
-                  <Link2 className="w-4 h-4 text-sky-400 shrink-0" />
+                <div className="p-2.5 bg-slate-50 border-b border-slate-200 flex items-center gap-2">
+                  <Link2 className="w-4 h-4 text-orange-500 shrink-0" />
                   <input
                     type="url"
                     placeholder="https://umrah360.in/book-demo"
                     value={linkInputUrl}
                     onChange={(e) => setLinkInputUrl(e.target.value)}
-                    className="flex-1 bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-sky-500"
+                    className="flex-1 bg-white border border-slate-200 rounded-lg px-2.5 py-1 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-orange-500"
                   />
                   <button
                     type="button"
@@ -759,7 +759,7 @@ export const EmailTemplateEditorModal: React.FC<EmailTemplateEditorModalProps> =
                     ref={visualEditorRef}
                     contentEditable
                     onInput={handleVisualInput}
-                    className="w-full min-h-[240px] max-h-[360px] overflow-y-auto px-4 py-3 bg-slate-950 rounded-xl text-slate-100 text-sm leading-relaxed focus:outline-none focus:ring-1 focus:ring-emerald-500/50 border border-slate-800/80 font-sans"
+                    className="w-full min-h-[260px] max-h-[380px] overflow-y-auto px-4 py-3 bg-white rounded-xl text-slate-900 text-sm leading-relaxed focus:outline-none focus:ring-2 focus:ring-orange-500/30 border border-slate-200 shadow-inner font-sans"
                     style={{
                       wordBreak: 'break-word',
                     }}
@@ -772,7 +772,7 @@ export const EmailTemplateEditorModal: React.FC<EmailTemplateEditorModalProps> =
                     placeholder="<p>Enter clean HTML with styling...</p>"
                     value={htmlContent}
                     onChange={handleHtmlCodeChange}
-                    className="w-full min-h-[240px] max-h-[360px] px-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-xs font-mono text-emerald-300 leading-relaxed focus:outline-none focus:border-emerald-500"
+                    className="w-full min-h-[260px] max-h-[380px] px-4 py-3 bg-slate-900 border border-slate-800 rounded-xl text-xs font-mono text-amber-300 leading-relaxed focus:outline-none focus:border-orange-500 shadow-inner"
                   />
                 )}
 
@@ -782,27 +782,27 @@ export const EmailTemplateEditorModal: React.FC<EmailTemplateEditorModalProps> =
                     placeholder="Enter standard plain-text email message..."
                     value={plainTextContent}
                     onChange={handlePlainTextChange}
-                    className="w-full min-h-[240px] max-h-[360px] px-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-xs font-mono text-slate-200 leading-relaxed focus:outline-none focus:border-emerald-500"
+                    className="w-full min-h-[260px] max-h-[380px] px-4 py-3 bg-white border border-slate-200 rounded-xl text-xs font-mono text-slate-900 leading-relaxed focus:outline-none focus:border-orange-500 shadow-inner"
                   />
                 )}
               </div>
             </div>
 
             {/* ATTACHMENTS MANAGER */}
-            <div className="p-4 bg-slate-950/80 border border-slate-800 rounded-2xl space-y-3">
+            <div className="p-4 bg-slate-50/80 border border-slate-200/90 rounded-2xl space-y-3 shadow-2xs">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <Paperclip className="w-4 h-4 text-emerald-400" />
-                  <span className="text-xs font-semibold text-slate-200 uppercase tracking-wider">
+                  <Paperclip className="w-4 h-4 text-orange-500" />
+                  <span className="text-xs font-bold text-slate-800 uppercase tracking-wider">
                     Template Attachments
                   </span>
-                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 font-mono">
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-200/80 text-slate-700 font-bold font-mono">
                     {attachments.length} {attachments.length === 1 ? 'file' : 'files'}
                   </span>
                 </div>
 
-                <label className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-semibold cursor-pointer border border-slate-700 transition">
-                  <Upload className="w-3.5 h-3.5 text-emerald-400" />
+                <label className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-xs font-bold cursor-pointer transition shadow-2xs">
+                  <Upload className="w-3.5 h-3.5 text-white" />
                   <span>Add Attachments</span>
                   <input
                     ref={fileInputRef}
@@ -817,26 +817,26 @@ export const EmailTemplateEditorModal: React.FC<EmailTemplateEditorModalProps> =
 
               {/* Uploaded Attachments List */}
               {attachments.length === 0 ? (
-                <div className="p-4 border border-dashed border-slate-800 rounded-xl text-center text-slate-500 text-xs">
-                  <p>No attachments uploaded. You can attach PDFs, brochures, rate cards, or images.</p>
-                  <p className="text-[10px] text-slate-500 mt-0.5">Attachments will be saved in DB and automatically sent when campaigns use this template.</p>
+                <div className="p-4 border-2 border-dashed border-slate-200 bg-white rounded-xl text-center text-slate-500 text-xs">
+                  <p className="font-semibold text-slate-700">No attachments uploaded yet.</p>
+                  <p className="text-[11px] text-slate-500 mt-0.5">Attach PDFs, brochures, rate cards, or images. Files will be saved and automatically attached when campaigns use this template.</p>
                 </div>
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-40 overflow-y-auto pr-1">
                   {attachments.map((att) => (
                     <div
                       key={att.id}
-                      className="p-2.5 bg-slate-900 border border-slate-800 rounded-xl flex items-center justify-between gap-2 text-xs"
+                      className="p-2.5 bg-white border border-slate-200 rounded-xl flex items-center justify-between gap-2 text-xs shadow-2xs"
                     >
                       <div className="flex items-center gap-2 min-w-0 flex-1">
-                        <div className="p-1.5 bg-slate-950 rounded-lg shrink-0">
+                        <div className="p-1.5 bg-slate-50 border border-slate-200 rounded-lg shrink-0">
                           {getFileIcon(att.name, att.type)}
                         </div>
                         <div className="min-w-0 flex-1">
-                          <p className="text-slate-200 font-medium truncate" title={att.name}>
+                          <p className="text-slate-800 font-bold truncate" title={att.name}>
                             {att.name}
                           </p>
-                          <p className="text-[10px] text-slate-400 font-mono">
+                          <p className="text-[10px] text-slate-500 font-mono">
                             {formatFileSize(att.size)}
                           </p>
                         </div>
@@ -847,7 +847,7 @@ export const EmailTemplateEditorModal: React.FC<EmailTemplateEditorModalProps> =
                           <a
                             href={att.dataUrl}
                             download={att.name}
-                            className="p-1 text-slate-400 hover:text-emerald-400 rounded transition"
+                            className="p-1 text-slate-400 hover:text-orange-600 rounded transition"
                             title="Download / View file"
                           >
                             <Download className="w-3.5 h-3.5" />
@@ -856,7 +856,7 @@ export const EmailTemplateEditorModal: React.FC<EmailTemplateEditorModalProps> =
                         <button
                           type="button"
                           onClick={() => removeAttachment(att.id)}
-                          className="p-1 text-slate-400 hover:text-rose-400 rounded transition"
+                          className="p-1 text-slate-400 hover:text-rose-600 rounded transition"
                           title="Remove attachment"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
@@ -873,18 +873,18 @@ export const EmailTemplateEditorModal: React.FC<EmailTemplateEditorModalProps> =
           {/* RIGHT COLUMN: LIVE RENDERED PREVIEW (5 Cols) */}
           <div className="lg:col-span-5 flex flex-col space-y-3">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
-                <Eye className="w-4 h-4 text-emerald-400" />
+              <span className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                <Eye className="w-4 h-4 text-orange-500" />
                 <span>Live Email Client Preview</span>
               </span>
 
               {/* Viewport switch: Desktop vs Mobile */}
-              <div className="flex items-center bg-slate-950 p-1 rounded-lg border border-slate-800 text-xs">
+              <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200 text-xs">
                 <button
                   type="button"
                   onClick={() => setPreviewDevice('DESKTOP')}
-                  className={`p-1 rounded ${
-                    previewDevice === 'DESKTOP' ? 'bg-slate-800 text-emerald-400' : 'text-slate-400 hover:text-slate-300'
+                  className={`p-1.5 rounded-lg transition ${
+                    previewDevice === 'DESKTOP' ? 'bg-white text-orange-600 shadow-2xs font-bold' : 'text-slate-500 hover:text-slate-900'
                   }`}
                   title="Desktop Preview"
                 >
@@ -893,8 +893,8 @@ export const EmailTemplateEditorModal: React.FC<EmailTemplateEditorModalProps> =
                 <button
                   type="button"
                   onClick={() => setPreviewDevice('MOBILE')}
-                  className={`p-1 rounded ${
-                    previewDevice === 'MOBILE' ? 'bg-slate-800 text-emerald-400' : 'text-slate-400 hover:text-slate-300'
+                  className={`p-1.5 rounded-lg transition ${
+                    previewDevice === 'MOBILE' ? 'bg-white text-orange-600 shadow-2xs font-bold' : 'text-slate-500 hover:text-slate-900'
                   }`}
                   title="Mobile Preview"
                 >

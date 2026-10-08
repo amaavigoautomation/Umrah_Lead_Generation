@@ -6,22 +6,11 @@ import {
   Edit2,
   Trash2,
   CheckCircle,
-  Tag,
-  ShieldCheck,
   Zap,
   Clock,
   Sparkles,
-  Database,
   Check,
-  AlertCircle,
-  Layers,
-  FileText,
-  AlertTriangle,
-  ChevronDown,
   Filter,
-  Eye,
-  Columns,
-  Table as TableIcon,
 } from 'lucide-react';
 import { KnowledgeDocument, KnowledgeStatus } from '../types';
 import { retrieveRelevantKnowledge, RetrievedChunk } from '../services/ragService';
@@ -43,7 +32,6 @@ export const KnowledgeBaseView: React.FC<KnowledgeBaseViewProps> = ({
   const [categoryFilter, setCategoryFilter] = useState<string>('ALL');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');
-  const [viewLayout, setViewLayout] = useState<'DIRECTORY' | 'SPLIT'>('DIRECTORY');
   const [ragTestQuery, setRagTestQuery] = useState<string>('Does Umrah360 support B2B sub-agents?');
   const [ragResults, setRagResults] = useState<RetrievedChunk[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -192,35 +180,19 @@ export const KnowledgeBaseView: React.FC<KnowledgeBaseViewProps> = ({
         <div>
           <div className="flex items-center space-x-2.5 flex-wrap gap-y-1">
             <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">
-              Knowledge Creator Studio
+              Knowledge Base
             </h1>
             <span className="bg-orange-50 text-orange-700 border border-orange-200/80 rounded-full px-3 py-0.5 text-xs font-semibold inline-flex items-center">
               Authoring & Revisions
             </span>
           </div>
           <p className="text-xs sm:text-sm text-slate-500 mt-1.5 font-medium max-w-3xl leading-relaxed">
-            Logged in as <strong className="text-slate-800 font-bold">Operations Lead</strong> • Maintain permanent Document Masters and draft structured version revisions for RAG & Inbound AI.
+            Ground truth repository for all AI Inbound email auto-replies, WhatsApp dialogues, website leads, and AI testing. All PUBLISHED articles are automatically active in RAG with 0ms in-memory latency.
           </p>
         </div>
 
         {/* Action Buttons on Right */}
         <div className="flex items-center space-x-3 shrink-0">
-          <button
-            onClick={() => {
-              if (selectedDoc) {
-                setEditingDoc({ ...selectedDoc, id: undefined, title: `${selectedDoc.title} (v${(selectedDoc.version || 1) + 1})` });
-                setIsModalOpen(true);
-              } else {
-                setEditingDoc({ title: '', category: 'PRODUCT', content: '', tags: ['umrah360'], status: 'PUBLISHED' });
-                setIsModalOpen(true);
-              }
-            }}
-            className="flex items-center space-x-1.5 px-4 py-2.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold shadow-xs transition-all"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            <span>Create New Version</span>
-          </button>
-
           <button
             onClick={() => {
               setEditingDoc({
@@ -235,101 +207,8 @@ export const KnowledgeBaseView: React.FC<KnowledgeBaseViewProps> = ({
             className="flex items-center space-x-1.5 px-4 py-2.5 rounded-lg bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 text-white text-xs font-semibold shadow-xs transition-all"
           >
             <Plus className="w-3.5 h-3.5" />
-            <span>+ New Document Master</span>
+            <span>Create article</span>
           </button>
-        </div>
-      </div>
-
-      {/* 2. FIVE METRIC STAT CARDS ROW (Matches Screenshot) */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5">
-        {/* Card 1: TOTAL MASTERS */}
-        <div className="bg-white border border-slate-200/90 rounded-2xl p-4 shadow-xs flex flex-col justify-between hover:border-orange-300 transition-all">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-              TOTAL MASTERS
-            </span>
-            <FileText className="w-4 h-4 text-slate-400" />
-          </div>
-          <div className="mt-2">
-            <span className="text-3xl font-extrabold text-slate-900 tabular-nums">
-              {documents.length}
-            </span>
-            <span className="block text-[11px] text-slate-500 font-medium mt-1">
-              Permanent Logical Records
-            </span>
-          </div>
-        </div>
-
-        {/* Card 2: PUBLISHED (LIVE) */}
-        <div className="bg-white border border-slate-200/90 rounded-2xl p-4 shadow-xs flex flex-col justify-between hover:border-orange-300 transition-all">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-              PUBLISHED (LIVE)
-            </span>
-            <CheckCircle className="w-4 h-4 text-orange-500" />
-          </div>
-          <div className="mt-2">
-            <span className="text-3xl font-extrabold text-slate-900 tabular-nums">
-              {publishedCount}
-            </span>
-            <span className="block text-[11px] text-slate-500 font-medium mt-1">
-              Active Operational Copies
-            </span>
-          </div>
-        </div>
-
-        {/* Card 3: IN REVIEW */}
-        <div className="bg-white border border-slate-200/90 rounded-2xl p-4 shadow-xs flex flex-col justify-between hover:border-orange-300 transition-all">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-              IN REVIEW
-            </span>
-            <Clock className="w-4 h-4 text-slate-400" />
-          </div>
-          <div className="mt-2">
-            <span className="text-3xl font-extrabold text-slate-900 tabular-nums">
-              {inReviewCount}
-            </span>
-            <span className="block text-[11px] text-slate-500 font-medium mt-1">
-              Waiting in Reviewer Queue
-            </span>
-          </div>
-        </div>
-
-        {/* Card 4: REVISION REQUIRED */}
-        <div className="bg-white border border-slate-200/90 rounded-2xl p-4 shadow-xs flex flex-col justify-between hover:border-orange-300 transition-all">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-              REVISION REQUIRED
-            </span>
-            <AlertTriangle className="w-4 h-4 text-orange-500" />
-          </div>
-          <div className="mt-2">
-            <span className="text-3xl font-extrabold text-orange-600 tabular-nums">
-              {revisionRequiredCount}
-            </span>
-            <span className="block text-[11px] text-slate-500 font-medium mt-1">
-              Reviewer Feedback Pending
-            </span>
-          </div>
-        </div>
-
-        {/* Card 5: SUPERSEDED */}
-        <div className="bg-white border border-slate-200/90 rounded-2xl p-4 shadow-xs flex flex-col justify-between hover:border-orange-300 transition-all">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-              SUPERSEDED
-            </span>
-            <Layers className="w-4 h-4 text-slate-400" />
-          </div>
-          <div className="mt-2">
-            <span className="text-3xl font-extrabold text-slate-900 tabular-nums">
-              {supersededCount}
-            </span>
-            <span className="block text-[11px] text-slate-500 font-medium mt-1">
-              Preserved Historical Revisions
-            </span>
-          </div>
         </div>
       </div>
 
@@ -379,219 +258,22 @@ export const KnowledgeBaseView: React.FC<KnowledgeBaseViewProps> = ({
             >
               <option value="ALL">All Statuses</option>
               <option value="PUBLISHED">PUBLISHED</option>
-              <option value="APPROVED">APPROVED</option>
-              <option value="REVIEW">IN REVIEW</option>
               <option value="DRAFT">DRAFT</option>
             </select>
           </div>
 
-          {/* View Toggle */}
-          <div className="flex items-center space-x-1 bg-slate-100 p-1 rounded-xl border border-slate-200">
-            <button
-              onClick={() => setViewLayout('DIRECTORY')}
-              className={`p-1.5 rounded-lg text-xs font-semibold transition ${
-                viewLayout === 'DIRECTORY' ? 'bg-white text-orange-600 shadow-2xs' : 'text-slate-600 hover:text-slate-900'
-              }`}
-              title="Table Directory View"
-            >
-              <TableIcon className="w-3.5 h-3.5" />
-            </button>
-            <button
-              onClick={() => setViewLayout('SPLIT')}
-              className={`p-1.5 rounded-lg text-xs font-semibold transition ${
-                viewLayout === 'SPLIT' ? 'bg-white text-orange-600 shadow-2xs' : 'text-slate-600 hover:text-slate-900'
-              }`}
-              title="Split Reader & RAG Sandbox"
-            >
-              <Columns className="w-3.5 h-3.5" />
-            </button>
-          </div>
         </div>
       </div>
 
-      {/* 4. MAIN CONTENT AREA: DOCUMENT MASTERS DIRECTORY (Matches Screenshot Table) */}
-      {viewLayout === 'DIRECTORY' ? (
-        <div className="bg-white border border-slate-200/90 rounded-2xl shadow-xs overflow-hidden">
-          {/* Table Header Bar */}
-          <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
-            <div className="flex items-center space-x-2">
-              <h2 className="text-base font-extrabold text-slate-900">Document Masters Directory</h2>
-              <span className="bg-slate-100 text-slate-600 rounded-md px-2 py-0.5 text-xs font-semibold">
-                {filteredDocs.length} records
-              </span>
-            </div>
-            <div className="text-xs text-slate-400 font-medium hidden sm:block">
-              Click any row to inspect & edit document master
-            </div>
+      {/* SPLIT VIEW (Inspector & RAG Sandbox) */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Left Column: Quick Article List */}
+        <div className="bg-white border border-slate-200/90 rounded-2xl overflow-hidden shadow-xs flex flex-col h-[650px]">
+          <div className="p-3.5 border-b border-slate-100 bg-slate-50/70 flex items-center justify-between">
+            <span className="font-extrabold text-xs text-slate-900 uppercase tracking-wider">
+              Articles ({filteredDocs.length})
+            </span>
           </div>
-
-          {/* Table */}
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-slate-50/70 border-b border-slate-200 text-slate-500 font-bold uppercase tracking-wider text-[11px]">
-                <tr>
-                  <th className="py-3.5 px-5">DOCUMENT ID</th>
-                  <th className="py-3.5 px-5">TITLE & CATEGORY</th>
-                  <th className="py-3.5 px-5">CURRENT PUBLISHED</th>
-                  <th className="py-3.5 px-5">STATUS</th>
-                  <th className="py-3.5 px-5">DEPARTMENT & OWNER</th>
-                  <th className="py-3.5 px-5">LAST UPDATED</th>
-                  <th className="py-3.5 px-5 text-right">ACTIONS</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 font-medium text-slate-800">
-                {filteredDocs.length === 0 ? (
-                  <tr>
-                    <td colSpan={7} className="py-12 text-center text-slate-400 text-xs">
-                      No documents found matching the filter criteria.
-                    </td>
-                  </tr>
-                ) : (
-                  filteredDocs.map((doc, idx) => {
-                    const docId = getDocDisplayId(doc, idx);
-                    return (
-                      <tr
-                        key={doc.id}
-                        className="hover:bg-slate-50/70 transition-colors cursor-pointer group"
-                        onClick={() => {
-                          setSelectedDocId(doc.id);
-                          setViewLayout('SPLIT');
-                        }}
-                      >
-                        {/* 1. DOCUMENT ID */}
-                        <td className="py-4 px-5 whitespace-nowrap">
-                          <span className="inline-flex items-center px-2.5 py-1 rounded-md bg-slate-100 border border-slate-200 text-slate-800 font-mono text-xs font-bold">
-                            {docId}
-                          </span>
-                        </td>
-
-                        {/* 2. TITLE & CATEGORY */}
-                        <td className="py-4 px-5">
-                          <div className="flex flex-col space-y-1">
-                            <span className="font-extrabold text-slate-900 group-hover:text-orange-600 transition-colors">
-                              {doc.title}
-                            </span>
-                            <div className="flex items-center space-x-1.5">
-                              <span className="bg-emerald-50 text-emerald-700 border border-emerald-200/80 text-[10px] font-bold px-2 py-0.5 rounded-full inline-flex items-center gap-1">
-                                <Sparkles className="w-2.5 h-2.5 text-emerald-600" />
-                                <span>{doc.category}</span>
-                              </span>
-                              <span className="text-[10px] text-slate-400">v{doc.version || 1}</span>
-                            </div>
-                          </div>
-                        </td>
-
-                        {/* 3. CURRENT PUBLISHED */}
-                        <td className="py-4 px-5 text-slate-500 whitespace-nowrap">
-                          {doc.status === 'PUBLISHED' ? (
-                            <span className="text-emerald-700 font-semibold flex items-center gap-1">
-                              <CheckCircle className="w-3.5 h-3.5 text-emerald-600" />
-                              <span>Active in RAG</span>
-                            </span>
-                          ) : (
-                            <span className="italic text-slate-400">None Published Yet</span>
-                          )}
-                        </td>
-
-                        {/* 4. STATUS */}
-                        <td className="py-4 px-5 whitespace-nowrap">
-                          {doc.status === 'PUBLISHED' ? (
-                            <span className="bg-emerald-50 text-emerald-700 border border-emerald-200/80 rounded-full px-2.5 py-1 text-[11px] font-bold inline-flex items-center gap-1">
-                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                              <span>PUBLISHED</span>
-                            </span>
-                          ) : doc.status === 'REVIEW' || doc.status === 'APPROVED' ? (
-                            <span className="bg-orange-50 text-orange-700 border border-orange-200/80 rounded-full px-2.5 py-1 text-[11px] font-bold inline-flex items-center gap-1">
-                              <span className="w-1.5 h-1.5 rounded-full bg-orange-500"></span>
-                              <span>IN REVIEW</span>
-                            </span>
-                          ) : (
-                            <span className="bg-slate-100 text-slate-600 border border-slate-200 rounded-full px-2.5 py-1 text-[11px] font-bold inline-flex items-center gap-1">
-                              <span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
-                              <span>DRAFT</span>
-                            </span>
-                          )}
-                        </td>
-
-                        {/* 5. DEPARTMENT & OWNER */}
-                        <td className="py-4 px-5 text-slate-600 whitespace-nowrap">
-                          <div>
-                            <span className="font-semibold block text-slate-800">All Operations</span>
-                            <span className="text-[10px] text-slate-400">{doc.author || 'Admin Lead'}</span>
-                          </div>
-                        </td>
-
-                        {/* 6. LAST UPDATED */}
-                        <td className="py-4 px-5 text-slate-500 whitespace-nowrap">
-                          {new Date(doc.updatedAt || doc.createdAt).toLocaleDateString('en-GB', {
-                            day: '2-digit',
-                            month: 'short',
-                            year: 'numeric',
-                          })}
-                        </td>
-
-                        {/* 7. ACTIONS */}
-                        <td className="py-4 px-5 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
-                          <div className="flex items-center justify-end space-x-1.5">
-                            <button
-                              onClick={() => {
-                                setSelectedDocId(doc.id);
-                                setViewLayout('SPLIT');
-                              }}
-                              className="px-2.5 py-1.5 rounded-lg bg-slate-50 hover:bg-slate-100 text-slate-700 font-semibold border border-slate-200 flex items-center space-x-1 transition"
-                              title="Inspect Details & RAG"
-                            >
-                              <Eye className="w-3.5 h-3.5" />
-                              <span>History</span>
-                            </button>
-
-                            <button
-                              onClick={() => {
-                                setEditingDoc(doc);
-                                setIsModalOpen(true);
-                              }}
-                              className="px-2.5 py-1.5 rounded-lg bg-slate-50 hover:bg-orange-50 text-slate-700 hover:text-orange-600 font-semibold border border-slate-200 hover:border-orange-200 flex items-center space-x-1 transition"
-                              title="Edit Document"
-                            >
-                              <Edit2 className="w-3.5 h-3.5" />
-                              <span>Revise</span>
-                            </button>
-
-                            {onDeleteDocument && (
-                              <button
-                                onClick={() => setDeleteCandidateDoc(doc)}
-                                className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition"
-                                title="Delete Document"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      ) : (
-        /* SPLIT VIEW (Inspector & RAG Sandbox) */
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Left Column: Quick Article List */}
-          <div className="bg-white border border-slate-200/90 rounded-2xl overflow-hidden shadow-xs flex flex-col h-[650px]">
-            <div className="p-3.5 border-b border-slate-100 bg-slate-50/70 flex items-center justify-between">
-              <span className="font-extrabold text-xs text-slate-900 uppercase tracking-wider">
-                Articles ({filteredDocs.length})
-              </span>
-              <button
-                onClick={() => setViewLayout('DIRECTORY')}
-                className="text-xs text-orange-600 font-bold hover:underline"
-              >
-                Back to Table
-              </button>
-            </div>
             <div className="flex-1 overflow-y-auto divide-y divide-slate-100">
               {filteredDocs.map((doc) => {
                 const isSelected = doc.id === selectedDoc?.id;
@@ -733,7 +415,6 @@ export const KnowledgeBaseView: React.FC<KnowledgeBaseViewProps> = ({
             </div>
           </div>
         </div>
-      )}
 
       {/* Modal for Add / Edit Article */}
       {isModalOpen && (
@@ -787,8 +468,6 @@ export const KnowledgeBaseView: React.FC<KnowledgeBaseViewProps> = ({
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-900 font-semibold focus:outline-none"
                   >
                     <option value="PUBLISHED">PUBLISHED (Active in RAG)</option>
-                    <option value="APPROVED">APPROVED</option>
-                    <option value="REVIEW">IN REVIEW</option>
                     <option value="DRAFT">DRAFT</option>
                   </select>
                 </div>

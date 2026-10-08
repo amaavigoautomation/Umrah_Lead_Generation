@@ -322,20 +322,20 @@ export const InteractiveScenarios: React.FC<InteractiveScenariosProps> = ({
           </button>
           <button
             onClick={() => setActiveScenario('outbound')}
-            className={`px-3 py-1.5 rounded-md text-xs font-semibold transition ${
+            className={`px-3.5 py-2 rounded-lg text-xs font-bold transition ${
               activeScenario === 'outbound'
-                ? 'bg-emerald-600 text-white shadow-sm'
-                : 'text-slate-400 hover:text-slate-200'
+                ? 'bg-orange-500 text-white shadow-xs'
+                : 'text-slate-600 hover:text-slate-900'
             }`}
           >
             Section 72: Apollo Outbound (19 Steps)
           </button>
           <button
             onClick={() => setActiveScenario('whatsapp')}
-            className={`px-3 py-1.5 rounded-md text-xs font-semibold transition ${
+            className={`px-3.5 py-2 rounded-lg text-xs font-bold transition ${
               activeScenario === 'whatsapp'
-                ? 'bg-emerald-600 text-white shadow-sm'
-                : 'text-slate-400 hover:text-slate-200'
+                ? 'bg-orange-500 text-white shadow-xs'
+                : 'text-slate-600 hover:text-slate-900'
             }`}
           >
             Section 73: WhatsApp Inbound
@@ -347,13 +347,13 @@ export const InteractiveScenarios: React.FC<InteractiveScenariosProps> = ({
       {activeScenario === 'outbound' && (
         <div className="space-y-6">
           {/* Step Progress Bar & Actions */}
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 shadow-lg space-y-4">
+          <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs space-y-4 text-slate-900">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
-                <span className="text-xs font-semibold text-emerald-400 uppercase tracking-wider">
+                <span className="text-xs font-bold text-orange-600 uppercase tracking-wider">
                   Outbound Lifecycle Progression
                 </span>
-                <h3 className="text-lg font-bold text-white mt-1">
+                <h3 className="text-lg font-extrabold text-slate-900 mt-1 font-display">
                   Step {outboundStep} of 19:{' '}
                   {outboundSteps.find((s) => s.step === outboundStep)?.title}
                 </h3>
@@ -362,7 +362,7 @@ export const InteractiveScenarios: React.FC<InteractiveScenariosProps> = ({
               <div className="flex items-center space-x-2">
                 <button
                   onClick={() => setOutboundStep(1)}
-                  className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium border border-slate-700 transition flex items-center space-x-1"
+                  className="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold border border-slate-200 transition flex items-center space-x-1"
                 >
                   <RotateCcw className="w-3.5 h-3.5" />
                   <span>Restart Flow</span>
@@ -371,7 +371,7 @@ export const InteractiveScenarios: React.FC<InteractiveScenariosProps> = ({
                 <button
                   onClick={() => setOutboundStep((prev) => Math.min(19, prev + 1))}
                   disabled={outboundStep === 19}
-                  className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold transition flex items-center space-x-1.5 shadow-md disabled:opacity-40"
+                  className="px-4 py-2 rounded-lg bg-orange-500 hover:bg-orange-600 text-white text-xs font-semibold transition flex items-center space-x-1.5 shadow-xs disabled:opacity-40"
                 >
                   <span>Next Step ({outboundStep + 1}/19)</span>
                   <ArrowRight className="w-4 h-4" />
@@ -380,7 +380,7 @@ export const InteractiveScenarios: React.FC<InteractiveScenariosProps> = ({
                 {outboundStep === 19 && (
                   <button
                     onClick={onNavigateToCrm}
-                    className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold transition flex items-center space-x-1.5 shadow-md"
+                    className="px-4 py-2 rounded-lg bg-orange-500 hover:bg-orange-600 text-white text-xs font-semibold transition flex items-center space-x-1.5 shadow-2xs"
                   >
                     <span>View Rahul in CRM</span>
                     <ExternalLink className="w-4 h-4" />
@@ -395,16 +395,16 @@ export const InteractiveScenarios: React.FC<InteractiveScenariosProps> = ({
                 <button
                   key={s.step}
                   onClick={() => setOutboundStep(s.step)}
-                  className={`px-2.5 py-1.5 rounded-md text-[11px] font-semibold whitespace-nowrap transition flex items-center space-x-1.5 ${
+                  className={`px-2.5 py-1.5 rounded-lg text-[11px] font-semibold whitespace-nowrap transition flex items-center space-x-1.5 ${
                     outboundStep === s.step
-                      ? 'bg-emerald-500 text-slate-950 ring-2 ring-emerald-400'
+                      ? 'bg-orange-500 text-white ring-2 ring-orange-400 font-bold'
                       : outboundStep > s.step
-                      ? 'bg-slate-800 text-emerald-400'
-                      : 'bg-slate-800/40 text-slate-500'
+                      ? 'bg-orange-50 text-orange-700 border border-orange-200'
+                      : 'bg-slate-100 text-slate-500 border border-slate-200'
                   }`}
                 >
                   <span>{s.step}</span>
-                  {outboundStep > s.step && <CheckCircle2 className="w-3 h-3" />}
+                  {outboundStep > s.step && <CheckCircle2 className="w-3 h-3 text-orange-600" />}
                 </button>
               ))}
             </div>
@@ -415,21 +415,21 @@ export const InteractiveScenarios: React.FC<InteractiveScenariosProps> = ({
             const current = outboundSteps.find((s) => s.step === outboundStep)!;
             return (
               <div
-                className={`bg-slate-900 border rounded-xl p-6 shadow-xl space-y-4 ${
+                className={`bg-white border rounded-2xl p-6 shadow-2xs space-y-4 text-slate-900 ${
                   current.isHandoff
-                    ? 'border-amber-500/80 bg-amber-950/20'
+                    ? 'border-amber-300 bg-amber-50/50'
                     : current.isFinal
-                    ? 'border-emerald-500/80 bg-emerald-950/20'
-                    : 'border-slate-800'
+                    ? 'border-orange-300 bg-orange-50/50'
+                    : 'border-slate-200'
                 }`}
               >
                 <div className="flex items-center justify-between">
-                  <span className="px-3 py-1 rounded-full text-xs font-bold bg-slate-800 text-slate-200 border border-slate-700">
+                  <span className="px-3 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-700 border border-slate-200">
                     {current.badge}
                   </span>
 
                   {current.isHandoff && (
-                    <span className="px-3 py-1 rounded-full text-xs font-bold bg-amber-500/20 text-amber-400 border border-amber-500/40 flex items-center space-x-1">
+                    <span className="px-3 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-800 border border-amber-300 flex items-center space-x-1">
                       <AlertTriangle className="w-3.5 h-3.5" />
                       <span>CRITICAL RULE: AI = OFF</span>
                     </span>
@@ -437,19 +437,19 @@ export const InteractiveScenarios: React.FC<InteractiveScenariosProps> = ({
                 </div>
 
                 <div>
-                  <h4 className="text-xl font-bold text-white">{current.title}</h4>
-                  <p className="text-sm text-slate-300 mt-2 leading-relaxed max-w-4xl">
+                  <h4 className="text-xl font-bold text-slate-900 font-display">{current.title}</h4>
+                  <p className="text-sm text-slate-600 mt-2 leading-relaxed max-w-4xl">
                     {current.desc}
                   </p>
                 </div>
 
                 {/* Scenario details inspection */}
                 {outboundStep === 6 && (
-                  <div className="p-4 bg-slate-950 rounded-xl border border-slate-800 text-xs font-mono text-slate-300 space-y-2">
-                    <div className="text-slate-400">
+                  <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 text-xs font-mono text-slate-800 space-y-2">
+                    <div className="text-slate-500 font-semibold">
                       Subject: Umrah360 for ABC Travels - Automate B2B Packages & Visa Operations
                     </div>
-                    <div className="whitespace-pre-wrap text-[11px] leading-relaxed">
+                    <div className="whitespace-pre-wrap text-[11px] leading-relaxed text-slate-700 font-sans">
                       Hi Rahul,{'\n\n'}We work with Umrah operators across India to automate their
                       dynamic package costing, Makkah/Madinah room allotments, and sub-agent B2B
                       voucher distribution.{'\n\n'}Most operators we speak with were spending 15+
@@ -461,12 +461,12 @@ export const InteractiveScenarios: React.FC<InteractiveScenariosProps> = ({
                 )}
 
                 {outboundStep === 18 && (
-                  <div className="p-4 bg-amber-950/40 rounded-xl border border-amber-800/60 text-xs space-y-2 text-amber-200">
-                    <div className="font-bold flex items-center space-x-1.5 text-amber-300">
-                      <AlertTriangle className="w-4 h-4" />
+                  <div className="p-4 bg-amber-50 rounded-xl border border-amber-200 text-xs space-y-2 text-amber-900">
+                    <div className="font-bold flex items-center space-x-1.5 text-amber-800">
+                      <AlertTriangle className="w-4 h-4 text-amber-600" />
                       <span>Section 18 & 32 Compliance: Custom Enterprise Pricing</span>
                     </div>
-                    <p className="text-xs leading-relaxed">
+                    <p className="text-xs leading-relaxed text-amber-800">
                       Rahul asked: &quot;What is the pricing for 20 users?&quot; Since 20+ users requires an
                       Enterprise plan with dedicated hosting and SLA guarantees, the AI does NOT
                       hallucinate or fabricate a price. It informs him of the custom volume quote,
@@ -478,12 +478,12 @@ export const InteractiveScenarios: React.FC<InteractiveScenariosProps> = ({
                 )}
 
                 {outboundStep === 19 && (
-                  <div className="p-4 bg-emerald-950/40 rounded-xl border border-emerald-800/60 text-xs space-y-2 text-emerald-200">
-                    <div className="font-bold flex items-center space-x-1.5 text-emerald-300">
-                      <CheckCircle2 className="w-4 h-4" />
+                  <div className="p-4 bg-orange-50 rounded-xl border border-orange-200 text-xs space-y-2 text-orange-950">
+                    <div className="font-bold flex items-center space-x-1.5 text-orange-700">
+                      <CheckCircle2 className="w-4 h-4 text-orange-600" />
                       <span>Section 72 Step 19 Verified: Complete CRM Synchronization</span>
                     </div>
-                    <ul className="space-y-1 text-xs text-emerald-100/90 list-disc list-inside">
+                    <ul className="space-y-1 text-xs text-orange-900 list-disc list-inside">
                       <li>Contact: Rahul Sharma (Founder, ABC Travels)</li>
                       <li>Lead Source: APOLLO • Lead Type: OUTBOUND</li>
                       <li>Campaign: Indian Umrah Operators</li>
@@ -503,18 +503,18 @@ export const InteractiveScenarios: React.FC<InteractiveScenariosProps> = ({
       {activeScenario === 'whatsapp' && (
         <div className="space-y-6">
           {/* Step Progress Bar & Actions */}
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-lg space-y-4">
+          <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-2xs space-y-4 text-slate-900">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
               <div>
                 <div className="flex items-center space-x-2">
-                  <span className="text-xs font-mono uppercase tracking-wider text-emerald-400 font-bold">
+                  <span className="text-xs font-mono uppercase tracking-wider text-orange-600 font-bold">
                     Section 73 WhatsApp Inbound Flow
                   </span>
-                  <span className="px-2 py-0.5 rounded text-[11px] font-bold font-mono bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                  <span className="px-2 py-0.5 rounded text-[11px] font-bold font-mono bg-orange-50 text-orange-700 border border-orange-200">
                     {WHATSAPP_BUSINESS_NUMBER_FORMATTED}
                   </span>
                 </div>
-                <h3 className="text-lg font-bold text-white mt-1">
+                <h3 className="text-lg font-bold text-slate-900 mt-1">
                   Step {whatsappStep} of {whatsappSteps.length}: {whatsappSteps[whatsappStep - 1]?.title}
                 </h3>
               </div>
@@ -523,21 +523,21 @@ export const InteractiveScenarios: React.FC<InteractiveScenariosProps> = ({
                 <button
                   onClick={() => setWhatsappStep((prev) => Math.max(1, prev - 1))}
                   disabled={whatsappStep === 1}
-                  className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 disabled:opacity-40 text-xs font-semibold transition"
+                  className="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 disabled:opacity-40 text-xs font-semibold transition border border-slate-200"
                 >
                   Previous
                 </button>
                 <button
                   onClick={() => setWhatsappStep((prev) => Math.min(whatsappSteps.length, prev + 1))}
                   disabled={whatsappStep === whatsappSteps.length}
-                  className="px-4 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white disabled:opacity-40 text-xs font-semibold transition flex items-center space-x-1"
+                  className="px-4 py-1.5 rounded-lg bg-orange-500 hover:bg-orange-600 text-white disabled:opacity-40 text-xs font-semibold transition flex items-center space-x-1 shadow-2xs"
                 >
                   <span>Next Step</span>
                   <ArrowRight className="w-3.5 h-3.5" />
                 </button>
                 <button
                   onClick={() => setWhatsappStep(1)}
-                  className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition"
+                  className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-800 transition border border-slate-200"
                   title="Reset to Step 1"
                 >
                   <RotateCcw className="w-4 h-4" />
@@ -553,10 +553,10 @@ export const InteractiveScenarios: React.FC<InteractiveScenariosProps> = ({
                   onClick={() => setWhatsappStep(s.step)}
                   className={`h-2 rounded-full transition-all ${
                     s.step === whatsappStep
-                      ? 'bg-emerald-400 ring-2 ring-emerald-500/50'
+                      ? 'bg-orange-500 ring-2 ring-orange-300'
                       : s.step < whatsappStep
-                      ? 'bg-emerald-600'
-                      : 'bg-slate-800'
+                      ? 'bg-orange-400'
+                      : 'bg-slate-200'
                   }`}
                   title={`Step ${s.step}: ${s.title}`}
                 />
@@ -565,9 +565,9 @@ export const InteractiveScenarios: React.FC<InteractiveScenariosProps> = ({
           </div>
 
           {/* Current Step Explanation & Visual Card */}
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 shadow-lg space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+          <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-2xs space-y-4 text-slate-900">
+            <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+              <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-orange-50 text-orange-700 border border-orange-200">
                 {whatsappSteps[whatsappStep - 1]?.badge}
               </span>
               <span className="text-xs text-slate-500 font-mono">
@@ -575,84 +575,84 @@ export const InteractiveScenarios: React.FC<InteractiveScenariosProps> = ({
               </span>
             </div>
 
-            <p className="text-sm text-slate-200 leading-relaxed font-sans">
+            <p className="text-sm text-slate-700 leading-relaxed font-sans">
               {whatsappSteps[whatsappStep - 1]?.desc}
             </p>
 
             {/* Visual preview according to current step */}
             {whatsappStep === 1 && (
-              <div className="p-4 bg-slate-950 rounded-xl border border-slate-800 text-xs space-y-2 font-mono">
-                <div className="text-slate-400">
-                  <span className="text-slate-600">To (Business Line):</span> {WHATSAPP_BUSINESS_NUMBER_FORMATTED} ({WHATSAPP_BUSINESS_NUMBER})
+              <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 text-xs space-y-2 font-mono">
+                <div className="text-slate-500">
+                  <span className="text-slate-700 font-semibold">To (Business Line):</span> {WHATSAPP_BUSINESS_NUMBER_FORMATTED} ({WHATSAPP_BUSINESS_NUMBER})
                 </div>
-                <div className="text-slate-400">
-                  <span className="text-slate-600">From (Customer):</span> +91 98201 11223 (Al-Haramain Travels)
+                <div className="text-slate-500">
+                  <span className="text-slate-700 font-semibold">From (Customer):</span> +91 98201 11223 (Al-Haramain Travels)
                 </div>
-                <div className="pt-2 text-slate-300 font-sans border-t border-slate-800/80 whitespace-pre-wrap">
+                <div className="pt-2 text-slate-800 font-sans border-t border-slate-200 whitespace-pre-wrap">
                   Hello! We operate Umrah tours from Bangalore with 200 pilgrims every Ramadan. Does Umrah360 support custom hotel room blocks in Makkah and instant sub-agent credit limits?
                 </div>
               </div>
             )}
 
             {whatsappStep === 2 && (
-              <div className="p-4 bg-emerald-950/30 rounded-xl border border-emerald-800/60 text-xs space-y-2 text-emerald-200">
-                <div className="font-bold flex items-center space-x-1.5 text-emerald-300">
-                  <CheckCircle2 className="w-4 h-4" />
+              <div className="p-4 bg-orange-50 rounded-xl border border-orange-200 text-xs space-y-2 text-orange-950">
+                <div className="font-bold flex items-center space-x-1.5 text-orange-700">
+                  <CheckCircle2 className="w-4 h-4 text-orange-600" />
                   <span>Webhook Verified: Meta WhatsApp Cloud API Spec</span>
                 </div>
-                <p className="text-xs leading-relaxed text-emerald-100 font-sans">
-                  The API endpoint at <code className="bg-slate-900 px-1.5 py-0.5 rounded text-emerald-300 font-mono">/api/inbound/whatsapp</code> successfully verifies the hub challenge, unpacks the sender payload, parses timestamp buckets, and generates a normalized internal event.
+                <p className="text-xs leading-relaxed text-orange-900 font-sans">
+                  The API endpoint at <code className="bg-white px-1.5 py-0.5 rounded text-orange-800 font-mono border border-orange-200">/api/inbound/whatsapp</code> successfully verifies the hub challenge, unpacks the sender payload, parses timestamp buckets, and generates a normalized internal event.
                 </p>
               </div>
             )}
 
             {whatsappStep === 3 && (
-              <div className="p-4 bg-slate-950 rounded-xl border border-slate-800 text-xs space-y-2">
-                <div className="text-slate-300 font-bold flex items-center space-x-1.5">
-                  <Users className="w-4 h-4 text-emerald-400" />
+              <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 text-xs space-y-2">
+                <div className="text-slate-800 font-bold flex items-center space-x-1.5">
+                  <Users className="w-4 h-4 text-orange-600" />
                   <span>CRM Entity Resolution Flow</span>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-2 text-[11px]">
-                  <div className="p-2.5 bg-slate-900 rounded-lg border border-slate-800">
+                  <div className="p-2.5 bg-white rounded-lg border border-slate-200 shadow-2xs">
                     <span className="text-slate-500 block">Contact</span>
-                    <strong className="text-white">Auto-Matched / Created</strong>
-                    <span className="text-emerald-400 block font-mono mt-1">+91 98201 11223</span>
+                    <strong className="text-slate-900">Auto-Matched / Created</strong>
+                    <span className="text-orange-600 block font-mono mt-1">+91 98201 11223</span>
                   </div>
-                  <div className="p-2.5 bg-slate-900 rounded-lg border border-slate-800">
+                  <div className="p-2.5 bg-white rounded-lg border border-slate-200 shadow-2xs">
                     <span className="text-slate-500 block">Lead Source</span>
-                    <strong className="text-white">INBOUND_WHATSAPP</strong>
-                    <span className="text-blue-400 block mt-1">Stage: CONTACTED</span>
+                    <strong className="text-slate-900">INBOUND_WHATSAPP</strong>
+                    <span className="text-blue-600 block mt-1">Stage: CONTACTED</span>
                   </div>
-                  <div className="p-2.5 bg-slate-900 rounded-lg border border-slate-800">
+                  <div className="p-2.5 bg-white rounded-lg border border-slate-200 shadow-2xs">
                     <span className="text-slate-500 block">Conversation</span>
-                    <strong className="text-white">WHATSAPP Thread</strong>
-                    <span className="text-purple-400 block mt-1">AI: ACTIVE</span>
+                    <strong className="text-slate-900">WHATSAPP Thread</strong>
+                    <span className="text-purple-600 block mt-1">AI: ACTIVE</span>
                   </div>
                 </div>
               </div>
             )}
 
             {whatsappStep === 4 && (
-              <div className="p-4 bg-blue-950/40 rounded-xl border border-blue-800/60 text-xs space-y-2 text-blue-200">
-                <div className="font-bold flex items-center space-x-1.5 text-blue-300">
-                  <ShieldCheck className="w-4 h-4" />
+              <div className="p-4 bg-blue-50 rounded-xl border border-blue-200 text-xs space-y-2 text-blue-950">
+                <div className="font-bold flex items-center space-x-1.5 text-blue-700">
+                  <ShieldCheck className="w-4 h-4 text-blue-600" />
                   <span>Idempotency & Anti-Spam (Section 73 Guarantee)</span>
                 </div>
-                <p className="text-xs leading-relaxed text-blue-100 font-sans">
+                <p className="text-xs leading-relaxed text-blue-900 font-sans">
                   The system prevents infinite AI loop hazards or rapid-fire replies. Even if a customer sends 3 quick WhatsApp messages in 10 seconds, only 1 cohesive, context-aware AI response is generated for that turn.
                 </p>
               </div>
             )}
 
             {whatsappStep === 5 && (
-              <div className="p-4 bg-slate-950 rounded-xl border border-slate-800 text-xs space-y-2">
-                <div className="text-slate-300 font-bold flex items-center space-x-1.5">
-                  <Bot className="w-4 h-4 text-emerald-400" />
+              <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 text-xs space-y-2">
+                <div className="text-slate-800 font-bold flex items-center space-x-1.5">
+                  <Bot className="w-4 h-4 text-orange-600" />
                   <span>RAG Knowledge Base Grounding Excerpts</span>
                 </div>
-                <div className="p-3 bg-slate-900 rounded-lg border border-slate-800 text-slate-300 font-sans text-xs space-y-1">
-                  <div className="text-emerald-400 font-semibold">Grounded in: B2B Sub-Agent Portal & Reseller Distribution</div>
-                  <p className="text-slate-400 text-[11px]">
+                <div className="p-3 bg-white rounded-lg border border-slate-200 text-slate-800 font-sans text-xs space-y-1 shadow-2xs">
+                  <div className="text-orange-700 font-semibold">Grounded in: B2B Sub-Agent Portal & Reseller Distribution</div>
+                  <p className="text-slate-600 text-[11px]">
                     &quot;Umrah360 provides a white-label B2B sub-agent portal where wholesale operators can set distinct credit limits, assign customized markup percentage tiers, and upload exclusive Makkah/Madinah hotel room blocks.&quot;
                   </p>
                 </div>
@@ -660,9 +660,9 @@ export const InteractiveScenarios: React.FC<InteractiveScenariosProps> = ({
             )}
 
             {whatsappStep === 6 && (
-              <div className="p-4 bg-emerald-950/30 rounded-xl border border-emerald-800/60 text-xs space-y-2">
-                <div className="font-bold text-emerald-300">WhatsApp Native Tone Guidelines Enforced</div>
-                <ul className="list-disc list-inside text-emerald-100 space-y-1 text-xs font-sans">
+              <div className="p-4 bg-orange-50 rounded-xl border border-orange-200 text-xs space-y-2">
+                <div className="font-bold text-orange-800">WhatsApp Native Tone Guidelines Enforced</div>
+                <ul className="list-disc list-inside text-orange-900 space-y-1 text-xs font-sans">
                   <li>Warm, professional, respectful formal greeting (Dear Customer / Hello).</li>
                   <li>WhatsApp formatting with <strong>*bold highlights*</strong> for legibility on mobile screens.</li>
                   <li>Concise, action-oriented responses without overly long essay blocks.</li>
@@ -671,26 +671,26 @@ export const InteractiveScenarios: React.FC<InteractiveScenariosProps> = ({
             )}
 
             {whatsappStep === 7 && (
-              <div className="p-4 bg-slate-950 rounded-xl border border-slate-800 text-xs space-y-2">
-                <div className="text-slate-300 font-bold">Real-Time CRM & Unified Inbox Persistence</div>
-                <p className="text-slate-400 text-xs font-sans">
+              <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 text-xs space-y-2">
+                <div className="text-slate-900 font-bold">Real-Time CRM & Unified Inbox Persistence</div>
+                <p className="text-slate-600 text-xs font-sans">
                   Incoming message and AI reply are immediately saved to Firestore, visible in the Unified Inbox under the WhatsApp channel, and reflected in the Lead timeline and score.
                 </p>
               </div>
             )}
 
             {whatsappStep === 8 && (
-              <div className="p-4 bg-emerald-950/40 rounded-xl border border-emerald-800/60 text-xs space-y-3">
+              <div className="p-4 bg-orange-50 rounded-xl border border-orange-200 text-xs space-y-3">
                 <div className="flex items-center justify-between">
-                  <span className="font-bold text-emerald-300 text-sm flex items-center space-x-2">
-                    <CheckCircle2 className="w-5 h-5 text-emerald-400" />
+                  <span className="font-bold text-orange-800 text-sm flex items-center space-x-2">
+                    <CheckCircle2 className="w-5 h-5 text-orange-600" />
                     <span>WhatsApp Inbound Pipeline Verified</span>
                   </span>
-                  <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-mono text-xs">
+                  <span className="px-2 py-0.5 rounded bg-orange-100 text-orange-800 font-mono text-xs border border-orange-200">
                     {WHATSAPP_BUSINESS_NUMBER_FORMATTED}
                   </span>
                 </div>
-                <p className="text-xs text-emerald-100 font-sans">
+                <p className="text-xs text-orange-900 font-sans">
                   The complete end-to-end pipeline functions identically to the email inbound flow, tailored with WhatsApp delivery, phone resolution, and instant chat responsiveness.
                 </p>
               </div>
@@ -698,15 +698,15 @@ export const InteractiveScenarios: React.FC<InteractiveScenariosProps> = ({
           </div>
 
           {/* Live Inbound WhatsApp Pipeline Runner */}
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 shadow-lg space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800 pb-3">
+          <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-2xs space-y-4 text-slate-900">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-200 pb-3">
               <div>
-                <h4 className="font-bold text-white text-sm flex items-center space-x-2">
-                  <MessageCircle className="w-4 h-4 text-emerald-400" />
+                <h4 className="font-bold text-slate-900 text-sm flex items-center space-x-2">
+                  <MessageCircle className="w-4 h-4 text-orange-600" />
                   <span>Execute Live WhatsApp Inbound Message</span>
                 </h4>
-                <p className="text-xs text-slate-400">
-                  Select a realistic inquiry preset and test the automated AI ingestion, scoring, and reply dispatch to <span className="font-mono text-emerald-400">{WHATSAPP_BUSINESS_NUMBER_FORMATTED}</span>.
+                <p className="text-xs text-slate-500">
+                  Select a realistic inquiry preset and test the automated AI ingestion, scoring, and reply dispatch to <span className="font-mono text-orange-600 font-semibold">{WHATSAPP_BUSINESS_NUMBER_FORMATTED}</span>.
                 </p>
               </div>
             </div>
@@ -719,17 +719,17 @@ export const InteractiveScenarios: React.FC<InteractiveScenariosProps> = ({
                   onClick={() => setSelectedWaPresetIndex(idx)}
                   className={`p-3 rounded-xl border text-left transition ${
                     selectedWaPresetIndex === idx
-                      ? 'bg-emerald-950/50 border-emerald-500 text-white shadow-md'
-                      : 'bg-slate-950 border-slate-800 text-slate-300 hover:border-slate-700'
+                      ? 'bg-orange-50/70 border-orange-300 text-slate-900 shadow-2xs'
+                      : 'bg-slate-50 border-slate-200 text-slate-700 hover:border-slate-300'
                   }`}
                 >
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-bold truncate">{preset.label}</span>
-                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 font-mono">
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-200/70 text-slate-600 font-mono">
                       {preset.payload.from}
                     </span>
                   </div>
-                  <p className="text-[11px] text-slate-400 line-clamp-2 mt-1 font-sans">
+                  <p className="text-[11px] text-slate-500 line-clamp-2 mt-1 font-sans">
                     &quot;{preset.payload.body}&quot;
                   </p>
                 </button>
@@ -740,19 +740,19 @@ export const InteractiveScenarios: React.FC<InteractiveScenariosProps> = ({
             {(() => {
               const activePreset = PRESET_WHATSAPP_MESSAGES[selectedWaPresetIndex] || PRESET_WHATSAPP_MESSAGES[0];
               return (
-                <div className="p-4 bg-slate-950 border border-slate-800 rounded-xl space-y-2 text-xs">
-                  <div className="flex flex-wrap items-center justify-between gap-2 text-slate-400 font-mono text-[11px]">
+                <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-2 text-xs">
+                  <div className="flex flex-wrap items-center justify-between gap-2 text-slate-600 font-mono text-[11px]">
                     <div>
-                      <span className="text-slate-600">To Line:</span> <strong className="text-emerald-400">{WHATSAPP_BUSINESS_NUMBER_FORMATTED}</strong>
+                      <span className="text-slate-500">To Line:</span> <strong className="text-orange-600">{WHATSAPP_BUSINESS_NUMBER_FORMATTED}</strong>
                     </div>
                     <div>
-                      <span className="text-slate-600">Sender:</span> <strong className="text-white">{activePreset.payload.fromName}</strong> ({activePreset.payload.from})
+                      <span className="text-slate-500">Sender:</span> <strong className="text-slate-900">{activePreset.payload.fromName}</strong> ({activePreset.payload.from})
                     </div>
                     <div>
-                      <span className="text-slate-600">Company:</span> <strong className="text-white">{activePreset.payload.companyName}</strong>
+                      <span className="text-slate-500">Company:</span> <strong className="text-slate-900">{activePreset.payload.companyName}</strong>
                     </div>
                   </div>
-                  <div className="p-3 bg-slate-900 rounded-lg text-slate-200 font-sans text-xs whitespace-pre-wrap border border-slate-800">
+                  <div className="p-3 bg-white rounded-lg text-slate-800 font-sans text-xs whitespace-pre-wrap border border-slate-200 shadow-2xs">
                     {activePreset.payload.body}
                   </div>
                 </div>
@@ -794,7 +794,7 @@ export const InteractiveScenarios: React.FC<InteractiveScenariosProps> = ({
                   }
                 }}
                 disabled={isExecutingWaLive}
-                className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold transition flex items-center space-x-2 shadow-lg disabled:opacity-50"
+                className="px-5 py-2 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-xs font-semibold transition flex items-center space-x-2 shadow-2xs disabled:opacity-50"
               >
                 {isExecutingWaLive ? (
                   <>
@@ -812,31 +812,31 @@ export const InteractiveScenarios: React.FC<InteractiveScenariosProps> = ({
 
             {/* Live Result Card */}
             {liveWaResult && (
-              <div className="mt-4 p-4 bg-slate-950 border border-slate-800 rounded-xl space-y-3 animate-in fade-in slide-in-from-top-3">
-                <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-                  <span className="font-bold text-white text-xs flex items-center space-x-1.5">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+              <div className="mt-4 p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-3 animate-in fade-in slide-in-from-top-3">
+                <div className="flex items-center justify-between border-b border-slate-200 pb-2">
+                  <span className="font-bold text-slate-900 text-xs flex items-center space-x-1.5">
+                    <CheckCircle2 className="w-4 h-4 text-orange-600" />
                     <span>WhatsApp Flow Execution Complete</span>
                   </span>
                   {liveWaResult.humanHandoffTriggered ? (
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-100 text-amber-800 border border-amber-200">
                       Human Takeover Triggered
                     </span>
                   ) : (
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-orange-100 text-orange-800 border border-orange-200">
                       AI Auto-Replied (1 Reply per Turn)
                     </span>
                   )}
                 </div>
 
-                <div className="text-xs space-y-1 text-slate-300">
+                <div className="text-xs space-y-1 text-slate-700">
                   <div>
-                    <span className="text-slate-500">Contact:</span> <strong className="text-white">{liveWaResult.contact.firstName} {liveWaResult.contact.lastName}</strong> ({liveWaResult.contact.phone})
+                    <span className="text-slate-500">Contact:</span> <strong className="text-slate-900">{liveWaResult.contact.firstName} {liveWaResult.contact.lastName}</strong> ({liveWaResult.contact.phone})
                   </div>
                   <div>
-                    <span className="text-slate-500">Lead Score:</span> <strong className="text-emerald-400">{liveWaResult.lead.leadScore}/100</strong> • Stage: {liveWaResult.lead.buyingStage}
+                    <span className="text-slate-500">Lead Score:</span> <strong className="text-orange-600">{liveWaResult.lead.leadScore}/100</strong> • Stage: {liveWaResult.lead.buyingStage}
                   </div>
-                  <div className="pt-2 text-slate-200 whitespace-pre-wrap bg-slate-900 p-3 rounded-lg border border-slate-800 text-[12px] font-sans">
+                  <div className="pt-2 text-slate-800 whitespace-pre-wrap bg-white p-3 rounded-lg border border-slate-200 text-[12px] font-sans shadow-2xs">
                     {liveWaResult.aiReplyMessage?.text}
                   </div>
                 </div>
@@ -850,7 +850,7 @@ export const InteractiveScenarios: React.FC<InteractiveScenariosProps> = ({
                         onNavigateToInbox();
                       }
                     }}
-                    className="px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold transition flex items-center space-x-1.5"
+                    className="px-3.5 py-1.5 rounded-lg bg-orange-500 hover:bg-orange-600 text-white text-xs font-semibold transition flex items-center space-x-1.5 shadow-2xs"
                   >
                     <Inbox className="w-3.5 h-3.5" />
                     <span>Open in Unified Inbox</span>
@@ -863,7 +863,7 @@ export const InteractiveScenarios: React.FC<InteractiveScenariosProps> = ({
                         onNavigateToCrm();
                       }
                     }}
-                    className="px-3.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold transition flex items-center space-x-1.5"
+                    className="px-3.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold transition flex items-center space-x-1.5 shadow-2xs"
                   >
                     <ExternalLink className="w-3.5 h-3.5" />
                     <span>View in CRM</span>
@@ -879,18 +879,18 @@ export const InteractiveScenarios: React.FC<InteractiveScenariosProps> = ({
       {activeScenario === 'inbound' && (
         <div className="space-y-6">
           {/* Step Progress Bar & Actions */}
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-lg space-y-4">
+          <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-2xs space-y-4 text-slate-900">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
               <div>
                 <div className="flex items-center space-x-2">
-                  <span className="text-xs font-mono uppercase tracking-wider text-blue-400 font-bold">
+                  <span className="text-xs font-mono uppercase tracking-wider text-orange-600 font-bold">
                     Section 74 Inbound Mail Flow
                   </span>
-                  <span className="px-2 py-0.5 rounded text-[11px] font-bold font-mono bg-blue-500/20 text-blue-300 border border-blue-500/30">
+                  <span className="px-2 py-0.5 rounded text-[11px] font-bold font-mono bg-orange-50 text-orange-700 border border-orange-200">
                     {INBOUND_MAILBOX}
                   </span>
                 </div>
-                <h3 className="text-lg font-bold text-white mt-1">
+                <h3 className="text-lg font-bold text-slate-900 mt-1">
                   Step {inboundStep} of {inboundSteps.length}: {inboundSteps[inboundStep - 1]?.title}
                 </h3>
               </div>
@@ -899,21 +899,21 @@ export const InteractiveScenarios: React.FC<InteractiveScenariosProps> = ({
                 <button
                   onClick={() => setInboundStep((prev) => Math.max(1, prev - 1))}
                   disabled={inboundStep === 1}
-                  className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 disabled:opacity-40 text-xs font-semibold transition"
+                  className="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 disabled:opacity-40 text-xs font-semibold transition border border-slate-200"
                 >
                   Previous
                 </button>
                 <button
                   onClick={() => setInboundStep((prev) => Math.min(inboundSteps.length, prev + 1))}
                   disabled={inboundStep === inboundSteps.length}
-                  className="px-4 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white disabled:opacity-40 text-xs font-semibold transition flex items-center space-x-1"
+                  className="px-4 py-1.5 rounded-lg bg-orange-500 hover:bg-orange-600 text-white disabled:opacity-40 text-xs font-semibold transition flex items-center space-x-1 shadow-2xs"
                 >
                   <span>Next Step</span>
                   <ArrowRight className="w-3.5 h-3.5" />
                 </button>
                 <button
                   onClick={() => setInboundStep(1)}
-                  className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition"
+                  className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-800 transition border border-slate-200"
                   title="Reset to Step 1"
                 >
                   <RotateCcw className="w-4 h-4" />
@@ -929,10 +929,10 @@ export const InteractiveScenarios: React.FC<InteractiveScenariosProps> = ({
                   onClick={() => setInboundStep(s.step)}
                   className={`h-2 rounded-full transition-all ${
                     s.step === inboundStep
-                      ? 'bg-blue-400 ring-2 ring-blue-500/50'
+                      ? 'bg-orange-500 ring-2 ring-orange-300'
                       : s.step < inboundStep
-                      ? 'bg-emerald-500'
-                      : 'bg-slate-800'
+                      ? 'bg-orange-400'
+                      : 'bg-slate-200'
                   }`}
                   title={`Step ${s.step}: ${s.title}`}
                 />
@@ -941,9 +941,9 @@ export const InteractiveScenarios: React.FC<InteractiveScenariosProps> = ({
           </div>
 
           {/* Current Step Explanation & Visual Card */}
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 shadow-lg space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-500/20 text-blue-300 border border-blue-500/30">
+          <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-2xs space-y-4 text-slate-900">
+            <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+              <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-orange-50 text-orange-700 border border-orange-200">
                 {inboundSteps[inboundStep - 1]?.badge}
               </span>
               <span className="text-xs text-slate-500 font-mono">
@@ -951,76 +951,76 @@ export const InteractiveScenarios: React.FC<InteractiveScenariosProps> = ({
               </span>
             </div>
 
-            <p className="text-sm text-slate-200 leading-relaxed font-sans">
+            <p className="text-sm text-slate-700 leading-relaxed font-sans">
               {inboundSteps[inboundStep - 1]?.desc}
             </p>
 
             {/* Step specific interactive previews */}
             {inboundStep === 1 && (
-              <div className="p-4 bg-slate-950 rounded-xl border border-slate-800 text-xs space-y-2 font-mono">
-                <div className="text-slate-400">
-                  <span className="text-slate-600">To:</span> {INBOUND_MAILBOX}
+              <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 text-xs space-y-2 font-mono">
+                <div className="text-slate-500">
+                  <span className="text-slate-700 font-semibold">To:</span> {INBOUND_MAILBOX}
                 </div>
-                <div className="text-slate-400">
-                  <span className="text-slate-600">From:</span> Tariq Khan &lt;tariq@albarakatours.com&gt;
+                <div className="text-slate-500">
+                  <span className="text-slate-700 font-semibold">From:</span> Tariq Khan &lt;tariq@albarakatours.com&gt;
                 </div>
-                <div className="text-slate-400">
-                  <span className="text-slate-600">Subject:</span> Inquiry: B2B Sub-Agent Portal & Hotel Allotments for Umrah 2026
+                <div className="text-slate-500">
+                  <span className="text-slate-700 font-semibold">Subject:</span> Inquiry: B2B Sub-Agent Portal & Hotel Allotments for Umrah 2026
                 </div>
-                <div className="pt-2 text-slate-300 font-sans border-t border-slate-800/80 whitespace-pre-wrap">
+                <div className="pt-2 text-slate-800 font-sans border-t border-slate-200 whitespace-pre-wrap">
                   Hello,{'\n\n'}We are a wholesale tour operator based in Mumbai with 35 sub-agents across Maharashtra. Does Umrah360 provide a white-label B2B sub-agent portal where our agents can issue branded vouchers with their own agency logo and credit wallets? Also, can we upload our own offline negotiated Makkah hotel allotments with blackout dates?{'\n\n'}Regards,{'\n'}Tariq Khan (MD, Al Baraka Tours)
                 </div>
               </div>
             )}
 
             {inboundStep === 2 && (
-              <div className="p-4 bg-emerald-950/40 rounded-xl border border-emerald-800/60 text-xs space-y-2 text-emerald-200">
-                <div className="font-bold flex items-center space-x-1.5 text-emerald-300">
-                  <CheckCircle2 className="w-4 h-4" />
+              <div className="p-4 bg-orange-50 rounded-xl border border-orange-200 text-xs space-y-2 text-orange-950">
+                <div className="font-bold flex items-center space-x-1.5 text-orange-700">
+                  <CheckCircle2 className="w-4 h-4 text-orange-600" />
                   <span>Duplicate Contact Algorithm: Zero Loss of History</span>
                 </div>
-                <p className="text-xs leading-relaxed text-emerald-100">
+                <p className="text-xs leading-relaxed text-orange-900">
                   The system scans existing contacts using email exact match (tariq@albarakatours.com) and phone number normalization. If the contact already exists, it preserves the contact ID and enriches the record. If it is new, it generates a contact profile and establishes the audit timeline.
                 </p>
               </div>
             )}
 
             {inboundStep === 6 && (
-              <div className="p-4 bg-blue-950/40 rounded-xl border border-blue-800/60 text-xs space-y-2 text-blue-200">
-                <div className="font-bold flex items-center space-x-1.5 text-blue-300">
-                  <ShieldCheck className="w-4 h-4" />
+              <div className="p-4 bg-orange-50 rounded-xl border border-orange-200 text-xs space-y-2 text-orange-950">
+                <div className="font-bold flex items-center space-x-1.5 text-orange-700">
+                  <ShieldCheck className="w-4 h-4 text-orange-600" />
                   <span>RAG Knowledge Grounding & Human Handoff Guardrails</span>
                 </div>
-                <p className="text-xs leading-relaxed text-blue-100">
+                <p className="text-xs leading-relaxed text-orange-900">
                   Query parsed: &quot;B2B sub-agent portal, custom markups, hotel allotments&quot;. Retrieved approved knowledge doc: <strong>B2B Sub-Agent Portal & Reseller Distribution Engine</strong>. Checked pricing guardrail: inquiry is for sub-agent management, not enterprise 20+ seats. Auto-reply generated with 96% confidence score.
                 </p>
               </div>
             )}
 
             {inboundStep === 7 && (
-              <div className="p-4 bg-slate-950 rounded-xl border border-slate-800 text-xs space-y-2">
-                <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-                  <span className="font-bold text-emerald-400 flex items-center space-x-1.5">
-                    <Bot className="w-4 h-4" />
+              <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 text-xs space-y-2">
+                <div className="flex items-center justify-between border-b border-slate-200 pb-2">
+                  <span className="font-bold text-orange-700 flex items-center space-x-1.5">
+                    <Bot className="w-4 h-4 text-orange-600" />
                     <span>Dispatched AI Reply (From: {INBOUND_MAILBOX})</span>
                   </span>
                   <span className="text-[10px] font-mono text-slate-500">
                     Header: In-Reply-To preserved
                   </span>
                 </div>
-                <div className="text-slate-300 whitespace-pre-wrap font-sans">
+                <div className="text-slate-800 whitespace-pre-wrap font-sans">
                   Dear Tariq,{'\n\n'}Thank you for contacting Umrah360!{'\n\n'}Yes, Umrah360 provides a complete white-label B2B Sub-Agent Portal built specifically for tour operators like Al Baraka Tours & Travels. With the B2B portal, you can:{'\n'}• Set custom markup & commission tiers per sub-agent category{'\n'}• Manage live credit limits, wallets, and ledger deposits{'\n'}• Allow sub-agents to search contracted inventory and instantly issue branded PDF vouchers with their own agency logo{'\n'}• Upload custom negotiated hotel blocks and transport contracts with blackout dates alongside online inventory{'\n\n'}Would you like to schedule a 15-minute live platform walkthrough to see how sub-agent allotments and credit limits are managed?{'\n\n'}Regards,{'\n'}Umrah360 Automation Team{'\n'}automation@amaavigo.com
                 </div>
               </div>
             )}
 
             {inboundStep === 8 && (
-              <div className="p-4 bg-emerald-950/40 rounded-xl border border-emerald-800/60 text-xs space-y-3 text-emerald-200">
-                <div className="font-bold flex items-center space-x-1.5 text-emerald-300">
-                  <CheckCircle2 className="w-4 h-4" />
+              <div className="p-4 bg-orange-50 rounded-xl border border-orange-200 text-xs space-y-3 text-orange-950">
+                <div className="font-bold flex items-center space-x-1.5 text-orange-800">
+                  <CheckCircle2 className="w-4 h-4 text-orange-600" />
                   <span>Complete Inbound Email Flow Verified & Synchronized</span>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-emerald-100 text-xs">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-orange-900 text-xs">
                   <div>• Contact: Tariq Khan (Al Baraka Tours)</div>
                   <div>• Lead Source: EMAIL (INBOUND)</div>
                   <div>• Lead Score: 88/100 (HIGH Intent)</div>
@@ -1032,13 +1032,13 @@ export const InteractiveScenarios: React.FC<InteractiveScenariosProps> = ({
                 <div className="flex items-center space-x-3 pt-2">
                   <button
                     onClick={onNavigateToInbox}
-                    className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-semibold transition"
+                    className="px-4 py-2 rounded-lg bg-orange-500 hover:bg-orange-600 text-white font-semibold transition shadow-2xs"
                   >
                     Open in Unified Inbox
                   </button>
                   <button
                     onClick={onNavigateToCrm}
-                    className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold transition"
+                    className="px-4 py-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-semibold transition shadow-2xs"
                   >
                     View in CRM Pipeline
                   </button>
@@ -1048,21 +1048,21 @@ export const InteractiveScenarios: React.FC<InteractiveScenariosProps> = ({
           </div>
 
           {/* Live Inbound Mail Simulator Widget */}
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 shadow-lg space-y-4">
+          <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-2xs space-y-4 text-slate-900">
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-2">
-                <Send className="w-4 h-4 text-blue-400" />
-                <h4 className="font-bold text-white text-sm">
+                <Send className="w-4 h-4 text-orange-600" />
+                <h4 className="font-bold text-slate-900 text-sm">
                   Run Live Inbound Email Test to {INBOUND_MAILBOX}
                 </h4>
               </div>
-              <span className="text-[11px] text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20 flex items-center space-x-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+              <span className="text-[11px] text-orange-700 bg-orange-50 px-2 py-0.5 rounded border border-orange-200 flex items-center space-x-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse"></span>
                 <span>Live Listener</span>
               </span>
             </div>
 
-            <p className="text-xs text-slate-400">
+            <p className="text-xs text-slate-500">
               Select any real-world pilgrimage tour operator inquiry and click &quot;Dispatch Inbound Email&quot; to execute the live 8-step pipeline with real AI response and CRM synchronization.
             </p>
 
@@ -1073,21 +1073,21 @@ export const InteractiveScenarios: React.FC<InteractiveScenariosProps> = ({
                   onClick={() => setSelectedPresetIndex(idx)}
                   className={`p-3 rounded-xl border text-left transition ${
                     selectedPresetIndex === idx
-                      ? 'bg-blue-950/40 border-blue-500/60 ring-1 ring-blue-500/40'
-                      : 'bg-slate-800/40 border-slate-700/60 hover:bg-slate-800 text-slate-300'
+                      ? 'bg-orange-50/70 border-orange-300 ring-1 ring-orange-200'
+                      : 'bg-slate-50 border-slate-200 hover:bg-slate-100/70 text-slate-700'
                   }`}
                 >
-                  <div className="text-[10px] font-bold px-2 py-0.5 rounded bg-blue-500/20 text-blue-300 border border-blue-500/30 inline-block mb-1">
+                  <div className="text-[10px] font-bold px-2 py-0.5 rounded bg-orange-100 text-orange-800 border border-orange-200 inline-block mb-1">
                     {preset.badge}
                   </div>
-                  <h5 className="font-bold text-white text-xs mt-1">{preset.label}</h5>
-                  <p className="text-slate-400 text-[11px] mt-1 line-clamp-2">{preset.description}</p>
+                  <h5 className="font-bold text-slate-900 text-xs mt-1">{preset.label}</h5>
+                  <p className="text-slate-500 text-[11px] mt-1 line-clamp-2">{preset.description}</p>
                 </button>
               ))}
             </div>
 
             <div className="pt-2 flex items-center justify-between">
-              <div className="text-xs text-slate-400 font-mono">
+              <div className="text-xs text-slate-500 font-mono">
                 Selected: {PRESET_INBOUND_EMAILS[selectedPresetIndex]?.payload.from} → {INBOUND_MAILBOX}
               </div>
 
@@ -1118,7 +1118,7 @@ export const InteractiveScenarios: React.FC<InteractiveScenariosProps> = ({
                   }
                 }}
                 disabled={isExecutingLive}
-                className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold transition flex items-center space-x-2 shadow-lg disabled:opacity-50"
+                className="px-5 py-2 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-xs font-semibold transition flex items-center space-x-2 shadow-2xs disabled:opacity-50"
               >
                 {isExecutingLive ? (
                   <>
@@ -1136,31 +1136,31 @@ export const InteractiveScenarios: React.FC<InteractiveScenariosProps> = ({
 
             {/* Live Result Card */}
             {liveResult && (
-              <div className="mt-4 p-4 bg-slate-950 border border-slate-800 rounded-xl space-y-3 animate-in fade-in slide-in-from-top-3">
-                <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-                  <span className="font-bold text-white text-xs flex items-center space-x-1.5">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+              <div className="mt-4 p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-3 animate-in fade-in slide-in-from-top-3">
+                <div className="flex items-center justify-between border-b border-slate-200 pb-2">
+                  <span className="font-bold text-slate-900 text-xs flex items-center space-x-1.5">
+                    <CheckCircle2 className="w-4 h-4 text-orange-600" />
                     <span>Inbound Mail Flow Execution Complete</span>
                   </span>
                   {liveResult.humanHandoffTriggered ? (
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-100 text-amber-800 border border-amber-200">
                       Human Takeover Triggered
                     </span>
                   ) : (
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-orange-100 text-orange-800 border border-orange-200">
                       AI Auto-Replied (In-Reply-To preserved)
                     </span>
                   )}
                 </div>
 
-                <div className="text-xs space-y-1 text-slate-300">
+                <div className="text-xs space-y-1 text-slate-700">
                   <div>
-                    <span className="text-slate-500">Contact:</span> <strong className="text-white">{liveResult.contact.firstName} {liveResult.contact.lastName}</strong> ({liveResult.contact.companyName})
+                    <span className="text-slate-500">Contact:</span> <strong className="text-slate-900">{liveResult.contact.firstName} {liveResult.contact.lastName}</strong> ({liveResult.contact.companyName})
                   </div>
                   <div>
-                    <span className="text-slate-500">Lead Score:</span> <strong className="text-emerald-400">{liveResult.lead.leadScore}/100</strong> • Stage: {liveResult.lead.buyingStage}
+                    <span className="text-slate-500">Lead Score:</span> <strong className="text-orange-600">{liveResult.lead.leadScore}/100</strong> • Stage: {liveResult.lead.buyingStage}
                   </div>
-                  <div className="pt-2 text-slate-300 whitespace-pre-wrap bg-slate-900 p-3 rounded-lg border border-slate-800 text-[11px] font-sans">
+                  <div className="pt-2 text-slate-800 whitespace-pre-wrap bg-white p-3 rounded-lg border border-slate-200 text-[11px] font-sans shadow-2xs">
                     {liveResult.aiReplyMessage?.text}
                   </div>
                 </div>
@@ -1174,7 +1174,7 @@ export const InteractiveScenarios: React.FC<InteractiveScenariosProps> = ({
                         onNavigateToInbox();
                       }
                     }}
-                    className="px-3.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold transition flex items-center space-x-1.5"
+                    className="px-3.5 py-1.5 rounded-lg bg-orange-500 hover:bg-orange-600 text-white text-xs font-semibold transition flex items-center space-x-1.5 shadow-2xs"
                   >
                     <Inbox className="w-3.5 h-3.5" />
                     <span>Open in Unified Inbox</span>
@@ -1187,7 +1187,7 @@ export const InteractiveScenarios: React.FC<InteractiveScenariosProps> = ({
                         onNavigateToCrm();
                       }
                     }}
-                    className="px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold transition flex items-center space-x-1.5"
+                    className="px-3.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold transition flex items-center space-x-1.5 shadow-2xs"
                   >
                     <ExternalLink className="w-3.5 h-3.5" />
                     <span>Inspect in CRM</span>

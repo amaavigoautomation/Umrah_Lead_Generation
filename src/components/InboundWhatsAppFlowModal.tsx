@@ -123,36 +123,36 @@ export const InboundWhatsAppFlowModal: React.FC<InboundWhatsAppFlowModalProps> =
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md overflow-y-auto">
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-4xl w-full max-h-[92vh] flex flex-col shadow-2xl overflow-hidden my-auto">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs overflow-y-auto">
+      <div className="bg-white border border-slate-200 rounded-2xl max-w-4xl w-full max-h-[92vh] flex flex-col shadow-2xl overflow-hidden my-auto text-slate-900">
         {/* Header */}
-        <div className="p-6 border-b border-slate-800 bg-slate-950/70 flex items-center justify-between">
+        <div className="p-6 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
           <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 rounded-xl bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
+            <div className="w-10 h-10 rounded-xl bg-orange-50 border border-orange-200 flex items-center justify-center text-orange-600 shadow-2xs">
               <MessageSquare className="w-5 h-5" />
             </div>
             <div>
               <div className="flex items-center space-x-2">
-                <h3 className="text-lg font-bold text-white">Live Inbound WhatsApp Pipeline</h3>
-                <span className="px-2.5 py-0.5 rounded-full text-[11px] font-mono font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 flex items-center space-x-1">
-                  <Phone className="w-3 h-3 text-emerald-400 inline" />
+                <h3 className="text-lg font-bold text-slate-900">Live Inbound WhatsApp Pipeline</h3>
+                <span className="px-2.5 py-0.5 rounded-full text-[11px] font-mono font-bold bg-orange-50 text-orange-700 border border-orange-200 flex items-center space-x-1">
+                  <Phone className="w-3 h-3 text-orange-600 inline" />
                   <span>{WHATSAPP_BUSINESS_NUMBER_FORMATTED}</span>
                 </span>
-                <span className="flex items-center space-x-1 text-[11px] text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                <span className="flex items-center space-x-1 text-[11px] text-orange-700 bg-orange-50 px-2 py-0.5 rounded-full border border-orange-200">
+                  <span className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse"></span>
                   <span>Active Listener</span>
                 </span>
               </div>
-              <p className="text-xs text-slate-400 mt-0.5">
+              <p className="text-xs text-slate-500 mt-0.5">
                 Simulates or receives real inbound WhatsApp messages sent to{' '}
-                <strong className="text-emerald-300 font-mono">{WHATSAPP_BUSINESS_NUMBER_FORMATTED}</strong> and triggers immediate AI auto-reply, CRM entity sync, and deduplication.
+                <strong className="text-orange-600 font-mono">{WHATSAPP_BUSINESS_NUMBER_FORMATTED}</strong> and triggers immediate AI auto-reply, CRM entity sync, and deduplication.
               </p>
             </div>
           </div>
 
           <button
             onClick={onClose}
-            className="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition"
+            className="p-2 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition"
           >
             <X className="w-5 h-5" />
           </button>
@@ -163,14 +163,14 @@ export const InboundWhatsAppFlowModal: React.FC<InboundWhatsAppFlowModalProps> =
           {/* Preset or Custom Selector */}
           <div className="space-y-3">
             <div className="flex items-center justify-between">
-              <span className="text-slate-300 font-semibold uppercase tracking-wider text-[11px]">
+              <span className="text-slate-700 font-semibold uppercase tracking-wider text-[11px]">
                 Choose WhatsApp Inquiry Scenario
               </span>
               <div className="flex items-center space-x-2">
                 <button
                   onClick={() => setIsCustom(false)}
                   className={`px-3 py-1 rounded-md transition font-medium ${
-                    !isCustom ? 'bg-emerald-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-slate-200'
+                    !isCustom ? 'bg-orange-500 text-white shadow-2xs' : 'bg-slate-100 text-slate-600 hover:text-slate-900 border border-slate-200'
                   }`}
                 >
                   Verified Agency Presets
@@ -178,7 +178,7 @@ export const InboundWhatsAppFlowModal: React.FC<InboundWhatsAppFlowModalProps> =
                 <button
                   onClick={() => setIsCustom(true)}
                   className={`px-3 py-1 rounded-md transition font-medium ${
-                    isCustom ? 'bg-emerald-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-slate-200'
+                    isCustom ? 'bg-orange-500 text-white shadow-2xs' : 'bg-slate-100 text-slate-600 hover:text-slate-900 border border-slate-200'
                   }`}
                 >
                   Custom Message Composer
@@ -194,88 +194,88 @@ export const InboundWhatsAppFlowModal: React.FC<InboundWhatsAppFlowModalProps> =
                     onClick={() => setSelectedPresetId(preset.id)}
                     className={`p-3.5 rounded-xl border text-left transition flex flex-col justify-between ${
                       selectedPresetId === preset.id
-                        ? 'bg-emerald-950/40 border-emerald-500/60 shadow-md ring-1 ring-emerald-500/40'
-                        : 'bg-slate-800/40 border-slate-700/60 hover:bg-slate-800 text-slate-300'
+                        ? 'bg-orange-50/70 border-orange-300 shadow-2xs ring-1 ring-orange-200'
+                        : 'bg-slate-50 border-slate-200 hover:bg-slate-100/70 text-slate-700'
                     }`}
                   >
                     <div>
                       <div className="flex items-center justify-between mb-1.5">
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-orange-100 text-orange-800 border border-orange-200">
                           {preset.badge}
                         </span>
                         {preset.id === 'preset-wa-enterprise-handoff' && (
-                          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30 flex items-center space-x-1">
+                          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 border border-amber-200 flex items-center space-x-1">
                             <AlertTriangle className="w-3 h-3 inline" />
                             <span>Guardrail Handoff</span>
                           </span>
                         )}
                       </div>
-                      <h4 className="font-semibold text-white text-xs mb-1">{preset.label}</h4>
-                      <p className="text-[11px] text-slate-400 line-clamp-2">{preset.description}</p>
+                      <h4 className="font-semibold text-slate-900 text-xs mb-1">{preset.label}</h4>
+                      <p className="text-[11px] text-slate-500 line-clamp-2">{preset.description}</p>
                     </div>
 
-                    <div className="mt-3 pt-2 border-t border-slate-700/50 flex items-center justify-between text-[11px] text-slate-400">
-                      <span className="font-mono text-emerald-400">{preset.payload.from}</span>
-                      <span className="text-slate-400 font-medium">To: {WHATSAPP_BUSINESS_NUMBER_FORMATTED}</span>
+                    <div className="mt-3 pt-2 border-t border-slate-200 flex items-center justify-between text-[11px] text-slate-500">
+                      <span className="font-mono text-orange-600 font-semibold">{preset.payload.from}</span>
+                      <span className="text-slate-500 font-medium">To: {WHATSAPP_BUSINESS_NUMBER_FORMATTED}</span>
                     </div>
                   </button>
                 ))}
               </div>
             ) : (
-              <div className="bg-slate-950/60 border border-slate-800 p-4 rounded-xl space-y-3">
+              <div className="bg-slate-50 border border-slate-200 p-4 rounded-xl space-y-3">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-[11px] text-slate-400 mb-1">Sender Phone Number</label>
+                    <label className="block text-[11px] text-slate-600 mb-1 font-medium">Sender Phone Number</label>
                     <input
                       type="text"
                       value={customPayload.from}
                       onChange={(e) => setCustomPayload({ ...customPayload, from: e.target.value })}
                       placeholder="+91 98450 11223"
-                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono text-xs focus:ring-1 focus:ring-emerald-500 focus:outline-none"
+                      className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-slate-900 font-mono text-xs focus:ring-1 focus:ring-orange-500 focus:outline-none shadow-2xs"
                     />
                   </div>
                   <div>
-                    <label className="block text-[11px] text-slate-400 mb-1">Sender Name</label>
+                    <label className="block text-[11px] text-slate-600 mb-1 font-medium">Sender Name</label>
                     <input
                       type="text"
                       value={customPayload.fromName}
                       onChange={(e) => setCustomPayload({ ...customPayload, fromName: e.target.value })}
                       placeholder="e.g. Tariq Khan"
-                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-xs focus:ring-1 focus:ring-emerald-500 focus:outline-none"
+                      className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-slate-900 text-xs focus:ring-1 focus:ring-orange-500 focus:outline-none shadow-2xs"
                     />
                   </div>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-[11px] text-slate-400 mb-1">Agency / Company Name</label>
+                    <label className="block text-[11px] text-slate-600 mb-1 font-medium">Agency / Company Name</label>
                     <input
                       type="text"
                       value={customPayload.companyName}
                       onChange={(e) => setCustomPayload({ ...customPayload, companyName: e.target.value })}
                       placeholder="e.g. Al Baraka Tours & Travels"
-                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-xs focus:ring-1 focus:ring-emerald-500 focus:outline-none"
+                      className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-slate-900 text-xs focus:ring-1 focus:ring-orange-500 focus:outline-none shadow-2xs"
                     />
                   </div>
                   <div>
-                    <label className="block text-[11px] text-slate-400 mb-1">Destination Number (Umrah360 WhatsApp)</label>
+                    <label className="block text-[11px] text-slate-600 mb-1 font-medium">Destination Number (Umrah360 WhatsApp)</label>
                     <input
                       type="text"
                       disabled
                       value={WHATSAPP_BUSINESS_NUMBER_FORMATTED}
-                      className="w-full bg-slate-900/50 border border-slate-800 rounded-lg px-3 py-2 text-emerald-400 font-mono text-xs"
+                      className="w-full bg-slate-100 border border-slate-200 rounded-lg px-3 py-2 text-orange-700 font-mono text-xs"
                     />
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-[11px] text-slate-400 mb-1">WhatsApp Message Body</label>
+                  <label className="block text-[11px] text-slate-600 mb-1 font-medium">WhatsApp Message Body</label>
                   <textarea
                     rows={4}
                     value={customPayload.body}
                     onChange={(e) => setCustomPayload({ ...customPayload, body: e.target.value })}
                     placeholder="Type WhatsApp message inquiry here..."
-                    className="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 text-white text-xs focus:ring-1 focus:ring-emerald-500 focus:outline-none"
+                    className="w-full bg-white border border-slate-200 rounded-lg p-3 text-slate-900 text-xs focus:ring-1 focus:ring-orange-500 focus:outline-none shadow-2xs"
                   />
                 </div>
               </div>
@@ -284,15 +284,15 @@ export const InboundWhatsAppFlowModal: React.FC<InboundWhatsAppFlowModalProps> =
 
           {/* Action Button */}
           <div className="flex items-center justify-between pt-2">
-            <div className="text-slate-400 text-[11px]">
-              Ready to send message from <strong className="text-white font-mono">{activePayload.from}</strong> to{' '}
-              <strong className="text-emerald-400 font-mono">{WHATSAPP_BUSINESS_NUMBER_FORMATTED}</strong>.
+            <div className="text-slate-500 text-[11px]">
+              Ready to send message from <strong className="text-slate-900 font-mono">{activePayload.from}</strong> to{' '}
+              <strong className="text-orange-600 font-mono">{WHATSAPP_BUSINESS_NUMBER_FORMATTED}</strong>.
             </div>
 
             <button
               onClick={handleExecuteFlow}
               disabled={isExecuting}
-              className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-semibold rounded-xl flex items-center space-x-2 transition shadow-lg shadow-emerald-600/20"
+              className="px-5 py-2.5 bg-orange-500 hover:bg-orange-600 disabled:opacity-50 text-white font-semibold rounded-xl flex items-center space-x-2 transition shadow-2xs"
             >
               {isExecuting ? (
                 <>

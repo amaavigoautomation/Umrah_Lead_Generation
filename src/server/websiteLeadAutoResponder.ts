@@ -23,7 +23,7 @@ const DEFAULT_UMRAH_CTX: TenantContext = {
   role: 'admin',
 };
 
-// Isolated per-tenant state tracking (no cross-tenant singletons)
+// Isolated per-tenant state tracking (no cross-tenant singletons) testing for vercel deployment
 const tenantRunningChecks = new Set<string>();
 const tenantInFlightDispatches = new Map<string, Set<string>>();
 

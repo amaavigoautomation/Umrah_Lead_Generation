@@ -19,6 +19,8 @@ export interface AiResponseResult {
   humanHandoffTriggered: boolean;
   handoffReason?: string;
   classification?: string;
+  ignored?: boolean;
+  reason?: string;
   leadQualification: {
     isLead: boolean;
     leadScore: number;

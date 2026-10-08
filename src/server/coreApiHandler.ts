@@ -1,4 +1,5 @@
 import OpenAI from 'openai';
+import { classifyInboundMessage } from './messageClassifier.js';
 import { sanitizeAiEmailText } from './emailSanitizer.js';
 import { verifySmtpConnection, sendLiveEmail, getSmtpConfig, updateSmtpConfig, getResendConfig } from './smtpService.js';
 import { checkImapStatus, getImapConfig, updateImapConfig } from './imapService.js';
@@ -1343,6 +1344,35 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
     const brand = await getTenantBrand(resolvedTenantId);
     const isUmrah = brand.playbook === 'umrah360';
     const defSig = brandSignature(brand);
+
+    // Qualification filter: don't auto-reply to bots, newsletters, social notifications or unrelated mail.
+    const respondChannel = conversation?.channel || 'EMAIL';
+    const respondIsWebsite = respondChannel === 'WEBSITE' || (conversation?.conversationId || '').startsWith('conv-web-');
+    if (!respondIsWebsite) {
+      const qualification = await classifyInboundMessage({
+        subject: conversation?.subject || '',
+        body: incomingMessage,
+        from: contact?.email || contact?.phone || '',
+        channel: respondChannel,
+        companyName: brand.companyName,
+        isFollowUp: Array.isArray(recentMessages) && recentMessages.length > 1,
+      });
+      if (!qualification.qualifies) {
+        console.log(`[coreApiHandler respond] Ignored message from ${contact?.email || contact?.phone || 'unknown'} on ${respondChannel}: ${qualification.reason}`);
+        res.statusCode = 200;
+        res.end(
+          JSON.stringify({
+            responseText: `AI qualification filter: ignored (${qualification.reason})`,
+            confidence: 0,
+            knowledgeSources: [],
+            humanHandoffTriggered: false,
+            ignored: true,
+            reason: qualification.reason,
+          })
+        );
+        return true;
+      }
+    }
 
     // If handoff was already identified as necessary by rule
     if (handoffCheck?.shouldHandoff) {

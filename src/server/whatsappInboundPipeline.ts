@@ -31,6 +31,7 @@ import {
 import { handleIncomingCampaignLeadReply } from './campaignService.js';
 import { sanitizeAiEmailText } from './emailSanitizer.js';
 import { getTenantBrand } from './brandService.js';
+import { classifyInboundMessage } from './messageClassifier.js';
 import { brandIntro, brandHost } from '../shared/brand.js';
 
 export const TARGET_WHATSAPP_NUMBER = '+919820252434';
@@ -935,6 +936,7 @@ export async function processLiveInboundWhatsApp(payload: {
     aiReplied: false,
   };
 
+  const hadPriorMessages = thread.length > 0;
   thread.push(incomingMessage);
 
   // Hook into Outbound Campaign System: track lead reply via WhatsApp phone or email
@@ -949,20 +951,33 @@ export async function processLiveInboundWhatsApp(payload: {
   }
 
   // =========================================================================
-  // RULE 4: GENERATE GROUNDED AI REPLY
+  // RULE 4: GENERATE GROUNDED AI REPLY & QUALIFICATION CHECK
   // =========================================================================
-  const aiResult = await generateWhatsAppAutoReplyText({
-    fromPhone: senderPhone,
-    fromName: payload.fromName,
+  const qualification = await classifyInboundMessage({
     body: payload.body,
-    companyName: payload.companyName,
-    threadHistory: [...thread],
+    from: senderPhone,
+    channel: 'WHATSAPP',
+    companyName: brand.companyName,
+    isFollowUp: hadPriorMessages,
   });
 
-  const shouldSendAutoReply = pipelineConfig.mode !== 'SIMULATION';
+  const shouldSendAutoReply = pipelineConfig.mode !== 'SIMULATION' && qualification.qualifies;
   const replyDecisionReason = pipelineConfig.mode === 'SIMULATION'
     ? 'WhatsApp mode is SIMULATION: auto-reply held for agent inspection'
-    : `New inbound customer message to ${targetNumber} - AI reply dispatched`;
+    : !qualification.qualifies
+      ? `AI qualification filter: ignored (${qualification.reason})`
+      : `New inbound customer message to ${targetNumber} - AI reply dispatched`;
+
+  // Only generate the (paid) AI reply when we will actually send it.
+  const aiResult = shouldSendAutoReply
+    ? await generateWhatsAppAutoReplyText({
+        fromPhone: senderPhone,
+        fromName: payload.fromName,
+        body: payload.body,
+        companyName: payload.companyName,
+        threadHistory: [...thread],
+      })
+    : { replyText: '', handoffTriggered: false, handoffReason: undefined as string | undefined, leadScore: 78, buyingStage: 'AWARENESS' } as Awaited<ReturnType<typeof generateWhatsAppAutoReplyText>>;
 
   let aiReplyMessage: any = undefined;
   const replyMsgId = `wa-reply-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
@@ -1141,8 +1156,10 @@ export async function processLiveInboundWhatsApp(payload: {
     recentProcessedWhatsApp.pop();
   }
 
-  // Persist CRM entities to Firestore once at arrival time
-  if (isFirebaseConfigured && db && crmEntities) {
+  // Persist CRM entities to Firestore once at arrival time (only if the message qualifies)
+  if (isFirebaseConfigured && db && crmEntities && !qualification.qualifies) {
+    console.log(`[WhatsApp Pipeline] Message ${incomingMsgId} is unqualified/ignored. Skipping CRM persistence so no lead/contact is created.`);
+  } else if (isFirebaseConfigured && db && crmEntities) {
     try {
       if (crmEntities.contact) {
         safeSetDoc(tenantRepo(getWACtx()).contactDoc(crmEntities.contact.contactId), crmEntities.contact, { merge: true }).catch(() => {});

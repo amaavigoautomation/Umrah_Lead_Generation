@@ -8,6 +8,7 @@ import {
   globalEmailRouteDoc,
 } from './tenantRepo.js';
 import { processWebsiteLeadSubmission } from './websiteLeadService.js';
+import { originAllowed, normalizeOrigin } from './websiteWebhookService.js';
 import { processLiveInboundWhatsApp, getWhatsAppGatewayStatus } from './whatsappInboundPipeline.js';
 import { addEmailSuppression, recordTenantUsage } from './usageService.js';
 import type { TenantContext, WebhookRoute, ChannelRoute, DomainRoute } from '../types/tenant.js';
@@ -35,12 +36,22 @@ export async function routeWebsiteLeadWebhook(
           const route = routeSnap.data() as WebhookRoute;
           resolvedTenantId = route.tenantId || DEFAULT_TENANT_ID;
 
-          // Check origin restriction if configured
-          if (route.allowedOrigins && route.allowedOrigins.length > 0) {
-            const reqOrigin = req.headers.origin || req.headers.referer || '';
-            const isAllowed = route.allowedOrigins.some((allowed) =>
-              reqOrigin.toLowerCase().includes(allowed.toLowerCase())
-            );
+          // Self-serve routes (requireOrigin) only accept the websites the company listed.
+          // Older hand-registered routes keep the previous, looser behaviour.
+          const reqOrigin = (req.headers.origin || req.headers.referer || '').toString();
+          if ((route as any).requireOrigin) {
+            const list = route.allowedOrigins || [];
+            let denyMsg = '';
+            if (list.length === 0) denyMsg = 'No website is allowed for this webhook yet. Add your website in Settings → Website leads.';
+            else if (reqOrigin && !originAllowed(reqOrigin, list)) denyMsg = 'This website is not allowed for this webhook';
+            if (denyMsg) {
+              res.statusCode = 403;
+              res.setHeader('Content-Type', 'application/json');
+              res.end(JSON.stringify({ error: denyMsg }));
+              return true;
+            }
+          } else if (route.allowedOrigins && route.allowedOrigins.length > 0) {
+            const isAllowed = route.allowedOrigins.some((allowed) => reqOrigin.toLowerCase().includes(allowed.toLowerCase()));
             if (!isAllowed && reqOrigin) {
               res.statusCode = 403;
               res.setHeader('Content-Type', 'application/json');
@@ -56,7 +67,12 @@ export async function routeWebsiteLeadWebhook(
           return true;
         }
       } catch (err) {
-        console.warn(`[WebhookRouter] Error looking up route for ${webhookId}:`, err);
+        // Never guess the owner: a failed lookup must not drop a client's lead into the default workspace.
+        console.error(`[WebhookRouter] Error looking up route for ${webhookId}:`, err);
+        res.statusCode = 503;
+        res.setHeader('Content-Type', 'application/json');
+        res.end(JSON.stringify({ error: 'Temporarily unable to route this request. Please try again.' }));
+        return true;
       }
     }
   }
@@ -70,6 +86,22 @@ export async function routeWebsiteLeadWebhook(
 
   try {
     const result = await processWebsiteLeadSubmission(body, tenantCtx);
+
+    // Plain HTML forms: `_redirect` sends the visitor back to a thank-you page (only on a listed website).
+    const redirectTo = typeof body?._redirect === 'string' ? body._redirect : '';
+    if (redirectTo && webhookId && webhookId !== 'umrah-demo' && isFirebaseConfigured && db) {
+      try {
+        const rSnap = await getDoc(globalWebhookRouteDoc(webhookId));
+        const list: string[] = (rSnap.data() as any)?.allowedOrigins || [];
+        const target = new URL(redirectTo);
+        if (/^https?:$/.test(target.protocol) && list.includes(normalizeOrigin(target.hostname) || '')) {
+          res.statusCode = 303;
+          res.setHeader('Location', target.toString());
+          res.end();
+          return true;
+        }
+      } catch {}
+    }
     res.statusCode = 200;
     res.setHeader('Content-Type', 'application/json');
     res.end(

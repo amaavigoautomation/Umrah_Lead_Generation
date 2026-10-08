@@ -17,6 +17,7 @@ import { SystemSettings, Channel, ChannelMode, AppUser } from '../types';
 import { UserManagementView } from './UserManagementView';
 import { EmailSettingsPanel } from './EmailSettingsPanel';
 import { InboundMailboxPanel } from './InboundMailboxPanel';
+import { WebsiteWebhookPanel } from './WebsiteWebhookPanel';
 import { BillingView } from './BillingView';
 
 interface SettingsViewProps {
@@ -355,6 +356,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       {tenantId && <EmailSettingsPanel tenantId={tenantId} canEdit={Boolean(canEditEmail)} />}
 
       {tenantId && canEditEmail && <InboundMailboxPanel tenantId={tenantId} canEdit />}
+
+      {tenantId && canEditEmail && <WebsiteWebhookPanel tenantId={tenantId} canEdit />}
 
       {/* User Management & Access Control (Firestore app_users) */}
       {users && onSaveUser && onDeleteUser && (

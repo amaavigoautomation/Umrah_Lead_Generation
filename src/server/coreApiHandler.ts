@@ -411,7 +411,13 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
   // MULTI-TENANT INBOUND WEBHOOK ROUTING (Phase P3)
   // =========================================================================
   if (url.startsWith('/api/webhooks/website/')) {
-    const webhookId = url.replace('/api/webhooks/website/', '').split('/')[0];
+    const webhookId = url.replace('/api/webhooks/website/', '').split(/[/?]/)[0];
+    if (!webhookId) {
+      res.statusCode = 404;
+      res.setHeader('Content-Type', 'application/json');
+      res.end(JSON.stringify({ error: 'Webhook key missing' }));
+      return true;
+    }
     return await routeWebsiteLeadWebhook(req, res, webhookId);
   }
   if (url === '/api/webhooks/umrah-demo' || url === '/api/leads/inbound') {
@@ -488,7 +494,7 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
       if (!targetId) denied = 'Platform admin only';
       else if (targetId !== resolvedTenantId) denied = 'Forbidden';
       else if (req.method !== 'GET' && userRole !== 'admin') denied = 'Workspace admin only';
-      else if (/\/(secrets|routes|inbound(\/.*)?|email(\/.*)?)$/.test(url.split('?')[0]) && userRole !== 'admin') denied = 'Workspace admin only';
+      else if (/\/(secrets|routes|inbound(\/.*)?|email(\/.*)?|webhook(\/.*)?)$/.test(url.split('?')[0]) && userRole !== 'admin') denied = 'Workspace admin only';
     }
     if (denied) {
       res.statusCode = 403;
@@ -888,6 +894,41 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
     } catch (err: any) {
       res.statusCode = err?.status || 500;
       res.end(JSON.stringify({ error: err?.message || 'Email settings request failed' }));
+      return true;
+    }
+  }
+
+  // Self-serve website-lead webhook: /api/tenants/:tenantId/webhook[/regenerate|/test]
+  const webhookMatch = url.split('?')[0].match(/^\/api\/tenants\/([^/]+)\/webhook(?:\/(regenerate|test))?$/);
+  if (webhookMatch) {
+    const tId = webhookMatch[1];
+    const action = webhookMatch[2];
+    try {
+      const svc = await import('./websiteWebhookService.js');
+      res.setHeader('Content-Type', 'application/json');
+      if (!action && req.method === 'GET') {
+        res.statusCode = 200;
+        res.end(JSON.stringify(await svc.getWebhookView(tId)));
+        return true;
+      }
+      if (!action && req.method === 'POST') {
+        res.statusCode = 200;
+        res.end(JSON.stringify(await svc.setAllowedOrigins(tId, body?.allowedOrigins)));
+        return true;
+      }
+      if (action === 'regenerate' && req.method === 'POST') {
+        res.statusCode = 200;
+        res.end(JSON.stringify(await svc.regenerateKey(tId)));
+        return true;
+      }
+      if (action === 'test' && req.method === 'POST') {
+        res.statusCode = 200;
+        res.end(JSON.stringify({ success: true, ...(await svc.sendTestLead({ ...activeTenantCtx, tenantId: tId })) }));
+        return true;
+      }
+    } catch (err: any) {
+      res.statusCode = err?.status || 500;
+      res.end(JSON.stringify({ error: err?.message || 'Webhook settings request failed' }));
       return true;
     }
   }

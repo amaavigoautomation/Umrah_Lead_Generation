@@ -55,6 +55,8 @@ export interface SendMailResult {
 
 // In-memory status cache
 let cachedSmtpStatus: SmtpStatus | null = null;
+let lastSmtpFetchTime = 0;
+const SMTP_FETCH_CACHE_TTL = 60_000; // Cache SMTP config for 1 minute to avoid Firestore quota exhaustion
 
 // Runtime in-memory config override
 let runtimeSmtpConfig: {
@@ -104,6 +106,10 @@ export function getSmtpConfig() {
 }
 
 export async function fetchFirestoreSmtpConfig() {
+  const now = Date.now();
+  if (now - lastSmtpFetchTime < SMTP_FETCH_CACHE_TTL) {
+    return getSmtpConfig();
+  }
   if (isFirebaseConfigured && db) {
     try {
       const settingsRef = doc(db, 'system_settings', 'default');
@@ -128,6 +134,7 @@ export async function fetchFirestoreSmtpConfig() {
           });
         }
       }
+      lastSmtpFetchTime = now;
     } catch (e) {
       console.warn('[SMTP Service] Error reading Firestore SMTP config:', e);
     }

@@ -272826,6 +272826,10 @@ function getSmtpConfig() {
   return { host, port, secure, user, pass, from, configured };
 }
 async function fetchFirestoreSmtpConfig() {
+  const now = Date.now();
+  if (now - lastSmtpFetchTime < SMTP_FETCH_CACHE_TTL) {
+    return getSmtpConfig();
+  }
   if (isFirebaseConfigured && db) {
     try {
       const settingsRef = doc(db, "system_settings", "default");
@@ -272848,6 +272852,7 @@ async function fetchFirestoreSmtpConfig() {
           });
         }
       }
+      lastSmtpFetchTime = now;
     } catch (e2) {
       console.warn("[SMTP Service] Error reading Firestore SMTP config:", e2);
     }
@@ -273173,7 +273178,7 @@ async function sendLiveEmail(params) {
   }
   return resendResult;
 }
-var cachedSmtpStatus, runtimeSmtpConfig, resendClient2, resendClientKey;
+var cachedSmtpStatus, lastSmtpFetchTime, SMTP_FETCH_CACHE_TTL, runtimeSmtpConfig, resendClient2, resendClientKey;
 var init_smtpService = __esm({
   "src/server/smtpService.ts"() {
     init_dist();
@@ -273183,6 +273188,8 @@ var init_smtpService = __esm({
     init_config();
     init_adminFirestore();
     cachedSmtpStatus = null;
+    lastSmtpFetchTime = 0;
+    SMTP_FETCH_CACHE_TTL = 6e4;
     runtimeSmtpConfig = null;
     resendClient2 = null;
     resendClientKey = "";

@@ -1,11 +1,12 @@
 import os from 'os';
-import { getDoc, setDoc, updateDoc } from './adminFirestore.js';
 import { isFirebaseConfigured } from '../firebase/config.js';
 import { db } from './adminFirestore.js';
-import { tenantRepo } from './tenantRepo.js';
 import type { TenantContext, TenantJobLease } from '../types/tenant.js';
 
 const WORKER_ID = `${os.hostname()}-${process.pid}-${Math.random().toString(36).substring(2, 8)}`;
+
+// Efficient in-memory lease tracking to avoid exhausting Firestore quotas
+const inMemoryLeases = new Map<string, TenantJobLease>();
 
 /**
  * Attempts to acquire an exclusive distributed lease for a job within a tenant
@@ -16,53 +17,39 @@ export async function acquireJobLease(
   jobName: string,
   ttlMs: number = 30_000
 ): Promise<boolean> {
-  if (!isFirebaseConfigured || !db || !tenantId) return true; // Single-instance fallback
-
-  const ctx: TenantContext = {
-    tenantId,
-    uid: 'system',
-    email: 'system@umrah360.in',
-    role: 'admin',
-  };
-
-  const jobDocRef = tenantRepo(ctx).jobDoc(jobName);
+  const leaseKey = `${tenantId}:${jobName}`;
   const now = Date.now();
   const expiresAt = new Date(now + ttlMs).toISOString();
   const leasedAt = new Date(now).toISOString();
 
-  try {
-    const snap = await getDoc(jobDocRef);
+  const currentLease = inMemoryLeases.get(leaseKey);
 
-    if (!snap.exists()) {
-      const leaseRecord: TenantJobLease = {
-        jobName,
-        workerId: WORKER_ID,
-        leasedAt,
-        expiresAt,
-      };
-      await setDoc(jobDocRef, leaseRecord);
-      return true;
-    }
-
-    const currentLease = snap.data() as TenantJobLease;
-    const currentExpiry = new Date(currentLease.expiresAt).getTime();
-
-    // If current lease has expired OR was already leased by this worker, renew it
-    if (now > currentExpiry || currentLease.workerId === WORKER_ID) {
-      await updateDoc(jobDocRef, {
-        workerId: WORKER_ID,
-        leasedAt,
-        expiresAt,
-      });
-      return true;
-    }
-
-    // Held by another active worker
-    return false;
-  } catch (err) {
-    console.warn(`[JobLease] Lease check error for ${tenantId}/${jobName}:`, err);
-    return true; // Fallback to avoid complete background stalling
+  if (!currentLease) {
+    const leaseRecord: TenantJobLease = {
+      jobName,
+      workerId: WORKER_ID,
+      leasedAt,
+      expiresAt,
+    };
+    inMemoryLeases.set(leaseKey, leaseRecord);
+    return true;
   }
+
+  const currentExpiry = new Date(currentLease.expiresAt).getTime();
+
+  // If current lease has expired OR was already leased by this worker, renew it
+  if (now > currentExpiry || currentLease.workerId === WORKER_ID) {
+    inMemoryLeases.set(leaseKey, {
+      ...currentLease,
+      workerId: WORKER_ID,
+      leasedAt,
+      expiresAt,
+    });
+    return true;
+  }
+
+  // Held by another active worker
+  return false;
 }
 
 /**
@@ -74,32 +61,17 @@ export async function releaseJobLease(
   status: 'success' | 'failed' = 'success',
   error?: string
 ): Promise<void> {
-  if (!isFirebaseConfigured || !db || !tenantId) return;
-
-  const ctx: TenantContext = {
-    tenantId,
-    uid: 'system',
-    email: 'system@umrah360.in',
-    role: 'admin',
-  };
-
-  const jobDocRef = tenantRepo(ctx).jobDoc(jobName);
-
-  try {
-    const snap = await getDoc(jobDocRef);
-    if (snap.exists()) {
-      const currentLease = snap.data() as TenantJobLease;
-      if (currentLease.workerId === WORKER_ID) {
-        await updateDoc(jobDocRef, {
-          expiresAt: new Date(0).toISOString(), // Expire immediately
-          lastCompletedAt: new Date().toISOString(),
-          lastStatus: status,
-          ...(error ? { lastError: error } : {}),
-        });
-      }
-    }
-  } catch (err) {
-    console.warn(`[JobLease] Lease release error for ${tenantId}/${jobName}:`, err);
+  const leaseKey = `${tenantId}:${jobName}`;
+  const currentLease = inMemoryLeases.get(leaseKey);
+  
+  if (currentLease && currentLease.workerId === WORKER_ID) {
+    inMemoryLeases.set(leaseKey, {
+      ...currentLease,
+      expiresAt: new Date(0).toISOString(), // Expire immediately
+      lastCompletedAt: new Date().toISOString(),
+      lastStatus: status,
+      ...(error ? { lastError: error } : {}),
+    });
   }
 }
 

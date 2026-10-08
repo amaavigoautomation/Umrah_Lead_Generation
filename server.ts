@@ -40,23 +40,35 @@ import type { TenantContext } from './src/types/tenant.js';
 
 // Background poller for inbound email, website leads, and outbound campaigns with distributed leasing
 let isBackgroundPolling = false;
+let cachedTenantIds: string[] = ['umrah360'];
+let lastTenantFetchTime = 0;
+const TENANT_CACHE_TTL = 5 * 60 * 1000; // Cache active tenant list for 5 minutes
+
 const safeBackgroundPoll = async () => {
   if (isBackgroundPolling) return;
   isBackgroundPolling = true;
 
   try {
-    // 1. Discover all active tenants
-    const tenantIds: string[] = ['umrah360'];
-    if (isFirebaseConfigured && db) {
-      try {
-        const snap = await getDocs(globalTenantsCol());
-        snap.forEach((d) => {
-          const t = d.data();
-          if (t.id && t.status !== 'suspended' && !tenantIds.includes(t.id)) {
-            tenantIds.push(t.id);
-          }
-        });
-      } catch {}
+    // 1. Discover all active tenants with local cache to avoid heavy Firestore reads
+    const now = Date.now();
+    let tenantIds = [...cachedTenantIds];
+
+    if (now - lastTenantFetchTime > TENANT_CACHE_TTL) {
+      if (isFirebaseConfigured && db) {
+        try {
+          const snap = await getDocs(globalTenantsCol());
+          const newTenantIds: string[] = ['umrah360'];
+          snap.forEach((d) => {
+            const t = d.data();
+            if (t.id && t.status !== 'suspended' && !newTenantIds.includes(t.id)) {
+              newTenantIds.push(t.id);
+            }
+          });
+          cachedTenantIds = newTenantIds;
+          lastTenantFetchTime = now;
+          tenantIds = [...newTenantIds];
+        } catch {}
+      }
     }
 
     // 2. Process background tasks per tenant under distributed lease
@@ -103,9 +115,9 @@ const safeBackgroundPoll = async () => {
   }
 };
 
-// Start background poller interval (every 4 seconds)
-setTimeout(safeBackgroundPoll, 2000);
-setInterval(safeBackgroundPoll, 4000);
+// Start background poller interval (every 30 seconds)
+setTimeout(safeBackgroundPoll, 5000);
+setInterval(safeBackgroundPoll, 30000);
 
 // API route middleware
 app.use('/api', async (req, res, next) => {

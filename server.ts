@@ -104,11 +104,11 @@ const safeBackgroundPoll = async () => {
   }
 };
 
-// Start background poller interval (every 4 seconds)
+// Start background poller interval (every 30 seconds; was 4s, which used up the Firestore free read quota)
 // Each company's own connected mailbox (independent of the platform mailbox loop above)
 startTenantMailboxPoller();
 setTimeout(safeBackgroundPoll, 2000);
-setInterval(safeBackgroundPoll, 4000);
+setInterval(safeBackgroundPoll, 30_000);
 
 // API route middleware
 app.use('/api', async (req, res, next) => {

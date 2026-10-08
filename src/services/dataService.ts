@@ -96,6 +96,19 @@ export const DEFAULT_SETTINGS: SystemSettings = {
   updatedAt: new Date().toISOString(),
 };
 
+/** Default settings for a workspace. Umrah360 keeps the original defaults; others start neutral with their own name. */
+export function defaultSettingsFor(tenantId: string, tenantName?: string): SystemSettings {
+  if (tenantId === 'umrah360') return DEFAULT_SETTINGS;
+  const name = (tenantName || tenantId || 'Our Team').trim();
+  return {
+    ...DEFAULT_SETTINGS,
+    sendingAccounts: [],
+    emailSignature: `Regards,\n${name} Team`,
+    webhookEndpoint: '',
+    updatedAt: new Date().toISOString(),
+  };
+}
+
 // Initial Indian Umrah Operators Campaign (Section 7, Section 72)
 export const INITIAL_CAMPAIGN: OutboundCampaign = {
   campaignId: 'camp-indian-umrah-operators',

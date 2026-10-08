@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useBrand } from '../context/BrandContext';
 import {
   Mail,
   Send,
@@ -87,6 +88,8 @@ export const LiveMailboxCenter: React.FC<LiveMailboxCenterProps> = ({
   onNavigateToCrm,
   onSyncNow,
 }) => {
+  const { brand } = useBrand();
+  const isUmrah = brand.playbook === 'umrah360';
   const [smtpStatus, setSmtpStatus] = useState<SmtpStatus | null>(null);
   const [imapStatus, setImapStatus] = useState<ImapStatus | null>(null);
   const [isLoadingStatus, setIsLoadingStatus] = useState<boolean>(true);
@@ -97,16 +100,16 @@ export const LiveMailboxCenter: React.FC<LiveMailboxCenterProps> = ({
   const [showSmtpConfigModal, setShowSmtpConfigModal] = useState<boolean>(false);
   const [modalSmtpHost, setModalSmtpHost] = useState<string>('smtp.gmail.com');
   const [modalSmtpPort, setModalSmtpPort] = useState<number>(465);
-  const [modalSmtpUser, setModalSmtpUser] = useState<string>('amaavigo@gmail.com');
+  const [modalSmtpUser, setModalSmtpUser] = useState<string>('');
   const [modalSmtpPass, setModalSmtpPass] = useState<string>('');
-  const [modalSmtpFrom, setModalSmtpFrom] = useState<string>('Umrah360 Automation <amaavigo@gmail.com>');
+  const [modalSmtpFrom, setModalSmtpFrom] = useState<string>('');
   const [isSavingModalSmtp, setIsSavingModalSmtp] = useState<boolean>(false);
   const [modalSmtpSaveResult, setModalSmtpSaveResult] = useState<{ success: boolean; message: string } | null>(null);
 
   const [isPollingImap, setIsPollingImap] = useState<boolean>(false);
   const [pollResult, setPollResult] = useState<{ success: boolean; count: number; message: string } | null>(null);
 
-  const activeMailbox = smtpStatus?.user || imapStatus?.user || INBOUND_MAILBOX || 'amaavigo@gmail.com';
+  const activeMailbox = smtpStatus?.user || imapStatus?.user || INBOUND_MAILBOX;
 
   const handleSaveModalSmtp = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -169,25 +172,27 @@ export const LiveMailboxCenter: React.FC<LiveMailboxCenterProps> = ({
   const [showWaModal, setShowWaModal] = useState<boolean>(false);
   const [waModalTestPhone, setWaModalTestPhone] = useState<string>('+919876543210');
   const [waModalTestName, setWaModalTestName] = useState<string>('Haji Farooq');
-  const [waModalTestBody, setWaModalTestBody] = useState<string>('Hello, we need package pricing for 25 pilgrims in Shawwal 2026.');
+  const [waModalTestBody, setWaModalTestBody] = useState<string>(isUmrah ? 'Hello, we need package pricing for 25 pilgrims in Shawwal 2026.' : 'Hello, I would like more information about your services.');
   const [isSendingWaModalTest, setIsSendingWaModalTest] = useState<boolean>(false);
   const [waModalTestResult, setWaModalTestResult] = useState<any>(null);
 
   // Live test send form (Outbound direct test)
-  const [testTo, setTestTo] = useState<string>('amaavigo@gmail.com');
-  const [testSubject, setTestSubject] = useState<string>('Umrah360 Live SMTP Auto-Reply Test');
+  const [testTo, setTestTo] = useState<string>('');
+  const [testSubject, setTestSubject] = useState<string>(`${brand.companyName} Live SMTP Auto-Reply Test`);
   const [testBody, setTestBody] = useState<string>(
-    'Hello,\n\nThis is a live test email dispatched via Umrah360 SMTP connection to confirm live mail delivery.\n\nBest regards,\nUmrah360 Automation Team'
+    `Hello,\n\nThis is a live test email dispatched via ${brand.companyName} SMTP connection to confirm live mail delivery.\n\nBest regards,\n${brand.teamName}`
   );
   const [isSendingLiveTest, setIsSendingLiveTest] = useState<boolean>(false);
   const [liveSendResult, setLiveSendResult] = useState<{ success: boolean; messageId?: string; error?: string } | null>(null);
 
   // Inbound Pipeline Ingestion Simulator & Tester
   const [inboundSender, setInboundSender] = useState<string>('partner.tour@gmail.com');
-  const [inboundSenderName, setInboundSenderName] = useState<string>('Al-Noor Pilgrimage Tours');
-  const [inboundSubject, setInboundSubject] = useState<string>('Inquiry: B2B Portal & Hotel Allotments for Umrah 2026');
+  const [inboundSenderName, setInboundSenderName] = useState<string>(isUmrah ? 'Al-Noor Pilgrimage Tours' : 'Example Customer');
+  const [inboundSubject, setInboundSubject] = useState<string>(isUmrah ? 'Inquiry: B2B Portal & Hotel Allotments for Umrah 2026' : `Inquiry about ${brand.companyName}`);
   const [inboundBody, setInboundBody] = useState<string>(
-    'Hello,\n\nWe are a pilgrimage tour agency with 8 staff members in Hyderabad. Does Umrah360 support custom hotel allotments and sub-agent credit limits?\n\nRegards,\nAl-Noor Pilgrimage Operations'
+    isUmrah
+      ? 'Hello,\n\nWe are a pilgrimage tour agency with 8 staff members in Hyderabad. Does Umrah360 support custom hotel allotments and sub-agent credit limits?\n\nRegards,\nAl-Noor Pilgrimage Operations'
+      : `Hello,\n\nI would like to learn more about ${brand.companyName}. Could you share some details?\n\nRegards,\nExample Customer`
   );
   const [isCustomerFollowUp, setIsCustomerFollowUp] = useState<boolean>(false);
   const [isIngestingInbound, setIsIngestingInbound] = useState<boolean>(false);
@@ -447,7 +452,7 @@ export const LiveMailboxCenter: React.FC<LiveMailboxCenterProps> = ({
           <div className="space-y-1">
             <div className="text-base font-bold text-slate-900 font-mono break-all">{activeMailbox}</div>
             <p className="text-xs text-slate-500">
-              Pilgrim operators & agencies send their inquiries directly to this address.
+              Customers send their inquiries directly to this address.
             </p>
           </div>
           <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs">
@@ -693,7 +698,7 @@ export const LiveMailboxCenter: React.FC<LiveMailboxCenterProps> = ({
                     required
                     value={inboundSender}
                     onChange={(e) => setInboundSender(e.target.value)}
-                    placeholder="amaavigo@gmail.com"
+                    placeholder="you@yourcompany.com"
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-[#ef741a] focus:ring-2 focus:ring-[#ef741a]/20 transition font-mono"
                   />
                 </div>
@@ -705,7 +710,7 @@ export const LiveMailboxCenter: React.FC<LiveMailboxCenterProps> = ({
                     type="text"
                     value={inboundSenderName}
                     onChange={(e) => setInboundSenderName(e.target.value)}
-                    placeholder="Amaavigo Travel"
+                    placeholder="Your Company"
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-[#ef741a] focus:ring-2 focus:ring-[#ef741a]/20 transition"
                   />
                 </div>
@@ -833,7 +838,7 @@ export const LiveMailboxCenter: React.FC<LiveMailboxCenterProps> = ({
               <h2 className="text-sm font-extrabold text-slate-900 font-display">Direct Outbound SMTP Send Test</h2>
             </div>
             <p className="text-xs text-slate-500 font-medium leading-relaxed">
-              Dispatches an immediate outbound email through the live SMTP connection to verify direct delivery to your personal mailbox (e.g. <strong className="text-slate-800">amaavigo@gmail.com</strong>).
+              Dispatches an immediate outbound email through the live SMTP connection to verify direct delivery to your personal mailbox (e.g. <strong className="text-slate-800">you@yourcompany.com</strong>).
             </p>
 
             <form onSubmit={handleSendLiveTest} className="space-y-3 pt-1">
@@ -846,7 +851,7 @@ export const LiveMailboxCenter: React.FC<LiveMailboxCenterProps> = ({
                   required
                   value={testTo}
                   onChange={(e) => setTestTo(e.target.value)}
-                  placeholder="amaavigo@gmail.com"
+                  placeholder="you@yourcompany.com"
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-[#ef741a] focus:ring-2 focus:ring-[#ef741a]/20 transition font-mono"
                 />
               </div>
@@ -1347,7 +1352,7 @@ export const LiveMailboxCenter: React.FC<LiveMailboxCenterProps> = ({
                   required
                   value={modalSmtpUser}
                   onChange={(e) => setModalSmtpUser(e.target.value)}
-                  placeholder="amaavigo@gmail.com"
+                  placeholder="you@yourcompany.com"
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-900 focus:outline-none focus:border-[#ef741a] font-mono"
                 />
               </div>
@@ -1375,7 +1380,7 @@ export const LiveMailboxCenter: React.FC<LiveMailboxCenterProps> = ({
                   type="text"
                   value={modalSmtpFrom}
                   onChange={(e) => setModalSmtpFrom(e.target.value)}
-                  placeholder="Umrah360 Automation <amaavigo@gmail.com>"
+                  placeholder={`${brand.senderName} <you@yourcompany.com>`}
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-900 focus:outline-none focus:border-[#ef741a] font-mono"
                 />
               </div>

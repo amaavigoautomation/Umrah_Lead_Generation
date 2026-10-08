@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useBrand } from '../context/BrandContext';
 import {
   X,
   Check,
@@ -74,6 +75,7 @@ export const EmailTemplateEditorModal: React.FC<EmailTemplateEditorModalProps> =
   isSaving,
   error,
 }) => {
+  const { brand } = useBrand();
   const [name, setName] = useState('');
   const [subject, setSubject] = useState('');
   const [formatMode, setFormatMode] = useState<'VISUAL' | 'HTML' | 'PLAIN'>('VISUAL');
@@ -111,8 +113,8 @@ export const EmailTemplateEditorModal: React.FC<EmailTemplateEditorModalProps> =
       setAttachments(editingTemplate.attachments || []);
     } else {
       setName('');
-      setSubject('Streamlining Pilgrimage Operations for {{company}}');
-      const defaultHtml = `<p>Hi <strong>{{name}}</strong>,</p><p>I noticed you lead operations at <strong>{{company}}</strong>.</p><p>Umrah360 helps pilgrimage tour operators automate dynamic package pricing, manage sub-agent distribution, and streamline Makkah & Madinah hotel allotments in real-time.</p><p>Would you be open to a brief 10-minute walkthrough this week?</p><p>Best regards,<br/><strong>Umrah360 Team</strong></p>`;
+      setSubject(brand.playbook === 'umrah360' ? 'Streamlining Pilgrimage Operations for {{company}}' : `${brand.companyName} for {{company}}`);
+      const defaultHtml = brand.playbook !== 'umrah360' ? `<p>Hi <strong>{{name}}</strong>,</p><p>I noticed you lead operations at <strong>{{company}}</strong>.</p><p>${brand.companyName}${brand.tagline ? ` is ${brand.tagline}` : ' may be able to help'}.</p><p>Would you be open to a brief 10-minute walkthrough this week?</p><p>Best regards,<br/><strong>${brand.teamName}</strong></p>` : `<p>Hi <strong>{{name}}</strong>,</p><p>I noticed you lead operations at <strong>{{company}}</strong>.</p><p>Umrah360 helps pilgrimage tour operators automate dynamic package pricing, manage sub-agent distribution, and streamline Makkah & Madinah hotel allotments in real-time.</p><p>Would you be open to a brief 10-minute walkthrough this week?</p><p>Best regards,<br/><strong>Umrah360 Team</strong></p>`;
       setHtmlContent(defaultHtml);
       setPlainTextContent(stripHtml(defaultHtml));
       setAttachments([]);
@@ -300,8 +302,8 @@ export const EmailTemplateEditorModal: React.FC<EmailTemplateEditorModalProps> =
       .replace(/\{\{\s*name\s*\}\}/gi, 'Mr. Tariq Farooq')
       .replace(/\{\{\s*firstName\s*\}\}/gi, 'Tariq')
       .replace(/\{\{\s*lastName\s*\}\}/gi, 'Farooq')
-      .replace(/\{\{\s*company\s*\}\}/gi, 'Al-Bait Pilgrimage Tours')
-      .replace(/\{\{\s*companyName\s*\}\}/gi, 'Al-Bait Pilgrimage Tours')
+      .replace(/\{\{\s*company\s*\}\}/gi, brand.playbook === 'umrah360' ? 'Al-Bait Pilgrimage Tours' : 'Example Co.')
+      .replace(/\{\{\s*companyName\s*\}\}/gi, brand.playbook === 'umrah360' ? 'Al-Bait Pilgrimage Tours' : 'Example Co.')
       .replace(/\{\{\s*designation\s*\}\}/gi, 'Managing Director')
       .replace(/\{\{\s*jobTitle\s*\}\}/gi, 'Managing Director')
       .replace(/\{\{\s*email\s*\}\}/gi, 'tariq@albait-tours.com');
@@ -431,7 +433,7 @@ export const EmailTemplateEditorModal: React.FC<EmailTemplateEditorModalProps> =
               </div>
               <input
                 type="text"
-                placeholder="e.g. Streamlining Pilgrimage Operations for {{company}}"
+                placeholder="e.g. Streamlining Operations for {{company}}"
                 value={subject}
                 onChange={(e) => {
                   setSubject(e.target.value);
@@ -730,7 +732,7 @@ export const EmailTemplateEditorModal: React.FC<EmailTemplateEditorModalProps> =
                   <Link2 className="w-4 h-4 text-orange-500 shrink-0" />
                   <input
                     type="url"
-                    placeholder="https://umrah360.in/book-demo"
+                    placeholder={`${brand.websiteUrl || 'https://yourcompany.com'}/book-demo`}
                     value={linkInputUrl}
                     onChange={(e) => setLinkInputUrl(e.target.value)}
                     className="flex-1 bg-white border border-slate-200 rounded-lg px-2.5 py-1 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-orange-500"
@@ -913,10 +915,10 @@ export const EmailTemplateEditorModal: React.FC<EmailTemplateEditorModalProps> =
               <div className="p-3.5 bg-slate-50 border-b border-slate-200 space-y-1.5 text-xs">
                 <div className="flex items-center justify-between text-[11px] text-slate-500">
                   <span>To: <strong className="text-slate-800">Tariq Farooq</strong> &lt;tariq@albait-tours.com&gt;</span>
-                  <span className="text-[10px] font-mono text-orange-600 font-semibold">Umrah360 Outbound</span>
+                  <span className="text-[10px] font-mono text-orange-600 font-semibold">{brand.companyName} Outbound</span>
                 </div>
                 <div className="text-[11px] text-slate-500">
-                  <span>From: <span className="text-slate-700 font-medium">Umrah360 Team</span> &lt;amaavigo@gmail.com&gt;</span>
+                  <span>From: <span className="text-slate-700 font-medium">{brand.teamName}</span> &lt;{brand.salesEmail || brand.calendarEmail || 'you@yourcompany.com'}&gt;</span>
                 </div>
                 <div className="pt-1 border-t border-slate-200 text-xs font-semibold text-slate-900">
                   <span className="text-slate-500 font-normal mr-1">Subject:</span>

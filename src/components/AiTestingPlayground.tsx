@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useBrand } from '../context/BrandContext';
 import {
   Sparkles,
   Bot,
@@ -20,11 +21,13 @@ interface AiTestingPlaygroundProps {
 
 export const AiTestingPlayground: React.FC<AiTestingPlaygroundProps> = ({ knowledgeDocs }) => {
   const [selectedChannel, setSelectedChannel] = useState<Channel>('EMAIL');
+  const { brand } = useBrand();
+  const isUmrah = brand.playbook === 'umrah360';
   const [customerMessage, setCustomerMessage] = useState<string>(
-    'What is the pricing for 20 users? Does it include the B2B agent portal?'
+    isUmrah ? 'What is the pricing for 20 users? Does it include the B2B agent portal?' : `What does ${brand.companyName} offer and how much does it cost?`
   );
   const [prospectName, setProspectName] = useState<string>('Rahul Sharma');
-  const [companyName, setCompanyName] = useState<string>('ABC Travels');
+  const [companyName, setCompanyName] = useState<string>(isUmrah ? 'ABC Travels' : 'Example Co.');
   const [jobTitle, setJobTitle] = useState<string>('Founder');
   const [isEvaluating, setIsEvaluating] = useState<boolean>(false);
   const [evaluationResult, setEvaluationResult] = useState<any>(null);
@@ -33,19 +36,19 @@ export const AiTestingPlayground: React.FC<AiTestingPlaygroundProps> = ({ knowle
   // Preset quick scenarios
   const presets = [
     {
-      label: 'Pricing for 20 Users (Triggers Human Handoff)',
+      label: isUmrah ? 'Pricing for 20 Users (Triggers Human Handoff)' : 'Pricing Question',
       channel: 'EMAIL' as Channel,
-      message: 'What is the pricing for 20 users? Does it include the B2B agent portal?',
+      message: isUmrah ? 'What is the pricing for 20 users? Does it include the B2B agent portal?' : `What are the pricing options for ${brand.companyName}?`,
     },
     {
-      label: 'B2B Sub-Agent Capability Question',
+      label: isUmrah ? 'B2B Sub-Agent Capability Question' : 'Product Capability Question',
       channel: 'WHATSAPP' as Channel,
-      message: 'Does Umrah360 support B2B sub-agents with white-label PDF vouchers and wallet credits?',
+      message: isUmrah ? 'Does Umrah360 support B2B sub-agents with white-label PDF vouchers and wallet credits?' : `What can ${brand.companyName} do for my business?`,
     },
     {
-      label: 'Dynamic Package Builder Inquiry',
+      label: isUmrah ? 'Dynamic Package Builder Inquiry' : 'Setup & Onboarding Inquiry',
       channel: 'WEBSITE' as Channel,
-      message: 'Can we build custom day-by-day itineraries with Makkah Clock tower hotels and Haramain trains?',
+      message: isUmrah ? 'Can we build custom day-by-day itineraries with Makkah Clock tower hotels and Haramain trains?' : 'How long does onboarding take and what support do you provide?',
     },
     {
       label: 'Unsubscribe / Stop Outreach',

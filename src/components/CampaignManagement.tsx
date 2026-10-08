@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { useBrand } from '../context/BrandContext';
 import * as XLSX from 'xlsx';
 import {
   Send,
@@ -85,6 +86,8 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
   onToggleCampaignStatus,
   tenantId = '',
 }) => {
+  const { brand } = useBrand();
+  const isUmrah = brand.playbook === 'umrah360';
   // Email templates live under the workspace, never in a shared root collection.
   const tplCol = () => collection(db, 'tenants', tenantId, 'email_templates');
   const tplDoc = (id: string) => doc(db, 'tenants', tenantId, 'email_templates', id);
@@ -2282,7 +2285,7 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                 </label>
                 <input
                   type="text"
-                  placeholder="e.g. Mumbai Umrah Operators - Q4 Outreach"
+                  placeholder="e.g. Q4 Outreach - Key Accounts"
                   value={newCampaignName}
                   onChange={(e) => setNewCampaignName(e.target.value)}
                   className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-orange-500"
@@ -2362,6 +2365,7 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                     <span>Paste Leads</span>
                   </button>
 
+                  {isUmrah && (
                   <button
                     type="button"
                     onClick={() => {
@@ -2377,6 +2381,7 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                     <Sparkles className="w-3.5 h-3.5 text-amber-300" />
                     <span>⚡ Sample Leads</span>
                   </button>
+                  )}
                 </div>
 
                 {/* TAB 1: FILE UPLOAD */}
@@ -2421,6 +2426,7 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                   <div className="space-y-2">
                     <div className="flex items-center justify-between text-[11px] text-slate-500">
                       <span>Paste lines with Email, Name, Company (comma, tab or newline separated):</span>
+                      {isUmrah && (
                       <button
                         type="button"
                         onClick={() => handleParsePastedLeads(`tariq@mansoorhajj.com, Tariq Al-Mansoor, Al-Mansoor Hajj Mumbai\nrashid@haramainjourneys.in, Rashid Farooqui, Haramain Journeys\nfarhan@malikpilgrimages.co.uk, Farhan Malik, Malik Pilgrimages UK`)}
@@ -2428,12 +2434,13 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                       >
                         Paste Example Format
                       </button>
+                      )}
                     </div>
                     <textarea
                       rows={4}
                       value={pastedLeadsText}
                       onChange={(e) => handleParsePastedLeads(e.target.value)}
-                      placeholder={`e.g.:\nahmed@safwatravels.in, Ahmed Khan, Al-Safwa Travels\ncontact@delhiumrah.in, Irfan Siddiqui, Delhi Consolidators\nbooking@alnoortours.ae, Bilal Qureshi, Al-Noor Tours`}
+                      placeholder={isUmrah ? `e.g.:\nahmed@safwatravels.in, Ahmed Khan, Al-Safwa Travels\ncontact@delhiumrah.in, Irfan Siddiqui, Delhi Consolidators\nbooking@alnoortours.ae, Bilal Qureshi, Al-Noor Tours` : `e.g.:\njane@example.com, Jane Doe, Example Co.\njohn@acme.com, John Smith, Acme Inc.`}
                       className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono text-slate-800 placeholder-slate-400 focus:outline-none focus:border-orange-500"
                     />
                   </div>
@@ -2801,7 +2808,7 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                         <span>AI Personalization Engine Ready</span>
                       </h4>
                       <p className="text-[11px] text-slate-600 mt-0.5">
-                        Each lead will receive an individually researched, tailored email referencing their company profile and Umrah360 product capabilities.
+                        Each lead will receive an individually researched, tailored email referencing their company profile and {brand.companyName} product capabilities.
                       </p>
                     </div>
                     <button
@@ -3269,7 +3276,7 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                       <span className="text-xs text-slate-500 ml-2">({sample.lead.email})</span>
                     </div>
                     <span className="text-[11px] bg-orange-50 text-orange-700 border border-orange-200 px-2 py-0.5 rounded font-semibold">
-                      {sample.lead.companyName || 'Agency'}
+                      {sample.lead.companyName || (isUmrah ? 'Agency' : 'Company')}
                     </span>
                   </div>
 

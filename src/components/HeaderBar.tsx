@@ -1,3 +1,4 @@
+import { useBrand } from '../context/BrandContext';
 import React, { useState, useEffect } from 'react';
 import {
   PanelLeft,
@@ -58,7 +59,9 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
   currentUser,
   onLogout,
 }) => {
-  const [activeMailbox, setActiveMailbox] = useState<string>('amaavigo@gmail.com');
+  const { brand } = useBrand();
+  const isUmrahBrand = brand.playbook === 'umrah360';
+  const [activeMailbox, setActiveMailbox] = useState<string>('');
 
   useEffect(() => {
     fetch('/api/smtp/status')
@@ -76,9 +79,15 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
       {/* Left: Company Logo (Amaavigo), Collapse Sidebar Button & View Icon */}
       <div className="flex items-center space-x-3">
         {/* Company Logo: Amaavigo */}
-        <div className="flex items-center space-x-2 border-r border-slate-200 pr-3">
-          <img src="/amaavigo-logo.png" alt="Amaavigo" className="h-6 w-auto object-contain" />
-        </div>
+        {(isUmrahBrand || brand.logoUrl) && (
+          <div className="flex items-center space-x-2 border-r border-slate-200 pr-3">
+            <img
+              src={brand.logoUrl || '/amaavigo-logo.png'}
+              alt={brand.logoUrl ? brand.companyName : 'Amaavigo'}
+              className="h-6 w-auto object-contain"
+            />
+          </div>
+        )}
 
         <button
           onClick={onToggleCollapse}

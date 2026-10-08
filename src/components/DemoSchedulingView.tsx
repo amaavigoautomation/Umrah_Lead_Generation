@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import { useBrand } from '../context/BrandContext';
+import { brandTzLabel, brandWorkingDaysLabel, fmtHour } from '../shared/brand';
 import {
   Calendar as CalendarIcon,
   Video,
@@ -34,6 +36,10 @@ interface DemoSchedulingViewProps {
 }
 
 export const DemoSchedulingView: React.FC<DemoSchedulingViewProps> = ({ leads = [] }) => {
+  const { brand } = useBrand();
+  const tzl = brandTzLabel(brand);
+  const dayRange = brandWorkingDaysLabel(brand).replace(' to ', '–').replace(/Monday/g, 'Mon').replace(/Tuesday/g, 'Tue').replace(/Wednesday/g, 'Wed').replace(/Thursday/g, 'Thu').replace(/Friday/g, 'Fri').replace(/Saturday/g, 'Sat').replace(/Sunday/g, 'Sun');
+  const hoursLabel = `${fmtHour(brand.workingHoursStart)} – ${fmtHour(brand.workingHoursEnd)} ${tzl}`;
   const [calendarConnected, setCalendarConnected] = useState(false);
   const [isAuthenticating, setIsAuthenticating] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
@@ -113,7 +119,7 @@ export const DemoSchedulingView: React.FC<DemoSchedulingViewProps> = ({ leads = 
       if (res.status === 401) {
         setCalendarConnected(false);
         try {
-          window.sessionStorage.removeItem('umrah360_calendar_token');
+          window.sessionStorage.removeItem('calendar_access_token');
         } catch {}
       } else if (res.ok) {
         const data = await res.json();
@@ -463,7 +469,7 @@ export const DemoSchedulingView: React.FC<DemoSchedulingViewProps> = ({ leads = 
                 CENTRAL DEMO SCHEDULING AGENT
               </span>
               <span className="px-2.5 py-0.5 bg-slate-100 text-slate-700 border border-slate-200/90 text-xs rounded-lg font-bold">
-                Asia/Kolkata (IST)
+                {brand.timezone}{brand.timezoneLabel ? ` (${brand.timezoneLabel})` : ''}
               </span>
             </div>
             <h2 className="text-xl md:text-2xl font-extrabold text-slate-900 flex items-center gap-2">
@@ -473,7 +479,7 @@ export const DemoSchedulingView: React.FC<DemoSchedulingViewProps> = ({ leads = 
             <p className="text-xs sm:text-sm text-slate-600 max-w-2xl font-medium leading-relaxed">
               All demo requests across <strong className="text-slate-900 font-bold">Website, Email, WhatsApp, and Campaigns</strong> are validated in
               realtime against <strong className="text-slate-900 font-bold">{CALENDAR_TARGET_ACCOUNT}</strong>. Bookings generate authentic Google Meet rooms
-              and reserve slots directly on Google Calendar (Mon–Fri, 10:00 AM – 7:00 PM IST).
+              and reserve slots directly on Google Calendar ({dayRange}, {hoursLabel}).
             </p>
           </div>
 
@@ -644,7 +650,7 @@ export const DemoSchedulingView: React.FC<DemoSchedulingViewProps> = ({ leads = 
             </div>
 
             <p className="text-xs text-slate-500 mb-4 font-medium leading-relaxed">
-              Queried directly from Google Calendar API. Mon–Fri, 10 AM – 7 PM IST only. Click any slot to quick-book
+              Queried directly from Google Calendar API. {dayRange}, {hoursLabel} only. Click any slot to quick-book
               or reschedule.
             </p>
 
@@ -688,7 +694,7 @@ export const DemoSchedulingView: React.FC<DemoSchedulingViewProps> = ({ leads = 
           </div>
 
           <div className="mt-4 pt-4 border-t border-slate-100 text-[11px] text-slate-500 flex items-center justify-between font-medium">
-            <span>Hours: 10 AM – 7 PM IST</span>
+            <span>Hours: {hoursLabel}</span>
             <span className="text-orange-600 font-bold font-mono tabular-nums">{availableSlots.length} available</span>
           </div>
         </div>
@@ -739,7 +745,7 @@ export const DemoSchedulingView: React.FC<DemoSchedulingViewProps> = ({ leads = 
                     <tr>
                       <th className="py-2.5 px-3">Lead & Company</th>
                       <th className="py-2.5 px-3">Attendees & Invites</th>
-                      <th className="py-2.5 px-3">Date & Time (IST)</th>
+                      <th className="py-2.5 px-3">Date & Time ({tzl})</th>
                       <th className="py-2.5 px-3">Channel</th>
                       <th className="py-2.5 px-3">Google Meet</th>
                       <th className="py-2.5 px-3">Status</th>
@@ -795,7 +801,7 @@ export const DemoSchedulingView: React.FC<DemoSchedulingViewProps> = ({ leads = 
                           <td className="py-3 px-3">
                             <div className="font-bold text-emerald-700">{b.date}</div>
                             <div className="text-[11px] text-slate-600 font-mono">
-                              {b.startTime} – {b.endTime} IST
+                              {b.startTime} – {b.endTime} {tzl}
                             </div>
                           </td>
                           <td className="py-3 px-3">
@@ -974,7 +980,7 @@ export const DemoSchedulingView: React.FC<DemoSchedulingViewProps> = ({ leads = 
                   Add Attendee to Demo Meeting
                 </h3>
                 <p className="text-xs text-slate-500 font-medium">
-                  {attendeeModalBooking.companyName} ({attendeeModalBooking.leadName}) • {attendeeModalBooking.date} ({attendeeModalBooking.startTime} – {attendeeModalBooking.endTime} IST)
+                  {attendeeModalBooking.companyName} ({attendeeModalBooking.leadName}) • {attendeeModalBooking.date} ({attendeeModalBooking.startTime} – {attendeeModalBooking.endTime} {tzl})
                 </p>
               </div>
             </div>
@@ -1061,7 +1067,7 @@ export const DemoSchedulingView: React.FC<DemoSchedulingViewProps> = ({ leads = 
         </div>
         <p className="text-xs text-slate-500 mb-5 font-medium leading-relaxed max-w-3xl">
           Test conversational scheduling requests across Website, Email, or WhatsApp. The agent parses intent,
-          converts natural relative dates ("Tomorrow afternoon", "Wednesday 3 PM") into IST, checks Google Calendar in
+          converts natural relative dates ("Tomorrow afternoon", "Wednesday 3 PM") into {tzl}, checks Google Calendar in
           realtime, and creates meetings or suggests alternatives.
         </p>
 
@@ -1227,7 +1233,7 @@ export const DemoSchedulingView: React.FC<DemoSchedulingViewProps> = ({ leads = 
                       </div>
                       <div className="text-[11px] text-slate-700 font-medium">
                         Date: {simResponse.booking.date} | {simResponse.booking.startTime} –{' '}
-                        {simResponse.booking.endTime} IST
+                        {simResponse.booking.endTime} {tzl}
                       </div>
                       <div className="text-[11px] text-emerald-800 font-mono font-bold break-all">
                         Meet: {simResponse.booking.googleMeetLink}

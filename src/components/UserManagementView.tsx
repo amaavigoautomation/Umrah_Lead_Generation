@@ -262,7 +262,7 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
                     type="email"
                     value={editingUser.email || ''}
                     onChange={(e) => setEditingUser({ ...editingUser, email: e.target.value })}
-                    placeholder="operator@umrah360.com"
+                    placeholder="name@yourcompany.com"
                     className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-slate-800 focus:outline-none focus:border-orange-500"
                     required
                   />

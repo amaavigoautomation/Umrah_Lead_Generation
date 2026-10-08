@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useBrand } from '../context/BrandContext';
 
 interface Umrah360LogoProps {
   className?: string;
@@ -12,10 +13,13 @@ export const Umrah360Logo: React.FC<Umrah360LogoProps> = ({
   className = '',
   size = 'md',
   showSubtitle = true,
-  systemName = 'Umrah360',
+  systemName,
   systemBadge = 'AI Platform',
 }) => {
   const [imgError, setImgError] = useState(false);
+  const { brand } = useBrand();
+  const name = systemName ?? brand.companyName;
+  const useAmaavigoMark = brand.playbook === 'umrah360' && !brand.logoUrl;
 
   const sizeMap = {
     sm: {
@@ -42,9 +46,22 @@ export const Umrah360Logo: React.FC<Umrah360LogoProps> = ({
 
   return (
     <div className={`flex items-center space-x-3 select-none ${className}`}>
-      {/* Official Amaavigo Logo */}
+      {/* Workspace logo (company's own logo, or text wordmark). The Amaavigo mark is kept for the Umrah360 workspace. */}
       <div className="flex items-center space-x-2">
-        {!imgError ? (
+        {!useAmaavigoMark ? (
+          brand.logoUrl && !imgError ? (
+            <img
+              src={brand.logoUrl}
+              alt={brand.companyName}
+              className={`${currentSize.logoImg} w-auto object-contain`}
+              onError={() => setImgError(true)}
+            />
+          ) : (
+            <span className="font-display font-extrabold text-slate-900 tracking-tight text-lg truncate max-w-[10rem]">
+              {brand.companyName || 'Workspace'}
+            </span>
+          )
+        ) : !imgError ? (
           <img
             src="/amaavigo-logo.png"
             alt="Amaavigo"
@@ -80,11 +97,11 @@ export const Umrah360Logo: React.FC<Umrah360LogoProps> = ({
         )}
 
         {/* Separator / Product Tag */}
-        <div className="h-4 w-px bg-slate-200 mx-1 hidden sm:block" />
+        {useAmaavigoMark && <div className="h-4 w-px bg-slate-200 mx-1 hidden sm:block" />}
 
-        {systemName && (
+        {useAmaavigoMark && name && (
           <span className="text-sm font-bold text-slate-800 hidden sm:inline-block font-sans">
-            {systemName}
+            {name}
           </span>
         )}
 

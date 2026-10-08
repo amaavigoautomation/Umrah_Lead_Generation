@@ -26,6 +26,7 @@ import {
 import { WHATSAPP_BUSINESS_NUMBER_FORMATTED } from '../services/whatsappInboundService';
 import { AppUser } from '../types';
 import { Umrah360Logo } from './Umrah360Logo';
+import { useBrand } from '../context/BrandContext';
 
 export type ActiveTab =
   | 'inbox'
@@ -73,6 +74,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   isCollapsed: controlledIsCollapsed,
   onToggleCollapse,
 }) => {
+  const { brand } = useBrand();
   const [internalCollapsed, setInternalCollapsed] = useState<boolean>(false);
   const [isMobileOpen, setIsMobileOpen] = useState<boolean>(false);
 
@@ -131,11 +133,16 @@ export const Navbar: React.FC<NavbarProps> = ({
       label: 'AI Testing',
       icon: <Sparkles className="w-4 h-4 shrink-0" />,
     },
-    {
-      id: 'scenarios',
-      label: 'E2E Walkthroughs',
-      icon: <PlayCircle className="w-4 h-4 shrink-0" />,
-    },
+    // The E2E walkthroughs are a scripted Umrah360 product tour, so only that workspace sees them.
+    ...(brand.playbook === 'umrah360'
+      ? [
+          {
+            id: 'scenarios' as ActiveTab,
+            label: 'E2E Walkthroughs',
+            icon: <PlayCircle className="w-4 h-4 shrink-0" />,
+          },
+        ]
+      : []),
     {
       id: 'settings',
       label: 'Settings',
@@ -161,7 +168,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         <div className="flex items-center justify-between">
           {!isCollapsed ? (
             <div className="flex items-center justify-between w-full">
-              <Umrah360Logo size="sm" systemName="Umrah360" systemBadge="" showSubtitle={false} />
+              <Umrah360Logo size="sm" systemBadge="" showSubtitle={false} />
               <button
                 onClick={handleToggle}
                 className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition hidden md:flex items-center justify-center"
@@ -178,7 +185,15 @@ export const Navbar: React.FC<NavbarProps> = ({
             </div>
           ) : (
             <div className="flex items-center justify-between w-full px-1">
-              <img src="/amaavigo-logo.png" alt="Logo" className="h-6 w-auto object-contain" />
+              {brand.playbook === 'umrah360' && !brand.logoUrl ? (
+                <img src="/amaavigo-logo.png" alt="Logo" className="h-6 w-auto object-contain" />
+              ) : brand.logoUrl ? (
+                <img src={brand.logoUrl} alt={brand.companyName} className="h-6 w-auto object-contain" />
+              ) : (
+                <span className="w-6 h-6 rounded-full bg-[#fef6f3] border border-[#fed7aa] text-[#ef741a] text-xs font-bold flex items-center justify-center">
+                  {(brand.companyName || '?').charAt(0).toUpperCase()}
+                </span>
+              )}
               <button
                 onClick={handleToggle}
                 className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition hidden md:flex items-center justify-center"
@@ -197,7 +212,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               <Shield className="w-3.5 h-3.5 text-[#ef741a] shrink-0" />
               {allTenants.length > 1 && onSwitchTenant ? (
                 <select
-                  value={currentTenant?.id || 'umrah360'}
+                  value={currentTenant?.id || ''}
                   onChange={(e) => onSwitchTenant(e.target.value)}
                   className="bg-transparent text-[11px] font-semibold focus:outline-none cursor-pointer text-slate-800 truncate"
                 >
@@ -209,7 +224,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 </select>
               ) : (
                 <span className="font-semibold text-slate-800 text-[11px] truncate">
-                  {currentTenant?.name || 'Umrah360'}
+                  {currentTenant?.name || brand.companyName}
                 </span>
               )}
             </div>
@@ -335,7 +350,7 @@ export const Navbar: React.FC<NavbarProps> = ({
     <>
       {/* Mobile Top Navigation Header */}
       <div className="md:hidden bg-white border-b border-slate-200 px-4 py-2.5 flex items-center justify-between sticky top-0 z-30 shadow-2xs">
-        <Umrah360Logo size="sm" systemName="Umrah360" systemBadge="" showSubtitle={false} />
+        <Umrah360Logo size="sm" systemBadge="" showSubtitle={false} />
 
         <div className="flex items-center space-x-2">
           {unreadCount > 0 && (

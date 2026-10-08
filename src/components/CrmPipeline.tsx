@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { useBrand, getCurrentBrand } from '../context/BrandContext';
 import {
   Users,
   Search,
@@ -59,6 +60,7 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
   selectedLeadId: initialSelectedLeadId,
   onUpdateLeadStatus,
 }) => {
+  const { brand } = useBrand();
   const [viewMode, setViewMode] = useState<ViewMode>('PIPELINE');
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(
     initialSelectedLeadId || leads[0]?.leadId || null
@@ -329,7 +331,7 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
           <button
             onClick={() => setIsWebsiteModalOpen(true)}
             className="flex items-center gap-1.5 px-3.5 py-1.5 bg-orange-500 hover:bg-orange-600 active:bg-orange-700 text-white rounded-xl text-xs font-bold transition shadow-2xs shadow-orange-500/20 shrink-0"
-            title="Connect your website demo form (umrah360.in/request-demo) to CRM"
+            title="Connect your website demo form to CRM"
           >
             <Globe className="w-3.5 h-3.5 text-white" />
             <span>Website Form Webhook</span>
@@ -1006,7 +1008,7 @@ function renderLeadDetail(
             <div className="flex items-center gap-2">
               <Globe className="w-4 h-4 text-emerald-600" />
               <span className="text-xs font-bold text-emerald-950 uppercase tracking-wider">
-                Website Demo Form (umrah360.in/request-demo)
+                Website Demo Form
               </span>
             </div>
             <span className="text-[10px] font-bold text-emerald-800 bg-emerald-100 px-2.5 py-0.5 rounded border border-emerald-300 flex items-center gap-1">
@@ -1098,7 +1100,7 @@ function renderLeadDetail(
               ? selectedLead.requirements
               : typeof selectedLead.requirements === 'string'
               ? (selectedLead.requirements as string).split('|').map((s) => s.trim())
-              : ['Umrah Packages', 'Costing Engine']
+              : getCurrentBrand().playbook === 'umrah360' ? ['Umrah Packages', 'Costing Engine'] : []
             ).map((req, i) => (
               <span
                 key={i}

@@ -251,7 +251,7 @@ export const AutoFollowUpDashboard: React.FC<AutoFollowUpDashboardProps> = ({
             </span>
           </div>
           <p className="text-sm text-slate-500 mt-1">
-            Dynamic, context-aware follow-up engine for Umrah360 inbound leads. Reads actual thread context and generates personalized replies.
+            Dynamic, context-aware follow-up engine for your inbound leads. Reads actual thread context and generates personalized replies.
           </p>
         </div>
 

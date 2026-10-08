@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useBrand } from '../context/BrandContext';
 import {
   Mail,
   Send,
@@ -40,14 +41,18 @@ export const InboundEmailFlowModal: React.FC<InboundEmailFlowModalProps> = ({
   onNavigateToThread,
   onNavigateToCrmLead,
 }) => {
+  const { brand } = useBrand();
+  const isUmrah = brand.playbook === 'umrah360';
   const [selectedPresetId, setSelectedPresetId] = useState<string>(PRESET_INBOUND_EMAILS[0].id);
   const [isCustom, setIsCustom] = useState<boolean>(false);
   const [customFrom, setCustomFrom] = useState<string>('ahmed@alqudsatours.com');
   const [customName, setCustomName] = useState<string>('Ahmed Al-Qudsi');
   const [customCompany, setCustomCompany] = useState<string>('Al-Qudsi Travel');
-  const [customSubject, setCustomSubject] = useState<string>('Umrah Group Costing & Visa Integration');
+  const [customSubject, setCustomSubject] = useState<string>(isUmrah ? 'Umrah Group Costing & Visa Integration' : `Inquiry about ${brand.companyName}`);
   const [customBody, setCustomBody] = useState<string>(
-    'Hello,\n\nWe organize group Umrah departures from Cairo and Dubai. Does Umrah360 support automated Saudi visa tracking and dynamic group costing with multi-currency SAR/USD?\n\nRegards,\nAhmed Al-Qudsi'
+    isUmrah
+      ? 'Hello,\n\nWe organize group Umrah departures from Cairo and Dubai. Does Umrah360 support automated Saudi visa tracking and dynamic group costing with multi-currency SAR/USD?\n\nRegards,\nAhmed Al-Qudsi'
+      : `Hello,\n\nI would like to learn more about ${brand.companyName}. Could you share some details?\n\nRegards,\nAhmed Al-Qudsi`
   );
 
   const [isExecuting, setIsExecuting] = useState<boolean>(false);

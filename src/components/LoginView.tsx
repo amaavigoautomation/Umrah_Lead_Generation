@@ -11,7 +11,6 @@ import {
   Shield,
   Sparkles,
 } from 'lucide-react';
-import { Umrah360Logo } from './Umrah360Logo';
 import { signIn, requestPasswordReset, friendlyAuthError } from '../services/authService';
 
 interface LoginViewProps {
@@ -72,10 +71,10 @@ export const LoginView: React.FC<LoginViewProps> = ({ isFirebaseActive, initialE
         {/* Brand Header */}
         <div className="text-center space-y-3">
           <div className="flex justify-center mb-2">
-            <Umrah360Logo size="lg" />
+            <img src="/amaavigo-logo.png" alt="Amaavigo" className="h-11 w-auto object-contain" />
           </div>
           <p className="text-xs text-slate-600 max-w-sm mx-auto font-medium">
-            Autonomous Inbound Pilgrimage Capture, Cold Outreach & Omnichannel Lead Engine
+            Autonomous Inbound Lead Capture, Cold Outreach & Omnichannel Lead Engine
           </p>
         </div>
 

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useBrand } from '../context/BrandContext';
 import {
   BookOpen,
   Search,
@@ -28,11 +29,12 @@ export const KnowledgeBaseView: React.FC<KnowledgeBaseViewProps> = ({
   onUpdateDocument,
   onDeleteDocument,
 }) => {
+  const { brand, tenantId } = useBrand();
   const [selectedDocId, setSelectedDocId] = useState<string>(documents[0]?.id || '');
   const [categoryFilter, setCategoryFilter] = useState<string>('ALL');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');
-  const [ragTestQuery, setRagTestQuery] = useState<string>('Does Umrah360 support B2B sub-agents?');
+  const [ragTestQuery, setRagTestQuery] = useState<string>(brand.playbook === 'umrah360' ? 'Does Umrah360 support B2B sub-agents?' : `What does ${brand.companyName} offer?`);
   const [ragResults, setRagResults] = useState<RetrievedChunk[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -101,7 +103,7 @@ export const KnowledgeBaseView: React.FC<KnowledgeBaseViewProps> = ({
           title: editingDoc.title.trim(),
           category: editingDoc.category || 'PRODUCT',
           content: editingDoc.content.trim(),
-          tags: editingDoc.tags && editingDoc.tags.length > 0 ? editingDoc.tags : ['umrah360'],
+          tags: editingDoc.tags && editingDoc.tags.length > 0 ? editingDoc.tags : [tenantId || 'general'],
           status: editingDoc.status || 'PUBLISHED',
           version: 1,
           author: 'Admin',
@@ -199,7 +201,7 @@ export const KnowledgeBaseView: React.FC<KnowledgeBaseViewProps> = ({
                 title: '',
                 category: 'PRODUCT',
                 content: '',
-                tags: ['umrah360', 'crm'],
+                tags: tenantId === 'umrah360' ? ['umrah360', 'crm'] : [tenantId || 'general'],
                 status: 'PUBLISHED',
               });
               setIsModalOpen(true);
@@ -385,7 +387,7 @@ export const KnowledgeBaseView: React.FC<KnowledgeBaseViewProps> = ({
                   type="text"
                   value={ragTestQuery}
                   onChange={(e) => setRagTestQuery(e.target.value)}
-                  placeholder="Ask any pilgrim or travel agency inquiry..."
+                  placeholder="Ask any customer question to test retrieval..."
                   className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-orange-500/30 focus:border-orange-500 font-medium"
                 />
                 <button
@@ -437,7 +439,7 @@ export const KnowledgeBaseView: React.FC<KnowledgeBaseViewProps> = ({
                   type="text"
                   value={editingDoc.title || ''}
                   onChange={(e) => setEditingDoc({ ...editingDoc, title: e.target.value })}
-                  placeholder="e.g. Saudi Ground Handling & Umrah ERP Package Policy"
+                  placeholder="e.g. Pricing & Plans, Refund Policy, Product Overview"
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-900 focus:outline-none focus:border-orange-500 font-medium"
                 />
               </div>

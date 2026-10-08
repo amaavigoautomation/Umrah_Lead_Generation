@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useBrand } from '../context/BrandContext';
 import {
   Settings,
   Shield,
@@ -42,6 +43,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   tenantId,
   canEditEmail,
 }) => {
+  const { brand } = useBrand();
   const [formData, setFormData] = useState<SystemSettings>(settings);
   const [isSaved, setIsSaved] = useState(false);
   const [openAiKeyInput, setOpenAiKeyInput] = useState('');
@@ -370,7 +372,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         />
       )}
 
-      {/* Database Reset & Cloud Details */}
+      {/* Database Reset & Cloud Details (Umrah360 sample data only) */}
+      {brand.playbook === 'umrah360' && (
       <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-slate-900">
         <div>
           <h4 className="font-bold text-sm text-slate-900 font-display flex items-center space-x-2">
@@ -391,6 +394,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           <span>Reset Initial Demo Data</span>
         </button>
       </div>
+      )}
     </div>
   );
 };

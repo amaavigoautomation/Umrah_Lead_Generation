@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useBrand } from '../context/BrandContext';
 import {
   MessageSquare,
   Send,
@@ -59,6 +60,8 @@ export const InboundWhatsAppFlowModal: React.FC<InboundWhatsAppFlowModalProps> =
   onNavigateToConversation,
   onNavigateToLead,
 }) => {
+  const { brand } = useBrand();
+  const isUmrah = brand.playbook === 'umrah360';
   const [selectedPresetId, setSelectedPresetId] = useState<string>(PRESET_INBOUND_WHATSAPP[0].id);
   const [isCustom, setIsCustom] = useState<boolean>(false);
   const [customPayload, setCustomPayload] = useState<InboundWhatsAppPayload>({
@@ -66,7 +69,7 @@ export const InboundWhatsAppFlowModal: React.FC<InboundWhatsAppFlowModalProps> =
     fromName: 'Tariq Khan',
     to: WHATSAPP_BUSINESS_NUMBER,
     companyName: 'Al Baraka Tours & Travels',
-    body: 'Hello, does Umrah360 provide a white-label B2B sub-agent portal and Makkah hotel offline allotments?',
+    body: isUmrah ? 'Hello, does Umrah360 provide a white-label B2B sub-agent portal and Makkah hotel offline allotments?' : `Hello, I would like to know more about ${brand.companyName}.`,
   });
 
   const [isExecuting, setIsExecuting] = useState<boolean>(false);
@@ -258,7 +261,7 @@ export const InboundWhatsAppFlowModal: React.FC<InboundWhatsAppFlowModalProps> =
                     />
                   </div>
                   <div>
-                    <label className="block text-[11px] text-slate-600 mb-1 font-medium">Destination Number (Umrah360 WhatsApp)</label>
+                    <label className="block text-[11px] text-slate-600 mb-1 font-medium">Destination Number ({brand.companyName} WhatsApp)</label>
                     <input
                       type="text"
                       disabled
@@ -417,7 +420,7 @@ export const InboundWhatsAppFlowModal: React.FC<InboundWhatsAppFlowModalProps> =
                         <div className="flex items-center justify-between text-[10px] text-emerald-400 mb-1">
                           <span className="font-semibold flex items-center space-x-1">
                             <Bot className="w-3 h-3" />
-                            <span>Umrah360 AI ({WHATSAPP_BUSINESS_NUMBER_FORMATTED})</span>
+                            <span>{brand.aiAgentName} ({WHATSAPP_BUSINESS_NUMBER_FORMATTED})</span>
                           </span>
                           <span className="text-[9px] px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300">
                             Automated

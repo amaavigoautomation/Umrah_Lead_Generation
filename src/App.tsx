@@ -42,6 +42,7 @@ import {
   INITIAL_PROSPECTS,
   INITIAL_ACTIVITIES,
   DEFAULT_SETTINGS,
+  defaultSettingsFor,
 } from './services/dataService';
 import { INITIAL_KNOWLEDGE_DOCUMENTS } from './services/knowledgeData';
 import { generateOmnichannelResponse } from './services/aiService';
@@ -192,6 +193,13 @@ export default function App() {
     createdAt: new Date().toISOString(),
   });
   const [allTenants, setAllTenants] = useState<any[]>([]);
+
+  // Until the workspace's own settings load, never show another company's default signature/accounts.
+  useEffect(() => {
+    if (currentTenantId && currentTenantId !== 'umrah360') {
+      setSettings((prev) => (prev === DEFAULT_SETTINGS ? defaultSettingsFor(currentTenantId, currentTenant?.name) : prev));
+    }
+  }, [currentTenantId, currentTenant?.name]);
 
   const tCol = useCallback((colName: string) => collection(db, 'tenants', currentTenantId, colName), [currentTenantId]);
   const tDoc = useCallback((colName: string, docId: string) => doc(db, 'tenants', currentTenantId, colName, docId), [currentTenantId]);
@@ -345,7 +353,7 @@ export default function App() {
           const loadedSettings = settingsSnap.data() as SystemSettings;
           setSettings(loadedSettings);
         } else {
-          await setDoc(settingsRef, DEFAULT_SETTINGS).catch(() => {});
+          await setDoc(settingsRef, defaultSettingsFor(currentTenantId, currentTenant?.name)).catch(() => {});
         }
 
         // Check if database was ever initialized before for this tenant
@@ -1580,6 +1588,19 @@ export default function App() {
 
   // Reset demo seed data
   const handleResetSeedData = () => {
+    // The built-in sample data is Umrah360-specific: other workspaces reset to empty.
+    if (currentTenantId !== 'umrah360') {
+      setContacts([]);
+      setLeads([]);
+      setConversations([]);
+      setMessages([]);
+      setCampaigns([]);
+      setProspects([]);
+      setActivities([]);
+      setKnowledgeDocs([]);
+      setSettings(defaultSettingsFor(currentTenantId, currentTenant?.name));
+      return;
+    }
     setContacts(INITIAL_CONTACTS);
     setLeads(INITIAL_LEADS);
     setConversations(INITIAL_CONVERSATIONS);
@@ -2092,7 +2113,7 @@ export default function App() {
 
             {activeTab === 'playground' && <AiTestingPlayground knowledgeDocs={knowledgeDocs} />}
 
-            {activeTab === 'scenarios' && (
+            {activeTab === 'scenarios' && currentTenantId === 'umrah360' && (
               <InteractiveScenarios
                 onNavigateToInbox={() => setActiveTab('inbox')}
                 onNavigateToCrm={() => setActiveTab('crm')}

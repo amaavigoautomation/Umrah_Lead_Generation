@@ -96,7 +96,8 @@ export function getSmtpConfig() {
   const user = runtimeSmtpConfig?.user || process.env.SMTP_USER || process.env.GMAIL_USER || process.env.IMAP_USER || '';
   const rawPass = runtimeSmtpConfig?.pass || process.env.SMTP_PASS || process.env.IMAP_PASS || process.env.GMAIL_APP_PASSWORD || process.env.GMAIL_PASS || '';
   const pass = rawPass.trim();
-  const from = runtimeSmtpConfig?.from || process.env.SMTP_FROM || (user ? `Umrah360 Automation <${user}>` : 'Umrah360 Automation');
+  const fromName = process.env.SMTP_FROM_NAME || 'Umrah360 Automation'; // shared platform mailbox only; workspaces send from their own verified sender
+  const from = runtimeSmtpConfig?.from || process.env.SMTP_FROM || (user ? `${fromName} <${user}>` : fromName);
 
   const configured = Boolean(host && pass && user);
 

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useBrand } from '../context/BrandContext';
 import {
   Send,
   Search,
@@ -43,6 +44,7 @@ export const OutboundCampaigns: React.FC<OutboundCampaignsProps> = ({
   onToggleCampaignStatus,
   onSelectProspectConversation,
 }) => {
+  const { brand } = useBrand();
   const allCampaigns = campaigns || [];
   const [selectedCampaignId, setSelectedCampaignId] = useState<string>(() => allCampaigns[0]?.campaignId || '');
 
@@ -67,7 +69,7 @@ export const OutboundCampaigns: React.FC<OutboundCampaignsProps> = ({
     phone: '',
     companyName: '',
     jobTitle: 'Founder',
-    industry: 'Pilgrimage & Leisure Tours',
+    industry: brand.playbook === 'umrah360' ? 'Pilgrimage & Leisure Tours' : '',
     companySize: '11-50',
     location: 'Mumbai, India',
   });
@@ -81,6 +83,12 @@ export const OutboundCampaigns: React.FC<OutboundCampaignsProps> = ({
 
   React.useEffect(() => {
     if (selectedProspect) {
+      if (brand.playbook !== 'umrah360') {
+        setCustomSubject(`${brand.companyName} for ${selectedProspect.companyName}`);
+        setCustomBody(`Hi ${selectedProspect.firstName},\n\nI noticed you are leading operations at ${selectedProspect.companyName}. ${brand.companyName}${brand.tagline ? ` is ${brand.tagline}` : ' may be able to help'}.\n\nWould you be open to a quick walkthrough?\n\nRegards,\n${brand.teamName}`);
+        setIsEditingEmail(false);
+        return;
+      }
       setCustomSubject(`Umrah360 for ${selectedProspect.companyName} - Automate B2B Packages & Visa Operations`);
       setCustomBody(`Hi ${selectedProspect.firstName},\n\nI noticed you are leading operations at ${selectedProspect.companyName}. We work with top Umrah operators across India to automate their dynamic package costing, Makkah/Madinah room allotments, and sub-agent B2B voucher distribution.\n\nUmrah360 gives your agency an automated B2B portal with live supplier costs and compliant invoicing.\n\nWould you be open to exploring how this could streamline your upcoming season?\n\nRegards,\nUmrah360 Growth Team`);
       setIsEditingEmail(false);
@@ -250,7 +258,7 @@ export const OutboundCampaigns: React.FC<OutboundCampaignsProps> = ({
                   Region: {activeCampaign.targetLocation}
                 </span>
                 <span className="px-2 py-1 bg-slate-800 rounded-md border border-slate-700">
-                  Sending: {activeCampaign.emailAccountId} (sales@umrah360.in)
+                  Sending: {activeCampaign.emailAccountId} ({brand.salesEmail || 'sales email not set'})
                 </span>
               </div>
             </div>
@@ -501,7 +509,7 @@ export const OutboundCampaigns: React.FC<OutboundCampaignsProps> = ({
                 </div>
                 <p className="text-xs text-slate-300 leading-relaxed">
                   {selectedProspect.qualificationReason ||
-                    'Verified decision maker in pilgrimage tours with high relevance for Umrah360 B2B.'}
+                    (brand.playbook === 'umrah360' ? 'Verified decision maker in pilgrimage tours with high relevance for Umrah360 B2B.' : `Verified decision maker with high relevance for ${brand.companyName}.`)}
                 </p>
               </div>
 

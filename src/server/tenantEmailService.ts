@@ -289,9 +289,6 @@ export async function setTenantSender(tenantId: string, input: { fromName?: stri
  * - tenant listed in PLATFORM_SENDER_TENANTS -> the platform RESEND_FROM (transition period)
  * - anything else -> blocked
  */
-const lastLiveDomainCheck = new Map<string, number>();
-const LIVE_DOMAIN_CHECK_MS = 60_000;
-
 export async function resolveTenantSender(tenantId: string): Promise<SenderResolution> {
   let s: TenantEmailSettings = {};
   try {
@@ -299,22 +296,6 @@ export async function resolveTenantSender(tenantId: string): Promise<SenderResol
   } catch (err: any) {
     // Cannot read settings: do not guess a sender.
     return { ok: false, error: `Could not load email settings: ${err?.message || 'unknown error'}` };
-  }
-
-  // The stored status is only updated when someone clicks Verify/Refresh, but Resend often finishes
-  // verifying the domain later on its own. Before blocking a send, ask Resend for the live status
-  // (at most once a minute per workspace) so a domain that is verified in Resend is never blocked here.
-  if (s.domain && s.resendDomainId && s.status !== 'verified' && getApiKey()) {
-    const last = lastLiveDomainCheck.get(tenantId) || 0;
-    if (Date.now() - last > LIVE_DOMAIN_CHECK_MS) {
-      lastLiveDomainCheck.set(tenantId, Date.now());
-      try {
-        s = await refreshTenantDomain(tenantId);
-        console.log(`[Email] Live domain status for ${tenantId} (${s.domain}): ${s.status}`);
-      } catch (err: any) {
-        console.warn(`[Email] Live domain check failed for ${tenantId}: ${err?.message || err}`);
-      }
-    }
   }
 
   if (s.status === 'verified' && s.domain && s.fromLocalPart) {

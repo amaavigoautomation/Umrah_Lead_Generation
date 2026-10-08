@@ -3,7 +3,8 @@ import { auth, db, isFirebaseConfigured } from '../firebase/config.js';
 import { doc, getDoc } from 'firebase/firestore';
 import { safeSetDoc } from './clientFirestoreUtils.js';
 
-export const CALENDAR_TARGET_ACCOUNT = 'amaavigo@gmail.com';
+import { CALENDAR_TARGET_ACCOUNT } from '../shared/brandLabels';
+export { CALENDAR_TARGET_ACCOUNT };
 export const CALENDAR_SCOPES = [
   'https://www.googleapis.com/auth/calendar',
   'https://www.googleapis.com/auth/calendar.events',
@@ -16,7 +17,7 @@ let isSigningIn = false;
 // Try restoring cached token from sessionStorage if in browser
 if (typeof window !== 'undefined') {
   try {
-    cachedAccessToken = window.sessionStorage.getItem('umrah360_calendar_token');
+    cachedAccessToken = window.sessionStorage.getItem('calendar_access_token');
   } catch {}
 }
 
@@ -50,7 +51,7 @@ export const initCalendarAuth = (
       cachedAccessToken = stored.accessToken;
       if (typeof window !== 'undefined') {
         try {
-          window.sessionStorage.setItem('umrah360_calendar_token', stored.accessToken);
+          window.sessionStorage.setItem('calendar_access_token', stored.accessToken);
         } catch {}
       }
       syncCalendarTokenToServer(stored.accessToken, stored.email || CALENDAR_TARGET_ACCOUNT);
@@ -101,7 +102,7 @@ export const signInWithGoogleCalendar = async (): Promise<{ user: User; accessTo
 
     if (typeof window !== 'undefined') {
       try {
-        window.sessionStorage.setItem('umrah360_calendar_token', credential.accessToken);
+        window.sessionStorage.setItem('calendar_access_token', credential.accessToken);
       } catch {}
     }
 
@@ -132,7 +133,7 @@ export const registerCalendarAccessToken = async (token: string, userEmail: stri
   cachedAccessToken = cleanToken;
   if (typeof window !== 'undefined') {
     try {
-      window.sessionStorage.setItem('umrah360_calendar_token', cleanToken);
+      window.sessionStorage.setItem('calendar_access_token', cleanToken);
     } catch {}
   }
   return syncCalendarTokenToServer(cleanToken, userEmail);
@@ -146,7 +147,7 @@ export const getCalendarAccessToken = async (): Promise<string | null> => {
 
   if (typeof window !== 'undefined') {
     try {
-      const sessionTok = window.sessionStorage.getItem('umrah360_calendar_token');
+      const sessionTok = window.sessionStorage.getItem('calendar_access_token');
       if (sessionTok) {
         cachedAccessToken = sessionTok;
         return sessionTok;
@@ -159,7 +160,7 @@ export const getCalendarAccessToken = async (): Promise<string | null> => {
     cachedAccessToken = stored.accessToken;
     if (typeof window !== 'undefined') {
       try {
-        window.sessionStorage.setItem('umrah360_calendar_token', stored.accessToken);
+        window.sessionStorage.setItem('calendar_access_token', stored.accessToken);
       } catch {}
     }
     return cachedAccessToken;

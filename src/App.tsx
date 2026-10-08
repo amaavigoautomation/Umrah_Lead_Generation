@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { BrandProvider, getCurrentBrand } from './context/BrandContext';
+import { brandHost } from './shared/brand';
 import { Navbar, ActiveTab } from './components/Navbar';
 import { HeaderBar } from './components/HeaderBar';
 import { UnifiedInbox } from './components/UnifiedInbox';
@@ -58,6 +60,12 @@ import {
 import { db, isFirebaseConfigured } from './firebase/config';
 import { collection, doc, setDoc, getDoc, getDocs, updateDoc, deleteDoc, query, where, orderBy, onSnapshot } from 'firebase/firestore';
 import { initCalendarAuth } from './services/googleCalendarAuth';
+
+// Per-workspace brand strings for locally-built message records (read at call time).
+const bn = () => getCurrentBrand();
+const brandEmail = () => bn().salesEmail || `noreply@${brandHost(bn()) || 'workspace.local'}`;
+const brandReSubject = () => (bn().playbook === 'umrah360' ? brandReSubject() : `Re: ${bn().companyName}`);
+const brandGrowthTeam = () => (bn().playbook === 'umrah360' ? brandGrowthTeam() : bn().teamName);
 
 function sanitizeDoc(obj: any): any {
   if (obj === undefined) return null;
@@ -175,9 +183,9 @@ export default function App() {
   // Multi-Tenant Context & Workspace State
   const [currentTenantId, setCurrentTenantId] = useState<string>('');
   const [currentTenant, setCurrentTenant] = useState<any>({
-    id: 'umrah360',
-    name: 'Umrah360 Flagship',
-    slug: 'umrah360',
+    id: '',
+    name: '',
+    slug: '',
     status: 'active',
     plan: 'enterprise',
     limits: { monthlyAiTokens: 5000000, dailyOutboundSends: 10000, hourlyOutboundSends: 1000, seats: 25 },
@@ -782,8 +790,8 @@ export default function App() {
             channel: conv.channel,
             direction: 'OUTBOUND',
             senderType: 'AI',
-            senderName: 'Umrah360 AI',
-            senderEmail: 'sales@umrah360.in',
+            senderName: bn().aiAgentName,
+            senderEmail: brandEmail(),
             text: aiResult.responseText,
             timestamp: replyNowIso,
             sentAt: replyNowIso,
@@ -796,9 +804,9 @@ export default function App() {
             emailMeta: conv.channel === 'EMAIL' ? {
               subject: lastMsg.emailMeta?.subject
                 ? (lastMsg.emailMeta.subject.toLowerCase().startsWith('re:') ? lastMsg.emailMeta.subject : `Re: ${lastMsg.emailMeta.subject}`)
-                : 'Re: Umrah360 - Automate B2B Packages & Visa Operations',
-              from: 'sales@umrah360.in',
-              to: recipientEmail || 'sales@umrah360.in',
+                : brandReSubject(),
+              from: brandEmail(),
+              to: recipientEmail || brandEmail(),
               inReplyTo,
               references: inReplyTo ? [inReplyTo] : undefined,
               messageId: `<ai-reply-${Date.now()}@umrah360.in>`,
@@ -820,13 +828,13 @@ export default function App() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                   to: recipientEmail,
-                  subject: aiMsg.emailMeta?.subject || `Re: ${lastMsg.emailMeta?.subject || 'Umrah360 Platform'}`,
+                  subject: aiMsg.emailMeta?.subject || `Re: ${lastMsg.emailMeta?.subject || `${bn().companyName} Platform`}`,
                   text: aiResult.responseText,
                   inReplyTo: inReplyTo || lastMsg.messageId,
                   references: inReplyTo ? [inReplyTo] : undefined,
                   conversationId: conv.conversationId,
                   gmailThreadId: conv.gmailThreadId || conv.emailThreadId,
-                  senderName: 'Umrah360 AI Automation',
+                  senderName: `${bn().aiAgentName} Automation`,
                 }),
               });
               const sendData = await sendRes.json();
@@ -935,7 +943,7 @@ export default function App() {
     if ((conv.channel === 'EMAIL' || conv.channel === 'WEBSITE') && senderType === 'AGENT' && recipientEmail) {
       const subject = lastIncoming?.emailMeta?.subject
         ? (lastIncoming.emailMeta.subject.toLowerCase().startsWith('re:') ? lastIncoming.emailMeta.subject : `Re: ${lastIncoming.emailMeta.subject}`)
-        : 'Re: Umrah360 - Automate B2B Packages & Visa Operations';
+        : brandReSubject();
 
       try {
         const sendRes = await fetch('/api/email/send', {
@@ -972,11 +980,11 @@ export default function App() {
       senderType,
       senderName:
         senderType === 'AGENT'
-          ? 'Umrah360 Agent'
+          ? `${bn().companyName} Agent`
           : senderType === 'AI'
-          ? 'Umrah360 AI'
+          ? bn().aiAgentName
           : contact?.firstName || 'Customer',
-      senderEmail: senderType === 'AGENT' ? 'sales@umrah360.in' : contact?.email,
+      senderEmail: senderType === 'AGENT' ? brandEmail() : contact?.email,
       text,
       aiReplied: false,
       timestamp: nowIso,
@@ -988,9 +996,9 @@ export default function App() {
           ? {
               subject: lastIncoming?.emailMeta?.subject
                 ? (lastIncoming.emailMeta.subject.toLowerCase().startsWith('re:') ? lastIncoming.emailMeta.subject : `Re: ${lastIncoming.emailMeta.subject}`)
-                : 'Re: Umrah360 - Automate B2B Packages & Visa Operations',
-              from: senderType === 'AGENT' ? 'sales@umrah360.in' : (contact?.email || 'sales@umrah360.in'),
-              to: senderType === 'AGENT' ? (contact?.email || 'sales@umrah360.in') : 'sales@umrah360.in',
+                : brandReSubject(),
+              from: senderType === 'AGENT' ? brandEmail() : (contact?.email || brandEmail()),
+              to: senderType === 'AGENT' ? (contact?.email || brandEmail()) : brandEmail(),
               messageId: sentGmailMessageId,
               inReplyTo,
               references: inReplyTo ? [inReplyTo] : undefined,
@@ -1062,8 +1070,8 @@ export default function App() {
           channel: conv.channel,
           direction: 'OUTBOUND',
           senderType: 'AI',
-          senderName: 'Umrah360 AI',
-          senderEmail: 'sales@umrah360.in',
+          senderName: bn().aiAgentName,
+          senderEmail: brandEmail(),
           text: aiResult.responseText,
           timestamp: replyNowIso,
           sentAt: replyNowIso,
@@ -1076,9 +1084,9 @@ export default function App() {
           emailMeta: conv.channel === 'EMAIL' ? {
             subject: lastIncoming?.emailMeta?.subject
               ? (lastIncoming.emailMeta.subject.toLowerCase().startsWith('re:') ? lastIncoming.emailMeta.subject : `Re: ${lastIncoming.emailMeta.subject}`)
-              : 'Re: Umrah360 - Automate B2B Packages & Visa Operations',
-            from: 'sales@umrah360.in',
-            to: contact.email || 'sales@umrah360.in',
+              : brandReSubject(),
+            from: brandEmail(),
+            to: contact.email || brandEmail(),
             inReplyTo: inReplyTo || newMsg.messageId,
             references: inReplyTo ? [inReplyTo] : undefined,
             messageId: `<ai-reply-${Date.now()}@umrah360.in>`,
@@ -1098,13 +1106,13 @@ export default function App() {
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
                 to: contact.email,
-                subject: aiMsg.emailMeta?.subject || `Re: ${lastIncoming?.emailMeta?.subject || 'Umrah360 Platform'}`,
+                subject: aiMsg.emailMeta?.subject || `Re: ${lastIncoming?.emailMeta?.subject || `${bn().companyName} Platform`}`,
                 text: aiResult.responseText,
                 inReplyTo: inReplyTo || newMsg.messageId,
                 references: inReplyTo ? [inReplyTo] : undefined,
                 conversationId: conv.conversationId,
                 gmailThreadId: conv.gmailThreadId || conv.emailThreadId,
-                senderName: 'Umrah360 AI Automation',
+                senderName: `${bn().aiAgentName} Automation`,
               }),
             });
             const sendData = await sendRes.json();
@@ -1433,7 +1441,7 @@ export default function App() {
       leadScore: prospect.qualificationScore || 85,
       intent: 'MEDIUM',
       buyingStage: 'AWARENESS',
-      serviceInterest: 'Umrah360 B2B & Package Builder',
+      serviceInterest: bn().playbook === 'umrah360' ? 'Umrah360 B2B & Package Builder' : bn().defaultProduct,
       requirements: ['B2B Reseller Portal'],
       aiSummary: `Discovered via Apollo (${prospect.jobTitle} at ${prospect.companyName}). Cold outreach sent.`,
       aiRecommendation: 'Monitor for reply and let AI continue thread contextually.',
@@ -1453,7 +1461,9 @@ export default function App() {
 
     const coldMsgText =
       customBody ||
-      `Hi ${prospect.firstName},\n\nI noticed you are leading operations at ${prospect.companyName}. We work with top Umrah operators across India to automate their dynamic package costing, Makkah/Madinah room allotments, and sub-agent B2B voucher distribution.\n\nUmrah360 gives your agency an automated B2B portal with live supplier costs and compliant invoicing.\n\nWould you be open to exploring how this could streamline your upcoming season?\n\nRegards,\nUmrah360 Growth Team`;
+      (bn().playbook !== 'umrah360'
+        ? `Hi ${prospect.firstName},\n\nI noticed you are leading operations at ${prospect.companyName}. ${bn().companyName}${bn().tagline ? ` is ${bn().tagline}` : ' may be able to help'}.\n\nWould you be open to a quick walkthrough?\n\nRegards,\n${bn().teamName}`
+        : `Hi ${prospect.firstName},\n\nI noticed you are leading operations at ${prospect.companyName}. We work with top Umrah operators across India to automate their dynamic package costing, Makkah/Madinah room allotments, and sub-agent B2B voucher distribution.\n\nUmrah360 gives your agency an automated B2B portal with live supplier costs and compliant invoicing.\n\nWould you be open to exploring how this could streamline your upcoming season?\n\nRegards,\nUmrah360 Growth Team`);
 
     const newConversation: Conversation = {
       conversationId,
@@ -1483,15 +1493,15 @@ export default function App() {
       conversationId,
       channel: 'EMAIL',
       senderType: 'AGENT',
-      senderName: 'Umrah360 Growth Team',
-      senderEmail: 'sales@umrah360.in',
+      senderName: brandGrowthTeam(),
+      senderEmail: brandEmail(),
       text: coldMsgText,
       timestamp: new Date().toISOString(),
       emailMeta: {
         subject:
           customSubject ||
-          `Umrah360 for ${prospect.companyName} - Automate B2B Packages & Visa Operations`,
-        from: 'sales@umrah360.in',
+          bn().playbook === 'umrah360' ? `Umrah360 for ${prospect.companyName} - Automate B2B Packages & Visa Operations` : `${bn().companyName} for ${prospect.companyName}`,
+        from: brandEmail(),
         to: prospect.email,
         messageId: `<cold-${Date.now()}@umrah360.in>`,
       },
@@ -1523,7 +1533,7 @@ export default function App() {
       contactId: contact.contactId,
       type: 'COLD_EMAIL_SENT',
       title: 'Cold Outreach Dispatched',
-      description: `Sent Introduction to Umrah360 with personalized companyName: ${prospect.companyName}`,
+      description: `Sent Introduction to ${bn().companyName} with personalized companyName: ${prospect.companyName}`,
       timestamp: new Date().toISOString(),
     };
     setActivities((prev) => [act, ...prev]);
@@ -1622,7 +1632,7 @@ export default function App() {
     const toEmail = contact?.email;
     if (!toEmail) return;
 
-    const subject = draft.subject || 'Re: Umrah360 Inquiry';
+    const subject = draft.subject || `Re: ${bn().companyName} Inquiry`;
     const nowIso = new Date().toISOString();
 
     let approvedSmtpStatus: 'DELIVERED' | 'DELIVERY_FAILED' = 'DELIVERED';
@@ -1656,8 +1666,8 @@ export default function App() {
         channel: 'EMAIL',
         direction: 'OUTBOUND',
         senderType: 'AI',
-        senderName: 'Umrah360 AI Automation (Approved)',
-        senderEmail: 'sales@umrah360.in',
+        senderName: `${bn().aiAgentName} Automation (Approved)`,
+        senderEmail: brandEmail(),
         text: draft.text,
         timestamp: nowIso,
         sentAt: nowIso,
@@ -1668,7 +1678,7 @@ export default function App() {
         confidence: 0.98,
         emailMeta: {
           subject,
-          from: 'sales@umrah360.in',
+          from: brandEmail(),
           to: toEmail,
           messageId: aiMsgId,
         },
@@ -1918,6 +1928,7 @@ export default function App() {
     (currentUser.allowedModules || []).includes(activeTab);
 
   return (
+    <BrandProvider tenantId={currentTenantId} tenantName={currentTenant?.name}>
     <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col md:flex-row font-sans selection:bg-orange-500/20 selection:text-orange-950">
       <Navbar
         activeTab={activeTab}
@@ -2134,5 +2145,6 @@ export default function App() {
       </main>
     </div>
   </div>
+    </BrandProvider>
   );
 }

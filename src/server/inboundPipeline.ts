@@ -61,6 +61,8 @@ import {
   detectDemoSchedulingIntent,
   processSchedulingConversationTurn,
 } from './demoSchedulingService.js';
+import { getTenantBrand } from './brandService.js';
+import { brandAutomationSignature, brandIntro, brandFallbackAgency } from '../shared/brand.js';
 import { sanitizeAiEmailText } from './emailSanitizer.js';
 
 export interface ProcessedMessageRecord {
@@ -836,6 +838,8 @@ export async function generateAutoReplyText(params: {
 }): Promise<{ replyText: string; handoffTriggered: boolean; handoffReason?: string; leadScore: number; buyingStage: string }> {
   const { from, fromName, subject, body, companyName, threadHistory } = params;
   const combinedText = `${subject}\n${body}`.toLowerCase();
+  const brand = await getTenantBrand(getInboundCtx().tenantId);
+  const isUmrah = brand.playbook === 'umrah360';
 
   // =========================================================================
   // UNIVERSAL DEMO SCHEDULING AGENT INTERCEPTION
@@ -854,7 +858,7 @@ export async function generateAutoReplyText(params: {
         leadContext: {
           leadEmail: from,
           leadName: fromName || from.split('@')[0],
-          companyName: companyName || `${fromName || 'Client'}'s Agency`,
+          companyName: companyName || `${fromName || 'Client'}'s ${isUmrah ? 'Agency' : 'Company'}`,
           channel: 'EMAIL',
         },
       });
@@ -882,19 +886,19 @@ export async function generateAutoReplyText(params: {
   const formattedThreadContext = (threadHistory && threadHistory.length > 0)
     ? threadHistory.map((m: any, idx: number) => {
         const isCustomer = m.senderType === 'CUSTOMER' || m.senderType === 'PROSPECT';
-        const roleLabel = isCustomer ? `CUSTOMER (${m.senderName || from})` : 'AI ASSISTANT (Umrah360)';
+        const roleLabel = isCustomer ? `CUSTOMER (${m.senderName || from})` : `AI ASSISTANT (${brand.companyName})`;
         return `[Message ${idx + 1} - ${roleLabel} at ${m.timestamp}]:\n${m.text}`;
       }).join('\n\n')
     : `[Message 1 - CUSTOMER (${fromName || from})]:\n${body}`;
 
   // Intent classification
-  const isIndividualPilgrimOrFamily =
+  const isIndividualPilgrimOrFamily = isUmrah &&
     /myself|my family|for family|for myself|as a customer|planning umrah|booking experience|customized package|customize a package|book a customized|hotels in makkah|flights.*hotels|transfers.*meals.*visa|real-time.*availability|online payment|entire booking.*online|go through a travel agency|direct booking|retail/i.test(
       combinedText
     );
-  const isTwentyUsers = /20 user|20 seat|25 user|twenty user|enterprise/i.test(combinedText);
-  const isB2bPortal = /b2b|sub-agent|reseller|credit limit|wallet|allotment|offline block/i.test(combinedText);
-  const isSaaSPricing = !isIndividualPilgrimOrFamily && /pricing|price|cost|quote|subscription|rate|\$15|\$199|\$499/i.test(combinedText);
+  const isTwentyUsers = isUmrah && /20 user|20 seat|25 user|twenty user|enterprise/i.test(combinedText);
+  const isB2bPortal = isUmrah && /b2b|sub-agent|reseller|credit limit|wallet|allotment|offline block/i.test(combinedText);
+  const isSaaSPricing = !isIndividualPilgrimOrFamily && (isUmrah ? /pricing|price|cost|quote|subscription|rate|\$15|\$199|\$499/i : /pricing|price|cost|quote|subscription|rate/i).test(combinedText);
 
   let handoffTriggered = false;
   let handoffReason: string | undefined;
@@ -917,7 +921,7 @@ export async function generateAutoReplyText(params: {
     buyingStage = 'CONSIDERATION';
   }
 
-  const targetMailbox = process.env.SMTP_USER || process.env.IMAP_USER || 'amaavigo@gmail.com';
+  const targetMailbox = isUmrah ? (process.env.SMTP_USER || process.env.IMAP_USER || 'amaavigo@gmail.com') : (brand.salesEmail || '');
   const senderGreetingName = fromName ? fromName.split(' ')[0] : from.split('@')[0];
 
   // Prepare full knowledgebase grounding text from dynamic published knowledge documents
@@ -932,7 +936,7 @@ export async function generateAutoReplyText(params: {
   if (openAiApiKey) {
     try {
       const openai = new OpenAI({ apiKey: openAiApiKey });
-      const prompt = `You are the official AI automation representative for Umrah360 (www.umrah360.in), responding to an email on behalf of ${targetMailbox}.
+      const umrahPrompt = `You are the official AI automation representative for Umrah360 (www.umrah360.in), responding to an email on behalf of ${targetMailbox}.
 
 OFFICIAL UMRAH360 KNOWLEDGE BASE (GROUND TRUTH):
 ${kbGroundingText}
@@ -970,6 +974,31 @@ Umrah360 Automation Team
 ${targetMailbox}
 www.umrah360.in`;
 
+      const genericPrompt = `You are the official AI automation representative for ${brandIntro(brand)}${brand.industryDescription ? `, serving ${brand.industryDescription}` : ''}, responding to an email${targetMailbox ? ` on behalf of ${targetMailbox}` : ''}.
+
+OFFICIAL ${brand.companyName.toUpperCase()} KNOWLEDGE BASE (GROUND TRUTH):
+${kbGroundingText || '(No knowledge documents have been published yet.)'}
+
+COMPLETE LOADED CONVERSATION THREAD CONTEXT (${threadHistory?.length || 1} message(s)):
+${formattedThreadContext}
+
+LATEST INCOMING CUSTOMER MESSAGE TO RESPOND TO:
+From: ${fromName || from} (${from})
+Company: ${companyName || 'Not specified'}
+Subject: ${subject}
+Latest Message Body:
+${body}
+
+CRITICAL INSTRUCTIONS:
+1. THREAD CONTINUITY: ${isFollowUpTurn ? 'This is a follow-up. Continue naturally from the earlier messages, do not repeat introductions, and answer the specific follow-up questions.' : 'This is a brand new inquiry. Briefly welcome the customer and answer their question.'} Greet with a formal professional greeting: "Dear ${senderGreetingName},"
+2. ACCURACY: Ground every answer strictly in the knowledge base above. NEVER invent features, prices, dates or guarantees. If the knowledge base does not contain the answer, say you will connect them with a specialist from ${brand.companyName} and ask for any details needed.
+3. Keep the response polite, helpful, crisp, and professional.
+4. FORMATTING (MANDATORY): Never use Markdown symbols (**, ##, ###, *, backticks). Write natural plain text.
+5. Conclude with:
+${brandAutomationSignature(brand)}${targetMailbox ? `\n${targetMailbox}` : ''}`;
+
+      const prompt = isUmrah ? umrahPrompt : genericPrompt;
+
       const candidateModels = ['gpt-4o-mini', 'gpt-4o', 'gpt-3.5-turbo'];
       for (const modelName of candidateModels) {
         try {
@@ -997,6 +1026,28 @@ www.umrah360.in`;
     } catch (openAiErr) {
       console.warn('[OpenAI Pipeline] Fallback to domain-grounded knowledge response:', openAiErr);
     }
+  }
+
+  // Generic (non-Umrah360) workspaces: neutral fallback grounded only in the company's own knowledge base.
+  if (!isUmrah) {
+    const words = Array.from(new Set(combinedText.split(/[^a-z0-9]+/).filter((w) => w.length > 3)));
+    let best: { score: number; text: string } = { score: 0, text: '' };
+    for (const d of publishedDocs) {
+      const hay = `${d.title} ${d.content}`.toLowerCase();
+      const score = words.reduce((n, w) => n + (hay.includes(w) ? 1 : 0), 0);
+      if (score > best.score) best = { score, text: String(d.content || '').trim().slice(0, 600) };
+    }
+    const sig = `${brandAutomationSignature(brand)}${targetMailbox ? `\n${targetMailbox}` : ''}`;
+    const genericReply = best.score >= 2
+      ? `Dear ${senderGreetingName},\n\nThank you for contacting ${brand.companyName}!\n\n${best.text}\n\nCould you tell us a little more about what you are looking for${companyName ? ` at ${companyName}` : ''} so we can help you further?\n\n${sig}`
+      : `Dear ${senderGreetingName},\n\nThank you for contacting ${brand.companyName}! We have received your message and one of our specialists will get back to you shortly.\n\nTo help us respond faster, please share a few details about what you are looking for.\n\n${sig}`;
+    return {
+      replyText: sanitizeAiEmailText(genericReply, senderGreetingName),
+      handoffTriggered,
+      handoffReason,
+      leadScore,
+      buyingStage,
+    };
   }
 
   // Domain-grounded fallback response engine (100% accurate to umrah360.in)
@@ -1161,6 +1212,8 @@ export async function processLiveInboundEmail(payload: {
   /** The mailbox this email was read from (a workspace's own IMAP inbox). Defaults to the platform mailbox. */
   ownMailbox?: string;
 }): Promise<ProcessedInboundEmailResult> {
+  const brand = await getTenantBrand(getInboundCtx().tenantId);
+  const isUmrahBrand = brand.playbook === 'umrah360';
   const targetMailbox = payload.ownMailbox || process.env.SMTP_USER || process.env.IMAP_USER || 'amaavigo@gmail.com';
   const incomingMsgId = resolveGmailMessageId(payload, targetMailbox);
   const replySubject = payload.subject.toLowerCase().startsWith('re:') ? payload.subject : `Re: ${payload.subject}`;
@@ -1284,7 +1337,7 @@ export async function processLiveInboundEmail(payload: {
       buyingStage: 'ENGAGED',
       timestamp: nowIso,
       crmEntities: {
-        contact: { contactId, firstName, lastName, email: payload.from, companyName: payload.companyName || 'Umrah360 Internal', createdAt: nowIso, updatedAt: nowIso, lastActivityAt: nowIso },
+        contact: { contactId, firstName, lastName, email: payload.from, companyName: payload.companyName || (isUmrahBrand ? 'Umrah360 Internal' : `${brand.companyName} Internal`), createdAt: nowIso, updatedAt: nowIso, lastActivityAt: nowIso },
         lead: { leadId, contactId, source: 'EMAIL', leadType: 'INBOUND', status: 'ENGAGED', leadScore: 50, intent: 'MEDIUM', buyingStage: 'ENGAGED', serviceInterest: payload.subject, requirements: [], aiSummary: 'Outbound message event', createdAt: nowIso, updatedAt: nowIso, lastActivityAt: nowIso },
         conversation: { conversationId, contactId, leadId, channel: 'EMAIL', direction: 'OUTBOUND', status: 'ACTIVE', aiEnabled: false, humanHandoff: false, emailThreadId: threadId, conversationSummary: `Outbound email: ${payload.subject}`, startedAt: nowIso, lastMessageAt: nowIso, lastMessageText: payload.body.slice(0, 120), unreadCount: 0, createdAt: nowIso, updatedAt: nowIso },
         incomingMessage: outboundMessage,
@@ -1683,7 +1736,7 @@ export async function processLiveInboundEmail(payload: {
         channel: 'EMAIL' as const,
         direction: 'OUTBOUND' as const,
         senderType: 'AI' as const,
-        senderName: 'Umrah360 AI Automation',
+        senderName: isUmrahBrand ? 'Umrah360 AI Automation' : `${brand.aiAgentName} Automation`,
         senderEmail: targetMailbox,
         text: aiResult.replyText,
         timestamp: nowIso,
@@ -1733,8 +1786,8 @@ export async function processLiveInboundEmail(payload: {
         firstName,
         lastName,
         email: payload.from,
-        companyName: matched.contact?.companyName || payload.companyName || `${firstName}'s Pilgrimage Agency`,
-        phone: matched.contact?.phone || payload.phone || '+91 98200 12345',
+        companyName: matched.contact?.companyName || payload.companyName || brandFallbackAgency(brand, firstName),
+        phone: matched.contact?.phone || payload.phone || (isUmrahBrand ? '+91 98200 12345' : ''),
         createdAt: matched.contact?.createdAt || nowIso,
         updatedAt: nowIso,
         lastActivityAt: nowIso,

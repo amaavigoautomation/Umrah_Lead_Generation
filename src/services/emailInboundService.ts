@@ -11,10 +11,12 @@ import {
 import { findDuplicateContact } from './dataService';
 import { retrieveRelevantKnowledge } from './ragService';
 import { checkHumanHandoffConditions } from './aiService';
+import { getCurrentBrand } from '../context/BrandContext';
 import { db } from '../firebase/config';
 import { doc, setDoc } from 'firebase/firestore';
 
-export const INBOUND_MAILBOX = 'amaavigo@gmail.com';
+import { INBOUND_MAILBOX } from '../shared/brandLabels';
+export { INBOUND_MAILBOX };
 
 export interface InboundEmailPayload {
   from: string;
@@ -238,7 +240,7 @@ export async function processInboundEmail(params: {
       lastName,
       email: payload.from.trim().toLowerCase(),
       phone: payload.phone || '',
-      companyName: payload.companyName || `${firstName}'s Pilgrimage Agency`,
+      companyName: payload.companyName || `${firstName}'s ${getCurrentBrand().playbook === 'umrah360' ? 'Pilgrimage Agency' : 'Company'}`,
       jobTitle: 'Tour Operator / Decision Maker',
       createdAt: now,
       updatedAt: now,
@@ -286,9 +288,9 @@ export async function processInboundEmail(params: {
       leadScore: isTwentyUsers ? 95 : isB2bInquiry ? 88 : 78,
       intent: 'HIGH',
       buyingStage: isTwentyUsers ? 'DECISION' : 'CONSIDERATION',
-      serviceInterest: isB2bInquiry ? 'B2B Sub-Agent Portal & Allotments' : 'Umrah360 Platform & Dynamic Costing',
+      serviceInterest: getCurrentBrand().playbook !== 'umrah360' ? getCurrentBrand().defaultProduct : isB2bInquiry ? 'B2B Sub-Agent Portal & Allotments' : 'Umrah360 Platform & Dynamic Costing',
       requirements: [
-        ...(isB2bInquiry ? ['B2B Sub-Agent Portal', 'Branded PDF Vouchers'] : ['Pilgrimage Package Builder']),
+        ...(isB2bInquiry ? ['B2B Sub-Agent Portal', 'Branded PDF Vouchers'] : [getCurrentBrand().playbook === 'umrah360' ? 'Pilgrimage Package Builder' : getCurrentBrand().defaultProduct]),
         ...(isPricingInquiry ? ['Pricing Breakdown'] : []),
         ...(isTwentyUsers ? ['20+ Users Enterprise Tier'] : []),
       ],
@@ -609,6 +611,15 @@ export async function processInboundEmail(params: {
     );
   }
 
+  // Non-Umrah360 workspaces: the canned replies above are Umrah360-specific, so send a neutral acknowledgement.
+  const simBrand = getCurrentBrand();
+  if (simBrand.playbook !== 'umrah360') {
+    const sig = `Regards,\n${simBrand.teamName}`;
+    replyText = handoffCheck.shouldHandoff
+      ? `Thank you for your inquiry, ${contact.firstName}!\n\nI have passed your message to our team and a specialist from ${simBrand.companyName} will follow up with you personally.\n\n${sig}`
+      : `Dear ${contact.firstName},\n\nThank you for contacting ${simBrand.companyName}! We have received your message and will get back to you shortly.\n\n${sig}`;
+  }
+
   const aiReplyTimestamp = new Date().toISOString();
   let outboundSmtpStatus = 'DELIVERY_QUEUED';
   let liveSentMessageId = `<reply-${Date.now()}@amaavigo.com>`;
@@ -627,7 +638,7 @@ export async function processInboundEmail(params: {
           inReplyTo: incomingMessageId,
           references: [incomingMessageId],
           conversationId: conversation.conversationId,
-          senderName: 'Umrah360 AI Automation',
+          senderName: `${getCurrentBrand().aiAgentName} Automation`,
         }),
       });
       const sendData = await sendRes.json();
@@ -652,7 +663,7 @@ export async function processInboundEmail(params: {
     channel: 'EMAIL',
     direction: 'OUTBOUND',
     senderType: 'AI',
-    senderName: 'Umrah360 AI',
+    senderName: getCurrentBrand().aiAgentName,
     senderEmail: INBOUND_MAILBOX,
     text: replyText,
     timestamp: aiReplyTimestamp,
@@ -702,8 +713,8 @@ export async function processInboundEmail(params: {
         ? 'Human Handoff Alert: Enterprise 20+ Seats'
         : `AI Auto-Reply Sent via ${INBOUND_MAILBOX}`,
       description: handoffCheck.shouldHandoff
-        ? 'AI Auto-Pilot switched off; senior pilgrimage specialist assigned for custom quote.'
-        : `AI delivered grounded response using Knowledge Base (${knowledgeSources.join(', ') || 'Umrah360 Architecture'}).`,
+        ? 'AI Auto-Pilot switched off; senior specialist assigned for custom quote.'
+        : `AI delivered grounded response using Knowledge Base (${knowledgeSources.join(', ') || `${getCurrentBrand().companyName} Architecture`}).`,
       timestamp: new Date(Date.now() + 500).toISOString(),
     },
   ];

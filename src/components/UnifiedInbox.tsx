@@ -41,6 +41,7 @@ import {
 import { generateOmnichannelResponse } from '../services/aiService';
 import { InboundEmailFlowModal } from './InboundEmailFlowModal';
 import { InboundWhatsAppFlowModal } from './InboundWhatsAppFlowModal';
+import { useBrand } from '../context/BrandContext';
 import {
   InboundEmailPayload,
   InboundProcessingResult,
@@ -88,6 +89,8 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
   onSyncNow,
   onAutoFollowUpChanged,
 }) => {
+  const { brand } = useBrand();
+  const isUmrah = brand.playbook === 'umrah360';
   const [selectedConversationId, setSelectedConversationId] = useState<string>(
     conversations[0]?.conversationId || ''
   );
@@ -102,7 +105,7 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
   const [showInboundFlowModal, setShowInboundFlowModal] = useState<boolean>(false);
   const [showInboundWhatsAppModal, setShowInboundWhatsAppModal] = useState<boolean>(false);
   const [simulatedPlatform, setSimulatedPlatform] = useState<Channel>('WHATSAPP');
-  const [simulatedText, setSimulatedText] = useState<string>('Hi, can you send us your B2B package cost breakdown for 5-star Makkah hotels?');
+  const [simulatedText, setSimulatedText] = useState<string>(isUmrah ? 'Hi, can you send us your B2B package cost breakdown for 5-star Makkah hotels?' : `Hi, I would like to know more about ${brand.companyName}.`);
 
   // SMTP Configuration & Delivery State
   const [smtpStatus, setSmtpStatus] = useState<{
@@ -117,9 +120,9 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
   const [showSmtpModal, setShowSmtpModal] = useState<boolean>(false);
   const [smtpHostInput, setSmtpHostInput] = useState<string>('smtp.gmail.com');
   const [smtpPortInput, setSmtpPortInput] = useState<number>(465);
-  const [smtpUserInput, setSmtpUserInput] = useState<string>('amaavigo@gmail.com');
+  const [smtpUserInput, setSmtpUserInput] = useState<string>('');
   const [smtpPassInput, setSmtpPassInput] = useState<string>('');
-  const [smtpFromInput, setSmtpFromInput] = useState<string>('Umrah360 Automation <amaavigo@gmail.com>');
+  const [smtpFromInput, setSmtpFromInput] = useState<string>('');
   const [isSavingSmtp, setIsSavingSmtp] = useState<boolean>(false);
   const [smtpSaveMessage, setSmtpSaveMessage] = useState<{ success: boolean; text: string } | null>(null);
   const [retryingMessageId, setRetryingMessageId] = useState<string | null>(null);
@@ -216,11 +219,11 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           to: toEmail,
-          subject: msg.emailMeta?.subject || 'Re: Umrah360 Inquiry',
+          subject: msg.emailMeta?.subject || `Re: ${brand.companyName} Inquiry`,
           text: msg.text,
           inReplyTo: msg.emailMeta?.inReplyTo,
           conversationId: msg.conversationId,
-          senderName: msg.senderName || 'Umrah360 AI Automation',
+          senderName: msg.senderName || `${brand.aiAgentName} Automation`,
         }),
       });
       const data = await res.json();
@@ -408,7 +411,7 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
         .reverse()
         .find((m) => m.senderType === 'CUSTOMER' || m.senderType === 'PROSPECT');
 
-      const incomingText = lastCustomerMsg ? lastCustomerMsg.text : 'Can you provide more information regarding Umrah360?';
+      const incomingText = lastCustomerMsg ? lastCustomerMsg.text : `Can you provide more information regarding ${brand.companyName}?`;
 
       const result = await generateOmnichannelResponse({
         incomingMessage: incomingText,
@@ -846,7 +849,7 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
                 <div className="flex items-center space-x-2 truncate">
                   <span className="font-semibold text-slate-500">Subject:</span>
                   <span className="font-medium text-slate-900 truncate">
-                    {activeMessages[0]?.emailMeta?.subject || activeConversation.conversationSummary || 'Umrah360 Inquiry'}
+                    {activeMessages[0]?.emailMeta?.subject || activeConversation.conversationSummary || `${brand.companyName} Inquiry`}
                   </span>
                 </div>
                  <div className="flex items-center space-x-3 text-[11px] text-slate-500 font-mono">
@@ -907,7 +910,7 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
                         </span>
 
                         <span className="font-medium">
-                          {msg.senderName || (isIncoming ? activeContact.firstName : 'Umrah360 Agent')}
+                          {msg.senderName || (isIncoming ? activeContact.firstName : `${brand.companyName} Agent`)}
                         </span>
                         {isAi && (
                           <span className="px-1.5 py-0.2 rounded bg-blue-500/20 text-blue-400 font-semibold border border-blue-500/30 flex items-center space-x-1">
@@ -996,6 +999,7 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
             <div className="p-2.5 bg-slate-50 border-t border-slate-200/80 flex items-center justify-between text-xs shrink-0">
               <div className="flex items-center space-x-1.5 overflow-x-auto scrollbar-none">
                 <span className="text-slate-500 font-medium text-[11px] mr-1">Quick Prompts:</span>
+                {isUmrah && (<>
                 <button
                   onClick={() =>
                     setReplyText(
@@ -1016,10 +1020,11 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
                 >
                   Approved Pricing
                 </button>
+                </>)}
                 <button
                   onClick={() =>
                     setReplyText(
-                      `We would be delighted to schedule a 20-minute live demonstration tailored to your pilgrimage operations. What time works best for you this week?`
+                      `We would be delighted to schedule a 20-minute live demonstration tailored to ${isUmrah ? 'your pilgrimage operations' : 'your business'}. What time works best for you this week?`
                     )
                   }
                   className="px-2.5 py-1 rounded-lg bg-white hover:bg-slate-100 text-slate-700 text-[11px] font-semibold border border-slate-200 shadow-2xs transition whitespace-nowrap"
@@ -1591,7 +1596,7 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
                   required
                   value={smtpUserInput}
                   onChange={(e) => setSmtpUserInput(e.target.value)}
-                  placeholder="amaavigo@gmail.com"
+                  placeholder="you@yourcompany.com"
                   className="w-full bg-white border border-slate-200 rounded-lg p-2 text-xs text-slate-900 focus:outline-none focus:border-orange-500 font-mono"
                 />
               </div>
@@ -1619,7 +1624,7 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
                   type="text"
                   value={smtpFromInput}
                   onChange={(e) => setSmtpFromInput(e.target.value)}
-                  placeholder="Umrah360 Automation <amaavigo@gmail.com>"
+                  placeholder={`${brand.senderName} <you@yourcompany.com>`}
                   className="w-full bg-white border border-slate-200 rounded-lg p-2 text-xs text-slate-900 focus:outline-none focus:border-orange-500 font-mono"
                 />
               </div>

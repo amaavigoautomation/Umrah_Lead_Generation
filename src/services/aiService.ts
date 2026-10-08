@@ -9,6 +9,8 @@ import {
   BuyingStage,
 } from '../types';
 import { retrieveRelevantKnowledge, RetrievedChunk } from './ragService';
+import { getCurrentBrand } from '../context/BrandContext';
+import { brandSignature } from '../shared/brand';
 
 export interface AiResponseResult {
   responseText: string;
@@ -134,7 +136,7 @@ export async function generateOmnichannelResponse(params: {
     conversation,
     recentMessages,
     knowledgeDocs,
-    signature = 'Regards,\nUmrah360 Team',
+    signature = brandSignature(getCurrentBrand()),
     allowBooking = false,
   } = params;
 
@@ -239,6 +241,40 @@ export async function generateOmnichannelResponse(params: {
 
   // Rule-based Domain Knowledge Engine (strictly grounded in approved Umrah360 documentation)
   const lowerMsg = freshMessage.toLowerCase();
+
+  // Non-Umrah360 workspaces: neutral, knowledge-grounded fallback (the rules below are Umrah360-specific).
+  const fbBrand = getCurrentBrand();
+  if (fbBrand.playbook !== 'umrah360') {
+    const excerpt = knowledgeChunks[0]?.relevantExcerpt;
+    const isHandoff = handoffCheck.shouldHandoff || !excerpt;
+    const body = excerpt
+      ? `Based on ${fbBrand.companyName}'s verified documentation:\n\n${excerpt}\n\nPlease let me know if you would like more details.`
+      : `Thank you for reaching out to ${fbBrand.companyName}! I don't have confirmed information on that detail, so I'll connect you with our team so they can assist you personally.`;
+    return {
+      responseText: `${body}\n\n${signature}`,
+      confidence: excerpt ? 0.9 : 0.6,
+      knowledgeSources,
+      humanHandoffTriggered: isHandoff,
+      handoffReason: isHandoff ? (handoffCheck.reason || 'No grounded answer available') : undefined,
+      classification: /price|pricing|cost|plan/.test(lowerMsg) ? 'PRICING_REQUEST' : 'QUESTION',
+      leadQualification: {
+        isLead: true,
+        leadScore: lead?.leadScore || 60,
+        intent: lead?.intent || 'MEDIUM',
+        buyingStage: lead?.buyingStage || 'AWARENESS',
+        requirements: [...(lead?.requirements || [])],
+        budget: lead?.budget || null,
+        timeline: lead?.timeline || 'Within 1 month',
+        nextAction: isHandoff ? 'Human follow-up' : 'Follow up with product information',
+      },
+      memoryUpdate: {
+        customerFacts: [`Engaged with ${fbBrand.companyName}`],
+        requirements: [...(lead?.requirements || [])],
+        buyingStage: lead?.buyingStage || 'AWARENESS',
+        nextAction: isHandoff ? 'Human follow-up' : 'Provide product information',
+      },
+    };
+  }
 
   // If handoff is triggered
   if (handoffCheck.shouldHandoff) {

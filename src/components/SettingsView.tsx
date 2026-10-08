@@ -18,6 +18,7 @@ import { UserManagementView } from './UserManagementView';
 import { EmailSettingsPanel } from './EmailSettingsPanel';
 import { InboundMailboxPanel } from './InboundMailboxPanel';
 import { WebsiteWebhookPanel } from './WebsiteWebhookPanel';
+import { BrandSettingsPanel } from './BrandSettingsPanel';
 import { BillingView } from './BillingView';
 
 interface SettingsViewProps {
@@ -357,6 +358,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
       {tenantId && canEditEmail && <InboundMailboxPanel tenantId={tenantId} canEdit />}
 
+      {tenantId && <BrandSettingsPanel tenantId={tenantId} canEdit={canEditEmail} />}
       {tenantId && canEditEmail && <WebsiteWebhookPanel tenantId={tenantId} canEdit />}
 
       {/* User Management & Access Control (Firestore app_users) */}

@@ -24,6 +24,22 @@ import { safeSetDoc } from './firestoreUtils.js';
 import { sendLiveEmail, getSmtpConfig } from './smtpService.js';
 import { appendOutboundMessageToThread } from './inboundPipeline.js';
 import { sanitizeAiEmailText } from './emailSanitizer.js';
+import { getTenantBrand, getBrandSync } from './brandService.js';
+import { initKnowledgeStore, getPublishedKnowledgeDocs } from './knowledgeService.js';
+import { brandIntro, brandHost, type TenantBrand } from '../shared/brand.js';
+
+const campaignSenderName = (b: TenantBrand) => (b.playbook === 'umrah360' ? 'Umrah360 Growth Team' : b.teamName);
+const defaultTemplateSubject = (b: TenantBrand) => `${b.companyName} Solutions for {{company}}`;
+
+/** Neutral cold-outreach copy for non-Umrah360 workspaces. */
+function genericOutreach(brand: TenantBrand, greeting: string, leadName: string, company: string, opener: string) {
+  const what = brand.tagline ? `${brand.companyName} is ${brand.tagline}.` : `${brand.companyName} may be able to help.`;
+  const sig = `Best regards,\n${brand.teamName}${brandHost(brand) ? `\n${brandHost(brand)}` : ''}`;
+  return {
+    subject: `${brand.companyName} for ${company}`,
+    body: `${greeting} ${leadName},\n\n${opener} ${what}\n\nWould you be open to a quick 15-minute walkthrough this week?\n\n${sig}`,
+  };
+}
 import {
   Campaign,
   CampaignLead,
@@ -62,16 +78,41 @@ export async function generateAiEmailForLead(lead: {
   personalizationEvidence: string;
   qualityCheckStatus: 'PASSED' | 'FAILED';
 }> {
+  const campCtx = getCampaignActiveCtx();
+  const brand = await getTenantBrand(campCtx.tenantId);
+  const isUmrah = brand.playbook === 'umrah360';
   const leadName = lead.name || lead.firstName || lead.email.split('@')[0];
-  const company = lead.companyName || `${leadName}'s Agency`;
-  const companyKey = company.toLowerCase().trim();
+  const company = lead.companyName || `${leadName}'s ${isUmrah ? 'Agency' : 'Company'}`;
+  const companyKey = `${campCtx.tenantId}:${company.toLowerCase().trim()}`;
 
   if (companyResearchCache.has(companyKey)) {
     const cached = companyResearchCache.get(companyKey);
-    return generateEmailWithCachedResearch(lead, cached);
+    return generateEmailWithCachedResearch(lead, cached, brand);
   }
 
+  const genericFallback = () => {
+    const g = genericOutreach(brand, 'Dear', leadName, company, `I noticed your work at ${company}.`);
+    return {
+      ...g,
+      researchData: {
+        companySummary: `${company}.`,
+        relevantSignals: [] as string[],
+        companyType: 'Business',
+        confidence: 'LOW' as const,
+      },
+      selectedPainPoint: 'Manual operations',
+      selectedCapabilities: [] as string[],
+      personalizationEvidence: company,
+      qualityCheckStatus: 'PASSED' as const,
+    };
+  };
+
   const apiKey = process.env.OPENAI_API_KEY || process.env.GEMINI_API_KEY;
+  if (!apiKey && !isUmrah) {
+    const fb = genericFallback();
+    companyResearchCache.set(companyKey, fb.researchData);
+    return fb;
+  }
   if (!apiKey) {
     const fallback = {
       subject: `Streamlining Operations & B2B Bookings for ${company}`,
@@ -93,9 +134,14 @@ export async function generateAiEmailForLead(lead: {
 
   try {
     const openai = new OpenAI({ apiKey });
-    const kbContext = INITIAL_KNOWLEDGE_DOCUMENTS.map((d) => `### ${d.title}\n${d.content}`).join('\n\n');
+    let kbDocs: { title: string; content: string }[] = INITIAL_KNOWLEDGE_DOCUMENTS;
+    if (!isUmrah) {
+      await initKnowledgeStore(campCtx).catch(() => 0);
+      kbDocs = getPublishedKnowledgeDocs(campCtx);
+    }
+    const kbContext = kbDocs.map((d) => `### ${d.title}\n${d.content}`).join('\n\n');
 
-    const prompt = `You are an expert B2B sales development AI for Umrah360 (www.umrah360.in), the premier ERP and CRM platform for Hajj and Umrah tour operators.
+    const umrahPrompt = `You are an expert B2B sales development AI for Umrah360 (www.umrah360.in), the premier ERP and CRM platform for Hajj and Umrah tour operators.
 Research the lead/company and generate a highly personalized, human-sounding cold outreach email.
 
 LEAD DETAILS:
@@ -135,6 +181,33 @@ Output your response strictly as a JSON object:
   "qualityCheckStatus": "PASSED"
 }
 `;
+    const genericPrompt = `You are an expert B2B sales development AI for ${brandIntro(brand)}${brand.industryDescription ? `, which serves ${brand.industryDescription}` : ''}.
+Research the lead/company and generate a highly personalized, human-sounding cold outreach email.
+
+LEAD DETAILS:
+- Name: ${leadName}
+- Company: ${company}
+- Email: ${lead.email}
+- Designation: ${lead.designation || 'Director / Owner'}
+- Website: ${lead.website || 'Not provided'}
+
+${brand.companyName.toUpperCase()} KNOWLEDGE BASE (Product Truth):
+${kbContext || '(No knowledge documents published yet.)'}
+
+INSTRUCTIONS:
+1. Analyze the company from its name, industry and website domain if available. Identify company type and operational signals.
+2. Identify the most relevant potential pain point.
+3. Select 1-3 genuine ${brand.companyName} capabilities from the knowledge base that address it. NEVER invent features or pricing.
+4. Pick the single strongest, short, natural, professional subject line.
+5. Write a personalized opening demonstrating relevance to THIS company (avoid "hope you're doing well", "I wanted to reach out").
+6. Concise body (80-180 words), conversational, plain text ONLY (no markdown).
+7. Formal greeting ("Dear [Name]," or "Hello [Name],"). No religious greetings.
+8. End with a low-friction CTA, then sign off as "${brand.teamName}"${brandHost(brand) ? ` with ${brandHost(brand)}` : ''}.
+9. Quality-check for factual consistency, human tone and a clear CTA.
+
+Output strictly as a JSON object with keys: subject, body, researchData {companySummary, relevantSignals[], companyType, confidence (HIGH|MEDIUM|LOW)}, selectedPainPoint, selectedCapabilities[], personalizationEvidence, qualityCheckStatus ("PASSED").
+`;
+    const prompt = isUmrah ? umrahPrompt : genericPrompt;
 
     const candidateModels = ['gpt-4o-mini', 'gpt-4o', 'gpt-3.5-turbo'];
     let text = '';
@@ -159,19 +232,19 @@ Output your response strictly as a JSON object:
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     if (jsonMatch) {
       const parsed = JSON.parse(jsonMatch[0]);
-      const rawSubject = parsed.subject || `Streamlining Operations for ${company}`;
+      const rawSubject = parsed.subject || (isUmrah ? `Streamlining Operations for ${company}` : `${brand.companyName} for ${company}`);
       const rawBody = parsed.body || `Dear ${leadName},\n\nI noticed your work at ${company}...`;
       const result = {
         subject: sanitizeAiEmailText(rawSubject, leadName),
         body: sanitizeAiEmailText(rawBody, leadName),
-        researchData: parsed.researchData || {
+        researchData: parsed.researchData || (isUmrah ? {
           companySummary: `${company} pilgrimage operations.`,
           relevantSignals: ['Umrah travel agency'],
           companyType: 'Travel Agency',
           confidence: 'MEDIUM',
-        },
+        } : { companySummary: `${company}.`, relevantSignals: [], companyType: 'Business', confidence: 'LOW' }),
         selectedPainPoint: parsed.selectedPainPoint || 'Manual operations',
-        selectedCapabilities: parsed.selectedCapabilities || ['Dynamic Package Builder'],
+        selectedCapabilities: parsed.selectedCapabilities || (isUmrah ? ['Dynamic Package Builder'] : []),
         personalizationEvidence: parsed.personalizationEvidence || company,
         qualityCheckStatus: 'PASSED' as const,
       };
@@ -180,6 +253,12 @@ Output your response strictly as a JSON object:
     }
   } catch (err) {
     console.error('Error generating AI email with Gemini:', err);
+  }
+
+  if (!isUmrah) {
+    const fb = genericFallback();
+    companyResearchCache.set(companyKey, fb.researchData);
+    return fb;
   }
 
   const fallback = {
@@ -200,8 +279,13 @@ Output your response strictly as a JSON object:
   return fallback;
 }
 
-function generateEmailWithCachedResearch(lead: any, researchData: any) {
+function generateEmailWithCachedResearch(lead: any, researchData: any, brand: TenantBrand) {
   const leadName = lead.name || lead.firstName || lead.email.split('@')[0];
+  if (brand.playbook !== 'umrah360') {
+    const company = lead.companyName || `${leadName}'s Company`;
+    const g = genericOutreach(brand, 'Dear', leadName, company, `Given your focus at ${company}, I wanted to share how ${brand.companyName} can help.`);
+    return { ...g, researchData, selectedPainPoint: 'Operational coordination', selectedCapabilities: [] as string[], personalizationEvidence: company, qualityCheckStatus: 'PASSED' as const };
+  }
   const company = lead.companyName || `${leadName}'s Agency`;
   return {
     subject: `Streamlining ${researchData.companyType || 'Pilgrimage'} Operations for ${company}`,
@@ -745,7 +829,7 @@ export async function saveTemplate(template: Partial<EmailTemplate>): Promise<Em
   const tpl: EmailTemplate = {
     templateId,
     name: (template.name || existing?.name || 'Untitled Template').trim(),
-    subject: (template.subject || existing?.subject || 'Umrah360 Solutions for {{company}}').trim(),
+    subject: (template.subject || existing?.subject || defaultTemplateSubject(getBrandSync(getCampaignActiveCtx().tenantId))).trim(),
     body: (template.body || existing?.body || '').trim(),
     htmlBody: template.htmlBody !== undefined ? template.htmlBody : existing?.htmlBody,
     format: template.format || (isHtml ? 'html' : 'text') || existing?.format || 'text',
@@ -784,6 +868,7 @@ export async function deleteTemplate(templateId: string): Promise<boolean> {
 }
 
 export async function generateAiSamplePreviews(leads: any[]): Promise<any[]> {
+  const previewBrand = await getTenantBrand(getCampaignActiveCtx().tenantId);
   const sampleLeads = (leads || []).slice(0, 3);
   const results: any[] = [];
   for (const lead of sampleLeads) {
@@ -801,8 +886,8 @@ export async function generateAiSamplePreviews(leads: any[]): Promise<any[]> {
     } catch (e: any) {
       results.push({
         lead,
-        subject: `Pilgrimage Operations & B2B Growth for ${lead.companyName || 'Your Agency'}`,
-        body: `Hi ${lead.name || 'there'},\n\nI noticed your operations at ${lead.companyName || 'your agency'}. Umrah360 automates dynamic package costing and sub-agent portals.\n\nWould you be open to a 10-minute walkthrough?\n\nBest regards,\nUmrah360 Growth Team`,
+        subject: previewBrand.playbook === 'umrah360' ? `Pilgrimage Operations & B2B Growth for ${lead.companyName || 'Your Agency'}` : `${previewBrand.companyName} for ${lead.companyName || 'your company'}`,
+        body: previewBrand.playbook !== 'umrah360' ? genericOutreach(previewBrand, 'Hi', lead.name || 'there', lead.companyName || 'your company', `I noticed your work at ${lead.companyName || 'your company'}.`).body : `Hi ${lead.name || 'there'},\n\nI noticed your operations at ${lead.companyName || 'your agency'}. Umrah360 automates dynamic package costing and sub-agent portals.\n\nWould you be open to a 10-minute walkthrough?\n\nBest regards,\nUmrah360 Growth Team`,
       });
     }
   }
@@ -1118,7 +1203,7 @@ export async function createCampaign(params: {
     selectedTemplate = {
       templateId: params.templateId,
       name: params.templateName || 'Custom Template',
-      subject: params.templateSubject || 'Umrah360 Solutions for {{company}}',
+      subject: params.templateSubject || defaultTemplateSubject(getBrandSync(getCampaignActiveCtx().tenantId)),
       body: params.templateBody,
       createdAt: now,
       updatedAt: now,
@@ -1764,7 +1849,7 @@ export async function processNextCampaignSendBatch(
     lead.updatedAt = new Date().toISOString();
 
     const smtpConfig = getSmtpConfig();
-    const senderFrom = smtpConfig.from || smtpConfig.user || 'sales@umrah360.in';
+    const senderFrom = smtpConfig.from || smtpConfig.user || (await getTenantBrand(getCampaignActiveCtx().tenantId)).salesEmail || 'sales@umrah360.in';
     const conversationId = lead.conversationId || `conv-${lead.leadId}`;
     const gmailThreadId = lead.gmailThreadId || `thread-${lead.leadId}`;
 
@@ -1827,7 +1912,7 @@ export async function processNextCampaignSendBatch(
           channel: 'EMAIL',
           direction: 'OUTBOUND',
           senderType: 'AGENT',
-          senderName: 'Umrah360 Growth Team',
+          senderName: campaignSenderName(await getTenantBrand(getCampaignActiveCtx().tenantId)),
           senderEmail: senderFrom,
           text: body,
           sentAt: now,
@@ -2095,7 +2180,7 @@ async function executeCampaignSendingEngine(campaignId: string, expectedRunId?: 
       lead.updatedAt = new Date().toISOString();
 
       const smtpConfig = getSmtpConfig();
-      const senderFrom = smtpConfig.from || smtpConfig.user || 'sales@umrah360.in';
+      const senderFrom = smtpConfig.from || smtpConfig.user || (await getTenantBrand(getCampaignActiveCtx().tenantId)).salesEmail || 'sales@umrah360.in';
       const conversationId = lead.conversationId || `conv-${lead.leadId}`;
       const gmailThreadId = lead.gmailThreadId || `thread-${lead.leadId}`;
 
@@ -2163,7 +2248,7 @@ async function executeCampaignSendingEngine(campaignId: string, expectedRunId?: 
             channel: 'EMAIL',
             direction: 'OUTBOUND',
             senderType: 'AGENT',
-            senderName: 'Umrah360 Growth Team',
+            senderName: campaignSenderName(await getTenantBrand(getCampaignActiveCtx().tenantId)),
             senderEmail: senderFrom,
             text: body,
             sentAt: now,

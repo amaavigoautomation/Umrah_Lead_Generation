@@ -52,11 +52,6 @@ import {
 } from './campaignService.js';
 import { processWebsiteLeadSubmission } from './websiteLeadService.js';
 import {
-  TARGET_CALENDAR_EMAIL,
-  SCHEDULING_TIMEZONE,
-  WORKING_START_HOUR,
-  WORKING_END_HOUR,
-  VALID_SLOT_START_HOURS,
   getLiveCalendarToken,
   setServerCalendarAccessToken,
   findNextAvailableSlots,
@@ -75,6 +70,8 @@ import {
   setCampaignActiveContext,
   getCampaignActiveCtx,
 } from './campaignService.js';
+import { getTenantBrand } from './brandService.js';
+import { brandSignature, brandIntro, brandTzLabel, brandWorkingDaysLabel, fmtHour } from '../shared/brand.js';
 import { setSchedulingActiveContext } from './demoSchedulingService.js';
 import { setInboundActiveContext } from './inboundPipeline.js';
 import { getEntitlements, hasFeature, featureForUrl, listPlans, savePlan, getEffectiveLimits, invalidateEntitlements } from './entitlements.js';
@@ -781,6 +778,30 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
     }
   }
 
+  // Company brand profile: /api/tenants/:tenantId/brand (GET: any member, POST: workspace admin)
+  const brandMatch = url.split('?')[0].match(/^\/api\/tenants\/([^/]+)\/brand$/);
+  if (brandMatch) {
+    const tId = brandMatch[1];
+    res.setHeader('Content-Type', 'application/json');
+    try {
+      const bs = await import('./brandService.js');
+      if (req.method === 'GET') {
+        res.statusCode = 200;
+        res.end(JSON.stringify({ brand: await bs.getTenantBrand(tId) }));
+        return true;
+      }
+      if (req.method === 'POST') {
+        res.statusCode = 200;
+        res.end(JSON.stringify({ brand: await bs.saveTenantBrand(tId, body?.brand || body || {}) }));
+        return true;
+      }
+    } catch (err: any) {
+      res.statusCode = err?.status || 500;
+      res.end(JSON.stringify({ error: err?.message || 'Brand request failed' }));
+      return true;
+    }
+  }
+
   // Tenant Usage Metrics: /api/tenants/:tenantId/usage
   const usageMatch = url.match(/^\/api\/tenants\/([^/?]+)\/usage$/);
   if (usageMatch && req.method === 'GET') {
@@ -899,7 +920,7 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
   }
 
   // Self-serve website-lead webhook: /api/tenants/:tenantId/webhook[/regenerate|/test]
-  const webhookMatch = url.split('?')[0].match(/^\/api\/tenants\/([^/]+)\/webhook(?:\/(regenerate|test))?$/);
+  const webhookMatch = url.split('?')[0].match(/^\/api\/tenants\/([^/]+)\/webhook(?:\/(regenerate|test|simulate))?$/);
   if (webhookMatch) {
     const tId = webhookMatch[1];
     const action = webhookMatch[2];
@@ -919,6 +940,14 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
       if (action === 'regenerate' && req.method === 'POST') {
         res.statusCode = 200;
         res.end(JSON.stringify(await svc.regenerateKey(tId)));
+        return true;
+      }
+      if (action === 'simulate' && req.method === 'POST') {
+        // Runs a form submission through the real pipeline, scoped to THIS workspace.
+        const svcLead = await import('./websiteLeadService.js');
+        const result = await svcLead.processWebsiteLeadSubmission(body || {}, { ...activeTenantCtx, tenantId: tId });
+        res.statusCode = 200;
+        res.end(JSON.stringify(result));
         return true;
       }
       if (action === 'test' && req.method === 'POST') {
@@ -1069,12 +1098,15 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
           endpoint: '/api/webhooks/umrah-demo',
           status: 'ready',
         },
-        calendar: {
-          targetEmail: TARGET_CALENDAR_EMAIL,
-          timezone: SCHEDULING_TIMEZONE,
-          workingDays: 'Monday - Friday',
-          workingHours: '10:00 AM - 7:00 PM IST',
-        },
+        calendar: await (async () => {
+          const b = await getTenantBrand(resolvedTenantId);
+          return {
+            targetEmail: b.calendarEmail,
+            timezone: b.timezone,
+            workingDays: brandWorkingDaysLabel(b).replace(' to ', ' - '),
+            workingHours: `${fmtHour(b.workingHoursStart)} - ${fmtHour(b.workingHoursEnd)} ${brandTzLabel(b)}`,
+          };
+        })(),
         timestamp: new Date().toISOString(),
       })
     );
@@ -1093,8 +1125,8 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
           tenantRepo(activeTenantCtx).settingsDoc('calendar_auth'),
           {
             accessToken,
-            email: email || TARGET_CALENDAR_EMAIL,
-            targetAccount: TARGET_CALENDAR_EMAIL,
+            email: email || (await getTenantBrand(resolvedTenantId)).calendarEmail,
+            targetAccount: (await getTenantBrand(resolvedTenantId)).calendarEmail,
             updatedAt: new Date().toISOString(),
             active: true,
           },
@@ -1113,17 +1145,21 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
   if (url === '/api/calendar/status' && req.method === 'GET') {
     const liveToken = await getLiveCalendarToken(requestBearerToken || undefined);
     const verification = liveToken ? await verifyGoogleCalendarConnection(liveToken) : { connected: false };
+    const cb = await getTenantBrand(resolvedTenantId);
+    const slotHrs: number[] = [];
+    for (let h = cb.workingHoursStart; h < cb.workingHoursEnd; h++) slotHrs.push(h);
+    const closedNames = [6, 0, 1, 2, 3, 4, 5].filter((d) => !cb.workingDays.includes(d)).map((d) => ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][d]);
     res.statusCode = 200;
     res.end(
       JSON.stringify({
         configured: Boolean(liveToken),
         connected: verification.connected,
-        targetAccount: TARGET_CALENDAR_EMAIL,
-        timezone: SCHEDULING_TIMEZONE,
-        workingDays: 'Monday – Friday (Saturday & Sunday closed)',
-        workingHours: '10:00 AM – 7:00 PM IST',
+        targetAccount: cb.calendarEmail,
+        timezone: cb.timezone,
+        workingDays: `${brandWorkingDaysLabel(cb).replace(' to ', ' – ')}${closedNames.length ? ` (${closedNames.join(' & ')} closed)` : ''}`,
+        workingHours: `${fmtHour(cb.workingHoursStart)} – ${fmtHour(cb.workingHoursEnd)} ${brandTzLabel(cb)}`,
         durationMinutes: 60,
-        fixedSlots: VALID_SLOT_START_HOURS.map((h) => `${h}:00 – ${h + 1}:00 IST`),
+        fixedSlots: slotHrs.map((h) => `${h}:00 – ${h + 1}:00 ${brandTzLabel(cb)}`),
         timestamp: new Date().toISOString(),
       })
     );
@@ -1143,13 +1179,14 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
       accessToken: requestBearerToken || undefined,
     });
 
+    const ab = await getTenantBrand(resolvedTenantId);
     res.statusCode = 200;
     res.end(
       JSON.stringify({
         success: true,
-        targetAccount: TARGET_CALENDAR_EMAIL,
-        timezone: SCHEDULING_TIMEZONE,
-        workingHours: '10:00 AM – 7:00 PM IST (Mon–Fri)',
+        targetAccount: ab.calendarEmail,
+        timezone: ab.timezone,
+        workingHours: `${fmtHour(ab.workingHoursStart)} – ${fmtHour(ab.workingHoursEnd)} ${brandTzLabel(ab)} (${brandWorkingDaysLabel(ab)})`,
         slots,
         totalAvailable: slots.length,
       })
@@ -1303,20 +1340,23 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
   // 2. AI Respond endpoint (/api/ai/respond)
   if ((url === '/api/ai/respond' || url.startsWith('/api/ai/respond?')) && req.method === 'POST') {
     const { incomingMessage, contact, lead, conversation, recentMessages, knowledgeChunks, handoffCheck, signature } = body;
+    const brand = await getTenantBrand(resolvedTenantId);
+    const isUmrah = brand.playbook === 'umrah360';
+    const defSig = brandSignature(brand);
 
     // If handoff was already identified as necessary by rule
     if (handoffCheck?.shouldHandoff) {
-      const isTwentyUsers = incomingMessage?.toLowerCase().includes('20') || incomingMessage?.toLowerCase().includes('enterprise');
+      const isTwentyUsers = isUmrah && (incomingMessage?.toLowerCase().includes('20') || incomingMessage?.toLowerCase().includes('enterprise'));
       const handoffResponse = isTwentyUsers
-        ? `Thank you for your interest, ${contact?.firstName || 'there'}! For teams of 20+ users, our Enterprise tier includes dedicated cloud hosting, unlimited B2B sub-agent capacity, and custom onboarding.\n\nBecause Enterprise accounts are customized to your agency's transaction volume, I have connected our Senior Solutions Specialist to share a tailored proposal and schedule a short walkthrough. Someone will reach out to you shortly.\n\n${signature || 'Regards,\nUmrah360 Team'}`
-        : `I don't have confirmed information on that specific detail in our verified documentation. I'll connect you directly with our senior pilgrimage operations team so they can assist you personally.\n\n${signature || 'Regards,\nUmrah360 Team'}`;
+        ? `Thank you for your interest, ${contact?.firstName || 'there'}! For teams of 20+ users, our Enterprise tier includes dedicated cloud hosting, unlimited B2B sub-agent capacity, and custom onboarding.\n\nBecause Enterprise accounts are customized to your agency's transaction volume, I have connected our Senior Solutions Specialist to share a tailored proposal and schedule a short walkthrough. Someone will reach out to you shortly.\n\n${signature || defSig}`
+        : `I don't have confirmed information on that specific detail in our verified documentation. I'll connect you directly with our ${isUmrah ? 'senior pilgrimage operations' : 'specialist'} team so they can assist you personally.\n\n${signature || defSig}`;
 
       res.statusCode = 200;
       res.end(
         JSON.stringify({
           responseText: handoffResponse,
           confidence: 0.95,
-          knowledgeSources: knowledgeChunks?.map((c: any) => c.title) || ['Umrah360 Sales Policy'],
+          knowledgeSources: knowledgeChunks?.map((c: any) => c.title) || (isUmrah ? ['Umrah360 Sales Policy'] : []),
           humanHandoffTriggered: true,
           handoffReason: handoffCheck.reason,
           classification: 'PRICING_REQUEST',
@@ -1325,13 +1365,13 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
             leadScore: Math.min(100, (lead?.leadScore || 65) + 15),
             intent: 'HIGH',
             buyingStage: 'CONSIDERATION',
-            requirements: [...(lead?.requirements || []), 'Enterprise 20+ seats', 'Custom quote'],
+            requirements: [...(lead?.requirements || []), ...(isUmrah ? ['Enterprise 20+ seats'] : []), 'Custom quote'],
             budget: 'Enterprise Quote Required',
             timeline: 'Immediate',
             nextAction: 'Senior specialist follow-up for 20-seat Enterprise quote',
           },
           memoryUpdate: {
-            customerFacts: [`Interested in Umrah360 for ${contact?.companyName || 'agency'}`, 'Inquired about 20-user Enterprise plan'],
+            customerFacts: [`Interested in ${brand.companyName} for ${contact?.companyName || 'agency'}`, ...(isUmrah ? ['Inquired about 20-user Enterprise plan'] : [])],
             requirements: ['20+ user seats', 'Custom quote'],
             buyingStage: 'CONSIDERATION',
             nextAction: 'Human handoff - custom pricing quote',
@@ -1346,7 +1386,7 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
     if (openAiApiKey) {
       try {
         const openai = new OpenAI({ apiKey: openAiApiKey });
-        const systemInstruction = `You are the AI conversation engine for Umrah360 (www.umrah360.in), the leading all-in-one ERP and CRM platform for Hajj and Umrah tour operators.
+        const umrahSystemInstruction = `You are the AI conversation engine for Umrah360 (www.umrah360.in), the leading all-in-one ERP and CRM platform for Hajj and Umrah tour operators.
 CRITICAL RULES:
 1. Ground your responses strictly in the provided Approved Knowledge Chunks. NEVER fabricate features, pricing, or guarantees.
 2. If the user asks for pricing for 20 users or large enterprise plans, you MUST NOT quote arbitrary numbers. State that Enterprise tiers for 20+ users require a tailored volume quote and will be handled by a specialist.
@@ -1354,7 +1394,16 @@ CRITICAL RULES:
 4. Channel: ${conversation?.channel || 'EMAIL'}.
 5. Match the customer's language and tone. Do not repeat greeting if already mid-thread.
 6. EMAIL FORMATTING & GREETING RULES (MANDATORY): Never use Markdown symbols in email replies. Do NOT use **, ##, ###, *, backticks, or similar formatting symbols. Write emails as natural, professional plain text. ALWAYS use formal professional greetings (e.g., "Dear [Name]," or "Hello [Name],"). NEVER use Muslim/religious greetings such as "Assalamu Alaikum", "Walaikum Assalam", "Salam", etc.
-7. Sign off with: ${signature || 'Regards,\nUmrah360 Team'}`;
+7. Sign off with: ${signature || defSig}`;
+        const genericSystemInstruction = `You are the AI conversation engine for ${brandIntro(brand)}${brand.industryDescription ? `, serving ${brand.industryDescription}` : ''}.
+CRITICAL RULES:
+1. Ground your responses strictly in the provided Approved Knowledge Chunks. NEVER fabricate features, pricing, or guarantees. If the answer is not in the chunks, say a specialist from ${brand.companyName} will follow up.
+2. Keep your reply concise, professional, warm, and helpful.
+3. Channel: ${conversation?.channel || 'EMAIL'}.
+4. Match the customer's language and tone. Do not repeat greeting if already mid-thread.
+5. FORMATTING (MANDATORY): Never use Markdown symbols (**, ##, ###, *, backticks). Write natural plain text with a formal greeting (e.g., "Dear [Name],").
+6. Sign off with: ${signature || defSig}`;
+        const systemInstruction = isUmrah ? umrahSystemInstruction : genericSystemInstruction;
 
         const contextPrompt = `
 CONTACT PROFILE:
@@ -1363,10 +1412,10 @@ Company: ${contact?.companyName}
 Title: ${contact?.jobTitle}
 
 CONVERSATION SUMMARY:
-${conversation?.conversationSummary || 'Ongoing dialogue regarding Umrah360.'}
+${conversation?.conversationSummary || `Ongoing dialogue regarding ${brand.companyName}.`}
 
 APPROVED KNOWLEDGE CHUNKS:
-${knowledgeChunks?.map((c: any) => `[${c.title}]: ${c.relevantExcerpt}`).join('\n\n') || 'General Umrah360 pilgrimage software information.'}
+${knowledgeChunks?.map((c: any) => `[${c.title}]: ${c.relevantExcerpt}`).join('\n\n') || (isUmrah ? 'General Umrah360 pilgrimage software information.' : 'No specific knowledge excerpts available.')}
 
 RECENT THREAD MESSAGES:
 ${recentMessages?.map((m: any) => `${m.senderName}: ${m.text}`).join('\n') || 'None'}
@@ -1415,14 +1464,14 @@ Generate a helpful, accurate, grounded response adhering to all rules.`;
                 leadScore: Math.min(100, (lead?.leadScore || 60) + 10),
                 intent: 'HIGH',
                 buyingStage: 'CONSIDERATION',
-                requirements: lead?.requirements || ['Umrah360 Core Suite'],
+                requirements: lead?.requirements || (isUmrah ? ['Umrah360 Core Suite'] : []),
                 budget: lead?.budget || null,
                 timeline: lead?.timeline || 'Upcoming season',
                 nextAction: 'Offer live platform walkthrough',
               },
               memoryUpdate: {
-                customerFacts: [`Inquired about Umrah360 capabilities for ${contact?.companyName}`],
-                requirements: lead?.requirements || ['B2B / FIT Package Management'],
+                customerFacts: [`Inquired about ${brand.companyName} capabilities for ${contact?.companyName}`],
+                requirements: lead?.requirements || (isUmrah ? ['B2B / FIT Package Management'] : []),
                 buyingStage: 'CONSIDERATION',
                 nextAction: 'Offer live platform walkthrough',
               },
@@ -1441,10 +1490,13 @@ Generate a helpful, accurate, grounded response adhering to all rules.`;
     const isPricing = incomingMessage?.toLowerCase().includes('price') || incomingMessage?.toLowerCase().includes('cost');
     let responseText = '';
 
-    if (isPilgrimRetail) {
-      responseText = `Dear ${contact?.firstName || 'Customer'},\n\nThank you for reaching out to Umrah360!\n\n1. Platform Role: Umrah360 (www.umrah360.in) is the core travel technology and dynamic booking platform that powers licensed Hajj and Umrah travel agencies and tour operators.\n\n2. Real-Time Booking: Travel agencies running on Umrah360 provide online portals where pilgrims can customize complete packages in real time (flights, 3/4/5-star Makkah and Madinah hotels, Haramain train / private VIP GMC transfers, meals, and Saudi e-visas) with live pricing and secure online payments.\n\n3. Booking Fulfillment: Because Umrah360 provides the software to licensed tour operators rather than selling directly as a retail travel agency, packages are fulfilled through our verified partner agencies. We would be delighted to connect you with one of our top certified partner travel agencies in your city!\n\n${signature || 'Regards,\nUmrah360 Team'}`;
+    if (!isUmrah) {
+      const excerpt = knowledgeChunks?.[0]?.relevantExcerpt;
+      responseText = `Dear ${contact?.firstName || 'Customer'},\n\nThank you for contacting ${brand.companyName}!\n\n${excerpt ? `${excerpt}\n\nCould you share a few more details so we can help you further?` : 'We have received your message and one of our specialists will get back to you shortly. Please share a few details about what you are looking for.'}\n\n${signature || defSig}`;
+    } else if (isPilgrimRetail) {
+      responseText = `Dear ${contact?.firstName || 'Customer'},\n\nThank you for reaching out to Umrah360!\n\n1. Platform Role: Umrah360 (www.umrah360.in) is the core travel technology and dynamic booking platform that powers licensed Hajj and Umrah travel agencies and tour operators.\n\n2. Real-Time Booking: Travel agencies running on Umrah360 provide online portals where pilgrims can customize complete packages in real time (flights, 3/4/5-star Makkah and Madinah hotels, Haramain train / private VIP GMC transfers, meals, and Saudi e-visas) with live pricing and secure online payments.\n\n3. Booking Fulfillment: Because Umrah360 provides the software to licensed tour operators rather than selling directly as a retail travel agency, packages are fulfilled through our verified partner agencies. We would be delighted to connect you with one of our top certified partner travel agencies in your city!\n\n${signature || defSig}`;
     } else if (isB2b) {
-      responseText = `Yes! Umrah360 provides a complete white-label B2B Sub-Agent Portal. It allows tour operators to distribute packages to external travel agents, manage custom multi-tier markups, establish real-time credit wallets, and enable agents to generate branded PDF vouchers instantly with their own agency logo.\n\nWould you like to see how sub-agent allotments and credit limits are configured?\n\n${signature || 'Regards,\nUmrah360 Team'}`;
+      responseText = `Yes! Umrah360 provides a complete white-label B2B Sub-Agent Portal. It allows tour operators to distribute packages to external travel agents, manage custom multi-tier markups, establish real-time credit wallets, and enable agents to generate branded PDF vouchers instantly with their own agency logo.\n\nWould you like to see how sub-agent allotments and credit limits are configured?\n\n${signature || defSig}`;
     } else if (isPricing) {
       responseText = `Here is our approved subscription pricing:
 • Lite Plan: INR 36,000/year (or INR 4,000/month) | International: USD 825/year (up to 5 users) — includes Umrah group package creation, booking management, departure control, visa tracking, proforma invoices, and payment receipts.
@@ -1453,13 +1505,13 @@ Generate a helpful, accurate, grounded response adhering to all rules.`;
 
 How many team members would be using the software at ${contact?.companyName || 'your agency'}?
 
-${signature || 'Regards,\nUmrah360 Team'}`;
+${signature || defSig}`;
     } else {
       responseText = `Umrah360 is the unified cloud operating platform purpose-built for Hajj and Umrah tour operators. It connects package creation, group departures, FIT custom packages, passenger manifests, Saudi visa tracking, rooming lists, B2B agent distribution, and departure-level profitability.
 
 Are you currently handling your operations through spreadsheets or looking to upgrade from another system?
 
-${signature || 'Regards,\nUmrah360 Team'}`;
+${signature || defSig}`;
     }
 
     responseText = sanitizeAiEmailText(responseText, contact?.firstName);
@@ -1496,8 +1548,12 @@ ${signature || 'Regards,\nUmrah360 Team'}`;
   // 3. AI Qualify endpoint (/api/ai/qualify)
   if ((url === '/api/ai/qualify' || url.startsWith('/api/ai/qualify?')) && req.method === 'POST') {
     const { jobTitle, companyName, industry, location } = body;
+    const qBrand = await getTenantBrand(resolvedTenantId);
     const isDecisionMaker = /founder|owner|director|ceo|managing director|partner|proprietor/i.test(jobTitle || '');
-    const isPilgrimage = /umrah|hajj|pilgrimage|travel|tour/i.test(`${industry} ${companyName}`);
+    const isPilgrimage =
+      qBrand.playbook === 'umrah360'
+        ? /umrah|hajj|pilgrimage|travel|tour/i.test(`${industry} ${companyName}`)
+        : (qBrand.industryDescription.toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length > 3).some((w) => `${industry} ${companyName}`.toLowerCase().includes(w)));
 
     let score = 55;
     if (isDecisionMaker) score += 25;
@@ -1572,8 +1628,11 @@ ${signature || 'Regards,\nUmrah360 Team'}`;
   // 4.5. AI Test Playground (/api/ai/test)
   if ((url === '/api/ai/test' || url.startsWith('/api/ai/test?')) && req.method === 'POST') {
     const { message, contact, lead, conversation, signature } = body;
-    const isTwentyUsers = /20 user|twenty|20 seat|enterprise/i.test(message || '');
-    const isB2b = /b2b|agent|reseller|wholesaler/i.test(message || '');
+    const brand = await getTenantBrand(resolvedTenantId);
+    const isUmrah = brand.playbook === 'umrah360';
+    const defSig = brandSignature(brand);
+    const isTwentyUsers = isUmrah && /20 user|twenty|20 seat|enterprise/i.test(message || '');
+    const isB2b = isUmrah && /b2b|agent|reseller|wholesaler/i.test(message || '');
 
     // Retrieve live grounded chunks from memory cache (0ms)
     const chunks = serverRetrieveKnowledge(message || '', 3);
@@ -1583,7 +1642,7 @@ ${signature || 'Regards,\nUmrah360 Team'}`;
       res.statusCode = 200;
       res.end(
         JSON.stringify({
-          responseText: `Thank you for your inquiry! For 20+ users, our Enterprise plan provides dedicated cloud infrastructure, custom B2B sub-agent networks, and personalized onboarding. Because this requires custom volume assessment, I'm transferring you to our Senior Solutions Specialist.\n\n${signature || 'Regards,\nUmrah360 Team'}`,
+          responseText: `Thank you for your inquiry! For 20+ users, our Enterprise plan provides dedicated cloud infrastructure, custom B2B sub-agent networks, and personalized onboarding. Because this requires custom volume assessment, I'm transferring you to our Senior Solutions Specialist.\n\n${signature || defSig}`,
           confidence: 0.96,
           humanHandoff: true,
           handoffReason: 'Enterprise 20+ users requires custom volume quote',
@@ -1600,12 +1659,12 @@ ${signature || 'Regards,\nUmrah360 Team'}`;
     if (openAiKey) {
       try {
         const openai = new OpenAI({ apiKey: openAiKey });
-        const systemInstruction = `You are the AI conversation engine for Umrah360 (www.umrah360.in).
+        const systemInstruction = `You are the AI conversation engine for ${isUmrah ? 'Umrah360 (www.umrah360.in)' : brandIntro(brand)}.
 CRITICAL RULES:
 1. Ground your response strictly in the provided Approved Knowledge Chunks. NEVER fabricate features, pricing, or guarantees.
 2. Keep your reply concise, professional, warm, and helpful.
 3. Plain text only. No markdown formatting symbols in emails.
-4. Sign off with: ${signature || 'Regards,\nUmrah360 Team'}`;
+4. Sign off with: ${signature || defSig}`;
 
         const prompt = `APPROVED KNOWLEDGE CHUNKS:
 ${chunks.map((c) => `[${c.title}]: ${c.relevantExcerpt}`).join('\n\n')}
@@ -1649,7 +1708,7 @@ Generate a helpful, grounded response.`;
               leadScore: isB2b ? 88 : 80,
               intent: 'HIGH',
               buyingStage: 'CONSIDERATION',
-              knowledgeSources: knowledgeSources.length > 0 ? knowledgeSources : ['Umrah360 Platform Knowledge Base'],
+              knowledgeSources: knowledgeSources.length > 0 ? knowledgeSources : [`${brand.companyName} Knowledge Base`],
             })
           );
           return true;
@@ -1662,11 +1721,13 @@ Generate a helpful, grounded response.`;
     // Dynamic grounded fallback
     let responseText = '';
     if (chunks.length > 0) {
-      responseText = `Based on Umrah360's verified documentation:\n\n${chunks[0].relevantExcerpt}\n\nPlease let us know if you would like a guided demo or specific details for your agency.\n\n${signature || 'Regards,\nUmrah360 Team'}`;
+      responseText = `Based on ${brand.companyName}'s verified documentation:\n\n${chunks[0].relevantExcerpt}\n\nPlease let us know if you would like a guided demo or specific details for your agency.\n\n${signature || defSig}`;
+    } else if (!isUmrah) {
+      responseText = `Thank you for contacting ${brand.companyName}! We have received your message and a specialist will follow up shortly.\n\n${signature || defSig}`;
     } else if (isB2b) {
-      responseText = `Yes! Umrah360 includes a full B2B Sub-Agent Portal allowing your partner agencies to search contracted hotel allotments and issue white-label PDF vouchers directly.\n\n${signature || 'Regards,\nUmrah360 Team'}`;
+      responseText = `Yes! Umrah360 includes a full B2B Sub-Agent Portal allowing your partner agencies to search contracted hotel allotments and issue white-label PDF vouchers directly.\n\n${signature || defSig}`;
     } else {
-      responseText = `Umrah360 automates pilgrimage tour operations, dynamic package pricing, and Saudi visa workflows.\n\n${signature || 'Regards,\nUmrah360 Team'}`;
+      responseText = `Umrah360 automates pilgrimage tour operations, dynamic package pricing, and Saudi visa workflows.\n\n${signature || defSig}`;
     }
 
     res.statusCode = 200;
@@ -1796,7 +1857,7 @@ Generate a helpful, grounded response.`;
           to,
           subject,
           externalMessageId: sendResult.messageId,
-          senderName: senderName || 'Umrah360 AI',
+          senderName: senderName || (await getTenantBrand(resolvedTenantId)).aiAgentName,
         });
       }
       res.statusCode = 200;

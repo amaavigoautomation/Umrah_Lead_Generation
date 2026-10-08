@@ -30,6 +30,8 @@ import {
 } from './demoSchedulingService.js';
 import { handleIncomingCampaignLeadReply } from './campaignService.js';
 import { sanitizeAiEmailText } from './emailSanitizer.js';
+import { getTenantBrand } from './brandService.js';
+import { brandIntro, brandHost } from '../shared/brand.js';
 
 export const TARGET_WHATSAPP_NUMBER = '+919820252434';
 export const TARGET_WHATSAPP_NUMBER_DISPLAY = '+91 98202 52434';
@@ -448,6 +450,8 @@ export async function generateWhatsAppAutoReplyText(params: {
 }> {
   const { fromPhone, fromName, body, companyName, threadHistory } = params;
   const combinedText = body.toLowerCase();
+  const brand = await getTenantBrand(getWACtx().tenantId);
+  const isUmrah = brand.playbook === 'umrah360';
 
   // =========================================================================
   // UNIVERSAL DEMO SCHEDULING AGENT INTERCEPTION FOR WHATSAPP
@@ -466,7 +470,7 @@ export async function generateWhatsAppAutoReplyText(params: {
         leadContext: {
           leadPhone: fromPhone,
           leadName: fromName || 'Brother / Sister',
-          companyName: companyName || 'Umrah Travel Agency',
+          companyName: companyName || (isUmrah ? 'Umrah Travel Agency' : 'Valued Customer'),
           channel: 'WHATSAPP',
         },
       });
@@ -485,14 +489,14 @@ export async function generateWhatsAppAutoReplyText(params: {
   }
 
   // Intent classification
-  const isIndividualPilgrimOrFamily =
+  const isIndividualPilgrimOrFamily = isUmrah &&
     /myself|my family|for family|for myself|as a customer|planning umrah|booking experience|customized package|customize a package|book a customized|hotels in makkah|flights.*hotels|transfers.*meals.*visa|real-time.*availability|online payment|direct booking|retail|pax|vip package|ramadan/i.test(
       combinedText
     );
-  const isTwentyUsers = /20 user|20 seat|25 user|twenty user|enterprise|volume quote|corporate rate/i.test(combinedText);
-  const isB2bPortal = /b2b|sub-agent|reseller|credit limit|wallet|allotment|offline block|agent markup/i.test(combinedText);
-  const isDynamicCosting = /dynamic costing|costing|rail|haramain|train|fare|forex|currency|sar|usd|gbp/i.test(combinedText);
-  const isVisa = /visa|evisa|e-visa|saudi visa|tracking|biometrics|nusuk/i.test(combinedText);
+  const isTwentyUsers = isUmrah && /20 user|20 seat|25 user|twenty user|enterprise|volume quote|corporate rate/i.test(combinedText);
+  const isB2bPortal = isUmrah && /b2b|sub-agent|reseller|credit limit|wallet|allotment|offline block|agent markup/i.test(combinedText);
+  const isDynamicCosting = isUmrah && /dynamic costing|costing|rail|haramain|train|fare|forex|currency|sar|usd|gbp/i.test(combinedText);
+  const isVisa = isUmrah && /visa|evisa|e-visa|saudi visa|tracking|biometrics|nusuk/i.test(combinedText);
 
   let handoffTriggered = false;
   let handoffReason: string | undefined;
@@ -528,7 +532,7 @@ export async function generateWhatsAppAutoReplyText(params: {
   const formattedThreadContext = (threadHistory && threadHistory.length > 0)
     ? threadHistory.map((m: any, idx: number) => {
         const isCustomer = m.senderType === 'CUSTOMER' || m.senderType === 'PROSPECT';
-        const role = isCustomer ? `Customer (${m.senderName || fromPhone})` : 'Umrah360 AI Assistant';
+        const role = isCustomer ? `Customer (${m.senderName || fromPhone})` : `${brand.companyName} AI Assistant`;
         return `[Msg ${idx + 1} - ${role} at ${m.timestamp}]: ${m.text}`;
       }).join('\n')
     : `[Msg 1 - Customer (${fromName || fromPhone})]: ${body}`;
@@ -538,7 +542,7 @@ export async function generateWhatsAppAutoReplyText(params: {
   if (openAiApiKey) {
     try {
       const openai = new OpenAI({ apiKey: openAiApiKey });
-      const prompt = `You are the official Umrah360 WhatsApp AI Assistant representing Umrah360 (+919820252434 / www.umrah360.in).
+      const umrahPrompt = `You are the official Umrah360 WhatsApp AI Assistant representing Umrah360 (+919820252434 / www.umrah360.in).
 Umrah360 is the leading all-in-one ERP, CRM, and distribution platform for Umrah and Hajj tour operators and travel agencies.
 
 GROUND TRUTH KNOWLEDGE BASE:
@@ -563,6 +567,28 @@ INSTRUCTIONS FOR WHATSAPP RESPONSE:
 "Umrah360 Team
 WhatsApp: +91 98202 52434
 www.umrah360.in"`;
+
+      const waSignoff = `${brand.teamName}${brand.supportPhone ? `\nWhatsApp: ${brand.supportPhone}` : ''}${brandHost(brand) ? `\n${brandHost(brand)}` : ''}`;
+      const genericPrompt = `You are the official WhatsApp AI Assistant representing ${brandIntro(brand)}${brand.industryDescription ? `, serving ${brand.industryDescription}` : ''}.
+
+GROUND TRUTH KNOWLEDGE BASE:
+${kbGroundingText || '(No knowledge documents have been published yet.)'}
+
+CONVERSATION THREAD HISTORY:
+${formattedThreadContext}
+
+LATEST INCOMING WHATSAPP MESSAGE:
+Sender: ${fromName || 'Inquirer'} (${fromPhone})
+Company: ${companyName || 'Not specified'}
+Message: "${body}"
+
+INSTRUCTIONS FOR WHATSAPP RESPONSE:
+1. Greet warmly with a formal greeting: "Dear ${senderGreetingName}," or "Hello ${senderGreetingName},"
+2. Tone: professional, warm, crisp and direct. Use short paragraphs suited to WhatsApp. Do not use Markdown headings.
+3. Ground every answer strictly in the knowledge base. NEVER invent features, prices or guarantees. If the answer is not in the knowledge base, say you will connect them with a specialist from ${brand.companyName} and ask for the details needed.
+4. Sign off politely as:
+"${waSignoff}"`;
+      const prompt = isUmrah ? umrahPrompt : genericPrompt;
 
       const candidateModels = ['gpt-4o-mini', 'gpt-4o', 'gpt-3.5-turbo'];
       for (const modelName of candidateModels) {
@@ -591,6 +617,28 @@ www.umrah360.in"`;
     } catch (gErr) {
       console.warn('[WhatsApp OpenAI] Fallback to domain knowledge engine:', gErr);
     }
+  }
+
+  // Generic (non-Umrah360) workspaces: neutral fallback grounded only in the company's own knowledge base.
+  if (!isUmrah) {
+    const words = Array.from(new Set(combinedText.split(/[^a-z0-9]+/).filter((w) => w.length > 3)));
+    let best: { score: number; text: string } = { score: 0, text: '' };
+    for (const d of publishedDocs) {
+      const hay = `${d.title} ${d.content}`.toLowerCase();
+      const score = words.reduce((n, w) => n + (hay.includes(w) ? 1 : 0), 0);
+      if (score > best.score) best = { score, text: String(d.content || '').trim().slice(0, 500) };
+    }
+    const sig = `${brand.teamName}${brand.supportPhone ? `\nWhatsApp: ${brand.supportPhone}` : ''}${brandHost(brand) ? `\n${brandHost(brand)}` : ''}`;
+    const genericReply = best.score >= 2
+      ? `Dear ${senderGreetingName},\n\nThank you for contacting ${brand.companyName}!\n\n${best.text}\n\nCould you share a little more about what you need so we can help further?\n\n${sig}`
+      : `Dear ${senderGreetingName},\n\nThank you for contacting ${brand.companyName}! We have received your message and a specialist will get back to you shortly.\n\nPlease share a few details about what you are looking for so we can respond faster.\n\n${sig}`;
+    return {
+      replyText: sanitizeAiEmailText(genericReply, senderGreetingName),
+      handoffTriggered,
+      handoffReason,
+      leadScore,
+      buyingStage,
+    };
   }
 
   // Domain-grounded fallback response engine
@@ -731,6 +779,8 @@ export async function processLiveInboundWhatsApp(payload: {
 }): Promise<ProcessedInboundWhatsAppResult> {
   const targetNumber = TARGET_WHATSAPP_NUMBER;
   const targetNumberFormatted = TARGET_WHATSAPP_NUMBER_DISPLAY;
+  const brand = await getTenantBrand(getWACtx().tenantId);
+  const isUmrahBrand = brand.playbook === 'umrah360';
   const nowIso = new Date().toISOString();
 
   const senderPhone = normalizePhoneNumber(payload.from);
@@ -769,7 +819,7 @@ export async function processLiveInboundWhatsApp(payload: {
       channel: 'WHATSAPP' as const,
       direction: 'OUTBOUND' as const,
       senderType: payload.senderType === 'AI' ? ('AI' as const) : ('AGENT' as const),
-      senderName: 'Umrah360 Support (+91 98202 52434)',
+      senderName: isUmrahBrand ? 'Umrah360 Support (+91 98202 52434)' : `${brand.companyName} Support`,
       senderPhone: targetNumber,
       text: payload.body,
       timestamp: nowIso,
@@ -802,7 +852,7 @@ export async function processLiveInboundWhatsApp(payload: {
       buyingStage: 'ENGAGED',
       timestamp: nowIso,
       crmEntities: {
-        contact: { contactId, firstName, lastName, phone: senderPhone, whatsappUserId: senderPhone, companyName: payload.companyName || 'Umrah360 Internal', createdAt: nowIso, updatedAt: nowIso, lastActivityAt: nowIso },
+        contact: { contactId, firstName, lastName, phone: senderPhone, whatsappUserId: senderPhone, companyName: payload.companyName || (isUmrahBrand ? 'Umrah360 Internal' : `${brand.companyName} Internal`), createdAt: nowIso, updatedAt: nowIso, lastActivityAt: nowIso },
         lead: { leadId, contactId, source: 'WHATSAPP', leadType: 'INBOUND', status: 'ENGAGED', leadScore: 50, intent: 'MEDIUM', buyingStage: 'ENGAGED', serviceInterest: 'WhatsApp Inquiry', requirements: [], aiSummary: 'Outbound message recorded', createdAt: nowIso, updatedAt: nowIso, lastActivityAt: nowIso },
         conversation: { conversationId, contactId, leadId, channel: 'WHATSAPP', direction: 'OUTBOUND', status: 'ACTIVE', aiEnabled: false, humanHandoff: false, conversationSummary: `Outbound WhatsApp to ${displayName}`, startedAt: nowIso, lastMessageAt: nowIso, lastMessageText: payload.body.slice(0, 120), unreadCount: 0, createdAt: nowIso, updatedAt: nowIso },
         incomingMessage: outboundMsg as any,
@@ -845,7 +895,7 @@ export async function processLiveInboundWhatsApp(payload: {
       buyingStage: 'ENGAGED',
       timestamp: nowIso,
       crmEntities: {
-        contact: { contactId, firstName, lastName, phone: senderPhone, whatsappUserId: senderPhone, companyName: payload.companyName || `${firstName}'s Agency`, createdAt: nowIso, updatedAt: nowIso, lastActivityAt: nowIso },
+        contact: { contactId, firstName, lastName, phone: senderPhone, whatsappUserId: senderPhone, companyName: payload.companyName || `${firstName}'s ${isUmrahBrand ? 'Agency' : 'Company'}`, createdAt: nowIso, updatedAt: nowIso, lastActivityAt: nowIso },
         lead: { leadId, contactId, source: 'WHATSAPP', leadType: 'INBOUND', status: 'ENGAGED', leadScore: 75, intent: 'HIGH', buyingStage: 'ENGAGED', serviceInterest: 'WhatsApp Inquiry', requirements: [], aiSummary: 'Duplicate message filtered', createdAt: nowIso, updatedAt: nowIso, lastActivityAt: nowIso },
         conversation: { conversationId, contactId, leadId, channel: 'WHATSAPP', direction: 'INBOUND', status: 'ACTIVE', aiEnabled: true, humanHandoff: false, conversationSummary: `WhatsApp dialogue with ${displayName}`, startedAt: nowIso, lastMessageAt: nowIso, lastMessageText: payload.body.slice(0, 120), unreadCount: 0, createdAt: nowIso, updatedAt: nowIso },
         incomingMessage: {
@@ -912,7 +962,7 @@ export async function processLiveInboundWhatsApp(payload: {
   const shouldSendAutoReply = pipelineConfig.mode !== 'SIMULATION';
   const replyDecisionReason = pipelineConfig.mode === 'SIMULATION'
     ? 'WhatsApp mode is SIMULATION: auto-reply held for agent inspection'
-    : 'New inbound customer message to +919820252434 - AI reply dispatched';
+    : `New inbound customer message to ${targetNumber} - AI reply dispatched`;
 
   let aiReplyMessage: any = undefined;
   const replyMsgId = `wa-reply-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
@@ -928,7 +978,7 @@ export async function processLiveInboundWhatsApp(payload: {
       channel: 'WHATSAPP' as const,
       direction: 'OUTBOUND' as const,
       senderType: 'AI' as const,
-      senderName: `Umrah360 AI (${targetNumberFormatted})`,
+      senderName: isUmrahBrand ? `Umrah360 AI (${targetNumberFormatted})` : `${brand.aiAgentName}`,
       senderPhone: targetNumber,
       text: aiResult.replyText,
       timestamp: nowIso,
@@ -998,7 +1048,7 @@ export async function processLiveInboundWhatsApp(payload: {
       lastName,
       phone: senderPhone,
       whatsappUserId: senderPhone,
-      companyName: payload.companyName || `${firstName}'s Agency`,
+      companyName: payload.companyName || `${firstName}'s ${isUmrahBrand ? 'Agency' : 'Company'}`,
       jobTitle: 'Tour Operator / Inquirer',
       createdAt: nowIso,
       updatedAt: nowIso,

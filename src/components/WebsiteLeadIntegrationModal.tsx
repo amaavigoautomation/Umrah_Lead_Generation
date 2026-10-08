@@ -1,4 +1,6 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import { useBrand } from '../context/BrandContext';
+import { brandHost } from '../shared/brand';
 import {
   Globe,
   X,
@@ -31,6 +33,18 @@ export const WebsiteLeadIntegrationModal: React.FC<WebsiteLeadIntegrationModalPr
   onClose,
   onLeadCreated,
 }) => {
+  const { brand, tenantId } = useBrand();
+  const isUmrah = brand.playbook === 'umrah360';
+  const siteHost = brandHost(brand) || 'your-website.com';
+  const demoPage = `${siteHost}/request-demo`;
+  const [webhookPath, setWebhookPath] = useState<string>('/api/webhooks/website/<your-webhook-key>');
+  useEffect(() => {
+    if (!isOpen || !tenantId) return;
+    fetch(`/api/tenants/${encodeURIComponent(tenantId)}/webhook`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((v) => { if (v?.path) setWebhookPath(v.path); })
+      .catch(() => {});
+  }, [isOpen, tenantId]);
   const [activeTab, setActiveTab] = useState<'SIMULATOR' | 'JS_SNIPPET' | 'WORDPRESS' | 'CURL'>('SIMULATOR');
   const [copiedUrl, setCopiedUrl] = useState(false);
   const [copiedSnippet, setCopiedSnippet] = useState(false);
@@ -42,19 +56,20 @@ export const WebsiteLeadIntegrationModal: React.FC<WebsiteLeadIntegrationModalPr
   } | null>(null);
 
   // Form state matching umrah360.in/request-demo
-  const [fullName, setFullName] = useState('Mohammad Al-Bakhla');
-  const [email, setEmail] = useState('demo@bakhlatours.com');
+  const [fullName, setFullName] = useState(isUmrah ? 'Mohammad Al-Bakhla' : 'Jane Doe');
+  const [email, setEmail] = useState(isUmrah ? 'demo@bakhlatours.com' : 'jane.doe@example.com');
   const [designation, setDesignation] = useState('Managing Director');
   const [country, setCountry] = useState('India');
   const [countryCode, setCountryCode] = useState('+91');
   const [phone, setPhone] = useState('9820252434');
   const [city, setCity] = useState('Mumbai');
-  const [companyName, setCompanyName] = useState('Bakhla Tours & Travels Pvt. Ltd.');
-  const [website, setWebsite] = useState('https://bakhlatours.com');
+  const [companyName, setCompanyName] = useState(isUmrah ? 'Bakhla Tours & Travels Pvt. Ltd.' : 'Example Co.');
+  const [website, setWebsite] = useState(isUmrah ? 'https://bakhlatours.com' : 'https://example.com');
   const [branches, setBranches] = useState<'Yes' | 'No'>('Yes');
-  const [product, setProduct] = useState('Umrah ERP & B2B Sub-Agent Portal');
+  const [product, setProduct] = useState(isUmrah ? 'Umrah ERP & B2B Sub-Agent Portal' : brand.defaultProduct);
   const [teamSize, setTeamSize] = useState('10-20');
   const [message, setMessage] = useState(
+    !isUmrah ? `Hi, I would like to learn more about ${brand.companyName}.` :
     'We manage 3,500 pilgrims annually across Mumbai and Gujarat branches. Need dynamic Saudi hotel costing, group visa allotments, and sub-agent B2B portal.'
   );
 
@@ -65,7 +80,7 @@ export const WebsiteLeadIntegrationModal: React.FC<WebsiteLeadIntegrationModalPr
   const detectedOrigin = typeof window !== 'undefined' ? window.location.origin : '';
   const currentOrigin = customOrigin.trim() || detectedOrigin || 'https://leadgeneration-sable.vercel.app';
   const cleanOrigin = currentOrigin.replace(/\/+$/, '');
-  const webhookUrl = `${cleanOrigin}/api/webhooks/umrah-demo`;
+  const webhookUrl = `${cleanOrigin}${webhookPath}`;
   const alternateUrl = `${cleanOrigin}/api/leads/inbound`;
 
   const copyToClipboard = (text: string, type: 'url' | 'snippet') => {
@@ -98,11 +113,11 @@ export const WebsiteLeadIntegrationModal: React.FC<WebsiteLeadIntegrationModalPr
       product,
       teamSize,
       message,
-      sourceUrl: 'https://umrah360.in/request-demo',
+      sourceUrl: `https://${demoPage}`,
     };
 
     try {
-      const res = await fetch('/api/webhooks/umrah-demo', {
+      const res = await fetch(`/api/tenants/${encodeURIComponent(tenantId)}/webhook/simulate`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -145,7 +160,7 @@ export const WebsiteLeadIntegrationModal: React.FC<WebsiteLeadIntegrationModalPr
     }
   };
 
-  const jsEmbedSnippet = `<!-- Umrah360 CRM Direct Webhook Integration for https://umrah360.in/request-demo -->
+  const jsEmbedSnippet = `<!-- ${brand.companyName} CRM Direct Webhook Integration for https://${demoPage} -->
 <script>
 (function() {
   document.addEventListener('DOMContentLoaded', function() {
@@ -162,7 +177,7 @@ export const WebsiteLeadIntegrationModal: React.FC<WebsiteLeadIntegrationModalPr
       });
       payload.sourceUrl = window.location.href;
 
-      // Asynchronously push to your Umrah360 CRM
+      // Asynchronously push to your ${brand.companyName} CRM
       fetch('${webhookUrl}', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -171,9 +186,9 @@ export const WebsiteLeadIntegrationModal: React.FC<WebsiteLeadIntegrationModalPr
       }).then(function(res) {
         return res.json();
       }).then(function(data) {
-        console.log('[Umrah360 CRM] Lead successfully pushed:', data);
+        console.log('[${brand.companyName} CRM] Lead successfully pushed:', data);
       }).catch(function(err) {
-        console.warn('[Umrah360 CRM] Webhook notice:', err);
+        console.warn('[${brand.companyName} CRM] Webhook notice:', err);
       });
     });
   });
@@ -183,18 +198,18 @@ export const WebsiteLeadIntegrationModal: React.FC<WebsiteLeadIntegrationModalPr
   const curlSnippet = `curl -X POST ${webhookUrl} \\
   -H "Content-Type: application/json" \\
   -d '{
-    "fullName": "Mohammad Al-Bakhla",
-    "email": "demo@bakhlatours.com",
+    "fullName": "${fullName}",
+    "email": "${email}",
     "designation": "Managing Director",
     "country": "India",
     "phone": "+91 9820252434",
     "city": "Mumbai",
-    "companyName": "Bakhla Tours & Travels Pvt. Ltd.",
-    "website": "https://bakhlatours.com",
+    "companyName": "${companyName}",
+    "website": "${website}",
     "branches": "Yes",
-    "product": "Umrah ERP & B2B Sub-Agent Portal",
+    "product": "${product}",
     "teamSize": "10-20",
-    "message": "We manage 3,500 pilgrims annually. Need dynamic Saudi hotel costing and sub-agent booking portal."
+    "message": "${message.replace(/"/g, '\\"')}"
   }'`;
 
   return (
@@ -221,7 +236,7 @@ export const WebsiteLeadIntegrationModal: React.FC<WebsiteLeadIntegrationModalPr
                 </span>
               </div>
               <p className="text-xs text-slate-500 mt-0.5">
-                Automatically push demo requests from <code className="text-orange-600 font-semibold">umrah360.in/request-demo</code> into your CRM
+                Automatically push demo requests from <code className="text-orange-600 font-semibold">{demoPage}</code> into your CRM
               </p>
             </div>
           </div>
@@ -370,7 +385,7 @@ export const WebsiteLeadIntegrationModal: React.FC<WebsiteLeadIntegrationModalPr
                 <div className="flex items-center gap-2">
                   <Sparkles className="w-4 h-4 text-emerald-400" />
                   <h3 className="text-xs font-bold text-white uppercase tracking-wider">
-                    Simulate Website Form: umrah360.in/request-demo
+                    Simulate Website Form: {demoPage}
                   </h3>
                 </div>
                 <p className="text-xs text-slate-400 leading-relaxed">
@@ -574,10 +589,16 @@ export const WebsiteLeadIntegrationModal: React.FC<WebsiteLeadIntegrationModalPr
                         onChange={(e) => setProduct(e.target.value)}
                         className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-xs text-slate-100 focus:outline-none focus:border-emerald-500"
                       >
-                        <option value="Umrah ERP & B2B Sub-Agent Portal">Umrah ERP & B2B Sub-Agent Portal</option>
-                        <option value="Saudi Umrah Visa & Hotel Allotments">Saudi Umrah Visa & Hotel Allotments</option>
-                        <option value="Pilgrimage Dynamic Costing & Voucher Engine">Pilgrimage Dynamic Costing & Voucher Engine</option>
-                        <option value="Complete Enterprise Pilgrimage Suite">Complete Enterprise Pilgrimage Suite (20+ Users)</option>
+                        {isUmrah ? (
+                          <>
+                            <option value="Umrah ERP & B2B Sub-Agent Portal">Umrah ERP & B2B Sub-Agent Portal</option>
+                            <option value="Saudi Umrah Visa & Hotel Allotments">Saudi Umrah Visa & Hotel Allotments</option>
+                            <option value="Pilgrimage Dynamic Costing & Voucher Engine">Pilgrimage Dynamic Costing & Voucher Engine</option>
+                            <option value="Complete Enterprise Pilgrimage Suite">Complete Enterprise Pilgrimage Suite (20+ Users)</option>
+                          </>
+                        ) : (
+                          <option value={brand.defaultProduct}>{brand.defaultProduct}</option>
+                        )}
                       </select>
                     </div>
 
@@ -616,7 +637,7 @@ export const WebsiteLeadIntegrationModal: React.FC<WebsiteLeadIntegrationModalPr
                 {/* Submit Action */}
                 <div className="flex items-center justify-between pt-2">
                   <span className="text-[11px] text-slate-400">
-                    Target: <code className="text-emerald-400">/api/webhooks/umrah-demo</code>
+                    Target: <code className="text-emerald-400">{webhookPath}</code>
                   </span>
                   <button
                     type="submit"
@@ -645,7 +666,7 @@ export const WebsiteLeadIntegrationModal: React.FC<WebsiteLeadIntegrationModalPr
             <div className="space-y-4">
               <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
                 <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider">
-                  How to embed on umrah360.in/request-demo
+                  How to embed on {demoPage}
                 </h3>
                 <p className="text-xs text-slate-600 leading-relaxed">
                   Add this small script right before the closing <code className="text-orange-600 font-semibold">&lt;/body&gt;</code> tag on your website page. It intercepts the "Schedule my Free Demo" submit event, captures all filled fields, and delivers the lead directly into this CRM with zero server reload needed!
@@ -675,7 +696,7 @@ export const WebsiteLeadIntegrationModal: React.FC<WebsiteLeadIntegrationModalPr
                   Connecting WordPress / Elementor Form
                 </h3>
                 <p className="text-slate-600 leading-relaxed">
-                  If your website <code className="text-orange-600 font-semibold">umrah360.in</code> is built with WordPress + Elementor Pro, you can connect the form in 2 minutes:
+                  If your website <code className="text-orange-600 font-semibold">{siteHost}</code> is built with WordPress + Elementor Pro, you can connect the form in 2 minutes:
                 </p>
               </div>
 

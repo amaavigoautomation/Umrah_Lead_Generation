@@ -126,7 +126,7 @@ export async function saveKnowledgeDoc(
     title: (docData.title || 'Untitled Knowledge Article').trim(),
     category: docData.category || 'PRODUCT',
     content: (docData.content || '').trim(),
-    tags: Array.isArray(docData.tags) ? docData.tags : ['umrah360'],
+    tags: Array.isArray(docData.tags) ? docData.tags : [ctx.tenantId],
     status: docData.status || 'PUBLISHED',
     version: Number(docData.version) || 1,
     author: docData.author || 'Admin',

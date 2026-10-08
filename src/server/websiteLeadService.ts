@@ -7,6 +7,8 @@ import { sendLiveEmail, getSmtpConfig, fetchFirestoreSmtpConfig } from './smtpSe
 import { handleIncomingCampaignLeadReply } from './campaignService.js';
 import { tenantRepo } from './tenantRepo.js';
 import type { TenantContext } from '../types/tenant.js';
+import { getTenantBrand } from './brandService.js';
+import { brandFallbackAgency, brandDemoThankYouSubject, brandSpecialistLine, brandThankYouSignoff, brandDefaultSourceUrl, brandInboundHeading } from '../shared/brand.js';
 
 const DEFAULT_UMRAH_CTX: TenantContext = {
   tenantId: 'umrah360',
@@ -354,6 +356,7 @@ export async function processWebsiteLeadSubmission(
   rawInput: any,
   ctx: TenantContext = DEFAULT_UMRAH_CTX
 ): Promise<ProcessedLeadResult> {
+  const brand = await getTenantBrand(ctx.tenantId);
   const flatFields = flattenAllFields(rawInput || {});
 
   const findValue = (patterns: RegExp[]): string => {
@@ -606,7 +609,7 @@ export async function processWebsiteLeadSubmission(
       }
     }
     if (!companyName) {
-      companyName = `${firstName}'s Pilgrimage Agency`;
+      companyName = brandFallbackAgency(brand, firstName);
     }
   }
 
@@ -654,11 +657,11 @@ export async function processWebsiteLeadSubmission(
         /^solution$/,
         /^interest$/,
         /product/,
-      ]) || 'Umrah360 ERP & B2B Sub-Agent Portal'
+      ]) || brand.defaultProduct
     ).trim();
   }
 
-  if (product === 'Umrah360 ERP & B2B Sub-Agent Portal' || !product) {
+  if (product === brand.defaultProduct || !product) {
     if (detectedProductFromField) {
       product = detectedProductFromField;
     } else if (flatFields['form_name']) {
@@ -691,7 +694,7 @@ export async function processWebsiteLeadSubmission(
     /comment/,
   ]).trim();
 
-  const sourceUrl = findValue([/^sourceurl$/, /^source$/, /^referrer$/]) || 'https://umrah360.in/request-demo';
+  const sourceUrl = findValue([/^sourceurl$/, /^source$/, /^referrer$/]) || brandDefaultSourceUrl(brand);
 
   // Unmapped fields
   const unmapped: string[] = [];
@@ -848,7 +851,7 @@ export async function processWebsiteLeadSubmission(
   const messageId = `msg-web-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
 
   const inboundLines = [
-    `🕋 INBOUND DEMO REQUEST from umrah360.in/request-demo:`,
+    brandInboundHeading(brand),
     ``,
     `• Name: ${rawFullName}${designation && designation.toLowerCase() !== rawFullName.toLowerCase() ? ` (${designation})` : ''}`,
     `• Company: ${companyName}${website ? ` (${website})` : ''}`,
@@ -927,7 +930,7 @@ export async function processWebsiteLeadSubmission(
     senderType: 'CUSTOMER',
     senderName: rawFullName,
     senderEmail: cleanEmail,
-    recipientEmail: 'sales@umrah360.in',
+    recipientEmail: brand.salesEmail || 'sales@umrah360.in',
     channel: 'WEBSITE',
     direction: 'INBOUND',
     text: inboundDetailsText,
@@ -950,11 +953,11 @@ export async function processWebsiteLeadSubmission(
       const smtpConfig = getSmtpConfig();
 
       if (smtpConfig.configured) {
-        const emailSubject = `We have received your Umrah360 Demo Request - ${companyName}`;
+        const emailSubject = brandDemoThankYouSubject(brand, companyName);
         const emailBody = [
           `Hello ${firstName},`,
           ``,
-          `Thank you for requesting a live demo of Umrah360 for ${companyName}!`,
+          `Thank you for requesting a live demo of ${brand.companyName} for ${companyName}!`,
           ``,
           `We have received your requirements:`,
           `- Product: ${product}`,
@@ -962,13 +965,14 @@ export async function processWebsiteLeadSubmission(
           `- Location: ${city ? `${city}, ` : ''}${country}`,
           `- Multi-Branch Setup: ${branches}`,
           ``,
-          `One of our senior pilgrimage software specialists will reach out to you shortly at ${fullPhone || cleanEmail} to coordinate a suitable time for your personalized walkthrough and answer any operational questions you have.`,
+          brandSpecialistLine(brand, fullPhone || cleanEmail),
           ``,
-          `If you need immediate assistance or have specific visa/hotel allotment workflows you would like to test, simply reply to this email.`,
+          brand.playbook === 'umrah360'
+            ? `If you need immediate assistance or have specific visa/hotel allotment workflows you would like to test, simply reply to this email.`
+            : `If you need immediate assistance, simply reply to this email.`,
           ``,
           `Warm regards,`,
-          `The Umrah360 Team`,
-          `https://umrah360.in`,
+          ...brandThankYouSignoff(brand),
         ].join('\n');
 
         console.log(`[Website Lead] Dispatching single Thank You email to ${cleanEmail} for ${companyName}...`);
@@ -1000,7 +1004,7 @@ export async function processWebsiteLeadSubmission(
             messageId: replyMsgId,
             conversationId,
             senderType: 'AI',
-            senderName: 'Umrah360 Automation',
+            senderName: brand.senderName,
             senderEmail: smtpConfig.user || 'amaavigo@gmail.com',
             recipientEmail: cleanEmail,
             channel: 'EMAIL',

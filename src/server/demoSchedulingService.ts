@@ -1,5 +1,7 @@
 import { tenantRepo } from './tenantRepo.js';
 import type { TenantContext } from '../types/tenant.js';
+import { getTenantBrand, getBrandSync } from './brandService.js';
+import { brandTzLabel, brandWorkingDaysLabel, fmtHour, DAY_NAMES } from '../shared/brand.js';
 
 const DEFAULT_UMRAH_CTX: TenantContext = {
   tenantId: 'umrah360',
@@ -15,6 +17,39 @@ export function setSchedulingActiveContext(ctx: TenantContext) {
 function getSchedCtx(): TenantContext {
   return activeSchedulingCtx;
 }
+
+// ---- Per-company scheduling brand (timezone, working days/hours, names). Cache is warmed by warmSchedBrand(). ----
+const sb = () => getBrandSync(getSchedCtx().tenantId);
+const warmSchedBrand = () => getTenantBrand(getSchedCtx().tenantId).catch(() => sb());
+const tz = () => sb().timezone;
+const TZL = () => brandTzLabel(sb());
+const tzDisplay = () => (sb().timezoneLabel ? `${tz()} (${sb().timezoneLabel})` : tz());
+const workStartH = () => sb().workingHoursStart;
+const workEndH = () => sb().workingHoursEnd;
+const slotHours = () => {
+  const out: number[] = [];
+  for (let h = workStartH(); h < workEndH(); h++) out.push(h);
+  return out;
+};
+const hrShort = (h: number) => `${((h + 11) % 12) + 1} ${h % 24 >= 12 ? 'PM' : 'AM'}`;
+const daysLabel = () => brandWorkingDaysLabel(sb());
+const closedDaysLabel = () => {
+  const closed = [0, 1, 2, 3, 4, 5, 6].filter((d) => !sb().workingDays.includes(d)).sort((a, b) => ((a + 1) % 7) - ((b + 1) % 7));
+  const names = closed.map((d) => DAY_NAMES[d]);
+  return names.length ? (names.length === 2 ? names.join(' and ') : names.join(', ')) : 'no days';
+};
+const brandName = () => sb().companyName;
+/** Calendar account that hosts demos for this company ('' if none). */
+const hostCalendarEmail = () => sb().calendarEmail;
+const hostEmailList = (smtpUser?: string, smtpFrom?: string) =>
+  [
+    hostCalendarEmail(),
+    smtpUser || '',
+    smtpFrom || '',
+    ...(sb().playbook === 'umrah360' ? ['sales@umrah360.in', 'support@umrah360.in'] : [sb().salesEmail]),
+  ]
+    .map((e) => e.toLowerCase().trim())
+    .filter((e) => e.length > 0);
 import OpenAI from 'openai';
 import { isFirebaseConfigured } from '../firebase/config.js';
 import { db } from './adminFirestore.js';
@@ -186,7 +221,7 @@ export async function verifyGoogleCalendarConnection(tokenOverride?: string): Pr
 
     if (res.ok) {
       const data = await res.json();
-      return { connected: true, email: data.id || TARGET_CALENDAR_EMAIL };
+      return { connected: true, email: data.id || hostCalendarEmail() };
     } else {
       const errText = await res.text();
       if (res.status === 401) {
@@ -217,10 +252,38 @@ export interface IstDateComponents {
 /**
  * Gets current date and time components in Asia/Kolkata (IST).
  */
+/** UTC offset like "+05:30" for a wall-clock date/time in the company timezone. */
+function tzOffsetFor(dateString: string, hour: number, minute: number = 0): string {
+  const [y, m, d] = dateString.split('-').map((n) => parseInt(n, 10));
+  const wall = Date.UTC(y, m - 1, d, hour, minute, 0);
+  const fmt = new Intl.DateTimeFormat('en-US', {
+    timeZone: tz(),
+    hourCycle: 'h23',
+    year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit',
+  });
+  const offsetAt = (instant: number) => {
+    const pm: Record<string, string> = {};
+    fmt.formatToParts(new Date(instant)).forEach((p) => { pm[p.type] = p.value; });
+    const asUtc = Date.UTC(+pm.year, +pm.month - 1, +pm.day, +pm.hour % 24, +pm.minute, +pm.second);
+    return Math.round((asUtc - instant) / 60000);
+  };
+  let off = offsetAt(wall);
+  off = offsetAt(wall - off * 60000);
+  const sign = off >= 0 ? '+' : '-';
+  const abs = Math.abs(off);
+  return `${sign}${String(Math.floor(abs / 60)).padStart(2, '0')}:${String(abs % 60).padStart(2, '0')}`;
+}
+
+/** Day of week (0=Sun) of a calendar date; independent of timezone. */
+function dayOfWeekFor(dateString: string): number {
+  const [y, m, d] = dateString.split('-').map((n) => parseInt(n, 10));
+  return new Date(Date.UTC(y, m - 1, d, 12, 0, 0)).getUTCDay();
+}
+
 export function getNowInIst(): IstDateComponents {
   const now = new Date();
   const formatter = new Intl.DateTimeFormat('en-CA', {
-    timeZone: SCHEDULING_TIMEZONE,
+    timeZone: tz(),
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
@@ -238,12 +301,11 @@ export function getNowInIst(): IstDateComponents {
   const year = parseInt(partMap.year, 10);
   const month = parseInt(partMap.month, 10);
   const day = parseInt(partMap.day, 10);
-  const hour = parseInt(partMap.hour, 10);
+  const hour = parseInt(partMap.hour, 10) % 24;
   const minute = parseInt(partMap.minute, 10);
 
   // Compute day of week in IST
-  const istDate = new Date(`${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}T12:00:00+05:30`);
-  const dayOfWeek = istDate.getDay();
+  const dayOfWeek = dayOfWeekFor(`${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`);
 
   return {
     year,
@@ -261,14 +323,14 @@ export function getNowInIst(): IstDateComponents {
  */
 export function createIstIsoString(dateString: string, hour: number, minute: number = 0): string {
   const pad = (n: number) => String(n).padStart(2, '0');
-  return `${dateString}T${pad(hour)}:${pad(minute)}:00+05:30`;
+  return `${dateString}T${pad(hour)}:${pad(minute)}:00${tzOffsetFor(dateString, hour, minute)}`;
 }
 
 /**
  * Checks whether a given day of week is a valid working day (Monday - Friday).
  */
 export function isWorkingDay(dayOfWeek: number): boolean {
-  return dayOfWeek >= 1 && dayOfWeek <= 5;
+  return sb().workingDays.includes(dayOfWeek);
 }
 
 /**
@@ -276,9 +338,9 @@ export function isWorkingDay(dayOfWeek: number): boolean {
  * e.g. "Wednesday, Oct 1: 3:00 PM – 4:00 PM IST"
  */
 export function formatSlotLabel(dateString: string, startHour: number): string {
-  const dateObj = new Date(`${dateString}T12:00:00+05:30`);
+  const dateObj = new Date(createIstIsoString(dateString, 12, 0));
   const dayName = new Intl.DateTimeFormat('en-US', {
-    timeZone: SCHEDULING_TIMEZONE,
+    timeZone: tz(),
     weekday: 'long',
     month: 'short',
     day: 'numeric',
@@ -290,7 +352,7 @@ export function formatSlotLabel(dateString: string, startHour: number): string {
     return `${hour12}:00 ${period}`;
   };
 
-  return `${dayName}: ${formatHour(startHour)} – ${formatHour(startHour + 1)} IST`;
+  return `${dayName}: ${formatHour(startHour)} – ${formatHour(startHour + 1)} ${TZL()}`;
 }
 
 // -----------------------------------------------------------------------------
@@ -321,6 +383,7 @@ export async function checkRealtimeGoogleCalendarSlot(
   endIso: string,
   accessTokenOverride?: string
 ): Promise<CalendarAvailabilityResult> {
+  await warmSchedBrand();
   const token = await getLiveCalendarToken(accessTokenOverride);
 
   if (!token) {
@@ -350,7 +413,7 @@ export async function checkRealtimeGoogleCalendarSlot(
       body: JSON.stringify({
         timeMin: startIso,
         timeMax: endIso,
-        timeZone: SCHEDULING_TIMEZONE,
+        timeZone: tz(),
         items: [{ id: 'primary' }],
       }),
     });
@@ -393,7 +456,7 @@ export async function checkRealtimeGoogleCalendarSlot(
     // 2. Query Events API for single events overlapping [startIso, endIso)
     const eventsUrl = `https://www.googleapis.com/calendar/v3/calendars/primary/events?timeMin=${encodeURIComponent(
       startIso
-    )}&timeMax=${encodeURIComponent(endIso)}&singleEvents=true&timeZone=${encodeURIComponent(SCHEDULING_TIMEZONE)}`;
+    )}&timeMax=${encodeURIComponent(endIso)}&singleEvents=true&timeZone=${encodeURIComponent(tz())}`;
 
     const eventsRes = await fetch(eventsUrl, {
       headers: {
@@ -406,8 +469,8 @@ export async function checkRealtimeGoogleCalendarSlot(
       const items = (eventsData.items || []).filter((e: any) => e.status !== 'cancelled');
 
       for (const item of items) {
-        const itemStart = item.start?.dateTime || (item.start?.date ? `${item.start.date}T00:00:00+05:30` : startIso);
-        const itemEnd = item.end?.dateTime || (item.end?.date ? `${item.end.date}T23:59:59+05:30` : endIso);
+        const itemStart = item.start?.dateTime || (item.start?.date ? createIstIsoString(item.start.date, 0, 0) : startIso);
+        const itemEnd = item.end?.dateTime || (item.end?.date ? `${item.end.date}T23:59:59${tzOffsetFor(item.end.date, 23, 59)}` : endIso);
         const itemStartMs = new Date(itemStart).getTime();
         const itemEndMs = new Date(itemEnd).getTime();
 
@@ -500,6 +563,7 @@ export async function findNextAvailableSlots(
     accessToken?: string;
   } = {}
 ): Promise<Array<{ date: string; startHour: number; label: string; startIso: string; endIso: string }>> {
+  await warmSchedBrand();
   const {
     targetDaysCount = 10,
     maxSlotsToReturn = 4,
@@ -515,16 +579,17 @@ export async function findNextAvailableSlots(
   let currentOffset = 0;
 
   // Define hour ranges based on preferred period
-  let allowedHours = VALID_SLOT_START_HOURS;
+  const VALID_HOURS = slotHours();
+  let allowedHours = VALID_HOURS;
   if (preferredPeriod === 'MORNING') {
-    allowedHours = VALID_SLOT_START_HOURS.filter((h) => h < 12); // 10, 11
+    allowedHours = VALID_HOURS.filter((h) => h < 12); // 10, 11
   } else if (preferredPeriod === 'AFTERNOON') {
-    allowedHours = VALID_SLOT_START_HOURS.filter((h) => h >= 12 && h < 17); // 12, 13, 14, 15, 16
+    allowedHours = VALID_HOURS.filter((h) => h >= 12 && h < 17); // 12, 13, 14, 15, 16
   } else if (preferredPeriod === 'EVENING') {
-    allowedHours = VALID_SLOT_START_HOURS.filter((h) => h >= 17); // 17, 18
+    allowedHours = VALID_HOURS.filter((h) => h >= 17); // 17, 18
   }
 
-  if (allowedHours.length === 0) allowedHours = VALID_SLOT_START_HOURS;
+  if (allowedHours.length === 0) allowedHours = VALID_HOURS;
 
   let daysChecked = 0;
 
@@ -533,15 +598,14 @@ export async function findNextAvailableSlots(
     checkDate.setDate(checkDate.getDate() + currentOffset);
 
     const formatter = new Intl.DateTimeFormat('en-CA', {
-      timeZone: SCHEDULING_TIMEZONE,
+      timeZone: tz(),
       year: 'numeric',
       month: '2-digit',
       day: '2-digit',
     });
     const dateStr = formatter.format(checkDate);
 
-    const dayObj = new Date(`${dateStr}T12:00:00+05:30`);
-    const dayOfWeek = dayObj.getDay();
+    const dayOfWeek = dayOfWeekFor(dateStr);
 
     currentOffset++;
 
@@ -621,6 +685,7 @@ export interface CreateBookingResult {
 export async function createGoogleCalendarDemoBooking(
   params: CreateBookingParams
 ): Promise<CreateBookingResult> {
+  await warmSchedBrand();
   const {
     leadId,
     contactId,
@@ -664,23 +729,23 @@ export async function createGoogleCalendarDemoBooking(
   let googleMeetLink = '';
   let calendarInviteSent = false;
 
-  const summary = `Umrah360 Demo - ${companyName || leadName || 'Agency Partner'}`;
+  const isUmrahSched = sb().playbook === 'umrah360';
+  const summary = `${brandName()} Demo - ${companyName || leadName || (isUmrahSched ? 'Agency Partner' : 'Guest')}`;
   const description = [
-    `Personalized 1-on-1 walkthrough of Umrah360 pilgrimage enterprise software.`,
+    isUmrahSched ? `Personalized 1-on-1 walkthrough of Umrah360 pilgrimage enterprise software.` : `Personalized 1-on-1 walkthrough of ${brandName()}.`,
     ``,
     `Attendee Details:`,
     `• Lead Name: ${leadName}`,
     `• Email: ${leadEmail}`,
-    `• Company: ${companyName || 'Travel Agency'}`,
+    `• Company: ${companyName || (isUmrahSched ? 'Travel Agency' : 'Not provided')}`,
     `• Phone: ${leadPhone || 'Not provided'}`,
     `• Inbound Channel: ${channel}`,
-    `• Timezone: Asia/Kolkata (IST)`,
+    `• Timezone: ${tzDisplay()}`,
     ``,
     `Agenda:`,
-    `- Group Series Operations & Visa Tracking`,
-    `- B2B Sub-Agent Portal & Dynamic Package Builder`,
-    `- Pilgrim Mobile Voucher & Accounting Automation`,
-    `- Q&A and Deployment Timelines`,
+    ...(isUmrahSched
+      ? [`- Group Series Operations & Visa Tracking`, `- B2B Sub-Agent Portal & Dynamic Package Builder`, `- Pilgrim Mobile Voucher & Accounting Automation`, `- Q&A and Deployment Timelines`]
+      : [`- Product walkthrough`, `- Q&A and next steps`]),
   ].join('\n');
 
   // 2. Create Event in Google Calendar with genuine Google Meet video conference
@@ -688,7 +753,7 @@ export async function createGoogleCalendarDemoBooking(
   if (token) {
     try {
       const attendees: Array<{ email: string }> = [];
-      if (leadEmail && leadEmail.includes('@') && leadEmail.toLowerCase() !== TARGET_CALENDAR_EMAIL.toLowerCase()) {
+      if (leadEmail && leadEmail.includes('@') && leadEmail.toLowerCase() !== hostCalendarEmail().toLowerCase()) {
         attendees.push({ email: leadEmail });
       }
 
@@ -697,11 +762,11 @@ export async function createGoogleCalendarDemoBooking(
         description,
         start: {
           dateTime: startIso,
-          timeZone: SCHEDULING_TIMEZONE,
+          timeZone: tz(),
         },
         end: {
           dateTime: endIso,
-          timeZone: SCHEDULING_TIMEZONE,
+          timeZone: tz(),
         },
         attendees,
         conferenceData: {
@@ -797,7 +862,7 @@ export async function createGoogleCalendarDemoBooking(
     return {
       success: false,
       error:
-        'Google Calendar OAuth token not found. Please click "Sync Calendar (amaavigo@gmail.com)" in the Demo Scheduling dashboard to connect your Google Calendar.',
+        'Google Calendar OAuth token not found. Please click "Sync Calendar" in the Demo Scheduling dashboard to connect your Google Calendar.',
     };
   }
 
@@ -823,11 +888,11 @@ export async function createGoogleCalendarDemoBooking(
     endTime,
     startDateTimeIso: startIso,
     endDateTimeIso: endIso,
-    timezone: SCHEDULING_TIMEZONE,
+    timezone: tz(),
     status: 'BOOKED',
     summary,
     description,
-    attendees: [TARGET_CALENDAR_EMAIL, ...(leadEmail ? [leadEmail] : [])],
+    attendees: [...(hostCalendarEmail() ? [hostCalendarEmail()] : []), ...(leadEmail ? [leadEmail] : [])],
     createdAt: nowIso,
     updatedAt: nowIso,
   };
@@ -848,7 +913,7 @@ export async function createGoogleCalendarDemoBooking(
             demoDate: dateString,
             demoStartTime: startTime,
             demoEndTime: endTime,
-            demoTimezone: SCHEDULING_TIMEZONE,
+            demoTimezone: tz(),
             calendarEventId,
             googleMeetLink,
             autoFollowUp: {
@@ -904,6 +969,7 @@ export async function cancelDemoBooking(
   bookingId: string,
   reason: string = 'Customer requested cancellation'
 ): Promise<{ success: boolean; error?: string }> {
+  await warmSchedBrand();
   if (!isFirebaseConfigured || !db) {
     return { success: false, error: 'Database not initialized' };
   }
@@ -985,6 +1051,7 @@ export async function rescheduleDemoBooking(
   newEndTime: string,
   accessToken?: string
 ): Promise<{ success: boolean; booking?: Booking; error?: string; conflict?: boolean }> {
+  await warmSchedBrand();
   // 1. Verify availability for requested new slot before modifying existing booking
   const freshCheck = await checkRealtimeGoogleCalendarSlot(newStartIso, newEndIso, accessToken);
   if (!freshCheck.available) {
@@ -1079,7 +1146,7 @@ export async function rescheduleDemoBooking(
           demoDate: newDateString,
           demoStartTime: newStartTime,
           demoEndTime: newEndTime,
-          demoTimezone: SCHEDULING_TIMEZONE,
+          demoTimezone: tz(),
           calendarEventId: newCalendarEventId,
           googleMeetLink: newGoogleMeetLink,
           updatedAt: nowIso,
@@ -1136,13 +1203,7 @@ export async function addAttendeeToDemoBooking(params: {
 
   const smtpCfg = getSmtpConfig();
   const hostEmails = Array.from(
-    new Set([
-      TARGET_CALENDAR_EMAIL.toLowerCase().trim(),
-      (smtpCfg.user || '').toLowerCase().trim(),
-      (smtpCfg.from || '').toLowerCase().trim(),
-      'sales@umrah360.in',
-      'support@umrah360.in',
-    ])
+    new Set(hostEmailList(smtpCfg.user, smtpCfg.from))
   ).filter((e) => e.length > 0);
 
   const primaryLeadEmail = (params.leadEmail || '').toLowerCase().trim();
@@ -1279,25 +1340,25 @@ export async function addAttendeeToDemoBooking(params: {
     const smtpConfig = getSmtpConfig();
     for (const targetEmail of emailsToAdd) {
       try {
-        const inviteSubject = `[Calendar Invite] Umrah360 Demo Walkthrough - ${booking.date} at ${booking.startTime} IST`;
+        const inviteSubject = `[Calendar Invite] ${brandName()} Demo Walkthrough - ${booking.date} at ${booking.startTime} ${TZL()}`;
         const inviteHtml = `
           <div style="font-family: Arial, sans-serif; max-width: 600px; color: #1e293b; padding: 20px; border: 1px solid #e2e8f0; border-radius: 12px;">
-            <h2 style="color: #0d9488; margin-bottom: 8px;">Umrah360 Demo Invitation</h2>
+            <h2 style="color: #0d9488; margin-bottom: 8px;">${brandName()} Demo Invitation</h2>
             <p style="font-size: 15px; color: #334155;">
-              You have been added as an attendee for the live product walkthrough of <strong>Umrah360</strong>.
+              You have been added as an attendee for the live product walkthrough of <strong>${brandName()}</strong>.
             </p>
             <div style="background-color: #f8fafc; padding: 16px; border-radius: 8px; margin: 16px 0;">
               <p style="margin: 4px 0;"><strong>Company:</strong> ${booking.companyName}</p>
               <p style="margin: 4px 0;"><strong>Primary Contact:</strong> ${booking.leadName} (${booking.leadEmail})</p>
               <p style="margin: 4px 0;"><strong>Date:</strong> ${booking.date}</p>
-              <p style="margin: 4px 0;"><strong>Time:</strong> ${booking.startTime} – ${booking.endTime} IST (Asia/Kolkata)</p>
+              <p style="margin: 4px 0;"><strong>Time:</strong> ${booking.startTime} – ${booking.endTime} ${tzDisplay()}</p>
               <p style="margin: 12px 0 4px 0;"><strong>Google Meet Video Link:</strong></p>
               <a href="${googleMeetLink}" style="display: inline-block; background-color: #0d9488; color: #ffffff; padding: 10px 18px; text-decoration: none; border-radius: 6px; font-weight: bold;">
                 Join Google Meet
               </a>
             </div>
             <p style="font-size: 13px; color: #64748b; margin-top: 20px;">
-              Looking forward to demonstrating how Umrah360 automates pilgrimage group costing, visa tracking, and sub-agent portals!
+              ${sb().playbook === 'umrah360' ? 'Looking forward to demonstrating how Umrah360 automates pilgrimage group costing, visa tracking, and sub-agent portals!' : `Looking forward to speaking with you about ${brandName()}!`}
             </p>
           </div>
         `;
@@ -1306,7 +1367,7 @@ export async function addAttendeeToDemoBooking(params: {
           tenantId: getSchedCtx().tenantId,
           to: targetEmail,
           subject: inviteSubject,
-          text: `You have been added to the Umrah360 Demo Walkthrough on ${booking.date} from ${booking.startTime} – ${booking.endTime} IST.\n\nJoin Google Meet: ${googleMeetLink}\n\nPrimary Contact: ${booking.leadName} (${booking.leadEmail})`,
+          text: `You have been added to the ${brandName()} Demo Walkthrough on ${booking.date} from ${booking.startTime} – ${booking.endTime} ${TZL()}.\n\nJoin Google Meet: ${googleMeetLink}\n\nPrimary Contact: ${booking.leadName} (${booking.leadEmail})`,
           html: inviteHtml,
         }).catch((e) => console.warn(`[SMTP Invite Warning for ${targetEmail}]:`, e));
 
@@ -1377,6 +1438,7 @@ export async function getActiveBookingForLeadOrConversation(
   leadEmail?: string,
   conversationId?: string
 ): Promise<Booking | null> {
+  await warmSchedBrand();
   if (!isFirebaseConfigured || !db) return null;
   try {
     if (leadEmail && leadEmail.includes('@')) {
@@ -1491,6 +1553,7 @@ export async function processSchedulingConversationTurn(params: {
   automated?: boolean;
   [key: string]: any;
 }): Promise<SchedulingTurnResult> {
+  await warmSchedBrand();
   // Booking only happens when the sender actually asks for it. Manual calls (Demo Scheduling tab)
   // always proceed; automated calls (inbound email / WhatsApp) proceed only on real booking intent,
   // judged on the sender's new text with quoted history stripped.
@@ -1545,13 +1608,13 @@ export async function processSchedulingConversationTurn(params: {
       return {
         handled: true,
         action: 'CANCELLED',
-        replyText: `Your Umrah360 demo scheduled for ${activeBooking.date} at ${activeBooking.startTime} IST has been cancelled. The time slot has been freed up on our calendar. Whenever you're ready to explore Umrah360 in the future, just let us know and we'll gladly schedule a fresh walkthrough!`,
+        replyText: `Your ${brandName()} demo scheduled for ${activeBooking.date} at ${activeBooking.startTime} ${TZL()} has been cancelled. The time slot has been freed up on our calendar. Whenever you're ready to explore ${brandName()} in the future, just let us know and we'll gladly schedule a fresh walkthrough!`,
       };
     } else {
       return {
         handled: true,
         action: 'CANCELLED',
-        replyText: `You do not have any active demo scheduled currently. If you'd like to book one at any time between Monday and Friday (10 AM to 7 PM IST), simply let me know!`,
+        replyText: `You do not have any active demo scheduled currently. If you'd like to book one at any time between ${daysLabel().replace(' to ', ' and ')} (${hrShort(workStartH())} to ${hrShort(workEndH())} ${TZL()}), simply let me know!`,
       };
     }
   }
@@ -1573,13 +1636,7 @@ export async function processSchedulingConversationTurn(params: {
 
   const activeSmtpCfg = getSmtpConfig();
   const hostEmails = Array.from(
-    new Set([
-      TARGET_CALENDAR_EMAIL.toLowerCase().trim(),
-      (activeSmtpCfg.user || '').toLowerCase().trim(),
-      (activeSmtpCfg.from || '').toLowerCase().trim(),
-      'sales@umrah360.in',
-      'support@umrah360.in',
-    ])
+    new Set(hostEmailList(activeSmtpCfg.user, activeSmtpCfg.from))
   ).filter((e) => e.length > 0);
 
   // Extract only NEW, distinct emails provided in THIS user message that are NOT the primary lead or host emails
@@ -1639,7 +1696,7 @@ export async function processSchedulingConversationTurn(params: {
           handled: true,
           action: 'ATTENDEE_ADDED',
           booking: addRes.booking,
-          replyText: `You're all set! I have added ${freshEmailsInMsg.join(', ')} as an attendee to your Umrah360 demo on ${slotLabel}.\n\n• Google Meet Link: ${meetLink}\n• Date & Time: ${addRes.booking.date} from ${addRes.booking.startTime} – ${addRes.booking.endTime} IST\n• Attendees: ${uniqueAttendeesList}\n\nI have updated Google Calendar and sent the invitation directly to ${freshEmailsInMsg.join(', ')}. We look forward to demonstrating Umrah360 to your team!`,
+          replyText: `You're all set! I have added ${freshEmailsInMsg.join(', ')} as an attendee to your ${brandName()} demo on ${slotLabel}.\n\n• Google Meet Link: ${meetLink}\n• Date & Time: ${addRes.booking.date} from ${addRes.booking.startTime} – ${addRes.booking.endTime} ${TZL()}\n• Attendees: ${uniqueAttendeesList}\n\nI have updated Google Calendar and sent the invitation directly to ${freshEmailsInMsg.join(', ')}. We look forward to demonstrating ${brandName()} to your team!`,
         };
       } else {
         return {
@@ -1652,7 +1709,7 @@ export async function processSchedulingConversationTurn(params: {
       return {
         handled: true,
         action: 'ASKED_AVAILABILITY',
-        replyText: `I'd be glad to invite ${freshEmailsInMsg.join(', ')} to the demo! Let's select a date and time for your walkthrough first. What day and time between 10:00 AM and 7:00 PM IST (Monday to Friday) works best for you? Once booked, I'll send the calendar invitation to both you and ${freshEmailsInMsg.join(', ')}.`,
+        replyText: `I'd be glad to invite ${freshEmailsInMsg.join(', ')} to the demo! Let's select a date and time for your walkthrough first. What day and time between ${fmtHour(workStartH())} and ${fmtHour(workEndH())} ${TZL()} (${daysLabel()}) works best for you? Once booked, I'll send the calendar invitation to both you and ${freshEmailsInMsg.join(', ')}.`,
       };
     }
   }
@@ -1677,15 +1734,15 @@ export async function processSchedulingConversationTurn(params: {
   if (apiKey) {
     try {
       const openai = new OpenAI({ apiKey });
-      const prompt = `You are the Demo Scheduling Agent for Umrah360.
-Current Date and Time in India (IST, Asia/Kolkata): ${nowIst.dateString}, ${nowIst.hour}:${String(nowIst.minute).padStart(2, '0')}.
+      const prompt = `You are the Demo Scheduling Agent for ${brandName()}.
+Current Date and Time (${TZL()}, ${tz()}): ${nowIst.dateString}, ${nowIst.hour}:${String(nowIst.minute).padStart(2, '0')}.
 Current Day of Week: ${['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][nowIst.dayOfWeek]}.
 
 Demo working rules:
-- Demos are Monday to Friday only. Saturday and Sunday are strictly unavailable.
-- Working hours are 10:00 AM to 7:00 PM IST (10:00 to 19:00).
-- Demos are 60 minutes long. Fixed start hours: 10, 11, 12, 13, 14, 15, 16, 17, 18.
-- 19:00 (7 PM) is NOT valid because the demo would end at 8 PM, which is after 7 PM. Latest start is 18:00 (6 PM).
+- Demos are ${daysLabel()} only. ${closedDaysLabel()} are strictly unavailable.
+- Working hours are ${fmtHour(workStartH())} to ${fmtHour(workEndH())} ${TZL()} (${workStartH()}:00 to ${workEndH()}:00).
+- Demos are 60 minutes long. Fixed start hours: ${slotHours().join(', ')}.
+- ${workEndH()}:00 (${hrShort(workEndH())}) is NOT valid because the demo would end at ${hrShort(workEndH() + 1)}, which is after ${hrShort(workEndH())}. Latest start is ${workEndH() - 1}:00 (${hrShort(workEndH() - 1)}).
 
 Conversation context:
 ${conversationHistory.map((m) => `${m.role.toUpperCase()}: ${m.content}`).join('\n')}
@@ -1695,10 +1752,10 @@ Analyze the conversation and latest message. Output JSON only:
 {
   "isDemoIntent": boolean (true if user wants to schedule, reschedule, meet, see software, or is answering scheduling questions),
   "hasSpecificSlot": boolean (true if user requested a specific day and hour or agreed to a proposed slot),
-  "dateString": string (YYYY-MM-DD resolved to future India date, or null),
-  "startHour": number (10 to 18 integer in 24hr format, or null),
-  "isWeekend": boolean (true if resolved date is Saturday or Sunday),
-  "isOutOfHours": boolean (true if user requested time outside 10:00 - 18:00, e.g. 9 AM or 7 PM),
+  "dateString": string (YYYY-MM-DD resolved to future date in the company timezone, or null),
+  "startHour": number (${workStartH()} to ${workEndH() - 1} integer in 24hr format, or null),
+  "isWeekend": boolean (true if resolved date falls on a non-working day: ${closedDaysLabel()}),
+  "isOutOfHours": boolean (true if user requested time outside ${workStartH()}:00 - ${workEndH() - 1}:00, e.g. ${hrShort(workStartH() - 1)} or ${hrShort(workEndH())}),
   "preferredPeriod": "MORNING" | "AFTERNOON" | "EVENING" | "ANY",
   "userConfirmedSlot": boolean (true if user said "yes", "sure", "that works", "let's do it", "confirm" to a previously proposed slot)
 }`;
@@ -1754,7 +1811,7 @@ Analyze the conversation and latest message. Output JSON only:
     } else if (lower.includes('tomorrow')) {
       const nextDay = new Date();
       nextDay.setDate(nextDay.getDate() + 1);
-      const f = new Intl.DateTimeFormat('en-CA', { timeZone: SCHEDULING_TIMEZONE });
+      const f = new Intl.DateTimeFormat('en-CA', { timeZone: tz() });
       nlpResult.dateString = f.format(nextDay);
       nlpResult.isDemoIntent = true;
     } else {
@@ -1765,15 +1822,15 @@ Analyze the conversation and latest message. Output JSON only:
           let diff = i - nowIst.dayOfWeek;
           if (diff === 0) {
             // Same weekday as today
-            diff = nowIst.hour < 18 ? 0 : 7;
+            diff = nowIst.hour < workEndH() - 1 ? 0 : 7;
           } else if (diff < 0) {
             diff += 7;
           }
           const targetD = new Date();
           targetD.setDate(targetD.getDate() + diff);
-          const f = new Intl.DateTimeFormat('en-CA', { timeZone: SCHEDULING_TIMEZONE });
+          const f = new Intl.DateTimeFormat('en-CA', { timeZone: tz() });
           nlpResult.dateString = f.format(targetD);
-          if (i === 0 || i === 6) nlpResult.isWeekend = true;
+          if (!sb().workingDays.includes(i)) nlpResult.isWeekend = true;
           break;
         }
       }
@@ -1787,10 +1844,10 @@ Analyze the conversation and latest message. Output JSON only:
 
     if (rangeMatch) {
       let rawH = parseInt(rangeMatch[1], 10);
-      if (rawH >= 1 && rawH <= 6) rawH += 12; // 6 -> 18 (6 PM IST)
-      if (rawH >= 10 && rawH <= 18) {
+      if (rawH >= 1 && rawH <= workEndH() - 12 - 1) rawH += 12; // 6 -> 18 (6 PM)
+      if (rawH >= workStartH() && rawH <= workEndH() - 1) {
         foundHour = rawH;
-      } else if (rawH < 10 || rawH >= 19) {
+      } else if (rawH < workStartH() || rawH >= workEndH()) {
         nlpResult.isOutOfHours = true;
       }
     } else if (timeMatch) {
@@ -1798,11 +1855,11 @@ Analyze the conversation and latest message. Output JSON only:
       const ampm = timeMatch[3]?.toLowerCase();
       if (ampm === 'pm' && rawH < 12) rawH += 12;
       else if (ampm === 'am' && rawH === 12) rawH = 0;
-      else if (!ampm && rawH >= 1 && rawH <= 6) rawH += 12; // 6 -> 18 (6 PM IST)
+      else if (!ampm && rawH >= 1 && rawH <= workEndH() - 12 - 1) rawH += 12; // 6 -> 18 (6 PM)
 
-      if (rawH >= 10 && rawH <= 18) {
+      if (rawH >= workStartH() && rawH <= workEndH() - 1) {
         foundHour = rawH;
-      } else if (rawH < 10 || rawH >= 19) {
+      } else if (rawH < workStartH() || rawH >= workEndH()) {
         nlpResult.isOutOfHours = true;
       }
     }
@@ -1835,7 +1892,7 @@ Analyze the conversation and latest message. Output JSON only:
     return {
       handled: true,
       action: 'ALREADY_BOOKED',
-      replyText: `You already have an Umrah360 demo scheduled for ${activeBooking.date} from ${activeBooking.startTime} – ${activeBooking.endTime} IST.\n\n• Google Meet Link: ${activeBooking.googleMeetLink}\n\nWould you like to reschedule it to another date or time?`,
+      replyText: `You already have a ${brandName()} demo scheduled for ${activeBooking.date} from ${activeBooking.startTime} – ${activeBooking.endTime} ${TZL()}.\n\n• Google Meet Link: ${activeBooking.googleMeetLink}\n\nWould you like to reschedule it to another date or time?`,
     };
   }
 
@@ -1854,14 +1911,14 @@ Analyze the conversation and latest message. Output JSON only:
       return {
         handled: true,
         action: 'OFFERED_ALTERNATIVES',
-        replyText: `I would be glad to arrange a live walkthrough of Umrah360 for ${companyName}! Here are our earliest available slots directly from our calendar:\n\n${slotsText}\n\nWhich of these works best for you? (Or let me know another preferred timing between 10:00 AM and 7:00 PM IST, Monday to Friday).`,
+        replyText: `I would be glad to arrange a live walkthrough of ${brandName()} for ${companyName}! Here are our earliest available slots directly from our calendar:\n\n${slotsText}\n\nWhich of these works best for you? (Or let me know another preferred timing between ${fmtHour(workStartH())} and ${fmtHour(workEndH())} ${TZL()}, ${daysLabel()}).`,
       };
     }
 
     return {
       handled: true,
       action: 'ASKED_AVAILABILITY',
-      replyText: `I would be happy to schedule a demo of Umrah360 for ${companyName}! Our demo slots run Monday to Friday between 10:00 AM and 7:00 PM IST (1-hour duration). What day and time work best for you?`,
+      replyText: `I would be happy to schedule a demo of ${brandName()} for ${companyName}! Our demo slots run ${daysLabel()} between ${fmtHour(workStartH())} and ${fmtHour(workEndH())} ${TZL()} (1-hour duration). What day and time work best for you?`,
     };
   }
 
@@ -1873,7 +1930,7 @@ Analyze the conversation and latest message. Output JSON only:
     return {
       handled: true,
       action: 'WEEKEND_NOT_ALLOWED',
-      replyText: `Our demo team operates Monday through Friday between 10 AM and 7 PM IST, so Saturday and Sunday are unavailable. I can offer these upcoming weekday slots instead:\n\n${alternativesText}\n\nWould one of these work for you?`,
+      replyText: `Our demo team operates ${daysLabel().replace(' to ', ' through ')} between ${hrShort(workStartH())} and ${hrShort(workEndH())} ${TZL()}, so ${closedDaysLabel()} are unavailable. I can offer these upcoming weekday slots instead:\n\n${alternativesText}\n\nWould one of these work for you?`,
     };
   }
 
@@ -1889,7 +1946,7 @@ Analyze the conversation and latest message. Output JSON only:
     return {
       handled: true,
       action: 'HOURS_NOT_ALLOWED',
-      replyText: `Our demo hours are 10:00 AM to 7:00 PM IST (Monday to Friday). Since each demo is a full 60-minute walkthrough, the latest slot starts at 6:00 PM (finishing at 7:00 PM). Here are our available slots:\n\n${alternativesText}\n\nWhich slot would you prefer?`,
+      replyText: `Our demo hours are ${fmtHour(workStartH())} to ${fmtHour(workEndH())} ${TZL()} (${daysLabel()}). Since each demo is a full 60-minute walkthrough, the latest slot starts at ${fmtHour(workEndH() - 1)} (finishing at ${fmtHour(workEndH())}). Here are our available slots:\n\n${alternativesText}\n\nWhich slot would you prefer?`,
     };
   }
 
@@ -1923,7 +1980,7 @@ Analyze the conversation and latest message. Output JSON only:
           handled: true,
           action: 'RESCHEDULED',
           booking: resched.booking,
-          replyText: `You're all set! Your Umrah360 demo has been rescheduled to ${slotLabel}.\n\n• Google Meet Link: ${resched.booking.googleMeetLink}\n• Company: ${companyName}\n• Attendee: ${leadName} (${leadEmail || 'Email invite updated'})\n• Timezone: Asia/Kolkata (IST)\n\nWe have sent the updated calendar invitation to your email. We look forward to demonstrating how Umrah360 automates your pilgrimage operations!`,
+          replyText: `You're all set! Your ${brandName()} demo has been rescheduled to ${slotLabel}.\n\n• Google Meet Link: ${resched.booking.googleMeetLink}\n• Company: ${companyName}\n• Attendee: ${leadName} (${leadEmail || 'Email invite updated'})\n• Timezone: ${tzDisplay()}\n\nWe have sent the updated calendar invitation to your email. We look forward to demonstrating how ${sb().playbook === 'umrah360' ? 'Umrah360 automates your pilgrimage operations' : `${brandName()} can help your business`}!`,
         };
       }
     }
@@ -1952,15 +2009,17 @@ Analyze the conversation and latest message. Output JSON only:
       const meetLink = bookingResult.googleMeetLink || 'Will be shared via calendar invitation';
 
       const replyText = [
-        `You're all set! Your Umrah360 demo is booked for ${slotLabel}.`,
+        `You're all set! Your ${brandName()} demo is booked for ${slotLabel}.`,
         ``,
         `Demo Details:`,
         `• Attendee: ${leadName}${leadEmail ? ` (${leadEmail})` : ''}`,
         `• Company: ${companyName}`,
         `• Google Meet Link: ${meetLink}`,
-        `• Timezone: Asia/Kolkata (IST)`,
+        `• Timezone: ${tzDisplay()}`,
         ``,
-        `I have sent the calendar invitation to your email. We look forward to showing you Umrah360's group series operations, visa tracking, and B2B portal!`,
+        sb().playbook === 'umrah360'
+          ? `I have sent the calendar invitation to your email. We look forward to showing you Umrah360's group series operations, visa tracking, and B2B portal!`
+          : `I have sent the calendar invitation to your email. We look forward to showing you ${brandName()}!`,
       ].join('\n');
 
       return {

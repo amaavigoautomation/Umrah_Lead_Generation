@@ -13,6 +13,8 @@
  *  - respects the suppression list and the tenant's daily outbound quota
  */
 import { getDoc, getDocs, setDoc, query, where, orderBy, limit } from './adminFirestore.js';
+import { getTenantBrand } from './brandService.js';
+import { brandIntro, brandSignature, type TenantBrand } from '../shared/brand.js';
 import { hasFeature } from './entitlements.js';
 import { isFirebaseConfigured } from '../firebase/config.js';
 import { db } from './adminFirestore.js';
@@ -672,8 +674,8 @@ type Evaluation = {
   model?: string;
 };
 
-function fallbackFollowUpText(interest?: string): string {
-  return `Hello,\n\nFollowing up on our previous message regarding ${interest || 'Umrah360'}. If you have any questions, or would like a short walkthrough of the platform, just reply to this email and we will be glad to help.\n\nRegards,\nUmrah360 Team`;
+function fallbackFollowUpText(brand: TenantBrand, interest?: string): string {
+  return `Hello,\n\nFollowing up on our previous message regarding ${interest || brand.companyName}. If you have any questions, or would like a short walkthrough of the platform, just reply to this email and we will be glad to help.\n\n${brandSignature(brand)}`;
 }
 
 export async function evaluateAndGenerateAiFollowUp(params: {
@@ -683,13 +685,15 @@ export async function evaluateAndGenerateAiFollowUp(params: {
   messages: Message[];
 }): Promise<Evaluation> {
   const { job, lead, conversation, messages } = params;
+  const brand = await getTenantBrand(job.tenantId);
+  const isUmrah = brand.playbook === 'umrah360';
 
   const apiKey = await getOpenAIApiKey();
   if (!apiKey) {
     return {
       decision: 'send',
       reason: 'OpenAI API key not configured; used neutral fallback follow-up template.',
-      generatedMessage: fallbackFollowUpText(lead.serviceInterest),
+      generatedMessage: fallbackFollowUpText(brand, lead.serviceInterest),
     };
   }
 
@@ -700,7 +704,7 @@ export async function evaluateAndGenerateAiFollowUp(params: {
     .map((m) => `[${m.senderType} - ${m.timestamp}]: ${m.text}`)
     .join('\n');
 
-  const systemPrompt = `You are the AI Operations & Conversation Engine for Umrah360 (www.umrah360.in), the travel ERP & CRM software for Hajj & Umrah tour operators.
+  const systemPrompt = `You are the AI Operations & Conversation Engine for ${isUmrah ? 'Umrah360 (www.umrah360.in), the travel ERP & CRM software for Hajj & Umrah tour operators' : brandIntro(brand)}.
 
 YOUR MISSION:
 Analyze the conversation thread with a lead who stopped responding after our last message. Decide whether an automated follow-up is appropriate and, if so, write a natural, contextual follow-up.
@@ -718,13 +722,13 @@ STRICT RULES:
    - "human_review": a human must step in (promised pricing/visa check, complaint, conflicting details, complex request).
 8. Respond ONLY with valid JSON:
    {"decision":"send|skip|human_review","reason":"...","objective":"...","language":"...","generatedMessage":"exact text if send","humanReviewReason":"if human_review"}
-9. End generatedMessage with the sign-off: "Regards,\\nUmrah360 Team".`;
+9. End generatedMessage with the sign-off: "${brandSignature(brand).replace(/\n/g, '\\n')}".`;
 
   const snap = job.leadSnapshot || {};
   const userPrompt = `LEAD PROFILE:
 - ID: ${lead.leadId}
 - Source: ${lead.source || snap.source || 'unknown'}
-- Service Interest: ${lead.serviceInterest || snap.serviceInterest || 'Umrah ERP Software'}
+- Service Interest: ${lead.serviceInterest || snap.serviceInterest || (isUmrah ? 'Umrah ERP Software' : brand.defaultProduct)}
 - Status: ${lead.status || snap.status}
 - Buying Stage: ${lead.buyingStage || snap.buyingStage || 'unknown'}
 - Known Requirements: ${JSON.stringify(lead.requirements || snap.requirements || [])}
@@ -796,7 +800,7 @@ Decide SEND, SKIP, or HUMAN_REVIEW and produce the JSON.`;
     return {
       decision: 'send',
       reason: `OpenAI generation failed (${err?.message || 'error'}); used neutral fallback.`,
-      generatedMessage: fallbackFollowUpText(lead.serviceInterest || snap.serviceInterest),
+      generatedMessage: fallbackFollowUpText(brand, lead.serviceInterest || snap.serviceInterest),
     };
   }
 }
@@ -1013,7 +1017,7 @@ async function processOneJob(
     return { jobId: job.id, status: 'scheduled', reason: sendQuota.reason };
   }
 
-  const subject = `Re: ${(conversation.subject || job.subject || 'Umrah360 Follow-Up').replace(/^re:\s*/i, '')}`;
+  const subject = `Re: ${(conversation.subject || job.subject || `${(await getTenantBrand(ctx.tenantId)).companyName} Follow-Up`).replace(/^re:\s*/i, '')}`;
   const lastMsg = thread[thread.length - 1];
   const inReplyTo = lastMsg?.gmailMessageId && !String(lastMsg.gmailMessageId).startsWith('<out-') ? lastMsg.gmailMessageId : undefined;
 

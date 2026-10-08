@@ -13,6 +13,8 @@ import { Conversation, Contact, Message } from '../types/index.js';
 import { hasThankYouEmailBeenSent, recordThankYouEmailSent } from './websiteLeadService.js';
 import { tenantRepo } from './tenantRepo.js';
 import type { TenantContext } from '../types/tenant.js';
+import { getTenantBrand } from './brandService.js';
+import { brandDemoThankYouSubject, brandSpecialistLine, brandThankYouSignoff } from '../shared/brand.js';
 
 const DEFAULT_UMRAH_CTX: TenantContext = {
   tenantId: 'umrah360',
@@ -315,6 +317,7 @@ export async function dispatchThankYouEmailForConversation(
     inFlight.add(targetEmail);
 
     // 5. Construct personalized Thank You message
+    const brand = await getTenantBrand(ctx.tenantId);
     const firstName =
       contact?.firstName ||
       extractedDetails.fullName?.split(/\s+/)[0] ||
@@ -326,14 +329,14 @@ export async function dispatchThankYouEmailForConversation(
     const product =
       extractedDetails.product ||
       contact?.tags?.find((t) => t !== 'WEBSITE_DEMO_FORM' && t !== 'UMRAH360_IN') ||
-      'Umrah360 Platform';
+      brand.defaultProduct;
     const phone = contact?.phone || extractedDetails.phone || '';
 
-    const subject = `We have received your Umrah360 Demo Request - ${companyName}`;
+    const subject = brandDemoThankYouSubject(brand, companyName);
     const emailBody = [
       `Dear ${firstName},`,
       ``,
-      `Thank you for requesting a live demo of Umrah360 for ${companyName}!`,
+      `Thank you for requesting a live demo of ${brand.companyName} for ${companyName}!`,
       ``,
       `We have received your requirements:`,
       `- Product Interest: ${product}`,
@@ -341,13 +344,14 @@ export async function dispatchThankYouEmailForConversation(
       ...(contact?.teamSize ? [`- Team Size: ${contact.teamSize}`] : []),
       ...(contact?.branches ? [`- Multi-Branch Setup: ${contact.branches}`] : []),
       ``,
-      `One of our senior pilgrimage software specialists will reach out to you shortly at ${phone || targetEmail} to coordinate a suitable time for your personalized walkthrough and answer any operational questions you have.`,
+      brandSpecialistLine(brand, phone || targetEmail),
       ``,
-      `If you have specific Saudi visa tracking, Makkah/Madinah hotel contracting, or B2B sub-agent workflows you would like to test, simply reply to this email.`,
+      brand.playbook === 'umrah360'
+        ? `If you have specific Saudi visa tracking, Makkah/Madinah hotel contracting, or B2B sub-agent workflows you would like to test, simply reply to this email.`
+        : `If you have specific workflows you would like to test, simply reply to this email.`,
       ``,
       `Warm regards,`,
-      `The Umrah360 Team`,
-      `https://umrah360.in`,
+      ...brandThankYouSignoff(brand),
     ].join('\n');
 
     console.log(`[Website Auto-Responder] Dispatching single Thank You email to ${targetEmail} for ${companyName} (${ctx.tenantId})...`);
@@ -379,7 +383,7 @@ export async function dispatchThankYouEmailForConversation(
       messageId: autoReplyMsgId,
       conversationId,
       senderType: 'AI',
-      senderName: 'Umrah360 Automation',
+      senderName: brand.senderName,
       senderEmail: smtpCfg.user || 'amaavigo@gmail.com',
       recipientEmail: targetEmail,
       channel: 'EMAIL',

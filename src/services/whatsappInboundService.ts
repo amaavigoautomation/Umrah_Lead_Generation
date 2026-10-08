@@ -10,6 +10,7 @@ import {
 import { findDuplicateContact } from './dataService';
 import { retrieveRelevantKnowledge } from './ragService';
 import { checkHumanHandoffConditions } from './aiService';
+import { getCurrentBrand } from '../context/BrandContext';
 
 export const WHATSAPP_BUSINESS_NUMBER = '+919820252434';
 export const WHATSAPP_BUSINESS_NUMBER_FORMATTED = '+91 98202 52434';
@@ -185,7 +186,7 @@ export async function processInboundWhatsAppMessage(params: {
       email: '',
       phone: payload.from,
       whatsappUserId: payload.from,
-      companyName: payload.companyName || `${firstName}'s Agency`,
+      companyName: payload.companyName || `${firstName}'s ${getCurrentBrand().playbook === 'umrah360' ? 'Agency' : 'Company'}`,
       jobTitle: 'Tour Operator / Inquirer',
       createdAt: now,
       updatedAt: now,
@@ -407,6 +408,10 @@ export async function processInboundWhatsAppMessage(params: {
   }
 
   // If backend didn't produce reply, generate locally
+  if (!replyText && getCurrentBrand().playbook !== 'umrah360') {
+    const wb = getCurrentBrand();
+    replyText = `Dear ${contact.firstName || 'Customer'},\n\nThank you for contacting ${wb.companyName}! We have received your message${handoffTriggered ? ' and a specialist will follow up with you personally' : ' and will get back to you shortly'}.\n\n${wb.teamName}${wb.supportPhone ? `\nWhatsApp: ${wb.supportPhone}` : ''}`;
+  }
   if (!replyText) {
     if (handoffTriggered) {
       replyText = `Dear ${contact.firstName || 'Customer'},\n\nThank you for contacting Umrah360 WhatsApp Business (+91 98202 52434)!\n\nFor team deployments with 20+ user seats, we provide custom Enterprise volume pricing, dedicated cloud hosting, and priority API rate limits.\n\nOur Senior Enterprise Solutions Manager has been notified and will contact you directly with a personalized quotation.\n\nBest regards,\nUmrah360 Enterprise Team\nWhatsApp: +91 98202 52434\nwww.umrah360.in`;
@@ -424,7 +429,7 @@ export async function processInboundWhatsAppMessage(params: {
       channel: 'WHATSAPP',
       direction: 'OUTBOUND',
       senderType: 'AI',
-      senderName: `Umrah360 AI (${WHATSAPP_BUSINESS_NUMBER_FORMATTED})`,
+      senderName: getCurrentBrand().playbook === 'umrah360' ? `Umrah360 AI (${WHATSAPP_BUSINESS_NUMBER_FORMATTED})` : getCurrentBrand().aiAgentName,
       text: replyText,
       timestamp: new Date().toISOString(),
       aiProcessed: true,

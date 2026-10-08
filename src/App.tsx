@@ -760,6 +760,10 @@ export default function App() {
           knowledgeDocs,
           signature: settings.emailSignature,
         }).then(async (aiResult) => {
+          if (aiResult?.ignored) {
+            console.log("Auto-reply skipped: message ignored by AI qualification filter", aiResult.reason);
+            return;
+          }
           const replyNowIso = new Date().toISOString();
           const inReplyTo = lastMsg.gmailMessageId || lastMsg.emailMeta?.messageId || lastMsg.messageId;
           const aiMsg: Message = {
@@ -1040,6 +1044,11 @@ export default function App() {
           knowledgeDocs,
           signature: settings.emailSignature,
         });
+
+        if (aiResult?.ignored) {
+          console.log("Auto-reply skipped: message ignored by AI qualification filter", aiResult.reason);
+          return;
+        }
 
         const replyNowIso = new Date().toISOString();
         const aiMsg: Message = {

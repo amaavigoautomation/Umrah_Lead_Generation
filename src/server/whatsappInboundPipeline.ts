@@ -1,5 +1,6 @@
 import { tenantRepo } from './tenantRepo.js';
 import type { TenantContext } from '../types/tenant.js';
+import { classifyInboundMessage } from './messageClassifier.js';
 
 const DEFAULT_UMRAH_CTX: TenantContext = {
   tenantId: 'umrah360',
@@ -899,20 +900,52 @@ export async function processLiveInboundWhatsApp(payload: {
   }
 
   // =========================================================================
-  // RULE 4: GENERATE GROUNDED AI REPLY
+  // RULE 4: GENERATE GROUNDED AI REPLY & QUALIFICATION CHECK
   // =========================================================================
-  const aiResult = await generateWhatsAppAutoReplyText({
-    fromPhone: senderPhone,
-    fromName: payload.fromName,
+  const qualification = await classifyInboundMessage({
     body: payload.body,
-    companyName: payload.companyName,
-    threadHistory: [...thread],
+    from: senderPhone,
+    channel: 'WHATSAPP',
+    companyName: getWACtx().tenantId === 'umrah360' ? 'Umrah360' : getWACtx().tenantId,
   });
 
-  const shouldSendAutoReply = pipelineConfig.mode !== 'SIMULATION';
-  const replyDecisionReason = pipelineConfig.mode === 'SIMULATION'
-    ? 'WhatsApp mode is SIMULATION: auto-reply held for agent inspection'
-    : 'New inbound customer message to +919820252434 - AI reply dispatched';
+  let shouldSendAutoReply = pipelineConfig.mode !== 'SIMULATION';
+  let replyDecisionReason = '';
+
+  if (pipelineConfig.mode === 'SIMULATION') {
+    shouldSendAutoReply = false;
+    replyDecisionReason = 'WhatsApp mode is SIMULATION: auto-reply held for agent inspection';
+  } else if (!qualification.qualifies) {
+    shouldSendAutoReply = false;
+    replyDecisionReason = `AI qualification filter: ignored (${qualification.reason})`;
+  } else {
+    shouldSendAutoReply = true;
+    replyDecisionReason = 'New inbound customer message to +919820252434 - AI reply dispatched';
+  }
+
+  let aiResult: {
+    replyText: string;
+    handoffTriggered: boolean;
+    handoffReason?: string;
+    leadScore: number;
+    buyingStage: string;
+  } = {
+    replyText: '',
+    handoffTriggered: false,
+    handoffReason: undefined,
+    leadScore: 78,
+    buyingStage: 'AWARENESS'
+  };
+
+  if (shouldSendAutoReply) {
+    aiResult = await generateWhatsAppAutoReplyText({
+      fromPhone: senderPhone,
+      fromName: payload.fromName,
+      body: payload.body,
+      companyName: payload.companyName,
+      threadHistory: [...thread],
+    });
+  }
 
   let aiReplyMessage: any = undefined;
   const replyMsgId = `wa-reply-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
@@ -1091,29 +1124,33 @@ export async function processLiveInboundWhatsApp(payload: {
     recentProcessedWhatsApp.pop();
   }
 
-  // Persist CRM entities to Firestore once at arrival time
+  // Persist CRM entities to Firestore once at arrival time (only if message qualifies)
   if (isFirebaseConfigured && db && crmEntities) {
-    try {
-      if (crmEntities.contact) {
-        safeSetDoc(tenantRepo(getWACtx()).contactDoc(crmEntities.contact.contactId), crmEntities.contact, { merge: true }).catch(() => {});
+    if (!qualification.qualifies) {
+      console.log(`[WhatsApp Pipeline] Message ${incomingMsgId} is unqualified/ignored. Skipping Firestore CRM persistence to avoid creating unqualified leads/contacts/conversations.`);
+    } else {
+      try {
+        if (crmEntities.contact) {
+          safeSetDoc(tenantRepo(getWACtx()).contactDoc(crmEntities.contact.contactId), crmEntities.contact, { merge: true }).catch(() => {});
+        }
+        if (crmEntities.lead) {
+          safeSetDoc(tenantRepo(getWACtx()).leadDoc(crmEntities.lead.leadId), crmEntities.lead, { merge: true }).catch(() => {});
+        }
+        if (crmEntities.conversation) {
+          safeSetDoc(tenantRepo(getWACtx()).conversationDoc(crmEntities.conversation.conversationId), crmEntities.conversation, { merge: true }).catch(() => {});
+        }
+        if (crmEntities.incomingMessage) {
+          safeSetDoc(tenantRepo(getWACtx()).messageDoc(crmEntities.incomingMessage.messageId), crmEntities.incomingMessage, { merge: true }).catch(() => {});
+        }
+        if (crmEntities.aiReplyMessage) {
+          safeSetDoc(tenantRepo(getWACtx()).messageDoc(crmEntities.aiReplyMessage.messageId), crmEntities.aiReplyMessage, { merge: true }).catch(() => {});
+        }
+        if (crmEntities.activity) {
+          safeSetDoc(tenantRepo(getWACtx()).leadActivityDoc(crmEntities.activity.activityId), crmEntities.activity, { merge: true }).catch(() => {});
+        }
+      } catch (fsErr) {
+        console.error('[WhatsApp Pipeline] Firestore persistence warning:', fsErr);
       }
-      if (crmEntities.lead) {
-        safeSetDoc(tenantRepo(getWACtx()).leadDoc(crmEntities.lead.leadId), crmEntities.lead, { merge: true }).catch(() => {});
-      }
-      if (crmEntities.conversation) {
-        safeSetDoc(tenantRepo(getWACtx()).conversationDoc(crmEntities.conversation.conversationId), crmEntities.conversation, { merge: true }).catch(() => {});
-      }
-      if (crmEntities.incomingMessage) {
-        safeSetDoc(tenantRepo(getWACtx()).messageDoc(crmEntities.incomingMessage.messageId), crmEntities.incomingMessage, { merge: true }).catch(() => {});
-      }
-      if (crmEntities.aiReplyMessage) {
-        safeSetDoc(tenantRepo(getWACtx()).messageDoc(crmEntities.aiReplyMessage.messageId), crmEntities.aiReplyMessage, { merge: true }).catch(() => {});
-      }
-      if (crmEntities.activity) {
-        safeSetDoc(tenantRepo(getWACtx()).leadActivityDoc(crmEntities.activity.activityId), crmEntities.activity, { merge: true }).catch(() => {});
-      }
-    } catch (fsErr) {
-      console.error('[WhatsApp Pipeline] Firestore persistence warning:', fsErr);
     }
   }
 

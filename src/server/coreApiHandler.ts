@@ -1,4 +1,5 @@
 import OpenAI from 'openai';
+import { classifyInboundMessage } from './messageClassifier.js';
 import { sanitizeAiEmailText } from './emailSanitizer.js';
 import { verifySmtpConnection, sendLiveEmail, getSmtpConfig, updateSmtpConfig, getResendConfig } from './smtpService.js';
 import { checkImapStatus, getImapConfig, updateImapConfig } from './imapService.js';
@@ -1175,6 +1176,35 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
   // 2. AI Respond endpoint (/api/ai/respond)
   if ((url === '/api/ai/respond' || url.startsWith('/api/ai/respond?')) && req.method === 'POST') {
     const { incomingMessage, contact, lead, conversation, recentMessages, knowledgeChunks, handoffCheck, signature } = body;
+
+    const channel = conversation?.channel || 'EMAIL';
+    const isWebsite = channel === 'WEBSITE' || (conversation?.conversationId || '').startsWith('conv-web-');
+
+    if (!isWebsite) {
+      const qualification = await classifyInboundMessage({
+        subject: conversation?.subject || "",
+        body: incomingMessage,
+        from: contact?.email || contact?.phone || "",
+        channel: channel,
+        companyName: activeTenantCtx.tenantId === 'umrah360' ? 'Umrah360' : activeTenantCtx.tenantId,
+      });
+
+      if (!qualification.qualifies) {
+        console.log(`[coreApiHandler respond] Ignored message from ${contact?.email || contact?.phone || "unknown"} on channel ${channel}. Reason: ${qualification.reason}`);
+        res.statusCode = 200;
+        res.end(
+          JSON.stringify({
+            responseText: `AI qualification filter: ignored (${qualification.reason})`,
+            confidence: 0,
+            knowledgeSources: [],
+            humanHandoffTriggered: false,
+            ignored: true,
+            reason: qualification.reason,
+          })
+        );
+        return true;
+      }
+    }
 
     // If handoff was already identified as necessary by rule
     if (handoffCheck?.shouldHandoff) {

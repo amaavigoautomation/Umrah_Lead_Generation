@@ -17,6 +17,8 @@ export interface AiResponseResult {
   humanHandoffTriggered: boolean;
   handoffReason?: string;
   classification?: string;
+  ignored?: boolean;
+  reason?: string;
   leadQualification: {
     isLead: boolean;
     leadScore: number;
@@ -239,6 +241,78 @@ export async function generateOmnichannelResponse(params: {
 
   // Rule-based Domain Knowledge Engine (strictly grounded in approved Umrah360 documentation)
   const lowerMsg = freshMessage.toLowerCase();
+
+  const channel = conversation?.channel || 'EMAIL';
+  const isWebsite = channel === 'WEBSITE' || (conversation?.conversationId || '').startsWith('conv-web-');
+
+  if (!isWebsite) {
+    const fromLower = (contact?.email || "").toLowerCase().trim();
+    const isBotOrNewsletter =
+      fromLower.includes("no-reply") ||
+      fromLower.includes("noreply") ||
+      fromLower.includes("mailer-daemon") ||
+      fromLower.includes("postmaster") ||
+      fromLower.includes("newsletter") ||
+      fromLower.includes("bounce") ||
+      fromLower.includes("alerts@") ||
+      fromLower.includes("notifications@") ||
+      fromLower.includes("bot@") ||
+      lowerMsg.includes("click here to unsubscribe") ||
+      lowerMsg.includes("view in browser") ||
+      lowerMsg.includes("unsubscribe here") ||
+      lowerMsg.includes("manage your preferences");
+
+    const hasRelevanceKeywords =
+      lowerMsg.includes("b2b") ||
+      lowerMsg.includes("b2c") ||
+      lowerMsg.includes("portal") ||
+      lowerMsg.includes("allotment") ||
+      lowerMsg.includes("cost") ||
+      lowerMsg.includes("pricing") ||
+      lowerMsg.includes("package") ||
+      lowerMsg.includes("software") ||
+      lowerMsg.includes("platform") ||
+      lowerMsg.includes("booking") ||
+      lowerMsg.includes("enquiry") ||
+      lowerMsg.includes("issue") ||
+      lowerMsg.includes("problem") ||
+      lowerMsg.includes("error") ||
+      lowerMsg.includes("demo") ||
+      lowerMsg.includes("interested") ||
+      lowerMsg.includes("help") ||
+      lowerMsg.includes("question") ||
+      lowerMsg.includes("contact") ||
+      lowerMsg.includes("support") ||
+      lowerMsg.includes("sales") ||
+      lowerMsg.includes("business") ||
+      lowerMsg.includes("client") ||
+      lowerMsg.includes("service") ||
+      lowerMsg.includes("product") ||
+      lowerMsg.includes("account") ||
+      lowerMsg.includes("integration") ||
+      lowerMsg.includes("partner");
+
+    if (isBotOrNewsletter || !hasRelevanceKeywords) {
+      console.log(`[Client Fallback Classifier] Ignored message: isBot=${isBotOrNewsletter}, hasRelevance=${hasRelevanceKeywords}`);
+      return {
+        responseText: "AI qualification filter: ignored (not a qualified customer inquiry, issue, or interest)",
+        confidence: 0,
+        knowledgeSources: [],
+        humanHandoffTriggered: false,
+        ignored: true,
+        reason: "Message is classified as bot/newsletter or completely unrelated topic.",
+        leadQualification: {
+          isLead: false,
+          leadScore: 0,
+          intent: 'LOW',
+          buyingStage: 'AWARENESS',
+          requirements: [],
+          nextAction: 'Ignore automated notification',
+        },
+        memoryUpdate: {},
+      };
+    }
+  }
 
   // If handoff is triggered
   if (handoffCheck.shouldHandoff) {

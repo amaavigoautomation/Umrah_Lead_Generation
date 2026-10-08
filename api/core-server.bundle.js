@@ -23013,6 +23013,109 @@ var init_openai = __esm({
   }
 });
 
+// src/server/messageClassifier.ts
+function classifyInboundMessageFallback(params) {
+  const from = (params.from || "").toLowerCase().trim();
+  const subject = (params.subject || "").toLowerCase().trim();
+  const body = (params.body || "").toLowerCase().trim();
+  const isAutoSender = from.includes("no-reply") || from.includes("noreply") || from.includes("mailer-daemon") || from.includes("postmaster") || from.includes("newsletter") || from.includes("bounce") || from.includes("alerts@") || from.includes("notifications@") || from.includes("support@github") || from.includes("jira@") || from.includes("system@") || from.includes("bot@");
+  if (isAutoSender) {
+    return {
+      qualifies: false,
+      reason: "Sender address flagged as automated/system bot",
+      isBotOrNewsletter: true
+    };
+  }
+  const isAutoSubject = subject.includes("out of office") || subject.includes("auto-reply") || subject.includes("auto reply") || subject.includes("delivery status") || subject.includes("undelivered mail") || subject.includes("failure notice") || subject.includes("returned mail") || subject.includes("vacation response") || subject.includes("unsubscribe") || subject.includes("mail delivery") || subject.includes("automatic reply");
+  if (isAutoSubject) {
+    return {
+      qualifies: false,
+      reason: "Subject flagged as automated bounce, notification, or auto-reply",
+      isBotOrNewsletter: true
+    };
+  }
+  const isNewsletterBody = body.includes("click here to unsubscribe") || body.includes("view in browser") || body.includes("manage your preferences") || body.includes("you are receiving this email because") || body.includes("opt-out") || body.includes("mailing list") || body.includes("unsubscribe here");
+  if (isNewsletterBody) {
+    return {
+      qualifies: false,
+      reason: "Email body classified as mass newsletter/marketing",
+      isBotOrNewsletter: true
+    };
+  }
+  const hasRelevanceKeywords = body.includes("b2b") || body.includes("b2c") || body.includes("portal") || body.includes("cost") || body.includes("pricing") || body.includes("package") || body.includes("software") || body.includes("platform") || body.includes("booking") || body.includes("enquiry") || body.includes("inquiry") || body.includes("issue") || body.includes("problem") || body.includes("error") || body.includes("demo") || body.includes("interested") || body.includes("help") || body.includes("question") || body.includes("contact") || body.includes("support") || body.includes("sales") || body.includes("business") || body.includes("client") || body.includes("service") || body.includes("product") || body.includes("account") || body.includes("integration") || body.includes("partner");
+  if (hasRelevanceKeywords) {
+    return {
+      qualifies: true,
+      reason: "Message has relevant industry or enquiry keywords",
+      isBotOrNewsletter: false
+    };
+  }
+  return {
+    qualifies: false,
+    reason: "Message is completely unrelated to our company, products, or services",
+    isBotOrNewsletter: false
+  };
+}
+async function classifyInboundMessage(params) {
+  const openAiKey = process.env.OPENAI_API_KEY || process.env.GEMINI_API_KEY;
+  const targetCompany = params.companyName || "Umrah360";
+  const systemInstruction = `You are a strict, highly accurate message classifier for a multi-tenant business communication platform (current company context: "${targetCompany}").
+Your task is to analyze an incoming message from a customer/user across channels like Email, WhatsApp, and Instagram, and determine if it qualifies for an automated AI reply.
+
+You must classify the message into one of two decisions:
+1. QUALIFIED: The message is a genuine, human-written message about our company/product/services, a general business inquiry, partnership enquiry, someone facing an issue/error, or someone expressing interest or asking a relevant business question.
+2. IGNORED: The message is a bot-generated message, an automated system notification (e.g., mail delivery bounce, postmaster alert, auto-reply, out-of-office message), a mass marketing newsletter/advertisement/spam, or a conversation completely unrelated to our company/product/services.
+
+Guidelines:
+- If it is a bot message, automated bounce, out-of-office response, or newsletter, you MUST set "qualifies" to false and "isBotOrNewsletter" to true.
+- If it is about the company/product/services, asks an enquiry, reports a problem/issue, or shows interest/curiosity, you MUST set "qualifies" to true and "isBotOrNewsletter" to false.
+- Do NOT hardcode specific keywords. Look at the semantic meaning of the message.
+- You must respond with a JSON object containing EXACTLY:
+  {
+    "qualifies": boolean,
+    "reason": "A concise, clear explanation of why it qualifies or is ignored",
+    "isBotOrNewsletter": boolean
+  }`;
+  const prompt = `INCOMING MESSAGE DETAILS:
+From/Sender: ${params.from || "Unknown"}
+Channel: ${params.channel || "Unknown"}
+Subject: ${params.subject || "No Subject"}
+Message Body:
+"""
+${params.body}
+"""`;
+  if (openAiKey) {
+    try {
+      const openai = new OpenAI({ apiKey: openAiKey });
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        messages: [
+          { role: "system", content: systemInstruction },
+          { role: "user", content: prompt }
+        ],
+        response_format: { type: "json_object" },
+        temperature: 0.1
+      });
+      const content = response.choices[0]?.message?.content;
+      if (content) {
+        const parsed = JSON.parse(content.trim());
+        console.log(`[OpenAI Classifier] Inbound classified: qualifies=${parsed.qualifies}, reason="${parsed.reason}"`);
+        return parsed;
+      }
+    } catch (err) {
+      console.warn("[OpenAI Classifier] Warning during classification, falling back to Rule-based:", err?.message || err);
+    }
+  }
+  const fallbackResult = classifyInboundMessageFallback(params);
+  console.log(`[Fallback Classifier] Inbound classified: qualifies=${fallbackResult.qualifies}, reason="${fallbackResult.reason}"`);
+  return fallbackResult;
+}
+var init_messageClassifier = __esm({
+  "src/server/messageClassifier.ts"() {
+    init_openai();
+  }
+});
+
 // src/server/emailSanitizer.ts
 function sanitizeAiEmailText(text, recipientName) {
   if (!text) return text;
@@ -280198,6 +280301,13 @@ async function processLiveInboundEmail(payload) {
     }
     const completeThreadContext = [...thread];
     console.log(`[Unified Inbox] Loaded complete thread context for ${conversationId} (${completeThreadContext.length} messages)`);
+    const qualification = await classifyInboundMessage({
+      subject: payload.subject,
+      body: payload.body,
+      from: payload.from,
+      channel: "EMAIL",
+      companyName: getInboundCtx().tenantId === "umrah360" ? "Umrah360" : getInboundCtx().tenantId
+    });
     let shouldSendAutoReply = false;
     let replyDecisionReason = "";
     if (pipelineConfig.emailMode === "SIMULATION") {
@@ -280206,6 +280316,9 @@ async function processLiveInboundEmail(payload) {
     } else if (pipelineConfig.emailMode === "REVIEW") {
       shouldSendAutoReply = false;
       replyDecisionReason = "Email channel mode is REVIEW: AI response drafted for human approval prior to dispatch.";
+    } else if (!qualification.qualifies) {
+      shouldSendAutoReply = false;
+      replyDecisionReason = `AI qualification filter: ignored (${qualification.reason})`;
     } else {
       shouldSendAutoReply = true;
       replyDecisionReason = payload.isTestSimulation ? "Live test simulation triggered - dispatching verified SMTP reply." : "Genuinely new inbound customer message received - generating AI reply ONCE.";
@@ -280433,29 +280546,33 @@ async function processLiveInboundEmail(payload) {
       recentProcessedEmails.pop();
     }
     if (isFirebaseConfigured && db && crmEntities) {
-      try {
-        const writes = [];
-        if (crmEntities.contact) {
-          writes.push(safeSetDoc(tenantRepo(getInboundCtx()).contactDoc(crmEntities.contact.contactId), crmEntities.contact, { merge: true }));
+      if (!qualification.qualifies) {
+        console.log(`[Inbound Pipeline] Message ${incomingMsgId} is unqualified/ignored. Skipping Firestore CRM persistence to avoid creating unqualified leads/contacts/conversations.`);
+      } else {
+        try {
+          const writes = [];
+          if (crmEntities.contact) {
+            writes.push(safeSetDoc(tenantRepo(getInboundCtx()).contactDoc(crmEntities.contact.contactId), crmEntities.contact, { merge: true }));
+          }
+          if (crmEntities.lead) {
+            writes.push(safeSetDoc(tenantRepo(getInboundCtx()).leadDoc(crmEntities.lead.leadId), crmEntities.lead, { merge: true }));
+          }
+          if (crmEntities.conversation) {
+            writes.push(safeSetDoc(tenantRepo(getInboundCtx()).conversationDoc(crmEntities.conversation.conversationId), crmEntities.conversation, { merge: true }));
+          }
+          if (crmEntities.incomingMessage) {
+            writes.push(safeSetDoc(tenantRepo(getInboundCtx()).messageDoc(crmEntities.incomingMessage.messageId), crmEntities.incomingMessage, { merge: true }));
+          }
+          if (crmEntities.aiReplyMessage) {
+            writes.push(safeSetDoc(tenantRepo(getInboundCtx()).messageDoc(crmEntities.aiReplyMessage.messageId), crmEntities.aiReplyMessage, { merge: true }));
+          }
+          if (crmEntities.activity) {
+            writes.push(safeSetDoc(tenantRepo(getInboundCtx()).leadActivityDoc(crmEntities.activity.activityId), crmEntities.activity));
+          }
+          await Promise.all(writes);
+        } catch (err) {
+          console.warn("[Inbound Pipeline] Notice syncing CRM entities to Firestore:", err);
         }
-        if (crmEntities.lead) {
-          writes.push(safeSetDoc(tenantRepo(getInboundCtx()).leadDoc(crmEntities.lead.leadId), crmEntities.lead, { merge: true }));
-        }
-        if (crmEntities.conversation) {
-          writes.push(safeSetDoc(tenantRepo(getInboundCtx()).conversationDoc(crmEntities.conversation.conversationId), crmEntities.conversation, { merge: true }));
-        }
-        if (crmEntities.incomingMessage) {
-          writes.push(safeSetDoc(tenantRepo(getInboundCtx()).messageDoc(crmEntities.incomingMessage.messageId), crmEntities.incomingMessage, { merge: true }));
-        }
-        if (crmEntities.aiReplyMessage) {
-          writes.push(safeSetDoc(tenantRepo(getInboundCtx()).messageDoc(crmEntities.aiReplyMessage.messageId), crmEntities.aiReplyMessage, { merge: true }));
-        }
-        if (crmEntities.activity) {
-          writes.push(safeSetDoc(tenantRepo(getInboundCtx()).leadActivityDoc(crmEntities.activity.activityId), crmEntities.activity));
-        }
-        await Promise.all(writes);
-      } catch (err) {
-        console.warn("[Inbound Pipeline] Notice syncing CRM entities to Firestore:", err);
       }
     }
     return record;
@@ -280535,6 +280652,7 @@ var DEFAULT_UMRAH_CTX5, activeInboundCtx, inboundCtxStore, recentProcessedEmails
 var init_inboundPipeline = __esm({
   "src/server/inboundPipeline.ts"() {
     init_tenantRepo();
+    init_messageClassifier();
     init_openai();
     init_smtpService();
     init_imapService();
@@ -285177,6 +285295,7 @@ var require_pino = __commonJS({
 
 // src/server/coreApiHandler.ts
 init_openai();
+init_messageClassifier();
 init_emailSanitizer();
 init_smtpService();
 init_imapService();
@@ -285184,6 +285303,7 @@ init_inboundPipeline();
 
 // src/server/whatsappInboundPipeline.ts
 init_tenantRepo();
+init_messageClassifier();
 init_openai();
 init_knowledgeService();
 init_config();
@@ -285769,15 +285889,40 @@ async function processLiveInboundWhatsApp(payload) {
   } catch (campaignErr) {
     console.warn("[WhatsApp Pipeline] Campaign lead tracking hook notice:", campaignErr);
   }
-  const aiResult = await generateWhatsAppAutoReplyText({
-    fromPhone: senderPhone,
-    fromName: payload.fromName,
+  const qualification = await classifyInboundMessage({
     body: payload.body,
-    companyName: payload.companyName,
-    threadHistory: [...thread]
+    from: senderPhone,
+    channel: "WHATSAPP",
+    companyName: getWACtx().tenantId === "umrah360" ? "Umrah360" : getWACtx().tenantId
   });
-  const shouldSendAutoReply = pipelineConfig2.mode !== "SIMULATION";
-  const replyDecisionReason = pipelineConfig2.mode === "SIMULATION" ? "WhatsApp mode is SIMULATION: auto-reply held for agent inspection" : "New inbound customer message to +919820252434 - AI reply dispatched";
+  let shouldSendAutoReply = pipelineConfig2.mode !== "SIMULATION";
+  let replyDecisionReason = "";
+  if (pipelineConfig2.mode === "SIMULATION") {
+    shouldSendAutoReply = false;
+    replyDecisionReason = "WhatsApp mode is SIMULATION: auto-reply held for agent inspection";
+  } else if (!qualification.qualifies) {
+    shouldSendAutoReply = false;
+    replyDecisionReason = `AI qualification filter: ignored (${qualification.reason})`;
+  } else {
+    shouldSendAutoReply = true;
+    replyDecisionReason = "New inbound customer message to +919820252434 - AI reply dispatched";
+  }
+  let aiResult = {
+    replyText: "",
+    handoffTriggered: false,
+    handoffReason: void 0,
+    leadScore: 78,
+    buyingStage: "AWARENESS"
+  };
+  if (shouldSendAutoReply) {
+    aiResult = await generateWhatsAppAutoReplyText({
+      fromPhone: senderPhone,
+      fromName: payload.fromName,
+      body: payload.body,
+      companyName: payload.companyName,
+      threadHistory: [...thread]
+    });
+  }
   let aiReplyMessage = void 0;
   const replyMsgId = `wa-reply-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
   if (shouldSendAutoReply) {
@@ -285934,33 +286079,37 @@ async function processLiveInboundWhatsApp(payload) {
     recentProcessedWhatsApp.pop();
   }
   if (isFirebaseConfigured && db && crmEntities) {
-    try {
-      if (crmEntities.contact) {
-        safeSetDoc(tenantRepo(getWACtx()).contactDoc(crmEntities.contact.contactId), crmEntities.contact, { merge: true }).catch(() => {
-        });
+    if (!qualification.qualifies) {
+      console.log(`[WhatsApp Pipeline] Message ${incomingMsgId} is unqualified/ignored. Skipping Firestore CRM persistence to avoid creating unqualified leads/contacts/conversations.`);
+    } else {
+      try {
+        if (crmEntities.contact) {
+          safeSetDoc(tenantRepo(getWACtx()).contactDoc(crmEntities.contact.contactId), crmEntities.contact, { merge: true }).catch(() => {
+          });
+        }
+        if (crmEntities.lead) {
+          safeSetDoc(tenantRepo(getWACtx()).leadDoc(crmEntities.lead.leadId), crmEntities.lead, { merge: true }).catch(() => {
+          });
+        }
+        if (crmEntities.conversation) {
+          safeSetDoc(tenantRepo(getWACtx()).conversationDoc(crmEntities.conversation.conversationId), crmEntities.conversation, { merge: true }).catch(() => {
+          });
+        }
+        if (crmEntities.incomingMessage) {
+          safeSetDoc(tenantRepo(getWACtx()).messageDoc(crmEntities.incomingMessage.messageId), crmEntities.incomingMessage, { merge: true }).catch(() => {
+          });
+        }
+        if (crmEntities.aiReplyMessage) {
+          safeSetDoc(tenantRepo(getWACtx()).messageDoc(crmEntities.aiReplyMessage.messageId), crmEntities.aiReplyMessage, { merge: true }).catch(() => {
+          });
+        }
+        if (crmEntities.activity) {
+          safeSetDoc(tenantRepo(getWACtx()).leadActivityDoc(crmEntities.activity.activityId), crmEntities.activity, { merge: true }).catch(() => {
+          });
+        }
+      } catch (fsErr) {
+        console.error("[WhatsApp Pipeline] Firestore persistence warning:", fsErr);
       }
-      if (crmEntities.lead) {
-        safeSetDoc(tenantRepo(getWACtx()).leadDoc(crmEntities.lead.leadId), crmEntities.lead, { merge: true }).catch(() => {
-        });
-      }
-      if (crmEntities.conversation) {
-        safeSetDoc(tenantRepo(getWACtx()).conversationDoc(crmEntities.conversation.conversationId), crmEntities.conversation, { merge: true }).catch(() => {
-        });
-      }
-      if (crmEntities.incomingMessage) {
-        safeSetDoc(tenantRepo(getWACtx()).messageDoc(crmEntities.incomingMessage.messageId), crmEntities.incomingMessage, { merge: true }).catch(() => {
-        });
-      }
-      if (crmEntities.aiReplyMessage) {
-        safeSetDoc(tenantRepo(getWACtx()).messageDoc(crmEntities.aiReplyMessage.messageId), crmEntities.aiReplyMessage, { merge: true }).catch(() => {
-        });
-      }
-      if (crmEntities.activity) {
-        safeSetDoc(tenantRepo(getWACtx()).leadActivityDoc(crmEntities.activity.activityId), crmEntities.activity, { merge: true }).catch(() => {
-        });
-      }
-    } catch (fsErr) {
-      console.error("[WhatsApp Pipeline] Firestore persistence warning:", fsErr);
     }
   }
   return result;
@@ -306528,6 +306677,32 @@ async function handleCoreApi(req, res) {
   }
   if ((url === "/api/ai/respond" || url.startsWith("/api/ai/respond?")) && req.method === "POST") {
     const { incomingMessage, contact, lead, conversation, recentMessages, knowledgeChunks, handoffCheck, signature } = body;
+    const channel = conversation?.channel || "EMAIL";
+    const isWebsite = channel === "WEBSITE" || (conversation?.conversationId || "").startsWith("conv-web-");
+    if (!isWebsite) {
+      const qualification = await classifyInboundMessage({
+        subject: conversation?.subject || "",
+        body: incomingMessage,
+        from: contact?.email || contact?.phone || "",
+        channel,
+        companyName: activeTenantCtx.tenantId === "umrah360" ? "Umrah360" : activeTenantCtx.tenantId
+      });
+      if (!qualification.qualifies) {
+        console.log(`[coreApiHandler respond] Ignored message from ${contact?.email || contact?.phone || "unknown"} on channel ${channel}. Reason: ${qualification.reason}`);
+        res.statusCode = 200;
+        res.end(
+          JSON.stringify({
+            responseText: `AI qualification filter: ignored (${qualification.reason})`,
+            confidence: 0,
+            knowledgeSources: [],
+            humanHandoffTriggered: false,
+            ignored: true,
+            reason: qualification.reason
+          })
+        );
+        return true;
+      }
+    }
     if (handoffCheck?.shouldHandoff) {
       const isTwentyUsers = incomingMessage?.toLowerCase().includes("20") || incomingMessage?.toLowerCase().includes("enterprise");
       const handoffResponse = isTwentyUsers ? `Thank you for your interest, ${contact?.firstName || "there"}! For teams of 20+ users, our Enterprise tier includes dedicated cloud hosting, unlimited B2B sub-agent capacity, and custom onboarding.

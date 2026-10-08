@@ -1,6 +1,7 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { tenantRepo } from './tenantRepo.js';
 import type { TenantContext } from '../types/tenant.js';
+import { classifyInboundMessage } from './messageClassifier.js';
 
 const DEFAULT_UMRAH_CTX: TenantContext = {
   tenantId: 'umrah360',
@@ -1547,8 +1548,16 @@ export async function processLiveInboundEmail(payload: {
     console.log(`[Unified Inbox] Loaded complete thread context for ${conversationId} (${completeThreadContext.length} messages)`);
 
     // =========================================================================
-    // RULE 6: EVALUATE CHANNEL MODE
+    // RULE 6: EVALUATE CHANNEL MODE AND RUN AI QUALIFICATION CHECK
     // =========================================================================
+    const qualification = await classifyInboundMessage({
+      subject: payload.subject,
+      body: payload.body,
+      from: payload.from,
+      channel: 'EMAIL',
+      companyName: getInboundCtx().tenantId === 'umrah360' ? 'Umrah360' : getInboundCtx().tenantId,
+    });
+
     let shouldSendAutoReply = false;
     let replyDecisionReason = '';
 
@@ -1558,6 +1567,9 @@ export async function processLiveInboundEmail(payload: {
     } else if (pipelineConfig.emailMode === 'REVIEW') {
       shouldSendAutoReply = false;
       replyDecisionReason = 'Email channel mode is REVIEW: AI response drafted for human approval prior to dispatch.';
+    } else if (!qualification.qualifies) {
+      shouldSendAutoReply = false;
+      replyDecisionReason = `AI qualification filter: ignored (${qualification.reason})`;
     } else {
       shouldSendAutoReply = true;
       replyDecisionReason = payload.isTestSimulation
@@ -1832,33 +1844,37 @@ export async function processLiveInboundEmail(payload: {
       recentProcessedEmails.pop();
     }
 
-    // Persist CRM entities to Firestore once at arrival time
+    // Persist CRM entities to Firestore once at arrival time (only if message qualifies)
     if (isFirebaseConfigured && db && crmEntities) {
-      try {
-        // Await every write: on serverless hosts the function can be frozen right after the
-        // response is sent, which would silently drop un-awaited writes (reply never saved).
-        const writes: Promise<unknown>[] = [];
-        if (crmEntities.contact) {
-          writes.push(safeSetDoc(tenantRepo(getInboundCtx()).contactDoc(crmEntities.contact.contactId), crmEntities.contact, { merge: true }));
+      if (!qualification.qualifies) {
+        console.log(`[Inbound Pipeline] Message ${incomingMsgId} is unqualified/ignored. Skipping Firestore CRM persistence to avoid creating unqualified leads/contacts/conversations.`);
+      } else {
+        try {
+          // Await every write: on serverless hosts the function can be frozen right after the
+          // response is sent, which would silently drop un-awaited writes (reply never saved).
+          const writes: Promise<unknown>[] = [];
+          if (crmEntities.contact) {
+            writes.push(safeSetDoc(tenantRepo(getInboundCtx()).contactDoc(crmEntities.contact.contactId), crmEntities.contact, { merge: true }));
+          }
+          if (crmEntities.lead) {
+            writes.push(safeSetDoc(tenantRepo(getInboundCtx()).leadDoc(crmEntities.lead.leadId), crmEntities.lead, { merge: true }));
+          }
+          if (crmEntities.conversation) {
+            writes.push(safeSetDoc(tenantRepo(getInboundCtx()).conversationDoc(crmEntities.conversation.conversationId), crmEntities.conversation, { merge: true }));
+          }
+          if (crmEntities.incomingMessage) {
+            writes.push(safeSetDoc(tenantRepo(getInboundCtx()).messageDoc(crmEntities.incomingMessage.messageId), crmEntities.incomingMessage, { merge: true }));
+          }
+          if (crmEntities.aiReplyMessage) {
+            writes.push(safeSetDoc(tenantRepo(getInboundCtx()).messageDoc(crmEntities.aiReplyMessage.messageId), crmEntities.aiReplyMessage, { merge: true }));
+          }
+          if (crmEntities.activity) {
+            writes.push(safeSetDoc(tenantRepo(getInboundCtx()).leadActivityDoc(crmEntities.activity.activityId), crmEntities.activity));
+          }
+          await Promise.all(writes);
+        } catch (err) {
+          console.warn('[Inbound Pipeline] Notice syncing CRM entities to Firestore:', err);
         }
-        if (crmEntities.lead) {
-          writes.push(safeSetDoc(tenantRepo(getInboundCtx()).leadDoc(crmEntities.lead.leadId), crmEntities.lead, { merge: true }));
-        }
-        if (crmEntities.conversation) {
-          writes.push(safeSetDoc(tenantRepo(getInboundCtx()).conversationDoc(crmEntities.conversation.conversationId), crmEntities.conversation, { merge: true }));
-        }
-        if (crmEntities.incomingMessage) {
-          writes.push(safeSetDoc(tenantRepo(getInboundCtx()).messageDoc(crmEntities.incomingMessage.messageId), crmEntities.incomingMessage, { merge: true }));
-        }
-        if (crmEntities.aiReplyMessage) {
-          writes.push(safeSetDoc(tenantRepo(getInboundCtx()).messageDoc(crmEntities.aiReplyMessage.messageId), crmEntities.aiReplyMessage, { merge: true }));
-        }
-        if (crmEntities.activity) {
-          writes.push(safeSetDoc(tenantRepo(getInboundCtx()).leadActivityDoc(crmEntities.activity.activityId), crmEntities.activity));
-        }
-        await Promise.all(writes);
-      } catch (err) {
-        console.warn('[Inbound Pipeline] Notice syncing CRM entities to Firestore:', err);
       }
     }
 

@@ -1613,10 +1613,26 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                         <span>Pause Sending</span>
                       </button>
                     ) : selectedCampaign.status === 'COMPLETED' ? (
-                      <div className="flex items-center gap-2 px-3.5 py-2 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-xl text-xs font-semibold">
-                        <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                        <span>Campaign Completed</span>
-                      </div>
+                      <>
+                        <div className="flex items-center gap-2 px-3.5 py-2 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-xl text-xs font-semibold">
+                          <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                          <span>Campaign Completed</span>
+                        </div>
+                        {(() => {
+                          const failedCount = campaignLeads.filter((l) => l.sendStatus === 'FAILED').length;
+                          return failedCount > 0 ? (
+                            <button
+                              id="retry-failed-campaign-btn"
+                              onClick={() => handleStartCampaign(selectedCampaign.campaignId)}
+                              className="flex items-center gap-2 px-3.5 py-2 bg-rose-500 hover:bg-rose-600 text-white rounded-xl text-sm font-semibold transition shadow-xs"
+                              title="Re-send only the leads whose delivery failed"
+                            >
+                              <RotateCcw className="w-4 h-4" />
+                              <span>Retry failed ({failedCount})</span>
+                            </button>
+                          ) : null;
+                        })()}
+                      </>
                     ) : (
                       <button
                         id="start-campaign-btn"

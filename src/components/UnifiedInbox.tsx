@@ -953,23 +953,25 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
                             {msg.smtpStatus === 'DELIVERED' ? (
                               <span className="flex items-center space-x-1 text-emerald-400 font-medium">
                                 <CheckCircle2 className="w-3 h-3 text-emerald-400 shrink-0" />
-                                <span>Delivered via SMTP to {msg.emailMeta?.to || activeContact.email}</span>
+                                <span>Delivered to {msg.emailMeta?.to || activeContact.email}</span>
                               </span>
                             ) : msg.smtpStatus === 'DELIVERY_FAILED' ? (
                               <div className="flex items-center justify-between w-full">
                                 <span className="flex items-center space-x-1 text-amber-300 font-medium">
                                   <AlertTriangle className="w-3 h-3 text-amber-400 shrink-0" />
-                                  <span className="truncate max-w-[260px]">
-                                    Not delivered: {msg.smtpError || 'SMTP connection required'}
+                                  <span className="truncate max-w-[260px]" title={msg.smtpError || ''}>
+                                    Not delivered: {msg.smtpError || 'Email sending is not configured'}
                                   </span>
                                 </span>
                                 <div className="flex items-center space-x-1.5 ml-2">
-                                  <button
-                                    onClick={() => setShowSmtpModal(true)}
-                                    className="px-2 py-0.5 rounded bg-amber-600 hover:bg-amber-500 text-white font-semibold transition"
-                                  >
-                                    Setup SMTP
-                                  </button>
+                                  {/^SMTP/i.test(msg.smtpError || '') && (
+                                    <button
+                                      onClick={() => setShowSmtpModal(true)}
+                                      className="px-2 py-0.5 rounded bg-amber-600 hover:bg-amber-500 text-white font-semibold transition"
+                                    >
+                                      Setup SMTP
+                                    </button>
+                                  )}
                                   <button
                                     onClick={() => handleRetrySendEmail(msg)}
                                     disabled={retryingMessageId === msg.messageId}

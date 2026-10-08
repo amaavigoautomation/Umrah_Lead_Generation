@@ -1906,7 +1906,7 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                                     {lead.sendStatus === 'FAILED' && <AlertCircle className="w-2.5 h-2.5" />}
                                     {lead.sendStatus}
                                   </span>
-                                  {lead.lastError && (
+                                  {lead.lastError && lead.sendStatus !== 'SENT' && (
                                     <p className="text-[10px] text-rose-600 truncate max-w-[140px] mt-0.5" title={lead.lastError}>
                                       {lead.lastError}
                                     </p>

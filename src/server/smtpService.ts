@@ -206,6 +206,23 @@ export async function verifySmtpConnection(): Promise<SmtpStatus> {
   const config = getSmtpConfig();
   const now = new Date().toISOString();
 
+  // When Resend is the active provider, outgoing mail never uses the Gmail login, so don't test it
+  // (a stale/wrong Gmail password would show a misleading error while sending works fine).
+  const resend = getResendConfig();
+  if (resend.configured) {
+    cachedSmtpStatus = {
+      configured: true,
+      host: 'Resend',
+      port: 443,
+      secure: true,
+      user: config.user,
+      from: resend.from,
+      verified: true,
+      lastChecked: now,
+    };
+    return cachedSmtpStatus;
+  }
+
   if (!config.configured) {
     cachedSmtpStatus = {
       configured: false,

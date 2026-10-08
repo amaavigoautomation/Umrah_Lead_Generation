@@ -58,7 +58,6 @@ import {
   OutboundProspect,
 } from '../types/index.js';
 import { EmailTemplateEditorModal } from './EmailTemplateEditorModal.js';
-import { OutboundCampaigns } from './OutboundCampaigns.js';
 import { INITIAL_CAMPAIGN } from '../services/dataService.js';
 
 interface CampaignManagementProps {
@@ -90,7 +89,7 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
   const tplCol = () => collection(db, 'tenants', tenantId, 'email_templates');
   const tplDoc = (id: string) => doc(db, 'tenants', tenantId, 'email_templates', id);
   // Navigation sub-tabs
-  const [activeTab, setActiveTab] = useState<'CAMPAIGNS' | 'PROSPECTS' | 'TEMPLATES'>('CAMPAIGNS');
+  const [activeTab, setActiveTab] = useState<'CAMPAIGNS' | 'TEMPLATES'>('CAMPAIGNS');
 
   // Campaigns state
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
@@ -1340,20 +1339,6 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
               </div>
             </button>
             <button
-              id="tab-prospects"
-              onClick={() => setActiveTab('PROSPECTS')}
-              className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all ${
-                activeTab === 'PROSPECTS'
-                  ? 'bg-orange-500 text-white shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              <div className="flex items-center gap-1.5">
-                <Users className="w-3.5 h-3.5" />
-                <span>Apollo Prospects ({prospects.length})</span>
-              </div>
-            </button>
-            <button
               id="tab-templates"
               onClick={() => setActiveTab('TEMPLATES')}
               className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all ${
@@ -1373,16 +1358,16 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
             id="refresh-campaigns-btn"
             onClick={loadData}
             title="Refresh campaign stats"
-            className="p-2 text-slate-400 hover:text-slate-200 hover:bg-slate-800 rounded-lg border border-slate-800 transition"
+            className="p-2 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg border border-slate-200 transition"
           >
-            <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin text-emerald-400' : ''}`} />
+            <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin text-orange-500' : ''}`} />
           </button>
 
           {activeTab === 'CAMPAIGNS' && (
             <button
               id="create-campaign-btn"
               onClick={() => openCreateCampaignModal()}
-              className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-sm font-medium transition shadow-md shadow-emerald-950/40"
+              className="flex items-center gap-2 px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg text-sm font-semibold transition shadow-xs"
             >
               <Plus className="w-4 h-4" />
               <span>Create Campaign</span>
@@ -1398,7 +1383,7 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                 setTemplateFormBody('');
                 setIsTemplateModalOpen(true);
               }}
-              className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-sm font-medium transition shadow-md shadow-emerald-950/40"
+              className="flex items-center gap-2 px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg text-sm font-semibold transition shadow-xs"
             >
               <Plus className="w-4 h-4" />
               <span>New Template</span>
@@ -1411,12 +1396,12 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
       {activeTab === 'CAMPAIGNS' && (
         <div className="flex-1 flex overflow-hidden">
           {/* Left Sidebar: Campaigns List */}
-          <aside className="w-80 border-r border-slate-800 bg-slate-900/60 flex flex-col shrink-0">
-            <div className="p-3 border-b border-slate-800 flex items-center justify-between">
-              <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+          <aside className="w-80 border-r border-slate-200 bg-white flex flex-col shrink-0">
+            <div className="p-3 border-b border-slate-200 flex items-center justify-between">
+              <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
                 All Campaigns
               </span>
-              <span className="text-xs text-slate-400 bg-slate-800 px-2 py-0.5 rounded-full">
+              <span className="text-xs text-slate-600 bg-slate-100 px-2 py-0.5 rounded-full font-medium">
                 {campaigns.length}
               </span>
             </div>
@@ -1425,11 +1410,11 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
               {campaigns.length === 0 ? (
                 <div className="p-6 text-center text-slate-400">
                   <Layers className="w-8 h-8 mx-auto mb-2 text-slate-400 opacity-60" />
-                  <p className="text-sm font-medium text-slate-400">No campaigns yet</p>
+                  <p className="text-sm font-medium text-slate-600">No campaigns yet</p>
                   <p className="text-xs text-slate-400 mt-1">Create your first campaign to begin cold outreach</p>
                   <button
                     onClick={() => openCreateCampaignModal()}
-                    className="mt-3 px-3 py-1.5 text-xs bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 rounded-lg hover:bg-emerald-600/50 transition inline-block"
+                    className="mt-3 px-3 py-1.5 text-xs bg-orange-50 text-orange-600 border border-orange-200 rounded-lg hover:bg-orange-100 transition inline-block font-semibold"
                   >
                     Create Campaign
                   </button>
@@ -1457,19 +1442,19 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                       }}
                       className={`p-3 rounded-xl cursor-pointer border transition-all select-none group active:scale-[0.99] ${
                         isSelected
-                          ? 'bg-slate-800/95 border-emerald-500/80 shadow-lg shadow-emerald-950/40 ring-1 ring-emerald-500/50'
-                          : 'bg-slate-900/40 border-slate-800/80 hover:bg-slate-800/60 hover:border-slate-700'
+                          ? 'bg-orange-50/70 border-orange-500 shadow-xs ring-1 ring-orange-500/30'
+                          : 'bg-white border-slate-200/90 hover:bg-slate-50 hover:border-slate-300'
                       }`}
                     >
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex items-center gap-1.5 flex-1 min-w-0">
                           <h3 className={`text-sm font-semibold truncate transition-colors ${
-                            isSelected ? 'text-emerald-300 font-bold' : 'text-slate-100 group-hover:text-emerald-300'
+                            isSelected ? 'text-orange-600 font-bold' : 'text-slate-800 group-hover:text-orange-600'
                           }`}>
                             {camp.name}
                           </h3>
                           {isSelected && (
-                            <span className="text-[9px] px-1.5 py-0.2 bg-emerald-500/30 text-emerald-200 border border-emerald-500/40 font-bold rounded-sm uppercase tracking-wider shrink-0">
+                            <span className="text-[9px] px-1.5 py-0.2 bg-orange-100 text-orange-700 border border-orange-200 font-bold rounded-sm uppercase tracking-wider shrink-0">
                               Selected
                             </span>
                           )}
@@ -1478,12 +1463,12 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                           <span
                             className={`text-[10px] px-2 py-0.5 font-medium rounded-full ${
                               camp.status === 'RUNNING'
-                                ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 animate-pulse'
+                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                                 : camp.status === 'PAUSED'
-                                ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                                ? 'bg-amber-50 text-amber-700 border border-amber-200'
                                 : camp.status === 'COMPLETED'
-                                ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
-                                : 'bg-slate-700 text-slate-300'
+                                ? 'bg-blue-50 text-blue-700 border border-blue-200'
+                                : 'bg-slate-100 text-slate-600'
                             }`}
                           >
                             {camp.status}
@@ -1495,37 +1480,37 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                               setIsDeleteModalOpen(true);
                             }}
                             title="Delete Campaign"
-                            className="p-1 text-slate-500 hover:text-rose-400 hover:bg-rose-950/40 rounded transition"
+                            className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
                         </div>
                       </div>
 
-                      <div className="mt-2 text-xs text-slate-400 flex items-center justify-between">
+                      <div className="mt-2 text-xs text-slate-500 flex items-center justify-between">
                         <span>{liveCampTotal} Leads</span>
                         <span>{percentSent}% Sent</span>
                       </div>
 
                       {/* Progress bar */}
-                      <div className="mt-1.5 w-full bg-slate-800 rounded-full h-1.5 overflow-hidden">
+                      <div className="mt-1.5 w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
                         <div
-                          className="bg-emerald-500 h-full rounded-full transition-all duration-300"
+                          className="bg-orange-500 h-full rounded-full transition-all duration-300"
                           style={{ width: `${percentSent}%` }}
                         />
                       </div>
 
                       {/* Quick metrics */}
-                      <div className="mt-2.5 pt-2 border-t border-slate-800/70 flex items-center justify-between text-[11px] text-slate-400">
+                      <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500">
                         <span className="flex items-center gap-1">
-                          <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                          <CheckCircle2 className="w-3 h-3 text-emerald-500" />
                           <span>{liveCampSent}</span>
                         </span>
                         <span className="flex items-center gap-1">
-                          <MessageSquare className="w-3 h-3 text-sky-400" />
+                          <MessageSquare className="w-3 h-3 text-sky-500" />
                           <span>{liveCampReplied}</span>
                         </span>
-                        <span className="flex items-center gap-1 text-emerald-400 font-medium">
+                        <span className="flex items-center gap-1 text-orange-600 font-semibold">
                           <Sparkles className="w-3 h-3" />
                           <span>{liveCampDemo} Demos</span>
                         </span>
@@ -1538,7 +1523,7 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
           </aside>
 
           {/* Right Main Content: Selected Campaign Execution Dashboard */}
-          <main className="flex-1 flex flex-col overflow-y-auto bg-slate-950">
+          <main className="flex-1 flex flex-col overflow-y-auto bg-slate-50">
             {selectedCampaign ? (
               <div className="p-6 space-y-6">
                 {/* Notification Banner */}
@@ -1580,28 +1565,28 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                 )}
 
                 {/* Campaign Header Toolbar */}
-                <div className="flex flex-wrap items-center justify-between gap-4 p-5 bg-slate-900 border border-slate-800 rounded-2xl">
+                <div className="flex flex-wrap items-center justify-between gap-4 p-5 bg-white border border-slate-200 rounded-2xl shadow-2xs">
                   <div>
                     <div className="flex items-center gap-3">
-                      <h2 className="text-xl font-bold text-slate-100">{selectedCampaign.name}</h2>
+                      <h2 className="text-xl font-bold text-slate-900">{selectedCampaign.name}</h2>
                       <span
                         className={`text-xs px-2.5 py-0.5 font-semibold rounded-full ${
                           selectedCampaign.status === 'RUNNING'
-                            ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                             : selectedCampaign.status === 'PAUSED'
-                            ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                            ? 'bg-amber-50 text-amber-700 border border-amber-200'
                             : selectedCampaign.status === 'COMPLETED'
-                            ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
-                            : 'bg-slate-700 text-slate-300'
+                            ? 'bg-blue-50 text-blue-700 border border-blue-200'
+                            : 'bg-slate-100 text-slate-600'
                         }`}
                       >
                         {selectedCampaign.status}
                       </span>
-                      <span className="text-xs px-2.5 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700">
+                      <span className="text-xs px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200 font-medium">
                         Run #{selectedCampaign.lastRunNumber || 1}
                       </span>
                     </div>
-                    <div className="flex items-center gap-4 text-xs text-slate-400 mt-2">
+                    <div className="flex items-center gap-4 text-xs text-slate-500 mt-2">
                       <span className="flex items-center gap-1.5">
                         <FileText className="w-3.5 h-3.5 text-slate-400" />
                         <span>Template: {selectedCampaign.templateName || 'Default B2B Portal'}</span>
@@ -1619,21 +1604,21 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                       <button
                         id="pause-campaign-btn"
                         onClick={() => handlePauseCampaign(selectedCampaign.campaignId)}
-                        className="flex items-center gap-2 px-4 py-2 bg-amber-600/90 hover:bg-amber-600 text-white rounded-xl text-sm font-medium transition shadow"
+                        className="flex items-center gap-2 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-sm font-semibold transition shadow-xs"
                       >
                         <Pause className="w-4 h-4" />
                         <span>Pause Sending</span>
                       </button>
                     ) : selectedCampaign.status === 'COMPLETED' ? (
-                      <div className="flex items-center gap-2 px-3.5 py-2 bg-emerald-950/60 border border-emerald-800/80 text-emerald-400 rounded-xl text-xs font-semibold">
-                        <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                      <div className="flex items-center gap-2 px-3.5 py-2 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-xl text-xs font-semibold">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-600" />
                         <span>Campaign Completed</span>
                       </div>
                     ) : (
                       <button
                         id="start-campaign-btn"
                         onClick={() => handleStartCampaign(selectedCampaign.campaignId)}
-                        className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-sm font-medium transition shadow shadow-emerald-950/40"
+                        className="flex items-center gap-2 px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-sm font-semibold transition shadow-xs"
                       >
                         <Play className="w-4 h-4 fill-white" />
                         <span>{selectedCampaign.status === 'PAUSED' ? 'Resume Campaign' : 'Start Campaign'}</span>
@@ -1643,10 +1628,10 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                     <button
                       id="restart-campaign-btn"
                       onClick={() => setIsRestartConfirmOpen(true)}
-                      className="flex items-center gap-2 px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl text-sm font-medium transition group"
+                      className="flex items-center gap-2 px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 rounded-xl text-sm font-medium transition group"
                       title="Intelligent restart: only sends to unreplied leads"
                     >
-                      <RotateCcw className="w-4 h-4 text-sky-400 group-hover:rotate-180 transition-transform duration-300" />
+                      <RotateCcw className="w-4 h-4 text-sky-600 group-hover:rotate-180 transition-transform duration-300" />
                       <span>Restart (New Run)</span>
                     </button>
 
@@ -1656,10 +1641,10 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                         setCampaignToDelete(selectedCampaign);
                         setIsDeleteModalOpen(true);
                       }}
-                      className="flex items-center gap-1.5 px-3 py-2 bg-slate-800 hover:bg-rose-950/60 text-slate-300 hover:text-rose-400 border border-slate-700 hover:border-rose-800/60 rounded-xl text-sm font-medium transition"
+                      className="flex items-center gap-1.5 px-3 py-2 bg-white hover:bg-rose-50 text-slate-600 hover:text-rose-600 border border-slate-200 hover:border-rose-200 rounded-xl text-sm font-medium transition"
                       title="Delete this campaign and all its leads"
                     >
-                      <Trash2 className="w-4 h-4 text-rose-400" />
+                      <Trash2 className="w-4 h-4 text-rose-500" />
                       <span>Delete</span>
                     </button>
                   </div>
@@ -1696,58 +1681,58 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
 
                   return (
                     <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
-                      <div className="p-4 bg-slate-900/90 border border-slate-800 rounded-xl">
-                        <p className="text-xs text-slate-400">Total Leads</p>
-                        <p className="text-2xl font-bold text-slate-100 mt-1">{liveTotalLeads}</p>
+                      <div className="p-4 bg-white border border-slate-200 rounded-xl shadow-2xs">
+                        <p className="text-xs text-slate-500 font-medium">Total Leads</p>
+                        <p className="text-2xl font-bold text-slate-900 mt-1">{liveTotalLeads}</p>
                         <p className="text-[11px] text-slate-400 mt-1">
                           {isRestartRun ? `Run #${currentRunNum} Target: ${runTargetCount} unreplied` : 'Uploaded prospect pool'}
                         </p>
                       </div>
 
-                      <div className="p-4 bg-slate-900/90 border border-slate-800 rounded-xl">
+                      <div className="p-4 bg-white border border-slate-200 rounded-xl shadow-2xs">
                         <div className="flex items-center justify-between">
-                          <p className="text-xs text-slate-400">Emails Sent</p>
+                          <p className="text-xs text-slate-500 font-medium">Emails Sent</p>
                           {isRestartRun && (
-                            <span className="text-[10px] font-semibold text-sky-400 bg-sky-950/80 px-1.5 py-0.5 rounded border border-sky-800/60">
+                            <span className="text-[10px] font-semibold text-sky-700 bg-sky-50 px-1.5 py-0.5 rounded border border-sky-200">
                               Run #{currentRunNum}
                             </span>
                           )}
                         </div>
                         <div className="flex items-baseline gap-1 mt-1">
-                          <p className="text-2xl font-bold text-emerald-400">{liveSentCount}</p>
+                          <p className="text-2xl font-bold text-orange-600">{liveSentCount}</p>
                           <span className="text-xs text-slate-400">
                             / {runTargetCount}
                           </span>
                         </div>
-                        <div className="mt-2 w-full bg-slate-800 rounded-full h-1 overflow-hidden">
+                        <div className="mt-2 w-full bg-slate-100 rounded-full h-1 overflow-hidden">
                           <div
-                            className="bg-emerald-500 h-full rounded-full transition-all duration-500"
+                            className="bg-orange-500 h-full rounded-full transition-all duration-500"
                             style={{ width: `${percentSent}%` }}
                           />
                         </div>
                       </div>
 
-                      <div className="p-4 bg-slate-900/90 border border-slate-800 rounded-xl">
-                        <p className="text-xs text-slate-400">Pending</p>
-                        <p className="text-2xl font-bold text-amber-400 mt-1">{livePendingCount}</p>
+                      <div className="p-4 bg-white border border-slate-200 rounded-xl shadow-2xs">
+                        <p className="text-xs text-slate-500 font-medium">Pending</p>
+                        <p className="text-2xl font-bold text-amber-600 mt-1">{livePendingCount}</p>
                         <p className="text-[11px] text-slate-400 mt-1">
                           {isRestartRun ? `Run #${currentRunNum} queued sends` : 'Awaiting dispatch'}
                         </p>
                       </div>
 
-                      <div className="p-4 bg-slate-900/90 border border-slate-800 rounded-xl">
-                        <p className="text-xs text-slate-400">Failed / Errors</p>
-                        <p className="text-2xl font-bold text-rose-400 mt-1">{liveFailedCount}</p>
+                      <div className="p-4 bg-white border border-slate-200 rounded-xl shadow-2xs">
+                        <p className="text-xs text-slate-500 font-medium">Failed / Errors</p>
+                        <p className="text-2xl font-bold text-rose-600 mt-1">{liveFailedCount}</p>
                         <p className="text-[11px] text-slate-400 mt-1">
                           {isRestartRun ? `Run #${currentRunNum} delivery errors` : 'SMTP errors / bounced'}
                         </p>
                       </div>
 
-                      <div className="p-4 bg-slate-900/90 border border-slate-800 rounded-xl">
-                        <p className="text-xs text-slate-400">Replies</p>
+                      <div className="p-4 bg-white border border-slate-200 rounded-xl shadow-2xs">
+                        <p className="text-xs text-slate-500 font-medium">Replies</p>
                         <div className="flex items-baseline gap-1.5 mt-1">
-                          <p className="text-2xl font-bold text-sky-400">{liveRepliedCount}</p>
-                          <span className="text-xs text-sky-300">
+                          <p className="text-2xl font-bold text-sky-600">{liveRepliedCount}</p>
+                          <span className="text-xs text-sky-600 font-medium">
                             {liveSentCount > 0
                               ? `(${Math.round((liveRepliedCount / liveSentCount) * 100)}%)`
                               : '(0%)'}
@@ -1756,20 +1741,20 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                         <p className="text-[11px] text-slate-400 mt-1">Inbound replies received</p>
                       </div>
 
-                      <div className="p-4 bg-emerald-950/20 border border-emerald-500/30 rounded-xl relative overflow-hidden">
+                      <div className="p-4 bg-orange-50/60 border border-orange-200 rounded-xl relative overflow-hidden shadow-2xs">
                         <div className="flex items-center justify-between">
-                          <p className="text-xs font-semibold text-emerald-400">Demo Booked</p>
-                          <Sparkles className="w-4 h-4 text-emerald-400" />
+                          <p className="text-xs font-semibold text-orange-700">Demo Booked</p>
+                          <Sparkles className="w-4 h-4 text-orange-500" />
                         </div>
                         <div className="flex items-baseline gap-1.5 mt-1">
-                          <p className="text-2xl font-bold text-emerald-300">{liveDemoCount}</p>
-                          <span className="text-xs text-emerald-400">
+                          <p className="text-2xl font-bold text-orange-600">{liveDemoCount}</p>
+                          <span className="text-xs text-orange-700 font-medium">
                             {liveSentCount > 0
                               ? `(${Math.round((liveDemoCount / liveSentCount) * 100)}%)`
                               : '(0%)'}
                           </span>
                         </div>
-                        <p className="text-[11px] text-emerald-400 mt-1">Automatic + Manual</p>
+                        <p className="text-[11px] text-orange-700 mt-1 font-medium">Automatic + Manual</p>
                       </div>
                     </div>
                   );
@@ -1777,9 +1762,9 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
 
                 {/* Runs History Accordion / Bar if multiple runs exist */}
                 {campaignRuns.length > 0 && (
-                  <div className="p-4 bg-slate-900/60 border border-slate-800 rounded-xl">
+                  <div className="p-4 bg-white border border-slate-200 rounded-xl shadow-2xs">
                     <div className="flex items-center justify-between mb-2">
-                      <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                      <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
                         <Clock className="w-3.5 h-3.5 text-slate-400" />
                         <span>Execution Runs History ({campaignRuns.length})</span>
                       </span>
@@ -1788,21 +1773,21 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                       {campaignRuns.map((run) => (
                         <div
                           key={run.runId}
-                          className="px-3 py-1.5 bg-slate-800/80 border border-slate-700/60 rounded-lg text-xs flex items-center gap-2"
+                          className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs flex items-center gap-2"
                         >
-                          <span className="font-semibold text-slate-200">Run #{run.runNumber}</span>
+                          <span className="font-semibold text-slate-700">Run #{run.runNumber}</span>
                           <span
-                            className={`px-1.5 py-0.5 text-[10px] rounded ${
+                            className={`px-1.5 py-0.5 text-[10px] rounded font-medium ${
                               run.status === 'COMPLETED'
-                                ? 'bg-blue-500/20 text-blue-300'
+                                ? 'bg-blue-50 text-blue-700 border border-blue-200'
                                 : run.status === 'RUNNING'
-                                ? 'bg-emerald-500/20 text-emerald-300'
-                                : 'bg-slate-700 text-slate-400'
+                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                : 'bg-slate-100 text-slate-600'
                             }`}
                           >
                             {run.status}
                           </span>
-                          <span className="text-slate-400 text-[11px]">
+                          <span className="text-slate-500 text-[11px]">
                             {run.sentCount} sent
                           </span>
                         </div>
@@ -1812,9 +1797,9 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                 )}
 
                 {/* Leads Table Card */}
-                <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
+                <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-2xs">
                   {/* Table Controls Header */}
-                  <div className="p-4 border-b border-slate-800 flex flex-wrap items-center justify-between gap-3">
+                  <div className="p-4 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3 bg-white">
                     <div className="flex items-center gap-2">
                       <div className="relative">
                         <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -1824,12 +1809,12 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                           placeholder="Search lead, email, company..."
                           value={searchQuery}
                           onChange={(e) => setSearchQuery(e.target.value)}
-                          className="w-64 pl-9 pr-3 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-xs text-slate-200 placeholder-slate-400 focus:outline-none focus:border-emerald-500"
+                          className="w-64 pl-9 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-orange-500 transition"
                         />
                       </div>
 
                       {/* Filter Pills */}
-                      <div className="flex bg-slate-950 p-1 rounded-lg border border-slate-800 text-xs">
+                      <div className="flex bg-slate-100 p-1 rounded-lg border border-slate-200 text-xs">
                         {(['ALL', 'PENDING', 'SENT', 'REPLIED', 'DEMO_BOOKED', 'FAILED'] as const).map(
                           (filter) => (
                             <button
@@ -1838,8 +1823,8 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                               onClick={() => setLeadStatusFilter(filter)}
                               className={`px-2.5 py-1 rounded-md transition ${
                                 leadStatusFilter === filter
-                                  ? 'bg-slate-800 text-emerald-400 font-semibold'
-                                  : 'text-slate-400 hover:text-slate-300'
+                                  ? 'bg-orange-500 text-white font-semibold shadow-xs'
+                                  : 'text-slate-600 hover:text-slate-900'
                               }`}
                             >
                               {filter.replace('_', ' ')}
@@ -1849,8 +1834,8 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                       </div>
                     </div>
 
-                    <div className="text-xs text-slate-400">
-                      Showing <span className="font-semibold text-slate-200">{filteredLeads.length}</span> of{' '}
+                    <div className="text-xs text-slate-500">
+                      Showing <span className="font-semibold text-slate-900">{filteredLeads.length}</span> of{' '}
                       {campaignLeads.length} leads
                     </div>
                   </div>
@@ -1858,7 +1843,7 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                   {/* Leads Data Table */}
                   <div className="overflow-x-auto">
                     <table className="w-full text-left text-xs">
-                      <thead className="bg-slate-950/60 border-b border-slate-800 text-slate-400 uppercase font-semibold text-[10px] tracking-wider">
+                      <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase font-semibold text-[10px] tracking-wider">
                         <tr>
                           <th className="py-3 px-4">#</th>
                           <th className="py-3 px-4">Lead Name / Title</th>
@@ -1871,7 +1856,7 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                           <th className="py-3 px-4 text-right">Actions</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-slate-800/60">
+                      <tbody className="divide-y divide-slate-100">
                         {filteredLeads.length === 0 ? (
                           <tr>
                             <td colSpan={9} className="py-10 text-center text-slate-400">
@@ -1884,19 +1869,19 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                             return (
                               <tr
                                 key={lead.campaignLeadId}
-                                className="hover:bg-slate-800/40 transition group"
+                                className="hover:bg-slate-50 transition group"
                               >
                                 <td className="py-3 px-4 text-slate-400">{lead.rowNumber || idx + 1}</td>
                                 <td className="py-3 px-4">
-                                  <div className="font-medium text-slate-200">{lead.name}</div>
+                                  <div className="font-semibold text-slate-900">{lead.name}</div>
                                   {lead.designation && (
-                                    <div className="text-[11px] text-slate-400">{lead.designation}</div>
+                                    <div className="text-[11px] text-slate-500">{lead.designation}</div>
                                   )}
                                 </td>
-                                <td className="py-3 px-4 text-slate-300 font-mono text-[11px]">
+                                <td className="py-3 px-4 text-slate-600 font-mono text-[11px]">
                                   {lead.email}
                                 </td>
-                                <td className="py-3 px-4 text-slate-300">
+                                <td className="py-3 px-4 text-slate-700 font-medium">
                                   <div className="flex items-center gap-1.5">
                                     <Building2 className="w-3.5 h-3.5 text-slate-400" />
                                     <span>{lead.companyName}</span>
@@ -1906,12 +1891,12 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                                   <span
                                     className={`px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider inline-flex items-center gap-1 ${
                                       lead.sendStatus === 'SENT'
-                                        ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                                        ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                                         : lead.sendStatus === 'SENDING'
-                                        ? 'bg-sky-500/10 text-sky-400 border border-sky-500/20 animate-pulse'
+                                        ? 'bg-sky-50 text-sky-700 border border-sky-200 animate-pulse'
                                         : lead.sendStatus === 'FAILED'
-                                        ? 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
-                                        : 'bg-slate-800 text-slate-400 border border-slate-700'
+                                        ? 'bg-rose-50 text-rose-700 border border-rose-200'
+                                        : 'bg-slate-100 text-slate-600 border border-slate-200'
                                     }`}
                                   >
                                     {lead.sendStatus === 'SENT' && <CheckCircle2 className="w-2.5 h-2.5" />}
@@ -1919,7 +1904,7 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                                     {lead.sendStatus}
                                   </span>
                                   {lead.lastError && (
-                                    <p className="text-[10px] text-rose-400 truncate max-w-[140px] mt-0.5" title={lead.lastError}>
+                                    <p className="text-[10px] text-rose-600 truncate max-w-[140px] mt-0.5" title={lead.lastError}>
                                       {lead.lastError}
                                     </p>
                                   )}
@@ -1930,13 +1915,13 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                                     title="Click to toggle Lead Reply / Qualification status"
                                     className={`px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider inline-flex items-center gap-1 transition border ${
                                       lead.replyStatus === 'REPLIED'
-                                        ? 'bg-sky-500/20 text-sky-300 border-sky-500/40 hover:bg-sky-500/30'
-                                        : 'bg-slate-800/90 text-slate-400 border-slate-700 hover:text-slate-200 hover:border-slate-600'
+                                        ? 'bg-sky-50 text-sky-700 border-sky-200 hover:bg-sky-100'
+                                        : 'bg-slate-100 text-slate-500 border-slate-200 hover:text-slate-800 hover:border-slate-300'
                                     }`}
                                   >
                                     {lead.replyStatus === 'REPLIED' ? (
                                       <>
-                                        <MessageSquare className="w-2.5 h-2.5 text-sky-400" />
+                                        <MessageSquare className="w-2.5 h-2.5 text-sky-600" />
                                         <span>REPLIED</span>
                                       </>
                                     ) : (
@@ -1950,13 +1935,13 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                                     title="Click to toggle Demo Booked status"
                                     className={`px-2 py-1 rounded-lg text-[11px] font-medium transition inline-flex items-center gap-1.5 border ${
                                       isDemoBooked
-                                        ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 hover:bg-emerald-500/30'
-                                        : 'bg-slate-800/80 text-slate-400 border-slate-700 hover:text-slate-200 hover:bg-slate-700'
+                                        ? 'bg-orange-50 text-orange-700 border-orange-200 hover:bg-orange-100'
+                                        : 'bg-slate-100 text-slate-600 border-slate-200 hover:text-slate-900 hover:bg-slate-200'
                                     }`}
                                   >
                                     {isDemoBooked ? (
                                       <>
-                                        <Sparkles className="w-3 h-3 text-emerald-400" />
+                                        <Sparkles className="w-3 h-3 text-orange-500" />
                                         <span>Booked ({lead.demoSource || 'Manual'})</span>
                                       </>
                                     ) : (
@@ -1967,7 +1952,7 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                                     )}
                                   </button>
                                 </td>
-                                <td className="py-3 px-4 text-slate-400 text-[11px]">
+                                <td className="py-3 px-4 text-slate-500 text-[11px]">
                                   {lead.lastSentAt
                                     ? new Date(lead.lastSentAt).toLocaleTimeString([], {
                                         hour: '2-digit',
@@ -1979,7 +1964,7 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                                   {lead.conversationId && onOpenConversation ? (
                                     <button
                                       onClick={() => onOpenConversation(lead.conversationId!)}
-                                      className="p-1 text-slate-400 hover:text-emerald-400 hover:bg-slate-800 rounded transition"
+                                      className="p-1 text-slate-400 hover:text-orange-600 hover:bg-orange-50 rounded transition"
                                       title="Open Thread in Unified Inbox"
                                     >
                                       <ExternalLink className="w-4 h-4" />
@@ -2006,28 +1991,11 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
         </div>
       )}
 
-      {/* Apollo Outbound Prospects Sub-Tab */}
-      {activeTab === 'PROSPECTS' && (
-        <div className="flex-1 overflow-y-auto bg-slate-950">
-          <OutboundCampaigns
-            campaigns={outboundCampaigns || []}
-            prospects={prospects}
-            contacts={contacts}
-            onAddProspect={onAddProspect || (() => {})}
-            onSendColdEmail={onSendColdEmail || (() => {})}
-            onToggleCampaignStatus={onToggleCampaignStatus || (() => {})}
-            onSelectProspectConversation={(threadId) => {
-              if (onOpenConversation) {
-                onOpenConversation(threadId);
-              }
-            }}
-          />
-        </div>
-      )}
+
 
       {/* Email Templates Sub-Tab */}
       {activeTab === 'TEMPLATES' && (
-        <div className="flex-1 overflow-y-auto p-6 bg-slate-950">
+        <div className="flex-1 overflow-y-auto p-6 bg-slate-50">
           <div className="max-w-6xl mx-auto space-y-6">
             {/* Feedback notification */}
             {templateSaveFeedback && (
@@ -2058,20 +2026,20 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
             )}
 
             {/* Header & Actions */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-900/60 p-5 rounded-2xl border border-slate-800/80">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-slate-200 shadow-2xs">
               <div>
                 <div className="flex items-center gap-3">
-                  <h2 className="text-lg font-bold text-slate-100">Outbound Email Templates</h2>
-                  <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                  <h2 className="text-lg font-bold text-slate-900">Outbound Email Templates</h2>
+                  <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-orange-50 text-orange-700 border border-orange-200">
                     {templates.length} {templates.length === 1 ? 'Template' : 'Templates'}
                   </span>
-                  <span className="hidden sm:inline-flex items-center gap-1 text-[11px] text-slate-400">
-                    <Database className="w-3 h-3 text-emerald-400" />
+                  <span className="hidden sm:inline-flex items-center gap-1 text-[11px] text-slate-500">
+                    <Database className="w-3 h-3 text-emerald-500" />
                     <span>Database Synced</span>
                   </span>
                 </div>
-                <p className="text-xs text-slate-400 mt-1">
-                  Dynamic templates stored in Firestore database. Supports variable replacement like <code className="text-emerald-400 bg-slate-950 px-1 py-0.5 rounded">{`{{name}}`}</code>, <code className="text-emerald-400 bg-slate-950 px-1 py-0.5 rounded">{`{{company}}`}</code>, and <code className="text-emerald-400 bg-slate-950 px-1 py-0.5 rounded">{`{{designation}}`}</code>.
+                <p className="text-xs text-slate-500 mt-1">
+                  Dynamic templates stored in Firestore database. Supports variable replacement like <code className="text-orange-600 bg-orange-50 px-1 py-0.5 rounded font-mono">{`{{name}}`}</code>, <code className="text-orange-600 bg-orange-50 px-1 py-0.5 rounded font-mono">{`{{company}}`}</code>, and <code className="text-orange-600 bg-orange-50 px-1 py-0.5 rounded font-mono">{`{{designation}}`}</code>.
                 </p>
               </div>
 
@@ -2085,7 +2053,7 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                     setTemplateFormError(null);
                     setIsTemplateModalOpen(true);
                   }}
-                  className="flex items-center gap-1.5 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-semibold transition shadow-lg shadow-emerald-900/20"
+                  className="flex items-center gap-1.5 px-3.5 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-xs font-semibold transition shadow-xs"
                 >
                   <Plus className="w-4 h-4" />
                   <span>Create Template</span>
@@ -2094,19 +2062,19 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
             </div>
 
             {/* Search Filter Bar */}
-            <div className="flex items-center gap-3 bg-slate-900 p-2.5 rounded-xl border border-slate-800">
+            <div className="flex items-center gap-3 bg-white p-2.5 rounded-xl border border-slate-200 shadow-2xs">
               <Search className="w-4 h-4 text-slate-400 ml-1.5" />
               <input
                 type="text"
                 placeholder="Search templates by name or subject..."
                 value={templateSearchQuery}
                 onChange={(e) => setTemplateSearchQuery(e.target.value)}
-                className="bg-transparent border-none text-xs text-slate-200 placeholder-slate-500 focus:outline-none flex-1"
+                className="bg-transparent border-none text-xs text-slate-800 placeholder-slate-400 focus:outline-none flex-1"
               />
               {templateSearchQuery && (
                 <button
                   onClick={() => setTemplateSearchQuery('')}
-                  className="text-slate-500 hover:text-slate-300 text-xs px-2"
+                  className="text-slate-400 hover:text-slate-600 text-xs px-2 font-medium"
                 >
                   Clear
                 </button>
@@ -2119,12 +2087,12 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
               const q = templateSearchQuery.toLowerCase();
               return tpl.name.toLowerCase().includes(q) || tpl.subject.toLowerCase().includes(q);
             }).length === 0 ? (
-              <div className="p-12 text-center bg-slate-900/40 rounded-2xl border border-slate-800/60 space-y-3">
-                <Mail className="w-10 h-10 text-slate-600 mx-auto" />
-                <p className="text-sm font-medium text-slate-300">
+              <div className="p-12 text-center bg-white rounded-2xl border border-slate-200 shadow-2xs space-y-3">
+                <Mail className="w-10 h-10 text-slate-400 mx-auto" />
+                <p className="text-sm font-semibold text-slate-800">
                   {templateSearchQuery ? 'No templates match your search query.' : 'No email templates found in database.'}
                 </p>
-                <p className="text-xs text-slate-400 max-w-sm mx-auto">
+                <p className="text-xs text-slate-500 max-w-sm mx-auto">
                   Create your first email template with dynamic placeholders to use in outbound campaigns.
                 </p>
                 <button
@@ -2136,7 +2104,7 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                     setTemplateFormError(null);
                     setIsTemplateModalOpen(true);
                   }}
-                  className="mt-2 inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-semibold"
+                  className="mt-2 inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-orange-500 hover:bg-orange-600 text-white rounded-lg text-xs font-semibold shadow-xs"
                 >
                   <Plus className="w-3.5 h-3.5" />
                   <span>Create First Template</span>
@@ -2161,27 +2129,27 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                     return (
                       <div
                         key={tpl.templateId}
-                        className="p-5 bg-slate-900 border border-slate-800 hover:border-slate-700/80 rounded-2xl flex flex-col justify-between transition-all duration-150 shadow-sm"
+                        className="p-5 bg-white border border-slate-200 hover:border-orange-300 rounded-2xl flex flex-col justify-between transition-all duration-150 shadow-2xs"
                       >
                         <div className="space-y-3">
                           <div className="flex items-start justify-between gap-3">
                             <div className="flex items-center gap-2 flex-wrap">
-                              <h3 className="font-semibold text-slate-100 text-sm">{tpl.name}</h3>
-                              <span className="text-[10px] px-1.5 py-0.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded">
+                              <h3 className="font-bold text-slate-900 text-sm">{tpl.name}</h3>
+                              <span className="text-[10px] px-1.5 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded font-medium">
                                 Saved in DB
                               </span>
                               {tpl.isHtml || tpl.format === 'html' || tpl.htmlBody ? (
-                                <span className="text-[10px] px-1.5 py-0.5 bg-sky-500/10 text-sky-400 border border-sky-500/20 rounded font-medium flex items-center gap-1">
+                                <span className="text-[10px] px-1.5 py-0.5 bg-sky-50 text-sky-700 border border-sky-200 rounded font-medium flex items-center gap-1">
                                   <Code className="w-2.5 h-2.5" />
                                   <span>HTML Rich Text</span>
                                 </span>
                               ) : (
-                                <span className="text-[10px] px-1.5 py-0.5 bg-slate-800 text-slate-400 border border-slate-700/60 rounded font-medium">
+                                <span className="text-[10px] px-1.5 py-0.5 bg-slate-100 text-slate-600 border border-slate-200 rounded font-medium">
                                   Plain Text
                                 </span>
                               )}
                               {tpl.attachments && tpl.attachments.length > 0 && (
-                                <span className="text-[10px] px-1.5 py-0.5 bg-amber-500/10 text-amber-400 border border-amber-500/20 rounded font-medium flex items-center gap-1">
+                                <span className="text-[10px] px-1.5 py-0.5 bg-amber-50 text-amber-700 border border-amber-200 rounded font-medium flex items-center gap-1">
                                   <Paperclip className="w-2.5 h-2.5" />
                                   <span>{tpl.attachments.length} {tpl.attachments.length === 1 ? 'Attachment' : 'Attachments'}</span>
                                 </span>
@@ -2190,14 +2158,14 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                             <div className="flex items-center gap-1.5">
                               <button
                                 onClick={() => openEditTemplate(tpl)}
-                                className="p-1.5 text-slate-400 hover:text-slate-100 hover:bg-slate-800 rounded-lg transition"
+                                className="p-1.5 text-slate-400 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition"
                                 title="Edit Email Template"
                               >
                                 <Edit3 className="w-4 h-4" />
                               </button>
                               <button
                                 onClick={() => promptDeleteTemplate(tpl)}
-                                className="p-1.5 text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition"
+                                className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition"
                                 title="Delete Email Template from Database"
                               >
                                 <Trash2 className="w-4 h-4" />
@@ -2205,33 +2173,33 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                             </div>
                           </div>
 
-                          <div className="text-xs font-mono text-emerald-400 bg-slate-950 p-2.5 rounded-xl border border-slate-800/80 break-words">
-                            <span className="text-slate-400 font-sans text-[11px] mr-1">Subject:</span>
+                          <div className="text-xs font-mono text-orange-700 bg-orange-50/60 p-2.5 rounded-xl border border-orange-100 break-words">
+                            <span className="text-slate-500 font-sans text-[11px] mr-1">Subject:</span>
                             {tpl.subject}
                           </div>
 
-                          <div className="text-xs text-slate-400 line-clamp-4 whitespace-pre-wrap leading-relaxed bg-slate-950/40 p-3 rounded-xl border border-slate-800/40 font-sans">
+                          <div className="text-xs text-slate-600 line-clamp-4 whitespace-pre-wrap leading-relaxed bg-slate-50 p-3 rounded-xl border border-slate-100 font-sans">
                             {tpl.body || stripHtml(tpl.htmlBody || '')}
                           </div>
 
                           {/* Attachments chip bar */}
                           {tpl.attachments && tpl.attachments.length > 0 && (
-                            <div className="p-2 bg-slate-950/80 border border-slate-800/80 rounded-xl space-y-1">
-                              <div className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider flex items-center gap-1">
-                                <Paperclip className="w-3 h-3 text-emerald-400" />
+                            <div className="p-2 bg-slate-50 border border-slate-200 rounded-xl space-y-1">
+                              <div className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider flex items-center gap-1">
+                                <Paperclip className="w-3 h-3 text-orange-500" />
                                 <span>Attached Files ({tpl.attachments.length}):</span>
                               </div>
                               <div className="flex flex-wrap gap-1.5">
                                 {tpl.attachments.map((att: any, attIdx: number) => (
                                   <div
                                     key={att.id || attIdx}
-                                    className="px-2 py-0.5 bg-slate-900 border border-slate-800 rounded-md text-[10px] text-slate-300 flex items-center gap-1 font-mono"
+                                    className="px-2 py-0.5 bg-white border border-slate-200 rounded-md text-[10px] text-slate-700 flex items-center gap-1 font-mono shadow-2xs"
                                     title={att.name || att.filename}
                                   >
-                                    <File className="w-2.5 h-2.5 text-sky-400" />
+                                    <File className="w-2.5 h-2.5 text-sky-500" />
                                     <span className="max-w-[130px] truncate">{att.name || att.filename}</span>
                                     {att.size && (
-                                      <span className="text-slate-500 text-[9px]">
+                                      <span className="text-slate-400 text-[9px]">
                                         ({att.size < 1024 * 1024 ? `${(att.size / 1024).toFixed(0)}KB` : `${(att.size / (1024 * 1024)).toFixed(1)}MB`})
                                       </span>
                                     )}
@@ -2249,7 +2217,7 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                               {tags.map((tag) => (
                                 <span
                                   key={tag}
-                                  className="text-[10px] font-mono px-1.5 py-0.5 bg-slate-800 text-slate-300 rounded border border-slate-700/60"
+                                  className="text-[10px] font-mono px-1.5 py-0.5 bg-slate-100 text-slate-600 rounded border border-slate-200"
                                 >
                                   {tag}
                                 </span>
@@ -2258,8 +2226,8 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                           )}
                         </div>
 
-                        <div className="mt-4 pt-3.5 border-t border-slate-800/80 flex items-center justify-between text-[11px] text-slate-400">
-                          <span className="truncate max-w-[140px]" title={tpl.templateId}>
+                        <div className="mt-4 pt-3.5 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500">
+                          <span className="truncate max-w-[140px] font-mono" title={tpl.templateId}>
                             ID: {tpl.templateId}
                           </span>
                           <div className="flex items-center gap-3">
@@ -2269,7 +2237,7 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                                 setActiveTab('CAMPAIGNS');
                                 openCreateCampaignModal(tpl.templateId);
                               }}
-                              className="inline-flex items-center gap-1 text-emerald-400 hover:text-emerald-300 font-medium"
+                              className="inline-flex items-center gap-1 text-orange-600 hover:text-orange-700 font-semibold"
                             >
                               <span>Use in Campaign</span>
                               <ChevronRight className="w-3 h-3" />
@@ -2287,19 +2255,19 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
 
       {/* CREATE CAMPAIGN MODAL (WIZARD) */}
       {isCreateModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden shadow-2xl">
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden shadow-2xl text-slate-900">
             {/* Modal Header */}
-            <div className="px-6 py-4 border-b border-slate-800 flex items-center justify-between">
+            <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
               <div>
-                <h3 className="text-base font-bold text-slate-100">Create New Campaign</h3>
-                <p className="text-xs text-slate-400 mt-0.5">
+                <h3 className="text-base font-bold text-slate-900">Create New Campaign</h3>
+                <p className="text-xs text-slate-500 mt-0.5">
                   Configure campaign details, upload leads file, and select template
                 </p>
               </div>
               <button
                 onClick={() => setIsCreateModalOpen(false)}
-                className="p-1.5 text-slate-400 hover:text-slate-200 rounded-lg"
+                className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -2309,7 +2277,7 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
             <div className="flex-1 overflow-y-auto p-6 space-y-5">
               {/* Campaign Name */}
               <div>
-                <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
+                <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1.5">
                   Campaign Name *
                 </label>
                 <input
@@ -2317,13 +2285,13 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                   placeholder="e.g. Mumbai Umrah Operators - Q4 Outreach"
                   value={newCampaignName}
                   onChange={(e) => setNewCampaignName(e.target.value)}
-                  className="w-full px-3.5 py-2 bg-slate-950 border border-slate-700/80 rounded-lg text-sm text-slate-100 placeholder-slate-400 focus:outline-none focus:border-emerald-500"
+                  className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-orange-500"
                 />
               </div>
 
               {/* Campaign Type Selection */}
               <div>
-                <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
+                <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1.5">
                   Campaign Type *
                 </label>
                 <div className="grid grid-cols-3 gap-2">
@@ -2331,25 +2299,25 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                     onClick={() => setNewCampaignType('EMAIL')}
                     className={`p-3 rounded-xl border cursor-pointer transition flex items-center gap-2 ${
                       newCampaignType === 'EMAIL'
-                        ? 'bg-emerald-500/10 border-emerald-500 text-emerald-300'
-                        : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-700'
+                        ? 'bg-orange-50 border-orange-500 text-orange-700 font-semibold'
+                        : 'bg-slate-50 border-slate-200 text-slate-600 hover:border-slate-300'
                     }`}
                   >
-                    <Mail className="w-4 h-4 text-emerald-400" />
+                    <Mail className="w-4 h-4 text-orange-500" />
                     <div>
                       <div className="text-xs font-semibold">EMAIL</div>
-                      <div className="text-[10px] text-slate-400">SMTP Active</div>
+                      <div className="text-[10px] text-slate-500">SMTP Active</div>
                     </div>
                   </div>
 
-                  <div className="p-3 rounded-xl border border-slate-800 bg-slate-950/40 text-slate-400 opacity-60 cursor-not-allowed">
+                  <div className="p-3 rounded-xl border border-slate-200 bg-slate-100 text-slate-400 opacity-60 cursor-not-allowed">
                     <div className="text-xs font-semibold">WHATSAPP</div>
-                    <div className="text-[10px] text-slate-400">Coming Soon</div>
+                    <div className="text-[10px] text-slate-500">Coming Soon</div>
                   </div>
 
-                  <div className="p-3 rounded-xl border border-slate-800 bg-slate-950/40 text-slate-400 opacity-60 cursor-not-allowed">
+                  <div className="p-3 rounded-xl border border-slate-200 bg-slate-100 text-slate-400 opacity-60 cursor-not-allowed">
                     <div className="text-xs font-semibold">WHATSAPP + EMAIL</div>
-                    <div className="text-[10px] text-slate-400">Coming Soon</div>
+                    <div className="text-[10px] text-slate-500">Coming Soon</div>
                   </div>
                 </div>
               </div>
@@ -2357,24 +2325,24 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
               {/* Lead Sources Selection Tabs */}
               <div>
                 <div className="flex items-center justify-between mb-2">
-                  <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider">
+                  <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wider">
                     Add Campaign Leads *
                   </label>
                   <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
-                    parsedPreviewLeads.length > 0 ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'bg-slate-800 text-slate-400'
+                    parsedPreviewLeads.length > 0 ? 'bg-orange-50 text-orange-700 border border-orange-200' : 'bg-slate-100 text-slate-500'
                   }`}>
                     {parsedPreviewLeads.length} Lead{parsedPreviewLeads.length === 1 ? '' : 's'} Ready
                   </span>
                 </div>
 
-                <div className="flex items-center gap-1.5 p-1 bg-slate-950 border border-slate-800 rounded-xl mb-3">
+                <div className="flex items-center gap-1.5 p-1 bg-slate-100 border border-slate-200 rounded-xl mb-3">
                   <button
                     type="button"
                     onClick={() => setLeadInputMethod('UPLOAD')}
                     className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-semibold transition flex items-center justify-center gap-1.5 ${
                       leadInputMethod === 'UPLOAD'
-                        ? 'bg-emerald-600 text-white shadow-sm'
-                        : 'text-slate-400 hover:text-slate-200'
+                        ? 'bg-orange-500 text-white shadow-xs'
+                        : 'text-slate-600 hover:text-slate-900'
                     }`}
                   >
                     <FileSpreadsheet className="w-3.5 h-3.5" />
@@ -2386,8 +2354,8 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                     onClick={() => setLeadInputMethod('PASTE')}
                     className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-semibold transition flex items-center justify-center gap-1.5 ${
                       leadInputMethod === 'PASTE'
-                        ? 'bg-emerald-600 text-white shadow-sm'
-                        : 'text-slate-400 hover:text-slate-200'
+                        ? 'bg-orange-500 text-white shadow-xs'
+                        : 'text-slate-600 hover:text-slate-900'
                     }`}
                   >
                     <Copy className="w-3.5 h-3.5" />
@@ -2402,8 +2370,8 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                     }}
                     className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-semibold transition flex items-center justify-center gap-1.5 ${
                       leadInputMethod === 'SAMPLE'
-                        ? 'bg-emerald-600 text-white shadow-sm'
-                        : 'text-slate-400 hover:text-slate-200'
+                        ? 'bg-orange-500 text-white shadow-xs'
+                        : 'text-slate-600 hover:text-slate-900'
                     }`}
                   >
                     <Sparkles className="w-3.5 h-3.5 text-amber-300" />
@@ -2424,22 +2392,22 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
 
                     <div
                       onClick={() => fileInputRef.current?.click()}
-                      className="border-2 border-dashed border-slate-700/80 hover:border-emerald-500/60 rounded-xl p-5 text-center cursor-pointer bg-slate-950/60 transition group"
+                      className="border-2 border-dashed border-slate-300 hover:border-orange-500 rounded-xl p-5 text-center cursor-pointer bg-slate-50/50 transition group"
                     >
-                      <FileSpreadsheet className="w-8 h-8 mx-auto mb-2 text-slate-400 group-hover:text-emerald-400 transition" />
+                      <FileSpreadsheet className="w-8 h-8 mx-auto mb-2 text-slate-400 group-hover:text-orange-500 transition" />
                       {uploadedFileName && leadInputMethod === 'UPLOAD' ? (
                         <div>
-                          <p className="text-sm font-semibold text-emerald-400">{uploadedFileName}</p>
-                          <p className="text-xs text-slate-400 mt-1">
+                          <p className="text-sm font-semibold text-orange-600">{uploadedFileName}</p>
+                          <p className="text-xs text-slate-500 mt-1">
                             Found {parsedPreviewLeads.length} valid rows. Click to change file.
                           </p>
                         </div>
                       ) : (
                         <div>
-                          <p className="text-sm font-medium text-slate-300">
+                          <p className="text-sm font-medium text-slate-700">
                             Click to select or drag and drop leads spreadsheet
                           </p>
-                          <p className="text-xs text-slate-400 mt-1">
+                          <p className="text-xs text-slate-500 mt-1">
                             Supports CSV, XLS, XLSX. Any column structure supported.
                           </p>
                         </div>
@@ -2451,12 +2419,12 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                 {/* TAB 2: QUICK PASTE */}
                 {leadInputMethod === 'PASTE' && (
                   <div className="space-y-2">
-                    <div className="flex items-center justify-between text-[11px] text-slate-400">
+                    <div className="flex items-center justify-between text-[11px] text-slate-500">
                       <span>Paste lines with Email, Name, Company (comma, tab or newline separated):</span>
                       <button
                         type="button"
                         onClick={() => handleParsePastedLeads(`tariq@mansoorhajj.com, Tariq Al-Mansoor, Al-Mansoor Hajj Mumbai\nrashid@haramainjourneys.in, Rashid Farooqui, Haramain Journeys\nfarhan@malikpilgrimages.co.uk, Farhan Malik, Malik Pilgrimages UK`)}
-                        className="text-emerald-400 hover:underline text-[10px]"
+                        className="text-orange-600 hover:underline text-[10px] font-semibold"
                       >
                         Paste Example Format
                       </button>
@@ -2466,35 +2434,35 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                       value={pastedLeadsText}
                       onChange={(e) => handleParsePastedLeads(e.target.value)}
                       placeholder={`e.g.:\nahmed@safwatravels.in, Ahmed Khan, Al-Safwa Travels\ncontact@delhiumrah.in, Irfan Siddiqui, Delhi Consolidators\nbooking@alnoortours.ae, Bilal Qureshi, Al-Noor Tours`}
-                      className="w-full p-3 bg-slate-950 border border-slate-700 rounded-xl text-xs font-mono text-slate-200 placeholder-slate-500 focus:outline-none focus:border-emerald-500"
+                      className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono text-slate-800 placeholder-slate-400 focus:outline-none focus:border-orange-500"
                     />
                   </div>
                 )}
 
                 {/* TAB 3: 1-CLICK SAMPLE LEADS */}
                 {leadInputMethod === 'SAMPLE' && (
-                  <div className="p-4 bg-slate-950/80 border border-emerald-500/30 rounded-xl space-y-3">
+                  <div className="p-4 bg-orange-50/50 border border-orange-200 rounded-xl space-y-3">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <Sparkles className="w-4 h-4 text-emerald-400" />
-                        <span className="text-xs font-bold text-slate-200">5 Verified Pilgrimage Tour Operator Leads</span>
+                        <Sparkles className="w-4 h-4 text-orange-500" />
+                        <span className="text-xs font-bold text-slate-900">5 Verified Pilgrimage Tour Operator Leads</span>
                       </div>
                       <button
                         type="button"
                         onClick={handleLoadSampleLeads}
-                        className="px-3 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-semibold transition"
+                        className="px-3 py-1 bg-orange-500 hover:bg-orange-600 text-white rounded-lg text-xs font-semibold transition"
                       >
                         Reload 5 Leads
                       </button>
                     </div>
-                    <p className="text-[11px] text-slate-400">
+                    <p className="text-[11px] text-slate-600">
                       Pre-configured licensed agency contacts across Mumbai, Delhi, London, and Dubai ready for instant campaign dispatch.
                     </p>
                   </div>
                 )}
 
                 {uploadError && (
-                  <p className="text-xs text-rose-400 mt-2 flex items-center gap-1">
+                  <p className="text-xs text-rose-600 mt-2 flex items-center gap-1 font-medium">
                     <AlertTriangle className="w-3.5 h-3.5" />
                     <span>{uploadError}</span>
                   </p>
@@ -2503,19 +2471,19 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
 
               {/* Column Mapping Preview if headers detected */}
               {rawHeaders.length > 0 && (
-                <div className="p-4 bg-slate-950 border border-slate-800 rounded-xl space-y-3">
-                  <span className="text-xs font-semibold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
-                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
+                  <span className="text-xs font-semibold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
                     <span>Auto-Detected Columns Mapping</span>
                   </span>
 
                   <div className="grid grid-cols-2 gap-3 text-xs">
                     <div>
-                      <label className="block text-slate-400 mb-1">Email Column (Required) *</label>
+                      <label className="block text-slate-600 mb-1">Email Column (Required) *</label>
                       <select
                         value={columnMapping.email}
                         onChange={(e) => handleColumnMappingChange('email', e.target.value)}
-                        className="w-full p-2 bg-slate-900 border border-slate-700 rounded text-slate-200"
+                        className="w-full p-2 bg-white border border-slate-200 rounded text-slate-800"
                       >
                         {rawHeaders.map((h) => (
                           <option key={h} value={h}>
@@ -2526,11 +2494,11 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                     </div>
 
                     <div>
-                      <label className="block text-slate-400 mb-1">Name / Contact Column</label>
+                      <label className="block text-slate-600 mb-1">Name / Contact Column</label>
                       <select
                         value={columnMapping.name}
                         onChange={(e) => handleColumnMappingChange('name', e.target.value)}
-                        className="w-full p-2 bg-slate-900 border border-slate-700 rounded text-slate-200"
+                        className="w-full p-2 bg-white border border-slate-200 rounded text-slate-800"
                       >
                         <option value="">None (Use email prefix)</option>
                         {rawHeaders.map((h) => (
@@ -2542,11 +2510,11 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                     </div>
 
                     <div>
-                      <label className="block text-slate-400 mb-1">Company Column</label>
+                      <label className="block text-slate-600 mb-1">Company Column</label>
                       <select
                         value={columnMapping.company}
                         onChange={(e) => handleColumnMappingChange('company', e.target.value)}
-                        className="w-full p-2 bg-slate-900 border border-slate-700 rounded text-slate-200"
+                        className="w-full p-2 bg-white border border-slate-200 rounded text-slate-800"
                       >
                         <option value="">None (Default)</option>
                         {rawHeaders.map((h) => (
@@ -2558,11 +2526,11 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                     </div>
 
                     <div>
-                      <label className="block text-slate-400 mb-1">Designation Column</label>
+                      <label className="block text-slate-600 mb-1">Designation Column</label>
                       <select
                         value={columnMapping.designation}
                         onChange={(e) => handleColumnMappingChange('designation', e.target.value)}
-                        className="w-full p-2 bg-slate-900 border border-slate-700 rounded text-slate-200"
+                        className="w-full p-2 bg-white border border-slate-200 rounded text-slate-800"
                       >
                         <option value="">None</option>
                         {rawHeaders.map((h) => (
@@ -2576,16 +2544,16 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
 
                   {/* Quick Leads Preview (First 3) */}
                   {parsedPreviewLeads.length > 0 && (
-                    <div className="mt-2 pt-2 border-t border-slate-800 text-[11px] text-slate-400">
-                      <span className="font-semibold text-slate-300">Preview (Sample Leads):</span>
+                    <div className="mt-2 pt-2 border-t border-slate-200 text-[11px] text-slate-500">
+                      <span className="font-semibold text-slate-700">Preview (Sample Leads):</span>
                       <div className="mt-1 space-y-1">
                         {parsedPreviewLeads.slice(0, 3).map((l, i) => (
-                          <div key={i} className="flex items-center gap-2 text-slate-300">
-                            <span className="text-emerald-400 font-mono">{l.email}</span>
+                          <div key={i} className="flex items-center gap-2 text-slate-700">
+                            <span className="text-orange-600 font-mono">{l.email}</span>
                             <span>•</span>
                             <span>{l.name}</span>
                             <span>•</span>
-                            <span className="text-slate-400">{l.companyName}</span>
+                            <span className="text-slate-500">{l.companyName}</span>
                           </div>
                         ))}
                       </div>
@@ -2596,7 +2564,7 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
 
               {/* Campaign Mode Selection */}
               <div>
-                <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">
+                <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-2">
                   Campaign Email Generation Mode *
                 </label>
                 <div className="grid grid-cols-2 gap-3">
@@ -2604,15 +2572,15 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                     onClick={() => setCampaignMode('PREDEFINED')}
                     className={`p-3.5 rounded-xl border cursor-pointer transition ${
                       campaignMode === 'PREDEFINED'
-                        ? 'bg-emerald-600/20 border-emerald-500 text-slate-100'
-                        : 'bg-slate-950 border-slate-800 text-slate-400 hover:bg-slate-900'
+                        ? 'bg-orange-50 border-orange-500 text-slate-900'
+                        : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
                     }`}
                   >
-                    <div className="flex items-center gap-2 font-semibold text-xs text-slate-200">
-                      <FileText className="w-4 h-4 text-emerald-400" />
+                    <div className="flex items-center gap-2 font-semibold text-xs text-slate-900">
+                      <FileText className="w-4 h-4 text-orange-500" />
                       <span>Predefined Template</span>
                     </div>
-                    <p className="text-[11px] text-slate-400 mt-1">
+                    <p className="text-[11px] text-slate-500 mt-1">
                       Uses standard template with variable replacement ({"{{name}}"}, {"{{company}}"}).
                     </p>
                   </div>
@@ -2621,15 +2589,15 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                     onClick={() => setCampaignMode('AI_GENERATED')}
                     className={`p-3.5 rounded-xl border cursor-pointer transition ${
                       campaignMode === 'AI_GENERATED'
-                        ? 'bg-emerald-600/20 border-emerald-500 text-slate-100'
-                        : 'bg-slate-950 border-slate-800 text-slate-400 hover:bg-slate-900'
+                        ? 'bg-orange-50 border-orange-500 text-slate-900'
+                        : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
                     }`}
                   >
-                    <div className="flex items-center gap-2 font-semibold text-xs text-slate-200">
-                      <Sparkles className="w-4 h-4 text-emerald-400 animate-pulse" />
+                    <div className="flex items-center gap-2 font-semibold text-xs text-slate-900">
+                      <Sparkles className="w-4 h-4 text-orange-500 animate-pulse" />
                       <span>AI Intelligent Personalization</span>
                     </div>
-                    <p className="text-[11px] text-slate-400 mt-1">
+                    <p className="text-[11px] text-slate-500 mt-1">
                       Full AI research, web signals, pain points, and Knowledge Base product pitching per lead.
                     </p>
                   </div>
@@ -2641,15 +2609,15 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider">
+                      <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wider">
                         Select Predefined Email Template *
                       </label>
-                      <span className="inline-flex items-center gap-1 text-[10px] text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20 font-medium">
-                        <Database className="w-3 h-3" />
+                      <span className="inline-flex items-center gap-1 text-[10px] text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 font-medium">
+                        <Database className="w-3 h-3 text-emerald-600" />
                         <span>Database Synced</span>
                       </span>
                     </div>
-                    <span className="text-[11px] text-emerald-400 font-medium">
+                    <span className="text-[11px] text-orange-600 font-semibold">
                       {templates.length} templates in database
                     </span>
                   </div>
@@ -2658,7 +2626,7 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                   <select
                     value={selectedTemplateId || (templates.length > 0 ? templates[0].templateId : '')}
                     onChange={(e) => handleSelectTemplate(e.target.value)}
-                    className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-sm font-medium text-slate-100 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition"
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-800 focus:outline-none focus:border-orange-500 transition"
                   >
                     {templates.map((tpl) => (
                       <option key={tpl.templateId} value={tpl.templateId}>
@@ -2669,7 +2637,7 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
 
                   {/* Visual Selectable Template Cards */}
                   <div className="space-y-2">
-                    <div className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+                    <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
                       Or Select Directly from Database:
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-52 overflow-y-auto pr-1">
@@ -2681,43 +2649,43 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                             onClick={() => handleSelectTemplate(tpl.templateId)}
                             className={`p-3 rounded-xl border cursor-pointer transition text-left relative flex flex-col justify-between ${
                               isSelected
-                                ? 'bg-emerald-500/10 border-emerald-500 ring-1 ring-emerald-500/50 shadow-sm'
-                                : 'bg-slate-950/80 border-slate-800 hover:border-slate-700 text-slate-400'
+                                ? 'bg-orange-50 border-orange-500 ring-1 ring-orange-500/30 shadow-2xs'
+                                : 'bg-slate-50 border-slate-200 hover:border-slate-300 text-slate-600'
                             }`}
                           >
                             <div>
                               <div className="flex items-start justify-between gap-2">
                                 <div className="flex items-center gap-1.5 flex-wrap">
-                                  <h4 className={`text-xs font-bold leading-tight ${isSelected ? 'text-emerald-300' : 'text-slate-200'}`}>
+                                  <h4 className={`text-xs font-bold leading-tight ${isSelected ? 'text-orange-600' : 'text-slate-900'}`}>
                                     {tpl.name}
                                   </h4>
                                   {tpl.isHtml || tpl.format === 'html' || tpl.htmlBody ? (
-                                    <span className="text-[9px] px-1 py-0.2 bg-sky-500/20 text-sky-300 rounded font-medium">
+                                    <span className="text-[9px] px-1 py-0.2 bg-sky-50 text-sky-700 rounded font-medium">
                                       HTML
                                     </span>
                                   ) : null}
                                   {tpl.attachments && tpl.attachments.length > 0 && (
-                                    <span className="text-[9px] px-1.5 py-0.2 bg-amber-500/20 text-amber-300 rounded font-medium flex items-center gap-0.5">
+                                    <span className="text-[9px] px-1.5 py-0.2 bg-amber-50 text-amber-700 rounded font-medium flex items-center gap-0.5">
                                       <Paperclip className="w-2.5 h-2.5" />
                                       <span>{tpl.attachments.length}</span>
                                     </span>
                                   )}
                                 </div>
                                 <div className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 ${
-                                  isSelected ? 'border-emerald-400 bg-emerald-500 text-slate-950' : 'border-slate-700'
+                                  isSelected ? 'border-orange-500 bg-orange-500 text-white' : 'border-slate-300'
                                 }`}>
                                   {isSelected && <Check className="w-2.5 h-2.5 stroke-[3]" />}
                                 </div>
                               </div>
-                              <p className="text-[11px] text-slate-400 mt-1 line-clamp-1 font-mono">
+                              <p className="text-[11px] text-slate-500 mt-1 line-clamp-1 font-mono">
                                 {tpl.subject}
                               </p>
-                              <p className="text-[10px] text-slate-400 mt-1 line-clamp-2 leading-relaxed">
+                              <p className="text-[10px] text-slate-500 mt-1 line-clamp-2 leading-relaxed">
                                 {stripHtml(tpl.htmlBody || tpl.body).slice(0, 100)}...
                               </p>
                             </div>
-                            <div className="mt-2 pt-2 border-t border-slate-800/60 flex items-center justify-between text-[10px]">
-                              <span className={isSelected ? 'text-emerald-400 font-semibold' : 'text-slate-400'}>
+                            <div className="mt-2 pt-2 border-t border-slate-200 flex items-center justify-between text-[10px]">
+                              <span className={isSelected ? 'text-orange-600 font-semibold' : 'text-slate-400'}>
                                 {isSelected ? '✓ ACTIVE SELECTION' : 'Click to select from DB'}
                               </span>
                               <span className="text-slate-400 font-mono text-[9px]">DB Doc: {tpl.templateId.slice(0, 14)}</span>
@@ -2736,50 +2704,50 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                       : templates.find((t) => t.templateId === currentId);
                     if (!activeTpl) return null;
                     return (
-                      <div className="p-3.5 bg-slate-950 border border-emerald-500/30 rounded-xl text-xs space-y-2.5 shadow-inner">
-                        <div className="flex items-center justify-between border-b border-slate-800/80 pb-2">
+                      <div className="p-3.5 bg-orange-50/40 border border-orange-200 rounded-xl text-xs space-y-2.5">
+                        <div className="flex items-center justify-between border-b border-orange-100 pb-2">
                           <div className="flex items-center gap-2">
-                            <Database className="w-4 h-4 text-emerald-400" />
-                            <span className="text-[11px] font-bold text-emerald-400 uppercase tracking-wider">
+                            <Database className="w-4 h-4 text-orange-500" />
+                            <span className="text-[11px] font-bold text-orange-700 uppercase tracking-wider">
                               Retrieved from Database:
                             </span>
                             {isLoadingTemplateFromDb && (
-                              <RefreshCw className="w-3 h-3 text-emerald-400 animate-spin" />
+                              <RefreshCw className="w-3 h-3 text-orange-500 animate-spin" />
                             )}
                           </div>
                           <div className="flex items-center gap-2">
                             {activeTpl.attachments && activeTpl.attachments.length > 0 && (
-                              <span className="text-[10px] px-2 py-0.5 bg-amber-500/10 text-amber-400 border border-amber-500/30 rounded font-medium flex items-center gap-1">
+                              <span className="text-[10px] px-2 py-0.5 bg-amber-50 text-amber-700 border border-amber-200 rounded font-medium flex items-center gap-1">
                                 <Paperclip className="w-3 h-3" />
                                 <span>{activeTpl.attachments.length} File(s) Attached</span>
                               </span>
                             )}
-                            <span className="text-[11px] text-emerald-300 font-semibold bg-emerald-950/60 px-2.5 py-0.5 rounded border border-emerald-800/40 font-mono">
+                            <span className="text-[11px] text-orange-700 font-bold bg-orange-100 px-2.5 py-0.5 rounded border border-orange-200 font-mono">
                               {activeTpl.name}
                             </span>
                           </div>
                         </div>
                         <div>
-                          <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">
+                          <span className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">
                             Personalized Subject Line:
                           </span>
-                          <p className="font-semibold text-emerald-300 mt-0.5 bg-slate-900/90 px-3 py-1.5 rounded-lg border border-slate-800 text-xs">
+                          <p className="font-semibold text-slate-800 mt-0.5 bg-white px-3 py-1.5 rounded-lg border border-slate-200 text-xs">
                             {activeTpl.subject}
                           </p>
                         </div>
                         <div>
                           <div className="flex items-center justify-between mb-1">
-                            <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">
+                            <span className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">
                               Email Message Body (from DB):
                             </span>
-                            <span className="text-[10px] text-slate-400">
-                              (Placeholders like <code className="text-emerald-400 font-mono">{"{{name}}"}</code> & <code className="text-emerald-400 font-mono">{"{{company}}"}</code> will be auto-filled)
+                            <span className="text-[10px] text-slate-500">
+                              (Placeholders like <code className="text-orange-600 font-mono">{"{{name}}"}</code> & <code className="text-orange-600 font-mono">{"{{company}}"}</code> will be auto-filled)
                             </span>
                           </div>
-                          <div className="max-h-36 overflow-y-auto bg-slate-900/90 p-3 rounded-lg border border-slate-800 text-slate-200 text-xs leading-relaxed shadow-inner">
+                          <div className="max-h-36 overflow-y-auto bg-white p-3 rounded-lg border border-slate-200 text-slate-800 text-xs leading-relaxed shadow-2xs">
                             {activeTpl.htmlBody ? (
                               <div
-                                className="prose prose-invert max-w-none text-xs"
+                                className="prose max-w-none text-xs"
                                 dangerouslySetInnerHTML={{ __html: activeTpl.htmlBody }}
                               />
                             ) : (
@@ -2792,13 +2760,13 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
 
                         {/* Attachments preview box */}
                         {activeTpl.attachments && activeTpl.attachments.length > 0 && (
-                          <div className="p-2.5 bg-slate-900/90 border border-slate-800 rounded-lg space-y-1.5">
+                          <div className="p-2.5 bg-white border border-slate-200 rounded-lg space-y-1.5">
                             <div className="flex items-center justify-between text-[11px]">
-                              <span className="font-semibold text-slate-300 flex items-center gap-1">
-                                <Paperclip className="w-3.5 h-3.5 text-amber-400" />
+                              <span className="font-semibold text-slate-700 flex items-center gap-1">
+                                <Paperclip className="w-3.5 h-3.5 text-amber-500" />
                                 <span>Attached to outgoing campaign emails:</span>
                               </span>
-                              <span className="text-slate-500 font-mono text-[10px]">
+                              <span className="text-slate-400 font-mono text-[10px]">
                                 Auto-dispatched via SMTP
                               </span>
                             </div>
@@ -2806,9 +2774,9 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                               {activeTpl.attachments.map((att: any, attIdx: number) => (
                                 <div
                                   key={att.id || attIdx}
-                                  className="px-2.5 py-1 bg-slate-950 border border-slate-800 rounded-md text-[10px] text-slate-200 flex items-center gap-1.5"
+                                  className="px-2.5 py-1 bg-slate-50 border border-slate-200 rounded-md text-[10px] text-slate-700 flex items-center gap-1.5"
                                 >
-                                  <File className="w-3 h-3 text-sky-400" />
+                                  <File className="w-3 h-3 text-sky-500" />
                                   <span className="font-medium">{att.name || att.filename}</span>
                                   {att.size && (
                                     <span className="text-slate-400 font-mono">
@@ -2825,14 +2793,14 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                   })()}
                 </div>
               ) : (
-                <div className="p-4 bg-slate-950 border border-emerald-500/30 rounded-xl space-y-3">
+                <div className="p-4 bg-orange-50/50 border border-orange-200 rounded-xl space-y-3">
                   <div className="flex items-center justify-between">
                     <div>
-                      <h4 className="text-xs font-semibold text-slate-200 flex items-center gap-1.5">
-                        <Sparkles className="w-4 h-4 text-emerald-400" />
+                      <h4 className="text-xs font-semibold text-slate-800 flex items-center gap-1.5">
+                        <Sparkles className="w-4 h-4 text-orange-500" />
                         <span>AI Personalization Engine Ready</span>
                       </h4>
-                      <p className="text-[11px] text-slate-400 mt-0.5">
+                      <p className="text-[11px] text-slate-600 mt-0.5">
                         Each lead will receive an individually researched, tailored email referencing their company profile and Umrah360 product capabilities.
                       </p>
                     </div>
@@ -2840,7 +2808,7 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                       type="button"
                       onClick={handlePreviewAiEmails}
                       disabled={aiPreviewLoading || parsedPreviewLeads.length === 0}
-                      className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white rounded-lg text-xs font-semibold transition flex items-center gap-1.5 shrink-0"
+                      className="px-3.5 py-2 bg-orange-500 hover:bg-orange-600 disabled:opacity-50 text-white rounded-lg text-xs font-semibold transition flex items-center gap-1.5 shrink-0 shadow-xs"
                     >
                       {aiPreviewLoading ? (
                         <>
@@ -2865,9 +2833,9 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                     type="checkbox"
                     checked={startImmediately}
                     onChange={(e) => setStartImmediately(e.target.checked)}
-                    className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 bg-slate-950 border-slate-700"
+                    className="w-4 h-4 rounded text-orange-500 focus:ring-orange-500 bg-slate-50 border-slate-300"
                   />
-                  <span className="text-sm text-slate-200">
+                  <span className="text-sm text-slate-700 font-medium">
                     Start Campaign sending immediately upon creation
                   </span>
                 </label>
@@ -2876,17 +2844,17 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
 
             {/* Error feedback if any */}
             {createCampaignError && (
-              <div className="px-6 py-2.5 bg-rose-500/10 border-t border-rose-500/20 text-rose-300 text-xs flex items-center gap-2">
-                <AlertCircle className="w-4 h-4 shrink-0 text-rose-400" />
+              <div className="px-6 py-2.5 bg-rose-50 border-t border-rose-200 text-rose-700 text-xs flex items-center gap-2 font-medium">
+                <AlertCircle className="w-4 h-4 shrink-0 text-rose-500" />
                 <span>{createCampaignError}</span>
               </div>
             )}
 
             {/* Modal Actions */}
-            <div className="px-6 py-4 border-t border-slate-800 bg-slate-950 flex items-center justify-between gap-3">
-              <div className="text-xs text-slate-400">
+            <div className="px-6 py-4 border-t border-slate-200 bg-slate-50 flex items-center justify-between gap-3">
+              <div className="text-xs text-slate-500">
                 {parsedPreviewLeads.length > 0 ? (
-                  <span className="text-emerald-400 font-medium">
+                  <span className="text-emerald-700 font-medium">
                     ✓ {parsedPreviewLeads.length} lead{parsedPreviewLeads.length === 1 ? '' : 's'} ready
                   </span>
                 ) : (
@@ -2899,7 +2867,7 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                 <button
                   type="button"
                   onClick={() => setIsCreateModalOpen(false)}
-                  className="px-4 py-2 text-sm text-slate-400 hover:text-slate-200 font-medium"
+                  className="px-4 py-2 text-sm text-slate-600 hover:text-slate-900 font-medium"
                 >
                   Cancel
                 </button>
@@ -2907,7 +2875,7 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                   type="button"
                   onClick={handleCreateCampaignSubmit}
                   disabled={loading}
-                  className="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white rounded-lg text-sm font-semibold transition flex items-center gap-2 shadow-lg shadow-emerald-950/40"
+                  className="px-5 py-2 bg-orange-500 hover:bg-orange-600 disabled:opacity-50 text-white rounded-lg text-sm font-semibold transition flex items-center gap-2 shadow-xs"
                 >
                   {loading ? (
                     <>
@@ -2935,57 +2903,57 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
         const nextRun = (selectedCampaign.lastRunNumber || 0) + 1;
 
         return (
-          <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-lg p-6 space-y-4 shadow-2xl animate-in fade-in zoom-in-95 duration-150">
+          <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+            <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-lg p-6 space-y-4 shadow-2xl text-slate-900 animate-in fade-in zoom-in-95 duration-150">
               {allQualified ? (
                 // ALL LEADS QUALIFIED POPUP
                 <>
                   <div className="flex items-start gap-3">
-                    <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl text-amber-400 shrink-0">
-                      <Sparkles className="w-6 h-6 text-amber-400" />
+                    <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-600 shrink-0">
+                      <Sparkles className="w-6 h-6 text-amber-500" />
                     </div>
                     <div>
-                      <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 text-[11px] font-semibold mb-1">
-                        <Check className="w-3 h-3" /> 100% Campaign Conversion
+                      <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-700 text-[11px] font-semibold mb-1 border border-amber-200">
+                        <Check className="w-3 h-3 text-amber-600" /> 100% Campaign Conversion
                       </div>
-                      <h3 className="text-base font-bold text-slate-100">
+                      <h3 className="text-base font-bold text-slate-900">
                         All Leads Have Replied & Qualified! 🎉
                       </h3>
-                      <p className="text-xs text-slate-400 mt-0.5">
+                      <p className="text-xs text-slate-500 mt-0.5">
                         No pending follow-ups required
                       </p>
                     </div>
                   </div>
 
-                  <div className="p-4 bg-amber-950/20 border border-amber-500/30 rounded-xl text-xs space-y-2.5 text-slate-200">
-                    <div className="flex items-center gap-2 text-amber-300 font-semibold">
-                      <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
+                  <div className="p-4 bg-amber-50/60 border border-amber-200 rounded-xl text-xs space-y-2.5 text-slate-800">
+                    <div className="flex items-center gap-2 text-amber-700 font-semibold">
+                      <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
                       <span>Zero Follow-up Emails Will Be Dispatched</span>
                     </div>
-                    <p className="text-slate-300 text-[12px] leading-relaxed">
+                    <p className="text-slate-700 text-[12px] leading-relaxed">
                       Every single lead in this campaign (<strong>{campaignLeads.length} of {campaignLeads.length} leads</strong>) has already responded and engaged.
                     </p>
-                    <p className="text-amber-200/90 text-[11px] bg-amber-900/30 p-2.5 rounded-lg border border-amber-600/30 font-medium">
-                      ⚠️ <strong>Notice:</strong> If you restart the campaign now for Run #{nextRun}, <span className="underline decoration-amber-400">no one will receive an email</span> because all contacts have already converted and qualified.
+                    <p className="text-amber-800 text-[11px] bg-amber-100/60 p-2.5 rounded-lg border border-amber-200 font-medium">
+                      ⚠️ <strong>Notice:</strong> If you restart the campaign now for Run #{nextRun}, <span className="underline decoration-amber-500">no one will receive an email</span> because all contacts have already converted and qualified.
                     </p>
                   </div>
 
                   {/* Qualified Leads List */}
                   <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
-                    <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+                    <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
                       Qualified Responders ({repliedLeads.length})
                     </p>
                     {repliedLeads.map((l) => (
                       <div
                         key={l.campaignLeadId}
-                        className="flex items-center justify-between p-2 bg-slate-950/80 border border-slate-800 rounded-lg text-xs"
+                        className="flex items-center justify-between p-2 bg-slate-50 border border-slate-200 rounded-lg text-xs"
                       >
                         <div className="flex items-center gap-2">
-                          <CheckCircle2 className="w-3.5 h-3.5 text-sky-400" />
-                          <span className="font-medium text-slate-200">{l.name}</span>
-                          <span className="text-slate-400 text-[11px]">({l.companyName})</span>
+                          <CheckCircle2 className="w-3.5 h-3.5 text-sky-600" />
+                          <span className="font-semibold text-slate-900">{l.name}</span>
+                          <span className="text-slate-500 text-[11px]">({l.companyName})</span>
                         </div>
-                        <span className="px-2 py-0.5 bg-sky-500/20 text-sky-300 rounded text-[10px] font-semibold">
+                        <span className="px-2 py-0.5 bg-sky-50 text-sky-700 border border-sky-200 rounded text-[10px] font-semibold">
                           REPLIED
                         </span>
                       </div>
@@ -2995,7 +2963,7 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                   <div className="flex items-center justify-end gap-3 pt-2">
                     <button
                       onClick={() => setIsRestartConfirmOpen(false)}
-                      className="px-4 py-2 text-xs text-slate-400 hover:text-slate-200 font-medium"
+                      className="px-4 py-2 text-xs text-slate-600 hover:text-slate-900 font-medium"
                     >
                       Close / Do Not Send
                     </button>
@@ -3003,7 +2971,7 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                       id="confirm-restart-all-qualified-btn"
                       disabled={isRestarting}
                       onClick={() => handleRestartCampaign(selectedCampaign.campaignId)}
-                      className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-lg text-xs font-semibold transition flex items-center gap-2"
+                      className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200 rounded-lg text-xs font-semibold transition flex items-center gap-2"
                     >
                       {isRestarting ? (
                         <>
@@ -3020,14 +2988,14 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                 // INTELLIGENT FOLLOW-UP RESTART MODAL
                 <>
                   <div className="flex items-center gap-3">
-                    <div className="p-2.5 bg-sky-500/10 border border-sky-500/20 rounded-xl text-sky-400">
+                    <div className="p-2.5 bg-sky-50 border border-sky-200 rounded-xl text-sky-600">
                       <RotateCcw className="w-5 h-5" />
                     </div>
                     <div>
-                      <h3 className="text-base font-bold text-slate-100">
+                      <h3 className="text-base font-bold text-slate-900">
                         Restart Campaign & Launch Follow-Up Run #{nextRun}
                       </h3>
-                      <p className="text-xs text-slate-400">
+                      <p className="text-xs text-slate-500">
                         Automated smart filtering based on lead reply & delivery status
                       </p>
                     </div>
@@ -3035,26 +3003,26 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
 
                   {/* Summary Breakdown */}
                   <div className="grid grid-cols-2 gap-3 text-xs">
-                    <div className="p-3 bg-emerald-950/20 border border-emerald-500/30 rounded-xl">
-                      <div className="text-[11px] text-emerald-400 font-semibold uppercase tracking-wider">
+                    <div className="p-3 bg-orange-50 border border-orange-200 rounded-xl">
+                      <div className="text-[11px] text-orange-700 font-semibold uppercase tracking-wider">
                         Follow-Up Queue (Run #{nextRun})
                       </div>
-                      <div className="text-xl font-bold text-emerald-300 mt-1">
-                        {unrepliedLeads.length} <span className="text-xs font-normal text-slate-400">leads</span>
+                      <div className="text-xl font-bold text-orange-600 mt-1">
+                        {unrepliedLeads.length} <span className="text-xs font-normal text-slate-500">leads</span>
                       </div>
-                      <p className="text-[10px] text-slate-400 mt-0.5">
+                      <p className="text-[10px] text-slate-500 mt-0.5">
                         Failed sends or unreplied contacts
                       </p>
                     </div>
 
-                    <div className="p-3 bg-sky-950/20 border border-sky-500/30 rounded-xl">
-                      <div className="text-[11px] text-sky-400 font-semibold uppercase tracking-wider">
+                    <div className="p-3 bg-sky-50 border border-sky-200 rounded-xl">
+                      <div className="text-[11px] text-sky-700 font-semibold uppercase tracking-wider">
                         Excluded (Already Replied)
                       </div>
-                      <div className="text-xl font-bold text-sky-300 mt-1">
-                        {repliedLeads.length} <span className="text-xs font-normal text-slate-400">leads</span>
+                      <div className="text-xl font-bold text-sky-600 mt-1">
+                        {repliedLeads.length} <span className="text-xs font-normal text-slate-500">leads</span>
                       </div>
-                      <p className="text-[10px] text-slate-400 mt-0.5">
+                      <p className="text-[10px] text-slate-500 mt-0.5">
                         0 emails sent to replied contacts
                       </p>
                     </div>
@@ -3062,9 +3030,9 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
 
                   {/* Follow-up Recipients List */}
                   <div className="space-y-1.5">
-                    <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider flex items-center justify-between">
+                    <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider flex items-center justify-between">
                       <span>Recipients for Run #{nextRun} ({unrepliedLeads.length})</span>
-                      <span className="text-[10px] text-emerald-400 font-normal">Will receive follow-up email</span>
+                      <span className="text-[10px] text-orange-600 font-medium">Will receive follow-up email</span>
                     </p>
                     <div className="max-h-36 overflow-y-auto space-y-1.5 pr-1">
                       {unrepliedLeads.map((lead) => {
@@ -3072,18 +3040,18 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                         return (
                           <div
                             key={lead.campaignLeadId}
-                            className="flex items-center justify-between p-2 bg-slate-950 border border-slate-800 rounded-lg text-xs"
+                            className="flex items-center justify-between p-2 bg-slate-50 border border-slate-200 rounded-lg text-xs"
                           >
                             <div>
-                              <div className="font-medium text-slate-200">{lead.name}</div>
-                              <div className="text-[11px] text-slate-400 font-mono">{lead.email}</div>
+                              <div className="font-semibold text-slate-900">{lead.name}</div>
+                              <div className="text-[11px] text-slate-500 font-mono">{lead.email}</div>
                             </div>
                             <div className="text-right">
                               <span
                                 className={`px-2 py-0.5 rounded text-[10px] font-semibold ${
                                   isFailed
-                                    ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
-                                    : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                                    ? 'bg-rose-50 text-rose-700 border border-rose-200'
+                                    : 'bg-amber-50 text-amber-700 border border-amber-200'
                                 }`}
                               >
                                 {isFailed ? 'Retry Failed Send' : 'Follow-up (No Reply)'}
@@ -3095,13 +3063,13 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                       {repliedLeads.map((lead) => (
                         <div
                           key={lead.campaignLeadId}
-                          className="flex items-center justify-between p-2 bg-slate-950/40 border border-slate-800/60 rounded-lg text-xs opacity-60"
+                          className="flex items-center justify-between p-2 bg-slate-100/60 border border-slate-200 rounded-lg text-xs opacity-60"
                         >
                           <div>
-                            <div className="font-medium text-slate-400">{lead.name}</div>
+                            <div className="font-medium text-slate-600">{lead.name}</div>
                             <div className="text-[11px] text-slate-400 font-mono">{lead.email}</div>
                           </div>
-                          <span className="px-2 py-0.5 bg-slate-800 text-slate-400 rounded text-[10px]">
+                          <span className="px-2 py-0.5 bg-slate-200 text-slate-600 rounded text-[10px]">
                             Skipped (Replied)
                           </span>
                         </div>
@@ -3112,7 +3080,7 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                   <div className="flex items-center justify-end gap-3 pt-2">
                     <button
                       onClick={() => setIsRestartConfirmOpen(false)}
-                      className="px-4 py-2 text-xs text-slate-400 hover:text-slate-200 font-medium"
+                      className="px-4 py-2 text-xs text-slate-600 hover:text-slate-900 font-medium"
                     >
                       Cancel
                     </button>
@@ -3120,7 +3088,7 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                       id="confirm-restart-campaign-btn"
                       disabled={isRestarting || unrepliedLeads.length === 0}
                       onClick={() => handleRestartCampaign(selectedCampaign.campaignId)}
-                      className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-semibold transition flex items-center gap-2 shadow shadow-emerald-950/40"
+                      className="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg text-xs font-semibold transition flex items-center gap-2 shadow-xs"
                     >
                       {isRestarting ? (
                         <>
@@ -3144,24 +3112,24 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
 
       {/* DELETE CAMPAIGN CONFIRMATION MODAL */}
       {isDeleteModalOpen && campaignToDelete && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-rose-900/40 rounded-2xl w-full max-w-md p-6 space-y-4 shadow-2xl">
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white border border-rose-200 rounded-2xl w-full max-w-md p-6 space-y-4 shadow-2xl text-slate-900">
             <div className="flex items-center gap-3">
-              <div className="p-2.5 bg-rose-500/10 border border-rose-500/20 rounded-xl text-rose-400">
+              <div className="p-2.5 bg-rose-50 border border-rose-200 rounded-xl text-rose-600">
                 <AlertTriangle className="w-5 h-5" />
               </div>
               <div>
-                <h3 className="text-base font-bold text-slate-100">Delete Campaign</h3>
-                <p className="text-xs text-slate-400">This action cannot be undone</p>
+                <h3 className="text-base font-bold text-slate-900">Delete Campaign</h3>
+                <p className="text-xs text-slate-500">This action cannot be undone</p>
               </div>
             </div>
 
-            <div className="p-3.5 bg-slate-950 border border-slate-800 rounded-xl text-xs space-y-2 text-slate-300">
+            <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl text-xs space-y-2 text-slate-700">
               <p>
                 Are you sure you want to permanently delete{' '}
-                <strong className="text-rose-400 font-semibold">{campaignToDelete.name}</strong>?
+                <strong className="text-rose-600 font-semibold">{campaignToDelete.name}</strong>?
               </p>
-              <ul className="list-disc list-inside space-y-1 text-slate-400">
+              <ul className="list-disc list-inside space-y-1 text-slate-600">
                 <li>Stops any active background sending immediately.</li>
                 <li>Permanently removes all {campaignToDelete.totalLeads} associated leads and statistics.</li>
                 <li>Deletes execution runs and tracking records for this campaign.</li>
@@ -3175,7 +3143,7 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                   setIsDeleteModalOpen(false);
                   setCampaignToDelete(null);
                 }}
-                className="px-4 py-2 text-xs text-slate-400 hover:text-slate-200 font-medium disabled:opacity-50"
+                className="px-4 py-2 text-xs text-slate-600 hover:text-slate-900 font-medium disabled:opacity-50"
               >
                 Cancel
               </button>
@@ -3183,7 +3151,7 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                 id="confirm-delete-campaign-btn"
                 disabled={isDeletingCampaign}
                 onClick={() => handleDeleteCampaign(campaignToDelete.campaignId)}
-                className="flex items-center gap-1.5 px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-xs font-semibold transition disabled:opacity-50"
+                className="flex items-center gap-1.5 px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-semibold transition disabled:opacity-50 shadow-xs"
               >
                 {isDeletingCampaign ? (
                   <>
@@ -3217,25 +3185,25 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
 
       {/* DELETE TEMPLATE CONFIRMATION MODAL */}
       {isDeleteTemplateModalOpen && templateToDelete && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md flex flex-col overflow-hidden shadow-2xl">
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-md flex flex-col overflow-hidden shadow-2xl text-slate-900">
             <div className="p-6 space-y-4">
-              <div className="w-10 h-10 rounded-xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-400">
+              <div className="w-10 h-10 rounded-xl bg-rose-50 border border-rose-200 flex items-center justify-center text-rose-600">
                 <Trash2 className="w-5 h-5" />
               </div>
               <div>
-                <h3 className="text-base font-bold text-slate-100">Delete Email Template</h3>
-                <p className="text-xs text-slate-400 mt-1">
-                  Are you sure you want to delete <strong className="text-slate-200">"{templateToDelete.name}"</strong>?
+                <h3 className="text-base font-bold text-slate-900">Delete Email Template</h3>
+                <p className="text-xs text-slate-500 mt-1">
+                  Are you sure you want to delete <strong className="text-slate-800">"{templateToDelete.name}"</strong>?
                   This will permanently remove the template from the Firestore database.
                 </p>
               </div>
-              <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 text-xs text-slate-400 font-mono truncate">
+              <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-600 font-mono truncate">
                 Subject: {templateToDelete.subject}
               </div>
             </div>
 
-            <div className="px-6 py-4 border-t border-slate-800 bg-slate-950 flex items-center justify-end gap-3">
+            <div className="px-6 py-4 border-t border-slate-200 bg-slate-50 flex items-center justify-end gap-3">
               <button
                 type="button"
                 onClick={() => {
@@ -3243,7 +3211,7 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                   setTemplateToDelete(null);
                 }}
                 disabled={isDeletingTemplate}
-                className="px-4 py-2 text-xs text-slate-400 hover:text-slate-200 transition"
+                className="px-4 py-2 text-xs text-slate-600 hover:text-slate-900 transition font-medium"
               >
                 Cancel
               </button>
@@ -3251,7 +3219,7 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                 type="button"
                 onClick={handleConfirmDeleteTemplate}
                 disabled={isDeletingTemplate}
-                className="inline-flex items-center gap-1.5 px-4 py-2 bg-rose-600 hover:bg-rose-500 disabled:opacity-50 text-white rounded-xl text-xs font-semibold shadow-lg shadow-rose-900/20 transition"
+                className="inline-flex items-center gap-1.5 px-4 py-2 bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white rounded-xl text-xs font-semibold shadow-xs transition"
               >
                 {isDeletingTemplate ? (
                   <>
@@ -3272,21 +3240,21 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
 
       {/* AI PREVIEW MODAL */}
       {isAiPreviewModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden shadow-2xl">
-            <div className="px-6 py-4 border-b border-slate-800 flex items-center justify-between">
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden shadow-2xl text-slate-900">
+            <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
               <div>
-                <h3 className="text-base font-bold text-slate-100 flex items-center gap-2">
-                  <Sparkles className="w-4 h-4 text-emerald-400" />
+                <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-orange-500" />
                   <span>AI Personalization Preview (Sample Leads)</span>
                 </h3>
-                <p className="text-xs text-slate-400">
+                <p className="text-xs text-slate-500">
                   Review how the AI personalizes subject lines, opening hooks, and product pitches for each company.
                 </p>
               </div>
               <button
                 onClick={() => setIsAiPreviewModalOpen(false)}
-                className="p-1.5 text-slate-400 hover:text-slate-200 rounded-lg"
+                className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -3294,38 +3262,38 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
 
             <div className="flex-1 overflow-y-auto p-6 space-y-6">
               {aiPreviewSamples.map((sample, idx) => (
-                <div key={idx} className="p-4 bg-slate-950 border border-slate-800 rounded-xl space-y-3">
-                  <div className="flex items-center justify-between border-b border-slate-800/80 pb-2">
+                <div key={idx} className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
+                  <div className="flex items-center justify-between border-b border-slate-200 pb-2">
                     <div>
-                      <span className="text-xs font-semibold text-emerald-400">{sample.lead.name}</span>
-                      <span className="text-xs text-slate-400 ml-2">({sample.lead.email})</span>
+                      <span className="text-xs font-bold text-orange-600">{sample.lead.name}</span>
+                      <span className="text-xs text-slate-500 ml-2">({sample.lead.email})</span>
                     </div>
-                    <span className="text-[11px] bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 px-2 py-0.5 rounded">
+                    <span className="text-[11px] bg-orange-50 text-orange-700 border border-orange-200 px-2 py-0.5 rounded font-semibold">
                       {sample.lead.companyName || 'Agency'}
                     </span>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs text-slate-300">
-                    <div className="bg-slate-900 p-2.5 rounded-lg border border-slate-800 space-y-1">
-                      <span className="text-[10px] uppercase font-bold text-slate-400">Detected Pain Point:</span>
-                      <p className="text-slate-200 font-medium">{sample.selectedPainPoint}</p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs text-slate-700">
+                    <div className="bg-white p-2.5 rounded-lg border border-slate-200 space-y-1 shadow-2xs">
+                      <span className="text-[10px] uppercase font-bold text-slate-500">Detected Pain Point:</span>
+                      <p className="text-slate-800 font-medium">{sample.selectedPainPoint}</p>
                     </div>
-                    <div className="bg-slate-900 p-2.5 rounded-lg border border-slate-800 space-y-1">
-                      <span className="text-[10px] uppercase font-bold text-slate-400">Selected Capabilities:</span>
-                      <p className="text-emerald-400 font-medium">{sample.selectedCapabilities?.join(', ')}</p>
+                    <div className="bg-white p-2.5 rounded-lg border border-slate-200 space-y-1 shadow-2xs">
+                      <span className="text-[10px] uppercase font-bold text-slate-500">Selected Capabilities:</span>
+                      <p className="text-orange-600 font-medium">{sample.selectedCapabilities?.join(', ')}</p>
                     </div>
                   </div>
 
                   <div className="space-y-1">
-                    <span className="text-[10px] uppercase font-bold text-slate-400">Generated Subject:</span>
-                    <p className="text-xs font-mono text-emerald-300 bg-slate-900 p-2 rounded border border-slate-800">
+                    <span className="text-[10px] uppercase font-bold text-slate-500">Generated Subject:</span>
+                    <p className="text-xs font-mono text-orange-700 bg-orange-50/60 p-2 rounded border border-orange-200 font-semibold">
                       {sample.subject}
                     </p>
                   </div>
 
                   <div className="space-y-1">
-                    <span className="text-[10px] uppercase font-bold text-slate-400">Generated Email Body:</span>
-                    <div className="text-xs text-slate-200 bg-slate-900 p-3 rounded border border-slate-800 whitespace-pre-wrap leading-relaxed">
+                    <span className="text-[10px] uppercase font-bold text-slate-500">Generated Email Body:</span>
+                    <div className="text-xs text-slate-800 bg-white p-3 rounded border border-slate-200 whitespace-pre-wrap leading-relaxed shadow-2xs font-sans">
                       {sample.body}
                     </div>
                   </div>
@@ -3333,10 +3301,10 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
               ))}
             </div>
 
-            <div className="px-6 py-4 border-t border-slate-800 bg-slate-950 flex items-center justify-end gap-3">
+            <div className="px-6 py-4 border-t border-slate-200 bg-slate-50 flex items-center justify-end gap-3">
               <button
                 onClick={() => setIsAiPreviewModalOpen(false)}
-                className="px-4 py-2 text-xs text-slate-400 hover:text-slate-200 font-medium"
+                className="px-4 py-2 text-xs text-slate-600 hover:text-slate-900 font-medium"
               >
                 Back to Config
               </button>
@@ -3345,7 +3313,7 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                   setIsAiPreviewModalOpen(false);
                   handleCreateCampaignSubmit();
                 }}
-                className="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-semibold transition flex items-center gap-2"
+                className="px-5 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg text-xs font-semibold transition flex items-center gap-2 shadow-xs"
               >
                 <span>Confirm & Create AI Campaign</span>
                 <ArrowRight className="w-4 h-4" />
@@ -3357,21 +3325,21 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
 
       {/* LEAD AI INSPECTION MODAL */}
       {inspectingLead && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden shadow-2xl">
-            <div className="px-6 py-4 border-b border-slate-800 flex items-center justify-between">
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden shadow-2xl text-slate-900">
+            <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
               <div>
-                <h3 className="text-base font-bold text-slate-100 flex items-center gap-2">
-                  <User className="w-4 h-4 text-emerald-400" />
+                <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                  <User className="w-4 h-4 text-orange-500" />
                   <span>Lead Personalization Audit: {inspectingLead.name}</span>
                 </h3>
-                <p className="text-xs text-slate-400 mt-0.5">
+                <p className="text-xs text-slate-500 mt-0.5">
                   {inspectingLead.companyName} ({inspectingLead.email})
                 </p>
               </div>
               <button
                 onClick={() => setInspectingLead(null)}
-                className="p-1.5 text-slate-400 hover:text-slate-200 rounded-lg"
+                className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -3379,20 +3347,20 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
 
             <div className="flex-1 overflow-y-auto p-6 space-y-4">
               <div className="grid grid-cols-2 gap-3 text-xs">
-                <div className="bg-slate-950 p-3 rounded-xl border border-slate-800">
-                  <span className="text-[10px] uppercase font-bold text-slate-400">Send Status:</span>
-                  <p className="font-semibold text-emerald-400 mt-0.5">{inspectingLead.sendStatus}</p>
+                <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
+                  <span className="text-[10px] uppercase font-bold text-slate-500">Send Status:</span>
+                  <p className="font-semibold text-emerald-700 mt-0.5">{inspectingLead.sendStatus}</p>
                 </div>
-                <div className="bg-slate-950 p-3 rounded-xl border border-slate-800">
-                  <span className="text-[10px] uppercase font-bold text-slate-400">Demo Status:</span>
-                  <p className="font-semibold text-sky-400 mt-0.5">{inspectingLead.demoStatus || 'NOT_BOOKED'}</p>
+                <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
+                  <span className="text-[10px] uppercase font-bold text-slate-500">Demo Status:</span>
+                  <p className="font-semibold text-sky-700 mt-0.5">{inspectingLead.demoStatus || 'NOT_BOOKED'}</p>
                 </div>
               </div>
 
               {inspectingLead.generatedSubject && (
                 <div className="space-y-1">
-                  <span className="text-[10px] uppercase font-bold text-slate-400">Actual Sent Subject:</span>
-                  <p className="text-xs font-mono text-emerald-300 bg-slate-950 p-3 rounded-xl border border-slate-800">
+                  <span className="text-[10px] uppercase font-bold text-slate-500">Actual Sent Subject:</span>
+                  <p className="text-xs font-mono text-orange-700 bg-orange-50/60 p-3 rounded-xl border border-orange-200 font-semibold">
                     {inspectingLead.generatedSubject}
                   </p>
                 </div>
@@ -3400,25 +3368,25 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
 
               {inspectingLead.generatedBody && (
                 <div className="space-y-1">
-                  <span className="text-[10px] uppercase font-bold text-slate-400">Actual Sent Email Body:</span>
-                  <div className="text-xs text-slate-200 bg-slate-950 p-4 rounded-xl border border-slate-800 whitespace-pre-wrap leading-relaxed font-mono">
+                  <span className="text-[10px] uppercase font-bold text-slate-500">Actual Sent Email Body:</span>
+                  <div className="text-xs text-slate-800 bg-slate-50 p-4 rounded-xl border border-slate-200 whitespace-pre-wrap leading-relaxed font-mono">
                     {inspectingLead.generatedBody}
                   </div>
                 </div>
               )}
 
               {inspectingLead.selectedPainPoint && (
-                <div className="p-3 bg-slate-950 border border-slate-800 rounded-xl space-y-1">
-                  <span className="text-[10px] uppercase font-bold text-slate-400">Targeted Pain Point:</span>
-                  <p className="text-xs text-slate-200 font-medium">{inspectingLead.selectedPainPoint}</p>
+                <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-1">
+                  <span className="text-[10px] uppercase font-bold text-slate-500">Targeted Pain Point:</span>
+                  <p className="text-xs text-slate-800 font-medium">{inspectingLead.selectedPainPoint}</p>
                 </div>
               )}
             </div>
 
-            <div className="px-6 py-4 border-t border-slate-800 bg-slate-950 flex items-center justify-end">
+            <div className="px-6 py-4 border-t border-slate-200 bg-slate-50 flex items-center justify-end">
               <button
                 onClick={() => setInspectingLead(null)}
-                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg text-xs font-semibold"
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-lg text-xs font-semibold border border-slate-200 transition"
               >
                 Close Audit
               </button>

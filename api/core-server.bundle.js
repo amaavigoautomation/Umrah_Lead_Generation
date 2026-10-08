@@ -23018,31 +23018,94 @@ function classifyInboundMessageFallback(params) {
   const from = (params.from || "").toLowerCase().trim();
   const subject = (params.subject || "").toLowerCase().trim();
   const body = (params.body || "").toLowerCase().trim();
-  const isAutoSender = from.includes("no-reply") || from.includes("noreply") || from.includes("mailer-daemon") || from.includes("postmaster") || from.includes("newsletter") || from.includes("bounce") || from.includes("alerts@") || from.includes("notifications@") || from.includes("support@github") || from.includes("jira@") || from.includes("system@") || from.includes("bot@");
-  if (isAutoSender) {
+  const emailDomain = from.includes("@") ? from.split("@")[1] : "";
+  const blockedDomains = [
+    "pinterest.com",
+    "discover.pinterest.com",
+    "pmail.pinterest.com",
+    "linkedin.com",
+    "messages-noreply.linkedin.com",
+    "facebookmail.com",
+    "facebook.com",
+    "instagram.com",
+    "twitter.com",
+    "x.com",
+    "youtube.com",
+    "quora.com",
+    "redditmail.com",
+    "reddit.com",
+    "tumblr.com",
+    "canva.com",
+    "medium.com",
+    "apollo.io",
+    "hubspotmail.com",
+    "hubspot.com",
+    "salesforce.com"
+  ];
+  const isBlockedDomain = blockedDomains.some(
+    (dom) => emailDomain === dom || emailDomain.endsWith("." + dom)
+  );
+  if (isBlockedDomain) {
     return {
       qualifies: false,
-      reason: "Sender address flagged as automated/system bot",
+      reason: `Sender domain (${emailDomain}) belongs to a blocked automated/social platform`,
       isBotOrNewsletter: true
     };
   }
-  const isAutoSubject = subject.includes("out of office") || subject.includes("auto-reply") || subject.includes("auto reply") || subject.includes("delivery status") || subject.includes("undelivered mail") || subject.includes("failure notice") || subject.includes("returned mail") || subject.includes("vacation response") || subject.includes("unsubscribe") || subject.includes("mail delivery") || subject.includes("automatic reply");
+  const automatedPrefixes = [
+    "no-reply",
+    "noreply",
+    "mailer-daemon",
+    "postmaster",
+    "newsletter",
+    "bounce",
+    "alerts",
+    "notifications",
+    "notification",
+    "system",
+    "bot",
+    "auto-reply",
+    "recommendations",
+    "update",
+    "updates",
+    "digest",
+    "digests",
+    "promotions",
+    "marketing",
+    "feedback",
+    "survey",
+    "info@discover",
+    "reply-to"
+  ];
+  const fromLocalPart = from.includes("@") ? from.split("@")[0] : from;
+  const isAutoPrefix = automatedPrefixes.some(
+    (prefix) => fromLocalPart.includes(prefix) || fromLocalPart.startsWith(prefix)
+  );
+  if (isAutoPrefix) {
+    return {
+      qualifies: false,
+      reason: `Sender local part (${fromLocalPart}) flagged as automated prefix`,
+      isBotOrNewsletter: true
+    };
+  }
+  const isAutoSubject = subject.includes("out of office") || subject.includes("auto-reply") || subject.includes("auto reply") || subject.includes("delivery status") || subject.includes("undelivered mail") || subject.includes("failure notice") || subject.includes("returned mail") || subject.includes("vacation response") || subject.includes("unsubscribe") || subject.includes("mail delivery") || subject.includes("automatic reply") || subject.includes("inspired by your") || subject.includes("recommended for you") || subject.includes("new pins") || subject.includes("verification code") || subject.includes("one-time password") || subject.includes("otp");
   if (isAutoSubject) {
     return {
       qualifies: false,
-      reason: "Subject flagged as automated bounce, notification, or auto-reply",
+      reason: "Subject flagged as automated notification, bounce, or social digest",
       isBotOrNewsletter: true
     };
   }
-  const isNewsletterBody = body.includes("click here to unsubscribe") || body.includes("view in browser") || body.includes("manage your preferences") || body.includes("you are receiving this email because") || body.includes("opt-out") || body.includes("mailing list") || body.includes("unsubscribe here");
+  const cleanBodyText = body.replace(/https?:\/\/[^\s]+/g, "").replace(/www\.[^\s]+/g, "").replace(/<[^>]*>/g, "").replace(/\s+/g, " ").trim();
+  const isNewsletterBody = cleanBodyText.includes("unsubscribe") || cleanBodyText.includes("un-subscribe") || cleanBodyText.includes("view in browser") || cleanBodyText.includes("manage your preferences") || cleanBodyText.includes("manage preferences") || cleanBodyText.includes("email preferences") || cleanBodyText.includes("you are receiving this email") || cleanBodyText.includes("received this email because") || cleanBodyText.includes("opt-out") || cleanBodyText.includes("opt out") || cleanBodyText.includes("mailing list") || cleanBodyText.includes("add us to your address") || cleanBodyText.includes("all rights reserved") || cleanBodyText.includes("copyright") || cleanBodyText.includes("to view this content, open the following url") || cleanBodyText.includes("open the following url in your browser") || cleanBodyText.includes("having trouble viewing this email") || cleanBodyText.includes("this is an automated message") || cleanBodyText.includes("please do not reply to this email") || cleanBodyText.includes("do not reply to this email") || cleanBodyText.includes("privacy policy") && (cleanBodyText.includes("terms of service") || cleanBodyText.includes("terms & conditions") || cleanBodyText.includes("terms and conditions"));
   if (isNewsletterBody) {
     return {
       qualifies: false,
-      reason: "Email body classified as mass newsletter/marketing",
+      reason: "Message body matched automated transactional, newsletter, or promotional footer template",
       isBotOrNewsletter: true
     };
   }
-  const hasRelevanceKeywords = body.includes("b2b") || body.includes("b2c") || body.includes("portal") || body.includes("cost") || body.includes("pricing") || body.includes("package") || body.includes("software") || body.includes("platform") || body.includes("booking") || body.includes("enquiry") || body.includes("inquiry") || body.includes("issue") || body.includes("problem") || body.includes("error") || body.includes("demo") || body.includes("interested") || body.includes("help") || body.includes("question") || body.includes("contact") || body.includes("support") || body.includes("sales") || body.includes("business") || body.includes("client") || body.includes("service") || body.includes("product") || body.includes("account") || body.includes("integration") || body.includes("partner");
+  const hasRelevanceKeywords = cleanBodyText.includes("b2b") || cleanBodyText.includes("b2c") || cleanBodyText.includes("portal") || cleanBodyText.includes("cost") || cleanBodyText.includes("pricing") || cleanBodyText.includes("package") || cleanBodyText.includes("software") || cleanBodyText.includes("platform") || cleanBodyText.includes("booking") || cleanBodyText.includes("enquiry") || cleanBodyText.includes("inquiry") || cleanBodyText.includes("issue") || cleanBodyText.includes("problem") || cleanBodyText.includes("error") || cleanBodyText.includes("demo") || cleanBodyText.includes("interested") || cleanBodyText.includes("help") || cleanBodyText.includes("question") || cleanBodyText.includes("contact") || cleanBodyText.includes("support") || cleanBodyText.includes("sales") || cleanBodyText.includes("business") || cleanBodyText.includes("client") || cleanBodyText.includes("service") || cleanBodyText.includes("product") || cleanBodyText.includes("account") || cleanBodyText.includes("integration") || cleanBodyText.includes("partner");
   if (hasRelevanceKeywords) {
     return {
       qualifies: true,
@@ -23059,7 +23122,15 @@ function classifyInboundMessageFallback(params) {
 async function classifyInboundMessage(params) {
   const openAiKey = process.env.OPENAI_API_KEY || process.env.GEMINI_API_KEY;
   const targetCompany = params.companyName || "Umrah360";
-  const systemInstruction = `You are a strict, highly accurate message classifier for a multi-tenant business communication platform (current company context: "${targetCompany}").
+  const deterministicResult = classifyInboundMessageFallback(params);
+  if (deterministicResult.isBotOrNewsletter || !deterministicResult.qualifies) {
+    console.log(`[Deterministic Pre-Check] Inbound classified immediately: qualifies=${deterministicResult.qualifies}, reason="${deterministicResult.reason}"`);
+    return deterministicResult;
+  }
+  if (openAiKey) {
+    try {
+      const openai = new OpenAI({ apiKey: openAiKey });
+      const systemInstruction = `You are a strict, highly accurate message classifier for a multi-tenant business communication platform (current company context: "${targetCompany}").
 Your task is to analyze an incoming message from a customer/user across channels like Email, WhatsApp, and Instagram, and determine if it qualifies for an automated AI reply.
 
 You must classify the message into one of two decisions:
@@ -23076,7 +23147,7 @@ Guidelines:
     "reason": "A concise, clear explanation of why it qualifies or is ignored",
     "isBotOrNewsletter": boolean
   }`;
-  const prompt = `INCOMING MESSAGE DETAILS:
+      const prompt = `INCOMING MESSAGE DETAILS:
 From/Sender: ${params.from || "Unknown"}
 Channel: ${params.channel || "Unknown"}
 Subject: ${params.subject || "No Subject"}
@@ -23084,9 +23155,6 @@ Message Body:
 """
 ${params.body}
 """`;
-  if (openAiKey) {
-    try {
-      const openai = new OpenAI({ apiKey: openAiKey });
       const response = await openai.chat.completions.create({
         model: "gpt-4o-mini",
         messages: [
@@ -23103,12 +23171,11 @@ ${params.body}
         return parsed;
       }
     } catch (err) {
-      console.warn("[OpenAI Classifier] Warning during classification, falling back to Rule-based:", err?.message || err);
+      console.warn("[OpenAI Classifier] Warning during classification, falling back to deterministic:", err?.message || err);
     }
   }
-  const fallbackResult = classifyInboundMessageFallback(params);
-  console.log(`[Fallback Classifier] Inbound classified: qualifies=${fallbackResult.qualifies}, reason="${fallbackResult.reason}"`);
-  return fallbackResult;
+  console.log(`[Pre-Check Fallback] Inbound classified: qualifies=${deterministicResult.qualifies}, reason="${deterministicResult.reason}"`);
+  return deterministicResult;
 }
 var init_messageClassifier = __esm({
   "src/server/messageClassifier.ts"() {

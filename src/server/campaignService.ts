@@ -21,7 +21,8 @@ import {
 import { isFirebaseConfigured } from '../firebase/config.js';
 import { db } from './adminFirestore.js';
 import { safeSetDoc } from './firestoreUtils.js';
-import { sendLiveEmail, getSmtpConfig } from './smtpService.js';
+import { sendLiveEmail } from './smtpService.js';
+import { getTenantEmailSettings } from './tenantEmailService.js';
 import { appendOutboundMessageToThread } from './inboundPipeline.js';
 import { sanitizeAiEmailText } from './emailSanitizer.js';
 import { getTenantBrand, getBrandSync } from './brandService.js';
@@ -29,6 +30,20 @@ import { initKnowledgeStore, getPublishedKnowledgeDocs } from './knowledgeServic
 import { brandIntro, brandHost, type TenantBrand } from '../shared/brand.js';
 
 const campaignSenderName = (b: TenantBrand) => (b.playbook === 'umrah360' ? 'Umrah360 Growth Team' : b.teamName);
+
+/**
+ * Address shown as the sender on the saved (inbox) copy of a campaign email.
+ * Always the workspace's own address: its verified sending address (Settings -> Email) when it has one,
+ * otherwise its brand sales email. Never the platform's shared SMTP mailbox.
+ * Record/display only: the real From header is decided inside sendLiveEmail.
+ */
+async function campaignRecordedSender(tenantId: string): Promise<string> {
+  try {
+    const s = await getTenantEmailSettings(tenantId);
+    if (s.status === 'verified' && s.domain && s.fromLocalPart) return `${s.fromLocalPart}@${s.domain}`;
+  } catch {}
+  return (await getTenantBrand(tenantId)).salesEmail || '';
+}
 const defaultTemplateSubject = (b: TenantBrand) => `${b.companyName} Solutions for {{company}}`;
 
 /** Neutral cold-outreach copy for non-Umrah360 workspaces. */
@@ -1848,8 +1863,7 @@ export async function processNextCampaignSendBatch(
     lead.sendStatus = 'SENDING';
     lead.updatedAt = new Date().toISOString();
 
-    const smtpConfig = getSmtpConfig();
-    const senderFrom = smtpConfig.from || smtpConfig.user || (await getTenantBrand(getCampaignActiveCtx().tenantId)).salesEmail || 'sales@umrah360.in';
+    const senderFrom = await campaignRecordedSender(getCampaignActiveCtx().tenantId);
     const conversationId = lead.conversationId || `conv-${lead.leadId}`;
     const gmailThreadId = lead.gmailThreadId || `thread-${lead.leadId}`;
 
@@ -2179,8 +2193,7 @@ async function executeCampaignSendingEngine(campaignId: string, expectedRunId?: 
       lead.sendStatus = 'SENDING';
       lead.updatedAt = new Date().toISOString();
 
-      const smtpConfig = getSmtpConfig();
-      const senderFrom = smtpConfig.from || smtpConfig.user || (await getTenantBrand(getCampaignActiveCtx().tenantId)).salesEmail || 'sales@umrah360.in';
+      const senderFrom = await campaignRecordedSender(getCampaignActiveCtx().tenantId);
       const conversationId = lead.conversationId || `conv-${lead.leadId}`;
       const gmailThreadId = lead.gmailThreadId || `thread-${lead.leadId}`;
 

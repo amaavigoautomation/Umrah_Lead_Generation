@@ -62,7 +62,6 @@ import {
   processSchedulingConversationTurn,
 } from './demoSchedulingService.js';
 import { getTenantBrand } from './brandService.js';
-import { classifyInboundMessage } from './messageClassifier.js';
 import { brandAutomationSignature, brandIntro, brandFallbackAgency } from '../shared/brand.js';
 import { sanitizeAiEmailText } from './emailSanitizer.js';
 
@@ -1604,17 +1603,8 @@ export async function processLiveInboundEmail(payload: {
     console.log(`[Unified Inbox] Loaded complete thread context for ${conversationId} (${completeThreadContext.length} messages)`);
 
     // =========================================================================
-    // RULE 6: EVALUATE CHANNEL MODE AND RUN AI QUALIFICATION CHECK
+    // RULE 6: EVALUATE CHANNEL MODE
     // =========================================================================
-    const qualification = await classifyInboundMessage({
-      subject: payload.subject,
-      body: payload.body,
-      from: payload.from,
-      channel: 'EMAIL',
-      companyName: brand.companyName,
-      isFollowUp: thread.length > 1 || /^\s*re:/i.test(payload.subject || ''),
-    });
-
     let shouldSendAutoReply = false;
     let replyDecisionReason = '';
 
@@ -1624,9 +1614,6 @@ export async function processLiveInboundEmail(payload: {
     } else if (pipelineConfig.emailMode === 'REVIEW') {
       shouldSendAutoReply = false;
       replyDecisionReason = 'Email channel mode is REVIEW: AI response drafted for human approval prior to dispatch.';
-    } else if (!qualification.qualifies) {
-      shouldSendAutoReply = false;
-      replyDecisionReason = `AI qualification filter: ignored (${qualification.reason})`;
     } else {
       shouldSendAutoReply = true;
       replyDecisionReason = payload.isTestSimulation
@@ -1901,10 +1888,8 @@ export async function processLiveInboundEmail(payload: {
       recentProcessedEmails.pop();
     }
 
-    // Persist CRM entities to Firestore once at arrival time (only if the message qualifies)
-    if (isFirebaseConfigured && db && crmEntities && !qualification.qualifies) {
-      console.log(`[Inbound Pipeline] Message ${incomingMsgId} is unqualified/ignored. Skipping CRM persistence so no lead/contact is created.`);
-    } else if (isFirebaseConfigured && db && crmEntities) {
+    // Persist CRM entities to Firestore once at arrival time
+    if (isFirebaseConfigured && db && crmEntities) {
       try {
         // Await every write: on serverless hosts the function can be frozen right after the
         // response is sent, which would silently drop un-awaited writes (reply never saved).

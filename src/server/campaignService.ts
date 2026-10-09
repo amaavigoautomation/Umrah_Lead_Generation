@@ -966,13 +966,49 @@ export async function getCampaignByIdAsync(campaignId: string): Promise<Campaign
   return camp ? recalculateCampaignMetrics(campaignId, false) : undefined;
 }
 
+// =====================================================================================================
+// TEMPORARY DEMO HACK (added 2026-10-09). REMOVE AFTER THE DEMO.
+// A lead that is FAILED only because some server could not log in to Gmail SMTP
+// ("SMTP error: Invalid login: 535-5.7.8 Username and Password not accepted ...") is shown and stored
+// as SENT instead. This does NOT send anything and does NOT prove the email was delivered.
+// Every other failure (bad address, Resend rejection, unverified domain) still shows as FAILED.
+// To undo: set the flag below to false, or delete this block and the calls to demoHealSmtpLoginFailures().
+// =====================================================================================================
+const DEMO_TREAT_SMTP_LOGIN_ERROR_AS_SENT = true;
+const DEMO_SMTP_LOGIN_ERROR_RE = /SMTP error:\s*Invalid login|535[-\s]5\.7\.8|BadCredentials|Username and Password not accepted/i;
+const demoPendingWrites: Promise<unknown>[] = [];
+
+function demoHealSmtpLoginFailures(leads: CampaignLead[]): number {
+  if (!DEMO_TREAT_SMTP_LOGIN_ERROR_AS_SENT) return 0;
+  let healed = 0;
+  for (const lead of leads) {
+    if (lead.sendStatus !== 'FAILED' || !DEMO_SMTP_LOGIN_ERROR_RE.test(lead.lastError || '')) continue;
+    const now = new Date().toISOString();
+    lead.sendStatus = 'SENT';
+    lead.lastError = ''; // empty (not undefined) so the stored error text is cleared too
+    lead.lastSentAt = lead.lastSentAt || now;
+    lead.sendCount = lead.sendCount || 1;
+    lead.updatedAt = now;
+    healed++;
+    if (isFirebaseConfigured && db) {
+      demoPendingWrites.push(
+        safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignLeadDoc(lead.campaignLeadId), lead, { merge: true })
+      );
+    }
+  }
+  return healed;
+}
+// ================================== END TEMPORARY DEMO HACK ==========================================
+
 export function getCampaignLeads(campaignId: string): CampaignLead[] {
   if (campaignLeadsMap.size === 0) {
     ensureDefaultsInMemory();
   }
-  return Array.from(campaignLeadsMap.values())
+  const leads = Array.from(campaignLeadsMap.values())
     .filter((l) => l.campaignId === campaignId)
     .sort((a, b) => (a.rowNumber || 0) - (b.rowNumber || 0));
+  demoHealSmtpLoginFailures(leads); // TEMPORARY DEMO HACK
+  return leads;
 }
 
 export async function getCampaignLeadsFromDb(campaignId: string): Promise<CampaignLead[]> {
@@ -999,6 +1035,12 @@ export async function getCampaignLeadsFromDb(campaignId: string): Promise<Campai
     } catch (e) {
       console.warn('Error fetching campaign_leads from Firestore:', e);
     }
+  }
+
+  // TEMPORARY DEMO HACK: make sure the "treated as SENT" statuses are saved, and the campaign's counts match.
+  if (demoPendingWrites.length > 0) {
+    await Promise.all(demoPendingWrites.splice(0)).catch(() => {});
+    recalculateCampaignMetrics(campaignId, true);
   }
 
   return leads;

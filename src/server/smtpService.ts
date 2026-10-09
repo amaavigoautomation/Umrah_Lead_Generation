@@ -51,6 +51,12 @@ export interface SendMailResult {
   simulated?: boolean;
   isDailyLimitExceeded?: boolean;
   provider?: 'resend' | 'smtp';
+  /**
+   * True when THIS SERVER cannot send email at all (Resend key missing or refused here).
+   * That is a setup problem of the server, not a failure of the recipient: callers should not
+   * mark the lead/message as failed, because a correctly configured server can still deliver it.
+   */
+  notConfigured?: boolean;
 }
 
 // In-memory status cache
@@ -274,140 +280,48 @@ export async function verifySmtpConnection(): Promise<SmtpStatus> {
   }
 }
 
-async function sendViaSmtp(params: SendMailParams): Promise<SendMailResult> {
-  await fetchFirestoreSmtpConfig().catch(() => {});
-  const config = getSmtpConfig();
-
-  // If SMTP is configured, attempt real SMTP transmission
-  if (config.configured) {
-    try {
-      const transporter = createTransporter();
-      if (!transporter) {
-        throw new Error('SMTP transporter creation failed');
-      }
-
-      // Process attachments if present
-      let formattedAttachments: any[] | undefined = undefined;
-      if (params.attachments && Array.isArray(params.attachments) && params.attachments.length > 0) {
-        formattedAttachments = params.attachments.map((att) => {
-          if (att.dataUrl && !att.content) {
-            const matches = att.dataUrl.match(/^data:([^;]+);base64,(.+)$/);
-            if (matches) {
-              return {
-                filename: att.filename,
-                contentType: att.contentType || matches[1],
-                content: Buffer.from(matches[2], 'base64'),
-              };
-            }
-          }
-          if (att.content && typeof att.content === 'string' && att.encoding === 'base64') {
-            return {
-              filename: att.filename,
-              contentType: att.contentType,
-              content: Buffer.from(att.content, 'base64'),
-            };
-          }
-          return {
-            filename: att.filename,
-            contentType: att.contentType,
-            content: att.content,
-            path: att.path,
-          };
-        });
-      }
-
-      const mailOptions: any = {
-        from: config.from,
-        to: params.to,
-        replyTo: params.replyTo || config.user,
-        subject: params.subject,
-        text: params.text,
-        html: params.html || params.text.replace(/\n/g, '<br/>'),
-        inReplyTo: params.inReplyTo,
-        references: params.references ? params.references.join(' ') : params.inReplyTo,
-        headers: {
-          'X-Mailer': 'Umrah360-AI-Automated-Platform',
-          'X-Automated-By': config.user,
-          ...(params.headers || {}),
-        },
-      };
-
-      if (formattedAttachments && formattedAttachments.length > 0) {
-        mailOptions.attachments = formattedAttachments;
-      }
-
-      let info: any;
-      try {
-        info = await transporter.sendMail(mailOptions);
-      } catch (firstErr: any) {
-        console.warn(`[SMTP Live] Primary transport error (${firstErr?.code || firstErr?.message}), trying fallback port 587/465...`);
-        try {
-          const fallback587 = createTransporter(587, false);
-          if (fallback587) {
-            info = await fallback587.sendMail(mailOptions);
-          } else {
-            throw firstErr;
-          }
-        } catch (secondErr: any) {
-          try {
-            const fallback465 = createTransporter(465, true);
-            if (fallback465) {
-              info = await fallback465.sendMail(mailOptions);
-            } else {
-              throw secondErr;
-            }
-          } catch (thirdErr: any) {
-            throw firstErr;
-          }
-        }
-      }
-
-      console.log(`[SMTP Live] Successfully sent email to ${params.to}, messageId: ${info.messageId}`);
-
-      return {
-        success: true,
-        messageId: info.messageId,
-        response: info.response,
-        simulated: false,
-        provider: 'smtp',
-      };
-    } catch (err: any) {
-      console.error(`[SMTP Live] Error sending email to ${params.to}:`, err);
-      return {
-        success: false,
-        error: `SMTP error: ${err.message || 'Unknown SMTP error'}`,
-        simulated: false,
-      };
-    }
-  }
-
-  // If SMTP credentials not provided yet in environment
-  return {
-    success: false,
-    error: `SMTP is not yet configured in environment. Set SMTP_HOST, SMTP_USER, and SMTP_PASS to dispatch real outgoing emails.`,
-    simulated: false,
-  };
-}
-
 // ---------------------------------------------------------------------------
 // Resend (outbound). Inbound stays on IMAP.
 // ---------------------------------------------------------------------------
 
 /**
- * Resend is used when RESEND_API_KEY and RESEND_FROM are both set (RESEND_FROM must be an
- * address on a domain verified in Resend, e.g. "Sales <sales@yourdomain.com>").
- * Set EMAIL_PROVIDER=smtp to force SMTP, or RESEND_DISABLE_SMTP_FALLBACK=true to never fall back.
+ * Resend is the ONLY way this app sends email. There is no SMTP sending and no SMTP fallback.
+ *  - RESEND_API_KEY: required on every server that should send.
+ *  - RESEND_FROM:    only for workspaces listed in PLATFORM_SENDER_TENANTS (they send from this platform
+ *                    address until their own domain is verified). Workspaces with a verified domain send
+ *                    from their own address and do not need it.
+ * EMAIL_PROVIDER and RESEND_DISABLE_SMTP_FALLBACK no longer have any effect.
  */
 export function getResendConfig() {
   const apiKey = (process.env.RESEND_API_KEY || '').trim();
   const from = (process.env.RESEND_FROM || '').trim();
-  const forceSmtp = (process.env.EMAIL_PROVIDER || '').trim().toLowerCase() === 'smtp';
   return {
     apiKey,
     from,
-    configured: Boolean(apiKey && from) && !forceSmtp,
-    fallbackToSmtp: process.env.RESEND_DISABLE_SMTP_FALLBACK !== 'true',
+    configured: Boolean(apiKey && from),
   };
+}
+
+const notConfiguredResult = (reason: string): SendMailResult => ({
+  success: false,
+  error: `Email sending is not set up on this server (${reason}). Nothing was sent.`,
+  simulated: false,
+  provider: 'resend',
+  notConfigured: true,
+});
+
+/**
+ * Can THIS SERVER send email for this workspace at all? Checks server setup only (the Resend key, and the
+ * platform sender when one is needed). It makes no network call and sends nothing.
+ * A workspace whose own domain is not verified yet still counts as "ready" here: that is a workspace
+ * setting, reported per email by sendLiveEmail exactly as before.
+ */
+export async function getEmailSendReadiness(tenantId?: string): Promise<{ ok: boolean; error?: string }> {
+  const cfg = getResendConfig();
+  if (!cfg.apiKey) return { ok: false, error: notConfiguredResult('RESEND_API_KEY is missing').error };
+  if (tenantId) return { ok: true }; // workspace sender (own domain / platform sender / blocked) is resolved at send time
+  if (!cfg.from) return { ok: false, error: notConfiguredResult('RESEND_FROM is missing').error };
+  return { ok: true };
 }
 
 let resendClient: Resend | null = null;
@@ -442,9 +356,10 @@ function toResendAttachments(list?: EmailAttachmentParam[]): any[] | undefined {
   });
 }
 
-type ResendOutcome = SendMailResult & { definiteRejection?: boolean };
+/** Resend error names that mean the API key on THIS server is missing or not accepted. */
+const RESEND_KEY_ERRORS = ['missing_api_key', 'invalid_api_key', 'restricted_api_key'];
 
-async function sendViaResend(params: SendMailParams, override?: { from: string; replyTo?: string }): Promise<ResendOutcome> {
+async function sendViaResend(params: SendMailParams, override?: { from: string; replyTo?: string }): Promise<SendMailResult> {
   const cfg = getResendConfig();
   try {
     const resend = getResendClient(cfg.apiKey);
@@ -475,13 +390,15 @@ async function sendViaResend(params: SendMailParams, override?: { from: string; 
     if (error || !data?.id) {
       const msg = (error as any)?.message || 'Resend did not return an email id';
       const status = Number((error as any)?.statusCode);
-      // Only a 4xx answer proves Resend refused the email (bad key, unverified domain, invalid
-      // address, rate limit), so only then is SMTP fallback safe. A missing status means the request
-      // never got an answer (network/timeout) and 5xx is not conclusive: the email may still have
-      // been accepted, so we must not send it a second time through SMTP.
+      // A 4xx answer proves Resend refused the email (bad key, unverified domain, invalid address,
+      // rate limit). A missing status means the request never got an answer (network/timeout).
       const definite = Number.isFinite(status) && status >= 400 && status < 500;
       console.error(`[Resend] ${definite ? 'Rejected' : 'Failed (outcome unknown)'} email to ${params.to}: ${msg}`);
-      return { success: false, error: `Resend error: ${msg}`, simulated: false, provider: 'resend', definiteRejection: definite };
+      // The key itself was refused: this server cannot send for anyone, so it is not this recipient's failure.
+      if (status === 401 || RESEND_KEY_ERRORS.includes(String((error as any)?.name || ''))) {
+        return { ...notConfiguredResult(`Resend refused the API key: ${msg}`) };
+      }
+      return { success: false, error: `Resend error: ${msg}`, simulated: false, provider: 'resend' };
     }
 
     // Map the Resend email id to the workspace so bounce/complaint webhooks suppress in the right tenant.
@@ -493,46 +410,43 @@ async function sendViaResend(params: SendMailParams, override?: { from: string; 
     console.log(`[Resend] Sent email to ${params.to}, id: ${data.id}`);
     return { success: true, messageId: data.id, response: 'resend:accepted', simulated: false, provider: 'resend' };
   } catch (err: any) {
-    // Network error / timeout: we cannot know whether Resend accepted it, so do NOT fall back (would risk a duplicate).
+    // Network error / timeout: we cannot know whether Resend accepted it.
     console.error(`[Resend] Error sending email to ${params.to}:`, err);
-    return { success: false, error: `Resend error: ${err?.message || 'Unknown error'}`, simulated: false, provider: 'resend', definiteRejection: false };
+    return { success: false, error: `Resend error: ${err?.message || 'Unknown error'}`, simulated: false, provider: 'resend' };
   }
 }
 
 /**
- * Single entry point for every outgoing email in the app.
- * Resend when configured; SMTP otherwise, and as a fallback only when Resend definitely rejected the email.
+ * Single entry point for every outgoing email in the app. Resend only.
+ *  - workspace with a verified domain            -> sent from the workspace's own address
+ *  - workspace listed in PLATFORM_SENDER_TENANTS -> sent from RESEND_FROM
+ *  - any other workspace                         -> blocked with a message pointing to Settings -> Email
+ *  - Resend not set up on this server            -> `notConfigured` result; nothing is sent, and no other
+ *                                                   transport is tried
  */
 export async function sendLiveEmail(params: SendMailParams): Promise<SendMailResult> {
   const cfg = getResendConfig();
+  if (!cfg.apiKey) {
+    console.warn(`[Email] Not sending to ${params.to}: RESEND_API_KEY is missing on this server.`);
+    return notConfiguredResult('RESEND_API_KEY is missing');
+  }
 
   // Workspace-scoped sends: the From address must come from the workspace's own verified domain.
-  // Never fall back to SMTP here (that would send as the platform's shared Gmail mailbox).
-  const forceSmtp = (process.env.EMAIL_PROVIDER || '').trim().toLowerCase() === 'smtp';
-  if (params.tenantId && cfg.apiKey && !forceSmtp) {
+  if (params.tenantId) {
     const sender = await resolveTenantSender(params.tenantId);
     if (sender.ok === false) {
       console.warn(`[Email] Blocked send for tenant ${params.tenantId}: ${sender.error}`);
       return { success: false, error: sender.error, simulated: false, provider: 'resend' };
     }
     if (sender.source === 'tenant') {
-      const { definiteRejection: _d, ...r } = await sendViaResend(params, { from: sender.from, replyTo: sender.replyTo });
-      return r;
+      return sendViaResend(params, { from: sender.from, replyTo: sender.replyTo });
     }
     // source === 'platform' (grandfathered tenant): continue with the platform sender below.
   }
-  if (!cfg.configured) {
-    return sendViaSmtp(params);
-  }
 
-  const { definiteRejection, ...resendResult } = await sendViaResend(params);
-  if (resendResult.success) return resendResult;
-
-  if (definiteRejection && cfg.fallbackToSmtp) {
-    console.warn('[Email] Resend rejected the email, falling back to SMTP.');
-    const smtpResult = await sendViaSmtp(params);
-    if (smtpResult.success) return smtpResult;
-    return { ...smtpResult, error: `${resendResult.error}; SMTP fallback: ${smtpResult.error}` };
+  if (!cfg.from) {
+    console.warn(`[Email] Not sending to ${params.to}: RESEND_FROM is missing on this server.`);
+    return notConfiguredResult('RESEND_FROM is missing');
   }
-  return resendResult;
+  return sendViaResend(params);
 }

@@ -21,7 +21,7 @@ import {
 import { isFirebaseConfigured } from '../firebase/config.js';
 import { db } from './adminFirestore.js';
 import { safeSetDoc } from './firestoreUtils.js';
-import { sendLiveEmail } from './smtpService.js';
+import { sendLiveEmail, getEmailSendReadiness } from './smtpService.js';
 import { getTenantEmailSettings } from './tenantEmailService.js';
 import { appendOutboundMessageToThread } from './inboundPipeline.js';
 import { sanitizeAiEmailText } from './emailSanitizer.js';
@@ -1703,6 +1703,8 @@ export async function processNextCampaignSendBatch(
   campaign: Campaign;
   processedCount: number;
   remainingPendingCount: number;
+  /** Set when THIS server cannot send email at all; the leads were left PENDING, not failed. */
+  sendBlockedReason?: string;
 }> {
   if (await isCampaignTombstoned(campaignId)) {
     purgeCampaignFromMemory(campaignId);
@@ -1718,6 +1720,23 @@ export async function processNextCampaignSendBatch(
     const leads = await getCampaignLeadsFromDb(campaignId);
     const pendingLeads = leads.filter((l) => l.sendStatus === 'PENDING' && l.replyStatus !== 'REPLIED');
     return { campaign, processedCount: 0, remainingPendingCount: pendingLeads.length };
+  }
+
+  // 1b. Server setup check. If THIS server cannot send email at all (Resend is not set up here), that is
+  // not a lead failure. Touch nothing in the database: every lead stays PENDING, so a correctly configured
+  // server can deliver it. The note is kept in memory only, so it is shown on this server's screen and
+  // never reaches other servers.
+  if (campaign.deliveryMode !== 'SIMULATION') {
+    const readiness = await getEmailSendReadiness(getCampaignActiveCtx().tenantId);
+    if (!readiness.ok) {
+      const leads = await getCampaignLeadsFromDb(campaignId);
+      const pendingLeads = leads.filter((l) => l.sendStatus === 'PENDING' && l.replyStatus !== 'REPLIED');
+      if (pendingLeads.length > 0) {
+        console.warn(`[Campaign Engine] Campaign ${campaignId}: not sending from this server. ${readiness.error}`);
+        for (const l of pendingLeads) l.lastError = `Not sent yet. ${readiness.error}`;
+        return { campaign, processedCount: 0, remainingPendingCount: pendingLeads.length, sendBlockedReason: readiness.error };
+      }
+    }
   }
 
   // 2. Register/Retrieve AbortController for instant pause cancellation
@@ -1772,6 +1791,7 @@ export async function processNextCampaignSendBatch(
 
     const batchToProcess = pendingLeads.slice(0, maxBatchSize);
     let processedCount = 0;
+    let sendBlockedReason: string | undefined;
 
     for (const lead of batchToProcess) {
       // INSTANT PAUSE CHECK: Check abort signal and campaign status before each email send
@@ -1949,9 +1969,18 @@ export async function processNextCampaignSendBatch(
           }
         }
         processedCount++;
+      } else if (sendResult.notConfigured) {
+        // THIS server cannot send (e.g. Resend refused the key here). Not this lead's failure: put it back
+        // to PENDING without saving anything, and stop the batch because every other lead would hit the same wall.
+        lead.sendStatus = 'PENDING';
+        lead.lastError = `Not sent yet. ${sendResult.error || 'Email sending is not set up on this server.'}`;
+        lead.updatedAt = now;
+        sendBlockedReason = sendResult.error || 'Email sending is not set up on this server.';
+        console.warn(`[Campaign Engine] Campaign ${campaignId}: stopping batch, this server cannot send. ${sendBlockedReason}`);
+        break;
       } else {
         lead.sendStatus = 'FAILED';
-        lead.lastError = sendResult.error || 'SMTP delivery failure';
+        lead.lastError = sendResult.error || 'Delivery failure';
         lead.updatedAt = now;
 
         if (isFirebaseConfigured && db) {
@@ -2011,6 +2040,7 @@ export async function processNextCampaignSendBatch(
     campaign: updatedCampaign,
     processedCount,
     remainingPendingCount: remainingPending.length,
+    ...(sendBlockedReason ? { sendBlockedReason } : {}),
   };
   } finally {
     activeCampaignAbortControllers.delete(campaignId);

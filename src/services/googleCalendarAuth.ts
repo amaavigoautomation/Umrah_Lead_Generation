@@ -1,5 +1,6 @@
-import { GoogleAuthProvider, signInWithPopup, onAuthStateChanged, User, signOut } from 'firebase/auth';
-import { auth, db, isFirebaseConfigured } from '../firebase/config.js';
+import { GoogleAuthProvider, signInWithPopup, onAuthStateChanged, User, signOut, getAuth, type Auth } from 'firebase/auth';
+import { initializeApp, getApps } from 'firebase/app';
+import { auth, db, isFirebaseConfigured, firebaseConfig } from '../firebase/config.js';
 import { doc, getDoc } from 'firebase/firestore';
 import { safeSetDoc } from './clientFirestoreUtils.js';
 
@@ -28,6 +29,24 @@ provider.setCustomParameters({
   prompt: 'consent',
   access_type: 'offline',
 });
+
+/**
+ * A SEPARATE Firebase auth instance used only for the Google Calendar popup.
+ *
+ * The popup must never run on the app's own `auth`: signInWithPopup(auth, ...) replaces the signed-in
+ * workspace user with the Google account, which has no workspace, so the app showed
+ * "Your account is not assigned to a workspace yet" and the calendar token could not be saved either.
+ * With its own instance the popup only hands us the Google access token; the app session is untouched.
+ */
+let calendarOAuthAuth: Auth | null = null;
+function getCalendarOAuthAuth(): Auth {
+  if (!calendarOAuthAuth) {
+    const name = 'calendar-oauth';
+    const app = getApps().find((a) => a.name === name) || initializeApp(firebaseConfig, name);
+    calendarOAuthAuth = getAuth(app);
+  }
+  return calendarOAuthAuth;
+}
 
 /**
  * Initializes Google Auth state listener and synchronizes active token to backend.
@@ -91,14 +110,17 @@ export const initCalendarAuth = (
 export const signInWithGoogleCalendar = async (): Promise<{ user: User; accessToken: string } | null> => {
   try {
     isSigningIn = true;
-    const result = await signInWithPopup(auth, provider);
+    // Popup on the separate instance: the workspace user stays signed in to the app.
+    const calendarAuth = getCalendarOAuthAuth();
+    const result = await signInWithPopup(calendarAuth, provider);
     const credential = GoogleAuthProvider.credentialFromResult(result);
+    // We only needed the Google access token, not a second login: drop the Google session straight away.
+    await signOut(calendarAuth).catch(() => {});
     if (!credential?.accessToken) {
       throw new Error('Failed to get Google Calendar OAuth access token from credential. Please ensure popup permissions are allowed.');
     }
 
     cachedAccessToken = credential.accessToken;
-    cachedUser = result.user;
 
     if (typeof window !== 'undefined') {
       try {
@@ -220,8 +242,13 @@ export const fetchStoredCalendarToken = async (): Promise<{ accessToken: string;
   return null;
 };
 
+/** Forgets the calendar token in this browser. Never signs the user out of the app itself. */
 export const logoutCalendar = async () => {
-  await signOut(auth);
+  if (calendarOAuthAuth) await signOut(calendarOAuthAuth).catch(() => {});
   cachedAccessToken = null;
-  cachedUser = null;
+  if (typeof window !== 'undefined') {
+    try {
+      window.sessionStorage.removeItem('calendar_access_token');
+    } catch {}
+  }
 };

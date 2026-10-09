@@ -866,6 +866,15 @@ export function getCampaignLeads(campaignId: string): CampaignLead[] {
   }
   return Array.from(campaignLeadsMap.values())
     .filter((l) => l.campaignId === campaignId)
+    .map((l) => {
+      if (l.gmailMessageId || l.lastSentAt) {
+        l.sendStatus = 'SENT';
+        l.lastError = '';
+      } else if (l.sendStatus === 'SENT') {
+        l.lastError = '';
+      }
+      return l;
+    })
     .sort((a, b) => (a.rowNumber || 0) - (b.rowNumber || 0));
 }
 
@@ -885,6 +894,12 @@ export async function getCampaignLeadsFromDb(campaignId: string): Promise<Campai
         snap.forEach((d) => {
           const l = d.data() as CampaignLead;
           if (l && l.campaignLeadId) {
+            if (l.gmailMessageId || l.lastSentAt) {
+              l.sendStatus = 'SENT';
+              l.lastError = '';
+            } else if (l.sendStatus === 'SENT') {
+              l.lastError = '';
+            }
             campaignLeadsMap.set(l.campaignLeadId, l);
           }
         });
@@ -1281,7 +1296,7 @@ export async function startCampaign(campaignId: string): Promise<Campaign> {
       console.log(`[Campaign Engine] Automatically resetting ${failedLeads.length} failed leads to PENDING for campaign ${campaignId}`);
       for (const fl of failedLeads) {
         fl.sendStatus = 'PENDING';
-        fl.lastError = undefined;
+        fl.lastError = '';
         fl.updatedAt = now;
         if (isFirebaseConfigured && db) {
           await safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignLeadDoc(fl.campaignLeadId), fl, { merge: true });
@@ -1461,7 +1476,7 @@ export async function restartCampaign(
   const leadSavePromises: Promise<any>[] = [];
   unrepliedLeads.forEach((l) => {
     l.sendStatus = 'PENDING';
-    l.lastError = undefined;
+    l.lastError = '';
     l.campaignRunId = newRunId;
     l.updatedAt = now;
     targetLeadsCount++;
@@ -1789,7 +1804,7 @@ export async function processNextCampaignSendBatch(
         lead.gmailMessageId = sentMsgId;
         lead.gmailThreadId = gmailThreadId;
         lead.conversationId = conversationId;
-        lead.lastError = undefined;
+        lead.lastError = '';
         lead.updatedAt = now;
 
         sendHistorySet.add(runHistoryKey);
@@ -2122,7 +2137,7 @@ async function executeCampaignSendingEngine(campaignId: string, expectedRunId?: 
           lead.gmailMessageId = sentMsgId;
           lead.gmailThreadId = gmailThreadId;
           lead.conversationId = conversationId;
-          lead.lastError = undefined;
+          lead.lastError = '';
           lead.updatedAt = now;
 
           // Record in send history ledger for this run
@@ -2645,10 +2660,11 @@ export async function updateCampaignLeadStatus(params: {
     if (params.sendStatus === 'FAILED') {
       targetLead.lastError = params.lastError || 'Delivery failure';
     } else if (params.sendStatus === 'PENDING') {
-      targetLead.lastError = undefined;
+      targetLead.lastError = '';
     } else if (params.sendStatus === 'SENT') {
       targetLead.lastSentAt = targetLead.lastSentAt || now;
       targetLead.sendCount = (targetLead.sendCount || 0) + 1;
+      targetLead.lastError = '';
     }
   }
 

@@ -90,17 +90,23 @@ export function updateSmtpConfig(newConfig: {
 }
 
 export function getSmtpConfig() {
-  const host = runtimeSmtpConfig?.host || process.env.SMTP_HOST || 'smtp.gmail.com';
-  const port = runtimeSmtpConfig?.port || parseInt(process.env.SMTP_PORT || '465', 10);
+  const envHost = (process.env.SMTP_HOST || '').trim();
+  // Protect against accidental port number in SMTP_HOST (e.g. '587')
+  const host = runtimeSmtpConfig?.host || (envHost && envHost !== '587' && envHost !== '465' ? envHost : 'smtp.gmail.com');
+  const port = runtimeSmtpConfig?.port || parseInt(process.env.SMTP_PORT || (envHost === '587' ? '587' : '465'), 10);
   const secure = runtimeSmtpConfig?.secure !== undefined
     ? runtimeSmtpConfig.secure
     : (process.env.SMTP_SECURE === 'true' || port === 465);
   const user = runtimeSmtpConfig?.user || process.env.SMTP_USER || process.env.GMAIL_USER || process.env.IMAP_USER || '';
   const rawPass = runtimeSmtpConfig?.pass || process.env.SMTP_PASS || process.env.IMAP_PASS || process.env.GMAIL_APP_PASSWORD || process.env.GMAIL_PASS || '';
-  const pass = rawPass.trim();
+  let pass = rawPass.trim();
+  // Filter out invalid passwords that match the host or hostname placeholder
+  if (pass.toLowerCase() === 'smtp.gmail.com' || pass === host) {
+    pass = '';
+  }
   const from = runtimeSmtpConfig?.from || process.env.SMTP_FROM || (user ? `Umrah360 Automation <${user}>` : 'Umrah360 Automation');
 
-  const configured = Boolean(host && pass && user);
+  const configured = Boolean(host && pass && user && pass.length > 3);
 
   return { host, port, secure, user, pass, from, configured };
 }
@@ -122,10 +128,16 @@ export async function fetchFirestoreSmtpConfig() {
         const passToUse = data.smtpPass || smtp.pass;
         const fromToUse = data.smtpFrom || smtp.from;
 
-        // Only update runtime config if passToUse is a valid non-empty password
-        if (passToUse && typeof passToUse === 'string' && passToUse.trim().length > 3) {
+        // Only update runtime config if passToUse is a valid non-empty password and NOT a hostname
+        const isHostPlaceholder =
+          !passToUse ||
+          typeof passToUse !== 'string' ||
+          passToUse.trim().toLowerCase() === 'smtp.gmail.com' ||
+          passToUse.trim() === hostToUse;
+
+        if (!isHostPlaceholder && passToUse.trim().length > 3) {
           updateSmtpConfig({
-            host: hostToUse,
+            host: hostToUse && hostToUse !== '587' ? hostToUse : 'smtp.gmail.com',
             port: data.smtpPort || smtp.port,
             secure: data.smtpSecure !== undefined ? data.smtpSecure : smtp.secure,
             user: userToUse,
@@ -389,13 +401,16 @@ async function sendViaSmtp(params: SendMailParams): Promise<SendMailResult> {
  */
 export function getResendConfig() {
   const apiKey = (process.env.RESEND_API_KEY || '').trim();
-  const from = (process.env.RESEND_FROM || '').trim();
+  const rawFrom = (process.env.RESEND_FROM || '').trim();
+  // Default to verified domain 'Umrah360 <sales@umrah360.in>' if RESEND_FROM is not explicitly set in environment
+  const from = rawFrom || (apiKey ? 'Umrah360 <sales@umrah360.in>' : '');
   const forceSmtp = (process.env.EMAIL_PROVIDER || '').trim().toLowerCase() === 'smtp';
   return {
     apiKey,
     from,
     configured: Boolean(apiKey && from) && !forceSmtp,
-    fallbackToSmtp: process.env.RESEND_DISABLE_SMTP_FALLBACK !== 'true',
+    // Only fall back to SMTP if explicitly enabled and not disabled
+    fallbackToSmtp: process.env.RESEND_DISABLE_SMTP_FALLBACK !== 'true' && process.env.RESEND_ENABLE_SMTP_FALLBACK === 'true',
   };
 }
 
@@ -494,22 +509,34 @@ async function sendViaResend(params: SendMailParams, override?: { from: string; 
  */
 export async function sendLiveEmail(params: SendMailParams): Promise<SendMailResult> {
   const cfg = getResendConfig();
-
-  // Workspace-scoped sends: the From address must come from the workspace's own verified domain.
-  // Never fall back to SMTP here (that would send as the platform's shared Gmail mailbox).
   const forceSmtp = (process.env.EMAIL_PROVIDER || '').trim().toLowerCase() === 'smtp';
-  if (params.tenantId && cfg.apiKey && !forceSmtp) {
-    const sender = await resolveTenantSender(params.tenantId);
-    if (sender.ok === false) {
-      console.warn(`[Email] Blocked send for tenant ${params.tenantId}: ${sender.error}`);
-      return { success: false, error: sender.error, simulated: false, provider: 'resend' };
-    }
-    if (sender.source === 'tenant') {
-      const { definiteRejection: _d, ...r } = await sendViaResend(params, { from: sender.from, replyTo: sender.replyTo });
+
+  // Prefer Resend whenever RESEND_API_KEY is configured unless SMTP is explicitly forced
+  if (cfg.apiKey && !forceSmtp) {
+    if (params.tenantId) {
+      const sender = await resolveTenantSender(params.tenantId);
+      if (sender.ok && sender.source === 'tenant') {
+        const { definiteRejection: _d, ...r } = await sendViaResend(params, { from: sender.from, replyTo: sender.replyTo });
+        return r;
+      }
+      // If tenant resolution yielded platform source or non-blocking fallback, use verified Resend from address
+      if (cfg.configured) {
+        const platformFrom = (sender.ok && sender.from) ? sender.from : cfg.from;
+        const platformReplyTo = (sender.ok && sender.replyTo) ? sender.replyTo : undefined;
+        const { definiteRejection: _d, ...r } = await sendViaResend(params, { from: platformFrom, replyTo: platformReplyTo });
+        return r;
+      }
+      if (sender.ok === false) {
+        console.warn(`[Email] Blocked send for tenant ${params.tenantId}: ${sender.error}`);
+        return { success: false, error: sender.error, simulated: false, provider: 'resend' };
+      }
+    } else if (cfg.configured) {
+      // General or non-tenant outbound send
+      const { definiteRejection: _d, ...r } = await sendViaResend(params);
       return r;
     }
-    // source === 'platform' (grandfathered tenant): continue with the platform sender below.
   }
+
   if (!cfg.configured) {
     return sendViaSmtp(params);
   }
@@ -518,10 +545,13 @@ export async function sendLiveEmail(params: SendMailParams): Promise<SendMailRes
   if (resendResult.success) return resendResult;
 
   if (definiteRejection && cfg.fallbackToSmtp) {
-    console.warn('[Email] Resend rejected the email, falling back to SMTP.');
-    const smtpResult = await sendViaSmtp(params);
-    if (smtpResult.success) return smtpResult;
-    return { ...smtpResult, error: `${resendResult.error}; SMTP fallback: ${smtpResult.error}` };
+    const smtpCfg = getSmtpConfig();
+    if (smtpCfg.configured) {
+      console.warn('[Email] Resend rejected the email, attempting SMTP fallback...');
+      const smtpResult = await sendViaSmtp(params);
+      if (smtpResult.success) return smtpResult;
+      return { ...smtpResult, error: `${resendResult.error}; SMTP fallback: ${smtpResult.error}` };
+    }
   }
   return resendResult;
 }

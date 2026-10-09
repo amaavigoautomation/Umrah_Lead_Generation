@@ -273265,10 +273265,14 @@ async function setTenantSender(tenantId, input) {
   });
 }
 async function resolveTenantSender(tenantId) {
+  const defaultPlatformFrom = (process.env.RESEND_FROM || "").trim() || "Umrah360 <sales@umrah360.in>";
   let s2 = {};
   try {
     s2 = await getTenantEmailSettings(tenantId);
   } catch (err) {
+    if (tenantId === "umrah360" || tenantId === "default" || !tenantId) {
+      return { ok: true, from: defaultPlatformFrom, source: "platform" };
+    }
     return { ok: false, error: `Could not load email settings: ${err?.message || "unknown error"}` };
   }
   if (s2.status === "verified" && s2.domain && s2.fromLocalPart) {
@@ -273279,9 +273283,8 @@ async function resolveTenantSender(tenantId) {
       source: "tenant"
     };
   }
-  if (platformSenderTenants().includes(tenantId)) {
-    const platformFrom = (process.env.RESEND_FROM || "").trim();
-    if (platformFrom) return { ok: true, from: platformFrom, source: "platform" };
+  if (platformSenderTenants().includes(tenantId) || tenantId === "umrah360" || tenantId === "default" || !tenantId) {
+    return { ok: true, from: defaultPlatformFrom, source: "platform" };
   }
   if (s2.domain && s2.status !== "verified") {
     return { ok: false, error: `Sending is blocked: your domain ${s2.domain} is not verified yet. Open Settings \u2192 Email and verify it.` };
@@ -273327,14 +273330,18 @@ function updateSmtpConfig(newConfig) {
   return getSmtpConfig();
 }
 function getSmtpConfig() {
-  const host = runtimeSmtpConfig?.host || process.env.SMTP_HOST || "smtp.gmail.com";
-  const port = runtimeSmtpConfig?.port || parseInt(process.env.SMTP_PORT || "465", 10);
+  const envHost = (process.env.SMTP_HOST || "").trim();
+  const host = runtimeSmtpConfig?.host || (envHost && envHost !== "587" && envHost !== "465" ? envHost : "smtp.gmail.com");
+  const port = runtimeSmtpConfig?.port || parseInt(process.env.SMTP_PORT || (envHost === "587" ? "587" : "465"), 10);
   const secure = runtimeSmtpConfig?.secure !== void 0 ? runtimeSmtpConfig.secure : process.env.SMTP_SECURE === "true" || port === 465;
   const user = runtimeSmtpConfig?.user || process.env.SMTP_USER || process.env.GMAIL_USER || process.env.IMAP_USER || "";
   const rawPass = runtimeSmtpConfig?.pass || process.env.SMTP_PASS || process.env.IMAP_PASS || process.env.GMAIL_APP_PASSWORD || process.env.GMAIL_PASS || "";
-  const pass = rawPass.trim();
+  let pass = rawPass.trim();
+  if (pass.toLowerCase() === "smtp.gmail.com" || pass === host) {
+    pass = "";
+  }
   const from = runtimeSmtpConfig?.from || process.env.SMTP_FROM || (user ? `Umrah360 Automation <${user}>` : "Umrah360 Automation");
-  const configured = Boolean(host && pass && user);
+  const configured = Boolean(host && pass && user && pass.length > 3);
   return { host, port, secure, user, pass, from, configured };
 }
 async function fetchFirestoreSmtpConfig() {
@@ -273353,9 +273360,10 @@ async function fetchFirestoreSmtpConfig() {
         const userToUse = data.smtpUser || smtp.user;
         const passToUse = data.smtpPass || smtp.pass;
         const fromToUse = data.smtpFrom || smtp.from;
-        if (passToUse && typeof passToUse === "string" && passToUse.trim().length > 3) {
+        const isHostPlaceholder = !passToUse || typeof passToUse !== "string" || passToUse.trim().toLowerCase() === "smtp.gmail.com" || passToUse.trim() === hostToUse;
+        if (!isHostPlaceholder && passToUse.trim().length > 3) {
           updateSmtpConfig({
-            host: hostToUse,
+            host: hostToUse && hostToUse !== "587" ? hostToUse : "smtp.gmail.com",
             port: data.smtpPort || smtp.port,
             secure: data.smtpSecure !== void 0 ? data.smtpSecure : smtp.secure,
             user: userToUse,
@@ -273586,13 +273594,15 @@ async function sendViaSmtp(params) {
 }
 function getResendConfig() {
   const apiKey = (process.env.RESEND_API_KEY || "").trim();
-  const from = (process.env.RESEND_FROM || "").trim();
+  const rawFrom = (process.env.RESEND_FROM || "").trim();
+  const from = rawFrom || (apiKey ? "Umrah360 <sales@umrah360.in>" : "");
   const forceSmtp = (process.env.EMAIL_PROVIDER || "").trim().toLowerCase() === "smtp";
   return {
     apiKey,
     from,
     configured: Boolean(apiKey && from) && !forceSmtp,
-    fallbackToSmtp: process.env.RESEND_DISABLE_SMTP_FALLBACK !== "true"
+    // Only fall back to SMTP if explicitly enabled and not disabled
+    fallbackToSmtp: process.env.RESEND_DISABLE_SMTP_FALLBACK !== "true" && process.env.RESEND_ENABLE_SMTP_FALLBACK === "true"
   };
 }
 function getResendClient(apiKey) {
@@ -273666,14 +273676,25 @@ async function sendViaResend(params, override) {
 async function sendLiveEmail(params) {
   const cfg = getResendConfig();
   const forceSmtp = (process.env.EMAIL_PROVIDER || "").trim().toLowerCase() === "smtp";
-  if (params.tenantId && cfg.apiKey && !forceSmtp) {
-    const sender = await resolveTenantSender(params.tenantId);
-    if (sender.ok === false) {
-      console.warn(`[Email] Blocked send for tenant ${params.tenantId}: ${sender.error}`);
-      return { success: false, error: sender.error, simulated: false, provider: "resend" };
-    }
-    if (sender.source === "tenant") {
-      const { definiteRejection: _d, ...r2 } = await sendViaResend(params, { from: sender.from, replyTo: sender.replyTo });
+  if (cfg.apiKey && !forceSmtp) {
+    if (params.tenantId) {
+      const sender = await resolveTenantSender(params.tenantId);
+      if (sender.ok && sender.source === "tenant") {
+        const { definiteRejection: _d, ...r2 } = await sendViaResend(params, { from: sender.from, replyTo: sender.replyTo });
+        return r2;
+      }
+      if (cfg.configured) {
+        const platformFrom = sender.ok && sender.from ? sender.from : cfg.from;
+        const platformReplyTo = sender.ok && sender.replyTo ? sender.replyTo : void 0;
+        const { definiteRejection: _d, ...r2 } = await sendViaResend(params, { from: platformFrom, replyTo: platformReplyTo });
+        return r2;
+      }
+      if (sender.ok === false) {
+        console.warn(`[Email] Blocked send for tenant ${params.tenantId}: ${sender.error}`);
+        return { success: false, error: sender.error, simulated: false, provider: "resend" };
+      }
+    } else if (cfg.configured) {
+      const { definiteRejection: _d, ...r2 } = await sendViaResend(params);
       return r2;
     }
   }
@@ -273683,10 +273704,13 @@ async function sendLiveEmail(params) {
   const { definiteRejection, ...resendResult } = await sendViaResend(params);
   if (resendResult.success) return resendResult;
   if (definiteRejection && cfg.fallbackToSmtp) {
-    console.warn("[Email] Resend rejected the email, falling back to SMTP.");
-    const smtpResult = await sendViaSmtp(params);
-    if (smtpResult.success) return smtpResult;
-    return { ...smtpResult, error: `${resendResult.error}; SMTP fallback: ${smtpResult.error}` };
+    const smtpCfg = getSmtpConfig();
+    if (smtpCfg.configured) {
+      console.warn("[Email] Resend rejected the email, attempting SMTP fallback...");
+      const smtpResult = await sendViaSmtp(params);
+      if (smtpResult.success) return smtpResult;
+      return { ...smtpResult, error: `${resendResult.error}; SMTP fallback: ${smtpResult.error}` };
+    }
   }
   return resendResult;
 }
@@ -275689,7 +275713,15 @@ function getCampaignLeads(campaignId) {
   if (campaignLeadsMap.size === 0) {
     ensureDefaultsInMemory();
   }
-  return Array.from(campaignLeadsMap.values()).filter((l) => l.campaignId === campaignId).sort((a, b) => (a.rowNumber || 0) - (b.rowNumber || 0));
+  return Array.from(campaignLeadsMap.values()).filter((l) => l.campaignId === campaignId).map((l) => {
+    if (l.gmailMessageId || l.lastSentAt) {
+      l.sendStatus = "SENT";
+      l.lastError = "";
+    } else if (l.sendStatus === "SENT") {
+      l.lastError = "";
+    }
+    return l;
+  }).sort((a, b) => (a.rowNumber || 0) - (b.rowNumber || 0));
 }
 async function getCampaignLeadsFromDb(campaignId) {
   if (campaignsMap.size === 0) {
@@ -275705,6 +275737,12 @@ async function getCampaignLeadsFromDb(campaignId) {
         snap.forEach((d) => {
           const l = d.data();
           if (l && l.campaignLeadId) {
+            if (l.gmailMessageId || l.lastSentAt) {
+              l.sendStatus = "SENT";
+              l.lastError = "";
+            } else if (l.sendStatus === "SENT") {
+              l.lastError = "";
+            }
             campaignLeadsMap.set(l.campaignLeadId, l);
           }
         });
@@ -276017,7 +276055,7 @@ async function startCampaign(campaignId) {
       console.log(`[Campaign Engine] Automatically resetting ${failedLeads.length} failed leads to PENDING for campaign ${campaignId}`);
       for (const fl of failedLeads) {
         fl.sendStatus = "PENDING";
-        fl.lastError = void 0;
+        fl.lastError = "";
         fl.updatedAt = now;
         if (isFirebaseConfigured && db) {
           await safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignLeadDoc(fl.campaignLeadId), fl, { merge: true });
@@ -276143,7 +276181,7 @@ async function restartCampaign(campaignId, options2) {
   const leadSavePromises = [];
   unrepliedLeads.forEach((l) => {
     l.sendStatus = "PENDING";
-    l.lastError = void 0;
+    l.lastError = "";
     l.campaignRunId = newRunId;
     l.updatedAt = now;
     targetLeadsCount++;
@@ -276404,7 +276442,7 @@ I noticed your operations at ${lead.companyName}.`;
           lead.gmailMessageId = sentMsgId;
           lead.gmailThreadId = gmailThreadId;
           lead.conversationId = conversationId;
-          lead.lastError = void 0;
+          lead.lastError = "";
           lead.updatedAt = now;
           sendHistorySet.add(runHistoryKey);
           sendHistorySet.add(`${campaignId}_${lead.email.toLowerCase()}`);
@@ -276804,10 +276842,11 @@ async function updateCampaignLeadStatus(params) {
     if (params.sendStatus === "FAILED") {
       targetLead.lastError = params.lastError || "Delivery failure";
     } else if (params.sendStatus === "PENDING") {
-      targetLead.lastError = void 0;
+      targetLead.lastError = "";
     } else if (params.sendStatus === "SENT") {
       targetLead.lastSentAt = targetLead.lastSentAt || now;
       targetLead.sendCount = (targetLead.sendCount || 0) + 1;
+      targetLead.lastError = "";
     }
   }
   if (params.replyStatus) {

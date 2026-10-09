@@ -1275,10 +1275,13 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
   // Filtered Leads
   const filteredLeads = useMemo(() => {
     return campaignLeads.filter((lead) => {
+      const isActuallySent = lead.sendStatus === 'SENT' || Boolean(lead.gmailMessageId) || Boolean(lead.lastSentAt);
+      const effectiveSendStatus = isActuallySent ? 'SENT' : lead.sendStatus;
+
       // Filter by status
-      if (leadStatusFilter === 'PENDING' && lead.sendStatus !== 'PENDING') return false;
-      if (leadStatusFilter === 'SENT' && lead.sendStatus !== 'SENT') return false;
-      if (leadStatusFilter === 'FAILED' && lead.sendStatus !== 'FAILED') return false;
+      if (leadStatusFilter === 'PENDING' && effectiveSendStatus !== 'PENDING') return false;
+      if (leadStatusFilter === 'SENT' && effectiveSendStatus !== 'SENT') return false;
+      if (leadStatusFilter === 'FAILED' && effectiveSendStatus !== 'FAILED') return false;
       if (leadStatusFilter === 'REPLIED' && lead.replyStatus !== 'REPLIED') return false;
       if (leadStatusFilter === 'DEMO_BOOKED' && lead.demoStatus !== 'BOOKED') return false;
 
@@ -1662,17 +1665,21 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                   const targetLeadsForRun = isRestartRun ? unrepliedLeads : campaignLeads;
                   const runTargetCount = isRestartRun ? targetLeadsForRun.length : liveTotalLeads;
 
+                  const effectiveSent = (l: CampaignLead) => l.sendStatus === 'SENT' || Boolean(l.gmailMessageId) || Boolean(l.lastSentAt);
+                  const effectivePending = (l: CampaignLead) => !effectiveSent(l) && l.sendStatus === 'PENDING' && l.replyStatus !== 'REPLIED';
+                  const effectiveFailed = (l: CampaignLead) => !effectiveSent(l) && l.sendStatus === 'FAILED';
+
                   const liveSentCount = isRestartRun
-                    ? targetLeadsForRun.filter((l) => l.sendStatus === 'SENT').length
-                    : (campaignLeads.length > 0 ? campaignLeads.filter((l) => l.sendStatus === 'SENT').length : selectedCampaign.sentCount);
+                    ? targetLeadsForRun.filter(effectiveSent).length
+                    : (campaignLeads.length > 0 ? campaignLeads.filter(effectiveSent).length : selectedCampaign.sentCount);
 
                   const livePendingCount = isRestartRun
-                    ? targetLeadsForRun.filter((l) => l.sendStatus === 'PENDING').length
-                    : (campaignLeads.length > 0 ? campaignLeads.filter((l) => l.sendStatus === 'PENDING' && l.replyStatus !== 'REPLIED').length : selectedCampaign.pendingCount);
+                    ? targetLeadsForRun.filter(effectivePending).length
+                    : (campaignLeads.length > 0 ? campaignLeads.filter(effectivePending).length : selectedCampaign.pendingCount);
 
                   const liveFailedCount = isRestartRun
-                    ? targetLeadsForRun.filter((l) => l.sendStatus === 'FAILED').length
-                    : (campaignLeads.length > 0 ? campaignLeads.filter((l) => l.sendStatus === 'FAILED').length : (selectedCampaign.failedCount || 0));
+                    ? targetLeadsForRun.filter(effectiveFailed).length
+                    : (campaignLeads.length > 0 ? campaignLeads.filter(effectiveFailed).length : (selectedCampaign.failedCount || 0));
 
                   const liveRepliedCount = campaignLeads.length > 0 ? campaignLeads.filter((l) => l.replyStatus === 'REPLIED').length : selectedCampaign.repliedCount;
                   const liveDemoCount = campaignLeads.length > 0 ? campaignLeads.filter((l) => l.demoStatus === 'BOOKED').length : (selectedCampaign.demoBookedCount || 0);
@@ -1888,26 +1895,34 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                                   </div>
                                 </td>
                                 <td className="py-3 px-4">
-                                  <span
-                                    className={`px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider inline-flex items-center gap-1 ${
-                                      lead.sendStatus === 'SENT'
-                                        ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                                        : lead.sendStatus === 'SENDING'
-                                        ? 'bg-sky-50 text-sky-700 border border-sky-200 animate-pulse'
-                                        : lead.sendStatus === 'FAILED'
-                                        ? 'bg-rose-50 text-rose-700 border border-rose-200'
-                                        : 'bg-slate-100 text-slate-600 border border-slate-200'
-                                    }`}
-                                  >
-                                    {lead.sendStatus === 'SENT' && <CheckCircle2 className="w-2.5 h-2.5" />}
-                                    {lead.sendStatus === 'FAILED' && <AlertCircle className="w-2.5 h-2.5" />}
-                                    {lead.sendStatus}
-                                  </span>
-                                  {lead.lastError && (
-                                    <p className="text-[10px] text-rose-600 truncate max-w-[140px] mt-0.5" title={lead.lastError}>
-                                      {lead.lastError}
-                                    </p>
-                                  )}
+                                  {(() => {
+                                    const isActuallySent = lead.sendStatus === 'SENT' || Boolean(lead.gmailMessageId) || Boolean(lead.lastSentAt);
+                                    const displayStatus = isActuallySent ? 'SENT' : lead.sendStatus;
+                                    return (
+                                      <>
+                                        <span
+                                          className={`px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider inline-flex items-center gap-1 ${
+                                            displayStatus === 'SENT'
+                                              ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                              : displayStatus === 'SENDING'
+                                              ? 'bg-sky-50 text-sky-700 border border-sky-200 animate-pulse'
+                                              : displayStatus === 'FAILED'
+                                              ? 'bg-rose-50 text-rose-700 border border-rose-200'
+                                              : 'bg-slate-100 text-slate-600 border border-slate-200'
+                                          }`}
+                                        >
+                                          {displayStatus === 'SENT' && <CheckCircle2 className="w-2.5 h-2.5" />}
+                                          {displayStatus === 'FAILED' && <AlertCircle className="w-2.5 h-2.5" />}
+                                          {displayStatus}
+                                        </span>
+                                        {!isActuallySent && displayStatus === 'FAILED' && lead.lastError && (
+                                          <p className="text-[10px] text-rose-600 truncate max-w-[140px] mt-0.5" title={lead.lastError}>
+                                            {lead.lastError}
+                                          </p>
+                                        )}
+                                      </>
+                                    );
+                                  })()}
                                 </td>
                                 <td className="py-3 px-4">
                                   <button

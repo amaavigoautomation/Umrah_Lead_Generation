@@ -214,11 +214,15 @@ export async function setTenantSender(tenantId: string, input: { fromName?: stri
  * - anything else -> blocked
  */
 export async function resolveTenantSender(tenantId: string): Promise<SenderResolution> {
+  const defaultPlatformFrom = (process.env.RESEND_FROM || '').trim() || 'Umrah360 <sales@umrah360.in>';
   let s: TenantEmailSettings = {};
   try {
     s = await getTenantEmailSettings(tenantId);
   } catch (err: any) {
-    // Cannot read settings: do not guess a sender.
+    // If settings can't be read from Firestore but it's the primary platform tenant, use the default platform sender
+    if (tenantId === 'umrah360' || tenantId === 'default' || !tenantId) {
+      return { ok: true, from: defaultPlatformFrom, source: 'platform' };
+    }
     return { ok: false, error: `Could not load email settings: ${err?.message || 'unknown error'}` };
   }
 
@@ -231,9 +235,8 @@ export async function resolveTenantSender(tenantId: string): Promise<SenderResol
     };
   }
 
-  if (platformSenderTenants().includes(tenantId)) {
-    const platformFrom = (process.env.RESEND_FROM || '').trim();
-    if (platformFrom) return { ok: true, from: platformFrom, source: 'platform' };
+  if (platformSenderTenants().includes(tenantId) || tenantId === 'umrah360' || tenantId === 'default' || !tenantId) {
+    return { ok: true, from: defaultPlatformFrom, source: 'platform' };
   }
 
   if (s.domain && s.status !== 'verified') {

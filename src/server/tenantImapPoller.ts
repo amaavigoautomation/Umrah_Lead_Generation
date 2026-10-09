@@ -34,10 +34,7 @@ import type { TenantContext } from '../types/tenant.js';
 
 const JOB_NAME = 'tenant_imap_inbound';
 const JOB_LEASE_MS = 3 * 60_000;
-// TEMPORARY DEMO SETTING (added 2026-10-09): 3 seconds so the browser's 4-second check is never skipped.
-// The normal value is 45_000. Put it back after the demo: at this rate every open tab signs in to the
-// mailbox about 15 times a minute, which mail providers can refuse, and it uses the database quota fast.
-const MIN_POLL_INTERVAL_MS = 3_000;
+const MIN_POLL_INTERVAL_MS = 45_000;
 const MAX_MESSAGES_PER_CYCLE = 25;
 const MAX_MESSAGE_BYTES = 10 * 1024 * 1024;
 const TICK_MS = 30_000;

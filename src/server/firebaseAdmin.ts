@@ -23,6 +23,14 @@ export function getFirebaseAdminApp(): App {
   if (serviceAccountJson) {
     try {
       const parsed = JSON.parse(serviceAccountJson);
+      // The browser build and the server key must point to the SAME Firebase project, otherwise every
+      // login is rejected ("Invalid or expired session") with no obvious reason. Say so loudly.
+      if (parsed.project_id && parsed.project_id !== projectId) {
+        console.error(
+          `[Firebase Admin] PROJECT MISMATCH: FIREBASE_SERVICE_ACCOUNT_JSON is for "${parsed.project_id}" but the app is configured for "${projectId}". ` +
+            'Set VITE_FIREBASE_PROJECT_ID (and the other VITE_FIREBASE_* values) for the same project in this environment.'
+        );
+      }
       return initializeApp({
         credential: cert(parsed),
         projectId: parsed.project_id || projectId,
@@ -57,7 +65,12 @@ let firestoreConfigured = false;
 
 export function getAdminFirestore(): Firestore {
   const app = getFirebaseAdminApp();
-  const dbId = process.env.FIRESTORE_DATABASE_ID || rawConfig.firestoreDatabaseId;
+  // The database name in firebase-applet-config.json belongs to that file's project only. When the
+  // environment points this server at another project, default to that project's "(default)" database.
+  const activeProjectId = String((app.options as any)?.projectId || '');
+  const dbId =
+    (process.env.FIRESTORE_DATABASE_ID || '').trim() ||
+    (activeProjectId && activeProjectId !== rawConfig.projectId ? '(default)' : rawConfig.firestoreDatabaseId);
   let fs: Firestore;
   if (dbId && dbId !== '(default)') {
     try {

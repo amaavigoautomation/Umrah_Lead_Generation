@@ -241,7 +241,13 @@ export async function getInboundSettings(tenantId: string, opts: { fresh?: boole
 
 async function writeSettings(tenantId: string, next: TenantInboundSettings, replace = false): Promise<TenantInboundSettings> {
   const repo = tenantRepo(sysCtx(tenantId));
-  const clean: TenantInboundSettings = JSON.parse(JSON.stringify({ ...next, updatedAt: new Date().toISOString() }));
+  // A field passed as `undefined` means "clear it" (lastError, lastErrorAt, nextPollAt after a success).
+  // JSON drops undefined, and on a MERGE write a dropped field keeps its old value in the database, so a
+  // pause (nextPollAt) or an old error survived a successful check and the mailbox stayed silently paused.
+  // On merge writes those fields are therefore cleared explicitly with null. A replace write needs nothing.
+  const clean: TenantInboundSettings = JSON.parse(
+    JSON.stringify({ ...next, updatedAt: new Date().toISOString() }, replace ? undefined : (_key, value) => (value === undefined ? null : value))
+  );
   await setDoc(repo.settingsDoc(INBOUND_SETTINGS_DOC), clean, replace ? { merge: false } : { merge: true });
   const merged = replace ? clean : { ...(await getInboundSettings(tenantId, { fresh: true })) };
   settingsCache.set(tenantId, { at: Date.now(), value: merged });

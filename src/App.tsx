@@ -251,12 +251,22 @@ export default function App() {
   // check this company's own mailbox every minute so replies get ingested and answered.
   useEffect(() => {
     if (!session || session.isPlatformAdmin || !currentTenantId) return;
+    // TEMPORARY DEMO SETTING (added 2026-10-09): check the mailbox every 4 seconds so new email shows up fast.
+    // The normal value is 60_000 (once a minute). Put it back after the demo.
+    const MAILBOX_CHECK_EVERY_MS = 4_000;
+    let checking = false;
     const tick = () => {
-      if (document.visibilityState === 'hidden') return;
-      fetch('/api/inbound-mail/cron', { method: 'POST' }).catch(() => {});
+      // Skip while the previous check is still running, so fast checks never pile up.
+      if (document.visibilityState === 'hidden' || checking) return;
+      checking = true;
+      fetch('/api/inbound-mail/cron', { method: 'POST' })
+        .catch(() => {})
+        .finally(() => {
+          checking = false;
+        });
     };
-    const first = setTimeout(tick, 5000);
-    const t = setInterval(tick, 60_000);
+    const first = setTimeout(tick, 2000);
+    const t = setInterval(tick, MAILBOX_CHECK_EVERY_MS);
     return () => { clearTimeout(first); clearInterval(t); };
   }, [session, currentTenantId]);
 

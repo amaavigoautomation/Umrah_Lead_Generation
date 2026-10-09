@@ -34,7 +34,10 @@ import type { TenantContext } from '../types/tenant.js';
 
 const JOB_NAME = 'tenant_imap_inbound';
 const JOB_LEASE_MS = 3 * 60_000;
-const MIN_POLL_INTERVAL_MS = 45_000;
+// TEMPORARY DEMO SETTING (added 2026-10-09): 3 seconds so the browser's 4-second check is never skipped.
+// The normal value is 45_000. Put it back after the demo: at this rate every open tab signs in to the
+// mailbox about 15 times a minute, which mail providers can refuse, and it uses the database quota fast.
+const MIN_POLL_INTERVAL_MS = 3_000;
 const MAX_MESSAGES_PER_CYCLE = 25;
 const MAX_MESSAGE_BYTES = 10 * 1024 * 1024;
 const TICK_MS = 30_000;
@@ -73,6 +76,17 @@ function isAuthFailure(err: any): boolean {
 
 function backoffMs(failures: number): number {
   return Math.min(MAX_BACKOFF_MS, 60_000 * 2 ** Math.max(0, failures - 1));
+}
+
+/**
+ * Pause after a refused sign-in. Mail providers also refuse sign-ins temporarily (too many logins in a short
+ * time), so one refusal must not stop the mailbox for a day: retry after 5 minutes, then 30 minutes, and only
+ * after a third refusal in a row treat it as a wrong password and wait 24 hours for the admin to reconnect.
+ */
+function authPauseMs(failures: number): number {
+  if (failures <= 1) return 5 * 60_000;
+  if (failures === 2) return 30 * 60_000;
+  return 24 * 3600_000;
 }
 
 /** Pulls new messages (parsed, filtered at the header level) from the mailbox. Connection is closed before any AI work. */
@@ -208,8 +222,8 @@ async function runCycle(tenantId: string): Promise<TenantPollResult> {
       lastErrorAt: new Date().toISOString(),
       lastPolledAt: startedAt,
       consecutiveFailures: failures,
-      // A wrong password will not fix itself: stop hammering the account until the admin reconnects.
-      nextPollAt: authFail ? new Date(Date.now() + 24 * 3600_000).toISOString() : new Date(Date.now() + backoffMs(failures)).toISOString(),
+      // A wrong password will not fix itself, but a single refusal is often temporary: see authPauseMs.
+      nextPollAt: new Date(Date.now() + (authFail ? authPauseMs(failures) : backoffMs(failures))).toISOString(),
     });
     result.error = msg;
     console.warn(`[Tenant IMAP] ${tenantId}: ${msg}`);

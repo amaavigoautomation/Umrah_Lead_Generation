@@ -227612,10 +227612,10 @@ var init_auth = __esm({
   }
 });
 
-// firebase-applet-config.json
+// firebase-applet-config.json with { type: 'json' }
 var firebase_applet_config_default;
 var init_firebase_applet_config = __esm({
-  "firebase-applet-config.json"() {
+  "firebase-applet-config.json with { type: 'json' }"() {
     firebase_applet_config_default = {
       projectId: "gen-lang-client-0376069258",
       appId: "1:280237761588:web:1e0633ce031a5a49f15661",
@@ -279498,6 +279498,25 @@ var init_dist5 = __esm({
   }
 });
 
+// firebase-applet-config.json
+var firebase_applet_config_default2;
+var init_firebase_applet_config2 = __esm({
+  "firebase-applet-config.json"() {
+    firebase_applet_config_default2 = {
+      projectId: "gen-lang-client-0376069258",
+      appId: "1:280237761588:web:1e0633ce031a5a49f15661",
+      apiKey: "AIzaSyAcr6lIIH50XWD7CcmclWh9lxbPKO7TzBk",
+      authDomain: "gen-lang-client-0376069258.firebaseapp.com",
+      storageBucket: "gen-lang-client-0376069258.firebasestorage.app",
+      messagingSenderId: "280237761588",
+      firestoreDatabaseId: "ai-studio-379c884e-3360-468a-ad55-8105acbd3214",
+      measurementId: "",
+      oAuthClientId: "",
+      recaptchaSiteKey: ""
+    };
+  }
+});
+
 // src/firebase/config.ts
 function createDb() {
   const dbId = firebaseConfig.firestoreDatabaseId || void 0;
@@ -279529,7 +279548,7 @@ var init_config = __esm({
     init_dist3();
     init_dist4();
     init_dist5();
-    init_firebase_applet_config();
+    init_firebase_applet_config2();
     envProjectId = typeof import.meta !== "undefined" && import.meta.env?.VITE_FIREBASE_PROJECT_ID || typeof process !== "undefined" && process.env?.VITE_FIREBASE_PROJECT_ID || typeof process !== "undefined" && process.env?.FIREBASE_PROJECT_ID;
     envApiKey = typeof import.meta !== "undefined" && import.meta.env?.VITE_FIREBASE_API_KEY || typeof process !== "undefined" && process.env?.VITE_FIREBASE_API_KEY || typeof process !== "undefined" && process.env?.FIREBASE_API_KEY;
     envAuthDomain = typeof import.meta !== "undefined" && import.meta.env?.VITE_FIREBASE_AUTH_DOMAIN || typeof process !== "undefined" && process.env?.VITE_FIREBASE_AUTH_DOMAIN;
@@ -279537,17 +279556,17 @@ var init_config = __esm({
     envMessagingSenderId = typeof import.meta !== "undefined" && import.meta.env?.VITE_FIREBASE_MESSAGING_SENDER_ID || typeof process !== "undefined" && process.env?.VITE_FIREBASE_MESSAGING_SENDER_ID;
     envAppId = typeof import.meta !== "undefined" && import.meta.env?.VITE_FIREBASE_APP_ID || typeof process !== "undefined" && process.env?.VITE_FIREBASE_APP_ID;
     envDatabaseId = typeof import.meta !== "undefined" && import.meta.env?.VITE_FIRESTORE_DATABASE_ID || typeof process !== "undefined" && process.env?.VITE_FIRESTORE_DATABASE_ID || typeof process !== "undefined" && process.env?.FIRESTORE_DATABASE_ID;
-    resolvedProjectId = envProjectId || firebase_applet_config_default.projectId;
-    usingOtherProject = resolvedProjectId !== firebase_applet_config_default.projectId;
+    resolvedProjectId = envProjectId || firebase_applet_config_default2.projectId;
+    usingOtherProject = resolvedProjectId !== firebase_applet_config_default2.projectId;
     firebaseConfig = {
-      ...firebase_applet_config_default,
+      ...firebase_applet_config_default2,
       projectId: resolvedProjectId,
-      apiKey: envApiKey || (usingOtherProject ? "" : firebase_applet_config_default.apiKey),
-      authDomain: envAuthDomain || (usingOtherProject ? `${resolvedProjectId}.firebaseapp.com` : firebase_applet_config_default.authDomain),
-      storageBucket: envStorageBucket || (usingOtherProject ? `${resolvedProjectId}.firebasestorage.app` : firebase_applet_config_default.storageBucket),
-      messagingSenderId: envMessagingSenderId || (usingOtherProject ? "" : firebase_applet_config_default.messagingSenderId),
-      appId: envAppId || (usingOtherProject ? "" : firebase_applet_config_default.appId),
-      firestoreDatabaseId: envDatabaseId || (usingOtherProject ? "(default)" : firebase_applet_config_default.firestoreDatabaseId)
+      apiKey: envApiKey || (usingOtherProject ? "" : firebase_applet_config_default2.apiKey),
+      authDomain: envAuthDomain || (usingOtherProject ? `${resolvedProjectId}.firebaseapp.com` : firebase_applet_config_default2.authDomain),
+      storageBucket: envStorageBucket || (usingOtherProject ? `${resolvedProjectId}.firebasestorage.app` : firebase_applet_config_default2.storageBucket),
+      messagingSenderId: envMessagingSenderId || (usingOtherProject ? "" : firebase_applet_config_default2.messagingSenderId),
+      appId: envAppId || (usingOtherProject ? "" : firebase_applet_config_default2.appId),
+      firestoreDatabaseId: envDatabaseId || (usingOtherProject ? "(default)" : firebase_applet_config_default2.firestoreDatabaseId)
     };
     webApiKeyMissing = !firebaseConfig.apiKey;
     if (webApiKeyMissing && typeof console !== "undefined") {
@@ -280630,10 +280649,12 @@ __export(tenantEmailService_exports, {
   cacheTenantEmailSettings: () => cacheTenantEmailSettings,
   getEmailSettingsView: () => getEmailSettingsView,
   getTenantEmailSettings: () => getTenantEmailSettings,
+  isTrackingEnabled: () => isTrackingEnabled,
   refreshTenantDomain: () => refreshTenantDomain,
   removeTenantDomain: () => removeTenantDomain,
   resolveTenantSender: () => resolveTenantSender,
   setTenantSender: () => setTenantSender,
+  setTenantTracking: () => setTenantTracking,
   verifyTenantDomain: () => verifyTenantDomain
 });
 function getApiKey() {
@@ -280688,6 +280709,60 @@ function mapRecords(records) {
     status: r2.status
   }));
 }
+function mapTrackingRecords(records) {
+  return (records || []).filter((r2) => r2.record === "Tracking" || r2.record === "TrackingCAA").map((r2) => ({ record: r2.record, type: r2.type, name: r2.name, value: r2.value, ttl: r2.ttl, status: r2.status }));
+}
+function sendingStatus(rawStatus, records) {
+  if (rawStatus === "verified") return rawStatus;
+  const sending = (records || []).filter((r2) => r2.record === "SPF" || r2.record === "DKIM");
+  const hasDkim = sending.some((r2) => r2.record === "DKIM");
+  if (hasDkim && sending.every((r2) => r2.status === "verified")) return "verified";
+  return rawStatus;
+}
+function trackingStatusOf(records) {
+  const t2 = (records || []).find((r2) => r2.record === "Tracking");
+  return t2 ? String(t2.status || "pending") : void 0;
+}
+async function applyResendTracking(domainId, on, current) {
+  if (current && current.open_tracking === on && current.click_tracking === on) return false;
+  try {
+    const res = await resendClient().domains.update({ id: domainId, openTracking: on, clickTracking: on });
+    if (res.error) {
+      console.warn(`[Tenant Email] could not ${on ? "enable" : "disable"} tracking for ${domainId}: ${res.error.message}`);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.warn(`[Tenant Email] tracking update failed for ${domainId}:`, err?.message || err);
+    return false;
+  }
+}
+async function loadDomainSyncingTracking(s2, domainId) {
+  const resend = resendClient();
+  let got = await resend.domains.get(domainId);
+  if (!got.error && got.data) {
+    const changed = await applyResendTracking(domainId, isTrackingEnabled(s2), got.data);
+    if (changed) {
+      const again = await resend.domains.get(domainId);
+      if (!again.error && again.data) got = again;
+    }
+  }
+  return got;
+}
+async function setTenantTracking(tenantId, enabled) {
+  const s2 = await getTenantEmailSettings(tenantId, { fresh: true });
+  const on = enabled !== false;
+  let patch = { trackingEnabled: on };
+  if (s2.resendDomainId) {
+    await applyResendTracking(s2.resendDomainId, on);
+    const got = await resendClient().domains.get(s2.resendDomainId).catch(() => null);
+    if (got && !got.error && got.data) {
+      patch = { ...patch, trackingRecords: mapTrackingRecords(got.data.records), trackingStatus: trackingStatusOf(got.data.records) };
+    }
+  }
+  await saveSettings(tenantId, patch);
+  return getEmailSettingsView(tenantId);
+}
 async function getEmailSettingsView(tenantId) {
   const s2 = await getTenantEmailSettings(tenantId, { fresh: true });
   const grandfathered = platformSenderTenants().includes(tenantId);
@@ -280697,7 +280772,8 @@ async function getEmailSettingsView(tenantId) {
     fromAddress: s2.domain && s2.fromLocalPart ? `${s2.fromLocalPart}@${s2.domain}` : void 0,
     canSend,
     usingPlatformSender: !canSend && grandfathered,
-    resendConfigured: Boolean(getApiKey())
+    resendConfigured: Boolean(getApiKey()),
+    trackingEnabled: isTrackingEnabled(s2)
   };
 }
 async function addTenantDomain(tenantId, rawDomain) {
@@ -280716,13 +280792,19 @@ async function addTenantDomain(tenantId, rawDomain) {
   let id = existing.domain === domain ? existing.resendDomainId : void 0;
   let status = "pending";
   let records = [];
+  const trackingOn = isTrackingEnabled(existing);
   if (id) {
-    const got = await resend.domains.get(id);
+    const got = await loadDomainSyncingTracking(existing, id);
     if (got.error || !got.data) throw new HttpError(502, `Resend: ${got.error?.message || "could not load domain"}`);
     status = got.data.status;
     records = got.data.records;
   } else {
-    const created = await resend.domains.create({ name: domain, capabilities: { sending: "enabled" } });
+    const created = await resend.domains.create({
+      name: domain,
+      capabilities: { sending: "enabled" },
+      openTracking: trackingOn,
+      clickTracking: trackingOn
+    });
     if (created.error || !created.data) {
       const code = Number(created.error?.statusCode);
       throw new HttpError(code >= 400 && code < 500 ? 400 : 502, `Resend: ${created.error?.message || "could not create domain"}`);
@@ -280732,27 +280814,32 @@ async function addTenantDomain(tenantId, rawDomain) {
     records = created.data.records;
   }
   await setDoc(claimRef, { domain, tenantId, resendDomainId: id, createdAt: (/* @__PURE__ */ new Date()).toISOString() }, { merge: true });
+  status = sendingStatus(status, records);
   return saveSettings(tenantId, {
     domain,
     resendDomainId: id,
     status,
     records: mapRecords(records),
+    trackingRecords: mapTrackingRecords(records),
+    trackingStatus: trackingStatusOf(records),
     ...status === "verified" ? { verifiedAt: (/* @__PURE__ */ new Date()).toISOString() } : {}
   });
 }
 async function refreshTenantDomain(tenantId) {
   const s2 = await getTenantEmailSettings(tenantId, { fresh: true });
   if (!s2.resendDomainId) throw new HttpError(400, "Add a domain first");
-  const got = await resendClient().domains.get(s2.resendDomainId);
+  const got = await loadDomainSyncingTracking(s2, s2.resendDomainId);
   if (got.error || !got.data) {
     const code = Number(got.error?.statusCode);
     if (code === 404) throw new HttpError(404, "This domain no longer exists in Resend. Remove it here and add it again.");
     throw new HttpError(502, `Resend: ${got.error?.message || "could not load domain"}`);
   }
-  const status = got.data.status;
+  const status = sendingStatus(got.data.status, got.data.records);
   return saveSettings(tenantId, {
     status,
     records: mapRecords(got.data.records),
+    trackingRecords: mapTrackingRecords(got.data.records),
+    trackingStatus: trackingStatusOf(got.data.records),
     ...status === "verified" && s2.status !== "verified" ? { verifiedAt: (/* @__PURE__ */ new Date()).toISOString() } : {}
   });
 }
@@ -280762,12 +280849,14 @@ async function verifyTenantDomain(tenantId) {
   const resend = resendClient();
   const ver = await resend.domains.verify(s2.resendDomainId);
   if (ver.error) throw new HttpError(502, `Resend: ${ver.error.message}`);
-  const got = await resend.domains.get(s2.resendDomainId);
+  const got = await loadDomainSyncingTracking(s2, s2.resendDomainId);
   if (got.error || !got.data) throw new HttpError(502, `Resend: ${got.error?.message || "could not load domain"}`);
-  const status = got.data.status;
+  const status = sendingStatus(got.data.status, got.data.records);
   return saveSettings(tenantId, {
     status,
     records: mapRecords(got.data.records),
+    trackingRecords: mapTrackingRecords(got.data.records),
+    trackingStatus: trackingStatusOf(got.data.records),
     ...status === "verified" && s2.status !== "verified" ? { verifiedAt: (/* @__PURE__ */ new Date()).toISOString() } : {}
   });
 }
@@ -280803,7 +280892,9 @@ async function removeTenantDomain(tenantId) {
     status: void 0,
     records: void 0,
     verifiedAt: void 0,
-    fromLocalPart: void 0
+    fromLocalPart: void 0,
+    trackingRecords: void 0,
+    trackingStatus: void 0
   });
   return getEmailSettingsView(tenantId);
 }
@@ -280846,7 +280937,7 @@ async function resolveTenantSender(tenantId) {
   }
   return { ok: false, error: "Sending is blocked: this workspace has no verified sending domain. Open Settings \u2192 Email to add one." };
 }
-var DOMAIN_RE, LOCAL_RE, client, clientKey, settingsCache2, CACHE_MS2, HttpError;
+var DOMAIN_RE, LOCAL_RE, client, clientKey, settingsCache2, CACHE_MS2, isTrackingEnabled, HttpError;
 var init_tenantEmailService = __esm({
   "src/server/tenantEmailService.ts"() {
     init_dist();
@@ -280860,6 +280951,7 @@ var init_tenantEmailService = __esm({
     clientKey = "";
     settingsCache2 = /* @__PURE__ */ new Map();
     CACHE_MS2 = 3e4;
+    isTrackingEnabled = (s2) => s2.trackingEnabled !== false;
     HttpError = class extends Error {
       constructor(status, message2) {
         super(message2);
@@ -315629,7 +315721,7 @@ async function handleCoreApi(req, res) {
       return true;
     }
   }
-  const emailMatch = url.split("?")[0].match(/^\/api\/tenants\/([^/]+)\/email(?:\/(domain|verify|refresh|sender))?$/);
+  const emailMatch = url.split("?")[0].match(/^\/api\/tenants\/([^/]+)\/email(?:\/(domain|verify|refresh|sender|tracking))?$/);
   if (emailMatch) {
     const tId = emailMatch[1];
     const action = emailMatch[2];
@@ -315649,7 +315741,11 @@ async function handleCoreApi(req, res) {
         if (action === "domain") await svc.addTenantDomain(tId, body?.domain);
         else if (action === "verify") await svc.verifyTenantDomain(tId);
         else if (action === "refresh") await svc.refreshTenantDomain(tId);
-        else await svc.setTenantSender(tId, { fromName: body?.fromName, fromLocalPart: body?.fromLocalPart, replyTo: body?.replyTo });
+        else if (action === "tracking") {
+          res.statusCode = 200;
+          res.end(JSON.stringify(await svc.setTenantTracking(tId, body?.enabled !== false)));
+          return true;
+        } else await svc.setTenantSender(tId, { fromName: body?.fromName, fromLocalPart: body?.fromLocalPart, replyTo: body?.replyTo });
         res.statusCode = 200;
         res.end(JSON.stringify(await svc.getEmailSettingsView(tId)));
         return true;
@@ -317159,9 +317255,12 @@ ${signature || defSig}`;
   const campaignEngagementMatch = url.match(/^\/api\/campaigns\/([a-zA-Z0-9_-]+)\/engagement$/);
   if (campaignEngagementMatch && req.method === "GET") {
     try {
-      const stats = await getCampaignEngagementStats(campaignEngagementMatch[1]);
+      const [stats, trackingEnabled] = await Promise.all([
+        getCampaignEngagementStats(campaignEngagementMatch[1]),
+        Promise.resolve().then(() => (init_tenantEmailService(), tenantEmailService_exports)).then(async (m2) => m2.isTrackingEnabled(await m2.getTenantEmailSettings(resolvedTenantId))).catch(() => true)
+      ]);
       res.statusCode = 200;
-      res.end(JSON.stringify({ success: true, ...stats }));
+      res.end(JSON.stringify({ success: true, trackingEnabled, ...stats }));
     } catch (err) {
       res.statusCode = 500;
       res.end(JSON.stringify({ error: err?.message || "Failed to load engagement stats" }));
@@ -318025,24 +318124,6 @@ firebase-admin/lib/auth/base-auth.js:
 
 firebase-admin/lib/auth/project-config-manager.js:
   (*! firebase-admin v14.5.0 *)
-
-@firebase/util/dist/postinstall.mjs:
-  (**
-   * @license
-   * Copyright 2025 Google LLC
-   *
-   * Licensed under the Apache License, Version 2.0 (the "License");
-   * you may not use this file except in compliance with the License.
-   * You may obtain a copy of the License at
-   *
-   *   http://www.apache.org/licenses/LICENSE-2.0
-   *
-   * Unless required by applicable law or agreed to in writing, software
-   * distributed under the License is distributed on an "AS IS" BASIS,
-   * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-   * See the License for the specific language governing permissions and
-   * limitations under the License.
-   *)
 
 @firebase/util/dist/node-esm/index.node.esm.js:
   (**

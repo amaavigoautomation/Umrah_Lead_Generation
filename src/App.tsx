@@ -50,7 +50,7 @@ import {
 import { db, isFirebaseConfigured } from './firebase/config';
 import { collection, doc, setDoc, getDoc, getDocs, updateDoc, deleteDoc, query, where, orderBy, limit, onSnapshot } from 'firebase/firestore';
 
-// Screens loaded on demand (own JS files). Login, navigation and the inbox stay in the main bundle.
+// thsi is a test Screens loaded on demand (own JS files). Login, navigation and the inbox stay in the main bundle.
 const CampaignManagement = lazyNamed(() => import('./components/CampaignManagement'), 'CampaignManagement');
 const CrmPipeline = lazyNamed(() => import('./components/CrmPipeline'), 'CrmPipeline');
 const KnowledgeBaseView = lazyNamed(() => import('./components/KnowledgeBaseView'), 'KnowledgeBaseView');

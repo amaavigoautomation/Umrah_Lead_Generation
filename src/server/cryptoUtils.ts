@@ -5,7 +5,10 @@ import type { EncryptedSecretPayload } from '../types/tenant.js';
 function getMasterKey(): Buffer {
   const envKey = process.env.SECRETS_MASTER_KEY || process.env.TENANT_MASTER_KEY;
   if (!envKey) {
-    // Development fallback key with strict notice
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error('SECRETS_MASTER_KEY or TENANT_MASTER_KEY must be configured in production.');
+    }
+    // Local development only. Never use this fallback for production credentials.
     const fallbackSeed = 'umrah360_platform_master_seed_key_v1_secure_dev';
     return crypto.createHash('sha256').update(fallbackSeed).digest();
   }

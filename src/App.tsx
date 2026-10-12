@@ -898,6 +898,28 @@ export default function App() {
 
     const threadMsgs = messages.filter((m) => m.conversationId === conversationId);
     const lastIncoming = [...threadMsgs].reverse().find((m) => m.senderType === 'CUSTOMER' || m.senderType === 'PROSPECT');
+    if (conv.channel === 'INSTAGRAM' && (senderType === 'AGENT' || senderType === 'AI')) {
+      const recipientId = conv.externalConversationId || lastIncoming?.instagramUserId || contacts.find((c) => c.contactId === conv.contactId)?.instagramUserId || '';
+      if (!recipientId) {
+        window.alert('This Instagram conversation does not have a valid recipient ID.');
+        return;
+      }
+      try {
+        const sendResponse = await fetch('/api/instagram/send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ recipientId, text }),
+        });
+        const sendData = await sendResponse.json().catch(() => ({}));
+        if (!sendResponse.ok || !sendData.success) {
+          window.alert(sendData.error || 'Instagram message could not be sent.');
+          return;
+        }
+      } catch (error: any) {
+        window.alert(error?.message || 'Instagram message could not be sent.');
+        return;
+      }
+    }
     const inReplyTo = lastIncoming?.gmailMessageId || lastIncoming?.emailMeta?.messageId;
     const gmailThreadId = conv.gmailThreadId || conv.emailThreadId || `thread-${conversationId}`;
     const nowIso = new Date().toISOString();
@@ -962,8 +984,8 @@ export default function App() {
 
     const newMsg: Message = {
       messageId: `msg-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-      gmailMessageId: sentGmailMessageId,
-      gmailThreadId,
+      gmailMessageId: conv.channel === 'INSTAGRAM' ? undefined : sentGmailMessageId,
+      gmailThreadId: conv.channel === 'INSTAGRAM' ? undefined : gmailThreadId,
       conversationId,
       channel: conv.channel === 'WEBSITE' ? 'EMAIL' : conv.channel,
       direction,
@@ -1009,6 +1031,18 @@ export default function App() {
           }),
           { merge: true }
         );
+        if (conv.channel === 'INSTAGRAM') {
+          await setDoc(tDoc('messages', newMsg.messageId), sanitizeDoc(newMsg), { merge: true });
+          await setDoc(tDoc('conversations', conversationId), sanitizeDoc({
+            conversationId,
+            contactId: conv.contactId,
+            channel: 'INSTAGRAM',
+            direction: 'OUTBOUND',
+            lastMessageAt: newMsg.timestamp,
+            lastMessageText: newMsg.text.slice(0, 120),
+            updatedAt: newMsg.timestamp,
+          }), { merge: true });
+        }
       } catch (e) {
         console.warn('Firestore write warning:', e);
       }

@@ -63,6 +63,8 @@ export interface CampaignLead {
   companyName: string;
   email: string;
   phone?: string;
+  /** Last 10 digits of `phone`, for equality lookups of inbound replies. */
+  phoneLast10?: string;
   designation?: string;
   sourceFile: string;
   rowNumber?: number;

@@ -10,7 +10,7 @@
  *
  * Because it bypasses rules, ALL tenant scoping must go through tenantRepo(ctx).
  */
-import { FieldValue } from 'firebase-admin/firestore';
+import { FieldValue, FieldPath } from 'firebase-admin/firestore';
 import type {
   DocumentData,
   DocumentReference as AdminDocumentReference,
@@ -98,8 +98,23 @@ type Constraint = (q: any) => any;
 export const where = (field: string, op: any, value: any): Constraint => (q) => q.where(field, op, value);
 export const orderBy = (field: string, dir: 'asc' | 'desc' = 'asc'): Constraint => (q) => q.orderBy(field, dir);
 export const limit = (n: number): Constraint => (q) => q.limit(n);
+/** Order by document ID. Works with equality filters without any composite index. */
+export const orderByDocumentId = (): Constraint => (q) => q.orderBy(FieldPath.documentId());
+/** Cursor for paging: continue after this document ID (pair with orderByDocumentId). */
+export const startAfterId = (id: string): Constraint => (q) => q.startAfter(id);
+/** Cursor for paging on one or more orderBy fields (values in the same order as the orderBy calls). */
+export const startAfterValues = (...values: any[]): Constraint => (q) => q.startAfter(...values);
 export function query(base: Query | CollectionReference, ...constraints: Constraint[]): Query {
   return constraints.reduce((q: any, c) => c(q), base as any);
+}
+
+/**
+ * Server-side COUNT aggregation. Billed as 1 read per up to 1,000 matching index entries,
+ * instead of 1 read per matching document like getDocs().
+ */
+export async function countDocs(q: Query | CollectionReference): Promise<number> {
+  const s = await (q as any).count().get();
+  return Number(s.data().count || 0);
 }
 
 export const increment = (n: number) => FieldValue.increment(n);

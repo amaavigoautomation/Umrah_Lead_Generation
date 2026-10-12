@@ -30,6 +30,9 @@ import {
   getCampaignById,
   getCampaignByIdAsync,
   getCampaignLeads,
+  getCampaignLeadsPage,
+  ensureCampaignSearchIndex,
+  type CampaignLeadFilter,
   getCampaignLeadsFromDb,
   getCampaignRuns,
   createCampaign,
@@ -1028,9 +1031,23 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
     }
     try {
       const poller = await import('./tenantImapPoller.js');
-      const results = runAll
+      const results: any[] = runAll
         ? await poller.pollAllTenantMailboxes()
         : [await poller.pollTenantMailbox(callerCtx!.tenantId)];
+
+      // The shared env mailbox (IMAP_* / SMTP_* vars) belongs to one workspace and is polled by a
+      // different routine. The browser used to trigger it every 25s via /api/inbound/sync; that timer is
+      // gone, so the cron covers it here. pollAndProcessImapMailbox is a no-op for any other workspace.
+      const ownerTenantId = getImapOwnerTenantId();
+      if (getImapConfig().configured && (runAll || callerCtx?.tenantId === ownerTenantId)) {
+        const ownerCtx: TenantContext = { tenantId: ownerTenantId, uid: 'system', email: 'system', role: 'admin' };
+        const legacy = await pollAndProcessImapMailbox(ownerCtx).catch((err: any) => ({
+          success: false,
+          polledCount: 0,
+          error: err?.message || String(err),
+        }));
+        results.push({ tenantId: ownerTenantId, mailbox: 'shared-env', polledCount: legacy.polledCount, error: (legacy as any).error });
+      }
       res.statusCode = 200;
       res.setHeader('Content-Type', 'application/json');
       res.end(JSON.stringify({ success: true, results }));
@@ -2446,7 +2463,8 @@ Generate a helpful, grounded response.`;
       res.end(JSON.stringify({ error: 'Campaign not found' }));
       return true;
     }
-    const leads = getCampaignLeads(campaignId);
+    // Rare, explicit action: reads this campaign's leads once (memory may only hold a partial set now).
+    const leads = await getCampaignLeadsFromDb(campaignId);
     const repliedLeads = leads.filter((l) => l.replyStatus === 'REPLIED');
     const unrepliedLeads = leads.filter((l) => l.replyStatus !== 'REPLIED');
     const allQualified = leads.length > 0 && repliedLeads.length === leads.length;
@@ -2493,13 +2511,41 @@ Generate a helpful, grounded response.`;
     return true;
   }
 
+  // Builds the campaign's search index if it does not exist yet (campaigns created before it existed).
+  // The browser then reads the index documents directly from Firestore.
+  const campaignSearchIndexMatch = url.match(/^\/api\/campaigns\/([a-zA-Z0-9_-]+)\/search-index$/);
+  if (campaignSearchIndexMatch && req.method === 'POST') {
+    try {
+      const result = await ensureCampaignSearchIndex(campaignSearchIndexMatch[1]);
+      res.statusCode = 200;
+      res.end(JSON.stringify({ success: true, ...result }));
+    } catch (err: any) {
+      res.statusCode = 500;
+      res.end(JSON.stringify({ error: err?.message || 'Failed to build search index' }));
+    }
+    return true;
+  }
+
   const campaignLeadsMatch = url.match(/^\/api\/campaigns\/([a-zA-Z0-9_-]+)\/leads$/);
   if (campaignLeadsMatch && req.method === 'GET') {
     const campaignId = campaignLeadsMatch[1];
-    await initCampaignStore();
-    const leads = await getCampaignLeadsFromDb(campaignId);
-    res.statusCode = 200;
-    res.end(JSON.stringify({ success: true, leads }));
+    // One page per request (?limit=50&cursor=...&filter=SENT). Was: every lead of the campaign,
+    // re-fetched by the campaign screen every few seconds.
+    const qp = new URL(rawUrl || '/', 'http://localhost').searchParams;
+    const filterParam = (qp.get('filter') || 'ALL').toUpperCase();
+    const allowed = ['ALL', 'PENDING', 'SENT', 'FAILED', 'REPLIED', 'DEMO_BOOKED'];
+    try {
+      const page = await getCampaignLeadsPage(campaignId, {
+        pageSize: parseInt(qp.get('limit') || '50', 10) || 50,
+        cursor: qp.get('cursor') || '',
+        filter: (allowed.includes(filterParam) ? filterParam : 'ALL') as CampaignLeadFilter,
+      });
+      res.statusCode = 200;
+      res.end(JSON.stringify({ success: true, leads: page.leads, nextCursor: page.nextCursor }));
+    } catch (err: any) {
+      res.statusCode = 500;
+      res.end(JSON.stringify({ error: err?.message || 'Failed to load campaign leads' }));
+    }
     return true;
   }
 

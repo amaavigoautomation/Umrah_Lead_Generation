@@ -22,7 +22,11 @@ export default async function handler(req: IncomingMessage & { body?: any }, res
         const pathParam = (req as any).query?.path || parsedUrl.searchParams.get('path');
         if (pathParam) {
           const pathStr = Array.isArray(pathParam) ? pathParam.join('/') : pathParam;
-          req.url = `/api/${pathStr.replace(/^\/+/, '')}`;
+          // Keep the original query string (minus Vercel's own `path` param), e.g. ?limit=50&after=...
+          const rest = new URLSearchParams(parsedUrl.searchParams);
+          rest.delete('path');
+          const qs = rest.toString();
+          req.url = `/api/${pathStr.replace(/^\/+/, '')}${qs ? `?${qs}` : ''}`;
         }
       }
     } catch {}

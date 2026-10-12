@@ -250,29 +250,6 @@ export default function App() {
     }
   }, [session, currentTenantId]);
 
-  // Serverless hosts (Vercel) have no always-on poller: while the app is open, ask the server to
-  // check this company's own mailbox every minute so replies get ingested and answered.
-  useEffect(() => {
-    if (!session || session.isPlatformAdmin || !currentTenantId) return;
-    // TEMPORARY DEMO SETTING (added 2026-10-09): check the mailbox every 4 seconds so new email shows up fast.
-    // The normal value is 60_000 (once a minute). Put it back after the demo.
-    const MAILBOX_CHECK_EVERY_MS = 4_000;
-    let checking = false;
-    const tick = () => {
-      // Skip while the previous check is still running, so fast checks never pile up.
-      if (document.visibilityState === 'hidden' || checking) return;
-      checking = true;
-      fetch('/api/inbound-mail/cron', { method: 'POST' })
-        .catch(() => {})
-        .finally(() => {
-          checking = false;
-        });
-    };
-    const first = setTimeout(tick, 2000);
-    const t = setInterval(tick, MAILBOX_CHECK_EVERY_MS);
-    return () => { clearTimeout(first); clearInterval(t); };
-  }, [session, currentTenantId]);
-
   // What the workspace's plan includes (the server enforces it too; this only drives the UI).
   const [entitlements, setEntitlements] = useState<{ planName: string; features: Record<string, boolean>; billing?: { status: string; locked: boolean; graceEndsAt?: string } } | null>(null);
   const [activatingPlan, setActivatingPlan] = useState(false);
@@ -564,7 +541,6 @@ export default function App() {
   // Track message IDs ingested from backend to prevent duplicates
   const ingestedBackendMsgIds = useRef<Set<string>>(new Set());
   const isSyncingInboundRef = useRef<boolean>(false);
-  const isDispatchingCampaignsRef = useRef<boolean>(false);
 
   // Background sync for live inbound emails (from IMAP or direct webhook)
   const syncWithBackendInbound = useCallback(async () => {
@@ -694,46 +670,14 @@ export default function App() {
     }
   }, []);
 
-  // Global campaign dispatch keep-alive: ensures RUNNING campaigns dispatch continuously
-  // regardless of which tab is active, or whether CampaignManagement component is mounted
-  const triggerActiveCampaignsDispatch = useCallback(async () => {
-    if (isDispatchingCampaignsRef.current) return;
-    isDispatchingCampaignsRef.current = true;
-    try {
-      await fetch('/api/campaigns/process-active', { method: 'POST' }).catch(() => null);
-    } catch {} finally {
-      isDispatchingCampaignsRef.current = false;
-    }
-  }, []);
-
-  // Poll backend inbound mailbox and trigger active campaign dispatches safely (25s interval)
+  // Campaign sending and mailbox checks are server jobs (cron-job.org -> /api/campaigns/cron and
+  // /api/inbound-mail/cron). The browser no longer triggers them on a timer: every open tab doing so
+  // made the server re-read whole collections every few seconds. New mail and campaign progress reach
+  // the screen through the Firestore listeners. One sync on sign-in, plus the manual "Sync now" button.
   useEffect(() => {
-    // Only poll once signed in to a workspace (requests need the Firebase token).
     if (!currentUser || !currentTenantId) return;
     syncWithBackendInbound();
-    triggerActiveCampaignsDispatch();
-    const interval = setInterval(() => {
-      if (document.visibilityState === 'visible') {
-        syncWithBackendInbound();
-        triggerActiveCampaignsDispatch();
-      }
-    }, 25000);
-
-    const handleVisibility = () => {
-      if (document.visibilityState === 'visible') {
-        syncWithBackendInbound();
-        triggerActiveCampaignsDispatch();
-      }
-    };
-    document.addEventListener('visibilitychange', handleVisibility);
-    window.addEventListener('focus', handleVisibility);
-
-    return () => {
-      clearInterval(interval);
-      document.removeEventListener('visibilitychange', handleVisibility);
-      window.removeEventListener('focus', handleVisibility);
-    };
-  }, [syncWithBackendInbound, triggerActiveCampaignsDispatch, currentUser?.userId, currentTenantId]);
+  }, [syncWithBackendInbound, currentUser?.userId, currentTenantId]);
 
   // Active AI Auto-Reply Engine: checks for any unreplied inbound customer messages in AI-enabled threads
   const autoRepliedTurnsRef = useRef<Set<string>>(new Set());

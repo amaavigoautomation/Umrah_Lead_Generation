@@ -42,7 +42,7 @@ import {
   File,
   Users,
 } from 'lucide-react';
-import { collection, doc, setDoc, deleteDoc, onSnapshot, getDoc, getDocs } from 'firebase/firestore';
+import { collection, doc, setDoc, deleteDoc, onSnapshot, getDoc, getDocs, query, where, documentId } from 'firebase/firestore';
 import { db, isFirebaseConfigured } from '../firebase/config.js';
 import {
   Campaign,
@@ -122,6 +122,10 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
   const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<EmailTemplate | null>(null);
   const [isRestartConfirmOpen, setIsRestartConfirmOpen] = useState(false);
+  const [restartPreview, setRestartPreview] = useState<{ repliedLeads: CampaignLead[]; unrepliedLeads: CampaignLead[] } | null>(null);
+  // Leads table paging (one page at a time; the server never sends the whole list).
+  const [leadsCursor, setLeadsCursor] = useState<string | null>(null);
+  const [isLoadingLeads, setIsLoadingLeads] = useState(false);
   const [isRestarting, setIsRestarting] = useState(false);
   const [campaignNotification, setCampaignNotification] = useState<{
     type: 'info' | 'success' | 'warning';
@@ -396,39 +400,62 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
   const loadSeqRef = useRef(0);
   const detailsSeqRef = useRef(0);
 
-  // Fetch all campaigns (and templates only once - they rarely change)
-  const loadData = async () => {
-    const seq = ++loadSeqRef.current;
-    try {
-      setRefreshing(true);
-      const needTemplates = !templatesLoadedRef.current;
-      const [campData, tplData] = await Promise.all([
-        fetchJsonWithTimeout('/api/campaigns'),
-        needTemplates ? fetchJsonWithTimeout('/api/templates') : Promise.resolve(null),
-      ]);
+  // Campaign list: a live Firestore listener on this workspace's campaigns. The server keeps each
+  // campaign's counters (sent / pending / failed / replied / demo) on the campaign document, so the
+  // screen updates when sending progresses without any polling. (Was: GET /api/campaigns every 5-15s,
+  // which re-read every lead and send record on the server each time.)
+  const seenCampaignIdsRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (!isFirebaseConfigured || !db || !tenantId) return;
+    seenCampaignIdsRef.current = new Set();
+    const unsub = onSnapshot(
+      collection(db, 'tenants', tenantId, 'campaigns'),
+      (snap) => {
+        const list = snap.docs
+          .map((d) => d.data() as Campaign)
+          .filter((c) => c && c.campaignId)
+          .sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+        setCampaigns(list);
+        campaignsRef.current = list;
 
-      // A newer request has already been issued: drop this (possibly stale) response
-      if (seq !== loadSeqRef.current) return;
-
-      if (campData && campData.campaigns && Array.isArray(campData.campaigns)) {
-        setCampaigns(campData.campaigns);
-        campaignsRef.current = campData.campaigns;
-
-        // If a campaign is currently selected, refresh its details without altering user selection
         const activeId = selectedCampaignIdRef.current;
-        if (activeId) {
-          const updated = campData.campaigns.find((c: Campaign) => c.campaignId === activeId);
-          if (updated) {
-            setSelectedCampaign((prev) => (prev ? { ...prev, ...updated } : updated));
+        const wasSeen = new Set(seenCampaignIdsRef.current);
+        seenCampaignIdsRef.current = new Set(list.map((c) => c.campaignId));
+        const updated = activeId ? list.find((c) => c.campaignId === activeId) : undefined;
+        if (updated) {
+          setSelectedCampaign((prev) => (prev ? { ...prev, ...updated } : updated));
+        } else if (activeId && wasSeen.has(activeId)) {
+          // The selected campaign was in an earlier snapshot and is gone now: it was deleted (here or
+          // elsewhere). Select the newest one, or none. (A campaign created a moment ago that the
+          // listener has not delivered yet was never "seen", so it stays selected.)
+          const next = list[0] || null;
+          setSelectedCampaignId(next ? next.campaignId : null);
+          selectedCampaignIdRef.current = next ? next.campaignId : null;
+          setSelectedCampaign(next);
+          if (!next) {
+            setCampaignLeads([]);
+            setCampaignRuns([]);
           }
-        } else if (campData.campaigns.length > 0) {
-          const firstCamp = campData.campaigns[0];
+        } else if (!activeId && list.length > 0) {
+          const firstCamp = list[0];
           setSelectedCampaignId(firstCamp.campaignId);
           selectedCampaignIdRef.current = firstCamp.campaignId;
           setSelectedCampaign(firstCamp);
         }
-      }
+      },
+      (err) => console.warn('[Campaigns] listener error:', err)
+    );
+    return () => unsub();
+  }, [tenantId]);
 
+  // Templates: loaded once (they rarely change). Campaigns come from the listener above.
+  const loadData = async () => {
+    if (templatesLoadedRef.current) return;
+    const seq = ++loadSeqRef.current;
+    try {
+      setRefreshing(true);
+      const tplData = await fetchJsonWithTimeout('/api/templates');
+      if (seq !== loadSeqRef.current) return;
       if (tplData && tplData.templates && Array.isArray(tplData.templates)) {
         templatesLoadedRef.current = true;
         setTemplates(tplData.templates);
@@ -446,19 +473,39 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
         });
       }
     } catch (e) {
-      console.warn('Error loading campaigns/templates:', e);
+      console.warn('Error loading templates:', e);
     } finally {
       if (seq === loadSeqRef.current) setRefreshing(false);
     }
   };
 
-  // Load selected campaign details (leads and runs). The campaign object itself comes from the list call.
-  const loadSelectedCampaignDetails = async (campaignId: string) => {
+  useEffect(() => {
+    loadData();
+    // Without Firebase (local demo mode) there is no listener: load the list once from the API.
+    if (!isFirebaseConfigured || !db) {
+      fetchJsonWithTimeout('/api/campaigns').then((d) => {
+        if (d && Array.isArray(d.campaigns)) {
+          setCampaigns(d.campaigns);
+          campaignsRef.current = d.campaigns;
+        }
+      });
+    }
+  }, []);
+
+  const LEADS_PAGE_SIZE = 50;
+  const leadsUrl = (campaignId: string, filter: string, size: number, cursor?: string | null) =>
+    `/api/campaigns/${campaignId}/leads?limit=${size}&filter=${encodeURIComponent(filter)}` +
+    (cursor ? `&cursor=${encodeURIComponent(cursor)}` : '');
+
+  // Selected campaign details: the FIRST page of leads (for the current status filter) plus the runs.
+  // `size` lets a refresh keep the rows the user already paged through (capped at 200 by the server).
+  const loadSelectedCampaignDetails = async (campaignId: string, size: number = LEADS_PAGE_SIZE) => {
     if (!campaignId) return;
     const seq = ++detailsSeqRef.current;
+    setIsLoadingLeads(true);
     try {
       const [leadsData, runsData] = await Promise.all([
-        fetchJsonWithTimeout(`/api/campaigns/${campaignId}/leads`),
+        fetchJsonWithTimeout(leadsUrl(campaignId, leadStatusFilterRef.current, size)),
         fetchJsonWithTimeout(`/api/campaigns/${campaignId}/runs`),
       ]);
 
@@ -468,66 +515,209 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
       // Accept empty arrays too, otherwise the previous campaign's leads (or stale statuses) stay on screen
       if (leadsData && Array.isArray(leadsData.leads)) {
         setCampaignLeads(leadsData.leads);
+        setLeadsCursor(leadsData.nextCursor || null);
       }
       if (runsData && Array.isArray(runsData.runs)) {
         setCampaignRuns(runsData.runs);
       }
     } catch (e) {
       console.warn('Error loading campaign leads/runs from API:', e);
+    } finally {
+      if (seq === detailsSeqRef.current) setIsLoadingLeads(false);
     }
   };
 
-  // Single sequential poller: never overlaps itself, slows down when idle.
+  // Next page of leads, appended to the table.
+  const loadMoreLeads = async () => {
+    const campaignId = selectedCampaignIdRef.current;
+    if (!campaignId || !leadsCursor || isLoadingLeads) return;
+    const seq = detailsSeqRef.current;
+    setIsLoadingLeads(true);
+    try {
+      const data = await fetchJsonWithTimeout(leadsUrl(campaignId, leadStatusFilterRef.current, LEADS_PAGE_SIZE, leadsCursor));
+      if (seq !== detailsSeqRef.current || selectedCampaignIdRef.current !== campaignId) return;
+      if (data && Array.isArray(data.leads)) {
+        setCampaignLeads((prev) => {
+          const seen = new Set(prev.map((l) => l.campaignLeadId));
+          return [...prev, ...data.leads.filter((l: CampaignLead) => !seen.has(l.campaignLeadId))];
+        });
+        setLeadsCursor(data.nextCursor || null);
+      }
+    } finally {
+      if (seq === detailsSeqRef.current) setIsLoadingLeads(false);
+    }
+  };
+
+  // Status filter is applied by the server; keep the latest value in a ref for the loaders above.
+  const leadStatusFilterRef = useRef(leadStatusFilter);
   useEffect(() => {
-    let cancelled = false;
-    let timer: ReturnType<typeof setTimeout> | null = null;
-    let busy = false;
+    leadStatusFilterRef.current = leadStatusFilter;
+  }, [leadStatusFilter]);
 
-    const tick = async () => {
-      if (cancelled) return;
-      if (busy || document.visibilityState !== 'visible') {
-        timer = setTimeout(tick, 5000);
-        return;
-      }
-      busy = true;
-      let running = false;
-      try {
-        const runningCamp = campaignsRef.current.find((c) => c.status === 'RUNNING');
-        running = !!runningCamp;
-        if (runningCamp) {
-          await fetchJsonWithTimeout(`/api/campaigns/${runningCamp.campaignId}/process`, { method: 'POST' }, 20000);
-        }
-        await loadData();
-        const activeId = selectedCampaignIdRef.current;
-        if (activeId) await loadSelectedCampaignDetails(activeId);
-      } finally {
-        busy = false;
-        if (!cancelled) timer = setTimeout(tick, running ? 5000 : 15000);
-      }
-    };
-
-    tick();
-
-    const handleVisible = () => {
-      if (document.visibilityState === 'visible' && !busy) {
-        if (timer) clearTimeout(timer);
-        tick();
-      }
-    };
-    document.addEventListener('visibilitychange', handleVisible);
-
-    return () => {
-      cancelled = true;
-      if (timer) clearTimeout(timer);
-      document.removeEventListener('visibilitychange', handleVisible);
-    };
-  }, []);
-
+  // (Re)load the table when the selected campaign or the status filter changes.
   useEffect(() => {
     if (selectedCampaignId) {
+      setLeadsCursor(null);
       loadSelectedCampaignDetails(selectedCampaignId);
     }
-  }, [selectedCampaignId]);
+  }, [selectedCampaignId, leadStatusFilter]);
+
+  // While sending progresses, the listener updates the campaign's counters; refresh the visible rows
+  // then (debounced), instead of polling. Only the rows on screen are re-read.
+  const progressKey = selectedCampaign
+    ? [selectedCampaign.status, selectedCampaign.sentCount, selectedCampaign.failedCount, selectedCampaign.repliedCount, selectedCampaign.demoBookedCount, selectedCampaign.pendingCount, selectedCampaign.lastRunNumber].join('|')
+    : '';
+  const campaignLeadsCountRef = useRef(0);
+  const refreshSearchResultsRef = useRef<() => void>(() => {});
+  useEffect(() => {
+    campaignLeadsCountRef.current = campaignLeads.length;
+  }, [campaignLeads.length]);
+  const lastProgressRef = useRef<{ id: string | null; key: string }>({ id: null, key: '' });
+  useEffect(() => {
+    if (!progressKey || !selectedCampaignId) return;
+    const prev = lastProgressRef.current;
+    lastProgressRef.current = { id: selectedCampaignId, key: progressKey };
+    // First value for this campaign: the selection effect already loaded the table.
+    if (prev.id !== selectedCampaignId) return;
+    const t = setTimeout(() => {
+      if (document.visibilityState !== 'visible') return;
+      const keep = Math.min(200, Math.max(LEADS_PAGE_SIZE, campaignLeadsCountRef.current));
+      loadSelectedCampaignDetails(selectedCampaignId, keep);
+      refreshSearchResultsRef.current();
+    }, 1500);
+    return () => clearTimeout(t);
+  }, [progressKey]);
+
+  // Restart dialog: load the replied / not-replied split once when it opens.
+  useEffect(() => {
+    if (!isRestartConfirmOpen || !selectedCampaignId) {
+      setRestartPreview(null);
+      return;
+    }
+    let cancelled = false;
+    fetchJsonWithTimeout(`/api/campaigns/${selectedCampaignId}/restart-preview`).then((d) => {
+      if (cancelled || !d) return;
+      setRestartPreview({
+        repliedLeads: Array.isArray(d.repliedLeads) ? d.repliedLeads : [],
+        unrepliedLeads: Array.isArray(d.unrepliedLeads) ? d.unrepliedLeads : [],
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [isRestartConfirmOpen, selectedCampaignId]);
+
+  // ---------------------------------------------------------------------------
+  // Full-campaign search via the search index (tenants/{t}/campaign_search). The index packs the
+  // searchable text of ~1000 leads per document, so searching a 10k-lead campaign costs ~10 reads once
+  // (then cached for this campaign), plus reads for the matching leads shown (50 per page).
+  // ---------------------------------------------------------------------------
+  type SearchEntry = { id: string; row: number; text: string };
+  const SEARCH_SEP = '\u001f';
+  const SEARCH_PAGE_SIZE = 50;
+  const searchIndexCacheRef = useRef<Map<string, SearchEntry[]>>(new Map());
+  const [searchMatchIds, setSearchMatchIds] = useState<string[] | null>(null); // null = not searching
+  const [searchResults, setSearchResults] = useState<CampaignLead[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const searchSeqRef = useRef(0);
+
+  const loadSearchIndex = async (campaignId: string): Promise<SearchEntry[]> => {
+    const cached = searchIndexCacheRef.current.get(campaignId);
+    if (cached) return cached;
+    const readChunks = async () =>
+      (await getDocs(query(collection(db, 'tenants', tenantId, 'campaign_search'), where('campaignId', '==', campaignId)))).docs;
+    let docs = await readChunks();
+    if (docs.length === 0) {
+      // Older campaign without an index: the server builds it once, then we read it.
+      await fetchJsonWithTimeout(`/api/campaigns/${campaignId}/search-index`, { method: 'POST' }, 60000);
+      docs = await readChunks();
+    }
+    const entries: SearchEntry[] = docs
+      .map((d) => d.data() as { chunk?: number; entries?: string[] })
+      .sort((a, b) => (a.chunk || 0) - (b.chunk || 0))
+      .flatMap((d) => d.entries || [])
+      .map((raw) => {
+        const [id, row, name, email, company] = raw.split(SEARCH_SEP);
+        return { id, row: Number(row) || 0, text: `${name || ''} ${email || ''} ${company || ''}`.toLowerCase() };
+      })
+      .filter((e) => e.id);
+    if (docs.length > 0) searchIndexCacheRef.current.set(campaignId, entries);
+    return entries;
+  };
+
+  // Reads only the given leads (Firestore 'in' takes up to 30 IDs per query), in the given order.
+  const fetchLeadsByIds = async (ids: string[]): Promise<CampaignLead[]> => {
+    const found = new Map<string, CampaignLead>();
+    for (let i = 0; i < ids.length; i += 30) {
+      const chunk = ids.slice(i, i + 30);
+      const snap = await getDocs(
+        query(collection(db, 'tenants', tenantId, 'campaign_leads'), where(documentId(), 'in', chunk))
+      );
+      snap.docs.forEach((d) => found.set(d.id, d.data() as CampaignLead));
+    }
+    return ids.map((id) => found.get(id)).filter(Boolean) as CampaignLead[];
+  };
+
+  // Run the search (debounced) when the text or the campaign changes.
+  useEffect(() => {
+    const q = searchQuery.trim().toLowerCase();
+    const campaignId = selectedCampaignId;
+    if (!q || !campaignId || !isFirebaseConfigured || !db || !tenantId) {
+      searchSeqRef.current++;
+      setSearchMatchIds(null);
+      setSearchResults([]);
+      setIsSearching(false);
+      return;
+    }
+    const seq = ++searchSeqRef.current;
+    const t = setTimeout(async () => {
+      setIsSearching(true);
+      try {
+        const index = await loadSearchIndex(campaignId);
+        if (seq !== searchSeqRef.current) return;
+        const ids = index
+          .filter((e) => e.text.includes(q))
+          .sort((a, b) => a.row - b.row)
+          .map((e) => e.id);
+        const first = await fetchLeadsByIds(ids.slice(0, SEARCH_PAGE_SIZE));
+        if (seq !== searchSeqRef.current) return;
+        setSearchMatchIds(ids);
+        setSearchResults(first);
+      } catch (e) {
+        console.warn('[Campaign search] failed:', e);
+      } finally {
+        if (seq === searchSeqRef.current) setIsSearching(false);
+      }
+    }, 300);
+    return () => clearTimeout(t);
+  }, [searchQuery, selectedCampaignId, tenantId]);
+
+  const loadMoreSearchResults = async () => {
+    if (!searchMatchIds || isSearching) return;
+    const seq = searchSeqRef.current;
+    const next = searchMatchIds.slice(searchResults.length, searchResults.length + SEARCH_PAGE_SIZE);
+    if (next.length === 0) return;
+    setIsSearching(true);
+    try {
+      const more = await fetchLeadsByIds(next);
+      if (seq !== searchSeqRef.current) return;
+      setSearchResults((prev) => [...prev, ...more]);
+    } finally {
+      if (seq === searchSeqRef.current) setIsSearching(false);
+    }
+  };
+
+  // Refresh the statuses of the search results already on screen (used when sending progresses).
+  const refreshSearchResults = async () => {
+    if (!searchMatchIds || searchResults.length === 0) return;
+    const seq = searchSeqRef.current;
+    const fresh = await fetchLeadsByIds(searchResults.map((l) => l.campaignLeadId));
+    if (seq === searchSeqRef.current) setSearchResults(fresh);
+  };
+
+  refreshSearchResultsRef.current = () => {
+    void refreshSearchResults().catch(() => {});
+  };
 
   // Campaign Actions
   const handleStartCampaign = async (campaignId: string) => {
@@ -1277,7 +1467,11 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
 
   // Filtered Leads
   const filteredLeads = useMemo(() => {
-    return campaignLeads.filter((lead) => {
+    // With Firebase, search runs over the whole campaign via the search index (searchResults);
+    // without it, fall back to filtering the loaded rows.
+    const indexSearch = isFirebaseConfigured && Boolean(db) && searchMatchIds !== null;
+    const source = indexSearch ? searchResults : campaignLeads;
+    return source.filter((lead) => {
       // Filter by status
       if (leadStatusFilter === 'PENDING' && lead.sendStatus !== 'PENDING') return false;
       if (leadStatusFilter === 'SENT' && lead.sendStatus !== 'SENT') return false;
@@ -1285,8 +1479,8 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
       if (leadStatusFilter === 'REPLIED' && lead.replyStatus !== 'REPLIED') return false;
       if (leadStatusFilter === 'DEMO_BOOKED' && lead.demoStatus !== 'BOOKED') return false;
 
-      // Filter by search query
-      if (searchQuery.trim()) {
+      // Filter by search query (already done by the index when indexSearch)
+      if (!indexSearch && searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
         const matchesName = lead.name.toLowerCase().includes(q);
         const matchesEmail = lead.email.toLowerCase().includes(q);
@@ -1296,7 +1490,7 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
 
       return true;
     });
-  }, [campaignLeads, leadStatusFilter, searchQuery]);
+  }, [campaignLeads, leadStatusFilter, searchQuery, searchMatchIds, searchResults]);
 
   // Selected Campaign Template
   const activeTemplate = useMemo(() => {
@@ -1359,7 +1553,12 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
 
           <button
             id="refresh-campaigns-btn"
-            onClick={loadData}
+            onClick={() => {
+              // Manual refresh: templates + the selected campaign's visible leads. Campaign stats are live.
+              templatesLoadedRef.current = false;
+              loadData();
+              if (selectedCampaignIdRef.current) loadSelectedCampaignDetails(selectedCampaignIdRef.current);
+            }}
             title="Refresh campaign stats"
             className="p-2 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg border border-slate-200 transition"
           >
@@ -1425,10 +1624,12 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
               ) : (
                 campaigns.map((camp) => {
                   const isSelected = camp.campaignId === selectedCampaignId;
-                  const liveCampTotal = isSelected && campaignLeads.length > 0 ? campaignLeads.length : camp.totalLeads;
-                  const liveCampSent = isSelected && campaignLeads.length > 0 ? campaignLeads.filter((l) => l.sendStatus === 'SENT').length : camp.sentCount;
-                  const liveCampReplied = isSelected && campaignLeads.length > 0 ? campaignLeads.filter((l) => l.replyStatus === 'REPLIED').length : camp.repliedCount;
-                  const liveCampDemo = isSelected && campaignLeads.length > 0 ? campaignLeads.filter((l) => l.demoStatus === 'BOOKED').length : (camp.demoBookedCount || 0);
+                  // Counters come from the campaign document (kept up to date by the server). The leads table
+                  // only holds one page, so counting it would be wrong.
+                  const liveCampTotal = camp.totalLeads || 0;
+                  const liveCampSent = camp.sentCount || 0;
+                  const liveCampReplied = camp.repliedCount || 0;
+                  const liveCampDemo = camp.demoBookedCount || 0;
                   const percentSent = liveCampTotal > 0 ? Math.round((liveCampSent / liveCampTotal) * 100) : 0;
                   return (
                     <div
@@ -1658,27 +1859,19 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                   const currentRunNum = selectedCampaign.lastRunNumber || 1;
                   const isRestartRun = currentRunNum > 1;
 
-                  const liveTotalLeads = campaignLeads.length > 0 ? campaignLeads.length : selectedCampaign.totalLeads;
-                  
-                  // For restart follow-up runs, target pool is unreplied leads receiving follow-ups
-                  const unrepliedLeads = campaignLeads.filter((l) => l.replyStatus !== 'REPLIED');
-                  const targetLeadsForRun = isRestartRun ? unrepliedLeads : campaignLeads;
-                  const runTargetCount = isRestartRun ? targetLeadsForRun.length : liveTotalLeads;
+                  // All counters come from the campaign document (server-maintained COUNT totals).
+                  // The leads table holds only one page, so it is never counted here.
+                  const liveTotalLeads = selectedCampaign.totalLeads || 0;
+                  const liveRepliedCount = selectedCampaign.repliedCount || 0;
+                  const liveDemoCount = selectedCampaign.demoBookedCount || 0;
 
+                  // For restart follow-up runs, the target pool is the leads that have not replied.
+                  const runTargetCount = isRestartRun ? Math.max(0, liveTotalLeads - liveRepliedCount) : liveTotalLeads;
                   const liveSentCount = isRestartRun
-                    ? targetLeadsForRun.filter((l) => l.sendStatus === 'SENT').length
-                    : (campaignLeads.length > 0 ? campaignLeads.filter((l) => l.sendStatus === 'SENT').length : selectedCampaign.sentCount);
-
-                  const livePendingCount = isRestartRun
-                    ? targetLeadsForRun.filter((l) => l.sendStatus === 'PENDING').length
-                    : (campaignLeads.length > 0 ? campaignLeads.filter((l) => l.sendStatus === 'PENDING' && l.replyStatus !== 'REPLIED').length : selectedCampaign.pendingCount);
-
-                  const liveFailedCount = isRestartRun
-                    ? targetLeadsForRun.filter((l) => l.sendStatus === 'FAILED').length
-                    : (campaignLeads.length > 0 ? campaignLeads.filter((l) => l.sendStatus === 'FAILED').length : (selectedCampaign.failedCount || 0));
-
-                  const liveRepliedCount = campaignLeads.length > 0 ? campaignLeads.filter((l) => l.replyStatus === 'REPLIED').length : selectedCampaign.repliedCount;
-                  const liveDemoCount = campaignLeads.length > 0 ? campaignLeads.filter((l) => l.demoStatus === 'BOOKED').length : (selectedCampaign.demoBookedCount || 0);
+                    ? Math.max(0, (selectedCampaign.sentCount || 0) - liveRepliedCount)
+                    : selectedCampaign.sentCount || 0;
+                  const livePendingCount = selectedCampaign.pendingCount || 0;
+                  const liveFailedCount = selectedCampaign.failedCount || 0;
 
                   const percentSent = runTargetCount > 0 ? Math.round((liveSentCount / runTargetCount) * 100) : 0;
 
@@ -1839,7 +2032,18 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
 
                     <div className="text-xs text-slate-500">
                       Showing <span className="font-semibold text-slate-900">{filteredLeads.length}</span> of{' '}
-                      {campaignLeads.length} leads
+                      {searchMatchIds !== null ? (
+                        <>
+                          {searchResults.length} loaded · <span className="font-semibold text-slate-900">{searchMatchIds.length}</span> match
+                          {searchMatchIds.length === 1 ? '' : 'es'} in all leads
+                        </>
+                      ) : (
+                        <>
+                          {campaignLeads.length} loaded
+                          {leadStatusFilter === 'ALL' && selectedCampaign?.totalLeads ? ` (${selectedCampaign.totalLeads} total)` : ''}
+                        </>
+                      )}
+                      {isSearching ? ' · searching…' : ''}
                     </div>
                   </div>
 
@@ -1983,6 +2187,18 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                       </tbody>
                     </table>
                   </div>
+                  {(searchMatchIds !== null ? searchResults.length < searchMatchIds.length : Boolean(leadsCursor)) && (
+                    <div className="p-3 text-center border-t border-slate-100">
+                      <button
+                        type="button"
+                        onClick={searchMatchIds !== null ? loadMoreSearchResults : loadMoreLeads}
+                        disabled={searchMatchIds !== null ? isSearching : isLoadingLeads}
+                        className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                      >
+                        {(searchMatchIds !== null ? isSearching : isLoadingLeads) ? 'Loading…' : 'Load more leads'}
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             ) : (
@@ -2904,9 +3120,11 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
 
       {/* RESTART CAMPAIGN CONFIRMATION MODAL & ALL-QUALIFIED POPUP */}
       {isRestartConfirmOpen && selectedCampaign && (() => {
-        const repliedLeads = campaignLeads.filter((l) => l.replyStatus === 'REPLIED');
-        const unrepliedLeads = campaignLeads.filter((l) => l.replyStatus !== 'REPLIED');
-        const allQualified = campaignLeads.length > 0 && repliedLeads.length === campaignLeads.length;
+        // Loaded once when the dialog opens (the table only holds one page of leads).
+        const repliedLeads = restartPreview?.repliedLeads || [];
+        const unrepliedLeads = restartPreview?.unrepliedLeads || [];
+        const previewTotal = repliedLeads.length + unrepliedLeads.length;
+        const allQualified = previewTotal > 0 && repliedLeads.length === previewTotal;
         const nextRun = (selectedCampaign.lastRunNumber || 0) + 1;
 
         return (
@@ -3093,7 +3311,7 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                     </button>
                     <button
                       id="confirm-restart-campaign-btn"
-                      disabled={isRestarting || unrepliedLeads.length === 0}
+                      disabled={isRestarting || !restartPreview || unrepliedLeads.length === 0}
                       onClick={() => handleRestartCampaign(selectedCampaign.campaignId)}
                       className="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg text-xs font-semibold transition flex items-center gap-2 shadow-xs"
                     >

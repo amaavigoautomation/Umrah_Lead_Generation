@@ -1,5 +1,5 @@
 import crypto from 'crypto';
-import { collection, doc, getDoc, getDocs, setDoc, deleteDoc, query, where } from './adminFirestore.js';
+import { doc, getDoc, setDoc, deleteDoc } from './adminFirestore.js';
 import { db } from './adminFirestore.js';
 import { tenantRepo } from './tenantRepo.js';
 import { encryptSecret, decryptSecret } from './cryptoUtils.js';
@@ -294,7 +294,7 @@ export async function handleInstagramWebhook(req: any, res: any): Promise<boolea
     for (const event of events) {
       const externalId = String(event.message?.mid || event.id || event.timestamp || crypto.randomUUID());
       const eventId = crypto.createHash('sha256').update(`${accountId}:${externalId}`).digest('hex');
-      const eventRef = doc(db, `tenants/${tenantId}/instagram_inbound_events`, eventId);
+      const eventRef = doc(db, 'instagram_inbound_events', eventId);
       const existing = await getDoc(eventRef);
       if (existing.exists()) continue;
       await setDoc(eventRef, {

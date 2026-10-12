@@ -1016,8 +1016,8 @@ export default function App() {
 
     const newMsg: Message = {
       messageId: `msg-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-      gmailMessageId: sentGmailMessageId,
-      gmailThreadId,
+      gmailMessageId: conv.channel === 'INSTAGRAM' ? undefined : sentGmailMessageId,
+      gmailThreadId: conv.channel === 'INSTAGRAM' ? undefined : gmailThreadId,
       conversationId,
       channel: conv.channel === 'WEBSITE' ? 'EMAIL' : conv.channel,
       direction,

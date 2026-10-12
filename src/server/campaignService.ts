@@ -4,6 +4,7 @@ import { hasFeature } from './entitlements.js';
 import { tenantRepo } from './tenantRepo.js';
 import type { TenantContext } from '../types/tenant.js';
 import crypto from 'crypto';
+import { normalizeEmail, type DuplicateInfo } from '../shared/leadDedupe.js';
 import OpenAI from 'openai';
 import { INITIAL_KNOWLEDGE_DOCUMENTS } from '../services/knowledgeData.js';
 import {
@@ -1408,7 +1409,7 @@ export async function createCampaign(params: {
   /** Start automatically at this moment (UTC ISO) instead of now. Wins over startImmediately. */
   scheduledStartAt?: string;
   scheduledTimezone?: string;
-}): Promise<{ campaign: Campaign; leads: CampaignLead[] }> {
+}): Promise<{ campaign: Campaign; leads: CampaignLead[]; duplicatesSkipped: number; duplicates: DuplicateInfo[] }> {
   await initCampaignStore();
 
   const campaignName = (params.name || '').trim();
@@ -1501,14 +1502,24 @@ export async function createCampaign(params: {
 
   campaignsMap.set(campaignId, initialCampaign);
 
-  // Process leads
+  // Process leads. One lead per email per campaign: repeats are skipped (first row wins). The lead's
+  // document ID is derived from the email, so the database itself cannot hold two leads with the same
+  // email in one campaign.
   const createdLeads: CampaignLead[] = [];
+  const firstRowByEmail = new Map<string, number>();
+  const duplicates: DuplicateInfo[] = [];
   params.leads.forEach((l, idx) => {
-    const cleanEmail = (l.email || '').trim().toLowerCase();
+    const cleanEmail = normalizeEmail(l.email);
     if (!cleanEmail) return;
 
     const rowNum = l.rowNumber || idx + 1;
-    const campaignLeadId = `clead-${campaignId}-${idx + 1}`;
+    const firstRow = firstRowByEmail.get(cleanEmail);
+    if (firstRow !== undefined) {
+      duplicates.push({ rowNumber: rowNum, email: cleanEmail, duplicateOfRow: firstRow });
+      return;
+    }
+    firstRowByEmail.set(cleanEmail, rowNum);
+    const campaignLeadId = `clead-${campaignId}-${crypto.createHash('sha1').update(cleanEmail).digest('hex').slice(0, 16)}`;
     const leadId = `lead-${cleanEmail.replace(/[^a-z0-9]/gi, '_')}`;
 
     const leadName = l.name || [l.firstName, l.lastName].filter(Boolean).join(' ') || cleanEmail.split('@')[0];
@@ -1562,6 +1573,13 @@ export async function createCampaign(params: {
     createdLeads.push(cLead);
   });
 
+  // Counts reflect the leads actually created (duplicates and empty rows excluded).
+  initialCampaign.totalLeads = createdLeads.length;
+  initialCampaign.pendingCount = createdLeads.length;
+  if (duplicates.length > 0) {
+    console.log(`[createCampaign] ${campaignId}: skipped ${duplicates.length} duplicate email(s).`);
+  }
+
   // Sync to Firestore synchronously before responding
   if (isFirebaseConfigured && db) {
     try {
@@ -1585,7 +1603,7 @@ export async function createCampaign(params: {
     });
   }
 
-  return { campaign: initialCampaign, leads: createdLeads };
+  return { campaign: initialCampaign, leads: createdLeads, duplicatesSkipped: duplicates.length, duplicates };
 }
 
 // -------------------------------------------------------------

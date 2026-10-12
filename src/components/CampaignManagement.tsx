@@ -60,6 +60,7 @@ import {
 import { EmailTemplateEditorModal } from './EmailTemplateEditorModal.js';
 import { INITIAL_CAMPAIGN } from '../services/dataService.js';
 import { zonedLocalToUtcIso, utcToZonedLocal, formatZoned, timeUntil } from '../shared/zonedTime';
+import { markDuplicateEmails, summarizeLeads } from '../shared/leadDedupe';
 
 interface CampaignManagementProps {
   onOpenConversation?: (conversationId: string) => void;
@@ -299,6 +300,31 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
     designation: '',
   });
   const [parsedPreviewLeads, setParsedPreviewLeads] = useState<any[]>([]);
+  // Upload summary: unique leads that will be created vs. repeated / invalid rows that are skipped.
+  const leadSummary = useMemo(() => summarizeLeads(parsedPreviewLeads), [parsedPreviewLeads]);
+  const downloadSkippedRows = () => {
+    const skipped = parsedPreviewLeads.filter((l) => !l.isValid || l.isDuplicate);
+    if (skipped.length === 0) return;
+    const esc = (v: any) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+    const csv = [
+      ['row', 'email', 'name', 'company', 'reason'].join(','),
+      ...skipped.map((l) =>
+        [
+          l.rowNumber,
+          esc(l.email),
+          esc(l.name),
+          esc(l.companyName),
+          esc(l.isDuplicate ? `Duplicate of row ${l.duplicateOfRow}` : 'Invalid email'),
+        ].join(',')
+      ),
+    ].join('\n');
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `skipped-rows-${(uploadedFileName || 'leads').replace(/\.[^.]+$/, '')}.csv`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
   const [uploadError, setUploadError] = useState<string | null>(null);
 
   const SAMPLE_PILGRIMAGE_LEADS = [
@@ -350,7 +376,7 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
   ];
 
   const handleLoadSampleLeads = () => {
-    setParsedPreviewLeads([...SAMPLE_PILGRIMAGE_LEADS]);
+    setParsedPreviewLeads(markDuplicateEmails([...SAMPLE_PILGRIMAGE_LEADS]));
     setUploadedFileName('5_Sample_Pilgrimage_Tour_Operators.csv');
     setUploadError(null);
     setCreateCampaignError(null);
@@ -385,7 +411,7 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
       };
     }).filter((l) => l.email);
 
-    setParsedPreviewLeads(parsed);
+    setParsedPreviewLeads(markDuplicateEmails(parsed));
     setUploadedFileName(`Pasted_Leads_${parsed.length}_recipients`);
     setUploadError(null);
     setCreateCampaignError(null);
@@ -1208,7 +1234,7 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
       })
       .filter((l) => l.email);
 
-    setParsedPreviewLeads(parsed);
+    setParsedPreviewLeads(markDuplicateEmails(parsed));
   };
 
   const handleColumnMappingChange = (field: keyof typeof columnMapping, colName: string) => {
@@ -2722,9 +2748,9 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                     Add Campaign Leads *
                   </label>
                   <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
-                    parsedPreviewLeads.length > 0 ? 'bg-orange-50 text-orange-700 border border-orange-200' : 'bg-slate-100 text-slate-500'
+                    leadSummary.unique > 0 ? 'bg-orange-50 text-orange-700 border border-orange-200' : 'bg-slate-100 text-slate-500'
                   }`}>
-                    {parsedPreviewLeads.length} Lead{parsedPreviewLeads.length === 1 ? '' : 's'} Ready
+                    {leadSummary.unique} Lead{leadSummary.unique === 1 ? '' : 's'} Ready
                   </span>
                 </div>
 
@@ -2794,7 +2820,7 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                         <div>
                           <p className="text-sm font-semibold text-orange-600">{uploadedFileName}</p>
                           <p className="text-xs text-slate-500 mt-1">
-                            Found {parsedPreviewLeads.length} valid rows. Click to change file.
+                            Found {leadSummary.unique} unique lead{leadSummary.unique === 1 ? '' : 's'} in {leadSummary.total} row{leadSummary.total === 1 ? '' : 's'}. Click to change file.
                           </p>
                         </div>
                       ) : (
@@ -2939,12 +2965,41 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                     </div>
                   </div>
 
+                  {/* Duplicate / invalid summary */}
+                  {parsedPreviewLeads.length > 0 && (leadSummary.duplicates > 0 || leadSummary.invalid > 0) && (
+                    <div className="mt-2 px-3 py-2 rounded-lg bg-amber-50 border border-amber-200 text-[11px] text-amber-800">
+                      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                        <span className="font-semibold">
+                          {leadSummary.total} rows · {leadSummary.unique} unique
+                          {leadSummary.duplicates > 0 ? ` · ${leadSummary.duplicates} duplicate${leadSummary.duplicates === 1 ? '' : 's'} skipped` : ''}
+                          {leadSummary.invalid > 0 ? ` · ${leadSummary.invalid} invalid` : ''}
+                        </span>
+                        <button type="button" onClick={downloadSkippedRows} className="underline hover:text-amber-900">
+                          Download skipped rows
+                        </button>
+                      </div>
+                      {leadSummary.duplicates > 0 && (
+                        <div className="mt-1 space-y-0.5 text-amber-700">
+                          {parsedPreviewLeads
+                            .filter((l) => l.isDuplicate)
+                            .slice(0, 3)
+                            .map((l) => (
+                              <div key={`dup-${l.rowNumber}`} className="font-mono">
+                                {l.email} · row {l.rowNumber} (duplicate of row {l.duplicateOfRow})
+                              </div>
+                            ))}
+                          {leadSummary.duplicates > 3 && <div>and {leadSummary.duplicates - 3} more</div>}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   {/* Quick Leads Preview (First 3) */}
                   {parsedPreviewLeads.length > 0 && (
                     <div className="mt-2 pt-2 border-t border-slate-200 text-[11px] text-slate-500">
                       <span className="font-semibold text-slate-700">Preview (Sample Leads):</span>
                       <div className="mt-1 space-y-1">
-                        {parsedPreviewLeads.slice(0, 3).map((l, i) => (
+                        {parsedPreviewLeads.filter((l) => l.isValid).slice(0, 3).map((l, i) => (
                           <div key={i} className="flex items-center gap-2 text-slate-700">
                             <span className="text-orange-600 font-mono">{l.email}</span>
                             <span>•</span>
@@ -3284,9 +3339,10 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
             {/* Modal Actions */}
             <div className="px-6 py-4 border-t border-slate-200 bg-slate-50 flex items-center justify-between gap-3">
               <div className="text-xs text-slate-500">
-                {parsedPreviewLeads.length > 0 ? (
+                {leadSummary.unique > 0 ? (
                   <span className="text-emerald-700 font-medium">
-                    ✓ {parsedPreviewLeads.length} lead{parsedPreviewLeads.length === 1 ? '' : 's'} ready
+                    ✓ {leadSummary.unique} lead{leadSummary.unique === 1 ? '' : 's'} ready
+                    {leadSummary.duplicates > 0 ? ` · ${leadSummary.duplicates} duplicate${leadSummary.duplicates === 1 ? '' : 's'} skipped` : ''}
                   </span>
                 ) : (
                   <span className="text-slate-500">

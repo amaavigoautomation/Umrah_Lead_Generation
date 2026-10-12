@@ -2194,7 +2194,15 @@ Generate a helpful, grounded response.`;
     try {
       const created = await createCampaign(body);
       res.statusCode = 201;
-      res.end(JSON.stringify({ success: true, campaign: created.campaign, leads: created.leads }));
+      res.end(
+        JSON.stringify({
+          success: true,
+          campaign: created.campaign,
+          leads: created.leads,
+          duplicatesSkipped: created.duplicatesSkipped,
+          duplicates: created.duplicates.slice(0, 500),
+        })
+      );
     } catch (err: any) {
       res.statusCode = 400;
       res.end(JSON.stringify({ error: err?.message || 'Failed to create campaign' }));

@@ -1081,8 +1081,16 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
     } catch (err: any) {
       const status = err instanceof Error && typeof (err as any).status === 'number' ? (err as any).status : 500;
       res.statusCode = status;
-      // Only our own InboundError messages are customer-readable; anything else stays generic.
-      res.end(JSON.stringify({ error: status < 500 ? err.message : 'Inbound mailbox request failed' }));
+      // Unexpected failures used to be swallowed with no trace. Log the real cause (Vercel -> Logs).
+      if (status >= 500) {
+        console.error(`[Inbound] ${req.method} ${url} failed for tenant ${tId}:`, err?.stack || err);
+      }
+      // Only our own InboundError messages are customer-readable; anything else stays generic,
+      // plus a short technical hint (error type and message, password removed) to find the cause fast.
+      const secret = String(body?.password || '');
+      let hint = status >= 500 ? `${err?.name || 'Error'}${err?.code ? ` [${err.code}]` : ''}: ${String(err?.message || '').slice(0, 200)}` : '';
+      if (secret && hint) hint = hint.split(secret).join('***');
+      res.end(JSON.stringify({ error: status < 500 ? err.message : 'Inbound mailbox request failed', ...(hint ? { hint } : {}) }));
       return true;
     }
   }
@@ -1221,6 +1229,11 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
             targetAccount: (await getTenantBrand(resolvedTenantId)).calendarEmail,
             updatedAt: new Date().toISOString(),
             active: true,
+            // A NEW token must clear an earlier "expired" flag. Without this, once any token had expired,
+            // every token saved afterwards was ignored by other server instances (they read this doc and
+            // skip it while expired is true), so the calendar looked disconnected again on the next visit.
+            expired: false,
+            expiredAt: null,
           },
           { merge: true }
         ).catch(() => {});

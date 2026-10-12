@@ -66,13 +66,13 @@ var uuid4;
 var init_uuid = __esm({
   "node_modules/openai/internal/utils/uuid.mjs"() {
     uuid4 = function() {
-      const { crypto: crypto7 } = globalThis;
-      if (crypto7?.randomUUID) {
-        uuid4 = crypto7.randomUUID.bind(crypto7);
-        return crypto7.randomUUID();
+      const { crypto: crypto11 } = globalThis;
+      if (crypto11?.randomUUID) {
+        uuid4 = crypto11.randomUUID.bind(crypto11);
+        return crypto11.randomUUID();
       }
       const u8 = new Uint8Array(1);
-      const randomByte = crypto7 ? () => crypto7.getRandomValues(u8)[0] : () => Math.random() * 255 & 255;
+      const randomByte = crypto11 ? () => crypto11.getRandomValues(u8)[0] : () => Math.random() * 255 & 255;
       return "10000000-1000-4000-8000-100000000000".replace(/[018]/g, (c) => (+c ^ randomByte() & 15 >> +c / 4).toString(16));
     };
   }
@@ -1457,9 +1457,9 @@ async function defaultParseResponse(client2, props) {
       if (!bodyText) {
         return void 0;
       }
-      const json = JSON.parse(bodyText);
+      const json2 = JSON.parse(bodyText);
       jsonBodyLength = bodyText.length;
-      return addRequestID(json, response);
+      return addRequestID(json2, response);
     }
     const text = await response.text();
     return text;
@@ -2859,8 +2859,8 @@ function assertSafeHeaders(headers) {
 }
 function exchangeDeadline(timeout, callerSignal) {
   const deadline = new AbortController();
-  const timer = timeout === void 0 ? void 0 : setTimeout(() => deadline.abort(new APIConnectionTimeoutError()), timeout);
-  const timerHandle = timer;
+  const timer2 = timeout === void 0 ? void 0 : setTimeout(() => deadline.abort(new APIConnectionTimeoutError()), timeout);
+  const timerHandle = timer2;
   if (typeof timerHandle === "object" && timerHandle !== null && "unref" in timerHandle && typeof timerHandle.unref === "function") {
     timerHandle.unref();
   }
@@ -2873,8 +2873,8 @@ function exchangeDeadline(timeout, callerSignal) {
     signal: deadline.signal,
     dispose: () => {
       callerSignal?.removeEventListener("abort", cancel);
-      if (timer) {
-        clearTimeout(timer);
+      if (timer2) {
+        clearTimeout(timer2);
       }
     }
   };
@@ -13501,17 +13501,17 @@ var init_agent_session_stream = __esm({
         if (delay === void 0 || !(error instanceof BadRequestError) || error.code !== "invalid_request_error" || !error.error || !("message" in error.error) || error.error.message !== `Unknown pending tool call: ${result.call_id}`) {
           throw error;
         }
-        let timer;
+        let timer2;
         try {
           await __classPrivateFieldGet(this, _AgentSessionStream_instances, "m", _AgentSessionStream_wait).call(this, () => (
             // oxlint-disable-next-line promise/avoid-new -- Own the registration timer so cancellation clears it promptly.
             new Promise((resolve) => {
-              timer = setTimeout(resolve, delay);
+              timer2 = setTimeout(resolve, delay);
             })
           ));
         } finally {
-          if (timer !== void 0) {
-            clearTimeout(timer);
+          if (timer2 !== void 0) {
+            clearTimeout(timer2);
           }
         }
         await __classPrivateFieldGet(this, _AgentSessionStream_instances, "m", _AgentSessionStream_submit2).call(this, result, options2, key, attempt + 1);
@@ -16667,7 +16667,7 @@ var init_AssistantStream = __esm({
 // node_modules/openai/lib/polling.mjs
 function sleepUntilAborted(milliseconds, signal) {
   return new Promise((resolve, reject) => {
-    let timer;
+    let timer2;
     let registered;
     let settled = false;
     const removeAbortListener = (listener) => {
@@ -16677,9 +16677,9 @@ function sleepUntilAborted(milliseconds, signal) {
       }
     };
     const cleanup = () => {
-      if (timer !== void 0) {
-        clearTimeout(timer);
-        timer = void 0;
+      if (timer2 !== void 0) {
+        clearTimeout(timer2);
+        timer2 = void 0;
       }
       if (registered) {
         const listener = registered;
@@ -16709,7 +16709,7 @@ function sleepUntilAborted(milliseconds, signal) {
       abort();
       return;
     }
-    timer = setTimeout(() => {
+    timer2 = setTimeout(() => {
       if (settled) {
         return;
       }
@@ -22987,7 +22987,7 @@ var init_client = __esm({
             void CancelReadableStream(props.response.body).catch(() => void 0);
             throw cancellation ?? error;
           }
-          let timer;
+          let timer2;
           let abortListener;
           let timedOut = false;
           try {
@@ -22995,7 +22995,7 @@ var init_client = __esm({
               throw abortError();
             }
             const timeoutPromise = new Promise((_, reject) => {
-              timer = setTimeout(() => {
+              timer2 = setTimeout(() => {
                 timedOut = true;
                 props.controller.abort();
                 reject(new APIConnectionTimeoutError());
@@ -23028,16 +23028,16 @@ var init_client = __esm({
             if (!retriesRemaining || attempt?.hasStreamingBody || props.options.__metadata?.["hasStreamingBody"] || globalThis.ReadableStream && props.options.body instanceof globalThis.ReadableStream || typeof props.options.body === "object" && props.options.body !== null && (Symbol.asyncIterator in props.options.body || Symbol.iterator in props.options.body && "next" in props.options.body && typeof props.options.body.next === "function")) {
               throw new APIConnectionTimeoutError();
             }
-            if (timer !== void 0)
-              clearTimeout(timer);
+            if (timer2 !== void 0)
+              clearTimeout(timer2);
             if (abortListener)
               callerSignal?.removeEventListener("abort", abortListener);
             abortListener = void 0;
             const next = await this.retryRequest(props.options, retriesRemaining, props.retryOfRequestLogID ?? props.requestLogID, void 0, props.requestSignal);
             Object.assign(props, next);
           } finally {
-            if (timer !== void 0)
-              clearTimeout(timer);
+            if (timer2 !== void 0)
+              clearTimeout(timer2);
             if (abortListener)
               callerSignal?.removeEventListener("abort", abortListener);
           }
@@ -31337,7 +31337,7 @@ var require_helpers = __commonJS({
       return Buffer.concat(chunks, length);
     }
     exports.toBuffer = toBuffer;
-    async function json(stream) {
+    async function json2(stream) {
       const buf = await toBuffer(stream);
       const str = buf.toString("utf8");
       try {
@@ -31348,7 +31348,7 @@ var require_helpers = __commonJS({
         throw err;
       }
     }
-    exports.json = json;
+    exports.json = json2;
     function req(url, opts = {}) {
       const href = typeof url === "string" ? url : url.href;
       const req2 = (href.startsWith("https:") ? https3 : http4).request(url, opts);
@@ -31398,7 +31398,7 @@ var require_dist2 = __commonJS({
     };
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.Agent = void 0;
-    var net = __importStar(__require("net"));
+    var net2 = __importStar(__require("net"));
     var http4 = __importStar(__require("http"));
     var https_1 = __require("https");
     __exportStar(require_helpers(), exports);
@@ -31438,7 +31438,7 @@ var require_dist2 = __commonJS({
         if (!this.sockets[name5]) {
           this.sockets[name5] = [];
         }
-        const fakeSocket = new net.Socket({ writable: false });
+        const fakeSocket = new net2.Socket({ writable: false });
         this.sockets[name5].push(fakeSocket);
         this.totalSocketCount++;
         return fakeSocket;
@@ -31650,7 +31650,7 @@ var require_dist3 = __commonJS({
     };
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.HttpsProxyAgent = void 0;
-    var net = __importStar(__require("net"));
+    var net2 = __importStar(__require("net"));
     var tls = __importStar(__require("tls"));
     var assert_1 = __importDefault(__require("assert"));
     var debug_1 = __importDefault(require_src());
@@ -31659,7 +31659,7 @@ var require_dist3 = __commonJS({
     var parse_proxy_response_1 = require_parse_proxy_response();
     var debug = (0, debug_1.default)("https-proxy-agent");
     var setServernameFromNonIpHost = (options2) => {
-      if (options2.servername === void 0 && options2.host && !net.isIP(options2.host)) {
+      if (options2.servername === void 0 && options2.host && !net2.isIP(options2.host)) {
         return {
           ...options2,
           servername: options2.host
@@ -31699,10 +31699,10 @@ var require_dist3 = __commonJS({
           socket = tls.connect(setServernameFromNonIpHost(this.connectOpts));
         } else {
           debug("Creating `net.Socket`: %o", this.connectOpts);
-          socket = net.connect(this.connectOpts);
+          socket = net2.connect(this.connectOpts);
         }
         const headers = typeof this.proxyHeaders === "function" ? this.proxyHeaders() : { ...this.proxyHeaders };
-        const host = net.isIPv6(opts.host) ? `[${opts.host}]` : opts.host;
+        const host = net2.isIPv6(opts.host) ? `[${opts.host}]` : opts.host;
         let payload = `CONNECT ${host}:${opts.port} HTTP/1.1\r
 `;
         if (proxy.username || proxy.password) {
@@ -31735,7 +31735,7 @@ var require_dist3 = __commonJS({
           return socket;
         }
         socket.destroy();
-        const fakeSocket = new net.Socket({ writable: false });
+        const fakeSocket = new net2.Socket({ writable: false });
         fakeSocket.readable = true;
         req.once("socket", (s2) => {
           debug("Replaying proxy buffer for failed request");
@@ -32503,8 +32503,8 @@ var require_ponyfill_es2018 = __commonJS({
       function isDataViewConstructor(ctor) {
         return ctor === DataView;
       }
-      function isDataView(view) {
-        return isDataViewConstructor(view.constructor);
+      function isDataView(view2) {
+        return isDataViewConstructor(view2.constructor);
       }
       function arrayBufferViewElementSize(ctor) {
         if (isDataViewConstructor(ctor)) {
@@ -32539,21 +32539,21 @@ var require_ponyfill_es2018 = __commonJS({
           }
           ReadableByteStreamControllerRespond(this._associatedReadableByteStreamController, bytesWritten);
         }
-        respondWithNewView(view) {
+        respondWithNewView(view2) {
           if (!IsReadableStreamBYOBRequest(this)) {
             throw byobRequestBrandCheckException("respondWithNewView");
           }
-          assertRequiredArgument(view, 1, "respondWithNewView");
-          if (!ArrayBuffer.isView(view)) {
+          assertRequiredArgument(view2, 1, "respondWithNewView");
+          if (!ArrayBuffer.isView(view2)) {
             throw new TypeError("You can only respond with array buffer views");
           }
           if (this._associatedReadableByteStreamController === void 0) {
             throw new TypeError("This BYOB request has been invalidated");
           }
-          if (IsDetachedBuffer(view.buffer)) {
+          if (IsDetachedBuffer(view2.buffer)) {
             throw new TypeError("The given view's buffer has been detached and so cannot be used as a response");
           }
-          ReadableByteStreamControllerRespondWithNewView(this._associatedReadableByteStreamController, view);
+          ReadableByteStreamControllerRespondWithNewView(this._associatedReadableByteStreamController, view2);
         }
       }
       Object.defineProperties(ReadableStreamBYOBRequest.prototype, {
@@ -32859,15 +32859,15 @@ var require_ponyfill_es2018 = __commonJS({
           ReadableByteStreamControllerFillReadRequestFromQueue(controller, readRequest);
         }
       }
-      function ReadableByteStreamControllerPullInto(controller, view, min, readIntoRequest) {
+      function ReadableByteStreamControllerPullInto(controller, view2, min, readIntoRequest) {
         const stream = controller._controlledReadableByteStream;
-        const ctor = view.constructor;
+        const ctor = view2.constructor;
         const elementSize = arrayBufferViewElementSize(ctor);
-        const { byteOffset, byteLength } = view;
+        const { byteOffset, byteLength } = view2;
         const minimumFill = min * elementSize;
         let buffer;
         try {
-          buffer = TransferArrayBuffer(view.buffer);
+          buffer = TransferArrayBuffer(view2.buffer);
         } catch (e2) {
           readIntoRequest._errorSteps(e2);
           return;
@@ -33059,15 +33059,15 @@ var require_ponyfill_es2018 = __commonJS({
         const entry = controller._queue.shift();
         controller._queueTotalSize -= entry.byteLength;
         ReadableByteStreamControllerHandleQueueDrain(controller);
-        const view = new Uint8Array(entry.buffer, entry.byteOffset, entry.byteLength);
-        readRequest._chunkSteps(view);
+        const view2 = new Uint8Array(entry.buffer, entry.byteOffset, entry.byteLength);
+        readRequest._chunkSteps(view2);
       }
       function ReadableByteStreamControllerGetBYOBRequest(controller) {
         if (controller._byobRequest === null && controller._pendingPullIntos.length > 0) {
           const firstDescriptor = controller._pendingPullIntos.peek();
-          const view = new Uint8Array(firstDescriptor.buffer, firstDescriptor.byteOffset + firstDescriptor.bytesFilled, firstDescriptor.byteLength - firstDescriptor.bytesFilled);
+          const view2 = new Uint8Array(firstDescriptor.buffer, firstDescriptor.byteOffset + firstDescriptor.bytesFilled, firstDescriptor.byteLength - firstDescriptor.bytesFilled);
           const byobRequest = Object.create(ReadableStreamBYOBRequest.prototype);
-          SetUpReadableStreamBYOBRequest(byobRequest, controller, view);
+          SetUpReadableStreamBYOBRequest(byobRequest, controller, view2);
           controller._byobRequest = byobRequest;
         }
         return controller._byobRequest;
@@ -33100,29 +33100,29 @@ var require_ponyfill_es2018 = __commonJS({
         firstDescriptor.buffer = TransferArrayBuffer(firstDescriptor.buffer);
         ReadableByteStreamControllerRespondInternal(controller, bytesWritten);
       }
-      function ReadableByteStreamControllerRespondWithNewView(controller, view) {
+      function ReadableByteStreamControllerRespondWithNewView(controller, view2) {
         const firstDescriptor = controller._pendingPullIntos.peek();
         const state2 = controller._controlledReadableByteStream._state;
         if (state2 === "closed") {
-          if (view.byteLength !== 0) {
+          if (view2.byteLength !== 0) {
             throw new TypeError("The view's length must be 0 when calling respondWithNewView() on a closed stream");
           }
         } else {
-          if (view.byteLength === 0) {
+          if (view2.byteLength === 0) {
             throw new TypeError("The view's length must be greater than 0 when calling respondWithNewView() on a readable stream");
           }
         }
-        if (firstDescriptor.byteOffset + firstDescriptor.bytesFilled !== view.byteOffset) {
+        if (firstDescriptor.byteOffset + firstDescriptor.bytesFilled !== view2.byteOffset) {
           throw new RangeError("The region specified by view does not match byobRequest");
         }
-        if (firstDescriptor.bufferByteLength !== view.buffer.byteLength) {
+        if (firstDescriptor.bufferByteLength !== view2.buffer.byteLength) {
           throw new RangeError("The buffer of view has different capacity than byobRequest");
         }
-        if (firstDescriptor.bytesFilled + view.byteLength > firstDescriptor.byteLength) {
+        if (firstDescriptor.bytesFilled + view2.byteLength > firstDescriptor.byteLength) {
           throw new RangeError("The region specified by view is larger than byobRequest");
         }
-        const viewByteLength = view.byteLength;
-        firstDescriptor.buffer = TransferArrayBuffer(view.buffer);
+        const viewByteLength = view2.byteLength;
+        firstDescriptor.buffer = TransferArrayBuffer(view2.buffer);
         ReadableByteStreamControllerRespondInternal(controller, viewByteLength);
       }
       function SetUpReadableByteStreamController(stream, controller, startAlgorithm, pullAlgorithm, cancelAlgorithm, highWaterMark, autoAllocateChunkSize) {
@@ -33176,9 +33176,9 @@ var require_ponyfill_es2018 = __commonJS({
         }
         SetUpReadableByteStreamController(stream, controller, startAlgorithm, pullAlgorithm, cancelAlgorithm, highWaterMark, autoAllocateChunkSize);
       }
-      function SetUpReadableStreamBYOBRequest(request, controller, view) {
+      function SetUpReadableStreamBYOBRequest(request, controller, view2) {
         request._associatedReadableByteStreamController = controller;
-        request._view = view;
+        request._view = view2;
       }
       function byobRequestBrandCheckException(name5) {
         return new TypeError(`ReadableStreamBYOBRequest.prototype.${name5} can only be used on a ReadableStreamBYOBRequest`);
@@ -33271,20 +33271,20 @@ var require_ponyfill_es2018 = __commonJS({
           }
           return ReadableStreamReaderGenericCancel(this, reason);
         }
-        read(view, rawOptions = {}) {
+        read(view2, rawOptions = {}) {
           if (!IsReadableStreamBYOBReader(this)) {
             return promiseRejectedWith(byobReaderBrandCheckException("read"));
           }
-          if (!ArrayBuffer.isView(view)) {
+          if (!ArrayBuffer.isView(view2)) {
             return promiseRejectedWith(new TypeError("view must be an array buffer view"));
           }
-          if (view.byteLength === 0) {
+          if (view2.byteLength === 0) {
             return promiseRejectedWith(new TypeError("view must have non-zero byteLength"));
           }
-          if (view.buffer.byteLength === 0) {
+          if (view2.buffer.byteLength === 0) {
             return promiseRejectedWith(new TypeError(`view's buffer must have non-zero byteLength`));
           }
-          if (IsDetachedBuffer(view.buffer)) {
+          if (IsDetachedBuffer(view2.buffer)) {
             return promiseRejectedWith(new TypeError("view's buffer has been detached"));
           }
           let options2;
@@ -33297,11 +33297,11 @@ var require_ponyfill_es2018 = __commonJS({
           if (min === 0) {
             return promiseRejectedWith(new TypeError("options.min must be greater than 0"));
           }
-          if (!isDataView(view)) {
-            if (min > view.length) {
+          if (!isDataView(view2)) {
+            if (min > view2.length) {
               return promiseRejectedWith(new RangeError("options.min must be less than or equal to view's length"));
             }
-          } else if (min > view.byteLength) {
+          } else if (min > view2.byteLength) {
             return promiseRejectedWith(new RangeError("options.min must be less than or equal to view's byteLength"));
           }
           if (this._ownerReadableStream === void 0) {
@@ -33318,7 +33318,7 @@ var require_ponyfill_es2018 = __commonJS({
             _closeSteps: (chunk) => resolvePromise({ value: chunk, done: true }),
             _errorSteps: (e2) => rejectPromise(e2)
           };
-          ReadableStreamBYOBReaderRead(this, view, min, readIntoRequest);
+          ReadableStreamBYOBReaderRead(this, view2, min, readIntoRequest);
           return promise;
         }
         /**
@@ -33364,13 +33364,13 @@ var require_ponyfill_es2018 = __commonJS({
         }
         return x2 instanceof ReadableStreamBYOBReader;
       }
-      function ReadableStreamBYOBReaderRead(reader, view, min, readIntoRequest) {
+      function ReadableStreamBYOBReaderRead(reader, view2, min, readIntoRequest) {
         const stream = reader._ownerReadableStream;
         stream._disturbed = true;
         if (stream._state === "errored") {
           readIntoRequest._errorSteps(stream._storedError);
         } else {
-          ReadableByteStreamControllerPullInto(stream._readableStreamController, view, min, readIntoRequest);
+          ReadableByteStreamControllerPullInto(stream._readableStreamController, view2, min, readIntoRequest);
         }
       }
       function ReadableStreamBYOBReaderRelease(reader) {
@@ -34995,7 +34995,7 @@ var require_ponyfill_es2018 = __commonJS({
           };
           ReadableStreamDefaultReaderRead(reader, readRequest);
         }
-        function pullWithBYOBReader(view, forBranch2) {
+        function pullWithBYOBReader(view2, forBranch2) {
           if (IsReadableStreamDefaultReader(reader)) {
             ReadableStreamReaderGenericRelease(reader);
             reader = AcquireReadableStreamBYOBReader(stream);
@@ -35061,7 +35061,7 @@ var require_ponyfill_es2018 = __commonJS({
               reading = false;
             }
           };
-          ReadableStreamBYOBReaderRead(reader, view, 1, readIntoRequest);
+          ReadableStreamBYOBReaderRead(reader, view2, 1, readIntoRequest);
         }
         function pull1Algorithm() {
           if (reading) {
@@ -40870,11 +40870,11 @@ var require_logging_utils = __commonJS({
         const debugLogger = this.upstream?.makeLogger(namespace);
         return (fields, ...args) => {
           const severity = fields.severity ?? types_1.LogSeverity.INFO;
-          const json = Object.assign({
+          const json2 = Object.assign({
             severity,
             message: util.format(...args)
           }, fields);
-          const jsonString = JSON.stringify(json);
+          const jsonString = JSON.stringify(json2);
           if (debugLogger) {
             debugLogger(fields, jsonString);
           } else {
@@ -41483,22 +41483,22 @@ var require_crypto2 = __commonJS({
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.NodeCrypto = void 0;
-    var crypto7 = __require("crypto");
+    var crypto11 = __require("crypto");
     var NodeCrypto = class {
       async sha256DigestBase64(str) {
-        return crypto7.createHash("sha256").update(str).digest("base64");
+        return crypto11.createHash("sha256").update(str).digest("base64");
       }
       randomBytesBase64(count) {
-        return crypto7.randomBytes(count).toString("base64");
+        return crypto11.randomBytes(count).toString("base64");
       }
       async verify(pubkey, data, signature) {
-        const verifier = crypto7.createVerify("RSA-SHA256");
+        const verifier = crypto11.createVerify("RSA-SHA256");
         verifier.update(data);
         verifier.end();
         return verifier.verify(pubkey, signature, "base64");
       }
       async sign(privateKey, data) {
-        const signer = crypto7.createSign("RSA-SHA256");
+        const signer = crypto11.createSign("RSA-SHA256");
         signer.update(data);
         signer.end();
         return signer.sign(privateKey, "base64");
@@ -41516,7 +41516,7 @@ var require_crypto2 = __commonJS({
        *   string in hexadecimal encoding.
        */
       async sha256DigestHex(str) {
-        return crypto7.createHash("sha256").update(str).digest("hex");
+        return crypto11.createHash("sha256").update(str).digest("hex");
       }
       /**
        * Computes the HMAC hash of a message using the provided crypto key and the
@@ -41528,15 +41528,15 @@ var require_crypto2 = __commonJS({
        */
       async signWithHmacSha256(key, msg) {
         const cryptoKey = typeof key === "string" ? key : toBuffer(key);
-        return toArrayBuffer(crypto7.createHmac("sha256", cryptoKey).update(msg).digest());
+        return toArrayBuffer(crypto11.createHmac("sha256", cryptoKey).update(msg).digest());
       }
     };
     exports.NodeCrypto = NodeCrypto;
     function toArrayBuffer(buffer) {
       const ab = new ArrayBuffer(buffer.length);
-      const view = new Uint8Array(ab);
+      const view2 = new Uint8Array(ab);
       for (let i2 = 0; i2 < buffer.length; ++i2) {
-        view[i2] = buffer[i2];
+        view2[i2] = buffer[i2];
       }
       return ab;
     }
@@ -41818,7 +41818,7 @@ var require_util2 = __commonJS({
     exports.isValidFile = isValidFile;
     exports.getWellKnownCertificateConfigFileLocation = getWellKnownCertificateConfigFileLocation;
     var fs5 = __require("fs");
-    var os2 = __require("os");
+    var os3 = __require("os");
     var path3 = __require("path");
     var WELL_KNOWN_CERTIFICATE_CONFIG_FILE = "certificate_config.json";
     var CLOUDSDK_CONFIG_DIRECTORY = "gcloud";
@@ -41916,7 +41916,7 @@ var require_util2 = __commonJS({
       return path3.join(configDir, WELL_KNOWN_CERTIFICATE_CONFIG_FILE);
     }
     function _isWindows() {
-      return os2.platform().startsWith("win");
+      return os3.platform().startsWith("win");
     }
   }
 });
@@ -42441,10 +42441,10 @@ var require_oauth2client = __commonJS({
        * https://github.com/googleapis/google-auth-library-nodejs/blob/main/samples/oauth2-codeVerifier.js
        */
       async generateCodeVerifierAsync() {
-        const crypto7 = (0, crypto_1.createCrypto)();
-        const randomString = crypto7.randomBytesBase64(96);
+        const crypto11 = (0, crypto_1.createCrypto)();
+        const randomString = crypto11.randomBytesBase64(96);
         const codeVerifier = randomString.replace(/\+/g, "~").replace(/=/g, "_").replace(/\//g, "-");
-        const unencodedCodeChallenge = await crypto7.sha256DigestBase64(codeVerifier);
+        const unencodedCodeChallenge = await crypto11.sha256DigestBase64(codeVerifier);
         const codeChallenge = unencodedCodeChallenge.split("=")[0].replace(/\+/g, "-").replace(/\//g, "_");
         return { codeVerifier, codeChallenge };
       }
@@ -42885,7 +42885,7 @@ var require_oauth2client = __commonJS({
        * @return Returns a promise resolving to LoginTicket on verification.
        */
       async verifySignedJwtWithCertsAsync(jwt, certs, requiredAudience, issuers, maxExpiry) {
-        const crypto7 = (0, crypto_1.createCrypto)();
+        const crypto11 = (0, crypto_1.createCrypto)();
         if (!maxExpiry) {
           maxExpiry = _OAuth2Client.DEFAULT_MAX_TOKEN_LIFETIME_SECS_;
         }
@@ -42898,7 +42898,7 @@ var require_oauth2client = __commonJS({
         let envelope;
         let payload;
         try {
-          envelope = JSON.parse(crypto7.decodeBase64StringUtf8(segments[0]));
+          envelope = JSON.parse(crypto11.decodeBase64StringUtf8(segments[0]));
         } catch (err) {
           if (err instanceof Error) {
             err.message = `Can't parse token envelope: ${segments[0]}': ${err.message}`;
@@ -42909,7 +42909,7 @@ var require_oauth2client = __commonJS({
           throw new Error("Can't parse token envelope: " + segments[0]);
         }
         try {
-          payload = JSON.parse(crypto7.decodeBase64StringUtf8(segments[1]));
+          payload = JSON.parse(crypto11.decodeBase64StringUtf8(segments[1]));
         } catch (err) {
           if (err instanceof Error) {
             err.message = `Can't parse token payload '${segments[0]}`;
@@ -42926,7 +42926,7 @@ var require_oauth2client = __commonJS({
         if (envelope.alg === "ES256") {
           signature = formatEcdsa.joseToDer(signature, "ES256").toString("base64");
         }
-        const verified = await crypto7.verify(cert2, signed, signature);
+        const verified = await crypto11.verify(cert2, signed, signature);
         if (!verified) {
           throw new Error("Invalid token signature: " + jwt);
         }
@@ -43301,14 +43301,14 @@ var require_buffer_equal_constant_time = __commonJS({
 var require_jwa = __commonJS({
   "node_modules/jwa/index.js"(exports, module) {
     var Buffer4 = require_safe_buffer().Buffer;
-    var crypto7 = __require("crypto");
+    var crypto11 = __require("crypto");
     var formatEcdsa = require_ecdsa_sig_formatter();
     var util = __require("util");
     var MSG_INVALID_ALGORITHM = '"%s" is not a valid algorithm.\n  Supported algorithms are:\n  "HS256", "HS384", "HS512", "RS256", "RS384", "RS512", "PS256", "PS384", "PS512", "ES256", "ES384", "ES512" and "none".';
     var MSG_INVALID_SECRET = "secret must be a string or buffer";
     var MSG_INVALID_VERIFIER_KEY = "key must be a string or a buffer";
     var MSG_INVALID_SIGNER_KEY = "key must be a string, a buffer or an object";
-    var supportsKeyObjects = typeof crypto7.createPublicKey === "function";
+    var supportsKeyObjects = typeof crypto11.createPublicKey === "function";
     if (supportsKeyObjects) {
       MSG_INVALID_VERIFIER_KEY += " or a KeyObject";
       MSG_INVALID_SECRET += "or a KeyObject";
@@ -43398,17 +43398,17 @@ var require_jwa = __commonJS({
       return function sign(thing, secret) {
         checkIsSecretKey(secret);
         thing = normalizeInput(thing);
-        var hmac2 = crypto7.createHmac("sha" + bits, secret);
+        var hmac2 = crypto11.createHmac("sha" + bits, secret);
         var sig2 = (hmac2.update(thing), hmac2.digest("base64"));
         return fromBase642(sig2);
       };
     }
     var bufferEqual;
-    var timingSafeEqual3 = "timingSafeEqual" in crypto7 ? function timingSafeEqual4(a, b) {
+    var timingSafeEqual3 = "timingSafeEqual" in crypto11 ? function timingSafeEqual4(a, b) {
       if (a.byteLength !== b.byteLength) {
         return false;
       }
-      return crypto7.timingSafeEqual(a, b);
+      return crypto11.timingSafeEqual(a, b);
     } : function timingSafeEqual4(a, b) {
       if (!bufferEqual) {
         bufferEqual = require_buffer_equal_constant_time();
@@ -43425,7 +43425,7 @@ var require_jwa = __commonJS({
       return function sign(thing, privateKey) {
         checkIsPrivateKey(privateKey);
         thing = normalizeInput(thing);
-        var signer = crypto7.createSign("RSA-SHA" + bits);
+        var signer = crypto11.createSign("RSA-SHA" + bits);
         var sig2 = (signer.update(thing), signer.sign(privateKey, "base64"));
         return fromBase642(sig2);
       };
@@ -43435,7 +43435,7 @@ var require_jwa = __commonJS({
         checkIsPublicKey(publicKey);
         thing = normalizeInput(thing);
         signature = toBase64(signature);
-        var verifier = crypto7.createVerify("RSA-SHA" + bits);
+        var verifier = crypto11.createVerify("RSA-SHA" + bits);
         verifier.update(thing);
         return verifier.verify(publicKey, signature, "base64");
       };
@@ -43444,11 +43444,11 @@ var require_jwa = __commonJS({
       return function sign(thing, privateKey) {
         checkIsPrivateKey(privateKey);
         thing = normalizeInput(thing);
-        var signer = crypto7.createSign("RSA-SHA" + bits);
+        var signer = crypto11.createSign("RSA-SHA" + bits);
         var sig2 = (signer.update(thing), signer.sign({
           key: privateKey,
-          padding: crypto7.constants.RSA_PKCS1_PSS_PADDING,
-          saltLength: crypto7.constants.RSA_PSS_SALTLEN_DIGEST
+          padding: crypto11.constants.RSA_PKCS1_PSS_PADDING,
+          saltLength: crypto11.constants.RSA_PSS_SALTLEN_DIGEST
         }, "base64"));
         return fromBase642(sig2);
       };
@@ -43458,12 +43458,12 @@ var require_jwa = __commonJS({
         checkIsPublicKey(publicKey);
         thing = normalizeInput(thing);
         signature = toBase64(signature);
-        var verifier = crypto7.createVerify("RSA-SHA" + bits);
+        var verifier = crypto11.createVerify("RSA-SHA" + bits);
         verifier.update(thing);
         return verifier.verify({
           key: publicKey,
-          padding: crypto7.constants.RSA_PKCS1_PSS_PADDING,
-          saltLength: crypto7.constants.RSA_PSS_SALTLEN_DIGEST
+          padding: crypto11.constants.RSA_PKCS1_PSS_PADDING,
+          saltLength: crypto11.constants.RSA_PSS_SALTLEN_DIGEST
         }, signature, "base64");
       };
     }
@@ -44295,20 +44295,20 @@ var require_jwtaccess = __commonJS({
        * Create a JWTAccess credentials instance using the given input options.
        * @param json The input object.
        */
-      fromJSON(json) {
-        if (!json) {
+      fromJSON(json2) {
+        if (!json2) {
           throw new Error("Must pass in a JSON object containing the service account auth settings.");
         }
-        if (!json.client_email) {
+        if (!json2.client_email) {
           throw new Error("The incoming JSON object does not contain a client_email field");
         }
-        if (!json.private_key) {
+        if (!json2.private_key) {
           throw new Error("The incoming JSON object does not contain a private_key field");
         }
-        this.email = json.client_email;
-        this.key = json.private_key;
-        this.keyId = json.private_key_id;
-        this.projectId = json.project_id;
+        this.email = json2.client_email;
+        this.key = json2.private_key;
+        this.keyId = json2.private_key_id;
+        this.projectId = json2.project_id;
       }
       fromStream(inputStream, callback) {
         if (callback) {
@@ -44541,22 +44541,22 @@ var require_jwtclient = __commonJS({
        *
        * **Important**: If you accept a credential configuration (credential JSON/File/Stream) from an external source for authentication to Google Cloud, you must validate it before providing it to any Google API or library. Providing an unvalidated credential configuration to Google APIs can compromise the security of your systems and data. For more information, refer to {@link https://cloud.google.com/docs/authentication/external/externally-sourced-credentials Validate credential configurations from external sources}.
        */
-      fromJSON(json) {
-        if (!json) {
+      fromJSON(json2) {
+        if (!json2) {
           throw new Error("Must pass in a JSON object containing the service account auth settings.");
         }
-        if (!json.client_email) {
+        if (!json2.client_email) {
           throw new Error("The incoming JSON object does not contain a client_email field");
         }
-        if (!json.private_key) {
+        if (!json2.private_key) {
           throw new Error("The incoming JSON object does not contain a private_key field");
         }
-        this.email = json.client_email;
-        this.key = json.private_key;
-        this.keyId = json.private_key_id;
-        this.projectId = json.project_id;
-        this.quotaProjectId = json.quota_project_id;
-        this.universeDomain = json.universe_domain || this.universeDomain;
+        this.email = json2.client_email;
+        this.key = json2.private_key;
+        this.keyId = json2.private_key_id;
+        this.projectId = json2.project_id;
+        this.quotaProjectId = json2.quota_project_id;
+        this.universeDomain = json2.universe_domain || this.universeDomain;
       }
       fromStream(inputStream, callback) {
         if (callback) {
@@ -44677,28 +44677,28 @@ var require_refreshclient = __commonJS({
        * options.
        * @param json The input object.
        */
-      fromJSON(json) {
-        if (!json) {
+      fromJSON(json2) {
+        if (!json2) {
           throw new Error("Must pass in a JSON object containing the user refresh token");
         }
-        if (json.type !== "authorized_user") {
+        if (json2.type !== "authorized_user") {
           throw new Error('The incoming JSON object does not have the "authorized_user" type');
         }
-        if (!json.client_id) {
+        if (!json2.client_id) {
           throw new Error("The incoming JSON object does not contain a client_id field");
         }
-        if (!json.client_secret) {
+        if (!json2.client_secret) {
           throw new Error("The incoming JSON object does not contain a client_secret field");
         }
-        if (!json.refresh_token) {
+        if (!json2.refresh_token) {
           throw new Error("The incoming JSON object does not contain a refresh_token field");
         }
-        this._clientId = json.client_id;
-        this._clientSecret = json.client_secret;
-        this._refreshToken = json.refresh_token;
-        this.credentials.refresh_token = json.refresh_token;
-        this.quotaProjectId = json.quota_project_id;
-        this.universeDomain = json.universe_domain || this.universeDomain;
+        this._clientId = json2.client_id;
+        this._clientSecret = json2.client_secret;
+        this._refreshToken = json2.refresh_token;
+        this.credentials.refresh_token = json2.refresh_token;
+        this.quotaProjectId = json2.quota_project_id;
+        this.universeDomain = json2.universe_domain || this.universeDomain;
       }
       fromStream(inputStream, callback) {
         if (callback) {
@@ -44729,9 +44729,9 @@ var require_refreshclient = __commonJS({
        * options.
        * @param json The input object.
        */
-      static fromJSON(json) {
+      static fromJSON(json2) {
         const client2 = new _UserRefreshClient();
-        client2.fromJSON(json);
+        client2.fromJSON(json2);
         return client2;
       }
     };
@@ -45585,8 +45585,8 @@ var require_filesubjecttokensupplier = __commonJS({
         if (this.formatType === "text") {
           subjectToken = rawText;
         } else if (this.formatType === "json" && this.subjectTokenFieldName) {
-          const json = JSON.parse(rawText);
-          subjectToken = json[this.subjectTokenFieldName];
+          const json2 = JSON.parse(rawText);
+          subjectToken = json2[this.subjectTokenFieldName];
         }
         if (!subjectToken) {
           throw new Error("Unable to parse the subject_token from the credential_source file");
@@ -46039,14 +46039,14 @@ var require_awsrequestsigner = __commonJS({
       }
     };
     exports.AwsRequestSigner = AwsRequestSigner;
-    async function sign(crypto7, key, msg) {
-      return await crypto7.signWithHmacSha256(key, msg);
+    async function sign(crypto11, key, msg) {
+      return await crypto11.signWithHmacSha256(key, msg);
     }
-    async function getSigningKey(crypto7, key, dateStamp, region, serviceName) {
-      const kDate = await sign(crypto7, `AWS4${key}`, dateStamp);
-      const kRegion = await sign(crypto7, kDate, region);
-      const kService = await sign(crypto7, kRegion, serviceName);
-      const kSigning = await sign(crypto7, kService, "aws4_request");
+    async function getSigningKey(crypto11, key, dateStamp, region, serviceName) {
+      const kDate = await sign(crypto11, `AWS4${key}`, dateStamp);
+      const kRegion = await sign(crypto11, kDate, region);
+      const kService = await sign(crypto11, kRegion, serviceName);
+      const kSigning = await sign(crypto11, kService, "aws4_request");
       return kSigning;
     }
     async function generateAuthenticationHeaderMap(options2) {
@@ -47012,7 +47012,7 @@ var require_gdchclient = __commonJS({
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.GdchClient = exports.GDCH_SERVICE_ACCOUNT_TYPE = void 0;
-    var crypto7 = __require("crypto");
+    var crypto11 = __require("crypto");
     var fs5 = __require("fs");
     var https3 = __require("https");
     var oauth2client_1 = require_oauth2client();
@@ -47061,45 +47061,45 @@ var require_gdchclient = __commonJS({
           apiAudience
         });
       }
-      fromJSON(json) {
-        if (!json) {
+      fromJSON(json2) {
+        if (!json2) {
           throw new Error("Must pass in a JSON object containing the GDCH credentials settings.");
         }
-        if (json.type !== exports.GDCH_SERVICE_ACCOUNT_TYPE) {
+        if (json2.type !== exports.GDCH_SERVICE_ACCOUNT_TYPE) {
           throw new Error(`The incoming JSON object does not have the "${exports.GDCH_SERVICE_ACCOUNT_TYPE}" type`);
         }
-        if (json.format_version !== "1") {
+        if (json2.format_version !== "1") {
           throw new Error("Only format version 1 is supported.");
         }
-        if (!json.project) {
+        if (!json2.project) {
           throw new Error("The incoming JSON object does not contain a project field");
         }
-        if (!json.private_key_id) {
+        if (!json2.private_key_id) {
           throw new Error("The incoming JSON object does not contain a private_key_id field");
         }
-        if (!json.private_key) {
+        if (!json2.private_key) {
           throw new Error("The incoming JSON object does not contain a private_key field");
         }
-        if (!json.name) {
+        if (!json2.name) {
           throw new Error("The incoming JSON object does not contain a name field");
         }
-        if (!json.token_uri) {
+        if (!json2.token_uri) {
           throw new Error("The incoming JSON object does not contain a token_uri field");
         }
-        this.projectId = json.project;
-        this.privateKeyId = json.private_key_id;
-        this.privateKey = json.private_key;
-        this.serviceIdentityName = json.name;
-        this.tokenServerUri = json.token_uri;
-        this.caCertPath = json.ca_cert_path;
+        this.projectId = json2.project;
+        this.privateKeyId = json2.private_key_id;
+        this.privateKey = json2.private_key;
+        this.serviceIdentityName = json2.name;
+        this.tokenServerUri = json2.token_uri;
+        this.caCertPath = json2.ca_cert_path;
         this.gdchOptions = {
           ...this.gdchOptions,
-          projectId: json.project,
-          privateKeyId: json.private_key_id,
-          privateKey: json.private_key,
-          serviceIdentityName: json.name,
-          tokenServerUri: json.token_uri,
-          caCertPath: json.ca_cert_path
+          projectId: json2.project,
+          privateKeyId: json2.private_key_id,
+          privateKey: json2.private_key,
+          serviceIdentityName: json2.name,
+          tokenServerUri: json2.token_uri,
+          caCertPath: json2.ca_cert_path
         };
       }
       async refreshTokenNoCache() {
@@ -47203,7 +47203,7 @@ var require_gdchclient = __commonJS({
         const encodedHeader = this.base64UrlEncode(JSON.stringify(header));
         const encodedPayload = this.base64UrlEncode(JSON.stringify(payload));
         const signingInput = `${encodedHeader}.${encodedPayload}`;
-        const signature = crypto7.sign("sha256", Buffer.from(signingInput), {
+        const signature = crypto11.sign("sha256", Buffer.from(signingInput), {
           key: this.privateKey,
           dsaEncoding: "ieee-p1363"
         });
@@ -47299,7 +47299,7 @@ var require_googleauth = __commonJS({
     var fs5 = __require("fs");
     var gaxios_1 = require_src2();
     var gcpMetadata = require_src4();
-    var os2 = __require("os");
+    var os3 = __require("os");
     var path3 = __require("path");
     var crypto_1 = require_crypto3();
     var computeclient_1 = require_computeclient();
@@ -47633,30 +47633,30 @@ var require_googleauth = __commonJS({
        * @param json The impersonated input object.
        * @returns JWT or UserRefresh Client with data
        */
-      fromImpersonatedJSON(json) {
-        if (!json) {
+      fromImpersonatedJSON(json2) {
+        if (!json2) {
           throw new Error("Must pass in a JSON object containing an  impersonated refresh token");
         }
-        if (json.type !== impersonated_1.IMPERSONATED_ACCOUNT_TYPE) {
+        if (json2.type !== impersonated_1.IMPERSONATED_ACCOUNT_TYPE) {
           throw new Error(`The incoming JSON object does not have the "${impersonated_1.IMPERSONATED_ACCOUNT_TYPE}" type`);
         }
-        if (!json.source_credentials) {
+        if (!json2.source_credentials) {
           throw new Error("The incoming JSON object does not contain a source_credentials field");
         }
-        if (!json.service_account_impersonation_url) {
+        if (!json2.service_account_impersonation_url) {
           throw new Error("The incoming JSON object does not contain a service_account_impersonation_url field");
         }
-        const sourceClient = this.fromJSON(json.source_credentials);
-        if (json.service_account_impersonation_url?.length > 256) {
-          throw new RangeError(`Target principal is too long: ${json.service_account_impersonation_url}`);
+        const sourceClient = this.fromJSON(json2.source_credentials);
+        if (json2.service_account_impersonation_url?.length > 256) {
+          throw new RangeError(`Target principal is too long: ${json2.service_account_impersonation_url}`);
         }
-        const targetPrincipal = /(?<target>[^/]+):(generateAccessToken|generateIdToken)$/.exec(json.service_account_impersonation_url)?.groups?.target;
+        const targetPrincipal = /(?<target>[^/]+):(generateAccessToken|generateIdToken)$/.exec(json2.service_account_impersonation_url)?.groups?.target;
         if (!targetPrincipal) {
-          throw new RangeError(`Cannot extract target principal from ${json.service_account_impersonation_url}`);
+          throw new RangeError(`Cannot extract target principal from ${json2.service_account_impersonation_url}`);
         }
-        const targetScopes = (this.scopes || json.scopes || this.defaultScopes) ?? [];
+        const targetScopes = (this.scopes || json2.scopes || this.defaultScopes) ?? [];
         return new impersonated_1.Impersonated({
-          ...json,
+          ...json2,
           sourceClient,
           targetPrincipal,
           targetScopes: Array.isArray(targetScopes) ? targetScopes : [targetScopes]
@@ -47704,33 +47704,33 @@ var require_googleauth = __commonJS({
        * @param options The JWT or UserRefresh options for the client
        * @returns JWT or UserRefresh Client with data
        */
-      fromJSON(json, options2 = {}) {
+      fromJSON(json2, options2 = {}) {
         let client2;
         const preferredUniverseDomain = (0, util_1.originalOrCamelOptions)(options2).get("universe_domain");
-        if (json.type === refreshclient_1.USER_REFRESH_ACCOUNT_TYPE) {
+        if (json2.type === refreshclient_1.USER_REFRESH_ACCOUNT_TYPE) {
           client2 = new refreshclient_1.UserRefreshClient(options2);
-          client2.fromJSON(json);
-        } else if (json.type === impersonated_1.IMPERSONATED_ACCOUNT_TYPE) {
-          client2 = this.fromImpersonatedJSON(json);
-        } else if (json.type === baseexternalclient_1.EXTERNAL_ACCOUNT_TYPE) {
+          client2.fromJSON(json2);
+        } else if (json2.type === impersonated_1.IMPERSONATED_ACCOUNT_TYPE) {
+          client2 = this.fromImpersonatedJSON(json2);
+        } else if (json2.type === baseexternalclient_1.EXTERNAL_ACCOUNT_TYPE) {
           client2 = externalclient_1.ExternalAccountClient.fromJSON({
-            ...json,
+            ...json2,
             ...options2
           });
           client2.scopes = this.getAnyScopes();
-        } else if (json.type === externalAccountAuthorizedUserClient_1.EXTERNAL_ACCOUNT_AUTHORIZED_USER_TYPE) {
+        } else if (json2.type === externalAccountAuthorizedUserClient_1.EXTERNAL_ACCOUNT_AUTHORIZED_USER_TYPE) {
           client2 = new externalAccountAuthorizedUserClient_1.ExternalAccountAuthorizedUserClient({
-            ...json,
+            ...json2,
             ...options2
           });
-        } else if (json.type === gdchclient_1.GDCH_SERVICE_ACCOUNT_TYPE) {
+        } else if (json2.type === gdchclient_1.GDCH_SERVICE_ACCOUNT_TYPE) {
           client2 = new gdchclient_1.GdchClient(options2);
-          client2.fromJSON(json);
+          client2.fromJSON(json2);
         } else {
           options2.scopes = this.scopes;
           client2 = new jwtclient_1.JWT(options2);
           this.setGapicJWTValues(client2);
-          client2.fromJSON(json);
+          client2.fromJSON(json2);
         }
         if (preferredUniverseDomain) {
           client2.universeDomain = preferredUniverseDomain;
@@ -47744,9 +47744,9 @@ var require_googleauth = __commonJS({
        * @param options The JWT or UserRefresh options for the client
        * @returns JWT or UserRefresh Client with data
        */
-      _cacheClientFromJSON(json, options2) {
-        const client2 = this.fromJSON(json, options2);
-        this.jsonContent = json;
+      _cacheClientFromJSON(json2, options2) {
+        const client2 = this.fromJSON(json2, options2);
+        this.jsonContent = json2;
         this.cachedCredential = client2;
         return client2;
       }
@@ -47808,7 +47808,7 @@ var require_googleauth = __commonJS({
        * @api private
        */
       _isWindows() {
-        const sys = os2.platform();
+        const sys = os3.platform();
         if (sys && sys.length >= 3) {
           if (sys.substring(0, 3).toLowerCase() === "win") {
             return true;
@@ -48066,24 +48066,24 @@ var require_googleauth = __commonJS({
           const signed = await client2.sign(data);
           return signed.signedBlob;
         }
-        const crypto7 = (0, crypto_1.createCrypto)();
+        const crypto11 = (0, crypto_1.createCrypto)();
         if (client2 instanceof jwtclient_1.JWT && client2.key) {
-          const sign = await crypto7.sign(client2.key, data);
+          const sign = await crypto11.sign(client2.key, data);
           return sign;
         }
         const creds = await this.getCredentials();
         if (!creds.client_email) {
           throw new Error("Cannot sign data without `client_email`.");
         }
-        return this.signBlob(crypto7, creds.client_email, data, endpoint);
+        return this.signBlob(crypto11, creds.client_email, data, endpoint);
       }
-      async signBlob(crypto7, emailOrUniqueId, data, endpoint) {
+      async signBlob(crypto11, emailOrUniqueId, data, endpoint) {
         const url = new URL(endpoint + `${emailOrUniqueId}:signBlob`);
         const res = await this.request({
           method: "POST",
           url: url.href,
           data: {
-            payload: crypto7.encodeBase64StringUtf8(data)
+            payload: crypto11.encodeBase64StringUtf8(data)
           },
           retry: true,
           retryConfig: {
@@ -48536,25 +48536,25 @@ var require_error = __commonJS({
       }
       /** @returns The object representation of the error. */
       toJSON() {
-        const json = {
+        const json2 = {
           code: this.code,
           message: this.message
         };
         if (this.httpResponse) {
-          json.httpResponse = {
+          json2.httpResponse = {
             status: this.httpResponse.status,
             headers: this.httpResponse.headers,
             data: this.httpResponse.data
           };
         }
         if (this.cause) {
-          json.cause = {
+          json2.cause = {
             name: this.cause.name || "Error",
             message: this.cause.message || String(this.cause),
             stack: this.cause.stack
           };
           if ("errors" in this.cause && Array.isArray(this.cause.errors)) {
-            json.cause.errors = this.cause.errors.map((e2) => {
+            json2.cause.errors = this.cause.errors.map((e2) => {
               if (e2 instanceof Error) {
                 return { name: e2.name, message: e2.message, stack: e2.stack };
               }
@@ -48562,7 +48562,7 @@ var require_error = __commonJS({
             });
           }
         }
-        return json;
+        return json2;
       }
     };
     exports.FirebaseError = FirebaseError3;
@@ -48882,16 +48882,16 @@ var require_credential_internal = __commonJS({
           });
         }
       }
-      constructor(json) {
-        if (!util.isNonNullObject(json)) {
+      constructor(json2) {
+        if (!util.isNonNullObject(json2)) {
           throw new error_1.FirebaseAppError({
             code: error_1.AppErrorCode.INVALID_CREDENTIAL,
             message: "Service account must be an object."
           });
         }
-        copyAttr(this, json, "projectId", "project_id");
-        copyAttr(this, json, "privateKey", "private_key");
-        copyAttr(this, json, "clientEmail", "client_email");
+        copyAttr(this, json2, "projectId", "project_id");
+        copyAttr(this, json2, "privateKey", "private_key");
+        copyAttr(this, json2, "clientEmail", "client_email");
         let errorMessage;
         if (!util.isNonEmptyString(this.projectId)) {
           errorMessage = 'Service account object must contain a string "project_id" property.';
@@ -48968,12 +48968,12 @@ var require_credential_internal = __commonJS({
           });
         }
       }
-      static validateFromJSON(json) {
+      static validateFromJSON(json2) {
         const creds = { clientId: "", clientSecret: "", refreshToken: "", type: "" };
-        copyAttr(creds, json, "clientId", "client_id");
-        copyAttr(creds, json, "clientSecret", "client_secret");
-        copyAttr(creds, json, "refreshToken", "refresh_token");
-        copyAttr(creds, json, "type", "type");
+        copyAttr(creds, json2, "clientId", "client_id");
+        copyAttr(creds, json2, "clientSecret", "client_secret");
+        copyAttr(creds, json2, "refreshToken", "refresh_token");
+        copyAttr(creds, json2, "type", "type");
         let errorMessage;
         if (!util.isNonEmptyString(creds.clientId)) {
           errorMessage = 'Refresh token must contain a "client_id" property.';
@@ -49043,8 +49043,8 @@ var require_credential_internal = __commonJS({
           });
         }
       }
-      static validateFromJSON(json) {
-        const { client_id: clientId, client_secret: clientSecret, refresh_token: refreshToken2, type } = json["source_credentials"];
+      static validateFromJSON(json2) {
+        const { client_id: clientId, client_secret: clientSecret, refresh_token: refreshToken2, type } = json2["source_credentials"];
         let errorMessage;
         if (!util.isNonEmptyString(clientId)) {
           errorMessage = 'Impersonated Service Account must contain a "source_credentials.client_id" property.';
@@ -49433,8 +49433,8 @@ var require_utils = __commonJS({
     function renameProperties(obj, keyMap) {
       Object.keys(keyMap).forEach((oldKey) => {
         if (oldKey in obj) {
-          const newKey = keyMap[oldKey];
-          obj[newKey] = obj[oldKey];
+          const newKey2 = keyMap[oldKey];
+          obj[newKey2] = obj[oldKey];
           delete obj[oldKey];
         }
       });
@@ -51437,7 +51437,7 @@ var require_service_config = __commonJS({
     exports.validateRetryThrottling = validateRetryThrottling;
     exports.validateServiceConfig = validateServiceConfig;
     exports.extractAndSelectServiceConfig = extractAndSelectServiceConfig;
-    var os2 = __require("os");
+    var os3 = __require("os");
     var constants_1 = require_constants();
     var DURATION_REGEX = /^\d+(\.\d{1,9})?s$/;
     var CLIENT_LANGUAGE_STRING = "node";
@@ -51736,7 +51736,7 @@ var require_service_config = __commonJS({
         if (Array.isArray(validatedConfig.clientHostname)) {
           let hostnameMatched = false;
           for (const hostname of validatedConfig.clientHostname) {
-            if (hostname === os2.hostname()) {
+            if (hostname === os3.hostname()) {
               hostnameMatched = true;
             }
           }
@@ -51861,7 +51861,7 @@ var require_backoff_timeout = __commonJS({
     var TRACER_NAME = "backoff";
     var INITIAL_BACKOFF_MS = 1e3;
     var BACKOFF_MULTIPLIER = 1.6;
-    var MAX_BACKOFF_MS = 12e4;
+    var MAX_BACKOFF_MS2 = 12e4;
     var BACKOFF_JITTER = 0.2;
     function uniformRandom(min, max) {
       return Math.random() * (max - min) + min;
@@ -51871,7 +51871,7 @@ var require_backoff_timeout = __commonJS({
         this.callback = callback;
         this.initialDelay = INITIAL_BACKOFF_MS;
         this.multiplier = BACKOFF_MULTIPLIER;
-        this.maxDelay = MAX_BACKOFF_MS;
+        this.maxDelay = MAX_BACKOFF_MS2;
         this.jitter = BACKOFF_JITTER;
         this.running = false;
         this.hasRef = true;
@@ -54488,7 +54488,7 @@ var require_make_client = __commonJS({
 // node_modules/lodash.camelcase/index.js
 var require_lodash = __commonJS({
   "node_modules/lodash.camelcase/index.js"(exports, module) {
-    var INFINITY2 = 1 / 0;
+    var INFINITY3 = 1 / 0;
     var symbolTag = "[object Symbol]";
     var reAsciiWord = /[^\x00-\x2f\x3a-\x40\x5b-\x60\x7b-\x7f]+/g;
     var reLatin = /[\xc0-\xd6\xd8-\xf6\xf8-\xff\u0100-\u017f]/g;
@@ -54806,7 +54806,7 @@ var require_lodash = __commonJS({
         return symbolToString ? symbolToString.call(value) : "";
       }
       var result = value + "";
-      return result == "0" && 1 / value == -INFINITY2 ? "-0" : result;
+      return result == "0" && 1 / value == -INFINITY3 ? "-0" : result;
     }
     function castSlice(array2, start, end) {
       var length = array2.length;
@@ -55827,24 +55827,24 @@ var require_umd = __commonJS({
         var INT_CACHE = {};
         var UINT_CACHE = {};
         function fromInt(value, unsigned) {
-          var obj, cachedObj, cache2;
+          var obj, cachedObj, cache3;
           if (unsigned) {
             value >>>= 0;
-            if (cache2 = 0 <= value && value < 256) {
+            if (cache3 = 0 <= value && value < 256) {
               cachedObj = UINT_CACHE[value];
               if (cachedObj) return cachedObj;
             }
             obj = fromBits(value, 0, true);
-            if (cache2) UINT_CACHE[value] = obj;
+            if (cache3) UINT_CACHE[value] = obj;
             return obj;
           } else {
             value |= 0;
-            if (cache2 = -128 <= value && value < 128) {
+            if (cache3 = -128 <= value && value < 128) {
               cachedObj = INT_CACHE[value];
               if (cachedObj) return cachedObj;
             }
             obj = fromBits(value, value < 0 ? -1 : 0, false);
-            if (cache2) INT_CACHE[value] = obj;
+            if (cache3) INT_CACHE[value] = obj;
             return obj;
           }
         }
@@ -57493,9 +57493,9 @@ var require_namespace = __commonJS({
     var Type;
     var Service;
     var Enum;
-    Namespace.fromJSON = function fromJSON2(name5, json, depth) {
+    Namespace.fromJSON = function fromJSON2(name5, json2, depth) {
       depth = util.checkDepth(depth);
-      return new Namespace(name5, json.options).addJSON(json.nested, depth);
+      return new Namespace(name5, json2.options).addJSON(json2.nested, depth);
     };
     function arrayToJSON(array2, toJSONOptions) {
       if (!(array2 && array2.length))
@@ -57623,7 +57623,7 @@ var require_namespace = __commonJS({
       object.onRemove(this);
       return clearCache(this);
     };
-    Namespace.prototype.define = function define2(path3, json) {
+    Namespace.prototype.define = function define2(path3, json2) {
       if (util.isString(path3))
         path3 = path3.split(".");
       else if (!Array.isArray(path3))
@@ -57642,8 +57642,8 @@ var require_namespace = __commonJS({
         } else
           ptr.add(ptr = new Namespace(part));
       }
-      if (json)
-        ptr.addJSON(json);
+      if (json2)
+        ptr.addJSON(json2);
       return ptr;
     };
     Namespace.prototype.resolveAll = function resolveAll() {
@@ -57776,8 +57776,8 @@ var require_mapfield = __commonJS({
       this.resolvedKeyType = null;
       this.map = true;
     }
-    MapField.fromJSON = function fromJSON2(name5, json) {
-      return new MapField(name5, json.id, json.keyType, json.type, json.options, json.comment);
+    MapField.fromJSON = function fromJSON2(name5, json2) {
+      return new MapField(name5, json2.id, json2.keyType, json2.type, json2.options, json2.comment);
     };
     MapField.prototype.toJSON = function toJSON(toJSONOptions) {
       var keepComments = toJSONOptions ? Boolean(toJSONOptions.keepComments) : false;
@@ -57848,8 +57848,8 @@ var require_method = __commonJS({
       this.comment = comment;
       this.parsedOptions = parsedOptions;
     }
-    Method.fromJSON = function fromJSON2(name5, json) {
-      return new Method(name5, json.type, json.requestType, json.responseType, json.requestStream, json.responseStream, json.options, json.comment, json.parsedOptions);
+    Method.fromJSON = function fromJSON2(name5, json2) {
+      return new Method(name5, json2.type, json2.requestType, json2.responseType, json2.requestStream, json2.responseStream, json2.options, json2.comment, json2.parsedOptions);
     };
     Method.prototype.toJSON = function toJSON(toJSONOptions) {
       var keepComments = toJSONOptions ? Boolean(toJSONOptions.keepComments) : false;
@@ -57898,17 +57898,17 @@ var require_service2 = __commonJS({
       this.methods = {};
       this._methodsArray = null;
     }
-    Service.fromJSON = function fromJSON2(name5, json, depth) {
+    Service.fromJSON = function fromJSON2(name5, json2, depth) {
       depth = util.checkDepth(depth);
-      var service = new Service(name5, json.options);
-      if (json.methods)
-        for (var names = Object.keys(json.methods), i2 = 0; i2 < names.length; ++i2)
-          service.add(Method.fromJSON(names[i2], json.methods[names[i2]]));
-      if (json.nested)
-        service.addJSON(json.nested, depth);
-      if (json.edition)
-        service._edition = json.edition;
-      service.comment = json.comment;
+      var service = new Service(name5, json2.options);
+      if (json2.methods)
+        for (var names = Object.keys(json2.methods), i2 = 0; i2 < names.length; ++i2)
+          service.add(Method.fromJSON(names[i2], json2.methods[names[i2]]));
+      if (json2.nested)
+        service.addJSON(json2.nested, depth);
+      if (json2.edition)
+        service._edition = json2.edition;
+      service.comment = json2.comment;
       service._defaultEdition = "proto3";
       return service;
     };
@@ -58594,40 +58594,40 @@ var require_type = __commonJS({
       delete type.verify;
       return type;
     }
-    Type.fromJSON = function fromJSON2(name5, json, depth) {
+    Type.fromJSON = function fromJSON2(name5, json2, depth) {
       if (depth === void 0)
         depth = 0;
       if (depth > util.nestingLimit)
         throw Error("max depth exceeded");
-      var type = new Type(name5, json.options);
-      type.extensions = json.extensions;
-      type.reserved = json.reserved;
-      var names = Object.keys(json.fields), i2 = 0;
+      var type = new Type(name5, json2.options);
+      type.extensions = json2.extensions;
+      type.reserved = json2.reserved;
+      var names = Object.keys(json2.fields), i2 = 0;
       for (; i2 < names.length; ++i2)
         type.add(
-          (typeof json.fields[names[i2]].keyType !== "undefined" ? MapField.fromJSON : Field2.fromJSON)(names[i2], json.fields[names[i2]])
+          (typeof json2.fields[names[i2]].keyType !== "undefined" ? MapField.fromJSON : Field2.fromJSON)(names[i2], json2.fields[names[i2]])
         );
-      if (json.oneofs)
-        for (names = Object.keys(json.oneofs), i2 = 0; i2 < names.length; ++i2)
-          type.add(OneOf.fromJSON(names[i2], json.oneofs[names[i2]]));
-      if (json.nested)
-        for (names = Object.keys(json.nested), i2 = 0; i2 < names.length; ++i2) {
-          var nested2 = json.nested[names[i2]];
+      if (json2.oneofs)
+        for (names = Object.keys(json2.oneofs), i2 = 0; i2 < names.length; ++i2)
+          type.add(OneOf.fromJSON(names[i2], json2.oneofs[names[i2]]));
+      if (json2.nested)
+        for (names = Object.keys(json2.nested), i2 = 0; i2 < names.length; ++i2) {
+          var nested2 = json2.nested[names[i2]];
           type.add(
             // most to least likely
             (nested2.id !== void 0 ? Field2.fromJSON : nested2.fields !== void 0 ? Type.fromJSON : nested2.values !== void 0 ? Enum.fromJSON : nested2.methods !== void 0 ? Service.fromJSON : Namespace.fromJSON)(names[i2], nested2, depth + 1)
           );
         }
-      if (json.extensions && json.extensions.length)
-        type.extensions = json.extensions;
-      if (json.reserved && json.reserved.length)
-        type.reserved = json.reserved;
-      if (json.group)
+      if (json2.extensions && json2.extensions.length)
+        type.extensions = json2.extensions;
+      if (json2.reserved && json2.reserved.length)
+        type.reserved = json2.reserved;
+      if (json2.group)
         type.group = true;
-      if (json.comment)
-        type.comment = json.comment;
-      if (json.edition)
-        type._edition = json.edition;
+      if (json2.comment)
+        type.comment = json2.comment;
+      if (json2.edition)
+        type._edition = json2.edition;
       type._defaultEdition = "proto3";
       return type;
     };
@@ -58842,13 +58842,13 @@ var require_root = __commonJS({
       this._edition = "proto2";
       this._fullyQualifiedObjects = {};
     }
-    Root.fromJSON = function fromJSON2(json, root, depth) {
+    Root.fromJSON = function fromJSON2(json2, root, depth) {
       depth = util.checkDepth(depth);
       if (!root)
         root = new Root();
-      if (json.options)
-        root.setOptions(json.options);
-      return root.addJSON(json.nested, depth).resolveAll();
+      if (json2.options)
+        root.setOptions(json2.options);
+      return root.addJSON(json2.nested, depth).resolveAll();
     };
     Root.prototype.resolvePath = util.path.resolve;
     Root.prototype.fetch = util.fetch;
@@ -59390,10 +59390,10 @@ var require_field = __commonJS({
     var util = require_util3();
     var Type;
     var ruleRe = /^required|optional|repeated$/;
-    Field2.fromJSON = function fromJSON2(name5, json) {
-      var field2 = new Field2(name5, json.id, json.type, json.rule, json.extend, json.options, json.comment);
-      if (json.edition)
-        field2._edition = json.edition;
+    Field2.fromJSON = function fromJSON2(name5, json2) {
+      var field2 = new Field2(name5, json2.id, json2.type, json2.rule, json2.extend, json2.options, json2.comment);
+      if (json2.edition)
+        field2._edition = json2.edition;
       field2._defaultEdition = "proto3";
       return field2;
     };
@@ -59596,8 +59596,8 @@ var require_oneof = __commonJS({
       this.fieldsArray = [];
       this.comment = comment;
     }
-    OneOf.fromJSON = function fromJSON2(name5, json) {
-      return new OneOf(name5, json.oneof, json.options, json.comment);
+    OneOf.fromJSON = function fromJSON2(name5, json2) {
+      return new OneOf(name5, json2.oneof, json2.options, json2.comment);
     };
     OneOf.prototype.toJSON = function toJSON(toJSONOptions) {
       var keepComments = toJSONOptions ? Boolean(toJSONOptions.keepComments) : false;
@@ -59922,11 +59922,11 @@ var require_enum = __commonJS({
       });
       return this;
     };
-    Enum.fromJSON = function fromJSON2(name5, json) {
-      var enm = new Enum(name5, json.values, json.options, json.comment, json.comments);
-      enm.reserved = json.reserved;
-      if (json.edition)
-        enm._edition = json.edition;
+    Enum.fromJSON = function fromJSON2(name5, json2) {
+      var enm = new Enum(name5, json2.values, json2.options, json2.comment, json2.comments);
+      enm.reserved = json2.reserved;
+      if (json2.edition)
+        enm._edition = json2.edition;
       enm._defaultEdition = "proto3";
       return enm;
     };
@@ -61087,12 +61087,12 @@ var require_common3 = __commonJS({
     "use strict";
     module.exports = common;
     var commonRe = /\/|\./;
-    function common(name5, json) {
+    function common(name5, json2) {
       if (!commonRe.test(name5)) {
         name5 = "google/protobuf/" + name5 + ".proto";
-        json = { nested: { google: { nested: { protobuf: { nested: json } } } } };
+        json2 = { nested: { google: { nested: { protobuf: { nested: json2 } } } } };
       }
-      common[name5] = json;
+      common[name5] = json2;
     }
     common("any", {
       /**
@@ -63323,13 +63323,13 @@ var require_descriptor2 = __commonJS({
       for (var i2 = 0, field2, key; i2 < type.fieldsArray.length; ++i2) {
         if ((key = (field2 = type._fieldsArray[i2]).name) === "uninterpretedOption") continue;
         if (!Object.prototype.hasOwnProperty.call(obj, key)) continue;
-        var newKey = underScore(key);
+        var newKey2 = underScore(key);
         if (field2.resolvedType instanceof Type) {
-          val[newKey] = fromDescriptorOptionsRecursive(obj[key], field2.resolvedType);
+          val[newKey2] = fromDescriptorOptionsRecursive(obj[key], field2.resolvedType);
         } else if (field2.resolvedType instanceof Enum) {
-          val[newKey] = field2.resolvedType.valuesById[obj[key]];
+          val[newKey2] = field2.resolvedType.valuesById[obj[key]];
         } else {
-          val[newKey] = obj[key];
+          val[newKey2] = obj[key];
         }
       }
       return val;
@@ -63344,16 +63344,16 @@ var require_descriptor2 = __commonJS({
       var keys = Object.keys(obj);
       for (var i2 = 0; i2 < keys.length; ++i2) {
         var key = keys[i2];
-        var newKey = $protobuf.util.camelCase(key);
-        if (!Object.prototype.hasOwnProperty.call(type.fields, newKey)) continue;
-        var field2 = type.fields[newKey];
+        var newKey2 = $protobuf.util.camelCase(key);
+        if (!Object.prototype.hasOwnProperty.call(type.fields, newKey2)) continue;
+        var field2 = type.fields[newKey2];
         if (field2.resolvedType instanceof Type) {
-          val[newKey] = toDescriptorOptionsRecursive(obj[key], field2.resolvedType);
+          val[newKey2] = toDescriptorOptionsRecursive(obj[key], field2.resolvedType);
         } else {
-          val[newKey] = obj[key];
+          val[newKey2] = obj[key];
         }
-        if (field2.repeated && !Array.isArray(val[newKey])) {
-          val[newKey] = [val[newKey]];
+        if (field2.repeated && !Array.isArray(val[newKey2])) {
+          val[newKey2] = [val[newKey2]];
         }
       }
       return val;
@@ -64010,9 +64010,9 @@ var require_src7 = __commonJS({
       return createPackageDefinition(loadedRoot, options2);
     }
     exports.loadSync = loadSync;
-    function fromJSON2(json, options2) {
+    function fromJSON2(json2, options2) {
       options2 = options2 || {};
-      const loadedRoot = Protobuf.Root.fromJSON(json);
+      const loadedRoot = Protobuf.Root.fromJSON(json2);
       loadedRoot.resolveAll();
       return createPackageDefinition(loadedRoot, options2);
     }
@@ -66289,7 +66289,7 @@ var require_subchannel_call = __commonJS({
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.Http2SubchannelCall = void 0;
     var http22 = __require("http2");
-    var os2 = __require("os");
+    var os3 = __require("os");
     var constants_1 = require_constants();
     var metadata_1 = require_metadata();
     var stream_decoder_1 = require_stream_decoder();
@@ -66297,7 +66297,7 @@ var require_subchannel_call = __commonJS({
     var constants_2 = require_constants();
     var TRACER_NAME = "subchannel_call";
     function getSystemErrorName(errno) {
-      for (const [name5, num] of Object.entries(os2.constants.errno)) {
+      for (const [name5, num] of Object.entries(os3.constants.errno)) {
         if (num === errno) {
           return name5;
         }
@@ -66743,7 +66743,7 @@ var require_transport = __commonJS({
     var resolver_1 = require_resolver();
     var subchannel_address_1 = require_subchannel_address();
     var uri_parser_1 = require_uri_parser();
-    var net = __require("net");
+    var net2 = __require("net");
     var subchannel_call_1 = require_subchannel_call();
     var call_number_1 = require_call_number();
     var TRACER_NAME = "transport";
@@ -67253,7 +67253,7 @@ var require_transport = __commonJS({
               const errorCallback = (error) => {
                 reject(error);
               };
-              const socket = net.connect(address, () => {
+              const socket = net2.connect(address, () => {
                 socket.removeListener("close", closeCallback);
                 socket.removeListener("error", errorCallback);
                 resolve(socket);
@@ -69217,7 +69217,7 @@ var require_internal_channel = __commonJS({
         if (this.connectivityState === connectivity_state_1.ConnectivityState.SHUTDOWN) {
           throw new Error("Channel has been shut down");
         }
-        let timer = null;
+        let timer2 = null;
         if (deadline !== Infinity) {
           const deadlineDate = deadline instanceof Date ? deadline : new Date(deadline);
           const now = /* @__PURE__ */ new Date();
@@ -69225,7 +69225,7 @@ var require_internal_channel = __commonJS({
             process.nextTick(callback, new Error("Deadline passed without connectivity state change"));
             return;
           }
-          timer = setTimeout(() => {
+          timer2 = setTimeout(() => {
             this.removeConnectivityStateWatcher(watcherObject);
             callback(new Error("Deadline passed without connectivity state change"));
           }, deadlineDate.getTime() - now.getTime());
@@ -69233,7 +69233,7 @@ var require_internal_channel = __commonJS({
         const watcherObject = {
           currentState,
           callback,
-          timer
+          timer: timer2
         };
         this.connectivityStateWatchers.push(watcherObject);
       }
@@ -74905,11 +74905,11 @@ var require_logging_utils2 = __commonJS({
         return (fields, ...args) => {
           var _a6;
           const severity = (_a6 = fields.severity) !== null && _a6 !== void 0 ? _a6 : LogSeverity.INFO;
-          const json = Object.assign({
+          const json2 = Object.assign({
             severity,
             message: util.format(...args)
           }, fields);
-          const jsonString = JSON.stringify(json);
+          const jsonString = JSON.stringify(json2);
           if (debugLogger) {
             debugLogger(fields, jsonString);
           } else {
@@ -75379,22 +75379,22 @@ var require_crypto5 = __commonJS({
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.NodeCrypto = void 0;
-    var crypto7 = __require("crypto");
+    var crypto11 = __require("crypto");
     var NodeCrypto = class {
       async sha256DigestBase64(str) {
-        return crypto7.createHash("sha256").update(str).digest("base64");
+        return crypto11.createHash("sha256").update(str).digest("base64");
       }
       randomBytesBase64(count) {
-        return crypto7.randomBytes(count).toString("base64");
+        return crypto11.randomBytes(count).toString("base64");
       }
       async verify(pubkey, data, signature) {
-        const verifier = crypto7.createVerify("RSA-SHA256");
+        const verifier = crypto11.createVerify("RSA-SHA256");
         verifier.update(data);
         verifier.end();
         return verifier.verify(pubkey, signature, "base64");
       }
       async sign(privateKey, data) {
-        const signer = crypto7.createSign("RSA-SHA256");
+        const signer = crypto11.createSign("RSA-SHA256");
         signer.update(data);
         signer.end();
         return signer.sign(privateKey, "base64");
@@ -75412,7 +75412,7 @@ var require_crypto5 = __commonJS({
        *   string in hexadecimal encoding.
        */
       async sha256DigestHex(str) {
-        return crypto7.createHash("sha256").update(str).digest("hex");
+        return crypto11.createHash("sha256").update(str).digest("hex");
       }
       /**
        * Computes the HMAC hash of a message using the provided crypto key and the
@@ -75424,7 +75424,7 @@ var require_crypto5 = __commonJS({
        */
       async signWithHmacSha256(key, msg) {
         const cryptoKey = typeof key === "string" ? key : toBuffer(key);
-        return toArrayBuffer(crypto7.createHmac("sha256", cryptoKey).update(msg).digest());
+        return toArrayBuffer(crypto11.createHmac("sha256", cryptoKey).update(msg).digest());
       }
     };
     exports.NodeCrypto = NodeCrypto;
@@ -75487,7 +75487,7 @@ var require_util5 = __commonJS({
     exports.isValidFile = isValidFile;
     exports.getWellKnownCertificateConfigFileLocation = getWellKnownCertificateConfigFileLocation;
     var fs5 = __require("fs");
-    var os2 = __require("os");
+    var os3 = __require("os");
     var path3 = __require("path");
     var WELL_KNOWN_CERTIFICATE_CONFIG_FILE = "certificate_config.json";
     var CLOUDSDK_CONFIG_DIRECTORY = "gcloud";
@@ -75585,7 +75585,7 @@ var require_util5 = __commonJS({
       return path3.join(configDir, WELL_KNOWN_CERTIFICATE_CONFIG_FILE);
     }
     function _isWindows() {
-      return os2.platform().startsWith("win");
+      return os3.platform().startsWith("win");
     }
   }
 });
@@ -76108,10 +76108,10 @@ var require_oauth2client2 = __commonJS({
        * https://github.com/googleapis/google-auth-library-nodejs/blob/main/samples/oauth2-codeVerifier.js
        */
       async generateCodeVerifierAsync() {
-        const crypto7 = (0, crypto_1.createCrypto)();
-        const randomString = crypto7.randomBytesBase64(96);
+        const crypto11 = (0, crypto_1.createCrypto)();
+        const randomString = crypto11.randomBytesBase64(96);
         const codeVerifier = randomString.replace(/\+/g, "~").replace(/=/g, "_").replace(/\//g, "-");
-        const unencodedCodeChallenge = await crypto7.sha256DigestBase64(codeVerifier);
+        const unencodedCodeChallenge = await crypto11.sha256DigestBase64(codeVerifier);
         const codeChallenge = unencodedCodeChallenge.split("=")[0].replace(/\+/g, "-").replace(/\//g, "_");
         return { codeVerifier, codeChallenge };
       }
@@ -76552,7 +76552,7 @@ var require_oauth2client2 = __commonJS({
        * @return Returns a promise resolving to LoginTicket on verification.
        */
       async verifySignedJwtWithCertsAsync(jwt, certs, requiredAudience, issuers, maxExpiry) {
-        const crypto7 = (0, crypto_1.createCrypto)();
+        const crypto11 = (0, crypto_1.createCrypto)();
         if (!maxExpiry) {
           maxExpiry = _OAuth2Client.DEFAULT_MAX_TOKEN_LIFETIME_SECS_;
         }
@@ -76565,7 +76565,7 @@ var require_oauth2client2 = __commonJS({
         let envelope;
         let payload;
         try {
-          envelope = JSON.parse(crypto7.decodeBase64StringUtf8(segments[0]));
+          envelope = JSON.parse(crypto11.decodeBase64StringUtf8(segments[0]));
         } catch (err) {
           if (err instanceof Error) {
             err.message = `Can't parse token envelope: ${segments[0]}': ${err.message}`;
@@ -76576,7 +76576,7 @@ var require_oauth2client2 = __commonJS({
           throw new Error("Can't parse token envelope: " + segments[0]);
         }
         try {
-          payload = JSON.parse(crypto7.decodeBase64StringUtf8(segments[1]));
+          payload = JSON.parse(crypto11.decodeBase64StringUtf8(segments[1]));
         } catch (err) {
           if (err instanceof Error) {
             err.message = `Can't parse token payload '${segments[0]}`;
@@ -76593,7 +76593,7 @@ var require_oauth2client2 = __commonJS({
         if (envelope.alg === "ES256") {
           signature = formatEcdsa.joseToDer(signature, "ES256").toString("base64");
         }
-        const verified = await crypto7.verify(cert2, signed, signature);
+        const verified = await crypto11.verify(cert2, signed, signature);
         if (!verified) {
           throw new Error("Invalid token signature: " + jwt);
         }
@@ -77647,20 +77647,20 @@ var require_jwtaccess2 = __commonJS({
        * Create a JWTAccess credentials instance using the given input options.
        * @param json The input object.
        */
-      fromJSON(json) {
-        if (!json) {
+      fromJSON(json2) {
+        if (!json2) {
           throw new Error("Must pass in a JSON object containing the service account auth settings.");
         }
-        if (!json.client_email) {
+        if (!json2.client_email) {
           throw new Error("The incoming JSON object does not contain a client_email field");
         }
-        if (!json.private_key) {
+        if (!json2.private_key) {
           throw new Error("The incoming JSON object does not contain a private_key field");
         }
-        this.email = json.client_email;
-        this.key = json.private_key;
-        this.keyId = json.private_key_id;
-        this.projectId = json.project_id;
+        this.email = json2.client_email;
+        this.key = json2.private_key;
+        this.keyId = json2.private_key_id;
+        this.projectId = json2.project_id;
       }
       fromStream(inputStream, callback) {
         if (callback) {
@@ -77892,22 +77892,22 @@ var require_jwtclient2 = __commonJS({
        *
        * **Important**: If you accept a credential configuration (credential JSON/File/Stream) from an external source for authentication to Google Cloud, you must validate it before providing it to any Google API or library. Providing an unvalidated credential configuration to Google APIs can compromise the security of your systems and data. For more information, refer to {@link https://cloud.google.com/docs/authentication/external/externally-sourced-credentials Validate credential configurations from external sources}.
        */
-      fromJSON(json) {
-        if (!json) {
+      fromJSON(json2) {
+        if (!json2) {
           throw new Error("Must pass in a JSON object containing the service account auth settings.");
         }
-        if (!json.client_email) {
+        if (!json2.client_email) {
           throw new Error("The incoming JSON object does not contain a client_email field");
         }
-        if (!json.private_key) {
+        if (!json2.private_key) {
           throw new Error("The incoming JSON object does not contain a private_key field");
         }
-        this.email = json.client_email;
-        this.key = json.private_key;
-        this.keyId = json.private_key_id;
-        this.projectId = json.project_id;
-        this.quotaProjectId = json.quota_project_id;
-        this.universeDomain = json.universe_domain || this.universeDomain;
+        this.email = json2.client_email;
+        this.key = json2.private_key;
+        this.keyId = json2.private_key_id;
+        this.projectId = json2.project_id;
+        this.quotaProjectId = json2.quota_project_id;
+        this.universeDomain = json2.universe_domain || this.universeDomain;
       }
       fromStream(inputStream, callback) {
         if (callback) {
@@ -78027,28 +78027,28 @@ var require_refreshclient2 = __commonJS({
        * options.
        * @param json The input object.
        */
-      fromJSON(json) {
-        if (!json) {
+      fromJSON(json2) {
+        if (!json2) {
           throw new Error("Must pass in a JSON object containing the user refresh token");
         }
-        if (json.type !== "authorized_user") {
+        if (json2.type !== "authorized_user") {
           throw new Error('The incoming JSON object does not have the "authorized_user" type');
         }
-        if (!json.client_id) {
+        if (!json2.client_id) {
           throw new Error("The incoming JSON object does not contain a client_id field");
         }
-        if (!json.client_secret) {
+        if (!json2.client_secret) {
           throw new Error("The incoming JSON object does not contain a client_secret field");
         }
-        if (!json.refresh_token) {
+        if (!json2.refresh_token) {
           throw new Error("The incoming JSON object does not contain a refresh_token field");
         }
-        this._clientId = json.client_id;
-        this._clientSecret = json.client_secret;
-        this._refreshToken = json.refresh_token;
-        this.credentials.refresh_token = json.refresh_token;
-        this.quotaProjectId = json.quota_project_id;
-        this.universeDomain = json.universe_domain || this.universeDomain;
+        this._clientId = json2.client_id;
+        this._clientSecret = json2.client_secret;
+        this._refreshToken = json2.refresh_token;
+        this.credentials.refresh_token = json2.refresh_token;
+        this.quotaProjectId = json2.quota_project_id;
+        this.universeDomain = json2.universe_domain || this.universeDomain;
       }
       fromStream(inputStream, callback) {
         if (callback) {
@@ -78079,9 +78079,9 @@ var require_refreshclient2 = __commonJS({
        * options.
        * @param json The input object.
        */
-      static fromJSON(json) {
+      static fromJSON(json2) {
         const client2 = new _UserRefreshClient();
-        client2.fromJSON(json);
+        client2.fromJSON(json2);
         return client2;
       }
     };
@@ -78932,8 +78932,8 @@ var require_filesubjecttokensupplier2 = __commonJS({
         if (this.formatType === "text") {
           subjectToken = rawText;
         } else if (this.formatType === "json" && this.subjectTokenFieldName) {
-          const json = JSON.parse(rawText);
-          subjectToken = json[this.subjectTokenFieldName];
+          const json2 = JSON.parse(rawText);
+          subjectToken = json2[this.subjectTokenFieldName];
         }
         if (!subjectToken) {
           throw new Error("Unable to parse the subject_token from the credential_source file");
@@ -79385,14 +79385,14 @@ var require_awsrequestsigner2 = __commonJS({
       }
     };
     exports.AwsRequestSigner = AwsRequestSigner;
-    async function sign(crypto7, key, msg) {
-      return await crypto7.signWithHmacSha256(key, msg);
+    async function sign(crypto11, key, msg) {
+      return await crypto11.signWithHmacSha256(key, msg);
     }
-    async function getSigningKey(crypto7, key, dateStamp, region, serviceName) {
-      const kDate = await sign(crypto7, `AWS4${key}`, dateStamp);
-      const kRegion = await sign(crypto7, kDate, region);
-      const kService = await sign(crypto7, kRegion, serviceName);
-      const kSigning = await sign(crypto7, kService, "aws4_request");
+    async function getSigningKey(crypto11, key, dateStamp, region, serviceName) {
+      const kDate = await sign(crypto11, `AWS4${key}`, dateStamp);
+      const kRegion = await sign(crypto11, kDate, region);
+      const kService = await sign(crypto11, kRegion, serviceName);
+      const kSigning = await sign(crypto11, kService, "aws4_request");
       return kSigning;
     }
     async function generateAuthenticationHeaderMap(options2) {
@@ -80357,7 +80357,7 @@ var require_googleauth2 = __commonJS({
     var fs5 = __require("fs");
     var gaxios_1 = require_src2();
     var gcpMetadata = require_src10();
-    var os2 = __require("os");
+    var os3 = __require("os");
     var path3 = __require("path");
     var crypto_1 = require_crypto6();
     var computeclient_1 = require_computeclient2();
@@ -80688,30 +80688,30 @@ var require_googleauth2 = __commonJS({
        * @param json The impersonated input object.
        * @returns JWT or UserRefresh Client with data
        */
-      fromImpersonatedJSON(json) {
-        if (!json) {
+      fromImpersonatedJSON(json2) {
+        if (!json2) {
           throw new Error("Must pass in a JSON object containing an  impersonated refresh token");
         }
-        if (json.type !== impersonated_1.IMPERSONATED_ACCOUNT_TYPE) {
+        if (json2.type !== impersonated_1.IMPERSONATED_ACCOUNT_TYPE) {
           throw new Error(`The incoming JSON object does not have the "${impersonated_1.IMPERSONATED_ACCOUNT_TYPE}" type`);
         }
-        if (!json.source_credentials) {
+        if (!json2.source_credentials) {
           throw new Error("The incoming JSON object does not contain a source_credentials field");
         }
-        if (!json.service_account_impersonation_url) {
+        if (!json2.service_account_impersonation_url) {
           throw new Error("The incoming JSON object does not contain a service_account_impersonation_url field");
         }
-        const sourceClient = this.fromJSON(json.source_credentials);
-        if (json.service_account_impersonation_url?.length > 256) {
-          throw new RangeError(`Target principal is too long: ${json.service_account_impersonation_url}`);
+        const sourceClient = this.fromJSON(json2.source_credentials);
+        if (json2.service_account_impersonation_url?.length > 256) {
+          throw new RangeError(`Target principal is too long: ${json2.service_account_impersonation_url}`);
         }
-        const targetPrincipal = /(?<target>[^/]+):(generateAccessToken|generateIdToken)$/.exec(json.service_account_impersonation_url)?.groups?.target;
+        const targetPrincipal = /(?<target>[^/]+):(generateAccessToken|generateIdToken)$/.exec(json2.service_account_impersonation_url)?.groups?.target;
         if (!targetPrincipal) {
-          throw new RangeError(`Cannot extract target principal from ${json.service_account_impersonation_url}`);
+          throw new RangeError(`Cannot extract target principal from ${json2.service_account_impersonation_url}`);
         }
-        const targetScopes = (this.scopes || json.scopes || this.defaultScopes) ?? [];
+        const targetScopes = (this.scopes || json2.scopes || this.defaultScopes) ?? [];
         return new impersonated_1.Impersonated({
-          ...json,
+          ...json2,
           sourceClient,
           targetPrincipal,
           targetScopes: Array.isArray(targetScopes) ? targetScopes : [targetScopes]
@@ -80759,30 +80759,30 @@ var require_googleauth2 = __commonJS({
        * @param options The JWT or UserRefresh options for the client
        * @returns JWT or UserRefresh Client with data
        */
-      fromJSON(json, options2 = {}) {
+      fromJSON(json2, options2 = {}) {
         let client2;
         const preferredUniverseDomain = (0, util_1.originalOrCamelOptions)(options2).get("universe_domain");
-        if (json.type === refreshclient_1.USER_REFRESH_ACCOUNT_TYPE) {
+        if (json2.type === refreshclient_1.USER_REFRESH_ACCOUNT_TYPE) {
           client2 = new refreshclient_1.UserRefreshClient(options2);
-          client2.fromJSON(json);
-        } else if (json.type === impersonated_1.IMPERSONATED_ACCOUNT_TYPE) {
-          client2 = this.fromImpersonatedJSON(json);
-        } else if (json.type === baseexternalclient_1.EXTERNAL_ACCOUNT_TYPE) {
+          client2.fromJSON(json2);
+        } else if (json2.type === impersonated_1.IMPERSONATED_ACCOUNT_TYPE) {
+          client2 = this.fromImpersonatedJSON(json2);
+        } else if (json2.type === baseexternalclient_1.EXTERNAL_ACCOUNT_TYPE) {
           client2 = externalclient_1.ExternalAccountClient.fromJSON({
-            ...json,
+            ...json2,
             ...options2
           });
           client2.scopes = this.getAnyScopes();
-        } else if (json.type === externalAccountAuthorizedUserClient_1.EXTERNAL_ACCOUNT_AUTHORIZED_USER_TYPE) {
+        } else if (json2.type === externalAccountAuthorizedUserClient_1.EXTERNAL_ACCOUNT_AUTHORIZED_USER_TYPE) {
           client2 = new externalAccountAuthorizedUserClient_1.ExternalAccountAuthorizedUserClient({
-            ...json,
+            ...json2,
             ...options2
           });
         } else {
           options2.scopes = this.scopes;
           client2 = new jwtclient_1.JWT(options2);
           this.setGapicJWTValues(client2);
-          client2.fromJSON(json);
+          client2.fromJSON(json2);
         }
         if (preferredUniverseDomain) {
           client2.universeDomain = preferredUniverseDomain;
@@ -80796,9 +80796,9 @@ var require_googleauth2 = __commonJS({
        * @param options The JWT or UserRefresh options for the client
        * @returns JWT or UserRefresh Client with data
        */
-      _cacheClientFromJSON(json, options2) {
-        const client2 = this.fromJSON(json, options2);
-        this.jsonContent = json;
+      _cacheClientFromJSON(json2, options2) {
+        const client2 = this.fromJSON(json2, options2);
+        this.jsonContent = json2;
         this.cachedCredential = client2;
         return client2;
       }
@@ -80860,7 +80860,7 @@ var require_googleauth2 = __commonJS({
        * @api private
        */
       _isWindows() {
-        const sys = os2.platform();
+        const sys = os3.platform();
         if (sys && sys.length >= 3) {
           if (sys.substring(0, 3).toLowerCase() === "win") {
             return true;
@@ -81106,24 +81106,24 @@ var require_googleauth2 = __commonJS({
           const signed = await client2.sign(data);
           return signed.signedBlob;
         }
-        const crypto7 = (0, crypto_1.createCrypto)();
+        const crypto11 = (0, crypto_1.createCrypto)();
         if (client2 instanceof jwtclient_1.JWT && client2.key) {
-          const sign = await crypto7.sign(client2.key, data);
+          const sign = await crypto11.sign(client2.key, data);
           return sign;
         }
         const creds = await this.getCredentials();
         if (!creds.client_email) {
           throw new Error("Cannot sign data without `client_email`.");
         }
-        return this.signBlob(crypto7, creds.client_email, data, endpoint);
+        return this.signBlob(crypto11, creds.client_email, data, endpoint);
       }
-      async signBlob(crypto7, emailOrUniqueId, data, endpoint) {
+      async signBlob(crypto11, emailOrUniqueId, data, endpoint) {
         const url = new URL(endpoint + `${emailOrUniqueId}:signBlob`);
         const res = await this.request({
           method: "POST",
           url: url.href,
           data: {
-            payload: crypto7.encodeBase64StringUtf8(data)
+            payload: crypto11.encodeBase64StringUtf8(data)
           },
           retry: true,
           retryConfig: {
@@ -81519,7 +81519,7 @@ var require_src12 = __commonJS({
 var require_object_hash = __commonJS({
   "node_modules/object-hash/index.js"(exports, module) {
     "use strict";
-    var crypto7 = __require("crypto");
+    var crypto11 = __require("crypto");
     exports = module.exports = objectHash;
     function objectHash(object, options2) {
       options2 = applyDefaults(object, options2);
@@ -81537,7 +81537,7 @@ var require_object_hash = __commonJS({
     exports.keysMD5 = function(object) {
       return objectHash(object, { algorithm: "md5", encoding: "hex", excludeValues: true });
     };
-    var hashes = crypto7.getHashes ? crypto7.getHashes().slice() : ["sha1", "md5"];
+    var hashes = crypto11.getHashes ? crypto11.getHashes().slice() : ["sha1", "md5"];
     hashes.push("passthrough");
     var encodings = ["buffer", "hex", "binary", "base64"];
     function applyDefaults(object, sourceOptions) {
@@ -81583,7 +81583,7 @@ var require_object_hash = __commonJS({
     function hash(object, options2) {
       var hashingStream;
       if (options2.algorithm !== "passthrough") {
-        hashingStream = crypto7.createHash(options2.algorithm);
+        hashingStream = crypto11.createHash(options2.algorithm);
       } else {
         hashingStream = new PassThrough3();
       }
@@ -82652,7 +82652,7 @@ var require_grpc = __commonJS({
     var fs5 = __importStar(__require("fs"));
     var google_auth_library_1 = require_src12();
     var grpc2 = __importStar(require_src8());
-    var os2 = __importStar(__require("os"));
+    var os3 = __importStar(__require("os"));
     var path_1 = __require("path");
     var path3 = __importStar(__require("path"));
     var protobuf = __importStar(require_protobufjs());
@@ -82844,14 +82844,14 @@ var require_grpc = __commonJS({
         }
         throw new Error(filename + " could not be found in " + protoPath);
       }
-      loadProtoJSON(json, ignoreCache = false) {
-        const hash = (0, object_hash_1.default)(JSON.stringify(json)).toString();
+      loadProtoJSON(json2, ignoreCache = false) {
+        const hash = (0, object_hash_1.default)(JSON.stringify(json2)).toString();
         const cached = _GrpcClient.protoCache.get(hash);
         if (cached && !ignoreCache) {
           return cached;
         }
         const options2 = _GrpcClient.defaultOptions();
-        const packageDefinition = grpcProtoLoader.fromJSON(json, options2);
+        const packageDefinition = grpcProtoLoader.fromJSON(json2, options2);
         const grpcPackage = this.grpc.loadPackageDefinition(packageDefinition);
         _GrpcClient.protoCache.set(hash, grpcPackage);
         return grpcPackage;
@@ -82975,7 +82975,7 @@ var require_grpc = __commonJS({
           if (opts?.cert && opts?.key) {
             return [opts.cert, opts.key];
           }
-          const metadataPath = (0, path_1.join)(this.baseDirectory || os2.homedir(), ".secureConnect", "context_aware_metadata.json");
+          const metadataPath = (0, path_1.join)(this.baseDirectory || os3.homedir(), ".secureConnect", "context_aware_metadata.json");
           const metadata = JSON.parse(await readFileAsync(metadataPath));
           if (!metadata.cert_provider_command) {
             throw Error("no cert_provider_command found");
@@ -92045,8 +92045,8 @@ var require_bytes = __commonJS({
         return Buffer.from(obj.buffer, 0, obj.byteLength).toString("base64");
       }
     }
-    function bytesFromProto3JSON(json) {
-      return Buffer.from(json, "base64");
+    function bytesFromProto3JSON(json2) {
+      return Buffer.from(json2, "base64");
     }
   }
 });
@@ -92170,42 +92170,42 @@ var require_value = __commonJS({
       }
       return null;
     }
-    function googleProtobufStructFromProto3JSON(json) {
+    function googleProtobufStructFromProto3JSON(json2) {
       const fields = {};
-      for (const [key, value] of Object.entries(json)) {
+      for (const [key, value] of Object.entries(json2)) {
         fields[key] = googleProtobufValueFromProto3JSON(value);
       }
       return { fields };
     }
-    function googleProtobufListValueFromProto3JSON(json) {
+    function googleProtobufListValueFromProto3JSON(json2) {
       return {
-        values: json.map((element) => googleProtobufValueFromProto3JSON(element))
+        values: json2.map((element) => googleProtobufValueFromProto3JSON(element))
       };
     }
-    function googleProtobufValueFromProto3JSON(json) {
-      if (json === null) {
+    function googleProtobufValueFromProto3JSON(json2) {
+      if (json2 === null) {
         return { nullValue: "NULL_VALUE" };
       }
-      if (typeof json === "number") {
-        return { numberValue: json };
+      if (typeof json2 === "number") {
+        return { numberValue: json2 };
       }
-      if (typeof json === "string") {
-        return { stringValue: json };
+      if (typeof json2 === "string") {
+        return { stringValue: json2 };
       }
-      if (typeof json === "boolean") {
-        return { boolValue: json };
+      if (typeof json2 === "boolean") {
+        return { boolValue: json2 };
       }
-      if (Array.isArray(json)) {
+      if (Array.isArray(json2)) {
         return {
-          listValue: googleProtobufListValueFromProto3JSON(json)
+          listValue: googleProtobufListValueFromProto3JSON(json2)
         };
       }
-      if (typeof json === "object") {
+      if (typeof json2 === "object") {
         return {
-          structValue: googleProtobufStructFromProto3JSON(json)
+          structValue: googleProtobufStructFromProto3JSON(json2)
         };
       }
-      throw new Error(`googleProtobufValueFromProto3JSON: incorrect parameter type: ${typeof json}`);
+      throw new Error(`googleProtobufValueFromProto3JSON: incorrect parameter type: ${typeof json2}`);
     }
   }
 });
@@ -92226,10 +92226,10 @@ var require_duration2 = __commonJS({
       durationSeconds += "s";
       return durationSeconds;
     }
-    function googleProtobufDurationFromProto3JSON(json) {
-      const match = json.match(/^(\d*)(?:\.(\d*))?s$/);
+    function googleProtobufDurationFromProto3JSON(json2) {
+      const match = json2.match(/^(\d*)(?:\.(\d*))?s$/);
       if (!match) {
-        throw new Error(`googleProtobufDurationFromProto3JSON: incorrect value ${json} passed as google.protobuf.Duration`);
+        throw new Error(`googleProtobufDurationFromProto3JSON: incorrect value ${json2} passed as google.protobuf.Duration`);
       }
       let seconds = 0;
       let nanos = 0;
@@ -92267,16 +92267,16 @@ var require_timestamp = __commonJS({
       }
       return date.replace(/(?:\.\d{0,9})/, "." + nanos);
     }
-    function googleProtobufTimestampFromProto3JSON(json) {
-      const match = json.match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?/);
+    function googleProtobufTimestampFromProto3JSON(json2) {
+      const match = json2.match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?/);
       if (!match) {
-        throw new Error(`googleProtobufDurationFromProto3JSON: incorrect value ${json} passed as google.protobuf.Duration`);
+        throw new Error(`googleProtobufDurationFromProto3JSON: incorrect value ${json2} passed as google.protobuf.Duration`);
       }
-      const date = new Date(json);
+      const date = new Date(json2);
       const millisecondsSinceEpoch = date.getTime();
       const seconds = Math.floor(millisecondsSinceEpoch / 1e3);
       let nanos = 0;
-      const secondsFromDate = json.split(".")[1];
+      const secondsFromDate = json2.split(".")[1];
       if (secondsFromDate) {
         nanos = parseInt(secondsFromDate.slice(0, -1).padEnd(9, "0"));
       }
@@ -92317,22 +92317,22 @@ var require_wrappers2 = __commonJS({
       }
       return obj.value;
     }
-    function wrapperFromProto3JSON(typeName, json) {
-      if (json === null) {
+    function wrapperFromProto3JSON(typeName, json2) {
+      if (json2 === null) {
         return {
           value: null
         };
       }
       if (typeName === ".google.protobuf.BytesValue") {
-        if (typeof json !== "string") {
-          throw new Error(`numberWrapperFromProto3JSON: expected to get a string for google.protobuf.BytesValue but got ${typeof json}`);
+        if (typeof json2 !== "string") {
+          throw new Error(`numberWrapperFromProto3JSON: expected to get a string for google.protobuf.BytesValue but got ${typeof json2}`);
         }
         return {
-          value: (0, bytes_1.bytesFromProto3JSON)(json)
+          value: (0, bytes_1.bytesFromProto3JSON)(json2)
         };
       }
       return {
-        value: json
+        value: json2
       };
     }
   }
@@ -92348,9 +92348,9 @@ var require_fieldmask = __commonJS({
     function googleProtobufFieldMaskToProto3JSON(obj) {
       return obj.paths.join(",");
     }
-    function googleProtobufFieldMaskFromProto3JSON(json) {
+    function googleProtobufFieldMaskFromProto3JSON(json2) {
       return {
-        paths: json.split(",")
+        paths: json2.split(",")
       };
     }
   }
@@ -92372,70 +92372,70 @@ var require_fromproto3json = __commonJS({
     var timestamp_1 = require_timestamp();
     var wrappers_1 = require_wrappers2();
     var fieldmask_1 = require_fieldmask();
-    function fromProto3JSONToInternalRepresentation(type, json) {
+    function fromProto3JSONToInternalRepresentation(type, json2) {
       const fullyQualifiedTypeName = typeof type === "string" ? type : (0, util_1.getFullyQualifiedTypeName)(type);
       if (typeof type !== "string" && "values" in type) {
         if (fullyQualifiedTypeName === ".google.protobuf.NullValue") {
           return "NULL_VALUE";
         }
-        return (0, enum_1.resolveEnumValueToString)(type, json);
+        return (0, enum_1.resolveEnumValueToString)(type, json2);
       }
       if (typeof type !== "string") {
         type.resolveAll();
       }
       if (typeof type === "string") {
-        return json;
+        return json2;
       }
       if (fullyQualifiedTypeName === ".google.protobuf.Value") {
-        return (0, value_1.googleProtobufValueFromProto3JSON)(json);
+        return (0, value_1.googleProtobufValueFromProto3JSON)(json2);
       }
       if (util_1.wrapperTypes.has(fullyQualifiedTypeName)) {
-        if (json !== null && typeof json === "object" || Array.isArray(json)) {
-          throw new Error(`fromProto3JSONToInternalRepresentation: JSON representation for ${fullyQualifiedTypeName} expects a string, a number, or a boolean, but got ${typeof json}`);
+        if (json2 !== null && typeof json2 === "object" || Array.isArray(json2)) {
+          throw new Error(`fromProto3JSONToInternalRepresentation: JSON representation for ${fullyQualifiedTypeName} expects a string, a number, or a boolean, but got ${typeof json2}`);
         }
-        return (0, wrappers_1.wrapperFromProto3JSON)(fullyQualifiedTypeName, json);
+        return (0, wrappers_1.wrapperFromProto3JSON)(fullyQualifiedTypeName, json2);
       }
-      if (json === null) {
+      if (json2 === null) {
         return null;
       }
       if (fullyQualifiedTypeName === ".google.protobuf.Any") {
-        return (0, any_1.googleProtobufAnyFromProto3JSON)(type.root, json);
+        return (0, any_1.googleProtobufAnyFromProto3JSON)(type.root, json2);
       }
       if (fullyQualifiedTypeName === ".google.protobuf.Struct") {
-        if (typeof json !== "object") {
-          throw new Error(`fromProto3JSONToInternalRepresentation: google.protobuf.Struct must be an object but got ${typeof json}`);
+        if (typeof json2 !== "object") {
+          throw new Error(`fromProto3JSONToInternalRepresentation: google.protobuf.Struct must be an object but got ${typeof json2}`);
         }
-        if (Array.isArray(json)) {
+        if (Array.isArray(json2)) {
           throw new Error("fromProto3JSONToInternalRepresentation: google.protobuf.Struct must be an object but got an array");
         }
-        return (0, value_1.googleProtobufStructFromProto3JSON)(json);
+        return (0, value_1.googleProtobufStructFromProto3JSON)(json2);
       }
       if (fullyQualifiedTypeName === ".google.protobuf.ListValue") {
-        if (!Array.isArray(json)) {
-          throw new Error(`fromProto3JSONToInternalRepresentation: google.protobuf.ListValue must be an array but got ${typeof json}`);
+        if (!Array.isArray(json2)) {
+          throw new Error(`fromProto3JSONToInternalRepresentation: google.protobuf.ListValue must be an array but got ${typeof json2}`);
         }
-        return (0, value_1.googleProtobufListValueFromProto3JSON)(json);
+        return (0, value_1.googleProtobufListValueFromProto3JSON)(json2);
       }
       if (fullyQualifiedTypeName === ".google.protobuf.Duration") {
-        if (typeof json !== "string") {
-          throw new Error(`fromProto3JSONToInternalRepresentation: google.protobuf.Duration must be a string but got ${typeof json}`);
+        if (typeof json2 !== "string") {
+          throw new Error(`fromProto3JSONToInternalRepresentation: google.protobuf.Duration must be a string but got ${typeof json2}`);
         }
-        return (0, duration_1.googleProtobufDurationFromProto3JSON)(json);
+        return (0, duration_1.googleProtobufDurationFromProto3JSON)(json2);
       }
       if (fullyQualifiedTypeName === ".google.protobuf.Timestamp") {
-        if (typeof json !== "string") {
-          throw new Error(`fromProto3JSONToInternalRepresentation: google.protobuf.Timestamp must be a string but got ${typeof json}`);
+        if (typeof json2 !== "string") {
+          throw new Error(`fromProto3JSONToInternalRepresentation: google.protobuf.Timestamp must be a string but got ${typeof json2}`);
         }
-        return (0, timestamp_1.googleProtobufTimestampFromProto3JSON)(json);
+        return (0, timestamp_1.googleProtobufTimestampFromProto3JSON)(json2);
       }
       if (fullyQualifiedTypeName === ".google.protobuf.FieldMask") {
-        if (typeof json !== "string") {
-          throw new Error(`fromProto3JSONToInternalRepresentation: google.protobuf.FieldMask must be a string but got ${typeof json}`);
+        if (typeof json2 !== "string") {
+          throw new Error(`fromProto3JSONToInternalRepresentation: google.protobuf.FieldMask must be a string but got ${typeof json2}`);
         }
-        return (0, fieldmask_1.googleProtobufFieldMaskFromProto3JSON)(json);
+        return (0, fieldmask_1.googleProtobufFieldMaskFromProto3JSON)(json2);
       }
       const result = {};
-      for (const [key, value] of Object.entries(json)) {
+      for (const [key, value] of Object.entries(json2)) {
         const field2 = type.fields[key];
         if (!field2) {
           continue;
@@ -92485,12 +92485,12 @@ var require_fromproto3json = __commonJS({
       }
       return result;
     }
-    function fromProto3JSON(type, json) {
-      const internalRepr = fromProto3JSONToInternalRepresentation(type, json);
+    function fromProto3JSON(type, json2) {
+      const internalRepr = fromProto3JSONToInternalRepresentation(type, json2);
       if (internalRepr === null) {
         return null;
       }
-      (0, util_1.assert)(typeof internalRepr === "object" && !Array.isArray(internalRepr), `fromProto3JSON: expected an object, not ${json}`);
+      (0, util_1.assert)(typeof internalRepr === "object" && !Array.isArray(internalRepr), `fromProto3JSON: expected an object, not ${json2}`);
       return type.fromObject(internalRepr);
     }
   }
@@ -92533,11 +92533,11 @@ var require_any = __commonJS({
       valueProto3JSON["@type"] = obj.type_url;
       return valueProto3JSON;
     }
-    function googleProtobufAnyFromProto3JSON(root, json) {
-      if (json === null || typeof json !== "object" || Array.isArray(json)) {
+    function googleProtobufAnyFromProto3JSON(root, json2) {
+      if (json2 === null || typeof json2 !== "object" || Array.isArray(json2)) {
         throw new Error("googleProtobufAnyFromProto3JSON: must be an object to decode google.protobuf.Any");
       }
-      const typeUrl = json["@type"];
+      const typeUrl = json2["@type"];
       if (!typeUrl || typeof typeUrl !== "string") {
         throw new Error("googleProtobufAnyFromProto3JSON: JSON serialization of google.protobuf.Any must contain @type field");
       }
@@ -92548,12 +92548,12 @@ var require_any = __commonJS({
       } catch (err) {
         throw new Error(`googleProtobufAnyFromProto3JSON: cannot find type ${typeName}: ${err}`);
       }
-      let value = json;
+      let value = json2;
       if (specialJSON.has(typeName)) {
-        if (!("value" in json)) {
+        if (!("value" in json2)) {
           throw new Error(`googleProtobufAnyFromProto3JSON: JSON representation of google.protobuf.Any with type ${typeName} must contain the value field`);
         }
-        value = json.value;
+        value = json2.value;
       }
       const valueMessage = (0, fromproto3json_1.fromProto3JSON)(type, value);
       if (valueMessage === null) {
@@ -93061,18 +93061,18 @@ var require_fallbackRest = __commonJS({
         "Content-Type": "application/json"
       };
       const message2 = rpc.resolvedRequestType.fromObject(request);
-      const json = serializer.toProto3JSON(message2, {
+      const json2 = serializer.toProto3JSON(message2, {
         numericEnums
       });
-      if (!json) {
+      if (!json2) {
         throw new Error(`Cannot send null request to RPC ${rpc.name}.`);
       }
-      if (typeof json !== "object" || Array.isArray(json)) {
+      if (typeof json2 !== "object" || Array.isArray(json2)) {
         throw new Error(`Request to RPC ${rpc.name} must be an object.`);
       }
-      const transcoded = (0, transcoding_1.transcode)(json, rpc.parsedOptions);
+      const transcoded = (0, transcoding_1.transcode)(json2, rpc.parsedOptions);
       if (!transcoded) {
-        throw new Error(`Cannot build HTTP request for ${JSON.stringify(json)}, method: ${rpc.name}`);
+        throw new Error(`Cannot build HTTP request for ${JSON.stringify(json2)}, method: ${rpc.name}`);
       }
       if (numericEnums) {
         transcoded.queryString = (transcoded.queryString ? `${transcoded.queryString}&` : "") + "$alt=json%3Benum-encoding=int";
@@ -93095,12 +93095,12 @@ var require_fallbackRest = __commonJS({
       if (!decodedString) {
         throw new Error(`Received null response from RPC ${rpc.name}`);
       }
-      const json = JSON.parse(decodedString);
+      const json2 = JSON.parse(decodedString);
       if (!ok) {
-        const error = googleError_1.GoogleError.parseHttpError(json);
+        const error = googleError_1.GoogleError.parseHttpError(json2);
         throw error;
       }
-      const message2 = serializer.fromProto3JSON(rpc.resolvedResponseType, json);
+      const message2 = serializer.fromProto3JSON(rpc.resolvedResponseType, json2);
       if (!message2) {
         throw new Error(`Received null or malformed response from JSON serializer from RPC ${rpc.name}`);
       }
@@ -98019,37 +98019,37 @@ var require_pageDescriptor = __commonJS({
         const asyncIterable = {
           [Symbol.asyncIterator]() {
             let nextPageRequest = request;
-            const cache2 = [];
+            const cache3 = [];
             return {
               async next() {
-                if (cache2.length > 0) {
+                if (cache3.length > 0) {
                   return Promise.resolve({
                     done: false,
-                    value: cache2.shift()
+                    value: cache3.shift()
                   });
                 }
                 let attempts = 0;
-                while (cache2.length === 0 && nextPageRequest) {
+                while (cache3.length === 0 && nextPageRequest) {
                   let result;
                   [result, nextPageRequest] = await apiCall(nextPageRequest, options2);
                   if (result && !Array.isArray(result)) {
                     for (const [key, value] of Object.entries(result)) {
-                      cache2.push([key, value]);
+                      cache3.push([key, value]);
                     }
                   } else {
-                    cache2.push(...result);
+                    cache3.push(...result);
                   }
-                  if (cache2.length === 0) {
+                  if (cache3.length === 0) {
                     ++attempts;
                     if (attempts > maxAttemptsEmptyResponse) {
                       break;
                     }
                   }
                 }
-                if (cache2.length === 0) {
+                if (cache3.length === 0) {
                   return Promise.resolve({ done: true, value: void 0 });
                 }
-                return Promise.resolve({ done: false, value: cache2.shift() });
+                return Promise.resolve({ done: false, value: cache3.shift() });
               }
             };
           }
@@ -99551,8 +99551,8 @@ var require_fallback = __commonJS({
         const rootObject = protobuf.Root.fromJSON(jsonObject);
         return rootObject;
       }
-      loadProtoJSON(json, ignoreCache = false) {
-        return _GrpcClient.protobufFromJSON(json, ignoreCache);
+      loadProtoJSON(json2, ignoreCache = false) {
+        return _GrpcClient.protobufFromJSON(json2, ignoreCache);
       }
       /**
        * Loads the protobuf root object from a JSON object created from a proto file.
@@ -99560,13 +99560,13 @@ var require_fallback = __commonJS({
        * @param {Object} jsonObject - A JSON version of a protofile created usin protobuf.js
        * @returns {Object} Root namespace of proto JSON
        */
-      static protobufFromJSON(json, ignoreCache = false) {
-        const hash = (0, object_hash_1.default)(JSON.stringify(json)).toString();
+      static protobufFromJSON(json2, ignoreCache = false) {
+        const hash = (0, object_hash_1.default)(JSON.stringify(json2)).toString();
         const cached = _GrpcClient.protoCache.get(hash);
         if (cached && !ignoreCache) {
           return cached;
         }
-        const root = protobuf.Root.fromJSON(json);
+        const root = protobuf.Root.fromJSON(json2);
         _GrpcClient.protoCache.set(hash, root);
         return root;
       }
@@ -99836,26 +99836,26 @@ var require_googleError = __commonJS({
       }
       // Parse http JSON error and promote google.rpc.ErrorInfo if exist.
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      static parseHttpError(json) {
-        if (Array.isArray(json)) {
-          json = json.find((obj) => {
+      static parseHttpError(json2) {
+        if (Array.isArray(json2)) {
+          json2 = json2.find((obj) => {
             return "error" in obj;
           });
         }
-        if (!json["error"]) {
-          json["error"] = {};
-          Object.keys(json).filter((key) => key !== "error").forEach((key) => {
-            json["error"][key] = json[key];
-            delete json[key];
+        if (!json2["error"]) {
+          json2["error"] = {};
+          Object.keys(json2).filter((key) => key !== "error").forEach((key) => {
+            json2["error"][key] = json2[key];
+            delete json2[key];
           });
         }
         const decoder2 = new GoogleErrorDecoder();
-        const proto3Error = decoder2.decodeHTTPError(json["error"]);
-        const error = Object.assign(new _GoogleError(json["error"]["message"]), proto3Error);
-        if (json["error"]["status"] && status_1.Status[json["error"]["status"]]) {
-          error.code = status_1.Status[json["error"]["status"]];
-        } else if (json["error"]["code"]) {
-          error.code = (0, status_1.rpcCodeFromHttpStatusCode)(json["error"]["code"]);
+        const proto3Error = decoder2.decodeHTTPError(json2["error"]);
+        const error = Object.assign(new _GoogleError(json2["error"]["message"]), proto3Error);
+        if (json2["error"]["status"] && status_1.Status[json2["error"]["status"]]) {
+          error.code = status_1.Status[json2["error"]["status"]];
+        } else if (json2["error"]["code"]) {
+          error.code = (0, status_1.rpcCodeFromHttpStatusCode)(json2["error"]["code"]);
         } else {
           delete error.code;
         }
@@ -99911,13 +99911,13 @@ var require_googleError = __commonJS({
         value: unknownProto.value
       });
     };
-    var getErrorDetails = (protobuf2, json) => {
+    var getErrorDetails = (protobuf2, json2) => {
       const error_details = {
         knownDetails: [],
         unknownDetails: []
       };
-      if (typeof json === "object" && json !== null && "details" in json) {
-        const details = json["details"];
+      if (typeof json2 === "object" && json2 !== null && "details" in json2) {
+        const details = json2["details"];
         for (const detail of details) {
           if (isDetailKnownProto(protobuf2, detail)) {
             error_details.knownDetails.push(detail);
@@ -100039,10 +100039,10 @@ var require_googleError = __commonJS({
         return result;
       }
       // Decodes http error which is an instance of google.rpc.Status.
-      decodeHTTPError(json) {
-        const errorDetails = getErrorDetails(this.root, json);
+      decodeHTTPError(json2) {
+        const errorDetails = getErrorDetails(this.root, json2);
         let details = [];
-        if (typeof json === "object" && json !== null && "details" in json) {
+        if (typeof json2 === "object" && json2 !== null && "details" in json2) {
           if (errorDetails.knownDetails.length) {
             details = errorDetails.knownDetails;
           }
@@ -100051,12 +100051,12 @@ var require_googleError = __commonJS({
             details = [...details, ...unknowDetailsAsResourceInfo];
           }
           if (details.length) {
-            json.details = details;
+            json2.details = details;
           }
         }
-        const errorMessage = serializer.fromProto3JSON(this.statusType, json);
+        const errorMessage = serializer.fromProto3JSON(this.statusType, json2);
         if (!errorMessage) {
-          throw new Error(`Received error message ${json}, but failed to serialize as proto3 message`);
+          throw new Error(`Received error message ${json2}, but failed to serialize as proto3 message`);
         }
         return this.statusType.toObject(errorMessage, fallback_1.defaultToObjectOptions);
       }
@@ -130781,11 +130781,11 @@ var require_logging_utils3 = __commonJS({
         const debugLogger = this.upstream?.makeLogger(namespace);
         return (fields, ...args) => {
           const severity = fields.severity ?? types_1.LogSeverity.INFO;
-          const json = Object.assign({
+          const json2 = Object.assign({
             severity,
             message: util.format(...args)
           }, fields);
-          const jsonString = JSON.stringify(json);
+          const jsonString = JSON.stringify(json2);
           if (debugLogger) {
             debugLogger(fields, jsonString);
           } else {
@@ -131293,22 +131293,22 @@ var require_crypto8 = __commonJS({
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.NodeCrypto = void 0;
-    var crypto7 = __require("crypto");
+    var crypto11 = __require("crypto");
     var NodeCrypto = class {
       async sha256DigestBase64(str) {
-        return crypto7.createHash("sha256").update(str).digest("base64");
+        return crypto11.createHash("sha256").update(str).digest("base64");
       }
       randomBytesBase64(count) {
-        return crypto7.randomBytes(count).toString("base64");
+        return crypto11.randomBytes(count).toString("base64");
       }
       async verify(pubkey, data, signature) {
-        const verifier = crypto7.createVerify("RSA-SHA256");
+        const verifier = crypto11.createVerify("RSA-SHA256");
         verifier.update(data);
         verifier.end();
         return verifier.verify(pubkey, signature, "base64");
       }
       async sign(privateKey, data) {
-        const signer = crypto7.createSign("RSA-SHA256");
+        const signer = crypto11.createSign("RSA-SHA256");
         signer.update(data);
         signer.end();
         return signer.sign(privateKey, "base64");
@@ -131326,7 +131326,7 @@ var require_crypto8 = __commonJS({
        *   string in hexadecimal encoding.
        */
       async sha256DigestHex(str) {
-        return crypto7.createHash("sha256").update(str).digest("hex");
+        return crypto11.createHash("sha256").update(str).digest("hex");
       }
       /**
        * Computes the HMAC hash of a message using the provided crypto key and the
@@ -131338,15 +131338,15 @@ var require_crypto8 = __commonJS({
        */
       async signWithHmacSha256(key, msg) {
         const cryptoKey = typeof key === "string" ? key : toBuffer(key);
-        return toArrayBuffer(crypto7.createHmac("sha256", cryptoKey).update(msg).digest());
+        return toArrayBuffer(crypto11.createHmac("sha256", cryptoKey).update(msg).digest());
       }
     };
     exports.NodeCrypto = NodeCrypto;
     function toArrayBuffer(buffer) {
       const ab = new ArrayBuffer(buffer.length);
-      const view = new Uint8Array(ab);
+      const view2 = new Uint8Array(ab);
       for (let i2 = 0; i2 < buffer.length; ++i2) {
-        view[i2] = buffer[i2];
+        view2[i2] = buffer[i2];
       }
       return ab;
     }
@@ -131406,7 +131406,7 @@ var require_util9 = __commonJS({
     exports.isValidFile = isValidFile;
     exports.getWellKnownCertificateConfigFileLocation = getWellKnownCertificateConfigFileLocation;
     var fs5 = __require("fs");
-    var os2 = __require("os");
+    var os3 = __require("os");
     var path3 = __require("path");
     var WELL_KNOWN_CERTIFICATE_CONFIG_FILE = "certificate_config.json";
     var CLOUDSDK_CONFIG_DIRECTORY = "gcloud";
@@ -131504,7 +131504,7 @@ var require_util9 = __commonJS({
       return path3.join(configDir, WELL_KNOWN_CERTIFICATE_CONFIG_FILE);
     }
     function _isWindows() {
-      return os2.platform().startsWith("win");
+      return os3.platform().startsWith("win");
     }
   }
 });
@@ -132029,10 +132029,10 @@ var require_oauth2client3 = __commonJS({
        * https://github.com/googleapis/google-auth-library-nodejs/blob/main/samples/oauth2-codeVerifier.js
        */
       async generateCodeVerifierAsync() {
-        const crypto7 = (0, crypto_1.createCrypto)();
-        const randomString = crypto7.randomBytesBase64(96);
+        const crypto11 = (0, crypto_1.createCrypto)();
+        const randomString = crypto11.randomBytesBase64(96);
         const codeVerifier = randomString.replace(/\+/g, "~").replace(/=/g, "_").replace(/\//g, "-");
-        const unencodedCodeChallenge = await crypto7.sha256DigestBase64(codeVerifier);
+        const unencodedCodeChallenge = await crypto11.sha256DigestBase64(codeVerifier);
         const codeChallenge = unencodedCodeChallenge.split("=")[0].replace(/\+/g, "-").replace(/\//g, "_");
         return { codeVerifier, codeChallenge };
       }
@@ -132473,7 +132473,7 @@ var require_oauth2client3 = __commonJS({
        * @return Returns a promise resolving to LoginTicket on verification.
        */
       async verifySignedJwtWithCertsAsync(jwt, certs, requiredAudience, issuers, maxExpiry) {
-        const crypto7 = (0, crypto_1.createCrypto)();
+        const crypto11 = (0, crypto_1.createCrypto)();
         if (!maxExpiry) {
           maxExpiry = _OAuth2Client.DEFAULT_MAX_TOKEN_LIFETIME_SECS_;
         }
@@ -132486,7 +132486,7 @@ var require_oauth2client3 = __commonJS({
         let envelope;
         let payload;
         try {
-          envelope = JSON.parse(crypto7.decodeBase64StringUtf8(segments[0]));
+          envelope = JSON.parse(crypto11.decodeBase64StringUtf8(segments[0]));
         } catch (err) {
           if (err instanceof Error) {
             err.message = `Can't parse token envelope: ${segments[0]}': ${err.message}`;
@@ -132497,7 +132497,7 @@ var require_oauth2client3 = __commonJS({
           throw new Error("Can't parse token envelope: " + segments[0]);
         }
         try {
-          payload = JSON.parse(crypto7.decodeBase64StringUtf8(segments[1]));
+          payload = JSON.parse(crypto11.decodeBase64StringUtf8(segments[1]));
         } catch (err) {
           if (err instanceof Error) {
             err.message = `Can't parse token payload '${segments[0]}`;
@@ -132514,7 +132514,7 @@ var require_oauth2client3 = __commonJS({
         if (envelope.alg === "ES256") {
           signature = formatEcdsa.joseToDer(signature, "ES256").toString("base64");
         }
-        const verified = await crypto7.verify(cert2, signed, signature);
+        const verified = await crypto11.verify(cert2, signed, signature);
         if (!verified) {
           throw new Error("Invalid token signature: " + jwt);
         }
@@ -133340,20 +133340,20 @@ var require_jwtaccess3 = __commonJS({
        * Create a JWTAccess credentials instance using the given input options.
        * @param json The input object.
        */
-      fromJSON(json) {
-        if (!json) {
+      fromJSON(json2) {
+        if (!json2) {
           throw new Error("Must pass in a JSON object containing the service account auth settings.");
         }
-        if (!json.client_email) {
+        if (!json2.client_email) {
           throw new Error("The incoming JSON object does not contain a client_email field");
         }
-        if (!json.private_key) {
+        if (!json2.private_key) {
           throw new Error("The incoming JSON object does not contain a private_key field");
         }
-        this.email = json.client_email;
-        this.key = json.private_key;
-        this.keyId = json.private_key_id;
-        this.projectId = json.project_id;
+        this.email = json2.client_email;
+        this.key = json2.private_key;
+        this.keyId = json2.private_key_id;
+        this.projectId = json2.project_id;
       }
       fromStream(inputStream, callback) {
         if (callback) {
@@ -133586,22 +133586,22 @@ var require_jwtclient3 = __commonJS({
        *
        * **Important**: If you accept a credential configuration (credential JSON/File/Stream) from an external source for authentication to Google Cloud, you must validate it before providing it to any Google API or library. Providing an unvalidated credential configuration to Google APIs can compromise the security of your systems and data. For more information, refer to {@link https://cloud.google.com/docs/authentication/external/externally-sourced-credentials Validate credential configurations from external sources}.
        */
-      fromJSON(json) {
-        if (!json) {
+      fromJSON(json2) {
+        if (!json2) {
           throw new Error("Must pass in a JSON object containing the service account auth settings.");
         }
-        if (!json.client_email) {
+        if (!json2.client_email) {
           throw new Error("The incoming JSON object does not contain a client_email field");
         }
-        if (!json.private_key) {
+        if (!json2.private_key) {
           throw new Error("The incoming JSON object does not contain a private_key field");
         }
-        this.email = json.client_email;
-        this.key = json.private_key;
-        this.keyId = json.private_key_id;
-        this.projectId = json.project_id;
-        this.quotaProjectId = json.quota_project_id;
-        this.universeDomain = json.universe_domain || this.universeDomain;
+        this.email = json2.client_email;
+        this.key = json2.private_key;
+        this.keyId = json2.private_key_id;
+        this.projectId = json2.project_id;
+        this.quotaProjectId = json2.quota_project_id;
+        this.universeDomain = json2.universe_domain || this.universeDomain;
       }
       fromStream(inputStream, callback) {
         if (callback) {
@@ -133722,28 +133722,28 @@ var require_refreshclient3 = __commonJS({
        * options.
        * @param json The input object.
        */
-      fromJSON(json) {
-        if (!json) {
+      fromJSON(json2) {
+        if (!json2) {
           throw new Error("Must pass in a JSON object containing the user refresh token");
         }
-        if (json.type !== "authorized_user") {
+        if (json2.type !== "authorized_user") {
           throw new Error('The incoming JSON object does not have the "authorized_user" type');
         }
-        if (!json.client_id) {
+        if (!json2.client_id) {
           throw new Error("The incoming JSON object does not contain a client_id field");
         }
-        if (!json.client_secret) {
+        if (!json2.client_secret) {
           throw new Error("The incoming JSON object does not contain a client_secret field");
         }
-        if (!json.refresh_token) {
+        if (!json2.refresh_token) {
           throw new Error("The incoming JSON object does not contain a refresh_token field");
         }
-        this._clientId = json.client_id;
-        this._clientSecret = json.client_secret;
-        this._refreshToken = json.refresh_token;
-        this.credentials.refresh_token = json.refresh_token;
-        this.quotaProjectId = json.quota_project_id;
-        this.universeDomain = json.universe_domain || this.universeDomain;
+        this._clientId = json2.client_id;
+        this._clientSecret = json2.client_secret;
+        this._refreshToken = json2.refresh_token;
+        this.credentials.refresh_token = json2.refresh_token;
+        this.quotaProjectId = json2.quota_project_id;
+        this.universeDomain = json2.universe_domain || this.universeDomain;
       }
       fromStream(inputStream, callback) {
         if (callback) {
@@ -133774,9 +133774,9 @@ var require_refreshclient3 = __commonJS({
        * options.
        * @param json The input object.
        */
-      static fromJSON(json) {
+      static fromJSON(json2) {
         const client2 = new _UserRefreshClient();
-        client2.fromJSON(json);
+        client2.fromJSON(json2);
         return client2;
       }
     };
@@ -134630,8 +134630,8 @@ var require_filesubjecttokensupplier3 = __commonJS({
         if (this.formatType === "text") {
           subjectToken = rawText;
         } else if (this.formatType === "json" && this.subjectTokenFieldName) {
-          const json = JSON.parse(rawText);
-          subjectToken = json[this.subjectTokenFieldName];
+          const json2 = JSON.parse(rawText);
+          subjectToken = json2[this.subjectTokenFieldName];
         }
         if (!subjectToken) {
           throw new Error("Unable to parse the subject_token from the credential_source file");
@@ -135084,14 +135084,14 @@ var require_awsrequestsigner3 = __commonJS({
       }
     };
     exports.AwsRequestSigner = AwsRequestSigner;
-    async function sign(crypto7, key, msg) {
-      return await crypto7.signWithHmacSha256(key, msg);
+    async function sign(crypto11, key, msg) {
+      return await crypto11.signWithHmacSha256(key, msg);
     }
-    async function getSigningKey(crypto7, key, dateStamp, region, serviceName) {
-      const kDate = await sign(crypto7, `AWS4${key}`, dateStamp);
-      const kRegion = await sign(crypto7, kDate, region);
-      const kService = await sign(crypto7, kRegion, serviceName);
-      const kSigning = await sign(crypto7, kService, "aws4_request");
+    async function getSigningKey(crypto11, key, dateStamp, region, serviceName) {
+      const kDate = await sign(crypto11, `AWS4${key}`, dateStamp);
+      const kRegion = await sign(crypto11, kDate, region);
+      const kService = await sign(crypto11, kRegion, serviceName);
+      const kSigning = await sign(crypto11, kService, "aws4_request");
       return kSigning;
     }
     async function generateAuthenticationHeaderMap(options2) {
@@ -136057,7 +136057,7 @@ var require_gdchclient2 = __commonJS({
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.GdchClient = exports.GDCH_SERVICE_ACCOUNT_TYPE = void 0;
-    var crypto7 = __require("crypto");
+    var crypto11 = __require("crypto");
     var fs5 = __require("fs");
     var https3 = __require("https");
     var oauth2client_1 = require_oauth2client3();
@@ -136106,45 +136106,45 @@ var require_gdchclient2 = __commonJS({
           apiAudience
         });
       }
-      fromJSON(json) {
-        if (!json) {
+      fromJSON(json2) {
+        if (!json2) {
           throw new Error("Must pass in a JSON object containing the GDCH credentials settings.");
         }
-        if (json.type !== exports.GDCH_SERVICE_ACCOUNT_TYPE) {
+        if (json2.type !== exports.GDCH_SERVICE_ACCOUNT_TYPE) {
           throw new Error(`The incoming JSON object does not have the "${exports.GDCH_SERVICE_ACCOUNT_TYPE}" type`);
         }
-        if (json.format_version !== "1") {
+        if (json2.format_version !== "1") {
           throw new Error("Only format version 1 is supported.");
         }
-        if (!json.project) {
+        if (!json2.project) {
           throw new Error("The incoming JSON object does not contain a project field");
         }
-        if (!json.private_key_id) {
+        if (!json2.private_key_id) {
           throw new Error("The incoming JSON object does not contain a private_key_id field");
         }
-        if (!json.private_key) {
+        if (!json2.private_key) {
           throw new Error("The incoming JSON object does not contain a private_key field");
         }
-        if (!json.name) {
+        if (!json2.name) {
           throw new Error("The incoming JSON object does not contain a name field");
         }
-        if (!json.token_uri) {
+        if (!json2.token_uri) {
           throw new Error("The incoming JSON object does not contain a token_uri field");
         }
-        this.projectId = json.project;
-        this.privateKeyId = json.private_key_id;
-        this.privateKey = json.private_key;
-        this.serviceIdentityName = json.name;
-        this.tokenServerUri = json.token_uri;
-        this.caCertPath = json.ca_cert_path;
+        this.projectId = json2.project;
+        this.privateKeyId = json2.private_key_id;
+        this.privateKey = json2.private_key;
+        this.serviceIdentityName = json2.name;
+        this.tokenServerUri = json2.token_uri;
+        this.caCertPath = json2.ca_cert_path;
         this.gdchOptions = {
           ...this.gdchOptions,
-          projectId: json.project,
-          privateKeyId: json.private_key_id,
-          privateKey: json.private_key,
-          serviceIdentityName: json.name,
-          tokenServerUri: json.token_uri,
-          caCertPath: json.ca_cert_path
+          projectId: json2.project,
+          privateKeyId: json2.private_key_id,
+          privateKey: json2.private_key,
+          serviceIdentityName: json2.name,
+          tokenServerUri: json2.token_uri,
+          caCertPath: json2.ca_cert_path
         };
       }
       async refreshTokenNoCache() {
@@ -136248,7 +136248,7 @@ var require_gdchclient2 = __commonJS({
         const encodedHeader = this.base64UrlEncode(JSON.stringify(header));
         const encodedPayload = this.base64UrlEncode(JSON.stringify(payload));
         const signingInput = `${encodedHeader}.${encodedPayload}`;
-        const signature = crypto7.sign("sha256", Buffer.from(signingInput), {
+        const signature = crypto11.sign("sha256", Buffer.from(signingInput), {
           key: this.privateKey,
           dsaEncoding: "ieee-p1363"
         });
@@ -136344,7 +136344,7 @@ var require_googleauth3 = __commonJS({
     var fs5 = __require("fs");
     var gaxios_1 = require_src2();
     var gcpMetadata = require_src17();
-    var os2 = __require("os");
+    var os3 = __require("os");
     var path3 = __require("path");
     var crypto_1 = require_crypto9();
     var computeclient_1 = require_computeclient3();
@@ -136678,30 +136678,30 @@ var require_googleauth3 = __commonJS({
        * @param json The impersonated input object.
        * @returns JWT or UserRefresh Client with data
        */
-      fromImpersonatedJSON(json) {
-        if (!json) {
+      fromImpersonatedJSON(json2) {
+        if (!json2) {
           throw new Error("Must pass in a JSON object containing an  impersonated refresh token");
         }
-        if (json.type !== impersonated_1.IMPERSONATED_ACCOUNT_TYPE) {
+        if (json2.type !== impersonated_1.IMPERSONATED_ACCOUNT_TYPE) {
           throw new Error(`The incoming JSON object does not have the "${impersonated_1.IMPERSONATED_ACCOUNT_TYPE}" type`);
         }
-        if (!json.source_credentials) {
+        if (!json2.source_credentials) {
           throw new Error("The incoming JSON object does not contain a source_credentials field");
         }
-        if (!json.service_account_impersonation_url) {
+        if (!json2.service_account_impersonation_url) {
           throw new Error("The incoming JSON object does not contain a service_account_impersonation_url field");
         }
-        const sourceClient = this.fromJSON(json.source_credentials);
-        if (json.service_account_impersonation_url?.length > 256) {
-          throw new RangeError(`Target principal is too long: ${json.service_account_impersonation_url}`);
+        const sourceClient = this.fromJSON(json2.source_credentials);
+        if (json2.service_account_impersonation_url?.length > 256) {
+          throw new RangeError(`Target principal is too long: ${json2.service_account_impersonation_url}`);
         }
-        const targetPrincipal = /(?<target>[^/]+):(generateAccessToken|generateIdToken)$/.exec(json.service_account_impersonation_url)?.groups?.target;
+        const targetPrincipal = /(?<target>[^/]+):(generateAccessToken|generateIdToken)$/.exec(json2.service_account_impersonation_url)?.groups?.target;
         if (!targetPrincipal) {
-          throw new RangeError(`Cannot extract target principal from ${json.service_account_impersonation_url}`);
+          throw new RangeError(`Cannot extract target principal from ${json2.service_account_impersonation_url}`);
         }
-        const targetScopes = (this.scopes || json.scopes || this.defaultScopes) ?? [];
+        const targetScopes = (this.scopes || json2.scopes || this.defaultScopes) ?? [];
         return new impersonated_1.Impersonated({
-          ...json,
+          ...json2,
           sourceClient,
           targetPrincipal,
           targetScopes: Array.isArray(targetScopes) ? targetScopes : [targetScopes]
@@ -136749,33 +136749,33 @@ var require_googleauth3 = __commonJS({
        * @param options The JWT or UserRefresh options for the client
        * @returns JWT or UserRefresh Client with data
        */
-      fromJSON(json, options2 = {}) {
+      fromJSON(json2, options2 = {}) {
         let client2;
         const preferredUniverseDomain = (0, util_1.originalOrCamelOptions)(options2).get("universe_domain");
-        if (json.type === refreshclient_1.USER_REFRESH_ACCOUNT_TYPE) {
+        if (json2.type === refreshclient_1.USER_REFRESH_ACCOUNT_TYPE) {
           client2 = new refreshclient_1.UserRefreshClient(options2);
-          client2.fromJSON(json);
-        } else if (json.type === impersonated_1.IMPERSONATED_ACCOUNT_TYPE) {
-          client2 = this.fromImpersonatedJSON(json);
-        } else if (json.type === baseexternalclient_1.EXTERNAL_ACCOUNT_TYPE) {
+          client2.fromJSON(json2);
+        } else if (json2.type === impersonated_1.IMPERSONATED_ACCOUNT_TYPE) {
+          client2 = this.fromImpersonatedJSON(json2);
+        } else if (json2.type === baseexternalclient_1.EXTERNAL_ACCOUNT_TYPE) {
           client2 = externalclient_1.ExternalAccountClient.fromJSON({
-            ...json,
+            ...json2,
             ...options2
           });
           client2.scopes = this.getAnyScopes();
-        } else if (json.type === externalAccountAuthorizedUserClient_1.EXTERNAL_ACCOUNT_AUTHORIZED_USER_TYPE) {
+        } else if (json2.type === externalAccountAuthorizedUserClient_1.EXTERNAL_ACCOUNT_AUTHORIZED_USER_TYPE) {
           client2 = new externalAccountAuthorizedUserClient_1.ExternalAccountAuthorizedUserClient({
-            ...json,
+            ...json2,
             ...options2
           });
-        } else if (json.type === gdchclient_1.GDCH_SERVICE_ACCOUNT_TYPE) {
+        } else if (json2.type === gdchclient_1.GDCH_SERVICE_ACCOUNT_TYPE) {
           client2 = new gdchclient_1.GdchClient(options2);
-          client2.fromJSON(json);
+          client2.fromJSON(json2);
         } else {
           options2.scopes = this.scopes;
           client2 = new jwtclient_1.JWT(options2);
           this.setGapicJWTValues(client2);
-          client2.fromJSON(json);
+          client2.fromJSON(json2);
         }
         if (preferredUniverseDomain) {
           client2.universeDomain = preferredUniverseDomain;
@@ -136789,9 +136789,9 @@ var require_googleauth3 = __commonJS({
        * @param options The JWT or UserRefresh options for the client
        * @returns JWT or UserRefresh Client with data
        */
-      _cacheClientFromJSON(json, options2) {
-        const client2 = this.fromJSON(json, options2);
-        this.jsonContent = json;
+      _cacheClientFromJSON(json2, options2) {
+        const client2 = this.fromJSON(json2, options2);
+        this.jsonContent = json2;
         this.cachedCredential = client2;
         return client2;
       }
@@ -136853,7 +136853,7 @@ var require_googleauth3 = __commonJS({
        * @api private
        */
       _isWindows() {
-        const sys = os2.platform();
+        const sys = os3.platform();
         if (sys && sys.length >= 3) {
           if (sys.substring(0, 3).toLowerCase() === "win") {
             return true;
@@ -137111,24 +137111,24 @@ var require_googleauth3 = __commonJS({
           const signed = await client2.sign(data);
           return signed.signedBlob;
         }
-        const crypto7 = (0, crypto_1.createCrypto)();
+        const crypto11 = (0, crypto_1.createCrypto)();
         if (client2 instanceof jwtclient_1.JWT && client2.key) {
-          const sign = await crypto7.sign(client2.key, data);
+          const sign = await crypto11.sign(client2.key, data);
           return sign;
         }
         const creds = await this.getCredentials();
         if (!creds.client_email) {
           throw new Error("Cannot sign data without `client_email`.");
         }
-        return this.signBlob(crypto7, creds.client_email, data, endpoint);
+        return this.signBlob(crypto11, creds.client_email, data, endpoint);
       }
-      async signBlob(crypto7, emailOrUniqueId, data, endpoint) {
+      async signBlob(crypto11, emailOrUniqueId, data, endpoint) {
         const url = new URL(endpoint + `${emailOrUniqueId}:signBlob`);
         const res = await this.request({
           method: "POST",
           url: url.href,
           data: {
-            payload: crypto7.encodeBase64StringUtf8(data)
+            payload: crypto11.encodeBase64StringUtf8(data)
           },
           retry: true,
           retryConfig: {
@@ -137558,8 +137558,8 @@ var require_bytes2 = __commonJS({
         return Buffer.from(obj.buffer, 0, obj.byteLength).toString("base64");
       }
     }
-    function bytesFromProto3JSON(json) {
-      return Buffer.from(json, "base64");
+    function bytesFromProto3JSON(json2) {
+      return Buffer.from(json2, "base64");
     }
   }
 });
@@ -137683,42 +137683,42 @@ var require_value2 = __commonJS({
       }
       return null;
     }
-    function googleProtobufStructFromProto3JSON(json) {
+    function googleProtobufStructFromProto3JSON(json2) {
       const fields = {};
-      for (const [key, value] of Object.entries(json)) {
+      for (const [key, value] of Object.entries(json2)) {
         fields[key] = googleProtobufValueFromProto3JSON(value);
       }
       return { fields };
     }
-    function googleProtobufListValueFromProto3JSON(json) {
+    function googleProtobufListValueFromProto3JSON(json2) {
       return {
-        values: json.map((element) => googleProtobufValueFromProto3JSON(element))
+        values: json2.map((element) => googleProtobufValueFromProto3JSON(element))
       };
     }
-    function googleProtobufValueFromProto3JSON(json) {
-      if (json === null) {
+    function googleProtobufValueFromProto3JSON(json2) {
+      if (json2 === null) {
         return { nullValue: "NULL_VALUE" };
       }
-      if (typeof json === "number") {
-        return { numberValue: json };
+      if (typeof json2 === "number") {
+        return { numberValue: json2 };
       }
-      if (typeof json === "string") {
-        return { stringValue: json };
+      if (typeof json2 === "string") {
+        return { stringValue: json2 };
       }
-      if (typeof json === "boolean") {
-        return { boolValue: json };
+      if (typeof json2 === "boolean") {
+        return { boolValue: json2 };
       }
-      if (Array.isArray(json)) {
+      if (Array.isArray(json2)) {
         return {
-          listValue: googleProtobufListValueFromProto3JSON(json)
+          listValue: googleProtobufListValueFromProto3JSON(json2)
         };
       }
-      if (typeof json === "object") {
+      if (typeof json2 === "object") {
         return {
-          structValue: googleProtobufStructFromProto3JSON(json)
+          structValue: googleProtobufStructFromProto3JSON(json2)
         };
       }
-      throw new Error(`googleProtobufValueFromProto3JSON: incorrect parameter type: ${typeof json}`);
+      throw new Error(`googleProtobufValueFromProto3JSON: incorrect parameter type: ${typeof json2}`);
     }
   }
 });
@@ -137739,10 +137739,10 @@ var require_duration3 = __commonJS({
       durationSeconds += "s";
       return durationSeconds;
     }
-    function googleProtobufDurationFromProto3JSON(json) {
-      const match = json.match(/^(\d*)(?:\.(\d*))?s$/);
+    function googleProtobufDurationFromProto3JSON(json2) {
+      const match = json2.match(/^(\d*)(?:\.(\d*))?s$/);
       if (!match) {
-        throw new Error(`googleProtobufDurationFromProto3JSON: incorrect value ${json} passed as google.protobuf.Duration`);
+        throw new Error(`googleProtobufDurationFromProto3JSON: incorrect value ${json2} passed as google.protobuf.Duration`);
       }
       let seconds = 0;
       let nanos = 0;
@@ -137780,16 +137780,16 @@ var require_timestamp2 = __commonJS({
       }
       return date.replace(/(?:\.\d{0,9})/, "." + nanos);
     }
-    function googleProtobufTimestampFromProto3JSON(json) {
-      const match = json.match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?/);
+    function googleProtobufTimestampFromProto3JSON(json2) {
+      const match = json2.match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?/);
       if (!match) {
-        throw new Error(`googleProtobufDurationFromProto3JSON: incorrect value ${json} passed as google.protobuf.Duration`);
+        throw new Error(`googleProtobufDurationFromProto3JSON: incorrect value ${json2} passed as google.protobuf.Duration`);
       }
-      const date = new Date(json);
+      const date = new Date(json2);
       const millisecondsSinceEpoch = date.getTime();
       const seconds = Math.floor(millisecondsSinceEpoch / 1e3);
       let nanos = 0;
-      const secondsFromDate = json.split(".")[1];
+      const secondsFromDate = json2.split(".")[1];
       if (secondsFromDate) {
         nanos = parseInt(secondsFromDate.slice(0, -1).padEnd(9, "0"));
       }
@@ -137830,22 +137830,22 @@ var require_wrappers3 = __commonJS({
       }
       return obj.value;
     }
-    function wrapperFromProto3JSON(typeName, json) {
-      if (json === null) {
+    function wrapperFromProto3JSON(typeName, json2) {
+      if (json2 === null) {
         return {
           value: null
         };
       }
       if (typeName === ".google.protobuf.BytesValue") {
-        if (typeof json !== "string") {
-          throw new Error(`numberWrapperFromProto3JSON: expected to get a string for google.protobuf.BytesValue but got ${typeof json}`);
+        if (typeof json2 !== "string") {
+          throw new Error(`numberWrapperFromProto3JSON: expected to get a string for google.protobuf.BytesValue but got ${typeof json2}`);
         }
         return {
-          value: (0, bytes_1.bytesFromProto3JSON)(json)
+          value: (0, bytes_1.bytesFromProto3JSON)(json2)
         };
       }
       return {
-        value: json
+        value: json2
       };
     }
   }
@@ -137861,9 +137861,9 @@ var require_fieldmask2 = __commonJS({
     function googleProtobufFieldMaskToProto3JSON(obj) {
       return obj.paths.join(",");
     }
-    function googleProtobufFieldMaskFromProto3JSON(json) {
+    function googleProtobufFieldMaskFromProto3JSON(json2) {
       return {
-        paths: json.split(",")
+        paths: json2.split(",")
       };
     }
   }
@@ -137885,70 +137885,70 @@ var require_fromproto3json2 = __commonJS({
     var timestamp_1 = require_timestamp2();
     var wrappers_1 = require_wrappers3();
     var fieldmask_1 = require_fieldmask2();
-    function fromProto3JSONToInternalRepresentation(type, json) {
+    function fromProto3JSONToInternalRepresentation(type, json2) {
       const fullyQualifiedTypeName = typeof type === "string" ? type : (0, util_1.getFullyQualifiedTypeName)(type);
       if (typeof type !== "string" && "values" in type) {
         if (fullyQualifiedTypeName === ".google.protobuf.NullValue") {
           return "NULL_VALUE";
         }
-        return (0, enum_1.resolveEnumValueToString)(type, json);
+        return (0, enum_1.resolveEnumValueToString)(type, json2);
       }
       if (typeof type !== "string") {
         type.resolveAll();
       }
       if (typeof type === "string") {
-        return json;
+        return json2;
       }
       if (fullyQualifiedTypeName === ".google.protobuf.Value") {
-        return (0, value_1.googleProtobufValueFromProto3JSON)(json);
+        return (0, value_1.googleProtobufValueFromProto3JSON)(json2);
       }
       if (util_1.wrapperTypes.has(fullyQualifiedTypeName)) {
-        if (json !== null && typeof json === "object" || Array.isArray(json)) {
-          throw new Error(`fromProto3JSONToInternalRepresentation: JSON representation for ${fullyQualifiedTypeName} expects a string, a number, or a boolean, but got ${typeof json}`);
+        if (json2 !== null && typeof json2 === "object" || Array.isArray(json2)) {
+          throw new Error(`fromProto3JSONToInternalRepresentation: JSON representation for ${fullyQualifiedTypeName} expects a string, a number, or a boolean, but got ${typeof json2}`);
         }
-        return (0, wrappers_1.wrapperFromProto3JSON)(fullyQualifiedTypeName, json);
+        return (0, wrappers_1.wrapperFromProto3JSON)(fullyQualifiedTypeName, json2);
       }
-      if (json === null) {
+      if (json2 === null) {
         return null;
       }
       if (fullyQualifiedTypeName === ".google.protobuf.Any") {
-        return (0, any_1.googleProtobufAnyFromProto3JSON)(type.root, json);
+        return (0, any_1.googleProtobufAnyFromProto3JSON)(type.root, json2);
       }
       if (fullyQualifiedTypeName === ".google.protobuf.Struct") {
-        if (typeof json !== "object") {
-          throw new Error(`fromProto3JSONToInternalRepresentation: google.protobuf.Struct must be an object but got ${typeof json}`);
+        if (typeof json2 !== "object") {
+          throw new Error(`fromProto3JSONToInternalRepresentation: google.protobuf.Struct must be an object but got ${typeof json2}`);
         }
-        if (Array.isArray(json)) {
+        if (Array.isArray(json2)) {
           throw new Error("fromProto3JSONToInternalRepresentation: google.protobuf.Struct must be an object but got an array");
         }
-        return (0, value_1.googleProtobufStructFromProto3JSON)(json);
+        return (0, value_1.googleProtobufStructFromProto3JSON)(json2);
       }
       if (fullyQualifiedTypeName === ".google.protobuf.ListValue") {
-        if (!Array.isArray(json)) {
-          throw new Error(`fromProto3JSONToInternalRepresentation: google.protobuf.ListValue must be an array but got ${typeof json}`);
+        if (!Array.isArray(json2)) {
+          throw new Error(`fromProto3JSONToInternalRepresentation: google.protobuf.ListValue must be an array but got ${typeof json2}`);
         }
-        return (0, value_1.googleProtobufListValueFromProto3JSON)(json);
+        return (0, value_1.googleProtobufListValueFromProto3JSON)(json2);
       }
       if (fullyQualifiedTypeName === ".google.protobuf.Duration") {
-        if (typeof json !== "string") {
-          throw new Error(`fromProto3JSONToInternalRepresentation: google.protobuf.Duration must be a string but got ${typeof json}`);
+        if (typeof json2 !== "string") {
+          throw new Error(`fromProto3JSONToInternalRepresentation: google.protobuf.Duration must be a string but got ${typeof json2}`);
         }
-        return (0, duration_1.googleProtobufDurationFromProto3JSON)(json);
+        return (0, duration_1.googleProtobufDurationFromProto3JSON)(json2);
       }
       if (fullyQualifiedTypeName === ".google.protobuf.Timestamp") {
-        if (typeof json !== "string") {
-          throw new Error(`fromProto3JSONToInternalRepresentation: google.protobuf.Timestamp must be a string but got ${typeof json}`);
+        if (typeof json2 !== "string") {
+          throw new Error(`fromProto3JSONToInternalRepresentation: google.protobuf.Timestamp must be a string but got ${typeof json2}`);
         }
-        return (0, timestamp_1.googleProtobufTimestampFromProto3JSON)(json);
+        return (0, timestamp_1.googleProtobufTimestampFromProto3JSON)(json2);
       }
       if (fullyQualifiedTypeName === ".google.protobuf.FieldMask") {
-        if (typeof json !== "string") {
-          throw new Error(`fromProto3JSONToInternalRepresentation: google.protobuf.FieldMask must be a string but got ${typeof json}`);
+        if (typeof json2 !== "string") {
+          throw new Error(`fromProto3JSONToInternalRepresentation: google.protobuf.FieldMask must be a string but got ${typeof json2}`);
         }
-        return (0, fieldmask_1.googleProtobufFieldMaskFromProto3JSON)(json);
+        return (0, fieldmask_1.googleProtobufFieldMaskFromProto3JSON)(json2);
       }
       const result = {};
-      for (const [key, value] of Object.entries(json)) {
+      for (const [key, value] of Object.entries(json2)) {
         const field2 = type.fields[key];
         if (!field2) {
           continue;
@@ -137998,12 +137998,12 @@ var require_fromproto3json2 = __commonJS({
       }
       return result;
     }
-    function fromProto3JSON(type, json) {
-      const internalRepr = fromProto3JSONToInternalRepresentation(type, json);
+    function fromProto3JSON(type, json2) {
+      const internalRepr = fromProto3JSONToInternalRepresentation(type, json2);
       if (internalRepr === null) {
         return null;
       }
-      (0, util_1.assert)(typeof internalRepr === "object" && !Array.isArray(internalRepr), `fromProto3JSON: expected an object, not ${json}`);
+      (0, util_1.assert)(typeof internalRepr === "object" && !Array.isArray(internalRepr), `fromProto3JSON: expected an object, not ${json2}`);
       return type.fromObject(internalRepr);
     }
   }
@@ -138046,11 +138046,11 @@ var require_any2 = __commonJS({
       valueProto3JSON["@type"] = obj.type_url;
       return valueProto3JSON;
     }
-    function googleProtobufAnyFromProto3JSON(root, json) {
-      if (json === null || typeof json !== "object" || Array.isArray(json)) {
+    function googleProtobufAnyFromProto3JSON(root, json2) {
+      if (json2 === null || typeof json2 !== "object" || Array.isArray(json2)) {
         throw new Error("googleProtobufAnyFromProto3JSON: must be an object to decode google.protobuf.Any");
       }
-      const typeUrl = json["@type"];
+      const typeUrl = json2["@type"];
       if (!typeUrl || typeof typeUrl !== "string") {
         throw new Error("googleProtobufAnyFromProto3JSON: JSON serialization of google.protobuf.Any must contain @type field");
       }
@@ -138061,12 +138061,12 @@ var require_any2 = __commonJS({
       } catch (err) {
         throw new Error(`googleProtobufAnyFromProto3JSON: cannot find type ${typeName}: ${err}`);
       }
-      let value = json;
+      let value = json2;
       if (specialJSON.has(typeName)) {
-        if (!("value" in json)) {
+        if (!("value" in json2)) {
           throw new Error(`googleProtobufAnyFromProto3JSON: JSON representation of google.protobuf.Any with type ${typeName} must contain the value field`);
         }
-        value = json.value;
+        value = json2.value;
       }
       const valueMessage = (0, fromproto3json_1.fromProto3JSON)(type, value);
       if (valueMessage === null) {
@@ -138578,26 +138578,26 @@ var require_googleError2 = __commonJS({
       }
       // Parse http JSON error and promote google.rpc.ErrorInfo if exist.
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      static parseHttpError(json) {
-        if (Array.isArray(json)) {
-          json = json.find((obj) => {
+      static parseHttpError(json2) {
+        if (Array.isArray(json2)) {
+          json2 = json2.find((obj) => {
             return "error" in obj;
           });
         }
-        if (!json["error"]) {
-          json["error"] = {};
-          Object.keys(json).filter((key) => key !== "error").forEach((key) => {
-            json["error"][key] = json[key];
-            delete json[key];
+        if (!json2["error"]) {
+          json2["error"] = {};
+          Object.keys(json2).filter((key) => key !== "error").forEach((key) => {
+            json2["error"][key] = json2[key];
+            delete json2[key];
           });
         }
         const decoder2 = new GoogleErrorDecoder();
-        const proto3Error = decoder2.decodeHTTPError(json["error"]);
-        const error = Object.assign(new _GoogleError(json["error"]["message"]), proto3Error);
-        if (json["error"]["status"] && status_1.Status[json["error"]["status"]]) {
-          error.code = status_1.Status[json["error"]["status"]];
-        } else if (json["error"]["code"]) {
-          error.code = (0, status_1.rpcCodeFromHttpStatusCode)(json["error"]["code"]);
+        const proto3Error = decoder2.decodeHTTPError(json2["error"]);
+        const error = Object.assign(new _GoogleError(json2["error"]["message"]), proto3Error);
+        if (json2["error"]["status"] && status_1.Status[json2["error"]["status"]]) {
+          error.code = status_1.Status[json2["error"]["status"]];
+        } else if (json2["error"]["code"]) {
+          error.code = (0, status_1.rpcCodeFromHttpStatusCode)(json2["error"]["code"]);
         } else {
           delete error.code;
         }
@@ -138653,13 +138653,13 @@ var require_googleError2 = __commonJS({
         value: unknownProto.value
       });
     };
-    var getErrorDetails = (protobuf2, json) => {
+    var getErrorDetails = (protobuf2, json2) => {
       const error_details = {
         knownDetails: [],
         unknownDetails: []
       };
-      if (typeof json === "object" && json !== null && "details" in json) {
-        const details = json["details"];
+      if (typeof json2 === "object" && json2 !== null && "details" in json2) {
+        const details = json2["details"];
         for (const detail of details) {
           if (isDetailKnownProto(protobuf2, detail)) {
             error_details.knownDetails.push(detail);
@@ -138781,10 +138781,10 @@ var require_googleError2 = __commonJS({
         return result;
       }
       // Decodes http error which is an instance of google.rpc.Status.
-      decodeHTTPError(json) {
-        const errorDetails = getErrorDetails(this.root, json);
+      decodeHTTPError(json2) {
+        const errorDetails = getErrorDetails(this.root, json2);
         let details = [];
-        if (typeof json === "object" && json !== null && "details" in json) {
+        if (typeof json2 === "object" && json2 !== null && "details" in json2) {
           if (errorDetails.knownDetails.length) {
             details = errorDetails.knownDetails;
           }
@@ -138793,12 +138793,12 @@ var require_googleError2 = __commonJS({
             details = [...details, ...unknowDetailsAsResourceInfo];
           }
           if (details.length) {
-            json.details = details;
+            json2.details = details;
           }
         }
-        const errorMessage = serializer.fromProto3JSON(this.statusType, json);
+        const errorMessage = serializer.fromProto3JSON(this.statusType, json2);
         if (!errorMessage) {
-          throw new Error(`Received error message ${json}, but failed to serialize as proto3 message`);
+          throw new Error(`Received error message ${json2}, but failed to serialize as proto3 message`);
         }
         return this.statusType.toObject(errorMessage, fallback_1.defaultToObjectOptions);
       }
@@ -149883,37 +149883,37 @@ var require_pageDescriptor2 = __commonJS({
         const asyncIterable = {
           [Symbol.asyncIterator]() {
             let nextPageRequest = request;
-            const cache2 = [];
+            const cache3 = [];
             return {
               async next() {
-                if (cache2.length > 0) {
+                if (cache3.length > 0) {
                   return Promise.resolve({
                     done: false,
-                    value: cache2.shift()
+                    value: cache3.shift()
                   });
                 }
                 let attempts = 0;
-                while (cache2.length === 0 && nextPageRequest) {
+                while (cache3.length === 0 && nextPageRequest) {
                   let result;
                   [result, nextPageRequest] = await apiCall(nextPageRequest, options2);
                   if (result && !Array.isArray(result)) {
                     for (const [key, value] of Object.entries(result)) {
-                      cache2.push([key, value]);
+                      cache3.push([key, value]);
                     }
                   } else {
-                    cache2.push(...result);
+                    cache3.push(...result);
                   }
-                  if (cache2.length === 0) {
+                  if (cache3.length === 0) {
                     ++attempts;
                     if (attempts > maxAttemptsEmptyResponse) {
                       break;
                     }
                   }
                 }
-                if (cache2.length === 0) {
+                if (cache3.length === 0) {
                   return Promise.resolve({ done: true, value: void 0 });
                 }
-                return Promise.resolve({ done: false, value: cache2.shift() });
+                return Promise.resolve({ done: false, value: cache3.shift() });
               }
             };
           }
@@ -150787,18 +150787,18 @@ var require_fallbackRest2 = __commonJS({
         "Content-Type": "application/json"
       };
       const message2 = rpc.resolvedRequestType.fromObject(request);
-      const json = serializer.toProto3JSON(message2, {
+      const json2 = serializer.toProto3JSON(message2, {
         numericEnums
       });
-      if (!json) {
+      if (!json2) {
         throw new Error(`Cannot send null request to RPC ${rpc.name}.`);
       }
-      if (typeof json !== "object" || Array.isArray(json)) {
+      if (typeof json2 !== "object" || Array.isArray(json2)) {
         throw new Error(`Request to RPC ${rpc.name} must be an object.`);
       }
-      const transcoded = (0, transcoding_1.transcode)(json, rpc.parsedOptions);
+      const transcoded = (0, transcoding_1.transcode)(json2, rpc.parsedOptions);
       if (!transcoded) {
-        throw new Error(`Cannot build HTTP request for ${JSON.stringify(json)}, method: ${rpc.name}`);
+        throw new Error(`Cannot build HTTP request for ${JSON.stringify(json2)}, method: ${rpc.name}`);
       }
       if (numericEnums) {
         transcoded.queryString = (transcoded.queryString ? `${transcoded.queryString}&` : "") + "$alt=json%3Benum-encoding=int";
@@ -150834,9 +150834,9 @@ var require_fallbackRest2 = __commonJS({
         }
         throw new Error(`Received null response from RPC ${rpc.name}`);
       }
-      let json;
+      let json2;
       try {
-        json = JSON.parse(decodedString);
+        json2 = JSON.parse(decodedString);
       } catch (err) {
         if (ok) {
           throw err;
@@ -150846,7 +150846,7 @@ var require_fallbackRest2 = __commonJS({
       if (!ok) {
         let error;
         try {
-          error = googleError_1.GoogleError.parseHttpError(json);
+          error = googleError_1.GoogleError.parseHttpError(json2);
         } catch (err) {
           throw _undecodableErrorResponse(rpc, httpStatusCode, "the response body is not a JSON error object", err);
         }
@@ -150855,7 +150855,7 @@ var require_fallbackRest2 = __commonJS({
         }
         throw error;
       }
-      const message2 = serializer.fromProto3JSON(rpc.resolvedResponseType, json);
+      const message2 = serializer.fromProto3JSON(rpc.resolvedResponseType, json2);
       if (!message2) {
         throw new Error(`Received null or malformed response from JSON serializer from RPC ${rpc.name}`);
       }
@@ -151241,17 +151241,17 @@ var require_resumableUpload = __commonJS({
           throw new Category3Error(`Cannot start resumable upload for method ${rpc.name}: the resolved request type is unavailable.`);
         }
         const message2 = rpc.resolvedRequestType.fromObject(this.context.request);
-        const json = serializer.toProto3JSON(message2, {
+        const json2 = serializer.toProto3JSON(message2, {
           numericEnums: this.context.numericEnums ?? false
         });
-        if (!json || typeof json !== "object" || Array.isArray(json)) {
+        if (!json2 || typeof json2 !== "object" || Array.isArray(json2)) {
           throw new Category3Error(`Cannot serialize the request for resumable upload method ${rpc.name}.`);
         }
         let queryString = "";
         let transcodedPath = "";
-        let bodyPayload = json;
+        let bodyPayload = json2;
         try {
-          const transcoded = (0, transcoding_1.transcode)(json, rpc.parsedOptions);
+          const transcoded = (0, transcoding_1.transcode)(json2, rpc.parsedOptions);
           if (transcoded) {
             queryString = transcoded.queryString ?? "";
             transcodedPath = transcoded.url ? transcoded.url.replace(/^\/?/, "/") : "";
@@ -171589,8 +171589,8 @@ var require_fallback2 = __commonJS({
         const rootObject = protobuf.Root.fromJSON(jsonObject);
         return rootObject;
       }
-      loadProtoJSON(json, ignoreCache = false) {
-        return _GrpcClient.protobufFromJSON(json, ignoreCache);
+      loadProtoJSON(json2, ignoreCache = false) {
+        return _GrpcClient.protobufFromJSON(json2, ignoreCache);
       }
       /**
        * Loads the protobuf root object from a JSON object created from a proto file.
@@ -171598,13 +171598,13 @@ var require_fallback2 = __commonJS({
        * @param {Object} jsonObject - A JSON version of a protofile created usin protobuf.js
        * @returns {Object} Root namespace of proto JSON
        */
-      static protobufFromJSON(json, ignoreCache = false) {
-        const hash = (0, object_hash_1.default)(JSON.stringify(json)).toString();
+      static protobufFromJSON(json2, ignoreCache = false) {
+        const hash = (0, object_hash_1.default)(JSON.stringify(json2)).toString();
         const cached = _GrpcClient.protoCache.get(hash);
         if (cached && !ignoreCache) {
           return cached;
         }
-        const root = protobuf.Root.fromJSON(json);
+        const root = protobuf.Root.fromJSON(json2);
         _GrpcClient.protoCache.set(hash, root);
         return root;
       }
@@ -173099,7 +173099,7 @@ var require_service_config2 = __commonJS({
     exports.validateRetryThrottling = validateRetryThrottling;
     exports.validateServiceConfig = validateServiceConfig;
     exports.extractAndSelectServiceConfig = extractAndSelectServiceConfig;
-    var os2 = __require("os");
+    var os3 = __require("os");
     var constants_1 = require_constants2();
     var DURATION_REGEX = /^\d+(\.\d{1,9})?s$/;
     var CLIENT_LANGUAGE_STRING = "node";
@@ -173398,7 +173398,7 @@ var require_service_config2 = __commonJS({
         if (Array.isArray(validatedConfig.clientHostname)) {
           let hostnameMatched = false;
           for (const hostname of validatedConfig.clientHostname) {
-            if (hostname === os2.hostname()) {
+            if (hostname === os3.hostname()) {
               hostnameMatched = true;
             }
           }
@@ -173523,7 +173523,7 @@ var require_backoff_timeout2 = __commonJS({
     var TRACER_NAME = "backoff";
     var INITIAL_BACKOFF_MS = 1e3;
     var BACKOFF_MULTIPLIER = 1.6;
-    var MAX_BACKOFF_MS = 12e4;
+    var MAX_BACKOFF_MS2 = 12e4;
     var BACKOFF_JITTER = 0.2;
     function uniformRandom(min, max) {
       return Math.random() * (max - min) + min;
@@ -173533,7 +173533,7 @@ var require_backoff_timeout2 = __commonJS({
         this.callback = callback;
         this.initialDelay = INITIAL_BACKOFF_MS;
         this.multiplier = BACKOFF_MULTIPLIER;
-        this.maxDelay = MAX_BACKOFF_MS;
+        this.maxDelay = MAX_BACKOFF_MS2;
         this.jitter = BACKOFF_JITTER;
         this.running = false;
         this.hasRef = true;
@@ -175592,9 +175592,9 @@ var require_src20 = __commonJS({
       return createPackageDefinition(loadedRoot, options2);
     }
     exports.loadSync = loadSync;
-    function fromJSON2(json, options2) {
+    function fromJSON2(json2, options2) {
       options2 = options2 || {};
-      const loadedRoot = Protobuf.Root.fromJSON(json);
+      const loadedRoot = Protobuf.Root.fromJSON(json2);
       loadedRoot.resolveAll();
       return createPackageDefinition(loadedRoot, options2);
     }
@@ -177871,7 +177871,7 @@ var require_subchannel_call2 = __commonJS({
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.Http2SubchannelCall = void 0;
     var http22 = __require("http2");
-    var os2 = __require("os");
+    var os3 = __require("os");
     var constants_1 = require_constants2();
     var metadata_1 = require_metadata2();
     var stream_decoder_1 = require_stream_decoder2();
@@ -177879,7 +177879,7 @@ var require_subchannel_call2 = __commonJS({
     var constants_2 = require_constants2();
     var TRACER_NAME = "subchannel_call";
     function getSystemErrorName(errno) {
-      for (const [name5, num] of Object.entries(os2.constants.errno)) {
+      for (const [name5, num] of Object.entries(os3.constants.errno)) {
         if (num === errno) {
           return name5;
         }
@@ -178325,7 +178325,7 @@ var require_transport2 = __commonJS({
     var resolver_1 = require_resolver2();
     var subchannel_address_1 = require_subchannel_address2();
     var uri_parser_1 = require_uri_parser2();
-    var net = __require("net");
+    var net2 = __require("net");
     var subchannel_call_1 = require_subchannel_call2();
     var call_number_1 = require_call_number2();
     var TRACER_NAME = "transport";
@@ -178835,7 +178835,7 @@ var require_transport2 = __commonJS({
               const errorCallback = (error) => {
                 reject(error);
               };
-              const socket = net.connect(address, () => {
+              const socket = net2.connect(address, () => {
                 socket.removeListener("close", closeCallback);
                 socket.removeListener("error", errorCallback);
                 resolve(socket);
@@ -180799,7 +180799,7 @@ var require_internal_channel2 = __commonJS({
         if (this.connectivityState === connectivity_state_1.ConnectivityState.SHUTDOWN) {
           throw new Error("Channel has been shut down");
         }
-        let timer = null;
+        let timer2 = null;
         if (deadline !== Infinity) {
           const deadlineDate = deadline instanceof Date ? deadline : new Date(deadline);
           const now = /* @__PURE__ */ new Date();
@@ -180807,7 +180807,7 @@ var require_internal_channel2 = __commonJS({
             process.nextTick(callback, new Error("Deadline passed without connectivity state change"));
             return;
           }
-          timer = setTimeout(() => {
+          timer2 = setTimeout(() => {
             this.removeConnectivityStateWatcher(watcherObject);
             callback(new Error("Deadline passed without connectivity state change"));
           }, deadlineDate.getTime() - now.getTime());
@@ -180815,7 +180815,7 @@ var require_internal_channel2 = __commonJS({
         const watcherObject = {
           currentState,
           callback,
-          timer
+          timer: timer2
         };
         this.connectivityStateWatchers.push(watcherObject);
       }
@@ -186352,7 +186352,7 @@ var require_grpc2 = __commonJS({
     var fs5 = __importStar(__require("fs"));
     var google_auth_library_1 = require_src18();
     var grpc2 = __importStar(require_src21());
-    var os2 = __importStar(__require("os"));
+    var os3 = __importStar(__require("os"));
     var path_1 = __require("path");
     var path3 = __importStar(__require("path"));
     var protobuf = __importStar(require_protobufjs());
@@ -186544,14 +186544,14 @@ var require_grpc2 = __commonJS({
         }
         throw new Error(filename + " could not be found in " + protoPath);
       }
-      loadProtoJSON(json, ignoreCache = false) {
-        const hash = (0, object_hash_1.default)(JSON.stringify(json)).toString();
+      loadProtoJSON(json2, ignoreCache = false) {
+        const hash = (0, object_hash_1.default)(JSON.stringify(json2)).toString();
         const cached = _GrpcClient.protoCache.get(hash);
         if (cached && !ignoreCache) {
           return cached;
         }
         const options2 = _GrpcClient.defaultOptions();
-        const packageDefinition = grpcProtoLoader.fromJSON(json, options2);
+        const packageDefinition = grpcProtoLoader.fromJSON(json2, options2);
         const grpcPackage = this.grpc.loadPackageDefinition(packageDefinition);
         _GrpcClient.protoCache.set(hash, grpcPackage);
         return grpcPackage;
@@ -186677,7 +186677,7 @@ var require_grpc2 = __commonJS({
           if (opts?.cert && opts?.key) {
             return [opts.cert, opts.key];
           }
-          const metadataPath = (0, path_1.join)(this.baseDirectory || os2.homedir(), ".secureConnect", "context_aware_metadata.json");
+          const metadataPath = (0, path_1.join)(this.baseDirectory || os3.homedir(), ".secureConnect", "context_aware_metadata.json");
           const metadata = JSON.parse(await readFileAsync(metadataPath));
           if (!metadata.cert_provider_command) {
             throw Error("no cert_provider_command found");
@@ -189762,11 +189762,11 @@ var require_order = __commonJS({
       }
       return primitiveComparator2(left.length, right.length);
     }
-    var MIN_SURROGATE = 55296;
-    var MAX_SURROGATE = 57343;
+    var MIN_SURROGATE2 = 55296;
+    var MAX_SURROGATE2 = 57343;
     function isSurrogate2(s2) {
       const c = s2.charCodeAt(0);
-      return c >= MIN_SURROGATE && c <= MAX_SURROGATE;
+      return c >= MIN_SURROGATE2 && c <= MAX_SURROGATE2;
     }
     function compare(left, right) {
       const leftType = typeOrder2(left);
@@ -195285,8 +195285,8 @@ var require_query_snapshot = __commonJS({
        */
       forEach(callback, thisArg) {
         (0, validate_1.validateFunction)("callback", callback);
-        for (const doc6 of this.docs) {
-          callback.call(thisArg, doc6);
+        for (const doc5 of this.docs) {
+          callback.call(thisArg, doc5);
         }
       }
       /**
@@ -195670,8 +195670,8 @@ var require_vector_query_snapshot = __commonJS({
        */
       forEach(callback, thisArg) {
         (0, validate_1.validateFunction)("callback", callback);
-        for (const doc6 of this.docs) {
-          callback.call(thisArg, doc6);
+        for (const doc5 of this.docs) {
+          callback.call(thisArg, doc5);
         }
       }
       /**
@@ -199067,8 +199067,8 @@ var require_collection_reference = __commonJS({
               mask: { fieldPaths: [] }
             };
             return this.firestore.request("listDocuments", request, tag2).then((documents) => {
-              return documents.map((doc6) => {
-                const path3 = path_1.QualifiedResourcePath.fromSlashSeparatedString(doc6.name);
+              return documents.map((doc5) => {
+                const path3 = path_1.QualifiedResourcePath.fromSlashSeparatedString(doc5.name);
                 return this.doc(path3.id);
               });
             });
@@ -200348,7 +200348,7 @@ var require_pipelines = __commonJS({
         const options2 = Array.isArray(docsOrOptions) ? {} : docsOrOptions;
         const docs = Array.isArray(docsOrOptions) ? docsOrOptions : docsOrOptions.docs;
         docs.filter((v) => v instanceof document_reference_1.DocumentReference).forEach((dr) => this._validateReference(dr));
-        const normalizedDocs = docs.map((doc6) => (0, pipeline_util_1.isString)(doc6) ? this.db.doc(doc6) : doc6);
+        const normalizedDocs = docs.map((doc5) => (0, pipeline_util_1.isString)(doc5) ? this.db.doc(doc5) : doc5);
         const internalOptions = {
           ...options2,
           docs: normalizedDocs
@@ -203158,10 +203158,10 @@ var require_field_value = __commonJS({
       }
     };
     exports.FieldValue = FieldValue3;
-    var FieldTransform = class extends FieldValue3 {
+    var FieldTransform2 = class extends FieldValue3 {
     };
-    exports.FieldTransform = FieldTransform;
-    var DeleteTransform = class _DeleteTransform extends FieldTransform {
+    exports.FieldTransform = FieldTransform2;
+    var DeleteTransform = class _DeleteTransform extends FieldTransform2 {
       /**
        * Sentinel value for a field delete.
        * @private
@@ -203197,7 +203197,7 @@ var require_field_value = __commonJS({
       }
     };
     exports.DeleteTransform = DeleteTransform;
-    var ServerTimestampTransform2 = class _ServerTimestampTransform extends FieldTransform {
+    var ServerTimestampTransform2 = class _ServerTimestampTransform extends FieldTransform2 {
       /**
        * Sentinel value for a server timestamp.
        *
@@ -203238,7 +203238,7 @@ var require_field_value = __commonJS({
         };
       }
     };
-    var NumericFieldTransform = class extends FieldTransform {
+    var NumericFieldTransform = class extends FieldTransform2 {
       operand;
       constructor(operand) {
         super();
@@ -203311,7 +203311,7 @@ var require_field_value = __commonJS({
         return this === other || other instanceof _NumericMaximumTransform && (this.operand === other.operand || Number.isNaN(this.operand) && Number.isNaN(other.operand));
       }
     };
-    var ArrayUnionTransform = class _ArrayUnionTransform extends FieldTransform {
+    var ArrayUnionTransform = class _ArrayUnionTransform extends FieldTransform2 {
       elements;
       constructor(elements) {
         super();
@@ -203352,7 +203352,7 @@ var require_field_value = __commonJS({
         return this === other || other instanceof _ArrayUnionTransform && deepEqual2(this.elements, other.elements);
       }
     };
-    var ArrayRemoveTransform = class _ArrayRemoveTransform extends FieldTransform {
+    var ArrayRemoveTransform = class _ArrayRemoveTransform extends FieldTransform2 {
       elements;
       constructor(elements) {
         super();
@@ -205491,11 +205491,11 @@ var require_bulk_writer = __commonJS({
        * @private
        * @internal
        */
-      static _applyJitter(backoffMs) {
-        if (backoffMs === 0)
+      static _applyJitter(backoffMs2) {
+        if (backoffMs2 === 0)
           return 0;
         const jitter = exports.DEFAULT_JITTER_FACTOR * (Math.random() * 2 - 1);
-        return Math.min(backoff_1.DEFAULT_BACKOFF_MAX_DELAY_MS, backoffMs + jitter * backoffMs);
+        return Math.min(backoff_1.DEFAULT_BACKOFF_MAX_DELAY_MS, backoffMs2 + jitter * backoffMs2);
       }
       /**
        * Schedules and runs the provided operation on the next available batch.
@@ -214535,7 +214535,7 @@ var require_tenant = __commonJS({
        * @returns A JSON-serializable representation of this object.
        */
       toJSON() {
-        const json = {
+        const json2 = {
           tenantId: this.tenantId,
           displayName: this.displayName,
           emailSignInConfig: this.emailSignInConfig_?.toJSON(),
@@ -214547,25 +214547,25 @@ var require_tenant = __commonJS({
           passwordPolicyConfig: (0, deep_copy_1.deepCopy)(this.passwordPolicyConfig),
           emailPrivacyConfig: (0, deep_copy_1.deepCopy)(this.emailPrivacyConfig)
         };
-        if (typeof json.multiFactorConfig === "undefined") {
-          delete json.multiFactorConfig;
+        if (typeof json2.multiFactorConfig === "undefined") {
+          delete json2.multiFactorConfig;
         }
-        if (typeof json.testPhoneNumbers === "undefined") {
-          delete json.testPhoneNumbers;
+        if (typeof json2.testPhoneNumbers === "undefined") {
+          delete json2.testPhoneNumbers;
         }
-        if (typeof json.smsRegionConfig === "undefined") {
-          delete json.smsRegionConfig;
+        if (typeof json2.smsRegionConfig === "undefined") {
+          delete json2.smsRegionConfig;
         }
-        if (typeof json.recaptchaConfig === "undefined") {
-          delete json.recaptchaConfig;
+        if (typeof json2.recaptchaConfig === "undefined") {
+          delete json2.recaptchaConfig;
         }
-        if (typeof json.passwordPolicyConfig === "undefined") {
-          delete json.passwordPolicyConfig;
+        if (typeof json2.passwordPolicyConfig === "undefined") {
+          delete json2.passwordPolicyConfig;
         }
-        if (typeof json.emailPrivacyConfig === "undefined") {
-          delete json.emailPrivacyConfig;
+        if (typeof json2.emailPrivacyConfig === "undefined") {
+          delete json2.emailPrivacyConfig;
         }
-        return json;
+        return json2;
       }
     };
     exports.Tenant = Tenant2;
@@ -214724,7 +214724,7 @@ var require_project_config = __commonJS({
        * @returns A JSON-serializable representation of this object.
        */
       toJSON() {
-        const json = {
+        const json2 = {
           smsRegionConfig: (0, deep_copy_1.deepCopy)(this.smsRegionConfig),
           multiFactorConfig: (0, deep_copy_1.deepCopy)(this.multiFactorConfig),
           recaptchaConfig: (0, deep_copy_1.deepCopy)(this.recaptchaConfig),
@@ -214732,25 +214732,25 @@ var require_project_config = __commonJS({
           emailPrivacyConfig: (0, deep_copy_1.deepCopy)(this.emailPrivacyConfig),
           mobileLinksConfig: (0, deep_copy_1.deepCopy)(this.mobileLinksConfig)
         };
-        if (typeof json.smsRegionConfig === "undefined") {
-          delete json.smsRegionConfig;
+        if (typeof json2.smsRegionConfig === "undefined") {
+          delete json2.smsRegionConfig;
         }
-        if (typeof json.multiFactorConfig === "undefined") {
-          delete json.multiFactorConfig;
+        if (typeof json2.multiFactorConfig === "undefined") {
+          delete json2.multiFactorConfig;
         }
-        if (typeof json.recaptchaConfig === "undefined") {
-          delete json.recaptchaConfig;
+        if (typeof json2.recaptchaConfig === "undefined") {
+          delete json2.recaptchaConfig;
         }
-        if (typeof json.passwordPolicyConfig === "undefined") {
-          delete json.passwordPolicyConfig;
+        if (typeof json2.passwordPolicyConfig === "undefined") {
+          delete json2.passwordPolicyConfig;
         }
-        if (typeof json.emailPrivacyConfig === "undefined") {
-          delete json.emailPrivacyConfig;
+        if (typeof json2.emailPrivacyConfig === "undefined") {
+          delete json2.emailPrivacyConfig;
         }
-        if (typeof json.mobileLinksConfig === "undefined") {
-          delete json.mobileLinksConfig;
+        if (typeof json2.mobileLinksConfig === "undefined") {
+          delete json2.mobileLinksConfig;
         }
-        return json;
+        return json2;
       }
     };
     exports.ProjectConfig = ProjectConfig2;
@@ -216375,8 +216375,8 @@ var require_crypto_signer = __commonJS({
        * @inheritDoc
        */
       sign(buffer) {
-        const crypto7 = __require("node:crypto");
-        const sign = crypto7.createSign("RSA-SHA256");
+        const crypto11 = __require("node:crypto");
+        const sign = crypto11.createSign("RSA-SHA256");
         sign.update(buffer);
         return Promise.resolve(sign.sign(this.credential.privateKey));
       }
@@ -217779,7 +217779,7 @@ var require_range = __commonJS({
         range = range.replace(BUILDSTRIPRE, "");
         const memoOpts = (this.options.includePrerelease && FLAG_INCLUDE_PRERELEASE) | (this.options.loose && FLAG_LOOSE);
         const memoKey = memoOpts + ":" + range;
-        const cached = cache2.get(memoKey);
+        const cached = cache3.get(memoKey);
         if (cached) {
           return cached;
         }
@@ -217813,7 +217813,7 @@ var require_range = __commonJS({
           rangeMap.delete("");
         }
         const result = [...rangeMap.values()];
-        cache2.set(memoKey, result);
+        cache3.set(memoKey, result);
         return result;
       }
       intersects(range, options2) {
@@ -217852,7 +217852,7 @@ var require_range = __commonJS({
     };
     module.exports = Range;
     var LRU = require_lrucache();
-    var cache2 = new LRU();
+    var cache3 = new LRU();
     var parseOptions = require_parse_options();
     var Comparator = require_comparator();
     var debug = require_debug();
@@ -219071,7 +219071,7 @@ var require_verify = __commonJS({
 // node_modules/lodash.includes/index.js
 var require_lodash2 = __commonJS({
   "node_modules/lodash.includes/index.js"(exports, module) {
-    var INFINITY2 = 1 / 0;
+    var INFINITY3 = 1 / 0;
     var MAX_SAFE_INTEGER = 9007199254740991;
     var MAX_INTEGER = 17976931348623157e292;
     var NAN2 = 0 / 0;
@@ -219214,7 +219214,7 @@ var require_lodash2 = __commonJS({
         return value === 0 ? value : 0;
       }
       value = toNumber2(value);
-      if (value === INFINITY2 || value === -INFINITY2) {
+      if (value === INFINITY3 || value === -INFINITY3) {
         var sign = value < 0 ? -1 : 1;
         return sign * MAX_INTEGER;
       }
@@ -219271,7 +219271,7 @@ var require_lodash3 = __commonJS({
 // node_modules/lodash.isinteger/index.js
 var require_lodash4 = __commonJS({
   "node_modules/lodash.isinteger/index.js"(exports, module) {
-    var INFINITY2 = 1 / 0;
+    var INFINITY3 = 1 / 0;
     var MAX_INTEGER = 17976931348623157e292;
     var NAN2 = 0 / 0;
     var symbolTag = "[object Symbol]";
@@ -219300,7 +219300,7 @@ var require_lodash4 = __commonJS({
         return value === 0 ? value : 0;
       }
       value = toNumber2(value);
-      if (value === INFINITY2 || value === -INFINITY2) {
+      if (value === INFINITY3 || value === -INFINITY3) {
         var sign = value < 0 ? -1 : 1;
         return sign * MAX_INTEGER;
       }
@@ -219413,7 +219413,7 @@ var require_lodash7 = __commonJS({
 var require_lodash8 = __commonJS({
   "node_modules/lodash.once/index.js"(exports, module) {
     var FUNC_ERROR_TEXT = "Expected a function";
-    var INFINITY2 = 1 / 0;
+    var INFINITY3 = 1 / 0;
     var MAX_INTEGER = 17976931348623157e292;
     var NAN2 = 0 / 0;
     var symbolTag = "[object Symbol]";
@@ -219458,7 +219458,7 @@ var require_lodash8 = __commonJS({
         return value === 0 ? value : 0;
       }
       value = toNumber2(value);
-      if (value === INFINITY2 || value === -INFINITY2) {
+      if (value === INFINITY3 || value === -INFINITY3) {
         var sign = value < 0 ? -1 : 1;
         return sign * MAX_INTEGER;
       }
@@ -222124,8 +222124,8 @@ function isUsableJWK(jwk, entry, alg, kid) {
   const { kty, key_ops: keyOps, ext, kid: jwkKid, alg: jwkAlg, use, crv } = jwk;
   return (ext === void 0 || typeof ext == "boolean") && (keyOps === void 0 || Array.isArray(keyOps) && keyOps.every((operation, index) => typeof operation == "string" && keyOps.indexOf(operation) === index) && keyOps.includes("verify")) && entry.kty.includes(kty) && (kid === void 0 || typeof kid == "string" && kid === jwkKid) && (jwkAlg === void 0 ? kty !== "AKP" : alg === jwkAlg) && (use === void 0 || use === "sig") && (!entry.crv || crv === entry.crv);
 }
-async function importWithAlgCache(cache2, jwk, entry) {
-  const cached = cache2.get(jwk) || cache2.set(jwk, {}).get(jwk), { alg } = entry;
+async function importWithAlgCache(cache3, jwk, entry) {
+  const cached = cache3.get(jwk) || cache3.set(jwk, {}).get(jwk), { alg } = entry;
   if (cached[alg] === void 0) {
     const pending = jwkToKey(entry, jwk, true).then((key) => {
       if (key.type !== "public")
@@ -222218,21 +222218,21 @@ function createRemoteJWKSet(url, options2) {
     throw new TypeError('"timeoutDuration" option must be a non-negative integer');
   const timeoutDuration = typeof timeoutOption == "number" ? timeoutOption : 5e3, cooldownDuration = validateDuration(opts.cooldownDuration, 3e4, "cooldownDuration"), cacheMaxAge = validateDuration(opts.cacheMaxAge, 6e5, "cacheMaxAge"), headers = new Headers(opts.headers);
   USER_AGENT && !headers.has("User-Agent") && headers.set("User-Agent", USER_AGENT), headers.has("accept") || headers.set("accept", "application/json, application/jwk-set+json");
-  const fetchImpl = opts[customFetch], cache2 = opts[jwksCache];
+  const fetchImpl = opts[customFetch], cache3 = opts[jwksCache];
   let jwksTimestamp, pendingFetch, reloadSequence = 0, appliedSequence = 0, local;
-  if (cache2 && typeof cache2 == "object") {
-    const { uat, jwks } = cache2;
+  if (cache3 && typeof cache3 == "object") {
+    const { uat, jwks } = cache3;
     isFreshFor(uat, cacheMaxAge) && isJwkSet(jwks) && (jwksTimestamp = uat, local = createLocalJWKSet(jwks));
   }
   const reload2 = async () => {
     if (pendingFetch && isCloudflareWorkers() && (pendingFetch = void 0), !pendingFetch) {
-      const sequence = ++reloadSequence, current = pendingFetch = fetchJwks(href, headers, AbortSignal.timeout(timeoutDuration), fetchImpl).then((json) => {
-        const next = createLocalJWKSet(json);
+      const sequence = ++reloadSequence, current = pendingFetch = fetchJwks(href, headers, AbortSignal.timeout(timeoutDuration), fetchImpl).then((json2) => {
+        const next = createLocalJWKSet(json2);
         if (sequence <= appliedSequence)
           return;
         local = next;
         const updatedAt = Date.now();
-        cache2 && (cache2.uat = updatedAt, cache2.jwks = json), jwksTimestamp = updatedAt, appliedSequence = sequence;
+        cache3 && (cache3.uat = updatedAt, cache3.jwks = json2), jwksTimestamp = updatedAt, appliedSequence = sequence;
       }).finally(() => {
         pendingFetch === current && (pendingFetch = void 0);
       });
@@ -223641,16 +223641,16 @@ var require_lodash9 = __commonJS({
       return this.__data__.has(key);
     }
     function stackSet(key, value) {
-      var cache2 = this.__data__;
-      if (cache2 instanceof ListCache) {
-        var pairs = cache2.__data__;
+      var cache3 = this.__data__;
+      if (cache3 instanceof ListCache) {
+        var pairs = cache3.__data__;
         if (!Map2 || pairs.length < LARGE_ARRAY_SIZE - 1) {
           pairs.push([key, value]);
           return this;
         }
-        cache2 = this.__data__ = new MapCache(pairs);
+        cache3 = this.__data__ = new MapCache(pairs);
       }
-      cache2.set(key, value);
+      cache3.set(key, value);
       return this;
     }
     Stack.prototype.clear = stackClear;
@@ -224012,7 +224012,7 @@ var require_sync = __commonJS({
     var lodash_clonedeep_1 = __importDefault(require_lodash9());
     var freeze_1 = require_freeze();
     function syncMemoizer(options2) {
-      const cache2 = new lru_cache_1.LRUCache(options2);
+      const cache3 = new lru_cache_1.LRUCache(options2);
       const load = options2.load;
       const hash = options2.hash;
       const bypass = options2.bypass;
@@ -224022,8 +224022,8 @@ var require_sync = __commonJS({
       const emitter = new events_1.EventEmitter();
       const defaultResult = Object.assign({
         del,
-        reset: () => cache2.clear(),
-        keys: () => [...cache2.keys()],
+        reset: () => cache3.clear(),
+        keys: () => [...cache3.keys()],
         on: emitter.on.bind(emitter),
         once: emitter.once.bind(emitter)
       }, options2);
@@ -224032,7 +224032,7 @@ var require_sync = __commonJS({
       }
       function del() {
         const key = hash(...arguments);
-        cache2.delete(key);
+        cache3.delete(key);
       }
       function emit(event, ...parameters) {
         emitter.emit(event, ...parameters);
@@ -224064,7 +224064,7 @@ var require_sync = __commonJS({
           return load(...args);
         }
         var key = hash(...args);
-        var fromCache = cache2.get(key);
+        var fromCache = cache3.get(key);
         if (fromCache) {
           emit("hit", ...args);
           return processResult(fromCache);
@@ -224072,9 +224072,9 @@ var require_sync = __commonJS({
         emit("miss", ...args);
         const result2 = load(...args);
         if (itemTTL) {
-          cache2.set(key, result2, { ttl: itemTTL(...args.concat([result2])) });
+          cache3.set(key, result2, { ttl: itemTTL(...args.concat([result2])) });
         } else {
-          cache2.set(key, result2);
+          cache3.set(key, result2);
         }
         return processResult(result2);
       };
@@ -224099,7 +224099,7 @@ var require_async = __commonJS({
     var freeze_1 = require_freeze();
     var sync_1 = require_sync();
     function asyncMemoizer(options2) {
-      const cache2 = new lru_cache_1.LRUCache(options2);
+      const cache3 = new lru_cache_1.LRUCache(options2);
       const load = options2.load;
       const hash = options2.hash;
       const bypass = options2.bypass;
@@ -224111,8 +224111,8 @@ var require_async = __commonJS({
       const emitter = new events_1.EventEmitter();
       const memoizerMethods = Object.assign({
         del,
-        reset: () => cache2.clear(),
-        keys: () => [...cache2.keys()],
+        reset: () => cache3.clear(),
+        keys: () => [...cache3.keys()],
         on: emitter.on.bind(emitter),
         once: emitter.once.bind(emitter)
       }, options2);
@@ -224121,16 +224121,16 @@ var require_async = __commonJS({
       }
       function del(...args) {
         const key = hash(...args);
-        cache2.delete(key);
+        cache3.delete(key);
       }
       function add(key, parameters, result) {
         if (freeze) {
           result.forEach(freeze_1.deepFreeze);
         }
         if (itemTTL) {
-          cache2.set(key, result, { ttl: itemTTL(...parameters.concat(result)) });
+          cache3.set(key, result, { ttl: itemTTL(...parameters.concat(result)) });
         } else {
-          cache2.set(key, result);
+          cache3.set(key, result);
         }
       }
       function runCallbacks(callbacks, args) {
@@ -224158,7 +224158,7 @@ var require_async = __commonJS({
         } else {
           key = hash(...parameters);
         }
-        const fromCache = cache2.get(key);
+        const fromCache = cache3.get(key);
         if (fromCache) {
           emit("hit", ...parameters);
           return runCallbacks([callback], [null].concat(fromCache));
@@ -226330,7 +226330,7 @@ var require_user_record = __commonJS({
        * @returns A JSON-serializable representation of this object.
        */
       toJSON() {
-        const json = {
+        const json2 = {
           uid: this.uid,
           email: this.email,
           emailVerified: this.emailVerified,
@@ -226347,13 +226347,13 @@ var require_user_record = __commonJS({
           tenantId: this.tenantId
         };
         if (this.multiFactor) {
-          json.multiFactor = this.multiFactor.toJSON();
+          json2.multiFactor = this.multiFactor.toJSON();
         }
-        json.providerData = [];
+        json2.providerData = [];
         for (const entry of this.providerData) {
-          json.providerData.push(entry.toJSON());
+          json2.providerData.push(entry.toJSON());
         }
-        return json;
+        return json2;
       }
     };
     exports.UserRecord = UserRecord3;
@@ -227643,6 +227643,11 @@ function getFirebaseAdminApp() {
   if (serviceAccountJson) {
     try {
       const parsed = JSON.parse(serviceAccountJson);
+      if (parsed.project_id && parsed.project_id !== projectId) {
+        console.error(
+          `[Firebase Admin] PROJECT MISMATCH: FIREBASE_SERVICE_ACCOUNT_JSON is for "${parsed.project_id}" but the app is configured for "${projectId}". Set VITE_FIREBASE_PROJECT_ID (and the other VITE_FIREBASE_* values) for the same project in this environment.`
+        );
+      }
       return initializeApp({
         credential: cert(parsed),
         projectId: parsed.project_id || projectId
@@ -227672,7 +227677,8 @@ function getAdminAuth() {
 }
 function getAdminFirestore() {
   const app2 = getFirebaseAdminApp();
-  const dbId = process.env.FIRESTORE_DATABASE_ID || firebase_applet_config_default.firestoreDatabaseId;
+  const activeProjectId = String(app2.options?.projectId || "");
+  const dbId = (process.env.FIRESTORE_DATABASE_ID || "").trim() || (activeProjectId && activeProjectId !== firebase_applet_config_default.projectId ? "(default)" : firebase_applet_config_default.firestoreDatabaseId);
   let fs5;
   if (dbId && dbId !== "(default)") {
     try {
@@ -227797,7 +227803,20 @@ async function deleteDoc(ref) {
 function query(base, ...constraints) {
   return constraints.reduce((q, c) => c(q), base);
 }
-var db, fs2, isRoot, where, orderBy, limit2, increment;
+async function countDocs(q) {
+  const s2 = await q.count().get();
+  return Number(s2.data().count || 0);
+}
+async function sumDocs(q, fields) {
+  const spec = {};
+  for (const f3 of fields) spec[f3] = AggregateField.sum(f3);
+  const s2 = await q.aggregate(spec).get();
+  const data = s2.data();
+  const out = {};
+  for (const f3 of fields) out[f3] = Number(data[f3] || 0);
+  return out;
+}
+var db, fs2, isRoot, where, orderBy, limit2, orderByDocumentId, startAfterId, startAfterValues, increment;
 var init_adminFirestore = __esm({
   "src/server/adminFirestore.ts"() {
     init_firestore();
@@ -227808,6 +227827,9 @@ var init_adminFirestore = __esm({
     where = (field2, op, value) => (q) => q.where(field2, op, value);
     orderBy = (field2, dir = "asc") => (q) => q.orderBy(field2, dir);
     limit2 = (n) => (q) => q.limit(n);
+    orderByDocumentId = () => (q) => q.orderBy(FieldPath.documentId());
+    startAfterId = (id) => (q) => q.startAfter(id);
+    startAfterValues = (...values) => (q) => q.startAfter(...values);
     increment = (n) => FieldValue.increment(n);
   }
 });
@@ -228010,6 +228032,9 @@ function isReactNative() {
 }
 function isSafari() {
   return !isNode() && !!navigator.userAgent && navigator.userAgent.includes("Safari") && !navigator.userAgent.includes("Chrome");
+}
+function isSafariOrWebkit() {
+  return !isNode() && !!navigator.userAgent && (navigator.userAgent.includes("Safari") || navigator.userAgent.includes("WebKit")) && !navigator.userAgent.includes("Chrome");
 }
 function isIndexedDBAvailable() {
   try {
@@ -231242,7 +231267,7 @@ var require_service_config3 = __commonJS({
     exports.validateRetryThrottling = validateRetryThrottling;
     exports.validateServiceConfig = validateServiceConfig;
     exports.extractAndSelectServiceConfig = extractAndSelectServiceConfig;
-    var os2 = __require("os");
+    var os3 = __require("os");
     var constants_1 = require_constants5();
     var load_balancer_1 = require_load_balancer3();
     var DURATION_REGEX = /^\d+(\.\d{1,9})?s$/;
@@ -231527,7 +231552,7 @@ var require_service_config3 = __commonJS({
         if (Array.isArray(validatedConfig.clientHostname)) {
           let hostnameMatched = false;
           for (const hostname of validatedConfig.clientHostname) {
-            if (hostname === os2.hostname()) {
+            if (hostname === os3.hostname()) {
               hostnameMatched = true;
             }
           }
@@ -231776,7 +231801,7 @@ var require_backoff_timeout3 = __commonJS({
     exports.BackoffTimeout = void 0;
     var INITIAL_BACKOFF_MS = 1e3;
     var BACKOFF_MULTIPLIER = 1.6;
-    var MAX_BACKOFF_MS = 12e4;
+    var MAX_BACKOFF_MS2 = 12e4;
     var BACKOFF_JITTER = 0.2;
     function uniformRandom(min, max) {
       return Math.random() * (max - min) + min;
@@ -231786,7 +231811,7 @@ var require_backoff_timeout3 = __commonJS({
         this.callback = callback;
         this.initialDelay = INITIAL_BACKOFF_MS;
         this.multiplier = BACKOFF_MULTIPLIER;
-        this.maxDelay = MAX_BACKOFF_MS;
+        this.maxDelay = MAX_BACKOFF_MS2;
         this.jitter = BACKOFF_JITTER;
         this.running = false;
         this.hasRef = true;
@@ -233632,9 +233657,9 @@ var require_src25 = __commonJS({
       return createPackageDefinition(loadedRoot, options2);
     }
     exports.loadSync = loadSync;
-    function fromJSON2(json, options2) {
+    function fromJSON2(json2, options2) {
       options2 = options2 || {};
-      const loadedRoot = Protobuf.Root.fromJSON(json);
+      const loadedRoot = Protobuf.Root.fromJSON(json2);
       loadedRoot.resolveAll();
       return createPackageDefinition(loadedRoot, options2);
     }
@@ -234521,7 +234546,7 @@ var require_resolver_dns3 = __commonJS({
     exports.DEFAULT_PORT = void 0;
     exports.setup = setup;
     var resolver_1 = require_resolver3();
-    var dns = __require("dns");
+    var dns2 = __require("dns");
     var util = __require("util");
     var service_config_1 = require_service_config3();
     var constants_1 = require_constants5();
@@ -234537,8 +234562,8 @@ var require_resolver_dns3 = __commonJS({
     }
     exports.DEFAULT_PORT = 443;
     var DEFAULT_MIN_TIME_BETWEEN_RESOLUTIONS_MS = 3e4;
-    var resolveTxtPromise = util.promisify(dns.resolveTxt);
-    var dnsLookupPromise = util.promisify(dns.lookup);
+    var resolveTxtPromise = util.promisify(dns2.resolveTxt);
+    var dnsLookupPromise = util.promisify(dns2.lookup);
     function mergeArrays(...arrays) {
       const result = [];
       for (let i2 = 0; i2 < Math.max.apply(null, arrays.map((array2) => array2.length)); i2++) {
@@ -235060,7 +235085,7 @@ var require_subchannel_call3 = __commonJS({
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.Http2SubchannelCall = void 0;
     var http22 = __require("http2");
-    var os2 = __require("os");
+    var os3 = __require("os");
     var constants_1 = require_constants5();
     var metadata_1 = require_metadata3();
     var stream_decoder_1 = require_stream_decoder3();
@@ -235068,7 +235093,7 @@ var require_subchannel_call3 = __commonJS({
     var constants_2 = require_constants5();
     var TRACER_NAME = "subchannel_call";
     function getSystemErrorName(errno) {
-      for (const [name5, num] of Object.entries(os2.constants.errno)) {
+      for (const [name5, num] of Object.entries(os3.constants.errno)) {
         if (num === errno) {
           return name5;
         }
@@ -235434,7 +235459,7 @@ var require_transport3 = __commonJS({
     var resolver_1 = require_resolver3();
     var subchannel_address_1 = require_subchannel_address3();
     var uri_parser_1 = require_uri_parser3();
-    var net = __require("net");
+    var net2 = __require("net");
     var subchannel_call_1 = require_subchannel_call3();
     var call_number_1 = require_call_number3();
     var TRACER_NAME = "transport";
@@ -235829,7 +235854,7 @@ var require_transport3 = __commonJS({
               if (proxyConnectionResult.socket) {
                 return proxyConnectionResult.socket;
               } else {
-                return net.connect(address);
+                return net2.connect(address);
               }
             };
           }
@@ -237945,7 +237970,7 @@ var require_internal_channel3 = __commonJS({
         if (this.connectivityState === connectivity_state_1.ConnectivityState.SHUTDOWN) {
           throw new Error("Channel has been shut down");
         }
-        let timer = null;
+        let timer2 = null;
         if (deadline !== Infinity) {
           const deadlineDate = deadline instanceof Date ? deadline : new Date(deadline);
           const now = /* @__PURE__ */ new Date();
@@ -237953,7 +237978,7 @@ var require_internal_channel3 = __commonJS({
             process.nextTick(callback, new Error("Deadline passed without connectivity state change"));
             return;
           }
-          timer = setTimeout(() => {
+          timer2 = setTimeout(() => {
             this.removeConnectivityStateWatcher(watcherObject);
             callback(new Error("Deadline passed without connectivity state change"));
           }, deadlineDate.getTime() - now.getTime());
@@ -237961,7 +237986,7 @@ var require_internal_channel3 = __commonJS({
         const watcherObject = {
           currentState,
           callback,
-          timer
+          timer: timer2
         };
         this.connectivityStateWatchers.push(watcherObject);
       }
@@ -241697,8 +241722,8 @@ var init_build2 = __esm({
       static utf8ByteArrayToString(bytes) {
         if (globalThis.TextDecoder) {
           if (!cachedNativeDecoder) cachedNativeDecoder = new TextDecoder("utf-8");
-          const view = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
-          return cachedNativeDecoder.decode(view);
+          const view2 = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+          return cachedNativeDecoder.decode(view2);
         } else {
           let out = [], pos = 0, c = 0;
           while (pos < bytes.length) {
@@ -247413,6 +247438,44 @@ function arrayEquals(left, right, comparator) {
   }
   return left.every((value, index) => comparator(value, right[index]));
 }
+function immediateSuccessor(s2) {
+  return s2 + "\0";
+}
+function diffSortedSets(before, after, comparator, onAdd, onRemove) {
+  const beforeIt = before.getIterator();
+  const afterIt = after.getIterator();
+  let beforeValue = advanceIterator(beforeIt);
+  let afterValue = advanceIterator(afterIt);
+  while (beforeValue || afterValue) {
+    let added = false;
+    let removed = false;
+    if (beforeValue && afterValue) {
+      const cmp = comparator(beforeValue, afterValue);
+      if (cmp < 0) {
+        removed = true;
+      } else if (cmp > 0) {
+        added = true;
+      }
+    } else if (beforeValue != null) {
+      removed = true;
+    } else {
+      added = true;
+    }
+    if (added) {
+      onAdd(afterValue);
+      afterValue = advanceIterator(afterIt);
+    } else if (removed) {
+      onRemove(beforeValue);
+      beforeValue = advanceIterator(beforeIt);
+    } else {
+      beforeValue = advanceIterator(beforeIt);
+      afterValue = advanceIterator(afterIt);
+    }
+  }
+}
+function advanceIterator(it) {
+  return it.hasNext() ? it.getNext() : void 0;
+}
 function objectSize(obj) {
   let count = 0;
   for (const key in obj) {
@@ -247522,8 +247585,8 @@ function property(typeString, optionalValue) {
   }
   return result;
 }
-function validateJSON(json, schema) {
-  if (!isPlainObject(json)) {
+function validateJSON(json2, schema) {
+  if (!isPlainObject(json2)) {
     throw new FirestoreError(Code.INVALID_ARGUMENT, "JSON must be an object");
   }
   let error = void 0;
@@ -247531,11 +247594,11 @@ function validateJSON(json, schema) {
     if (schema[key]) {
       const typeString = schema[key].typeString;
       const value = "value" in schema[key] ? { value: schema[key].value } : void 0;
-      if (!(key in json)) {
+      if (!(key in json2)) {
         error = `JSON missing required field: '${key}'`;
         break;
       }
-      const fieldValue = json[key];
+      const fieldValue = json2[key];
       if (typeString && typeof fieldValue !== typeString) {
         error = `JSON field '${key}' must be a ${typeString}.`;
         break;
@@ -248036,6 +248099,11 @@ function estimateMapByteSize(mapValue) {
 function estimateArrayByteSize(arrayValue) {
   return (arrayValue.values || []).reduce((previousSize, value) => previousSize + estimateByteSize(value), 0);
 }
+function refValue(databaseId, key) {
+  return {
+    referenceValue: `projects/${databaseId.projectId}/databases/${databaseId.database}/documents/${key.path.canonicalString()}`
+  };
+}
 function isBoolean(value) {
   return !!value && "booleanValue" in value;
 }
@@ -248097,6 +248165,86 @@ function deepClone(source) {
 }
 function isMaxValue(value) {
   return (((value.mapValue || {}).fields || {})["__type__"] || {}).stringValue === MAX_VALUE_TYPE;
+}
+function valuesGetLowerBound(value) {
+  if ("nullValue" in value) {
+    return MIN_VALUE;
+  } else if ("booleanValue" in value) {
+    return { booleanValue: false };
+  } else if ("integerValue" in value || "doubleValue" in value) {
+    return { doubleValue: NaN };
+  } else if ("timestampValue" in value) {
+    return { timestampValue: { seconds: Number.MIN_SAFE_INTEGER } };
+  } else if ("stringValue" in value) {
+    return { stringValue: "" };
+  } else if ("bytesValue" in value) {
+    return { bytesValue: "" };
+  } else if ("referenceValue" in value) {
+    return refValue(DatabaseId.empty(), DocumentKey.empty());
+  } else if ("geoPointValue" in value) {
+    return { geoPointValue: { latitude: -90, longitude: -180 } };
+  } else if ("arrayValue" in value) {
+    return { arrayValue: {} };
+  } else if ("mapValue" in value) {
+    if (isVectorValue(value)) {
+      return MIN_VECTOR_VALUE;
+    }
+    return { mapValue: {} };
+  } else {
+    return fail(35942, { value });
+  }
+}
+function valuesGetUpperBound(value) {
+  if ("nullValue" in value) {
+    return { booleanValue: false };
+  } else if ("booleanValue" in value) {
+    return { doubleValue: NaN };
+  } else if ("integerValue" in value || "doubleValue" in value) {
+    return { timestampValue: { seconds: Number.MIN_SAFE_INTEGER } };
+  } else if ("timestampValue" in value) {
+    return { stringValue: "" };
+  } else if ("stringValue" in value) {
+    return { bytesValue: "" };
+  } else if ("bytesValue" in value) {
+    return refValue(DatabaseId.empty(), DocumentKey.empty());
+  } else if ("referenceValue" in value) {
+    return { geoPointValue: { latitude: -90, longitude: -180 } };
+  } else if ("geoPointValue" in value) {
+    return { arrayValue: {} };
+  } else if ("arrayValue" in value) {
+    return MIN_VECTOR_VALUE;
+  } else if ("mapValue" in value) {
+    if (isVectorValue(value)) {
+      return { mapValue: {} };
+    }
+    return MAX_VALUE;
+  } else {
+    return fail(61959, { value });
+  }
+}
+function lowerBoundCompare(left, right) {
+  const cmp = valueCompare(left.value, right.value);
+  if (cmp !== 0) {
+    return cmp;
+  }
+  if (left.inclusive && !right.inclusive) {
+    return -1;
+  } else if (!left.inclusive && right.inclusive) {
+    return 1;
+  }
+  return 0;
+}
+function upperBoundCompare(left, right) {
+  const cmp = valueCompare(left.value, right.value);
+  if (cmp !== 0) {
+    return cmp;
+  }
+  if (left.inclusive && !right.inclusive) {
+    return 1;
+  } else if (!left.inclusive && right.inclusive) {
+    return -1;
+  }
+  return 0;
 }
 function toDouble(serializer, value) {
   if (serializer.useProto3Json) {
@@ -248230,18 +248378,18 @@ function preconditionIsValidForDocument(precondition, document2) {
     return true;
   }
 }
-function calculateOverlayMutation(doc6, mask) {
-  if (!doc6.hasLocalMutations || mask && mask.fields.length === 0) {
+function calculateOverlayMutation(doc5, mask) {
+  if (!doc5.hasLocalMutations || mask && mask.fields.length === 0) {
     return null;
   }
   if (mask === null) {
-    if (doc6.isNoDocument()) {
-      return new DeleteMutation(doc6.key, Precondition.none());
+    if (doc5.isNoDocument()) {
+      return new DeleteMutation(doc5.key, Precondition.none());
     } else {
-      return new SetMutation(doc6.key, doc6.data, Precondition.none());
+      return new SetMutation(doc5.key, doc5.data, Precondition.none());
     }
   } else {
-    const docValue = doc6.data;
+    const docValue = doc5.data;
     const patchValue = ObjectValue.empty();
     let maskSet = new SortedSet(FieldPath$1.comparator);
     for (let path3 of mask.fields) {
@@ -248259,7 +248407,7 @@ function calculateOverlayMutation(doc6, mask) {
         maskSet = maskSet.add(path3);
       }
     }
-    return new PatchMutation(doc6.key, patchValue, new FieldMask(maskSet.toArray()), Precondition.none());
+    return new PatchMutation(doc5.key, patchValue, new FieldMask(maskSet.toArray()), Precondition.none());
   }
 }
 function mutationApplyToRemoteDocument(mutation, document2, mutationResult) {
@@ -248385,15 +248533,15 @@ function deleteMutationApplyToLocalView(mutation, document2, previousMask) {
   }
   return previousMask;
 }
-function boundCompareToDocument(bound, orderBy3, doc6) {
+function boundCompareToDocument(bound, orderBy3, doc5) {
   let comparison = 0;
   for (let i2 = 0; i2 < bound.position.length; i2++) {
     const orderByComponent = orderBy3[i2];
     const component = bound.position[i2];
     if (orderByComponent.field.isKeyField()) {
-      comparison = DocumentKey.comparator(DocumentKey.fromName(component.referenceValue), doc6.key);
+      comparison = DocumentKey.comparator(DocumentKey.fromName(component.referenceValue), doc5.key);
     } else {
-      const docValue = doc6.data.field(orderByComponent.field);
+      const docValue = doc5.data.field(orderByComponent.field);
       comparison = valueCompare(component, docValue);
     }
     if (orderByComponent.dir === "desc") {
@@ -248405,12 +248553,12 @@ function boundCompareToDocument(bound, orderBy3, doc6) {
   }
   return comparison;
 }
-function boundSortsAfterDocument(bound, orderBy3, doc6) {
-  const comparison = boundCompareToDocument(bound, orderBy3, doc6);
+function boundSortsAfterDocument(bound, orderBy3, doc5) {
+  const comparison = boundCompareToDocument(bound, orderBy3, doc5);
   return bound.inclusive ? comparison >= 0 : comparison > 0;
 }
-function boundSortsBeforeDocument(bound, orderBy3, doc6) {
-  const comparison = boundCompareToDocument(bound, orderBy3, doc6);
+function boundSortsBeforeDocument(bound, orderBy3, doc5) {
+  const comparison = boundCompareToDocument(bound, orderBy3, doc5);
   return bound.inclusive ? comparison <= 0 : comparison < 0;
 }
 function boundEquals(left, right) {
@@ -248433,6 +248581,9 @@ function boundEquals(left, right) {
 }
 function compositeFilterIsConjunction(compositeFilter) {
   return compositeFilter.op === "and";
+}
+function compositeFilterIsDisjunction(compositeFilter) {
+  return compositeFilter.op === "or";
 }
 function compositeFilterIsFlatConjunction(compositeFilter) {
   return compositeFilterIsFlat(compositeFilter) && compositeFilterIsConjunction(compositeFilter);
@@ -248474,6 +248625,10 @@ function compositeFilterEquals(f1, f22) {
   }
   return false;
 }
+function compositeFilterWithAddedFilters(compositeFilter, otherFilters) {
+  const mergedFilters = compositeFilter.filters.concat(otherFilters);
+  return CompositeFilter.create(mergedFilters, compositeFilter.op);
+}
 function stringifyFilter(filter) {
   if (filter instanceof FieldFilter) {
     return stringifyFieldFilter(filter);
@@ -248511,6 +248666,25 @@ function compareDocumentsByField(field2, d1, d2) {
   } else {
     return fail(42886);
   }
+}
+function fieldIndexGetArraySegment(fieldIndex) {
+  return fieldIndex.fields.find(
+    (s2) => s2.kind === 2
+    /* IndexKind.CONTAINS */
+  );
+}
+function fieldIndexGetDirectionalSegments(fieldIndex) {
+  return fieldIndex.fields.filter(
+    (s2) => s2.kind !== 2
+    /* IndexKind.CONTAINS */
+  );
+}
+function fieldIndexGetKeyOrder(fieldIndex) {
+  const directionalSegments = fieldIndexGetDirectionalSegments(fieldIndex);
+  return directionalSegments.length === 0 ? 0 : directionalSegments[directionalSegments.length - 1].kind;
+}
+function fieldIndexToString(fieldIndex) {
+  return `id=${fieldIndex.indexId}|cg=${fieldIndex.collectionGroup}|f=${fieldIndex.fields.map((f3) => `${f3.fieldPath}:${f3.kind}`).join(",")}`;
 }
 function newIndexOffsetSuccessorFromReadTime(readTime, largestBatchId) {
   const successorSeconds = readTime.toTimestamp().seconds;
@@ -248627,6 +248801,178 @@ function targetIsPipelineTarget(target) {
 function targetIsDocumentTarget(target) {
   return !!target.path && DocumentKey.isDocumentKey(target.path) && target.collectionGroup === null && target.filters.length === 0;
 }
+function targetGetFieldFiltersForPath(target, path3) {
+  return target.filters.filter((f3) => f3 instanceof FieldFilter && f3.field.isEqual(path3));
+}
+function targetGetArrayValues(target, fieldIndex) {
+  const segment = fieldIndexGetArraySegment(fieldIndex);
+  if (segment === void 0) {
+    return null;
+  }
+  for (const fieldFilter of targetGetFieldFiltersForPath(target, segment.fieldPath)) {
+    switch (fieldFilter.op) {
+      case "array-contains-any":
+        return fieldFilter.value.arrayValue.values || [];
+      case "array-contains":
+        return [fieldFilter.value];
+    }
+  }
+  return null;
+}
+function targetGetNotInValues(target, fieldIndex) {
+  const values = /* @__PURE__ */ new Map();
+  for (const segment of fieldIndexGetDirectionalSegments(fieldIndex)) {
+    for (const fieldFilter of targetGetFieldFiltersForPath(target, segment.fieldPath)) {
+      switch (fieldFilter.op) {
+        case "==":
+        case "in":
+          values.set(segment.fieldPath.canonicalString(), fieldFilter.value);
+          break;
+        case "not-in":
+        case "!=":
+          values.set(segment.fieldPath.canonicalString(), fieldFilter.value);
+          return Array.from(values.values());
+      }
+    }
+  }
+  return null;
+}
+function targetGetLowerBound(target, fieldIndex) {
+  const values = [];
+  let inclusive = true;
+  for (const segment of fieldIndexGetDirectionalSegments(fieldIndex)) {
+    const segmentBound = segment.kind === 0 ? targetGetAscendingBound(target, segment.fieldPath, target.startAt) : targetGetDescendingBound(target, segment.fieldPath, target.startAt);
+    values.push(segmentBound.value);
+    inclusive && (inclusive = segmentBound.inclusive);
+  }
+  return new Bound(values, inclusive);
+}
+function targetGetUpperBound(target, fieldIndex) {
+  const values = [];
+  let inclusive = true;
+  for (const segment of fieldIndexGetDirectionalSegments(fieldIndex)) {
+    const segmentBound = segment.kind === 0 ? targetGetDescendingBound(target, segment.fieldPath, target.endAt) : targetGetAscendingBound(target, segment.fieldPath, target.endAt);
+    values.push(segmentBound.value);
+    inclusive && (inclusive = segmentBound.inclusive);
+  }
+  return new Bound(values, inclusive);
+}
+function targetGetAscendingBound(target, fieldPath, bound) {
+  let value = MIN_VALUE;
+  let inclusive = true;
+  for (const fieldFilter of targetGetFieldFiltersForPath(target, fieldPath)) {
+    let filterValue = MIN_VALUE;
+    let filterInclusive = true;
+    switch (fieldFilter.op) {
+      case "<":
+      case "<=":
+        filterValue = valuesGetLowerBound(fieldFilter.value);
+        break;
+      case "==":
+      case "in":
+      case ">=":
+        filterValue = fieldFilter.value;
+        break;
+      case ">":
+        filterValue = fieldFilter.value;
+        filterInclusive = false;
+        break;
+      case "!=":
+      case "not-in":
+        filterValue = MIN_VALUE;
+        break;
+    }
+    if (lowerBoundCompare({ value, inclusive }, { value: filterValue, inclusive: filterInclusive }) < 0) {
+      value = filterValue;
+      inclusive = filterInclusive;
+    }
+  }
+  if (bound !== null) {
+    for (let i2 = 0; i2 < target.orderBy.length; ++i2) {
+      const orderBy3 = target.orderBy[i2];
+      if (orderBy3.field.isEqual(fieldPath)) {
+        const cursorValue = bound.position[i2];
+        if (lowerBoundCompare({ value, inclusive }, { value: cursorValue, inclusive: bound.inclusive }) < 0) {
+          value = cursorValue;
+          inclusive = bound.inclusive;
+        }
+        break;
+      }
+    }
+  }
+  return { value, inclusive };
+}
+function targetGetDescendingBound(target, fieldPath, bound) {
+  let value = MAX_VALUE;
+  let inclusive = true;
+  for (const fieldFilter of targetGetFieldFiltersForPath(target, fieldPath)) {
+    let filterValue = MAX_VALUE;
+    let filterInclusive = true;
+    switch (fieldFilter.op) {
+      case ">=":
+      case ">":
+        filterValue = valuesGetUpperBound(fieldFilter.value);
+        filterInclusive = false;
+        break;
+      case "==":
+      case "in":
+      case "<=":
+        filterValue = fieldFilter.value;
+        break;
+      case "<":
+        filterValue = fieldFilter.value;
+        filterInclusive = false;
+        break;
+      case "!=":
+      case "not-in":
+        filterValue = MAX_VALUE;
+        break;
+    }
+    if (upperBoundCompare({ value, inclusive }, { value: filterValue, inclusive: filterInclusive }) > 0) {
+      value = filterValue;
+      inclusive = filterInclusive;
+    }
+  }
+  if (bound !== null) {
+    for (let i2 = 0; i2 < target.orderBy.length; ++i2) {
+      const orderBy3 = target.orderBy[i2];
+      if (orderBy3.field.isEqual(fieldPath)) {
+        const cursorValue = bound.position[i2];
+        if (upperBoundCompare({ value, inclusive }, { value: cursorValue, inclusive: bound.inclusive }) > 0) {
+          value = cursorValue;
+          inclusive = bound.inclusive;
+        }
+        break;
+      }
+    }
+  }
+  return { value, inclusive };
+}
+function targetGetSegmentCount(target) {
+  let fields = new SortedSet(FieldPath$1.comparator);
+  let hasArraySegment = false;
+  for (const filter of target.filters) {
+    for (const subFilter of filter.getFlattenedFilters()) {
+      if (subFilter.field.isKeyField()) {
+        continue;
+      }
+      if (subFilter.op === "array-contains" || subFilter.op === "array-contains-any") {
+        hasArraySegment = true;
+      } else {
+        fields = fields.add(subFilter.field);
+      }
+    }
+  }
+  for (const orderBy3 of target.orderBy) {
+    if (!orderBy3.field.isKeyField()) {
+      fields = fields.add(orderBy3.field);
+    }
+  }
+  return fields.size + (hasArraySegment ? 1 : 0);
+}
+function targetHasLimit(target) {
+  return target.limit !== null;
+}
 function newQuery(path3, collectionGroup2, explicitOrderBy, filters, limit3, limitType, startAt, endAt) {
   return new QueryImpl(path3, collectionGroup2, explicitOrderBy, filters, limit3, limitType, startAt, endAt);
 }
@@ -248721,43 +249067,46 @@ function canonifyQuery(query2) {
 function stringifyQuery2(query2) {
   return `Query(target=${stringifyTarget(queryToTarget(query2))}; limitType=${query2.limitType})`;
 }
-function queryMatches(query2, doc6) {
-  return doc6.isFoundDocument() && queryMatchesPathAndCollectionGroup(query2, doc6) && queryMatchesOrderBy(query2, doc6) && queryMatchesFilters(query2, doc6) && queryMatchesBounds(query2, doc6);
+function queryMatches(query2, doc5) {
+  return doc5.isFoundDocument() && queryMatchesPathAndCollectionGroup(query2, doc5) && queryMatchesOrderBy(query2, doc5) && queryMatchesFilters(query2, doc5) && queryMatchesBounds(query2, doc5);
 }
-function queryMatchesPathAndCollectionGroup(query2, doc6) {
-  const docPath = doc6.key.path;
+function queryMatchesPathAndCollectionGroup(query2, doc5) {
+  const docPath = doc5.key.path;
   if (query2.collectionGroup !== null) {
-    return doc6.key.hasCollectionId(query2.collectionGroup) && query2.path.isPrefixOf(docPath);
+    return doc5.key.hasCollectionId(query2.collectionGroup) && query2.path.isPrefixOf(docPath);
   } else if (DocumentKey.isDocumentKey(query2.path)) {
     return query2.path.isEqual(docPath);
   } else {
     return query2.path.isImmediateParentOf(docPath);
   }
 }
-function queryMatchesOrderBy(query2, doc6) {
+function queryMatchesOrderBy(query2, doc5) {
   for (const orderBy3 of queryNormalizedOrderBy(query2)) {
-    if (!orderBy3.field.isKeyField() && doc6.data.field(orderBy3.field) === null) {
+    if (!orderBy3.field.isKeyField() && doc5.data.field(orderBy3.field) === null) {
       return false;
     }
   }
   return true;
 }
-function queryMatchesFilters(query2, doc6) {
+function queryMatchesFilters(query2, doc5) {
   for (const filter of query2.filters) {
-    if (!filter.matches(doc6)) {
+    if (!filter.matches(doc5)) {
       return false;
     }
   }
   return true;
 }
-function queryMatchesBounds(query2, doc6) {
-  if (query2.startAt && !boundSortsBeforeDocument(query2.startAt, queryNormalizedOrderBy(query2), doc6)) {
+function queryMatchesBounds(query2, doc5) {
+  if (query2.startAt && !boundSortsBeforeDocument(query2.startAt, queryNormalizedOrderBy(query2), doc5)) {
     return false;
   }
-  if (query2.endAt && !boundSortsAfterDocument(query2.endAt, queryNormalizedOrderBy(query2), doc6)) {
+  if (query2.endAt && !boundSortsAfterDocument(query2.endAt, queryNormalizedOrderBy(query2), doc5)) {
     return false;
   }
   return true;
+}
+function queryCollectionGroup(query2) {
+  return query2.collectionGroup || (query2.path.length % 2 === 1 ? query2.path.lastSegment() : query2.path.get(query2.path.length - 2));
 }
 function newQueryComparator(query2) {
   return (d1, d2) => {
@@ -248782,6 +249131,40 @@ function compareDocs(orderBy3, d1, d2) {
     default:
       return fail(19790, { direction: orderBy3.dir });
   }
+}
+function isPermanentError(code) {
+  switch (code) {
+    case Code.OK:
+      return fail(64938);
+    case Code.CANCELLED:
+    case Code.UNKNOWN:
+    case Code.DEADLINE_EXCEEDED:
+    case Code.RESOURCE_EXHAUSTED:
+    case Code.INTERNAL:
+    case Code.UNAVAILABLE:
+    // Unauthenticated means something went wrong with our token and we need
+    // to retry with new credentials which will happen automatically.
+    case Code.UNAUTHENTICATED:
+      return false;
+    case Code.INVALID_ARGUMENT:
+    case Code.NOT_FOUND:
+    case Code.ALREADY_EXISTS:
+    case Code.PERMISSION_DENIED:
+    case Code.FAILED_PRECONDITION:
+    // Aborted might be retried in some scenarios, but that is dependent on
+    // the context and should handled individually by the calling code.
+    // See https://cloud.google.com/apis/design/errors.
+    case Code.ABORTED:
+    case Code.OUT_OF_RANGE:
+    case Code.UNIMPLEMENTED:
+    case Code.DATA_LOSS:
+      return true;
+    default:
+      return fail(15467, { code });
+  }
+}
+function isPermanentWriteError(code) {
+  return isPermanentError(code) && code !== Code.ABORTED;
 }
 function mapCodeFromRpcCode(code) {
   if (code === void 0) {
@@ -248832,8 +249215,8 @@ function mutableDocumentMap() {
 }
 function documentMap(...docs) {
   let map = EMPTY_DOCUMENT_MAP;
-  for (const doc6 of docs) {
-    map = map.insert(doc6.key, doc6);
+  for (const doc5 of docs) {
+    map = map.insert(doc5.key, doc5);
   }
   return map;
 }
@@ -248853,6 +249236,9 @@ function newMutationMap() {
 }
 function newDocumentKeyMap() {
   return new ObjectMap((key) => key.toString(), (l, r2) => l.isEqual(r2));
+}
+function documentVersionMap() {
+  return EMPTY_DOCUMENT_VERSION_MAP;
 }
 function documentKeySet(...keys) {
   let set = EMPTY_DOCUMENT_KEY_SET;
@@ -249047,6 +249433,31 @@ function extractLocalPathFromResourceName(resourceName) {
   hardAssert(resourceName.length > 4 && resourceName.get(4) === "documents", 29091, { key: resourceName.toString() });
   return resourceName.popFirst(5);
 }
+function toMutationDocument(serializer, key, fields) {
+  return {
+    name: toName(serializer, key),
+    fields: fields.value.mapValue.fields
+  };
+}
+function toDocument(serializer, document2) {
+  return {
+    name: toName(serializer, document2.key),
+    fields: document2.data.value.mapValue.fields,
+    updateTime: toTimestamp(serializer, document2.version.toTimestamp()),
+    createTime: toTimestamp(serializer, document2.createTime.toTimestamp())
+  };
+}
+function fromDocument(serializer, document2, hasCommittedMutations) {
+  const key = fromName(serializer, document2.name);
+  const version7 = fromVersion(document2.updateTime);
+  const createTime = document2.createTime ? fromVersion(document2.createTime) : SnapshotVersion.min();
+  const data = new ObjectValue({ mapValue: { fields: document2.fields } });
+  const result = MutableDocument.newFoundDocument(key, version7, createTime, data);
+  if (hasCommittedMutations) {
+    result.setHasCommittedMutations();
+  }
+  return hasCommittedMutations ? result.setHasCommittedMutations() : result;
+}
 function fromWatchChange(serializer, change) {
   let watchChange;
   if ("targetChange" in change) {
@@ -249069,19 +249480,19 @@ function fromWatchChange(serializer, change) {
     const data = new ObjectValue({
       mapValue: { fields: entityChange.document.fields }
     });
-    const doc6 = MutableDocument.newFoundDocument(key, version7, createTime, data);
+    const doc5 = MutableDocument.newFoundDocument(key, version7, createTime, data);
     const updatedTargetIds = entityChange.targetIds || [];
     const removedTargetIds = entityChange.removedTargetIds || [];
-    watchChange = new DocumentWatchChange(updatedTargetIds, removedTargetIds, doc6.key, doc6);
+    watchChange = new DocumentWatchChange(updatedTargetIds, removedTargetIds, doc5.key, doc5);
   } else if ("documentDelete" in change) {
     assertPresent(change.documentDelete);
     const docDelete = change.documentDelete;
     assertPresent(docDelete.document);
     const key = fromName(serializer, docDelete.document);
     const version7 = docDelete.readTime ? fromVersion(docDelete.readTime) : SnapshotVersion.min();
-    const doc6 = MutableDocument.newNoDocument(key, version7);
+    const doc5 = MutableDocument.newNoDocument(key, version7);
     const removedTargetIds = docDelete.removedTargetIds || [];
-    watchChange = new DocumentWatchChange([], removedTargetIds, doc6.key, doc6);
+    watchChange = new DocumentWatchChange([], removedTargetIds, doc5.key, doc5);
   } else if ("documentRemove" in change) {
     assertPresent(change.documentRemove);
     const docRemove = change.documentRemove;
@@ -249130,8 +249541,171 @@ function versionFromListenResponse(change) {
   }
   return fromVersion(targetChange.readTime);
 }
+function toMutation(serializer, mutation) {
+  let result;
+  if (mutation instanceof SetMutation) {
+    result = {
+      update: toMutationDocument(serializer, mutation.key, mutation.value)
+    };
+  } else if (mutation instanceof DeleteMutation) {
+    result = { delete: toName(serializer, mutation.key) };
+  } else if (mutation instanceof PatchMutation) {
+    result = {
+      update: toMutationDocument(serializer, mutation.key, mutation.data),
+      updateMask: toDocumentMask(mutation.fieldMask)
+    };
+  } else if (mutation instanceof VerifyMutation) {
+    result = {
+      verify: toName(serializer, mutation.key)
+    };
+  } else {
+    return fail(16599, {
+      mutationType: mutation.type
+    });
+  }
+  if (mutation.fieldTransforms.length > 0) {
+    result.updateTransforms = mutation.fieldTransforms.map((transform2) => toFieldTransform(serializer, transform2));
+  }
+  if (!mutation.precondition.isNone) {
+    result.currentDocument = toPrecondition(serializer, mutation.precondition);
+  }
+  return result;
+}
+function fromMutation(serializer, proto) {
+  const precondition = proto.currentDocument ? fromPrecondition(proto.currentDocument) : Precondition.none();
+  const fieldTransforms = proto.updateTransforms ? proto.updateTransforms.map((transform2) => fromFieldTransform(serializer, transform2)) : [];
+  if (proto.update) {
+    assertPresent(proto.update.name);
+    const key = fromName(serializer, proto.update.name);
+    const value = new ObjectValue({
+      mapValue: { fields: proto.update.fields }
+    });
+    if (proto.updateMask) {
+      const fieldMask = fromDocumentMask(proto.updateMask);
+      return new PatchMutation(key, value, fieldMask, precondition, fieldTransforms);
+    } else {
+      return new SetMutation(key, value, precondition, fieldTransforms);
+    }
+  } else if (proto.delete) {
+    const key = fromName(serializer, proto.delete);
+    return new DeleteMutation(key, precondition);
+  } else if (proto.verify) {
+    const key = fromName(serializer, proto.verify);
+    return new VerifyMutation(key, precondition);
+  } else {
+    return fail(1463, { proto });
+  }
+}
+function toPrecondition(serializer, precondition) {
+  if (precondition.updateTime !== void 0) {
+    return {
+      updateTime: toVersion(serializer, precondition.updateTime)
+    };
+  } else if (precondition.exists !== void 0) {
+    return { exists: precondition.exists };
+  } else {
+    return fail(27497);
+  }
+}
+function fromPrecondition(precondition) {
+  if (precondition.updateTime !== void 0) {
+    return Precondition.updateTime(fromVersion(precondition.updateTime));
+  } else if (precondition.exists !== void 0) {
+    return Precondition.exists(precondition.exists);
+  } else {
+    return Precondition.none();
+  }
+}
+function fromWriteResult(proto, commitTime) {
+  let version7 = proto.updateTime ? fromVersion(proto.updateTime) : fromVersion(commitTime);
+  if (version7.isEqual(SnapshotVersion.min())) {
+    version7 = fromVersion(commitTime);
+  }
+  return new MutationResult(version7, proto.transformResults || []);
+}
+function fromWriteResults(protos2, commitTime) {
+  if (protos2 && protos2.length > 0) {
+    hardAssert(commitTime !== void 0, 14353);
+    return protos2.map((proto) => fromWriteResult(proto, commitTime));
+  } else {
+    return [];
+  }
+}
+function toFieldTransform(serializer, fieldTransform) {
+  const transform2 = fieldTransform.transform;
+  if (transform2 instanceof ServerTimestampTransform) {
+    return {
+      fieldPath: fieldTransform.field.canonicalString(),
+      setToServerValue: "REQUEST_TIME"
+    };
+  } else if (transform2 instanceof ArrayUnionTransformOperation) {
+    return {
+      fieldPath: fieldTransform.field.canonicalString(),
+      appendMissingElements: {
+        values: transform2.elements
+      }
+    };
+  } else if (transform2 instanceof ArrayRemoveTransformOperation) {
+    return {
+      fieldPath: fieldTransform.field.canonicalString(),
+      removeAllFromArray: {
+        values: transform2.elements
+      }
+    };
+  } else if (transform2 instanceof NumericIncrementTransformOperation) {
+    return {
+      fieldPath: fieldTransform.field.canonicalString(),
+      increment: transform2.operand
+    };
+  } else if (transform2 instanceof NumericMinimumTransformOperation) {
+    return {
+      fieldPath: fieldTransform.field.canonicalString(),
+      minimum: transform2.operand
+    };
+  } else if (transform2 instanceof NumericMaximumTransformOperation) {
+    return {
+      fieldPath: fieldTransform.field.canonicalString(),
+      maximum: transform2.operand
+    };
+  } else {
+    throw fail(20930, {
+      transform: fieldTransform.transform
+    });
+  }
+}
+function fromFieldTransform(serializer, proto) {
+  let transform2 = null;
+  if ("setToServerValue" in proto) {
+    hardAssert(proto.setToServerValue === "REQUEST_TIME", 16630, { proto });
+    transform2 = new ServerTimestampTransform();
+  } else if ("appendMissingElements" in proto) {
+    const values = proto.appendMissingElements.values || [];
+    transform2 = new ArrayUnionTransformOperation(values);
+  } else if ("removeAllFromArray" in proto) {
+    const values = proto.removeAllFromArray.values || [];
+    transform2 = new ArrayRemoveTransformOperation(values);
+  } else if ("increment" in proto) {
+    transform2 = new NumericIncrementTransformOperation(serializer, proto.increment);
+  } else if ("minimum" in proto) {
+    transform2 = new NumericMinimumTransformOperation(serializer, proto.minimum);
+  } else if ("maximum" in proto) {
+    transform2 = new NumericMaximumTransformOperation(serializer, proto.maximum);
+  } else {
+    fail(16584, { proto });
+  }
+  const fieldPath = FieldPath$1.fromServerFormat(proto.fieldPath);
+  return new FieldTransform(fieldPath, transform2);
+}
 function toDocumentsTarget(serializer, target) {
   return { documents: [toQueryPath(serializer, target.path)] };
+}
+function fromDocumentsTarget(documentsTarget) {
+  const count = documentsTarget.documents.length;
+  hardAssert(count === 1, 1966, {
+    count
+  });
+  const name5 = documentsTarget.documents[0];
+  return queryToTarget(newQueryForPath(fromQueryPath(name5)));
 }
 function toQueryTarget(serializer, target) {
   const queryTarget = { structuredQuery: {} };
@@ -249205,6 +249779,9 @@ function convertQueryTargetToQuery(target) {
     endAt = fromEndAtCursor(query2.endAt);
   }
   return newQuery(path3, collectionGroup2, orderBy3, filterBy, limit3, "F", startAt, endAt);
+}
+function fromQueryTarget(target) {
+  return queryToTarget(convertQueryTargetToQuery(target));
 }
 function toListenRequestLabels(serializer, targetData) {
   const value = toLabel(targetData.purpose);
@@ -249495,6 +250072,17 @@ function fromFieldFilter(filter) {
 function fromCompositeFilter(filter) {
   return CompositeFilter.create(filter.compositeFilter.filters.map((filter2) => fromFilter(filter2)), fromCompositeOperatorName(filter.compositeFilter.op));
 }
+function toDocumentMask(fieldMask) {
+  const canonicalFields = [];
+  fieldMask.fields.forEach((field2) => canonicalFields.push(field2.canonicalString()));
+  return {
+    fieldPaths: canonicalFields
+  };
+}
+function fromDocumentMask(proto) {
+  const paths = proto.fieldPaths || [];
+  return new FieldMask(paths.map((path3) => FieldPath$1.fromServerFormat(path3)));
+}
 function isValidResourceName(path3) {
   return path3.length >= 4 && path3.get(0) === "projects" && path3.get(2) === "databases";
 }
@@ -249614,6 +250202,11 @@ function newConnectivityMonitor() {
 function newDatastore(authCredentials, appCheckCredentials, connection, serializer) {
   return new DatastoreImpl(authCredentials, appCheckCredentials, connection, serializer);
 }
+function newPersistentWriteStream(datastore, queue, listener) {
+  const datastoreImpl = debugCast(datastore);
+  datastoreImpl.verifyInitialized();
+  return new PersistentWriteStream(queue, datastoreImpl.connection, datastoreImpl.authCredentials, datastoreImpl.appCheckCredentials, datastoreImpl.serializer, listener);
+}
 function newPersistentWatchStream(datastore, queue, listener) {
   const datastoreImpl = debugCast(datastore);
   datastoreImpl.verifyInitialized();
@@ -249644,6 +250237,35 @@ function getAndroidVersion(ua) {
 }
 function isIndexedDbTransactionError(e2) {
   return e2.name === "IndexedDbTransactionError";
+}
+function wrapRequest(request) {
+  return new PersistencePromise((resolve, reject) => {
+    request.onsuccess = (event) => {
+      const result = event.target.result;
+      resolve(result);
+    };
+    request.onerror = (event) => {
+      const error = checkForAndReportiOSError(event.target.error);
+      reject(error);
+    };
+  });
+}
+function checkForAndReportiOSError(error) {
+  const iOSVersion = SimpleDb.getIOSVersion(getUA());
+  if (iOSVersion >= 12.2 && iOSVersion < 13) {
+    const IOS_ERROR = "An internal error was encountered in the Indexed Database server";
+    if (error.message.indexOf(IOS_ERROR) >= 0) {
+      const newError = new FirestoreError("internal", `IOS_INDEXEDDB_BUG1: IndexedDb has thrown '${IOS_ERROR}'. This is likely due to an unavoidable bug in iOS. See https://stackoverflow.com/q/56496296/110915 for details and a potential workaround.`);
+      if (!reportedIOSError) {
+        reportedIOSError = true;
+        setTimeout(() => {
+          throw newError;
+        }, 0);
+      }
+      return newError;
+    }
+  }
+  return error;
 }
 function bufferEntryComparator([aSequence, aIndex], [bSequence, bIndex]) {
   const seqCmp = primitiveComparator(aSequence, bSequence);
@@ -250788,6 +251410,281 @@ function encodeSegment(segment, resultBuf) {
 function encodeSeparator(result) {
   return result + escapeChar + encodedSeparatorChar;
 }
+function decodeResourcePath(path3) {
+  const length = path3.length;
+  hardAssert(length >= 2, 64408, { path: path3 });
+  if (length === 2) {
+    hardAssert(path3.charAt(0) === escapeChar && path3.charAt(1) === encodedSeparatorChar, 56145, { path: path3 });
+    return ResourcePath.emptyPath();
+  }
+  const lastReasonableEscapeIndex = length - 2;
+  const segments = [];
+  let segmentBuilder = "";
+  for (let start = 0; start < length; ) {
+    const end = path3.indexOf(escapeChar, start);
+    if (end < 0 || end > lastReasonableEscapeIndex) {
+      fail(50515, { path: path3 });
+    }
+    const next = path3.charAt(end + 1);
+    switch (next) {
+      case encodedSeparatorChar:
+        const currentPiece = path3.substring(start, end);
+        let segment;
+        if (segmentBuilder.length === 0) {
+          segment = currentPiece;
+        } else {
+          segmentBuilder += currentPiece;
+          segment = segmentBuilder;
+          segmentBuilder = "";
+        }
+        segments.push(segment);
+        break;
+      case encodedNul:
+        segmentBuilder += path3.substring(start, end);
+        segmentBuilder += "\0";
+        break;
+      case encodedEscape:
+        segmentBuilder += path3.substring(start, end + 1);
+        break;
+      default:
+        fail(61167, { path: path3 });
+    }
+    start = end + 2;
+  }
+  return new ResourcePath(segments);
+}
+function newDbDocumentMutationPrefixForUser(userId) {
+  return [userId];
+}
+function newDbDocumentMutationPrefixForPath(userId, path3) {
+  return [userId, encodeResourcePath(path3)];
+}
+function newDbDocumentMutationKey(userId, path3, batchId) {
+  return [userId, encodeResourcePath(path3), batchId];
+}
+function getObjectStores(schemaVersion) {
+  if (schemaVersion === 18) {
+    return V18_STORES;
+  } else if (schemaVersion === 17) {
+    return V17_STORES;
+  } else if (schemaVersion === 16) {
+    return V16_STORES;
+  } else if (schemaVersion === 15) {
+    return V15_STORES;
+  } else if (schemaVersion === 14) {
+    return V14_STORES;
+  } else if (schemaVersion === 13) {
+    return V13_STORES;
+  } else if (schemaVersion === 12) {
+    return V12_STORES;
+  } else if (schemaVersion === 11) {
+    return V11_STORES;
+  } else {
+    fail(60245);
+  }
+}
+function removeMutationBatch(txn, userId, batch) {
+  const mutationStore = txn.store(DbMutationBatchStore);
+  const indexTxn = txn.store(DbDocumentMutationStore);
+  const promises = [];
+  const range = IDBKeyRange.only(batch.batchId);
+  let numDeleted = 0;
+  const removePromise = mutationStore.iterate({ range }, (key, value, control) => {
+    numDeleted++;
+    return control.delete();
+  });
+  promises.push(removePromise.next(() => {
+    hardAssert(numDeleted === 1, 47070, { batchId: batch.batchId });
+  }));
+  const removedDocuments = [];
+  for (const mutation of batch.mutations) {
+    const indexKey = newDbDocumentMutationKey(userId, mutation.key.path, batch.batchId);
+    promises.push(indexTxn.delete(indexKey));
+    removedDocuments.push(mutation.key);
+  }
+  return PersistencePromise.waitFor(promises).next(() => removedDocuments);
+}
+function dbDocumentSize(doc5) {
+  if (!doc5) {
+    return 0;
+  }
+  let value;
+  if (doc5.document) {
+    value = doc5.document;
+  } else if (doc5.unknownDocument) {
+    value = doc5.unknownDocument;
+  } else if (doc5.noDocument) {
+    value = doc5.noDocument;
+  } else {
+    throw fail(14731);
+  }
+  return JSON.stringify(value).length;
+}
+function getStore(txn, store) {
+  const indexedDbTransaction = debugCast(txn);
+  return SimpleDb.getStore(indexedDbTransaction.simpleDbTransaction, store);
+}
+function fromDbRemoteDocument(localSerializer, remoteDoc) {
+  let doc5;
+  if (remoteDoc.document) {
+    doc5 = fromDocument(localSerializer.remoteSerializer, remoteDoc.document, !!remoteDoc.hasCommittedMutations);
+  } else if (remoteDoc.noDocument) {
+    const key = DocumentKey.fromSegments(remoteDoc.noDocument.path);
+    const version7 = fromDbTimestamp(remoteDoc.noDocument.readTime);
+    doc5 = MutableDocument.newNoDocument(key, version7);
+    if (remoteDoc.hasCommittedMutations) {
+      doc5.setHasCommittedMutations();
+    }
+  } else if (remoteDoc.unknownDocument) {
+    const key = DocumentKey.fromSegments(remoteDoc.unknownDocument.path);
+    const version7 = fromDbTimestamp(remoteDoc.unknownDocument.version);
+    doc5 = MutableDocument.newUnknownDocument(key, version7);
+  } else {
+    return fail(56709);
+  }
+  if (remoteDoc.readTime) {
+    doc5.setReadTime(fromDbTimestampKey(remoteDoc.readTime));
+  }
+  return doc5;
+}
+function toDbRemoteDocument(localSerializer, document2) {
+  const key = document2.key;
+  const remoteDoc = {
+    prefixPath: key.getCollectionPath().popLast().toArray(),
+    collectionGroup: key.collectionGroup,
+    documentId: key.path.lastSegment(),
+    readTime: toDbTimestampKey(document2.readTime),
+    hasCommittedMutations: document2.hasCommittedMutations
+  };
+  if (document2.isFoundDocument()) {
+    remoteDoc.document = toDocument(localSerializer.remoteSerializer, document2);
+  } else if (document2.isNoDocument()) {
+    remoteDoc.noDocument = {
+      path: key.path.toArray(),
+      readTime: toDbTimestamp(document2.version)
+    };
+  } else if (document2.isUnknownDocument()) {
+    remoteDoc.unknownDocument = {
+      path: key.path.toArray(),
+      version: toDbTimestamp(document2.version)
+    };
+  } else {
+    return fail(57904, { document: document2 });
+  }
+  return remoteDoc;
+}
+function toDbTimestampKey(snapshotVersion) {
+  const timestamp = snapshotVersion.toTimestamp();
+  return [timestamp.seconds, timestamp.nanoseconds];
+}
+function fromDbTimestampKey(dbTimestampKey) {
+  const timestamp = new Timestamp2(dbTimestampKey[0], dbTimestampKey[1]);
+  return SnapshotVersion.fromTimestamp(timestamp);
+}
+function toDbTimestamp(snapshotVersion) {
+  const timestamp = snapshotVersion.toTimestamp();
+  return { seconds: timestamp.seconds, nanoseconds: timestamp.nanoseconds };
+}
+function fromDbTimestamp(dbTimestamp) {
+  const timestamp = new Timestamp2(dbTimestamp.seconds, dbTimestamp.nanoseconds);
+  return SnapshotVersion.fromTimestamp(timestamp);
+}
+function toDbMutationBatch(localSerializer, userId, batch) {
+  const serializedBaseMutations = batch.baseMutations.map((m2) => toMutation(localSerializer.remoteSerializer, m2));
+  const serializedMutations = batch.mutations.map((m2) => toMutation(localSerializer.remoteSerializer, m2));
+  return {
+    userId,
+    batchId: batch.batchId,
+    localWriteTimeMs: batch.localWriteTime.toMillis(),
+    baseMutations: serializedBaseMutations,
+    mutations: serializedMutations
+  };
+}
+function fromDbMutationBatch(localSerializer, dbBatch) {
+  const baseMutations = (dbBatch.baseMutations || []).map((m2) => fromMutation(localSerializer.remoteSerializer, m2));
+  for (let i2 = 0; i2 < dbBatch.mutations.length - 1; ++i2) {
+    const currentMutation = dbBatch.mutations[i2];
+    const hasTransform = i2 + 1 < dbBatch.mutations.length && dbBatch.mutations[i2 + 1].transform !== void 0;
+    if (hasTransform) {
+      const transformMutation = dbBatch.mutations[i2 + 1];
+      currentMutation.updateTransforms = transformMutation.transform.fieldTransforms;
+      dbBatch.mutations.splice(i2 + 1, 1);
+      ++i2;
+    }
+  }
+  const mutations = dbBatch.mutations.map((m2) => fromMutation(localSerializer.remoteSerializer, m2));
+  const timestamp = Timestamp2.fromMillis(dbBatch.localWriteTimeMs);
+  return new MutationBatch(dbBatch.batchId, timestamp, baseMutations, mutations);
+}
+function fromDbTarget(serializer, dbTarget) {
+  const version7 = fromDbTimestamp(dbTarget.readTime);
+  const lastLimboFreeSnapshotVersion = dbTarget.lastLimboFreeSnapshotVersion !== void 0 ? fromDbTimestamp(dbTarget.lastLimboFreeSnapshotVersion) : SnapshotVersion.min();
+  let target;
+  if (isPipelineQueryTarget(dbTarget.query)) {
+    target = fromPipelineTarget(dbTarget.query, serializer.remoteSerializer);
+  } else if (isDocumentQuery(dbTarget.query)) {
+    target = fromDocumentsTarget(dbTarget.query);
+  } else {
+    target = fromQueryTarget(dbTarget.query);
+  }
+  return new TargetData(target, dbTarget.targetId, "TargetPurposeListen", dbTarget.lastListenSequenceNumber, version7, lastLimboFreeSnapshotVersion, ByteString.fromBase64String(dbTarget.resumeToken));
+}
+function toDbTarget(localSerializer, targetData) {
+  const dbTimestamp = toDbTimestamp(targetData.snapshotVersion);
+  const dbLastLimboFreeTimestamp = toDbTimestamp(targetData.lastLimboFreeSnapshotVersion);
+  let queryProto;
+  if (targetIsPipelineTarget(targetData.target)) {
+    queryProto = toPipelineTarget(localSerializer.remoteSerializer, targetData.target);
+  } else if (targetIsDocumentTarget(targetData.target)) {
+    queryProto = toDocumentsTarget(localSerializer.remoteSerializer, targetData.target);
+  } else {
+    queryProto = toQueryTarget(localSerializer.remoteSerializer, targetData.target).queryTarget;
+  }
+  const resumeToken = targetData.resumeToken.toBase64();
+  return {
+    targetId: targetData.targetId,
+    canonicalId: canonifyTargetOrPipeline(targetData.target),
+    readTime: dbTimestamp,
+    resumeToken,
+    lastListenSequenceNumber: targetData.sequenceNumber,
+    lastLimboFreeSnapshotVersion: dbLastLimboFreeTimestamp,
+    query: queryProto
+  };
+}
+function isPipelineQueryTarget(dbQuery) {
+  return dbQuery.structuredPipeline !== void 0;
+}
+function isDocumentQuery(dbQuery) {
+  return dbQuery.documents !== void 0;
+}
+function fromDbBundle(dbBundle) {
+  return {
+    id: dbBundle.bundleId,
+    createTime: fromDbTimestamp(dbBundle.createTime),
+    version: dbBundle.version
+  };
+}
+function toDbBundle(metadata) {
+  return {
+    bundleId: metadata.id,
+    createTime: toDbTimestamp(fromVersion(metadata.createTime)),
+    version: metadata.version
+  };
+}
+function fromDbNamedQuery(dbNamedQuery) {
+  return {
+    name: dbNamedQuery.name,
+    query: fromBundledQuery(dbNamedQuery.bundledQuery),
+    readTime: fromDbTimestamp(dbNamedQuery.readTime)
+  };
+}
+function toDbNamedQuery(query2) {
+  return {
+    name: query2.name,
+    readTime: toDbTimestamp(fromVersion(query2.readTime)),
+    bundledQuery: query2.bundledQuery
+  };
+}
 function fromBundledQuery(bundledQuery) {
   const query2 = convertQueryTargetToQuery({
     parent: bundledQuery.parent,
@@ -250816,6 +251713,434 @@ function fromBundleMetadata(metadata) {
     version: metadata.version,
     createTime: fromVersion(metadata.createTime)
   };
+}
+function fromDbDocumentOverlay(localSerializer, dbDocumentOverlay) {
+  return new Overlay(dbDocumentOverlay.largestBatchId, fromMutation(localSerializer.remoteSerializer, dbDocumentOverlay.overlayMutation));
+}
+function toDbDocumentOverlay(localSerializer, userId, overlay) {
+  const [_, collectionPath, documentId] = toDbDocumentOverlayKey(userId, overlay.mutation.key);
+  return {
+    userId,
+    collectionPath,
+    documentId,
+    collectionGroup: overlay.mutation.key.getCollectionGroup(),
+    largestBatchId: overlay.largestBatchId,
+    overlayMutation: toMutation(localSerializer.remoteSerializer, overlay.mutation)
+  };
+}
+function toDbDocumentOverlayKey(userId, docKey) {
+  const docId = docKey.path.lastSegment();
+  const collectionPath = encodeResourcePath(docKey.path.popLast());
+  return [userId, collectionPath, docId];
+}
+function toDbIndexConfiguration(index) {
+  return {
+    indexId: index.indexId,
+    collectionGroup: index.collectionGroup,
+    fields: index.fields.map((s2) => [s2.fieldPath.canonicalString(), s2.kind])
+  };
+}
+function fromDbIndexConfiguration(index, state2) {
+  const decodedState = state2 ? new IndexState(state2.sequenceNumber, new IndexOffset(fromDbTimestamp(state2.readTime), new DocumentKey(decodeResourcePath(state2.documentKey)), state2.largestBatchId)) : IndexState.empty();
+  const decodedSegments = index.fields.map(([fieldPath, kind]) => new IndexSegment(FieldPath$1.fromServerFormat(fieldPath), kind));
+  return new FieldIndex(index.indexId, index.collectionGroup, decodedSegments, decodedState);
+}
+function toDbIndexState(indexId, uid, sequenceNumber, offset) {
+  return {
+    indexId,
+    uid,
+    sequenceNumber,
+    readTime: toDbTimestamp(offset.readTime),
+    documentKey: encodeResourcePath(offset.documentKey.path),
+    largestBatchId: offset.largestBatchId
+  };
+}
+function fromPipelineTarget(target, serializer) {
+  const pipeline2 = target.structuredPipeline;
+  hardAssert((pipeline2?.pipeline?.stages ?? []).length > 0, 1845);
+  const stages = pipeline2?.pipeline?.stages.map(stageFromProto);
+  return new CorePipeline(serializer, stages);
+}
+function stageFromProto(protoStage) {
+  switch (protoStage.name) {
+    case "collection": {
+      return new CollectionSource(protoStage.args[0].referenceValue, {});
+    }
+    case "collection_group": {
+      return new CollectionGroupSource(protoStage.args[1].stringValue, {});
+    }
+    case "database": {
+      return new DatabaseSource({});
+    }
+    case "documents": {
+      return new DocumentsSource(protoStage.args.map((arg) => arg.referenceValue), {});
+    }
+    case "where": {
+      return new Where(exprFromProto(protoStage.args[0]), {});
+    }
+    case "limit": {
+      const limitValue = protoStage.args[0].integerValue ?? protoStage.args[0].doubleValue;
+      return new Limit(typeof limitValue === "number" ? limitValue : Number(limitValue), {});
+    }
+    case "sort": {
+      return new Sort(protoStage.args.map((arg) => orderingFromProto(arg)), {});
+    }
+    default: {
+      throw new Error(`Stage type: ${protoStage.name} not supported.`);
+    }
+  }
+}
+function exprFromProto(value) {
+  if (!!value.fieldReferenceValue) {
+    return new Field(fieldPathFromArgument("_exprFromProto", value.fieldReferenceValue), "_exprFromProto");
+  } else if (!!value.functionValue) {
+    return functionFromProto(value);
+  } else {
+    return Constant._fromProto(value);
+  }
+}
+function functionFromProto(value) {
+  return new FunctionExpression(value.functionValue.name, value.functionValue.args?.map(exprFromProto) || []);
+}
+function orderingFromProto(value) {
+  const fields = value.mapValue?.fields;
+  return new Ordering(exprFromProto(fields.expression), fields.direction?.stringValue, "orderingFromProto");
+}
+function mutationQueueContainsKey(txn, userId, key) {
+  const indexKey = newDbDocumentMutationPrefixForPath(userId, key.path);
+  const encodedPath = indexKey[1];
+  const startRange = IDBKeyRange.lowerBound(indexKey);
+  let containsKey = false;
+  return documentMutationsStore(txn).iterate({ range: startRange, keysOnly: true }, (key2, value, control) => {
+    const [
+      userID,
+      keyPath,
+      /*batchID*/
+      _
+    ] = key2;
+    if (userID === userId && keyPath === encodedPath) {
+      containsKey = true;
+    }
+    control.done();
+  }).next(() => containsKey);
+}
+function mutationQueuesContainKey(txn, docKey) {
+  let found = false;
+  return mutationQueuesStore(txn).iterateSerial((userId) => {
+    return mutationQueueContainsKey(txn, userId, docKey).next((containsKey) => {
+      if (containsKey) {
+        found = true;
+      }
+      return PersistencePromise.resolve(!containsKey);
+    });
+  }).next(() => found);
+}
+function mutationsStore(txn) {
+  return getStore(txn, DbMutationBatchStore);
+}
+function documentMutationsStore(txn) {
+  return getStore(txn, DbDocumentMutationStore);
+}
+function mutationQueuesStore(txn) {
+  return getStore(txn, DbMutationQueueStore);
+}
+function bundlesStore(txn) {
+  return getStore(txn, DbBundleStore);
+}
+function namedQueriesStore(txn) {
+  return getStore(txn, DbNamedQueryStore);
+}
+function documentOverlayStore(txn) {
+  return getStore(txn, DbDocumentOverlayStore);
+}
+function doubleToLongBits(value) {
+  const dv = new DataView(new ArrayBuffer(8));
+  dv.setFloat64(
+    0,
+    value,
+    /* littleEndian= */
+    false
+  );
+  return new Uint8Array(dv.buffer);
+}
+function numberOfLeadingZerosInByte(x2) {
+  if (x2 === 0) {
+    return 8;
+  }
+  let zeros = 0;
+  if (x2 >> 4 === 0) {
+    zeros += 4;
+    x2 = x2 << 4;
+  }
+  if (x2 >> 6 === 0) {
+    zeros += 2;
+    x2 = x2 << 2;
+  }
+  if (x2 >> 7 === 0) {
+    zeros += 1;
+  }
+  return zeros;
+}
+function numberOfLeadingZeros(bytes) {
+  let leadingZeros = 0;
+  for (let i2 = 0; i2 < 8; ++i2) {
+    const zeros = numberOfLeadingZerosInByte(bytes[i2] & 255);
+    leadingZeros += zeros;
+    if (zeros !== 8) {
+      break;
+    }
+  }
+  return leadingZeros;
+}
+function unsignedNumLength(value) {
+  const numBits = LONG_SIZE - numberOfLeadingZeros(value);
+  return Math.ceil(numBits / BYTE_SIZE);
+}
+function indexEntryComparator(left, right) {
+  let cmp = left._indexId - right._indexId;
+  if (cmp !== 0) {
+    return cmp;
+  }
+  cmp = compareByteArrays(left._arrayValue, right._arrayValue);
+  if (cmp !== 0) {
+    return cmp;
+  }
+  cmp = compareByteArrays(left._directionalValue, right._directionalValue);
+  if (cmp !== 0) {
+    return cmp;
+  }
+  return DocumentKey.comparator(left._documentKey, right._documentKey);
+}
+function compareByteArrays(left, right) {
+  for (let i2 = 0; i2 < left.length && i2 < right.length; ++i2) {
+    const compare = left[i2] - right[i2];
+    if (compare !== 0) {
+      return compare;
+    }
+  }
+  return left.length - right.length;
+}
+function encodeKeySafeBytes(array2) {
+  if (isSafariOrWebkit()) {
+    return encodeUint8ArrayToSortableString(array2);
+  }
+  return array2;
+}
+function decodeKeySafeBytes(input) {
+  if (typeof input !== "string") {
+    return input;
+  }
+  return decodeSortableStringToUint8Array(input);
+}
+function encodeUint8ArrayToSortableString(array2) {
+  let byteString = "";
+  for (let i2 = 0; i2 < array2.length; i2++) {
+    byteString += String.fromCharCode(array2[i2]);
+  }
+  return byteString;
+}
+function decodeSortableStringToUint8Array(byteString) {
+  const uint8array = new Uint8Array(byteString.length);
+  for (let i2 = 0; i2 < byteString.length; i2++) {
+    uint8array[i2] = byteString.charCodeAt(i2);
+  }
+  return uint8array;
+}
+function computeInExpansion(filter) {
+  hardAssert(filter instanceof FieldFilter || filter instanceof CompositeFilter, 20012);
+  if (filter instanceof FieldFilter) {
+    if (filter instanceof InFilter) {
+      const expandedFilters2 = filter.value.arrayValue?.values?.map((value) => FieldFilter.create(filter.field, "==", value)) || [];
+      return CompositeFilter.create(
+        expandedFilters2,
+        "or"
+        /* CompositeOperator.OR */
+      );
+    } else {
+      return filter;
+    }
+  }
+  const expandedFilters = filter.filters.map((subfilter) => computeInExpansion(subfilter));
+  return CompositeFilter.create(expandedFilters, filter.op);
+}
+function getDnfTerms(filter) {
+  if (filter.getFilters().length === 0) {
+    return [];
+  }
+  const result = computeDistributedNormalForm(computeInExpansion(filter));
+  hardAssert(isDisjunctiveNormalForm(result), 7391);
+  if (isSingleFieldFilter(result) || isFlatConjunction(result)) {
+    return [result];
+  }
+  return result.getFilters();
+}
+function isSingleFieldFilter(filter) {
+  return filter instanceof FieldFilter;
+}
+function isFlatConjunction(filter) {
+  return filter instanceof CompositeFilter && compositeFilterIsFlatConjunction(filter);
+}
+function isDisjunctiveNormalForm(filter) {
+  return isSingleFieldFilter(filter) || isFlatConjunction(filter) || isDisjunctionOfFieldFiltersAndFlatConjunctions(filter);
+}
+function isDisjunctionOfFieldFiltersAndFlatConjunctions(filter) {
+  if (filter instanceof CompositeFilter) {
+    if (compositeFilterIsDisjunction(filter)) {
+      for (const subFilter of filter.getFilters()) {
+        if (!isSingleFieldFilter(subFilter) && !isFlatConjunction(subFilter)) {
+          return false;
+        }
+      }
+      return true;
+    }
+  }
+  return false;
+}
+function computeDistributedNormalForm(filter) {
+  hardAssert(filter instanceof FieldFilter || filter instanceof CompositeFilter, 34018);
+  if (filter instanceof FieldFilter) {
+    return filter;
+  }
+  if (filter.filters.length === 1) {
+    return computeDistributedNormalForm(filter.filters[0]);
+  }
+  const result = filter.filters.map((subfilter) => computeDistributedNormalForm(subfilter));
+  let newFilter = CompositeFilter.create(result, filter.op);
+  newFilter = applyAssociation(newFilter);
+  if (isDisjunctiveNormalForm(newFilter)) {
+    return newFilter;
+  }
+  hardAssert(newFilter instanceof CompositeFilter, 64498);
+  hardAssert(compositeFilterIsConjunction(newFilter), 40251);
+  hardAssert(newFilter.filters.length > 1, 57927);
+  return newFilter.filters.reduce((runningResult, filter2) => applyDistribution(runningResult, filter2));
+}
+function applyDistribution(lhs, rhs) {
+  hardAssert(lhs instanceof FieldFilter || lhs instanceof CompositeFilter, 38388);
+  hardAssert(rhs instanceof FieldFilter || rhs instanceof CompositeFilter, 25473);
+  let result;
+  if (lhs instanceof FieldFilter) {
+    if (rhs instanceof FieldFilter) {
+      result = applyDistributionFieldFilters(lhs, rhs);
+    } else {
+      result = applyDistributionFieldAndCompositeFilters(lhs, rhs);
+    }
+  } else {
+    if (rhs instanceof FieldFilter) {
+      result = applyDistributionFieldAndCompositeFilters(rhs, lhs);
+    } else {
+      result = applyDistributionCompositeFilters(lhs, rhs);
+    }
+  }
+  return applyAssociation(result);
+}
+function applyDistributionFieldFilters(lhs, rhs) {
+  return CompositeFilter.create(
+    [lhs, rhs],
+    "and"
+    /* CompositeOperator.AND */
+  );
+}
+function applyDistributionCompositeFilters(lhs, rhs) {
+  hardAssert(lhs.filters.length > 0 && rhs.filters.length > 0, 48005);
+  if (compositeFilterIsConjunction(lhs) && compositeFilterIsConjunction(rhs)) {
+    return compositeFilterWithAddedFilters(lhs, rhs.getFilters());
+  }
+  const disjunctionSide = compositeFilterIsDisjunction(lhs) ? lhs : rhs;
+  const otherSide = compositeFilterIsDisjunction(lhs) ? rhs : lhs;
+  const results = disjunctionSide.filters.map((subfilter) => applyDistribution(subfilter, otherSide));
+  return CompositeFilter.create(
+    results,
+    "or"
+    /* CompositeOperator.OR */
+  );
+}
+function applyDistributionFieldAndCompositeFilters(fieldFilter, compositeFilter) {
+  if (compositeFilterIsConjunction(compositeFilter)) {
+    return compositeFilterWithAddedFilters(compositeFilter, fieldFilter.getFilters());
+  } else {
+    const newFilters = compositeFilter.filters.map((subfilter) => applyDistribution(fieldFilter, subfilter));
+    return CompositeFilter.create(
+      newFilters,
+      "or"
+      /* CompositeOperator.OR */
+    );
+  }
+}
+function applyAssociation(filter) {
+  hardAssert(filter instanceof FieldFilter || filter instanceof CompositeFilter, 11850);
+  if (filter instanceof FieldFilter) {
+    return filter;
+  }
+  const filters = filter.getFilters();
+  if (filters.length === 1) {
+    return applyAssociation(filters[0]);
+  }
+  if (compositeFilterIsFlat(filter)) {
+    return filter;
+  }
+  const updatedFilters = filters.map((subfilter) => applyAssociation(subfilter));
+  const newSubfilters = [];
+  updatedFilters.forEach((subfilter) => {
+    if (subfilter instanceof FieldFilter) {
+      newSubfilters.push(subfilter);
+    } else if (subfilter instanceof CompositeFilter) {
+      if (subfilter.op === filter.op) {
+        newSubfilters.push(...subfilter.filters);
+      } else {
+        newSubfilters.push(subfilter);
+      }
+    }
+  });
+  if (newSubfilters.length === 1) {
+    return newSubfilters[0];
+  }
+  return CompositeFilter.create(newSubfilters, filter.op);
+}
+function collectionParentsStore(txn) {
+  return getStore(txn, DbCollectionParentStore);
+}
+function indexEntriesStore(txn) {
+  return getStore(txn, DbIndexEntryStore);
+}
+function indexConfigurationStore(txn) {
+  return getStore(txn, DbIndexConfigurationStore);
+}
+function indexStateStore(txn) {
+  return getStore(txn, DbIndexStateStore);
+}
+function getMinOffsetFromFieldIndexes(fieldIndexes) {
+  hardAssert(fieldIndexes.length !== 0, 28825);
+  let minOffset = fieldIndexes[0].indexState.offset;
+  let maxBatchId = minOffset.largestBatchId;
+  for (let i2 = 1; i2 < fieldIndexes.length; i2++) {
+    const newOffset = fieldIndexes[i2].indexState.offset;
+    if (indexOffsetComparator(newOffset, minOffset) < 0) {
+      minOffset = newOffset;
+    }
+    if (maxBatchId < newOffset.largestBatchId) {
+      maxBatchId = newOffset.largestBatchId;
+    }
+  }
+  return new IndexOffset(minOffset.readTime, minOffset.documentKey, maxBatchId);
+}
+function targetsStore(txn) {
+  return getStore(txn, DbTargetStore);
+}
+function globalTargetStore(txn) {
+  return getStore(txn, DbTargetGlobalStore);
+}
+function documentTargetStore(txn) {
+  return getStore(txn, DbTargetDocumentStore);
+}
+function sentinelKey$1(key) {
+  return [0, encodeResourcePath(key.path)];
+}
+function sentinelRow(key, sequenceNumber) {
+  return { targetId: 0, path: encodeResourcePath(key.path), sequenceNumber };
+}
+function writeSentinelKey(txn, key) {
+  return documentTargetStore(txn).put(sentinelRow(key, txn.currentSequenceNumber));
 }
 function runPipeline(pipeline2, input) {
   let current = input;
@@ -250943,11 +252268,216 @@ function getLastEffectiveLimit(pipeline2) {
   }
   return void 0;
 }
+function newIndexedDbRemoteDocumentCache(serializer) {
+  return new IndexedDbRemoteDocumentCacheImpl(serializer);
+}
+function documentGlobalStore(txn) {
+  return getStore(txn, DbRemoteDocumentGlobalStore);
+}
+function remoteDocumentsStore(txn) {
+  return getStore(txn, DbRemoteDocumentStore);
+}
+function dbKey(documentKey) {
+  const path3 = documentKey.path.toArray();
+  return [
+    /* prefix path */
+    path3.slice(0, path3.length - 2),
+    /* collection id */
+    path3[path3.length - 2],
+    /* document id */
+    path3[path3.length - 1]
+  ];
+}
+function dbReadTimeKey(documentKey, readTime) {
+  const path3 = documentKey.path.toArray();
+  return [
+    /* prefix path */
+    path3.slice(0, path3.length - 2),
+    /* collection id */
+    path3[path3.length - 2],
+    toDbTimestampKey(readTime),
+    /* document id */
+    path3[path3.length - 1]
+  ];
+}
+function dbCollectionGroupKey(collectionGroup2, offset) {
+  const path3 = offset.documentKey.path.toArray();
+  return [
+    /* collection id */
+    collectionGroup2,
+    toDbTimestampKey(offset.readTime),
+    /* prefix path */
+    path3.slice(0, path3.length - 2),
+    /* document id */
+    path3.length > 0 ? path3[path3.length - 1] : ""
+  ];
+}
+function dbKeyComparator(l, r2) {
+  const left = l.path.toArray();
+  const right = r2.path.toArray();
+  let cmp = 0;
+  for (let i2 = 0; i2 < left.length - 2 && i2 < right.length - 2; ++i2) {
+    cmp = primitiveComparator(left[i2], right[i2]);
+    if (cmp) {
+      return cmp;
+    }
+  }
+  cmp = primitiveComparator(left.length, right.length);
+  if (cmp) {
+    return cmp;
+  }
+  cmp = primitiveComparator(left[left.length - 2], right[right.length - 2]);
+  if (cmp) {
+    return cmp;
+  }
+  return primitiveComparator(left[left.length - 1], right[right.length - 1]);
+}
 function documentEntryMap() {
   return new SortedMap(DocumentKey.comparator);
 }
 function newMemoryRemoteDocumentCache(sizer) {
   return new MemoryRemoteDocumentCacheImpl(sizer);
+}
+function sentinelKey(path3) {
+  return [0, encodeResourcePath(path3)];
+}
+function createPrimaryClientStore(db3) {
+  db3.createObjectStore(DbPrimaryClientStore);
+}
+function createMutationQueue(db3) {
+  db3.createObjectStore(DbMutationQueueStore, {
+    keyPath: DbMutationQueueKeyPath
+  });
+  const mutationBatchesStore = db3.createObjectStore(DbMutationBatchStore, {
+    keyPath: DbMutationBatchKeyPath,
+    autoIncrement: true
+  });
+  mutationBatchesStore.createIndex(DbMutationBatchUserMutationsIndex, DbMutationBatchUserMutationsKeyPath, { unique: true });
+  db3.createObjectStore(DbDocumentMutationStore);
+}
+function upgradeMutationBatchSchemaAndMigrateData(db3, txn) {
+  const v1MutationsStore = txn.store(DbMutationBatchStore);
+  return v1MutationsStore.loadAll().next((existingMutations) => {
+    db3.deleteObjectStore(DbMutationBatchStore);
+    const mutationsStore2 = db3.createObjectStore(DbMutationBatchStore, {
+      keyPath: DbMutationBatchKeyPath,
+      autoIncrement: true
+    });
+    mutationsStore2.createIndex(DbMutationBatchUserMutationsIndex, DbMutationBatchUserMutationsKeyPath, { unique: true });
+    const v3MutationsStore = txn.store(DbMutationBatchStore);
+    const writeAll = existingMutations.map((mutation) => v3MutationsStore.put(mutation));
+    return PersistencePromise.waitFor(writeAll);
+  });
+}
+function createLegacyRemoteDocumentCache(db3) {
+  db3.createObjectStore(DbRemoteDocumentStore$1);
+}
+function createRemoteDocumentCache(db3) {
+  const remoteDocumentStore = db3.createObjectStore(DbRemoteDocumentStore, {
+    keyPath: DbRemoteDocumentKeyPath
+  });
+  remoteDocumentStore.createIndex(DbRemoteDocumentDocumentKeyIndex, DbRemoteDocumentDocumentKeyIndexPath);
+  remoteDocumentStore.createIndex(DbRemoteDocumentCollectionGroupIndex, DbRemoteDocumentCollectionGroupIndexPath);
+}
+function createDocumentGlobalStore(db3) {
+  db3.createObjectStore(DbRemoteDocumentGlobalStore);
+}
+function createQueryCache(db3) {
+  const targetDocumentsStore = db3.createObjectStore(DbTargetDocumentStore, {
+    keyPath: DbTargetDocumentKeyPath
+  });
+  targetDocumentsStore.createIndex(DbTargetDocumentDocumentTargetsIndex, DbTargetDocumentDocumentTargetsKeyPath, { unique: true });
+  const targetStore = db3.createObjectStore(DbTargetStore, {
+    keyPath: DbTargetKeyPath
+  });
+  targetStore.createIndex(DbTargetQueryTargetsIndexName, DbTargetQueryTargetsKeyPath, { unique: true });
+  db3.createObjectStore(DbTargetGlobalStore);
+}
+function dropQueryCache(db3) {
+  db3.deleteObjectStore(DbTargetDocumentStore);
+  db3.deleteObjectStore(DbTargetStore);
+  db3.deleteObjectStore(DbTargetGlobalStore);
+}
+function dropRemoteDocumentChangesStore(db3) {
+  if (db3.objectStoreNames.contains("remoteDocumentChanges")) {
+    db3.deleteObjectStore("remoteDocumentChanges");
+  }
+}
+function writeEmptyTargetGlobalEntry(txn) {
+  const globalStore = txn.store(DbTargetGlobalStore);
+  const metadata = {
+    highestTargetId: 0,
+    highestListenSequenceNumber: 0,
+    lastRemoteSnapshotVersion: SnapshotVersion.min().toTimestamp(),
+    targetCount: 0
+  };
+  return globalStore.put(DbTargetGlobalKey, metadata);
+}
+function createClientMetadataStore(db3) {
+  db3.createObjectStore(DbClientMetadataStore, {
+    keyPath: DbClientMetadataKeyPath
+  });
+}
+function createBundlesStore(db3) {
+  db3.createObjectStore(DbBundleStore, {
+    keyPath: DbBundleKeyPath
+  });
+}
+function createNamedQueriesStore(db3) {
+  db3.createObjectStore(DbNamedQueryStore, {
+    keyPath: DbNamedQueryKeyPath
+  });
+}
+function createFieldIndex(db3) {
+  const indexConfigurationStore2 = db3.createObjectStore(DbIndexConfigurationStore, {
+    keyPath: DbIndexConfigurationKeyPath,
+    autoIncrement: true
+  });
+  indexConfigurationStore2.createIndex(DbIndexConfigurationCollectionGroupIndex, DbIndexConfigurationCollectionGroupIndexPath, { unique: false });
+  const indexStateStore2 = db3.createObjectStore(DbIndexStateStore, {
+    keyPath: DbIndexStateKeyPath
+  });
+  indexStateStore2.createIndex(DbIndexStateSequenceNumberIndex, DbIndexStateSequenceNumberIndexPath, { unique: false });
+  const indexEntryStore = db3.createObjectStore(DbIndexEntryStore, {
+    keyPath: DbIndexEntryKeyPath
+  });
+  indexEntryStore.createIndex(DbIndexEntryDocumentKeyIndex, DbIndexEntryDocumentKeyIndexPath, { unique: false });
+}
+function createDocumentOverlayStore(db3) {
+  const documentOverlayStore2 = db3.createObjectStore(DbDocumentOverlayStore, {
+    keyPath: DbDocumentOverlayKeyPath
+  });
+  documentOverlayStore2.createIndex(DbDocumentOverlayCollectionPathOverlayIndex, DbDocumentOverlayCollectionPathOverlayIndexPath, { unique: false });
+  documentOverlayStore2.createIndex(DbDocumentOverlayCollectionGroupOverlayIndex, DbDocumentOverlayCollectionGroupOverlayIndexPath, { unique: false });
+}
+function createGlobalsStore(db3) {
+  db3.createObjectStore(DbGlobalsStore, {
+    keyPath: DbGlobalsKeyPath
+  });
+}
+function extractKey(remoteDoc) {
+  if (remoteDoc.document) {
+    return new DocumentKey(ResourcePath.fromString(remoteDoc.document.name).popFirst(5));
+  } else if (remoteDoc.noDocument) {
+    return DocumentKey.fromSegments(remoteDoc.noDocument.path);
+  } else if (remoteDoc.unknownDocument) {
+    return DocumentKey.fromSegments(remoteDoc.unknownDocument.path);
+  } else {
+    return fail(36783);
+  }
+}
+function primaryClientStore(txn) {
+  return getStore(txn, DbPrimaryClientStore);
+}
+function clientMetadataStore(txn) {
+  return getStore(txn, DbClientMetadataStore);
+}
+function indexedDbStoragePrefix(databaseId, persistenceKey) {
+  let database = databaseId.projectId;
+  if (!databaseId.isDefaultDatabase) {
+    database += "." + databaseId.database;
+  }
+  return "firestore/" + persistenceKey + "/" + database + "/";
 }
 function newLocalStore(persistence, queryEngine, initialUser, serializer) {
   return new LocalStoreImpl(persistence, queryEngine, initialUser, serializer);
@@ -250986,6 +252516,38 @@ async function localStoreHandleUserChange(localStore, user) {
     });
   });
   return result;
+}
+function localStoreAcknowledgeBatch(localStore, batchResult) {
+  const localStoreImpl = debugCast(localStore);
+  return localStoreImpl.persistence.runTransaction("Acknowledge batch", "readwrite-primary", (txn) => {
+    const affected = batchResult.batch.keys();
+    const documentBuffer = localStoreImpl.remoteDocuments.newChangeBuffer({
+      trackRemovals: true
+      // Make sure document removals show up in `getNewDocumentChanges()`
+    });
+    return applyWriteToRemoteDocuments(localStoreImpl, txn, batchResult, documentBuffer).next(() => documentBuffer.apply(txn)).next(() => localStoreImpl.mutationQueue.performConsistencyCheck(txn)).next(() => localStoreImpl.documentOverlayCache.removeOverlaysForBatchId(txn, affected, batchResult.batch.batchId)).next(() => localStoreImpl.localDocuments.recalculateAndSaveOverlaysForDocumentKeys(txn, getKeysWithTransformResults(batchResult))).next(() => localStoreImpl.localDocuments.getDocuments(txn, affected));
+  });
+}
+function getKeysWithTransformResults(batchResult) {
+  let result = documentKeySet();
+  for (let i2 = 0; i2 < batchResult.mutationResults.length; ++i2) {
+    const mutationResult = batchResult.mutationResults[i2];
+    if (mutationResult.transformResults.length > 0) {
+      result = result.add(batchResult.batch.mutations[i2].key);
+    }
+  }
+  return result;
+}
+function localStoreRejectBatch(localStore, batchId) {
+  const localStoreImpl = debugCast(localStore);
+  return localStoreImpl.persistence.runTransaction("Reject batch", "readwrite-primary", (txn) => {
+    let affectedKeys;
+    return localStoreImpl.mutationQueue.lookupMutationBatch(txn, batchId).next((batch) => {
+      hardAssert(batch !== null, 37113);
+      affectedKeys = batch.keys();
+      return localStoreImpl.mutationQueue.removeMutationBatch(txn, batch);
+    }).next(() => localStoreImpl.mutationQueue.performConsistencyCheck(txn)).next(() => localStoreImpl.documentOverlayCache.removeOverlaysForBatchId(txn, affectedKeys, batchId)).next(() => localStoreImpl.localDocuments.recalculateAndSaveOverlaysForDocumentKeys(txn, affectedKeys)).next(() => localStoreImpl.localDocuments.getDocuments(txn, affectedKeys));
+  });
 }
 function localStoreGetLastRemoteSnapshotVersion(localStore) {
   const localStoreImpl = debugCast(localStore);
@@ -251050,19 +252612,19 @@ function populateDocumentChangeBuffer(txn, documentBuffer, documents) {
   documents.forEach((k) => updatedKeys = updatedKeys.add(k));
   return documentBuffer.getEntries(txn, updatedKeys).next((existingDocs) => {
     let changedDocuments = mutableDocumentMap();
-    documents.forEach((key, doc6) => {
+    documents.forEach((key, doc5) => {
       const existingDoc = existingDocs.get(key);
-      if (doc6.isFoundDocument() !== existingDoc.isFoundDocument()) {
+      if (doc5.isFoundDocument() !== existingDoc.isFoundDocument()) {
         existenceChangedKeys = existenceChangedKeys.add(key);
       }
-      if (doc6.isNoDocument() && doc6.version.isEqual(SnapshotVersion.min())) {
-        documentBuffer.removeEntry(key, doc6.readTime);
-        changedDocuments = changedDocuments.insert(key, doc6);
-      } else if (!existingDoc.isValidDocument() || doc6.version.compareTo(existingDoc.version) > 0 || doc6.version.compareTo(existingDoc.version) === 0 && existingDoc.hasPendingWrites) {
-        documentBuffer.addEntry(doc6);
-        changedDocuments = changedDocuments.insert(key, doc6);
+      if (doc5.isNoDocument() && doc5.version.isEqual(SnapshotVersion.min())) {
+        documentBuffer.removeEntry(key, doc5.readTime);
+        changedDocuments = changedDocuments.insert(key, doc5);
+      } else if (!existingDoc.isValidDocument() || doc5.version.compareTo(existingDoc.version) > 0 || doc5.version.compareTo(existingDoc.version) === 0 && existingDoc.hasPendingWrites) {
+        documentBuffer.addEntry(doc5);
+        changedDocuments = changedDocuments.insert(key, doc5);
       } else {
-        logDebug(LOG_TAG$8, "Ignoring outdated watch update for ", key, ". Current version:", existingDoc.version, " Watch version:", doc6.version);
+        logDebug(LOG_TAG$8, "Ignoring outdated watch update for ", key, ". Current version:", existingDoc.version, " Watch version:", doc5.version);
       }
     });
     return { changedDocuments, existenceChangedKeys };
@@ -251103,6 +252665,15 @@ async function localStoreNotifyLocalViewChanges(localStore, viewChanges) {
       localStoreImpl.targetDataByTarget = localStoreImpl.targetDataByTarget.insert(targetId, updatedTargetData);
     }
   }
+}
+function localStoreGetNextMutationBatch(localStore, afterBatchId) {
+  const localStoreImpl = debugCast(localStore);
+  return localStoreImpl.persistence.runTransaction("Get next mutation batch", "readonly", (txn) => {
+    if (afterBatchId === void 0) {
+      afterBatchId = BATCHID_UNKNOWN;
+    }
+    return localStoreImpl.mutationQueue.getNextMutationBatchAfterBatchId(txn, afterBatchId);
+  });
 }
 function localStoreAllocateTarget(localStore, target) {
   const localStoreImpl = debugCast(localStore);
@@ -251181,12 +252752,86 @@ function localStoreExecuteQuery(localStore, query2, usePreviousResults) {
     }
   );
 }
+function applyWriteToRemoteDocuments(localStoreImpl, txn, batchResult, documentBuffer) {
+  const batch = batchResult.batch;
+  const docKeys = batch.keys();
+  let promiseChain = PersistencePromise.resolve();
+  docKeys.forEach((docKey) => {
+    promiseChain = promiseChain.next(() => documentBuffer.getEntry(txn, docKey)).next((doc5) => {
+      const ackVersion = batchResult.docVersions.get(docKey);
+      hardAssert(ackVersion !== null, 48541);
+      if (doc5.version.compareTo(ackVersion) < 0) {
+        batch.applyToRemoteDocument(doc5, batchResult);
+        if (doc5.isValidDocument()) {
+          doc5.setReadTime(batchResult.commitVersion);
+          documentBuffer.addEntry(doc5);
+        }
+      }
+    });
+  });
+  return promiseChain.next(() => localStoreImpl.mutationQueue.removeMutationBatch(txn, batch));
+}
+function localStoreLookupMutationDocuments(localStore, batchId) {
+  const localStoreImpl = debugCast(localStore);
+  const mutationQueueImpl = debugCast(localStoreImpl.mutationQueue);
+  return localStoreImpl.persistence.runTransaction("Lookup mutation documents", "readonly", (txn) => {
+    return mutationQueueImpl.lookupMutationKeys(txn, batchId).next((keys) => {
+      if (keys) {
+        return localStoreImpl.localDocuments.getDocuments(txn, keys);
+      } else {
+        return PersistencePromise.resolve(null);
+      }
+    });
+  });
+}
+function localStoreRemoveCachedMutationBatchMetadata(localStore, batchId) {
+  const mutationQueueImpl = debugCast(debugCast(localStore, LocalStoreImpl).mutationQueue);
+  mutationQueueImpl.removeCachedMutationKeys(batchId);
+}
+function localStoreGetActiveClients(localStore) {
+  const persistenceImpl = debugCast(debugCast(localStore, LocalStoreImpl).persistence);
+  return persistenceImpl.getActiveClients();
+}
+function localStoreGetCachedTarget(localStore, targetId) {
+  const localStoreImpl = debugCast(localStore);
+  const targetCacheImpl = debugCast(localStoreImpl.targetCache);
+  const cachedTargetData = localStoreImpl.targetDataByTarget.get(targetId);
+  if (cachedTargetData) {
+    return Promise.resolve(cachedTargetData.target ?? null);
+  } else {
+    return localStoreImpl.persistence.runTransaction("Get target data", "readonly", (txn) => {
+      return targetCacheImpl.getTargetDataForTarget(txn, targetId).next((targetData) => targetData?.target ?? null);
+    });
+  }
+}
+function localStoreGetDocuments(localStore, pipeline2) {
+  const localStoreImpl = debugCast(localStore);
+  const keys = getPipelineDocuments(pipeline2);
+  const keySet = documentKeySet(...keys.map((k) => DocumentKey.fromPath(k)));
+  return localStoreImpl.persistence.runTransaction("Get documents for pipeline", "readonly", (txn) => localStoreImpl.remoteDocuments.getEntries(txn, keySet)).then((changedDocs) => {
+    return changedDocs;
+  });
+}
+function localStoreGetNewDocumentChanges(localStore, collectionGroup2) {
+  const localStoreImpl = debugCast(localStore);
+  const readTime = localStoreImpl.collectionGroupReadTime.get(collectionGroup2) || SnapshotVersion.min();
+  return localStoreImpl.persistence.runTransaction("Get new document changes", "readonly", (txn) => localStoreImpl.remoteDocuments.getAllFromCollectionGroup(
+    txn,
+    collectionGroup2,
+    newIndexOffsetSuccessorFromReadTime(readTime, INITIAL_LARGEST_BATCH_ID),
+    /* limit= */
+    Number.MAX_SAFE_INTEGER
+  )).then((changedDocs) => {
+    setMaxReadTime(localStoreImpl, changedDocs);
+    return changedDocs;
+  });
+}
 function setMaxReadTime(localStoreImpl, changedDocs) {
-  changedDocs.forEach((_, doc6) => {
-    const collectionGroup2 = doc6.key.getCollectionGroup();
+  changedDocs.forEach((_, doc5) => {
+    const collectionGroup2 = doc5.key.getCollectionGroup();
     const readTime = localStoreImpl.collectionGroupReadTime.get(collectionGroup2) || SnapshotVersion.min();
-    if (doc6.readTime.compareTo(readTime) > 0) {
-      localStoreImpl.collectionGroupReadTime.set(collectionGroup2, doc6.readTime);
+    if (doc5.readTime.compareTo(readTime) > 0) {
+      localStoreImpl.collectionGroupReadTime.set(collectionGroup2, doc5.readTime);
     }
   });
 }
@@ -251405,6 +253050,9 @@ async function disableNetworkUntilRecovery(remoteStoreImpl, e2, op) {
     throw e2;
   }
 }
+function executeWithRecovery(remoteStoreImpl, op) {
+  return op().catch((e2) => disableNetworkUntilRecovery(remoteStoreImpl, e2, op));
+}
 function raiseWatchSnapshot(remoteStoreImpl, snapshotVersion) {
   const remoteEvent = remoteStoreImpl.watchChangeAggregator.createRemoteEvent(snapshotVersion);
   remoteEvent.targetChanges.forEach((change, remoteTargetId) => {
@@ -251458,6 +253106,77 @@ async function handleTargetError(remoteStoreImpl, watchChange) {
       remoteStoreImpl.listenTargets.delete(targetId);
     }
     remoteStoreImpl.watchChangeAggregator.removeTarget(targetId);
+  }
+}
+async function fillWritePipeline(remoteStore) {
+  const remoteStoreImpl = debugCast(remoteStore);
+  const writeStream = ensureWriteStream(remoteStoreImpl);
+  let lastBatchIdRetrieved = remoteStoreImpl.writePipeline.length > 0 ? remoteStoreImpl.writePipeline[remoteStoreImpl.writePipeline.length - 1].batchId : BATCHID_UNKNOWN;
+  while (canAddToWritePipeline(remoteStoreImpl)) {
+    try {
+      const batch = await localStoreGetNextMutationBatch(remoteStoreImpl.localStore, lastBatchIdRetrieved);
+      if (batch === null) {
+        if (remoteStoreImpl.writePipeline.length === 0) {
+          writeStream.markIdle();
+        }
+        break;
+      } else {
+        lastBatchIdRetrieved = batch.batchId;
+        addToWritePipeline(remoteStoreImpl, batch);
+      }
+    } catch (e2) {
+      await disableNetworkUntilRecovery(remoteStoreImpl, e2);
+    }
+  }
+  if (shouldStartWriteStream(remoteStoreImpl)) {
+    startWriteStream(remoteStoreImpl);
+  }
+}
+function canAddToWritePipeline(remoteStoreImpl) {
+  return canUseNetwork(remoteStoreImpl) && remoteStoreImpl.writePipeline.length < MAX_PENDING_WRITES;
+}
+function addToWritePipeline(remoteStoreImpl, batch) {
+  remoteStoreImpl.writePipeline.push(batch);
+  const writeStream = ensureWriteStream(remoteStoreImpl);
+  if (writeStream.isOpen() && writeStream.handshakeComplete) {
+    writeStream.writeMutations(batch.mutations);
+  }
+}
+function shouldStartWriteStream(remoteStoreImpl) {
+  return canUseNetwork(remoteStoreImpl) && !ensureWriteStream(remoteStoreImpl).isStarted() && remoteStoreImpl.writePipeline.length > 0;
+}
+function startWriteStream(remoteStoreImpl) {
+  ensureWriteStream(remoteStoreImpl).start();
+}
+async function onWriteStreamOpen(remoteStoreImpl) {
+  ensureWriteStream(remoteStoreImpl).writeHandshake();
+}
+async function onWriteHandshakeComplete(remoteStoreImpl) {
+  const writeStream = ensureWriteStream(remoteStoreImpl);
+  for (const batch of remoteStoreImpl.writePipeline) {
+    writeStream.writeMutations(batch.mutations);
+  }
+}
+async function onMutationResult(remoteStoreImpl, commitVersion, results) {
+  const batch = remoteStoreImpl.writePipeline.shift();
+  const success = MutationBatchResult.from(batch, commitVersion, results);
+  await executeWithRecovery(remoteStoreImpl, () => remoteStoreImpl.remoteSyncer.applySuccessfulWrite(success));
+  await fillWritePipeline(remoteStoreImpl);
+}
+async function onWriteStreamClose(remoteStoreImpl, error) {
+  if (error && ensureWriteStream(remoteStoreImpl).handshakeComplete) {
+    await handleWriteError(remoteStoreImpl, error);
+  }
+  if (shouldStartWriteStream(remoteStoreImpl)) {
+    startWriteStream(remoteStoreImpl);
+  }
+}
+async function handleWriteError(remoteStoreImpl, error) {
+  if (isPermanentWriteError(error.code)) {
+    const batch = remoteStoreImpl.writePipeline.shift();
+    ensureWriteStream(remoteStoreImpl).inhibitBackoff();
+    await executeWithRecovery(remoteStoreImpl, () => remoteStoreImpl.remoteSyncer.rejectFailedWrite(batch.batchId, error));
+    await fillWritePipeline(remoteStoreImpl);
   }
 }
 async function restartNetwork(remoteStore) {
@@ -251547,6 +253266,30 @@ function ensureWatchStream(remoteStoreImpl) {
   }
   return remoteStoreImpl.watchStream;
 }
+function ensureWriteStream(remoteStoreImpl) {
+  if (!remoteStoreImpl.writeStream) {
+    remoteStoreImpl.writeStream = newPersistentWriteStream(remoteStoreImpl.datastore, remoteStoreImpl.asyncQueue, {
+      onConnected: () => Promise.resolve(),
+      onOpen: onWriteStreamOpen.bind(null, remoteStoreImpl),
+      onClose: onWriteStreamClose.bind(null, remoteStoreImpl),
+      onHandshakeComplete: onWriteHandshakeComplete.bind(null, remoteStoreImpl),
+      onMutationResult: onMutationResult.bind(null, remoteStoreImpl)
+    });
+    remoteStoreImpl.onNetworkStatusChange.push(async (enabled) => {
+      if (enabled) {
+        remoteStoreImpl.writeStream.inhibitBackoff();
+        await fillWritePipeline(remoteStoreImpl);
+      } else {
+        await remoteStoreImpl.writeStream.stop();
+        if (remoteStoreImpl.writePipeline.length > 0) {
+          logDebug(LOG_TAG$6, `Stopping write stream with ${remoteStoreImpl.writePipeline.length} pending writes`);
+          remoteStoreImpl.writePipeline = [];
+        }
+      }
+    });
+  }
+  return remoteStoreImpl.writeStream;
+}
 function wrapInUserErrorIfRecoverable(e2, msg) {
   logError(LOG_TAG$5, `${msg}: ${e2}`);
   if (isIndexedDbTransactionError(e2)) {
@@ -251566,6 +253309,50 @@ function getDefaultRelativeIndexReadCostPerDocument() {
   } else {
     return 4;
   }
+}
+function createWebStorageClientStateKey(persistenceKey, clientId) {
+  return `${CLIENT_STATE_KEY_PREFIX}_${persistenceKey}_${clientId}`;
+}
+function createWebStorageMutationBatchKey(persistenceKey, user, batchId) {
+  let mutationKey = `${MUTATION_BATCH_KEY_PREFIX}_${persistenceKey}_${batchId}`;
+  if (user.isAuthenticated()) {
+    mutationKey += `_${user.uid}`;
+  }
+  return mutationKey;
+}
+function createWebStorageQueryTargetMetadataKey(persistenceKey, targetId) {
+  return `${QUERY_TARGET_KEY_PREFIX}_${persistenceKey}_${targetId}`;
+}
+function createWebStorageOnlineStateKey(persistenceKey) {
+  return `${ONLINE_STATE_KEY_PREFIX}_${persistenceKey}`;
+}
+function createBundleLoadedKey(persistenceKey) {
+  return `${BUNDLE_LOADED_KEY_PREFIX}_${persistenceKey}`;
+}
+function createWebStorageSequenceNumberKey(persistenceKey) {
+  return `${SEQUENCE_NUMBER_KEY_PREFIX}_${persistenceKey}`;
+}
+function fromWebStorageSequenceNumber(seqString) {
+  let sequenceNumber = ListenSequence.INVALID;
+  if (seqString != null) {
+    try {
+      const parsed = JSON.parse(seqString);
+      hardAssert(typeof parsed === "number", 30636, { seqString });
+      sequenceNumber = parsed;
+    } catch (e2) {
+      logError(LOG_TAG$3, "Failed to read sequence number from WebStorage", e2);
+    }
+  }
+  return sequenceNumber;
+}
+function getWindow() {
+  if (process.env.USE_MOCK_PERSISTENCE === "YES") {
+    return window;
+  }
+  return null;
+}
+function getDocument() {
+  return null;
 }
 function newEventManager() {
   return new EventManagerImpl();
@@ -251795,17 +253582,17 @@ async function initializeViewAndComputeSnapshot(syncEngineImpl, query2, targetId
     /* usePreviousResults= */
     true
   );
-  const view = new View(query2, queryResult.remoteKeys);
-  const viewDocChanges = view.computeDocChanges(queryResult.documents);
+  const view2 = new View(query2, queryResult.remoteKeys);
+  const viewDocChanges = view2.computeDocChanges(queryResult.documents);
   const synthesizedTargetChange = TargetChange.createSynthesizedTargetChangeForCurrentChange(targetId, current && syncEngineImpl.onlineState !== "Offline", resumeToken);
-  const viewChange = view.applyChanges(
+  const viewChange = view2.applyChanges(
     viewDocChanges,
     /* limboResolutionEnabled= */
     syncEngineImpl.isPrimaryClient,
     synthesizedTargetChange
   );
   updateTrackedLimbos(syncEngineImpl, targetId, viewChange.limboChanges);
-  const data = new QueryView(query2, targetId, view);
+  const data = new QueryView(query2, targetId, view2);
   syncEngineImpl.queryViewsByQuery.set(query2, data);
   if (syncEngineImpl.queriesByTarget.has(targetId)) {
     syncEngineImpl.queriesByTarget.get(targetId).push(query2);
@@ -251935,6 +253722,42 @@ async function syncEngineRejectListen(syncEngine, targetId, err) {
     ).then(() => removeAndCleanupTarget(syncEngineImpl, targetId, err)).catch(ignoreIfPrimaryLeaseLoss);
   }
 }
+async function syncEngineApplySuccessfulWrite(syncEngine, mutationBatchResult) {
+  const syncEngineImpl = debugCast(syncEngine);
+  const batchId = mutationBatchResult.batch.batchId;
+  try {
+    const changes = await localStoreAcknowledgeBatch(syncEngineImpl.localStore, mutationBatchResult);
+    processUserCallback(
+      syncEngineImpl,
+      batchId,
+      /*error=*/
+      null
+    );
+    triggerPendingWritesCallbacks(syncEngineImpl, batchId);
+    syncEngineImpl.sharedClientState.updateMutationState(batchId, "acknowledged");
+    await syncEngineEmitNewSnapsAndNotifyLocalStore(syncEngineImpl, changes);
+  } catch (error) {
+    await ignoreIfPrimaryLeaseLoss(error);
+  }
+}
+async function syncEngineRejectFailedWrite(syncEngine, batchId, error) {
+  const syncEngineImpl = debugCast(syncEngine);
+  try {
+    const changes = await localStoreRejectBatch(syncEngineImpl.localStore, batchId);
+    processUserCallback(syncEngineImpl, batchId, error);
+    triggerPendingWritesCallbacks(syncEngineImpl, batchId);
+    syncEngineImpl.sharedClientState.updateMutationState(batchId, "rejected", error);
+    await syncEngineEmitNewSnapsAndNotifyLocalStore(syncEngineImpl, changes);
+  } catch (error2) {
+    await ignoreIfPrimaryLeaseLoss(error2);
+  }
+}
+function triggerPendingWritesCallbacks(syncEngineImpl, batchId) {
+  (syncEngineImpl.pendingWritesCallbacks.get(batchId) || []).forEach((callback) => {
+    callback.resolve();
+  });
+  syncEngineImpl.pendingWritesCallbacks.delete(batchId);
+}
 function rejectOutstandingPendingWritesCallbacks(syncEngineImpl, errorMessage) {
   syncEngineImpl.pendingWritesCallbacks.forEach((callbacks) => {
     callbacks.forEach((callback) => {
@@ -251942,6 +253765,22 @@ function rejectOutstandingPendingWritesCallbacks(syncEngineImpl, errorMessage) {
     });
   });
   syncEngineImpl.pendingWritesCallbacks.clear();
+}
+function processUserCallback(syncEngine, batchId, error) {
+  const syncEngineImpl = debugCast(syncEngine);
+  let newCallbacks = syncEngineImpl.mutationUserCallbacks[syncEngineImpl.currentUser.toKey()];
+  if (newCallbacks) {
+    const callback = newCallbacks.get(batchId);
+    if (callback) {
+      if (error) {
+        callback.reject(error);
+      } else {
+        callback.resolve();
+      }
+      newCallbacks = newCallbacks.remove(batchId);
+    }
+    syncEngineImpl.mutationUserCallbacks[syncEngineImpl.currentUser.toKey()] = newCallbacks;
+  }
 }
 function removeAndCleanupTarget(syncEngineImpl, targetId, error = null) {
   syncEngineImpl.sharedClientState.removeLocalQueryTarget(targetId);
@@ -252091,6 +253930,217 @@ function syncEngineGetRemoteKeysForTarget(syncEngine, targetId) {
     return keySet;
   }
 }
+async function synchronizeViewAndComputeSnapshot(syncEngine, queryView) {
+  const syncEngineImpl = debugCast(syncEngine);
+  const queryResult = await localStoreExecuteQuery(
+    syncEngineImpl.localStore,
+    queryView.query,
+    /* usePreviousResults= */
+    true
+  );
+  const viewSnapshot = queryView.view.synchronizeWithPersistedState(queryResult);
+  if (syncEngineImpl.isPrimaryClient) {
+    updateTrackedLimbos(syncEngineImpl, queryView.targetId, viewSnapshot.limboChanges);
+  }
+  return viewSnapshot;
+}
+async function syncEngineSynchronizeWithChangedDocuments(syncEngine, collectionGroup2) {
+  const syncEngineImpl = debugCast(syncEngine);
+  return localStoreGetNewDocumentChanges(syncEngineImpl.localStore, collectionGroup2).then((changes) => syncEngineEmitNewSnapsAndNotifyLocalStore(syncEngineImpl, changes));
+}
+async function syncEngineApplyBatchState(syncEngine, batchId, batchState, error) {
+  const syncEngineImpl = debugCast(syncEngine);
+  const documents = await localStoreLookupMutationDocuments(syncEngineImpl.localStore, batchId);
+  if (documents === null) {
+    logDebug(LOG_TAG$2, "Cannot apply mutation batch with id: " + batchId);
+    return;
+  }
+  if (batchState === "pending") {
+    await fillWritePipeline(syncEngineImpl.remoteStore);
+  } else if (batchState === "acknowledged" || batchState === "rejected") {
+    processUserCallback(syncEngineImpl, batchId, error ? error : null);
+    triggerPendingWritesCallbacks(syncEngineImpl, batchId);
+    localStoreRemoveCachedMutationBatchMetadata(syncEngineImpl.localStore, batchId);
+  } else {
+    fail(6720, `Unknown batchState`, { batchState });
+  }
+  await syncEngineEmitNewSnapsAndNotifyLocalStore(syncEngineImpl, documents);
+}
+async function syncEngineApplyPrimaryState(syncEngine, isPrimary) {
+  const syncEngineImpl = debugCast(syncEngine);
+  ensureWatchCallbacks(syncEngineImpl);
+  syncEngineEnsureWriteCallbacks(syncEngineImpl);
+  if (isPrimary === true && syncEngineImpl._isPrimaryClient !== true) {
+    const activeTargets = syncEngineImpl.sharedClientState.getAllActiveQueryTargets();
+    const activeQueries = await synchronizeQueryViewsAndRaiseSnapshots(syncEngineImpl, activeTargets.toArray());
+    syncEngineImpl._isPrimaryClient = true;
+    await remoteStoreApplyPrimaryState(syncEngineImpl.remoteStore, true);
+    for (const targetData of activeQueries) {
+      remoteStoreListen(syncEngineImpl.remoteStore, targetData);
+    }
+  } else if (isPrimary === false && syncEngineImpl._isPrimaryClient !== false) {
+    const activeTargets = [];
+    let p = Promise.resolve();
+    syncEngineImpl.queriesByTarget.forEach((_, targetId) => {
+      if (syncEngineImpl.sharedClientState.isLocalQueryTarget(targetId)) {
+        activeTargets.push(targetId);
+      } else {
+        p = p.then(() => {
+          removeAndCleanupTarget(syncEngineImpl, targetId);
+          return localStoreReleaseTarget(
+            syncEngineImpl.localStore,
+            targetId,
+            /*keepPersistedTargetData=*/
+            true
+          );
+        });
+      }
+      remoteStoreUnlisten(syncEngineImpl.remoteStore, targetId);
+    });
+    await p;
+    await synchronizeQueryViewsAndRaiseSnapshots(syncEngineImpl, activeTargets);
+    resetLimboDocuments(syncEngineImpl);
+    syncEngineImpl._isPrimaryClient = false;
+    await remoteStoreApplyPrimaryState(syncEngineImpl.remoteStore, false);
+  }
+}
+function resetLimboDocuments(syncEngine) {
+  const syncEngineImpl = debugCast(syncEngine);
+  syncEngineImpl.activeLimboResolutionsByTarget.forEach((_, targetId) => {
+    remoteStoreUnlisten(syncEngineImpl.remoteStore, targetId);
+  });
+  syncEngineImpl.limboDocumentRefs.removeAllReferences();
+  syncEngineImpl.activeLimboResolutionsByTarget = /* @__PURE__ */ new Map();
+  syncEngineImpl.activeLimboTargetsByKey = new SortedMap(DocumentKey.comparator);
+}
+async function synchronizeQueryViewsAndRaiseSnapshots(syncEngine, targets, transitionToPrimary) {
+  const syncEngineImpl = debugCast(syncEngine);
+  const activeQueries = [];
+  const newViewSnapshots = [];
+  for (const targetId of targets) {
+    let targetData;
+    const queries = syncEngineImpl.queriesByTarget.get(targetId);
+    if (queries && queries.length !== 0) {
+      targetData = await localStoreAllocateTarget(syncEngineImpl.localStore, isPipeline(queries[0]) ? queries[0] : queryToTarget(queries[0]));
+      for (const query2 of queries) {
+        const queryView = syncEngineImpl.queryViewsByQuery.get(query2);
+        const viewChange = await synchronizeViewAndComputeSnapshot(syncEngineImpl, queryView);
+        if (viewChange.snapshot) {
+          newViewSnapshots.push(viewChange.snapshot);
+        }
+      }
+    } else {
+      const target = await localStoreGetCachedTarget(syncEngineImpl.localStore, targetId);
+      targetData = await localStoreAllocateTarget(syncEngineImpl.localStore, target);
+      await initializeViewAndComputeSnapshot(
+        syncEngineImpl,
+        synthesizeTargetToQuery(target),
+        targetId,
+        /*current=*/
+        false,
+        targetData.resumeToken
+      );
+    }
+    activeQueries.push(targetData);
+  }
+  syncEngineImpl.syncEngineListener.onWatchChange(newViewSnapshots);
+  return activeQueries;
+}
+function synthesizeTargetToQuery(target) {
+  return targetIsPipelineTarget(target) ? target : newQuery(target.path, target.collectionGroup, target.orderBy, target.filters, target.limit, "F", target.startAt, target.endAt);
+}
+function syncEngineGetActiveClients(syncEngine) {
+  const syncEngineImpl = debugCast(syncEngine);
+  return localStoreGetActiveClients(syncEngineImpl.localStore);
+}
+async function syncEngineApplyTargetState(syncEngine, targetId, state2, error) {
+  const syncEngineImpl = debugCast(syncEngine);
+  if (syncEngineImpl._isPrimaryClient) {
+    logDebug(LOG_TAG$2, "Ignoring unexpected query state notification.");
+    return;
+  }
+  const query2 = syncEngineImpl.queriesByTarget.get(targetId);
+  if (query2 && query2.length > 0) {
+    switch (state2) {
+      case "current":
+      case "not-current": {
+        let changes;
+        if (isPipeline(query2[0])) {
+          switch (getPipelineSourceType(query2[0])) {
+            case "collection_group":
+            case "collection":
+              changes = await localStoreGetNewDocumentChanges(syncEngineImpl.localStore, getPipelineCollectionId(query2[0]));
+              break;
+            case "documents":
+              changes = await localStoreGetDocuments(syncEngineImpl.localStore, query2[0]);
+              break;
+            case "database":
+            case "unknown":
+            default:
+              logWarn("");
+              changes = documentMap();
+              break;
+          }
+        } else {
+          changes = await localStoreGetNewDocumentChanges(syncEngineImpl.localStore, queryCollectionGroup(query2[0]));
+        }
+        const synthesizedRemoteEvent = RemoteEvent.createSynthesizedRemoteEventForCurrentChange(targetId, state2 === "current", ByteString.EMPTY_BYTE_STRING);
+        await syncEngineEmitNewSnapsAndNotifyLocalStore(syncEngineImpl, changes, synthesizedRemoteEvent);
+        break;
+      }
+      case "rejected": {
+        await localStoreReleaseTarget(
+          syncEngineImpl.localStore,
+          targetId,
+          /* keepPersistedTargetData */
+          true
+        );
+        removeAndCleanupTarget(syncEngineImpl, targetId, error);
+        break;
+      }
+      default:
+        fail(64155, state2);
+    }
+  }
+}
+async function syncEngineApplyActiveTargetsChange(syncEngine, added, removed) {
+  const syncEngineImpl = ensureWatchCallbacks(syncEngine);
+  if (!syncEngineImpl._isPrimaryClient) {
+    return;
+  }
+  for (const targetId of added) {
+    const targetAlreadyListeningToRemoteStore = syncEngineImpl.queriesByTarget.has(targetId) && syncEngineImpl.sharedClientState.isActiveQueryTarget(targetId);
+    if (targetAlreadyListeningToRemoteStore) {
+      logDebug(LOG_TAG$2, "Adding an already active target " + targetId);
+      continue;
+    }
+    const target = await localStoreGetCachedTarget(syncEngineImpl.localStore, targetId);
+    const targetData = await localStoreAllocateTarget(syncEngineImpl.localStore, target);
+    await initializeViewAndComputeSnapshot(
+      syncEngineImpl,
+      synthesizeTargetToQuery(target),
+      targetData.targetId,
+      /*current=*/
+      false,
+      targetData.resumeToken
+    );
+    remoteStoreListen(syncEngineImpl.remoteStore, targetData);
+  }
+  for (const targetId of removed) {
+    if (!syncEngineImpl.queriesByTarget.has(targetId)) {
+      continue;
+    }
+    await localStoreReleaseTarget(
+      syncEngineImpl.localStore,
+      targetId,
+      /* keepPersistedTargetData */
+      false
+    ).then(() => {
+      remoteStoreUnlisten(syncEngineImpl.remoteStore, targetId);
+      removeAndCleanupTarget(syncEngineImpl, targetId);
+    }).catch(ignoreIfPrimaryLeaseLoss);
+  }
+}
 function ensureWatchCallbacks(syncEngine) {
   const syncEngineImpl = debugCast(syncEngine);
   syncEngineImpl.remoteStore.remoteSyncer.applyRemoteEvent = syncEngineApplyRemoteEvent.bind(null, syncEngineImpl);
@@ -252098,6 +254148,12 @@ function ensureWatchCallbacks(syncEngine) {
   syncEngineImpl.remoteStore.remoteSyncer.rejectListen = syncEngineRejectListen.bind(null, syncEngineImpl);
   syncEngineImpl.syncEngineListener.onWatchChange = eventManagerOnWatchChange.bind(null, syncEngineImpl.eventManager);
   syncEngineImpl.syncEngineListener.onWatchError = eventManagerOnWatchError.bind(null, syncEngineImpl.eventManager);
+  return syncEngineImpl;
+}
+function syncEngineEnsureWriteCallbacks(syncEngine) {
+  const syncEngineImpl = debugCast(syncEngine);
+  syncEngineImpl.remoteStore.remoteSyncer.applySuccessfulWrite = syncEngineApplySuccessfulWrite.bind(null, syncEngineImpl);
+  syncEngineImpl.remoteStore.remoteSyncer.rejectFailedWrite = syncEngineRejectFailedWrite.bind(null, syncEngineImpl);
   return syncEngineImpl;
 }
 async function setOfflineComponentProvider(client2, offlineComponentProvider) {
@@ -252222,6 +254278,36 @@ function getMessageOrStack(error) {
   }
   return message2;
 }
+function initializeFirestore2(app2, settings, databaseId) {
+  if (!databaseId) {
+    databaseId = DEFAULT_DATABASE_NAME;
+  }
+  const provider = _getProvider(app2, "firestore");
+  if (provider.isInitialized(databaseId)) {
+    const existingInstance = provider.getImmediate({
+      identifier: databaseId
+    });
+    const initialSettings = provider.getOptions(databaseId);
+    if (deepEqual(initialSettings, settings)) {
+      return existingInstance;
+    } else {
+      throw new FirestoreError(Code.FAILED_PRECONDITION, "initializeFirestore() has already been called with different options. To avoid this error, call initializeFirestore() with the same options as when it was originally called, or call getFirestore() to return the already initialized instance.");
+    }
+  }
+  if (settings.cacheSizeBytes !== void 0 && settings.localCache !== void 0) {
+    throw new FirestoreError(Code.INVALID_ARGUMENT, `cache and cacheSizeBytes cannot be specified at the same time as cacheSizeBytes willbe deprecated. Instead, specify the cache size in the cache object`);
+  }
+  if (settings.cacheSizeBytes !== void 0 && settings.cacheSizeBytes !== CACHE_SIZE_UNLIMITED && settings.cacheSizeBytes < LRU_MINIMUM_CACHE_SIZE_BYTES) {
+    throw new FirestoreError(Code.INVALID_ARGUMENT, `cacheSizeBytes must be at least ${LRU_MINIMUM_CACHE_SIZE_BYTES}`);
+  }
+  if (settings.host && isCloudWorkstation(settings.host)) {
+    void pingServer(settings.host);
+  }
+  return provider.initialize({
+    options: settings,
+    instanceIdentifier: databaseId
+  });
+}
 function getFirestore2(appOrDatabaseId, optionalDatabaseId) {
   const app2 = typeof appOrDatabaseId === "object" ? appOrDatabaseId : getApp2();
   const databaseId = typeof appOrDatabaseId === "string" ? appOrDatabaseId : optionalDatabaseId || DEFAULT_DATABASE_NAME;
@@ -252265,7 +254351,7 @@ function buildComponentProvider(componentsProvider) {
     _online: online
   };
 }
-var grpc, protoLoader, version4, SDK_VERSION3, logClient, AutoId, MIN_SURROGATE$1, MAX_SURROGATE$1, SortedMap, SortedMapIterator, LLRBNode, LLRBEmptyNode, SortedSet, SortedSetIterator, Code, FirestoreError, DOCUMENT_KEY_NAME, UPDATE_TIME_NAME, CREATE_TIME_NAME, BasePath, ResourcePath, identifierRegExp, FieldPath$1, FieldMask, DocumentKey, MIN_SECONDS, MS_TO_NANOS, Timestamp2, ByteString, ISO_TIMESTAMP_REG_EXP, SERVER_TIMESTAMP_SENTINEL, TYPE_KEY$1, PREVIOUS_VALUE_KEY, LOCAL_WRITE_TIME_KEY, DatabaseInfo, DEFAULT_DATABASE_NAME, DatabaseId, BATCHID_UNKNOWN, TYPE_KEY, MAX_VALUE_TYPE, MAX_VALUE, VECTOR_VALUE_SENTINEL, VECTOR_MAP_VECTORS_KEY, MIN_VALUE, TRUE_VALUE, FALSE_VALUE, MIN_VECTOR_VALUE, ObjectValue, TransformOperation, ServerTimestampTransform, ArrayUnionTransformOperation, ArrayRemoveTransformOperation, NumericTransformOperation, NumericIncrementTransformOperation, NumericMinimumTransformOperation, NumericMaximumTransformOperation, Precondition, Mutation, SetMutation, PatchMutation, DeleteMutation, Bound, Filter2, FieldFilter, CompositeFilter, KeyFieldFilter, KeyFieldInFilter, KeyFieldNotInFilter, ArrayContainsFilter, InFilter, NotInFilter, ArrayContainsAnyFilter, OrderBy, SnapshotVersion, MutableDocument, INITIAL_LARGEST_BATCH_ID, FieldIndex, IndexOffset, TargetImpl, QueryImpl, ExistenceFilter, RpcCode, ObjectMap, EMPTY_MUTABLE_DOCUMENT_MAP, EMPTY_DOCUMENT_MAP, EMPTY_DOCUMENT_VERSION_MAP, EMPTY_DOCUMENT_KEY_SET, EMPTY_TARGET_ID_SET, Base64DecodeError, testingHooksSpi, MAX_64_BIT_UNSIGNED_INTEGER, BloomFilter, BloomFilterError, RemoteEvent, TargetChange, DocumentWatchChange, ExistenceFilterChange, WatchTargetChange, TargetState, LOG_TAG$i, WatchChangeAggregator, DIRECTIONS, OPERATORS, COMPOSITE_OPERATORS, JsonProtoSerializer, Bytes, FieldPath3, FieldValue2, GeoPoint2, User, Deferred2, OAuthToken, EmptyAuthCredentialsProvider, EmulatorAuthCredentialsProvider, FirebaseAuthCredentialsProvider, FirstPartyToken, FirstPartyAuthCredentialsProvider, AppCheckToken, FirebaseAppCheckTokenProvider, NoopConnectivityMonitor, StreamBridge, lastUniqueDebugId, grpcVersion, LOG_TAG$h, X_GOOG_API_CLIENT_VALUE, GrpcConnection, options, nested, protos, protos$1, protoLoaderOptions, LOG_TAG$g, DEFAULT_BACKOFF_INITIAL_DELAY_MS, DEFAULT_BACKOFF_FACTOR, DEFAULT_BACKOFF_MAX_DELAY_MS, ExponentialBackoff, LOG_TAG$f, IDLE_TIMEOUT_MS, HEALTHY_TIMEOUT_MS, PersistentStream, PersistentListenStream, Datastore, DatastoreImpl, LOG_TAG$e, datastoreInstances, GC_DID_NOT_RUN, LRU_COLLECTION_DISABLED, LRU_DEFAULT_CACHE_SIZE_BYTES, LruParams, ListenSequence, PRIMARY_LEASE_LOST_ERROR_MSG, PersistenceTransaction, PersistencePromise, LOG_TAG$c, LRU_MINIMUM_CACHE_SIZE_BYTES, INITIAL_GC_DELAY_MS, REGULAR_GC_DELAY_MS, RollingSequenceNumberBuffer, LruScheduler, LruGarbageCollectorImpl, DEFAULT_HOST, DEFAULT_SSL, MIN_LONG_POLLING_TIMEOUT_SECONDS, MAX_LONG_POLLING_TIMEOUT_SECONDS, DEFAULT_AUTO_DETECT_LONG_POLLING, FirestoreSettingsImpl, Firestore$1, Query2, DocumentReference3, CollectionReference3, VectorValue, RESERVED_FIELD_REGEX, ParseContextImpl, UserDataReader, FIELD_PATH_RESERVED, OptionsUtil, Expression, AggregateFunction, AliasedAggregate, AliasedExpression, ListOfExprs, Field, Constant, FunctionExpression, BooleanExpression, BooleanFunctionExpression, BooleanConstant, BooleanField, Ordering, Stage, AddFields, Aggregate, Distinct, CollectionSource, CollectionGroupSource, DatabaseSource, DocumentsSource, Where, Limit, Offset, Select, Sort, Replace, EvaluateResult, CoreField, CoreConstant, CoreListOfExprs, LongMaxValue, LongMinValue, BigIntOrDoubleArithmetics, CoreAdd, CoreSubtract, CoreMultiply, CoreDivide, CoreMod, CoreAnd, CoreNot, CoreOr, CoreXor, CoreEqAny, CoreNotEqAny, CoreIsNan, CoreIsNotNan, CoreIsNull, CoreIsNotNull, CoreIsError, CoreExists, CoreCond, CoreLogicalMaximum, CoreLogicalMinimum, ComparisonBase, CoreEq, CoreNeq, CoreLt, CoreLte, CoreGt, CoreGte, CoreArrayConcat, CoreArrayReverse, CoreArrayContains, CoreArrayContainsAll, CoreArrayContainsAny, CoreArrayLength, CoreArrayElement, CoreReverse, CoreReplaceFirst, CoreReplaceAll, CoreCharLength, CoreByteLength, StringSearchFunctionBase, CoreLike, CoreRegexContains, CoreRegexMatch, CoreStrContains, CoreStartsWith, CoreEndsWith, CoreToLower, CoreToUpper, CoreTrim, CoreStrConcat, CoreMapGet, DistanceBase, CoreCosineDistance, CoreDotProduct, CoreEuclideanDistance, CoreVectorLength, TIMESTAMP_MIN_SECONDS, TIMESTAMP_MAX_SECONDS, MILLISECONDS_PER_SECOND, MICROSECONDS_PER_SECOND, TIMESTAMP_MIN_MILLISECONDS, TIMESTAMP_MAX_MILLISECONDS, TIMESTAMP_MIN_MICROSECONDS, TIMESTAMP_MAX_MICROSECONDS, UnixToTimestamp, CoreUnixMicrosToTimestamp, CoreUnixMillisToTimestamp, CoreUnixSecondsToTimestamp, TimestampToUnix, CoreTimestampToUnixMicros, CoreTimestampToUnixMillis, CoreTimestampToUnixSeconds, TimestampArithmetic, CoreTimestampAdd, CoreTimestampSub, CorePipeline, MutationBatch, escapeChar, encodedSeparatorChar, encodedNul, encodedEscape, DbRemoteDocumentStore$1, DbPrimaryClientStore, DbMutationQueueStore, DbMutationBatchStore, DbDocumentMutationStore, DbRemoteDocumentStore, DbRemoteDocumentGlobalStore, DbTargetStore, DbTargetDocumentStore, DbTargetGlobalStore, DbCollectionParentStore, DbClientMetadataStore, DbBundleStore, DbNamedQueryStore, DbIndexConfigurationStore, DbIndexStateStore, DbIndexEntryStore, DbDocumentOverlayStore, DbGlobalsStore, V1_STORES, V3_STORES, V4_STORES, V6_STORES, V8_STORES, V11_STORES, V12_STORES, V13_STORES, V14_STORES, V15_STORES, V17_STORES, Overlay, TargetData, LocalSerializer, INDEX_TYPE_NULL, INDEX_TYPE_BOOLEAN, INDEX_TYPE_NAN, INDEX_TYPE_NUMBER, INDEX_TYPE_TIMESTAMP, INDEX_TYPE_STRING, INDEX_TYPE_BLOB, INDEX_TYPE_REFERENCE, INDEX_TYPE_GEOPOINT, INDEX_TYPE_ARRAY, INDEX_TYPE_VECTOR, INDEX_TYPE_MAP, INDEX_TYPE_REFERENCE_SEGMENT, NOT_TRUNCATED, FirestoreIndexValueWriter, MemoryIndexManager, MemoryCollectionParentIndex, EMPTY_VALUE, OFFSET, TargetIdGenerator, RemoteDocumentChangeBuffer, OverlayedDocument, LocalDocumentsView, MemoryBundleCache, MemoryDocumentOverlayCache, MemoryGlobalsCache, ReferenceSet, DocReference, MemoryMutationQueue, MIN_LONG_VALUE, MemoryRemoteDocumentCacheImpl, MemoryRemoteDocumentChangeBuffer, MemoryTargetCache, LOG_TAG$a, MemoryPersistence, MemoryTransaction, MemoryEagerDelegate, MemoryLruDelegate, MAX_CLIENT_AGE_MS, LOG_TAG$8, RESUME_TOKEN_MAX_AGE_MICROS, LocalStoreImpl, LOG_TAG$7, MAX_WATCH_STREAM_FAILURES, ONLINE_STATE_TIMEOUT_MS, OnlineStateTracker, LOG_TAG$6, RemoteStoreImpl, AsyncObserver, LOG_TAG$5, DelayedOperation, INITIAL_BACKFILL_DELAY_MS, REGULAR_BACKFILL_DELAY_MS, QueryContext, DEFAULT_INDEX_AUTO_CREATION_MIN_COLLECTION_SIZE, QueryEngine, LocalClientState, MemorySharedClientState, DocumentSet, DocumentChangeSet, ViewSnapshot, QueryListenersInfo, EventManagerImpl, ListenerDataSource, QueryListener, LocalViewChanges, AddedLimboDocument, RemovedLimboDocument, View, LOG_TAG$2, QueryView, LimboResolution, SyncEngineImpl, MemoryOfflineComponentProvider, LruGcMemoryOfflineComponentProvider, OnlineComponentProvider, LOG_TAG$1, MAX_CONCURRENT_LIMBO_RESOLUTIONS, DOM_EXCEPTION_INVALID_STATE, DOM_EXCEPTION_ABORTED, DOM_EXCEPTION_QUOTA_EXCEEDED, FirestoreClient, LOG_TAG, AsyncQueueImpl, Firestore4, AbstractUserDataWriter, ExpUserDataWriter;
+var grpc, protoLoader, version4, SDK_VERSION3, logClient, AutoId, MIN_SURROGATE$1, MAX_SURROGATE$1, SortedMap, SortedMapIterator, LLRBNode, LLRBEmptyNode, SortedSet, SortedSetIterator, Code, FirestoreError, DOCUMENT_KEY_NAME, UPDATE_TIME_NAME, CREATE_TIME_NAME, BasePath, ResourcePath, identifierRegExp, FieldPath$1, FieldMask, DocumentKey, MIN_SECONDS, MS_TO_NANOS, Timestamp2, ByteString, ISO_TIMESTAMP_REG_EXP, SERVER_TIMESTAMP_SENTINEL, TYPE_KEY$1, PREVIOUS_VALUE_KEY, LOCAL_WRITE_TIME_KEY, DatabaseInfo, DEFAULT_DATABASE_NAME, DatabaseId, BATCHID_UNKNOWN, TYPE_KEY, MAX_VALUE_TYPE, MAX_VALUE, VECTOR_VALUE_SENTINEL, VECTOR_MAP_VECTORS_KEY, MIN_VALUE, TRUE_VALUE, FALSE_VALUE, MIN_VECTOR_VALUE, ObjectValue, TransformOperation, ServerTimestampTransform, ArrayUnionTransformOperation, ArrayRemoveTransformOperation, NumericTransformOperation, NumericIncrementTransformOperation, NumericMinimumTransformOperation, NumericMaximumTransformOperation, FieldTransform, MutationResult, Precondition, Mutation, SetMutation, PatchMutation, DeleteMutation, VerifyMutation, Bound, Filter2, FieldFilter, CompositeFilter, KeyFieldFilter, KeyFieldInFilter, KeyFieldNotInFilter, ArrayContainsFilter, InFilter, NotInFilter, ArrayContainsAnyFilter, OrderBy, SnapshotVersion, MutableDocument, INITIAL_LARGEST_BATCH_ID, INITIAL_SEQUENCE_NUMBER, FieldIndex, IndexSegment, IndexState, IndexOffset, TargetImpl, QueryImpl, ExistenceFilter, RpcCode, ObjectMap, EMPTY_MUTABLE_DOCUMENT_MAP, EMPTY_DOCUMENT_MAP, EMPTY_DOCUMENT_VERSION_MAP, EMPTY_DOCUMENT_KEY_SET, EMPTY_TARGET_ID_SET, Base64DecodeError, testingHooksSpi, MAX_64_BIT_UNSIGNED_INTEGER, BloomFilter, BloomFilterError, RemoteEvent, TargetChange, DocumentWatchChange, ExistenceFilterChange, WatchTargetChange, TargetState, LOG_TAG$i, WatchChangeAggregator, DIRECTIONS, OPERATORS, COMPOSITE_OPERATORS, JsonProtoSerializer, Bytes, FieldPath3, FieldValue2, GeoPoint2, User, Deferred2, OAuthToken, EmptyAuthCredentialsProvider, EmulatorAuthCredentialsProvider, FirebaseAuthCredentialsProvider, FirstPartyToken, FirstPartyAuthCredentialsProvider, AppCheckToken, FirebaseAppCheckTokenProvider, NoopConnectivityMonitor, StreamBridge, lastUniqueDebugId, grpcVersion, LOG_TAG$h, X_GOOG_API_CLIENT_VALUE, GrpcConnection, options, nested, protos, protos$1, protoLoaderOptions, LOG_TAG$g, DEFAULT_BACKOFF_INITIAL_DELAY_MS, DEFAULT_BACKOFF_FACTOR, DEFAULT_BACKOFF_MAX_DELAY_MS, ExponentialBackoff, LOG_TAG$f, IDLE_TIMEOUT_MS, HEALTHY_TIMEOUT_MS, PersistentStream, PersistentListenStream, PersistentWriteStream, Datastore, DatastoreImpl, LOG_TAG$e, datastoreInstances, GC_DID_NOT_RUN, LRU_COLLECTION_DISABLED, LRU_DEFAULT_CACHE_SIZE_BYTES, LruParams, ListenSequence, PRIMARY_LEASE_LOST_ERROR_MSG, PersistenceTransaction, PersistencePromise, LOG_TAG$d, TRANSACTION_RETRY_COUNT, SimpleDbTransaction, SimpleDb, IterationController, IndexedDbTransactionError, SimpleDbStore, reportedIOSError, LOG_TAG$c, LRU_MINIMUM_CACHE_SIZE_BYTES, INITIAL_GC_DELAY_MS, REGULAR_GC_DELAY_MS, RollingSequenceNumberBuffer, LruScheduler, LruGarbageCollectorImpl, DEFAULT_HOST, DEFAULT_SSL, MIN_LONG_POLLING_TIMEOUT_SECONDS, MAX_LONG_POLLING_TIMEOUT_SECONDS, DEFAULT_AUTO_DETECT_LONG_POLLING, FirestoreSettingsImpl, Firestore$1, Query2, DocumentReference3, CollectionReference3, VectorValue, RESERVED_FIELD_REGEX, ParseContextImpl, UserDataReader, FIELD_PATH_RESERVED, OptionsUtil, Expression, AggregateFunction, AliasedAggregate, AliasedExpression, ListOfExprs, Field, Constant, FunctionExpression, BooleanExpression, BooleanFunctionExpression, BooleanConstant, BooleanField, Ordering, Stage, AddFields, Aggregate, Distinct, CollectionSource, CollectionGroupSource, DatabaseSource, DocumentsSource, Where, Limit, Offset, Select, Sort, Replace, EvaluateResult, CoreField, CoreConstant, CoreListOfExprs, LongMaxValue, LongMinValue, BigIntOrDoubleArithmetics, CoreAdd, CoreSubtract, CoreMultiply, CoreDivide, CoreMod, CoreAnd, CoreNot, CoreOr, CoreXor, CoreEqAny, CoreNotEqAny, CoreIsNan, CoreIsNotNan, CoreIsNull, CoreIsNotNull, CoreIsError, CoreExists, CoreCond, CoreLogicalMaximum, CoreLogicalMinimum, ComparisonBase, CoreEq, CoreNeq, CoreLt, CoreLte, CoreGt, CoreGte, CoreArrayConcat, CoreArrayReverse, CoreArrayContains, CoreArrayContainsAll, CoreArrayContainsAny, CoreArrayLength, CoreArrayElement, CoreReverse, CoreReplaceFirst, CoreReplaceAll, CoreCharLength, CoreByteLength, StringSearchFunctionBase, CoreLike, CoreRegexContains, CoreRegexMatch, CoreStrContains, CoreStartsWith, CoreEndsWith, CoreToLower, CoreToUpper, CoreTrim, CoreStrConcat, CoreMapGet, DistanceBase, CoreCosineDistance, CoreDotProduct, CoreEuclideanDistance, CoreVectorLength, TIMESTAMP_MIN_SECONDS, TIMESTAMP_MAX_SECONDS, MILLISECONDS_PER_SECOND, MICROSECONDS_PER_SECOND, TIMESTAMP_MIN_MILLISECONDS, TIMESTAMP_MAX_MILLISECONDS, TIMESTAMP_MIN_MICROSECONDS, TIMESTAMP_MAX_MICROSECONDS, UnixToTimestamp, CoreUnixMicrosToTimestamp, CoreUnixMillisToTimestamp, CoreUnixSecondsToTimestamp, TimestampToUnix, CoreTimestampToUnixMicros, CoreTimestampToUnixMillis, CoreTimestampToUnixSeconds, TimestampArithmetic, CoreTimestampAdd, CoreTimestampSub, CorePipeline, MutationBatch, MutationBatchResult, escapeChar, encodedSeparatorChar, encodedNul, encodedEscape, DbRemoteDocumentStore$1, DbPrimaryClientStore, DbPrimaryClientKey, DbMutationQueueStore, DbMutationQueueKeyPath, DbMutationBatchStore, DbMutationBatchKeyPath, DbMutationBatchUserMutationsIndex, DbMutationBatchUserMutationsKeyPath, DbDocumentMutationPlaceholder, DbDocumentMutationStore, DbRemoteDocumentStore, DbRemoteDocumentKeyPath, DbRemoteDocumentDocumentKeyIndex, DbRemoteDocumentDocumentKeyIndexPath, DbRemoteDocumentCollectionGroupIndex, DbRemoteDocumentCollectionGroupIndexPath, DbRemoteDocumentGlobalStore, DbRemoteDocumentGlobalKey, DbTargetStore, DbTargetKeyPath, DbTargetQueryTargetsIndexName, DbTargetQueryTargetsKeyPath, DbTargetDocumentStore, DbTargetDocumentKeyPath, DbTargetDocumentDocumentTargetsIndex, DbTargetDocumentDocumentTargetsKeyPath, DbTargetGlobalKey, DbTargetGlobalStore, DbCollectionParentStore, DbCollectionParentKeyPath, DbClientMetadataStore, DbClientMetadataKeyPath, DbBundleStore, DbBundleKeyPath, DbNamedQueryStore, DbNamedQueryKeyPath, DbIndexConfigurationStore, DbIndexConfigurationKeyPath, DbIndexConfigurationCollectionGroupIndex, DbIndexConfigurationCollectionGroupIndexPath, DbIndexStateStore, DbIndexStateKeyPath, DbIndexStateSequenceNumberIndex, DbIndexStateSequenceNumberIndexPath, DbIndexEntryStore, DbIndexEntryKeyPath, DbIndexEntryDocumentKeyIndex, DbIndexEntryDocumentKeyIndexPath, DbDocumentOverlayStore, DbDocumentOverlayKeyPath, DbDocumentOverlayCollectionPathOverlayIndex, DbDocumentOverlayCollectionPathOverlayIndexPath, DbDocumentOverlayCollectionGroupOverlayIndex, DbDocumentOverlayCollectionGroupOverlayIndexPath, DbGlobalsStore, DbGlobalsKeyPath, V1_STORES, V3_STORES, V4_STORES, V6_STORES, V8_STORES, V11_STORES, V12_STORES, V13_STORES, V14_STORES, V15_STORES, V16_STORES, V17_STORES, V18_STORES, IndexedDbTransaction, Overlay, TargetData, LocalSerializer, IndexedDbMutationQueue, IndexedDbBundleCache, IndexedDbDocumentOverlayCache, IndexedDbGlobalsCache, INDEX_TYPE_NULL, INDEX_TYPE_BOOLEAN, INDEX_TYPE_NAN, INDEX_TYPE_NUMBER, INDEX_TYPE_TIMESTAMP, INDEX_TYPE_STRING, INDEX_TYPE_BLOB, INDEX_TYPE_REFERENCE, INDEX_TYPE_GEOPOINT, INDEX_TYPE_ARRAY, INDEX_TYPE_VECTOR, INDEX_TYPE_MAP, INDEX_TYPE_REFERENCE_SEGMENT, NOT_TRUNCATED, FirestoreIndexValueWriter, MIN_SURROGATE, MAX_SURROGATE, ESCAPE1, NULL_BYTE, SEPARATOR, ESCAPE2, INFINITY2, FF_BYTE, LONG_SIZE, BYTE_SIZE, DEFAULT_BUFFER_SIZE, OrderedCodeWriter, AscendingIndexByteEncoder, DescendingIndexByteEncoder, IndexByteEncoder, IndexEntry, TargetIndexMatcher, MemoryIndexManager, MemoryCollectionParentIndex, LOG_TAG$b, EMPTY_VALUE, IndexedDbIndexManager, OFFSET, TargetIdGenerator, IndexedDbTargetCache, IndexedDbLruDelegateImpl, RemoteDocumentChangeBuffer, IndexedDbRemoteDocumentCacheImpl, IndexedDbRemoteDocumentChangeBuffer, SCHEMA_VERSION, OverlayedDocument, LocalDocumentsView, MemoryBundleCache, MemoryDocumentOverlayCache, MemoryGlobalsCache, ReferenceSet, DocReference, MemoryMutationQueue, MIN_LONG_VALUE, MemoryRemoteDocumentCacheImpl, MemoryRemoteDocumentChangeBuffer, MemoryTargetCache, LOG_TAG$a, MemoryPersistence, MemoryTransaction, MemoryEagerDelegate, MemoryLruDelegate, SchemaConverter, LOG_TAG$9, MAX_CLIENT_AGE_MS, MAX_PRIMARY_ELIGIBLE_AGE_MS, CLIENT_METADATA_REFRESH_INTERVAL_MS, PRIMARY_LEASE_EXCLUSIVE_ERROR_MSG, UNSUPPORTED_PLATFORM_ERROR_MSG, ZOMBIED_CLIENTS_KEY_PREFIX, MAIN_DATABASE, IndexedDbPersistence, LOG_TAG$8, RESUME_TOKEN_MAX_AGE_MICROS, LocalStoreImpl, LOG_TAG$7, MAX_WATCH_STREAM_FAILURES, ONLINE_STATE_TIMEOUT_MS, OnlineStateTracker, LOG_TAG$6, MAX_PENDING_WRITES, RemoteStoreImpl, AsyncObserver, LOG_TAG$5, DelayedOperation, LOG_TAG$4, INITIAL_BACKFILL_DELAY_MS, REGULAR_BACKFILL_DELAY_MS, MAX_DOCUMENTS_TO_PROCESS, IndexBackfillerScheduler, IndexBackfiller, QueryContext, DEFAULT_INDEX_AUTO_CREATION_MIN_COLLECTION_SIZE, QueryEngine, CLIENT_STATE_KEY_PREFIX, MUTATION_BATCH_KEY_PREFIX, QUERY_TARGET_KEY_PREFIX, ONLINE_STATE_KEY_PREFIX, BUNDLE_LOADED_KEY_PREFIX, SEQUENCE_NUMBER_KEY_PREFIX, LOG_TAG$3, MutationMetadata, QueryTargetMetadata, RemoteClientState, SharedOnlineState, LocalClientState, WebStorageSharedClientState, MemorySharedClientState, DocumentSet, DocumentChangeSet, ViewSnapshot, QueryListenersInfo, EventManagerImpl, ListenerDataSource, QueryListener, LocalViewChanges, AddedLimboDocument, RemovedLimboDocument, View, LOG_TAG$2, QueryView, LimboResolution, SyncEngineImpl, MemoryOfflineComponentProvider, LruGcMemoryOfflineComponentProvider, IndexedDbOfflineComponentProvider, MultiTabOfflineComponentProvider, OnlineComponentProvider, LOG_TAG$1, MAX_CONCURRENT_LIMBO_RESOLUTIONS, DOM_EXCEPTION_INVALID_STATE, DOM_EXCEPTION_ABORTED, DOM_EXCEPTION_QUOTA_EXCEEDED, FirestoreClient, LOG_TAG, AsyncQueueImpl, CACHE_SIZE_UNLIMITED, Firestore4, AbstractUserDataWriter, ExpUserDataWriter;
 var init_common_BKJf2lb8_node = __esm({
   "node_modules/@firebase/firestore/dist/common-BKJf2lb8.node.mjs"() {
     init_index_esm3();
@@ -253471,9 +255557,9 @@ var init_common_BKJf2lb8_node = __esm({
       /**
        * Builds a `Timestamp` instance from a JSON object created by {@link Timestamp.toJSON}.
        */
-      static fromJSON(json) {
-        if (validateJSON(json, _Timestamp._jsonSchema)) {
-          return new _Timestamp(json.seconds, json.nanoseconds);
+      static fromJSON(json2) {
+        if (validateJSON(json2, _Timestamp._jsonSchema)) {
+          return new _Timestamp(json2.seconds, json2.nanoseconds);
         }
       }
       /**
@@ -253765,6 +255851,18 @@ var init_common_BKJf2lb8_node = __esm({
     };
     NumericMaximumTransformOperation = class extends NumericTransformOperation {
     };
+    FieldTransform = class {
+      constructor(field2, transform2) {
+        this.field = field2;
+        this.transform = transform2;
+      }
+    };
+    MutationResult = class {
+      constructor(version7, transformResults) {
+        this.version = version7;
+        this.transformResults = transformResults;
+      }
+    };
     Precondition = class _Precondition {
       constructor(updateTime, exists) {
         this.updateTime = updateTime;
@@ -253831,6 +255929,18 @@ var init_common_BKJf2lb8_node = __esm({
         return null;
       }
     };
+    VerifyMutation = class extends Mutation {
+      constructor(key, precondition) {
+        super();
+        this.key = key;
+        this.precondition = precondition;
+        this.type = 3;
+        this.fieldTransforms = [];
+      }
+      getFieldMask() {
+        return null;
+      }
+    };
     Bound = class {
       constructor(position, inclusive) {
         this.position = position;
@@ -253871,8 +255981,8 @@ var init_common_BKJf2lb8_node = __esm({
       static createKeyFieldInFilter(field2, op, value) {
         return op === "in" ? new KeyFieldInFilter(field2, value) : new KeyFieldNotInFilter(field2, value);
       }
-      matches(doc6) {
-        const other = doc6.data.field(this.field);
+      matches(doc5) {
+        const other = doc5.data.field(this.field);
         if (this.op === "!=") {
           return other !== null && other.nullValue === void 0 && this.matchesComparison(valueCompare(other, this.value));
         }
@@ -253929,11 +256039,11 @@ var init_common_BKJf2lb8_node = __esm({
       static create(filters, op) {
         return new _CompositeFilter(filters, op);
       }
-      matches(doc6) {
+      matches(doc5) {
         if (compositeFilterIsConjunction(this)) {
-          return this.filters.find((filter) => !filter.matches(doc6)) === void 0;
+          return this.filters.find((filter) => !filter.matches(doc5)) === void 0;
         } else {
-          return this.filters.find((filter) => filter.matches(doc6)) !== void 0;
+          return this.filters.find((filter) => filter.matches(doc5)) !== void 0;
         }
       }
       getFlattenedFilters() {
@@ -253955,8 +256065,8 @@ var init_common_BKJf2lb8_node = __esm({
         super(field2, op, value);
         this.key = DocumentKey.fromName(value.referenceValue);
       }
-      matches(doc6) {
-        const comparison = DocumentKey.comparator(doc6.key, this.key);
+      matches(doc5) {
+        const comparison = DocumentKey.comparator(doc5.key, this.key);
         return this.matchesComparison(comparison);
       }
     };
@@ -253965,8 +256075,8 @@ var init_common_BKJf2lb8_node = __esm({
         super(field2, "in", value);
         this.keys = extractDocumentKeysFromArrayValue("in", value);
       }
-      matches(doc6) {
-        return this.keys.some((key) => key.isEqual(doc6.key));
+      matches(doc5) {
+        return this.keys.some((key) => key.isEqual(doc5.key));
       }
     };
     KeyFieldNotInFilter = class extends FieldFilter {
@@ -253974,16 +256084,16 @@ var init_common_BKJf2lb8_node = __esm({
         super(field2, "not-in", value);
         this.keys = extractDocumentKeysFromArrayValue("not-in", value);
       }
-      matches(doc6) {
-        return !this.keys.some((key) => key.isEqual(doc6.key));
+      matches(doc5) {
+        return !this.keys.some((key) => key.isEqual(doc5.key));
       }
     };
     ArrayContainsFilter = class extends FieldFilter {
       constructor(field2, value) {
         super(field2, "array-contains", value);
       }
-      matches(doc6) {
-        const other = doc6.data.field(this.field);
+      matches(doc5) {
+        const other = doc5.data.field(this.field);
         return isArray2(other) && arrayValueContains(other.arrayValue, this.value);
       }
     };
@@ -253991,8 +256101,8 @@ var init_common_BKJf2lb8_node = __esm({
       constructor(field2, value) {
         super(field2, "in", value);
       }
-      matches(doc6) {
-        const other = doc6.data.field(this.field);
+      matches(doc5) {
+        const other = doc5.data.field(this.field);
         return other !== null && arrayValueContains(this.value.arrayValue, other);
       }
     };
@@ -254000,11 +256110,11 @@ var init_common_BKJf2lb8_node = __esm({
       constructor(field2, value) {
         super(field2, "not-in", value);
       }
-      matches(doc6) {
+      matches(doc5) {
         if (arrayValueContains(this.value.arrayValue, { nullValue: "NULL_VALUE" })) {
           return false;
         }
-        const other = doc6.data.field(this.field);
+        const other = doc5.data.field(this.field);
         return other !== null && other.nullValue === void 0 && !arrayValueContains(this.value.arrayValue, other);
       }
     };
@@ -254012,8 +256122,8 @@ var init_common_BKJf2lb8_node = __esm({
       constructor(field2, value) {
         super(field2, "array-contains-any", value);
       }
-      matches(doc6) {
-        const other = doc6.data.field(this.field);
+      matches(doc5) {
+        const other = doc5.data.field(this.field);
         if (!isArray2(other) || !other.arrayValue.values) {
           return false;
         }
@@ -254222,6 +256332,7 @@ var init_common_BKJf2lb8_node = __esm({
       }
     };
     INITIAL_LARGEST_BATCH_ID = -1;
+    INITIAL_SEQUENCE_NUMBER = 0;
     FieldIndex = class {
       constructor(indexId, collectionGroup2, fields, indexState) {
         this.indexId = indexId;
@@ -254231,6 +256342,22 @@ var init_common_BKJf2lb8_node = __esm({
       }
     };
     FieldIndex.UNKNOWN_ID = -1;
+    IndexSegment = class {
+      constructor(fieldPath, kind) {
+        this.fieldPath = fieldPath;
+        this.kind = kind;
+      }
+    };
+    IndexState = class _IndexState {
+      constructor(sequenceNumber, offset) {
+        this.sequenceNumber = sequenceNumber;
+        this.offset = offset;
+      }
+      /** The state of an index that has not yet been backfilled. */
+      static empty() {
+        return new _IndexState(INITIAL_SEQUENCE_NUMBER, IndexOffset.min());
+      }
+    };
     IndexOffset = class _IndexOffset {
       constructor(readTime, documentKey, largestBatchId) {
         this.readTime = readTime;
@@ -254867,8 +256994,8 @@ var init_common_BKJf2lb8_node = __esm({
             resolvedLimboDocuments = resolvedLimboDocuments.add(key);
           }
         });
-        this.pendingDocumentUpdates.forEach((_, doc6) => doc6.setReadTime(snapshotVersion));
-        this.pendingAugmentedDocumentUpdates.forEach((_, doc6) => doc6.setReadTime(snapshotVersion));
+        this.pendingDocumentUpdates.forEach((_, doc5) => doc5.setReadTime(snapshotVersion));
+        this.pendingAugmentedDocumentUpdates.forEach((_, doc5) => doc5.setReadTime(snapshotVersion));
         const remoteEvent = new RemoteEvent(snapshotVersion, targetChanges, this.pendingTargetResets, this.pendingDocumentUpdates, this.pendingAugmentedDocumentUpdates, resolvedLimboDocuments);
         this.pendingDocumentUpdates = mutableDocumentMap();
         this.pendingDocumentUpdatesByTarget = documentTargetMap();
@@ -255173,9 +257300,9 @@ var init_common_BKJf2lb8_node = __esm({
        * @returns an instance of {@link Bytes} if the JSON object could be parsed. Throws a
        * {@link FirestoreError} if an error occurs.
        */
-      static fromJSON(json) {
-        if (validateJSON(json, _Bytes._jsonSchema)) {
-          return _Bytes.fromBase64String(json.bytes);
+      static fromJSON(json2) {
+        if (validateJSON(json2, _Bytes._jsonSchema)) {
+          return _Bytes.fromBase64String(json2.bytes);
         }
       }
     };
@@ -255282,9 +257409,9 @@ var init_common_BKJf2lb8_node = __esm({
        * @returns an instance of {@link GeoPoint} if the JSON object could be parsed. Throws a
        * {@link FirestoreError} if an error occurs.
        */
-      static fromJSON(json) {
-        if (validateJSON(json, _GeoPoint._jsonSchema)) {
-          return new _GeoPoint(json.latitude, json.longitude);
+      static fromJSON(json2) {
+        if (validateJSON(json2, _GeoPoint._jsonSchema)) {
+          return new _GeoPoint(json2.latitude, json2.longitude);
         }
       }
     };
@@ -260723,6 +262850,64 @@ var init_common_BKJf2lb8_node = __esm({
         this.sendRequest(request);
       }
     };
+    PersistentWriteStream = class extends PersistentStream {
+      constructor(queue, connection, authCredentials, appCheckCredentials, serializer, listener) {
+        super(queue, "write_stream_connection_backoff", "write_stream_idle", "health_check_timeout", connection, authCredentials, appCheckCredentials, listener);
+        this.serializer = serializer;
+      }
+      /**
+       * Tracks whether or not a handshake has been successfully exchanged and
+       * the stream is ready to accept mutations.
+       */
+      get handshakeComplete() {
+        return this.responseCount > 0;
+      }
+      // Override of PersistentStream.start
+      start() {
+        this.lastStreamToken = void 0;
+        super.start();
+      }
+      tearDown() {
+        if (this.handshakeComplete) {
+          this.writeMutations([]);
+        }
+      }
+      startRpc(authToken, appCheckToken) {
+        return this.connection.openStream("Write", authToken, appCheckToken);
+      }
+      onFirst(responseProto) {
+        hardAssert(!!responseProto.streamToken, 31322);
+        this.lastStreamToken = responseProto.streamToken;
+        hardAssert(!responseProto.writeResults || responseProto.writeResults.length === 0, 55816);
+        return this.listener.onHandshakeComplete();
+      }
+      onNext(responseProto) {
+        hardAssert(!!responseProto.streamToken, 12678);
+        this.lastStreamToken = responseProto.streamToken;
+        this.backoff.reset();
+        const results = fromWriteResults(responseProto.writeResults, responseProto.commitTime);
+        const commitVersion = fromVersion(responseProto.commitTime);
+        return this.listener.onMutationResult(commitVersion, results);
+      }
+      /**
+       * Sends an initial streamToken to the server, performing the handshake
+       * required to make the StreamingWrite RPC work. Subsequent
+       * calls should wait until onHandshakeComplete was called.
+       */
+      writeHandshake() {
+        const request = {};
+        request.database = getEncodedDatabaseId(this.serializer);
+        this.sendRequest(request);
+      }
+      /** Sends a group of mutations to the Firestore backend to apply. */
+      writeMutations(mutations) {
+        const request = {
+          streamToken: this.lastStreamToken,
+          writes: mutations.map((mutation) => toMutation(this.serializer, mutation))
+        };
+        this.sendRequest(request);
+      }
+    };
     Datastore = class {
     };
     DatastoreImpl = class extends Datastore {
@@ -261016,6 +263201,468 @@ var init_common_BKJf2lb8_node = __esm({
         });
       }
     };
+    LOG_TAG$d = "SimpleDb";
+    TRANSACTION_RETRY_COUNT = 3;
+    SimpleDbTransaction = class _SimpleDbTransaction {
+      static open(db3, action, mode, objectStoreNames) {
+        try {
+          return new _SimpleDbTransaction(action, db3.transaction(objectStoreNames, mode));
+        } catch (e2) {
+          throw new IndexedDbTransactionError(action, e2);
+        }
+      }
+      constructor(action, transaction) {
+        this.action = action;
+        this.transaction = transaction;
+        this.aborted = false;
+        this.completionDeferred = new Deferred2();
+        this.transaction.oncomplete = () => {
+          this.completionDeferred.resolve();
+        };
+        this.transaction.onabort = () => {
+          if (transaction.error) {
+            this.completionDeferred.reject(new IndexedDbTransactionError(action, transaction.error));
+          } else {
+            this.completionDeferred.resolve();
+          }
+        };
+        this.transaction.onerror = (event) => {
+          const error = checkForAndReportiOSError(event.target.error);
+          this.completionDeferred.reject(new IndexedDbTransactionError(action, error));
+        };
+      }
+      get completionPromise() {
+        return this.completionDeferred.promise;
+      }
+      abort(error) {
+        if (error) {
+          this.completionDeferred.reject(error);
+        }
+        if (!this.aborted) {
+          logDebug(LOG_TAG$d, "Aborting transaction:", error ? error.message : "Client-initiated abort");
+          this.aborted = true;
+          this.transaction.abort();
+        }
+      }
+      maybeCommit() {
+        const maybeV3IndexedDb = this.transaction;
+        if (!this.aborted && typeof maybeV3IndexedDb.commit === "function") {
+          maybeV3IndexedDb.commit();
+        }
+      }
+      /**
+       * Returns a SimpleDbStore<KeyType, ValueType> for the specified store. All
+       * operations performed on the SimpleDbStore happen within the context of this
+       * transaction and it cannot be used anymore once the transaction is
+       * completed.
+       *
+       * Note that we can't actually enforce that the KeyType and ValueType are
+       * correct, but they allow type safety through the rest of the consuming code.
+       */
+      store(storeName) {
+        const store = this.transaction.objectStore(storeName);
+        return new SimpleDbStore(store);
+      }
+    };
+    SimpleDb = class _SimpleDb {
+      /** Deletes the specified database. */
+      static delete(name5) {
+        logDebug(LOG_TAG$d, "Removing database:", name5);
+        const globals = getGlobal2();
+        return wrapRequest(globals.indexedDB.deleteDatabase(name5)).toPromise();
+      }
+      /** Returns true if IndexedDB is available in the current environment. */
+      static isAvailable() {
+        if (!isIndexedDBAvailable()) {
+          return false;
+        }
+        if (_SimpleDb.isMockPersistence()) {
+          return true;
+        }
+        const ua = getUA();
+        const iOSVersion = _SimpleDb.getIOSVersion(ua);
+        const isUnsupportedIOS = 0 < iOSVersion && iOSVersion < 10;
+        const androidVersion = getAndroidVersion(ua);
+        const isUnsupportedAndroid = 0 < androidVersion && androidVersion < 4.5;
+        if (ua.indexOf("MSIE ") > 0 || ua.indexOf("Trident/") > 0 || ua.indexOf("Edge/") > 0 || isUnsupportedIOS || isUnsupportedAndroid) {
+          return false;
+        } else {
+          return true;
+        }
+      }
+      /**
+       * Returns true if the backing IndexedDB store is the Node IndexedDBShim
+       * (see https://github.com/axemclion/IndexedDBShim).
+       */
+      static isMockPersistence() {
+        return typeof process !== "undefined" && process.env?.USE_MOCK_PERSISTENCE === "YES";
+      }
+      /** Helper to get a typed SimpleDbStore from a transaction. */
+      static getStore(txn, store) {
+        return txn.store(store);
+      }
+      // visible for testing
+      /** Parse User Agent to determine iOS version. Returns -1 if not found. */
+      static getIOSVersion(ua) {
+        const iOSVersionRegex = ua.match(/i(?:phone|pad|pod) os ([\d_]+)/i);
+        const version7 = iOSVersionRegex ? iOSVersionRegex[1].split("_").slice(0, 2).join(".") : "-1";
+        return Number(version7);
+      }
+      /*
+       * Creates a new SimpleDb wrapper for IndexedDb database `name`.
+       *
+       * Note that `version` must not be a downgrade. IndexedDB does not support
+       * downgrading the schema version. We currently do not support any way to do
+       * versioning outside of IndexedDB's versioning mechanism, as only
+       * version-upgrade transactions are allowed to do things like create
+       * objectstores.
+       */
+      constructor(name5, version7, schemaConverter) {
+        this.name = name5;
+        this.version = version7;
+        this.schemaConverter = schemaConverter;
+        this.lastClosedDbVersion = null;
+        const iOSVersion = _SimpleDb.getIOSVersion(getUA());
+        if (iOSVersion === 12.2) {
+          logError("Firestore persistence suffers from a bug in iOS 12.2 Safari that may cause your app to stop working. See https://stackoverflow.com/q/56496296/110915 for details and a potential workaround.");
+        }
+      }
+      /**
+       * Opens the specified database, creating or upgrading it if necessary.
+       */
+      async ensureDb(action) {
+        if (!this.db) {
+          logDebug(LOG_TAG$d, "Opening database:", this.name);
+          this.db = await new Promise((resolve, reject) => {
+            const request = indexedDB.open(this.name, this.version);
+            request.onsuccess = (event) => {
+              const db3 = event.target.result;
+              resolve(db3);
+            };
+            request.onblocked = () => {
+              reject(new IndexedDbTransactionError(action, "Cannot upgrade IndexedDB schema while another tab is open. Close all tabs that access Firestore and reload this page to proceed."));
+            };
+            request.onerror = (event) => {
+              const error = event.target.error;
+              if (error.name === "VersionError") {
+                reject(new FirestoreError(Code.FAILED_PRECONDITION, "A newer version of the Firestore SDK was previously used and so the persisted data is not compatible with the version of the SDK you are now using. The SDK will operate with persistence disabled. If you need persistence, please re-upgrade to a newer version of the SDK or else clear the persisted IndexedDB data for your app to start fresh."));
+              } else if (error.name === "InvalidStateError") {
+                reject(new FirestoreError(Code.FAILED_PRECONDITION, "Unable to open an IndexedDB connection. This could be due to running in a private browsing session on a browser whose private browsing sessions do not support IndexedDB: " + error));
+              } else {
+                reject(new IndexedDbTransactionError(action, error));
+              }
+            };
+            request.onupgradeneeded = (event) => {
+              logDebug(LOG_TAG$d, 'Database "' + this.name + '" requires upgrade from version:', event.oldVersion);
+              const db3 = event.target.result;
+              this.schemaConverter.createOrUpgrade(db3, request.transaction, event.oldVersion, this.version).next(() => {
+                logDebug(LOG_TAG$d, "Database upgrade to version " + this.version + " complete");
+              });
+            };
+          });
+        }
+        if (this.versionchangelistener) {
+          this.db.onversionchange = (event) => this.versionchangelistener(event);
+        }
+        return this.db;
+      }
+      setVersionChangeListener(versionChangeListener) {
+        this.versionchangelistener = versionChangeListener;
+        if (this.db) {
+          this.db.onversionchange = (event) => {
+            return versionChangeListener(event);
+          };
+        }
+      }
+      async runTransaction(action, mode, objectStores, transactionFn) {
+        const readonly = mode === "readonly";
+        let attemptNumber = 0;
+        while (true) {
+          ++attemptNumber;
+          try {
+            this.db = await this.ensureDb(action);
+            const transaction = SimpleDbTransaction.open(this.db, action, readonly ? "readonly" : "readwrite", objectStores);
+            const transactionFnResult = transactionFn(transaction).next((result) => {
+              transaction.maybeCommit();
+              return result;
+            }).catch((error) => {
+              transaction.abort(error);
+              return PersistencePromise.reject(error);
+            }).toPromise();
+            transactionFnResult.catch(() => {
+            });
+            await transaction.completionPromise;
+            return transactionFnResult;
+          } catch (e2) {
+            const error = e2;
+            const retryable = error.name !== "FirebaseError" && attemptNumber < TRANSACTION_RETRY_COUNT;
+            logDebug(LOG_TAG$d, "Transaction failed with error:", error.message, "Retrying:", retryable);
+            this.close();
+            if (!retryable) {
+              return Promise.reject(error);
+            }
+          }
+        }
+      }
+      close() {
+        if (this.db) {
+          this.db.close();
+        }
+        this.db = void 0;
+      }
+    };
+    IterationController = class {
+      constructor(dbCursor) {
+        this.dbCursor = dbCursor;
+        this.shouldStop = false;
+        this.nextKey = null;
+      }
+      get isDone() {
+        return this.shouldStop;
+      }
+      get skipToKey() {
+        return this.nextKey;
+      }
+      set cursor(value) {
+        this.dbCursor = value;
+      }
+      /**
+       * This function can be called to stop iteration at any point.
+       */
+      done() {
+        this.shouldStop = true;
+      }
+      /**
+       * This function can be called to skip to that next key, which could be
+       * an index or a primary key.
+       */
+      skip(key) {
+        this.nextKey = key;
+      }
+      /**
+       * Delete the current cursor value from the object store.
+       *
+       * NOTE: You CANNOT do this with a keysOnly query.
+       */
+      delete() {
+        return wrapRequest(this.dbCursor.delete());
+      }
+    };
+    IndexedDbTransactionError = class extends FirestoreError {
+      constructor(actionName, cause) {
+        super(Code.UNAVAILABLE, `IndexedDB transaction '${actionName}' failed: ${cause}`);
+        this.name = "IndexedDbTransactionError";
+      }
+    };
+    SimpleDbStore = class {
+      constructor(store) {
+        this.store = store;
+      }
+      put(keyOrValue, value) {
+        let request;
+        if (value !== void 0) {
+          logDebug(LOG_TAG$d, "PUT", this.store.name, keyOrValue, value);
+          request = this.store.put(value, keyOrValue);
+        } else {
+          logDebug(LOG_TAG$d, "PUT", this.store.name, "<auto-key>", keyOrValue);
+          request = this.store.put(keyOrValue);
+        }
+        return wrapRequest(request);
+      }
+      /**
+       * Adds a new value into an Object Store and returns the new key. Similar to
+       * IndexedDb's `add()`, this method will fail on primary key collisions.
+       *
+       * @param value - The object to write.
+       * @returns The key of the value to add.
+       */
+      add(value) {
+        logDebug(LOG_TAG$d, "ADD", this.store.name, value, value);
+        const request = this.store.add(value);
+        return wrapRequest(request);
+      }
+      /**
+       * Gets the object with the specified key from the specified store, or null
+       * if no object exists with the specified key.
+       *
+       * @key The key of the object to get.
+       * @returns The object with the specified key or null if no object exists.
+       */
+      get(key) {
+        const request = this.store.get(key);
+        return wrapRequest(request).next((result) => {
+          if (result === void 0) {
+            result = null;
+          }
+          logDebug(LOG_TAG$d, "GET", this.store.name, key, result);
+          return result;
+        });
+      }
+      delete(key) {
+        logDebug(LOG_TAG$d, "DELETE", this.store.name, key);
+        const request = this.store.delete(key);
+        return wrapRequest(request);
+      }
+      /**
+       * If we ever need more of the count variants, we can add overloads. For now,
+       * all we need is to count everything in a store.
+       *
+       * Returns the number of rows in the store.
+       */
+      count() {
+        logDebug(LOG_TAG$d, "COUNT", this.store.name);
+        const request = this.store.count();
+        return wrapRequest(request);
+      }
+      loadAll(indexOrRange, range) {
+        const iterateOptions = this.options(indexOrRange, range);
+        const store = iterateOptions.index ? this.store.index(iterateOptions.index) : this.store;
+        if (typeof store.getAll === "function") {
+          const request = store.getAll(iterateOptions.range);
+          return new PersistencePromise((resolve, reject) => {
+            request.onerror = (event) => {
+              reject(event.target.error);
+            };
+            request.onsuccess = (event) => {
+              resolve(event.target.result);
+            };
+          });
+        } else {
+          const cursor = this.cursor(iterateOptions);
+          const results = [];
+          return this.iterateCursor(cursor, (key, value) => {
+            results.push(value);
+          }).next(() => {
+            return results;
+          });
+        }
+      }
+      /**
+       * Loads the first `count` elements from the provided index range. Loads all
+       * elements if no limit is provided.
+       */
+      loadFirst(range, count) {
+        const request = this.store.getAll(range, count === null ? void 0 : count);
+        return new PersistencePromise((resolve, reject) => {
+          request.onerror = (event) => {
+            reject(event.target.error);
+          };
+          request.onsuccess = (event) => {
+            resolve(event.target.result);
+          };
+        });
+      }
+      deleteAll(indexOrRange, range) {
+        logDebug(LOG_TAG$d, "DELETE ALL", this.store.name);
+        const options2 = this.options(indexOrRange, range);
+        options2.keysOnly = false;
+        const cursor = this.cursor(options2);
+        return this.iterateCursor(cursor, (key, value, control) => {
+          return control.delete();
+        });
+      }
+      iterate(optionsOrCallback, callback) {
+        let options2;
+        if (!callback) {
+          options2 = {};
+          callback = optionsOrCallback;
+        } else {
+          options2 = optionsOrCallback;
+        }
+        const cursor = this.cursor(options2);
+        return this.iterateCursor(cursor, callback);
+      }
+      /**
+       * Iterates over a store, but waits for the given callback to complete for
+       * each entry before iterating the next entry. This allows the callback to do
+       * asynchronous work to determine if this iteration should continue.
+       *
+       * The provided callback should return `true` to continue iteration, and
+       * `false` otherwise.
+       */
+      iterateSerial(callback) {
+        const cursorRequest = this.cursor({});
+        return new PersistencePromise((resolve, reject) => {
+          cursorRequest.onerror = (event) => {
+            const error = checkForAndReportiOSError(event.target.error);
+            reject(error);
+          };
+          cursorRequest.onsuccess = (event) => {
+            const cursor = event.target.result;
+            if (!cursor) {
+              resolve();
+              return;
+            }
+            callback(cursor.primaryKey, cursor.value).next((shouldContinue) => {
+              if (shouldContinue) {
+                cursor.continue();
+              } else {
+                resolve();
+              }
+            });
+          };
+        });
+      }
+      iterateCursor(cursorRequest, fn) {
+        const results = [];
+        return new PersistencePromise((resolve, reject) => {
+          cursorRequest.onerror = (event) => {
+            reject(event.target.error);
+          };
+          cursorRequest.onsuccess = (event) => {
+            const cursor = event.target.result;
+            if (!cursor) {
+              resolve();
+              return;
+            }
+            const controller = new IterationController(cursor);
+            const userResult = fn(cursor.primaryKey, cursor.value, controller);
+            if (userResult instanceof PersistencePromise) {
+              const userPromise = userResult.catch((err) => {
+                controller.done();
+                return PersistencePromise.reject(err);
+              });
+              results.push(userPromise);
+            }
+            if (controller.isDone) {
+              resolve();
+            } else if (controller.skipToKey === null) {
+              cursor.continue();
+            } else {
+              cursor.continue(controller.skipToKey);
+            }
+          };
+        }).next(() => PersistencePromise.waitFor(results));
+      }
+      options(indexOrRange, range) {
+        let indexName = void 0;
+        if (indexOrRange !== void 0) {
+          if (typeof indexOrRange === "string") {
+            indexName = indexOrRange;
+          } else {
+            range = indexOrRange;
+          }
+        }
+        return { index: indexName, range };
+      }
+      cursor(options2) {
+        let direction = "next";
+        if (options2.reverse) {
+          direction = "prev";
+        }
+        if (options2.index) {
+          const index = this.store.index(options2.index);
+          if (options2.keysOnly) {
+            return index.openKeyCursor(options2.range, direction);
+          } else {
+            return index.openCursor(options2.range, direction);
+          }
+        } else {
+          return this.store.openCursor(options2.range, direction);
+        }
+      }
+    };
+    reportedIOSError = false;
     LOG_TAG$c = "LruGarbageCollector";
     LRU_MINIMUM_CACHE_SIZE_BYTES = 1 * 1024 * 1024;
     INITIAL_GC_DELAY_MS = 1 * 60 * 1e3;
@@ -261362,9 +264009,9 @@ Total Duration: ${removedDocumentsTs - startTs}ms`;
           referencePath: this._key.toString()
         };
       }
-      static fromJSON(firestore, json, converter) {
-        if (validateJSON(json, _DocumentReference._jsonSchema)) {
-          return new _DocumentReference(firestore, converter ? converter : null, new DocumentKey(ResourcePath.fromString(json.referencePath)));
+      static fromJSON(firestore, json2, converter) {
+        if (validateJSON(json2, _DocumentReference._jsonSchema)) {
+          return new _DocumentReference(firestore, converter ? converter : null, new DocumentKey(ResourcePath.fromString(json2.referencePath)));
         }
       }
     };
@@ -261450,10 +264097,10 @@ Total Duration: ${removedDocumentsTs - startTs}ms`;
        * @returns an instance of {@link VectorValue} if the JSON object could be parsed. Throws a
        * {@link FirestoreError} if an error occurs.
        */
-      static fromJSON(json) {
-        if (validateJSON(json, _VectorValue._jsonSchema)) {
-          if (Array.isArray(json.vectorValues) && json.vectorValues.every((element) => typeof element === "number")) {
-            return new _VectorValue(json.vectorValues);
+      static fromJSON(json2) {
+        if (validateJSON(json2, _VectorValue._jsonSchema)) {
+          if (Array.isArray(json2.vectorValues) && json2.vectorValues.every((element) => typeof element === "number")) {
+            return new _VectorValue(json2.vectorValues);
           }
           throw new FirestoreError(Code.INVALID_ARGUMENT, "Expected 'vectorValues' field to be a number array");
         }
@@ -265653,29 +268300,129 @@ Total Duration: ${removedDocumentsTs - startTs}ms`;
         return this.batchId === other.batchId && arrayEquals(this.mutations, other.mutations, (l, r2) => mutationEquals(l, r2)) && arrayEquals(this.baseMutations, other.baseMutations, (l, r2) => mutationEquals(l, r2));
       }
     };
+    MutationBatchResult = class _MutationBatchResult {
+      constructor(batch, commitVersion, mutationResults, docVersions) {
+        this.batch = batch;
+        this.commitVersion = commitVersion;
+        this.mutationResults = mutationResults;
+        this.docVersions = docVersions;
+      }
+      /**
+       * Creates a new MutationBatchResult for the given batch and results. There
+       * must be one result for each mutation in the batch. This static factory
+       * caches a document=&gt;version mapping (docVersions).
+       */
+      static from(batch, commitVersion, results) {
+        hardAssert(batch.mutations.length === results.length, 58842, {
+          mutationsSent: batch.mutations.length,
+          resultsReceived: results.length
+        });
+        let versionMap = documentVersionMap();
+        const mutations = batch.mutations;
+        for (let i2 = 0; i2 < mutations.length; i2++) {
+          versionMap = versionMap.insert(mutations[i2].key, results[i2].version);
+        }
+        return new _MutationBatchResult(batch, commitVersion, results, versionMap);
+      }
+    };
     escapeChar = "";
     encodedSeparatorChar = "";
     encodedNul = "";
     encodedEscape = "";
     DbRemoteDocumentStore$1 = "remoteDocuments";
     DbPrimaryClientStore = "owner";
+    DbPrimaryClientKey = "owner";
     DbMutationQueueStore = "mutationQueues";
+    DbMutationQueueKeyPath = "userId";
     DbMutationBatchStore = "mutations";
+    DbMutationBatchKeyPath = "batchId";
+    DbMutationBatchUserMutationsIndex = "userMutationsIndex";
+    DbMutationBatchUserMutationsKeyPath = ["userId", "batchId"];
+    DbDocumentMutationPlaceholder = {};
     DbDocumentMutationStore = "documentMutations";
     DbRemoteDocumentStore = "remoteDocumentsV14";
+    DbRemoteDocumentKeyPath = [
+      "prefixPath",
+      "collectionGroup",
+      "readTime",
+      "documentId"
+    ];
+    DbRemoteDocumentDocumentKeyIndex = "documentKeyIndex";
+    DbRemoteDocumentDocumentKeyIndexPath = [
+      "prefixPath",
+      "collectionGroup",
+      "documentId"
+    ];
+    DbRemoteDocumentCollectionGroupIndex = "collectionGroupIndex";
+    DbRemoteDocumentCollectionGroupIndexPath = [
+      "collectionGroup",
+      "readTime",
+      "prefixPath",
+      "documentId"
+    ];
     DbRemoteDocumentGlobalStore = "remoteDocumentGlobal";
+    DbRemoteDocumentGlobalKey = "remoteDocumentGlobalKey";
     DbTargetStore = "targets";
+    DbTargetKeyPath = "targetId";
+    DbTargetQueryTargetsIndexName = "queryTargetsIndex";
+    DbTargetQueryTargetsKeyPath = ["canonicalId", "targetId"];
     DbTargetDocumentStore = "targetDocuments";
+    DbTargetDocumentKeyPath = ["targetId", "path"];
+    DbTargetDocumentDocumentTargetsIndex = "documentTargetsIndex";
+    DbTargetDocumentDocumentTargetsKeyPath = ["path", "targetId"];
+    DbTargetGlobalKey = "targetGlobalKey";
     DbTargetGlobalStore = "targetGlobal";
     DbCollectionParentStore = "collectionParents";
+    DbCollectionParentKeyPath = ["collectionId", "parent"];
     DbClientMetadataStore = "clientMetadata";
+    DbClientMetadataKeyPath = "clientId";
     DbBundleStore = "bundles";
+    DbBundleKeyPath = "bundleId";
     DbNamedQueryStore = "namedQueries";
+    DbNamedQueryKeyPath = "name";
     DbIndexConfigurationStore = "indexConfiguration";
+    DbIndexConfigurationKeyPath = "indexId";
+    DbIndexConfigurationCollectionGroupIndex = "collectionGroupIndex";
+    DbIndexConfigurationCollectionGroupIndexPath = "collectionGroup";
     DbIndexStateStore = "indexState";
+    DbIndexStateKeyPath = ["indexId", "uid"];
+    DbIndexStateSequenceNumberIndex = "sequenceNumberIndex";
+    DbIndexStateSequenceNumberIndexPath = ["uid", "sequenceNumber"];
     DbIndexEntryStore = "indexEntries";
+    DbIndexEntryKeyPath = [
+      "indexId",
+      "uid",
+      "arrayValue",
+      "directionalValue",
+      "orderedDocumentKey",
+      "documentKey"
+    ];
+    DbIndexEntryDocumentKeyIndex = "documentKeyIndex";
+    DbIndexEntryDocumentKeyIndexPath = [
+      "indexId",
+      "uid",
+      "orderedDocumentKey"
+    ];
     DbDocumentOverlayStore = "documentOverlays";
+    DbDocumentOverlayKeyPath = [
+      "userId",
+      "collectionPath",
+      "documentId"
+    ];
+    DbDocumentOverlayCollectionPathOverlayIndex = "collectionPathOverlayIndex";
+    DbDocumentOverlayCollectionPathOverlayIndexPath = [
+      "userId",
+      "collectionPath",
+      "largestBatchId"
+    ];
+    DbDocumentOverlayCollectionGroupOverlayIndex = "collectionGroupOverlayIndex";
+    DbDocumentOverlayCollectionGroupOverlayIndexPath = [
+      "userId",
+      "collectionGroup",
+      "largestBatchId"
+    ];
     DbGlobalsStore = "globals";
+    DbGlobalsKeyPath = "name";
     V1_STORES = [
       DbMutationQueueStore,
       DbMutationBatchStore,
@@ -265715,7 +268462,16 @@ Total Duration: ${removedDocumentsTs - startTs}ms`;
       DbIndexStateStore,
       DbIndexEntryStore
     ];
+    V16_STORES = V15_STORES;
     V17_STORES = [...V15_STORES, DbGlobalsStore];
+    V18_STORES = V17_STORES;
+    IndexedDbTransaction = class extends PersistenceTransaction {
+      constructor(simpleDbTransaction, currentSequenceNumber) {
+        super();
+        this.simpleDbTransaction = simpleDbTransaction;
+        this.currentSequenceNumber = currentSequenceNumber;
+      }
+    };
     Overlay = class {
       constructor(largestBatchId, mutation) {
         this.largestBatchId = largestBatchId;
@@ -265783,6 +268539,408 @@ Total Duration: ${removedDocumentsTs - startTs}ms`;
     LocalSerializer = class {
       constructor(remoteSerializer) {
         this.remoteSerializer = remoteSerializer;
+      }
+    };
+    IndexedDbMutationQueue = class _IndexedDbMutationQueue {
+      constructor(userId, serializer, indexManager, referenceDelegate) {
+        this.userId = userId;
+        this.serializer = serializer;
+        this.indexManager = indexManager;
+        this.referenceDelegate = referenceDelegate;
+        this.documentKeysByBatchId = {};
+      }
+      /**
+       * Creates a new mutation queue for the given user.
+       * @param user - The user for which to create a mutation queue.
+       * @param serializer - The serializer to use when persisting to IndexedDb.
+       */
+      static forUser(user, serializer, indexManager, referenceDelegate) {
+        hardAssert(user.uid !== "", 64387);
+        const userId = user.isAuthenticated() ? user.uid : "";
+        return new _IndexedDbMutationQueue(userId, serializer, indexManager, referenceDelegate);
+      }
+      checkEmpty(transaction) {
+        let empty = true;
+        const range = IDBKeyRange.bound([this.userId, Number.NEGATIVE_INFINITY], [this.userId, Number.POSITIVE_INFINITY]);
+        return mutationsStore(transaction).iterate({ index: DbMutationBatchUserMutationsIndex, range }, (key, value, control) => {
+          empty = false;
+          control.done();
+        }).next(() => empty);
+      }
+      addMutationBatch(transaction, localWriteTime, baseMutations, mutations) {
+        const documentStore = documentMutationsStore(transaction);
+        const mutationStore = mutationsStore(transaction);
+        return mutationStore.add({}).next((batchId) => {
+          hardAssert(typeof batchId === "number", 49019);
+          const batch = new MutationBatch(batchId, localWriteTime, baseMutations, mutations);
+          const dbBatch = toDbMutationBatch(this.serializer, this.userId, batch);
+          const promises = [];
+          let collectionParents = new SortedSet((l, r2) => primitiveComparator(l.canonicalString(), r2.canonicalString()));
+          for (const mutation of mutations) {
+            const indexKey = newDbDocumentMutationKey(this.userId, mutation.key.path, batchId);
+            collectionParents = collectionParents.add(mutation.key.path.popLast());
+            promises.push(mutationStore.put(dbBatch));
+            promises.push(documentStore.put(indexKey, DbDocumentMutationPlaceholder));
+          }
+          collectionParents.forEach((parent) => {
+            promises.push(this.indexManager.addToCollectionParentIndex(transaction, parent));
+          });
+          transaction.addOnCommittedListener(() => {
+            this.documentKeysByBatchId[batchId] = batch.keys();
+          });
+          return PersistencePromise.waitFor(promises).next(() => batch);
+        });
+      }
+      lookupMutationBatch(transaction, batchId) {
+        return mutationsStore(transaction).get(batchId).next((dbBatch) => {
+          if (dbBatch) {
+            hardAssert(dbBatch.userId === this.userId, 48, `Unexpected user for mutation batch`, {
+              userId: dbBatch.userId,
+              batchId
+            });
+            return fromDbMutationBatch(this.serializer, dbBatch);
+          }
+          return null;
+        });
+      }
+      /**
+       * Returns the document keys for the mutation batch with the given batchId.
+       * For primary clients, this method returns `null` after
+       * `removeMutationBatches()` has been called. Secondary clients return a
+       * cached result until `removeCachedMutationKeys()` is invoked.
+       */
+      // PORTING NOTE: Multi-tab only.
+      lookupMutationKeys(transaction, batchId) {
+        if (this.documentKeysByBatchId[batchId]) {
+          return PersistencePromise.resolve(this.documentKeysByBatchId[batchId]);
+        } else {
+          return this.lookupMutationBatch(transaction, batchId).next((batch) => {
+            if (batch) {
+              const keys = batch.keys();
+              this.documentKeysByBatchId[batchId] = keys;
+              return keys;
+            } else {
+              return null;
+            }
+          });
+        }
+      }
+      getNextMutationBatchAfterBatchId(transaction, batchId) {
+        const nextBatchId = batchId + 1;
+        const range = IDBKeyRange.lowerBound([this.userId, nextBatchId]);
+        let foundBatch = null;
+        return mutationsStore(transaction).iterate({ index: DbMutationBatchUserMutationsIndex, range }, (key, dbBatch, control) => {
+          if (dbBatch.userId === this.userId) {
+            hardAssert(dbBatch.batchId >= nextBatchId, 47524, { nextBatchId });
+            foundBatch = fromDbMutationBatch(this.serializer, dbBatch);
+          }
+          control.done();
+        }).next(() => foundBatch);
+      }
+      getHighestUnacknowledgedBatchId(transaction) {
+        const range = IDBKeyRange.upperBound([
+          this.userId,
+          Number.POSITIVE_INFINITY
+        ]);
+        let batchId = BATCHID_UNKNOWN;
+        return mutationsStore(transaction).iterate({ index: DbMutationBatchUserMutationsIndex, range, reverse: true }, (key, dbBatch, control) => {
+          batchId = dbBatch.batchId;
+          control.done();
+        }).next(() => batchId);
+      }
+      getAllMutationBatches(transaction) {
+        const range = IDBKeyRange.bound([this.userId, BATCHID_UNKNOWN], [this.userId, Number.POSITIVE_INFINITY]);
+        return mutationsStore(transaction).loadAll(DbMutationBatchUserMutationsIndex, range).next((dbBatches) => dbBatches.map((dbBatch) => fromDbMutationBatch(this.serializer, dbBatch)));
+      }
+      getAllMutationBatchesAffectingDocumentKey(transaction, documentKey) {
+        const indexPrefix = newDbDocumentMutationPrefixForPath(this.userId, documentKey.path);
+        const indexStart = IDBKeyRange.lowerBound(indexPrefix);
+        const results = [];
+        return documentMutationsStore(transaction).iterate({ range: indexStart }, (indexKey, _, control) => {
+          const [userID, encodedPath, batchId] = indexKey;
+          const path3 = decodeResourcePath(encodedPath);
+          if (userID !== this.userId || !documentKey.path.isEqual(path3)) {
+            control.done();
+            return;
+          }
+          return mutationsStore(transaction).get(batchId).next((mutation) => {
+            if (!mutation) {
+              throw fail(61480, {
+                indexKey,
+                batchId
+              });
+            }
+            hardAssert(mutation.userId === this.userId, 10503, `Unexpected user for mutation batch`, {
+              userId: mutation.userId,
+              batchId
+            });
+            results.push(fromDbMutationBatch(this.serializer, mutation));
+          });
+        }).next(() => results);
+      }
+      getAllMutationBatchesAffectingDocumentKeys(transaction, documentKeys) {
+        let uniqueBatchIDs = new SortedSet(primitiveComparator);
+        const promises = [];
+        documentKeys.forEach((documentKey) => {
+          const indexStart = newDbDocumentMutationPrefixForPath(this.userId, documentKey.path);
+          const range = IDBKeyRange.lowerBound(indexStart);
+          const promise = documentMutationsStore(transaction).iterate({ range }, (indexKey, _, control) => {
+            const [userID, encodedPath, batchID] = indexKey;
+            const path3 = decodeResourcePath(encodedPath);
+            if (userID !== this.userId || !documentKey.path.isEqual(path3)) {
+              control.done();
+              return;
+            }
+            uniqueBatchIDs = uniqueBatchIDs.add(batchID);
+          });
+          promises.push(promise);
+        });
+        return PersistencePromise.waitFor(promises).next(() => this.lookupMutationBatches(transaction, uniqueBatchIDs));
+      }
+      getAllMutationBatchesAffectingQuery(transaction, query2) {
+        const queryPath = query2.path;
+        const immediateChildrenLength = queryPath.length + 1;
+        const indexPrefix = newDbDocumentMutationPrefixForPath(this.userId, queryPath);
+        const indexStart = IDBKeyRange.lowerBound(indexPrefix);
+        let uniqueBatchIDs = new SortedSet(primitiveComparator);
+        return documentMutationsStore(transaction).iterate({ range: indexStart }, (indexKey, _, control) => {
+          const [userID, encodedPath, batchID] = indexKey;
+          const path3 = decodeResourcePath(encodedPath);
+          if (userID !== this.userId || !queryPath.isPrefixOf(path3)) {
+            control.done();
+            return;
+          }
+          if (path3.length !== immediateChildrenLength) {
+            return;
+          }
+          uniqueBatchIDs = uniqueBatchIDs.add(batchID);
+        }).next(() => this.lookupMutationBatches(transaction, uniqueBatchIDs));
+      }
+      lookupMutationBatches(transaction, batchIDs) {
+        const results = [];
+        const promises = [];
+        batchIDs.forEach((batchId) => {
+          promises.push(mutationsStore(transaction).get(batchId).next((mutation) => {
+            if (mutation === null) {
+              throw fail(35274, {
+                batchId
+              });
+            }
+            hardAssert(mutation.userId === this.userId, 9748, `Unexpected user for mutation batch`, { userId: mutation.userId, batchId });
+            results.push(fromDbMutationBatch(this.serializer, mutation));
+          }));
+        });
+        return PersistencePromise.waitFor(promises).next(() => results);
+      }
+      removeMutationBatch(transaction, batch) {
+        return removeMutationBatch(transaction.simpleDbTransaction, this.userId, batch).next((removedDocuments) => {
+          transaction.addOnCommittedListener(() => {
+            this.removeCachedMutationKeys(batch.batchId);
+          });
+          return PersistencePromise.forEach(removedDocuments, (key) => {
+            return this.referenceDelegate.markPotentiallyOrphaned(transaction, key);
+          });
+        });
+      }
+      /**
+       * Clears the cached keys for a mutation batch. This method should be
+       * called by secondary clients after they process mutation updates.
+       *
+       * Note that this method does not have to be called from primary clients as
+       * the corresponding cache entries are cleared when an acknowledged or
+       * rejected batch is removed from the mutation queue.
+       */
+      // PORTING NOTE: Multi-tab only
+      removeCachedMutationKeys(batchId) {
+        delete this.documentKeysByBatchId[batchId];
+      }
+      performConsistencyCheck(txn) {
+        return this.checkEmpty(txn).next((empty) => {
+          if (!empty) {
+            return PersistencePromise.resolve();
+          }
+          const startRange = IDBKeyRange.lowerBound(newDbDocumentMutationPrefixForUser(this.userId));
+          const danglingMutationReferences = [];
+          return documentMutationsStore(txn).iterate({ range: startRange }, (key, _, control) => {
+            const userID = key[0];
+            if (userID !== this.userId) {
+              control.done();
+              return;
+            } else {
+              const path3 = decodeResourcePath(key[1]);
+              danglingMutationReferences.push(path3);
+            }
+          }).next(() => {
+            hardAssert(danglingMutationReferences.length === 0, 56720, {
+              danglingKeys: danglingMutationReferences.map((p) => p.canonicalString())
+            });
+          });
+        });
+      }
+      containsKey(txn, key) {
+        return mutationQueueContainsKey(txn, this.userId, key);
+      }
+      // PORTING NOTE: Multi-tab only (state is held in memory in other clients).
+      /** Returns the mutation queue's metadata from IndexedDb. */
+      getMutationQueueMetadata(transaction) {
+        return mutationQueuesStore(transaction).get(this.userId).next((metadata) => {
+          return metadata || {
+            userId: this.userId,
+            lastAcknowledgedBatchId: BATCHID_UNKNOWN,
+            lastStreamToken: ""
+          };
+        });
+      }
+    };
+    IndexedDbBundleCache = class {
+      getBundleMetadata(transaction, bundleId) {
+        return bundlesStore(transaction).get(bundleId).next((bundle) => {
+          if (bundle) {
+            return fromDbBundle(bundle);
+          }
+          return void 0;
+        });
+      }
+      saveBundleMetadata(transaction, bundleMetadata) {
+        return bundlesStore(transaction).put(toDbBundle(bundleMetadata));
+      }
+      getNamedQuery(transaction, queryName) {
+        return namedQueriesStore(transaction).get(queryName).next((query2) => {
+          if (query2) {
+            return fromDbNamedQuery(query2);
+          }
+          return void 0;
+        });
+      }
+      saveNamedQuery(transaction, query2) {
+        return namedQueriesStore(transaction).put(toDbNamedQuery(query2));
+      }
+    };
+    IndexedDbDocumentOverlayCache = class _IndexedDbDocumentOverlayCache {
+      /**
+       * @param serializer - The document serializer.
+       * @param userId - The userId for which we are accessing overlays.
+       */
+      constructor(serializer, userId) {
+        this.serializer = serializer;
+        this.userId = userId;
+      }
+      static forUser(serializer, user) {
+        const userId = user.uid || "";
+        return new _IndexedDbDocumentOverlayCache(serializer, userId);
+      }
+      getOverlay(transaction, key) {
+        return documentOverlayStore(transaction).get(toDbDocumentOverlayKey(this.userId, key)).next((dbOverlay) => {
+          if (dbOverlay) {
+            return fromDbDocumentOverlay(this.serializer, dbOverlay);
+          }
+          return null;
+        });
+      }
+      getOverlays(transaction, keys) {
+        const result = newOverlayMap();
+        return PersistencePromise.forEach(keys, (key) => {
+          return this.getOverlay(transaction, key).next((overlay) => {
+            if (overlay !== null) {
+              result.set(key, overlay);
+            }
+          });
+        }).next(() => result);
+      }
+      getAllOverlays(transaction, sinceBatchId) {
+        const overlays = newOverlayMap();
+        return documentOverlayStore(transaction).iterate((dbOverlayKey, dbOverlay) => {
+          const overlay = fromDbDocumentOverlay(this.serializer, dbOverlay);
+          if (overlay.largestBatchId > sinceBatchId) {
+            overlays.set(overlay.getKey(), overlay);
+          }
+        }).next(() => overlays);
+      }
+      saveOverlays(transaction, largestBatchId, overlays) {
+        const promises = [];
+        overlays.forEach((_, mutation) => {
+          const overlay = new Overlay(largestBatchId, mutation);
+          promises.push(this.saveOverlay(transaction, overlay));
+        });
+        return PersistencePromise.waitFor(promises);
+      }
+      removeOverlaysForBatchId(transaction, documentKeys, batchId) {
+        const collectionPaths = /* @__PURE__ */ new Set();
+        documentKeys.forEach((key) => collectionPaths.add(encodeResourcePath(key.getCollectionPath())));
+        const promises = [];
+        collectionPaths.forEach((collectionPath) => {
+          const range = IDBKeyRange.bound(
+            [this.userId, collectionPath, batchId],
+            [this.userId, collectionPath, batchId + 1],
+            /*lowerOpen=*/
+            false,
+            /*upperOpen=*/
+            true
+          );
+          promises.push(documentOverlayStore(transaction).deleteAll(DbDocumentOverlayCollectionPathOverlayIndex, range));
+        });
+        return PersistencePromise.waitFor(promises);
+      }
+      getOverlaysForCollection(transaction, collection7, sinceBatchId) {
+        const result = newOverlayMap();
+        const collectionPath = encodeResourcePath(collection7);
+        const range = IDBKeyRange.bound(
+          [this.userId, collectionPath, sinceBatchId],
+          [this.userId, collectionPath, Number.POSITIVE_INFINITY],
+          /*lowerOpen=*/
+          true
+        );
+        return documentOverlayStore(transaction).loadAll(DbDocumentOverlayCollectionPathOverlayIndex, range).next((dbOverlays) => {
+          for (const dbOverlay of dbOverlays) {
+            const overlay = fromDbDocumentOverlay(this.serializer, dbOverlay);
+            result.set(overlay.getKey(), overlay);
+          }
+          return result;
+        });
+      }
+      getOverlaysForCollectionGroup(transaction, collectionGroup2, sinceBatchId, count) {
+        const result = newOverlayMap();
+        let currentBatchId = void 0;
+        const range = IDBKeyRange.bound(
+          [this.userId, collectionGroup2, sinceBatchId],
+          [this.userId, collectionGroup2, Number.POSITIVE_INFINITY],
+          /*lowerOpen=*/
+          true
+        );
+        return documentOverlayStore(transaction).iterate({
+          index: DbDocumentOverlayCollectionGroupOverlayIndex,
+          range
+        }, (_, dbOverlay, control) => {
+          const overlay = fromDbDocumentOverlay(this.serializer, dbOverlay);
+          if (result.size() < count || overlay.largestBatchId === currentBatchId) {
+            result.set(overlay.getKey(), overlay);
+            currentBatchId = overlay.largestBatchId;
+          } else {
+            control.done();
+          }
+        }).next(() => result);
+      }
+      saveOverlay(transaction, overlay) {
+        return documentOverlayStore(transaction).put(toDbDocumentOverlay(this.serializer, this.userId, overlay));
+      }
+    };
+    IndexedDbGlobalsCache = class {
+      globalsStore(txn) {
+        return getStore(txn, DbGlobalsStore);
+      }
+      getSessionToken(txn) {
+        const globals = this.globalsStore(txn);
+        return globals.get("sessionToken").next((global2) => {
+          const value = global2?.value;
+          return value ? ByteString.fromUint8Array(value) : ByteString.EMPTY_BYTE_STRING;
+        });
+      }
+      setSessionToken(txn, sessionToken) {
+        const globals = this.globalsStore(txn);
+        return globals.put({
+          name: "sessionToken",
+          value: sessionToken.toUint8Array()
+        });
       }
     };
     INDEX_TYPE_NULL = 5;
@@ -265922,6 +269080,459 @@ Total Duration: ${removedDocumentsTs - startTs}ms`;
       }
     };
     FirestoreIndexValueWriter.INSTANCE = new FirestoreIndexValueWriter();
+    MIN_SURROGATE = "\uD800";
+    MAX_SURROGATE = "\uDBFF";
+    ESCAPE1 = 0;
+    NULL_BYTE = 255;
+    SEPARATOR = 1;
+    ESCAPE2 = 255;
+    INFINITY2 = 255;
+    FF_BYTE = 0;
+    LONG_SIZE = 64;
+    BYTE_SIZE = 8;
+    DEFAULT_BUFFER_SIZE = 1024;
+    OrderedCodeWriter = class {
+      constructor() {
+        this.buffer = new Uint8Array(DEFAULT_BUFFER_SIZE);
+        this.position = 0;
+      }
+      writeBytesAscending(value) {
+        const it = value[Symbol.iterator]();
+        let byte = it.next();
+        while (!byte.done) {
+          this.writeByteAscending(byte.value);
+          byte = it.next();
+        }
+        this.writeSeparatorAscending();
+      }
+      writeBytesDescending(value) {
+        const it = value[Symbol.iterator]();
+        let byte = it.next();
+        while (!byte.done) {
+          this.writeByteDescending(byte.value);
+          byte = it.next();
+        }
+        this.writeSeparatorDescending();
+      }
+      /** Writes utf8 bytes into this byte sequence, ascending. */
+      writeUtf8Ascending(sequence) {
+        for (const c of sequence) {
+          const charCode = c.charCodeAt(0);
+          if (charCode < 128) {
+            this.writeByteAscending(charCode);
+          } else if (charCode < 2048) {
+            this.writeByteAscending(15 << 6 | charCode >>> 6);
+            this.writeByteAscending(128 | 63 & charCode);
+          } else if (c < MIN_SURROGATE || MAX_SURROGATE < c) {
+            this.writeByteAscending(15 << 5 | charCode >>> 12);
+            this.writeByteAscending(128 | 63 & charCode >>> 6);
+            this.writeByteAscending(128 | 63 & charCode);
+          } else {
+            const codePoint = c.codePointAt(0);
+            this.writeByteAscending(15 << 4 | codePoint >>> 18);
+            this.writeByteAscending(128 | 63 & codePoint >>> 12);
+            this.writeByteAscending(128 | 63 & codePoint >>> 6);
+            this.writeByteAscending(128 | 63 & codePoint);
+          }
+        }
+        this.writeSeparatorAscending();
+      }
+      /** Writes utf8 bytes into this byte sequence, descending */
+      writeUtf8Descending(sequence) {
+        for (const c of sequence) {
+          const charCode = c.charCodeAt(0);
+          if (charCode < 128) {
+            this.writeByteDescending(charCode);
+          } else if (charCode < 2048) {
+            this.writeByteDescending(15 << 6 | charCode >>> 6);
+            this.writeByteDescending(128 | 63 & charCode);
+          } else if (c < MIN_SURROGATE || MAX_SURROGATE < c) {
+            this.writeByteDescending(15 << 5 | charCode >>> 12);
+            this.writeByteDescending(128 | 63 & charCode >>> 6);
+            this.writeByteDescending(128 | 63 & charCode);
+          } else {
+            const codePoint = c.codePointAt(0);
+            this.writeByteDescending(15 << 4 | codePoint >>> 18);
+            this.writeByteDescending(128 | 63 & codePoint >>> 12);
+            this.writeByteDescending(128 | 63 & codePoint >>> 6);
+            this.writeByteDescending(128 | 63 & codePoint);
+          }
+        }
+        this.writeSeparatorDescending();
+      }
+      writeNumberAscending(val) {
+        const value = this.toOrderedBits(val);
+        const len = unsignedNumLength(value);
+        this.ensureAvailable(1 + len);
+        this.buffer[this.position++] = len & 255;
+        for (let i2 = value.length - len; i2 < value.length; ++i2) {
+          this.buffer[this.position++] = value[i2] & 255;
+        }
+      }
+      writeNumberDescending(val) {
+        const value = this.toOrderedBits(val);
+        const len = unsignedNumLength(value);
+        this.ensureAvailable(1 + len);
+        this.buffer[this.position++] = ~(len & 255);
+        for (let i2 = value.length - len; i2 < value.length; ++i2) {
+          this.buffer[this.position++] = ~(value[i2] & 255);
+        }
+      }
+      /**
+       * Writes the "infinity" byte sequence that sorts after all other byte
+       * sequences written in ascending order.
+       */
+      writeInfinityAscending() {
+        this.writeEscapedByteAscending(ESCAPE2);
+        this.writeEscapedByteAscending(INFINITY2);
+      }
+      /**
+       * Writes the "infinity" byte sequence that sorts before all other byte
+       * sequences written in descending order.
+       */
+      writeInfinityDescending() {
+        this.writeEscapedByteDescending(ESCAPE2);
+        this.writeEscapedByteDescending(INFINITY2);
+      }
+      /**
+       * Resets the buffer such that it is the same as when it was newly
+       * constructed.
+       */
+      reset() {
+        this.position = 0;
+      }
+      seed(encodedBytes) {
+        this.ensureAvailable(encodedBytes.length);
+        this.buffer.set(encodedBytes, this.position);
+        this.position += encodedBytes.length;
+      }
+      /** Makes a copy of the encoded bytes in this buffer.  */
+      encodedBytes() {
+        return this.buffer.slice(0, this.position);
+      }
+      /**
+       * Encodes `val` into an encoding so that the order matches the IEEE 754
+       * floating-point comparison results with the following exceptions:
+       *   -0.0 < 0.0
+       *   all non-NaN < NaN
+       *   NaN = NaN
+       */
+      toOrderedBits(val) {
+        const value = doubleToLongBits(val);
+        const isNegative = (value[0] & 128) !== 0;
+        value[0] ^= isNegative ? 255 : 128;
+        for (let i2 = 1; i2 < value.length; ++i2) {
+          value[i2] ^= isNegative ? 255 : 0;
+        }
+        return value;
+      }
+      /** Writes a single byte ascending to the buffer. */
+      writeByteAscending(b) {
+        const masked = b & 255;
+        if (masked === ESCAPE1) {
+          this.writeEscapedByteAscending(ESCAPE1);
+          this.writeEscapedByteAscending(NULL_BYTE);
+        } else if (masked === ESCAPE2) {
+          this.writeEscapedByteAscending(ESCAPE2);
+          this.writeEscapedByteAscending(FF_BYTE);
+        } else {
+          this.writeEscapedByteAscending(masked);
+        }
+      }
+      /** Writes a single byte descending to the buffer.  */
+      writeByteDescending(b) {
+        const masked = b & 255;
+        if (masked === ESCAPE1) {
+          this.writeEscapedByteDescending(ESCAPE1);
+          this.writeEscapedByteDescending(NULL_BYTE);
+        } else if (masked === ESCAPE2) {
+          this.writeEscapedByteDescending(ESCAPE2);
+          this.writeEscapedByteDescending(FF_BYTE);
+        } else {
+          this.writeEscapedByteDescending(b);
+        }
+      }
+      writeSeparatorAscending() {
+        this.writeEscapedByteAscending(ESCAPE1);
+        this.writeEscapedByteAscending(SEPARATOR);
+      }
+      writeSeparatorDescending() {
+        this.writeEscapedByteDescending(ESCAPE1);
+        this.writeEscapedByteDescending(SEPARATOR);
+      }
+      writeEscapedByteAscending(b) {
+        this.ensureAvailable(1);
+        this.buffer[this.position++] = b;
+      }
+      writeEscapedByteDescending(b) {
+        this.ensureAvailable(1);
+        this.buffer[this.position++] = ~b;
+      }
+      ensureAvailable(bytes) {
+        const minCapacity = bytes + this.position;
+        if (minCapacity <= this.buffer.length) {
+          return;
+        }
+        let newLength = this.buffer.length * 2;
+        if (newLength < minCapacity) {
+          newLength = minCapacity;
+        }
+        const newBuffer = new Uint8Array(newLength);
+        newBuffer.set(this.buffer);
+        this.buffer = newBuffer;
+      }
+    };
+    AscendingIndexByteEncoder = class {
+      constructor(orderedCode) {
+        this.orderedCode = orderedCode;
+      }
+      writeBytes(value) {
+        this.orderedCode.writeBytesAscending(value);
+      }
+      writeString(value) {
+        this.orderedCode.writeUtf8Ascending(value);
+      }
+      writeNumber(value) {
+        this.orderedCode.writeNumberAscending(value);
+      }
+      writeInfinity() {
+        this.orderedCode.writeInfinityAscending();
+      }
+    };
+    DescendingIndexByteEncoder = class {
+      constructor(orderedCode) {
+        this.orderedCode = orderedCode;
+      }
+      writeBytes(value) {
+        this.orderedCode.writeBytesDescending(value);
+      }
+      writeString(value) {
+        this.orderedCode.writeUtf8Descending(value);
+      }
+      writeNumber(value) {
+        this.orderedCode.writeNumberDescending(value);
+      }
+      writeInfinity() {
+        this.orderedCode.writeInfinityDescending();
+      }
+    };
+    IndexByteEncoder = class {
+      constructor() {
+        this.orderedCode = new OrderedCodeWriter();
+        this.ascending = new AscendingIndexByteEncoder(this.orderedCode);
+        this.descending = new DescendingIndexByteEncoder(this.orderedCode);
+      }
+      seed(encodedBytes) {
+        this.orderedCode.seed(encodedBytes);
+      }
+      forKind(kind) {
+        return kind === 0 ? this.ascending : this.descending;
+      }
+      encodedBytes() {
+        return this.orderedCode.encodedBytes();
+      }
+      reset() {
+        this.orderedCode.reset();
+      }
+    };
+    IndexEntry = class _IndexEntry {
+      constructor(_indexId, _documentKey, _arrayValue, _directionalValue) {
+        this._indexId = _indexId;
+        this._documentKey = _documentKey;
+        this._arrayValue = _arrayValue;
+        this._directionalValue = _directionalValue;
+      }
+      /**
+       * Returns an IndexEntry entry that sorts immediately after the current
+       * directional value.
+       */
+      successor() {
+        const currentLength = this._directionalValue.length;
+        const newLength = currentLength === 0 || this._directionalValue[currentLength - 1] === 255 ? currentLength + 1 : currentLength;
+        const successor = new Uint8Array(newLength);
+        successor.set(this._directionalValue, 0);
+        if (newLength !== currentLength) {
+          successor.set([0], this._directionalValue.length);
+        } else {
+          ++successor[successor.length - 1];
+        }
+        return new _IndexEntry(this._indexId, this._documentKey, this._arrayValue, successor);
+      }
+      // Create a representation of the Index Entry as a DbIndexEntry
+      dbIndexEntry(uid, orderedDocumentKey, documentKey) {
+        return {
+          indexId: this._indexId,
+          uid,
+          arrayValue: encodeKeySafeBytes(this._arrayValue),
+          directionalValue: encodeKeySafeBytes(this._directionalValue),
+          orderedDocumentKey: encodeKeySafeBytes(orderedDocumentKey),
+          documentKey: documentKey.path.toArray()
+        };
+      }
+      // Create a representation of the Index Entry as a DbIndexEntryKey
+      dbIndexEntryKey(uid, orderedDocumentKey, documentKey) {
+        const entry = this.dbIndexEntry(uid, orderedDocumentKey, documentKey);
+        return [
+          entry.indexId,
+          entry.uid,
+          entry.arrayValue,
+          entry.directionalValue,
+          entry.orderedDocumentKey,
+          entry.documentKey
+        ];
+      }
+    };
+    TargetIndexMatcher = class {
+      constructor(target) {
+        this.inequalityFilters = new SortedSet((lhs, rhs) => FieldPath$1.comparator(lhs.field, rhs.field));
+        this.collectionId = target.collectionGroup != null ? target.collectionGroup : target.path.lastSegment();
+        this.orderBys = target.orderBy;
+        this.equalityFilters = [];
+        for (const filter of target.filters) {
+          const fieldFilter = filter;
+          if (fieldFilter.isInequality()) {
+            this.inequalityFilters = this.inequalityFilters.add(fieldFilter);
+          } else {
+            this.equalityFilters.push(fieldFilter);
+          }
+        }
+      }
+      get hasMultipleInequality() {
+        return this.inequalityFilters.size > 1;
+      }
+      /**
+       * Returns whether the index can be used to serve the TargetIndexMatcher's
+       * target.
+       *
+       * An index is considered capable of serving the target when:
+       * - The target uses all index segments for its filters and orderBy clauses.
+       *   The target can have additional filter and orderBy clauses, but not
+       *   fewer.
+       * - If an ArrayContains/ArrayContainsAnyfilter is used, the index must also
+       *   have a corresponding `CONTAINS` segment.
+       * - All directional index segments can be mapped to the target as a series of
+       *   equality filters, a single inequality filter and a series of orderBy
+       *   clauses.
+       * - The segments that represent the equality filters may appear out of order.
+       * - The optional segment for the inequality filter must appear after all
+       *   equality segments.
+       * - The segments that represent that orderBy clause of the target must appear
+       *   in order after all equality and inequality segments. Single orderBy
+       *   clauses cannot be skipped, but a continuous orderBy suffix may be
+       *   omitted.
+       */
+      servedByIndex(index) {
+        hardAssert(index.collectionGroup === this.collectionId, 49279);
+        if (this.hasMultipleInequality) {
+          return false;
+        }
+        const arraySegment = fieldIndexGetArraySegment(index);
+        if (arraySegment !== void 0 && !this.hasMatchingEqualityFilter(arraySegment)) {
+          return false;
+        }
+        const segments = fieldIndexGetDirectionalSegments(index);
+        let equalitySegments = /* @__PURE__ */ new Set();
+        let segmentIndex = 0;
+        let orderBysIndex = 0;
+        for (; segmentIndex < segments.length; ++segmentIndex) {
+          if (this.hasMatchingEqualityFilter(segments[segmentIndex])) {
+            equalitySegments = equalitySegments.add(segments[segmentIndex].fieldPath.canonicalString());
+          } else {
+            break;
+          }
+        }
+        if (segmentIndex === segments.length) {
+          return true;
+        }
+        if (this.inequalityFilters.size > 0) {
+          const inequalityFilter = this.inequalityFilters.getIterator().getNext();
+          if (!equalitySegments.has(inequalityFilter.field.canonicalString())) {
+            const segment = segments[segmentIndex];
+            if (!this.matchesFilter(inequalityFilter, segment) || !this.matchesOrderBy(this.orderBys[orderBysIndex++], segment)) {
+              return false;
+            }
+          }
+          ++segmentIndex;
+        }
+        for (; segmentIndex < segments.length; ++segmentIndex) {
+          const segment = segments[segmentIndex];
+          if (orderBysIndex >= this.orderBys.length || !this.matchesOrderBy(this.orderBys[orderBysIndex++], segment)) {
+            return false;
+          }
+        }
+        return true;
+      }
+      /**
+       * Returns a full matched field index for this target. Currently multiple
+       * inequality query is not supported so function returns null.
+       */
+      buildTargetIndex() {
+        if (this.hasMultipleInequality) {
+          return null;
+        }
+        let uniqueFields = new SortedSet(FieldPath$1.comparator);
+        const segments = [];
+        for (const filter of this.equalityFilters) {
+          if (filter.field.isKeyField()) {
+            continue;
+          }
+          const isArrayOperator = filter.op === "array-contains" || filter.op === "array-contains-any";
+          if (isArrayOperator) {
+            segments.push(new IndexSegment(
+              filter.field,
+              2
+              /* IndexKind.CONTAINS */
+            ));
+          } else {
+            if (uniqueFields.has(filter.field)) {
+              continue;
+            }
+            uniqueFields = uniqueFields.add(filter.field);
+            segments.push(new IndexSegment(
+              filter.field,
+              0
+              /* IndexKind.ASCENDING */
+            ));
+          }
+        }
+        for (const orderBy3 of this.orderBys) {
+          if (orderBy3.field.isKeyField()) {
+            continue;
+          }
+          if (uniqueFields.has(orderBy3.field)) {
+            continue;
+          }
+          uniqueFields = uniqueFields.add(orderBy3.field);
+          segments.push(new IndexSegment(
+            orderBy3.field,
+            orderBy3.dir === "asc" ? 0 : 1
+            /* IndexKind.DESCENDING */
+          ));
+        }
+        return new FieldIndex(FieldIndex.UNKNOWN_ID, this.collectionId, segments, IndexState.empty());
+      }
+      hasMatchingEqualityFilter(segment) {
+        for (const filter of this.equalityFilters) {
+          if (this.matchesFilter(filter, segment)) {
+            return true;
+          }
+        }
+        return false;
+      }
+      matchesFilter(filter, segment) {
+        if (filter === void 0 || !filter.field.isEqual(segment.fieldPath)) {
+          return false;
+        }
+        const isArrayOperator = filter.op === "array-contains" || filter.op === "array-contains-any";
+        return segment.kind === 2 === isArrayOperator;
+      }
+      matchesOrderBy(orderBy3, segment) {
+        if (!orderBy3.field.isEqual(segment.fieldPath)) {
+          return false;
+        }
+        return segment.kind === 0 && orderBy3.dir === "asc" || segment.kind === 1 && orderBy3.dir === "desc";
+      }
+    };
     MemoryIndexManager = class {
       constructor() {
         this.collectionParentIndex = new MemoryCollectionParentIndex();
@@ -265997,7 +269608,498 @@ Total Duration: ${removedDocumentsTs - startTs}ms`;
         return parentPaths.toArray();
       }
     };
+    LOG_TAG$b = "IndexedDbIndexManager";
     EMPTY_VALUE = new Uint8Array(0);
+    IndexedDbIndexManager = class {
+      constructor(user, databaseId) {
+        this.databaseId = databaseId;
+        this.collectionParentsCache = new MemoryCollectionParentIndex();
+        this.targetToDnfSubTargets = new ObjectMap((t2) => canonifyTarget(t2), (l, r2) => targetEquals(l, r2));
+        this.uid = user.uid || "";
+      }
+      /**
+       * Adds a new entry to the collection parent index.
+       *
+       * Repeated calls for the same collectionPath should be avoided within a
+       * transaction as IndexedDbIndexManager only caches writes once a transaction
+       * has been committed.
+       */
+      addToCollectionParentIndex(transaction, collectionPath) {
+        if (!this.collectionParentsCache.has(collectionPath)) {
+          const collectionId = collectionPath.lastSegment();
+          const parentPath = collectionPath.popLast();
+          transaction.addOnCommittedListener(() => {
+            this.collectionParentsCache.add(collectionPath);
+          });
+          const collectionParent = {
+            collectionId,
+            parent: encodeResourcePath(parentPath)
+          };
+          return collectionParentsStore(transaction).put(collectionParent);
+        }
+        return PersistencePromise.resolve();
+      }
+      getCollectionParents(transaction, collectionId) {
+        const parentPaths = [];
+        const range = IDBKeyRange.bound(
+          [collectionId, ""],
+          [immediateSuccessor(collectionId), ""],
+          /*lowerOpen=*/
+          false,
+          /*upperOpen=*/
+          true
+        );
+        return collectionParentsStore(transaction).loadAll(range).next((entries) => {
+          for (const entry of entries) {
+            if (entry.collectionId !== collectionId) {
+              break;
+            }
+            parentPaths.push(decodeResourcePath(entry.parent));
+          }
+          return parentPaths;
+        });
+      }
+      addFieldIndex(transaction, index) {
+        const indexes = indexConfigurationStore(transaction);
+        const dbIndex = toDbIndexConfiguration(index);
+        delete dbIndex.indexId;
+        const result = indexes.add(dbIndex);
+        if (index.indexState) {
+          const states = indexStateStore(transaction);
+          return result.next((indexId) => {
+            states.put(toDbIndexState(indexId, this.uid, index.indexState.sequenceNumber, index.indexState.offset));
+          });
+        } else {
+          return result.next();
+        }
+      }
+      deleteFieldIndex(transaction, index) {
+        const indexes = indexConfigurationStore(transaction);
+        const states = indexStateStore(transaction);
+        const entries = indexEntriesStore(transaction);
+        return indexes.delete(index.indexId).next(() => states.delete(IDBKeyRange.bound(
+          [index.indexId],
+          [index.indexId + 1],
+          /*lowerOpen=*/
+          false,
+          /*upperOpen=*/
+          true
+        ))).next(() => entries.delete(IDBKeyRange.bound(
+          [index.indexId],
+          [index.indexId + 1],
+          /*lowerOpen=*/
+          false,
+          /*upperOpen=*/
+          true
+        )));
+      }
+      deleteAllFieldIndexes(transaction) {
+        const indexes = indexConfigurationStore(transaction);
+        const entries = indexEntriesStore(transaction);
+        const states = indexStateStore(transaction);
+        return indexes.deleteAll().next(() => entries.deleteAll()).next(() => states.deleteAll());
+      }
+      createTargetIndexes(transaction, target) {
+        return PersistencePromise.forEach(this.getSubTargets(target), (subTarget) => {
+          return this.getIndexType(transaction, subTarget).next((type) => {
+            if (type === 0 || type === 1) {
+              const targetIndexMatcher = new TargetIndexMatcher(subTarget);
+              const fieldIndex = targetIndexMatcher.buildTargetIndex();
+              if (fieldIndex != null) {
+                return this.addFieldIndex(transaction, fieldIndex);
+              }
+            }
+          });
+        });
+      }
+      getDocumentsMatchingTarget(transaction, target) {
+        const indexEntries = indexEntriesStore(transaction);
+        let canServeTarget = true;
+        const indexes = /* @__PURE__ */ new Map();
+        return PersistencePromise.forEach(this.getSubTargets(target), (subTarget) => {
+          return this.getFieldIndex(transaction, subTarget).next((index) => {
+            canServeTarget && (canServeTarget = !!index);
+            indexes.set(subTarget, index);
+          });
+        }).next(() => {
+          if (!canServeTarget) {
+            return PersistencePromise.resolve(null);
+          } else {
+            let existingKeys = documentKeySet();
+            const result = [];
+            return PersistencePromise.forEach(indexes, (index, subTarget) => {
+              logDebug(LOG_TAG$b, `Using index ${fieldIndexToString(index)} to execute ${canonifyTarget(target)}`);
+              const arrayValues = targetGetArrayValues(subTarget, index);
+              const notInValues = targetGetNotInValues(subTarget, index);
+              const lowerBound = targetGetLowerBound(subTarget, index);
+              const upperBound = targetGetUpperBound(subTarget, index);
+              const lowerBoundEncoded = this.encodeBound(index, subTarget, lowerBound);
+              const upperBoundEncoded = this.encodeBound(index, subTarget, upperBound);
+              const notInEncoded = this.encodeValues(index, subTarget, notInValues);
+              const indexRanges = this.generateIndexRanges(index.indexId, arrayValues, lowerBoundEncoded, lowerBound.inclusive, upperBoundEncoded, upperBound.inclusive, notInEncoded);
+              return PersistencePromise.forEach(indexRanges, (indexRange) => {
+                return indexEntries.loadFirst(indexRange, target.limit).next((entries) => {
+                  entries.forEach((entry) => {
+                    const documentKey = DocumentKey.fromSegments(entry.documentKey);
+                    if (!existingKeys.has(documentKey)) {
+                      existingKeys = existingKeys.add(documentKey);
+                      result.push(documentKey);
+                    }
+                  });
+                });
+              });
+            }).next(() => result);
+          }
+        });
+      }
+      getSubTargets(target) {
+        let subTargets = this.targetToDnfSubTargets.get(target);
+        if (subTargets) {
+          return subTargets;
+        }
+        if (target.filters.length === 0) {
+          subTargets = [target];
+        } else {
+          const dnf = getDnfTerms(CompositeFilter.create(
+            target.filters,
+            "and"
+            /* CompositeOperator.AND */
+          ));
+          subTargets = dnf.map((term) => newTarget(target.path, target.collectionGroup, target.orderBy, term.getFilters(), target.limit, target.startAt, target.endAt));
+        }
+        this.targetToDnfSubTargets.set(target, subTargets);
+        return subTargets;
+      }
+      /**
+       * Constructs a key range query on `DbIndexEntryStore` that unions all
+       * bounds.
+       */
+      generateIndexRanges(indexId, arrayValues, lowerBounds, lowerBoundInclusive, upperBounds, upperBoundInclusive, notInValues) {
+        const totalScans = (arrayValues != null ? arrayValues.length : 1) * Math.max(lowerBounds.length, upperBounds.length);
+        const scansPerArrayElement = totalScans / (arrayValues != null ? arrayValues.length : 1);
+        const indexRanges = [];
+        for (let i2 = 0; i2 < totalScans; ++i2) {
+          const arrayValue = arrayValues ? this.encodeSingleElement(arrayValues[i2 / scansPerArrayElement]) : EMPTY_VALUE;
+          const lowerBound = this.generateLowerBound(indexId, arrayValue, lowerBounds[i2 % scansPerArrayElement], lowerBoundInclusive);
+          const upperBound = this.generateUpperBound(indexId, arrayValue, upperBounds[i2 % scansPerArrayElement], upperBoundInclusive);
+          const notInBound = notInValues.map((notIn) => this.generateLowerBound(
+            indexId,
+            arrayValue,
+            notIn,
+            /* inclusive= */
+            true
+          ));
+          indexRanges.push(...this.createRange(lowerBound, upperBound, notInBound));
+        }
+        return indexRanges;
+      }
+      /** Generates the lower bound for `arrayValue` and `directionalValue`. */
+      generateLowerBound(indexId, arrayValue, directionalValue, inclusive) {
+        const entry = new IndexEntry(indexId, DocumentKey.empty(), arrayValue, directionalValue);
+        return inclusive ? entry : entry.successor();
+      }
+      /** Generates the upper bound for `arrayValue` and `directionalValue`. */
+      generateUpperBound(indexId, arrayValue, directionalValue, inclusive) {
+        const entry = new IndexEntry(indexId, DocumentKey.empty(), arrayValue, directionalValue);
+        return inclusive ? entry.successor() : entry;
+      }
+      getFieldIndex(transaction, target) {
+        const targetIndexMatcher = new TargetIndexMatcher(target);
+        const collectionGroup2 = target.collectionGroup != null ? target.collectionGroup : target.path.lastSegment();
+        return this.getFieldIndexes(transaction, collectionGroup2).next((indexes) => {
+          let index = null;
+          for (const candidate of indexes) {
+            const matches = targetIndexMatcher.servedByIndex(candidate);
+            if (matches && (!index || candidate.fields.length > index.fields.length)) {
+              index = candidate;
+            }
+          }
+          return index;
+        });
+      }
+      getIndexType(transaction, target) {
+        let indexType = 2;
+        const subTargets = this.getSubTargets(target);
+        return PersistencePromise.forEach(subTargets, (target2) => {
+          return this.getFieldIndex(transaction, target2).next((index) => {
+            if (!index) {
+              indexType = 0;
+            } else if (indexType !== 0 && index.fields.length < targetGetSegmentCount(target2)) {
+              indexType = 1;
+            }
+          });
+        }).next(() => {
+          if (targetHasLimit(target) && subTargets.length > 1 && indexType === 2) {
+            return 1;
+          }
+          return indexType;
+        });
+      }
+      /**
+       * Returns the byte encoded form of the directional values in the field index.
+       * Returns `null` if the document does not have all fields specified in the
+       * index.
+       */
+      encodeDirectionalElements(fieldIndex, document2) {
+        const encoder3 = new IndexByteEncoder();
+        for (const segment of fieldIndexGetDirectionalSegments(fieldIndex)) {
+          const field2 = document2.data.field(segment.fieldPath);
+          if (field2 == null) {
+            return null;
+          }
+          const directionalEncoder = encoder3.forKind(segment.kind);
+          FirestoreIndexValueWriter.INSTANCE.writeIndexValue(field2, directionalEncoder);
+        }
+        return encoder3.encodedBytes();
+      }
+      /** Encodes a single value to the ascending index format. */
+      encodeSingleElement(value) {
+        const encoder3 = new IndexByteEncoder();
+        FirestoreIndexValueWriter.INSTANCE.writeIndexValue(value, encoder3.forKind(
+          0
+          /* IndexKind.ASCENDING */
+        ));
+        return encoder3.encodedBytes();
+      }
+      /**
+       * Returns an encoded form of the document key that sorts based on the key
+       * ordering of the field index.
+       */
+      encodeDirectionalKey(fieldIndex, documentKey) {
+        const encoder3 = new IndexByteEncoder();
+        FirestoreIndexValueWriter.INSTANCE.writeIndexValue(refValue(this.databaseId, documentKey), encoder3.forKind(fieldIndexGetKeyOrder(fieldIndex)));
+        return encoder3.encodedBytes();
+      }
+      /**
+       * Encodes the given field values according to the specification in `target`.
+       * For IN queries, a list of possible values is returned.
+       */
+      encodeValues(fieldIndex, target, values) {
+        if (values === null) {
+          return [];
+        }
+        let encoders = [];
+        encoders.push(new IndexByteEncoder());
+        let valueIdx = 0;
+        for (const segment of fieldIndexGetDirectionalSegments(fieldIndex)) {
+          const value = values[valueIdx++];
+          for (const encoder3 of encoders) {
+            if (this.isInFilter(target, segment.fieldPath) && isArray2(value)) {
+              encoders = this.expandIndexValues(encoders, segment, value);
+            } else {
+              const directionalEncoder = encoder3.forKind(segment.kind);
+              FirestoreIndexValueWriter.INSTANCE.writeIndexValue(value, directionalEncoder);
+            }
+          }
+        }
+        return this.getEncodedBytes(encoders);
+      }
+      /**
+       * Encodes the given bounds according to the specification in `target`. For IN
+       * queries, a list of possible values is returned.
+       */
+      encodeBound(fieldIndex, target, bound) {
+        return this.encodeValues(fieldIndex, target, bound.position);
+      }
+      /** Returns the byte representation for the provided encoders. */
+      getEncodedBytes(encoders) {
+        const result = [];
+        for (let i2 = 0; i2 < encoders.length; ++i2) {
+          result[i2] = encoders[i2].encodedBytes();
+        }
+        return result;
+      }
+      /**
+       * Creates a separate encoder for each element of an array.
+       *
+       * The method appends each value to all existing encoders (e.g. filter("a",
+       * "==", "a1").filter("b", "in", ["b1", "b2"]) becomes ["a1,b1", "a1,b2"]). A
+       * list of new encoders is returned.
+       */
+      expandIndexValues(encoders, segment, value) {
+        const prefixes = [...encoders];
+        const results = [];
+        for (const arrayElement of value.arrayValue.values || []) {
+          for (const prefix of prefixes) {
+            const clonedEncoder = new IndexByteEncoder();
+            clonedEncoder.seed(prefix.encodedBytes());
+            FirestoreIndexValueWriter.INSTANCE.writeIndexValue(arrayElement, clonedEncoder.forKind(segment.kind));
+            results.push(clonedEncoder);
+          }
+        }
+        return results;
+      }
+      isInFilter(target, fieldPath) {
+        return !!target.filters.find((f3) => f3 instanceof FieldFilter && f3.field.isEqual(fieldPath) && (f3.op === "in" || f3.op === "not-in"));
+      }
+      getFieldIndexes(transaction, collectionGroup2) {
+        const indexes = indexConfigurationStore(transaction);
+        const states = indexStateStore(transaction);
+        return (collectionGroup2 ? indexes.loadAll(DbIndexConfigurationCollectionGroupIndex, IDBKeyRange.bound(collectionGroup2, collectionGroup2)) : indexes.loadAll()).next((indexConfigs) => {
+          const result = [];
+          return PersistencePromise.forEach(indexConfigs, (indexConfig) => {
+            return states.get([indexConfig.indexId, this.uid]).next((indexState) => {
+              result.push(fromDbIndexConfiguration(indexConfig, indexState));
+            });
+          }).next(() => result);
+        });
+      }
+      getNextCollectionGroupToUpdate(transaction) {
+        return this.getFieldIndexes(transaction).next((indexes) => {
+          if (indexes.length === 0) {
+            return null;
+          }
+          indexes.sort((l, r2) => {
+            const cmp = l.indexState.sequenceNumber - r2.indexState.sequenceNumber;
+            return cmp !== 0 ? cmp : primitiveComparator(l.collectionGroup, r2.collectionGroup);
+          });
+          return indexes[0].collectionGroup;
+        });
+      }
+      updateCollectionGroup(transaction, collectionGroup2, offset) {
+        const indexes = indexConfigurationStore(transaction);
+        const states = indexStateStore(transaction);
+        return this.getNextSequenceNumber(transaction).next((nextSequenceNumber) => indexes.loadAll(DbIndexConfigurationCollectionGroupIndex, IDBKeyRange.bound(collectionGroup2, collectionGroup2)).next((configs) => PersistencePromise.forEach(configs, (config) => states.put(toDbIndexState(config.indexId, this.uid, nextSequenceNumber, offset)))));
+      }
+      updateIndexEntries(transaction, documents) {
+        const memoizedIndexes = /* @__PURE__ */ new Map();
+        return PersistencePromise.forEach(documents, (key, doc5) => {
+          const memoizedCollectionIndexes = memoizedIndexes.get(key.collectionGroup);
+          const fieldIndexes = memoizedCollectionIndexes ? PersistencePromise.resolve(memoizedCollectionIndexes) : this.getFieldIndexes(transaction, key.collectionGroup);
+          return fieldIndexes.next((fieldIndexes2) => {
+            memoizedIndexes.set(key.collectionGroup, fieldIndexes2);
+            return PersistencePromise.forEach(fieldIndexes2, (fieldIndex) => {
+              return this.getExistingIndexEntries(transaction, key, fieldIndex).next((existingEntries) => {
+                const newEntries = this.computeIndexEntries(doc5, fieldIndex);
+                if (!existingEntries.isEqual(newEntries)) {
+                  return this.updateEntries(transaction, doc5, fieldIndex, existingEntries, newEntries);
+                }
+                return PersistencePromise.resolve();
+              });
+            });
+          });
+        });
+      }
+      addIndexEntry(transaction, document2, fieldIndex, indexEntry) {
+        const indexEntries = indexEntriesStore(transaction);
+        return indexEntries.put(indexEntry.dbIndexEntry(this.uid, this.encodeDirectionalKey(fieldIndex, document2.key), document2.key));
+      }
+      deleteIndexEntry(transaction, document2, fieldIndex, indexEntry) {
+        const indexEntries = indexEntriesStore(transaction);
+        return indexEntries.delete(indexEntry.dbIndexEntryKey(this.uid, this.encodeDirectionalKey(fieldIndex, document2.key), document2.key));
+      }
+      getExistingIndexEntries(transaction, documentKey, fieldIndex) {
+        const indexEntries = indexEntriesStore(transaction);
+        let results = new SortedSet(indexEntryComparator);
+        return indexEntries.iterate({
+          index: DbIndexEntryDocumentKeyIndex,
+          range: IDBKeyRange.only([
+            fieldIndex.indexId,
+            this.uid,
+            encodeKeySafeBytes(this.encodeDirectionalKey(fieldIndex, documentKey))
+          ])
+        }, (_, entry) => {
+          results = results.add(new IndexEntry(fieldIndex.indexId, documentKey, decodeKeySafeBytes(entry.arrayValue), decodeKeySafeBytes(entry.directionalValue)));
+        }).next(() => results);
+      }
+      /** Creates the index entries for the given document. */
+      computeIndexEntries(document2, fieldIndex) {
+        let results = new SortedSet(indexEntryComparator);
+        const directionalValue = this.encodeDirectionalElements(fieldIndex, document2);
+        if (directionalValue == null) {
+          return results;
+        }
+        const arraySegment = fieldIndexGetArraySegment(fieldIndex);
+        if (arraySegment != null) {
+          const value = document2.data.field(arraySegment.fieldPath);
+          if (isArray2(value)) {
+            for (const arrayValue of value.arrayValue.values || []) {
+              results = results.add(new IndexEntry(fieldIndex.indexId, document2.key, this.encodeSingleElement(arrayValue), directionalValue));
+            }
+          }
+        } else {
+          results = results.add(new IndexEntry(fieldIndex.indexId, document2.key, EMPTY_VALUE, directionalValue));
+        }
+        return results;
+      }
+      /**
+       * Updates the index entries for the provided document by deleting entries
+       * that are no longer referenced in `newEntries` and adding all newly added
+       * entries.
+       */
+      updateEntries(transaction, document2, fieldIndex, existingEntries, newEntries) {
+        logDebug(LOG_TAG$b, "Updating index entries for document '%s'", document2.key);
+        const promises = [];
+        diffSortedSets(
+          existingEntries,
+          newEntries,
+          indexEntryComparator,
+          /* onAdd= */
+          (entry) => {
+            promises.push(this.addIndexEntry(transaction, document2, fieldIndex, entry));
+          },
+          /* onRemove= */
+          (entry) => {
+            promises.push(this.deleteIndexEntry(transaction, document2, fieldIndex, entry));
+          }
+        );
+        return PersistencePromise.waitFor(promises);
+      }
+      getNextSequenceNumber(transaction) {
+        let nextSequenceNumber = 1;
+        const states = indexStateStore(transaction);
+        return states.iterate({
+          index: DbIndexStateSequenceNumberIndex,
+          reverse: true,
+          range: IDBKeyRange.upperBound([this.uid, Number.MAX_SAFE_INTEGER])
+        }, (_, state2, controller) => {
+          controller.done();
+          nextSequenceNumber = state2.sequenceNumber + 1;
+        }).next(() => nextSequenceNumber);
+      }
+      /**
+       * Returns a new set of IDB ranges that splits the existing range and excludes
+       * any values that match the `notInValue` from these ranges. As an example,
+       * '[foo > 2 && foo != 3]` becomes  `[foo > 2 && < 3, foo > 3]`.
+       */
+      createRange(lower2, upper, notInValues) {
+        notInValues = notInValues.sort((l, r2) => indexEntryComparator(l, r2)).filter((el, i2, values) => !i2 || indexEntryComparator(el, values[i2 - 1]) !== 0);
+        const bounds = [];
+        bounds.push(lower2);
+        for (const notInValue of notInValues) {
+          const cmpToLower = indexEntryComparator(notInValue, lower2);
+          const cmpToUpper = indexEntryComparator(notInValue, upper);
+          if (cmpToLower === 0) {
+            bounds[0] = lower2.successor();
+          } else if (cmpToLower > 0 && cmpToUpper < 0) {
+            bounds.push(notInValue);
+            bounds.push(notInValue.successor());
+          } else if (cmpToUpper > 0) {
+            break;
+          }
+        }
+        bounds.push(upper);
+        const ranges = [];
+        for (let i2 = 0; i2 < bounds.length; i2 += 2) {
+          if (this.isRangeMatchable(bounds[i2], bounds[i2 + 1])) {
+            return [];
+          }
+          const lowerBound = bounds[i2].dbIndexEntryKey(this.uid, EMPTY_VALUE, DocumentKey.empty());
+          const upperBound = bounds[i2 + 1].dbIndexEntryKey(this.uid, EMPTY_VALUE, DocumentKey.empty());
+          ranges.push(IDBKeyRange.bound(lowerBound, upperBound));
+        }
+        return ranges;
+      }
+      isRangeMatchable(lowerBound, upperBound) {
+        return indexEntryComparator(lowerBound, upperBound) > 0;
+      }
+      getMinOffsetFromCollectionGroup(transaction, collectionGroup2) {
+        return this.getFieldIndexes(transaction, collectionGroup2).next(getMinOffsetFromFieldIndexes);
+      }
+      getMinOffset(transaction, target) {
+        return PersistencePromise.mapArray(this.getSubTargets(target), (subTarget) => this.getFieldIndex(transaction, subTarget).next((index) => index ? index : fail(44426))).next(getMinOffsetFromFieldIndexes);
+      }
+    };
     OFFSET = 2;
     TargetIdGenerator = class _TargetIdGenerator {
       constructor(lastId) {
@@ -266012,6 +270114,324 @@ Total Duration: ${removedDocumentsTs - startTs}ms`;
       }
       static forSyncEngine() {
         return new _TargetIdGenerator(1 - OFFSET);
+      }
+    };
+    IndexedDbTargetCache = class {
+      constructor(referenceDelegate, serializer) {
+        this.referenceDelegate = referenceDelegate;
+        this.serializer = serializer;
+      }
+      // PORTING NOTE: We don't cache global metadata for the target cache, since
+      // some of it (in particular `highestTargetId`) can be modified by secondary
+      // tabs. We could perhaps be more granular (and e.g. still cache
+      // `lastRemoteSnapshotVersion` in memory) but for simplicity we currently go
+      // to IndexedDb whenever we need to read metadata. We can revisit if it turns
+      // out to have a meaningful performance impact.
+      allocateTargetId(transaction) {
+        return this.retrieveMetadata(transaction).next((metadata) => {
+          const targetIdGenerator = new TargetIdGenerator(metadata.highestTargetId);
+          metadata.highestTargetId = targetIdGenerator.next();
+          return this.saveMetadata(transaction, metadata).next(() => metadata.highestTargetId);
+        });
+      }
+      getLastRemoteSnapshotVersion(transaction) {
+        return this.retrieveMetadata(transaction).next((metadata) => {
+          return SnapshotVersion.fromTimestamp(new Timestamp2(metadata.lastRemoteSnapshotVersion.seconds, metadata.lastRemoteSnapshotVersion.nanoseconds));
+        });
+      }
+      getHighestSequenceNumber(transaction) {
+        return this.retrieveMetadata(transaction).next((targetGlobal) => targetGlobal.highestListenSequenceNumber);
+      }
+      setTargetsMetadata(transaction, highestListenSequenceNumber, lastRemoteSnapshotVersion) {
+        return this.retrieveMetadata(transaction).next((metadata) => {
+          metadata.highestListenSequenceNumber = highestListenSequenceNumber;
+          if (lastRemoteSnapshotVersion) {
+            metadata.lastRemoteSnapshotVersion = lastRemoteSnapshotVersion.toTimestamp();
+          }
+          if (highestListenSequenceNumber > metadata.highestListenSequenceNumber) {
+            metadata.highestListenSequenceNumber = highestListenSequenceNumber;
+          }
+          return this.saveMetadata(transaction, metadata);
+        });
+      }
+      addTargetData(transaction, targetData) {
+        return this.saveTargetData(transaction, targetData).next(() => {
+          return this.retrieveMetadata(transaction).next((metadata) => {
+            metadata.targetCount += 1;
+            this.updateMetadataFromTargetData(targetData, metadata);
+            return this.saveMetadata(transaction, metadata);
+          });
+        });
+      }
+      updateTargetData(transaction, targetData) {
+        return this.saveTargetData(transaction, targetData);
+      }
+      removeTargetData(transaction, targetData) {
+        return this.removeMatchingKeysForTargetId(transaction, targetData.targetId).next(() => targetsStore(transaction).delete(targetData.targetId)).next(() => this.retrieveMetadata(transaction)).next((metadata) => {
+          hardAssert(metadata.targetCount > 0, 8065);
+          metadata.targetCount -= 1;
+          return this.saveMetadata(transaction, metadata);
+        });
+      }
+      /**
+       * Drops any targets with sequence number less than or equal to the upper bound, excepting those
+       * present in `activeTargetIds`. Document associations for the removed targets are also removed.
+       * Returns the number of targets removed.
+       */
+      removeTargets(txn, upperBound, activeTargetIds) {
+        let count = 0;
+        const promises = [];
+        return targetsStore(txn).iterate((key, value) => {
+          const targetData = fromDbTarget(this.serializer, value);
+          if (targetData.sequenceNumber <= upperBound && activeTargetIds.get(targetData.targetId) === null) {
+            count++;
+            promises.push(this.removeTargetData(txn, targetData));
+          }
+        }).next(() => PersistencePromise.waitFor(promises)).next(() => count);
+      }
+      /**
+       * Call provided function with each `TargetData` that we have cached.
+       */
+      forEachTarget(txn, f3) {
+        return targetsStore(txn).iterate((key, value) => {
+          const targetData = fromDbTarget(this.serializer, value);
+          f3(targetData);
+        });
+      }
+      retrieveMetadata(transaction) {
+        return globalTargetStore(transaction).get(DbTargetGlobalKey).next((metadata) => {
+          hardAssert(metadata !== null, 2888);
+          return metadata;
+        });
+      }
+      saveMetadata(transaction, metadata) {
+        return globalTargetStore(transaction).put(DbTargetGlobalKey, metadata);
+      }
+      saveTargetData(transaction, targetData) {
+        return targetsStore(transaction).put(toDbTarget(this.serializer, targetData));
+      }
+      /**
+       * In-place updates the provided metadata to account for values in the given
+       * TargetData. Saving is done separately. Returns true if there were any
+       * changes to the metadata.
+       */
+      updateMetadataFromTargetData(targetData, metadata) {
+        let updated = false;
+        if (targetData.targetId > metadata.highestTargetId) {
+          metadata.highestTargetId = targetData.targetId;
+          updated = true;
+        }
+        if (targetData.sequenceNumber > metadata.highestListenSequenceNumber) {
+          metadata.highestListenSequenceNumber = targetData.sequenceNumber;
+          updated = true;
+        }
+        return updated;
+      }
+      getTargetCount(transaction) {
+        return this.retrieveMetadata(transaction).next((metadata) => metadata.targetCount);
+      }
+      getTargetData(transaction, target) {
+        const canonicalId2 = canonifyTargetOrPipeline(target);
+        const range = IDBKeyRange.bound([canonicalId2, Number.NEGATIVE_INFINITY], [canonicalId2, Number.POSITIVE_INFINITY]);
+        let result = null;
+        return targetsStore(transaction).iterate({ range, index: DbTargetQueryTargetsIndexName }, (key, value, control) => {
+          const found = fromDbTarget(this.serializer, value);
+          if (targetOrPipelineEqual(target, found.target)) {
+            result = found;
+            control.done();
+          }
+        }).next(() => result);
+      }
+      addMatchingKeys(txn, keys, targetId) {
+        const promises = [];
+        const store = documentTargetStore(txn);
+        keys.forEach((key) => {
+          const path3 = encodeResourcePath(key.path);
+          promises.push(store.put({ targetId, path: path3 }));
+          promises.push(this.referenceDelegate.addReference(txn, targetId, key));
+        });
+        return PersistencePromise.waitFor(promises);
+      }
+      removeMatchingKeys(txn, keys, targetId) {
+        const store = documentTargetStore(txn);
+        return PersistencePromise.forEach(keys, (key) => {
+          const path3 = encodeResourcePath(key.path);
+          return PersistencePromise.waitFor([
+            store.delete([targetId, path3]),
+            this.referenceDelegate.removeReference(txn, targetId, key)
+          ]);
+        });
+      }
+      removeMatchingKeysForTargetId(txn, targetId) {
+        const store = documentTargetStore(txn);
+        const range = IDBKeyRange.bound(
+          [targetId],
+          [targetId + 1],
+          /*lowerOpen=*/
+          false,
+          /*upperOpen=*/
+          true
+        );
+        return store.delete(range);
+      }
+      getMatchingKeysForTargetId(txn, targetId) {
+        const range = IDBKeyRange.bound(
+          [targetId],
+          [targetId + 1],
+          /*lowerOpen=*/
+          false,
+          /*upperOpen=*/
+          true
+        );
+        const store = documentTargetStore(txn);
+        let result = documentKeySet();
+        return store.iterate({ range, keysOnly: true }, (key, _, control) => {
+          const path3 = decodeResourcePath(key[1]);
+          const docKey = new DocumentKey(path3);
+          result = result.add(docKey);
+        }).next(() => result);
+      }
+      containsKey(txn, key) {
+        const path3 = encodeResourcePath(key.path);
+        const range = IDBKeyRange.bound(
+          [path3],
+          [immediateSuccessor(path3)],
+          /*lowerOpen=*/
+          false,
+          /*upperOpen=*/
+          true
+        );
+        let count = 0;
+        return documentTargetStore(txn).iterate({
+          index: DbTargetDocumentDocumentTargetsIndex,
+          keysOnly: true,
+          range
+        }, ([targetId, path4], _, control) => {
+          if (targetId !== 0) {
+            count++;
+            control.done();
+          }
+        }).next(() => count > 0);
+      }
+      /**
+       * Looks up a TargetData entry by target ID.
+       *
+       * @param targetId - The target ID of the TargetData entry to look up.
+       * @returns The cached TargetData entry, or null if the cache has no entry for
+       * the target.
+       */
+      // PORTING NOTE: Multi-tab only.
+      getTargetDataForTarget(transaction, targetId) {
+        return targetsStore(transaction).get(targetId).next((found) => {
+          if (found) {
+            return fromDbTarget(this.serializer, found);
+          } else {
+            return null;
+          }
+        });
+      }
+    };
+    IndexedDbLruDelegateImpl = class {
+      constructor(db3, params) {
+        this.db = db3;
+        this.garbageCollector = newLruGarbageCollector(this, params);
+      }
+      getSequenceNumberCount(txn) {
+        const docCountPromise = this.orphanedDocumentCount(txn);
+        const targetCountPromise = this.db.getTargetCache().getTargetCount(txn);
+        return targetCountPromise.next((targetCount) => docCountPromise.next((docCount) => targetCount + docCount));
+      }
+      orphanedDocumentCount(txn) {
+        let orphanedCount = 0;
+        return this.forEachOrphanedDocumentSequenceNumber(txn, (_) => {
+          orphanedCount++;
+        }).next(() => orphanedCount);
+      }
+      forEachTarget(txn, f3) {
+        return this.db.getTargetCache().forEachTarget(txn, f3);
+      }
+      forEachOrphanedDocumentSequenceNumber(txn, f3) {
+        return this.forEachOrphanedDocument(txn, (docKey, sequenceNumber) => f3(sequenceNumber));
+      }
+      addReference(txn, targetId, key) {
+        return writeSentinelKey(txn, key);
+      }
+      removeReference(txn, targetId, key) {
+        return writeSentinelKey(txn, key);
+      }
+      removeTargets(txn, upperBound, activeTargetIds) {
+        return this.db.getTargetCache().removeTargets(txn, upperBound, activeTargetIds);
+      }
+      markPotentiallyOrphaned(txn, key) {
+        return writeSentinelKey(txn, key);
+      }
+      /**
+       * Returns true if anything would prevent this document from being garbage
+       * collected, given that the document in question is not present in any
+       * targets and has a sequence number less than or equal to the upper bound for
+       * the collection run.
+       */
+      isPinned(txn, docKey) {
+        return mutationQueuesContainKey(txn, docKey);
+      }
+      removeOrphanedDocuments(txn, upperBound) {
+        const documentCache = this.db.getRemoteDocumentCache();
+        const changeBuffer = documentCache.newChangeBuffer();
+        const promises = [];
+        let documentCount = 0;
+        const iteration = this.forEachOrphanedDocument(txn, (docKey, sequenceNumber) => {
+          if (sequenceNumber <= upperBound) {
+            const p = this.isPinned(txn, docKey).next((isPinned) => {
+              if (!isPinned) {
+                documentCount++;
+                return changeBuffer.getEntry(txn, docKey).next(() => {
+                  changeBuffer.removeEntry(docKey, SnapshotVersion.min());
+                  return documentTargetStore(txn).delete(sentinelKey$1(docKey));
+                });
+              }
+            });
+            promises.push(p);
+          }
+        });
+        return iteration.next(() => PersistencePromise.waitFor(promises)).next(() => changeBuffer.apply(txn)).next(() => documentCount);
+      }
+      removeTarget(txn, targetData) {
+        const updated = targetData.withSequenceNumber(txn.currentSequenceNumber);
+        return this.db.getTargetCache().updateTargetData(txn, updated);
+      }
+      updateLimboDocument(txn, key) {
+        return writeSentinelKey(txn, key);
+      }
+      /**
+       * Call provided function for each document in the cache that is 'orphaned'. Orphaned
+       * means not a part of any target, so the only entry in the target-document index for
+       * that document will be the sentinel row (targetId 0), which will also have the sequence
+       * number for the last time the document was accessed.
+       */
+      forEachOrphanedDocument(txn, f3) {
+        const store = documentTargetStore(txn);
+        let nextToReport = ListenSequence.INVALID;
+        let nextPath;
+        return store.iterate({
+          index: DbTargetDocumentDocumentTargetsIndex
+        }, ([targetId, docKey], { path: path3, sequenceNumber }) => {
+          if (targetId === 0) {
+            if (nextToReport !== ListenSequence.INVALID) {
+              f3(new DocumentKey(decodeResourcePath(nextPath)), nextToReport);
+            }
+            nextToReport = sequenceNumber;
+            nextPath = path3;
+          } else {
+            nextToReport = ListenSequence.INVALID;
+          }
+        }).next(() => {
+          if (nextToReport !== ListenSequence.INVALID) {
+            f3(new DocumentKey(decodeResourcePath(nextPath)), nextToReport);
+          }
+        });
+      }
+      getCacheSize(txn) {
+        return this.db.getRemoteDocumentCache().getSize(txn);
       }
     };
     RemoteDocumentChangeBuffer = class {
@@ -266085,6 +270505,274 @@ Total Duration: ${removedDocumentsTs - startTs}ms`;
       assertNotApplied() {
       }
     };
+    IndexedDbRemoteDocumentCacheImpl = class {
+      constructor(serializer) {
+        this.serializer = serializer;
+      }
+      setIndexManager(indexManager) {
+        this.indexManager = indexManager;
+      }
+      /**
+       * Adds the supplied entries to the cache.
+       *
+       * All calls of `addEntry` are required to go through the RemoteDocumentChangeBuffer
+       * returned by `newChangeBuffer()` to ensure proper accounting of metadata.
+       */
+      addEntry(transaction, key, doc5) {
+        const documentStore = remoteDocumentsStore(transaction);
+        return documentStore.put(doc5);
+      }
+      /**
+       * Removes a document from the cache.
+       *
+       * All calls of `removeEntry`  are required to go through the RemoteDocumentChangeBuffer
+       * returned by `newChangeBuffer()` to ensure proper accounting of metadata.
+       */
+      removeEntry(transaction, documentKey, readTime) {
+        const store = remoteDocumentsStore(transaction);
+        return store.delete(dbReadTimeKey(documentKey, readTime));
+      }
+      /**
+       * Updates the current cache size.
+       *
+       * Callers to `addEntry()` and `removeEntry()` *must* call this afterwards to update the
+       * cache's metadata.
+       */
+      updateMetadata(transaction, sizeDelta) {
+        return this.getMetadata(transaction).next((metadata) => {
+          metadata.byteSize += sizeDelta;
+          return this.setMetadata(transaction, metadata);
+        });
+      }
+      getEntry(transaction, documentKey) {
+        let doc5 = MutableDocument.newInvalidDocument(documentKey);
+        return remoteDocumentsStore(transaction).iterate({
+          index: DbRemoteDocumentDocumentKeyIndex,
+          range: IDBKeyRange.only(dbKey(documentKey))
+        }, (_, dbRemoteDoc) => {
+          doc5 = this.maybeDecodeDocument(documentKey, dbRemoteDoc);
+        }).next(() => doc5);
+      }
+      /**
+       * Looks up an entry in the cache.
+       *
+       * @param documentKey - The key of the entry to look up.
+       * @returns The cached document entry and its size.
+       */
+      getSizedEntry(transaction, documentKey) {
+        let result = {
+          size: 0,
+          document: MutableDocument.newInvalidDocument(documentKey)
+        };
+        return remoteDocumentsStore(transaction).iterate({
+          index: DbRemoteDocumentDocumentKeyIndex,
+          range: IDBKeyRange.only(dbKey(documentKey))
+        }, (_, dbRemoteDoc) => {
+          result = {
+            document: this.maybeDecodeDocument(documentKey, dbRemoteDoc),
+            size: dbDocumentSize(dbRemoteDoc)
+          };
+        }).next(() => result);
+      }
+      getEntries(transaction, documentKeys) {
+        let results = mutableDocumentMap();
+        return this.forEachDbEntry(transaction, documentKeys, (key, dbRemoteDoc) => {
+          const doc5 = this.maybeDecodeDocument(key, dbRemoteDoc);
+          results = results.insert(key, doc5);
+        }).next(() => results);
+      }
+      getAllEntries(transaction) {
+        let results = mutableDocumentMap();
+        return remoteDocumentsStore(transaction).iterate((dbKey2, dbDoc) => {
+          const doc5 = this.maybeDecodeDocument(DocumentKey.fromSegments(dbDoc.prefixPath.concat(dbDoc.collectionGroup, dbDoc.documentId)), dbDoc);
+          results = results.insert(doc5.key, doc5);
+        }).next(() => results);
+      }
+      /**
+       * Looks up several entries in the cache.
+       *
+       * @param documentKeys - The set of keys entries to look up.
+       * @returns A map of documents indexed by key and a map of sizes indexed by
+       *     key (zero if the document does not exist).
+       */
+      getSizedEntries(transaction, documentKeys) {
+        let results = mutableDocumentMap();
+        let sizeMap = new SortedMap(DocumentKey.comparator);
+        return this.forEachDbEntry(transaction, documentKeys, (key, dbRemoteDoc) => {
+          const doc5 = this.maybeDecodeDocument(key, dbRemoteDoc);
+          results = results.insert(key, doc5);
+          sizeMap = sizeMap.insert(key, dbDocumentSize(dbRemoteDoc));
+        }).next(() => {
+          return { documents: results, sizeMap };
+        });
+      }
+      forEachDbEntry(transaction, documentKeys, callback) {
+        if (documentKeys.isEmpty()) {
+          return PersistencePromise.resolve();
+        }
+        let sortedKeys = new SortedSet(dbKeyComparator);
+        documentKeys.forEach((e2) => sortedKeys = sortedKeys.add(e2));
+        const range = IDBKeyRange.bound(dbKey(sortedKeys.first()), dbKey(sortedKeys.last()));
+        const keyIter = sortedKeys.getIterator();
+        let nextKey = keyIter.getNext();
+        return remoteDocumentsStore(transaction).iterate({ index: DbRemoteDocumentDocumentKeyIndex, range }, (_, dbRemoteDoc, control) => {
+          const potentialKey = DocumentKey.fromSegments([
+            ...dbRemoteDoc.prefixPath,
+            dbRemoteDoc.collectionGroup,
+            dbRemoteDoc.documentId
+          ]);
+          while (nextKey && dbKeyComparator(nextKey, potentialKey) < 0) {
+            callback(nextKey, null);
+            nextKey = keyIter.getNext();
+          }
+          if (nextKey && nextKey.isEqual(potentialKey)) {
+            callback(nextKey, dbRemoteDoc);
+            nextKey = keyIter.hasNext() ? keyIter.getNext() : null;
+          }
+          if (nextKey) {
+            control.skip(dbKey(nextKey));
+          } else {
+            control.done();
+          }
+        }).next(() => {
+          while (nextKey) {
+            callback(nextKey, null);
+            nextKey = keyIter.hasNext() ? keyIter.getNext() : null;
+          }
+        });
+      }
+      getDocumentsMatchingQuery(transaction, query2, offset, mutatedDocs, context2) {
+        const collection7 = isPipeline(query2) ? ResourcePath.fromString(getPipelineCollection(query2)) : query2.path;
+        const startKey = [
+          collection7.popLast().toArray(),
+          collection7.lastSegment(),
+          toDbTimestampKey(offset.readTime),
+          offset.documentKey.path.isEmpty() ? "" : offset.documentKey.path.lastSegment()
+        ];
+        const endKey = [
+          collection7.popLast().toArray(),
+          collection7.lastSegment(),
+          [Number.MAX_SAFE_INTEGER, Number.MAX_SAFE_INTEGER],
+          ""
+        ];
+        return remoteDocumentsStore(transaction).loadAll(IDBKeyRange.bound(startKey, endKey, true)).next((dbRemoteDocs) => {
+          context2?.incrementDocumentReadCount(dbRemoteDocs.length);
+          let results = mutableDocumentMap();
+          for (const dbRemoteDoc of dbRemoteDocs) {
+            const document2 = this.maybeDecodeDocument(DocumentKey.fromSegments(dbRemoteDoc.prefixPath.concat(dbRemoteDoc.collectionGroup, dbRemoteDoc.documentId)), dbRemoteDoc);
+            if (document2.isFoundDocument() && (queryOrPipelineMatches(query2, document2) || mutatedDocs.has(document2.key))) {
+              results = results.insert(document2.key, document2);
+            }
+          }
+          return results;
+        });
+      }
+      getAllFromCollectionGroup(transaction, collectionGroup2, offset, limit3) {
+        let results = mutableDocumentMap();
+        const startKey = dbCollectionGroupKey(collectionGroup2, offset);
+        const endKey = dbCollectionGroupKey(collectionGroup2, IndexOffset.max());
+        return remoteDocumentsStore(transaction).iterate({
+          index: DbRemoteDocumentCollectionGroupIndex,
+          range: IDBKeyRange.bound(startKey, endKey, true)
+        }, (_, dbRemoteDoc, control) => {
+          const document2 = this.maybeDecodeDocument(DocumentKey.fromSegments(dbRemoteDoc.prefixPath.concat(dbRemoteDoc.collectionGroup, dbRemoteDoc.documentId)), dbRemoteDoc);
+          results = results.insert(document2.key, document2);
+          if (results.size === limit3) {
+            control.done();
+          }
+        }).next(() => results);
+      }
+      newChangeBuffer(options2) {
+        return new IndexedDbRemoteDocumentChangeBuffer(this, !!options2 && options2.trackRemovals);
+      }
+      getSize(txn) {
+        return this.getMetadata(txn).next((metadata) => metadata.byteSize);
+      }
+      getMetadata(txn) {
+        return documentGlobalStore(txn).get(DbRemoteDocumentGlobalKey).next((metadata) => {
+          hardAssert(!!metadata, 20021);
+          return metadata;
+        });
+      }
+      setMetadata(txn, metadata) {
+        return documentGlobalStore(txn).put(DbRemoteDocumentGlobalKey, metadata);
+      }
+      /**
+       * Decodes `dbRemoteDoc` and returns the document (or an invalid document if
+       * the document corresponds to the format used for sentinel deletes).
+       */
+      maybeDecodeDocument(documentKey, dbRemoteDoc) {
+        if (dbRemoteDoc) {
+          const doc5 = fromDbRemoteDocument(this.serializer, dbRemoteDoc);
+          const isSentinelRemoval = doc5.isNoDocument() && doc5.version.isEqual(SnapshotVersion.min());
+          if (!isSentinelRemoval) {
+            return doc5;
+          }
+        }
+        return MutableDocument.newInvalidDocument(documentKey);
+      }
+    };
+    IndexedDbRemoteDocumentChangeBuffer = class extends RemoteDocumentChangeBuffer {
+      /**
+       * @param documentCache - The IndexedDbRemoteDocumentCache to apply the changes to.
+       * @param trackRemovals - Whether to create sentinel deletes that can be tracked by
+       * `getNewDocumentChanges()`.
+       */
+      constructor(documentCache, trackRemovals) {
+        super();
+        this.documentCache = documentCache;
+        this.trackRemovals = trackRemovals;
+        this.documentStates = new ObjectMap((key) => key.toString(), (l, r2) => l.isEqual(r2));
+      }
+      applyChanges(transaction) {
+        const promises = [];
+        let sizeDelta = 0;
+        let collectionParents = new SortedSet((l, r2) => primitiveComparator(l.canonicalString(), r2.canonicalString()));
+        this.changes.forEach((key, documentChange) => {
+          const previousDoc = this.documentStates.get(key);
+          promises.push(this.documentCache.removeEntry(transaction, key, previousDoc.readTime));
+          if (documentChange.isValidDocument()) {
+            const doc5 = toDbRemoteDocument(this.documentCache.serializer, documentChange);
+            collectionParents = collectionParents.add(key.path.popLast());
+            const size = dbDocumentSize(doc5);
+            sizeDelta += size - previousDoc.size;
+            promises.push(this.documentCache.addEntry(transaction, key, doc5));
+          } else {
+            sizeDelta -= previousDoc.size;
+            if (this.trackRemovals) {
+              const deletedDoc = toDbRemoteDocument(this.documentCache.serializer, documentChange.convertToNoDocument(SnapshotVersion.min()));
+              promises.push(this.documentCache.addEntry(transaction, key, deletedDoc));
+            }
+          }
+        });
+        collectionParents.forEach((parent) => {
+          promises.push(this.documentCache.indexManager.addToCollectionParentIndex(transaction, parent));
+        });
+        promises.push(this.documentCache.updateMetadata(transaction, sizeDelta));
+        return PersistencePromise.waitFor(promises);
+      }
+      getFromCache(transaction, documentKey) {
+        return this.documentCache.getSizedEntry(transaction, documentKey).next((getResult) => {
+          this.documentStates.set(documentKey, {
+            size: getResult.size,
+            readTime: getResult.document.readTime
+          });
+          return getResult.document;
+        });
+      }
+      getAllFromCache(transaction, documentKeys) {
+        return this.documentCache.getSizedEntries(transaction, documentKeys).next(({ documents, sizeMap }) => {
+          sizeMap.forEach((documentKey, size) => {
+            this.documentStates.set(documentKey, {
+              size,
+              readTime: documents.get(documentKey).readTime
+            });
+          });
+          return documents;
+        });
+      }
+    };
+    SCHEMA_VERSION = 18;
     OverlayedDocument = class {
       constructor(overlayedDocument, mutatedFields) {
         this.overlayedDocument = overlayedDocument;
@@ -266189,15 +270877,15 @@ Total Duration: ${removedDocumentsTs - startTs}ms`;
         let recalculateDocuments = mutableDocumentMap();
         const mutatedFields = newDocumentKeyMap();
         const results = newOverlayedDocumentMap();
-        docs.forEach((_, doc6) => {
-          const overlay = overlays.get(doc6.key);
-          if (existenceStateChanged.has(doc6.key) && (overlay === void 0 || overlay.mutation instanceof PatchMutation)) {
-            recalculateDocuments = recalculateDocuments.insert(doc6.key, doc6);
+        docs.forEach((_, doc5) => {
+          const overlay = overlays.get(doc5.key);
+          if (existenceStateChanged.has(doc5.key) && (overlay === void 0 || overlay.mutation instanceof PatchMutation)) {
+            recalculateDocuments = recalculateDocuments.insert(doc5.key, doc5);
           } else if (overlay !== void 0) {
-            mutatedFields.set(doc6.key, overlay.mutation.getFieldMask());
-            mutationApplyToLocalView(overlay.mutation, doc6, overlay.mutation.getFieldMask(), Timestamp2.now());
+            mutatedFields.set(doc5.key, overlay.mutation.getFieldMask());
+            mutationApplyToLocalView(overlay.mutation, doc5, overlay.mutation.getFieldMask(), Timestamp2.now());
           } else {
-            mutatedFields.set(doc6.key, FieldMask.empty());
+            mutatedFields.set(doc5.key, FieldMask.empty());
           }
         });
         return this.recalculateAndSaveOverlays(transaction, recalculateDocuments).next((recalculatedFields) => {
@@ -266301,8 +270989,8 @@ Total Duration: ${removedDocumentsTs - startTs}ms`;
               if (originalDocs.get(key)) {
                 return PersistencePromise.resolve();
               }
-              return this.remoteDocumentCache.getEntry(transaction, key).next((doc6) => {
-                modifiedDocs = modifiedDocs.insert(key, doc6);
+              return this.remoteDocumentCache.getEntry(transaction, key).next((doc5) => {
+                modifiedDocs = modifiedDocs.insert(key, doc5);
               });
             }).next(() => this.populateOverlays(transaction, overlays, originalDocs)).next(() => this.computeViews(transaction, modifiedDocs, overlays, documentKeySet())).next((localDocs) => ({
               batchId: largestBatchId,
@@ -266327,8 +271015,8 @@ Total Duration: ${removedDocumentsTs - startTs}ms`;
           return PersistencePromise.forEach(parents, (parent) => {
             const collectionQuery = asCollectionQueryAtPath(query2, parent.child(collectionId));
             return this.getDocumentsMatchingCollectionQuery(transaction, collectionQuery, offset, context2).next((r2) => {
-              r2.forEach((key, doc6) => {
-                results = results.insert(key, doc6);
+              r2.forEach((key, doc5) => {
+                results = results.insert(key, doc5);
               });
             });
           }).next(() => results);
@@ -266340,7 +271028,7 @@ Total Duration: ${removedDocumentsTs - startTs}ms`;
           overlays = result;
           return this.remoteDocumentCache.getDocumentsMatchingQuery(transaction, query2, offset, overlays, context2);
         }).next((remoteDocuments) => {
-          return this.retrieveMatchingLocalDocuments(overlays, remoteDocuments, (doc6) => queryMatches(query2, doc6));
+          return this.retrieveMatchingLocalDocuments(overlays, remoteDocuments, (doc5) => queryMatches(query2, doc5));
         });
       }
       getDocumentsMatchingPipeline(txn, pipeline2, offset, context2) {
@@ -266351,8 +271039,8 @@ Total Duration: ${removedDocumentsTs - startTs}ms`;
             return PersistencePromise.forEach(parents, (parent) => {
               const collectionPipeline = asCollectionPipelineAtPath(pipeline2, parent.child(collectionId));
               return this.getDocumentsMatchingPipeline(txn, collectionPipeline, offset, context2).next((r2) => {
-                r2.forEach((key, doc6) => {
-                  results = results.insert(key, doc6);
+                r2.forEach((key, doc5) => {
+                  results = results.insert(key, doc5);
                 });
               });
             }).next(() => results);
@@ -266376,7 +271064,7 @@ Total Duration: ${removedDocumentsTs - startTs}ms`;
                 throw new FirestoreError("invalid-argument", `Invalid pipeline source to execute offline: ${canonifyPipeline(pipeline2)}`);
             }
           }).next((remoteDocuments) => {
-            return this.retrieveMatchingLocalDocuments(overlays, remoteDocuments, (doc6) => pipelineMatches(pipeline2, doc6));
+            return this.retrieveMatchingLocalDocuments(overlays, remoteDocuments, (doc5) => pipelineMatches(pipeline2, doc5));
           });
         }
       }
@@ -266816,13 +271504,13 @@ Total Duration: ${removedDocumentsTs - startTs}ms`;
        * All calls of `addEntry`  are required to go through the RemoteDocumentChangeBuffer
        * returned by `newChangeBuffer()`.
        */
-      addEntry(transaction, doc6) {
-        const key = doc6.key;
+      addEntry(transaction, doc5) {
+        const key = doc5.key;
         const entry = this.docs.get(key);
         const previousSize = entry ? entry.size : 0;
-        const currentSize = this.sizer(doc6);
+        const currentSize = this.sizer(doc5);
         this.docs = this.docs.insert(key, {
-          document: doc6.mutableCopy(),
+          document: doc5.mutableCopy(),
           size: currentSize
         });
         this.size += currentSize - previousSize;
@@ -266865,10 +271553,10 @@ Total Duration: ${removedDocumentsTs - startTs}ms`;
         let matcher;
         if (isPipeline(query2)) {
           collectionPath = ResourcePath.fromString(getPipelineCollection(query2));
-          matcher = (doc6) => pipelineMatches(query2, doc6);
+          matcher = (doc5) => pipelineMatches(query2, doc5);
         } else {
           collectionPath = query2.path;
-          matcher = (doc6) => queryMatches(query2, doc6);
+          matcher = (doc5) => queryMatches(query2, doc5);
         }
         let results = mutableDocumentMap();
         const prefix = new DocumentKey(collectionPath.child("__id" + MIN_LONG_VALUE + "__"));
@@ -266911,9 +271599,9 @@ Total Duration: ${removedDocumentsTs - startTs}ms`;
       }
       applyChanges(transaction) {
         const promises = [];
-        this.changes.forEach((key, doc6) => {
-          if (doc6.isValidDocument()) {
-            promises.push(this.documentCache.addEntry(transaction, doc6));
+        this.changes.forEach((key, doc5) => {
+          if (doc5.isValidDocument()) {
+            promises.push(this.documentCache.addEntry(transaction, doc5));
           } else {
             this.documentCache.removeEntry(key);
           }
@@ -267050,7 +271738,7 @@ Total Duration: ${removedDocumentsTs - startTs}ms`;
         this.globalsCache = new MemoryGlobalsCache();
         this.referenceDelegate = referenceDelegateFactory(this);
         this.targetCache = new MemoryTargetCache(this);
-        const sizer = (doc6) => this.referenceDelegate.documentSize(doc6);
+        const sizer = (doc5) => this.referenceDelegate.documentSize(doc5);
         this.indexManager = new MemoryIndexManager();
         this.remoteDocumentCache = newMemoryRemoteDocumentCache(sizer);
         this.serializer = new LocalSerializer(serializer);
@@ -267155,17 +271843,17 @@ Total Duration: ${removedDocumentsTs - startTs}ms`;
       removeTarget(txn, targetData) {
         const orphaned = this.localViewReferences.removeReferencesForId(targetData.targetId);
         orphaned.forEach((key) => this.orphanedDocuments.add(key.toString()));
-        const cache2 = this.persistence.getTargetCache();
-        return cache2.getMatchingKeysForTargetId(txn, targetData.targetId).next((keys) => {
+        const cache3 = this.persistence.getTargetCache();
+        return cache3.getMatchingKeysForTargetId(txn, targetData.targetId).next((keys) => {
           keys.forEach((key) => this.orphanedDocuments.add(key.toString()));
-        }).next(() => cache2.removeTargetData(txn, targetData));
+        }).next(() => cache3.removeTargetData(txn, targetData));
       }
       onTransactionStarted() {
         this._orphanedDocuments = /* @__PURE__ */ new Set();
       }
       onTransactionCommitted(txn) {
-        const cache2 = this.persistence.getRemoteDocumentCache();
-        const changeBuffer = cache2.newChangeBuffer();
+        const cache3 = this.persistence.getRemoteDocumentCache();
+        const changeBuffer = cache3.newChangeBuffer();
         return PersistencePromise.forEach(this.orphanedDocuments, (path3) => {
           const key = DocumentKey.fromPath(path3);
           return this.isReferenced(txn, key).next((isReferenced) => {
@@ -267187,7 +271875,7 @@ Total Duration: ${removedDocumentsTs - startTs}ms`;
           }
         });
       }
-      documentSize(doc6) {
+      documentSize(doc5) {
         return 0;
       }
       isReferenced(txn, key) {
@@ -267244,9 +271932,9 @@ Total Duration: ${removedDocumentsTs - startTs}ms`;
       }
       removeOrphanedDocuments(txn, upperBound) {
         let count = 0;
-        const cache2 = this.persistence.getRemoteDocumentCache();
-        const changeBuffer = cache2.newChangeBuffer();
-        const p = cache2.forEachDocumentKey(txn, (key) => {
+        const cache3 = this.persistence.getRemoteDocumentCache();
+        const changeBuffer = cache3.newChangeBuffer();
+        const p = cache3.forEachDocumentKey(txn, (key) => {
           return this.isPinned(txn, key, upperBound).next((isPinned) => {
             if (!isPinned) {
               count++;
@@ -267297,7 +271985,757 @@ Total Duration: ${removedDocumentsTs - startTs}ms`;
         return this.persistence.getRemoteDocumentCache().getSize(txn);
       }
     };
+    SchemaConverter = class {
+      constructor(serializer) {
+        this.serializer = serializer;
+      }
+      /**
+       * Performs database creation and schema upgrades.
+       *
+       * Note that in production, this method is only ever used to upgrade the schema
+       * to SCHEMA_VERSION. Different values of toVersion are only used for testing
+       * and local feature development.
+       */
+      createOrUpgrade(db3, txn, fromVersion2, toVersion2) {
+        const simpleDbTransaction = new SimpleDbTransaction("createOrUpgrade", txn);
+        if (fromVersion2 < 1 && toVersion2 >= 1) {
+          createPrimaryClientStore(db3);
+          createMutationQueue(db3);
+          createQueryCache(db3);
+          createLegacyRemoteDocumentCache(db3);
+        }
+        let p = PersistencePromise.resolve();
+        if (fromVersion2 < 3 && toVersion2 >= 3) {
+          if (fromVersion2 !== 0) {
+            dropQueryCache(db3);
+            createQueryCache(db3);
+          }
+          p = p.next(() => writeEmptyTargetGlobalEntry(simpleDbTransaction));
+        }
+        if (fromVersion2 < 4 && toVersion2 >= 4) {
+          if (fromVersion2 !== 0) {
+            p = p.next(() => upgradeMutationBatchSchemaAndMigrateData(db3, simpleDbTransaction));
+          }
+          p = p.next(() => {
+            createClientMetadataStore(db3);
+          });
+        }
+        if (fromVersion2 < 5 && toVersion2 >= 5) {
+          p = p.next(() => this.removeAcknowledgedMutations(simpleDbTransaction));
+        }
+        if (fromVersion2 < 6 && toVersion2 >= 6) {
+          p = p.next(() => {
+            createDocumentGlobalStore(db3);
+            return this.addDocumentGlobal(simpleDbTransaction);
+          });
+        }
+        if (fromVersion2 < 7 && toVersion2 >= 7) {
+          p = p.next(() => this.ensureSequenceNumbers(simpleDbTransaction));
+        }
+        if (fromVersion2 < 8 && toVersion2 >= 8) {
+          p = p.next(() => this.createCollectionParentIndex(db3, simpleDbTransaction));
+        }
+        if (fromVersion2 < 9 && toVersion2 >= 9) {
+          p = p.next(() => {
+            dropRemoteDocumentChangesStore(db3);
+          });
+        }
+        if (fromVersion2 < 10 && toVersion2 >= 10) {
+          p = p.next(() => this.rewriteCanonicalIds(simpleDbTransaction));
+        }
+        if (fromVersion2 < 11 && toVersion2 >= 11) {
+          p = p.next(() => {
+            createBundlesStore(db3);
+            createNamedQueriesStore(db3);
+          });
+        }
+        if (fromVersion2 < 12 && toVersion2 >= 12) {
+          p = p.next(() => {
+            createDocumentOverlayStore(db3);
+          });
+        }
+        if (fromVersion2 < 13 && toVersion2 >= 13) {
+          p = p.next(() => createRemoteDocumentCache(db3)).next(() => this.rewriteRemoteDocumentCache(db3, simpleDbTransaction)).next(() => db3.deleteObjectStore(DbRemoteDocumentStore$1));
+        }
+        if (fromVersion2 < 14 && toVersion2 >= 14) {
+          p = p.next(() => this.runOverlayMigration(db3, simpleDbTransaction));
+        }
+        if (fromVersion2 < 15 && toVersion2 >= 15) {
+          p = p.next(() => createFieldIndex(db3));
+        }
+        if (fromVersion2 < 16 && toVersion2 >= 16) {
+          p = p.next(() => {
+            const indexStateStore2 = txn.objectStore(DbIndexStateStore);
+            indexStateStore2.clear();
+          }).next(() => {
+            const indexEntryStore = txn.objectStore(DbIndexEntryStore);
+            indexEntryStore.clear();
+          });
+        }
+        if (fromVersion2 < 17 && toVersion2 >= 17) {
+          p = p.next(() => {
+            createGlobalsStore(db3);
+          });
+        }
+        if (fromVersion2 < 18 && toVersion2 >= 18) {
+          if (isSafariOrWebkit()) {
+            p = p.next(() => {
+              const indexStateStore2 = txn.objectStore(DbIndexStateStore);
+              indexStateStore2.clear();
+            }).next(() => {
+              const indexEntryStore = txn.objectStore(DbIndexEntryStore);
+              indexEntryStore.clear();
+            });
+          }
+        }
+        return p;
+      }
+      addDocumentGlobal(txn) {
+        let byteSize = 0;
+        return txn.store(DbRemoteDocumentStore$1).iterate((_, doc5) => {
+          byteSize += dbDocumentSize(doc5);
+        }).next(() => {
+          const metadata = { byteSize };
+          return txn.store(DbRemoteDocumentGlobalStore).put(DbRemoteDocumentGlobalKey, metadata);
+        });
+      }
+      removeAcknowledgedMutations(txn) {
+        const queuesStore = txn.store(DbMutationQueueStore);
+        const mutationsStore2 = txn.store(DbMutationBatchStore);
+        return queuesStore.loadAll().next((queues) => {
+          return PersistencePromise.forEach(queues, (queue) => {
+            const range = IDBKeyRange.bound([queue.userId, BATCHID_UNKNOWN], [queue.userId, queue.lastAcknowledgedBatchId]);
+            return mutationsStore2.loadAll(DbMutationBatchUserMutationsIndex, range).next((dbBatches) => {
+              return PersistencePromise.forEach(dbBatches, (dbBatch) => {
+                hardAssert(dbBatch.userId === queue.userId, 18650, `Cannot process batch from unexpected user`, { batchId: dbBatch.batchId });
+                const batch = fromDbMutationBatch(this.serializer, dbBatch);
+                return removeMutationBatch(txn, queue.userId, batch).next(() => {
+                });
+              });
+            });
+          });
+        });
+      }
+      /**
+       * Ensures that every document in the remote document cache has a corresponding sentinel row
+       * with a sequence number. Missing rows are given the most recently used sequence number.
+       */
+      ensureSequenceNumbers(txn) {
+        const documentTargetStore2 = txn.store(DbTargetDocumentStore);
+        const documentsStore = txn.store(DbRemoteDocumentStore$1);
+        const globalTargetStore2 = txn.store(DbTargetGlobalStore);
+        return globalTargetStore2.get(DbTargetGlobalKey).next((metadata) => {
+          const writeSentinelKey2 = (path3) => {
+            return documentTargetStore2.put({
+              targetId: 0,
+              path: encodeResourcePath(path3),
+              sequenceNumber: metadata.highestListenSequenceNumber
+            });
+          };
+          const promises = [];
+          return documentsStore.iterate((key, doc5) => {
+            const path3 = new ResourcePath(key);
+            const docSentinelKey = sentinelKey(path3);
+            promises.push(documentTargetStore2.get(docSentinelKey).next((maybeSentinel) => {
+              if (!maybeSentinel) {
+                return writeSentinelKey2(path3);
+              } else {
+                return PersistencePromise.resolve();
+              }
+            }));
+          }).next(() => PersistencePromise.waitFor(promises));
+        });
+      }
+      createCollectionParentIndex(db3, txn) {
+        db3.createObjectStore(DbCollectionParentStore, {
+          keyPath: DbCollectionParentKeyPath
+        });
+        const collectionParentsStore2 = txn.store(DbCollectionParentStore);
+        const cache3 = new MemoryCollectionParentIndex();
+        const addEntry = (collectionPath) => {
+          if (cache3.add(collectionPath)) {
+            const collectionId = collectionPath.lastSegment();
+            const parentPath = collectionPath.popLast();
+            return collectionParentsStore2.put({
+              collectionId,
+              parent: encodeResourcePath(parentPath)
+            });
+          }
+        };
+        return txn.store(DbRemoteDocumentStore$1).iterate({ keysOnly: true }, (pathSegments, _) => {
+          const path3 = new ResourcePath(pathSegments);
+          return addEntry(path3.popLast());
+        }).next(() => {
+          return txn.store(DbDocumentMutationStore).iterate({ keysOnly: true }, ([userID, encodedPath, batchId], _) => {
+            const path3 = decodeResourcePath(encodedPath);
+            return addEntry(path3.popLast());
+          });
+        });
+      }
+      rewriteCanonicalIds(txn) {
+        const targetStore = txn.store(DbTargetStore);
+        return targetStore.iterate((key, originalDbTarget) => {
+          const originalTargetData = fromDbTarget(this.serializer, originalDbTarget);
+          const updatedDbTarget = toDbTarget(this.serializer, originalTargetData);
+          return targetStore.put(updatedDbTarget);
+        });
+      }
+      rewriteRemoteDocumentCache(db3, transaction) {
+        const legacyRemoteDocumentStore = transaction.store(DbRemoteDocumentStore$1);
+        const writes = [];
+        return legacyRemoteDocumentStore.iterate((_, legacyDocument) => {
+          const remoteDocumentStore = transaction.store(DbRemoteDocumentStore);
+          const path3 = extractKey(legacyDocument).path.toArray();
+          const dbRemoteDocument = {
+            prefixPath: path3.slice(0, path3.length - 2),
+            collectionGroup: path3[path3.length - 2],
+            documentId: path3[path3.length - 1],
+            readTime: legacyDocument.readTime || [0, 0],
+            unknownDocument: legacyDocument.unknownDocument,
+            noDocument: legacyDocument.noDocument,
+            document: legacyDocument.document,
+            hasCommittedMutations: !!legacyDocument.hasCommittedMutations
+          };
+          writes.push(remoteDocumentStore.put(dbRemoteDocument));
+        }).next(() => PersistencePromise.waitFor(writes));
+      }
+      runOverlayMigration(db3, transaction) {
+        const mutationsStore2 = transaction.store(DbMutationBatchStore);
+        const remoteDocumentCache = newIndexedDbRemoteDocumentCache(this.serializer);
+        const memoryPersistence = new MemoryPersistence(MemoryEagerDelegate.factory, this.serializer.remoteSerializer);
+        return mutationsStore2.loadAll().next((dbBatches) => {
+          const userToDocumentSet = /* @__PURE__ */ new Map();
+          dbBatches.forEach((dbBatch) => {
+            let documentSet = userToDocumentSet.get(dbBatch.userId) ?? documentKeySet();
+            const batch = fromDbMutationBatch(this.serializer, dbBatch);
+            batch.keys().forEach((key) => documentSet = documentSet.add(key));
+            userToDocumentSet.set(dbBatch.userId, documentSet);
+          });
+          return PersistencePromise.forEach(userToDocumentSet, (allDocumentKeysForUser, userId) => {
+            const user = new User(userId);
+            const documentOverlayCache = IndexedDbDocumentOverlayCache.forUser(this.serializer, user);
+            const indexManager = memoryPersistence.getIndexManager(user);
+            const mutationQueue = IndexedDbMutationQueue.forUser(user, this.serializer, indexManager, memoryPersistence.referenceDelegate);
+            const localDocumentsView = new LocalDocumentsView(remoteDocumentCache, mutationQueue, documentOverlayCache, indexManager);
+            return localDocumentsView.recalculateAndSaveOverlaysForDocumentKeys(new IndexedDbTransaction(transaction, ListenSequence.INVALID), allDocumentKeysForUser).next();
+          });
+        });
+      }
+    };
+    LOG_TAG$9 = "IndexedDbPersistence";
     MAX_CLIENT_AGE_MS = 30 * 60 * 1e3;
+    MAX_PRIMARY_ELIGIBLE_AGE_MS = 5e3;
+    CLIENT_METADATA_REFRESH_INTERVAL_MS = 4e3;
+    PRIMARY_LEASE_EXCLUSIVE_ERROR_MSG = "Failed to obtain exclusive access to the persistence layer. To allow shared access, multi-tab synchronization has to be enabled in all tabs. If you are using `experimentalForceOwningTab:true`, make sure that only one tab has persistence enabled at any given time.";
+    UNSUPPORTED_PLATFORM_ERROR_MSG = "This platform is either missing IndexedDB or is known to have an incomplete implementation. Offline persistence has been disabled.";
+    ZOMBIED_CLIENTS_KEY_PREFIX = "firestore_zombie";
+    MAIN_DATABASE = "main";
+    IndexedDbPersistence = class _IndexedDbPersistence {
+      constructor(allowTabSynchronization, persistenceKey, clientId, lruParams, queue, window2, document2, serializer, sequenceNumberSyncer, forceOwningTab, schemaVersion = SCHEMA_VERSION) {
+        this.allowTabSynchronization = allowTabSynchronization;
+        this.persistenceKey = persistenceKey;
+        this.clientId = clientId;
+        this.queue = queue;
+        this.window = window2;
+        this.document = document2;
+        this.sequenceNumberSyncer = sequenceNumberSyncer;
+        this.forceOwningTab = forceOwningTab;
+        this.schemaVersion = schemaVersion;
+        this.listenSequence = null;
+        this._started = false;
+        this.isPrimary = false;
+        this.networkEnabled = true;
+        this.windowUnloadHandler = null;
+        this.inForeground = false;
+        this.documentVisibilityHandler = null;
+        this.clientMetadataRefresher = null;
+        this.lastGarbageCollectionTime = Number.NEGATIVE_INFINITY;
+        this.primaryStateListener = (_) => Promise.resolve();
+        if (!_IndexedDbPersistence.isAvailable()) {
+          throw new FirestoreError(Code.UNIMPLEMENTED, UNSUPPORTED_PLATFORM_ERROR_MSG);
+        }
+        this.referenceDelegate = new IndexedDbLruDelegateImpl(this, lruParams);
+        this.dbName = persistenceKey + MAIN_DATABASE;
+        this.serializer = new LocalSerializer(serializer);
+        this.simpleDb = new SimpleDb(this.dbName, this.schemaVersion, new SchemaConverter(this.serializer));
+        this.globalsCache = new IndexedDbGlobalsCache();
+        this.targetCache = new IndexedDbTargetCache(this.referenceDelegate, this.serializer);
+        this.remoteDocumentCache = newIndexedDbRemoteDocumentCache(this.serializer);
+        this.bundleCache = new IndexedDbBundleCache();
+        if (this.window && this.window.localStorage) {
+          this.webStorage = this.window.localStorage;
+        } else {
+          this.webStorage = null;
+          if (forceOwningTab === false) {
+            logError(LOG_TAG$9, "LocalStorage is unavailable. As a result, persistence may not work reliably. In particular enablePersistence() could fail immediately after refreshing the page.");
+          }
+        }
+      }
+      /**
+       * Attempt to start IndexedDb persistence.
+       *
+       * @returns Whether persistence was enabled.
+       */
+      start() {
+        return this.updateClientMetadataAndTryBecomePrimary().then(() => {
+          if (!this.isPrimary && !this.allowTabSynchronization) {
+            throw new FirestoreError(Code.FAILED_PRECONDITION, PRIMARY_LEASE_EXCLUSIVE_ERROR_MSG);
+          }
+          this.attachVisibilityHandler();
+          this.attachWindowUnloadHook();
+          this.scheduleClientMetadataAndPrimaryLeaseRefreshes();
+          return this.runTransaction("getHighestListenSequenceNumber", "readonly", (txn) => this.targetCache.getHighestSequenceNumber(txn));
+        }).then((highestListenSequenceNumber) => {
+          this.listenSequence = new ListenSequence(highestListenSequenceNumber, this.sequenceNumberSyncer);
+        }).then(() => {
+          this._started = true;
+        }).catch((reason) => {
+          this.simpleDb && this.simpleDb.close();
+          return Promise.reject(reason);
+        });
+      }
+      /**
+       * Registers a listener that gets called when the primary state of the
+       * instance changes. Upon registering, this listener is invoked immediately
+       * with the current primary state.
+       *
+       * PORTING NOTE: This is only used for Web multi-tab.
+       */
+      setPrimaryStateListener(primaryStateListener) {
+        this.primaryStateListener = async (primaryState) => {
+          if (this.started) {
+            return primaryStateListener(primaryState);
+          }
+        };
+        return primaryStateListener(this.isPrimary);
+      }
+      /**
+       * Registers a listener that gets called when the database receives a
+       * version change event indicating that it has deleted.
+       *
+       * PORTING NOTE: This is only used for Web multi-tab.
+       */
+      setDatabaseDeletedListener(databaseDeletedListener) {
+        this.simpleDb.setVersionChangeListener(async (event) => {
+          if (event.newVersion === null) {
+            await databaseDeletedListener();
+          }
+        });
+      }
+      /**
+       * Adjusts the current network state in the client's metadata, potentially
+       * affecting the primary lease.
+       *
+       * PORTING NOTE: This is only used for Web multi-tab.
+       */
+      setNetworkEnabled(networkEnabled) {
+        if (this.networkEnabled !== networkEnabled) {
+          this.networkEnabled = networkEnabled;
+          this.queue.enqueueAndForget(async () => {
+            if (this.started) {
+              await this.updateClientMetadataAndTryBecomePrimary();
+            }
+          });
+        }
+      }
+      /**
+       * Updates the client metadata in IndexedDb and attempts to either obtain or
+       * extend the primary lease for the local client. Asynchronously notifies the
+       * primary state listener if the client either newly obtained or released its
+       * primary lease.
+       */
+      updateClientMetadataAndTryBecomePrimary() {
+        return this.runTransaction("updateClientMetadataAndTryBecomePrimary", "readwrite", (txn) => {
+          const metadataStore = clientMetadataStore(txn);
+          return metadataStore.put({
+            clientId: this.clientId,
+            updateTimeMs: Date.now(),
+            networkEnabled: this.networkEnabled,
+            inForeground: this.inForeground
+          }).next(() => {
+            if (this.isPrimary) {
+              return this.verifyPrimaryLease(txn).next((success) => {
+                if (!success) {
+                  this.isPrimary = false;
+                  this.queue.enqueueRetryable(() => this.primaryStateListener(false));
+                }
+              });
+            }
+          }).next(() => this.canActAsPrimary(txn)).next((canActAsPrimary) => {
+            if (this.isPrimary && !canActAsPrimary) {
+              return this.releasePrimaryLeaseIfHeld(txn).next(() => false);
+            } else if (canActAsPrimary) {
+              return this.acquireOrExtendPrimaryLease(txn).next(() => true);
+            } else {
+              return (
+                /* canActAsPrimary= */
+                false
+              );
+            }
+          });
+        }).catch((e2) => {
+          if (isIndexedDbTransactionError(e2)) {
+            logDebug(LOG_TAG$9, "Failed to extend owner lease: ", e2);
+            return this.isPrimary;
+          }
+          if (!this.allowTabSynchronization) {
+            throw e2;
+          }
+          logDebug(LOG_TAG$9, "Releasing owner lease after error during lease refresh", e2);
+          return (
+            /* isPrimary= */
+            false
+          );
+        }).then((isPrimary) => {
+          if (this.isPrimary !== isPrimary) {
+            this.queue.enqueueRetryable(() => this.primaryStateListener(isPrimary));
+          }
+          this.isPrimary = isPrimary;
+        });
+      }
+      verifyPrimaryLease(txn) {
+        const store = primaryClientStore(txn);
+        return store.get(DbPrimaryClientKey).next((primaryClient) => {
+          return PersistencePromise.resolve(this.isLocalClient(primaryClient));
+        });
+      }
+      removeClientMetadata(txn) {
+        const metadataStore = clientMetadataStore(txn);
+        return metadataStore.delete(this.clientId);
+      }
+      /**
+       * If the garbage collection threshold has passed, prunes the
+       * RemoteDocumentChanges and the ClientMetadata store based on the last update
+       * time of all clients.
+       */
+      async maybeGarbageCollectMultiClientState() {
+        if (this.isPrimary && !this.isWithinAge(this.lastGarbageCollectionTime, MAX_CLIENT_AGE_MS)) {
+          this.lastGarbageCollectionTime = Date.now();
+          const inactiveClients = await this.runTransaction("maybeGarbageCollectMultiClientState", "readwrite-primary", (txn) => {
+            const metadataStore = getStore(txn, DbClientMetadataStore);
+            return metadataStore.loadAll().next((existingClients) => {
+              const active = this.filterActiveClients(existingClients, MAX_CLIENT_AGE_MS);
+              const inactive = existingClients.filter((client2) => active.indexOf(client2) === -1);
+              return PersistencePromise.forEach(inactive, (inactiveClient) => metadataStore.delete(inactiveClient.clientId)).next(() => inactive);
+            });
+          }).catch(() => {
+            return [];
+          });
+          if (this.webStorage) {
+            for (const inactiveClient of inactiveClients) {
+              this.webStorage.removeItem(this.zombiedClientLocalStorageKey(inactiveClient.clientId));
+            }
+          }
+        }
+      }
+      /**
+       * Schedules a recurring timer to update the client metadata and to either
+       * extend or acquire the primary lease if the client is eligible.
+       */
+      scheduleClientMetadataAndPrimaryLeaseRefreshes() {
+        this.clientMetadataRefresher = this.queue.enqueueAfterDelay("client_metadata_refresh", CLIENT_METADATA_REFRESH_INTERVAL_MS, () => {
+          return this.updateClientMetadataAndTryBecomePrimary().then(() => this.maybeGarbageCollectMultiClientState()).then(() => this.scheduleClientMetadataAndPrimaryLeaseRefreshes());
+        });
+      }
+      /** Checks whether `client` is the local client. */
+      isLocalClient(client2) {
+        return client2 ? client2.ownerId === this.clientId : false;
+      }
+      /**
+       * Evaluate the state of all active clients and determine whether the local
+       * client is or can act as the holder of the primary lease. Returns whether
+       * the client is eligible for the lease, but does not actually acquire it.
+       * May return 'false' even if there is no active leaseholder and another
+       * (foreground) client should become leaseholder instead.
+       */
+      canActAsPrimary(txn) {
+        if (this.forceOwningTab) {
+          return PersistencePromise.resolve(true);
+        }
+        const store = primaryClientStore(txn);
+        return store.get(DbPrimaryClientKey).next((currentPrimary) => {
+          const currentLeaseIsValid = currentPrimary !== null && this.isWithinAge(currentPrimary.leaseTimestampMs, MAX_PRIMARY_ELIGIBLE_AGE_MS) && !this.isClientZombied(currentPrimary.ownerId);
+          if (currentLeaseIsValid) {
+            if (this.isLocalClient(currentPrimary) && this.networkEnabled) {
+              return true;
+            }
+            if (!this.isLocalClient(currentPrimary)) {
+              if (!currentPrimary.allowTabSynchronization) {
+                throw new FirestoreError(Code.FAILED_PRECONDITION, PRIMARY_LEASE_EXCLUSIVE_ERROR_MSG);
+              }
+              return false;
+            }
+          }
+          if (this.networkEnabled && this.inForeground) {
+            return true;
+          }
+          return clientMetadataStore(txn).loadAll().next((existingClients) => {
+            const preferredCandidate = this.filterActiveClients(existingClients, MAX_PRIMARY_ELIGIBLE_AGE_MS).find((otherClient) => {
+              if (this.clientId !== otherClient.clientId) {
+                const otherClientHasBetterNetworkState = !this.networkEnabled && otherClient.networkEnabled;
+                const otherClientHasBetterVisibility = !this.inForeground && otherClient.inForeground;
+                const otherClientHasSameNetworkState = this.networkEnabled === otherClient.networkEnabled;
+                if (otherClientHasBetterNetworkState || otherClientHasBetterVisibility && otherClientHasSameNetworkState) {
+                  return true;
+                }
+              }
+              return false;
+            });
+            return preferredCandidate === void 0;
+          });
+        }).next((canActAsPrimary) => {
+          if (this.isPrimary !== canActAsPrimary) {
+            logDebug(LOG_TAG$9, `Client ${canActAsPrimary ? "is" : "is not"} eligible for a primary lease.`);
+          }
+          return canActAsPrimary;
+        });
+      }
+      async shutdown() {
+        this._started = false;
+        this.markClientZombied();
+        if (this.clientMetadataRefresher) {
+          this.clientMetadataRefresher.cancel();
+          this.clientMetadataRefresher = null;
+        }
+        this.detachVisibilityHandler();
+        this.detachWindowUnloadHook();
+        await this.simpleDb.runTransaction("shutdown", "readwrite", [DbPrimaryClientStore, DbClientMetadataStore], (simpleDbTxn) => {
+          const persistenceTransaction = new IndexedDbTransaction(simpleDbTxn, ListenSequence.INVALID);
+          return this.releasePrimaryLeaseIfHeld(persistenceTransaction).next(() => this.removeClientMetadata(persistenceTransaction));
+        });
+        this.simpleDb.close();
+        this.removeClientZombiedEntry();
+      }
+      /**
+       * Returns clients that are not zombied and have an updateTime within the
+       * provided threshold.
+       */
+      filterActiveClients(clients, activityThresholdMs) {
+        return clients.filter((client2) => this.isWithinAge(client2.updateTimeMs, activityThresholdMs) && !this.isClientZombied(client2.clientId));
+      }
+      /**
+       * Returns the IDs of the clients that are currently active. If multi-tab
+       * is not supported, returns an array that only contains the local client's
+       * ID.
+       *
+       * PORTING NOTE: This is only used for Web multi-tab.
+       */
+      getActiveClients() {
+        return this.runTransaction("getActiveClients", "readonly", (txn) => {
+          return clientMetadataStore(txn).loadAll().next((clients) => this.filterActiveClients(clients, MAX_CLIENT_AGE_MS).map((clientMetadata) => clientMetadata.clientId));
+        });
+      }
+      get started() {
+        return this._started;
+      }
+      getGlobalsCache() {
+        return this.globalsCache;
+      }
+      getMutationQueue(user, indexManager) {
+        return IndexedDbMutationQueue.forUser(user, this.serializer, indexManager, this.referenceDelegate);
+      }
+      getTargetCache() {
+        return this.targetCache;
+      }
+      getRemoteDocumentCache() {
+        return this.remoteDocumentCache;
+      }
+      getIndexManager(user) {
+        return new IndexedDbIndexManager(user, this.serializer.remoteSerializer.databaseId);
+      }
+      getDocumentOverlayCache(user) {
+        return IndexedDbDocumentOverlayCache.forUser(this.serializer, user);
+      }
+      getBundleCache() {
+        return this.bundleCache;
+      }
+      runTransaction(action, mode, transactionOperation) {
+        logDebug(LOG_TAG$9, "Starting transaction:", action);
+        const simpleDbMode = mode === "readonly" ? "readonly" : "readwrite";
+        const objectStores = getObjectStores(this.schemaVersion);
+        let persistenceTransaction;
+        return this.simpleDb.runTransaction(action, simpleDbMode, objectStores, (simpleDbTxn) => {
+          persistenceTransaction = new IndexedDbTransaction(simpleDbTxn, this.listenSequence ? this.listenSequence.next() : ListenSequence.INVALID);
+          if (mode === "readwrite-primary") {
+            return this.verifyPrimaryLease(persistenceTransaction).next((holdsPrimaryLease) => {
+              if (holdsPrimaryLease) {
+                return (
+                  /* holdsPrimaryLease= */
+                  true
+                );
+              }
+              return this.canActAsPrimary(persistenceTransaction);
+            }).next((holdsPrimaryLease) => {
+              if (!holdsPrimaryLease) {
+                logError(`Failed to obtain primary lease for action '${action}'.`);
+                this.isPrimary = false;
+                this.queue.enqueueRetryable(() => this.primaryStateListener(false));
+                throw new FirestoreError(Code.FAILED_PRECONDITION, PRIMARY_LEASE_LOST_ERROR_MSG);
+              }
+              return transactionOperation(persistenceTransaction);
+            }).next((result) => {
+              return this.acquireOrExtendPrimaryLease(persistenceTransaction).next(() => result);
+            });
+          } else {
+            return this.verifyAllowTabSynchronization(persistenceTransaction).next(() => transactionOperation(persistenceTransaction));
+          }
+        }).then((result) => {
+          persistenceTransaction.raiseOnCommittedEvent();
+          return result;
+        });
+      }
+      /**
+       * Verifies that the current tab is the primary leaseholder or alternatively
+       * that the leaseholder has opted into multi-tab synchronization.
+       */
+      // TODO(b/114226234): Remove this check when `synchronizeTabs` can no longer
+      // be turned off.
+      verifyAllowTabSynchronization(txn) {
+        const store = primaryClientStore(txn);
+        return store.get(DbPrimaryClientKey).next((currentPrimary) => {
+          const currentLeaseIsValid = currentPrimary !== null && this.isWithinAge(currentPrimary.leaseTimestampMs, MAX_PRIMARY_ELIGIBLE_AGE_MS) && !this.isClientZombied(currentPrimary.ownerId);
+          if (currentLeaseIsValid && !this.isLocalClient(currentPrimary)) {
+            if (!this.forceOwningTab && (!this.allowTabSynchronization || !currentPrimary.allowTabSynchronization)) {
+              throw new FirestoreError(Code.FAILED_PRECONDITION, PRIMARY_LEASE_EXCLUSIVE_ERROR_MSG);
+            }
+          }
+        });
+      }
+      /**
+       * Obtains or extends the new primary lease for the local client. This
+       * method does not verify that the client is eligible for this lease.
+       */
+      acquireOrExtendPrimaryLease(txn) {
+        const newPrimary = {
+          ownerId: this.clientId,
+          allowTabSynchronization: this.allowTabSynchronization,
+          leaseTimestampMs: Date.now()
+        };
+        return primaryClientStore(txn).put(DbPrimaryClientKey, newPrimary);
+      }
+      static isAvailable() {
+        return SimpleDb.isAvailable();
+      }
+      /** Checks the primary lease and removes it if we are the current primary. */
+      releasePrimaryLeaseIfHeld(txn) {
+        const store = primaryClientStore(txn);
+        return store.get(DbPrimaryClientKey).next((primaryClient) => {
+          if (this.isLocalClient(primaryClient)) {
+            logDebug(LOG_TAG$9, "Releasing primary lease.");
+            return store.delete(DbPrimaryClientKey);
+          } else {
+            return PersistencePromise.resolve();
+          }
+        });
+      }
+      /** Verifies that `updateTimeMs` is within `maxAgeMs`. */
+      isWithinAge(updateTimeMs, maxAgeMs) {
+        const now = Date.now();
+        const minAcceptable = now - maxAgeMs;
+        const maxAcceptable = now;
+        if (updateTimeMs < minAcceptable) {
+          return false;
+        } else if (updateTimeMs > maxAcceptable) {
+          logError(`Detected an update time that is in the future: ${updateTimeMs} > ${maxAcceptable}`);
+          return false;
+        }
+        return true;
+      }
+      attachVisibilityHandler() {
+        if (this.document !== null && typeof this.document.addEventListener === "function") {
+          this.documentVisibilityHandler = () => {
+            this.queue.enqueueAndForget(() => {
+              this.inForeground = this.document.visibilityState === "visible";
+              return this.updateClientMetadataAndTryBecomePrimary();
+            });
+          };
+          this.document.addEventListener("visibilitychange", this.documentVisibilityHandler);
+          this.inForeground = this.document.visibilityState === "visible";
+        }
+      }
+      detachVisibilityHandler() {
+        if (this.documentVisibilityHandler) {
+          this.document.removeEventListener("visibilitychange", this.documentVisibilityHandler);
+          this.documentVisibilityHandler = null;
+        }
+      }
+      /**
+       * Attaches a window.unload handler that will synchronously write our
+       * clientId to a "zombie client id" location in LocalStorage. This can be used
+       * by tabs trying to acquire the primary lease to determine that the lease
+       * is no longer valid even if the timestamp is recent. This is particularly
+       * important for the refresh case (so the tab correctly re-acquires the
+       * primary lease). LocalStorage is used for this rather than IndexedDb because
+       * it is a synchronous API and so can be used reliably from  an unload
+       * handler.
+       */
+      attachWindowUnloadHook() {
+        if (typeof this.window?.addEventListener === "function") {
+          this.windowUnloadHandler = () => {
+            this.markClientZombied();
+            const safariIndexdbBugVersionRegex = /(?:Version|Mobile)\/1[456]/;
+            if (isSafari() && (navigator.appVersion.match(safariIndexdbBugVersionRegex) || navigator.userAgent.match(safariIndexdbBugVersionRegex))) {
+              this.queue.enterRestrictedMode(
+                /* purgeExistingTasks= */
+                true
+              );
+            }
+            this.queue.enqueueAndForget(() => {
+              return this.shutdown();
+            });
+          };
+          this.window.addEventListener("pagehide", this.windowUnloadHandler);
+        }
+      }
+      detachWindowUnloadHook() {
+        if (this.windowUnloadHandler) {
+          this.window.removeEventListener("pagehide", this.windowUnloadHandler);
+          this.windowUnloadHandler = null;
+        }
+      }
+      /**
+       * Returns whether a client is "zombied" based on its LocalStorage entry.
+       * Clients become zombied when their tab closes without running all of the
+       * cleanup logic in `shutdown()`.
+       */
+      isClientZombied(clientId) {
+        try {
+          const isZombied = this.webStorage?.getItem(this.zombiedClientLocalStorageKey(clientId)) !== null;
+          logDebug(LOG_TAG$9, `Client '${clientId}' ${isZombied ? "is" : "is not"} zombied in LocalStorage`);
+          return isZombied;
+        } catch (e2) {
+          logError(LOG_TAG$9, "Failed to get zombied client id.", e2);
+          return false;
+        }
+      }
+      /**
+       * Record client as zombied (a client that had its tab closed). Zombied
+       * clients are ignored during primary tab selection.
+       */
+      markClientZombied() {
+        if (!this.webStorage) {
+          return;
+        }
+        try {
+          this.webStorage.setItem(this.zombiedClientLocalStorageKey(this.clientId), String(Date.now()));
+        } catch (e2) {
+          logError("Failed to set zombie client id.", e2);
+        }
+      }
+      /** Removes the zombied client entry if it exists. */
+      removeClientZombiedEntry() {
+        if (!this.webStorage) {
+          return;
+        }
+        try {
+          this.webStorage.removeItem(this.zombiedClientLocalStorageKey(this.clientId));
+        } catch (e2) {
+        }
+      }
+      zombiedClientLocalStorageKey(clientId) {
+        return `${ZOMBIED_CLIENTS_KEY_PREFIX}_${this.persistenceKey}_${clientId}`;
+      }
+    };
     LOG_TAG$8 = "LocalStore";
     RESUME_TOKEN_MAX_AGE_MICROS = 5 * 60 * 1e6;
     LocalStoreImpl = class {
@@ -267424,6 +272862,7 @@ This typically indicates that your device does not have a healthy Internet conne
       }
     };
     LOG_TAG$6 = "RemoteStore";
+    MAX_PENDING_WRITES = 10;
     RemoteStoreImpl = class {
       constructor(localStore, datastore, asyncQueue, onlineStateHandler, connectivityMonitor) {
         this.localStore = localStore;
@@ -267567,8 +273006,97 @@ This typically indicates that your device does not have a healthy Internet conne
         }
       }
     };
+    LOG_TAG$4 = "IndexBackfiller";
     INITIAL_BACKFILL_DELAY_MS = 15 * 1e3;
     REGULAR_BACKFILL_DELAY_MS = 60 * 1e3;
+    MAX_DOCUMENTS_TO_PROCESS = 50;
+    IndexBackfillerScheduler = class {
+      constructor(asyncQueue, backfiller) {
+        this.asyncQueue = asyncQueue;
+        this.backfiller = backfiller;
+        this.task = null;
+      }
+      start() {
+        this.schedule(INITIAL_BACKFILL_DELAY_MS);
+      }
+      stop() {
+        if (this.task) {
+          this.task.cancel();
+          this.task = null;
+        }
+      }
+      get started() {
+        return this.task !== null;
+      }
+      schedule(delay) {
+        logDebug(LOG_TAG$4, `Scheduled in ${delay}ms`);
+        this.task = this.asyncQueue.enqueueAfterDelay("index_backfill", delay, async () => {
+          this.task = null;
+          try {
+            const documentsProcessed = await this.backfiller.backfill();
+            logDebug(LOG_TAG$4, `Documents written: ${documentsProcessed}`);
+          } catch (e2) {
+            if (isIndexedDbTransactionError(e2)) {
+              logDebug(LOG_TAG$4, "Ignoring IndexedDB error during index backfill: ", e2);
+            } else {
+              await ignoreIfPrimaryLeaseLoss(e2);
+            }
+          }
+          await this.schedule(REGULAR_BACKFILL_DELAY_MS);
+        });
+      }
+    };
+    IndexBackfiller = class {
+      constructor(localStore, persistence) {
+        this.localStore = localStore;
+        this.persistence = persistence;
+      }
+      async backfill(maxDocumentsToProcess = MAX_DOCUMENTS_TO_PROCESS) {
+        return this.persistence.runTransaction("Backfill Indexes", "readwrite-primary", (txn) => this.writeIndexEntries(txn, maxDocumentsToProcess));
+      }
+      /** Writes index entries until the cap is reached. Returns the number of documents processed. */
+      writeIndexEntries(transaction, maxDocumentsToProcess) {
+        const processedCollectionGroups = /* @__PURE__ */ new Set();
+        let documentsRemaining = maxDocumentsToProcess;
+        let continueLoop = true;
+        return PersistencePromise.doWhile(() => continueLoop === true && documentsRemaining > 0, () => {
+          return this.localStore.indexManager.getNextCollectionGroupToUpdate(transaction).next((collectionGroup2) => {
+            if (collectionGroup2 === null || processedCollectionGroups.has(collectionGroup2)) {
+              continueLoop = false;
+            } else {
+              logDebug(LOG_TAG$4, `Processing collection: ${collectionGroup2}`);
+              return this.writeEntriesForCollectionGroup(transaction, collectionGroup2, documentsRemaining).next((documentsProcessed) => {
+                documentsRemaining -= documentsProcessed;
+                processedCollectionGroups.add(collectionGroup2);
+              });
+            }
+          });
+        }).next(() => maxDocumentsToProcess - documentsRemaining);
+      }
+      /**
+       * Writes entries for the provided collection group. Returns the number of documents processed.
+       */
+      writeEntriesForCollectionGroup(transaction, collectionGroup2, documentsRemainingUnderCap) {
+        return this.localStore.indexManager.getMinOffsetFromCollectionGroup(transaction, collectionGroup2).next((existingOffset) => this.localStore.localDocuments.getNextDocuments(transaction, collectionGroup2, existingOffset, documentsRemainingUnderCap).next((nextBatch) => {
+          const docs = nextBatch.changes;
+          return this.localStore.indexManager.updateIndexEntries(transaction, docs).next(() => this.getNewOffset(existingOffset, nextBatch)).next((newOffset) => {
+            logDebug(LOG_TAG$4, `Updating offset: ${newOffset}`);
+            return this.localStore.indexManager.updateCollectionGroup(transaction, collectionGroup2, newOffset);
+          }).next(() => docs.size);
+        }));
+      }
+      /** Returns the next offset based on the provided documents. */
+      getNewOffset(existingOffset, lookupResult) {
+        let maxOffset = existingOffset;
+        lookupResult.changes.forEach((key, document2) => {
+          const newOffset = newIndexOffsetFromDocument(document2);
+          if (indexOffsetComparator(newOffset, maxOffset) > 0) {
+            maxOffset = newOffset;
+          }
+        });
+        return new IndexOffset(maxOffset.readTime, maxOffset.documentKey, Math.max(lookupResult.batchId, existingOffset.largestBatchId));
+      }
+    };
     QueryContext = class {
       constructor() {
         this._documentReadCount = 0;
@@ -267713,10 +273241,10 @@ This typically indicates that your device does not have a healthy Internet conne
         let matcher;
         if (isPipeline(query2)) {
           queryResults = new SortedSet(compareByKey);
-          matcher = (doc6) => pipelineMatches(query2, doc6);
+          matcher = (doc5) => pipelineMatches(query2, doc5);
         } else {
           queryResults = new SortedSet(newQueryComparator(query2));
-          matcher = (doc6) => queryMatches(query2, doc6);
+          matcher = (doc5) => queryMatches(query2, doc5);
         }
         documents.forEach((_, maybeDoc) => {
           if (matcher(maybeDoc)) {
@@ -267772,6 +273300,143 @@ This typically indicates that your device does not have a healthy Internet conne
         });
       }
     };
+    CLIENT_STATE_KEY_PREFIX = "firestore_clients";
+    MUTATION_BATCH_KEY_PREFIX = "firestore_mutations";
+    QUERY_TARGET_KEY_PREFIX = "firestore_targets";
+    ONLINE_STATE_KEY_PREFIX = "firestore_online_state";
+    BUNDLE_LOADED_KEY_PREFIX = "firestore_bundle_loaded_v2";
+    SEQUENCE_NUMBER_KEY_PREFIX = "firestore_sequence_number";
+    LOG_TAG$3 = "SharedClientState";
+    MutationMetadata = class _MutationMetadata {
+      constructor(user, batchId, state2, error) {
+        this.user = user;
+        this.batchId = batchId;
+        this.state = state2;
+        this.error = error;
+      }
+      /**
+       * Parses a MutationMetadata from its JSON representation in WebStorage.
+       * Logs a warning and returns null if the format of the data is not valid.
+       */
+      static fromWebStorageEntry(user, batchId, value) {
+        const mutationBatch = JSON.parse(value);
+        let validData = typeof mutationBatch === "object" && ["pending", "acknowledged", "rejected"].indexOf(mutationBatch.state) !== -1 && (mutationBatch.error === void 0 || typeof mutationBatch.error === "object");
+        let firestoreError = void 0;
+        if (validData && mutationBatch.error) {
+          validData = typeof mutationBatch.error.message === "string" && typeof mutationBatch.error.code === "string";
+          if (validData) {
+            firestoreError = new FirestoreError(mutationBatch.error.code, mutationBatch.error.message);
+          }
+        }
+        if (validData) {
+          return new _MutationMetadata(user, batchId, mutationBatch.state, firestoreError);
+        } else {
+          logError(LOG_TAG$3, `Failed to parse mutation state for ID '${batchId}': ${value}`);
+          return null;
+        }
+      }
+      toWebStorageJSON() {
+        const batchMetadata = {
+          state: this.state,
+          updateTimeMs: Date.now()
+          // Modify the existing value to trigger update.
+        };
+        if (this.error) {
+          batchMetadata.error = {
+            code: this.error.code,
+            message: this.error.message
+          };
+        }
+        return JSON.stringify(batchMetadata);
+      }
+    };
+    QueryTargetMetadata = class _QueryTargetMetadata {
+      constructor(targetId, state2, error) {
+        this.targetId = targetId;
+        this.state = state2;
+        this.error = error;
+      }
+      /**
+       * Parses a QueryTargetMetadata from its JSON representation in WebStorage.
+       * Logs a warning and returns null if the format of the data is not valid.
+       */
+      static fromWebStorageEntry(targetId, value) {
+        const targetState = JSON.parse(value);
+        let validData = typeof targetState === "object" && ["not-current", "current", "rejected"].indexOf(targetState.state) !== -1 && (targetState.error === void 0 || typeof targetState.error === "object");
+        let firestoreError = void 0;
+        if (validData && targetState.error) {
+          validData = typeof targetState.error.message === "string" && typeof targetState.error.code === "string";
+          if (validData) {
+            firestoreError = new FirestoreError(targetState.error.code, targetState.error.message);
+          }
+        }
+        if (validData) {
+          return new _QueryTargetMetadata(targetId, targetState.state, firestoreError);
+        } else {
+          logError(LOG_TAG$3, `Failed to parse target state for ID '${targetId}': ${value}`);
+          return null;
+        }
+      }
+      toWebStorageJSON() {
+        const targetState = {
+          state: this.state,
+          updateTimeMs: Date.now()
+          // Modify the existing value to trigger update.
+        };
+        if (this.error) {
+          targetState.error = {
+            code: this.error.code,
+            message: this.error.message
+          };
+        }
+        return JSON.stringify(targetState);
+      }
+    };
+    RemoteClientState = class _RemoteClientState {
+      constructor(clientId, activeTargetIds) {
+        this.clientId = clientId;
+        this.activeTargetIds = activeTargetIds;
+      }
+      /**
+       * Parses a RemoteClientState from the JSON representation in WebStorage.
+       * Logs a warning and returns null if the format of the data is not valid.
+       */
+      static fromWebStorageEntry(clientId, value) {
+        const clientState = JSON.parse(value);
+        let validData = typeof clientState === "object" && clientState.activeTargetIds instanceof Array;
+        let activeTargetIdsSet = targetIdSet();
+        for (let i2 = 0; validData && i2 < clientState.activeTargetIds.length; ++i2) {
+          validData = isSafeInteger(clientState.activeTargetIds[i2]);
+          activeTargetIdsSet = activeTargetIdsSet.add(clientState.activeTargetIds[i2]);
+        }
+        if (validData) {
+          return new _RemoteClientState(clientId, activeTargetIdsSet);
+        } else {
+          logError(LOG_TAG$3, `Failed to parse client data for instance '${clientId}': ${value}`);
+          return null;
+        }
+      }
+    };
+    SharedOnlineState = class _SharedOnlineState {
+      constructor(clientId, onlineState) {
+        this.clientId = clientId;
+        this.onlineState = onlineState;
+      }
+      /**
+       * Parses a SharedOnlineState from its JSON representation in WebStorage.
+       * Logs a warning and returns null if the format of the data is not valid.
+       */
+      static fromWebStorageEntry(value) {
+        const onlineState = JSON.parse(value);
+        const validData = typeof onlineState === "object" && ["Unknown", "Online", "Offline"].indexOf(onlineState.onlineState) !== -1 && typeof onlineState.clientId === "string";
+        if (validData) {
+          return new _SharedOnlineState(onlineState.clientId, onlineState.onlineState);
+        } else {
+          logError(LOG_TAG$3, `Failed to parse online state: ${value}`);
+          return null;
+        }
+      }
+    };
     LocalClientState = class {
       constructor() {
         this.activeTargetIds = targetIdSet();
@@ -267793,6 +273458,330 @@ This typically indicates that your device does not have a healthy Internet conne
           // Modify the existing value to trigger update.
         };
         return JSON.stringify(data);
+      }
+    };
+    WebStorageSharedClientState = class {
+      constructor(window2, queue, persistenceKey, localClientId, initialUser) {
+        this.window = window2;
+        this.queue = queue;
+        this.persistenceKey = persistenceKey;
+        this.localClientId = localClientId;
+        this.syncEngine = null;
+        this.onlineStateHandler = null;
+        this.sequenceNumberHandler = null;
+        this.storageListener = this.handleWebStorageEvent.bind(this);
+        this.activeClients = new SortedMap(primitiveComparator);
+        this.started = false;
+        this.earlyEvents = [];
+        const escapedPersistenceKey = persistenceKey.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        this.storage = this.window.localStorage;
+        this.currentUser = initialUser;
+        this.localClientStorageKey = createWebStorageClientStateKey(this.persistenceKey, this.localClientId);
+        this.sequenceNumberKey = createWebStorageSequenceNumberKey(this.persistenceKey);
+        this.activeClients = this.activeClients.insert(this.localClientId, new LocalClientState());
+        this.clientStateKeyRe = new RegExp(`^${CLIENT_STATE_KEY_PREFIX}_${escapedPersistenceKey}_([^_]*)$`);
+        this.mutationBatchKeyRe = new RegExp(`^${MUTATION_BATCH_KEY_PREFIX}_${escapedPersistenceKey}_(\\d+)(?:_(.*))?$`);
+        this.queryTargetKeyRe = new RegExp(`^${QUERY_TARGET_KEY_PREFIX}_${escapedPersistenceKey}_(\\d+)$`);
+        this.onlineStateKey = createWebStorageOnlineStateKey(this.persistenceKey);
+        this.bundleLoadedKey = createBundleLoadedKey(this.persistenceKey);
+        this.window.addEventListener("storage", this.storageListener);
+      }
+      /** Returns 'true' if WebStorage is available in the current environment. */
+      static isAvailable(window2) {
+        return !!(window2 && window2.localStorage);
+      }
+      async start() {
+        const existingClients = await this.syncEngine.getActiveClients();
+        for (const clientId of existingClients) {
+          if (clientId === this.localClientId) {
+            continue;
+          }
+          const storageItem = this.getItem(createWebStorageClientStateKey(this.persistenceKey, clientId));
+          if (storageItem) {
+            const clientState = RemoteClientState.fromWebStorageEntry(clientId, storageItem);
+            if (clientState) {
+              this.activeClients = this.activeClients.insert(clientState.clientId, clientState);
+            }
+          }
+        }
+        this.persistClientState();
+        const onlineStateJSON = this.storage.getItem(this.onlineStateKey);
+        if (onlineStateJSON) {
+          const onlineState = this.fromWebStorageOnlineState(onlineStateJSON);
+          if (onlineState) {
+            this.handleOnlineStateEvent(onlineState);
+          }
+        }
+        for (const event of this.earlyEvents) {
+          this.handleWebStorageEvent(event);
+        }
+        this.earlyEvents = [];
+        this.window.addEventListener("pagehide", () => this.shutdown());
+        this.started = true;
+      }
+      writeSequenceNumber(sequenceNumber) {
+        this.setItem(this.sequenceNumberKey, JSON.stringify(sequenceNumber));
+      }
+      getAllActiveQueryTargets() {
+        return this.extractActiveQueryTargets(this.activeClients);
+      }
+      isActiveQueryTarget(targetId) {
+        let found = false;
+        this.activeClients.forEach((key, value) => {
+          if (value.activeTargetIds.has(targetId)) {
+            found = true;
+          }
+        });
+        return found;
+      }
+      addPendingMutation(batchId) {
+        this.persistMutationState(batchId, "pending");
+      }
+      updateMutationState(batchId, state2, error) {
+        this.persistMutationState(batchId, state2, error);
+        this.removeMutationState(batchId);
+      }
+      addLocalQueryTarget(targetId, addToActiveTargetIds = true) {
+        let queryState = "not-current";
+        if (this.isActiveQueryTarget(targetId)) {
+          const storageItem = this.storage.getItem(createWebStorageQueryTargetMetadataKey(this.persistenceKey, targetId));
+          if (storageItem) {
+            const metadata = QueryTargetMetadata.fromWebStorageEntry(targetId, storageItem);
+            if (metadata) {
+              queryState = metadata.state;
+            }
+          }
+        }
+        if (addToActiveTargetIds) {
+          this.localClientState.addQueryTarget(targetId);
+        }
+        this.persistClientState();
+        return queryState;
+      }
+      removeLocalQueryTarget(targetId) {
+        this.localClientState.removeQueryTarget(targetId);
+        this.persistClientState();
+      }
+      isLocalQueryTarget(targetId) {
+        return this.localClientState.activeTargetIds.has(targetId);
+      }
+      clearQueryState(targetId) {
+        this.removeItem(createWebStorageQueryTargetMetadataKey(this.persistenceKey, targetId));
+      }
+      updateQueryState(targetId, state2, error) {
+        this.persistQueryTargetState(targetId, state2, error);
+      }
+      handleUserChange(user, removedBatchIds, addedBatchIds) {
+        removedBatchIds.forEach((batchId) => {
+          this.removeMutationState(batchId);
+        });
+        this.currentUser = user;
+        addedBatchIds.forEach((batchId) => {
+          this.addPendingMutation(batchId);
+        });
+      }
+      setOnlineState(onlineState) {
+        this.persistOnlineState(onlineState);
+      }
+      notifyBundleLoaded(collectionGroups) {
+        this.persistBundleLoadedState(collectionGroups);
+      }
+      shutdown() {
+        if (this.started) {
+          this.window.removeEventListener("storage", this.storageListener);
+          this.removeItem(this.localClientStorageKey);
+          this.started = false;
+        }
+      }
+      getItem(key) {
+        const value = this.storage.getItem(key);
+        logDebug(LOG_TAG$3, "READ", key, value);
+        return value;
+      }
+      setItem(key, value) {
+        logDebug(LOG_TAG$3, "SET", key, value);
+        this.storage.setItem(key, value);
+      }
+      removeItem(key) {
+        logDebug(LOG_TAG$3, "REMOVE", key);
+        this.storage.removeItem(key);
+      }
+      handleWebStorageEvent(event) {
+        const storageEvent = event;
+        if (storageEvent.storageArea === this.storage) {
+          logDebug(LOG_TAG$3, "EVENT", storageEvent.key, storageEvent.newValue);
+          if (storageEvent.key === this.localClientStorageKey) {
+            logError("Received WebStorage notification for local change. Another client might have garbage-collected our state");
+            return;
+          }
+          this.queue.enqueueRetryable(async () => {
+            if (!this.started) {
+              this.earlyEvents.push(storageEvent);
+              return;
+            }
+            if (storageEvent.key === null) {
+              return;
+            }
+            if (this.clientStateKeyRe.test(storageEvent.key)) {
+              if (storageEvent.newValue != null) {
+                const clientState = this.fromWebStorageClientState(storageEvent.key, storageEvent.newValue);
+                if (clientState) {
+                  return this.handleClientStateEvent(clientState.clientId, clientState);
+                }
+              } else {
+                const clientId = this.fromWebStorageClientStateKey(storageEvent.key);
+                return this.handleClientStateEvent(clientId, null);
+              }
+            } else if (this.mutationBatchKeyRe.test(storageEvent.key)) {
+              if (storageEvent.newValue !== null) {
+                const mutationMetadata = this.fromWebStorageMutationMetadata(storageEvent.key, storageEvent.newValue);
+                if (mutationMetadata) {
+                  return this.handleMutationBatchEvent(mutationMetadata);
+                }
+              }
+            } else if (this.queryTargetKeyRe.test(storageEvent.key)) {
+              if (storageEvent.newValue !== null) {
+                const queryTargetMetadata = this.fromWebStorageQueryTargetMetadata(storageEvent.key, storageEvent.newValue);
+                if (queryTargetMetadata) {
+                  return this.handleQueryTargetEvent(queryTargetMetadata);
+                }
+              }
+            } else if (storageEvent.key === this.onlineStateKey) {
+              if (storageEvent.newValue !== null) {
+                const onlineState = this.fromWebStorageOnlineState(storageEvent.newValue);
+                if (onlineState) {
+                  return this.handleOnlineStateEvent(onlineState);
+                }
+              }
+            } else if (storageEvent.key === this.sequenceNumberKey) {
+              const sequenceNumber = fromWebStorageSequenceNumber(storageEvent.newValue);
+              if (sequenceNumber !== ListenSequence.INVALID) {
+                this.sequenceNumberHandler(sequenceNumber);
+              }
+            } else if (storageEvent.key === this.bundleLoadedKey) {
+              const collectionGroups = this.fromWebStoreBundleLoadedState(storageEvent.newValue);
+              await Promise.all(collectionGroups.map((cg) => this.syncEngine.synchronizeWithChangedDocuments(cg)));
+            }
+          });
+        }
+      }
+      get localClientState() {
+        return this.activeClients.get(this.localClientId);
+      }
+      persistClientState() {
+        this.setItem(this.localClientStorageKey, this.localClientState.toWebStorageJSON());
+      }
+      persistMutationState(batchId, state2, error) {
+        const mutationState = new MutationMetadata(this.currentUser, batchId, state2, error);
+        const mutationKey = createWebStorageMutationBatchKey(this.persistenceKey, this.currentUser, batchId);
+        this.setItem(mutationKey, mutationState.toWebStorageJSON());
+      }
+      removeMutationState(batchId) {
+        const mutationKey = createWebStorageMutationBatchKey(this.persistenceKey, this.currentUser, batchId);
+        this.removeItem(mutationKey);
+      }
+      persistOnlineState(onlineState) {
+        const entry = {
+          clientId: this.localClientId,
+          onlineState
+        };
+        this.storage.setItem(this.onlineStateKey, JSON.stringify(entry));
+      }
+      persistQueryTargetState(targetId, state2, error) {
+        const targetKey = createWebStorageQueryTargetMetadataKey(this.persistenceKey, targetId);
+        const targetMetadata = new QueryTargetMetadata(targetId, state2, error);
+        this.setItem(targetKey, targetMetadata.toWebStorageJSON());
+      }
+      persistBundleLoadedState(collectionGroups) {
+        const json2 = JSON.stringify(Array.from(collectionGroups));
+        this.setItem(this.bundleLoadedKey, json2);
+      }
+      /**
+       * Parses a client state key in WebStorage. Returns null if the key does not
+       * match the expected key format.
+       */
+      fromWebStorageClientStateKey(key) {
+        const match = this.clientStateKeyRe.exec(key);
+        return match ? match[1] : null;
+      }
+      /**
+       * Parses a client state in WebStorage. Returns 'null' if the value could not
+       * be parsed.
+       */
+      fromWebStorageClientState(key, value) {
+        const clientId = this.fromWebStorageClientStateKey(key);
+        return RemoteClientState.fromWebStorageEntry(clientId, value);
+      }
+      /**
+       * Parses a mutation batch state in WebStorage. Returns 'null' if the value
+       * could not be parsed.
+       */
+      fromWebStorageMutationMetadata(key, value) {
+        const match = this.mutationBatchKeyRe.exec(key);
+        const batchId = Number(match[1]);
+        const userId = match[2] !== void 0 ? match[2] : null;
+        return MutationMetadata.fromWebStorageEntry(new User(userId), batchId, value);
+      }
+      /**
+       * Parses a query target state from WebStorage. Returns 'null' if the value
+       * could not be parsed.
+       */
+      fromWebStorageQueryTargetMetadata(key, value) {
+        const match = this.queryTargetKeyRe.exec(key);
+        const targetId = Number(match[1]);
+        return QueryTargetMetadata.fromWebStorageEntry(targetId, value);
+      }
+      /**
+       * Parses an online state from WebStorage. Returns 'null' if the value
+       * could not be parsed.
+       */
+      fromWebStorageOnlineState(value) {
+        return SharedOnlineState.fromWebStorageEntry(value);
+      }
+      fromWebStoreBundleLoadedState(value) {
+        return JSON.parse(value);
+      }
+      async handleMutationBatchEvent(mutationBatch) {
+        if (mutationBatch.user.uid !== this.currentUser.uid) {
+          logDebug(LOG_TAG$3, `Ignoring mutation for non-active user ${mutationBatch.user.uid}`);
+          return;
+        }
+        return this.syncEngine.applyBatchState(mutationBatch.batchId, mutationBatch.state, mutationBatch.error);
+      }
+      handleQueryTargetEvent(targetMetadata) {
+        return this.syncEngine.applyTargetState(targetMetadata.targetId, targetMetadata.state, targetMetadata.error);
+      }
+      handleClientStateEvent(clientId, clientState) {
+        const updatedClients = clientState ? this.activeClients.insert(clientId, clientState) : this.activeClients.remove(clientId);
+        const existingTargets = this.extractActiveQueryTargets(this.activeClients);
+        const newTargets = this.extractActiveQueryTargets(updatedClients);
+        const addedTargets = [];
+        const removedTargets = [];
+        newTargets.forEach((targetId) => {
+          if (!existingTargets.has(targetId)) {
+            addedTargets.push(targetId);
+          }
+        });
+        existingTargets.forEach((targetId) => {
+          if (!newTargets.has(targetId)) {
+            removedTargets.push(targetId);
+          }
+        });
+        return this.syncEngine.applyActiveTargetsChange(addedTargets, removedTargets).then(() => {
+          this.activeClients = updatedClients;
+        });
+      }
+      handleOnlineStateEvent(onlineState) {
+        if (this.activeClients.get(onlineState.clientId)) {
+          this.onlineStateHandler(onlineState.onlineState);
+        }
+      }
+      extractActiveQueryTargets(clients) {
+        let activeTargets = targetIdSet();
+        clients.forEach((kev, value) => {
+          activeTargets = activeTargets.unionWith(value.activeTargetIds);
+        });
+        return activeTargets;
       }
     };
     MemorySharedClientState = class {
@@ -267883,8 +273872,8 @@ This typically indicates that your device does not have a healthy Internet conne
        * document key is not present in the set;
        */
       indexOf(key) {
-        const doc6 = this.keyedMap.get(key);
-        return doc6 ? this.sortedSet.indexOf(doc6) : -1;
+        const doc5 = this.keyedMap.get(key);
+        return doc5 ? this.sortedSet.indexOf(doc5) : -1;
       }
       get size() {
         return this.sortedSet.size;
@@ -267897,17 +273886,17 @@ This typically indicates that your device does not have a healthy Internet conne
         });
       }
       /** Inserts or updates a document with the same key */
-      add(doc6) {
-        const set = this.delete(doc6.key);
-        return set.copy(set.keyedMap.insert(doc6.key, doc6), set.sortedSet.insert(doc6, null));
+      add(doc5) {
+        const set = this.delete(doc5.key);
+        return set.copy(set.keyedMap.insert(doc5.key, doc5), set.sortedSet.insert(doc5, null));
       }
       /** Deletes a document with a given key */
       delete(key) {
-        const doc6 = this.get(key);
-        if (!doc6) {
+        const doc5 = this.get(key);
+        if (!doc5) {
           return this;
         }
-        return this.copy(this.keyedMap.remove(key), this.sortedSet.remove(doc6));
+        return this.copy(this.keyedMap.remove(key), this.sortedSet.remove(doc5));
       }
       isEqual(other) {
         if (!(other instanceof _DocumentSet)) {
@@ -267929,8 +273918,8 @@ This typically indicates that your device does not have a healthy Internet conne
       }
       toString() {
         const docStrings = [];
-        this.forEach((doc6) => {
-          docStrings.push(doc6.toString());
+        this.forEach((doc5) => {
+          docStrings.push(doc5.toString());
         });
         if (docStrings.length === 0) {
           return "DocumentSet ()";
@@ -268016,8 +274005,8 @@ This typically indicates that your device does not have a healthy Internet conne
       /** Returns a view snapshot as if all documents in the snapshot were added. */
       static fromInitialDocuments(query2, documents, mutatedKeys, fromCache, hasCachedResults) {
         const changes = [];
-        documents.forEach((doc6) => {
-          changes.push({ type: 0, doc: doc6 });
+        documents.forEach((doc5) => {
+          changes.push({ type: 0, doc: doc5 });
         });
         return new _ViewSnapshot(
           query2,
@@ -268293,16 +274282,16 @@ This typically indicates that your device does not have a healthy Internet conne
         if (limit3) {
           if (isPipeline(this.query)) {
             const candidates = [];
-            newDocumentSet.forEach((doc6) => candidates.push(doc6));
+            newDocumentSet.forEach((doc5) => candidates.push(doc5));
             const results = runPipeline(this.query, candidates);
             let newResults = new DocumentSet(newPipelineComparator(this.query));
-            for (const doc6 of results) {
-              newResults = newResults.add(doc6);
+            for (const doc5 of results) {
+              newResults = newResults.add(doc5);
             }
-            newDocumentSet.forEach((doc6) => {
-              if (!newResults.has(doc6.key)) {
-                newMutatedKeys = newMutatedKeys.delete(doc6.key);
-                changeSet.track({ type: 1, doc: doc6 });
+            newDocumentSet.forEach((doc5) => {
+              if (!newResults.has(doc5.key)) {
+                newMutatedKeys = newMutatedKeys.delete(doc5.key);
+                changeSet.track({ type: 1, doc: doc5 });
               }
             });
             newDocumentSet = newResults;
@@ -268454,9 +274443,9 @@ This typically indicates that your device does not have a healthy Internet conne
         }
         const oldLimboDocuments = this.limboDocuments;
         this.limboDocuments = documentKeySet();
-        this.documentSet.forEach((doc6) => {
-          if (this.shouldBeInLimbo(doc6.key)) {
-            this.limboDocuments = this.limboDocuments.add(doc6.key);
+        this.documentSet.forEach((doc5) => {
+          if (this.shouldBeInLimbo(doc5.key)) {
+            this.limboDocuments = this.limboDocuments.add(doc5.key);
           }
         });
         const changes = [];
@@ -268514,10 +274503,10 @@ This typically indicates that your device does not have a healthy Internet conne
     };
     LOG_TAG$2 = "SyncEngine";
     QueryView = class {
-      constructor(query2, targetId, view) {
+      constructor(query2, targetId, view2) {
         this.query = query2;
         this.targetId = targetId;
-        this.view = view;
+        this.view = view2;
       }
     };
     LimboResolution = class {
@@ -268603,6 +274592,102 @@ This typically indicates that your device does not have a healthy Internet conne
       createPersistence(cfg) {
         const lruParams = this.cacheSizeBytes !== void 0 ? LruParams.withCacheSize(this.cacheSizeBytes) : LruParams.DEFAULT;
         return new MemoryPersistence((p) => MemoryLruDelegate.factory(p, lruParams), this.serializer);
+      }
+    };
+    IndexedDbOfflineComponentProvider = class extends MemoryOfflineComponentProvider {
+      constructor(onlineComponentProvider, cacheSizeBytes, forceOwnership) {
+        super();
+        this.onlineComponentProvider = onlineComponentProvider;
+        this.cacheSizeBytes = cacheSizeBytes;
+        this.forceOwnership = forceOwnership;
+        this.kind = "persistent";
+        this.synchronizeTabs = false;
+      }
+      async initialize(cfg) {
+        await super.initialize(cfg);
+        await this.onlineComponentProvider.initialize(this, cfg);
+        await syncEngineEnsureWriteCallbacks(this.onlineComponentProvider.syncEngine);
+        await fillWritePipeline(this.onlineComponentProvider.remoteStore);
+        await this.persistence.setPrimaryStateListener(() => {
+          if (this.gcScheduler && !this.gcScheduler.started) {
+            this.gcScheduler.start();
+          }
+          if (this.indexBackfillerScheduler && !this.indexBackfillerScheduler.started) {
+            this.indexBackfillerScheduler.start();
+          }
+          return Promise.resolve();
+        });
+      }
+      createLocalStore(cfg) {
+        return newLocalStore(this.persistence, new QueryEngine(), cfg.initialUser, this.serializer);
+      }
+      createGarbageCollectionScheduler(cfg, localStore) {
+        const garbageCollector = this.persistence.referenceDelegate.garbageCollector;
+        return new LruScheduler(garbageCollector, cfg.asyncQueue, localStore);
+      }
+      createIndexBackfillerScheduler(cfg, localStore) {
+        const indexBackfiller = new IndexBackfiller(localStore, this.persistence);
+        return new IndexBackfillerScheduler(cfg.asyncQueue, indexBackfiller);
+      }
+      createPersistence(cfg) {
+        const persistenceKey = indexedDbStoragePrefix(cfg.databaseInfo.databaseId, cfg.databaseInfo.persistenceKey);
+        const lruParams = this.cacheSizeBytes !== void 0 ? LruParams.withCacheSize(this.cacheSizeBytes) : LruParams.DEFAULT;
+        return new IndexedDbPersistence(this.synchronizeTabs, persistenceKey, cfg.clientId, lruParams, cfg.asyncQueue, getWindow(), getDocument(), this.serializer, this.sharedClientState, !!this.forceOwnership);
+      }
+      createSharedClientState(cfg) {
+        return new MemorySharedClientState();
+      }
+    };
+    MultiTabOfflineComponentProvider = class extends IndexedDbOfflineComponentProvider {
+      constructor(onlineComponentProvider, cacheSizeBytes) {
+        super(
+          onlineComponentProvider,
+          cacheSizeBytes,
+          /* forceOwnership= */
+          false
+        );
+        this.onlineComponentProvider = onlineComponentProvider;
+        this.cacheSizeBytes = cacheSizeBytes;
+        this.synchronizeTabs = true;
+      }
+      async initialize(cfg) {
+        await super.initialize(cfg);
+        const syncEngine = this.onlineComponentProvider.syncEngine;
+        if (this.sharedClientState instanceof WebStorageSharedClientState) {
+          this.sharedClientState.syncEngine = {
+            applyBatchState: syncEngineApplyBatchState.bind(null, syncEngine),
+            applyTargetState: syncEngineApplyTargetState.bind(null, syncEngine),
+            applyActiveTargetsChange: syncEngineApplyActiveTargetsChange.bind(null, syncEngine),
+            getActiveClients: syncEngineGetActiveClients.bind(null, syncEngine),
+            synchronizeWithChangedDocuments: syncEngineSynchronizeWithChangedDocuments.bind(null, syncEngine)
+          };
+          await this.sharedClientState.start();
+        }
+        await this.persistence.setPrimaryStateListener(async (isPrimary) => {
+          await syncEngineApplyPrimaryState(this.onlineComponentProvider.syncEngine, isPrimary);
+          if (this.gcScheduler) {
+            if (isPrimary && !this.gcScheduler.started) {
+              this.gcScheduler.start();
+            } else if (!isPrimary) {
+              this.gcScheduler.stop();
+            }
+          }
+          if (this.indexBackfillerScheduler) {
+            if (isPrimary && !this.indexBackfillerScheduler.started) {
+              this.indexBackfillerScheduler.start();
+            } else if (!isPrimary) {
+              this.indexBackfillerScheduler.stop();
+            }
+          }
+        });
+      }
+      createSharedClientState(cfg) {
+        const window2 = getWindow();
+        if (!WebStorageSharedClientState.isAvailable(window2)) {
+          throw new FirestoreError(Code.UNIMPLEMENTED, "IndexedDB persistence is only available on platforms that support LocalStorage.");
+        }
+        const persistenceKey = indexedDbStoragePrefix(cfg.databaseInfo.databaseId, cfg.databaseInfo.persistenceKey);
+        return new WebStorageSharedClientState(window2, cfg.asyncQueue, persistenceKey, cfg.clientId, cfg.initialUser);
       }
     };
     OnlineComponentProvider = class {
@@ -268895,6 +274980,7 @@ This typically indicates that your device does not have a healthy Internet conne
         this.delayedOperations.splice(index, 1);
       }
     };
+    CACHE_SIZE_UNLIMITED = LRU_COLLECTION_DISABLED;
     Firestore4 = class extends Firestore$1 {
       /** @hideconstructor */
       constructor(authCredentialsProvider, appCheckCredentialsProvider, databaseId, app2) {
@@ -269036,6 +275122,15 @@ function registerFirestore(variant, useFetchStreams = true) {
   registerVersion(name$12, version5, variant);
   registerVersion(name$12, version5, "esm2020");
 }
+function persistentLocalCache(settings) {
+  return new PersistentLocalCacheImpl(settings);
+}
+function persistentSingleTabManager(settings) {
+  return new SingleTabManagerImpl(settings?.forceOwnership);
+}
+function persistentMultipleTabManager() {
+  return new MultiTabManagerImpl();
+}
 function lengthPrefixedString(o) {
   const str = JSON.stringify(o);
   const l = encoder2.encode(str).byteLength;
@@ -269077,11 +275172,11 @@ function changesFromSnapshot(querySnapshot, includeMetadataChanges) {
     let index = 0;
     return querySnapshot._snapshot.docChanges.map((change) => {
       isPipeline(querySnapshot._snapshot.query) ? newPipelineComparator(querySnapshot._snapshot.query) : newQueryComparator(querySnapshot.query._query);
-      const doc6 = new QueryDocumentSnapshot3(querySnapshot._firestore, querySnapshot._userDataWriter, change.doc.key, change.doc, new SnapshotMetadata(querySnapshot._snapshot.mutatedKeys.has(change.doc.key), querySnapshot._snapshot.fromCache), querySnapshot.query.converter);
+      const doc5 = new QueryDocumentSnapshot3(querySnapshot._firestore, querySnapshot._userDataWriter, change.doc.key, change.doc, new SnapshotMetadata(querySnapshot._snapshot.mutatedKeys.has(change.doc.key), querySnapshot._snapshot.fromCache), querySnapshot.query.converter);
       change.doc;
       return {
         type: "added",
-        doc: doc6,
+        doc: doc5,
         oldIndex: -1,
         newIndex: index++
       };
@@ -269092,7 +275187,7 @@ function changesFromSnapshot(querySnapshot, includeMetadataChanges) {
       (change) => includeMetadataChanges || change.type !== 3
       /* ChangeType.Metadata */
     ).map((change) => {
-      const doc6 = new QueryDocumentSnapshot3(querySnapshot._firestore, querySnapshot._userDataWriter, change.doc.key, change.doc, new SnapshotMetadata(querySnapshot._snapshot.mutatedKeys.has(change.doc.key), querySnapshot._snapshot.fromCache), querySnapshot.query.converter);
+      const doc5 = new QueryDocumentSnapshot3(querySnapshot._firestore, querySnapshot._userDataWriter, change.doc.key, change.doc, new SnapshotMetadata(querySnapshot._snapshot.mutatedKeys.has(change.doc.key), querySnapshot._snapshot.fromCache), querySnapshot.query.converter);
       let oldIndex = -1;
       let newIndex = -1;
       if (change.type !== 0) {
@@ -269105,7 +275200,7 @@ function changesFromSnapshot(querySnapshot, includeMetadataChanges) {
       }
       return {
         type: resultChangeType(change.type),
-        doc: doc6,
+        doc: doc5,
         oldIndex,
         newIndex
       };
@@ -269134,11 +275229,11 @@ function getDocFromServer(reference) {
   }).then((snapshot) => convertToDocSnapshot(firestore, reference, snapshot));
 }
 function convertToDocSnapshot(firestore, ref, snapshot) {
-  const doc6 = snapshot.docs.get(ref._key);
+  const doc5 = snapshot.docs.get(ref._key);
   const userDataWriter = new ExpUserDataWriter(firestore);
-  return new DocumentSnapshot3(firestore, userDataWriter, ref._key, doc6, new SnapshotMetadata(snapshot.hasPendingWrites, snapshot.fromCache), ref.converter);
+  return new DocumentSnapshot3(firestore, userDataWriter, ref._key, doc5, new SnapshotMetadata(snapshot.hasPendingWrites, snapshot.fromCache), ref.converter);
 }
-var import_grpc_js, import_proto_loader, name$12, version5, DocumentSnapshot$1, QueryDocumentSnapshot$1, encoder2, meta, doc1Meta, doc1, doc2Meta, doc22, noDocMeta, limitQuery, limitToLastQuery, BUNDLE_VERSION, BundleBuilder2, SnapshotMetadata, DocumentSnapshot3, QueryDocumentSnapshot3, QuerySnapshot2;
+var import_grpc_js, import_proto_loader, name$12, version5, DocumentSnapshot$1, QueryDocumentSnapshot$1, PersistentLocalCacheImpl, SingleTabManagerImpl, MultiTabManagerImpl, encoder2, meta, doc1Meta, doc1, doc2Meta, doc22, noDocMeta, limitQuery, limitToLastQuery, BUNDLE_VERSION, BundleBuilder2, SnapshotMetadata, DocumentSnapshot3, QueryDocumentSnapshot3, QuerySnapshot2;
 var init_index_node = __esm({
   "node_modules/@firebase/firestore/dist/index.node.mjs"() {
     init_index_esm3();
@@ -269250,6 +275345,59 @@ var init_index_node = __esm({
        */
       data() {
         return super.data();
+      }
+    };
+    PersistentLocalCacheImpl = class {
+      constructor(settings) {
+        this.kind = "persistent";
+        let tabManager;
+        if (settings?.tabManager) {
+          settings.tabManager._initialize(settings);
+          tabManager = settings.tabManager;
+        } else {
+          tabManager = persistentSingleTabManager(void 0);
+          tabManager._initialize(settings);
+        }
+        this._onlineComponentProvider = tabManager._onlineComponentProvider;
+        this._offlineComponentProvider = tabManager._offlineComponentProvider;
+      }
+      toJSON() {
+        return { kind: this.kind };
+      }
+    };
+    SingleTabManagerImpl = class {
+      constructor(forceOwnership) {
+        this.forceOwnership = forceOwnership;
+        this.kind = "persistentSingleTab";
+      }
+      toJSON() {
+        return { kind: this.kind };
+      }
+      /**
+       * @internal
+       */
+      _initialize(settings) {
+        this._onlineComponentProvider = OnlineComponentProvider.provider;
+        this._offlineComponentProvider = {
+          build: (onlineComponents) => new IndexedDbOfflineComponentProvider(onlineComponents, settings?.cacheSizeBytes, this.forceOwnership)
+        };
+      }
+    };
+    MultiTabManagerImpl = class {
+      constructor() {
+        this.kind = "PersistentMultipleTab";
+      }
+      toJSON() {
+        return { kind: this.kind };
+      }
+      /**
+       * @internal
+       */
+      _initialize(settings) {
+        this._onlineComponentProvider = OnlineComponentProvider.provider;
+        this._offlineComponentProvider = {
+          build: (onlineComponents) => new MultiTabOfflineComponentProvider(onlineComponents, settings?.cacheSizeBytes)
+        };
       }
     };
     encoder2 = newTextEncoder();
@@ -269630,7 +275778,7 @@ var init_index_node = __esm({
       /** An array of all the documents in the `QuerySnapshot`. */
       get docs() {
         const result = [];
-        this.forEach((doc6) => result.push(doc6));
+        this.forEach((doc5) => result.push(doc5));
         return result;
       }
       /** The number of documents in the `QuerySnapshot`. */
@@ -269649,8 +275797,8 @@ var init_index_node = __esm({
        * @param thisArg - The `this` binding for the callback.
        */
       forEach(callback, thisArg) {
-        this._snapshot.docs.forEach((doc6) => {
-          callback.call(thisArg, new QueryDocumentSnapshot3(this._firestore, this._userDataWriter, doc6.key, doc6, new SnapshotMetadata(this._snapshot.mutatedKeys.has(doc6.key), this._snapshot.fromCache), this.query.converter));
+        this._snapshot.docs.forEach((doc5) => {
+          callback.call(thisArg, new QueryDocumentSnapshot3(this._firestore, this._userDataWriter, doc5.key, doc5, new SnapshotMetadata(this._snapshot.mutatedKeys.has(doc5.key), this._snapshot.fromCache), this.query.converter));
         });
       }
       /**
@@ -269693,13 +275841,13 @@ var init_index_node = __esm({
         const documents = [];
         const documentData = [];
         const paths = [];
-        this.docs.forEach((doc6) => {
-          if (doc6._document === null) {
+        this.docs.forEach((doc5) => {
+          if (doc5._document === null) {
             return;
           }
-          documents.push(doc6._document);
-          documentData.push(this._userDataWriter.convertObjectMap(doc6._document.data.value.mapValue.fields, "previous"));
-          paths.push(doc6.ref.path);
+          documents.push(doc5._document);
+          documentData.push(this._userDataWriter.convertObjectMap(doc5._document.data.value.mapValue.fields, "previous"));
+          paths.push(doc5.ref.path);
         });
         result["bundle"] = buildQuerySnapshotJsonBundle(this._firestore, this.query._query, result["bundleName"], parent, paths, documents, documentData);
         return result;
@@ -269886,21 +276034,21 @@ async function _performFetchWithErrorHandling(auth2, customErrorMap, fetchFn) {
       networkTimeout.promise
     ]);
     networkTimeout.clearNetworkTimeout();
-    const json = await response.json();
-    if ("needConfirmation" in json) {
-      throw _makeTaggedError(auth2, "account-exists-with-different-credential", json);
+    const json2 = await response.json();
+    if ("needConfirmation" in json2) {
+      throw _makeTaggedError(auth2, "account-exists-with-different-credential", json2);
     }
-    if (response.ok && !("errorMessage" in json)) {
-      return json;
+    if (response.ok && !("errorMessage" in json2)) {
+      return json2;
     } else {
-      const errorMessage = response.ok ? json.errorMessage : json.error.message;
+      const errorMessage = response.ok ? json2.errorMessage : json2.error.message;
       const [serverErrorCode, serverErrorMessage] = errorMessage.split(" : ");
       if (serverErrorCode === "FEDERATED_USER_ID_ALREADY_LINKED") {
-        throw _makeTaggedError(auth2, "credential-already-in-use", json);
+        throw _makeTaggedError(auth2, "credential-already-in-use", json2);
       } else if (serverErrorCode === "EMAIL_EXISTS") {
-        throw _makeTaggedError(auth2, "email-already-in-use", json);
+        throw _makeTaggedError(auth2, "email-already-in-use", json2);
       } else if (serverErrorCode === "USER_DISABLED") {
-        throw _makeTaggedError(auth2, "user-disabled", json);
+        throw _makeTaggedError(auth2, "user-disabled", json2);
       }
       const authError = errorMap[serverErrorCode] || serverErrorCode.toLowerCase().replace(/[_\s]+/g, "-");
       if (serverErrorMessage) {
@@ -272512,8 +278660,8 @@ var init_totp_BU9AvxK8 = __esm({
        *
        * @returns If the JSON input does not represent an {@link AuthCredential}, null is returned.
        */
-      static fromJSON(json) {
-        const obj = typeof json === "string" ? JSON.parse(json) : json;
+      static fromJSON(json2) {
+        const obj = typeof json2 === "string" ? JSON.parse(json2) : json2;
         if (obj?.email && obj?.password) {
           if (obj.signInMethod === "password") {
             return this._fromEmailAndPassword(obj.email, obj.password);
@@ -272634,8 +278782,8 @@ var init_totp_BU9AvxK8 = __esm({
        *
        * @returns If the JSON input does not represent an {@link  AuthCredential}, null is returned.
        */
-      static fromJSON(json) {
-        const obj = typeof json === "string" ? JSON.parse(json) : json;
+      static fromJSON(json2) {
+        const obj = typeof json2 === "string" ? JSON.parse(json2) : json2;
         const { providerId, signInMethod, ...rest } = obj;
         if (!providerId || !signInMethod) {
           return null;
@@ -273351,6 +279499,19 @@ var init_dist5 = __esm({
 });
 
 // src/firebase/config.ts
+function createDb() {
+  const dbId = firebaseConfig.firestoreDatabaseId || void 0;
+  const isBrowser2 = typeof window !== "undefined" && typeof indexedDB !== "undefined";
+  if (isBrowser2) {
+    try {
+      const settings = { localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) };
+      return dbId ? initializeFirestore2(app, settings, dbId) : initializeFirestore2(app, settings);
+    } catch (err) {
+      console.warn("[Firebase] Local cache not enabled:", err);
+    }
+  }
+  return dbId ? getFirestore2(app, dbId) : getFirestore2(app);
+}
 async function testFirestoreConnection() {
   if (typeof window === "undefined") return;
   if (!isFirebaseConfigured || !db2) return;
@@ -273362,7 +279523,7 @@ async function testFirestoreConnection() {
     }
   }
 }
-var envProjectId, envApiKey, firebaseConfig, app, db2, auth, isFirebaseConfigured;
+var envProjectId, envApiKey, envAuthDomain, envStorageBucket, envMessagingSenderId, envAppId, envDatabaseId, resolvedProjectId, usingOtherProject, firebaseConfig, webApiKeyMissing, app, db2, auth, isFirebaseConfigured;
 var init_config = __esm({
   "src/firebase/config.ts"() {
     init_dist3();
@@ -273371,597 +279532,89 @@ var init_config = __esm({
     init_firebase_applet_config();
     envProjectId = typeof import.meta !== "undefined" && import.meta.env?.VITE_FIREBASE_PROJECT_ID || typeof process !== "undefined" && process.env?.VITE_FIREBASE_PROJECT_ID || typeof process !== "undefined" && process.env?.FIREBASE_PROJECT_ID;
     envApiKey = typeof import.meta !== "undefined" && import.meta.env?.VITE_FIREBASE_API_KEY || typeof process !== "undefined" && process.env?.VITE_FIREBASE_API_KEY || typeof process !== "undefined" && process.env?.FIREBASE_API_KEY;
+    envAuthDomain = typeof import.meta !== "undefined" && import.meta.env?.VITE_FIREBASE_AUTH_DOMAIN || typeof process !== "undefined" && process.env?.VITE_FIREBASE_AUTH_DOMAIN;
+    envStorageBucket = typeof import.meta !== "undefined" && import.meta.env?.VITE_FIREBASE_STORAGE_BUCKET || typeof process !== "undefined" && process.env?.VITE_FIREBASE_STORAGE_BUCKET;
+    envMessagingSenderId = typeof import.meta !== "undefined" && import.meta.env?.VITE_FIREBASE_MESSAGING_SENDER_ID || typeof process !== "undefined" && process.env?.VITE_FIREBASE_MESSAGING_SENDER_ID;
+    envAppId = typeof import.meta !== "undefined" && import.meta.env?.VITE_FIREBASE_APP_ID || typeof process !== "undefined" && process.env?.VITE_FIREBASE_APP_ID;
+    envDatabaseId = typeof import.meta !== "undefined" && import.meta.env?.VITE_FIRESTORE_DATABASE_ID || typeof process !== "undefined" && process.env?.VITE_FIRESTORE_DATABASE_ID || typeof process !== "undefined" && process.env?.FIRESTORE_DATABASE_ID;
+    resolvedProjectId = envProjectId || firebase_applet_config_default.projectId;
+    usingOtherProject = resolvedProjectId !== firebase_applet_config_default.projectId;
     firebaseConfig = {
       ...firebase_applet_config_default,
-      projectId: envProjectId || firebase_applet_config_default.projectId,
-      apiKey: envApiKey || firebase_applet_config_default.apiKey
+      projectId: resolvedProjectId,
+      apiKey: envApiKey || (usingOtherProject ? "" : firebase_applet_config_default.apiKey),
+      authDomain: envAuthDomain || (usingOtherProject ? `${resolvedProjectId}.firebaseapp.com` : firebase_applet_config_default.authDomain),
+      storageBucket: envStorageBucket || (usingOtherProject ? `${resolvedProjectId}.firebasestorage.app` : firebase_applet_config_default.storageBucket),
+      messagingSenderId: envMessagingSenderId || (usingOtherProject ? "" : firebase_applet_config_default.messagingSenderId),
+      appId: envAppId || (usingOtherProject ? "" : firebase_applet_config_default.appId),
+      firestoreDatabaseId: envDatabaseId || (usingOtherProject ? "(default)" : firebase_applet_config_default.firestoreDatabaseId)
     };
-    app = getApps2().find((a) => a.name === "[DEFAULT]") || initializeApp2(firebaseConfig);
-    db2 = firebaseConfig.firestoreDatabaseId ? getFirestore2(app, firebaseConfig.firestoreDatabaseId) : getFirestore2(app);
+    webApiKeyMissing = !firebaseConfig.apiKey;
+    if (webApiKeyMissing && typeof console !== "undefined") {
+      console.error(
+        `[Firebase] VITE_FIREBASE_API_KEY is missing for project "${firebaseConfig.projectId}". Set it (with the other VITE_FIREBASE_* values) in this environment and redeploy.`
+      );
+    }
+    app = getApps2().find((a) => a.name === "[DEFAULT]") || initializeApp2(webApiKeyMissing ? { ...firebaseConfig, apiKey: "missing-web-api-key" } : firebaseConfig);
+    db2 = createDb();
     auth = getAuth2(app);
-    isFirebaseConfigured = Boolean(firebaseConfig.projectId && firebaseConfig.apiKey);
+    isFirebaseConfigured = Boolean(firebaseConfig.projectId && (firebaseConfig.apiKey || typeof window === "undefined"));
     testFirestoreConnection();
   }
 });
 
-// src/server/tenantEmailService.ts
-var tenantEmailService_exports = {};
-__export(tenantEmailService_exports, {
-  HttpError: () => HttpError,
-  addTenantDomain: () => addTenantDomain,
-  cacheTenantEmailSettings: () => cacheTenantEmailSettings,
-  getEmailSettingsView: () => getEmailSettingsView,
-  getTenantEmailSettings: () => getTenantEmailSettings,
-  resolveTenantSender: () => resolveTenantSender,
-  setTenantSender: () => setTenantSender,
-  verifyTenantDomain: () => verifyTenantDomain
-});
-function getApiKey() {
-  return (process.env.RESEND_API_KEY || "").trim();
-}
-function resendClient() {
-  const key = getApiKey();
-  if (!key) throw new Error("RESEND_API_KEY is not configured on the platform");
-  if (!client || clientKey !== key) {
-    client = new Resend(key);
-    clientKey = key;
+// src/server/cryptoUtils.ts
+import crypto2 from "crypto";
+function getMasterKey() {
+  const envKey = process.env.SECRETS_MASTER_KEY || process.env.TENANT_MASTER_KEY;
+  if (!envKey) {
+    if (process.env.NODE_ENV === "production") {
+      throw new Error("SECRETS_MASTER_KEY or TENANT_MASTER_KEY must be configured in production.");
+    }
+    const fallbackSeed = "umrah360_platform_master_seed_key_v1_secure_dev";
+    return crypto2.createHash("sha256").update(fallbackSeed).digest();
   }
-  return client;
+  if (envKey.length === 64 && /^[0-9a-fA-F]+$/.test(envKey)) {
+    return Buffer.from(envKey, "hex");
+  }
+  return crypto2.createHash("sha256").update(envKey).digest();
 }
-function platformSenderTenants() {
-  return (process.env.PLATFORM_SENDER_TENANTS || "").split(",").map((s2) => s2.trim()).filter(Boolean);
-}
-async function getTenantEmailSettings(tenantId, opts = {}) {
-  const cached = settingsCache.get(tenantId);
-  if (!opts.fresh && cached && Date.now() - cached.at < CACHE_MS) return cached.value;
-  if (!isFirebaseConfigured || !db) return {};
-  const repo = tenantRepo({ tenantId });
-  const snap = await getDoc(repo.settingsDoc("email"));
-  const value = (snap.exists() ? snap.data() : {}) || {};
-  settingsCache.set(tenantId, { at: Date.now(), value });
-  return value;
-}
-function cacheTenantEmailSettings(tenantId, value) {
-  settingsCache.set(tenantId, { at: Date.now(), value });
-}
-async function saveSettings(tenantId, patch) {
-  const repo = tenantRepo({ tenantId });
-  const current = await getTenantEmailSettings(tenantId, { fresh: true });
-  const next = { ...current, ...patch, updatedAt: (/* @__PURE__ */ new Date()).toISOString() };
-  const clean2 = JSON.parse(JSON.stringify(next));
-  await setDoc(repo.settingsDoc("email"), clean2, { merge: false });
-  settingsCache.set(tenantId, { at: Date.now(), value: clean2 });
-  return clean2;
-}
-function formatFrom(name5, address) {
-  const n = (name5 || "").replace(/["<>\r\n]/g, "").trim();
-  return n ? `${n} <${address}>` : address;
-}
-function mapRecords(records) {
-  return (records || []).filter((r2) => r2.record === "SPF" || r2.record === "DKIM").map((r2) => ({
-    record: r2.record,
-    type: r2.type,
-    name: r2.name,
-    value: r2.value,
-    ttl: r2.ttl,
-    priority: r2.priority,
-    status: r2.status
-  }));
-}
-async function getEmailSettingsView(tenantId) {
-  const s2 = await getTenantEmailSettings(tenantId, { fresh: true });
-  const grandfathered = platformSenderTenants().includes(tenantId);
-  const canSend = s2.status === "verified" && Boolean(s2.domain && s2.fromLocalPart);
+function encryptSecret(plainText) {
+  if (!plainText) {
+    throw new Error("Cannot encrypt empty or null secret");
+  }
+  const key = getMasterKey();
+  const iv = crypto2.randomBytes(IV_LENGTH);
+  const cipher = crypto2.createCipheriv(ALGORITHM, key, iv);
+  let encrypted = cipher.update(plainText, "utf8", "base64");
+  encrypted += cipher.final("base64");
+  const authTag = cipher.getAuthTag().toString("base64");
   return {
-    ...s2,
-    fromAddress: s2.domain && s2.fromLocalPart ? `${s2.fromLocalPart}@${s2.domain}` : void 0,
-    canSend,
-    usingPlatformSender: !canSend && grandfathered,
-    resendConfigured: Boolean(getApiKey())
+    encryptedData: encrypted,
+    iv: iv.toString("base64"),
+    authTag,
+    keyVersion: KEY_VERSION
   };
 }
-async function addTenantDomain(tenantId, rawDomain) {
-  const domain = String(rawDomain || "").toLowerCase().trim().replace(/^@/, "");
-  if (!DOMAIN_RE.test(domain)) throw new HttpError(400, "Enter a valid domain such as yourcompany.com");
-  const existing = await getTenantEmailSettings(tenantId, { fresh: true });
-  if (existing.domain && existing.domain !== domain && existing.status === "verified") {
-    throw new HttpError(409, "Remove the current verified domain before adding another one");
+function decryptSecret(payload) {
+  if (!payload || !payload.encryptedData || !payload.iv || !payload.authTag) {
+    throw new Error("Invalid encrypted secret payload structure");
   }
-  const claimRef = doc(db, "email_domains", domain);
-  const claim = await getDoc(claimRef);
-  if (claim.exists() && claim.data()?.tenantId && claim.data()?.tenantId !== tenantId) {
-    throw new HttpError(409, "This domain is already registered by another workspace");
-  }
-  const resend = resendClient();
-  let id = existing.domain === domain ? existing.resendDomainId : void 0;
-  let status = "pending";
-  let records = [];
-  if (id) {
-    const got = await resend.domains.get(id);
-    if (got.error || !got.data) throw new HttpError(502, `Resend: ${got.error?.message || "could not load domain"}`);
-    status = got.data.status;
-    records = got.data.records;
-  } else {
-    const created = await resend.domains.create({ name: domain, capabilities: { sending: "enabled" } });
-    if (created.error || !created.data) {
-      const code = Number(created.error?.statusCode);
-      throw new HttpError(code >= 400 && code < 500 ? 400 : 502, `Resend: ${created.error?.message || "could not create domain"}`);
-    }
-    id = created.data.id;
-    status = created.data.status;
-    records = created.data.records;
-  }
-  await setDoc(claimRef, { domain, tenantId, resendDomainId: id, createdAt: (/* @__PURE__ */ new Date()).toISOString() }, { merge: true });
-  return saveSettings(tenantId, {
-    domain,
-    resendDomainId: id,
-    status,
-    records: mapRecords(records),
-    ...status === "verified" ? { verifiedAt: (/* @__PURE__ */ new Date()).toISOString() } : {}
-  });
+  const key = getMasterKey();
+  const iv = Buffer.from(payload.iv, "base64");
+  const authTag = Buffer.from(payload.authTag, "base64");
+  const decipher = crypto2.createDecipheriv(ALGORITHM, key, iv);
+  decipher.setAuthTag(authTag);
+  let decrypted = decipher.update(payload.encryptedData, "base64", "utf8");
+  decrypted += decipher.final("utf8");
+  return decrypted;
 }
-async function verifyTenantDomain(tenantId) {
-  const s2 = await getTenantEmailSettings(tenantId, { fresh: true });
-  if (!s2.resendDomainId) throw new HttpError(400, "Add a domain first");
-  const resend = resendClient();
-  const ver = await resend.domains.verify(s2.resendDomainId);
-  if (ver.error) throw new HttpError(502, `Resend: ${ver.error.message}`);
-  const got = await resend.domains.get(s2.resendDomainId);
-  if (got.error || !got.data) throw new HttpError(502, `Resend: ${got.error?.message || "could not load domain"}`);
-  const status = got.data.status;
-  return saveSettings(tenantId, {
-    status,
-    records: mapRecords(got.data.records),
-    ...status === "verified" && s2.status !== "verified" ? { verifiedAt: (/* @__PURE__ */ new Date()).toISOString() } : {}
-  });
-}
-async function setTenantSender(tenantId, input) {
-  const s2 = await getTenantEmailSettings(tenantId, { fresh: true });
-  if (!s2.domain) throw new HttpError(400, "Add a domain first");
-  const local = String(input.fromLocalPart || "").toLowerCase().trim().split("@")[0];
-  if (!LOCAL_RE.test(local)) throw new HttpError(400, "Enter the part before the @ (letters, numbers, . _ + -)");
-  const replyTo = String(input.replyTo || "").trim();
-  if (replyTo && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(replyTo)) throw new HttpError(400, "Reply-to must be a valid email address");
-  return saveSettings(tenantId, {
-    fromName: String(input.fromName || "").replace(/["<>\r\n]/g, "").trim().slice(0, 80),
-    fromLocalPart: local,
-    replyTo
-  });
-}
-async function resolveTenantSender(tenantId) {
-  let s2 = {};
-  try {
-    s2 = await getTenantEmailSettings(tenantId);
-  } catch (err) {
-    return { ok: false, error: `Could not load email settings: ${err?.message || "unknown error"}` };
-  }
-  if (s2.status === "verified" && s2.domain && s2.fromLocalPart) {
-    return {
-      ok: true,
-      from: formatFrom(s2.fromName, `${s2.fromLocalPart}@${s2.domain}`),
-      replyTo: s2.replyTo || void 0,
-      source: "tenant"
-    };
-  }
-  if (platformSenderTenants().includes(tenantId)) {
-    const platformFrom = (process.env.RESEND_FROM || "").trim();
-    if (platformFrom) return { ok: true, from: platformFrom, source: "platform" };
-  }
-  if (s2.domain && s2.status !== "verified") {
-    return { ok: false, error: `Sending is blocked: your domain ${s2.domain} is not verified yet. Open Settings \u2192 Email and verify it.` };
-  }
-  return { ok: false, error: "Sending is blocked: this workspace has no verified sending domain. Open Settings \u2192 Email to add one." };
-}
-var DOMAIN_RE, LOCAL_RE, client, clientKey, settingsCache, CACHE_MS, HttpError;
-var init_tenantEmailService = __esm({
-  "src/server/tenantEmailService.ts"() {
-    init_dist();
-    init_adminFirestore();
-    init_tenantRepo();
-    init_config();
-    DOMAIN_RE = /^(?!-)([a-z0-9-]{1,63}\.)+[a-z]{2,}$/;
-    LOCAL_RE = /^[a-z0-9._+-]{1,64}$/;
-    client = null;
-    clientKey = "";
-    settingsCache = /* @__PURE__ */ new Map();
-    CACHE_MS = 3e4;
-    HttpError = class extends Error {
-      constructor(status, message2) {
-        super(message2);
-        this.status = status;
-      }
-    };
-  }
-});
-
-// src/server/smtpService.ts
-import nodemailer from "nodemailer";
-import fs3 from "fs";
-function updateSmtpConfig(newConfig) {
-  const current = getSmtpConfig();
-  runtimeSmtpConfig = {
-    host: newConfig.host !== void 0 ? newConfig.host : current.host,
-    port: newConfig.port !== void 0 ? newConfig.port : current.port,
-    secure: newConfig.secure !== void 0 ? newConfig.secure : current.secure,
-    user: newConfig.user !== void 0 ? newConfig.user : current.user,
-    pass: newConfig.pass !== void 0 ? newConfig.pass : current.pass,
-    from: newConfig.from !== void 0 ? newConfig.from : current.from
-  };
-  cachedSmtpStatus = null;
-  return getSmtpConfig();
-}
-function getSmtpConfig() {
-  const host = runtimeSmtpConfig?.host || process.env.SMTP_HOST || "smtp.gmail.com";
-  const port = runtimeSmtpConfig?.port || parseInt(process.env.SMTP_PORT || "465", 10);
-  const secure = runtimeSmtpConfig?.secure !== void 0 ? runtimeSmtpConfig.secure : process.env.SMTP_SECURE === "true" || port === 465;
-  const user = runtimeSmtpConfig?.user || process.env.SMTP_USER || process.env.GMAIL_USER || process.env.IMAP_USER || "";
-  const rawPass = runtimeSmtpConfig?.pass || process.env.SMTP_PASS || process.env.IMAP_PASS || process.env.GMAIL_APP_PASSWORD || process.env.GMAIL_PASS || "";
-  const pass = rawPass.trim();
-  const from = runtimeSmtpConfig?.from || process.env.SMTP_FROM || (user ? `Umrah360 Automation <${user}>` : "Umrah360 Automation");
-  const configured = Boolean(host && pass && user);
-  return { host, port, secure, user, pass, from, configured };
-}
-async function fetchFirestoreSmtpConfig() {
-  if (isFirebaseConfigured && db) {
-    try {
-      const settingsRef = doc(db, "system_settings", "default");
-      const settingsSnap = await getDoc(settingsRef);
-      if (settingsSnap.exists()) {
-        const data = settingsSnap.data();
-        const smtp = data.smtp || {};
-        const hostToUse = data.smtpHost || smtp.host;
-        const userToUse = data.smtpUser || smtp.user;
-        const passToUse = data.smtpPass || smtp.pass;
-        const fromToUse = data.smtpFrom || smtp.from;
-        if (passToUse && typeof passToUse === "string" && passToUse.trim().length > 3) {
-          updateSmtpConfig({
-            host: hostToUse,
-            port: data.smtpPort || smtp.port,
-            secure: data.smtpSecure !== void 0 ? data.smtpSecure : smtp.secure,
-            user: userToUse,
-            pass: passToUse.trim(),
-            from: fromToUse
-          });
-        }
-      }
-    } catch (e2) {
-      console.warn("[SMTP Service] Error reading Firestore SMTP config:", e2);
-    }
-  }
-  return getSmtpConfig();
-}
-function createTransporter(customPort, customSecure) {
-  const config = getSmtpConfig();
-  if (!config.configured) {
-    return null;
-  }
-  const port = customPort ?? config.port;
-  const isGmail = config.host.toLowerCase().includes("gmail") || config.user.toLowerCase().includes("gmail.com");
-  const cleanPass = config.pass.replace(/\s+/g, "");
-  if (isGmail && (!customPort || customPort === 465 || customPort === 587)) {
-    if (port === 587) {
-      return nodemailer.createTransport({
-        host: "smtp.gmail.com",
-        port: 587,
-        secure: false,
-        // STARTTLS
-        auth: {
-          user: config.user,
-          pass: cleanPass
-        },
-        tls: {
-          rejectUnauthorized: false
-        },
-        connectionTimeout: 1e4,
-        greetingTimeout: 8e3,
-        socketTimeout: 1e4
-      });
-    }
-    return nodemailer.createTransport({
-      service: "gmail",
-      auth: {
-        user: config.user,
-        pass: cleanPass
-      },
-      tls: {
-        rejectUnauthorized: false
-      },
-      connectionTimeout: 1e4,
-      greetingTimeout: 8e3,
-      socketTimeout: 1e4
-    });
-  }
-  const secure = customSecure !== void 0 ? customSecure : config.secure && port === 465;
-  return nodemailer.createTransport({
-    host: config.host,
-    port,
-    secure,
-    auth: {
-      user: config.user,
-      pass: cleanPass
-    },
-    tls: {
-      rejectUnauthorized: false
-      // Prevents self-signed cert blocks on custom mail hosts
-    },
-    connectionTimeout: 1e4,
-    greetingTimeout: 8e3,
-    socketTimeout: 1e4
-  });
-}
-async function verifySmtpConnection() {
-  const config = getSmtpConfig();
-  const now = (/* @__PURE__ */ new Date()).toISOString();
-  if (!config.configured) {
-    cachedSmtpStatus = {
-      configured: false,
-      host: config.host || "(not set)",
-      port: config.port,
-      secure: config.secure,
-      user: config.user,
-      from: config.from,
-      verified: false,
-      lastChecked: now,
-      lastError: "SMTP_HOST or SMTP_PASS environment variable is missing. Set these to enable live email dispatch."
-    };
-    return cachedSmtpStatus;
-  }
-  try {
-    const transporter = createTransporter();
-    if (!transporter) {
-      throw new Error("Failed to instantiate SMTP transporter");
-    }
-    await transporter.verify();
-    cachedSmtpStatus = {
-      configured: true,
-      host: config.host,
-      port: config.port,
-      secure: config.secure,
-      user: config.user,
-      from: config.from,
-      verified: true,
-      lastChecked: now
-    };
-    return cachedSmtpStatus;
-  } catch (err) {
-    console.error("SMTP Connection verification failed:", err);
-    cachedSmtpStatus = {
-      configured: true,
-      host: config.host,
-      port: config.port,
-      secure: config.secure,
-      user: config.user,
-      from: config.from,
-      verified: false,
-      lastChecked: now,
-      lastError: err.message || "Failed to authenticate or connect with SMTP server"
-    };
-    return cachedSmtpStatus;
-  }
-}
-async function sendViaSmtp(params) {
-  await fetchFirestoreSmtpConfig().catch(() => {
-  });
-  const config = getSmtpConfig();
-  if (config.configured) {
-    try {
-      const transporter = createTransporter();
-      if (!transporter) {
-        throw new Error("SMTP transporter creation failed");
-      }
-      let formattedAttachments = void 0;
-      if (params.attachments && Array.isArray(params.attachments) && params.attachments.length > 0) {
-        formattedAttachments = params.attachments.map((att) => {
-          if (att.dataUrl && !att.content) {
-            const matches = att.dataUrl.match(/^data:([^;]+);base64,(.+)$/);
-            if (matches) {
-              return {
-                filename: att.filename,
-                contentType: att.contentType || matches[1],
-                content: Buffer.from(matches[2], "base64")
-              };
-            }
-          }
-          if (att.content && typeof att.content === "string" && att.encoding === "base64") {
-            return {
-              filename: att.filename,
-              contentType: att.contentType,
-              content: Buffer.from(att.content, "base64")
-            };
-          }
-          return {
-            filename: att.filename,
-            contentType: att.contentType,
-            content: att.content,
-            path: att.path
-          };
-        });
-      }
-      const mailOptions = {
-        from: config.from,
-        to: params.to,
-        replyTo: params.replyTo || config.user,
-        subject: params.subject,
-        text: params.text,
-        html: params.html || params.text.replace(/\n/g, "<br/>"),
-        inReplyTo: params.inReplyTo,
-        references: params.references ? params.references.join(" ") : params.inReplyTo,
-        headers: {
-          "X-Mailer": "Umrah360-AI-Automated-Platform",
-          "X-Automated-By": config.user,
-          ...params.headers || {}
-        }
-      };
-      if (formattedAttachments && formattedAttachments.length > 0) {
-        mailOptions.attachments = formattedAttachments;
-      }
-      let info;
-      try {
-        info = await transporter.sendMail(mailOptions);
-      } catch (firstErr) {
-        console.warn(`[SMTP Live] Primary transport error (${firstErr?.code || firstErr?.message}), trying fallback port 587/465...`);
-        try {
-          const fallback587 = createTransporter(587, false);
-          if (fallback587) {
-            info = await fallback587.sendMail(mailOptions);
-          } else {
-            throw firstErr;
-          }
-        } catch (secondErr) {
-          try {
-            const fallback465 = createTransporter(465, true);
-            if (fallback465) {
-              info = await fallback465.sendMail(mailOptions);
-            } else {
-              throw secondErr;
-            }
-          } catch (thirdErr) {
-            throw firstErr;
-          }
-        }
-      }
-      console.log(`[SMTP Live] Successfully sent email to ${params.to}, messageId: ${info.messageId}`);
-      return {
-        success: true,
-        messageId: info.messageId,
-        response: info.response,
-        simulated: false,
-        provider: "smtp"
-      };
-    } catch (err) {
-      console.error(`[SMTP Live] Error sending email to ${params.to}:`, err);
-      return {
-        success: false,
-        error: `SMTP error: ${err.message || "Unknown SMTP error"}`,
-        simulated: false
-      };
-    }
-  }
-  return {
-    success: false,
-    error: `SMTP is not yet configured in environment. Set SMTP_HOST, SMTP_USER, and SMTP_PASS to dispatch real outgoing emails.`,
-    simulated: false
-  };
-}
-function getResendConfig() {
-  const apiKey = (process.env.RESEND_API_KEY || "").trim();
-  const from = (process.env.RESEND_FROM || "").trim();
-  const forceSmtp = (process.env.EMAIL_PROVIDER || "").trim().toLowerCase() === "smtp";
-  return {
-    apiKey,
-    from,
-    configured: Boolean(apiKey && from) && !forceSmtp,
-    fallbackToSmtp: process.env.RESEND_DISABLE_SMTP_FALLBACK !== "true"
-  };
-}
-function getResendClient(apiKey) {
-  if (!resendClient2 || resendClientKey !== apiKey) {
-    resendClient2 = new Resend(apiKey);
-    resendClientKey = apiKey;
-  }
-  return resendClient2;
-}
-function toResendAttachments(list) {
-  if (!list || list.length === 0) return void 0;
-  return list.map((att) => {
-    if (att.dataUrl && !att.content) {
-      const m2 = att.dataUrl.match(/^data:([^;]+);base64,(.+)$/);
-      if (m2) return { filename: att.filename, contentType: att.contentType || m2[1], content: Buffer.from(m2[2], "base64") };
-    }
-    if (att.content && typeof att.content === "string" && att.encoding === "base64") {
-      return { filename: att.filename, contentType: att.contentType, content: Buffer.from(att.content, "base64") };
-    }
-    if (att.content) {
-      return { filename: att.filename, contentType: att.contentType, content: att.content };
-    }
-    if (att.path) {
-      if (/^https?:\/\//i.test(att.path)) return { filename: att.filename, contentType: att.contentType, path: att.path };
-      return { filename: att.filename, contentType: att.contentType, content: fs3.readFileSync(att.path) };
-    }
-    return { filename: att.filename, contentType: att.contentType };
-  });
-}
-async function sendViaResend(params, override) {
-  const cfg = getResendConfig();
-  try {
-    const resend = getResendClient(cfg.apiKey);
-    const refs = params.references && params.references.length > 0 ? params.references : params.inReplyTo ? [params.inReplyTo] : [];
-    const headers = {
-      "X-Mailer": "Umrah360-AI-Automated-Platform",
-      ...params.inReplyTo ? { "In-Reply-To": params.inReplyTo } : {},
-      ...refs.length > 0 ? { References: refs.join(" ") } : {},
-      ...params.headers || {}
-    };
-    const replyTo = override ? params.replyTo || override.replyTo || void 0 : params.replyTo || (process.env.RESEND_REPLY_TO || "").trim() || getSmtpConfig().user || void 0;
-    const { data, error } = await resend.emails.send({
-      from: override?.from || cfg.from,
-      to: params.to,
-      subject: params.subject,
-      text: params.text,
-      html: params.html || params.text.replace(/\n/g, "<br/>"),
-      ...replyTo ? { replyTo } : {},
-      headers,
-      attachments: toResendAttachments(params.attachments)
-    });
-    if (error || !data?.id) {
-      const msg = error?.message || "Resend did not return an email id";
-      const status = Number(error?.statusCode);
-      const definite = Number.isFinite(status) && status >= 400 && status < 500;
-      console.error(`[Resend] ${definite ? "Rejected" : "Failed (outcome unknown)"} email to ${params.to}: ${msg}`);
-      return { success: false, error: `Resend error: ${msg}`, simulated: false, provider: "resend", definiteRejection: definite };
-    }
-    const tenantId = params.tenantId || params.headers?.["X-Tenant-Id"];
-    if (tenantId && isFirebaseConfigured && db) {
-      setDoc(globalEmailRouteDoc(data.id), { emailId: data.id, tenantId, createdAt: (/* @__PURE__ */ new Date()).toISOString() }, { merge: true }).catch(() => {
-      });
-    }
-    console.log(`[Resend] Sent email to ${params.to}, id: ${data.id}`);
-    return { success: true, messageId: data.id, response: "resend:accepted", simulated: false, provider: "resend" };
-  } catch (err) {
-    console.error(`[Resend] Error sending email to ${params.to}:`, err);
-    return { success: false, error: `Resend error: ${err?.message || "Unknown error"}`, simulated: false, provider: "resend", definiteRejection: false };
-  }
-}
-async function sendLiveEmail(params) {
-  const cfg = getResendConfig();
-  const forceSmtp = (process.env.EMAIL_PROVIDER || "").trim().toLowerCase() === "smtp";
-  if (params.tenantId && cfg.apiKey && !forceSmtp) {
-    const sender = await resolveTenantSender(params.tenantId);
-    if (sender.ok === false) {
-      console.warn(`[Email] Blocked send for tenant ${params.tenantId}: ${sender.error}`);
-      return { success: false, error: sender.error, simulated: false, provider: "resend" };
-    }
-    if (sender.source === "tenant") {
-      const { definiteRejection: _d, ...r2 } = await sendViaResend(params, { from: sender.from, replyTo: sender.replyTo });
-      return r2;
-    }
-  }
-  if (!cfg.configured) {
-    return sendViaSmtp(params);
-  }
-  const { definiteRejection, ...resendResult } = await sendViaResend(params);
-  if (resendResult.success) return resendResult;
-  if (definiteRejection && cfg.fallbackToSmtp) {
-    console.warn("[Email] Resend rejected the email, falling back to SMTP.");
-    const smtpResult = await sendViaSmtp(params);
-    if (smtpResult.success) return smtpResult;
-    return { ...smtpResult, error: `${resendResult.error}; SMTP fallback: ${smtpResult.error}` };
-  }
-  return resendResult;
-}
-var cachedSmtpStatus, runtimeSmtpConfig, resendClient2, resendClientKey;
-var init_smtpService = __esm({
-  "src/server/smtpService.ts"() {
-    init_dist();
-    init_adminFirestore();
-    init_tenantRepo();
-    init_tenantEmailService();
-    init_config();
-    init_adminFirestore();
-    cachedSmtpStatus = null;
-    runtimeSmtpConfig = null;
-    resendClient2 = null;
-    resendClientKey = "";
+var ALGORITHM, IV_LENGTH, KEY_VERSION;
+var init_cryptoUtils = __esm({
+  "src/server/cryptoUtils.ts"() {
+    ALGORITHM = "aes-256-gcm";
+    IV_LENGTH = 12;
+    KEY_VERSION = 1;
   }
 });
 
@@ -273999,22 +279652,22 @@ var init_firestoreUtils = __esm({
 });
 
 // src/server/firestorePersistence.ts
-import crypto2 from "crypto";
+import crypto3 from "crypto";
 function getTenantCache(tenantId) {
-  let cache2 = tenantMemoryCaches.get(tenantId);
-  if (!cache2) {
-    cache2 = {
+  let cache3 = tenantMemoryCaches.get(tenantId);
+  if (!cache3) {
+    cache3 = {
       processed: /* @__PURE__ */ new Set(),
       replied: /* @__PURE__ */ new Set(),
       loaded: false
     };
-    tenantMemoryCaches.set(tenantId, cache2);
+    tenantMemoryCaches.set(tenantId, cache3);
   }
-  return cache2;
+  return cache3;
 }
 function docIdFromMessageId(messageId) {
   const normalized = (messageId || "").trim().toLowerCase();
-  const hash = crypto2.createHash("sha256").update(normalized).digest("hex").slice(0, 32);
+  const hash = crypto3.createHash("sha256").update(normalized).digest("hex").slice(0, 32);
   const cleanPrefix = normalized.replace(/[<>]/g, "").replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 30);
   return `msg_${cleanPrefix}_${hash}`;
 }
@@ -274022,9 +279675,9 @@ function normalizeIdentifier(id) {
   return (id || "").trim().toLowerCase().replace(/[<>]/g, "");
 }
 async function initPersistentIdempotencyStore(ctx = DEFAULT_UMRAH_CTX) {
-  const cache2 = getTenantCache(ctx.tenantId);
+  const cache3 = getTenantCache(ctx.tenantId);
   if (!isFirebaseConfigured || !db) {
-    return { totalLoaded: cache2.processed.size, repliedCount: cache2.replied.size };
+    return { totalLoaded: cache3.processed.size, repliedCount: cache3.replied.size };
   }
   try {
     const repo = tenantRepo(ctx);
@@ -274036,12 +279689,12 @@ async function initPersistentIdempotencyStore(ctx = DEFAULT_UMRAH_CTX) {
       const data = d.data();
       if (data.messageId) {
         const norm = normalizeIdentifier(data.messageId);
-        cache2.processed.add(norm);
-        cache2.processed.add(data.messageId);
-        if (data.cleanKey) cache2.processed.add(data.cleanKey);
+        cache3.processed.add(norm);
+        cache3.processed.add(data.messageId);
+        if (data.cleanKey) cache3.processed.add(data.cleanKey);
         if (data.aiReplied || data.status === "REPLIED") {
-          cache2.replied.add(norm);
-          cache2.replied.add(data.messageId);
+          cache3.replied.add(norm);
+          cache3.replied.add(data.messageId);
           repliedCount++;
         }
         loadedCount++;
@@ -274054,43 +279707,43 @@ async function initPersistentIdempotencyStore(ctx = DEFAULT_UMRAH_CTX) {
         const m2 = d.data();
         if (m2.gmailMessageId) {
           const norm = normalizeIdentifier(m2.gmailMessageId);
-          cache2.processed.add(norm);
-          cache2.processed.add(m2.gmailMessageId);
+          cache3.processed.add(norm);
+          cache3.processed.add(m2.gmailMessageId);
           if (m2.direction === "OUTBOUND" || m2.aiReplied) {
-            cache2.replied.add(norm);
-            cache2.replied.add(m2.gmailMessageId);
+            cache3.replied.add(norm);
+            cache3.replied.add(m2.gmailMessageId);
           }
         }
         if (m2.emailMeta?.inReplyTo) {
           const normReplyTo = normalizeIdentifier(m2.emailMeta.inReplyTo);
-          cache2.processed.add(normReplyTo);
-          cache2.replied.add(normReplyTo);
+          cache3.processed.add(normReplyTo);
+          cache3.replied.add(normReplyTo);
         }
       });
     } catch (e2) {
       console.warn(`[Firestore Idempotency] Notice loading messages for tenant ${ctx.tenantId}:`, e2);
     }
-    cache2.loaded = true;
+    cache3.loaded = true;
     return { totalLoaded: loadedCount, repliedCount };
   } catch (err) {
     console.error(`[Firestore Idempotency] Failed to load idempotency ledger for tenant ${ctx.tenantId}:`, err);
-    return { totalLoaded: cache2.processed.size, repliedCount: cache2.replied.size };
+    return { totalLoaded: cache3.processed.size, repliedCount: cache3.replied.size };
   }
 }
 async function isMessageAlreadyProcessed(messageId, fromEmail, ctx = DEFAULT_UMRAH_CTX) {
   if (!messageId) {
     return { processed: false, replied: false };
   }
-  const cache2 = getTenantCache(ctx.tenantId);
+  const cache3 = getTenantCache(ctx.tenantId);
   const normId = normalizeIdentifier(messageId);
-  if (cache2.replied.has(normId) || cache2.replied.has(messageId)) {
+  if (cache3.replied.has(normId) || cache3.replied.has(messageId)) {
     return {
       processed: true,
       replied: true,
       reason: `Message ${messageId} already replied (found in memory cache for ${ctx.tenantId})`
     };
   }
-  if (cache2.processed.has(normId) || cache2.processed.has(messageId)) {
+  if (cache3.processed.has(normId) || cache3.processed.has(messageId)) {
     return {
       processed: true,
       replied: false,
@@ -274105,12 +279758,12 @@ async function isMessageAlreadyProcessed(messageId, fromEmail, ctx = DEFAULT_UMR
       const snap = await getDoc(docRef);
       if (snap.exists()) {
         const data = snap.data();
-        cache2.processed.add(normId);
-        cache2.processed.add(messageId);
+        cache3.processed.add(normId);
+        cache3.processed.add(messageId);
         const wasReplied = Boolean(data.aiReplied || data.status === "REPLIED");
         if (wasReplied) {
-          cache2.replied.add(normId);
-          cache2.replied.add(messageId);
+          cache3.replied.add(normId);
+          cache3.replied.add(messageId);
         }
         return {
           processed: true,
@@ -274124,8 +279777,8 @@ async function isMessageAlreadyProcessed(messageId, fromEmail, ctx = DEFAULT_UMR
       if (!qSnap.empty) {
         const msgData = qSnap.docs[0].data();
         const wasReplied = Boolean(msgData.aiReplied || msgData.direction === "OUTBOUND");
-        cache2.processed.add(normId);
-        if (wasReplied) cache2.replied.add(normId);
+        cache3.processed.add(normId);
+        if (wasReplied) cache3.replied.add(normId);
         return {
           processed: true,
           replied: wasReplied,
@@ -274139,15 +279792,15 @@ async function isMessageAlreadyProcessed(messageId, fromEmail, ctx = DEFAULT_UMR
   return { processed: false, replied: false };
 }
 async function recordProcessedInboundEmail(record, ctx = DEFAULT_UMRAH_CTX) {
-  const cache2 = getTenantCache(ctx.tenantId);
+  const cache3 = getTenantCache(ctx.tenantId);
   const normId = normalizeIdentifier(record.messageId);
   const nowIso = record.timestamp || (/* @__PURE__ */ new Date()).toISOString();
   const cleanKey = normId;
-  cache2.processed.add(normId);
-  cache2.processed.add(record.messageId);
+  cache3.processed.add(normId);
+  cache3.processed.add(record.messageId);
   if (record.aiReplied || record.status === "REPLIED") {
-    cache2.replied.add(normId);
-    cache2.replied.add(record.messageId);
+    cache3.replied.add(normId);
+    cache3.replied.add(record.messageId);
   }
   if (isFirebaseConfigured && db) {
     try {
@@ -274580,6 +280233,956 @@ var init_imapService = __esm({
   }
 });
 
+// src/server/tenantInboundService.ts
+var tenantInboundService_exports = {};
+__export(tenantInboundService_exports, {
+  INBOUND_SECRET_NAME: () => INBOUND_SECRET_NAME,
+  INBOUND_SETTINGS_DOC: () => INBOUND_SETTINGS_DOC,
+  InboundError: () => InboundError,
+  connectInbound: () => connectInbound,
+  createTenantImapClient: () => createTenantImapClient,
+  disconnectInbound: () => disconnectInbound,
+  friendlyImapError: () => friendlyImapError,
+  getConnectedMailboxAddress: () => getConnectedMailboxAddress,
+  getInboundCredentials: () => getInboundCredentials,
+  getInboundSettings: () => getInboundSettings,
+  getInboundView: () => getInboundView,
+  invalidateInboundSettings: () => invalidateInboundSettings,
+  isPrivateAddress: () => isPrivateAddress,
+  listInboundTenantIds: () => listInboundTenantIds,
+  mailboxKey: () => mailboxKey,
+  resolveSafeHost: () => resolveSafeHost,
+  safeClose: () => safeClose,
+  setInboundOptions: () => setInboundOptions,
+  testImapCredentials: () => testImapCredentials,
+  testStoredInbound: () => testStoredInbound,
+  updateInboundState: () => updateInboundState
+});
+import dns from "node:dns/promises";
+import net from "node:net";
+import crypto4 from "node:crypto";
+import { ImapFlow as ImapFlow2 } from "imapflow";
+function isPrivateIPv4(ip) {
+  const p = ip.split(".").map(Number);
+  if (p.length !== 4 || p.some((n) => !Number.isInteger(n) || n < 0 || n > 255)) return true;
+  const [a, b, c] = p;
+  return a === 0 || a === 10 || a === 127 || a === 169 && b === 254 || a === 172 && b >= 16 && b <= 31 || a === 192 && b === 168 || a === 100 && b >= 64 && b <= 127 || a === 192 && b === 0 && c === 0 || a === 198 && (b === 18 || b === 19) || a >= 224;
+}
+function isPrivateAddress(ip) {
+  const v = net.isIP(ip);
+  if (v === 4) return isPrivateIPv4(ip);
+  if (v === 6) {
+    const s2 = ip.toLowerCase();
+    if (s2 === "::" || s2 === "::1") return true;
+    if (/^f[cd]/.test(s2)) return true;
+    if (/^fe[89ab]/.test(s2)) return true;
+    if (/^ff/.test(s2)) return true;
+    const mapped = s2.match(/^::ffff:(.+)$/);
+    if (mapped) {
+      const rest = mapped[1];
+      if (net.isIP(rest) === 4) return isPrivateIPv4(rest);
+      const hex = rest.match(/^([0-9a-f]{1,4}):([0-9a-f]{1,4})$/);
+      if (hex) {
+        const hi = parseInt(hex[1], 16);
+        const lo = parseInt(hex[2], 16);
+        return isPrivateIPv4(`${hi >> 8}.${hi & 255}.${lo >> 8}.${lo & 255}`);
+      }
+      return true;
+    }
+    return false;
+  }
+  return true;
+}
+async function resolveSafeHost(host) {
+  if (!HOST_RE.test(host) || host.includes("..") || !host.includes(".")) {
+    throw new InboundError(400, "Enter a valid mail server name, for example imap.gmail.com");
+  }
+  if (net.isIP(host)) {
+    if (isPrivateAddress(host)) throw new InboundError(400, "That mail server address is not allowed");
+    return host;
+  }
+  let addrs;
+  try {
+    addrs = await dns.lookup(host, { all: true, verbatim: true });
+  } catch {
+    throw new InboundError(400, `Could not find the mail server "${host}". Check the spelling.`);
+  }
+  if (!addrs.length || addrs.some((a) => isPrivateAddress(a.address))) {
+    throw new InboundError(400, "That mail server address is not allowed");
+  }
+  return (addrs.find((a) => a.family === 4) || addrs[0]).address;
+}
+function createTenantImapClient(c, ip) {
+  const client2 = new ImapFlow2({
+    host: ip,
+    port: c.port,
+    secure: c.secure,
+    servername: c.host,
+    auth: { user: c.user, pass: c.pass },
+    logger: false,
+    emitLogs: false,
+    disableAutoIdle: true,
+    // Port 143: upgrade with STARTTLS or fail. Never send the password in clear text.
+    doSTARTTLS: c.secure ? void 0 : true,
+    tls: { rejectUnauthorized: true, servername: c.host },
+    clientInfo: { name: "Umrah360-Inbound", version: "1.0.0" },
+    connectionTimeout: 15e3,
+    greetingTimeout: 1e4,
+    socketTimeout: 4e4
+  });
+  client2.on("error", (err) => {
+    console.warn("[Tenant IMAP client notice]:", friendlyImapError(err, c));
+  });
+  return client2;
+}
+async function safeClose(client2) {
+  try {
+    await client2.logout();
+  } catch {
+    try {
+      client2.close();
+    } catch {
+    }
+  }
+}
+function friendlyImapError(err, c) {
+  let msg;
+  const code = String(err?.code || "");
+  if (err?.authenticationFailed || /AUTHENTICATIONFAILED|Invalid credentials|Authentication failed/i.test(String(err?.responseText || err?.message || ""))) {
+    msg = "Sign-in failed. Check the email address and password. Gmail and Microsoft accounts usually need an app password, not the normal one.";
+  } else if (["ENOTFOUND", "EAI_AGAIN"].includes(code)) {
+    msg = `Could not find the mail server${c ? ` "${c.host}"` : ""}.`;
+  } else if (["ECONNREFUSED", "ETIMEDOUT", "ECONNRESET", "EHOSTUNREACH", "NoConnection"].includes(code) || /timed? ?out/i.test(String(err?.message))) {
+    msg = `Could not connect to the mail server${c ? ` at ${c.host}:${c.port}` : ""}. Check the server name and port.`;
+  } else if (/CERT|SELF_SIGNED|ALTNAME|certificate/i.test(code + " " + String(err?.message))) {
+    msg = "The mail server's security certificate could not be verified.";
+  } else {
+    msg = describeImapError(err);
+  }
+  if (c?.pass) msg = msg.split(c.pass).join("***");
+  return msg.slice(0, 400);
+}
+async function testImapCredentials(c, ip) {
+  const client2 = createTenantImapClient(c, ip);
+  try {
+    await client2.connect();
+    const lock = await client2.getMailboxLock("INBOX", { readOnly: true });
+    try {
+      const mb = client2.mailbox;
+      return { uidValidity: String(mb?.uidValidity ?? ""), uidNext: Number(mb?.uidNext) || 1 };
+    } finally {
+      lock.release();
+    }
+  } catch (err) {
+    if (err instanceof InboundError) throw err;
+    throw new InboundError(400, friendlyImapError(err, c));
+  } finally {
+    await safeClose(client2);
+  }
+}
+async function getInboundSettings(tenantId, opts = {}) {
+  const cached = settingsCache.get(tenantId);
+  if (!opts.fresh && cached && Date.now() - cached.at < CACHE_MS) return cached.value;
+  if (!isFirebaseConfigured || !db) return {};
+  const snap = await getDoc(tenantRepo(sysCtx(tenantId)).settingsDoc(INBOUND_SETTINGS_DOC));
+  const value = (snap.exists() ? snap.data() : {}) || {};
+  settingsCache.set(tenantId, { at: Date.now(), value });
+  return value;
+}
+async function writeSettings(tenantId, next, replace = false) {
+  const repo = tenantRepo(sysCtx(tenantId));
+  const clean2 = JSON.parse(
+    JSON.stringify({ ...next, updatedAt: (/* @__PURE__ */ new Date()).toISOString() }, replace ? void 0 : (_key, value) => value === void 0 ? null : value)
+  );
+  await setDoc(repo.settingsDoc(INBOUND_SETTINGS_DOC), clean2, replace ? { merge: false } : { merge: true });
+  const merged = replace ? clean2 : { ...await getInboundSettings(tenantId, { fresh: true }) };
+  settingsCache.set(tenantId, { at: Date.now(), value: merged });
+  return merged;
+}
+async function updateInboundState(tenantId, patch) {
+  const current = await getInboundSettings(tenantId, { fresh: true });
+  return writeSettings(tenantId, { ...current, ...patch });
+}
+function invalidateInboundSettings(tenantId) {
+  if (tenantId) settingsCache.delete(tenantId);
+  else settingsCache.clear();
+}
+async function readPassword(tenantId) {
+  if (!isFirebaseConfigured || !db) return null;
+  const snap = await getDoc(tenantRepo(sysCtx(tenantId)).secretDoc(INBOUND_SECRET_NAME));
+  if (!snap.exists()) return null;
+  try {
+    return decryptSecret(snap.data());
+  } catch {
+    return null;
+  }
+}
+async function getInboundCredentials(tenantId) {
+  const s2 = await getInboundSettings(tenantId, { fresh: true });
+  if (!s2.host || !s2.user || !s2.port) return null;
+  const pass = await readPassword(tenantId);
+  if (!pass) return null;
+  return { host: s2.host, port: s2.port, secure: s2.secure ?? s2.port === 993, user: s2.user, pass };
+}
+async function getInboundView(tenantId) {
+  const s2 = await getInboundSettings(tenantId, { fresh: true });
+  let hasPassword = false;
+  if (isFirebaseConfigured && db) {
+    hasPassword = (await getDoc(tenantRepo(sysCtx(tenantId)).secretDoc(INBOUND_SECRET_NAME))).exists();
+  }
+  return {
+    enabled: Boolean(s2.enabled),
+    host: s2.host,
+    port: s2.port,
+    user: s2.user,
+    processNewInquiries: Boolean(s2.processNewInquiries),
+    status: s2.status || "not_configured",
+    lastError: s2.lastError,
+    lastErrorAt: s2.lastErrorAt,
+    lastPolledAt: s2.lastPolledAt,
+    lastSuccessAt: s2.lastSuccessAt,
+    connectedAt: s2.connectedAt,
+    hasPassword
+  };
+}
+async function getConnectedMailboxAddress(tenantId) {
+  try {
+    const s2 = await getInboundSettings(tenantId);
+    if (s2.enabled && s2.user && s2.user.includes("@") && s2.status !== "not_configured") return s2.user.toLowerCase();
+  } catch {
+  }
+  return void 0;
+}
+function mailboxKey(host, user) {
+  return crypto4.createHash("sha256").update(`${host.toLowerCase()}|${user.toLowerCase()}`).digest("hex").slice(0, 32);
+}
+async function listInboundTenantIds() {
+  if (!isFirebaseConfigured || !db) return [];
+  const snap = await getDocs(collection(db, MAILBOX_REGISTRY));
+  const ids = /* @__PURE__ */ new Set();
+  snap.forEach((d) => {
+    const t2 = d.data()?.tenantId;
+    if (typeof t2 === "string" && t2) ids.add(t2);
+  });
+  return [...ids];
+}
+async function claimMailbox(tenantId, host, user) {
+  const ref = doc(db, MAILBOX_REGISTRY, mailboxKey(host, user));
+  const record = { tenantId, host: host.toLowerCase(), user: user.toLowerCase(), createdAt: (/* @__PURE__ */ new Date()).toISOString() };
+  const snap = await getDoc(ref);
+  if (snap.exists()) {
+    if (snap.data()?.tenantId !== tenantId) {
+      throw new InboundError(409, "This mailbox is already connected to another workspace");
+    }
+    return;
+  }
+  try {
+    await createDoc(ref, record);
+  } catch (err) {
+    const again = await getDoc(ref);
+    if (!again.exists() || again.data()?.tenantId !== tenantId) {
+      throw new InboundError(409, "This mailbox is already connected to another workspace");
+    }
+  }
+}
+async function releaseMailbox(tenantId, host, user) {
+  if (!host || !user) return;
+  const ref = doc(db, MAILBOX_REGISTRY, mailboxKey(host, user));
+  const snap = await getDoc(ref);
+  if (snap.exists() && snap.data()?.tenantId === tenantId) await deleteDoc(ref);
+}
+function requireDb() {
+  if (!isFirebaseConfigured || !db) throw new InboundError(503, "Database is not configured");
+}
+async function connectInbound(tenantId, input) {
+  requireDb();
+  const host = String(input.host || "").trim().toLowerCase();
+  const port = Number(input.port) || 993;
+  const user = String(input.user || "").trim();
+  if (!ALLOWED_PORTS.includes(port)) throw new InboundError(400, "Use port 993 (SSL/TLS) or 143 (STARTTLS)");
+  if (!user || user.length > 254 || /[\r\n\0]/.test(user)) throw new InboundError(400, "Enter the mailbox email address or username");
+  const existing = await getInboundSettings(tenantId, { fresh: true });
+  const sameMailbox = existing.host === host && (existing.user || "").toLowerCase() === user.toLowerCase();
+  let pass = String(input.password || "");
+  if (!pass) {
+    if (!sameMailbox) throw new InboundError(400, "Enter the mailbox password");
+    pass = await readPassword(tenantId) || "";
+    if (!pass) throw new InboundError(400, "Enter the mailbox password");
+  }
+  if (pass.length > 512) throw new InboundError(400, "Password is too long");
+  const creds = { host, port, secure: port === 993, user, pass };
+  const ip = await resolveSafeHost(host);
+  await claimMailbox(tenantId, host, user);
+  let uidState;
+  try {
+    uidState = await testImapCredentials(creds, ip);
+  } catch (err) {
+    if (!sameMailbox) await releaseMailbox(tenantId, host, user).catch(() => {
+    });
+    throw err;
+  }
+  if (existing.host && !sameMailbox) await releaseMailbox(tenantId, existing.host, existing.user).catch(() => {
+  });
+  const repo = tenantRepo(sysCtx(tenantId));
+  const enc = encryptSecret(pass);
+  const now = (/* @__PURE__ */ new Date()).toISOString();
+  await setDoc(repo.secretDoc(INBOUND_SECRET_NAME), { name: INBOUND_SECRET_NAME, ...enc, createdAt: now, updatedAt: now }, { merge: false });
+  const keepBaseline = sameMailbox && existing.lastUid !== void 0 && existing.uidValidity === uidState.uidValidity;
+  await writeSettings(tenantId, {
+    ...existing,
+    enabled: true,
+    host,
+    port,
+    secure: creds.secure,
+    user,
+    processNewInquiries: input.processNewInquiries ?? existing.processNewInquiries ?? false,
+    status: "connected",
+    lastError: void 0,
+    lastErrorAt: void 0,
+    consecutiveFailures: 0,
+    nextPollAt: void 0,
+    uidValidity: uidState.uidValidity,
+    lastUid: keepBaseline ? existing.lastUid : Math.max(0, uidState.uidNext - 1),
+    connectedAt: keepBaseline ? existing.connectedAt : now
+  }, true);
+  return getInboundView(tenantId);
+}
+async function testStoredInbound(tenantId) {
+  requireDb();
+  const creds = await getInboundCredentials(tenantId);
+  if (!creds) throw new InboundError(400, "No mailbox is connected");
+  const ip = await resolveSafeHost(creds.host);
+  const s2 = await getInboundSettings(tenantId, { fresh: true });
+  try {
+    const st = await testImapCredentials(creds, ip);
+    const reset = st.uidValidity !== s2.uidValidity;
+    await updateInboundState(tenantId, {
+      status: s2.enabled === false ? "paused" : "connected",
+      lastError: void 0,
+      lastErrorAt: void 0,
+      consecutiveFailures: 0,
+      nextPollAt: void 0,
+      ...reset ? { uidValidity: st.uidValidity, lastUid: Math.max(0, st.uidNext - 1) } : {}
+    });
+  } catch (err) {
+    await updateInboundState(tenantId, { status: "error", lastError: err?.message, lastErrorAt: (/* @__PURE__ */ new Date()).toISOString() });
+    throw err;
+  }
+  return getInboundView(tenantId);
+}
+async function setInboundOptions(tenantId, opts) {
+  requireDb();
+  const s2 = await getInboundSettings(tenantId, { fresh: true });
+  if (!s2.host || !s2.user) throw new InboundError(400, "Connect a mailbox first");
+  const patch = {};
+  if (typeof opts.processNewInquiries === "boolean") patch.processNewInquiries = opts.processNewInquiries;
+  if (typeof opts.enabled === "boolean") {
+    patch.enabled = opts.enabled;
+    if (!opts.enabled) patch.status = "paused";
+    else if (s2.status === "paused") {
+      patch.status = "connected";
+      patch.nextPollAt = void 0;
+    }
+  }
+  await updateInboundState(tenantId, patch);
+  return getInboundView(tenantId);
+}
+async function disconnectInbound(tenantId) {
+  requireDb();
+  const s2 = await getInboundSettings(tenantId, { fresh: true });
+  await deleteDoc(tenantRepo(sysCtx(tenantId)).secretDoc(INBOUND_SECRET_NAME)).catch(() => {
+  });
+  await releaseMailbox(tenantId, s2.host, s2.user).catch(() => {
+  });
+  await writeSettings(tenantId, { enabled: false, status: "not_configured" }, true);
+  return getInboundView(tenantId);
+}
+var InboundError, INBOUND_SETTINGS_DOC, INBOUND_SECRET_NAME, MAILBOX_REGISTRY, ALLOWED_PORTS, sysCtx, HOST_RE, settingsCache, CACHE_MS;
+var init_tenantInboundService = __esm({
+  "src/server/tenantInboundService.ts"() {
+    init_adminFirestore();
+    init_config();
+    init_tenantRepo();
+    init_cryptoUtils();
+    init_imapService();
+    InboundError = class extends Error {
+      constructor(status, message2) {
+        super(message2);
+        this.status = status;
+      }
+    };
+    INBOUND_SETTINGS_DOC = "inbound";
+    INBOUND_SECRET_NAME = "imap_password";
+    MAILBOX_REGISTRY = "imap_mailboxes";
+    ALLOWED_PORTS = [993, 143];
+    sysCtx = (tenantId) => ({ tenantId, uid: "system", email: "", role: "admin" });
+    HOST_RE = /^[a-z0-9]([a-z0-9.-]{0,251}[a-z0-9])?$/;
+    settingsCache = /* @__PURE__ */ new Map();
+    CACHE_MS = 3e4;
+  }
+});
+
+// src/server/tenantEmailService.ts
+var tenantEmailService_exports = {};
+__export(tenantEmailService_exports, {
+  HttpError: () => HttpError,
+  addTenantDomain: () => addTenantDomain,
+  cacheTenantEmailSettings: () => cacheTenantEmailSettings,
+  getEmailSettingsView: () => getEmailSettingsView,
+  getTenantEmailSettings: () => getTenantEmailSettings,
+  refreshTenantDomain: () => refreshTenantDomain,
+  removeTenantDomain: () => removeTenantDomain,
+  resolveTenantSender: () => resolveTenantSender,
+  setTenantSender: () => setTenantSender,
+  verifyTenantDomain: () => verifyTenantDomain
+});
+function getApiKey() {
+  return (process.env.RESEND_API_KEY || "").trim();
+}
+function resendClient() {
+  const key = getApiKey();
+  if (!key) throw new Error("RESEND_API_KEY is not configured on the platform");
+  if (!client || clientKey !== key) {
+    client = new Resend(key);
+    clientKey = key;
+  }
+  return client;
+}
+function platformSenderTenants() {
+  return (process.env.PLATFORM_SENDER_TENANTS || "").split(",").map((s2) => s2.trim()).filter(Boolean);
+}
+async function getTenantEmailSettings(tenantId, opts = {}) {
+  const cached = settingsCache2.get(tenantId);
+  if (!opts.fresh && cached && Date.now() - cached.at < CACHE_MS2) return cached.value;
+  if (!isFirebaseConfigured || !db) return {};
+  const repo = tenantRepo({ tenantId });
+  const snap = await getDoc(repo.settingsDoc("email"));
+  const value = (snap.exists() ? snap.data() : {}) || {};
+  settingsCache2.set(tenantId, { at: Date.now(), value });
+  return value;
+}
+function cacheTenantEmailSettings(tenantId, value) {
+  settingsCache2.set(tenantId, { at: Date.now(), value });
+}
+async function saveSettings(tenantId, patch) {
+  const repo = tenantRepo({ tenantId });
+  const current = await getTenantEmailSettings(tenantId, { fresh: true });
+  const next = { ...current, ...patch, updatedAt: (/* @__PURE__ */ new Date()).toISOString() };
+  const clean2 = JSON.parse(JSON.stringify(next));
+  await setDoc(repo.settingsDoc("email"), clean2, { merge: false });
+  settingsCache2.set(tenantId, { at: Date.now(), value: clean2 });
+  return clean2;
+}
+function formatFrom(name5, address) {
+  const n = (name5 || "").replace(/["<>\r\n]/g, "").trim();
+  return n ? `${n} <${address}>` : address;
+}
+function mapRecords(records) {
+  return (records || []).filter((r2) => r2.record === "SPF" || r2.record === "DKIM").map((r2) => ({
+    record: r2.record,
+    type: r2.type,
+    name: r2.name,
+    value: r2.value,
+    ttl: r2.ttl,
+    priority: r2.priority,
+    status: r2.status
+  }));
+}
+async function getEmailSettingsView(tenantId) {
+  const s2 = await getTenantEmailSettings(tenantId, { fresh: true });
+  const grandfathered = platformSenderTenants().includes(tenantId);
+  const canSend = s2.status === "verified" && Boolean(s2.domain && s2.fromLocalPart);
+  return {
+    ...s2,
+    fromAddress: s2.domain && s2.fromLocalPart ? `${s2.fromLocalPart}@${s2.domain}` : void 0,
+    canSend,
+    usingPlatformSender: !canSend && grandfathered,
+    resendConfigured: Boolean(getApiKey())
+  };
+}
+async function addTenantDomain(tenantId, rawDomain) {
+  const domain = String(rawDomain || "").toLowerCase().trim().replace(/^@/, "");
+  if (!DOMAIN_RE.test(domain)) throw new HttpError(400, "Enter a valid domain such as yourcompany.com");
+  const existing = await getTenantEmailSettings(tenantId, { fresh: true });
+  if (existing.domain && existing.domain !== domain && existing.status === "verified") {
+    throw new HttpError(409, "Remove the current verified domain before adding another one");
+  }
+  const claimRef = doc(db, "email_domains", domain);
+  const claim = await getDoc(claimRef);
+  if (claim.exists() && claim.data()?.tenantId && claim.data()?.tenantId !== tenantId) {
+    throw new HttpError(409, "This domain is already registered by another workspace");
+  }
+  const resend = resendClient();
+  let id = existing.domain === domain ? existing.resendDomainId : void 0;
+  let status = "pending";
+  let records = [];
+  if (id) {
+    const got = await resend.domains.get(id);
+    if (got.error || !got.data) throw new HttpError(502, `Resend: ${got.error?.message || "could not load domain"}`);
+    status = got.data.status;
+    records = got.data.records;
+  } else {
+    const created = await resend.domains.create({ name: domain, capabilities: { sending: "enabled" } });
+    if (created.error || !created.data) {
+      const code = Number(created.error?.statusCode);
+      throw new HttpError(code >= 400 && code < 500 ? 400 : 502, `Resend: ${created.error?.message || "could not create domain"}`);
+    }
+    id = created.data.id;
+    status = created.data.status;
+    records = created.data.records;
+  }
+  await setDoc(claimRef, { domain, tenantId, resendDomainId: id, createdAt: (/* @__PURE__ */ new Date()).toISOString() }, { merge: true });
+  return saveSettings(tenantId, {
+    domain,
+    resendDomainId: id,
+    status,
+    records: mapRecords(records),
+    ...status === "verified" ? { verifiedAt: (/* @__PURE__ */ new Date()).toISOString() } : {}
+  });
+}
+async function refreshTenantDomain(tenantId) {
+  const s2 = await getTenantEmailSettings(tenantId, { fresh: true });
+  if (!s2.resendDomainId) throw new HttpError(400, "Add a domain first");
+  const got = await resendClient().domains.get(s2.resendDomainId);
+  if (got.error || !got.data) {
+    const code = Number(got.error?.statusCode);
+    if (code === 404) throw new HttpError(404, "This domain no longer exists in Resend. Remove it here and add it again.");
+    throw new HttpError(502, `Resend: ${got.error?.message || "could not load domain"}`);
+  }
+  const status = got.data.status;
+  return saveSettings(tenantId, {
+    status,
+    records: mapRecords(got.data.records),
+    ...status === "verified" && s2.status !== "verified" ? { verifiedAt: (/* @__PURE__ */ new Date()).toISOString() } : {}
+  });
+}
+async function verifyTenantDomain(tenantId) {
+  const s2 = await getTenantEmailSettings(tenantId, { fresh: true });
+  if (!s2.resendDomainId) throw new HttpError(400, "Add a domain first");
+  const resend = resendClient();
+  const ver = await resend.domains.verify(s2.resendDomainId);
+  if (ver.error) throw new HttpError(502, `Resend: ${ver.error.message}`);
+  const got = await resend.domains.get(s2.resendDomainId);
+  if (got.error || !got.data) throw new HttpError(502, `Resend: ${got.error?.message || "could not load domain"}`);
+  const status = got.data.status;
+  return saveSettings(tenantId, {
+    status,
+    records: mapRecords(got.data.records),
+    ...status === "verified" && s2.status !== "verified" ? { verifiedAt: (/* @__PURE__ */ new Date()).toISOString() } : {}
+  });
+}
+function platformFromDomain() {
+  const m2 = (process.env.RESEND_FROM || "").match(/@([a-z0-9.-]+)/i);
+  return m2 ? m2[1].toLowerCase() : "";
+}
+async function removeTenantDomain(tenantId) {
+  const s2 = await getTenantEmailSettings(tenantId, { fresh: true });
+  if (!s2.domain) throw new HttpError(400, "There is no domain to remove");
+  const domain = s2.domain.toLowerCase();
+  if (platformFromDomain() === domain) {
+    throw new HttpError(409, `${domain} is the platform's own sending domain, so it can't be removed here.`);
+  }
+  if (s2.resendDomainId) {
+    const resend = resendClient();
+    const res = await resend.domains.remove(s2.resendDomainId);
+    if (res.error) {
+      const code = Number(res.error?.statusCode);
+      if (code !== 404) throw new HttpError(502, `Resend: ${res.error.message || "could not remove domain"}`);
+    }
+  }
+  try {
+    const claimRef = doc(db, "email_domains", domain);
+    const claim = await getDoc(claimRef);
+    if (claim.exists() && claim.data()?.tenantId === tenantId) await deleteDoc(claimRef);
+  } catch (err) {
+    console.warn("[Tenant Email] could not release domain claim:", err?.message || err);
+  }
+  await saveSettings(tenantId, {
+    domain: void 0,
+    resendDomainId: void 0,
+    status: void 0,
+    records: void 0,
+    verifiedAt: void 0,
+    fromLocalPart: void 0
+  });
+  return getEmailSettingsView(tenantId);
+}
+async function setTenantSender(tenantId, input) {
+  const s2 = await getTenantEmailSettings(tenantId, { fresh: true });
+  if (!s2.domain) throw new HttpError(400, "Add a domain first");
+  const local = String(input.fromLocalPart || "").toLowerCase().trim().split("@")[0];
+  if (!LOCAL_RE.test(local)) throw new HttpError(400, "Enter the part before the @ (letters, numbers, . _ + -)");
+  const replyTo = String(input.replyTo || "").trim();
+  if (replyTo && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(replyTo)) throw new HttpError(400, "Reply-to must be a valid email address");
+  return saveSettings(tenantId, {
+    fromName: String(input.fromName || "").replace(/["<>\r\n]/g, "").trim().slice(0, 80),
+    fromLocalPart: local,
+    replyTo
+  });
+}
+async function resolveTenantSender(tenantId) {
+  let s2 = {};
+  try {
+    s2 = await getTenantEmailSettings(tenantId);
+  } catch (err) {
+    return { ok: false, error: `Could not load email settings: ${err?.message || "unknown error"}` };
+  }
+  if (s2.status === "verified" && s2.domain && s2.fromLocalPart) {
+    return {
+      ok: true,
+      from: formatFrom(s2.fromName, `${s2.fromLocalPart}@${s2.domain}`),
+      // An explicit Reply-To wins; otherwise replies go to the mailbox this workspace connected for inbound,
+      // so customer answers land where the poller (and the team) can see them.
+      replyTo: s2.replyTo || await getConnectedMailboxAddress(tenantId) || void 0,
+      source: "tenant"
+    };
+  }
+  if (platformSenderTenants().includes(tenantId)) {
+    const platformFrom = (process.env.RESEND_FROM || "").trim();
+    if (platformFrom) return { ok: true, from: platformFrom, source: "platform" };
+  }
+  if (s2.domain && s2.status !== "verified") {
+    return { ok: false, error: `Sending is blocked: your domain ${s2.domain} is not verified yet. Open Settings \u2192 Email and verify it.` };
+  }
+  return { ok: false, error: "Sending is blocked: this workspace has no verified sending domain. Open Settings \u2192 Email to add one." };
+}
+var DOMAIN_RE, LOCAL_RE, client, clientKey, settingsCache2, CACHE_MS2, HttpError;
+var init_tenantEmailService = __esm({
+  "src/server/tenantEmailService.ts"() {
+    init_dist();
+    init_adminFirestore();
+    init_tenantRepo();
+    init_config();
+    init_tenantInboundService();
+    DOMAIN_RE = /^(?!-)([a-z0-9-]{1,63}\.)+[a-z]{2,}$/;
+    LOCAL_RE = /^[a-z0-9._+-]{1,64}$/;
+    client = null;
+    clientKey = "";
+    settingsCache2 = /* @__PURE__ */ new Map();
+    CACHE_MS2 = 3e4;
+    HttpError = class extends Error {
+      constructor(status, message2) {
+        super(message2);
+        this.status = status;
+      }
+    };
+  }
+});
+
+// src/server/smtpService.ts
+import nodemailer from "nodemailer";
+import fs3 from "fs";
+function updateSmtpConfig(newConfig) {
+  const current = getSmtpConfig();
+  runtimeSmtpConfig = {
+    host: newConfig.host !== void 0 ? newConfig.host : current.host,
+    port: newConfig.port !== void 0 ? newConfig.port : current.port,
+    secure: newConfig.secure !== void 0 ? newConfig.secure : current.secure,
+    user: newConfig.user !== void 0 ? newConfig.user : current.user,
+    pass: newConfig.pass !== void 0 ? newConfig.pass : current.pass,
+    from: newConfig.from !== void 0 ? newConfig.from : current.from
+  };
+  cachedSmtpStatus = null;
+  return getSmtpConfig();
+}
+function getSmtpConfig() {
+  const host = runtimeSmtpConfig?.host || process.env.SMTP_HOST || "smtp.gmail.com";
+  const port = runtimeSmtpConfig?.port || parseInt(process.env.SMTP_PORT || "465", 10);
+  const secure = runtimeSmtpConfig?.secure !== void 0 ? runtimeSmtpConfig.secure : process.env.SMTP_SECURE === "true" || port === 465;
+  const user = runtimeSmtpConfig?.user || process.env.SMTP_USER || process.env.GMAIL_USER || process.env.IMAP_USER || "";
+  const rawPass = runtimeSmtpConfig?.pass || process.env.SMTP_PASS || process.env.IMAP_PASS || process.env.GMAIL_APP_PASSWORD || process.env.GMAIL_PASS || "";
+  const pass = rawPass.trim();
+  const fromName2 = process.env.SMTP_FROM_NAME || "Umrah360 Automation";
+  const from = runtimeSmtpConfig?.from || process.env.SMTP_FROM || (user ? `${fromName2} <${user}>` : fromName2);
+  const configured = Boolean(host && pass && user);
+  return { host, port, secure, user, pass, from, configured };
+}
+async function fetchFirestoreSmtpConfig() {
+  if (isFirebaseConfigured && db) {
+    try {
+      const settingsRef = doc(db, "system_settings", "default");
+      const settingsSnap = await getDoc(settingsRef);
+      if (settingsSnap.exists()) {
+        const data = settingsSnap.data();
+        const smtp = data.smtp || {};
+        const hostToUse = data.smtpHost || smtp.host;
+        const userToUse = data.smtpUser || smtp.user;
+        const passToUse = data.smtpPass || smtp.pass;
+        const fromToUse = data.smtpFrom || smtp.from;
+        if (passToUse && typeof passToUse === "string" && passToUse.trim().length > 3) {
+          updateSmtpConfig({
+            host: hostToUse,
+            port: data.smtpPort || smtp.port,
+            secure: data.smtpSecure !== void 0 ? data.smtpSecure : smtp.secure,
+            user: userToUse,
+            pass: passToUse.trim(),
+            from: fromToUse
+          });
+        }
+      }
+    } catch (e2) {
+      console.warn("[SMTP Service] Error reading Firestore SMTP config:", e2);
+    }
+  }
+  return getSmtpConfig();
+}
+function createTransporter(customPort, customSecure) {
+  const config = getSmtpConfig();
+  if (!config.configured) {
+    return null;
+  }
+  const port = customPort ?? config.port;
+  const isGmail = config.host.toLowerCase().includes("gmail") || config.user.toLowerCase().includes("gmail.com");
+  const cleanPass = config.pass.replace(/\s+/g, "");
+  if (isGmail && (!customPort || customPort === 465 || customPort === 587)) {
+    if (port === 587) {
+      return nodemailer.createTransport({
+        host: "smtp.gmail.com",
+        port: 587,
+        secure: false,
+        // STARTTLS
+        auth: {
+          user: config.user,
+          pass: cleanPass
+        },
+        tls: {
+          rejectUnauthorized: false
+        },
+        connectionTimeout: 1e4,
+        greetingTimeout: 8e3,
+        socketTimeout: 1e4
+      });
+    }
+    return nodemailer.createTransport({
+      service: "gmail",
+      auth: {
+        user: config.user,
+        pass: cleanPass
+      },
+      tls: {
+        rejectUnauthorized: false
+      },
+      connectionTimeout: 1e4,
+      greetingTimeout: 8e3,
+      socketTimeout: 1e4
+    });
+  }
+  const secure = customSecure !== void 0 ? customSecure : config.secure && port === 465;
+  return nodemailer.createTransport({
+    host: config.host,
+    port,
+    secure,
+    auth: {
+      user: config.user,
+      pass: cleanPass
+    },
+    tls: {
+      rejectUnauthorized: false
+      // Prevents self-signed cert blocks on custom mail hosts
+    },
+    connectionTimeout: 1e4,
+    greetingTimeout: 8e3,
+    socketTimeout: 1e4
+  });
+}
+async function verifySmtpConnection() {
+  const config = getSmtpConfig();
+  const now = (/* @__PURE__ */ new Date()).toISOString();
+  const resend = getResendConfig();
+  if (resend.configured) {
+    cachedSmtpStatus = {
+      configured: true,
+      host: "Resend",
+      port: 443,
+      secure: true,
+      user: config.user,
+      from: resend.from,
+      verified: true,
+      lastChecked: now
+    };
+    return cachedSmtpStatus;
+  }
+  if (!config.configured) {
+    cachedSmtpStatus = {
+      configured: false,
+      host: config.host || "(not set)",
+      port: config.port,
+      secure: config.secure,
+      user: config.user,
+      from: config.from,
+      verified: false,
+      lastChecked: now,
+      lastError: "SMTP_HOST or SMTP_PASS environment variable is missing. Set these to enable live email dispatch."
+    };
+    return cachedSmtpStatus;
+  }
+  try {
+    const transporter = createTransporter();
+    if (!transporter) {
+      throw new Error("Failed to instantiate SMTP transporter");
+    }
+    await transporter.verify();
+    cachedSmtpStatus = {
+      configured: true,
+      host: config.host,
+      port: config.port,
+      secure: config.secure,
+      user: config.user,
+      from: config.from,
+      verified: true,
+      lastChecked: now
+    };
+    return cachedSmtpStatus;
+  } catch (err) {
+    console.error("SMTP Connection verification failed:", err);
+    cachedSmtpStatus = {
+      configured: true,
+      host: config.host,
+      port: config.port,
+      secure: config.secure,
+      user: config.user,
+      from: config.from,
+      verified: false,
+      lastChecked: now,
+      lastError: err.message || "Failed to authenticate or connect with SMTP server"
+    };
+    return cachedSmtpStatus;
+  }
+}
+function getResendConfig() {
+  const apiKey = (process.env.RESEND_API_KEY || "").trim();
+  const from = (process.env.RESEND_FROM || "").trim();
+  return {
+    apiKey,
+    from,
+    configured: Boolean(apiKey && from)
+  };
+}
+async function getEmailSendReadiness(tenantId) {
+  const cfg = getResendConfig();
+  if (!cfg.apiKey) return { ok: false, error: notConfiguredResult("RESEND_API_KEY is missing").error };
+  if (tenantId) return { ok: true };
+  if (!cfg.from) return { ok: false, error: notConfiguredResult("RESEND_FROM is missing").error };
+  return { ok: true };
+}
+function getResendClient(apiKey) {
+  if (!resendClient2 || resendClientKey !== apiKey) {
+    resendClient2 = new Resend(apiKey);
+    resendClientKey = apiKey;
+  }
+  return resendClient2;
+}
+function toResendAttachments(list) {
+  if (!list || list.length === 0) return void 0;
+  return list.map((att) => {
+    if (att.dataUrl && !att.content) {
+      const m2 = att.dataUrl.match(/^data:([^;]+);base64,(.+)$/);
+      if (m2) return { filename: att.filename, contentType: att.contentType || m2[1], content: Buffer.from(m2[2], "base64") };
+    }
+    if (att.content && typeof att.content === "string" && att.encoding === "base64") {
+      return { filename: att.filename, contentType: att.contentType, content: Buffer.from(att.content, "base64") };
+    }
+    if (att.content) {
+      return { filename: att.filename, contentType: att.contentType, content: att.content };
+    }
+    if (att.path) {
+      if (/^https?:\/\//i.test(att.path)) return { filename: att.filename, contentType: att.contentType, path: att.path };
+      return { filename: att.filename, contentType: att.contentType, content: fs3.readFileSync(att.path) };
+    }
+    return { filename: att.filename, contentType: att.contentType };
+  });
+}
+async function sendViaResend(params, override) {
+  const cfg = getResendConfig();
+  try {
+    const resend = getResendClient(cfg.apiKey);
+    const refs = params.references && params.references.length > 0 ? params.references : params.inReplyTo ? [params.inReplyTo] : [];
+    const headers = {
+      "X-Mailer": "Umrah360-AI-Automated-Platform",
+      ...params.inReplyTo ? { "In-Reply-To": params.inReplyTo } : {},
+      ...refs.length > 0 ? { References: refs.join(" ") } : {},
+      ...params.headers || {}
+    };
+    const replyTo = override ? params.replyTo || override.replyTo || void 0 : params.replyTo || (process.env.RESEND_REPLY_TO || "").trim() || getSmtpConfig().user || void 0;
+    const { data, error } = await resend.emails.send({
+      from: override?.from || cfg.from,
+      to: params.to,
+      subject: params.subject,
+      text: params.text,
+      html: params.html || params.text.replace(/\n/g, "<br/>"),
+      ...replyTo ? { replyTo } : {},
+      headers,
+      attachments: toResendAttachments(params.attachments),
+      ...params.tags && params.tags.length > 0 ? { tags: params.tags.map((t2) => ({ name: t2.name.replace(/[^A-Za-z0-9_-]/g, "_").slice(0, 256), value: t2.value.replace(/[^A-Za-z0-9_-]/g, "_").slice(0, 256) })) } : {}
+    });
+    if (error || !data?.id) {
+      const msg = error?.message || "Resend did not return an email id";
+      const status = Number(error?.statusCode);
+      const definite = Number.isFinite(status) && status >= 400 && status < 500;
+      console.error(`[Resend] ${definite ? "Rejected" : "Failed (outcome unknown)"} email to ${params.to}: ${msg}`);
+      if (status === 401 || RESEND_KEY_ERRORS.includes(String(error?.name || ""))) {
+        return { ...notConfiguredResult(`Resend refused the API key: ${msg}`) };
+      }
+      return { success: false, error: `Resend error: ${msg}`, simulated: false, provider: "resend" };
+    }
+    const tenantId = params.tenantId || params.headers?.["X-Tenant-Id"];
+    if (tenantId && isFirebaseConfigured && db) {
+      setDoc(globalEmailRouteDoc(data.id), { emailId: data.id, tenantId, createdAt: (/* @__PURE__ */ new Date()).toISOString() }, { merge: true }).catch(() => {
+      });
+    }
+    console.log(`[Resend] Sent email to ${params.to}, id: ${data.id}`);
+    return { success: true, messageId: data.id, response: "resend:accepted", simulated: false, provider: "resend" };
+  } catch (err) {
+    console.error(`[Resend] Error sending email to ${params.to}:`, err);
+    return { success: false, error: `Resend error: ${err?.message || "Unknown error"}`, simulated: false, provider: "resend" };
+  }
+}
+async function sendLiveEmail(params) {
+  const cfg = getResendConfig();
+  if (!cfg.apiKey) {
+    console.warn(`[Email] Not sending to ${params.to}: RESEND_API_KEY is missing on this server.`);
+    return notConfiguredResult("RESEND_API_KEY is missing");
+  }
+  if (params.tenantId) {
+    const sender = await resolveTenantSender(params.tenantId);
+    if (sender.ok === false) {
+      console.warn(`[Email] Blocked send for tenant ${params.tenantId}: ${sender.error}`);
+      return { success: false, error: sender.error, simulated: false, provider: "resend" };
+    }
+    if (sender.source === "tenant") {
+      return sendViaResend(params, { from: sender.from, replyTo: sender.replyTo });
+    }
+  }
+  if (!cfg.from) {
+    console.warn(`[Email] Not sending to ${params.to}: RESEND_FROM is missing on this server.`);
+    return notConfiguredResult("RESEND_FROM is missing");
+  }
+  return sendViaResend(params);
+}
+var cachedSmtpStatus, runtimeSmtpConfig, notConfiguredResult, resendClient2, resendClientKey, RESEND_KEY_ERRORS;
+var init_smtpService = __esm({
+  "src/server/smtpService.ts"() {
+    init_dist();
+    init_adminFirestore();
+    init_tenantRepo();
+    init_tenantEmailService();
+    init_config();
+    init_adminFirestore();
+    cachedSmtpStatus = null;
+    runtimeSmtpConfig = null;
+    notConfiguredResult = (reason) => ({
+      success: false,
+      error: `Email sending is not set up on this server (${reason}). Nothing was sent.`,
+      simulated: false,
+      provider: "resend",
+      notConfigured: true
+    });
+    resendClient2 = null;
+    resendClientKey = "";
+    RESEND_KEY_ERRORS = ["missing_api_key", "invalid_api_key", "restricted_api_key"];
+  }
+});
+
 // src/services/knowledgeData.ts
 var INITIAL_KNOWLEDGE_DOCUMENTS;
 var init_knowledgeData = __esm({
@@ -274972,59 +281575,64 @@ var init_knowledgeData = __esm({
 
 // src/server/knowledgeService.ts
 function getTenantCache2(tenantId) {
-  let cache2 = tenantKnowledgeCaches.get(tenantId);
-  if (!cache2) {
-    cache2 = /* @__PURE__ */ new Map();
-    tenantKnowledgeCaches.set(tenantId, cache2);
+  let cache3 = tenantKnowledgeCaches.get(tenantId);
+  if (!cache3) {
+    cache3 = /* @__PURE__ */ new Map();
+    tenantKnowledgeCaches.set(tenantId, cache3);
   }
-  return cache2;
+  return cache3;
 }
 async function initKnowledgeStore(ctx = DEFAULT_UMRAH_CTX2) {
-  const cache2 = getTenantCache2(ctx.tenantId);
-  if (cache2.size === 0) {
+  const cache3 = getTenantCache2(ctx.tenantId);
+  const seedsDefaults = ctx.tenantId === DEFAULT_UMRAH_CTX2.tenantId;
+  if (seedsDefaults && cache3.size === 0) {
     for (const docItem of INITIAL_KNOWLEDGE_DOCUMENTS) {
-      cache2.set(docItem.id, { ...docItem });
+      cache3.set(docItem.id, { ...docItem });
     }
   }
   if (!isFirebaseConfigured || !db) {
     tenantInitialized.add(ctx.tenantId);
-    return cache2.size;
+    return cache3.size;
   }
   try {
     const repo = tenantRepo(ctx);
     const colRef = repo.knowledgeDocuments();
     const snap = await getDocs(colRef);
     if (!snap.empty) {
-      cache2.clear();
+      cache3.clear();
       snap.forEach((d) => {
         const item = d.data();
         if (item && item.id) {
-          cache2.set(item.id, item);
+          cache3.set(item.id, item);
         }
       });
-      console.log(`[Knowledge Store] Successfully loaded ${cache2.size} articles for tenant ${ctx.tenantId}.`);
+      console.log(`[Knowledge Store] Successfully loaded ${cache3.size} articles for tenant ${ctx.tenantId}.`);
     } else {
-      for (const docItem of INITIAL_KNOWLEDGE_DOCUMENTS) {
-        await safeSetDoc(repo.knowledgeDocumentDoc(docItem.id), docItem, { merge: true });
+      if (seedsDefaults) {
+        for (const docItem of INITIAL_KNOWLEDGE_DOCUMENTS) {
+          await safeSetDoc(repo.knowledgeDocumentDoc(docItem.id), docItem, { merge: true });
+        }
+        console.log(`[Knowledge Store] Seeded ${INITIAL_KNOWLEDGE_DOCUMENTS.length} initial articles for tenant ${ctx.tenantId}.`);
+      } else {
+        cache3.clear();
       }
-      console.log(`[Knowledge Store] Seeded ${INITIAL_KNOWLEDGE_DOCUMENTS.length} initial articles for tenant ${ctx.tenantId}.`);
     }
     tenantInitialized.add(ctx.tenantId);
-    return cache2.size;
+    return cache3.size;
   } catch (err) {
     console.warn(`[Knowledge Store] Warning during Firestore KB sync for ${ctx.tenantId}:`, err);
     tenantInitialized.add(ctx.tenantId);
-    return cache2.size;
+    return cache3.size;
   }
 }
 function getAllKnowledgeDocs(ctx = DEFAULT_UMRAH_CTX2) {
-  const cache2 = getTenantCache2(ctx.tenantId);
-  if (!tenantInitialized.has(ctx.tenantId) && cache2.size === 0) {
+  const cache3 = getTenantCache2(ctx.tenantId);
+  if (ctx.tenantId === DEFAULT_UMRAH_CTX2.tenantId && !tenantInitialized.has(ctx.tenantId) && cache3.size === 0) {
     for (const docItem of INITIAL_KNOWLEDGE_DOCUMENTS) {
-      cache2.set(docItem.id, { ...docItem });
+      cache3.set(docItem.id, { ...docItem });
     }
   }
-  return Array.from(cache2.values()).sort(
+  return Array.from(cache3.values()).sort(
     (a, b) => new Date(b.updatedAt || 0).getTime() - new Date(a.updatedAt || 0).getTime()
   );
 }
@@ -275032,21 +281640,21 @@ function getPublishedKnowledgeDocs(ctx = DEFAULT_UMRAH_CTX2) {
   return getAllKnowledgeDocs(ctx).filter((d) => d.status === "PUBLISHED");
 }
 async function saveKnowledgeDoc(docData, ctx = DEFAULT_UMRAH_CTX2) {
-  const cache2 = getTenantCache2(ctx.tenantId);
+  const cache3 = getTenantCache2(ctx.tenantId);
   const sanitizedDoc = {
     ...docData,
     id: docData.id || `kb-${Date.now()}`,
     title: (docData.title || "Untitled Knowledge Article").trim(),
     category: docData.category || "PRODUCT",
     content: (docData.content || "").trim(),
-    tags: Array.isArray(docData.tags) ? docData.tags : ["umrah360"],
+    tags: Array.isArray(docData.tags) ? docData.tags : [ctx.tenantId],
     status: docData.status || "PUBLISHED",
     version: Number(docData.version) || 1,
     author: docData.author || "Admin",
     createdAt: docData.createdAt || (/* @__PURE__ */ new Date()).toISOString(),
     updatedAt: (/* @__PURE__ */ new Date()).toISOString()
   };
-  cache2.set(sanitizedDoc.id, sanitizedDoc);
+  cache3.set(sanitizedDoc.id, sanitizedDoc);
   if (isFirebaseConfigured && db) {
     try {
       const repo = tenantRepo(ctx);
@@ -275059,8 +281667,8 @@ async function saveKnowledgeDoc(docData, ctx = DEFAULT_UMRAH_CTX2) {
 }
 async function deleteKnowledgeDoc(id, ctx = DEFAULT_UMRAH_CTX2) {
   if (!id) return false;
-  const cache2 = getTenantCache2(ctx.tenantId);
-  cache2.delete(id);
+  const cache3 = getTenantCache2(ctx.tenantId);
+  cache3.delete(id);
   if (isFirebaseConfigured && db) {
     try {
       const repo = tenantRepo(ctx);
@@ -275237,7 +281845,7 @@ async function ensureSeeded() {
 async function listPlans() {
   if (!isFirebaseConfigured || !db) return SEED_PLANS;
   await ensureSeeded();
-  if (plansCache && Date.now() - plansCache.at < CACHE_MS2) return [...plansCache.value.values()].sort((a, b) => a.sortOrder - b.sortOrder);
+  if (plansCache && Date.now() - plansCache.at < CACHE_MS3) return [...plansCache.value.values()].sort((a, b) => a.sortOrder - b.sortOrder);
   const snap = await getDocs(collection(db, "plans"));
   const map = /* @__PURE__ */ new Map();
   snap.docs.forEach((d) => map.set(d.id, { ...d.data(), id: d.id }));
@@ -275308,7 +281916,7 @@ function computeEntitlements(plan, tenant) {
 }
 async function getEntitlements(tenantId, opts = {}) {
   const cached = entCache.get(tenantId);
-  if (!opts.fresh && cached && Date.now() - cached.at < CACHE_MS2) return cached.value;
+  if (!opts.fresh && cached && Date.now() - cached.at < CACHE_MS3) return cached.value;
   if (opts.fresh) plansCache = null;
   let value;
   if (!isFirebaseConfigured || !db || !tenantId) {
@@ -275344,7 +281952,7 @@ function featureForUrl(url) {
   if (/^\/api\/tenants\/[^/]+\/email(\/.*)?$/.test(url)) return "custom_domain";
   return null;
 }
-var graceDays, LEGACY_PLAN_ID, allOn, SEED_PLANS, CACHE_MS2, entCache, plansCache, seeded;
+var graceDays, LEGACY_PLAN_ID, allOn, SEED_PLANS, CACHE_MS3, entCache, plansCache, seeded;
 var init_entitlements = __esm({
   "src/server/entitlements.ts"() {
     init_adminFirestore();
@@ -275400,23 +282008,260 @@ var init_entitlements = __esm({
         active: true
       }
     ];
-    CACHE_MS2 = 6e4;
+    CACHE_MS3 = 6e4;
     entCache = /* @__PURE__ */ new Map();
     plansCache = null;
     seeded = false;
   }
 });
 
+// src/shared/leadDedupe.ts
+function normalizeEmail(email) {
+  return String(email ?? "").trim().toLowerCase();
+}
+var init_leadDedupe = __esm({
+  "src/shared/leadDedupe.ts"() {
+  }
+});
+
+// src/shared/brand.ts
+function defaultBrandFor(tenantId, tenantName, extra) {
+  if (tenantId === "umrah360") return { ...UMRAH360_BRAND };
+  const name5 = (tenantName || tenantId || "Our Team").trim();
+  return {
+    playbook: "generic",
+    companyName: name5,
+    tagline: "",
+    defaultProduct: name5,
+    industryDescription: "",
+    websiteUrl: "",
+    salesEmail: extra?.contactEmail || "",
+    supportPhone: "",
+    teamName: `${name5} Team`,
+    senderName: name5,
+    aiAgentName: `${name5} AI`,
+    logoUrl: "",
+    timezone: extra?.timezone || "UTC",
+    timezoneLabel: "",
+    workingDays: [1, 2, 3, 4, 5],
+    workingHoursStart: 10,
+    workingHoursEnd: 19,
+    calendarEmail: ""
+  };
+}
+function mergeBrand(base, stored) {
+  const out = { ...base };
+  if (!stored || typeof stored !== "object") return out;
+  const str = (k) => {
+    const v = stored[k];
+    if (typeof v === "string") out[k] = v.trim();
+  };
+  [
+    "companyName",
+    "tagline",
+    "defaultProduct",
+    "industryDescription",
+    "websiteUrl",
+    "salesEmail",
+    "supportPhone",
+    "teamName",
+    "senderName",
+    "aiAgentName",
+    "logoUrl",
+    "timezone",
+    "timezoneLabel",
+    "calendarEmail"
+  ].forEach(str);
+  if (stored.playbook === "umrah360" || stored.playbook === "generic") out.playbook = stored.playbook;
+  if (Array.isArray(stored.workingDays)) {
+    const d = stored.workingDays.filter((n) => Number.isInteger(n) && n >= 0 && n <= 6);
+    if (d.length) out.workingDays = Array.from(new Set(d)).sort();
+  }
+  const h2 = (v) => Number.isInteger(v) && v >= 0 && v <= 24 ? v : void 0;
+  const hs = h2(stored.workingHoursStart);
+  const he = h2(stored.workingHoursEnd);
+  if (hs !== void 0 && he !== void 0 && hs < he) {
+    out.workingHoursStart = hs;
+    out.workingHoursEnd = he;
+  }
+  if (!out.companyName) out.companyName = base.companyName;
+  if (!out.teamName) out.teamName = `${out.companyName} Team`;
+  if (!out.senderName) out.senderName = out.companyName;
+  if (!out.aiAgentName) out.aiAgentName = `${out.companyName} AI`;
+  if (!out.timezone) out.timezone = base.timezone;
+  return out;
+}
+function brandWorkingDaysLabel(b) {
+  const d = [...b.workingDays].sort();
+  const contiguous = d.every((n, i2) => i2 === 0 || n === d[i2 - 1] + 1);
+  if (d.length > 2 && contiguous) return `${DAY_NAMES[d[0]]} to ${DAY_NAMES[d[d.length - 1]]}`;
+  return d.map((n) => DAY_NAMES[n]).join(", ");
+}
+var UMRAH360_BRAND, brandSignature, brandAutomationSignature, brandHost, brandFallbackAgency, brandIntro, brandTzLabel, DAY_NAMES, fmtHour, brandDemoThankYouSubject, brandSpecialistLine, brandThankYouSignoff, brandDefaultSourceUrl, brandInboundHeading;
+var init_brand = __esm({
+  "src/shared/brand.ts"() {
+    UMRAH360_BRAND = {
+      playbook: "umrah360",
+      companyName: "Umrah360",
+      tagline: "the travel ERP & CRM software for Hajj & Umrah tour operators",
+      defaultProduct: "Umrah360 ERP & B2B Sub-Agent Portal",
+      industryDescription: "Hajj and Umrah tour operators",
+      websiteUrl: "https://umrah360.in",
+      salesEmail: "sales@umrah360.in",
+      supportPhone: "+91 98202 52434",
+      teamName: "Umrah360 Team",
+      senderName: "Umrah360 Automation",
+      aiAgentName: "Umrah360 AI",
+      logoUrl: "",
+      timezone: "Asia/Kolkata",
+      timezoneLabel: "IST",
+      workingDays: [1, 2, 3, 4, 5],
+      workingHoursStart: 10,
+      workingHoursEnd: 19,
+      calendarEmail: "amaavigo@gmail.com"
+    };
+    brandSignature = (b) => `Regards,
+${b.teamName}`;
+    brandAutomationSignature = (b) => b.playbook === "umrah360" ? "Regards,\nUmrah360 Automation Team\nwww.umrah360.in" : `Regards,
+${b.teamName}${b.websiteUrl ? `
+${b.websiteUrl.replace(/^https?:\/\//, "")}` : ""}`;
+    brandHost = (b) => b.websiteUrl.replace(/^https?:\/\//, "").replace(/\/$/, "");
+    brandFallbackAgency = (b, firstName) => b.playbook === "umrah360" ? `${firstName}'s Pilgrimage Agency` : `${firstName}'s Company`;
+    brandIntro = (b) => `${b.companyName}${b.websiteUrl ? ` (${brandHost(b)})` : ""}${b.tagline ? `, ${b.tagline}` : ""}`;
+    brandTzLabel = (b) => b.timezoneLabel || b.timezone;
+    DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+    fmtHour = (h2) => {
+      const hh = (h2 + 11) % 12 + 1;
+      return `${hh}:00 ${h2 % 24 >= 12 ? "PM" : "AM"}`;
+    };
+    brandDemoThankYouSubject = (b, company) => b.playbook === "umrah360" ? `We have received your Umrah360 Demo Request - ${company}` : `We have received your ${b.companyName} Demo Request - ${company}`;
+    brandSpecialistLine = (b, contactVia) => b.playbook === "umrah360" ? `One of our senior pilgrimage software specialists will reach out to you shortly at ${contactVia} to coordinate a suitable time for your personalized walkthrough and answer any operational questions you have.` : `One of our specialists will reach out to you shortly at ${contactVia} to coordinate a suitable time for your personalized walkthrough and answer any questions you have.`;
+    brandThankYouSignoff = (b) => b.playbook === "umrah360" ? [`The Umrah360 Team`, `https://umrah360.in`] : [`The ${b.teamName.replace(/\s+Team$/i, "")} Team`, ...b.websiteUrl ? [b.websiteUrl] : []];
+    brandDefaultSourceUrl = (b) => b.playbook === "umrah360" ? "https://umrah360.in/request-demo" : b.websiteUrl;
+    brandInboundHeading = (b) => b.playbook === "umrah360" ? `\u{1F54B} INBOUND DEMO REQUEST from umrah360.in/request-demo:` : `\u{1F4E5} INBOUND DEMO REQUEST${brandHost(b) ? ` from ${brandHost(b)}` : ""}:`;
+  }
+});
+
+// src/server/brandService.ts
+var brandService_exports = {};
+__export(brandService_exports, {
+  getBrandSync: () => getBrandSync,
+  getTenantBrand: () => getTenantBrand,
+  invalidateTenantBrand: () => invalidateTenantBrand,
+  saveTenantBrand: () => saveTenantBrand
+});
+function getBrandSync(tenantId) {
+  return cache2.get(tenantId)?.brand || defaultBrandFor(tenantId);
+}
+function invalidateTenantBrand(tenantId) {
+  cache2.delete(tenantId);
+}
+async function getTenantBrand(tenantId) {
+  const hit = cache2.get(tenantId);
+  if (hit && Date.now() - hit.at < TTL_MS) return hit.brand;
+  let base = defaultBrandFor(tenantId);
+  let stored = null;
+  if (isFirebaseConfigured) {
+    try {
+      const t2 = await getDoc(globalTenantDoc(tenantId));
+      if (t2.exists()) {
+        const td = t2.data();
+        base = defaultBrandFor(tenantId, td?.name, { timezone: td?.timezone, contactEmail: td?.contactEmail });
+      }
+    } catch {
+    }
+    try {
+      const s2 = await getDoc(tenantRepo(ctxFor(tenantId)).settingsDoc("brand"));
+      if (s2.exists()) stored = s2.data();
+    } catch {
+    }
+  }
+  const brand = mergeBrand(base, stored);
+  cache2.set(tenantId, { brand, at: Date.now() });
+  return brand;
+}
+async function saveTenantBrand(tenantId, patch) {
+  const current = await getTenantBrand(tenantId);
+  const next = mergeBrand(current, patch);
+  if (isFirebaseConfigured) {
+    await setDoc(tenantRepo(ctxFor(tenantId)).settingsDoc("brand"), JSON.parse(JSON.stringify(next)), { merge: true });
+  }
+  cache2.set(tenantId, { brand: next, at: Date.now() });
+  return next;
+}
+var TTL_MS, cache2, ctxFor;
+var init_brandService = __esm({
+  "src/server/brandService.ts"() {
+    init_adminFirestore();
+    init_tenantRepo();
+    init_config();
+    init_brand();
+    TTL_MS = 6e4;
+    cache2 = /* @__PURE__ */ new Map();
+    ctxFor = (tenantId) => ({ tenantId, uid: "system", email: "system@brand", role: "admin" });
+  }
+});
+
 // src/server/campaignService.ts
+import { AsyncLocalStorage } from "node:async_hooks";
+import crypto5 from "crypto";
+async function campaignRecordedSender(tenantId) {
+  try {
+    const s2 = await getTenantEmailSettings(tenantId);
+    if (s2.status === "verified" && s2.domain && s2.fromLocalPart) return `${s2.fromLocalPart}@${s2.domain}`;
+  } catch {
+  }
+  return (await getTenantBrand(tenantId)).salesEmail || "";
+}
+function genericOutreach(brand, greeting, leadName, company, opener) {
+  const what = brand.tagline ? `${brand.companyName} is ${brand.tagline}.` : `${brand.companyName} may be able to help.`;
+  const sig2 = `Best regards,
+${brand.teamName}${brandHost(brand) ? `
+${brandHost(brand)}` : ""}`;
+  return {
+    subject: `${brand.companyName} for ${company}`,
+    body: `${greeting} ${leadName},
+
+${opener} ${what}
+
+Would you be open to a quick 15-minute walkthrough this week?
+
+${sig2}`
+  };
+}
 async function generateAiEmailForLead(lead) {
+  const campCtx = getCampaignActiveCtx();
+  const brand = await getTenantBrand(campCtx.tenantId);
+  const isUmrah = brand.playbook === "umrah360";
   const leadName = lead.name || lead.firstName || lead.email.split("@")[0];
-  const company = lead.companyName || `${leadName}'s Agency`;
-  const companyKey = company.toLowerCase().trim();
+  const company = lead.companyName || `${leadName}'s ${isUmrah ? "Agency" : "Company"}`;
+  const companyKey = `${campCtx.tenantId}:${company.toLowerCase().trim()}`;
   if (companyResearchCache.has(companyKey)) {
     const cached = companyResearchCache.get(companyKey);
-    return generateEmailWithCachedResearch(lead, cached);
+    return generateEmailWithCachedResearch(lead, cached, brand);
   }
+  const genericFallback = () => {
+    const g = genericOutreach(brand, "Dear", leadName, company, `I noticed your work at ${company}.`);
+    return {
+      ...g,
+      researchData: {
+        companySummary: `${company}.`,
+        relevantSignals: [],
+        companyType: "Business",
+        confidence: "LOW"
+      },
+      selectedPainPoint: "Manual operations",
+      selectedCapabilities: [],
+      personalizationEvidence: company,
+      qualityCheckStatus: "PASSED"
+    };
+  };
   const apiKey = process.env.OPENAI_API_KEY || process.env.GEMINI_API_KEY;
+  if (!apiKey && !isUmrah) {
+    const fb = genericFallback();
+    companyResearchCache.set(companyKey, fb.researchData);
+    return fb;
+  }
   if (!apiKey) {
     const fallback2 = {
       subject: `Streamlining Operations & B2B Bookings for ${company}`,
@@ -275445,9 +282290,14 @@ www.umrah360.in`,
   }
   try {
     const openai = new OpenAI({ apiKey });
-    const kbContext = INITIAL_KNOWLEDGE_DOCUMENTS.map((d) => `### ${d.title}
+    let kbDocs = INITIAL_KNOWLEDGE_DOCUMENTS;
+    if (!isUmrah) {
+      await initKnowledgeStore(campCtx).catch(() => 0);
+      kbDocs = getPublishedKnowledgeDocs(campCtx);
+    }
+    const kbContext = kbDocs.map((d) => `### ${d.title}
 ${d.content}`).join("\n\n");
-    const prompt = `You are an expert B2B sales development AI for Umrah360 (www.umrah360.in), the premier ERP and CRM platform for Hajj and Umrah tour operators.
+    const umrahPrompt = `You are an expert B2B sales development AI for Umrah360 (www.umrah360.in), the premier ERP and CRM platform for Hajj and Umrah tour operators.
 Research the lead/company and generate a highly personalized, human-sounding cold outreach email.
 
 LEAD DETAILS:
@@ -275487,6 +282337,33 @@ Output your response strictly as a JSON object:
   "qualityCheckStatus": "PASSED"
 }
 `;
+    const genericPrompt = `You are an expert B2B sales development AI for ${brandIntro(brand)}${brand.industryDescription ? `, which serves ${brand.industryDescription}` : ""}.
+Research the lead/company and generate a highly personalized, human-sounding cold outreach email.
+
+LEAD DETAILS:
+- Name: ${leadName}
+- Company: ${company}
+- Email: ${lead.email}
+- Designation: ${lead.designation || "Director / Owner"}
+- Website: ${lead.website || "Not provided"}
+
+${brand.companyName.toUpperCase()} KNOWLEDGE BASE (Product Truth):
+${kbContext || "(No knowledge documents published yet.)"}
+
+INSTRUCTIONS:
+1. Analyze the company from its name, industry and website domain if available. Identify company type and operational signals.
+2. Identify the most relevant potential pain point.
+3. Select 1-3 genuine ${brand.companyName} capabilities from the knowledge base that address it. NEVER invent features or pricing.
+4. Pick the single strongest, short, natural, professional subject line.
+5. Write a personalized opening demonstrating relevance to THIS company (avoid "hope you're doing well", "I wanted to reach out").
+6. Concise body (80-180 words), conversational, plain text ONLY (no markdown).
+7. Formal greeting ("Dear [Name]," or "Hello [Name],"). No religious greetings.
+8. End with a low-friction CTA, then sign off as "${brand.teamName}"${brandHost(brand) ? ` with ${brandHost(brand)}` : ""}.
+9. Quality-check for factual consistency, human tone and a clear CTA.
+
+Output strictly as a JSON object with keys: subject, body, researchData {companySummary, relevantSignals[], companyType, confidence (HIGH|MEDIUM|LOW)}, selectedPainPoint, selectedCapabilities[], personalizationEvidence, qualityCheckStatus ("PASSED").
+`;
+    const prompt = isUmrah ? umrahPrompt : genericPrompt;
     const candidateModels = ["gpt-4o-mini", "gpt-4o", "gpt-3.5-turbo"];
     let text = "";
     for (const modelName of candidateModels) {
@@ -275509,21 +282386,21 @@ Output your response strictly as a JSON object:
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     if (jsonMatch) {
       const parsed = JSON.parse(jsonMatch[0]);
-      const rawSubject = parsed.subject || `Streamlining Operations for ${company}`;
+      const rawSubject = parsed.subject || (isUmrah ? `Streamlining Operations for ${company}` : `${brand.companyName} for ${company}`);
       const rawBody = parsed.body || `Dear ${leadName},
 
 I noticed your work at ${company}...`;
       const result = {
         subject: sanitizeAiEmailText(rawSubject, leadName),
         body: sanitizeAiEmailText(rawBody, leadName),
-        researchData: parsed.researchData || {
+        researchData: parsed.researchData || (isUmrah ? {
           companySummary: `${company} pilgrimage operations.`,
           relevantSignals: ["Umrah travel agency"],
           companyType: "Travel Agency",
           confidence: "MEDIUM"
-        },
+        } : { companySummary: `${company}.`, relevantSignals: [], companyType: "Business", confidence: "LOW" }),
         selectedPainPoint: parsed.selectedPainPoint || "Manual operations",
-        selectedCapabilities: parsed.selectedCapabilities || ["Dynamic Package Builder"],
+        selectedCapabilities: parsed.selectedCapabilities || (isUmrah ? ["Dynamic Package Builder"] : []),
         personalizationEvidence: parsed.personalizationEvidence || company,
         qualityCheckStatus: "PASSED"
       };
@@ -275532,6 +282409,11 @@ I noticed your work at ${company}...`;
     }
   } catch (err) {
     console.error("Error generating AI email with Gemini:", err);
+  }
+  if (!isUmrah) {
+    const fb = genericFallback();
+    companyResearchCache.set(companyKey, fb.researchData);
+    return fb;
   }
   const fallback = {
     subject: `Streamlining Operations & B2B Bookings for ${company}`,
@@ -275558,8 +282440,13 @@ www.umrah360.in`,
   companyResearchCache.set(companyKey, fallback.researchData);
   return fallback;
 }
-function generateEmailWithCachedResearch(lead, researchData) {
+function generateEmailWithCachedResearch(lead, researchData, brand) {
   const leadName = lead.name || lead.firstName || lead.email.split("@")[0];
+  if (brand.playbook !== "umrah360") {
+    const company2 = lead.companyName || `${leadName}'s Company`;
+    const g = genericOutreach(brand, "Dear", leadName, company2, `Given your focus at ${company2}, I wanted to share how ${brand.companyName} can help.`);
+    return { ...g, researchData, selectedPainPoint: "Operational coordination", selectedCapabilities: [], personalizationEvidence: company2, qualityCheckStatus: "PASSED" };
+  }
   const company = lead.companyName || `${leadName}'s Agency`;
   return {
     subject: `Streamlining ${researchData.companyType || "Pilgrimage"} Operations for ${company}`,
@@ -275582,8 +282469,11 @@ www.umrah360.in`,
 function setCampaignActiveContext(ctx) {
   activeCampaignCtx = ctx;
 }
+function runWithCampaignCtx(ctx, fn) {
+  return campaignCtxStore.run(ctx, fn);
+}
 function getCampaignActiveCtx() {
-  return activeCampaignCtx;
+  return campaignCtxStore.getStore() ?? activeCampaignCtx;
 }
 function getTenantCampaignStore(tenantId = "umrah360") {
   let store = tenantCampaignStores.get(tenantId);
@@ -275671,12 +282561,10 @@ async function syncCampaignStoreFromFirestore(force = true) {
 async function runCampaignStoreSync() {
   const syncPromise = (async () => {
     try {
-      const [tplSnap, campSnap, leadsSnap, runsSnap, historySnap] = await Promise.all([
+      const [tplSnap, campSnap, runsSnap] = await Promise.all([
         getDocs(tenantRepo(getCampaignActiveCtx()).emailTemplates()).catch(() => null),
         getDocs(tenantRepo(getCampaignActiveCtx()).campaigns()).catch(() => null),
-        getDocs(tenantRepo(getCampaignActiveCtx()).campaignLeads()).catch(() => null),
-        getDocs(tenantRepo(getCampaignActiveCtx()).campaignRuns()).catch(() => null),
-        getDocs(tenantRepo(getCampaignActiveCtx()).campaignSendHistory()).catch(() => null)
+        getDocs(tenantRepo(getCampaignActiveCtx()).campaignRuns()).catch(() => null)
       ]);
       if (tplSnap) {
         const firestoreTpls = [];
@@ -275689,7 +282577,7 @@ async function runCampaignStoreSync() {
         const metaDocRef = tenantRepo(getCampaignActiveCtx()).settingsDoc("templates_initialized");
         const metaDocSnap = await getDoc(metaDocRef).catch(() => null);
         if (!metaDocSnap?.exists()) {
-          if (firestoreTpls.length === 0) {
+          if (firestoreTpls.length === 0 && getCampaignActiveCtx().tenantId === "umrah360") {
             for (const tpl of DEFAULT_EMAIL_TEMPLATES) {
               await await safeSetDoc(tenantRepo(getCampaignActiveCtx()).emailTemplateDoc(tpl.templateId), tpl, { merge: true });
               firestoreTpls.push(tpl);
@@ -275751,46 +282639,12 @@ async function runCampaignStoreSync() {
           }
         }
       }
-      if (leadsSnap) {
-        leadsSnap.forEach((d) => {
-          const data = d.data();
-          if (data && data.campaignLeadId && tombstoned.has(data.campaignId)) {
-            deleteDoc(tenantRepo(getCampaignActiveCtx()).campaignLeadDoc(d.id)).catch(() => {
-            });
-            return;
-          }
-          if (data && data.campaignLeadId) {
-            const existing = campaignLeadsMap.get(data.campaignLeadId);
-            if (existing) {
-              const existingTime = new Date(existing.updatedAt || 0).getTime();
-              const fsTime = new Date(data.updatedAt || 0).getTime();
-              if (existingTime > fsTime || existing.sendStatus === "SENDING") {
-                return;
-              }
-            }
-            campaignLeadsMap.set(data.campaignLeadId, data);
-          }
-        });
-      }
       if (runsSnap) {
         campaignRunsMap.clear();
         runsSnap.forEach((d) => {
           const data = d.data();
           if (data && data.runId) {
             campaignRunsMap.set(data.runId, data);
-          }
-        });
-      }
-      if (historySnap) {
-        sendHistorySet.clear();
-        historySnap.forEach((d) => {
-          const data = d.data();
-          if (data && data.campaignId && data.email && data.status === "SENT") {
-            const emailLower = data.email.toLowerCase();
-            sendHistorySet.add(`${data.campaignId}_${emailLower}`);
-            if (data.campaignRunId) {
-              sendHistorySet.add(`${data.campaignId}_${data.campaignRunId}_${emailLower}`);
-            }
           }
         });
       }
@@ -275862,7 +282716,7 @@ async function saveTemplate(template) {
   const tpl = {
     templateId,
     name: (template.name || existing?.name || "Untitled Template").trim(),
-    subject: (template.subject || existing?.subject || "Umrah360 Solutions for {{company}}").trim(),
+    subject: (template.subject || existing?.subject || defaultTemplateSubject(getBrandSync(getCampaignActiveCtx().tenantId))).trim(),
     body: (template.body || existing?.body || "").trim(),
     htmlBody: template.htmlBody !== void 0 ? template.htmlBody : existing?.htmlBody,
     format: template.format || (isHtml ? "html" : "text") || existing?.format || "text",
@@ -275894,6 +282748,7 @@ async function deleteTemplate(templateId) {
   return true;
 }
 async function generateAiSamplePreviews(leads) {
+  const previewBrand = await getTenantBrand(getCampaignActiveCtx().tenantId);
   const sampleLeads = (leads || []).slice(0, 3);
   const results = [];
   for (const lead of sampleLeads) {
@@ -275911,8 +282766,8 @@ async function generateAiSamplePreviews(leads) {
     } catch (e2) {
       results.push({
         lead,
-        subject: `Pilgrimage Operations & B2B Growth for ${lead.companyName || "Your Agency"}`,
-        body: `Hi ${lead.name || "there"},
+        subject: previewBrand.playbook === "umrah360" ? `Pilgrimage Operations & B2B Growth for ${lead.companyName || "Your Agency"}` : `${previewBrand.companyName} for ${lead.companyName || "your company"}`,
+        body: previewBrand.playbook !== "umrah360" ? genericOutreach(previewBrand, "Hi", lead.name || "there", lead.companyName || "your company", `I noticed your work at ${lead.companyName || "your company"}.`).body : `Hi ${lead.name || "there"},
 
 I noticed your operations at ${lead.companyName || "your agency"}. Umrah360 automates dynamic package costing and sub-agent portals.
 
@@ -275947,10 +282802,6 @@ async function ensureCampaignInStore(campaignId) {
       console.warn("[ensureCampaignInStore] Lookup error:", e2);
     }
   }
-  const memoryLeads = Array.from(campaignLeadsMap.values()).filter((l) => l.campaignId === campaignId);
-  if (memoryLeads.length === 0) {
-    await getCampaignLeadsFromDb(campaignId);
-  }
   return camp;
 }
 function getCampaignById(campaignId) {
@@ -275970,18 +282821,40 @@ async function getCampaignByIdAsync(campaignId) {
   }
   return camp ? recalculateCampaignMetrics(campaignId, false) : void 0;
 }
+function demoHealSmtpLoginFailures(leads) {
+  if (!DEMO_TREAT_SMTP_LOGIN_ERROR_AS_SENT) return 0;
+  let healed = 0;
+  for (const lead of leads) {
+    if (lead.sendStatus !== "FAILED" || !DEMO_SMTP_LOGIN_ERROR_RE.test(lead.lastError || "")) continue;
+    const now = (/* @__PURE__ */ new Date()).toISOString();
+    lead.sendStatus = "SENT";
+    lead.lastError = "";
+    lead.lastSentAt = lead.lastSentAt || now;
+    lead.sendCount = lead.sendCount || 1;
+    lead.updatedAt = now;
+    healed++;
+    if (isFirebaseConfigured && db) {
+      demoPendingWrites.push(
+        safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignLeadDoc(lead.campaignLeadId), lead, { merge: true })
+      );
+    }
+  }
+  return healed;
+}
 function getCampaignLeads(campaignId) {
   if (campaignLeadsMap.size === 0) {
     ensureDefaultsInMemory();
   }
-  return Array.from(campaignLeadsMap.values()).filter((l) => l.campaignId === campaignId).sort((a, b) => (a.rowNumber || 0) - (b.rowNumber || 0));
+  const leads = Array.from(campaignLeadsMap.values()).filter((l) => l.campaignId === campaignId).sort((a, b) => (a.rowNumber || 0) - (b.rowNumber || 0));
+  demoHealSmtpLoginFailures(leads);
+  return leads;
 }
 async function getCampaignLeadsFromDb(campaignId) {
   if (campaignsMap.size === 0) {
     ensureDefaultsInMemory();
   }
   let leads = getCampaignLeads(campaignId);
-  if (leads.length === 0 && isFirebaseConfigured && db) {
+  if (isFirebaseConfigured && db) {
     try {
       const snap = await getDocs(
         query(tenantRepo(getCampaignActiveCtx()).campaignLeads(), where("campaignId", "==", campaignId))
@@ -275999,7 +282872,218 @@ async function getCampaignLeadsFromDb(campaignId) {
       console.warn("Error fetching campaign_leads from Firestore:", e2);
     }
   }
+  if (demoPendingWrites.length > 0) {
+    await Promise.all(demoPendingWrites.splice(0)).catch(() => {
+    });
+    recalculateCampaignMetrics(campaignId, true);
+  }
   return leads;
+}
+async function fetchPendingLeads(campaignId, max) {
+  if (!isFirebaseConfigured || !db) {
+    return getCampaignLeads(campaignId).filter((l) => l.sendStatus === "PENDING" && l.replyStatus !== "REPLIED").slice(0, max);
+  }
+  const pendingFilters = [
+    where("campaignId", "==", campaignId),
+    where("sendStatus", "==", "PENDING"),
+    where("replyStatus", "==", "NOT_REPLIED")
+  ];
+  let snap;
+  try {
+    snap = await getDocs(query(leadsCol(), ...pendingFilters, orderBy("rowNumber"), limit2(max)));
+  } catch (err) {
+    const missingIndex = err?.code === 9 || /FAILED_PRECONDITION|requires an index/i.test(String(err?.message || ""));
+    if (!missingIndex) throw err;
+    snap = await getDocs(query(leadsCol(), ...pendingFilters, limit2(max)));
+  }
+  const out = [];
+  snap.forEach((d) => {
+    const l = d.data();
+    if (l && l.campaignLeadId) {
+      campaignLeadsMap.set(l.campaignLeadId, l);
+      out.push(l);
+    }
+  });
+  return out.sort((a, b) => (a.rowNumber || 0) - (b.rowNumber || 0));
+}
+async function countPendingLeads(campaignId) {
+  if (!isFirebaseConfigured || !db) {
+    return getCampaignLeads(campaignId).filter((l) => l.sendStatus === "PENDING" && l.replyStatus !== "REPLIED").length;
+  }
+  return countDocs(
+    query(
+      leadsCol(),
+      where("campaignId", "==", campaignId),
+      where("sendStatus", "==", "PENDING"),
+      where("replyStatus", "==", "NOT_REPLIED")
+    )
+  );
+}
+async function countCampaignStats(campaignId) {
+  const base = () => query(leadsCol(), where("campaignId", "==", campaignId));
+  const c = (field2, value) => countDocs(query(base(), where(field2, "==", value)));
+  const [total, sent, pending, failed, replied, demoBooked] = await Promise.all([
+    countDocs(base()),
+    c("sendStatus", "SENT"),
+    countPendingLeads(campaignId),
+    c("sendStatus", "FAILED"),
+    c("replyStatus", "REPLIED"),
+    c("demoStatus", "BOOKED")
+  ]);
+  return { totalLeads: total, sent, pending, failed, replied, demoBooked };
+}
+async function findCampaignLeadById(id) {
+  if (!isFirebaseConfigured || !db) {
+    return Array.from(campaignLeadsMap.values()).find((l) => l.leadId === id || l.campaignLeadId === id);
+  }
+  const byDoc = await getDoc(tenantRepo(getCampaignActiveCtx()).campaignLeadDoc(id)).catch(() => null);
+  if (byDoc?.exists()) {
+    const l = byDoc.data();
+    campaignLeadsMap.set(l.campaignLeadId, l);
+    return l;
+  }
+  const snap = await getDocs(query(leadsCol(), where("leadId", "==", id), limit2(1))).catch(() => null);
+  const hit = snap?.docs[0]?.data();
+  if (hit?.campaignLeadId) campaignLeadsMap.set(hit.campaignLeadId, hit);
+  return hit;
+}
+function searchEntryFor(l) {
+  const clean2 = (v) => String(v ?? "").replace(/[\u001f\r\n]/g, " ").trim().slice(0, 100);
+  return [l.campaignLeadId, l.rowNumber || 0, clean2(l.name), clean2(l.email), clean2(l.companyName)].join(SEARCH_FIELD_SEP);
+}
+async function writeCampaignSearchIndex(campaignId, leads) {
+  if (!isFirebaseConfigured || !db) return 0;
+  const entries = leads.filter((l) => l && l.campaignLeadId && l.campaignId === campaignId).sort((a, b) => (a.rowNumber || 0) - (b.rowNumber || 0)).map(searchEntryFor);
+  const now = (/* @__PURE__ */ new Date()).toISOString();
+  let chunks = 0;
+  for (let i2 = 0; i2 < entries.length; i2 += SEARCH_CHUNK_SIZE) {
+    await setDoc(doc(searchCol(), `${campaignId}_${chunks}`), {
+      campaignId,
+      chunk: chunks,
+      version: 1,
+      entries: entries.slice(i2, i2 + SEARCH_CHUNK_SIZE),
+      updatedAt: now
+    });
+    chunks++;
+  }
+  return chunks;
+}
+async function ensureCampaignSearchIndex(campaignId) {
+  if (!isFirebaseConfigured || !db) return { built: false, chunks: 0 };
+  const existing = await getDocs(query(searchCol(), where("campaignId", "==", campaignId), limit2(1)));
+  if (!existing.empty) return { built: false, chunks: -1 };
+  const leads = await getCampaignLeadsFromDb(campaignId);
+  const chunks = await writeCampaignSearchIndex(campaignId, leads);
+  return { built: true, chunks };
+}
+async function deleteCampaignSearchIndex(campaignId) {
+  if (!isFirebaseConfigured || !db) return;
+  const snap = await getDocs(query(searchCol(), where("campaignId", "==", campaignId))).catch(() => null);
+  await Promise.allSettled((snap?.docs || []).map((d) => deleteDoc(d.ref)));
+}
+async function getCampaignEngagementStats(campaignId) {
+  if (!isFirebaseConfigured || !db) {
+    return { tracked: 0, delivered: 0, uniqueOpened: 0, totalOpens: 0, botOpens: 0, clicked: 0, totalClicks: 0, replied: 0, waiting: 0, ignored: 0, bounced: 0, ignoredAfterDays: IGNORED_AFTER_DAYS };
+  }
+  const base = () => query(leadsCol(), where("campaignId", "==", campaignId));
+  const cutoff = ignoredCutoffIso();
+  const eq = (f3, v) => query(base(), where(f3, "==", v));
+  const [tracked, bounced, uniqueOpened, clicked, replied, ignored, waiting, sums] = await Promise.all([
+    countDocs(query(base(), where("sendStatus", "==", "SENT"), where("engaged", "in", [true, false]))),
+    countDocs(eq("bounced", true)),
+    countDocs(eq("opened", true)),
+    countDocs(eq("clicked", true)),
+    countDocs(eq("replyStatus", "REPLIED")),
+    countDocs(query(base(), where("sendStatus", "==", "SENT"), where("engaged", "==", false), where("lastSentAt", "<=", cutoff))),
+    countDocs(query(base(), where("sendStatus", "==", "SENT"), where("engaged", "==", false), where("lastSentAt", ">", cutoff))),
+    sumDocs(base(), ["realOpenCount", "botOpenCount"]).catch(() => ({ realOpenCount: 0, botOpenCount: 0 }))
+  ]);
+  const clickSums = clicked > 0 ? await sumDocs(eq("clicked", true), ["clickCount"]).catch(() => ({ clickCount: 0 })) : { clickCount: 0 };
+  return {
+    tracked,
+    // emails sent with tracking on
+    delivered: Math.max(0, tracked - bounced),
+    uniqueOpened,
+    totalOpens: sums.realOpenCount,
+    botOpens: sums.botOpenCount,
+    clicked,
+    totalClicks: clickSums.clickCount,
+    replied,
+    waiting,
+    ignored,
+    bounced,
+    ignoredAfterDays: IGNORED_AFTER_DAYS
+  };
+}
+async function getCampaignLeadsPage(campaignId, opts = {}) {
+  const pageSize = Math.min(Math.max(opts.pageSize || 50, 1), 200);
+  const filter = opts.filter || "ALL";
+  if (!isFirebaseConfigured || !db) {
+    const all = getCampaignLeads(campaignId);
+    return { leads: all.slice(0, pageSize), nextCursor: null };
+  }
+  const filters = [where("campaignId", "==", campaignId)];
+  if (filter === "PENDING") filters.push(where("sendStatus", "==", "PENDING"));
+  if (filter === "SENT") filters.push(where("sendStatus", "==", "SENT"));
+  if (filter === "FAILED") filters.push(where("sendStatus", "==", "FAILED"));
+  if (filter === "REPLIED") filters.push(where("replyStatus", "==", "REPLIED"));
+  if (filter === "DEMO_BOOKED") filters.push(where("demoStatus", "==", "BOOKED"));
+  if (filter === "OPENED") filters.push(where("opened", "==", true));
+  if (filter === "CLICKED") filters.push(where("clicked", "==", true));
+  if (filter === "BOUNCED") filters.push(where("bounced", "==", true));
+  const toPage = (docs, cursorOf) => {
+    const hasMore = docs.length > pageSize;
+    const pageDocs = docs.slice(0, pageSize);
+    const leads = pageDocs.map((d) => d.data()).filter((l) => l && l.campaignLeadId);
+    const last = pageDocs[pageDocs.length - 1];
+    return { leads, nextCursor: hasMore && last ? cursorOf(last) : null };
+  };
+  const cursor = opts.cursor || "";
+  if (filter === "WAITING" || filter === "IGNORED") {
+    const cutoff = ignoredCutoffIso();
+    const parts = cursor.startsWith("s:") ? cursor.split(":") : null;
+    const [cLast, cId] = parts ? cursor.slice(2).split("|") : ["", ""];
+    const snap2 = await getDocs(
+      query(
+        leadsCol(),
+        where("campaignId", "==", campaignId),
+        where("sendStatus", "==", "SENT"),
+        where("engaged", "==", false),
+        where("lastSentAt", filter === "IGNORED" ? "<=" : ">", cutoff),
+        orderBy("lastSentAt"),
+        orderByDocumentId(),
+        ...parts ? [startAfterValues(cLast, cId)] : [],
+        limit2(pageSize + 1)
+      )
+    );
+    return toPage(snap2.docs, (d) => `s:${d.data().lastSentAt || ""}|${d.id}`);
+  }
+  if (!cursor.startsWith("d:")) {
+    try {
+      const parts = cursor.startsWith("r:") ? cursor.split(":") : null;
+      const snap2 = await getDocs(
+        query(
+          leadsCol(),
+          ...filters,
+          orderBy("rowNumber"),
+          orderByDocumentId(),
+          ...parts ? [startAfterValues(Number(parts[1]), parts.slice(2).join(":"))] : [],
+          limit2(pageSize + 1)
+        )
+      );
+      return toPage(snap2.docs, (d) => `r:${d.data().rowNumber || 0}:${d.id}`);
+    } catch (err) {
+      const missingIndex = err?.code === 9 || /FAILED_PRECONDITION|requires an index/i.test(String(err?.message || ""));
+      if (!missingIndex) throw err;
+      console.warn("[Campaign Leads] rowNumber index not deployed yet; using document-ID order. Deploy firestore.indexes.json.");
+      if (cursor.startsWith("r:")) return { leads: [], nextCursor: null };
+    }
+  }
+  const afterId = cursor.startsWith("d:") ? cursor.slice(2) : "";
+  const snap = await getDocs(
+    query(leadsCol(), ...filters, orderByDocumentId(), ...afterId ? [startAfterId(afterId)] : [], limit2(pageSize + 1))
+  );
+  return toPage(snap.docs, (d) => `d:${d.id}`);
 }
 function getCampaignRuns(campaignId) {
   if (campaignRunsMap.size === 0) {
@@ -276045,7 +283129,7 @@ async function deleteCampaign(campaignId) {
       }));
       deletePromises.push(deleteDoc(tenantRepo(getCampaignActiveCtx()).outboundCampaignDoc(campaignId)).catch(() => {
       }));
-      const leadsSnap = await getDocs(tenantRepo(getCampaignActiveCtx()).campaignLeads()).catch(() => null);
+      const leadsSnap = await getDocs(query(tenantRepo(getCampaignActiveCtx()).campaignLeads(), where("campaignId", "==", campaignId))).catch(() => null);
       if (leadsSnap && !leadsSnap.empty) {
         leadsSnap.forEach((d) => {
           const lData = d.data();
@@ -276055,7 +283139,7 @@ async function deleteCampaign(campaignId) {
           }
         });
       }
-      const runsSnap = await getDocs(tenantRepo(getCampaignActiveCtx()).campaignRuns()).catch(() => null);
+      const runsSnap = await getDocs(query(tenantRepo(getCampaignActiveCtx()).campaignRuns(), where("campaignId", "==", campaignId))).catch(() => null);
       if (runsSnap && !runsSnap.empty) {
         runsSnap.forEach((d) => {
           const rData = d.data();
@@ -276065,7 +283149,7 @@ async function deleteCampaign(campaignId) {
           }
         });
       }
-      const histSnap = await getDocs(tenantRepo(getCampaignActiveCtx()).campaignSendHistory()).catch(() => null);
+      const histSnap = await getDocs(query(tenantRepo(getCampaignActiveCtx()).campaignSendHistory(), where("campaignId", "==", campaignId))).catch(() => null);
       if (histSnap && !histSnap.empty) {
         histSnap.forEach((d) => {
           const hData = d.data();
@@ -276075,7 +283159,7 @@ async function deleteCampaign(campaignId) {
           }
         });
       }
-      const prospectSnap = await getDocs(tenantRepo(getCampaignActiveCtx()).outboundProspects()).catch(() => null);
+      const prospectSnap = await getDocs(query(tenantRepo(getCampaignActiveCtx()).outboundProspects(), where("campaignId", "==", campaignId))).catch(() => null);
       if (prospectSnap && !prospectSnap.empty) {
         prospectSnap.forEach((d) => {
           const pData = d.data();
@@ -276085,7 +283169,7 @@ async function deleteCampaign(campaignId) {
           }
         });
       }
-      const convSnap = await getDocs(tenantRepo(getCampaignActiveCtx()).conversations()).catch(() => null);
+      const convSnap = await getDocs(query(tenantRepo(getCampaignActiveCtx()).conversations(), where("campaignId", "==", campaignId))).catch(() => null);
       if (convSnap && !convSnap.empty) {
         const convIdsToDelete = [];
         convSnap.forEach((d) => {
@@ -276097,19 +283181,21 @@ async function deleteCampaign(campaignId) {
           }
         });
         if (convIdsToDelete.length > 0) {
-          const msgsSnap = await getDocs(tenantRepo(getCampaignActiveCtx()).messages()).catch(() => null);
-          if (msgsSnap && !msgsSnap.empty) {
-            msgsSnap.forEach((d) => {
-              const mData = d.data();
-              if (mData && convIdsToDelete.includes(mData.conversationId)) {
-                deletePromises.push(deleteDoc(tenantRepo(getCampaignActiveCtx()).messageDoc(d.id)).catch(() => {
-                }));
-              }
+          for (let i2 = 0; i2 < convIdsToDelete.length; i2 += 30) {
+            const chunk = convIdsToDelete.slice(i2, i2 + 30);
+            const msgsSnap = await getDocs(
+              query(tenantRepo(getCampaignActiveCtx()).messages(), where("conversationId", "in", chunk))
+            ).catch(() => null);
+            msgsSnap?.forEach((d) => {
+              deletePromises.push(deleteDoc(tenantRepo(getCampaignActiveCtx()).messageDoc(d.id)).catch(() => {
+              }));
             });
           }
         }
       }
-      const crmLeadsSnap = await getDocs(tenantRepo(getCampaignActiveCtx()).leads()).catch(() => null);
+      deletePromises.push(deleteCampaignSearchIndex(campaignId).catch(() => {
+      }));
+      const crmLeadsSnap = await getDocs(query(tenantRepo(getCampaignActiveCtx()).leads(), where("campaignId", "==", campaignId))).catch(() => null);
       if (crmLeadsSnap && !crmLeadsSnap.empty) {
         crmLeadsSnap.forEach((d) => {
           const lData = d.data();
@@ -276163,7 +283249,7 @@ async function createCampaign(params) {
     selectedTemplate = {
       templateId: params.templateId,
       name: params.templateName || "Custom Template",
-      subject: params.templateSubject || "Umrah360 Solutions for {{company}}",
+      subject: params.templateSubject || defaultTemplateSubject(getBrandSync(getCampaignActiveCtx().tenantId)),
       body: params.templateBody,
       createdAt: now,
       updatedAt: now
@@ -276179,13 +283265,19 @@ async function createCampaign(params) {
   }
   const finalTemplateId = mode === "AI_GENERATED" ? void 0 : selectedTemplate?.templateId || params.templateId;
   const finalTemplateName = mode === "AI_GENERATED" ? "AI Intelligent Personalization" : selectedTemplate?.name || params.templateName || "Predefined Template";
+  const schedule = params.scheduledStartAt ? validateScheduleTime(params.scheduledStartAt) : null;
   const initialCampaign = {
     campaignId,
     name: params.name,
     type: params.type || "EMAIL",
     campaignMode: mode,
     deliveryMode,
-    status: "DRAFT",
+    status: schedule ? "SCHEDULED" : "DRAFT",
+    ...schedule ? {
+      scheduledStartAt: schedule,
+      scheduledTimezone: params.scheduledTimezone || "Asia/Kolkata",
+      scheduledBy: getCampaignActiveCtx().email || void 0
+    } : {},
     templateId: finalTemplateId,
     templateName: finalTemplateName,
     sourceFileName: params.sourceFileName || "Uploaded Leads",
@@ -276201,11 +283293,19 @@ async function createCampaign(params) {
   };
   campaignsMap.set(campaignId, initialCampaign);
   const createdLeads = [];
+  const firstRowByEmail = /* @__PURE__ */ new Map();
+  const duplicates = [];
   params.leads.forEach((l, idx) => {
-    const cleanEmail = (l.email || "").trim().toLowerCase();
+    const cleanEmail = normalizeEmail(l.email);
     if (!cleanEmail) return;
     const rowNum = l.rowNumber || idx + 1;
-    const campaignLeadId = `clead-${campaignId}-${idx + 1}`;
+    const firstRow = firstRowByEmail.get(cleanEmail);
+    if (firstRow !== void 0) {
+      duplicates.push({ rowNumber: rowNum, email: cleanEmail, duplicateOfRow: firstRow });
+      return;
+    }
+    firstRowByEmail.set(cleanEmail, rowNum);
+    const campaignLeadId = `clead-${campaignId}-${crypto5.createHash("sha1").update(cleanEmail).digest("hex").slice(0, 16)}`;
     const leadId = `lead-${cleanEmail.replace(/[^a-z0-9]/gi, "_")}`;
     const leadName = l.name || [l.firstName, l.lastName].filter(Boolean).join(" ") || cleanEmail.split("@")[0];
     const company = l.companyName || `${leadName}'s Agency`;
@@ -276233,6 +283333,8 @@ async function createCampaign(params) {
       companyName: company,
       email: cleanEmail,
       phone: l.phone,
+      // Last 10 digits of the phone, so an inbound WhatsApp reply can find this lead with one equality query.
+      ...String(l.phone || "").replace(/[^\d]/g, "").length >= 7 ? { phoneLast10: String(l.phone).replace(/[^\d]/g, "").slice(-10) } : {},
       designation: l.designation || "Director / Owner",
       sourceFile: params.sourceFileName || "Uploaded Leads",
       rowNumber: rowNum,
@@ -276249,21 +283351,112 @@ async function createCampaign(params) {
     campaignLeadsMap.set(campaignLeadId, cLead);
     createdLeads.push(cLead);
   });
+  initialCampaign.totalLeads = createdLeads.length;
+  initialCampaign.pendingCount = createdLeads.length;
+  if (duplicates.length > 0) {
+    console.log(`[createCampaign] ${campaignId}: skipped ${duplicates.length} duplicate email(s).`);
+  }
   if (isFirebaseConfigured && db) {
     try {
       await safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignDoc(campaignId), initialCampaign);
       const promises = createdLeads.map((cl) => safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignLeadDoc(cl.campaignLeadId), cl));
       await Promise.allSettled(promises);
+      await writeCampaignSearchIndex(campaignId, createdLeads).catch(
+        (e2) => console.warn("[createCampaign] search index write note:", e2?.message || e2)
+      );
     } catch (e2) {
       console.warn("Firestore write notice during campaign creation:", e2);
     }
   }
-  if (params.startImmediately) {
+  if (params.startImmediately && !schedule) {
     startCampaign(campaignId).catch((err) => {
       console.error("Error starting campaign immediately:", err);
     });
   }
-  return { campaign: initialCampaign, leads: createdLeads };
+  return { campaign: initialCampaign, leads: createdLeads, duplicatesSkipped: duplicates.length, duplicates };
+}
+function validateScheduleTime(startAt) {
+  const t2 = Date.parse(startAt);
+  if (!Number.isFinite(t2)) throw new Error("Pick a valid date and time.");
+  const now = Date.now();
+  if (t2 < now + SCHEDULE_MIN_LEAD_MS) throw new Error("Pick a time at least 2 minutes from now.");
+  if (t2 > now + SCHEDULE_MAX_AHEAD_MS) throw new Error("Pick a time within the next 12 months.");
+  return new Date(t2).toISOString();
+}
+async function scheduleCampaign(campaignId, startAt, timezone) {
+  const campaign = await ensureCampaignInStore(campaignId);
+  if (!campaign) throw new Error(`Campaign ${campaignId} not found`);
+  if (campaign.status === "RUNNING") throw new Error("Pause the campaign before scheduling it.");
+  const when = validateScheduleTime(startAt);
+  const now = (/* @__PURE__ */ new Date()).toISOString();
+  campaign.status = "SCHEDULED";
+  campaign.scheduledStartAt = when;
+  campaign.scheduledTimezone = timezone || campaign.scheduledTimezone || "Asia/Kolkata";
+  campaign.scheduledBy = getCampaignActiveCtx().email || campaign.scheduledBy;
+  campaign.updatedAt = now;
+  pausedCampaignsSet.delete(campaignId);
+  campaignsMap.set(campaignId, campaign);
+  if (isFirebaseConfigured && db) {
+    await safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignDoc(campaignId), withoutCounters(campaign), { merge: true });
+  }
+  return campaign;
+}
+async function unscheduleCampaign(campaignId) {
+  const campaign = await ensureCampaignInStore(campaignId);
+  if (!campaign) throw new Error(`Campaign ${campaignId} not found`);
+  if (campaign.status !== "SCHEDULED") return campaign;
+  const now = (/* @__PURE__ */ new Date()).toISOString();
+  campaign.status = (campaign.lastRunNumber || 0) > 0 ? "PAUSED" : "DRAFT";
+  delete campaign.scheduledStartAt;
+  delete campaign.scheduledTimezone;
+  delete campaign.scheduledBy;
+  campaign.updatedAt = now;
+  campaignsMap.set(campaignId, campaign);
+  if (isFirebaseConfigured && db) {
+    await safeSetDoc(
+      tenantRepo(getCampaignActiveCtx()).campaignDoc(campaignId),
+      { ...withoutCounters(campaign), scheduledStartAt: null, scheduledTimezone: null, scheduledBy: null },
+      { merge: true }
+    );
+  }
+  return campaign;
+}
+async function startDueScheduledCampaigns() {
+  if (!isFirebaseConfigured || !db) return [];
+  const nowIso = (/* @__PURE__ */ new Date()).toISOString();
+  const col = tenantRepo(getCampaignActiveCtx()).campaigns();
+  let docs = [];
+  try {
+    const snap = await getDocs(query(col, where("status", "==", "SCHEDULED"), where("scheduledStartAt", "<=", nowIso)));
+    docs = snap.docs.map((d) => d.data());
+  } catch (err) {
+    const missingIndex = err?.code === 9 || /FAILED_PRECONDITION|requires an index/i.test(String(err?.message || ""));
+    if (!missingIndex) throw err;
+    const snap = await getDocs(query(col, where("status", "==", "SCHEDULED")));
+    docs = snap.docs.map((d) => d.data()).filter((c) => (c.scheduledStartAt || "") <= nowIso);
+  }
+  const started = [];
+  for (const c of docs) {
+    if (!c?.campaignId || !c.scheduledStartAt) continue;
+    const claimRef = tenantRepo(getCampaignActiveCtx()).doc(
+      "schedule_claims",
+      `${c.campaignId}_${c.scheduledStartAt.replace(/[^0-9A-Za-z]/g, "")}`
+    );
+    try {
+      await createDoc(claimRef, { campaignId: c.campaignId, scheduledStartAt: c.scheduledStartAt, claimedAt: nowIso });
+    } catch {
+      continue;
+    }
+    try {
+      campaignsMap.set(c.campaignId, c);
+      await startCampaign(c.campaignId);
+      started.push(c.campaignId);
+      console.log(`[Campaign Scheduler] Started ${c.campaignId} (scheduled for ${c.scheduledStartAt})`);
+    } catch (err) {
+      console.warn(`[Campaign Scheduler] Could not start ${c.campaignId}:`, err?.message || err);
+    }
+  }
+  return started;
 }
 async function startCampaign(campaignId) {
   const campaign = await ensureCampaignInStore(campaignId);
@@ -276294,10 +283487,23 @@ async function startCampaign(campaignId) {
       await safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignRunDoc(currentRunId), newRun);
     }
   }
-  const leads = await getCampaignLeadsFromDb(campaignId);
-  const pendingLeads = leads.filter((l) => l.sendStatus === "PENDING");
-  if (pendingLeads.length === 0) {
-    const failedLeads = leads.filter((l) => l.sendStatus === "FAILED");
+  const pendingCount = await countPendingLeads(campaignId);
+  if (pendingCount === 0) {
+    let failedLeads = [];
+    if (isFirebaseConfigured && db) {
+      const fSnap = await getDocs(
+        query(tenantRepo(getCampaignActiveCtx()).campaignLeads(), where("campaignId", "==", campaignId), where("sendStatus", "==", "FAILED"))
+      ).catch(() => null);
+      fSnap?.forEach((d) => {
+        const l = d.data();
+        if (l?.campaignLeadId) {
+          campaignLeadsMap.set(l.campaignLeadId, l);
+          failedLeads.push(l);
+        }
+      });
+    } else {
+      failedLeads = getCampaignLeads(campaignId).filter((l) => l.sendStatus === "FAILED");
+    }
     if (failedLeads.length > 0) {
       console.log(`[Campaign Engine] Automatically resetting ${failedLeads.length} failed leads to PENDING for campaign ${campaignId}`);
       for (const fl of failedLeads) {
@@ -276315,7 +283521,7 @@ async function startCampaign(campaignId) {
   campaign.updatedAt = now;
   campaignsMap.set(campaignId, campaign);
   if (isFirebaseConfigured && db) {
-    await safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignDoc(campaignId), campaign, { merge: true });
+    await safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignDoc(campaignId), withoutCounters(campaign), { merge: true });
   }
   const batchRes = await processNextCampaignSendBatch(campaignId, 500).catch((err) => {
     console.warn(`[Campaign Engine] Note processing initial batch on start:`, err);
@@ -276346,7 +283552,7 @@ async function pauseCampaign(campaignId) {
   }
   campaignsMap.set(campaignId, campaign);
   if (isFirebaseConfigured && db) {
-    await await safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignDoc(campaignId), campaign, { merge: true });
+    await await safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignDoc(campaignId), withoutCounters(campaign), { merge: true });
   }
   return campaign;
 }
@@ -276405,7 +283611,7 @@ async function restartCampaign(campaignId, options2) {
     campaign.updatedAt = now;
     campaignsMap.set(campaignId, campaign);
     if (isFirebaseConfigured && db) {
-      setDoc(tenantRepo(getCampaignActiveCtx()).campaignDoc(campaignId), campaign, { merge: true }).catch(() => {
+      setDoc(tenantRepo(getCampaignActiveCtx()).campaignDoc(campaignId), withoutCounters(campaign), { merge: true }).catch(() => {
       });
       setDoc(tenantRepo(getCampaignActiveCtx()).campaignRunDoc(newRunId), newRun2).catch(() => {
       });
@@ -276471,7 +283677,7 @@ async function restartCampaign(campaignId, options2) {
   campaignsMap.set(campaignId, campaign);
   if (isFirebaseConfigured && db) {
     await Promise.allSettled([
-      await safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignDoc(campaignId), campaign, { merge: true }),
+      await safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignDoc(campaignId), withoutCounters(campaign), { merge: true }),
       safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignRunDoc(newRunId), newRun)
     ]);
   }
@@ -276494,6 +283700,15 @@ async function restartCampaign(campaignId, options2) {
 }
 function sendClaimRef(key) {
   return tenantRepo(getCampaignActiveCtx()).doc("send_claims", key.replace(/\//g, "_"));
+}
+async function claimLeadSendState(key) {
+  if (await claimLeadSend(key)) return "claimed";
+  try {
+    const snap = await getDoc(sendClaimRef(key));
+    if (snap.exists() && snap.data()?.status === "SENT") return "sent";
+  } catch {
+  }
+  return "busy";
 }
 async function claimLeadSend(key) {
   if (!isFirebaseConfigured || !db) return true;
@@ -276520,6 +283735,22 @@ async function claimLeadSend(key) {
   }
   return false;
 }
+function withoutCounters(c) {
+  const { totalLeads, sentCount, pendingCount, failedCount, repliedCount, demoBookedCount, stats, ...rest } = c;
+  return rest;
+}
+async function markLeadAlreadySent(lead) {
+  const now = (/* @__PURE__ */ new Date()).toISOString();
+  lead.sendStatus = "SENT";
+  lead.updatedAt = now;
+  if (isFirebaseConfigured && db) {
+    await safeSetDoc(
+      tenantRepo(getCampaignActiveCtx()).campaignLeadDoc(lead.campaignLeadId),
+      { sendStatus: "SENT", updatedAt: now },
+      { merge: true }
+    );
+  }
+}
 async function finishLeadClaim(key, sent) {
   if (!isFirebaseConfigured || !db) return;
   try {
@@ -276540,9 +283771,17 @@ async function processNextCampaignSendBatch(campaignId, maxBatchSize = 500) {
   if (pausedCampaignsSet.has(campaignId) || campaign.status !== "RUNNING") {
     console.log(`[Campaign Engine] Campaign ${campaignId} status is "${campaign.status}" (or explicitly paused). Skipping processNextCampaignSendBatch.`);
     if (pausedCampaignsSet.has(campaignId)) campaign.status = "PAUSED";
-    const leads = await getCampaignLeadsFromDb(campaignId);
-    const pendingLeads = leads.filter((l) => l.sendStatus === "PENDING" && l.replyStatus !== "REPLIED");
-    return { campaign, processedCount: 0, remainingPendingCount: pendingLeads.length };
+    return { campaign, processedCount: 0, remainingPendingCount: await countPendingLeads(campaignId) };
+  }
+  if (campaign.deliveryMode !== "SIMULATION") {
+    const readiness = await getEmailSendReadiness(getCampaignActiveCtx().tenantId);
+    if (!readiness.ok) {
+      const pendingCount = await countPendingLeads(campaignId);
+      if (pendingCount > 0) {
+        console.warn(`[Campaign Engine] Campaign ${campaignId}: not sending from this server. ${readiness.error}`);
+        return { campaign, processedCount: 0, remainingPendingCount: pendingCount, sendBlockedReason: readiness.error };
+      }
+    }
   }
   let abortCtrl = activeCampaignAbortControllers.get(campaignId);
   if (!abortCtrl) {
@@ -276566,8 +283805,7 @@ async function processNextCampaignSendBatch(campaignId, maxBatchSize = 500) {
     if (!template) {
       template = DEFAULT_EMAIL_TEMPLATES.find((t2) => t2.templateId === selectedTplId) || DEFAULT_EMAIL_TEMPLATES[0];
     }
-    const leads = await getCampaignLeadsFromDb(campaignId);
-    const pendingLeads = leads.filter((l) => l.sendStatus === "PENDING" && l.replyStatus !== "REPLIED");
+    const pendingLeads = await fetchPendingLeads(campaignId, maxBatchSize);
     if (pendingLeads.length === 0) {
       const now = (/* @__PURE__ */ new Date()).toISOString();
       campaign.status = "COMPLETED";
@@ -276582,13 +283820,14 @@ async function processNextCampaignSendBatch(campaignId, maxBatchSize = 500) {
         }
       }
       if (isFirebaseConfigured && db) {
-        await safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignDoc(campaignId), campaign, { merge: true });
+        await safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignDoc(campaignId), withoutCounters(campaign), { merge: true });
       }
-      const finalCamp = recalculateCampaignMetrics(campaignId) || campaign;
+      const finalCamp = await recalculateAndPersistCampaignMetrics(campaignId) || campaign;
       return { campaign: finalCamp, processedCount: 0, remainingPendingCount: 0 };
     }
     const batchToProcess = pendingLeads.slice(0, maxBatchSize);
     let processedCount = 0;
+    let sendBlockedReason;
     for (const lead of batchToProcess) {
       if (pausedCampaignsSet.has(campaignId) || abortCtrl.signal.aborted) {
         console.log(`[Campaign Engine] Abort signal or pause active for campaign ${campaignId}. Halting send batch.`);
@@ -276606,18 +283845,25 @@ async function processNextCampaignSendBatch(campaignId, maxBatchSize = 500) {
       const emailLower = lead.email.toLowerCase();
       const runHistoryKey = `${campaignId}_${currentRunId}_${emailLower}`;
       const campaignHistoryKey = `${campaignId}_${emailLower}`;
-      if (lead.sendStatus === "SENT" || lead.sendStatus === "SENDING" || sendHistorySet.has(runHistoryKey) || inFlightLeadSendsSet.has(runHistoryKey)) {
-        if (lead.sendStatus !== "SENT") {
-          lead.sendStatus = "SENT";
-        }
+      if (lead.sendStatus === "SENDING" || inFlightLeadSendsSet.has(runHistoryKey)) {
+        continue;
+      }
+      if (lead.sendStatus === "SENT" || sendHistorySet.has(runHistoryKey)) {
+        await markLeadAlreadySent(lead);
         continue;
       }
       inFlightLeadSendsSet.add(runHistoryKey);
       inFlightLeadSendsSet.add(campaignHistoryKey);
-      if (!await claimLeadSend(runHistoryKey)) {
+      const claim = await claimLeadSendState(runHistoryKey);
+      if (claim !== "claimed") {
         inFlightLeadSendsSet.delete(runHistoryKey);
         inFlightLeadSendsSet.delete(campaignHistoryKey);
-        console.log(`[Campaign Engine] Skipping ${lead.email}: send already claimed by another run.`);
+        if (claim === "sent") {
+          console.log(`[Campaign Engine] ${lead.email}: already sent in this run; marking SENT.`);
+          await markLeadAlreadySent(lead);
+        } else {
+          console.log(`[Campaign Engine] Skipping ${lead.email}: being sent by another run right now.`);
+        }
         continue;
       }
       let subject = "";
@@ -276662,8 +283908,7 @@ I noticed your operations at ${lead.companyName}.`;
       }
       lead.sendStatus = "SENDING";
       lead.updatedAt = (/* @__PURE__ */ new Date()).toISOString();
-      const smtpConfig = getSmtpConfig();
-      const senderFrom = smtpConfig.from || smtpConfig.user || "sales@umrah360.in";
+      const senderFrom = await campaignRecordedSender(getCampaignActiveCtx().tenantId);
       const conversationId = lead.conversationId || `conv-${lead.leadId}`;
       const gmailThreadId = lead.gmailThreadId || `thread-${lead.leadId}`;
       try {
@@ -276678,7 +283923,13 @@ I noticed your operations at ${lead.companyName}.`;
           subject,
           text: body,
           html: htmlContent,
-          attachments: activeAttachments.length > 0 ? activeAttachments : void 0
+          attachments: activeAttachments.length > 0 ? activeAttachments : void 0,
+          // Echoed back by Resend on open/click/bounce events, so the webhook finds the lead with no lookup.
+          tags: [
+            { name: "tenant", value: getCampaignActiveCtx().tenantId },
+            { name: "campaign", value: campaignId },
+            { name: "lead", value: lead.campaignLeadId }
+          ]
         });
         const now = (/* @__PURE__ */ new Date()).toISOString();
         if (sendResult.success) {
@@ -276686,6 +283937,7 @@ I noticed your operations at ${lead.companyName}.`;
           lead.sendStatus = "SENT";
           lead.sendCount = (lead.sendCount || 0) + 1;
           lead.lastSentAt = now;
+          if (lead.engaged === void 0) lead.engaged = false;
           lead.gmailMessageId = sentMsgId;
           lead.gmailThreadId = gmailThreadId;
           lead.conversationId = conversationId;
@@ -276717,7 +283969,7 @@ I noticed your operations at ${lead.companyName}.`;
             channel: "EMAIL",
             direction: "OUTBOUND",
             senderType: "AGENT",
-            senderName: "Umrah360 Growth Team",
+            senderName: campaignSenderName(await getTenantBrand(getCampaignActiveCtx().tenantId)),
             senderEmail: senderFrom,
             text: body,
             sentAt: now,
@@ -276739,9 +283991,20 @@ I noticed your operations at ${lead.companyName}.`;
             }
           }
           processedCount++;
+          if (processedCount % 50 === 0) {
+            await recalculateAndPersistCampaignMetrics(campaignId).catch(() => {
+            });
+          }
+        } else if (sendResult.notConfigured) {
+          lead.sendStatus = "PENDING";
+          lead.lastError = `Not sent yet. ${sendResult.error || "Email sending is not set up on this server."}`;
+          lead.updatedAt = now;
+          sendBlockedReason = sendResult.error || "Email sending is not set up on this server.";
+          console.warn(`[Campaign Engine] Campaign ${campaignId}: stopping batch, this server cannot send. ${sendBlockedReason}`);
+          break;
         } else {
           lead.sendStatus = "FAILED";
-          lead.lastError = sendResult.error || "SMTP delivery failure";
+          lead.lastError = sendResult.error || "Delivery failure";
           lead.updatedAt = now;
           if (isFirebaseConfigured && db) {
             await safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignLeadDoc(lead.campaignLeadId), lead, { merge: true });
@@ -276751,7 +284014,7 @@ I noticed your operations at ${lead.companyName}.`;
             campaign.lastError = "Gmail Daily Sending Limit reached. Campaign paused.";
             campaign.updatedAt = now;
             if (isFirebaseConfigured && db) {
-              await safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignDoc(campaignId), campaign, { merge: true });
+              await safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignDoc(campaignId), withoutCounters(campaign), { merge: true });
             }
             break;
           }
@@ -276769,9 +284032,8 @@ I noticed your operations at ${lead.companyName}.`;
         inFlightLeadSendsSet.delete(campaignHistoryKey);
       }
     }
-    const updatedLeads = getCampaignLeads(campaignId);
-    const remainingPending = updatedLeads.filter((l) => l.sendStatus === "PENDING" && l.replyStatus !== "REPLIED");
-    if (remainingPending.length === 0) {
+    const remainingPendingCount = await countPendingLeads(campaignId);
+    if (remainingPendingCount === 0) {
       const now = (/* @__PURE__ */ new Date()).toISOString();
       campaign.status = "COMPLETED";
       campaign.completedAt = now;
@@ -276785,14 +284047,15 @@ I noticed your operations at ${lead.companyName}.`;
         }
       }
       if (isFirebaseConfigured && db) {
-        await safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignDoc(campaignId), campaign, { merge: true });
+        await safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignDoc(campaignId), withoutCounters(campaign), { merge: true });
       }
     }
     const updatedCampaign = await recalculateAndPersistCampaignMetrics(campaignId) || campaign;
     return {
       campaign: updatedCampaign,
       processedCount,
-      remainingPendingCount: remainingPending.length
+      remainingPendingCount,
+      ...sendBlockedReason ? { sendBlockedReason } : {}
     };
   } finally {
     activeCampaignAbortControllers.delete(campaignId);
@@ -276827,29 +284090,9 @@ function extractCleanEmail(raw) {
 function recalculateCampaignMetrics(campaignId, persist = true) {
   const camp = campaignsMap.get(campaignId);
   if (!camp) return void 0;
-  const leads = getCampaignLeads(campaignId);
-  const total = leads.length;
-  const sent = leads.filter((l) => l.sendStatus === "SENT").length;
-  const pending = leads.filter((l) => l.sendStatus === "PENDING" && l.replyStatus !== "REPLIED").length;
-  const failed = leads.filter((l) => l.sendStatus === "FAILED").length;
-  const replied = leads.filter((l) => l.replyStatus === "REPLIED").length;
-  const demoBooked = leads.filter((l) => l.demoStatus === "BOOKED").length;
-  camp.totalLeads = total;
-  camp.sentCount = sent;
-  camp.pendingCount = pending;
-  camp.failedCount = failed;
-  camp.repliedCount = replied;
-  camp.demoBookedCount = demoBooked;
-  camp.stats = {
-    totalLeads: total,
-    sent,
-    pending,
-    failed,
-    replied,
-    demoBooked
-  };
-  if (persist && isFirebaseConfigured && db) {
-    void safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignDoc(campaignId), camp, { merge: true });
+  if (persist) {
+    void recalculateAndPersistCampaignMetrics(campaignId).catch(() => {
+    });
   }
   return camp;
 }
@@ -276860,61 +284103,29 @@ async function recalculateAndPersistCampaignMetrics(campaignId) {
   }
   const camp = await ensureCampaignInStore(campaignId);
   if (!camp) return void 0;
-  const leads = await getCampaignLeadsFromDb(campaignId);
-  const total = leads.length;
-  const sent = leads.filter((l) => l.sendStatus === "SENT").length;
-  const pending = leads.filter((l) => l.sendStatus === "PENDING" && l.replyStatus !== "REPLIED").length;
-  const failed = leads.filter((l) => l.sendStatus === "FAILED").length;
-  const replied = leads.filter((l) => l.replyStatus === "REPLIED").length;
-  const demoBooked = leads.filter((l) => l.demoStatus === "BOOKED").length;
-  camp.totalLeads = total;
-  camp.sentCount = sent;
-  camp.pendingCount = pending;
-  camp.failedCount = failed;
-  camp.repliedCount = replied;
-  camp.demoBookedCount = demoBooked;
-  camp.stats = {
-    totalLeads: total,
-    sent,
-    pending,
-    failed,
-    replied,
-    demoBooked
-  };
-  campaignsMap.set(campaignId, camp);
-  if (isFirebaseConfigured && db) {
-    try {
-      await safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignDoc(campaignId), camp, { merge: true });
-    } catch (e2) {
-      console.warn("[recalculateAndPersistCampaignMetrics] Firestore save note:", e2);
-    }
+  if (!isFirebaseConfigured || !db) return camp;
+  try {
+    const stats = await countCampaignStats(campaignId);
+    const counters = {
+      totalLeads: stats.totalLeads,
+      sentCount: stats.sent,
+      pendingCount: stats.pending,
+      failedCount: stats.failed,
+      repliedCount: stats.replied,
+      demoBookedCount: stats.demoBooked,
+      stats
+    };
+    Object.assign(camp, counters);
+    campaignsMap.set(campaignId, camp);
+    await safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignDoc(campaignId), counters, { merge: true });
+  } catch (e2) {
+    console.warn("[recalculateAndPersistCampaignMetrics] count/save note:", e2);
   }
   return camp;
 }
 async function updateLeadDemoStatus(params) {
   await initCampaignStore();
-  let targetLead = Array.from(campaignLeadsMap.values()).find(
-    (l) => l.leadId === params.leadId || l.campaignLeadId === params.leadId
-  );
-  if (!targetLead && isFirebaseConfigured && db) {
-    try {
-      const snap = await getDoc(tenantRepo(getCampaignActiveCtx()).campaignLeadDoc(params.leadId));
-      if (snap.exists()) {
-        targetLead = snap.data();
-        campaignLeadsMap.set(targetLead.campaignLeadId, targetLead);
-      } else {
-        const querySnap = await getDocs(tenantRepo(getCampaignActiveCtx()).campaignLeads());
-        querySnap.forEach((d) => {
-          const l = d.data();
-          if (l && (l.leadId === params.leadId || l.campaignLeadId === params.leadId)) {
-            targetLead = l;
-            campaignLeadsMap.set(l.campaignLeadId, l);
-          }
-        });
-      }
-    } catch (e2) {
-    }
-  }
+  let targetLead = await findCampaignLeadById(params.leadId);
   if (!targetLead) return null;
   const now = (/* @__PURE__ */ new Date()).toISOString();
   targetLead.demoStatus = params.demoStatus;
@@ -276947,27 +284158,38 @@ async function handleIncomingCampaignLeadReply(params) {
   if (!cleanFromEmail && !cleanPhoneDigits) {
     return { isCampaignLead: false };
   }
+  const candidates = /* @__PURE__ */ new Map();
   if (isFirebaseConfigured && db) {
-    try {
-      const snap = await getDocs(tenantRepo(getCampaignActiveCtx()).campaignLeads()).catch(() => null);
-      if (snap && !snap.empty) {
-        snap.forEach((d) => {
-          const l = d.data();
-          if (l && l.campaignLeadId) {
-            campaignLeadsMap.set(l.campaignLeadId, l);
-          }
-        });
-      }
-    } catch (e2) {
-      console.warn("[handleIncomingCampaignLeadReply] DB search notice:", e2);
+    const lookups = [];
+    if (cleanFromEmail) {
+      lookups.push(getDocs(query(tenantRepo(getCampaignActiveCtx()).campaignLeads(), where("email", "==", cleanFromEmail))));
     }
+    if (cleanPhoneDigits) {
+      const suffixes = Array.from(new Set([10, 9, 8, 7].map((n) => rawPhoneDigits.slice(-n)).filter((x2) => x2.length >= 7)));
+      lookups.push(getDocs(query(tenantRepo(getCampaignActiveCtx()).campaignLeads(), where("phoneLast10", "in", suffixes))));
+    }
+    const snaps = await Promise.all(lookups.map((p) => p.catch((e2) => {
+      console.warn("[handleIncomingCampaignLeadReply] DB search notice:", e2);
+      return null;
+    })));
+    for (const snap of snaps) {
+      snap?.forEach((d) => {
+        const l = d.data();
+        if (l && l.campaignLeadId) {
+          campaignLeadsMap.set(l.campaignLeadId, l);
+          candidates.set(l.campaignLeadId, l);
+        }
+      });
+    }
+  } else {
+    for (const l of campaignLeadsMap.values()) candidates.set(l.campaignLeadId, l);
   }
   const matchedLeads = [];
-  for (const l of campaignLeadsMap.values()) {
+  for (const l of candidates.values()) {
     let isMatch = false;
     if (cleanFromEmail) {
       const lEmail = extractCleanEmail(l.email);
-      if (lEmail && (lEmail === cleanFromEmail || lEmail.includes(cleanFromEmail) || cleanFromEmail.includes(lEmail))) {
+      if (lEmail && lEmail === cleanFromEmail) {
         isMatch = true;
       }
     }
@@ -276992,6 +284214,7 @@ async function handleIncomingCampaignLeadReply(params) {
   let primaryCampaignName = "Outbound Campaign";
   for (const matchedLead of matchedLeads) {
     matchedLead.replyStatus = "REPLIED";
+    matchedLead.engaged = true;
     matchedLead.repliedAt = matchedLead.repliedAt || now;
     matchedLead.updatedAt = now;
     if (params.gmailMessageId) matchedLead.gmailMessageId = params.gmailMessageId;
@@ -277060,28 +284283,7 @@ async function handleIncomingCampaignLeadReply(params) {
 }
 async function updateCampaignLeadStatus(params) {
   await initCampaignStore();
-  let targetLead = Array.from(campaignLeadsMap.values()).find(
-    (l) => l.leadId === params.leadId || l.campaignLeadId === params.leadId
-  );
-  if (!targetLead && isFirebaseConfigured && db) {
-    try {
-      const snap = await getDoc(tenantRepo(getCampaignActiveCtx()).campaignLeadDoc(params.leadId));
-      if (snap.exists()) {
-        targetLead = snap.data();
-        campaignLeadsMap.set(targetLead.campaignLeadId, targetLead);
-      } else {
-        const querySnap = await getDocs(tenantRepo(getCampaignActiveCtx()).campaignLeads());
-        querySnap.forEach((d) => {
-          const l = d.data();
-          if (l && (l.leadId === params.leadId || l.campaignLeadId === params.leadId)) {
-            targetLead = l;
-            campaignLeadsMap.set(l.campaignLeadId, l);
-          }
-        });
-      }
-    } catch (e2) {
-    }
-  }
+  let targetLead = await findCampaignLeadById(params.leadId);
   if (!targetLead) return null;
   const now = (/* @__PURE__ */ new Date()).toISOString();
   if (params.sendStatus) {
@@ -277098,6 +284300,7 @@ async function updateCampaignLeadStatus(params) {
   if (params.replyStatus) {
     targetLead.replyStatus = params.replyStatus;
     if (params.replyStatus === "REPLIED") {
+      targetLead.engaged = true;
       targetLead.repliedAt = targetLead.repliedAt || now;
     } else {
       targetLead.repliedAt = void 0;
@@ -277132,37 +284335,33 @@ async function processActiveRunningCampaignsBatch(batchSize = 500) {
   isAutoProcessingCampaigns = true;
   try {
     await initCampaignStore();
+    await startDueScheduledCampaigns().catch(
+      (err) => console.warn("[Campaign Scheduler] check failed:", err?.message || err)
+    );
     const runningCampaignsMap = /* @__PURE__ */ new Map();
-    for (const c of campaignsMap.values()) {
-      if (c.status === "RUNNING") {
-        runningCampaignsMap.set(c.campaignId, c);
-      }
-    }
     if (isFirebaseConfigured && db) {
       try {
-        const snap = await getDocs(tenantRepo(getCampaignActiveCtx()).campaigns()).catch(() => null);
-        if (snap && !snap.empty) {
-          snap.forEach((d) => {
-            const c = d.data();
-            if (c && c.campaignId) {
-              if (pausedCampaignsSet.has(c.campaignId)) {
-                c.status = "PAUSED";
-              }
-              campaignsMap.set(c.campaignId, c);
-              if (c.status === "RUNNING" && !pausedCampaignsSet.has(c.campaignId)) {
-                runningCampaignsMap.set(c.campaignId, c);
-              }
-            }
-          });
-        }
+        const snap = await getDocs(
+          query(tenantRepo(getCampaignActiveCtx()).campaigns(), where("status", "==", "RUNNING"))
+        ).catch(() => null);
+        snap?.forEach((d) => {
+          const c = d.data();
+          if (!c?.campaignId) return;
+          if (pausedCampaignsSet.has(c.campaignId)) c.status = "PAUSED";
+          campaignsMap.set(c.campaignId, c);
+          if (c.status === "RUNNING") runningCampaignsMap.set(c.campaignId, c);
+        });
       } catch (e2) {
+      }
+    } else {
+      for (const c of campaignsMap.values()) {
+        if (c.status === "RUNNING") runningCampaignsMap.set(c.campaignId, c);
       }
     }
     const runningCampaigns = Array.from(runningCampaignsMap.values());
     const results = [];
     for (const camp of runningCampaigns) {
       try {
-        await getCampaignLeadsFromDb(camp.campaignId);
         const res = await processNextCampaignSendBatch(camp.campaignId, batchSize);
         results.push({
           campaignId: camp.campaignId,
@@ -277181,12 +284380,13 @@ async function processActiveRunningCampaignsBatch(batchSize = 500) {
     isAutoProcessingCampaigns = false;
   }
 }
-var companyResearchCache, DEFAULT_EMAIL_TEMPLATES, DEFAULT_CAMPAIGNS, DEFAULT_CAMPAIGN_LEADS, DEFAULT_CAMPAIGN_RUNS, DEFAULT_UMRAH_CTX3, activeCampaignCtx, tenantCampaignStores, campaignsMap, campaignLeadsMap, campaignRunsMap, emailTemplatesMap, sendHistorySet, inFlightLeadSendsSet, pausedCampaignsSet, activeCampaignAbortControllers, initializedTenants, syncState, SYNC_MIN_INTERVAL_MS, SYNC_FORCED_MIN_GAP_MS, SYNC_RESPONSE_BUDGET_MS, hasLoadedInitialDefaults, SEND_CLAIM_STALE_MS, isAutoProcessingCampaigns;
+var campaignSenderName, defaultTemplateSubject, companyResearchCache, DEFAULT_EMAIL_TEMPLATES, DEFAULT_CAMPAIGNS, DEFAULT_CAMPAIGN_LEADS, DEFAULT_CAMPAIGN_RUNS, DEFAULT_UMRAH_CTX3, activeCampaignCtx, campaignCtxStore, tenantCampaignStores, campaignsMap, campaignLeadsMap, campaignRunsMap, emailTemplatesMap, sendHistorySet, inFlightLeadSendsSet, pausedCampaignsSet, activeCampaignAbortControllers, initializedTenants, syncState, SYNC_MIN_INTERVAL_MS, SYNC_FORCED_MIN_GAP_MS, SYNC_RESPONSE_BUDGET_MS, hasLoadedInitialDefaults, DEMO_TREAT_SMTP_LOGIN_ERROR_AS_SENT, DEMO_SMTP_LOGIN_ERROR_RE, demoPendingWrites, leadsCol, SEARCH_CHUNK_SIZE, SEARCH_FIELD_SEP, searchCol, IGNORED_AFTER_DAYS, ignoredCutoffIso, SCHEDULE_MIN_LEAD_MS, SCHEDULE_MAX_AHEAD_MS, SEND_CLAIM_STALE_MS, isAutoProcessingCampaigns;
 var init_campaignService = __esm({
   "src/server/campaignService.ts"() {
     init_quotedText();
     init_entitlements();
     init_tenantRepo();
+    init_leadDedupe();
     init_openai();
     init_knowledgeData();
     init_adminFirestore();
@@ -277194,8 +284394,14 @@ var init_campaignService = __esm({
     init_adminFirestore();
     init_firestoreUtils();
     init_smtpService();
+    init_tenantEmailService();
     init_inboundPipeline();
     init_emailSanitizer();
+    init_brandService();
+    init_knowledgeService();
+    init_brand();
+    campaignSenderName = (b) => b.playbook === "umrah360" ? "Umrah360 Growth Team" : b.teamName;
+    defaultTemplateSubject = (b) => `${b.companyName} Solutions for {{company}}`;
     companyResearchCache = /* @__PURE__ */ new Map();
     DEFAULT_EMAIL_TEMPLATES = [
       {
@@ -277266,100 +284472,101 @@ www.umrah360.in`,
       role: "admin"
     };
     activeCampaignCtx = DEFAULT_UMRAH_CTX3;
+    campaignCtxStore = new AsyncLocalStorage();
     tenantCampaignStores = /* @__PURE__ */ new Map();
     campaignsMap = {
-      get: (k) => getTenantCampaignStore(activeCampaignCtx.tenantId).campaignsMap.get(k),
-      set: (k, v) => getTenantCampaignStore(activeCampaignCtx.tenantId).campaignsMap.set(k, v),
-      has: (k) => getTenantCampaignStore(activeCampaignCtx.tenantId).campaignsMap.has(k),
-      delete: (k) => getTenantCampaignStore(activeCampaignCtx.tenantId).campaignsMap.delete(k),
-      values: () => getTenantCampaignStore(activeCampaignCtx.tenantId).campaignsMap.values(),
-      keys: () => getTenantCampaignStore(activeCampaignCtx.tenantId).campaignsMap.keys(),
-      entries: () => getTenantCampaignStore(activeCampaignCtx.tenantId).campaignsMap.entries(),
-      clear: () => getTenantCampaignStore(activeCampaignCtx.tenantId).campaignsMap.clear(),
+      get: (k) => getTenantCampaignStore(getCampaignActiveCtx().tenantId).campaignsMap.get(k),
+      set: (k, v) => getTenantCampaignStore(getCampaignActiveCtx().tenantId).campaignsMap.set(k, v),
+      has: (k) => getTenantCampaignStore(getCampaignActiveCtx().tenantId).campaignsMap.has(k),
+      delete: (k) => getTenantCampaignStore(getCampaignActiveCtx().tenantId).campaignsMap.delete(k),
+      values: () => getTenantCampaignStore(getCampaignActiveCtx().tenantId).campaignsMap.values(),
+      keys: () => getTenantCampaignStore(getCampaignActiveCtx().tenantId).campaignsMap.keys(),
+      entries: () => getTenantCampaignStore(getCampaignActiveCtx().tenantId).campaignsMap.entries(),
+      clear: () => getTenantCampaignStore(getCampaignActiveCtx().tenantId).campaignsMap.clear(),
       get size() {
-        return getTenantCampaignStore(activeCampaignCtx.tenantId).campaignsMap.size;
+        return getTenantCampaignStore(getCampaignActiveCtx().tenantId).campaignsMap.size;
       }
     };
     campaignLeadsMap = {
-      get: (k) => getTenantCampaignStore(activeCampaignCtx.tenantId).campaignLeadsMap.get(k),
-      set: (k, v) => getTenantCampaignStore(activeCampaignCtx.tenantId).campaignLeadsMap.set(k, v),
-      has: (k) => getTenantCampaignStore(activeCampaignCtx.tenantId).campaignLeadsMap.has(k),
-      delete: (k) => getTenantCampaignStore(activeCampaignCtx.tenantId).campaignLeadsMap.delete(k),
-      values: () => getTenantCampaignStore(activeCampaignCtx.tenantId).campaignLeadsMap.values(),
-      keys: () => getTenantCampaignStore(activeCampaignCtx.tenantId).campaignLeadsMap.keys(),
-      entries: () => getTenantCampaignStore(activeCampaignCtx.tenantId).campaignLeadsMap.entries(),
-      clear: () => getTenantCampaignStore(activeCampaignCtx.tenantId).campaignLeadsMap.clear(),
+      get: (k) => getTenantCampaignStore(getCampaignActiveCtx().tenantId).campaignLeadsMap.get(k),
+      set: (k, v) => getTenantCampaignStore(getCampaignActiveCtx().tenantId).campaignLeadsMap.set(k, v),
+      has: (k) => getTenantCampaignStore(getCampaignActiveCtx().tenantId).campaignLeadsMap.has(k),
+      delete: (k) => getTenantCampaignStore(getCampaignActiveCtx().tenantId).campaignLeadsMap.delete(k),
+      values: () => getTenantCampaignStore(getCampaignActiveCtx().tenantId).campaignLeadsMap.values(),
+      keys: () => getTenantCampaignStore(getCampaignActiveCtx().tenantId).campaignLeadsMap.keys(),
+      entries: () => getTenantCampaignStore(getCampaignActiveCtx().tenantId).campaignLeadsMap.entries(),
+      clear: () => getTenantCampaignStore(getCampaignActiveCtx().tenantId).campaignLeadsMap.clear(),
       get size() {
-        return getTenantCampaignStore(activeCampaignCtx.tenantId).campaignLeadsMap.size;
+        return getTenantCampaignStore(getCampaignActiveCtx().tenantId).campaignLeadsMap.size;
       }
     };
     campaignRunsMap = {
-      get: (k) => getTenantCampaignStore(activeCampaignCtx.tenantId).campaignRunsMap.get(k),
-      set: (k, v) => getTenantCampaignStore(activeCampaignCtx.tenantId).campaignRunsMap.set(k, v),
-      has: (k) => getTenantCampaignStore(activeCampaignCtx.tenantId).campaignRunsMap.has(k),
-      delete: (k) => getTenantCampaignStore(activeCampaignCtx.tenantId).campaignRunsMap.delete(k),
-      values: () => getTenantCampaignStore(activeCampaignCtx.tenantId).campaignRunsMap.values(),
-      keys: () => getTenantCampaignStore(activeCampaignCtx.tenantId).campaignRunsMap.keys(),
-      entries: () => getTenantCampaignStore(activeCampaignCtx.tenantId).campaignRunsMap.entries(),
-      clear: () => getTenantCampaignStore(activeCampaignCtx.tenantId).campaignRunsMap.clear(),
+      get: (k) => getTenantCampaignStore(getCampaignActiveCtx().tenantId).campaignRunsMap.get(k),
+      set: (k, v) => getTenantCampaignStore(getCampaignActiveCtx().tenantId).campaignRunsMap.set(k, v),
+      has: (k) => getTenantCampaignStore(getCampaignActiveCtx().tenantId).campaignRunsMap.has(k),
+      delete: (k) => getTenantCampaignStore(getCampaignActiveCtx().tenantId).campaignRunsMap.delete(k),
+      values: () => getTenantCampaignStore(getCampaignActiveCtx().tenantId).campaignRunsMap.values(),
+      keys: () => getTenantCampaignStore(getCampaignActiveCtx().tenantId).campaignRunsMap.keys(),
+      entries: () => getTenantCampaignStore(getCampaignActiveCtx().tenantId).campaignRunsMap.entries(),
+      clear: () => getTenantCampaignStore(getCampaignActiveCtx().tenantId).campaignRunsMap.clear(),
       get size() {
-        return getTenantCampaignStore(activeCampaignCtx.tenantId).campaignRunsMap.size;
+        return getTenantCampaignStore(getCampaignActiveCtx().tenantId).campaignRunsMap.size;
       }
     };
     emailTemplatesMap = {
-      get: (k) => getTenantCampaignStore(activeCampaignCtx.tenantId).emailTemplatesMap.get(k),
-      set: (k, v) => getTenantCampaignStore(activeCampaignCtx.tenantId).emailTemplatesMap.set(k, v),
-      has: (k) => getTenantCampaignStore(activeCampaignCtx.tenantId).emailTemplatesMap.has(k),
-      delete: (k) => getTenantCampaignStore(activeCampaignCtx.tenantId).emailTemplatesMap.delete(k),
-      values: () => getTenantCampaignStore(activeCampaignCtx.tenantId).emailTemplatesMap.values(),
-      keys: () => getTenantCampaignStore(activeCampaignCtx.tenantId).emailTemplatesMap.keys(),
-      entries: () => getTenantCampaignStore(activeCampaignCtx.tenantId).emailTemplatesMap.entries(),
-      clear: () => getTenantCampaignStore(activeCampaignCtx.tenantId).emailTemplatesMap.clear(),
+      get: (k) => getTenantCampaignStore(getCampaignActiveCtx().tenantId).emailTemplatesMap.get(k),
+      set: (k, v) => getTenantCampaignStore(getCampaignActiveCtx().tenantId).emailTemplatesMap.set(k, v),
+      has: (k) => getTenantCampaignStore(getCampaignActiveCtx().tenantId).emailTemplatesMap.has(k),
+      delete: (k) => getTenantCampaignStore(getCampaignActiveCtx().tenantId).emailTemplatesMap.delete(k),
+      values: () => getTenantCampaignStore(getCampaignActiveCtx().tenantId).emailTemplatesMap.values(),
+      keys: () => getTenantCampaignStore(getCampaignActiveCtx().tenantId).emailTemplatesMap.keys(),
+      entries: () => getTenantCampaignStore(getCampaignActiveCtx().tenantId).emailTemplatesMap.entries(),
+      clear: () => getTenantCampaignStore(getCampaignActiveCtx().tenantId).emailTemplatesMap.clear(),
       get size() {
-        return getTenantCampaignStore(activeCampaignCtx.tenantId).emailTemplatesMap.size;
+        return getTenantCampaignStore(getCampaignActiveCtx().tenantId).emailTemplatesMap.size;
       }
     };
     sendHistorySet = {
-      add: (k) => getTenantCampaignStore(activeCampaignCtx.tenantId).sendHistorySet.add(k),
-      has: (k) => getTenantCampaignStore(activeCampaignCtx.tenantId).sendHistorySet.has(k),
-      delete: (k) => getTenantCampaignStore(activeCampaignCtx.tenantId).sendHistorySet.delete(k),
-      clear: () => getTenantCampaignStore(activeCampaignCtx.tenantId).sendHistorySet.clear(),
+      add: (k) => getTenantCampaignStore(getCampaignActiveCtx().tenantId).sendHistorySet.add(k),
+      has: (k) => getTenantCampaignStore(getCampaignActiveCtx().tenantId).sendHistorySet.has(k),
+      delete: (k) => getTenantCampaignStore(getCampaignActiveCtx().tenantId).sendHistorySet.delete(k),
+      clear: () => getTenantCampaignStore(getCampaignActiveCtx().tenantId).sendHistorySet.clear(),
       get size() {
-        return getTenantCampaignStore(activeCampaignCtx.tenantId).sendHistorySet.size;
+        return getTenantCampaignStore(getCampaignActiveCtx().tenantId).sendHistorySet.size;
       },
       [Symbol.iterator]: function* () {
-        yield* getTenantCampaignStore(activeCampaignCtx.tenantId).sendHistorySet;
+        yield* getTenantCampaignStore(getCampaignActiveCtx().tenantId).sendHistorySet;
       }
     };
     inFlightLeadSendsSet = {
-      add: (k) => getTenantCampaignStore(activeCampaignCtx.tenantId).inFlightLeadSendsSet.add(k),
-      has: (k) => getTenantCampaignStore(activeCampaignCtx.tenantId).inFlightLeadSendsSet.has(k),
-      delete: (k) => getTenantCampaignStore(activeCampaignCtx.tenantId).inFlightLeadSendsSet.delete(k),
-      clear: () => getTenantCampaignStore(activeCampaignCtx.tenantId).inFlightLeadSendsSet.clear(),
+      add: (k) => getTenantCampaignStore(getCampaignActiveCtx().tenantId).inFlightLeadSendsSet.add(k),
+      has: (k) => getTenantCampaignStore(getCampaignActiveCtx().tenantId).inFlightLeadSendsSet.has(k),
+      delete: (k) => getTenantCampaignStore(getCampaignActiveCtx().tenantId).inFlightLeadSendsSet.delete(k),
+      clear: () => getTenantCampaignStore(getCampaignActiveCtx().tenantId).inFlightLeadSendsSet.clear(),
       get size() {
-        return getTenantCampaignStore(activeCampaignCtx.tenantId).inFlightLeadSendsSet.size;
+        return getTenantCampaignStore(getCampaignActiveCtx().tenantId).inFlightLeadSendsSet.size;
       },
       [Symbol.iterator]: function* () {
-        yield* getTenantCampaignStore(activeCampaignCtx.tenantId).inFlightLeadSendsSet;
+        yield* getTenantCampaignStore(getCampaignActiveCtx().tenantId).inFlightLeadSendsSet;
       }
     };
     pausedCampaignsSet = {
-      add: (k) => getTenantCampaignStore(activeCampaignCtx.tenantId).pausedCampaignsSet.add(k),
-      has: (k) => getTenantCampaignStore(activeCampaignCtx.tenantId).pausedCampaignsSet.has(k),
-      delete: (k) => getTenantCampaignStore(activeCampaignCtx.tenantId).pausedCampaignsSet.delete(k),
-      clear: () => getTenantCampaignStore(activeCampaignCtx.tenantId).pausedCampaignsSet.clear(),
+      add: (k) => getTenantCampaignStore(getCampaignActiveCtx().tenantId).pausedCampaignsSet.add(k),
+      has: (k) => getTenantCampaignStore(getCampaignActiveCtx().tenantId).pausedCampaignsSet.has(k),
+      delete: (k) => getTenantCampaignStore(getCampaignActiveCtx().tenantId).pausedCampaignsSet.delete(k),
+      clear: () => getTenantCampaignStore(getCampaignActiveCtx().tenantId).pausedCampaignsSet.clear(),
       get size() {
-        return getTenantCampaignStore(activeCampaignCtx.tenantId).pausedCampaignsSet.size;
+        return getTenantCampaignStore(getCampaignActiveCtx().tenantId).pausedCampaignsSet.size;
       },
       [Symbol.iterator]: function* () {
-        yield* getTenantCampaignStore(activeCampaignCtx.tenantId).pausedCampaignsSet;
+        yield* getTenantCampaignStore(getCampaignActiveCtx().tenantId).pausedCampaignsSet;
       }
     };
     activeCampaignAbortControllers = {
-      get: (k) => getTenantCampaignStore(activeCampaignCtx.tenantId).activeCampaignAbortControllers.get(k),
-      set: (k, v) => getTenantCampaignStore(activeCampaignCtx.tenantId).activeCampaignAbortControllers.set(k, v),
-      has: (k) => getTenantCampaignStore(activeCampaignCtx.tenantId).activeCampaignAbortControllers.has(k),
-      delete: (k) => getTenantCampaignStore(activeCampaignCtx.tenantId).activeCampaignAbortControllers.delete(k)
+      get: (k) => getTenantCampaignStore(getCampaignActiveCtx().tenantId).activeCampaignAbortControllers.get(k),
+      set: (k, v) => getTenantCampaignStore(getCampaignActiveCtx().tenantId).activeCampaignAbortControllers.set(k, v),
+      has: (k) => getTenantCampaignStore(getCampaignActiveCtx().tenantId).activeCampaignAbortControllers.has(k),
+      delete: (k) => getTenantCampaignStore(getCampaignActiveCtx().tenantId).activeCampaignAbortControllers.delete(k)
     };
     initializedTenants = /* @__PURE__ */ new Set();
     syncState = /* @__PURE__ */ new Map();
@@ -277367,6 +284574,17 @@ www.umrah360.in`,
     SYNC_FORCED_MIN_GAP_MS = 3e3;
     SYNC_RESPONSE_BUDGET_MS = 6e3;
     hasLoadedInitialDefaults = false;
+    DEMO_TREAT_SMTP_LOGIN_ERROR_AS_SENT = true;
+    DEMO_SMTP_LOGIN_ERROR_RE = /SMTP error:\s*Invalid login|535[-\s]5\.7\.8|BadCredentials|Username and Password not accepted/i;
+    demoPendingWrites = [];
+    leadsCol = () => tenantRepo(getCampaignActiveCtx()).campaignLeads();
+    SEARCH_CHUNK_SIZE = 1e3;
+    SEARCH_FIELD_SEP = "";
+    searchCol = () => tenantRepo(getCampaignActiveCtx()).collection("campaign_search");
+    IGNORED_AFTER_DAYS = 5;
+    ignoredCutoffIso = () => new Date(Date.now() - IGNORED_AFTER_DAYS * 864e5).toISOString();
+    SCHEDULE_MIN_LEAD_MS = 2 * 60 * 1e3;
+    SCHEDULE_MAX_AHEAD_MS = 365 * 24 * 60 * 60 * 1e3;
     SEND_CLAIM_STALE_MS = 10 * 60 * 1e3;
     isAutoProcessingCampaigns = false;
   }
@@ -278014,26 +285232,27 @@ async function handleDemoBookedEvent(ctx, params) {
     reason: "demo_booked"
   });
 }
-function fallbackFollowUpText(interest) {
+function fallbackFollowUpText(brand, interest) {
   return `Hello,
 
-Following up on our previous message regarding ${interest || "Umrah360"}. If you have any questions, or would like a short walkthrough of the platform, just reply to this email and we will be glad to help.
+Following up on our previous message regarding ${interest || brand.companyName}. If you have any questions, or would like a short walkthrough of the platform, just reply to this email and we will be glad to help.
 
-Regards,
-Umrah360 Team`;
+${brandSignature(brand)}`;
 }
 async function evaluateAndGenerateAiFollowUp(params) {
   const { job, lead, conversation, messages } = params;
+  const brand = await getTenantBrand(job.tenantId);
+  const isUmrah = brand.playbook === "umrah360";
   const apiKey = await getOpenAIApiKey();
   if (!apiKey) {
     return {
       decision: "send",
       reason: "OpenAI API key not configured; used neutral fallback follow-up template.",
-      generatedMessage: fallbackFollowUpText(lead.serviceInterest)
+      generatedMessage: fallbackFollowUpText(brand, lead.serviceInterest)
     };
   }
   const threadContext = messages.filter((m2) => m2.conversationId === conversation.conversationId).sort((a, b) => ts(a.timestamp) - ts(b.timestamp)).slice(-20).map((m2) => `[${m2.senderType} - ${m2.timestamp}]: ${m2.text}`).join("\n");
-  const systemPrompt = `You are the AI Operations & Conversation Engine for Umrah360 (www.umrah360.in), the travel ERP & CRM software for Hajj & Umrah tour operators.
+  const systemPrompt = `You are the AI Operations & Conversation Engine for ${isUmrah ? "Umrah360 (www.umrah360.in), the travel ERP & CRM software for Hajj & Umrah tour operators" : brandIntro(brand)}.
 
 YOUR MISSION:
 Analyze the conversation thread with a lead who stopped responding after our last message. Decide whether an automated follow-up is appropriate and, if so, write a natural, contextual follow-up.
@@ -278051,12 +285270,12 @@ STRICT RULES:
    - "human_review": a human must step in (promised pricing/visa check, complaint, conflicting details, complex request).
 8. Respond ONLY with valid JSON:
    {"decision":"send|skip|human_review","reason":"...","objective":"...","language":"...","generatedMessage":"exact text if send","humanReviewReason":"if human_review"}
-9. End generatedMessage with the sign-off: "Regards,\\nUmrah360 Team".`;
+9. End generatedMessage with the sign-off: "${brandSignature(brand).replace(/\n/g, "\\n")}".`;
   const snap = job.leadSnapshot || {};
   const userPrompt = `LEAD PROFILE:
 - ID: ${lead.leadId}
 - Source: ${lead.source || snap.source || "unknown"}
-- Service Interest: ${lead.serviceInterest || snap.serviceInterest || "Umrah ERP Software"}
+- Service Interest: ${lead.serviceInterest || snap.serviceInterest || (isUmrah ? "Umrah ERP Software" : brand.defaultProduct)}
 - Status: ${lead.status || snap.status}
 - Buying Stage: ${lead.buyingStage || snap.buyingStage || "unknown"}
 - Known Requirements: ${JSON.stringify(lead.requirements || snap.requirements || [])}
@@ -278118,7 +285337,7 @@ Decide SEND, SKIP, or HUMAN_REVIEW and produce the JSON.`;
     return {
       decision: "send",
       reason: `OpenAI generation failed (${err?.message || "error"}); used neutral fallback.`,
-      generatedMessage: fallbackFollowUpText(lead.serviceInterest || snap.serviceInterest)
+      generatedMessage: fallbackFollowUpText(brand, lead.serviceInterest || snap.serviceInterest)
     };
   }
 }
@@ -278301,7 +285520,7 @@ async function processOneJob(ctx, job, cfg) {
     await finishJob(ctx, job);
     return { jobId: job.id, status: "scheduled", reason: sendQuota.reason };
   }
-  const subject = `Re: ${(conversation.subject || job.subject || "Umrah360 Follow-Up").replace(/^re:\s*/i, "")}`;
+  const subject = `Re: ${(conversation.subject || job.subject || `${(await getTenantBrand(ctx.tenantId)).companyName} Follow-Up`).replace(/^re:\s*/i, "")}`;
   const lastMsg = thread[thread.length - 1];
   const inReplyTo = lastMsg?.gmailMessageId && !String(lastMsg.gmailMessageId).startsWith("<out-") ? lastMsg.gmailMessageId : void 0;
   const sendRes = await sendLiveEmail({
@@ -278474,6 +285693,8 @@ var DEFAULT_FOLLOWUP_CONFIG, INELIGIBLE_STATUSES, AUTO_SEND_CHANNELS, safeId, ra
 var init_autoFollowUpService = __esm({
   "src/server/autoFollowUpService.ts"() {
     init_adminFirestore();
+    init_brandService();
+    init_brand();
     init_entitlements();
     init_config();
     init_adminFirestore();
@@ -278624,7 +285845,7 @@ async function verifyGoogleCalendarConnection(tokenOverride) {
     });
     if (res.ok) {
       const data = await res.json();
-      return { connected: true, email: data.id || TARGET_CALENDAR_EMAIL };
+      return { connected: true, email: data.id || hostCalendarEmail() };
     } else {
       const errText = await res.text();
       if (res.status === 401) {
@@ -278637,10 +285858,41 @@ async function verifyGoogleCalendarConnection(tokenOverride) {
     return { connected: false, error: err?.message || "Network error verifying Google Calendar" };
   }
 }
+function tzOffsetFor(dateString, hour, minute = 0) {
+  const [y, m2, d] = dateString.split("-").map((n) => parseInt(n, 10));
+  const wall = Date.UTC(y, m2 - 1, d, hour, minute, 0);
+  const fmt = new Intl.DateTimeFormat("en-US", {
+    timeZone: tz(),
+    hourCycle: "h23",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit"
+  });
+  const offsetAt = (instant) => {
+    const pm = {};
+    fmt.formatToParts(new Date(instant)).forEach((p) => {
+      pm[p.type] = p.value;
+    });
+    const asUtc = Date.UTC(+pm.year, +pm.month - 1, +pm.day, +pm.hour % 24, +pm.minute, +pm.second);
+    return Math.round((asUtc - instant) / 6e4);
+  };
+  let off = offsetAt(wall);
+  off = offsetAt(wall - off * 6e4);
+  const sign = off >= 0 ? "+" : "-";
+  const abs = Math.abs(off);
+  return `${sign}${String(Math.floor(abs / 60)).padStart(2, "0")}:${String(abs % 60).padStart(2, "0")}`;
+}
+function dayOfWeekFor(dateString) {
+  const [y, m2, d] = dateString.split("-").map((n) => parseInt(n, 10));
+  return new Date(Date.UTC(y, m2 - 1, d, 12, 0, 0)).getUTCDay();
+}
 function getNowInIst() {
   const now = /* @__PURE__ */ new Date();
   const formatter = new Intl.DateTimeFormat("en-CA", {
-    timeZone: SCHEDULING_TIMEZONE,
+    timeZone: tz(),
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
@@ -278656,10 +285908,9 @@ function getNowInIst() {
   const year = parseInt(partMap.year, 10);
   const month = parseInt(partMap.month, 10);
   const day = parseInt(partMap.day, 10);
-  const hour = parseInt(partMap.hour, 10);
+  const hour = parseInt(partMap.hour, 10) % 24;
   const minute = parseInt(partMap.minute, 10);
-  const istDate = /* @__PURE__ */ new Date(`${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}T12:00:00+05:30`);
-  const dayOfWeek = istDate.getDay();
+  const dayOfWeek = dayOfWeekFor(`${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`);
   return {
     year,
     month,
@@ -278672,15 +285923,15 @@ function getNowInIst() {
 }
 function createIstIsoString(dateString, hour, minute = 0) {
   const pad = (n) => String(n).padStart(2, "0");
-  return `${dateString}T${pad(hour)}:${pad(minute)}:00+05:30`;
+  return `${dateString}T${pad(hour)}:${pad(minute)}:00${tzOffsetFor(dateString, hour, minute)}`;
 }
 function isWorkingDay(dayOfWeek) {
-  return dayOfWeek >= 1 && dayOfWeek <= 5;
+  return sb().workingDays.includes(dayOfWeek);
 }
 function formatSlotLabel(dateString, startHour) {
-  const dateObj = /* @__PURE__ */ new Date(`${dateString}T12:00:00+05:30`);
+  const dateObj = new Date(createIstIsoString(dateString, 12, 0));
   const dayName = new Intl.DateTimeFormat("en-US", {
-    timeZone: SCHEDULING_TIMEZONE,
+    timeZone: tz(),
     weekday: "long",
     month: "short",
     day: "numeric"
@@ -278690,9 +285941,10 @@ function formatSlotLabel(dateString, startHour) {
     const hour12 = h2 % 12 === 0 ? 12 : h2 % 12;
     return `${hour12}:00 ${period}`;
   };
-  return `${dayName}: ${formatHour(startHour)} \u2013 ${formatHour(startHour + 1)} IST`;
+  return `${dayName}: ${formatHour(startHour)} \u2013 ${formatHour(startHour + 1)} ${TZL()}`;
 }
 async function checkRealtimeGoogleCalendarSlot(startIso, endIso, accessTokenOverride) {
+  await warmSchedBrand();
   const token = await getLiveCalendarToken(accessTokenOverride);
   if (!token) {
     const fallbackOccupied = await checkFirestoreBookingsConflict(startIso, endIso);
@@ -278717,7 +285969,7 @@ async function checkRealtimeGoogleCalendarSlot(startIso, endIso, accessTokenOver
       body: JSON.stringify({
         timeMin: startIso,
         timeMax: endIso,
-        timeZone: SCHEDULING_TIMEZONE,
+        timeZone: tz(),
         items: [{ id: "primary" }]
       })
     });
@@ -278754,7 +286006,7 @@ async function checkRealtimeGoogleCalendarSlot(startIso, endIso, accessTokenOver
     }
     const eventsUrl = `https://www.googleapis.com/calendar/v3/calendars/primary/events?timeMin=${encodeURIComponent(
       startIso
-    )}&timeMax=${encodeURIComponent(endIso)}&singleEvents=true&timeZone=${encodeURIComponent(SCHEDULING_TIMEZONE)}`;
+    )}&timeMax=${encodeURIComponent(endIso)}&singleEvents=true&timeZone=${encodeURIComponent(tz())}`;
     const eventsRes = await fetch(eventsUrl, {
       headers: {
         Authorization: `Bearer ${token}`
@@ -278764,8 +286016,8 @@ async function checkRealtimeGoogleCalendarSlot(startIso, endIso, accessTokenOver
       const eventsData = await eventsRes.json();
       const items = (eventsData.items || []).filter((e2) => e2.status !== "cancelled");
       for (const item of items) {
-        const itemStart = item.start?.dateTime || (item.start?.date ? `${item.start.date}T00:00:00+05:30` : startIso);
-        const itemEnd = item.end?.dateTime || (item.end?.date ? `${item.end.date}T23:59:59+05:30` : endIso);
+        const itemStart = item.start?.dateTime || (item.start?.date ? createIstIsoString(item.start.date, 0, 0) : startIso);
+        const itemEnd = item.end?.dateTime || (item.end?.date ? `${item.end.date}T23:59:59${tzOffsetFor(item.end.date, 23, 59)}` : endIso);
         const itemStartMs = new Date(itemStart).getTime();
         const itemEndMs = new Date(itemEnd).getTime();
         if (reqStartMs < itemEndMs && reqEndMs > itemStartMs) {
@@ -278826,6 +286078,7 @@ async function checkFirestoreBookingsConflict(startIso, endIso, excludeBookingId
   return false;
 }
 async function findNextAvailableSlots(options2 = {}) {
+  await warmSchedBrand();
   const {
     targetDaysCount = 10,
     maxSlotsToReturn = 4,
@@ -278836,28 +286089,28 @@ async function findNextAvailableSlots(options2 = {}) {
   const nowIst = getNowInIst();
   const availableSlots = [];
   let currentOffset = 0;
-  let allowedHours = VALID_SLOT_START_HOURS;
+  const VALID_HOURS = slotHours();
+  let allowedHours = VALID_HOURS;
   if (preferredPeriod === "MORNING") {
-    allowedHours = VALID_SLOT_START_HOURS.filter((h2) => h2 < 12);
+    allowedHours = VALID_HOURS.filter((h2) => h2 < 12);
   } else if (preferredPeriod === "AFTERNOON") {
-    allowedHours = VALID_SLOT_START_HOURS.filter((h2) => h2 >= 12 && h2 < 17);
+    allowedHours = VALID_HOURS.filter((h2) => h2 >= 12 && h2 < 17);
   } else if (preferredPeriod === "EVENING") {
-    allowedHours = VALID_SLOT_START_HOURS.filter((h2) => h2 >= 17);
+    allowedHours = VALID_HOURS.filter((h2) => h2 >= 17);
   }
-  if (allowedHours.length === 0) allowedHours = VALID_SLOT_START_HOURS;
+  if (allowedHours.length === 0) allowedHours = VALID_HOURS;
   let daysChecked = 0;
   while (daysChecked < targetDaysCount && availableSlots.length < maxSlotsToReturn && currentOffset < 14) {
     const checkDate = /* @__PURE__ */ new Date();
     checkDate.setDate(checkDate.getDate() + currentOffset);
     const formatter = new Intl.DateTimeFormat("en-CA", {
-      timeZone: SCHEDULING_TIMEZONE,
+      timeZone: tz(),
       year: "numeric",
       month: "2-digit",
       day: "2-digit"
     });
     const dateStr = formatter.format(checkDate);
-    const dayObj = /* @__PURE__ */ new Date(`${dateStr}T12:00:00+05:30`);
-    const dayOfWeek = dayObj.getDay();
+    const dayOfWeek = dayOfWeekFor(dateStr);
     currentOffset++;
     if (!isWorkingDay(dayOfWeek)) {
       continue;
@@ -278887,6 +286140,7 @@ async function findNextAvailableSlots(options2 = {}) {
   return availableSlots;
 }
 async function createGoogleCalendarDemoBooking(params) {
+  await warmSchedBrand();
   const {
     leadId,
     contactId,
@@ -278926,28 +286180,26 @@ async function createGoogleCalendarDemoBooking(params) {
   let calendarEventId = `mock-cal-${Date.now()}`;
   let googleMeetLink = "";
   let calendarInviteSent = false;
-  const summary = `Umrah360 Demo - ${companyName || leadName || "Agency Partner"}`;
+  const isUmrahSched = sb().playbook === "umrah360";
+  const summary = `${brandName()} Demo - ${companyName || leadName || (isUmrahSched ? "Agency Partner" : "Guest")}`;
   const description = [
-    `Personalized 1-on-1 walkthrough of Umrah360 pilgrimage enterprise software.`,
+    isUmrahSched ? `Personalized 1-on-1 walkthrough of Umrah360 pilgrimage enterprise software.` : `Personalized 1-on-1 walkthrough of ${brandName()}.`,
     ``,
     `Attendee Details:`,
     `\u2022 Lead Name: ${leadName}`,
     `\u2022 Email: ${leadEmail}`,
-    `\u2022 Company: ${companyName || "Travel Agency"}`,
+    `\u2022 Company: ${companyName || (isUmrahSched ? "Travel Agency" : "Not provided")}`,
     `\u2022 Phone: ${leadPhone || "Not provided"}`,
     `\u2022 Inbound Channel: ${channel}`,
-    `\u2022 Timezone: Asia/Kolkata (IST)`,
+    `\u2022 Timezone: ${tzDisplay()}`,
     ``,
     `Agenda:`,
-    `- Group Series Operations & Visa Tracking`,
-    `- B2B Sub-Agent Portal & Dynamic Package Builder`,
-    `- Pilgrim Mobile Voucher & Accounting Automation`,
-    `- Q&A and Deployment Timelines`
+    ...isUmrahSched ? [`- Group Series Operations & Visa Tracking`, `- B2B Sub-Agent Portal & Dynamic Package Builder`, `- Pilgrim Mobile Voucher & Accounting Automation`, `- Q&A and Deployment Timelines`] : [`- Product walkthrough`, `- Q&A and next steps`]
   ].join("\n");
   if (token) {
     try {
       const attendees = [];
-      if (leadEmail && leadEmail.includes("@") && leadEmail.toLowerCase() !== TARGET_CALENDAR_EMAIL.toLowerCase()) {
+      if (leadEmail && leadEmail.includes("@") && leadEmail.toLowerCase() !== hostCalendarEmail().toLowerCase()) {
         attendees.push({ email: leadEmail });
       }
       const eventPayload = {
@@ -278955,11 +286207,11 @@ async function createGoogleCalendarDemoBooking(params) {
         description,
         start: {
           dateTime: startIso,
-          timeZone: SCHEDULING_TIMEZONE
+          timeZone: tz()
         },
         end: {
           dateTime: endIso,
-          timeZone: SCHEDULING_TIMEZONE
+          timeZone: tz()
         },
         attendees,
         conferenceData: {
@@ -279040,7 +286292,7 @@ async function createGoogleCalendarDemoBooking(params) {
   } else {
     return {
       success: false,
-      error: 'Google Calendar OAuth token not found. Please click "Sync Calendar (amaavigo@gmail.com)" in the Demo Scheduling dashboard to connect your Google Calendar.'
+      error: 'Google Calendar OAuth token not found. Please click "Sync Calendar" in the Demo Scheduling dashboard to connect your Google Calendar.'
     };
   }
   const nowIso = (/* @__PURE__ */ new Date()).toISOString();
@@ -279063,11 +286315,11 @@ async function createGoogleCalendarDemoBooking(params) {
     endTime,
     startDateTimeIso: startIso,
     endDateTimeIso: endIso,
-    timezone: SCHEDULING_TIMEZONE,
+    timezone: tz(),
     status: "BOOKED",
     summary,
     description,
-    attendees: [TARGET_CALENDAR_EMAIL, ...leadEmail ? [leadEmail] : []],
+    attendees: [...hostCalendarEmail() ? [hostCalendarEmail()] : [], ...leadEmail ? [leadEmail] : []],
     createdAt: nowIso,
     updatedAt: nowIso
   };
@@ -279085,7 +286337,7 @@ async function createGoogleCalendarDemoBooking(params) {
             demoDate: dateString,
             demoStartTime: startTime,
             demoEndTime: endTime,
-            demoTimezone: SCHEDULING_TIMEZONE,
+            demoTimezone: tz(),
             calendarEventId,
             googleMeetLink,
             autoFollowUp: {
@@ -279129,6 +286381,7 @@ async function createGoogleCalendarDemoBooking(params) {
   };
 }
 async function cancelDemoBooking(bookingId, reason = "Customer requested cancellation") {
+  await warmSchedBrand();
   if (!isFirebaseConfigured || !db) {
     return { success: false, error: "Database not initialized" };
   }
@@ -279185,6 +286438,7 @@ async function cancelDemoBooking(bookingId, reason = "Customer requested cancell
   }
 }
 async function rescheduleDemoBooking(bookingId, newStartIso, newEndIso, newDateString, newStartTime, newEndTime, accessToken) {
+  await warmSchedBrand();
   const freshCheck = await checkRealtimeGoogleCalendarSlot(newStartIso, newEndIso, accessToken);
   if (!freshCheck.available) {
     return {
@@ -279266,7 +286520,7 @@ async function rescheduleDemoBooking(bookingId, newStartIso, newEndIso, newDateS
           demoDate: newDateString,
           demoStartTime: newStartTime,
           demoEndTime: newEndTime,
-          demoTimezone: SCHEDULING_TIMEZONE,
+          demoTimezone: tz(),
           calendarEventId: newCalendarEventId,
           googleMeetLink: newGoogleMeetLink,
           updatedAt: nowIso
@@ -279296,13 +286550,7 @@ async function addAttendeeToDemoBooking(params) {
   if (Array.isArray(params.attendeeEmails)) rawList.push(...params.attendeeEmails);
   const smtpCfg = getSmtpConfig();
   const hostEmails = Array.from(
-    /* @__PURE__ */ new Set([
-      TARGET_CALENDAR_EMAIL.toLowerCase().trim(),
-      (smtpCfg.user || "").toLowerCase().trim(),
-      (smtpCfg.from || "").toLowerCase().trim(),
-      "sales@umrah360.in",
-      "support@umrah360.in"
-    ])
+    new Set(hostEmailList(smtpCfg.user, smtpCfg.from))
   ).filter((e2) => e2.length > 0);
   const primaryLeadEmail = (params.leadEmail || "").toLowerCase().trim();
   const emailsToAdd = Array.from(
@@ -279410,25 +286658,25 @@ async function addAttendeeToDemoBooking(params) {
     const smtpConfig = getSmtpConfig();
     for (const targetEmail of emailsToAdd) {
       try {
-        const inviteSubject = `[Calendar Invite] Umrah360 Demo Walkthrough - ${booking.date} at ${booking.startTime} IST`;
+        const inviteSubject = `[Calendar Invite] ${brandName()} Demo Walkthrough - ${booking.date} at ${booking.startTime} ${TZL()}`;
         const inviteHtml = `
           <div style="font-family: Arial, sans-serif; max-width: 600px; color: #1e293b; padding: 20px; border: 1px solid #e2e8f0; border-radius: 12px;">
-            <h2 style="color: #0d9488; margin-bottom: 8px;">Umrah360 Demo Invitation</h2>
+            <h2 style="color: #0d9488; margin-bottom: 8px;">${brandName()} Demo Invitation</h2>
             <p style="font-size: 15px; color: #334155;">
-              You have been added as an attendee for the live product walkthrough of <strong>Umrah360</strong>.
+              You have been added as an attendee for the live product walkthrough of <strong>${brandName()}</strong>.
             </p>
             <div style="background-color: #f8fafc; padding: 16px; border-radius: 8px; margin: 16px 0;">
               <p style="margin: 4px 0;"><strong>Company:</strong> ${booking.companyName}</p>
               <p style="margin: 4px 0;"><strong>Primary Contact:</strong> ${booking.leadName} (${booking.leadEmail})</p>
               <p style="margin: 4px 0;"><strong>Date:</strong> ${booking.date}</p>
-              <p style="margin: 4px 0;"><strong>Time:</strong> ${booking.startTime} \u2013 ${booking.endTime} IST (Asia/Kolkata)</p>
+              <p style="margin: 4px 0;"><strong>Time:</strong> ${booking.startTime} \u2013 ${booking.endTime} ${tzDisplay()}</p>
               <p style="margin: 12px 0 4px 0;"><strong>Google Meet Video Link:</strong></p>
               <a href="${googleMeetLink}" style="display: inline-block; background-color: #0d9488; color: #ffffff; padding: 10px 18px; text-decoration: none; border-radius: 6px; font-weight: bold;">
                 Join Google Meet
               </a>
             </div>
             <p style="font-size: 13px; color: #64748b; margin-top: 20px;">
-              Looking forward to demonstrating how Umrah360 automates pilgrimage group costing, visa tracking, and sub-agent portals!
+              ${sb().playbook === "umrah360" ? "Looking forward to demonstrating how Umrah360 automates pilgrimage group costing, visa tracking, and sub-agent portals!" : `Looking forward to speaking with you about ${brandName()}!`}
             </p>
           </div>
         `;
@@ -279436,7 +286684,7 @@ async function addAttendeeToDemoBooking(params) {
           tenantId: getSchedCtx().tenantId,
           to: targetEmail,
           subject: inviteSubject,
-          text: `You have been added to the Umrah360 Demo Walkthrough on ${booking.date} from ${booking.startTime} \u2013 ${booking.endTime} IST.
+          text: `You have been added to the ${brandName()} Demo Walkthrough on ${booking.date} from ${booking.startTime} \u2013 ${booking.endTime} ${TZL()}.
 
 Join Google Meet: ${googleMeetLink}
 
@@ -279476,6 +286724,7 @@ Primary Contact: ${booking.leadName} (${booking.leadEmail})`,
   }
 }
 async function getActiveBookingForLeadOrConversation(leadId, leadEmail, conversationId) {
+  await warmSchedBrand();
   if (!isFirebaseConfigured || !db) return null;
   try {
     if (leadEmail && leadEmail.includes("@")) {
@@ -279548,8 +286797,12 @@ function detectDemoSchedulingIntent(text) {
   return false;
 }
 async function processSchedulingConversationTurn(params) {
+  await warmSchedBrand();
   if (params.manual !== true) {
-    return { handled: false, replyText: "", action: "NOT_DEMO_INTENT" };
+    const newText = String(params.messageText || "");
+    if (!detectDemoSchedulingIntent(newText)) {
+      return { handled: false, replyText: "", action: "NOT_DEMO_INTENT" };
+    }
   }
   const messageText = params.messageText || "";
   const conversationHistory = Array.isArray(params.conversationHistory) ? params.conversationHistory : [];
@@ -279589,13 +286842,13 @@ async function processSchedulingConversationTurn(params) {
       return {
         handled: true,
         action: "CANCELLED",
-        replyText: `Your Umrah360 demo scheduled for ${activeBooking.date} at ${activeBooking.startTime} IST has been cancelled. The time slot has been freed up on our calendar. Whenever you're ready to explore Umrah360 in the future, just let us know and we'll gladly schedule a fresh walkthrough!`
+        replyText: `Your ${brandName()} demo scheduled for ${activeBooking.date} at ${activeBooking.startTime} ${TZL()} has been cancelled. The time slot has been freed up on our calendar. Whenever you're ready to explore ${brandName()} in the future, just let us know and we'll gladly schedule a fresh walkthrough!`
       };
     } else {
       return {
         handled: true,
         action: "CANCELLED",
-        replyText: `You do not have any active demo scheduled currently. If you'd like to book one at any time between Monday and Friday (10 AM to 7 PM IST), simply let me know!`
+        replyText: `You do not have any active demo scheduled currently. If you'd like to book one at any time between ${daysLabel().replace(" to ", " and ")} (${hrShort(workStartH())} to ${hrShort(workEndH())} ${TZL()}), simply let me know!`
       };
     }
   }
@@ -279606,13 +286859,7 @@ async function processSchedulingConversationTurn(params) {
   const primaryLeadEmail = (leadEmail || activeBooking?.leadEmail || ctx.leadEmail || "").toLowerCase().trim();
   const activeSmtpCfg = getSmtpConfig();
   const hostEmails = Array.from(
-    /* @__PURE__ */ new Set([
-      TARGET_CALENDAR_EMAIL.toLowerCase().trim(),
-      (activeSmtpCfg.user || "").toLowerCase().trim(),
-      (activeSmtpCfg.from || "").toLowerCase().trim(),
-      "sales@umrah360.in",
-      "support@umrah360.in"
-    ])
+    new Set(hostEmailList(activeSmtpCfg.user, activeSmtpCfg.from))
   ).filter((e2) => e2.length > 0);
   const freshEmailsInMsg = Array.from(
     new Set(
@@ -279653,13 +286900,13 @@ async function processSchedulingConversationTurn(params) {
           handled: true,
           action: "ATTENDEE_ADDED",
           booking: addRes.booking,
-          replyText: `You're all set! I have added ${freshEmailsInMsg.join(", ")} as an attendee to your Umrah360 demo on ${slotLabel2}.
+          replyText: `You're all set! I have added ${freshEmailsInMsg.join(", ")} as an attendee to your ${brandName()} demo on ${slotLabel2}.
 
 \u2022 Google Meet Link: ${meetLink}
-\u2022 Date & Time: ${addRes.booking.date} from ${addRes.booking.startTime} \u2013 ${addRes.booking.endTime} IST
+\u2022 Date & Time: ${addRes.booking.date} from ${addRes.booking.startTime} \u2013 ${addRes.booking.endTime} ${TZL()}
 \u2022 Attendees: ${uniqueAttendeesList}
 
-I have updated Google Calendar and sent the invitation directly to ${freshEmailsInMsg.join(", ")}. We look forward to demonstrating Umrah360 to your team!`
+I have updated Google Calendar and sent the invitation directly to ${freshEmailsInMsg.join(", ")}. We look forward to demonstrating ${brandName()} to your team!`
         };
       } else {
         return {
@@ -279672,7 +286919,7 @@ I have updated Google Calendar and sent the invitation directly to ${freshEmails
       return {
         handled: true,
         action: "ASKED_AVAILABILITY",
-        replyText: `I'd be glad to invite ${freshEmailsInMsg.join(", ")} to the demo! Let's select a date and time for your walkthrough first. What day and time between 10:00 AM and 7:00 PM IST (Monday to Friday) works best for you? Once booked, I'll send the calendar invitation to both you and ${freshEmailsInMsg.join(", ")}.`
+        replyText: `I'd be glad to invite ${freshEmailsInMsg.join(", ")} to the demo! Let's select a date and time for your walkthrough first. What day and time between ${fmtHour(workStartH())} and ${fmtHour(workEndH())} ${TZL()} (${daysLabel()}) works best for you? Once booked, I'll send the calendar invitation to both you and ${freshEmailsInMsg.join(", ")}.`
       };
     }
   }
@@ -279684,15 +286931,15 @@ I have updated Google Calendar and sent the invitation directly to ${freshEmails
   if (apiKey) {
     try {
       const openai = new OpenAI({ apiKey });
-      const prompt = `You are the Demo Scheduling Agent for Umrah360.
-Current Date and Time in India (IST, Asia/Kolkata): ${nowIst.dateString}, ${nowIst.hour}:${String(nowIst.minute).padStart(2, "0")}.
+      const prompt = `You are the Demo Scheduling Agent for ${brandName()}.
+Current Date and Time (${TZL()}, ${tz()}): ${nowIst.dateString}, ${nowIst.hour}:${String(nowIst.minute).padStart(2, "0")}.
 Current Day of Week: ${["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][nowIst.dayOfWeek]}.
 
 Demo working rules:
-- Demos are Monday to Friday only. Saturday and Sunday are strictly unavailable.
-- Working hours are 10:00 AM to 7:00 PM IST (10:00 to 19:00).
-- Demos are 60 minutes long. Fixed start hours: 10, 11, 12, 13, 14, 15, 16, 17, 18.
-- 19:00 (7 PM) is NOT valid because the demo would end at 8 PM, which is after 7 PM. Latest start is 18:00 (6 PM).
+- Demos are ${daysLabel()} only. ${closedDaysLabel()} are strictly unavailable.
+- Working hours are ${fmtHour(workStartH())} to ${fmtHour(workEndH())} ${TZL()} (${workStartH()}:00 to ${workEndH()}:00).
+- Demos are 60 minutes long. Fixed start hours: ${slotHours().join(", ")}.
+- ${workEndH()}:00 (${hrShort(workEndH())}) is NOT valid because the demo would end at ${hrShort(workEndH() + 1)}, which is after ${hrShort(workEndH())}. Latest start is ${workEndH() - 1}:00 (${hrShort(workEndH() - 1)}).
 
 Conversation context:
 ${conversationHistory.map((m2) => `${m2.role.toUpperCase()}: ${m2.content}`).join("\n")}
@@ -279702,10 +286949,10 @@ Analyze the conversation and latest message. Output JSON only:
 {
   "isDemoIntent": boolean (true if user wants to schedule, reschedule, meet, see software, or is answering scheduling questions),
   "hasSpecificSlot": boolean (true if user requested a specific day and hour or agreed to a proposed slot),
-  "dateString": string (YYYY-MM-DD resolved to future India date, or null),
-  "startHour": number (10 to 18 integer in 24hr format, or null),
-  "isWeekend": boolean (true if resolved date is Saturday or Sunday),
-  "isOutOfHours": boolean (true if user requested time outside 10:00 - 18:00, e.g. 9 AM or 7 PM),
+  "dateString": string (YYYY-MM-DD resolved to future date in the company timezone, or null),
+  "startHour": number (${workStartH()} to ${workEndH() - 1} integer in 24hr format, or null),
+  "isWeekend": boolean (true if resolved date falls on a non-working day: ${closedDaysLabel()}),
+  "isOutOfHours": boolean (true if user requested time outside ${workStartH()}:00 - ${workEndH() - 1}:00, e.g. ${hrShort(workStartH() - 1)} or ${hrShort(workEndH())}),
   "preferredPeriod": "MORNING" | "AFTERNOON" | "EVENING" | "ANY",
   "userConfirmedSlot": boolean (true if user said "yes", "sure", "that works", "let's do it", "confirm" to a previously proposed slot)
 }`;
@@ -279746,7 +286993,7 @@ Analyze the conversation and latest message. Output JSON only:
     } else if (lower2.includes("tomorrow")) {
       const nextDay = /* @__PURE__ */ new Date();
       nextDay.setDate(nextDay.getDate() + 1);
-      const f3 = new Intl.DateTimeFormat("en-CA", { timeZone: SCHEDULING_TIMEZONE });
+      const f3 = new Intl.DateTimeFormat("en-CA", { timeZone: tz() });
       nlpResult.dateString = f3.format(nextDay);
       nlpResult.isDemoIntent = true;
     } else {
@@ -279756,15 +287003,15 @@ Analyze the conversation and latest message. Output JSON only:
           nlpResult.isDemoIntent = true;
           let diff = i2 - nowIst.dayOfWeek;
           if (diff === 0) {
-            diff = nowIst.hour < 18 ? 0 : 7;
+            diff = nowIst.hour < workEndH() - 1 ? 0 : 7;
           } else if (diff < 0) {
             diff += 7;
           }
           const targetD = /* @__PURE__ */ new Date();
           targetD.setDate(targetD.getDate() + diff);
-          const f3 = new Intl.DateTimeFormat("en-CA", { timeZone: SCHEDULING_TIMEZONE });
+          const f3 = new Intl.DateTimeFormat("en-CA", { timeZone: tz() });
           nlpResult.dateString = f3.format(targetD);
-          if (i2 === 0 || i2 === 6) nlpResult.isWeekend = true;
+          if (!sb().workingDays.includes(i2)) nlpResult.isWeekend = true;
           break;
         }
       }
@@ -279774,10 +287021,10 @@ Analyze the conversation and latest message. Output JSON only:
     let foundHour = void 0;
     if (rangeMatch) {
       let rawH = parseInt(rangeMatch[1], 10);
-      if (rawH >= 1 && rawH <= 6) rawH += 12;
-      if (rawH >= 10 && rawH <= 18) {
+      if (rawH >= 1 && rawH <= workEndH() - 12 - 1) rawH += 12;
+      if (rawH >= workStartH() && rawH <= workEndH() - 1) {
         foundHour = rawH;
-      } else if (rawH < 10 || rawH >= 19) {
+      } else if (rawH < workStartH() || rawH >= workEndH()) {
         nlpResult.isOutOfHours = true;
       }
     } else if (timeMatch) {
@@ -279785,10 +287032,10 @@ Analyze the conversation and latest message. Output JSON only:
       const ampm = timeMatch[3]?.toLowerCase();
       if (ampm === "pm" && rawH < 12) rawH += 12;
       else if (ampm === "am" && rawH === 12) rawH = 0;
-      else if (!ampm && rawH >= 1 && rawH <= 6) rawH += 12;
-      if (rawH >= 10 && rawH <= 18) {
+      else if (!ampm && rawH >= 1 && rawH <= workEndH() - 12 - 1) rawH += 12;
+      if (rawH >= workStartH() && rawH <= workEndH() - 1) {
         foundHour = rawH;
-      } else if (rawH < 10 || rawH >= 19) {
+      } else if (rawH < workStartH() || rawH >= workEndH()) {
         nlpResult.isOutOfHours = true;
       }
     }
@@ -279814,7 +287061,7 @@ Analyze the conversation and latest message. Output JSON only:
     return {
       handled: true,
       action: "ALREADY_BOOKED",
-      replyText: `You already have an Umrah360 demo scheduled for ${activeBooking.date} from ${activeBooking.startTime} \u2013 ${activeBooking.endTime} IST.
+      replyText: `You already have a ${brandName()} demo scheduled for ${activeBooking.date} from ${activeBooking.startTime} \u2013 ${activeBooking.endTime} ${TZL()}.
 
 \u2022 Google Meet Link: ${activeBooking.googleMeetLink}
 
@@ -279833,17 +287080,17 @@ Would you like to reschedule it to another date or time?`
       return {
         handled: true,
         action: "OFFERED_ALTERNATIVES",
-        replyText: `I would be glad to arrange a live walkthrough of Umrah360 for ${companyName}! Here are our earliest available slots directly from our calendar:
+        replyText: `I would be glad to arrange a live walkthrough of ${brandName()} for ${companyName}! Here are our earliest available slots directly from our calendar:
 
 ${slotsText}
 
-Which of these works best for you? (Or let me know another preferred timing between 10:00 AM and 7:00 PM IST, Monday to Friday).`
+Which of these works best for you? (Or let me know another preferred timing between ${fmtHour(workStartH())} and ${fmtHour(workEndH())} ${TZL()}, ${daysLabel()}).`
       };
     }
     return {
       handled: true,
       action: "ASKED_AVAILABILITY",
-      replyText: `I would be happy to schedule a demo of Umrah360 for ${companyName}! Our demo slots run Monday to Friday between 10:00 AM and 7:00 PM IST (1-hour duration). What day and time work best for you?`
+      replyText: `I would be happy to schedule a demo of ${brandName()} for ${companyName}! Our demo slots run ${daysLabel()} between ${fmtHour(workStartH())} and ${fmtHour(workEndH())} ${TZL()} (1-hour duration). What day and time work best for you?`
     };
   }
   if (nlpResult.isWeekend) {
@@ -279852,7 +287099,7 @@ Which of these works best for you? (Or let me know another preferred timing betw
     return {
       handled: true,
       action: "WEEKEND_NOT_ALLOWED",
-      replyText: `Our demo team operates Monday through Friday between 10 AM and 7 PM IST, so Saturday and Sunday are unavailable. I can offer these upcoming weekday slots instead:
+      replyText: `Our demo team operates ${daysLabel().replace(" to ", " through ")} between ${hrShort(workStartH())} and ${hrShort(workEndH())} ${TZL()}, so ${closedDaysLabel()} are unavailable. I can offer these upcoming weekday slots instead:
 
 ${alternativesText}
 
@@ -279869,7 +287116,7 @@ Would one of these work for you?`
     return {
       handled: true,
       action: "HOURS_NOT_ALLOWED",
-      replyText: `Our demo hours are 10:00 AM to 7:00 PM IST (Monday to Friday). Since each demo is a full 60-minute walkthrough, the latest slot starts at 6:00 PM (finishing at 7:00 PM). Here are our available slots:
+      replyText: `Our demo hours are ${fmtHour(workStartH())} to ${fmtHour(workEndH())} ${TZL()} (${daysLabel()}). Since each demo is a full 60-minute walkthrough, the latest slot starts at ${fmtHour(workEndH() - 1)} (finishing at ${fmtHour(workEndH())}). Here are our available slots:
 
 ${alternativesText}
 
@@ -279900,14 +287147,14 @@ Which slot would you prefer?`
           handled: true,
           action: "RESCHEDULED",
           booking: resched.booking,
-          replyText: `You're all set! Your Umrah360 demo has been rescheduled to ${slotLabel2}.
+          replyText: `You're all set! Your ${brandName()} demo has been rescheduled to ${slotLabel2}.
 
 \u2022 Google Meet Link: ${resched.booking.googleMeetLink}
 \u2022 Company: ${companyName}
 \u2022 Attendee: ${leadName} (${leadEmail || "Email invite updated"})
-\u2022 Timezone: Asia/Kolkata (IST)
+\u2022 Timezone: ${tzDisplay()}
 
-We have sent the updated calendar invitation to your email. We look forward to demonstrating how Umrah360 automates your pilgrimage operations!`
+We have sent the updated calendar invitation to your email. We look forward to demonstrating how ${sb().playbook === "umrah360" ? "Umrah360 automates your pilgrimage operations" : `${brandName()} can help your business`}!`
         };
       }
     }
@@ -279932,15 +287179,15 @@ We have sent the updated calendar invitation to your email. We look forward to d
       const slotLabel2 = formatSlotLabel(targetDateStr, startH);
       const meetLink = bookingResult.googleMeetLink || "Will be shared via calendar invitation";
       const replyText = [
-        `You're all set! Your Umrah360 demo is booked for ${slotLabel2}.`,
+        `You're all set! Your ${brandName()} demo is booked for ${slotLabel2}.`,
         ``,
         `Demo Details:`,
         `\u2022 Attendee: ${leadName}${leadEmail ? ` (${leadEmail})` : ""}`,
         `\u2022 Company: ${companyName}`,
         `\u2022 Google Meet Link: ${meetLink}`,
-        `\u2022 Timezone: Asia/Kolkata (IST)`,
+        `\u2022 Timezone: ${tzDisplay()}`,
         ``,
-        `I have sent the calendar invitation to your email. We look forward to showing you Umrah360's group series operations, visa tracking, and B2B portal!`
+        sb().playbook === "umrah360" ? `I have sent the calendar invitation to your email. We look forward to showing you Umrah360's group series operations, visa tracking, and B2B portal!` : `I have sent the calendar invitation to your email. We look forward to showing you ${brandName()}!`
       ].join("\n");
       return {
         handled: true,
@@ -279994,10 +287241,12 @@ async function getAllBookings() {
     return [];
   }
 }
-var DEFAULT_UMRAH_CTX4, activeSchedulingCtx, TARGET_CALENDAR_EMAIL, SCHEDULING_TIMEZONE, VALID_SLOT_START_HOURS, serverCalendarAccessToken, serverTokenExpiresAt;
+var DEFAULT_UMRAH_CTX4, activeSchedulingCtx, sb, warmSchedBrand, tz, TZL, tzDisplay, workStartH, workEndH, slotHours, hrShort, daysLabel, closedDaysLabel, brandName, hostCalendarEmail, hostEmailList, serverCalendarAccessToken, serverTokenExpiresAt;
 var init_demoSchedulingService = __esm({
   "src/server/demoSchedulingService.ts"() {
     init_tenantRepo();
+    init_brandService();
+    init_brand();
     init_openai();
     init_config();
     init_adminFirestore();
@@ -280012,17 +287261,41 @@ var init_demoSchedulingService = __esm({
       role: "admin"
     };
     activeSchedulingCtx = DEFAULT_UMRAH_CTX4;
-    TARGET_CALENDAR_EMAIL = "amaavigo@gmail.com";
-    SCHEDULING_TIMEZONE = "Asia/Kolkata";
-    VALID_SLOT_START_HOURS = [10, 11, 12, 13, 14, 15, 16, 17, 18];
+    sb = () => getBrandSync(getSchedCtx().tenantId);
+    warmSchedBrand = () => getTenantBrand(getSchedCtx().tenantId).catch(() => sb());
+    tz = () => sb().timezone;
+    TZL = () => brandTzLabel(sb());
+    tzDisplay = () => sb().timezoneLabel ? `${tz()} (${sb().timezoneLabel})` : tz();
+    workStartH = () => sb().workingHoursStart;
+    workEndH = () => sb().workingHoursEnd;
+    slotHours = () => {
+      const out = [];
+      for (let h2 = workStartH(); h2 < workEndH(); h2++) out.push(h2);
+      return out;
+    };
+    hrShort = (h2) => `${(h2 + 11) % 12 + 1} ${h2 % 24 >= 12 ? "PM" : "AM"}`;
+    daysLabel = () => brandWorkingDaysLabel(sb());
+    closedDaysLabel = () => {
+      const closed = [0, 1, 2, 3, 4, 5, 6].filter((d) => !sb().workingDays.includes(d)).sort((a, b) => (a + 1) % 7 - (b + 1) % 7);
+      const names = closed.map((d) => DAY_NAMES[d]);
+      return names.length ? names.length === 2 ? names.join(" and ") : names.join(", ") : "no days";
+    };
+    brandName = () => sb().companyName;
+    hostCalendarEmail = () => sb().calendarEmail;
+    hostEmailList = (smtpUser, smtpFrom) => [
+      hostCalendarEmail(),
+      smtpUser || "",
+      smtpFrom || "",
+      ...sb().playbook === "umrah360" ? ["sales@umrah360.in", "support@umrah360.in"] : [sb().salesEmail]
+    ].map((e2) => e2.toLowerCase().trim()).filter((e2) => e2.length > 0);
     serverCalendarAccessToken = null;
     serverTokenExpiresAt = 0;
   }
 });
 
 // src/server/inboundPipeline.ts
-import { AsyncLocalStorage } from "node:async_hooks";
-import crypto3 from "node:crypto";
+import { AsyncLocalStorage as AsyncLocalStorage2 } from "node:async_hooks";
+import crypto6 from "node:crypto";
 function setInboundActiveContext(ctx) {
   activeInboundCtx = ctx;
 }
@@ -280053,7 +287326,7 @@ function recordProcessedMessage(record) {
     status: record.aiReplied ? "REPLIED" : "PROCESSED",
     reason: record.aiReplied ? "AI auto-reply dispatched" : "Inbound email processed",
     timestamp: record.firstSeenAt || (/* @__PURE__ */ new Date()).toISOString()
-  }).catch((e2) => console.warn("[Idempotency Store] Firestore record error:", e2));
+  }, getInboundCtx()).catch((e2) => console.warn("[Idempotency Store] Firestore record error:", e2));
 }
 function getProcessedMessageRecord(gmailMessageId) {
   if (!gmailMessageId) return void 0;
@@ -280096,7 +287369,7 @@ function markMessageAsReplied(gmailMessageId, replyMessageId) {
     status: "REPLIED",
     reason: "AI auto-reply dispatched via SMTP",
     timestamp: nowIso
-  }).catch((e2) => console.warn("[Idempotency Store] Firestore markMessageAsReplied error:", e2));
+  }, getInboundCtx()).catch((e2) => console.warn("[Idempotency Store] Firestore markMessageAsReplied error:", e2));
 }
 function resolveGmailMessageId(payload, targetMailbox) {
   const candidate = payload.gmailMessageId || payload.messageId || payload.id;
@@ -280107,7 +287380,7 @@ function resolveGmailMessageId(payload, targetMailbox) {
   const cleanFrom = (payload.from || "").toLowerCase().trim();
   const cleanSubj = (payload.subject || "").toLowerCase().trim();
   const cleanBody = (payload.body || "").trim().slice(0, 300);
-  const hash = crypto3.createHash("sha256").update(`${cleanFrom}|${cleanSubj}|${cleanBody}`).digest("hex").slice(0, 16);
+  const hash = crypto6.createHash("sha256").update(`${cleanFrom}|${cleanSubj}|${cleanBody}`).digest("hex").slice(0, 16);
   return `<msg-hash-${hash}@${domain}>`;
 }
 function getPipelineConfig() {
@@ -280397,6 +287670,8 @@ async function generateAutoReplyText(params) {
   const { from, fromName: fromName2, subject, body, companyName, threadHistory } = params;
   const combinedText = `${subject}
 ${body}`.toLowerCase();
+  const brand = await getTenantBrand(getInboundCtx().tenantId);
+  const isUmrah = brand.playbook === "umrah360";
   if (detectDemoSchedulingIntent(body) || detectDemoSchedulingIntent(subject)) {
     try {
       const historyTurns = (threadHistory || []).map((m2) => ({
@@ -280411,7 +287686,7 @@ ${body}`,
         leadContext: {
           leadEmail: from,
           leadName: fromName2 || from.split("@")[0],
-          companyName: companyName || `${fromName2 || "Client"}'s Agency`,
+          companyName: companyName || `${fromName2 || "Client"}'s ${isUmrah ? "Agency" : "Company"}`,
           channel: "EMAIL"
         }
       });
@@ -280431,17 +287706,17 @@ ${body}`,
   const isFollowUpTurn = customerMessagesCount > 1 || threadHistory && threadHistory.length > 1;
   const formattedThreadContext = threadHistory && threadHistory.length > 0 ? threadHistory.map((m2, idx) => {
     const isCustomer = m2.senderType === "CUSTOMER" || m2.senderType === "PROSPECT";
-    const roleLabel = isCustomer ? `CUSTOMER (${m2.senderName || from})` : "AI ASSISTANT (Umrah360)";
+    const roleLabel = isCustomer ? `CUSTOMER (${m2.senderName || from})` : `AI ASSISTANT (${brand.companyName})`;
     return `[Message ${idx + 1} - ${roleLabel} at ${m2.timestamp}]:
 ${m2.text}`;
   }).join("\n\n") : `[Message 1 - CUSTOMER (${fromName2 || from})]:
 ${body}`;
-  const isIndividualPilgrimOrFamily = /myself|my family|for family|for myself|as a customer|planning umrah|booking experience|customized package|customize a package|book a customized|hotels in makkah|flights.*hotels|transfers.*meals.*visa|real-time.*availability|online payment|entire booking.*online|go through a travel agency|direct booking|retail/i.test(
+  const isIndividualPilgrimOrFamily = isUmrah && /myself|my family|for family|for myself|as a customer|planning umrah|booking experience|customized package|customize a package|book a customized|hotels in makkah|flights.*hotels|transfers.*meals.*visa|real-time.*availability|online payment|entire booking.*online|go through a travel agency|direct booking|retail/i.test(
     combinedText
   );
-  const isTwentyUsers = /20 user|20 seat|25 user|twenty user|enterprise/i.test(combinedText);
-  const isB2bPortal = /b2b|sub-agent|reseller|credit limit|wallet|allotment|offline block/i.test(combinedText);
-  const isSaaSPricing = !isIndividualPilgrimOrFamily && /pricing|price|cost|quote|subscription|rate|\$15|\$199|\$499/i.test(combinedText);
+  const isTwentyUsers = isUmrah && /20 user|20 seat|25 user|twenty user|enterprise/i.test(combinedText);
+  const isB2bPortal = isUmrah && /b2b|sub-agent|reseller|credit limit|wallet|allotment|offline block/i.test(combinedText);
+  const isSaaSPricing = !isIndividualPilgrimOrFamily && (isUmrah ? /pricing|price|cost|quote|subscription|rate|\$15|\$199|\$499/i : /pricing|price|cost|quote|subscription|rate/i).test(combinedText);
   let handoffTriggered = false;
   let handoffReason;
   let leadScore = 75;
@@ -280461,18 +287736,19 @@ ${body}`;
     leadScore = 82;
     buyingStage = "CONSIDERATION";
   }
-  const targetMailbox = process.env.SMTP_USER || process.env.IMAP_USER || "amaavigo@gmail.com";
+  const targetMailbox = isUmrah ? process.env.SMTP_USER || process.env.IMAP_USER || "amaavigo@gmail.com" : brand.salesEmail || "";
   const senderGreetingName = fromName2 ? fromName2.split(" ")[0] : from.split("@")[0];
-  const publishedDocs = getPublishedKnowledgeDocs();
+  await initKnowledgeStore(getInboundCtx()).catch(() => 0);
+  const publishedDocs = getPublishedKnowledgeDocs(getInboundCtx());
   const kbGroundingText = publishedDocs.map(
-    (doc6) => `=== [${doc6.category}] ${doc6.title} ===
-${doc6.content}`
+    (doc5) => `=== [${doc5.category}] ${doc5.title} ===
+${doc5.content}`
   ).join("\n\n");
   const openAiApiKey = process.env.OPENAI_API_KEY || process.env.GEMINI_API_KEY;
   if (openAiApiKey) {
     try {
       const openai = new OpenAI({ apiKey: openAiApiKey });
-      const prompt = `You are the official AI automation representative for Umrah360 (www.umrah360.in), responding to an email on behalf of ${targetMailbox}.
+      const umrahPrompt = `You are the official AI automation representative for Umrah360 (www.umrah360.in), responding to an email on behalf of ${targetMailbox}.
 
 OFFICIAL UMRAH360 KNOWLEDGE BASE (GROUND TRUTH):
 ${kbGroundingText}
@@ -280509,6 +287785,30 @@ Regards,
 Umrah360 Automation Team
 ${targetMailbox}
 www.umrah360.in`;
+      const genericPrompt = `You are the official AI automation representative for ${brandIntro(brand)}${brand.industryDescription ? `, serving ${brand.industryDescription}` : ""}, responding to an email${targetMailbox ? ` on behalf of ${targetMailbox}` : ""}.
+
+OFFICIAL ${brand.companyName.toUpperCase()} KNOWLEDGE BASE (GROUND TRUTH):
+${kbGroundingText || "(No knowledge documents have been published yet.)"}
+
+COMPLETE LOADED CONVERSATION THREAD CONTEXT (${threadHistory?.length || 1} message(s)):
+${formattedThreadContext}
+
+LATEST INCOMING CUSTOMER MESSAGE TO RESPOND TO:
+From: ${fromName2 || from} (${from})
+Company: ${companyName || "Not specified"}
+Subject: ${subject}
+Latest Message Body:
+${body}
+
+CRITICAL INSTRUCTIONS:
+1. THREAD CONTINUITY: ${isFollowUpTurn ? "This is a follow-up. Continue naturally from the earlier messages, do not repeat introductions, and answer the specific follow-up questions." : "This is a brand new inquiry. Briefly welcome the customer and answer their question."} Greet with a formal professional greeting: "Dear ${senderGreetingName},"
+2. ACCURACY: Ground every answer strictly in the knowledge base above. NEVER invent features, prices, dates or guarantees. If the knowledge base does not contain the answer, say you will connect them with a specialist from ${brand.companyName} and ask for any details needed.
+3. Keep the response polite, helpful, crisp, and professional.
+4. FORMATTING (MANDATORY): Never use Markdown symbols (**, ##, ###, *, backticks). Write natural plain text.
+5. Conclude with:
+${brandAutomationSignature(brand)}${targetMailbox ? `
+${targetMailbox}` : ""}`;
+      const prompt = isUmrah ? umrahPrompt : genericPrompt;
       const candidateModels = ["gpt-4o-mini", "gpt-4o", "gpt-3.5-turbo"];
       for (const modelName of candidateModels) {
         try {
@@ -280535,6 +287835,39 @@ www.umrah360.in`;
     } catch (openAiErr) {
       console.warn("[OpenAI Pipeline] Fallback to domain-grounded knowledge response:", openAiErr);
     }
+  }
+  if (!isUmrah) {
+    const words = Array.from(new Set(combinedText.split(/[^a-z0-9]+/).filter((w) => w.length > 3)));
+    let best = { score: 0, text: "" };
+    for (const d of publishedDocs) {
+      const hay = `${d.title} ${d.content}`.toLowerCase();
+      const score = words.reduce((n, w) => n + (hay.includes(w) ? 1 : 0), 0);
+      if (score > best.score) best = { score, text: String(d.content || "").trim().slice(0, 600) };
+    }
+    const sig2 = `${brandAutomationSignature(brand)}${targetMailbox ? `
+${targetMailbox}` : ""}`;
+    const genericReply = best.score >= 2 ? `Dear ${senderGreetingName},
+
+Thank you for contacting ${brand.companyName}!
+
+${best.text}
+
+Could you tell us a little more about what you are looking for${companyName ? ` at ${companyName}` : ""} so we can help you further?
+
+${sig2}` : `Dear ${senderGreetingName},
+
+Thank you for contacting ${brand.companyName}! We have received your message and one of our specialists will get back to you shortly.
+
+To help us respond faster, please share a few details about what you are looking for.
+
+${sig2}`;
+    return {
+      replyText: sanitizeAiEmailText(genericReply, senderGreetingName),
+      handoffTriggered,
+      handoffReason,
+      leadScore,
+      buyingStage
+    };
   }
   let replyText = "";
   if (isFollowUpTurn) {
@@ -280671,7 +288004,9 @@ www.umrah360.in`;
   };
 }
 async function processLiveInboundEmail(payload) {
-  const targetMailbox = process.env.SMTP_USER || process.env.IMAP_USER || "amaavigo@gmail.com";
+  const brand = await getTenantBrand(getInboundCtx().tenantId);
+  const isUmrahBrand = brand.playbook === "umrah360";
+  const targetMailbox = payload.ownMailbox || process.env.SMTP_USER || process.env.IMAP_USER || "amaavigo@gmail.com";
   const incomingMsgId = resolveGmailMessageId(payload, targetMailbox);
   const replySubject = payload.subject.toLowerCase().startsWith("re:") ? payload.subject : `Re: ${payload.subject}`;
   const nowIso = (/* @__PURE__ */ new Date()).toISOString();
@@ -280762,7 +288097,7 @@ async function processLiveInboundEmail(payload) {
       buyingStage: "ENGAGED",
       timestamp: nowIso,
       crmEntities: {
-        contact: { contactId, firstName, lastName, email: payload.from, companyName: payload.companyName || "Umrah360 Internal", createdAt: nowIso, updatedAt: nowIso, lastActivityAt: nowIso },
+        contact: { contactId, firstName, lastName, email: payload.from, companyName: payload.companyName || (isUmrahBrand ? "Umrah360 Internal" : `${brand.companyName} Internal`), createdAt: nowIso, updatedAt: nowIso, lastActivityAt: nowIso },
         lead: { leadId, contactId, source: "EMAIL", leadType: "INBOUND", status: "ENGAGED", leadScore: 50, intent: "MEDIUM", buyingStage: "ENGAGED", serviceInterest: payload.subject, requirements: [], aiSummary: "Outbound message event", createdAt: nowIso, updatedAt: nowIso, lastActivityAt: nowIso },
         conversation: { conversationId, contactId, leadId, channel: "EMAIL", direction: "OUTBOUND", status: "ACTIVE", aiEnabled: false, humanHandoff: false, emailThreadId: threadId, conversationSummary: `Outbound email: ${payload.subject}`, startedAt: nowIso, lastMessageAt: nowIso, lastMessageText: payload.body.slice(0, 120), unreadCount: 0, createdAt: nowIso, updatedAt: nowIso },
         incomingMessage: outboundMessage,
@@ -280776,7 +288111,7 @@ async function processLiveInboundEmail(payload) {
   const isThreadMsgAlreadyReplied = thread.some(
     (m2) => (m2.gmailMessageId === incomingMsgId || m2.emailMeta?.messageId === incomingMsgId) && m2.direction === "INBOUND" && (m2.senderType === "CUSTOMER" || m2.senderType === "PROSPECT") && m2.aiReplied === true
   );
-  const firestoreCheck = await isMessageAlreadyProcessed(incomingMsgId, payload.from);
+  const firestoreCheck = await isMessageAlreadyProcessed(incomingMsgId, payload.from, getInboundCtx());
   const isFirestoreRepliedOrBaselined = Boolean(
     firestoreCheck.processed && (firestoreCheck.replied || firestoreCheck.reason?.includes("BASELINE") || firestoreCheck.reason?.includes("status: REPLIED"))
   );
@@ -280909,14 +288244,14 @@ async function processLiveInboundEmail(payload) {
     });
     let campaignReplyResult = { isCampaignLead: false };
     try {
-      campaignReplyResult = await handleIncomingCampaignLeadReply({
+      campaignReplyResult = await runWithCampaignCtx(getInboundCtx(), () => handleIncomingCampaignLeadReply({
         fromEmail: payload.from,
         fromPhone: payload.phone,
         subject: payload.subject,
         body: payload.body,
         gmailMessageId: incomingMsgId,
         gmailThreadId: threadId
-      });
+      }));
     } catch (campaignErr) {
       console.warn("[Unified Inbox] Campaign lead tracking hook notice:", campaignErr);
     }
@@ -281059,7 +288394,7 @@ async function processLiveInboundEmail(payload) {
         channel: "EMAIL",
         direction: "OUTBOUND",
         senderType: "AI",
-        senderName: "Umrah360 AI Automation",
+        senderName: isUmrahBrand ? "Umrah360 AI Automation" : `${brand.aiAgentName} Automation`,
         senderEmail: targetMailbox,
         text: aiResult.replyText,
         timestamp: nowIso,
@@ -281093,8 +288428,8 @@ async function processLiveInboundEmail(payload) {
         firstName,
         lastName,
         email: payload.from,
-        companyName: matched.contact?.companyName || payload.companyName || `${firstName}'s Pilgrimage Agency`,
-        phone: matched.contact?.phone || payload.phone || "+91 98200 12345",
+        companyName: matched.contact?.companyName || payload.companyName || brandFallbackAgency(brand, firstName),
+        phone: matched.contact?.phone || payload.phone || (isUmrahBrand ? "+91 98200 12345" : ""),
         createdAt: matched.contact?.createdAt || nowIso,
         updatedAt: nowIso,
         lastActivityAt: nowIso
@@ -281306,6 +288641,8 @@ var init_inboundPipeline = __esm({
     init_adminFirestore();
     init_firestoreUtils();
     init_demoSchedulingService();
+    init_brandService();
+    init_brand();
     init_emailSanitizer();
     DEFAULT_UMRAH_CTX5 = {
       tenantId: "umrah360",
@@ -281314,7 +288651,7 @@ var init_inboundPipeline = __esm({
       role: "admin"
     };
     activeInboundCtx = DEFAULT_UMRAH_CTX5;
-    inboundCtxStore = new AsyncLocalStorage();
+    inboundCtxStore = new AsyncLocalStorage2();
     recentProcessedEmails = [];
     conversationThreadMessagesMap = /* @__PURE__ */ new Map();
     repliedMessageIds = /* @__PURE__ */ new Set();
@@ -281413,6 +288750,859 @@ var init_inboundPipeline = __esm({
     isImapPollingActive = false;
     lastImapPollTimestamp = 0;
     IMAP_POLL_MIN_INTERVAL_MS = 15e3;
+  }
+});
+
+// src/server/websiteLeadService.ts
+var websiteLeadService_exports = {};
+__export(websiteLeadService_exports, {
+  hasThankYouEmailBeenSent: () => hasThankYouEmailBeenSent,
+  processWebsiteLeadSubmission: () => processWebsiteLeadSubmission,
+  recordThankYouEmailSent: () => recordThankYouEmailSent
+});
+function getSentCache(tenantId) {
+  let cache3 = tenantSentThankYouCaches.get(tenantId);
+  if (!cache3) {
+    cache3 = /* @__PURE__ */ new Set();
+    tenantSentThankYouCaches.set(tenantId, cache3);
+  }
+  return cache3;
+}
+function getInFlightSet(tenantId) {
+  let set = tenantInFlightThankYouSends.get(tenantId);
+  if (!set) {
+    set = /* @__PURE__ */ new Set();
+    tenantInFlightThankYouSends.set(tenantId, set);
+  }
+  return set;
+}
+async function hasThankYouEmailBeenSent(rawEmail, ctx = DEFAULT_UMRAH_CTX7) {
+  const clean2 = rawEmail?.trim().toLowerCase() || "";
+  if (!clean2 || !clean2.includes("@") || clean2.endsWith("@umrah360.in")) return true;
+  const sentCache = getSentCache(ctx.tenantId);
+  if (sentCache.has(clean2)) {
+    return true;
+  }
+  if (!isFirebaseConfigured || !db) return false;
+  try {
+    const repo = tenantRepo(ctx);
+    const emailKey = clean2.replace(/[^a-z0-9_.-]/g, "_");
+    const historyRef = repo.websiteLeadThankYouHistoryDoc(emailKey);
+    const historySnap = await getDoc(historyRef);
+    if (historySnap.exists()) {
+      sentCache.add(clean2);
+      return true;
+    }
+    const convQ = query(
+      repo.conversations(),
+      where("customerEmail", "==", clean2),
+      where("thankYouEmailSent", "==", true),
+      limit2(1)
+    );
+    const convSnap = await getDocs(convQ);
+    if (!convSnap.empty) {
+      sentCache.add(clean2);
+      return true;
+    }
+    const contactQ = query(
+      repo.contacts(),
+      where("email", "==", clean2),
+      limit2(1)
+    );
+    const contactSnap = await getDocs(contactQ);
+    if (!contactSnap.empty) {
+      const cData = contactSnap.docs[0].data();
+      if (cData.thankYouEmailSent) {
+        sentCache.add(clean2);
+        return true;
+      }
+    }
+  } catch (e2) {
+    console.warn(`[Website Lead] Notice checking thank you history for tenant ${ctx.tenantId}:`, e2);
+  }
+  return false;
+}
+async function recordThankYouEmailSent(rawEmail, meta2, ctx = DEFAULT_UMRAH_CTX7) {
+  const clean2 = rawEmail?.trim().toLowerCase() || "";
+  if (!clean2) return;
+  const sentCache = getSentCache(ctx.tenantId);
+  sentCache.add(clean2);
+  if (!isFirebaseConfigured || !db) return;
+  try {
+    const repo = tenantRepo(ctx);
+    const emailKey = clean2.replace(/[^a-z0-9_.-]/g, "_");
+    const nowIso = (/* @__PURE__ */ new Date()).toISOString();
+    await safeSetDoc(
+      repo.websiteLeadThankYouHistoryDoc(emailKey),
+      {
+        email: clean2,
+        leadId: meta2.leadId || "",
+        conversationId: meta2.conversationId || "",
+        sentAt: nowIso,
+        smtpMessageId: meta2.smtpMessageId || "verified",
+        status: "DELIVERED"
+      },
+      { merge: true }
+    );
+  } catch (e2) {
+    console.warn(`[Website Lead] Notice recording thank you history for ${ctx.tenantId}:`, e2);
+  }
+}
+function flattenAllFields(obj, target = {}) {
+  if (!obj || typeof obj !== "object") return target;
+  const setOrAppend = (k, v) => {
+    if (v === null || v === void 0) return;
+    const cleanK = String(k).trim();
+    const cleanV = String(v).trim();
+    if (!cleanK || !cleanV) return;
+    if (target[cleanK]) {
+      const existing = target[cleanK];
+      if (!existing.toLowerCase().includes(cleanV.toLowerCase())) {
+        target[cleanK] = `${existing}, ${cleanV}`;
+      }
+    } else {
+      target[cleanK] = cleanV;
+    }
+  };
+  if (Array.isArray(obj)) {
+    for (let i2 = 0; i2 < obj.length; i2++) {
+      const item = obj[i2];
+      if (item && typeof item === "object") {
+        const itemKey = item.id || item.name || item.field_id || item.key || item.label || `item_${i2}`;
+        const itemVal = item.value ?? item.val ?? item.raw_value ?? item.text ?? "";
+        if (typeof itemVal === "string" || typeof itemVal === "number" || typeof itemVal === "boolean") {
+          setOrAppend(String(itemKey), itemVal);
+        } else if (Array.isArray(itemVal)) {
+          for (const subVal of itemVal) {
+            setOrAppend(String(itemKey), subVal);
+          }
+        }
+        flattenAllFields(item, target);
+      } else if (typeof item === "string" || typeof item === "number") {
+        setOrAppend(`item_${i2}`, item);
+      }
+    }
+    return target;
+  }
+  for (const [rawK, rawV] of Object.entries(obj)) {
+    if (rawV === null || rawV === void 0) continue;
+    const lowerK = rawK.toLowerCase().trim();
+    if (lowerK === "form" && typeof rawV === "object" && rawV !== null) {
+      if (rawV.id) setOrAppend("form_id", rawV.id);
+      if (rawV.name) setOrAppend("form_name", rawV.name);
+      continue;
+    }
+    if ((lowerK === "post" || lowerK === "page") && typeof rawV === "object" && rawV !== null) {
+      if (rawV.id) setOrAppend(`${lowerK}_id`, rawV.id);
+      if (rawV.title) setOrAppend(`${lowerK}_title`, rawV.title);
+      continue;
+    }
+    if (Array.isArray(rawV)) {
+      for (const arrItem of rawV) {
+        if (typeof arrItem === "string" || typeof arrItem === "number" || typeof arrItem === "boolean") {
+          setOrAppend(rawK, arrItem);
+        } else if (arrItem && typeof arrItem === "object") {
+          const itemVal = arrItem.value ?? arrItem.val ?? arrItem.raw_value ?? arrItem.text;
+          if (itemVal) setOrAppend(rawK, itemVal);
+          flattenAllFields(arrItem, target);
+        }
+      }
+    } else if (typeof rawV === "string" || typeof rawV === "number" || typeof rawV === "boolean") {
+      const strVal = String(rawV).trim();
+      if (lowerK === "form_name" || lowerK === "form-name" || lowerK === "formname" || lowerK === "form_title") {
+        setOrAppend("form_name", strVal);
+        continue;
+      }
+      setOrAppend(rawK, strVal);
+      const bracketMatch = rawK.match(/(?:form_fields|fields|entry|wpforms)\[([^\]]+)\]/i);
+      if (bracketMatch && bracketMatch[1]) {
+        setOrAppend(bracketMatch[1], strVal);
+      }
+    } else if (typeof rawV === "object") {
+      const nestedVal = rawV.value ?? rawV.val ?? rawV.raw_value ?? rawV.text;
+      if (typeof nestedVal === "string" || typeof nestedVal === "number" || typeof nestedVal === "boolean") {
+        setOrAppend(rawK, nestedVal);
+        if (rawV.id) setOrAppend(String(rawV.id), nestedVal);
+        const innerName = String(rawV.name || "").trim();
+        if (innerName && innerName.toLowerCase() !== "form" && innerName.length > 2) {
+          setOrAppend(innerName, nestedVal);
+        }
+        if (rawV.label) setOrAppend(String(rawV.label), nestedVal);
+      }
+      flattenAllFields(rawV, target);
+    }
+  }
+  return target;
+}
+function isInvalidHumanName(val) {
+  if (!val || typeof val !== "string") return true;
+  const s2 = val.trim();
+  if (s2.length < 2) return true;
+  const designationsAndTitles = /* @__PURE__ */ new Set([
+    "vp",
+    "ceo",
+    "cto",
+    "cfo",
+    "coo",
+    "md",
+    "gm",
+    "hr",
+    "it",
+    "pr",
+    "director",
+    "manager",
+    "founder",
+    "owner",
+    "partner",
+    "head",
+    "executive",
+    "president",
+    "proprietor",
+    "admin",
+    "lead",
+    "officer",
+    "chief",
+    "agent"
+  ]);
+  const lower2 = s2.toLowerCase();
+  if (designationsAndTitles.has(lower2)) return true;
+  const productOrFormKeywords = [
+    "crm",
+    "booking",
+    "management",
+    "group series",
+    "erp",
+    "portal",
+    "software",
+    "package",
+    "solution",
+    "license",
+    "b2b",
+    "allotment",
+    "request demo",
+    "demo request",
+    "demo form",
+    "inquiry form",
+    "contact form",
+    "series",
+    "pilgrim",
+    "agency leader",
+    "tour operator",
+    "partner",
+    "system",
+    "platform",
+    "app",
+    "application",
+    "vice president",
+    "head of sales",
+    "decision maker"
+  ];
+  for (const kw of productOrFormKeywords) {
+    if (lower2.includes(kw)) return true;
+  }
+  return false;
+}
+async function processWebsiteLeadSubmission(rawInput, ctx = DEFAULT_UMRAH_CTX7) {
+  const brand = await getTenantBrand(ctx.tenantId);
+  const flatFields = flattenAllFields(rawInput || {});
+  const findValue = (patterns) => {
+    for (const pat of patterns) {
+      for (const [k, v] of Object.entries(flatFields)) {
+        if (!v) continue;
+        const cleanK = k.toLowerCase().replace(/[-_\[\]\.\s]/g, "");
+        if (pat.test(cleanK)) return v;
+      }
+    }
+    return "";
+  };
+  let email = findValue([
+    /^email$/,
+    /^youremail$/,
+    /^useremail$/,
+    /^contactemail$/,
+    /^workemail$/,
+    /^emailaddress$/,
+    /^mail$/,
+    /email/,
+    /mail/
+  ]).trim().toLowerCase();
+  if (!email || !email.includes("@")) {
+    const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/;
+    for (const [, v] of Object.entries(flatFields)) {
+      const match = v.match(emailRegex);
+      if (match && match[0]) {
+        email = match[0].trim().toLowerCase();
+        break;
+      }
+    }
+  }
+  let rawFullName = findValue([
+    /^fullname$/,
+    /^yourfullname$/,
+    /^your_full_name$/,
+    /^yourname$/,
+    /^your_name$/,
+    /^clientname$/,
+    /^contactname$/,
+    /^leadname$/,
+    /^username$/,
+    /^personname$/,
+    /^applicantname$/
+  ]).trim();
+  let detectedProductFromField = "";
+  if (rawFullName && isInvalidHumanName(rawFullName)) {
+    if (isInvalidHumanName(rawFullName)) {
+      detectedProductFromField = rawFullName;
+    }
+    rawFullName = "";
+  }
+  let firstNamePart = findValue([/^firstname$/, /^fname$/, /^first$/]).trim();
+  let lastNamePart = findValue([/^lastname$/, /^lname$/, /^last$/]).trim();
+  if (!rawFullName && (firstNamePart || lastNamePart)) {
+    const combinedParts = `${firstNamePart} ${lastNamePart}`.trim();
+    if (!isInvalidHumanName(combinedParts)) {
+      rawFullName = combinedParts;
+    }
+  }
+  if (!rawFullName) {
+    const candidateName = findValue([/^name$/, /^full_name$/]).trim();
+    if (candidateName && !isInvalidHumanName(candidateName)) {
+      rawFullName = candidateName;
+    } else if (candidateName && isInvalidHumanName(candidateName) && !detectedProductFromField) {
+      detectedProductFromField = candidateName;
+    }
+  }
+  if (!rawFullName || isInvalidHumanName(rawFullName)) {
+    for (const [k, v] of Object.entries(flatFields)) {
+      if (!v) continue;
+      const cleanK = k.toLowerCase().replace(/[-_\[\]\.\s]/g, "");
+      if (/email|mail|phone|mobile|tel|city|country|state|zip|product|service|company|agency|message|query|remark|note|size|team|branch|form|post|page|nonce|token|url|ref|recaptcha|designation|job|title|role|position/i.test(
+        cleanK
+      )) {
+        continue;
+      }
+      const trimmedV = v.trim();
+      if (trimmedV.length >= 3 && trimmedV.length <= 40 && !trimmedV.includes("@") && !/\d/.test(trimmedV) && /^[a-zA-Z\s.'-]+$/.test(trimmedV) && !isInvalidHumanName(trimmedV)) {
+        rawFullName = trimmedV;
+        break;
+      }
+    }
+  }
+  if (!rawFullName && email) {
+    const userPart = email.split("@")[0] || "";
+    const cleanUserPart = userPart.replace(/[._\-0-9]/g, " ").trim();
+    if (cleanUserPart.length > 2) {
+      rawFullName = cleanUserPart.split(" ").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+    }
+  }
+  rawFullName = rawFullName || "Inbound Website Lead";
+  let firstName = firstNamePart;
+  let lastName = lastNamePart;
+  if (!firstName) {
+    const parts = rawFullName.split(/\s+/);
+    firstName = parts[0] || "Partner";
+    lastName = parts.slice(1).join(" ") || "";
+  }
+  let rawPhone = findValue([
+    /^phone$/,
+    /^phonenumber$/,
+    /^yourphone$/,
+    /^mobile$/,
+    /^mobilenumber$/,
+    /^contactnumber$/,
+    /^tel$/,
+    /^telephone$/,
+    /^whatsapp$/,
+    /phone/,
+    /mobile/,
+    /whatsapp/
+  ]).trim();
+  if (!rawPhone) {
+    for (const [k, v] of Object.entries(flatFields)) {
+      if (/id|date|time|nonce|token|zip|postal|lead/i.test(k)) continue;
+      const cleanDigits = v.replace(/[\s\-\(\)\.]/g, "");
+      if (/^\+?[0-9]{7,16}$/.test(cleanDigits) && !v.includes("@")) {
+        rawPhone = v.trim();
+        break;
+      }
+    }
+  }
+  const rawCountryCode = findValue([/^countrycode$/, /^callingcode$/, /^code$/]).trim();
+  let fullPhone = rawPhone;
+  if (fullPhone && rawCountryCode && !fullPhone.startsWith("+")) {
+    const cleanCode = rawCountryCode.startsWith("+") ? rawCountryCode : `+${rawCountryCode}`;
+    fullPhone = `${cleanCode} ${fullPhone}`.trim();
+  }
+  const designation = (findValue([/^designation$/, /^jobtitle$/, /^job_title$/, /^job$/, /^role$/, /^position$/, /^title$/]) || "Tour Operator / Agency Leader").trim();
+  const city = findValue([/^city$/, /^yourcity$/, /^your_city$/, /^town$/, /city/]).trim();
+  let country = findValue([
+    /^countryname$/,
+    /^country_name$/,
+    /^yourcountryname$/,
+    /^selectcountryname$/,
+    /^nationname$/,
+    /^countrytext$/,
+    /^country_text$/
+  ]).trim();
+  if (!country) {
+    country = findValue([
+      /^country$/,
+      /^selectcountry$/,
+      /^yourcountry$/,
+      /^nation$/
+    ]).trim();
+  }
+  const numericCountryMap = {
+    "101": "India",
+    "194": "Saudi Arabia",
+    "221": "United Arab Emirates",
+    "232": "United Kingdom",
+    "233": "United States",
+    "163": "Pakistan",
+    "100": "Indonesia",
+    "132": "Malaysia",
+    "18": "Bangladesh",
+    "58": "Egypt",
+    "220": "Turkey",
+    "91": "India",
+    "+91": "India",
+    "1": "United States",
+    "+1": "United States",
+    "44": "United Kingdom",
+    "+44": "United Kingdom",
+    "966": "Saudi Arabia",
+    "+966": "Saudi Arabia",
+    "971": "United Arab Emirates",
+    "+971": "United Arab Emirates"
+  };
+  if (!country || /^\+?\d+$/.test(country)) {
+    const altCountryName = findValue([/countryname/i, /country_name/i, /countrytext/i]);
+    if (altCountryName && !/^\+?\d+$/.test(altCountryName)) {
+      country = altCountryName.trim();
+    } else if (country && numericCountryMap[country]) {
+      country = numericCountryMap[country];
+    } else {
+      country = "India";
+    }
+  }
+  let companyName = findValue([
+    /^companyname$/,
+    /^company$/,
+    /^agencyname$/,
+    /^agency$/,
+    /^organization$/,
+    /^businessname$/,
+    /^firm$/,
+    /^operator$/,
+    /^touroperator$/,
+    /company/,
+    /agency/
+  ]).trim();
+  if (!companyName) {
+    if (email) {
+      const domainPart = email.split("@")[1] || "";
+      if (domainPart && !["gmail.com", "yahoo.com", "outlook.com", "hotmail.com", "icloud.com"].includes(domainPart)) {
+        const derived = domainPart.split(".")[0];
+        companyName = derived.charAt(0).toUpperCase() + derived.slice(1) + " Travels";
+      }
+    }
+    if (!companyName) {
+      companyName = brandFallbackAgency(brand, firstName);
+    }
+  }
+  const website = findValue([/^website$/, /^companywebsite$/, /^url$/, /^companyurl$/]).trim();
+  const rawBranchesVal = findValue([/^branches$/, /^hasbranches$/, /^hasbranch$/, /^branch$/, /branch/]).trim();
+  const branches = typeof rawBranchesVal === "string" && /yes|true|multiple|branch/i.test(rawBranchesVal) ? "Yes" : rawBranchesVal && /no|false|single/i.test(rawBranchesVal) ? "No" : "No";
+  const productValues = [];
+  for (const [k, v] of Object.entries(flatFields)) {
+    if (!v) continue;
+    const lowerK = k.toLowerCase().replace(/[-_\[\]\.\s]/g, "");
+    if (/product|products|selectproduct|serviceinterest|productinterest|solution|interest/i.test(lowerK)) {
+      const parts = String(v).split(/[,;\n]/).map((p) => p.trim()).filter(Boolean);
+      for (const p of parts) {
+        if (p && !productValues.some((pv) => pv.toLowerCase() === p.toLowerCase()) && !/select|choose|default/i.test(p)) {
+          productValues.push(p);
+        }
+      }
+    }
+  }
+  let product = productValues.length > 0 ? productValues.join(", ") : "";
+  if (!product) {
+    product = (findValue([
+      /^product$/,
+      /^products$/,
+      /^selectproducts$/,
+      /^productinterest$/,
+      /^serviceinterest$/,
+      /^solution$/,
+      /^interest$/,
+      /product/
+    ]) || brand.defaultProduct).trim();
+  }
+  if (product === brand.defaultProduct || !product) {
+    if (detectedProductFromField) {
+      product = detectedProductFromField;
+    } else if (flatFields["form_name"]) {
+      product = flatFields["form_name"];
+    }
+  }
+  const teamSize = (findValue([/^teamsize$/, /^team$/, /^size$/, /^employees$/, /^users$/, /^capacity$/]) || "5-10 Users").trim();
+  const message2 = findValue([
+    /^message$/,
+    /^yourmessage$/,
+    /^query$/,
+    /^notes$/,
+    /^comments$/,
+    /^remark$/,
+    /^remarks$/,
+    /^requirement$/,
+    /^requirements$/,
+    /^inquiry$/,
+    /^description$/,
+    /^details$/,
+    /message/,
+    /query/,
+    /remark/,
+    /comment/
+  ]).trim();
+  const sourceUrl = findValue([/^sourceurl$/, /^source$/, /^referrer$/]) || brandDefaultSourceUrl(brand);
+  const unmapped = [];
+  const mappedValues = /* @__PURE__ */ new Set([
+    email,
+    rawPhone,
+    fullPhone,
+    rawFullName,
+    firstNamePart,
+    lastNamePart,
+    companyName,
+    designation,
+    city,
+    country,
+    product,
+    teamSize,
+    branches,
+    message2,
+    website,
+    sourceUrl
+  ]);
+  for (const [k, v] of Object.entries(flatFields)) {
+    if (!v) continue;
+    if (mappedValues.has(v)) continue;
+    const lowerK = k.toLowerCase().replace(/[-_\[\]\.\s]/g, "");
+    if (/^(id|type|rawvalue|fieldid|fieldtype|key|label|formid|formname|action|submit|nonce|wpnonce|wphttpreferer|recaptcha|token|postid|referertitle)$/i.test(lowerK)) continue;
+    if (k.length > 50 || v.length > 500) continue;
+    unmapped.push(`\u2022 ${k}: ${v}`);
+  }
+  let leadScore = 85;
+  if (teamSize.includes("10") || teamSize.includes("20") || teamSize.includes("Enterprise")) {
+    leadScore += 10;
+  }
+  if (branches === "Yes") {
+    leadScore += 5;
+  }
+  if (website) {
+    leadScore += 2;
+  }
+  leadScore = Math.min(100, Math.max(70, leadScore));
+  const nowIso = (/* @__PURE__ */ new Date()).toISOString();
+  let contactId = `contact-web-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+  let existingContactData = {};
+  if (isFirebaseConfigured && db) {
+    try {
+      const repo = tenantRepo(ctx);
+      const q = query(repo.contacts(), where("email", "==", email));
+      const snap = await getDocs(q);
+      if (!snap.empty) {
+        const found = snap.docs[0].data();
+        contactId = found.contactId;
+        existingContactData = found;
+        console.log(`[Website Lead] Matching existing contact found: ${contactId} (${email}) for tenant ${ctx.tenantId}`);
+      }
+    } catch (e2) {
+      console.warn("[Website Lead] Note looking up existing contact:", e2);
+    }
+  }
+  const contact = {
+    contactId,
+    firstName: firstName || existingContactData.firstName || "Partner",
+    lastName: lastName || existingContactData.lastName || "",
+    email,
+    phone: fullPhone || existingContactData.phone || "",
+    companyName: companyName || existingContactData.companyName || "Umrah Tour Operator",
+    jobTitle: designation || existingContactData.jobTitle || "Agency Executive",
+    country,
+    city,
+    website: website || existingContactData.website || "",
+    branches,
+    hasBranches: branches === "Yes",
+    teamSize,
+    notes: message2 ? `Demo Inquiry: ${message2}` : existingContactData.notes || "",
+    createdAt: existingContactData.createdAt || nowIso,
+    updatedAt: nowIso,
+    lastActivityAt: nowIso
+  };
+  const leadId = `lead-web-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+  const aiSummary = `Inbound Free Demo Request received from ${rawFullName} (${designation} at ${companyName}). Located in ${city ? `${city}, ` : ""}${country}. Interested in "${product}". Team size: ${teamSize}. Multi-branch agency: ${branches}. Customer query: "${message2 || "Requested full platform walkthrough"}".`;
+  const aiRecommendation = `High-intent inbound lead! Action required: Contact ${firstName} (${email} / ${fullPhone || "phone"}) to confirm demo time slot for ${companyName} and prepare customized pricing for ${teamSize}.`;
+  const requirements = [
+    product,
+    `Team Size: ${teamSize}`,
+    branches === "Yes" ? "Multi-Branch Deployment" : "Single Office",
+    city ? `City: ${city}` : null,
+    country ? `Country: ${country}` : null
+  ].filter(Boolean);
+  const lead = {
+    leadId,
+    contactId,
+    source: "WEBSITE",
+    leadType: "INBOUND",
+    status: "DEMO_SCHEDULED",
+    leadScore,
+    intent: "HIGH",
+    buyingStage: "CONSIDERATION",
+    serviceInterest: product,
+    requirements,
+    budget: teamSize.includes("20") ? "Enterprise Quote Required" : "Standard Tier",
+    timeline: "Immediate / Upcoming Season",
+    aiSummary,
+    aiRecommendation,
+    demoStatus: "NOT_BOOKED",
+    demoSource: void 0,
+    demoBookedAt: nowIso,
+    country,
+    city,
+    website,
+    branches,
+    teamSize,
+    productInterest: product,
+    queryMessage: message2,
+    notes: message2 || `Demo requested on ${sourceUrl}`,
+    sourceUrl,
+    createdAt: nowIso,
+    updatedAt: nowIso,
+    lastActivityAt: nowIso
+  };
+  try {
+    await handleIncomingCampaignLeadReply({
+      fromEmail: email,
+      fromPhone: fullPhone,
+      subject: `Website Demo Request: ${companyName}`,
+      body: message2 || "Submitted website demo request form"
+    });
+  } catch (campErr) {
+    console.warn("[Website Lead] Campaign lead reply hook notice:", campErr);
+  }
+  const conversationId = `conv-web-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+  const messageId = `msg-web-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+  const inboundLines = [
+    brandInboundHeading(brand),
+    ``,
+    `\u2022 Name: ${rawFullName}${designation && designation.toLowerCase() !== rawFullName.toLowerCase() ? ` (${designation})` : ""}`,
+    `\u2022 Company: ${companyName}${website ? ` (${website})` : ""}`,
+    `\u2022 Email: ${email || "Not provided"}`,
+    `\u2022 Phone: ${fullPhone || "Not provided"}`,
+    `\u2022 Location: ${city ? `${city}, ` : ""}${country}`,
+    `\u2022 Product Interest: ${product}`,
+    `\u2022 Team Size: ${teamSize}`,
+    `\u2022 Multi-Branch: ${branches}`,
+    ``,
+    `Message / Query:`,
+    message2 || 'Customer submitted the "Schedule my Free Demo" form for an operational walkthrough.'
+  ];
+  if (unmapped.length > 0) {
+    inboundLines.push(``, `Additional Form Submission Data:`, ...unmapped);
+  }
+  const inboundDetailsText = inboundLines.join("\n");
+  const cleanEmail = email ? email.trim().toLowerCase() : "";
+  let alreadySent = false;
+  let isInFlight = false;
+  const inFlightSet = getInFlightSet(ctx.tenantId);
+  if (cleanEmail && cleanEmail.includes("@")) {
+    alreadySent = await hasThankYouEmailBeenSent(cleanEmail, ctx);
+    isInFlight = inFlightSet.has(cleanEmail);
+  }
+  const shouldSendThankYou = Boolean(
+    cleanEmail && cleanEmail.includes("@") && !cleanEmail.endsWith("@umrah360.in") && !alreadySent && !isInFlight
+  );
+  let duplicateThankYouSuppressed = alreadySent || isInFlight;
+  if (duplicateThankYouSuppressed) {
+    console.log(
+      `[Website Lead Idempotency] Thank you email already previously sent or in-flight for "${cleanEmail}". Strictly sending ONCE; suppressing duplicate email dispatch.`
+    );
+  }
+  const conversation = {
+    conversationId,
+    contactId,
+    leadId,
+    channel: "WEBSITE",
+    direction: "INBOUND",
+    status: "ACTIVE",
+    aiEnabled: false,
+    // Explicitly false for website leads so generic AI never sends duplicate emails
+    humanHandoff: false,
+    conversationSummary: `Website Demo Request: ${companyName} (${rawFullName})`,
+    subject: `Website Demo Request: ${companyName} (${product})`,
+    customerEmail: cleanEmail,
+    thankYouEmailSent: true,
+    // Always marked true so background pollers NEVER duplicate this dispatch
+    thankYouSmtpMessageId: alreadySent ? "ALREADY_SENT_PREVIOUSLY" : void 0,
+    startedAt: nowIso,
+    lastMessageAt: nowIso,
+    lastMessageText: inboundDetailsText.slice(0, 180) + "...",
+    unreadCount: 1,
+    isRead: false,
+    unread: true,
+    createdAt: nowIso,
+    updatedAt: nowIso
+  };
+  const initialMessage = {
+    messageId,
+    conversationId,
+    senderType: "CUSTOMER",
+    senderName: rawFullName,
+    senderEmail: cleanEmail,
+    recipientEmail: brand.salesEmail || "sales@umrah360.in",
+    channel: "WEBSITE",
+    direction: "INBOUND",
+    text: inboundDetailsText,
+    timestamp: nowIso,
+    sentAt: nowIso,
+    receivedAt: nowIso,
+    aiReplied: true
+    // Marked true so generic inbox auto-replier NEVER attempts an AI response
+  };
+  let autoConfirmationSent = false;
+  let autoReplyMessage = null;
+  if (shouldSendThankYou) {
+    inFlightSet.add(cleanEmail);
+    try {
+      await fetchFirestoreSmtpConfig();
+      const smtpConfig = getSmtpConfig();
+      if (smtpConfig.configured) {
+        const emailSubject = brandDemoThankYouSubject(brand, companyName);
+        const emailBody = [
+          `Hello ${firstName},`,
+          ``,
+          `Thank you for requesting a live demo of ${brand.companyName} for ${companyName}!`,
+          ``,
+          `We have received your requirements:`,
+          `- Product: ${product}`,
+          `- Team Size: ${teamSize}`,
+          `- Location: ${city ? `${city}, ` : ""}${country}`,
+          `- Multi-Branch Setup: ${branches}`,
+          ``,
+          brandSpecialistLine(brand, fullPhone || cleanEmail),
+          ``,
+          brand.playbook === "umrah360" ? `If you need immediate assistance or have specific visa/hotel allotment workflows you would like to test, simply reply to this email.` : `If you need immediate assistance, simply reply to this email.`,
+          ``,
+          `Warm regards,`,
+          ...brandThankYouSignoff(brand)
+        ].join("\n");
+        console.log(`[Website Lead] Dispatching single Thank You email to ${cleanEmail} for ${companyName}...`);
+        const mailResult = await sendLiveEmail({
+          tenantId: ctx.tenantId,
+          to: cleanEmail,
+          subject: emailSubject,
+          text: emailBody,
+          headers: {
+            "X-Conversation-Id": conversationId,
+            "X-Lead-Id": leadId,
+            "X-Contact-Id": contactId
+          }
+        });
+        if (mailResult.success) {
+          autoConfirmationSent = true;
+          const sentIso = (/* @__PURE__ */ new Date()).toISOString();
+          console.log(`[Website Lead Success] \u2713 Live Thank You email delivered to ${cleanEmail} (ID: ${mailResult.messageId})!`);
+          conversation.thankYouEmailSent = true;
+          conversation.thankYouEmailDeliveredAt = sentIso;
+          conversation.thankYouSmtpMessageId = mailResult.messageId;
+          const replyMsgId = `msg-thankyou-${conversationId}`;
+          autoReplyMessage = {
+            messageId: replyMsgId,
+            conversationId,
+            senderType: "AI",
+            senderName: brand.senderName,
+            senderEmail: smtpConfig.user || "amaavigo@gmail.com",
+            recipientEmail: cleanEmail,
+            channel: "EMAIL",
+            direction: "OUTBOUND",
+            text: emailBody,
+            timestamp: sentIso,
+            sentAt: sentIso,
+            receivedAt: sentIso,
+            createdAt: sentIso,
+            deliveryStatus: "DELIVERED",
+            smtpMessageId: mailResult.messageId,
+            emailDeliveredAt: sentIso,
+            aiReplied: true
+          };
+          await recordThankYouEmailSent(cleanEmail, {
+            leadId,
+            conversationId,
+            smtpMessageId: mailResult.messageId
+          }, ctx);
+        } else {
+          console.warn(`[Website Lead Warning] SMTP delivery attempt to ${cleanEmail} failed:`, mailResult.error);
+        }
+      } else {
+        console.warn(`[Website Lead Notice] SMTP credentials not configured yet; skipping live email dispatch.`);
+      }
+    } catch (smtpErr) {
+      console.warn("[Website Lead] Notice sending auto-confirmation email:", smtpErr);
+    } finally {
+      inFlightSet.delete(cleanEmail);
+    }
+  }
+  if (isFirebaseConfigured && db) {
+    try {
+      const repo = tenantRepo(ctx);
+      const writes = [
+        safeSetDoc(repo.contactDoc(contact.contactId), contact, { merge: true }),
+        safeSetDoc(repo.leadDoc(lead.leadId), lead, { merge: true }),
+        safeSetDoc(repo.conversationDoc(conversation.conversationId), conversation, { merge: true }),
+        safeSetDoc(repo.messageDoc(initialMessage.messageId), initialMessage, { merge: true })
+      ];
+      if (autoReplyMessage) {
+        writes.push(safeSetDoc(repo.messageDoc(autoReplyMessage.messageId), autoReplyMessage, { merge: true }));
+      }
+      await Promise.all(writes);
+      console.log(`[Website Lead] Successfully stored Lead "${companyName}" (${leadId}) directly into Firestore DB for tenant ${ctx.tenantId}!`);
+    } catch (dbErr) {
+      console.error(`[Website Lead] Error writing to Firestore DB for ${ctx.tenantId}:`, dbErr);
+    }
+  }
+  return {
+    success: true,
+    message: duplicateThankYouSuppressed ? `Lead for ${companyName} (${rawFullName}) saved in CRM. Thank-you email was already sent previously to ${cleanEmail} and preserved without duplicates.` : `Lead for ${companyName} (${rawFullName}) successfully pushed to CRM and thank-you confirmation delivered!`,
+    contact,
+    lead,
+    conversation,
+    initialMessage,
+    autoConfirmationSent,
+    duplicateThankYouSuppressed
+  };
+}
+var DEFAULT_UMRAH_CTX7, tenantSentThankYouCaches, tenantInFlightThankYouSends;
+var init_websiteLeadService = __esm({
+  "src/server/websiteLeadService.ts"() {
+    init_adminFirestore();
+    init_config();
+    init_adminFirestore();
+    init_firestoreUtils();
+    init_smtpService();
+    init_campaignService();
+    init_tenantRepo();
+    init_brandService();
+    init_brand();
+    DEFAULT_UMRAH_CTX7 = {
+      tenantId: "umrah360",
+      uid: "system",
+      email: "system@umrah360.in",
+      role: "admin"
+    };
+    tenantSentThankYouCaches = /* @__PURE__ */ new Map();
+    tenantInFlightThankYouSends = /* @__PURE__ */ new Map();
   }
 });
 
@@ -284553,12 +292743,12 @@ var require_levels = __commonJS({
     function genLsCache(instance) {
       const formatter = instance[formattersSym].level;
       const { labels } = instance.levels;
-      const cache2 = {};
+      const cache3 = {};
       for (const label in labels) {
         const level = formatter(labels[label], Number(label));
-        cache2[label] = JSON.stringify(level).slice(0, -1);
+        cache3[label] = JSON.stringify(level).slice(0, -1);
       }
-      instance[lsCacheSym] = cache2;
+      instance[lsCacheSym] = cache3;
       return instance;
     }
     function isStandardLevel(level, useOnlyCustomLevels) {
@@ -285708,7 +293898,7 @@ var require_multistream = __commonJS({
 var require_pino = __commonJS({
   "node_modules/pino/pino.js"(exports, module) {
     "use strict";
-    var os2 = __require("node:os");
+    var os3 = __require("node:os");
     var stdSerializers = require_pino_std_serializers();
     var caller = require_caller();
     var redaction = require_redaction();
@@ -285756,7 +293946,7 @@ var require_pino = __commonJS({
     } = symbols;
     var { epochTime, nullTime } = time;
     var { pid } = process;
-    var hostname = os2.hostname();
+    var hostname = os3.hostname();
     var defaultErrorSerializer = stdSerializers.err;
     var defaultOptions = {
       level: "info",
@@ -285935,6 +294125,556 @@ var require_pino = __commonJS({
   }
 });
 
+// src/server/websiteWebhookService.ts
+var websiteWebhookService_exports = {};
+__export(websiteWebhookService_exports, {
+  WebhookSettingsError: () => WebhookSettingsError,
+  getWebhookView: () => getWebhookView,
+  normalizeOrigin: () => normalizeOrigin,
+  originAllowed: () => originAllowed,
+  regenerateKey: () => regenerateKey,
+  sendTestLead: () => sendTestLead,
+  setAllowedOrigins: () => setAllowedOrigins
+});
+import crypto10 from "crypto";
+function newKey(tenantId) {
+  const slug = tenantId.toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 12) || "co";
+  return `${slug}-${crypto10.randomBytes(12).toString("base64url")}`;
+}
+function normalizeOrigin(raw) {
+  let s2 = String(raw || "").trim().toLowerCase();
+  if (!s2) return null;
+  if (!/^[a-z][a-z0-9+.-]*:\/\//.test(s2)) s2 = `https://${s2}`;
+  try {
+    const host = new URL(s2).hostname.replace(/^www\./, "");
+    return /^[a-z0-9.-]+\.[a-z]{2,}$/.test(host) || host === "localhost" ? host : null;
+  } catch {
+    return null;
+  }
+}
+function originAllowed(requestOrigin, allowed) {
+  const host = normalizeOrigin(requestOrigin);
+  if (!host) return false;
+  return allowed.some((a) => host === a || host.endsWith(`.${a}`));
+}
+function view(key, allowedOrigins, createdAt) {
+  return { key, path: `/api/webhooks/website/${key}`, allowedOrigins, createdAt };
+}
+async function writeRoute(tenantId, key, allowedOrigins, createdAt) {
+  await setDoc(
+    globalWebhookRouteDoc(key),
+    { webhookId: key, tenantId, type: "website", allowedOrigins, requireOrigin: true, createdAt, updatedAt: (/* @__PURE__ */ new Date()).toISOString() },
+    { merge: false }
+  );
+}
+function requireDb2() {
+  if (!isFirebaseConfigured || !db) throw new WebhookSettingsError("Database not configured", 503);
+}
+async function getWebhookView(tenantId) {
+  requireDb2();
+  const ref = tenantRepo({ tenantId }).settingsDoc(SETTINGS_DOC);
+  const snap = await getDoc(ref);
+  const data = snap.exists() ? snap.data() : null;
+  if (data?.key) {
+    const route = await getDoc(globalWebhookRouteDoc(data.key));
+    if (!route.exists()) await writeRoute(tenantId, data.key, data.allowedOrigins || [], data.createdAt || (/* @__PURE__ */ new Date()).toISOString());
+    return view(data.key, data.allowedOrigins || [], data.createdAt);
+  }
+  const key = newKey(tenantId);
+  const createdAt = (/* @__PURE__ */ new Date()).toISOString();
+  await writeRoute(tenantId, key, [], createdAt);
+  await setDoc(ref, { key, allowedOrigins: [], createdAt }, { merge: false });
+  return view(key, [], createdAt);
+}
+async function setAllowedOrigins(tenantId, origins) {
+  requireDb2();
+  if (!Array.isArray(origins)) throw new WebhookSettingsError("allowedOrigins must be a list of websites");
+  const clean2 = [];
+  for (const o of origins.slice(0, 20)) {
+    const host = normalizeOrigin(String(o));
+    if (!host) throw new WebhookSettingsError(`"${String(o).slice(0, 80)}" is not a valid website address`);
+    if (!clean2.includes(host)) clean2.push(host);
+  }
+  const current = await getWebhookView(tenantId);
+  await writeRoute(tenantId, current.key, clean2, current.createdAt || (/* @__PURE__ */ new Date()).toISOString());
+  await setDoc(
+    tenantRepo({ tenantId }).settingsDoc(SETTINGS_DOC),
+    { key: current.key, allowedOrigins: clean2, createdAt: current.createdAt, updatedAt: (/* @__PURE__ */ new Date()).toISOString() },
+    { merge: true }
+  );
+  return view(current.key, clean2, current.createdAt);
+}
+async function regenerateKey(tenantId) {
+  requireDb2();
+  const current = await getWebhookView(tenantId);
+  const key = newKey(tenantId);
+  const createdAt = (/* @__PURE__ */ new Date()).toISOString();
+  await writeRoute(tenantId, key, current.allowedOrigins, createdAt);
+  await setDoc(
+    tenantRepo({ tenantId }).settingsDoc(SETTINGS_DOC),
+    { key, allowedOrigins: current.allowedOrigins, createdAt, updatedAt: createdAt },
+    { merge: false }
+  );
+  await deleteDoc(globalWebhookRouteDoc(current.key)).catch(() => {
+  });
+  return view(key, current.allowedOrigins, createdAt);
+}
+async function sendTestLead(ctx) {
+  requireDb2();
+  if (!ctx.email) throw new WebhookSettingsError("Your account has no email address to send the test to");
+  const result = await processWebsiteLeadSubmission(
+    {
+      name: "Webhook Test",
+      email: ctx.email,
+      phone: "+91 90000 00000",
+      message: "Test lead sent from Settings \u2192 Website leads. If you can see this in your inbox, your webhook works."
+    },
+    ctx
+  );
+  return { leadId: result.lead?.leadId, thankYouEmailSent: result.thankYouEmailSent };
+}
+var WebhookSettingsError, SETTINGS_DOC;
+var init_websiteWebhookService = __esm({
+  "src/server/websiteWebhookService.ts"() {
+    init_adminFirestore();
+    init_config();
+    init_tenantRepo();
+    init_websiteLeadService();
+    WebhookSettingsError = class extends Error {
+      constructor(message2, status = 400) {
+        super(message2);
+        this.status = status;
+      }
+    };
+    SETTINGS_DOC = "website_webhook";
+  }
+});
+
+// src/server/jobLeaseService.ts
+import os2 from "os";
+async function acquireJobLease(tenantId, jobName, ttlMs = 3e4) {
+  if (!isFirebaseConfigured || !db || !tenantId) return true;
+  const ctx = {
+    tenantId,
+    uid: "system",
+    email: "system@umrah360.in",
+    role: "admin"
+  };
+  const jobDocRef = tenantRepo(ctx).jobDoc(jobName);
+  const now = Date.now();
+  const expiresAt = new Date(now + ttlMs).toISOString();
+  const leasedAt = new Date(now).toISOString();
+  try {
+    const snap = await getDoc(jobDocRef);
+    if (!snap.exists()) {
+      const leaseRecord = {
+        jobName,
+        workerId: WORKER_ID,
+        leasedAt,
+        expiresAt
+      };
+      await setDoc(jobDocRef, leaseRecord);
+      return true;
+    }
+    const currentLease = snap.data();
+    const currentExpiry = new Date(currentLease.expiresAt).getTime();
+    if (now > currentExpiry || currentLease.workerId === WORKER_ID) {
+      await updateDoc(jobDocRef, {
+        workerId: WORKER_ID,
+        leasedAt,
+        expiresAt
+      });
+      return true;
+    }
+    return false;
+  } catch (err) {
+    console.warn(`[JobLease] Lease check error for ${tenantId}/${jobName}:`, err);
+    return true;
+  }
+}
+async function releaseJobLease(tenantId, jobName, status = "success", error) {
+  if (!isFirebaseConfigured || !db || !tenantId) return;
+  const ctx = {
+    tenantId,
+    uid: "system",
+    email: "system@umrah360.in",
+    role: "admin"
+  };
+  const jobDocRef = tenantRepo(ctx).jobDoc(jobName);
+  try {
+    const snap = await getDoc(jobDocRef);
+    if (snap.exists()) {
+      const currentLease = snap.data();
+      if (currentLease.workerId === WORKER_ID) {
+        await updateDoc(jobDocRef, {
+          expiresAt: (/* @__PURE__ */ new Date(0)).toISOString(),
+          // Expire immediately
+          lastCompletedAt: (/* @__PURE__ */ new Date()).toISOString(),
+          lastStatus: status,
+          ...error ? { lastError: error } : {}
+        });
+      }
+    }
+  } catch (err) {
+    console.warn(`[JobLease] Lease release error for ${tenantId}/${jobName}:`, err);
+  }
+}
+async function runWithJobLease(tenantId, jobName, ttlMs, task) {
+  const acquired = await acquireJobLease(tenantId, jobName, ttlMs);
+  if (!acquired) {
+    return null;
+  }
+  try {
+    const result = await task();
+    await releaseJobLease(tenantId, jobName, "success");
+    return result;
+  } catch (err) {
+    await releaseJobLease(tenantId, jobName, "failed", err?.message || String(err));
+    throw err;
+  }
+}
+var WORKER_ID;
+var init_jobLeaseService = __esm({
+  "src/server/jobLeaseService.ts"() {
+    init_adminFirestore();
+    init_config();
+    init_adminFirestore();
+    init_tenantRepo();
+    WORKER_ID = `${os2.hostname()}-${process.pid}-${Math.random().toString(36).substring(2, 8)}`;
+  }
+});
+
+// src/server/tenantImapPoller.ts
+var tenantImapPoller_exports = {};
+__export(tenantImapPoller_exports, {
+  normalizeIdentifier: () => normalizeIdentifier,
+  pollAllTenantMailboxes: () => pollAllTenantMailboxes,
+  pollTenantMailbox: () => pollTenantMailbox,
+  startTenantMailboxPoller: () => startTenantMailboxPoller
+});
+import { simpleParser as simpleParser2 } from "mailparser";
+function isAuthFailure(err) {
+  return Boolean(err?.authenticationFailed) || /AUTHENTICATIONFAILED|Invalid credentials|Authentication failed|LOGIN failed/i.test(String(err?.responseText || err?.message || ""));
+}
+function backoffMs(failures) {
+  return Math.min(MAX_BACKOFF_MS, 6e4 * 2 ** Math.max(0, failures - 1));
+}
+function authPauseMs(failures) {
+  if (failures <= 1) return 5 * 6e4;
+  if (failures === 2) return 30 * 6e4;
+  return 24 * 36e5;
+}
+async function fetchNewMessages(creds, ip, settings) {
+  const client2 = createTenantImapClient(creds, ip);
+  try {
+    await client2.connect();
+    const lock = await client2.getMailboxLock("INBOX", { readOnly: true });
+    try {
+      const mb = client2.mailbox;
+      const uidValidity = String(mb?.uidValidity ?? "");
+      const uidNext = Number(mb?.uidNext) || 1;
+      if (settings.uidValidity && settings.uidValidity !== uidValidity) {
+        return { candidates: [], uidValidity, uidNext, reset: true, highestSeen: Math.max(0, uidNext - 1) };
+      }
+      const lastUid = Number(settings.lastUid) || 0;
+      if (uidNext - 1 <= lastUid) {
+        return { candidates: [], uidValidity, uidNext, reset: false, highestSeen: lastUid };
+      }
+      const heads = [];
+      for await (const m2 of client2.fetch(`${lastUid + 1}:*`, { uid: true, envelope: true, size: true }, { uid: true })) {
+        if (m2.uid > lastUid) heads.push({ uid: m2.uid, envelope: m2.envelope, size: Number(m2.size) || 0 });
+        if (heads.length >= MAX_MESSAGES_PER_CYCLE) break;
+      }
+      heads.sort((a, b) => a.uid - b.uid);
+      const ownAddress = creds.user.toLowerCase();
+      const candidates = [];
+      let highestSeen = lastUid;
+      for (const h2 of heads.slice(0, MAX_MESSAGES_PER_CYCLE)) {
+        highestSeen = Math.max(highestSeen, h2.uid);
+        const fromAddr = String(h2.envelope?.from?.[0]?.address || "").toLowerCase();
+        const subject = String(h2.envelope?.subject || "");
+        const envId = String(h2.envelope?.messageId || "");
+        const base = { uid: h2.uid, messageId: envId, from: fromAddr, fromName: fromAddr, to: creds.user, subject, text: "" };
+        if (!fromAddr) {
+          candidates.push({ ...base, skipReason: "No sender address" });
+          continue;
+        }
+        if (fromAddr === ownAddress) {
+          candidates.push({ ...base, skipReason: "Sent from the connected mailbox itself" });
+          continue;
+        }
+        if (isBotOrNewsletter(fromAddr, subject)) {
+          candidates.push({ ...base, skipReason: "Automated / newsletter sender" });
+          continue;
+        }
+        if (h2.size > MAX_MESSAGE_BYTES) {
+          candidates.push({ ...base, skipReason: "Message too large" });
+          continue;
+        }
+        try {
+          const full = await client2.fetchOne(String(h2.uid), { source: true }, { uid: true });
+          if (!full || !full.source) {
+            candidates.push({ ...base, skipReason: "Message body unavailable" });
+            continue;
+          }
+          const parsed = await simpleParser2(full.source);
+          const xAutomatedBy = parsed.headers.get("x-automated-by");
+          const xMailer = parsed.headers.get("x-mailer");
+          const autoSubmitted = String(parsed.headers.get("auto-submitted") || "").toLowerCase();
+          const precedence = String(parsed.headers.get("precedence") || "").toLowerCase();
+          if (xAutomatedBy || xMailer === "Umrah360-AI-Automated-Platform" || autoSubmitted && autoSubmitted !== "no" || ["bulk", "junk", "list"].includes(precedence) || parsed.headers.get("list-unsubscribe")) {
+            candidates.push({ ...base, skipReason: "Automated or bulk email" });
+            continue;
+          }
+          const from = parsed.from?.value?.[0]?.address?.toLowerCase() || fromAddr;
+          const refs = Array.isArray(parsed.references) ? parsed.references : parsed.references ? [parsed.references] : void 0;
+          candidates.push({
+            uid: h2.uid,
+            // Deterministic fallback id so a re-read produces the same key
+            messageId: parsed.messageId || envId || `<tenant-inbound-${h2.uid}-${uidValidity}@${creds.host}>`,
+            from,
+            fromName: parsed.from?.value?.[0]?.name || from,
+            to: creds.user,
+            subject: parsed.subject || subject || "No Subject",
+            text: parsed.text || "",
+            inReplyTo: parsed.inReplyTo || void 0,
+            references: refs,
+            date: parsed.date ? parsed.date.toISOString() : void 0
+          });
+        } catch (e2) {
+          console.warn(`[Tenant IMAP] Could not read message UID ${h2.uid}:`, friendlyImapError(e2, creds));
+          candidates.push({ ...base, skipReason: "Message could not be read" });
+        }
+      }
+      return { candidates, uidValidity, uidNext, reset: false, highestSeen };
+    } finally {
+      lock.release();
+    }
+  } finally {
+    await safeClose(client2);
+  }
+}
+async function runCycle(tenantId) {
+  const result = { tenantId, ran: true, processed: 0, skipped: 0 };
+  const ctx = sysCtx2(tenantId);
+  const settings = await getInboundSettings(tenantId, { fresh: true });
+  const creds = await getInboundCredentials(tenantId);
+  if (!creds) {
+    await updateInboundState(tenantId, {
+      status: "error",
+      lastError: "The saved mailbox password could not be read. Please reconnect the mailbox.",
+      lastErrorAt: (/* @__PURE__ */ new Date()).toISOString(),
+      nextPollAt: new Date(Date.now() + MAX_BACKOFF_MS).toISOString()
+    });
+    result.error = "credentials unavailable";
+    return result;
+  }
+  const startedAt = (/* @__PURE__ */ new Date()).toISOString();
+  let fetched;
+  try {
+    const ip = await resolveSafeHost(creds.host);
+    fetched = await fetchNewMessages(creds, ip, settings);
+  } catch (err) {
+    const msg = err?.message && err?.status ? String(err.message) : friendlyImapError(err, creds);
+    const failures = (settings.consecutiveFailures || 0) + 1;
+    const authFail = isAuthFailure(err);
+    await updateInboundState(tenantId, {
+      status: authFail ? "auth_failed" : "error",
+      lastError: msg,
+      lastErrorAt: (/* @__PURE__ */ new Date()).toISOString(),
+      lastPolledAt: startedAt,
+      consecutiveFailures: failures,
+      // A wrong password will not fix itself, but a single refusal is often temporary: see authPauseMs.
+      nextPollAt: new Date(Date.now() + (authFail ? authPauseMs(failures) : backoffMs(failures))).toISOString()
+    });
+    result.error = msg;
+    console.warn(`[Tenant IMAP] ${tenantId}: ${msg}`);
+    return result;
+  }
+  if (fetched.reset) {
+    await updateInboundState(tenantId, {
+      uidValidity: fetched.uidValidity,
+      lastUid: fetched.highestSeen,
+      lastPolledAt: startedAt,
+      lastSuccessAt: startedAt,
+      status: "connected",
+      consecutiveFailures: 0,
+      lastError: void 0,
+      lastErrorAt: void 0
+    });
+    return result;
+  }
+  let lastUid = Number(settings.lastUid) || 0;
+  console.log(`[Tenant IMAP] ${tenantId}: checked ${creds.user} \u2014 ${fetched.candidates.length} new message(s) after UID ${lastUid}${fetched.reset ? " (UID reset)" : ""}`);
+  for (const c of fetched.candidates) {
+    try {
+      if (c.skipReason) {
+        console.log(`[Tenant IMAP] ${tenantId}: UID ${c.uid} from ${c.from} skipped: ${c.skipReason}`);
+        result.skipped++;
+        await recordProcessedInboundEmail(
+          { messageId: c.messageId || `<uid-${c.uid}>`, fromEmail: c.from || "unknown", subject: c.subject, aiReplied: false, status: "SKIPPED", reason: c.skipReason },
+          ctx
+        );
+        lastUid = Math.max(lastUid, c.uid);
+        continue;
+      }
+      const already = await isMessageAlreadyProcessed(c.messageId, c.from, ctx);
+      if (already.processed) {
+        result.skipped++;
+        lastUid = Math.max(lastUid, c.uid);
+        continue;
+      }
+      let allowed = Boolean(settings.processNewInquiries);
+      if (!allowed) {
+        const match = await runWithInboundCtx(
+          ctx,
+          () => findExistingConversationForInboundEmail({
+            senderEmail: c.from,
+            inReplyTo: c.inReplyTo,
+            references: c.references,
+            subject: c.subject
+          })
+        );
+        allowed = Boolean(match.isExisting && ["inReplyTo", "references", "customerEmail", "contactEmail"].includes(match.matchedBy));
+        if (!allowed && isFirebaseConfigured && db && c.from) {
+          try {
+            const from = c.from.toLowerCase().trim();
+            const snap = await getDocs(query(tenantRepo(ctx).campaignLeads(), where("email", "==", from), limit2(1)));
+            allowed = !snap.empty;
+          } catch (e2) {
+            console.warn("[Tenant IMAP] campaign lead lookup notice:", e2?.message || e2);
+          }
+        }
+      }
+      console.log(`[Tenant IMAP] ${tenantId}: UID ${c.uid} from ${c.from} "${(c.subject || "").slice(0, 60)}" -> ${allowed ? "processing" : "skipped (not a reply to a known conversation)"}`);
+      if (!allowed) {
+        result.skipped++;
+        await recordProcessedInboundEmail(
+          { messageId: c.messageId, fromEmail: c.from, subject: c.subject, aiReplied: false, status: "SKIPPED", reason: "Not a reply to a known conversation" },
+          ctx
+        );
+        lastUid = Math.max(lastUid, c.uid);
+        continue;
+      }
+      await runWithInboundCtx(
+        ctx,
+        () => processLiveInboundEmail({
+          from: c.from,
+          fromName: c.fromName,
+          to: c.to,
+          subject: c.subject,
+          body: c.text,
+          messageId: c.messageId,
+          inReplyTo: c.inReplyTo,
+          references: c.references,
+          ownMailbox: creds.user
+        })
+      );
+      result.processed++;
+      lastUid = Math.max(lastUid, c.uid);
+    } catch (e2) {
+      console.error(`[Tenant IMAP] ${tenantId}: failed processing UID ${c.uid}:`, e2?.message || e2);
+      try {
+        await recordProcessedInboundEmail(
+          { messageId: c.messageId || `<uid-${c.uid}>`, fromEmail: c.from || "unknown", subject: c.subject, aiReplied: false, status: "SKIPPED", reason: `Processing error: ${String(e2?.message || e2).slice(0, 200)}` },
+          ctx
+        );
+      } catch {
+      }
+      result.skipped++;
+      lastUid = Math.max(lastUid, c.uid);
+    }
+  }
+  const complete = fetched.candidates.length === 0 || fetched.candidates.every((c) => c.uid <= lastUid);
+  if (complete) lastUid = Math.max(lastUid, fetched.highestSeen);
+  await updateInboundState(tenantId, {
+    uidValidity: fetched.uidValidity,
+    lastUid,
+    lastPolledAt: startedAt,
+    lastSuccessAt: (/* @__PURE__ */ new Date()).toISOString(),
+    status: "connected",
+    consecutiveFailures: 0,
+    lastError: void 0,
+    lastErrorAt: void 0,
+    nextPollAt: void 0
+  });
+  return result;
+}
+async function pollTenantMailbox(tenantId, opts = {}) {
+  const idle = { tenantId, ran: false, processed: 0, skipped: 0 };
+  if (!isFirebaseConfigured || !db || !tenantId) return idle;
+  const now = Date.now();
+  if (now - (lastAttempt.get(tenantId) || 0) < (opts.force ? 1e4 : MIN_POLL_INTERVAL_MS)) return idle;
+  const settings = await getInboundSettings(tenantId, { fresh: true });
+  if (!settings.enabled || !settings.host || !settings.user) return idle;
+  if (settings.status === "paused" || settings.status === "not_configured") {
+    console.log(`[Tenant IMAP] ${tenantId}: not polling, status is ${settings.status}`);
+    return idle;
+  }
+  if (!opts.force && settings.nextPollAt && new Date(settings.nextPollAt).getTime() > now) {
+    console.log(`[Tenant IMAP] ${tenantId}: waiting until ${settings.nextPollAt} (last error: ${settings.lastError || "none"})`);
+    return idle;
+  }
+  lastAttempt.set(tenantId, now);
+  const out = await runWithJobLease(tenantId, JOB_NAME, JOB_LEASE_MS, () => runCycle(tenantId));
+  return out ?? idle;
+}
+async function pollAllTenantMailboxes(opts = {}) {
+  if (tickRunning) return [];
+  tickRunning = true;
+  try {
+    const ids = await listInboundTenantIds();
+    const results = [];
+    for (let i2 = 0; i2 < ids.length; i2 += CONCURRENCY) {
+      const batch = ids.slice(i2, i2 + CONCURRENCY);
+      const settled = await Promise.allSettled(batch.map((id) => pollTenantMailbox(id, opts)));
+      settled.forEach((s2, idx) => {
+        if (s2.status === "fulfilled") results.push(s2.value);
+        else {
+          console.error(`[Tenant IMAP] ${batch[idx]} poll crashed:`, s2.reason?.message || s2.reason);
+          results.push({ tenantId: batch[idx], ran: true, processed: 0, skipped: 0, error: String(s2.reason?.message || s2.reason) });
+        }
+      });
+    }
+    return results;
+  } finally {
+    tickRunning = false;
+  }
+}
+function startTenantMailboxPoller() {
+  if (timer) return;
+  timer = setInterval(() => {
+    pollAllTenantMailboxes().catch((e2) => console.error("[Tenant IMAP] tick failed:", e2?.message || e2));
+  }, TICK_MS);
+  timer.unref?.();
+  console.log("[Tenant IMAP] Per-workspace mailbox poller started.");
+}
+var JOB_NAME, JOB_LEASE_MS, MIN_POLL_INTERVAL_MS, MAX_MESSAGES_PER_CYCLE, MAX_MESSAGE_BYTES, TICK_MS, CONCURRENCY, MAX_BACKOFF_MS, lastAttempt, sysCtx2, tickRunning, timer;
+var init_tenantImapPoller = __esm({
+  "src/server/tenantImapPoller.ts"() {
+    init_jobLeaseService();
+    init_config();
+    init_adminFirestore();
+    init_tenantRepo();
+    init_firestorePersistence();
+    init_imapService();
+    init_inboundPipeline();
+    init_tenantInboundService();
+    JOB_NAME = "tenant_imap_inbound";
+    JOB_LEASE_MS = 3 * 6e4;
+    MIN_POLL_INTERVAL_MS = 45e3;
+    MAX_MESSAGES_PER_CYCLE = 25;
+    MAX_MESSAGE_BYTES = 10 * 1024 * 1024;
+    TICK_MS = 3e4;
+    CONCURRENCY = 3;
+    MAX_BACKOFF_MS = 30 * 6e4;
+    lastAttempt = /* @__PURE__ */ new Map();
+    sysCtx2 = (tenantId) => ({ tenantId, uid: "system", email: "", role: "admin" });
+    tickRunning = false;
+    timer = null;
+  }
+});
+
 // src/server/coreApiHandler.ts
 init_openai();
 init_emailSanitizer();
@@ -285952,6 +294692,8 @@ init_firestoreUtils();
 init_demoSchedulingService();
 init_campaignService();
 init_emailSanitizer();
+init_brandService();
+init_brand();
 var DEFAULT_UMRAH_CTX6 = {
   tenantId: "umrah360",
   uid: "system",
@@ -286156,6 +294898,8 @@ async function sendLiveMetaWhatsAppMessage(recipientPhone, messageText) {
 async function generateWhatsAppAutoReplyText(params) {
   const { fromPhone, fromName: fromName2, body, companyName, threadHistory } = params;
   const combinedText = body.toLowerCase();
+  const brand = await getTenantBrand(getWACtx().tenantId);
+  const isUmrah = brand.playbook === "umrah360";
   if (detectDemoSchedulingIntent(body)) {
     try {
       const historyTurns = (threadHistory || []).map((m2) => ({
@@ -286169,7 +294913,7 @@ async function generateWhatsAppAutoReplyText(params) {
         leadContext: {
           leadPhone: fromPhone,
           leadName: fromName2 || "Brother / Sister",
-          companyName: companyName || "Umrah Travel Agency",
+          companyName: companyName || (isUmrah ? "Umrah Travel Agency" : "Valued Customer"),
           channel: "WHATSAPP"
         }
       });
@@ -286185,13 +294929,13 @@ async function generateWhatsAppAutoReplyText(params) {
       console.warn("[Demo Scheduling WhatsApp Warning]:", schedErr);
     }
   }
-  const isIndividualPilgrimOrFamily = /myself|my family|for family|for myself|as a customer|planning umrah|booking experience|customized package|customize a package|book a customized|hotels in makkah|flights.*hotels|transfers.*meals.*visa|real-time.*availability|online payment|direct booking|retail|pax|vip package|ramadan/i.test(
+  const isIndividualPilgrimOrFamily = isUmrah && /myself|my family|for family|for myself|as a customer|planning umrah|booking experience|customized package|customize a package|book a customized|hotels in makkah|flights.*hotels|transfers.*meals.*visa|real-time.*availability|online payment|direct booking|retail|pax|vip package|ramadan/i.test(
     combinedText
   );
-  const isTwentyUsers = /20 user|20 seat|25 user|twenty user|enterprise|volume quote|corporate rate/i.test(combinedText);
-  const isB2bPortal = /b2b|sub-agent|reseller|credit limit|wallet|allotment|offline block|agent markup/i.test(combinedText);
-  const isDynamicCosting = /dynamic costing|costing|rail|haramain|train|fare|forex|currency|sar|usd|gbp/i.test(combinedText);
-  const isVisa = /visa|evisa|e-visa|saudi visa|tracking|biometrics|nusuk/i.test(combinedText);
+  const isTwentyUsers = isUmrah && /20 user|20 seat|25 user|twenty user|enterprise|volume quote|corporate rate/i.test(combinedText);
+  const isB2bPortal = isUmrah && /b2b|sub-agent|reseller|credit limit|wallet|allotment|offline block|agent markup/i.test(combinedText);
+  const isDynamicCosting = isUmrah && /dynamic costing|costing|rail|haramain|train|fare|forex|currency|sar|usd|gbp/i.test(combinedText);
+  const isVisa = isUmrah && /visa|evisa|e-visa|saudi visa|tracking|biometrics|nusuk/i.test(combinedText);
   let handoffTriggered = false;
   let handoffReason;
   let leadScore = 78;
@@ -286212,21 +294956,22 @@ async function generateWhatsAppAutoReplyText(params) {
     buyingStage = "CONSIDERATION";
   }
   const senderGreetingName = fromName2 ? fromName2.split(" ")[0] : "there";
-  const publishedDocs = getPublishedKnowledgeDocs();
+  await initKnowledgeStore(getWACtx()).catch(() => 0);
+  const publishedDocs = getPublishedKnowledgeDocs(getWACtx());
   const kbGroundingText = publishedDocs.map(
-    (doc6) => `[DOCUMENT: ${doc6.title} (${doc6.category})]
-${doc6.content}`
+    (doc5) => `[DOCUMENT: ${doc5.title} (${doc5.category})]
+${doc5.content}`
   ).join("\n\n");
   const formattedThreadContext = threadHistory && threadHistory.length > 0 ? threadHistory.map((m2, idx) => {
     const isCustomer = m2.senderType === "CUSTOMER" || m2.senderType === "PROSPECT";
-    const role = isCustomer ? `Customer (${m2.senderName || fromPhone})` : "Umrah360 AI Assistant";
+    const role = isCustomer ? `Customer (${m2.senderName || fromPhone})` : `${brand.companyName} AI Assistant`;
     return `[Msg ${idx + 1} - ${role} at ${m2.timestamp}]: ${m2.text}`;
   }).join("\n") : `[Msg 1 - Customer (${fromName2 || fromPhone})]: ${body}`;
   const openAiApiKey = process.env.OPENAI_API_KEY || process.env.GEMINI_API_KEY;
   if (openAiApiKey) {
     try {
       const openai = new OpenAI({ apiKey: openAiApiKey });
-      const prompt = `You are the official Umrah360 WhatsApp AI Assistant representing Umrah360 (+919820252434 / www.umrah360.in).
+      const umrahPrompt = `You are the official Umrah360 WhatsApp AI Assistant representing Umrah360 (+919820252434 / www.umrah360.in).
 Umrah360 is the leading all-in-one ERP, CRM, and distribution platform for Umrah and Hajj tour operators and travel agencies.
 
 GROUND TRUTH KNOWLEDGE BASE:
@@ -286251,6 +294996,29 @@ INSTRUCTIONS FOR WHATSAPP RESPONSE:
 "Umrah360 Team
 WhatsApp: +91 98202 52434
 www.umrah360.in"`;
+      const waSignoff = `${brand.teamName}${brand.supportPhone ? `
+WhatsApp: ${brand.supportPhone}` : ""}${brandHost(brand) ? `
+${brandHost(brand)}` : ""}`;
+      const genericPrompt = `You are the official WhatsApp AI Assistant representing ${brandIntro(brand)}${brand.industryDescription ? `, serving ${brand.industryDescription}` : ""}.
+
+GROUND TRUTH KNOWLEDGE BASE:
+${kbGroundingText || "(No knowledge documents have been published yet.)"}
+
+CONVERSATION THREAD HISTORY:
+${formattedThreadContext}
+
+LATEST INCOMING WHATSAPP MESSAGE:
+Sender: ${fromName2 || "Inquirer"} (${fromPhone})
+Company: ${companyName || "Not specified"}
+Message: "${body}"
+
+INSTRUCTIONS FOR WHATSAPP RESPONSE:
+1. Greet warmly with a formal greeting: "Dear ${senderGreetingName}," or "Hello ${senderGreetingName},"
+2. Tone: professional, warm, crisp and direct. Use short paragraphs suited to WhatsApp. Do not use Markdown headings.
+3. Ground every answer strictly in the knowledge base. NEVER invent features, prices or guarantees. If the answer is not in the knowledge base, say you will connect them with a specialist from ${brand.companyName} and ask for the details needed.
+4. Sign off politely as:
+"${waSignoff}"`;
+      const prompt = isUmrah ? umrahPrompt : genericPrompt;
       const candidateModels = ["gpt-4o-mini", "gpt-4o", "gpt-3.5-turbo"];
       for (const modelName of candidateModels) {
         try {
@@ -286277,6 +295045,40 @@ www.umrah360.in"`;
     } catch (gErr) {
       console.warn("[WhatsApp OpenAI] Fallback to domain knowledge engine:", gErr);
     }
+  }
+  if (!isUmrah) {
+    const words = Array.from(new Set(combinedText.split(/[^a-z0-9]+/).filter((w) => w.length > 3)));
+    let best = { score: 0, text: "" };
+    for (const d of publishedDocs) {
+      const hay = `${d.title} ${d.content}`.toLowerCase();
+      const score = words.reduce((n, w) => n + (hay.includes(w) ? 1 : 0), 0);
+      if (score > best.score) best = { score, text: String(d.content || "").trim().slice(0, 500) };
+    }
+    const sig2 = `${brand.teamName}${brand.supportPhone ? `
+WhatsApp: ${brand.supportPhone}` : ""}${brandHost(brand) ? `
+${brandHost(brand)}` : ""}`;
+    const genericReply = best.score >= 2 ? `Dear ${senderGreetingName},
+
+Thank you for contacting ${brand.companyName}!
+
+${best.text}
+
+Could you share a little more about what you need so we can help further?
+
+${sig2}` : `Dear ${senderGreetingName},
+
+Thank you for contacting ${brand.companyName}! We have received your message and a specialist will get back to you shortly.
+
+Please share a few details about what you are looking for so we can respond faster.
+
+${sig2}`;
+    return {
+      replyText: sanitizeAiEmailText(genericReply, senderGreetingName),
+      handoffTriggered,
+      handoffReason,
+      leadScore,
+      buyingStage
+    };
   }
   let replyText = "";
   if (isTwentyUsers) {
@@ -286387,6 +295189,8 @@ www.umrah360.in`;
 async function processLiveInboundWhatsApp(payload) {
   const targetNumber = TARGET_WHATSAPP_NUMBER;
   const targetNumberFormatted = TARGET_WHATSAPP_NUMBER_DISPLAY;
+  const brand = await getTenantBrand(getWACtx().tenantId);
+  const isUmrahBrand = brand.playbook === "umrah360";
   const nowIso = (/* @__PURE__ */ new Date()).toISOString();
   const senderPhone = normalizePhoneNumber(payload.from);
   const targetPhone = normalizePhoneNumber(payload.to || targetNumber);
@@ -286414,7 +295218,7 @@ async function processLiveInboundWhatsApp(payload) {
       channel: "WHATSAPP",
       direction: "OUTBOUND",
       senderType: payload.senderType === "AI" ? "AI" : "AGENT",
-      senderName: "Umrah360 Support (+91 98202 52434)",
+      senderName: isUmrahBrand ? "Umrah360 Support (+91 98202 52434)" : `${brand.companyName} Support`,
       senderPhone: targetNumber,
       text: payload.body,
       timestamp: nowIso,
@@ -286445,7 +295249,7 @@ async function processLiveInboundWhatsApp(payload) {
       buyingStage: "ENGAGED",
       timestamp: nowIso,
       crmEntities: {
-        contact: { contactId, firstName, lastName, phone: senderPhone, whatsappUserId: senderPhone, companyName: payload.companyName || "Umrah360 Internal", createdAt: nowIso, updatedAt: nowIso, lastActivityAt: nowIso },
+        contact: { contactId, firstName, lastName, phone: senderPhone, whatsappUserId: senderPhone, companyName: payload.companyName || (isUmrahBrand ? "Umrah360 Internal" : `${brand.companyName} Internal`), createdAt: nowIso, updatedAt: nowIso, lastActivityAt: nowIso },
         lead: { leadId, contactId, source: "WHATSAPP", leadType: "INBOUND", status: "ENGAGED", leadScore: 50, intent: "MEDIUM", buyingStage: "ENGAGED", serviceInterest: "WhatsApp Inquiry", requirements: [], aiSummary: "Outbound message recorded", createdAt: nowIso, updatedAt: nowIso, lastActivityAt: nowIso },
         conversation: { conversationId, contactId, leadId, channel: "WHATSAPP", direction: "OUTBOUND", status: "ACTIVE", aiEnabled: false, humanHandoff: false, conversationSummary: `Outbound WhatsApp to ${displayName}`, startedAt: nowIso, lastMessageAt: nowIso, lastMessageText: payload.body.slice(0, 120), unreadCount: 0, createdAt: nowIso, updatedAt: nowIso },
         incomingMessage: outboundMsg,
@@ -286483,7 +295287,7 @@ async function processLiveInboundWhatsApp(payload) {
       buyingStage: "ENGAGED",
       timestamp: nowIso,
       crmEntities: {
-        contact: { contactId, firstName, lastName, phone: senderPhone, whatsappUserId: senderPhone, companyName: payload.companyName || `${firstName}'s Agency`, createdAt: nowIso, updatedAt: nowIso, lastActivityAt: nowIso },
+        contact: { contactId, firstName, lastName, phone: senderPhone, whatsappUserId: senderPhone, companyName: payload.companyName || `${firstName}'s ${isUmrahBrand ? "Agency" : "Company"}`, createdAt: nowIso, updatedAt: nowIso, lastActivityAt: nowIso },
         lead: { leadId, contactId, source: "WHATSAPP", leadType: "INBOUND", status: "ENGAGED", leadScore: 75, intent: "HIGH", buyingStage: "ENGAGED", serviceInterest: "WhatsApp Inquiry", requirements: [], aiSummary: "Duplicate message filtered", createdAt: nowIso, updatedAt: nowIso, lastActivityAt: nowIso },
         conversation: { conversationId, contactId, leadId, channel: "WHATSAPP", direction: "INBOUND", status: "ACTIVE", aiEnabled: true, humanHandoff: false, conversationSummary: `WhatsApp dialogue with ${displayName}`, startedAt: nowIso, lastMessageAt: nowIso, lastMessageText: payload.body.slice(0, 120), unreadCount: 0, createdAt: nowIso, updatedAt: nowIso },
         incomingMessage: {
@@ -286536,7 +295340,7 @@ async function processLiveInboundWhatsApp(payload) {
     threadHistory: [...thread]
   });
   const shouldSendAutoReply = pipelineConfig2.mode !== "SIMULATION";
-  const replyDecisionReason = pipelineConfig2.mode === "SIMULATION" ? "WhatsApp mode is SIMULATION: auto-reply held for agent inspection" : "New inbound customer message to +919820252434 - AI reply dispatched";
+  const replyDecisionReason = pipelineConfig2.mode === "SIMULATION" ? "WhatsApp mode is SIMULATION: auto-reply held for agent inspection" : `New inbound customer message to ${targetNumber} - AI reply dispatched`;
   let aiReplyMessage = void 0;
   const replyMsgId = `wa-reply-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
   if (shouldSendAutoReply) {
@@ -286549,7 +295353,7 @@ async function processLiveInboundWhatsApp(payload) {
       channel: "WHATSAPP",
       direction: "OUTBOUND",
       senderType: "AI",
-      senderName: `Umrah360 AI (${targetNumberFormatted})`,
+      senderName: isUmrahBrand ? `Umrah360 AI (${targetNumberFormatted})` : `${brand.aiAgentName}`,
       senderPhone: targetNumber,
       text: aiResult.replyText,
       timestamp: nowIso,
@@ -286602,7 +295406,7 @@ async function processLiveInboundWhatsApp(payload) {
       lastName,
       phone: senderPhone,
       whatsappUserId: senderPhone,
-      companyName: payload.companyName || `${firstName}'s Agency`,
+      companyName: payload.companyName || `${firstName}'s ${isUmrahBrand ? "Agency" : "Company"}`,
       jobTitle: "Tour Operator / Inquirer",
       createdAt: nowIso,
       updatedAt: nowIso,
@@ -286727,854 +295531,15 @@ async function processLiveInboundWhatsApp(payload) {
 
 // src/server/coreApiHandler.ts
 init_campaignService();
-
-// src/server/websiteLeadService.ts
-init_adminFirestore();
-init_config();
-init_adminFirestore();
-init_firestoreUtils();
-init_smtpService();
-init_campaignService();
-init_tenantRepo();
-var DEFAULT_UMRAH_CTX7 = {
-  tenantId: "umrah360",
-  uid: "system",
-  email: "system@umrah360.in",
-  role: "admin"
-};
-var tenantSentThankYouCaches = /* @__PURE__ */ new Map();
-var tenantInFlightThankYouSends = /* @__PURE__ */ new Map();
-function getSentCache(tenantId) {
-  let cache2 = tenantSentThankYouCaches.get(tenantId);
-  if (!cache2) {
-    cache2 = /* @__PURE__ */ new Set();
-    tenantSentThankYouCaches.set(tenantId, cache2);
-  }
-  return cache2;
-}
-function getInFlightSet(tenantId) {
-  let set = tenantInFlightThankYouSends.get(tenantId);
-  if (!set) {
-    set = /* @__PURE__ */ new Set();
-    tenantInFlightThankYouSends.set(tenantId, set);
-  }
-  return set;
-}
-async function hasThankYouEmailBeenSent(rawEmail, ctx = DEFAULT_UMRAH_CTX7) {
-  const clean2 = rawEmail?.trim().toLowerCase() || "";
-  if (!clean2 || !clean2.includes("@") || clean2.endsWith("@umrah360.in")) return true;
-  const sentCache = getSentCache(ctx.tenantId);
-  if (sentCache.has(clean2)) {
-    return true;
-  }
-  if (!isFirebaseConfigured || !db) return false;
-  try {
-    const repo = tenantRepo(ctx);
-    const emailKey = clean2.replace(/[^a-z0-9_.-]/g, "_");
-    const historyRef = repo.websiteLeadThankYouHistoryDoc(emailKey);
-    const historySnap = await getDoc(historyRef);
-    if (historySnap.exists()) {
-      sentCache.add(clean2);
-      return true;
-    }
-    const convQ = query(
-      repo.conversations(),
-      where("customerEmail", "==", clean2),
-      where("thankYouEmailSent", "==", true),
-      limit2(1)
-    );
-    const convSnap = await getDocs(convQ);
-    if (!convSnap.empty) {
-      sentCache.add(clean2);
-      return true;
-    }
-    const contactQ = query(
-      repo.contacts(),
-      where("email", "==", clean2),
-      limit2(1)
-    );
-    const contactSnap = await getDocs(contactQ);
-    if (!contactSnap.empty) {
-      const cData = contactSnap.docs[0].data();
-      if (cData.thankYouEmailSent) {
-        sentCache.add(clean2);
-        return true;
-      }
-    }
-  } catch (e2) {
-    console.warn(`[Website Lead] Notice checking thank you history for tenant ${ctx.tenantId}:`, e2);
-  }
-  return false;
-}
-async function recordThankYouEmailSent(rawEmail, meta2, ctx = DEFAULT_UMRAH_CTX7) {
-  const clean2 = rawEmail?.trim().toLowerCase() || "";
-  if (!clean2) return;
-  const sentCache = getSentCache(ctx.tenantId);
-  sentCache.add(clean2);
-  if (!isFirebaseConfigured || !db) return;
-  try {
-    const repo = tenantRepo(ctx);
-    const emailKey = clean2.replace(/[^a-z0-9_.-]/g, "_");
-    const nowIso = (/* @__PURE__ */ new Date()).toISOString();
-    await safeSetDoc(
-      repo.websiteLeadThankYouHistoryDoc(emailKey),
-      {
-        email: clean2,
-        leadId: meta2.leadId || "",
-        conversationId: meta2.conversationId || "",
-        sentAt: nowIso,
-        smtpMessageId: meta2.smtpMessageId || "verified",
-        status: "DELIVERED"
-      },
-      { merge: true }
-    );
-  } catch (e2) {
-    console.warn(`[Website Lead] Notice recording thank you history for ${ctx.tenantId}:`, e2);
-  }
-}
-function flattenAllFields(obj, target = {}) {
-  if (!obj || typeof obj !== "object") return target;
-  const setOrAppend = (k, v) => {
-    if (v === null || v === void 0) return;
-    const cleanK = String(k).trim();
-    const cleanV = String(v).trim();
-    if (!cleanK || !cleanV) return;
-    if (target[cleanK]) {
-      const existing = target[cleanK];
-      if (!existing.toLowerCase().includes(cleanV.toLowerCase())) {
-        target[cleanK] = `${existing}, ${cleanV}`;
-      }
-    } else {
-      target[cleanK] = cleanV;
-    }
-  };
-  if (Array.isArray(obj)) {
-    for (let i2 = 0; i2 < obj.length; i2++) {
-      const item = obj[i2];
-      if (item && typeof item === "object") {
-        const itemKey = item.id || item.name || item.field_id || item.key || item.label || `item_${i2}`;
-        const itemVal = item.value ?? item.val ?? item.raw_value ?? item.text ?? "";
-        if (typeof itemVal === "string" || typeof itemVal === "number" || typeof itemVal === "boolean") {
-          setOrAppend(String(itemKey), itemVal);
-        } else if (Array.isArray(itemVal)) {
-          for (const subVal of itemVal) {
-            setOrAppend(String(itemKey), subVal);
-          }
-        }
-        flattenAllFields(item, target);
-      } else if (typeof item === "string" || typeof item === "number") {
-        setOrAppend(`item_${i2}`, item);
-      }
-    }
-    return target;
-  }
-  for (const [rawK, rawV] of Object.entries(obj)) {
-    if (rawV === null || rawV === void 0) continue;
-    const lowerK = rawK.toLowerCase().trim();
-    if (lowerK === "form" && typeof rawV === "object" && rawV !== null) {
-      if (rawV.id) setOrAppend("form_id", rawV.id);
-      if (rawV.name) setOrAppend("form_name", rawV.name);
-      continue;
-    }
-    if ((lowerK === "post" || lowerK === "page") && typeof rawV === "object" && rawV !== null) {
-      if (rawV.id) setOrAppend(`${lowerK}_id`, rawV.id);
-      if (rawV.title) setOrAppend(`${lowerK}_title`, rawV.title);
-      continue;
-    }
-    if (Array.isArray(rawV)) {
-      for (const arrItem of rawV) {
-        if (typeof arrItem === "string" || typeof arrItem === "number" || typeof arrItem === "boolean") {
-          setOrAppend(rawK, arrItem);
-        } else if (arrItem && typeof arrItem === "object") {
-          const itemVal = arrItem.value ?? arrItem.val ?? arrItem.raw_value ?? arrItem.text;
-          if (itemVal) setOrAppend(rawK, itemVal);
-          flattenAllFields(arrItem, target);
-        }
-      }
-    } else if (typeof rawV === "string" || typeof rawV === "number" || typeof rawV === "boolean") {
-      const strVal = String(rawV).trim();
-      if (lowerK === "form_name" || lowerK === "form-name" || lowerK === "formname" || lowerK === "form_title") {
-        setOrAppend("form_name", strVal);
-        continue;
-      }
-      setOrAppend(rawK, strVal);
-      const bracketMatch = rawK.match(/(?:form_fields|fields|entry|wpforms)\[([^\]]+)\]/i);
-      if (bracketMatch && bracketMatch[1]) {
-        setOrAppend(bracketMatch[1], strVal);
-      }
-    } else if (typeof rawV === "object") {
-      const nestedVal = rawV.value ?? rawV.val ?? rawV.raw_value ?? rawV.text;
-      if (typeof nestedVal === "string" || typeof nestedVal === "number" || typeof nestedVal === "boolean") {
-        setOrAppend(rawK, nestedVal);
-        if (rawV.id) setOrAppend(String(rawV.id), nestedVal);
-        const innerName = String(rawV.name || "").trim();
-        if (innerName && innerName.toLowerCase() !== "form" && innerName.length > 2) {
-          setOrAppend(innerName, nestedVal);
-        }
-        if (rawV.label) setOrAppend(String(rawV.label), nestedVal);
-      }
-      flattenAllFields(rawV, target);
-    }
-  }
-  return target;
-}
-function isInvalidHumanName(val) {
-  if (!val || typeof val !== "string") return true;
-  const s2 = val.trim();
-  if (s2.length < 2) return true;
-  const designationsAndTitles = /* @__PURE__ */ new Set([
-    "vp",
-    "ceo",
-    "cto",
-    "cfo",
-    "coo",
-    "md",
-    "gm",
-    "hr",
-    "it",
-    "pr",
-    "director",
-    "manager",
-    "founder",
-    "owner",
-    "partner",
-    "head",
-    "executive",
-    "president",
-    "proprietor",
-    "admin",
-    "lead",
-    "officer",
-    "chief",
-    "agent"
-  ]);
-  const lower2 = s2.toLowerCase();
-  if (designationsAndTitles.has(lower2)) return true;
-  const productOrFormKeywords = [
-    "crm",
-    "booking",
-    "management",
-    "group series",
-    "erp",
-    "portal",
-    "software",
-    "package",
-    "solution",
-    "license",
-    "b2b",
-    "allotment",
-    "request demo",
-    "demo request",
-    "demo form",
-    "inquiry form",
-    "contact form",
-    "series",
-    "pilgrim",
-    "agency leader",
-    "tour operator",
-    "partner",
-    "system",
-    "platform",
-    "app",
-    "application",
-    "vice president",
-    "head of sales",
-    "decision maker"
-  ];
-  for (const kw of productOrFormKeywords) {
-    if (lower2.includes(kw)) return true;
-  }
-  return false;
-}
-async function processWebsiteLeadSubmission(rawInput, ctx = DEFAULT_UMRAH_CTX7) {
-  const flatFields = flattenAllFields(rawInput || {});
-  const findValue = (patterns) => {
-    for (const pat of patterns) {
-      for (const [k, v] of Object.entries(flatFields)) {
-        if (!v) continue;
-        const cleanK = k.toLowerCase().replace(/[-_\[\]\.\s]/g, "");
-        if (pat.test(cleanK)) return v;
-      }
-    }
-    return "";
-  };
-  let email = findValue([
-    /^email$/,
-    /^youremail$/,
-    /^useremail$/,
-    /^contactemail$/,
-    /^workemail$/,
-    /^emailaddress$/,
-    /^mail$/,
-    /email/,
-    /mail/
-  ]).trim().toLowerCase();
-  if (!email || !email.includes("@")) {
-    const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/;
-    for (const [, v] of Object.entries(flatFields)) {
-      const match = v.match(emailRegex);
-      if (match && match[0]) {
-        email = match[0].trim().toLowerCase();
-        break;
-      }
-    }
-  }
-  let rawFullName = findValue([
-    /^fullname$/,
-    /^yourfullname$/,
-    /^your_full_name$/,
-    /^yourname$/,
-    /^your_name$/,
-    /^clientname$/,
-    /^contactname$/,
-    /^leadname$/,
-    /^username$/,
-    /^personname$/,
-    /^applicantname$/
-  ]).trim();
-  let detectedProductFromField = "";
-  if (rawFullName && isInvalidHumanName(rawFullName)) {
-    if (isInvalidHumanName(rawFullName)) {
-      detectedProductFromField = rawFullName;
-    }
-    rawFullName = "";
-  }
-  let firstNamePart = findValue([/^firstname$/, /^fname$/, /^first$/]).trim();
-  let lastNamePart = findValue([/^lastname$/, /^lname$/, /^last$/]).trim();
-  if (!rawFullName && (firstNamePart || lastNamePart)) {
-    const combinedParts = `${firstNamePart} ${lastNamePart}`.trim();
-    if (!isInvalidHumanName(combinedParts)) {
-      rawFullName = combinedParts;
-    }
-  }
-  if (!rawFullName) {
-    const candidateName = findValue([/^name$/, /^full_name$/]).trim();
-    if (candidateName && !isInvalidHumanName(candidateName)) {
-      rawFullName = candidateName;
-    } else if (candidateName && isInvalidHumanName(candidateName) && !detectedProductFromField) {
-      detectedProductFromField = candidateName;
-    }
-  }
-  if (!rawFullName || isInvalidHumanName(rawFullName)) {
-    for (const [k, v] of Object.entries(flatFields)) {
-      if (!v) continue;
-      const cleanK = k.toLowerCase().replace(/[-_\[\]\.\s]/g, "");
-      if (/email|mail|phone|mobile|tel|city|country|state|zip|product|service|company|agency|message|query|remark|note|size|team|branch|form|post|page|nonce|token|url|ref|recaptcha|designation|job|title|role|position/i.test(
-        cleanK
-      )) {
-        continue;
-      }
-      const trimmedV = v.trim();
-      if (trimmedV.length >= 3 && trimmedV.length <= 40 && !trimmedV.includes("@") && !/\d/.test(trimmedV) && /^[a-zA-Z\s.'-]+$/.test(trimmedV) && !isInvalidHumanName(trimmedV)) {
-        rawFullName = trimmedV;
-        break;
-      }
-    }
-  }
-  if (!rawFullName && email) {
-    const userPart = email.split("@")[0] || "";
-    const cleanUserPart = userPart.replace(/[._\-0-9]/g, " ").trim();
-    if (cleanUserPart.length > 2) {
-      rawFullName = cleanUserPart.split(" ").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
-    }
-  }
-  rawFullName = rawFullName || "Inbound Website Lead";
-  let firstName = firstNamePart;
-  let lastName = lastNamePart;
-  if (!firstName) {
-    const parts = rawFullName.split(/\s+/);
-    firstName = parts[0] || "Partner";
-    lastName = parts.slice(1).join(" ") || "";
-  }
-  let rawPhone = findValue([
-    /^phone$/,
-    /^phonenumber$/,
-    /^yourphone$/,
-    /^mobile$/,
-    /^mobilenumber$/,
-    /^contactnumber$/,
-    /^tel$/,
-    /^telephone$/,
-    /^whatsapp$/,
-    /phone/,
-    /mobile/,
-    /whatsapp/
-  ]).trim();
-  if (!rawPhone) {
-    for (const [k, v] of Object.entries(flatFields)) {
-      if (/id|date|time|nonce|token|zip|postal|lead/i.test(k)) continue;
-      const cleanDigits = v.replace(/[\s\-\(\)\.]/g, "");
-      if (/^\+?[0-9]{7,16}$/.test(cleanDigits) && !v.includes("@")) {
-        rawPhone = v.trim();
-        break;
-      }
-    }
-  }
-  const rawCountryCode = findValue([/^countrycode$/, /^callingcode$/, /^code$/]).trim();
-  let fullPhone = rawPhone;
-  if (fullPhone && rawCountryCode && !fullPhone.startsWith("+")) {
-    const cleanCode = rawCountryCode.startsWith("+") ? rawCountryCode : `+${rawCountryCode}`;
-    fullPhone = `${cleanCode} ${fullPhone}`.trim();
-  }
-  const designation = (findValue([/^designation$/, /^jobtitle$/, /^job_title$/, /^job$/, /^role$/, /^position$/, /^title$/]) || "Tour Operator / Agency Leader").trim();
-  const city = findValue([/^city$/, /^yourcity$/, /^your_city$/, /^town$/, /city/]).trim();
-  let country = findValue([
-    /^countryname$/,
-    /^country_name$/,
-    /^yourcountryname$/,
-    /^selectcountryname$/,
-    /^nationname$/,
-    /^countrytext$/,
-    /^country_text$/
-  ]).trim();
-  if (!country) {
-    country = findValue([
-      /^country$/,
-      /^selectcountry$/,
-      /^yourcountry$/,
-      /^nation$/
-    ]).trim();
-  }
-  const numericCountryMap = {
-    "101": "India",
-    "194": "Saudi Arabia",
-    "221": "United Arab Emirates",
-    "232": "United Kingdom",
-    "233": "United States",
-    "163": "Pakistan",
-    "100": "Indonesia",
-    "132": "Malaysia",
-    "18": "Bangladesh",
-    "58": "Egypt",
-    "220": "Turkey",
-    "91": "India",
-    "+91": "India",
-    "1": "United States",
-    "+1": "United States",
-    "44": "United Kingdom",
-    "+44": "United Kingdom",
-    "966": "Saudi Arabia",
-    "+966": "Saudi Arabia",
-    "971": "United Arab Emirates",
-    "+971": "United Arab Emirates"
-  };
-  if (!country || /^\+?\d+$/.test(country)) {
-    const altCountryName = findValue([/countryname/i, /country_name/i, /countrytext/i]);
-    if (altCountryName && !/^\+?\d+$/.test(altCountryName)) {
-      country = altCountryName.trim();
-    } else if (country && numericCountryMap[country]) {
-      country = numericCountryMap[country];
-    } else {
-      country = "India";
-    }
-  }
-  let companyName = findValue([
-    /^companyname$/,
-    /^company$/,
-    /^agencyname$/,
-    /^agency$/,
-    /^organization$/,
-    /^businessname$/,
-    /^firm$/,
-    /^operator$/,
-    /^touroperator$/,
-    /company/,
-    /agency/
-  ]).trim();
-  if (!companyName) {
-    if (email) {
-      const domainPart = email.split("@")[1] || "";
-      if (domainPart && !["gmail.com", "yahoo.com", "outlook.com", "hotmail.com", "icloud.com"].includes(domainPart)) {
-        const derived = domainPart.split(".")[0];
-        companyName = derived.charAt(0).toUpperCase() + derived.slice(1) + " Travels";
-      }
-    }
-    if (!companyName) {
-      companyName = `${firstName}'s Pilgrimage Agency`;
-    }
-  }
-  const website = findValue([/^website$/, /^companywebsite$/, /^url$/, /^companyurl$/]).trim();
-  const rawBranchesVal = findValue([/^branches$/, /^hasbranches$/, /^hasbranch$/, /^branch$/, /branch/]).trim();
-  const branches = typeof rawBranchesVal === "string" && /yes|true|multiple|branch/i.test(rawBranchesVal) ? "Yes" : rawBranchesVal && /no|false|single/i.test(rawBranchesVal) ? "No" : "No";
-  const productValues = [];
-  for (const [k, v] of Object.entries(flatFields)) {
-    if (!v) continue;
-    const lowerK = k.toLowerCase().replace(/[-_\[\]\.\s]/g, "");
-    if (/product|products|selectproduct|serviceinterest|productinterest|solution|interest/i.test(lowerK)) {
-      const parts = String(v).split(/[,;\n]/).map((p) => p.trim()).filter(Boolean);
-      for (const p of parts) {
-        if (p && !productValues.some((pv) => pv.toLowerCase() === p.toLowerCase()) && !/select|choose|default/i.test(p)) {
-          productValues.push(p);
-        }
-      }
-    }
-  }
-  let product = productValues.length > 0 ? productValues.join(", ") : "";
-  if (!product) {
-    product = (findValue([
-      /^product$/,
-      /^products$/,
-      /^selectproducts$/,
-      /^productinterest$/,
-      /^serviceinterest$/,
-      /^solution$/,
-      /^interest$/,
-      /product/
-    ]) || "Umrah360 ERP & B2B Sub-Agent Portal").trim();
-  }
-  if (product === "Umrah360 ERP & B2B Sub-Agent Portal" || !product) {
-    if (detectedProductFromField) {
-      product = detectedProductFromField;
-    } else if (flatFields["form_name"]) {
-      product = flatFields["form_name"];
-    }
-  }
-  const teamSize = (findValue([/^teamsize$/, /^team$/, /^size$/, /^employees$/, /^users$/, /^capacity$/]) || "5-10 Users").trim();
-  const message2 = findValue([
-    /^message$/,
-    /^yourmessage$/,
-    /^query$/,
-    /^notes$/,
-    /^comments$/,
-    /^remark$/,
-    /^remarks$/,
-    /^requirement$/,
-    /^requirements$/,
-    /^inquiry$/,
-    /^description$/,
-    /^details$/,
-    /message/,
-    /query/,
-    /remark/,
-    /comment/
-  ]).trim();
-  const sourceUrl = findValue([/^sourceurl$/, /^source$/, /^referrer$/]) || "https://umrah360.in/request-demo";
-  const unmapped = [];
-  const mappedValues = /* @__PURE__ */ new Set([
-    email,
-    rawPhone,
-    fullPhone,
-    rawFullName,
-    firstNamePart,
-    lastNamePart,
-    companyName,
-    designation,
-    city,
-    country,
-    product,
-    teamSize,
-    branches,
-    message2,
-    website,
-    sourceUrl
-  ]);
-  for (const [k, v] of Object.entries(flatFields)) {
-    if (!v) continue;
-    if (mappedValues.has(v)) continue;
-    const lowerK = k.toLowerCase().replace(/[-_\[\]\.\s]/g, "");
-    if (/^(id|type|rawvalue|fieldid|fieldtype|key|label|formid|formname|action|submit|nonce|wpnonce|wphttpreferer|recaptcha|token|postid|referertitle)$/i.test(lowerK)) continue;
-    if (k.length > 50 || v.length > 500) continue;
-    unmapped.push(`\u2022 ${k}: ${v}`);
-  }
-  let leadScore = 85;
-  if (teamSize.includes("10") || teamSize.includes("20") || teamSize.includes("Enterprise")) {
-    leadScore += 10;
-  }
-  if (branches === "Yes") {
-    leadScore += 5;
-  }
-  if (website) {
-    leadScore += 2;
-  }
-  leadScore = Math.min(100, Math.max(70, leadScore));
-  const nowIso = (/* @__PURE__ */ new Date()).toISOString();
-  let contactId = `contact-web-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-  let existingContactData = {};
-  if (isFirebaseConfigured && db) {
-    try {
-      const repo = tenantRepo(ctx);
-      const q = query(repo.contacts(), where("email", "==", email));
-      const snap = await getDocs(q);
-      if (!snap.empty) {
-        const found = snap.docs[0].data();
-        contactId = found.contactId;
-        existingContactData = found;
-        console.log(`[Website Lead] Matching existing contact found: ${contactId} (${email}) for tenant ${ctx.tenantId}`);
-      }
-    } catch (e2) {
-      console.warn("[Website Lead] Note looking up existing contact:", e2);
-    }
-  }
-  const contact = {
-    contactId,
-    firstName: firstName || existingContactData.firstName || "Partner",
-    lastName: lastName || existingContactData.lastName || "",
-    email,
-    phone: fullPhone || existingContactData.phone || "",
-    companyName: companyName || existingContactData.companyName || "Umrah Tour Operator",
-    jobTitle: designation || existingContactData.jobTitle || "Agency Executive",
-    country,
-    city,
-    website: website || existingContactData.website || "",
-    branches,
-    hasBranches: branches === "Yes",
-    teamSize,
-    notes: message2 ? `Demo Inquiry: ${message2}` : existingContactData.notes || "",
-    createdAt: existingContactData.createdAt || nowIso,
-    updatedAt: nowIso,
-    lastActivityAt: nowIso
-  };
-  const leadId = `lead-web-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-  const aiSummary = `Inbound Free Demo Request received from ${rawFullName} (${designation} at ${companyName}). Located in ${city ? `${city}, ` : ""}${country}. Interested in "${product}". Team size: ${teamSize}. Multi-branch agency: ${branches}. Customer query: "${message2 || "Requested full platform walkthrough"}".`;
-  const aiRecommendation = `High-intent inbound lead! Action required: Contact ${firstName} (${email} / ${fullPhone || "phone"}) to confirm demo time slot for ${companyName} and prepare customized pricing for ${teamSize}.`;
-  const requirements = [
-    product,
-    `Team Size: ${teamSize}`,
-    branches === "Yes" ? "Multi-Branch Deployment" : "Single Office",
-    city ? `City: ${city}` : null,
-    country ? `Country: ${country}` : null
-  ].filter(Boolean);
-  const lead = {
-    leadId,
-    contactId,
-    source: "WEBSITE",
-    leadType: "INBOUND",
-    status: "DEMO_SCHEDULED",
-    leadScore,
-    intent: "HIGH",
-    buyingStage: "CONSIDERATION",
-    serviceInterest: product,
-    requirements,
-    budget: teamSize.includes("20") ? "Enterprise Quote Required" : "Standard Tier",
-    timeline: "Immediate / Upcoming Season",
-    aiSummary,
-    aiRecommendation,
-    demoStatus: "BOOKED",
-    demoSource: "AUTOMATIC",
-    demoBookedAt: nowIso,
-    country,
-    city,
-    website,
-    branches,
-    teamSize,
-    productInterest: product,
-    queryMessage: message2,
-    notes: message2 || `Demo requested on ${sourceUrl}`,
-    sourceUrl,
-    createdAt: nowIso,
-    updatedAt: nowIso,
-    lastActivityAt: nowIso
-  };
-  try {
-    await handleIncomingCampaignLeadReply({
-      fromEmail: email,
-      fromPhone: fullPhone,
-      subject: `Website Demo Request: ${companyName}`,
-      body: message2 || "Submitted website demo request form"
-    });
-  } catch (campErr) {
-    console.warn("[Website Lead] Campaign lead reply hook notice:", campErr);
-  }
-  const conversationId = `conv-web-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-  const messageId = `msg-web-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-  const inboundLines = [
-    `\u{1F54B} INBOUND DEMO REQUEST from umrah360.in/request-demo:`,
-    ``,
-    `\u2022 Name: ${rawFullName}${designation && designation.toLowerCase() !== rawFullName.toLowerCase() ? ` (${designation})` : ""}`,
-    `\u2022 Company: ${companyName}${website ? ` (${website})` : ""}`,
-    `\u2022 Email: ${email || "Not provided"}`,
-    `\u2022 Phone: ${fullPhone || "Not provided"}`,
-    `\u2022 Location: ${city ? `${city}, ` : ""}${country}`,
-    `\u2022 Product Interest: ${product}`,
-    `\u2022 Team Size: ${teamSize}`,
-    `\u2022 Multi-Branch: ${branches}`,
-    ``,
-    `Message / Query:`,
-    message2 || 'Customer submitted the "Schedule my Free Demo" form for an operational walkthrough.'
-  ];
-  if (unmapped.length > 0) {
-    inboundLines.push(``, `Additional Form Submission Data:`, ...unmapped);
-  }
-  const inboundDetailsText = inboundLines.join("\n");
-  const cleanEmail = email ? email.trim().toLowerCase() : "";
-  let alreadySent = false;
-  let isInFlight = false;
-  const inFlightSet = getInFlightSet(ctx.tenantId);
-  if (cleanEmail && cleanEmail.includes("@")) {
-    alreadySent = await hasThankYouEmailBeenSent(cleanEmail, ctx);
-    isInFlight = inFlightSet.has(cleanEmail);
-  }
-  const shouldSendThankYou = Boolean(
-    cleanEmail && cleanEmail.includes("@") && !cleanEmail.endsWith("@umrah360.in") && !alreadySent && !isInFlight
-  );
-  let duplicateThankYouSuppressed = alreadySent || isInFlight;
-  if (duplicateThankYouSuppressed) {
-    console.log(
-      `[Website Lead Idempotency] Thank you email already previously sent or in-flight for "${cleanEmail}". Strictly sending ONCE; suppressing duplicate email dispatch.`
-    );
-  }
-  const conversation = {
-    conversationId,
-    contactId,
-    leadId,
-    channel: "WEBSITE",
-    direction: "INBOUND",
-    status: "ACTIVE",
-    aiEnabled: false,
-    // Explicitly false for website leads so generic AI never sends duplicate emails
-    humanHandoff: false,
-    conversationSummary: `Website Demo Request: ${companyName} (${rawFullName})`,
-    subject: `Website Demo Request: ${companyName} (${product})`,
-    customerEmail: cleanEmail,
-    thankYouEmailSent: true,
-    // Always marked true so background pollers NEVER duplicate this dispatch
-    thankYouSmtpMessageId: alreadySent ? "ALREADY_SENT_PREVIOUSLY" : void 0,
-    startedAt: nowIso,
-    lastMessageAt: nowIso,
-    lastMessageText: inboundDetailsText.slice(0, 180) + "...",
-    unreadCount: 1,
-    isRead: false,
-    unread: true,
-    createdAt: nowIso,
-    updatedAt: nowIso
-  };
-  const initialMessage = {
-    messageId,
-    conversationId,
-    senderType: "CUSTOMER",
-    senderName: rawFullName,
-    senderEmail: cleanEmail,
-    recipientEmail: "sales@umrah360.in",
-    channel: "WEBSITE",
-    direction: "INBOUND",
-    text: inboundDetailsText,
-    timestamp: nowIso,
-    sentAt: nowIso,
-    receivedAt: nowIso,
-    aiReplied: true
-    // Marked true so generic inbox auto-replier NEVER attempts an AI response
-  };
-  let autoConfirmationSent = false;
-  let autoReplyMessage = null;
-  if (shouldSendThankYou) {
-    inFlightSet.add(cleanEmail);
-    try {
-      await fetchFirestoreSmtpConfig();
-      const smtpConfig = getSmtpConfig();
-      if (smtpConfig.configured) {
-        const emailSubject = `We have received your Umrah360 Demo Request - ${companyName}`;
-        const emailBody = [
-          `As-salamu alaykum ${firstName},`,
-          ``,
-          `Thank you for requesting a live demo of Umrah360 for ${companyName}!`,
-          ``,
-          `We have received your requirements:`,
-          `- Product: ${product}`,
-          `- Team Size: ${teamSize}`,
-          `- Location: ${city ? `${city}, ` : ""}${country}`,
-          `- Multi-Branch Setup: ${branches}`,
-          ``,
-          `One of our senior pilgrimage software specialists will reach out to you shortly at ${fullPhone || cleanEmail} to coordinate a suitable time for your personalized walkthrough and answer any operational questions you have.`,
-          ``,
-          `If you need immediate assistance or have specific visa/hotel allotment workflows you would like to test, simply reply to this email.`,
-          ``,
-          `Warm regards,`,
-          `The Umrah360 Team`,
-          `https://umrah360.in`
-        ].join("\n");
-        console.log(`[Website Lead] Dispatching single Thank You email to ${cleanEmail} for ${companyName}...`);
-        const mailResult = await sendLiveEmail({
-          tenantId: ctx.tenantId,
-          to: cleanEmail,
-          subject: emailSubject,
-          text: emailBody,
-          headers: {
-            "X-Conversation-Id": conversationId,
-            "X-Lead-Id": leadId,
-            "X-Contact-Id": contactId
-          }
-        });
-        if (mailResult.success) {
-          autoConfirmationSent = true;
-          const sentIso = (/* @__PURE__ */ new Date()).toISOString();
-          console.log(`[Website Lead Success] \u2713 Live Thank You email delivered to ${cleanEmail} (ID: ${mailResult.messageId})!`);
-          conversation.thankYouEmailSent = true;
-          conversation.thankYouEmailDeliveredAt = sentIso;
-          conversation.thankYouSmtpMessageId = mailResult.messageId;
-          const replyMsgId = `msg-thankyou-${conversationId}`;
-          autoReplyMessage = {
-            messageId: replyMsgId,
-            conversationId,
-            senderType: "AI",
-            senderName: "Umrah360 Automation",
-            senderEmail: smtpConfig.user || "amaavigo@gmail.com",
-            recipientEmail: cleanEmail,
-            channel: "EMAIL",
-            direction: "OUTBOUND",
-            text: emailBody,
-            timestamp: sentIso,
-            sentAt: sentIso,
-            receivedAt: sentIso,
-            createdAt: sentIso,
-            deliveryStatus: "DELIVERED",
-            smtpMessageId: mailResult.messageId,
-            emailDeliveredAt: sentIso,
-            aiReplied: true
-          };
-          await recordThankYouEmailSent(cleanEmail, {
-            leadId,
-            conversationId,
-            smtpMessageId: mailResult.messageId
-          }, ctx);
-        } else {
-          console.warn(`[Website Lead Warning] SMTP delivery attempt to ${cleanEmail} failed:`, mailResult.error);
-        }
-      } else {
-        console.warn(`[Website Lead Notice] SMTP credentials not configured yet; skipping live email dispatch.`);
-      }
-    } catch (smtpErr) {
-      console.warn("[Website Lead] Notice sending auto-confirmation email:", smtpErr);
-    } finally {
-      inFlightSet.delete(cleanEmail);
-    }
-  }
-  if (isFirebaseConfigured && db) {
-    try {
-      const repo = tenantRepo(ctx);
-      const writes = [
-        safeSetDoc(repo.contactDoc(contact.contactId), contact, { merge: true }),
-        safeSetDoc(repo.leadDoc(lead.leadId), lead, { merge: true }),
-        safeSetDoc(repo.conversationDoc(conversation.conversationId), conversation, { merge: true }),
-        safeSetDoc(repo.messageDoc(initialMessage.messageId), initialMessage, { merge: true })
-      ];
-      if (autoReplyMessage) {
-        writes.push(safeSetDoc(repo.messageDoc(autoReplyMessage.messageId), autoReplyMessage, { merge: true }));
-      }
-      await Promise.all(writes);
-      console.log(`[Website Lead] Successfully stored Lead "${companyName}" (${leadId}) directly into Firestore DB for tenant ${ctx.tenantId}!`);
-    } catch (dbErr) {
-      console.error(`[Website Lead] Error writing to Firestore DB for ${ctx.tenantId}:`, dbErr);
-    }
-  }
-  return {
-    success: true,
-    message: duplicateThankYouSuppressed ? `Lead for ${companyName} (${rawFullName}) saved in CRM. Thank-you email was already sent previously to ${cleanEmail} and preserved without duplicates.` : `Lead for ${companyName} (${rawFullName}) successfully pushed to CRM and thank-you confirmation delivered!`,
-    contact,
-    lead,
-    conversation,
-    initialMessage,
-    autoConfirmationSent,
-    duplicateThankYouSuppressed
-  };
-}
-
-// src/server/coreApiHandler.ts
+init_websiteLeadService();
 init_demoSchedulingService();
 init_config();
 init_adminFirestore();
 init_adminFirestore();
 init_firestoreUtils();
 init_campaignService();
+init_brandService();
+init_brand();
 init_demoSchedulingService();
 init_inboundPipeline();
 init_entitlements();
@@ -288019,15 +295984,15 @@ function flattenAndStringify(data) {
   const result = {};
   const step = (obj, prevKey) => {
     Object.entries(obj).forEach(([key, value]) => {
-      const newKey = prevKey ? `${prevKey}[${key}]` : key;
+      const newKey2 = prevKey ? `${prevKey}[${key}]` : key;
       if (isObject3(value)) {
         if (!(value instanceof Uint8Array) && !Object.prototype.hasOwnProperty.call(value, "data")) {
-          return step(value, newKey);
+          return step(value, newKey2);
         } else {
-          result[newKey] = value;
+          result[newKey2] = value;
         }
       } else {
-        result[newKey] = String(value);
+        result[newKey2] = String(value);
       }
     });
   };
@@ -289795,14 +297760,14 @@ var StripeContext = class _StripeContext {
 };
 
 // node_modules/stripe/esm/platform/NodePlatformFunctions.js
-import * as crypto5 from "crypto";
+import * as crypto8 from "crypto";
 import * as fs4 from "fs";
 import * as os from "os";
 import * as path2 from "path";
 import { EventEmitter } from "events";
 
 // node_modules/stripe/esm/crypto/NodeCryptoProvider.js
-import * as crypto4 from "crypto";
+import * as crypto7 from "crypto";
 
 // node_modules/stripe/esm/crypto/CryptoProvider.js
 var CryptoProvider = class {
@@ -289845,7 +297810,7 @@ var CryptoProviderOnlySupportsAsyncError = class extends Error {
 var NodeCryptoProvider = class extends CryptoProvider {
   /** @override */
   computeHMACSignature(payload, secret) {
-    return crypto4.createHmac("sha256", secret).update(payload, "utf8").digest("hex");
+    return crypto7.createHmac("sha256", secret).update(payload, "utf8").digest("hex");
   }
   /** @override */
   async computeHMACSignatureAsync(payload, secret) {
@@ -289854,7 +297819,7 @@ var NodeCryptoProvider = class extends CryptoProvider {
   }
   /** @override */
   async computeSHA256Async(data) {
-    return new Uint8Array(await crypto4.createHash("sha256").update(data).digest());
+    return new Uint8Array(await crypto7.createHash("sha256").update(data).digest());
   }
 };
 
@@ -290311,7 +298276,7 @@ var NodePlatformFunctions = class extends PlatformFunctions {
       }
     } catch {
     }
-    const newId = crypto5.randomBytes(16).toString("hex");
+    const newId = crypto8.randomBytes(16).toString("hex");
     try {
       fs4.mkdirSync(path2.dirname(filePath), { recursive: true });
       fs4.writeFileSync(filePath, newId, "utf8");
@@ -290349,11 +298314,11 @@ var NodePlatformFunctions = class extends PlatformFunctions {
     if (a.length !== b.length) {
       return false;
     }
-    if (crypto5.timingSafeEqual) {
+    if (crypto8.timingSafeEqual) {
       const textEncoder2 = new TextEncoder();
       const aEncoded = textEncoder2.encode(a);
       const bEncoded = textEncoder2.encode(b);
-      return crypto5.timingSafeEqual(aEncoded, bEncoded);
+      return crypto8.timingSafeEqual(aEncoded, bEncoded);
     }
     return super.secureCompare(a, b);
   }
@@ -306159,39 +314124,521 @@ async function authenticateRequest(req) {
 
 // src/server/coreApiHandler.ts
 init_autoFollowUpService();
+init_cryptoUtils();
 
-// src/server/cryptoUtils.ts
-import crypto6 from "crypto";
-function getMasterKey() {
-  const envKey = process.env.SECRETS_MASTER_KEY || process.env.TENANT_MASTER_KEY;
-  if (!envKey) {
-    const fallbackSeed = "umrah360_platform_master_seed_key_v1_secure_dev";
-    return crypto6.createHash("sha256").update(fallbackSeed).digest();
-  }
-  if (envKey.length === 64 && /^[0-9a-fA-F]+$/.test(envKey)) {
-    return Buffer.from(envKey, "hex");
-  }
-  return crypto6.createHash("sha256").update(envKey).digest();
+// src/server/instagramIntegrationService.ts
+init_adminFirestore();
+init_openai();
+init_adminFirestore();
+init_tenantRepo();
+init_cryptoUtils();
+import crypto9 from "crypto";
+var GRAPH_VERSION = process.env.META_GRAPH_API_VERSION || "v23.0";
+var OAUTH_STATE_TTL_MS = 10 * 60 * 1e3;
+function requiredEnv(name5) {
+  const value = process.env[name5]?.trim();
+  if (!value) throw new Error(`Missing required server environment variable: ${name5}`);
+  return value;
 }
-var ALGORITHM = "aes-256-gcm";
-var IV_LENGTH = 12;
-var KEY_VERSION = 1;
-function encryptSecret(plainText) {
-  if (!plainText) {
-    throw new Error("Cannot encrypt empty or null secret");
+function json(res, status, payload) {
+  res.statusCode = status;
+  res.setHeader("Content-Type", "application/json");
+  res.end(JSON.stringify(payload));
+}
+function queryParams(req) {
+  return new URL(req.url || "/", "http://localhost").searchParams;
+}
+function stateDocId(state2) {
+  return crypto9.createHash("sha256").update(state2).digest("hex");
+}
+function contextFromState(state2) {
+  if (!state2?.tenantId || !state2?.uid || !state2?.role) {
+    throw new Error("Invalid Instagram OAuth state context");
   }
-  const key = getMasterKey();
-  const iv = crypto6.randomBytes(IV_LENGTH);
-  const cipher = crypto6.createCipheriv(ALGORITHM, key, iv);
-  let encrypted = cipher.update(plainText, "utf8", "base64");
-  encrypted += cipher.final("base64");
-  const authTag = cipher.getAuthTag().toString("base64");
   return {
-    encryptedData: encrypted,
-    iv: iv.toString("base64"),
-    authTag,
-    keyVersion: KEY_VERSION
+    tenantId: String(state2.tenantId),
+    uid: String(state2.uid),
+    email: String(state2.email || ""),
+    role: state2.role,
+    isPlatformAdmin: false
   };
+}
+async function getConnection(ctx) {
+  const snap = await getDoc(tenantRepo(ctx).integrationDoc("instagram"));
+  if (!snap.exists()) return null;
+  const data = snap.data();
+  return data?.channel === "instagram" ? data.connection || null : null;
+}
+async function getAccessToken(ctx) {
+  const repo = tenantRepo(ctx);
+  const snap = await getDoc(repo.secretDoc("instagram_access_token"));
+  if (!snap.exists()) throw new Error("Instagram is not connected. Reconnect the account.");
+  let accessToken = decryptSecret(snap.data());
+  const connection = await getConnection(ctx);
+  if (!connection) throw new Error("Instagram connection metadata is missing. Reconnect the account.");
+  if (connection.tokenExpiresAt) {
+    const expiresAt = Date.parse(connection.tokenExpiresAt);
+    if (Number.isFinite(expiresAt) && expiresAt <= Date.now()) {
+      throw new Error("Instagram access token has expired. Reconnect the account.");
+    }
+    if (Number.isFinite(expiresAt) && expiresAt - Date.now() < 7 * 24 * 60 * 60 * 1e3) {
+      try {
+        const refreshUrl = new URL("https://graph.instagram.com/refresh_access_token");
+        refreshUrl.searchParams.set("grant_type", "ig_refresh_token");
+        refreshUrl.searchParams.set("access_token", accessToken);
+        const refreshResponse = await fetch(refreshUrl);
+        const refreshBody = await refreshResponse.json().catch(() => ({}));
+        if (refreshResponse.ok && refreshBody.access_token) {
+          accessToken = String(refreshBody.access_token);
+          const now = (/* @__PURE__ */ new Date()).toISOString();
+          const expiresIn = Number(refreshBody.expires_in);
+          await setDoc(repo.secretDoc("instagram_access_token"), {
+            ...encryptSecret(accessToken),
+            name: "instagram_access_token",
+            createdAt: snap.data().createdAt || now,
+            updatedAt: now
+          });
+          await setDoc(repo.integrationDoc("instagram"), {
+            channel: "instagram",
+            connection: {
+              ...connection,
+              tokenExpiresAt: expiresIn ? new Date(Date.now() + expiresIn * 1e3).toISOString() : connection.tokenExpiresAt,
+              updatedAt: now
+            }
+          }, { merge: true });
+        }
+      } catch {
+      }
+    }
+  }
+  return accessToken;
+}
+async function startInstagramOAuth(ctx) {
+  const clientId = requiredEnv("META_INSTAGRAM_APP_ID");
+  const redirectUri = requiredEnv("META_INSTAGRAM_REDIRECT_URI");
+  requiredEnv("META_INSTAGRAM_APP_SECRET");
+  if (!process.env.SECRETS_MASTER_KEY && !process.env.TENANT_MASTER_KEY) {
+    throw new Error("SECRETS_MASTER_KEY or TENANT_MASTER_KEY must be configured before connecting Instagram.");
+  }
+  const state2 = crypto9.randomBytes(32).toString("base64url");
+  const now = Date.now();
+  await setDoc(doc(db, "instagram_oauth_states", stateDocId(state2)), {
+    tenantId: ctx.tenantId,
+    uid: ctx.uid,
+    email: ctx.email || "",
+    role: ctx.role,
+    createdAt: now,
+    expiresAt: now + OAUTH_STATE_TTL_MS
+  });
+  const params = new URLSearchParams({
+    client_id: clientId,
+    redirect_uri: redirectUri,
+    response_type: "code",
+    scope: "instagram_business_basic,instagram_business_manage_messages",
+    state: state2
+  });
+  return { authorizationUrl: `https://www.instagram.com/oauth/authorize?${params.toString()}` };
+}
+async function getInstagramStatus(ctx) {
+  const connection = await getConnection(ctx);
+  return { connected: connection?.status === "connected", connection };
+}
+async function disconnectInstagram(ctx) {
+  const repo = tenantRepo(ctx);
+  const existing = await getConnection(ctx);
+  try {
+    const token = await getAccessToken(ctx);
+    const revokeUrl = new URL("https://graph.instagram.com/" + GRAPH_VERSION + "/me/permissions");
+    revokeUrl.searchParams.set("access_token", token);
+    await fetch(revokeUrl, { method: "DELETE" });
+  } catch {
+  }
+  if (existing) {
+    await setDoc(repo.integrationDoc("instagram"), {
+      channel: "instagram",
+      connection: { ...existing, status: "disconnected", updatedAt: (/* @__PURE__ */ new Date()).toISOString() }
+    }, { merge: true });
+  }
+  await deleteDoc(repo.secretDoc("instagram_access_token"));
+  if (existing?.accountId) {
+    await deleteDoc(doc(db, "instagram_account_routes", existing.accountId));
+  }
+}
+async function exchangeCode(code) {
+  const clientId = requiredEnv("META_INSTAGRAM_APP_ID");
+  const clientSecret = requiredEnv("META_INSTAGRAM_APP_SECRET");
+  const redirectUri = requiredEnv("META_INSTAGRAM_REDIRECT_URI");
+  const form = new URLSearchParams({
+    client_id: clientId,
+    client_secret: clientSecret,
+    grant_type: "authorization_code",
+    redirect_uri: redirectUri,
+    code
+  });
+  const tokenResponse = await fetch("https://api.instagram.com/oauth/access_token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: form.toString()
+  });
+  const tokenBody = await tokenResponse.json().catch(() => ({}));
+  if (!tokenResponse.ok || !tokenBody.access_token || !tokenBody.user_id) {
+    throw new Error("Meta could not exchange the Instagram authorization code. Check app configuration and permissions.");
+  }
+  let accessToken = String(tokenBody.access_token);
+  let expiresIn = Number(tokenBody.expires_in) || void 0;
+  const longLivedUrl = new URL("https://graph.instagram.com/access_token");
+  longLivedUrl.searchParams.set("grant_type", "ig_exchange_token");
+  longLivedUrl.searchParams.set("client_secret", clientSecret);
+  longLivedUrl.searchParams.set("access_token", accessToken);
+  const longLivedResponse = await fetch(longLivedUrl);
+  const longLivedBody = await longLivedResponse.json().catch(() => ({}));
+  if (longLivedResponse.ok && longLivedBody.access_token) {
+    accessToken = String(longLivedBody.access_token);
+    expiresIn = Number(longLivedBody.expires_in) || expiresIn;
+  }
+  const profileUrl = new URL(`https://graph.instagram.com/${GRAPH_VERSION}/me`);
+  profileUrl.searchParams.set("fields", "user_id,username");
+  profileUrl.searchParams.set("access_token", accessToken);
+  const profileResponse = await fetch(profileUrl);
+  const profile = await profileResponse.json().catch(() => ({}));
+  if (!profileResponse.ok || !(profile.user_id || profile.id) || !profile.username) {
+    throw new Error("Instagram authorization succeeded, but the account profile could not be verified.");
+  }
+  const accountId = String(profile.user_id || profile.id || tokenBody.user_id);
+  let webhookSubscribed = false;
+  try {
+    const subscribeUrl = new URL("https://graph.instagram.com/" + GRAPH_VERSION + "/" + encodeURIComponent(accountId) + "/subscribed_apps");
+    subscribeUrl.searchParams.set("subscribed_fields", "messages");
+    subscribeUrl.searchParams.set("access_token", accessToken);
+    const subscribeResponse = await fetch(subscribeUrl, { method: "POST" });
+    webhookSubscribed = subscribeResponse.ok;
+  } catch {
+    webhookSubscribed = false;
+  }
+  return {
+    accessToken,
+    accountId,
+    username: String(profile.username),
+    expiresIn,
+    webhookSubscribed
+  };
+}
+async function handleInstagramOAuthCallback(req, res) {
+  const params = queryParams(req);
+  const state2 = params.get("state") || "";
+  const code = params.get("code") || "";
+  const error = params.get("error_description") || params.get("error");
+  if (!state2) {
+    json(res, 400, { error: "Missing OAuth state." });
+    return true;
+  }
+  const stateRef = doc(db, "instagram_oauth_states", stateDocId(state2));
+  const stateSnap = await getDoc(stateRef);
+  if (!stateSnap.exists()) {
+    json(res, 400, { error: "Instagram authorization state is invalid or has already been used." });
+    return true;
+  }
+  const stateData = stateSnap.data();
+  await deleteDoc(stateRef);
+  if (Date.now() > Number(stateData.expiresAt || 0)) {
+    json(res, 400, { error: "Instagram authorization expired. Please try again." });
+    return true;
+  }
+  if (error || !code) {
+    const appUrl = process.env.APP_BASE_URL || process.env.APP_URL || "/";
+    res.statusCode = 302;
+    res.setHeader("Location", `${appUrl}${appUrl.includes("?") ? "&" : "?"}instagram=error`);
+    res.end();
+    return true;
+  }
+  try {
+    const ctx = contextFromState(stateData);
+    const account = await exchangeCode(code);
+    const existing = await getConnection(ctx);
+    const routeRef = doc(db, "instagram_account_routes", account.accountId);
+    const routeSnap = await getDoc(routeRef);
+    if (routeSnap.exists() && routeSnap.data().tenantId !== ctx.tenantId) {
+      json(res, 409, { error: "This Instagram account is already connected to another workspace." });
+      return true;
+    }
+    if (existing?.accountId && existing.accountId !== account.accountId) {
+      await deleteDoc(doc(db, "instagram_account_routes", existing.accountId));
+    }
+    const now = (/* @__PURE__ */ new Date()).toISOString();
+    const connection = {
+      accountId: account.accountId,
+      username: account.username,
+      status: "connected",
+      connectedAt: existing?.connectedAt || now,
+      updatedAt: now,
+      scopes: ["instagram_business_basic", "instagram_business_manage_messages"],
+      tokenExpiresAt: account.expiresIn ? new Date(Date.now() + account.expiresIn * 1e3).toISOString() : null,
+      webhookSubscriptionStatus: account.webhookSubscribed ? "subscribed" : "needs_setup"
+    };
+    await setDoc(tenantRepo(ctx).secretDoc("instagram_access_token"), {
+      ...encryptSecret(account.accessToken),
+      name: "instagram_access_token",
+      updatedAt: now,
+      createdAt: now
+    });
+    await setDoc(tenantRepo(ctx).integrationDoc("instagram"), { channel: "instagram", connection }, { merge: true });
+    await setDoc(routeRef, { tenantId: ctx.tenantId, accountId: account.accountId, updatedAt: now });
+    const appUrl = process.env.APP_BASE_URL || process.env.APP_URL || "/";
+    res.statusCode = 302;
+    res.setHeader("Location", `${appUrl}${appUrl.includes("?") ? "&" : "?"}instagram=connected`);
+    res.end();
+  } catch (err) {
+    console.error("[Instagram OAuth] Connection failed:", err?.message || "unknown error");
+    json(res, 500, { error: "Could not connect Instagram. Check server configuration and Meta app permissions." });
+  }
+  return true;
+}
+function isValidMetaSignature(req) {
+  const secret = process.env.META_INSTAGRAM_APP_SECRET;
+  const signature = req.headers?.["x-hub-signature-256"];
+  const rawBody = req.rawBody;
+  if (!secret || !signature || !rawBody) return false;
+  const raw = Buffer.isBuffer(rawBody) ? rawBody : Buffer.from(String(rawBody));
+  const expected = `sha256=${crypto9.createHmac("sha256", secret).update(raw).digest("hex")}`;
+  const a = Buffer.from(String(signature));
+  const b = Buffer.from(expected);
+  return a.length === b.length && crypto9.timingSafeEqual(a, b);
+}
+async function processInstagramMessageEvent(tenantId, accountId, event, eventId) {
+  const senderId = String(event?.sender?.id || "");
+  const externalMessageId = String(event?.message?.mid || event?.id || eventId);
+  const eventRef = doc(db, "instagram_inbound_events", eventId);
+  if (!senderId || senderId === accountId || event?.message?.is_echo) {
+    await updateDoc(eventRef, { status: "ignored", processedAt: (/* @__PURE__ */ new Date()).toISOString() });
+    return;
+  }
+  const messageText = String(event?.message?.text || "").trim();
+  const incomingText = messageText || (Array.isArray(event?.message?.attachments) && event.message.attachments.length ? "[Instagram attachment received]" : "");
+  if (!incomingText) {
+    await updateDoc(eventRef, { status: "ignored", processedAt: (/* @__PURE__ */ new Date()).toISOString() });
+    return;
+  }
+  const ctx = { tenantId, uid: "instagram-webhook", email: "", role: "admin" };
+  const repo = tenantRepo(ctx);
+  const stableHash = (value) => crypto9.createHash("sha256").update(value).digest("hex").slice(0, 24);
+  const contactId = "igc_" + stableHash(accountId + ":" + senderId);
+  const conversationId = "igconv_" + stableHash(accountId + ":" + senderId);
+  const messageId = "igmsg_" + stableHash(accountId + ":" + externalMessageId);
+  const now = (/* @__PURE__ */ new Date()).toISOString();
+  const eventTime = Number(event?.timestamp);
+  const timestamp = Number.isFinite(eventTime) && eventTime > 0 ? new Date(eventTime).toISOString() : now;
+  const existingMessage = await getDoc(repo.messageDoc(messageId));
+  if (existingMessage.exists()) {
+    await updateDoc(eventRef, { status: "duplicate", processedAt: now });
+    return;
+  }
+  const contactSnap = await getDoc(repo.contactDoc(contactId));
+  const contact = contactSnap.exists() ? contactSnap.data() : {
+    contactId,
+    firstName: "Instagram",
+    lastName: "User",
+    email: "",
+    phone: "",
+    companyName: "Instagram contact",
+    instagramUserId: senderId,
+    tags: ["INSTAGRAM_DM"],
+    notes: "",
+    createdAt: now,
+    updatedAt: now
+  };
+  await setDoc(repo.contactDoc(contactId), { ...contact, instagramUserId: senderId, updatedAt: now, lastActivityAt: timestamp }, { merge: true });
+  const conversationSnap = await getDoc(repo.conversationDoc(conversationId));
+  const previous = conversationSnap.exists() ? conversationSnap.data() : null;
+  const conversation = {
+    conversationId,
+    contactId,
+    channel: "INSTAGRAM",
+    direction: "INBOUND",
+    externalConversationId: senderId,
+    status: previous?.status || "ACTIVE",
+    aiEnabled: previous?.aiEnabled !== false,
+    humanHandoff: previous?.humanHandoff === true,
+    managementMode: previous?.managementMode || "AI",
+    conversationSummary: previous?.conversationSummary || "Instagram direct-message conversation",
+    startedAt: previous?.startedAt || timestamp,
+    lastMessageAt: timestamp,
+    lastMessageText: incomingText,
+    unreadCount: Number(previous?.unreadCount || 0) + 1,
+    isRead: false,
+    unread: true,
+    createdAt: previous?.createdAt || now,
+    updatedAt: now
+  };
+  await setDoc(repo.conversationDoc(conversationId), conversation, { merge: true });
+  await setDoc(repo.messageDoc(messageId), {
+    messageId,
+    externalMessageId,
+    conversationId,
+    channel: "INSTAGRAM",
+    senderType: "CUSTOMER",
+    senderName: "Instagram user",
+    instagramUserId: senderId,
+    text: incomingText,
+    direction: "INBOUND",
+    timestamp,
+    receivedAt: now,
+    createdAt: now,
+    aiReplied: false,
+    aiProcessed: false
+  });
+  const settingsSnap = await getDoc(repo.settingsDoc("default"));
+  const settings = settingsSnap.exists() ? settingsSnap.data() : {};
+  const mode = settings?.channelModes?.INSTAGRAM || "AUTO";
+  if (!conversation.aiEnabled || conversation.humanHandoff || conversation.managementMode === "HUMAN" || mode === "SIMULATION") {
+    await updateDoc(eventRef, { status: "processed", processedAt: now, conversationId });
+    return;
+  }
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey || !messageText) {
+    await updateDoc(eventRef, { status: "processed_no_reply", reason: !apiKey ? "OPENAI_API_KEY is not configured" : "No text available for AI reply", processedAt: now, conversationId });
+    return;
+  }
+  const knowledgeSnap = await getDocs(repo.knowledgeDocuments());
+  const knowledge = knowledgeSnap.docs.map((d) => d.data()).filter((d) => d.status === "PUBLISHED").slice(0, 8).map((d) => "## " + String(d.title || "Knowledge") + "\n" + String(d.content || "").slice(0, 2500)).join("\n\n").slice(0, 12e3);
+  const historySnap = await getDocs(query(repo.messages(), where("conversationId", "==", conversationId)));
+  const history = historySnap.docs.map((d) => d.data()).filter((m2) => m2.messageId !== messageId).sort((a, b) => new Date(a.timestamp || 0).getTime() - new Date(b.timestamp || 0).getTime()).slice(-8).map((m2) => ({ role: m2.direction === "OUTBOUND" ? "assistant" : "user", content: String(m2.text || "").slice(0, 1500) }));
+  const openai = new OpenAI({ apiKey });
+  const completion = await openai.chat.completions.create({
+    model: process.env.INSTAGRAM_AI_MODEL || "gpt-4o-mini",
+    temperature: 0.3,
+    messages: [
+      { role: "system", content: "You are this workspace customer-support and lead-qualification assistant. Reply naturally and briefly to the Instagram DM. Use only the workspace knowledge below for factual claims. If knowledge does not answer the question, ask a concise clarifying question instead of inventing facts. Do not claim a booking or action has completed unless confirmed.\n\nWorkspace knowledge:\n" + (knowledge || "No published workspace knowledge is available. Ask a clarifying question and do not invent product details.") },
+      ...history,
+      { role: "user", content: messageText.slice(0, 3e3) }
+    ]
+  });
+  const replyText = completion.choices[0]?.message?.content?.trim();
+  if (!replyText) {
+    await updateDoc(eventRef, { status: "processed_no_reply", reason: "AI returned an empty response", processedAt: now, conversationId });
+    return;
+  }
+  if (mode === "REVIEW") {
+    await updateDoc(repo.conversationDoc(conversationId), {
+      draftReply: { draftId: "igdraft_" + stableHash(externalMessageId), text: replyText, generatedAt: now, status: "PENDING" },
+      updatedAt: now
+    });
+    await updateDoc(repo.messageDoc(messageId), { aiProcessed: true });
+    await updateDoc(eventRef, { status: "draft_created", processedAt: now, conversationId });
+    return;
+  }
+  const latestSnap = await getDoc(repo.conversationDoc(conversationId));
+  const latest = latestSnap.exists() ? latestSnap.data() : {};
+  if (latest.aiEnabled === false || latest.humanHandoff === true || latest.managementMode === "HUMAN") {
+    await updateDoc(eventRef, { status: "suppressed_human_takeover", processedAt: (/* @__PURE__ */ new Date()).toISOString(), conversationId });
+    return;
+  }
+  const sendResult = await sendInstagramMessage(ctx, senderId, replyText);
+  const outboundId = "igout_" + stableHash(externalMessageId);
+  const sentAt = (/* @__PURE__ */ new Date()).toISOString();
+  await setDoc(repo.messageDoc(outboundId), {
+    messageId: outboundId,
+    externalMessageId: String(sendResult?.message_id || sendResult?.messageId || ""),
+    conversationId,
+    channel: "INSTAGRAM",
+    senderType: "AI",
+    senderName: "AI Assistant",
+    instagramUserId: senderId,
+    text: replyText,
+    direction: "OUTBOUND",
+    timestamp: sentAt,
+    sentAt,
+    createdAt: sentAt,
+    aiProcessed: true,
+    aiGenerated: true,
+    deliveryStatus: "DELIVERED"
+  });
+  await updateDoc(repo.messageDoc(messageId), { aiReplied: true, repliedAt: sentAt, repliedByMessageId: outboundId, aiProcessed: true });
+  await updateDoc(repo.conversationDoc(conversationId), { lastMessageAt: sentAt, lastMessageText: replyText, updatedAt: sentAt });
+  await updateDoc(eventRef, { status: "replied", processedAt: sentAt, conversationId, outboundMessageId: outboundId });
+}
+async function handleInstagramWebhook(req, res) {
+  if (req.method === "GET") {
+    const params = queryParams(req);
+    const mode = params.get("hub.mode") || params.get("hub_mode");
+    const token = params.get("hub.verify_token") || params.get("hub_verify_token");
+    const challenge = params.get("hub.challenge") || params.get("hub_challenge");
+    const expected = process.env.META_INSTAGRAM_WEBHOOK_VERIFY_TOKEN;
+    if (mode === "subscribe" && expected && token === expected && challenge) {
+      res.statusCode = 200;
+      res.setHeader("Content-Type", "text/plain");
+      res.end(challenge);
+    } else {
+      res.statusCode = 403;
+      res.end("Forbidden");
+    }
+    return true;
+  }
+  if (req.method !== "POST") {
+    json(res, 405, { error: "Method not allowed" });
+    return true;
+  }
+  if (!isValidMetaSignature(req)) {
+    json(res, 401, { error: "Invalid webhook signature or raw request body unavailable." });
+    return true;
+  }
+  const body = req.body || {};
+  if (body.object !== "instagram") {
+    json(res, 400, { error: "Unsupported webhook object." });
+    return true;
+  }
+  let accepted = 0;
+  for (const entry of Array.isArray(body.entry) ? body.entry : []) {
+    const accountId = String(entry.id || "");
+    if (!accountId) continue;
+    const routeSnap = await getDoc(doc(db, "instagram_account_routes", accountId));
+    if (!routeSnap.exists()) continue;
+    const tenantId = String(routeSnap.data().tenantId || "");
+    if (!tenantId) continue;
+    const events = [
+      ...Array.isArray(entry.messaging) ? entry.messaging : [],
+      ...Array.isArray(entry.changes) ? entry.changes : []
+    ];
+    for (const event of events) {
+      const externalId = String(event.message?.mid || event.id || event.timestamp || crypto9.randomUUID());
+      const eventId = crypto9.createHash("sha256").update(`${accountId}:${externalId}`).digest("hex");
+      const eventRef = doc(db, "instagram_inbound_events", eventId);
+      try {
+        await createDoc(eventRef, { accountId, tenantId, externalId, event, status: "received", receivedAt: (/* @__PURE__ */ new Date()).toISOString() });
+      } catch {
+        continue;
+      }
+      try {
+        await processInstagramMessageEvent(tenantId, accountId, event, eventId);
+      } catch (error) {
+        console.error("[Instagram webhook] Event processing failed:", error?.message || "unknown error");
+        await updateDoc(eventRef, { status: "failed", lastError: "Processing failed; inspect server logs.", updatedAt: (/* @__PURE__ */ new Date()).toISOString() }).catch(() => {
+        });
+      }
+      accepted++;
+    }
+  }
+  json(res, 200, { success: true, accepted });
+  return true;
+}
+async function sendInstagramMessage(ctx, recipientId, text) {
+  if (!recipientId?.trim() || !text?.trim()) throw new Error("Instagram recipient and message text are required.");
+  const connection = await getConnection(ctx);
+  if (!connection || connection.status !== "connected") throw new Error("Instagram account is not connected.");
+  if (connection.tokenExpiresAt && Date.parse(connection.tokenExpiresAt) <= Date.now()) {
+    throw new Error("Instagram access token may have expired. Reconnect the account.");
+  }
+  const accessToken = await getAccessToken(ctx);
+  const url = `https://graph.instagram.com/${GRAPH_VERSION}/${encodeURIComponent(connection.accountId)}/messages`;
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ recipient: { id: recipientId }, message: { text: text.trim() } })
+  });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(`Instagram message send failed (HTTP ${response.status}). Check account permissions and messaging eligibility.`);
+  }
+  return result;
 }
 
 // src/server/coreApiHandler.ts
@@ -306199,9 +314646,12 @@ init_usageService();
 
 // src/server/webhookRouter.ts
 init_adminFirestore();
+init_tenantRepo();
 init_config();
 init_adminFirestore();
 init_tenantRepo();
+init_websiteLeadService();
+init_websiteWebhookService();
 init_usageService();
 var DEFAULT_TENANT_ID = "umrah360";
 async function routeWebsiteLeadWebhook(req, res, webhookId) {
@@ -306214,11 +314664,20 @@ async function routeWebsiteLeadWebhook(req, res, webhookId) {
         if (routeSnap.exists()) {
           const route = routeSnap.data();
           resolvedTenantId = route.tenantId || DEFAULT_TENANT_ID;
-          if (route.allowedOrigins && route.allowedOrigins.length > 0) {
-            const reqOrigin = req.headers.origin || req.headers.referer || "";
-            const isAllowed = route.allowedOrigins.some(
-              (allowed) => reqOrigin.toLowerCase().includes(allowed.toLowerCase())
-            );
+          const reqOrigin = (req.headers.origin || req.headers.referer || "").toString();
+          if (route.requireOrigin) {
+            const list = route.allowedOrigins || [];
+            let denyMsg = "";
+            if (list.length === 0) denyMsg = "No website is allowed for this webhook yet. Add your website in Settings \u2192 Website leads.";
+            else if (reqOrigin && !originAllowed(reqOrigin, list)) denyMsg = "This website is not allowed for this webhook";
+            if (denyMsg) {
+              res.statusCode = 403;
+              res.setHeader("Content-Type", "application/json");
+              res.end(JSON.stringify({ error: denyMsg }));
+              return true;
+            }
+          } else if (route.allowedOrigins && route.allowedOrigins.length > 0) {
+            const isAllowed = route.allowedOrigins.some((allowed) => reqOrigin.toLowerCase().includes(allowed.toLowerCase()));
             if (!isAllowed && reqOrigin) {
               res.statusCode = 403;
               res.setHeader("Content-Type", "application/json");
@@ -306233,7 +314692,11 @@ async function routeWebsiteLeadWebhook(req, res, webhookId) {
           return true;
         }
       } catch (err) {
-        console.warn(`[WebhookRouter] Error looking up route for ${webhookId}:`, err);
+        console.error(`[WebhookRouter] Error looking up route for ${webhookId}:`, err);
+        res.statusCode = 503;
+        res.setHeader("Content-Type", "application/json");
+        res.end(JSON.stringify({ error: "Temporarily unable to route this request. Please try again." }));
+        return true;
       }
     }
   }
@@ -306245,6 +314708,21 @@ async function routeWebsiteLeadWebhook(req, res, webhookId) {
   };
   try {
     const result = await processWebsiteLeadSubmission(body, tenantCtx);
+    const redirectTo = typeof body?._redirect === "string" ? body._redirect : "";
+    if (redirectTo && webhookId && webhookId !== "umrah-demo" && isFirebaseConfigured && db) {
+      try {
+        const rSnap = await getDoc(globalWebhookRouteDoc(webhookId));
+        const list = rSnap.data()?.allowedOrigins || [];
+        const target = new URL(redirectTo);
+        if (/^https?:$/.test(target.protocol) && list.includes(normalizeOrigin(target.hostname) || "")) {
+          res.statusCode = 303;
+          res.setHeader("Location", target.toString());
+          res.end();
+          return true;
+        }
+      } catch {
+      }
+    }
     res.statusCode = 200;
     res.setHeader("Content-Type", "application/json");
     res.end(
@@ -306324,9 +314802,64 @@ async function routeWhatsAppWebhook(req, res) {
     return true;
   }
 }
+function readTags(raw) {
+  const out = {};
+  if (Array.isArray(raw)) {
+    for (const t2 of raw) if (t2?.name) out[String(t2.name)] = String(t2.value ?? "");
+  } else if (raw && typeof raw === "object") {
+    for (const [k, v] of Object.entries(raw)) out[k] = String(v ?? "");
+  }
+  return out;
+}
+var SCANNER_AGENT = /(proxy|prefetch|bot\b|scanner|barracuda|proofpoint|mimecast|safelinks|defender|symantec|trendmicro|ironport)/i;
+var OPEN_BOT_WINDOW_MS = 15e3;
+var CLICK_BOT_WINDOW_MS = 5e3;
+async function trackEmailEngagement(event) {
+  const type = String(event?.type || "");
+  if (!["email.opened", "email.clicked", "email.bounced", "email.complained"].includes(type)) return false;
+  const tags = readTags(event?.data?.tags);
+  const tenantId = tags.tenant;
+  const leadId = tags.lead;
+  if (!tenantId || !leadId) return false;
+  const nowIso = (/* @__PURE__ */ new Date()).toISOString();
+  const eventMs = Date.parse(event?.created_at || "") || Date.now();
+  const sentMs = Date.parse(event?.data?.created_at || "");
+  const sinceSentMs = Number.isFinite(sentMs) ? eventMs - sentMs : Number.POSITIVE_INFINITY;
+  const agent = String(event?.data?.click?.userAgent || event?.data?.open?.userAgent || event?.data?.user_agent || "");
+  let patch;
+  if (type === "email.opened") {
+    const bot = sinceSentMs < OPEN_BOT_WINDOW_MS || SCANNER_AGENT.test(agent);
+    patch = bot ? { botOpenCount: increment(1), updatedAt: nowIso } : { realOpenCount: increment(1), opened: true, engaged: true, lastOpenedAt: nowIso, updatedAt: nowIso };
+  } else if (type === "email.clicked") {
+    const bot = sinceSentMs < CLICK_BOT_WINDOW_MS || SCANNER_AGENT.test(agent);
+    patch = bot ? { botClickCount: increment(1), updatedAt: nowIso } : { clickCount: increment(1), clicked: true, engaged: true, lastClickedAt: nowIso, updatedAt: nowIso };
+  } else {
+    patch = { bounced: true, updatedAt: nowIso };
+  }
+  const ctx = { tenantId, uid: "resend-webhook", email: "webhook@system", role: "admin" };
+  try {
+    await updateDoc(tenantRepo(ctx).campaignLeadDoc(leadId), patch);
+    return true;
+  } catch (err) {
+    if (err?.code !== 5 && !/NOT_FOUND/i.test(String(err?.message || ""))) {
+      console.warn("[Resend Webhook] engagement update failed:", err?.message || err);
+    }
+    return false;
+  }
+}
 async function routeResendWebhook(req, res) {
   const event = req.body || {};
   const type = event.type;
+  if (type === "email.opened" || type === "email.clicked") {
+    const tracked = await trackEmailEngagement(event);
+    res.statusCode = 200;
+    res.setHeader("Content-Type", "application/json");
+    res.end(JSON.stringify({ received: true, event: type, tracked }));
+    return true;
+  }
+  if (type === "email.bounced" || type === "email.complained") {
+    await trackEmailEngagement(event).catch(() => false);
+  }
   const recipient = event.data?.to?.[0] || event.data?.email;
   const resendEmailId = event.data?.email_id;
   let resolvedTenantId = DEFAULT_TENANT_ID;
@@ -306420,6 +314953,7 @@ async function handleCoreApi(req, res) {
         }
         if (chunks.length > 0) {
           const rawBody = Buffer.concat(chunks).toString("utf-8");
+          req.rawBody = Buffer.from(rawBody, "utf-8");
           if (rawBody) {
             try {
               body = JSON.parse(rawBody);
@@ -306444,7 +314978,7 @@ async function handleCoreApi(req, res) {
   const rawCalendarToken = req.headers["x-google-access-token"];
   let requestBearerToken = typeof rawCalendarToken === "string" && rawCalendarToken.trim() && rawCalendarToken !== "null" && rawCalendarToken !== "undefined" ? rawCalendarToken.trim() : null;
   if (requestBearerToken) setServerCalendarAccessToken(requestBearerToken);
-  const isPublicPath = url === "/api/health" || url.startsWith("/api/webhooks/") || url === "/api/inbound/whatsapp" || url === "/api/leads/inbound" || url === "/api/campaigns/cron" || url === "/api/campaigns/process-active" || url === "/api/auto-followup/trigger";
+  const isPublicPath = url === "/api/health" || url === "/api/instagram/oauth/callback" || url.startsWith("/api/webhooks/") || url === "/api/inbound/whatsapp" || url === "/api/leads/inbound" || url === "/api/campaigns/cron" || url === "/api/campaigns/process-active" || url === "/api/auto-followup/trigger" || url === "/api/inbound-mail/cron";
   let resolvedTenantId = "";
   let userUid = "anonymous";
   let userEmail = "";
@@ -306591,7 +315125,13 @@ async function handleCoreApi(req, res) {
     }
   }
   if (url.startsWith("/api/webhooks/website/")) {
-    const webhookId = url.replace("/api/webhooks/website/", "").split("/")[0];
+    const webhookId = url.replace("/api/webhooks/website/", "").split(/[/?]/)[0];
+    if (!webhookId) {
+      res.statusCode = 404;
+      res.setHeader("Content-Type", "application/json");
+      res.end(JSON.stringify({ error: "Webhook key missing" }));
+      return true;
+    }
     return await routeWebsiteLeadWebhook(req, res, webhookId);
   }
   if (url === "/api/webhooks/umrah-demo" || url === "/api/leads/inbound") {
@@ -306602,6 +315142,73 @@ async function handleCoreApi(req, res) {
   }
   if (url === "/api/webhooks/email/resend") {
     return await routeResendWebhook(req, res);
+  }
+  if (url === "/api/webhooks/instagram") {
+    return await handleInstagramWebhook(req, res);
+  }
+  if (url === "/api/instagram/oauth/callback") {
+    return await handleInstagramOAuthCallback(req, res);
+  }
+  if (url === "/api/instagram/status" && req.method === "GET") {
+    try {
+      const status = await getInstagramStatus(activeTenantCtx);
+      res.statusCode = 200;
+      res.end(JSON.stringify(status));
+    } catch (err) {
+      res.statusCode = 500;
+      res.end(JSON.stringify({ error: err?.message || "Could not read Instagram status." }));
+    }
+    return true;
+  }
+  if (url === "/api/instagram/connect" && req.method === "POST") {
+    if (userRole !== "admin" && !isPlatformAdmin) {
+      res.statusCode = 403;
+      res.end(JSON.stringify({ error: "Workspace admin access is required to connect Instagram." }));
+      return true;
+    }
+    try {
+      const result = await startInstagramOAuth(activeTenantCtx);
+      res.statusCode = 200;
+      res.end(JSON.stringify(result));
+    } catch (err) {
+      res.statusCode = 400;
+      res.end(JSON.stringify({ error: err?.message || "Could not start Instagram authorization." }));
+    }
+    return true;
+  }
+  if (url === "/api/instagram/send" && req.method === "POST") {
+    const recipientId = typeof body.recipientId === "string" ? body.recipientId.trim() : "";
+    const messageText = typeof body.text === "string" ? body.text.trim() : "";
+    if (!recipientId || !messageText) {
+      res.statusCode = 400;
+      res.end(JSON.stringify({ error: "recipientId and text are required." }));
+      return true;
+    }
+    try {
+      const result = await sendInstagramMessage(activeTenantCtx, recipientId, messageText);
+      res.statusCode = 200;
+      res.end(JSON.stringify({ success: true, result }));
+    } catch (err) {
+      res.statusCode = 400;
+      res.end(JSON.stringify({ error: err?.message || "Instagram message could not be sent." }));
+    }
+    return true;
+  }
+  if (url === "/api/instagram/disconnect" && req.method === "POST") {
+    if (userRole !== "admin" && !isPlatformAdmin) {
+      res.statusCode = 403;
+      res.end(JSON.stringify({ error: "Workspace admin access is required to disconnect Instagram." }));
+      return true;
+    }
+    try {
+      await disconnectInstagram(activeTenantCtx);
+      res.statusCode = 200;
+      res.end(JSON.stringify({ success: true }));
+    } catch (err) {
+      res.statusCode = 400;
+      res.end(JSON.stringify({ error: err?.message || "Could not disconnect Instagram." }));
+    }
+    return true;
   }
   if (url === "/api/auth/me" && req.method === "GET") {
     let globalUser = null;
@@ -306658,7 +315265,7 @@ async function handleCoreApi(req, res) {
       if (!targetId) denied = "Platform admin only";
       else if (targetId !== resolvedTenantId) denied = "Forbidden";
       else if (req.method !== "GET" && userRole !== "admin") denied = "Workspace admin only";
-      else if (/\/(secrets|routes|email(\/.*)?)$/.test(url.split("?")[0]) && userRole !== "admin") denied = "Workspace admin only";
+      else if (/\/(secrets|routes|inbound(\/.*)?|email(\/.*)?|webhook(\/.*)?)$/.test(url.split("?")[0]) && userRole !== "admin") denied = "Workspace admin only";
     }
     if (denied) {
       res.statusCode = 403;
@@ -306923,6 +315530,28 @@ async function handleCoreApi(req, res) {
       return true;
     }
   }
+  const brandMatch = url.split("?")[0].match(/^\/api\/tenants\/([^/]+)\/brand$/);
+  if (brandMatch) {
+    const tId = brandMatch[1];
+    res.setHeader("Content-Type", "application/json");
+    try {
+      const bs = await Promise.resolve().then(() => (init_brandService(), brandService_exports));
+      if (req.method === "GET") {
+        res.statusCode = 200;
+        res.end(JSON.stringify({ brand: await bs.getTenantBrand(tId) }));
+        return true;
+      }
+      if (req.method === "POST") {
+        res.statusCode = 200;
+        res.end(JSON.stringify({ brand: await bs.saveTenantBrand(tId, body?.brand || body || {}) }));
+        return true;
+      }
+    } catch (err) {
+      res.statusCode = err?.status || 500;
+      res.end(JSON.stringify({ error: err?.message || "Brand request failed" }));
+      return true;
+    }
+  }
   const usageMatch = url.match(/^\/api\/tenants\/([^/?]+)\/usage$/);
   if (usageMatch && req.method === "GET") {
     const tId = usageMatch[1];
@@ -307000,7 +315629,7 @@ async function handleCoreApi(req, res) {
       return true;
     }
   }
-  const emailMatch = url.split("?")[0].match(/^\/api\/tenants\/([^/]+)\/email(?:\/(domain|verify|sender))?$/);
+  const emailMatch = url.split("?")[0].match(/^\/api\/tenants\/([^/]+)\/email(?:\/(domain|verify|refresh|sender))?$/);
   if (emailMatch) {
     const tId = emailMatch[1];
     const action = emailMatch[2];
@@ -307011,9 +315640,15 @@ async function handleCoreApi(req, res) {
         res.end(JSON.stringify(await svc.getEmailSettingsView(tId)));
         return true;
       }
+      if (req.method === "DELETE" && action === "domain") {
+        res.statusCode = 200;
+        res.end(JSON.stringify(await svc.removeTenantDomain(tId)));
+        return true;
+      }
       if (req.method === "POST" && action) {
         if (action === "domain") await svc.addTenantDomain(tId, body?.domain);
         else if (action === "verify") await svc.verifyTenantDomain(tId);
+        else if (action === "refresh") await svc.refreshTenantDomain(tId);
         else await svc.setTenantSender(tId, { fromName: body?.fromName, fromLocalPart: body?.fromLocalPart, replyTo: body?.replyTo });
         res.statusCode = 200;
         res.end(JSON.stringify(await svc.getEmailSettingsView(tId)));
@@ -307024,6 +315659,134 @@ async function handleCoreApi(req, res) {
       res.end(JSON.stringify({ error: err?.message || "Email settings request failed" }));
       return true;
     }
+  }
+  const webhookMatch = url.split("?")[0].match(/^\/api\/tenants\/([^/]+)\/webhook(?:\/(regenerate|test|simulate))?$/);
+  if (webhookMatch) {
+    const tId = webhookMatch[1];
+    const action = webhookMatch[2];
+    try {
+      const svc = await Promise.resolve().then(() => (init_websiteWebhookService(), websiteWebhookService_exports));
+      res.setHeader("Content-Type", "application/json");
+      if (!action && req.method === "GET") {
+        res.statusCode = 200;
+        res.end(JSON.stringify(await svc.getWebhookView(tId)));
+        return true;
+      }
+      if (!action && req.method === "POST") {
+        res.statusCode = 200;
+        res.end(JSON.stringify(await svc.setAllowedOrigins(tId, body?.allowedOrigins)));
+        return true;
+      }
+      if (action === "regenerate" && req.method === "POST") {
+        res.statusCode = 200;
+        res.end(JSON.stringify(await svc.regenerateKey(tId)));
+        return true;
+      }
+      if (action === "simulate" && req.method === "POST") {
+        const svcLead = await Promise.resolve().then(() => (init_websiteLeadService(), websiteLeadService_exports));
+        const result = await svcLead.processWebsiteLeadSubmission(body || {}, { ...activeTenantCtx, tenantId: tId });
+        res.statusCode = 200;
+        res.end(JSON.stringify(result));
+        return true;
+      }
+      if (action === "test" && req.method === "POST") {
+        res.statusCode = 200;
+        res.end(JSON.stringify({ success: true, ...await svc.sendTestLead({ ...activeTenantCtx, tenantId: tId }) }));
+        return true;
+      }
+    } catch (err) {
+      res.statusCode = err?.status || 500;
+      res.end(JSON.stringify({ error: err?.message || "Webhook settings request failed" }));
+      return true;
+    }
+  }
+  const inboundMatch = url.split("?")[0].match(/^\/api\/tenants\/([^/]+)\/inbound(?:\/(test|options|disconnect|poll))?$/);
+  if (inboundMatch) {
+    const tId = inboundMatch[1];
+    const action = inboundMatch[2];
+    try {
+      const svc = await Promise.resolve().then(() => (init_tenantInboundService(), tenantInboundService_exports));
+      if (!action && req.method === "GET") {
+        res.statusCode = 200;
+        res.end(JSON.stringify(await svc.getInboundView(tId)));
+        return true;
+      }
+      if (req.method === "POST") {
+        let view2;
+        if (!action) {
+          view2 = await svc.connectInbound(tId, {
+            host: body?.host,
+            port: body?.port,
+            user: body?.user,
+            password: body?.password,
+            processNewInquiries: typeof body?.processNewInquiries === "boolean" ? body.processNewInquiries : void 0
+          });
+        } else if (action === "test") {
+          view2 = await svc.testStoredInbound(tId);
+        } else if (action === "options") {
+          view2 = await svc.setInboundOptions(tId, { enabled: body?.enabled, processNewInquiries: body?.processNewInquiries });
+        } else if (action === "poll") {
+          const poller = await Promise.resolve().then(() => (init_tenantImapPoller(), tenantImapPoller_exports));
+          await poller.pollTenantMailbox(tId, { force: true });
+          view2 = await svc.getInboundView(tId);
+        } else {
+          view2 = await svc.disconnectInbound(tId);
+        }
+        res.statusCode = 200;
+        res.end(JSON.stringify(view2));
+        return true;
+      }
+    } catch (err) {
+      const status = err instanceof Error && typeof err.status === "number" ? err.status : 500;
+      res.statusCode = status;
+      if (status >= 500) {
+        console.error(`[Inbound] ${req.method} ${url} failed for tenant ${tId}:`, err?.stack || err);
+      }
+      const secret = String(body?.password || "");
+      let hint = status >= 500 ? `${err?.name || "Error"}${err?.code ? ` [${err.code}]` : ""}: ${String(err?.message || "").slice(0, 200)}` : "";
+      if (secret && hint) hint = hint.split(secret).join("***");
+      res.end(JSON.stringify({ error: status < 500 ? err.message : "Inbound mailbox request failed", ...hint ? { hint } : {} }));
+      return true;
+    }
+  }
+  if (url === "/api/inbound-mail/cron" && (req.method === "POST" || req.method === "GET")) {
+    const cronSecret = process.env.CRON_SECRET;
+    const presented = (req.headers["authorization"] || "").toString().replace(/^Bearer\s+/i, "");
+    const isCron = Boolean(cronSecret) && presented === cronSecret;
+    let callerCtx = null;
+    let runAll = isCron;
+    if (!isCron) {
+      const a = await authenticateRequest(req);
+      if (!a.ok) {
+        res.statusCode = a.status || 401;
+        res.end(JSON.stringify({ error: a.error || "Unauthorized", code: a.code }));
+        return true;
+      }
+      callerCtx = a.ctx;
+      runAll = Boolean(callerCtx.isPlatformAdmin);
+    }
+    try {
+      const poller = await Promise.resolve().then(() => (init_tenantImapPoller(), tenantImapPoller_exports));
+      const results = runAll ? await poller.pollAllTenantMailboxes() : [await poller.pollTenantMailbox(callerCtx.tenantId)];
+      const ownerTenantId = getImapOwnerTenantId();
+      if (getImapConfig().configured && (runAll || callerCtx?.tenantId === ownerTenantId)) {
+        const ownerCtx = { tenantId: ownerTenantId, uid: "system", email: "system", role: "admin" };
+        const legacy = await pollAndProcessImapMailbox(ownerCtx).catch((err) => ({
+          success: false,
+          polledCount: 0,
+          error: err?.message || String(err)
+        }));
+        results.push({ tenantId: ownerTenantId, mailbox: "shared-env", polledCount: legacy.polledCount, error: legacy.error });
+      }
+      res.statusCode = 200;
+      res.setHeader("Content-Type", "application/json");
+      res.end(JSON.stringify({ success: true, results }));
+    } catch (err) {
+      res.statusCode = 500;
+      res.setHeader("Content-Type", "application/json");
+      res.end(JSON.stringify({ error: err?.message || "Failed to poll mailboxes" }));
+    }
+    return true;
   }
   const routesMatch = url.match(/^\/api\/tenants\/([^/?]+)\/routes$/);
   if (routesMatch) {
@@ -307078,12 +315841,15 @@ async function handleCoreApi(req, res) {
           endpoint: "/api/webhooks/umrah-demo",
           status: "ready"
         },
-        calendar: {
-          targetEmail: TARGET_CALENDAR_EMAIL,
-          timezone: SCHEDULING_TIMEZONE,
-          workingDays: "Monday - Friday",
-          workingHours: "10:00 AM - 7:00 PM IST"
-        },
+        calendar: await (async () => {
+          const b = await getTenantBrand(resolvedTenantId);
+          return {
+            targetEmail: b.calendarEmail,
+            timezone: b.timezone,
+            workingDays: brandWorkingDaysLabel(b).replace(" to ", " - "),
+            workingHours: `${fmtHour(b.workingHoursStart)} - ${fmtHour(b.workingHoursEnd)} ${brandTzLabel(b)}`
+          };
+        })(),
         timestamp: (/* @__PURE__ */ new Date()).toISOString()
       })
     );
@@ -307098,10 +315864,15 @@ async function handleCoreApi(req, res) {
           tenantRepo(activeTenantCtx).settingsDoc("calendar_auth"),
           {
             accessToken,
-            email: email || TARGET_CALENDAR_EMAIL,
-            targetAccount: TARGET_CALENDAR_EMAIL,
+            email: email || (await getTenantBrand(resolvedTenantId)).calendarEmail,
+            targetAccount: (await getTenantBrand(resolvedTenantId)).calendarEmail,
             updatedAt: (/* @__PURE__ */ new Date()).toISOString(),
-            active: true
+            active: true,
+            // A NEW token must clear an earlier "expired" flag. Without this, once any token had expired,
+            // every token saved afterwards was ignored by other server instances (they read this doc and
+            // skip it while expired is true), so the calendar looked disconnected again on the next visit.
+            expired: false,
+            expiredAt: null
           },
           { merge: true }
         ).catch(() => {
@@ -307118,17 +315889,21 @@ async function handleCoreApi(req, res) {
   if (url === "/api/calendar/status" && req.method === "GET") {
     const liveToken = await getLiveCalendarToken(requestBearerToken || void 0);
     const verification = liveToken ? await verifyGoogleCalendarConnection(liveToken) : { connected: false };
+    const cb = await getTenantBrand(resolvedTenantId);
+    const slotHrs = [];
+    for (let h2 = cb.workingHoursStart; h2 < cb.workingHoursEnd; h2++) slotHrs.push(h2);
+    const closedNames = [6, 0, 1, 2, 3, 4, 5].filter((d) => !cb.workingDays.includes(d)).map((d) => ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][d]);
     res.statusCode = 200;
     res.end(
       JSON.stringify({
         configured: Boolean(liveToken),
         connected: verification.connected,
-        targetAccount: TARGET_CALENDAR_EMAIL,
-        timezone: SCHEDULING_TIMEZONE,
-        workingDays: "Monday \u2013 Friday (Saturday & Sunday closed)",
-        workingHours: "10:00 AM \u2013 7:00 PM IST",
+        targetAccount: cb.calendarEmail,
+        timezone: cb.timezone,
+        workingDays: `${brandWorkingDaysLabel(cb).replace(" to ", " \u2013 ")}${closedNames.length ? ` (${closedNames.join(" & ")} closed)` : ""}`,
+        workingHours: `${fmtHour(cb.workingHoursStart)} \u2013 ${fmtHour(cb.workingHoursEnd)} ${brandTzLabel(cb)}`,
         durationMinutes: 60,
-        fixedSlots: VALID_SLOT_START_HOURS.map((h2) => `${h2}:00 \u2013 ${h2 + 1}:00 IST`),
+        fixedSlots: slotHrs.map((h2) => `${h2}:00 \u2013 ${h2 + 1}:00 ${brandTzLabel(cb)}`),
         timestamp: (/* @__PURE__ */ new Date()).toISOString()
       })
     );
@@ -307145,13 +315920,14 @@ async function handleCoreApi(req, res) {
       maxSlotsToReturn: count,
       accessToken: requestBearerToken || void 0
     });
+    const ab = await getTenantBrand(resolvedTenantId);
     res.statusCode = 200;
     res.end(
       JSON.stringify({
         success: true,
-        targetAccount: TARGET_CALENDAR_EMAIL,
-        timezone: SCHEDULING_TIMEZONE,
-        workingHours: "10:00 AM \u2013 7:00 PM IST (Mon\u2013Fri)",
+        targetAccount: ab.calendarEmail,
+        timezone: ab.timezone,
+        workingHours: `${fmtHour(ab.workingHoursStart)} \u2013 ${fmtHour(ab.workingHoursEnd)} ${brandTzLabel(ab)} (${brandWorkingDaysLabel(ab)})`,
         slots,
         totalAvailable: slots.length
       })
@@ -307287,21 +316063,24 @@ async function handleCoreApi(req, res) {
   }
   if ((url === "/api/ai/respond" || url.startsWith("/api/ai/respond?")) && req.method === "POST") {
     const { incomingMessage, contact, lead, conversation, recentMessages, knowledgeChunks, handoffCheck, signature } = body;
+    const brand = await getTenantBrand(resolvedTenantId);
+    const isUmrah = brand.playbook === "umrah360";
+    const defSig = brandSignature(brand);
     if (handoffCheck?.shouldHandoff) {
-      const isTwentyUsers = incomingMessage?.toLowerCase().includes("20") || incomingMessage?.toLowerCase().includes("enterprise");
+      const isTwentyUsers = isUmrah && (incomingMessage?.toLowerCase().includes("20") || incomingMessage?.toLowerCase().includes("enterprise"));
       const handoffResponse = isTwentyUsers ? `Thank you for your interest, ${contact?.firstName || "there"}! For teams of 20+ users, our Enterprise tier includes dedicated cloud hosting, unlimited B2B sub-agent capacity, and custom onboarding.
 
 Because Enterprise accounts are customized to your agency's transaction volume, I have connected our Senior Solutions Specialist to share a tailored proposal and schedule a short walkthrough. Someone will reach out to you shortly.
 
-${signature || "Regards,\nUmrah360 Team"}` : `I don't have confirmed information on that specific detail in our verified documentation. I'll connect you directly with our senior pilgrimage operations team so they can assist you personally.
+${signature || defSig}` : `I don't have confirmed information on that specific detail in our verified documentation. I'll connect you directly with our ${isUmrah ? "senior pilgrimage operations" : "specialist"} team so they can assist you personally.
 
-${signature || "Regards,\nUmrah360 Team"}`;
+${signature || defSig}`;
       res.statusCode = 200;
       res.end(
         JSON.stringify({
           responseText: handoffResponse,
           confidence: 0.95,
-          knowledgeSources: knowledgeChunks?.map((c) => c.title) || ["Umrah360 Sales Policy"],
+          knowledgeSources: knowledgeChunks?.map((c) => c.title) || (isUmrah ? ["Umrah360 Sales Policy"] : []),
           humanHandoffTriggered: true,
           handoffReason: handoffCheck.reason,
           classification: "PRICING_REQUEST",
@@ -307310,13 +316089,13 @@ ${signature || "Regards,\nUmrah360 Team"}`;
             leadScore: Math.min(100, (lead?.leadScore || 65) + 15),
             intent: "HIGH",
             buyingStage: "CONSIDERATION",
-            requirements: [...lead?.requirements || [], "Enterprise 20+ seats", "Custom quote"],
+            requirements: [...lead?.requirements || [], ...isUmrah ? ["Enterprise 20+ seats"] : [], "Custom quote"],
             budget: "Enterprise Quote Required",
             timeline: "Immediate",
             nextAction: "Senior specialist follow-up for 20-seat Enterprise quote"
           },
           memoryUpdate: {
-            customerFacts: [`Interested in Umrah360 for ${contact?.companyName || "agency"}`, "Inquired about 20-user Enterprise plan"],
+            customerFacts: [`Interested in ${brand.companyName} for ${contact?.companyName || "agency"}`, ...isUmrah ? ["Inquired about 20-user Enterprise plan"] : []],
             requirements: ["20+ user seats", "Custom quote"],
             buyingStage: "CONSIDERATION",
             nextAction: "Human handoff - custom pricing quote"
@@ -307329,7 +316108,7 @@ ${signature || "Regards,\nUmrah360 Team"}`;
     if (openAiApiKey) {
       try {
         const openai = new OpenAI({ apiKey: openAiApiKey });
-        const systemInstruction = `You are the AI conversation engine for Umrah360 (www.umrah360.in), the leading all-in-one ERP and CRM platform for Hajj and Umrah tour operators.
+        const umrahSystemInstruction = `You are the AI conversation engine for Umrah360 (www.umrah360.in), the leading all-in-one ERP and CRM platform for Hajj and Umrah tour operators.
 CRITICAL RULES:
 1. Ground your responses strictly in the provided Approved Knowledge Chunks. NEVER fabricate features, pricing, or guarantees.
 2. If the user asks for pricing for 20 users or large enterprise plans, you MUST NOT quote arbitrary numbers. State that Enterprise tiers for 20+ users require a tailored volume quote and will be handled by a specialist.
@@ -307337,7 +316116,16 @@ CRITICAL RULES:
 4. Channel: ${conversation?.channel || "EMAIL"}.
 5. Match the customer's language and tone. Do not repeat greeting if already mid-thread.
 6. EMAIL FORMATTING & GREETING RULES (MANDATORY): Never use Markdown symbols in email replies. Do NOT use **, ##, ###, *, backticks, or similar formatting symbols. Write emails as natural, professional plain text. ALWAYS use formal professional greetings (e.g., "Dear [Name]," or "Hello [Name],"). NEVER use Muslim/religious greetings such as "Assalamu Alaikum", "Walaikum Assalam", "Salam", etc.
-7. Sign off with: ${signature || "Regards,\nUmrah360 Team"}`;
+7. Sign off with: ${signature || defSig}`;
+        const genericSystemInstruction = `You are the AI conversation engine for ${brandIntro(brand)}${brand.industryDescription ? `, serving ${brand.industryDescription}` : ""}.
+CRITICAL RULES:
+1. Ground your responses strictly in the provided Approved Knowledge Chunks. NEVER fabricate features, pricing, or guarantees. If the answer is not in the chunks, say a specialist from ${brand.companyName} will follow up.
+2. Keep your reply concise, professional, warm, and helpful.
+3. Channel: ${conversation?.channel || "EMAIL"}.
+4. Match the customer's language and tone. Do not repeat greeting if already mid-thread.
+5. FORMATTING (MANDATORY): Never use Markdown symbols (**, ##, ###, *, backticks). Write natural plain text with a formal greeting (e.g., "Dear [Name],").
+6. Sign off with: ${signature || defSig}`;
+        const systemInstruction = isUmrah ? umrahSystemInstruction : genericSystemInstruction;
         const contextPrompt = `
 CONTACT PROFILE:
 Name: ${contact?.firstName} ${contact?.lastName}
@@ -307345,10 +316133,10 @@ Company: ${contact?.companyName}
 Title: ${contact?.jobTitle}
 
 CONVERSATION SUMMARY:
-${conversation?.conversationSummary || "Ongoing dialogue regarding Umrah360."}
+${conversation?.conversationSummary || `Ongoing dialogue regarding ${brand.companyName}.`}
 
 APPROVED KNOWLEDGE CHUNKS:
-${knowledgeChunks?.map((c) => `[${c.title}]: ${c.relevantExcerpt}`).join("\n\n") || "General Umrah360 pilgrimage software information."}
+${knowledgeChunks?.map((c) => `[${c.title}]: ${c.relevantExcerpt}`).join("\n\n") || (isUmrah ? "General Umrah360 pilgrimage software information." : "No specific knowledge excerpts available.")}
 
 RECENT THREAD MESSAGES:
 ${recentMessages?.map((m2) => `${m2.senderName}: ${m2.text}`).join("\n") || "None"}
@@ -307393,14 +316181,14 @@ Generate a helpful, accurate, grounded response adhering to all rules.`;
                 leadScore: Math.min(100, (lead?.leadScore || 60) + 10),
                 intent: "HIGH",
                 buyingStage: "CONSIDERATION",
-                requirements: lead?.requirements || ["Umrah360 Core Suite"],
+                requirements: lead?.requirements || (isUmrah ? ["Umrah360 Core Suite"] : []),
                 budget: lead?.budget || null,
                 timeline: lead?.timeline || "Upcoming season",
                 nextAction: "Offer live platform walkthrough"
               },
               memoryUpdate: {
-                customerFacts: [`Inquired about Umrah360 capabilities for ${contact?.companyName}`],
-                requirements: lead?.requirements || ["B2B / FIT Package Management"],
+                customerFacts: [`Inquired about ${brand.companyName} capabilities for ${contact?.companyName}`],
+                requirements: lead?.requirements || (isUmrah ? ["B2B / FIT Package Management"] : []),
                 buyingStage: "CONSIDERATION",
                 nextAction: "Offer live platform walkthrough"
               }
@@ -307416,7 +316204,18 @@ Generate a helpful, accurate, grounded response adhering to all rules.`;
     const isB2b = incomingMessage?.toLowerCase().includes("b2b") || incomingMessage?.toLowerCase().includes("agent");
     const isPricing = incomingMessage?.toLowerCase().includes("price") || incomingMessage?.toLowerCase().includes("cost");
     let responseText = "";
-    if (isPilgrimRetail) {
+    if (!isUmrah) {
+      const excerpt = knowledgeChunks?.[0]?.relevantExcerpt;
+      responseText = `Dear ${contact?.firstName || "Customer"},
+
+Thank you for contacting ${brand.companyName}!
+
+${excerpt ? `${excerpt}
+
+Could you share a few more details so we can help you further?` : "We have received your message and one of our specialists will get back to you shortly. Please share a few details about what you are looking for."}
+
+${signature || defSig}`;
+    } else if (isPilgrimRetail) {
       responseText = `Dear ${contact?.firstName || "Customer"},
 
 Thank you for reaching out to Umrah360!
@@ -307427,13 +316226,13 @@ Thank you for reaching out to Umrah360!
 
 3. Booking Fulfillment: Because Umrah360 provides the software to licensed tour operators rather than selling directly as a retail travel agency, packages are fulfilled through our verified partner agencies. We would be delighted to connect you with one of our top certified partner travel agencies in your city!
 
-${signature || "Regards,\nUmrah360 Team"}`;
+${signature || defSig}`;
     } else if (isB2b) {
       responseText = `Yes! Umrah360 provides a complete white-label B2B Sub-Agent Portal. It allows tour operators to distribute packages to external travel agents, manage custom multi-tier markups, establish real-time credit wallets, and enable agents to generate branded PDF vouchers instantly with their own agency logo.
 
 Would you like to see how sub-agent allotments and credit limits are configured?
 
-${signature || "Regards,\nUmrah360 Team"}`;
+${signature || defSig}`;
     } else if (isPricing) {
       responseText = `Here is our approved subscription pricing:
 \u2022 Lite Plan: INR 36,000/year (or INR 4,000/month) | International: USD 825/year (up to 5 users) \u2014 includes Umrah group package creation, booking management, departure control, visa tracking, proforma invoices, and payment receipts.
@@ -307442,13 +316241,13 @@ ${signature || "Regards,\nUmrah360 Team"}`;
 
 How many team members would be using the software at ${contact?.companyName || "your agency"}?
 
-${signature || "Regards,\nUmrah360 Team"}`;
+${signature || defSig}`;
     } else {
       responseText = `Umrah360 is the unified cloud operating platform purpose-built for Hajj and Umrah tour operators. It connects package creation, group departures, FIT custom packages, passenger manifests, Saudi visa tracking, rooming lists, B2B agent distribution, and departure-level profitability.
 
 Are you currently handling your operations through spreadsheets or looking to upgrade from another system?
 
-${signature || "Regards,\nUmrah360 Team"}`;
+${signature || defSig}`;
     }
     responseText = sanitizeAiEmailText(responseText, contact?.firstName);
     res.statusCode = 200;
@@ -307481,8 +316280,9 @@ ${signature || "Regards,\nUmrah360 Team"}`;
   }
   if ((url === "/api/ai/qualify" || url.startsWith("/api/ai/qualify?")) && req.method === "POST") {
     const { jobTitle, companyName, industry, location } = body;
+    const qBrand = await getTenantBrand(resolvedTenantId);
     const isDecisionMaker = /founder|owner|director|ceo|managing director|partner|proprietor/i.test(jobTitle || "");
-    const isPilgrimage = /umrah|hajj|pilgrimage|travel|tour/i.test(`${industry} ${companyName}`);
+    const isPilgrimage = qBrand.playbook === "umrah360" ? /umrah|hajj|pilgrimage|travel|tour/i.test(`${industry} ${companyName}`) : qBrand.industryDescription.toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length > 3).some((w) => `${industry} ${companyName}`.toLowerCase().includes(w));
     let score = 55;
     if (isDecisionMaker) score += 25;
     if (isPilgrimage) score += 15;
@@ -307500,16 +316300,16 @@ ${signature || "Regards,\nUmrah360 Team"}`;
     return true;
   }
   if (url === "/api/knowledge" || url.startsWith("/api/knowledge?") || url.startsWith("/api/knowledge/")) {
-    await initKnowledgeStore();
+    await initKnowledgeStore(activeTenantCtx);
     if (req.method === "GET") {
-      const documents = getAllKnowledgeDocs();
+      const documents = getAllKnowledgeDocs(activeTenantCtx);
       res.statusCode = 200;
       res.end(JSON.stringify({ success: true, documents, count: documents.length }));
       return true;
     }
     if (req.method === "POST" || req.method === "PUT") {
       try {
-        const saved = await saveKnowledgeDoc(body);
+        const saved = await saveKnowledgeDoc(body, activeTenantCtx);
         res.statusCode = 200;
         res.end(JSON.stringify({ success: true, document: saved, message: "Article successfully saved and active in RAG" }));
       } catch (err) {
@@ -307535,7 +316335,7 @@ ${signature || "Regards,\nUmrah360 Team"}`;
         res.end(JSON.stringify({ success: false, error: "Knowledge document ID required" }));
         return true;
       }
-      const deleted = await deleteKnowledgeDoc(docId);
+      const deleted = await deleteKnowledgeDoc(docId, activeTenantCtx);
       res.statusCode = 200;
       res.end(JSON.stringify({ success: deleted, deletedId: docId }));
       return true;
@@ -307543,8 +316343,11 @@ ${signature || "Regards,\nUmrah360 Team"}`;
   }
   if ((url === "/api/ai/test" || url.startsWith("/api/ai/test?")) && req.method === "POST") {
     const { message: message2, contact, lead, conversation, signature } = body;
-    const isTwentyUsers = /20 user|twenty|20 seat|enterprise/i.test(message2 || "");
-    const isB2b = /b2b|agent|reseller|wholesaler/i.test(message2 || "");
+    const brand = await getTenantBrand(resolvedTenantId);
+    const isUmrah = brand.playbook === "umrah360";
+    const defSig = brandSignature(brand);
+    const isTwentyUsers = isUmrah && /20 user|twenty|20 seat|enterprise/i.test(message2 || "");
+    const isB2b = isUmrah && /b2b|agent|reseller|wholesaler/i.test(message2 || "");
     const chunks = retrieveRelevantKnowledge(message2 || "", 3);
     const knowledgeSources = chunks.map((c) => c.title);
     if (isTwentyUsers) {
@@ -307553,7 +316356,7 @@ ${signature || "Regards,\nUmrah360 Team"}`;
         JSON.stringify({
           responseText: `Thank you for your inquiry! For 20+ users, our Enterprise plan provides dedicated cloud infrastructure, custom B2B sub-agent networks, and personalized onboarding. Because this requires custom volume assessment, I'm transferring you to our Senior Solutions Specialist.
 
-${signature || "Regards,\nUmrah360 Team"}`,
+${signature || defSig}`,
           confidence: 0.96,
           humanHandoff: true,
           handoffReason: "Enterprise 20+ users requires custom volume quote",
@@ -307569,12 +316372,12 @@ ${signature || "Regards,\nUmrah360 Team"}`,
     if (openAiKey) {
       try {
         const openai = new OpenAI({ apiKey: openAiKey });
-        const systemInstruction = `You are the AI conversation engine for Umrah360 (www.umrah360.in).
+        const systemInstruction = `You are the AI conversation engine for ${isUmrah ? "Umrah360 (www.umrah360.in)" : brandIntro(brand)}.
 CRITICAL RULES:
 1. Ground your response strictly in the provided Approved Knowledge Chunks. NEVER fabricate features, pricing, or guarantees.
 2. Keep your reply concise, professional, warm, and helpful.
 3. Plain text only. No markdown formatting symbols in emails.
-4. Sign off with: ${signature || "Regards,\nUmrah360 Team"}`;
+4. Sign off with: ${signature || defSig}`;
         const prompt = `APPROVED KNOWLEDGE CHUNKS:
 ${chunks.map((c) => `[${c.title}]: ${c.relevantExcerpt}`).join("\n\n")}
 
@@ -307613,7 +316416,7 @@ Generate a helpful, grounded response.`;
               leadScore: isB2b ? 88 : 80,
               intent: "HIGH",
               buyingStage: "CONSIDERATION",
-              knowledgeSources: knowledgeSources.length > 0 ? knowledgeSources : ["Umrah360 Platform Knowledge Base"]
+              knowledgeSources: knowledgeSources.length > 0 ? knowledgeSources : [`${brand.companyName} Knowledge Base`]
             })
           );
           return true;
@@ -307624,21 +316427,25 @@ Generate a helpful, grounded response.`;
     }
     let responseText = "";
     if (chunks.length > 0) {
-      responseText = `Based on Umrah360's verified documentation:
+      responseText = `Based on ${brand.companyName}'s verified documentation:
 
 ${chunks[0].relevantExcerpt}
 
 Please let us know if you would like a guided demo or specific details for your agency.
 
-${signature || "Regards,\nUmrah360 Team"}`;
+${signature || defSig}`;
+    } else if (!isUmrah) {
+      responseText = `Thank you for contacting ${brand.companyName}! We have received your message and a specialist will follow up shortly.
+
+${signature || defSig}`;
     } else if (isB2b) {
       responseText = `Yes! Umrah360 includes a full B2B Sub-Agent Portal allowing your partner agencies to search contracted hotel allotments and issue white-label PDF vouchers directly.
 
-${signature || "Regards,\nUmrah360 Team"}`;
+${signature || defSig}`;
     } else {
       responseText = `Umrah360 automates pilgrimage tour operations, dynamic package pricing, and Saudi visa workflows.
 
-${signature || "Regards,\nUmrah360 Team"}`;
+${signature || defSig}`;
     }
     res.statusCode = 200;
     res.end(
@@ -307752,7 +316559,7 @@ ${signature || "Regards,\nUmrah360 Team"}`;
           to,
           subject,
           externalMessageId: sendResult.messageId,
-          senderName: senderName || "Umrah360 AI"
+          senderName: senderName || (await getTenantBrand(resolvedTenantId)).aiAgentName
         });
       }
       res.statusCode = 200;
@@ -308021,7 +316828,15 @@ ${signature || "Regards,\nUmrah360 Team"}`;
     try {
       const created = await createCampaign(body);
       res.statusCode = 201;
-      res.end(JSON.stringify({ success: true, campaign: created.campaign, leads: created.leads }));
+      res.end(
+        JSON.stringify({
+          success: true,
+          campaign: created.campaign,
+          leads: created.leads,
+          duplicatesSkipped: created.duplicatesSkipped,
+          duplicates: created.duplicates.slice(0, 500)
+        })
+      );
     } catch (err) {
       res.statusCode = 400;
       res.end(JSON.stringify({ error: err?.message || "Failed to create campaign" }));
@@ -308272,7 +317087,7 @@ ${signature || "Regards,\nUmrah360 Team"}`;
       res.end(JSON.stringify({ error: "Campaign not found" }));
       return true;
     }
-    const leads = getCampaignLeads(campaignId);
+    const leads = await getCampaignLeadsFromDb(campaignId);
     const repliedLeads = leads.filter((l) => l.replyStatus === "REPLIED");
     const unrepliedLeads = leads.filter((l) => l.replyStatus !== "REPLIED");
     const allQualified = leads.length > 0 && repliedLeads.length === leads.length;
@@ -308316,13 +317131,61 @@ ${signature || "Regards,\nUmrah360 Team"}`;
     }
     return true;
   }
+  const campaignScheduleMatch = url.match(/^\/api\/campaigns\/([a-zA-Z0-9_-]+)\/(schedule|unschedule)$/);
+  if (campaignScheduleMatch && req.method === "POST") {
+    const [, campaignId, action] = campaignScheduleMatch;
+    try {
+      const campaign = action === "schedule" ? await scheduleCampaign(campaignId, String(body?.startAt || ""), body?.timezone ? String(body.timezone) : void 0) : await unscheduleCampaign(campaignId);
+      res.statusCode = 200;
+      res.end(JSON.stringify({ success: true, campaign }));
+    } catch (err) {
+      res.statusCode = 400;
+      res.end(JSON.stringify({ error: err?.message || `Failed to ${action} campaign` }));
+    }
+    return true;
+  }
+  const campaignSearchIndexMatch = url.match(/^\/api\/campaigns\/([a-zA-Z0-9_-]+)\/search-index$/);
+  if (campaignSearchIndexMatch && req.method === "POST") {
+    try {
+      const result = await ensureCampaignSearchIndex(campaignSearchIndexMatch[1]);
+      res.statusCode = 200;
+      res.end(JSON.stringify({ success: true, ...result }));
+    } catch (err) {
+      res.statusCode = 500;
+      res.end(JSON.stringify({ error: err?.message || "Failed to build search index" }));
+    }
+    return true;
+  }
+  const campaignEngagementMatch = url.match(/^\/api\/campaigns\/([a-zA-Z0-9_-]+)\/engagement$/);
+  if (campaignEngagementMatch && req.method === "GET") {
+    try {
+      const stats = await getCampaignEngagementStats(campaignEngagementMatch[1]);
+      res.statusCode = 200;
+      res.end(JSON.stringify({ success: true, ...stats }));
+    } catch (err) {
+      res.statusCode = 500;
+      res.end(JSON.stringify({ error: err?.message || "Failed to load engagement stats" }));
+    }
+    return true;
+  }
   const campaignLeadsMatch = url.match(/^\/api\/campaigns\/([a-zA-Z0-9_-]+)\/leads$/);
   if (campaignLeadsMatch && req.method === "GET") {
     const campaignId = campaignLeadsMatch[1];
-    await initCampaignStore();
-    const leads = await getCampaignLeadsFromDb(campaignId);
-    res.statusCode = 200;
-    res.end(JSON.stringify({ success: true, leads }));
+    const qp = new URL(rawUrl || "/", "http://localhost").searchParams;
+    const filterParam = (qp.get("filter") || "ALL").toUpperCase();
+    const allowed = ["ALL", "PENDING", "SENT", "FAILED", "REPLIED", "DEMO_BOOKED", "OPENED", "CLICKED", "BOUNCED", "WAITING", "IGNORED"];
+    try {
+      const page = await getCampaignLeadsPage(campaignId, {
+        pageSize: parseInt(qp.get("limit") || "50", 10) || 50,
+        cursor: qp.get("cursor") || "",
+        filter: allowed.includes(filterParam) ? filterParam : "ALL"
+      });
+      res.statusCode = 200;
+      res.end(JSON.stringify({ success: true, leads: page.leads, nextCursor: page.nextCursor }));
+    } catch (err) {
+      res.statusCode = 500;
+      res.end(JSON.stringify({ error: err?.message || "Failed to load campaign leads" }));
+    }
     return true;
   }
   const campaignRunsMatch = url.match(/^\/api\/campaigns\/([a-zA-Z0-9_-]+)\/runs$/);

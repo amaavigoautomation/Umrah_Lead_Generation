@@ -22,6 +22,9 @@ if (typeof window !== 'undefined') {
   } catch {}
 }
 
+/** True when this browser already holds a calendar token (used so the page does not flash "Disconnected"). */
+export const hasCalendarToken = (): boolean => Boolean(cachedAccessToken);
+
 const provider = new GoogleAuthProvider();
 CALENDAR_SCOPES.forEach((scope) => provider.addScope(scope));
 provider.setCustomParameters({

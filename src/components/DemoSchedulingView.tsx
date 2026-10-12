@@ -28,6 +28,7 @@ import {
   getCalendarAccessToken,
   registerCalendarAccessToken,
   initCalendarAuth,
+  hasCalendarToken,
   CALENDAR_TARGET_ACCOUNT,
 } from '../services/googleCalendarAuth.js';
 
@@ -40,7 +41,7 @@ export const DemoSchedulingView: React.FC<DemoSchedulingViewProps> = ({ leads = 
   const tzl = brandTzLabel(brand);
   const dayRange = brandWorkingDaysLabel(brand).replace(' to ', '–').replace(/Monday/g, 'Mon').replace(/Tuesday/g, 'Tue').replace(/Wednesday/g, 'Wed').replace(/Thursday/g, 'Thu').replace(/Friday/g, 'Fri').replace(/Saturday/g, 'Sat').replace(/Sunday/g, 'Sun');
   const hoursLabel = `${fmtHour(brand.workingHoursStart)} – ${fmtHour(brand.workingHoursEnd)} ${tzl}`;
-  const [calendarConnected, setCalendarConnected] = useState(false);
+  const [calendarConnected, setCalendarConnected] = useState(() => hasCalendarToken());
   const [isAuthenticating, setIsAuthenticating] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
 
@@ -95,13 +96,22 @@ export const DemoSchedulingView: React.FC<DemoSchedulingViewProps> = ({ leads = 
   // 1. Check Initial Status
   const checkStatus = async () => {
     try {
-      const res = await fetch('/api/calendar/status');
+      // Send this browser's token with the check. Without it, the check depended on which server
+      // instance answered (each keeps its own copy in memory), so coming back to this page could
+      // report "not connected" for a token that was still valid.
+      const token = await getCalendarAccessToken();
+      const headers: Record<string, string> = {};
+      if (token) headers['X-Google-Access-Token'] = token;
+      const res = await fetch('/api/calendar/status', { headers });
       if (res.ok) {
         const data = await res.json();
-        setCalendarConnected(Boolean(data.configured && data.connected));
-      } else {
-        setCalendarConnected(false);
+        const connected = Boolean(data.configured && data.connected);
+        setCalendarConnected(connected);
+        if (!connected) {
+          console.warn('[Calendar] status says not connected', { configured: data.configured, connected: data.connected, hadToken: Boolean(token) });
+        }
       }
+      // Non-OK (e.g. login check hiccup): keep the current state instead of showing "Disconnected".
     } catch {
       // offline or dev
     }
@@ -117,10 +127,10 @@ export const DemoSchedulingView: React.FC<DemoSchedulingViewProps> = ({ leads = 
 
       const res = await fetch('/api/calendar/availability?count=8', { headers });
       if (res.status === 401) {
-        setCalendarConnected(false);
-        try {
-          window.sessionStorage.removeItem('calendar_access_token');
-        } catch {}
+        // A 401 can come from the app's own login check, not only from Google. Do not throw the token
+        // away on it: let the status check (which asks Google directly) decide.
+        console.warn('[Calendar] availability returned 401, re-checking status');
+        checkStatus();
       } else if (res.ok) {
         const data = await res.json();
         setAvailableSlots(data.slots || []);

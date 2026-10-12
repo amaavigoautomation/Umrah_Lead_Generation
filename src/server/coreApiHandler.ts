@@ -100,7 +100,7 @@ import {
   runAutoFollowUpWorkerCycle,
 } from './autoFollowUpService.js';
 import { encryptSecret, decryptSecret } from './cryptoUtils.js';
-import { startInstagramOAuth, getInstagramStatus, disconnectInstagram, handleInstagramOAuthCallback, handleInstagramWebhook } from './instagramIntegrationService.js';
+import { startInstagramOAuth, getInstagramStatus, disconnectInstagram, handleInstagramOAuthCallback, handleInstagramWebhook, sendInstagramMessage } from './instagramIntegrationService.js';
 import { getTenantCurrentUsage, recordTenantUsage, checkTenantQuota } from './usageService.js';
 import {
   routeWebsiteLeadWebhook,
@@ -460,6 +460,24 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
     } catch (err: any) {
       res.statusCode = 400;
       res.end(JSON.stringify({ error: err?.message || 'Could not start Instagram authorization.' }));
+    }
+    return true;
+  }
+  if (url === '/api/instagram/send' && req.method === 'POST') {
+    const recipientId = typeof body.recipientId === 'string' ? body.recipientId.trim() : '';
+    const messageText = typeof body.text === 'string' ? body.text.trim() : '';
+    if (!recipientId || !messageText) {
+      res.statusCode = 400;
+      res.end(JSON.stringify({ error: 'recipientId and text are required.' }));
+      return true;
+    }
+    try {
+      const result = await sendInstagramMessage(activeTenantCtx, recipientId, messageText);
+      res.statusCode = 200;
+      res.end(JSON.stringify({ success: true, result }));
+    } catch (err: any) {
+      res.statusCode = 400;
+      res.end(JSON.stringify({ error: err?.message || 'Instagram message could not be sent.' }));
     }
     return true;
   }

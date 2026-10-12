@@ -186,7 +186,7 @@ export async function handleInstagramOAuthCallback(req: any, res: any): Promise<
     return true;
   }
   if (error || !code) {
-    const appUrl = process.env.APP_BASE_URL || '/';
+    const appUrl = process.env.APP_BASE_URL || process.env.APP_URL || '/';
     res.statusCode = 302;
     res.setHeader('Location', `${appUrl}${appUrl.includes('?') ? '&' : '?'}instagram=error`);
     res.end();
@@ -222,7 +222,7 @@ export async function handleInstagramOAuthCallback(req: any, res: any): Promise<
     });
     await setDoc(tenantRepo(ctx).integrationDoc('instagram'), { channel: 'instagram', connection }, { merge: true });
     await setDoc(routeRef, { tenantId: ctx.tenantId, accountId: account.accountId, updatedAt: now });
-    const appUrl = process.env.APP_BASE_URL || '/';
+    const appUrl = process.env.APP_BASE_URL || process.env.APP_URL || '/';
     res.statusCode = 302;
     res.setHeader('Location', `${appUrl}${appUrl.includes('?') ? '&' : '?'}instagram=connected`);
     res.end();

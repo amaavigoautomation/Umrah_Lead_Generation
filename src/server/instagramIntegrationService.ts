@@ -111,6 +111,9 @@ export async function startInstagramOAuth(ctx: TenantContext): Promise<{ authori
   const clientId = requiredEnv('META_INSTAGRAM_APP_ID');
   const redirectUri = requiredEnv('META_INSTAGRAM_REDIRECT_URI');
   requiredEnv('META_INSTAGRAM_APP_SECRET');
+  if (!process.env.SECRETS_MASTER_KEY && !process.env.TENANT_MASTER_KEY) {
+    throw new Error('SECRETS_MASTER_KEY or TENANT_MASTER_KEY must be configured before connecting Instagram.');
+  }
   const state = crypto.randomBytes(32).toString('base64url');
   const now = Date.now();
   await setDoc(doc(db, 'instagram_oauth_states', stateDocId(state)), {

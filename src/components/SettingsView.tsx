@@ -54,7 +54,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [maskedOpenAiKey, setMaskedOpenAiKey] = useState('');
   const [isSavingOpenAiKey, setIsSavingOpenAiKey] = useState(false);
   const [openAiKeySaveStatus, setOpenAiKeySaveStatus] = useState<string | null>(null);
-  const [instagramStatus, setInstagramStatus] = useState<{ connected: boolean; connection?: { username?: string; status?: string } | null }>({ connected: false });
+  const [instagramStatus, setInstagramStatus] = useState<{ connected: boolean; connection?: { username?: string; status?: string; webhookSubscriptionStatus?: 'subscribed' | 'needs_setup' } | null }>({ connected: false });
   const [instagramLoading, setInstagramLoading] = useState(false);
   const [instagramMessage, setInstagramMessage] = useState<string | null>(null);
 
@@ -291,6 +291,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             <div className="rounded-xl border border-emerald-100 bg-emerald-50/60 p-3 text-xs">
               <p className="font-bold text-emerald-900">@{instagramStatus.connection?.username || 'Instagram account'}</p>
               <p className="text-emerald-700 mt-1">This account is linked to the current workspace.</p>
+              {instagramStatus.connection?.webhookSubscriptionStatus === 'needs_setup' && (
+                <p className="mt-2 font-semibold text-amber-700">Account connected, but automatic webhook subscription was not confirmed. Check the Meta app's Instagram messaging and webhook configuration before testing incoming DMs.</p>
+              )}
             </div>
           )}
           <div className="flex flex-wrap gap-2">

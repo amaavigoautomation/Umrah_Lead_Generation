@@ -106,7 +106,6 @@ import {
   runAutoFollowUpWorkerCycle,
 } from './autoFollowUpService.js';
 import { encryptSecret, decryptSecret } from './cryptoUtils.js';
-import { startInstagramOAuth, getInstagramStatus, disconnectInstagram, handleInstagramOAuthCallback, handleInstagramWebhook, sendInstagramMessage } from './instagramIntegrationService.js';
 import { getTenantCurrentUsage, recordTenantUsage, checkTenantQuota } from './usageService.js';
 import {
   routeWebsiteLeadWebhook,
@@ -194,7 +193,6 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
         }
         if (chunks.length > 0) {
           const rawBody = Buffer.concat(chunks).toString('utf-8');
-          req.rawBody = Buffer.from(rawBody, 'utf-8');
           if (rawBody) {
             try {
               body = JSON.parse(rawBody);
@@ -237,7 +235,6 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
   // =========================================================================
   const isPublicPath =
     url === '/api/health' ||
-    url === '/api/instagram/oauth/callback' ||
     url.startsWith('/api/webhooks/') ||
     url === '/api/inbound/whatsapp' ||
     url === '/api/leads/inbound' ||
@@ -434,75 +431,6 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
   }
   if (url === '/api/webhooks/email/resend') {
     return await routeResendWebhook(req, res);
-  }
-  if (url === '/api/webhooks/instagram') {
-    return await handleInstagramWebhook(req, res);
-  }
-  if (url === '/api/instagram/oauth/callback') {
-    return await handleInstagramOAuthCallback(req, res);
-  }
-
-  // Instagram connection APIs use only the authenticated tenant context.
-  if (url === '/api/instagram/status' && req.method === 'GET') {
-    try {
-      const status = await getInstagramStatus(activeTenantCtx);
-      res.statusCode = 200;
-      res.end(JSON.stringify(status));
-    } catch (err: any) {
-      res.statusCode = 500;
-      res.end(JSON.stringify({ error: err?.message || 'Could not read Instagram status.' }));
-    }
-    return true;
-  }
-  if (url === '/api/instagram/connect' && req.method === 'POST') {
-    if (userRole !== 'admin' && !isPlatformAdmin) {
-      res.statusCode = 403;
-      res.end(JSON.stringify({ error: 'Workspace admin access is required to connect Instagram.' }));
-      return true;
-    }
-    try {
-      const result = await startInstagramOAuth(activeTenantCtx);
-      res.statusCode = 200;
-      res.end(JSON.stringify(result));
-    } catch (err: any) {
-      res.statusCode = 400;
-      res.end(JSON.stringify({ error: err?.message || 'Could not start Instagram authorization.' }));
-    }
-    return true;
-  }
-  if (url === '/api/instagram/send' && req.method === 'POST') {
-    const recipientId = typeof body.recipientId === 'string' ? body.recipientId.trim() : '';
-    const messageText = typeof body.text === 'string' ? body.text.trim() : '';
-    if (!recipientId || !messageText) {
-      res.statusCode = 400;
-      res.end(JSON.stringify({ error: 'recipientId and text are required.' }));
-      return true;
-    }
-    try {
-      const result = await sendInstagramMessage(activeTenantCtx, recipientId, messageText);
-      res.statusCode = 200;
-      res.end(JSON.stringify({ success: true, result }));
-    } catch (err: any) {
-      res.statusCode = 400;
-      res.end(JSON.stringify({ error: err?.message || 'Instagram message could not be sent.' }));
-    }
-    return true;
-  }
-  if (url === '/api/instagram/disconnect' && req.method === 'POST') {
-    if (userRole !== 'admin' && !isPlatformAdmin) {
-      res.statusCode = 403;
-      res.end(JSON.stringify({ error: 'Workspace admin access is required to disconnect Instagram.' }));
-      return true;
-    }
-    try {
-      await disconnectInstagram(activeTenantCtx);
-      res.statusCode = 200;
-      res.end(JSON.stringify({ success: true }));
-    } catch (err: any) {
-      res.statusCode = 400;
-      res.end(JSON.stringify({ error: err?.message || 'Could not disconnect Instagram.' }));
-    }
-    return true;
   }
 
   // =========================================================================
@@ -1316,9 +1244,10 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
       const bookingPayload = {
         ...body,
         accessToken: body.accessToken || requestBearerToken || undefined,
+        replacingBookingId: undefined, // internal only: the duplicate check can't be skipped from outside
       };
       const result = await createGoogleCalendarDemoBooking(bookingPayload);
-      res.statusCode = result.success ? 200 : (result.conflict ? 409 : 400);
+      res.statusCode = result.success ? 200 : result.conflict || result.alreadyBooked ? 409 : 400;
       res.end(JSON.stringify(result));
     } catch (err: any) {
       res.statusCode = 500;

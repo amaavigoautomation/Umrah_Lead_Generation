@@ -555,8 +555,10 @@ export interface Booking {
   conversationId?: string;
   channel: Channel;
   leadName: string;
-  leadEmail: string;
+  leadEmail: string; // stored lower-case, so duplicate checks always match
   leadPhone?: string;
+  /** Last 10 digits of leadPhone, to find an existing demo for a WhatsApp lead without an email. */
+  leadPhoneLast10?: string;
   companyName: string;
   calendarEventId: string;
   googleMeetLink: string;

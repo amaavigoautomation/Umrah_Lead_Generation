@@ -62,7 +62,10 @@ import {
   where,
   limit,
   orderBy,
+  createDoc,
+  deleteDoc,
 } from './adminFirestore.js';
+import crypto from 'crypto';
 import { safeSetDoc } from './firestoreUtils.js';
 import { Booking, BookingStatus, Channel, Lead } from '../types/index.js';
 import { updateCampaignLeadStatus } from './campaignService.js';
@@ -665,6 +668,8 @@ export interface CreateBookingParams {
   startTime: string; // HH:mm
   endTime: string; // HH:mm
   accessToken?: string;
+  /** Internal (reschedule only): the booking being moved. Skips the duplicate check and the new record. */
+  replacingBookingId?: string;
 }
 
 export interface CreateBookingResult {
@@ -674,7 +679,115 @@ export interface CreateBookingResult {
   calendarEventId?: string;
   calendarInviteSent?: boolean;
   conflict?: boolean;
+  /** The lead already has an upcoming demo: nothing was booked. */
+  alreadyBooked?: boolean;
+  existingBooking?: Booking;
   error?: string;
+}
+
+const normalizeLeadEmail = (e?: string) => String(e || '').trim().toLowerCase();
+const phoneLast10 = (p?: string) => {
+  const d = String(p || '').replace(/\D/g, '');
+  return d.length >= 7 ? d.slice(-10) : '';
+};
+/** A booking blocks a new one only while its demo has not happened yet. */
+function isUpcomingBooking(b: Booking): boolean {
+  const end = Date.parse(b.endDateTimeIso || b.startDateTimeIso || '');
+  return Number.isFinite(end) ? end > Date.now() : true;
+}
+
+/** "Tue 14 Oct, 3:00 – 4:00 PM IST" style line for an existing booking. */
+function bookingWhen(b: Booking): string {
+  return `${b.date} from ${b.startTime} – ${b.endTime} ${TZL()}`;
+}
+
+/** What the lead is told when they already have a demo coming up. */
+export function alreadyBookedReplyText(b: Booking, requestedLabel?: string): string {
+  const lines = [
+    `You already have a ${brandName()} demo scheduled for ${bookingWhen(b)}.`,
+    ``,
+    `• Google Meet Link: ${b.googleMeetLink || 'in your calendar invitation'}`,
+    ``,
+    requestedLabel
+      ? `If you'd like to move it to ${requestedLabel} instead, just reply "reschedule to ${requestedLabel}".`
+      : `Would you like to reschedule it to another date or time? Just reply with the day and time.`,
+  ];
+  return lines.join('\n');
+}
+
+/**
+ * Short lock so two requests for the same lead (e.g. an email and a WhatsApp message arriving together)
+ * cannot both pass the duplicate check and book twice. Create-only document; released right after.
+ * A lock older than 2 minutes is treated as left over from a crashed request and taken over.
+ */
+const LOCK_STALE_MS = 120_000;
+async function acquireDemoBookingLock(key: string): Promise<{ ok: boolean; release: () => Promise<void> }> {
+  const noop = { ok: true, release: async () => {} };
+  if (!key || !isFirebaseConfigured || !db) return noop;
+  const id = crypto.createHash('sha1').update(key).digest('hex').slice(0, 24);
+  const ref = tenantRepo(getSchedCtx()).doc('demo_booking_locks', id);
+  const release = async () => {
+    await deleteDoc(ref).catch(() => {});
+  };
+  const tryCreate = async () => {
+    await createDoc(ref, { key, createdAt: new Date().toISOString() });
+  };
+  try {
+    await tryCreate();
+    return { ok: true, release };
+  } catch {
+    const snap = await getDoc(ref).catch(() => null);
+    const at = Date.parse(String(snap?.data()?.createdAt || ''));
+    if (!snap?.exists() || !Number.isFinite(at) || Date.now() - at > LOCK_STALE_MS) {
+      await deleteDoc(ref).catch(() => {});
+      try {
+        await tryCreate();
+        return { ok: true, release };
+      } catch {}
+    }
+    return { ok: false, release: async () => {} };
+  }
+}
+
+/**
+ * Books a demo, but never a second one for a lead who already has an upcoming demo (any campaign, any
+ * channel, matched by email, lead, conversation or phone). There is no override: to change the time the
+ * existing demo is rescheduled. Every booking path (AI conversation, Demo Scheduling page) comes here.
+ */
+export async function createGoogleCalendarDemoBooking(params: CreateBookingParams): Promise<CreateBookingResult> {
+  if (params.replacingBookingId) return createGoogleCalendarDemoBookingInner(params);
+  await warmSchedBrand();
+  const email = normalizeLeadEmail(params.leadEmail);
+
+  const existing = await getActiveBookingForLeadOrConversation(params.leadId, email, params.conversationId, params.leadPhone);
+  if (existing) {
+    return {
+      success: false,
+      alreadyBooked: true,
+      existingBooking: existing,
+      error: `${params.leadName || 'This lead'} already has a demo booked for ${bookingWhen(existing)}. Reschedule that one instead.`,
+    };
+  }
+
+  const lock = await acquireDemoBookingLock(email || params.leadId || phoneLast10(params.leadPhone) || params.conversationId || '');
+  if (!lock.ok) {
+    return { success: false, alreadyBooked: true, error: 'A demo for this lead is being booked right now. Please refresh in a moment.' };
+  }
+  try {
+    // Re-check inside the lock: another request may have finished booking while we waited.
+    const again = await getActiveBookingForLeadOrConversation(params.leadId, email, params.conversationId, params.leadPhone);
+    if (again) {
+      return {
+        success: false,
+        alreadyBooked: true,
+        existingBooking: again,
+        error: `${params.leadName || 'This lead'} already has a demo booked for ${bookingWhen(again)}. Reschedule that one instead.`,
+      };
+    }
+    return await createGoogleCalendarDemoBookingInner({ ...params, leadEmail: email });
+  } finally {
+    await lock.release();
+  }
 }
 
 /**
@@ -682,7 +795,7 @@ export interface CreateBookingResult {
  * invites the lead's email (sends calendar invitation ONCE via sendUpdates=all),
  * stores the confirmed booking record in Firestore, and updates the CRM Lead.
  */
-export async function createGoogleCalendarDemoBooking(
+async function createGoogleCalendarDemoBookingInner(
   params: CreateBookingParams
 ): Promise<CreateBookingResult> {
   await warmSchedBrand();
@@ -878,8 +991,9 @@ export async function createGoogleCalendarDemoBooking(
     conversationId: conversationId || '',
     channel,
     leadName: leadName || 'Valued Partner',
-    leadEmail: leadEmail || '',
+    leadEmail: normalizeLeadEmail(leadEmail),
     leadPhone: leadPhone || '',
+    leadPhoneLast10: phoneLast10(leadPhone) || undefined,
     companyName: companyName || 'Travel Agency',
     calendarEventId,
     googleMeetLink,
@@ -899,7 +1013,11 @@ export async function createGoogleCalendarDemoBooking(
 
   if (isFirebaseConfigured && db) {
     try {
-      await safeSetDoc(tenantRepo(getSchedCtx()).bookingDoc(bookingId), booking, { merge: true });
+      // A reschedule updates the ORIGINAL booking record itself; saving another one here left the lead with
+      // two active bookings.
+      if (!params.replacingBookingId) {
+        await safeSetDoc(tenantRepo(getSchedCtx()).bookingDoc(bookingId), booking, { merge: true });
+      }
 
       // 4. Update CRM Lead record
       if (leadId) {
@@ -1099,7 +1217,8 @@ export async function rescheduleDemoBooking(
     let newGoogleMeetLink = booking.googleMeetLink;
 
     if (token) {
-      const createRes = await createGoogleCalendarDemoBooking({
+      const createRes = await createGoogleCalendarDemoBookingInner({
+        replacingBookingId: booking.bookingId,
         leadId: booking.leadId,
         contactId: booking.contactId,
         campaignId: booking.campaignId,
@@ -1436,48 +1555,41 @@ export interface SchedulingTurnResult {
 export async function getActiveBookingForLeadOrConversation(
   leadId?: string,
   leadEmail?: string,
-  conversationId?: string
+  conversationId?: string,
+  leadPhone?: string
 ): Promise<Booking | null> {
   await warmSchedBrand();
   if (!isFirebaseConfigured || !db) return null;
+  // Only an UPCOMING demo counts: once its time has passed the lead may book again.
+  const firstUpcoming = async (field: string, value: string): Promise<Booking | null> => {
+    const snap = await getDocs(
+      query(tenantRepo(getSchedCtx()).bookings(), where(field, '==', value), where('status', 'in', ['BOOKED', 'RESCHEDULED']), limit(10))
+    );
+    const upcoming = snap.docs
+      .map((d) => d.data() as Booking)
+      .filter(isUpcomingBooking)
+      .sort((a, b) => Date.parse(a.startDateTimeIso) - Date.parse(b.startDateTimeIso));
+    return upcoming[0] || null;
+  };
   try {
-    if (leadEmail && leadEmail.includes('@')) {
-      const q = query(
-        tenantRepo(getSchedCtx()).bookings(),
-        where('leadEmail', '==', leadEmail.trim().toLowerCase()),
-        where('status', 'in', ['BOOKED', 'RESCHEDULED']),
-        limit(1)
-      );
-      const snap = await getDocs(q);
-      if (!snap.empty) {
-        return snap.docs[0].data() as Booking;
-      }
+    const raw = String(leadEmail || '').trim();
+    const email = normalizeLeadEmail(raw);
+    if (email.includes('@')) {
+      const hit = (await firstUpcoming('leadEmail', email)) || (raw !== email ? await firstUpcoming('leadEmail', raw) : null);
+      if (hit) return hit;
     }
-
     if (leadId) {
-      const q = query(
-        tenantRepo(getSchedCtx()).bookings(),
-        where('leadId', '==', leadId),
-        where('status', 'in', ['BOOKED', 'RESCHEDULED']),
-        limit(1)
-      );
-      const snap = await getDocs(q);
-      if (!snap.empty) {
-        return snap.docs[0].data() as Booking;
-      }
+      const hit = await firstUpcoming('leadId', leadId);
+      if (hit) return hit;
     }
-
+    const last10 = phoneLast10(leadPhone);
+    if (last10) {
+      const hit = await firstUpcoming('leadPhoneLast10', last10);
+      if (hit) return hit;
+    }
     if (conversationId) {
-      const q = query(
-        tenantRepo(getSchedCtx()).bookings(),
-        where('conversationId', '==', conversationId),
-        where('status', 'in', ['BOOKED', 'RESCHEDULED']),
-        limit(1)
-      );
-      const snap = await getDocs(q);
-      if (!snap.empty) {
-        return snap.docs[0].data() as Booking;
-      }
+      const hit = await firstUpcoming('conversationId', conversationId);
+      if (hit) return hit;
     }
   } catch (e) {
     console.warn('[Calendar Service Notice] Error finding active booking:', e);
@@ -1596,7 +1708,8 @@ export async function processSchedulingConversationTurn(params: {
   const activeBooking = await getActiveBookingForLeadOrConversation(
     leadId,
     leadEmail,
-    conversationId
+    conversationId,
+    leadPhone
   );
 
   const lowerText = messageText.toLowerCase();
@@ -1892,7 +2005,7 @@ Analyze the conversation and latest message. Output JSON only:
     return {
       handled: true,
       action: 'ALREADY_BOOKED',
-      replyText: `You already have a ${brandName()} demo scheduled for ${activeBooking.date} from ${activeBooking.startTime} – ${activeBooking.endTime} ${TZL()}.\n\n• Google Meet Link: ${activeBooking.googleMeetLink}\n\nWould you like to reschedule it to another date or time?`,
+      replyText: alreadyBookedReplyText(activeBooking),
     };
   }
 
@@ -1985,6 +2098,15 @@ Analyze the conversation and latest message. Output JSON only:
       }
     }
 
+    // Already has an upcoming demo and did not ask to reschedule: never book a second one.
+    if (activeBooking) {
+      return {
+        handled: true,
+        action: 'ALREADY_BOOKED',
+        replyText: alreadyBookedReplyText(activeBooking, formatSlotLabel(targetDateStr, startH)),
+      };
+    }
+
     // New booking creation with Google Calendar & Google Meet (sends invite once)
     const bookingResult = await createGoogleCalendarDemoBooking({
       leadId: leadContext.leadId,
@@ -2027,6 +2149,15 @@ Analyze the conversation and latest message. Output JSON only:
         action: 'CONFIRMED_BOOKING',
         booking: bookingResult.booking,
         replyText,
+      };
+    } else if (bookingResult.alreadyBooked) {
+      // Another message from this lead booked a demo a moment ago.
+      return {
+        handled: true,
+        action: 'ALREADY_BOOKED',
+        replyText: bookingResult.existingBooking
+          ? alreadyBookedReplyText(bookingResult.existingBooking)
+          : `A demo for you is being booked right now. You'll get the calendar invitation by email shortly.`,
       };
     } else if (bookingResult.conflict) {
       // Slot was booked in a race condition

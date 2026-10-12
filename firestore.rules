@@ -172,9 +172,11 @@ service cloud.firestore {
       allow write: if false; // Server-only append
     }
 
-    // General tenant fallback for any subcollection
+    // Deny unknown tenant subcollections by default. Each client-readable collection
+    // must be explicitly allowlisted above; otherwise broad fallback rules can expose
+    // server-only secrets and job data because Firestore allow rules are OR-combined.
     match /tenants/{tenantId}/{allChildren=**} {
-      allow read, write: if isTenantUser(tenantId);
+      allow read, write: if false;
     }
 
     match /leads/{document=**} {

@@ -22,6 +22,9 @@ interface EmailView {
   canSend: boolean;
   usingPlatformSender?: boolean;
   resendConfigured: boolean;
+  trackingEnabled?: boolean;
+  trackingRecords?: DnsRecord[];
+  trackingStatus?: string;
 }
 
 async function api<T = any>(url: string, init?: RequestInit): Promise<T> {
@@ -360,6 +363,74 @@ export const EmailSettingsPanel: React.FC<{ tenantId: string; canEdit: boolean }
           )}
         </section>
       )}
+
+      {/* Step 4: tracking (on by default; nothing to set up in Resend) */}
+      <section className="space-y-3 border-t border-slate-100 pt-5">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h4 className="text-sm font-semibold text-slate-900">{hasDomain ? '4. ' : ''}Track opens and clicks</h4>
+            <p className="text-sm text-slate-500">
+              Shows who opened (estimated) and clicked your campaign emails. Turn off if your customers expect no tracking.
+            </p>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={view?.trackingEnabled !== false}
+            disabled={!canEdit || busy === 'tracking'}
+            onClick={() =>
+              run(
+                'tracking',
+                'tracking',
+                { enabled: view?.trackingEnabled === false },
+                view?.trackingEnabled === false ? 'Tracking turned on.' : 'Tracking turned off.'
+              )
+            }
+            className={`relative shrink-0 w-11 h-6 rounded-full transition-colors disabled:opacity-50 ${
+              view?.trackingEnabled !== false ? 'bg-orange-600' : 'bg-slate-300'
+            }`}
+          >
+            <span
+              className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${
+                view?.trackingEnabled !== false ? 'translate-x-5' : ''
+              }`}
+            />
+          </button>
+        </div>
+        {view?.trackingEnabled !== false && (view?.trackingRecords || []).length > 0 && (
+          <div className="space-y-2">
+            <p className="text-xs text-slate-500">
+              Optional: add these records so tracked links use your own domain (looks more trustworthy to inboxes). Sending works without them.
+            </p>
+            <div className="overflow-x-auto border border-slate-200 rounded-lg">
+              <table className="w-full text-sm">
+                <tbody className="divide-y divide-slate-100">
+                  {(view?.trackingRecords || []).map((r, i) => (
+                    <tr key={i}>
+                      <td className="px-3 py-2 font-medium text-slate-700 whitespace-nowrap">{r.type}</td>
+                      <td className="px-3 py-2">
+                        <div className="flex items-center gap-2">
+                          <code className="text-xs text-slate-700 break-all">{r.name}</code>
+                          <CopyBtn text={r.name} />
+                        </div>
+                      </td>
+                      <td className="px-3 py-2">
+                        <div className="flex items-center gap-2">
+                          <code className="text-xs text-slate-700 break-all">{r.value}</code>
+                          <CopyBtn text={r.value} />
+                        </div>
+                      </td>
+                      <td className="px-3 py-2 whitespace-nowrap">
+                        <span className={r.status === 'verified' ? 'text-emerald-600 font-medium' : 'text-slate-500'}>{r.status || 'pending'}</span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </section>
     </div>
   );
 };

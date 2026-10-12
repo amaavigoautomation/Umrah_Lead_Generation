@@ -124,6 +124,7 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
   >('ALL');
   // Email engagement numbers (opened is an ESTIMATE; replied and clicked are confirmed). From aggregation queries.
   const [engagement, setEngagement] = useState<{
+    trackingEnabled?: boolean;
     tracked: number; delivered: number; uniqueOpened: number; totalOpens: number; botOpens: number;
     clicked: number; totalClicks: number; replied: number; waiting: number; ignored: number; bounced: number; ignoredAfterDays: number;
   } | null>(null);
@@ -2188,7 +2189,12 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                 })()}
 
                 {/* Email engagement: opened is estimated; clicked and replied are confirmed */}
-                {engagement && engagement.tracked > 0 && (() => {
+                {engagement && engagement.trackingEnabled === false && (
+                  <div className="px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-[11px] text-slate-500">
+                    Open and click tracking is off for this workspace (Settings → Email). Replies are still counted.
+                  </div>
+                )}
+                {engagement && engagement.trackingEnabled !== false && engagement.tracked > 0 && (() => {
                   const pct = (n: number) => (engagement.delivered > 0 ? `${((n / engagement.delivered) * 100).toFixed(1)}%` : '0%');
                   return (
                     <div className="p-4 bg-white border border-slate-200 rounded-xl shadow-2xs space-y-3">

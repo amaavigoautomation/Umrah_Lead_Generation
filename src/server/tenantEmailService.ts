@@ -32,6 +32,11 @@ export interface TenantEmailSettings {
   fromLocalPart?: string; // the part before @, e.g. "sales"
   replyTo?: string;
   verifiedAt?: string;
+  /** Open/click tracking for campaign emails. Missing = ON (the default for every workspace). */
+  trackingEnabled?: boolean;
+  /** Optional DNS records Resend gives for its tracking subdomain (not needed for sending). */
+  trackingRecords?: TenantDnsRecord[];
+  trackingStatus?: string;
   updatedAt?: string;
 }
 
@@ -116,6 +121,81 @@ function mapRecords(records: any[] | undefined): TenantDnsRecord[] {
     }));
 }
 
+function mapTrackingRecords(records: any[] | undefined): TenantDnsRecord[] {
+  return (records || [])
+    .filter((r) => r.record === 'Tracking' || r.record === 'TrackingCAA')
+    .map((r) => ({ record: r.record, type: r.type, name: r.name, value: r.value, ttl: r.ttl, status: r.status }));
+}
+
+/**
+ * Sending only needs SPF + DKIM. Once tracking is on, Resend also lists tracking records, and while those are
+ * pending it may report the whole domain as "partially_verified". That must never block sending, so the
+ * status we store is "verified" whenever every SPF/DKIM record is verified.
+ */
+function sendingStatus(rawStatus: TenantDomainStatus, records: any[] | undefined): TenantDomainStatus {
+  if (rawStatus === 'verified') return rawStatus;
+  const sending = (records || []).filter((r) => r.record === 'SPF' || r.record === 'DKIM');
+  const hasDkim = sending.some((r) => r.record === 'DKIM');
+  if (hasDkim && sending.every((r) => r.status === 'verified')) return 'verified';
+  return rawStatus;
+}
+
+function trackingStatusOf(records: any[] | undefined): string | undefined {
+  const t = (records || []).find((r) => r.record === 'Tracking');
+  return t ? String(t.status || 'pending') : undefined;
+}
+
+export const isTrackingEnabled = (s: TenantEmailSettings) => s.trackingEnabled !== false;
+
+/**
+ * Turns Resend's open + click tracking on/off for the domain, so workspaces never have to open Resend.
+ * Best effort: a failure here is logged and never blocks adding/verifying the domain.
+ */
+async function applyResendTracking(domainId: string, on: boolean, current?: { open_tracking?: boolean; click_tracking?: boolean }): Promise<boolean> {
+  if (current && current.open_tracking === on && current.click_tracking === on) return false;
+  try {
+    const res = await resendClient().domains.update({ id: domainId, openTracking: on, clickTracking: on });
+    if (res.error) {
+      console.warn(`[Tenant Email] could not ${on ? 'enable' : 'disable'} tracking for ${domainId}: ${res.error.message}`);
+      return false;
+    }
+    return true;
+  } catch (err: any) {
+    console.warn(`[Tenant Email] tracking update failed for ${domainId}:`, err?.message || err);
+    return false;
+  }
+}
+
+/** Reads the domain from Resend, switching tracking to the workspace's setting first if it differs. */
+async function loadDomainSyncingTracking(s: TenantEmailSettings, domainId: string) {
+  const resend = resendClient();
+  let got = await resend.domains.get(domainId);
+  if (!got.error && got.data) {
+    const changed = await applyResendTracking(domainId, isTrackingEnabled(s), got.data as any);
+    if (changed) {
+      const again = await resend.domains.get(domainId);
+      if (!again.error && again.data) got = again;
+    }
+  }
+  return got;
+}
+
+/** Workspace switch: "Track opens and clicks". Saved here and applied to the domain in Resend. */
+export async function setTenantTracking(tenantId: string, enabled: boolean) {
+  const s = await getTenantEmailSettings(tenantId, { fresh: true });
+  const on = enabled !== false;
+  let patch: Partial<TenantEmailSettings> = { trackingEnabled: on };
+  if (s.resendDomainId) {
+    await applyResendTracking(s.resendDomainId, on);
+    const got = await resendClient().domains.get(s.resendDomainId).catch(() => null);
+    if (got && !got.error && got.data) {
+      patch = { ...patch, trackingRecords: mapTrackingRecords(got.data.records as any[]), trackingStatus: trackingStatusOf(got.data.records as any[]) };
+    }
+  }
+  await saveSettings(tenantId, patch);
+  return getEmailSettingsView(tenantId);
+}
+
 /** Public view for the UI: never exposes anything secret. */
 export async function getEmailSettingsView(tenantId: string) {
   const s = await getTenantEmailSettings(tenantId, { fresh: true });
@@ -127,6 +207,7 @@ export async function getEmailSettingsView(tenantId: string) {
     canSend,
     usingPlatformSender: !canSend && grandfathered,
     resendConfigured: Boolean(getApiKey()),
+    trackingEnabled: isTrackingEnabled(s),
   };
 }
 
@@ -151,13 +232,20 @@ export async function addTenantDomain(tenantId: string, rawDomain: string) {
   let status: TenantDomainStatus = 'pending';
   let records: any[] = [];
 
+  const trackingOn = isTrackingEnabled(existing);
   if (id) {
-    const got = await resend.domains.get(id);
+    const got = await loadDomainSyncingTracking(existing, id);
     if (got.error || !got.data) throw new HttpError(502, `Resend: ${got.error?.message || 'could not load domain'}`);
     status = got.data.status as TenantDomainStatus;
     records = got.data.records as any[];
   } else {
-    const created = await resend.domains.create({ name: domain, capabilities: { sending: 'enabled' } } as any);
+    // Open + click tracking are switched on right here, so a new workspace never has to visit Resend.
+    const created = await resend.domains.create({
+      name: domain,
+      capabilities: { sending: 'enabled' },
+      openTracking: trackingOn,
+      clickTracking: trackingOn,
+    } as any);
     if (created.error || !created.data) {
       const code = Number((created.error as any)?.statusCode);
       throw new HttpError(code >= 400 && code < 500 ? 400 : 502, `Resend: ${created.error?.message || 'could not create domain'}`);
@@ -168,11 +256,14 @@ export async function addTenantDomain(tenantId: string, rawDomain: string) {
   }
 
   await setDoc(claimRef, { domain, tenantId, resendDomainId: id, createdAt: new Date().toISOString() }, { merge: true });
+  status = sendingStatus(status, records);
   return saveSettings(tenantId, {
     domain,
     resendDomainId: id,
     status,
     records: mapRecords(records),
+    trackingRecords: mapTrackingRecords(records),
+    trackingStatus: trackingStatusOf(records),
     ...(status === 'verified' ? { verifiedAt: new Date().toISOString() } : {}),
   });
 }
@@ -185,16 +276,18 @@ export async function addTenantDomain(tenantId: string, rawDomain: string) {
 export async function refreshTenantDomain(tenantId: string) {
   const s = await getTenantEmailSettings(tenantId, { fresh: true });
   if (!s.resendDomainId) throw new HttpError(400, 'Add a domain first');
-  const got = await resendClient().domains.get(s.resendDomainId);
+  const got = await loadDomainSyncingTracking(s, s.resendDomainId);
   if (got.error || !got.data) {
     const code = Number((got.error as any)?.statusCode);
     if (code === 404) throw new HttpError(404, 'This domain no longer exists in Resend. Remove it here and add it again.');
     throw new HttpError(502, `Resend: ${got.error?.message || 'could not load domain'}`);
   }
-  const status = got.data.status as TenantDomainStatus;
+  const status = sendingStatus(got.data.status as TenantDomainStatus, got.data.records as any[]);
   return saveSettings(tenantId, {
     status,
     records: mapRecords(got.data.records as any[]),
+    trackingRecords: mapTrackingRecords(got.data.records as any[]),
+    trackingStatus: trackingStatusOf(got.data.records as any[]),
     ...(status === 'verified' && s.status !== 'verified' ? { verifiedAt: new Date().toISOString() } : {}),
   });
 }
@@ -206,12 +299,14 @@ export async function verifyTenantDomain(tenantId: string) {
   // Ask Resend to re-check DNS, then read back the result.
   const ver = await resend.domains.verify(s.resendDomainId);
   if (ver.error) throw new HttpError(502, `Resend: ${ver.error.message}`);
-  const got = await resend.domains.get(s.resendDomainId);
+  const got = await loadDomainSyncingTracking(s, s.resendDomainId);
   if (got.error || !got.data) throw new HttpError(502, `Resend: ${got.error?.message || 'could not load domain'}`);
-  const status = got.data.status as TenantDomainStatus;
+  const status = sendingStatus(got.data.status as TenantDomainStatus, got.data.records as any[]);
   return saveSettings(tenantId, {
     status,
     records: mapRecords(got.data.records as any[]),
+    trackingRecords: mapTrackingRecords(got.data.records as any[]),
+    trackingStatus: trackingStatusOf(got.data.records as any[]),
     ...(status === 'verified' && s.status !== 'verified' ? { verifiedAt: new Date().toISOString() } : {}),
   });
 }
@@ -265,6 +360,8 @@ export async function removeTenantDomain(tenantId: string) {
     records: undefined,
     verifiedAt: undefined,
     fromLocalPart: undefined,
+    trackingRecords: undefined,
+    trackingStatus: undefined,
   });
   return getEmailSettingsView(tenantId);
 }

@@ -965,7 +965,7 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
   }
 
   // Tenant email identity (Phase 1): /api/tenants/:tenantId/email[/domain|/verify|/sender]
-  const emailMatch = url.split('?')[0].match(/^\/api\/tenants\/([^/]+)\/email(?:\/(domain|verify|refresh|sender))?$/);
+  const emailMatch = url.split('?')[0].match(/^\/api\/tenants\/([^/]+)\/email(?:\/(domain|verify|refresh|sender|tracking))?$/);
   if (emailMatch) {
     const tId = emailMatch[1];
     const action = emailMatch[2];
@@ -985,6 +985,11 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
         if (action === 'domain') await svc.addTenantDomain(tId, body?.domain);
         else if (action === 'verify') await svc.verifyTenantDomain(tId);
         else if (action === 'refresh') await svc.refreshTenantDomain(tId);
+        else if (action === 'tracking') {
+          res.statusCode = 200;
+          res.end(JSON.stringify(await svc.setTenantTracking(tId, body?.enabled !== false)));
+          return true;
+        }
         else await svc.setTenantSender(tId, { fromName: body?.fromName, fromLocalPart: body?.fromLocalPart, replyTo: body?.replyTo });
         res.statusCode = 200;
         res.end(JSON.stringify(await svc.getEmailSettingsView(tId)));
@@ -2644,9 +2649,14 @@ Generate a helpful, grounded response.`;
   const campaignEngagementMatch = url.match(/^\/api\/campaigns\/([a-zA-Z0-9_-]+)\/engagement$/);
   if (campaignEngagementMatch && req.method === 'GET') {
     try {
-      const stats = await getCampaignEngagementStats(campaignEngagementMatch[1]);
+      const [stats, trackingEnabled] = await Promise.all([
+        getCampaignEngagementStats(campaignEngagementMatch[1]),
+        import('./tenantEmailService.js')
+          .then(async (m) => m.isTrackingEnabled(await m.getTenantEmailSettings(resolvedTenantId)))
+          .catch(() => true),
+      ]);
       res.statusCode = 200;
-      res.end(JSON.stringify({ success: true, ...stats }));
+      res.end(JSON.stringify({ success: true, trackingEnabled, ...stats }));
     } catch (err: any) {
       res.statusCode = 500;
       res.end(JSON.stringify({ error: err?.message || 'Failed to load engagement stats' }));

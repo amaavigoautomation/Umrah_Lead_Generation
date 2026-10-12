@@ -41,6 +41,8 @@ export interface SendMailParams {
   headers?: Record<string, string>;
   /** Used to map Resend delivery events (bounce/complaint) back to a workspace. */
   tenantId?: string;
+  /** Resend tags (letters, digits, _ and - only). Echoed back on every webhook event for this email. */
+  tags?: Array<{ name: string; value: string }>;
 }
 
 export interface SendMailResult {
@@ -385,6 +387,9 @@ async function sendViaResend(params: SendMailParams, override?: { from: string; 
       ...(replyTo ? { replyTo } : {}),
       headers,
       attachments: toResendAttachments(params.attachments),
+      ...(params.tags && params.tags.length > 0
+        ? { tags: params.tags.map((t) => ({ name: t.name.replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 256), value: t.value.replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 256) })) }
+        : {}),
     } as any);
 
     if (error || !data?.id) {

@@ -119,7 +119,14 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
   // Filters & Search
   const [searchQuery, setSearchQuery] = useState('');
   const [templateSearchQuery, setTemplateSearchQuery] = useState('');
-  const [leadStatusFilter, setLeadStatusFilter] = useState<'ALL' | 'PENDING' | 'SENT' | 'REPLIED' | 'DEMO_BOOKED' | 'FAILED'>('ALL');
+  const [leadStatusFilter, setLeadStatusFilter] = useState<
+    'ALL' | 'PENDING' | 'SENT' | 'REPLIED' | 'DEMO_BOOKED' | 'FAILED' | 'OPENED' | 'CLICKED' | 'WAITING' | 'IGNORED' | 'BOUNCED'
+  >('ALL');
+  // Email engagement numbers (opened is an ESTIMATE; replied and clicked are confirmed). From aggregation queries.
+  const [engagement, setEngagement] = useState<{
+    tracked: number; delivered: number; uniqueOpened: number; totalOpens: number; botOpens: number;
+    clicked: number; totalClicks: number; replied: number; waiting: number; ignored: number; bounced: number; ignoredAfterDays: number;
+  } | null>(null);
 
   // Modals
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -642,6 +649,26 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
     }, 1500);
     return () => clearTimeout(t);
   }, [progressKey]);
+
+  // Engagement stats: load when a campaign is opened, then every 60 s while the tab is visible
+  // (a handful of aggregation queries, not one read per lead).
+  useEffect(() => {
+    setEngagement(null);
+    if (!selectedCampaignId) return;
+    let cancelled = false;
+    const load = () => {
+      if (document.visibilityState !== 'visible') return;
+      fetchJsonWithTimeout(`/api/campaigns/${selectedCampaignId}/engagement`).then((d) => {
+        if (!cancelled && d && d.success) setEngagement(d);
+      });
+    };
+    load();
+    const timer = setInterval(load, 60_000);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [selectedCampaignId]);
 
   // Restart dialog: load the replied / not-replied split once when it opens.
   useEffect(() => {
@@ -1615,6 +1642,10 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
       if (leadStatusFilter === 'FAILED' && lead.sendStatus !== 'FAILED') return false;
       if (leadStatusFilter === 'REPLIED' && lead.replyStatus !== 'REPLIED') return false;
       if (leadStatusFilter === 'DEMO_BOOKED' && lead.demoStatus !== 'BOOKED') return false;
+      if (leadStatusFilter === 'OPENED' && !lead.opened) return false;
+      if (leadStatusFilter === 'CLICKED' && !lead.clicked) return false;
+      if (leadStatusFilter === 'BOUNCED' && !lead.bounced) return false;
+      // WAITING / IGNORED depend on the send time and are decided by the server.
 
       // Filter by search query (already done by the index when indexSearch)
       if (!indexSearch && searchQuery.trim()) {
@@ -2156,6 +2187,53 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                   );
                 })()}
 
+                {/* Email engagement: opened is estimated; clicked and replied are confirmed */}
+                {engagement && engagement.tracked > 0 && (() => {
+                  const pct = (n: number) => (engagement.delivered > 0 ? `${((n / engagement.delivered) * 100).toFixed(1)}%` : '0%');
+                  return (
+                    <div className="p-4 bg-white border border-slate-200 rounded-xl shadow-2xs space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Email engagement</span>
+                        <span className="text-[10px] text-slate-400">Updates every minute</span>
+                      </div>
+                      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                        <div className="p-3 rounded-lg border border-slate-200 bg-slate-50">
+                          <p className="text-[11px] text-slate-500 font-medium">Delivered</p>
+                          <p className="text-xl font-bold text-slate-800">{engagement.delivered}</p>
+                          <p className="text-[10px] text-slate-400">{engagement.bounced} bounced</p>
+                        </div>
+                        <div
+                          className="p-3 rounded-lg border border-dashed border-slate-300 bg-white"
+                          title="Estimated. Mail apps can pre-load images (counts as an open) and some block them (open is missed). Replies and clicks are confirmed."
+                        >
+                          <p className="text-[11px] text-slate-500 font-medium">Opened <span className="text-[9px] font-semibold text-amber-600">EST.</span></p>
+                          <p className="text-xl font-bold text-slate-700">{engagement.uniqueOpened}</p>
+                          <p className="text-[10px] text-slate-400">~{pct(engagement.uniqueOpened)} · {engagement.totalOpens} total opens</p>
+                        </div>
+                        <div className="p-3 rounded-lg border border-emerald-200 bg-emerald-50/50">
+                          <p className="text-[11px] text-emerald-700 font-medium">Clicked</p>
+                          <p className="text-xl font-bold text-emerald-700">{engagement.clicked}</p>
+                          <p className="text-[10px] text-emerald-700/70">{pct(engagement.clicked)} · {engagement.totalClicks} clicks</p>
+                        </div>
+                        <div className="p-3 rounded-lg border border-sky-200 bg-sky-50/50">
+                          <p className="text-[11px] text-sky-700 font-medium">Replied</p>
+                          <p className="text-xl font-bold text-sky-700">{engagement.replied}</p>
+                          <p className="text-[10px] text-sky-700/70">{pct(engagement.replied)}</p>
+                        </div>
+                        <div className="p-3 rounded-lg border border-slate-200 bg-slate-50" title={`No open, click or reply ${engagement.ignoredAfterDays}+ days after sending`}>
+                          <p className="text-[11px] text-slate-500 font-medium">Ignored</p>
+                          <p className="text-xl font-bold text-slate-700">{engagement.ignored}</p>
+                          <p className="text-[10px] text-slate-400">{engagement.waiting} still waiting ({engagement.ignoredAfterDays}d window)</p>
+                        </div>
+                      </div>
+                      <p className="text-[10px] text-slate-400">
+                        Opened is an estimate and its rate hides {engagement.botOpens} bot-like opens (scanners, mail apps pre-loading the email). Clicked and replied are confirmed.
+                        Emails sent before tracking was turned on are not included.
+                      </p>
+                    </div>
+                  );
+                })()}
+
                 {/* Runs History Accordion / Bar if multiple runs exist */}
                 {campaignRuns.length > 0 && (
                   <div className="p-4 bg-white border border-slate-200 rounded-xl shadow-2xs">
@@ -2228,6 +2306,22 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                           )
                         )}
                       </div>
+                      <div className="flex bg-slate-100 p-1 rounded-lg border border-slate-200 text-xs" title="Email engagement (opened is an estimate)">
+                        {(['OPENED', 'CLICKED', 'WAITING', 'IGNORED', 'BOUNCED'] as const).map((filter) => (
+                          <button
+                            key={filter}
+                            id={`filter-leads-${filter.toLowerCase()}`}
+                            onClick={() => setLeadStatusFilter(filter)}
+                            className={`px-2.5 py-1 rounded-md transition ${
+                              leadStatusFilter === filter
+                                ? 'bg-orange-500 text-white font-semibold shadow-xs'
+                                : 'text-slate-600 hover:text-slate-900'
+                            }`}
+                          >
+                            {filter === 'OPENED' ? 'OPENED (est.)' : filter}
+                          </button>
+                        ))}
+                      </div>
                     </div>
 
                     <div className="text-xs text-slate-500">
@@ -2258,6 +2352,7 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                           <th className="py-3 px-4">Company</th>
                           <th className="py-3 px-4">Send Status</th>
                           <th className="py-3 px-4">Reply Status</th>
+                          <th className="py-3 px-4">Engagement</th>
                           <th className="py-3 px-4">Demo Status</th>
                           <th className="py-3 px-4">Last Sent</th>
                           <th className="py-3 px-4 text-right">Actions</th>
@@ -2266,7 +2361,7 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                       <tbody className="divide-y divide-slate-100">
                         {filteredLeads.length === 0 ? (
                           <tr>
-                            <td colSpan={9} className="py-10 text-center text-slate-400">
+                            <td colSpan={10} className="py-10 text-center text-slate-400">
                               No leads matching the current filter
                             </td>
                           </tr>
@@ -2335,6 +2430,41 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                                       <span>NO REPLY</span>
                                     )}
                                   </button>
+                                </td>
+                                <td className="py-3 px-4">
+                                  {(() => {
+                                    if (lead.replyStatus === 'REPLIED') {
+                                      return <span className="text-[11px] font-semibold text-sky-700">● Replied</span>;
+                                    }
+                                    if (lead.bounced) return <span className="text-[11px] font-semibold text-rose-600">✕ Bounced</span>;
+                                    if (lead.clicked) {
+                                      return (
+                                        <span className="text-[11px] font-semibold text-emerald-700" title={lead.lastClickedAt ? `Last click ${new Date(lead.lastClickedAt).toLocaleString()}` : ''}>
+                                          ● Clicked{lead.clickCount && lead.clickCount > 1 ? ` ${lead.clickCount}×` : ''}
+                                        </span>
+                                      );
+                                    }
+                                    if (lead.opened) {
+                                      return (
+                                        <span
+                                          className="text-[11px] text-slate-600"
+                                          title={`Estimated. Last opened ${lead.lastOpenedAt ? new Date(lead.lastOpenedAt).toLocaleString() : '—'}${lead.botOpenCount ? ` · ${lead.botOpenCount} bot-like open(s) not counted` : ''}`}
+                                        >
+                                          ○ Opened {lead.realOpenCount || 1}× (est.)
+                                        </span>
+                                      );
+                                    }
+                                    if (lead.sendStatus === 'SENT' && lead.engaged === false) {
+                                      const days = engagement?.ignoredAfterDays ?? 5;
+                                      const old = lead.lastSentAt && Date.now() - new Date(lead.lastSentAt).getTime() > days * 86_400_000;
+                                      return old ? (
+                                        <span className="text-[11px] text-slate-400">✕ Ignored</span>
+                                      ) : (
+                                        <span className="text-[11px] text-slate-400">◌ Waiting</span>
+                                      );
+                                    }
+                                    return <span className="text-[11px] text-slate-300">—</span>;
+                                  })()}
                                 </td>
                                 <td className="py-3 px-4">
                                   <button

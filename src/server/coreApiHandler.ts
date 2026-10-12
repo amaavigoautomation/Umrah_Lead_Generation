@@ -31,6 +31,7 @@ import {
   getCampaignByIdAsync,
   getCampaignLeads,
   getCampaignLeadsPage,
+  getCampaignEngagementStats,
   ensureCampaignSearchIndex,
   scheduleCampaign,
   unscheduleCampaign,
@@ -2626,6 +2627,20 @@ Generate a helpful, grounded response.`;
     return true;
   }
 
+  // Email engagement numbers (opened / clicked / replied / ignored) from aggregation queries only.
+  const campaignEngagementMatch = url.match(/^\/api\/campaigns\/([a-zA-Z0-9_-]+)\/engagement$/);
+  if (campaignEngagementMatch && req.method === 'GET') {
+    try {
+      const stats = await getCampaignEngagementStats(campaignEngagementMatch[1]);
+      res.statusCode = 200;
+      res.end(JSON.stringify({ success: true, ...stats }));
+    } catch (err: any) {
+      res.statusCode = 500;
+      res.end(JSON.stringify({ error: err?.message || 'Failed to load engagement stats' }));
+    }
+    return true;
+  }
+
   const campaignLeadsMatch = url.match(/^\/api\/campaigns\/([a-zA-Z0-9_-]+)\/leads$/);
   if (campaignLeadsMatch && req.method === 'GET') {
     const campaignId = campaignLeadsMatch[1];
@@ -2633,7 +2648,7 @@ Generate a helpful, grounded response.`;
     // re-fetched by the campaign screen every few seconds.
     const qp = new URL(rawUrl || '/', 'http://localhost').searchParams;
     const filterParam = (qp.get('filter') || 'ALL').toUpperCase();
-    const allowed = ['ALL', 'PENDING', 'SENT', 'FAILED', 'REPLIED', 'DEMO_BOOKED'];
+    const allowed = ['ALL', 'PENDING', 'SENT', 'FAILED', 'REPLIED', 'DEMO_BOOKED', 'OPENED', 'CLICKED', 'BOUNCED', 'WAITING', 'IGNORED'];
     try {
       const page = await getCampaignLeadsPage(campaignId, {
         pageSize: parseInt(qp.get('limit') || '50', 10) || 50,

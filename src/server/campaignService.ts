@@ -20,6 +20,7 @@ import {
   where,
   limit,
   countDocs,
+  sumDocs,
   orderBy,
   orderByDocumentId,
   startAfterValues,
@@ -1165,7 +1166,52 @@ async function deleteCampaignSearchIndex(campaignId: string): Promise<void> {
   await Promise.allSettled((snap?.docs || []).map((d) => deleteDoc(d.ref)));
 }
 
-export type CampaignLeadFilter = 'ALL' | 'PENDING' | 'SENT' | 'FAILED' | 'REPLIED' | 'DEMO_BOOKED';
+export type CampaignLeadFilter =
+  | 'ALL' | 'PENDING' | 'SENT' | 'FAILED' | 'REPLIED' | 'DEMO_BOOKED'
+  | 'OPENED' | 'CLICKED' | 'BOUNCED' | 'WAITING' | 'IGNORED';
+
+/** A delivered email with no open, click or reply for this long counts as "ignored" (before that: "waiting"). */
+export const IGNORED_AFTER_DAYS = 5;
+const ignoredCutoffIso = () => new Date(Date.now() - IGNORED_AFTER_DAYS * 86_400_000).toISOString();
+
+/**
+ * Email engagement numbers for the campaign screen, all from aggregation queries (no lead documents read).
+ * CONFIRMED: replied, clicked. ESTIMATED: opened (images can be pre-loaded by mail apps, or blocked).
+ * Only emails sent after tracking was added carry the fields, so older campaigns show zeros.
+ */
+export async function getCampaignEngagementStats(campaignId: string) {
+  if (!isFirebaseConfigured || !db) {
+    return { tracked: 0, delivered: 0, uniqueOpened: 0, totalOpens: 0, botOpens: 0, clicked: 0, totalClicks: 0, replied: 0, waiting: 0, ignored: 0, bounced: 0, ignoredAfterDays: IGNORED_AFTER_DAYS };
+  }
+  const base = () => query(leadsCol(), where('campaignId', '==', campaignId));
+  const cutoff = ignoredCutoffIso();
+  const eq = (f: string, v: any) => query(base(), where(f, '==', v));
+  const [tracked, bounced, uniqueOpened, clicked, replied, ignored, waiting, sums] = await Promise.all([
+    countDocs(query(base(), where('sendStatus', '==', 'SENT'), where('engaged', 'in', [true, false]))),
+    countDocs(eq('bounced', true)),
+    countDocs(eq('opened', true)),
+    countDocs(eq('clicked', true)),
+    countDocs(eq('replyStatus', 'REPLIED')),
+    countDocs(query(base(), where('sendStatus', '==', 'SENT'), where('engaged', '==', false), where('lastSentAt', '<=', cutoff))),
+    countDocs(query(base(), where('sendStatus', '==', 'SENT'), where('engaged', '==', false), where('lastSentAt', '>', cutoff))),
+    sumDocs(base(), ['realOpenCount', 'botOpenCount']).catch(() => ({ realOpenCount: 0, botOpenCount: 0 })),
+  ]);
+  const clickSums = clicked > 0 ? await sumDocs(eq('clicked', true), ['clickCount']).catch(() => ({ clickCount: 0 })) : { clickCount: 0 };
+  return {
+    tracked, // emails sent with tracking on
+    delivered: Math.max(0, tracked - bounced),
+    uniqueOpened,
+    totalOpens: sums.realOpenCount,
+    botOpens: sums.botOpenCount,
+    clicked,
+    totalClicks: clickSums.clickCount,
+    replied,
+    waiting,
+    ignored,
+    bounced,
+    ignoredAfterDays: IGNORED_AFTER_DAYS,
+  };
+}
 
 /**
  * One page of a campaign's leads for the leads table: reads `pageSize` documents, never the whole list.
@@ -1191,6 +1237,9 @@ export async function getCampaignLeadsPage(
   if (filter === 'FAILED') filters.push(where('sendStatus', '==', 'FAILED'));
   if (filter === 'REPLIED') filters.push(where('replyStatus', '==', 'REPLIED'));
   if (filter === 'DEMO_BOOKED') filters.push(where('demoStatus', '==', 'BOOKED'));
+  if (filter === 'OPENED') filters.push(where('opened', '==', true));
+  if (filter === 'CLICKED') filters.push(where('clicked', '==', true));
+  if (filter === 'BOUNCED') filters.push(where('bounced', '==', true));
 
   const toPage = (docs: any[], cursorOf: (d: any) => string) => {
     const hasMore = docs.length > pageSize;
@@ -1201,6 +1250,29 @@ export async function getCampaignLeadsPage(
   };
 
   const cursor = opts.cursor || '';
+
+  // Waiting / Ignored: sent, no engagement yet, split by how long ago it was sent. Ordered by send time.
+  if (filter === 'WAITING' || filter === 'IGNORED') {
+    const cutoff = ignoredCutoffIso();
+    const parts = cursor.startsWith('s:') ? cursor.split(':') : null;
+    // lastSentAt is an ISO string that itself contains ':', so the cursor is "s:<lastSentAt>|<docId>".
+    const [cLast, cId] = parts ? cursor.slice(2).split('|') : ['', ''];
+    const snap = await getDocs(
+      query(
+        leadsCol(),
+        where('campaignId', '==', campaignId),
+        where('sendStatus', '==', 'SENT'),
+        where('engaged', '==', false),
+        where('lastSentAt', filter === 'IGNORED' ? '<=' : '>', cutoff),
+        orderBy('lastSentAt'),
+        orderByDocumentId(),
+        ...(parts ? [startAfterValues(cLast, cId)] : []),
+        limit(pageSize + 1)
+      )
+    );
+    return toPage(snap.docs, (d) => `s:${(d.data() as CampaignLead).lastSentAt || ''}|${d.id}`);
+  }
+
   // Row-number order (preferred)
   if (!cursor.startsWith('d:')) {
     try {
@@ -2328,6 +2400,12 @@ export async function processNextCampaignSendBatch(
             text: body,
             html: htmlContent,
             attachments: activeAttachments.length > 0 ? activeAttachments : undefined,
+            // Echoed back by Resend on open/click/bounce events, so the webhook finds the lead with no lookup.
+            tags: [
+              { name: 'tenant', value: getCampaignActiveCtx().tenantId },
+              { name: 'campaign', value: campaignId },
+              { name: 'lead', value: lead.campaignLeadId },
+            ],
           });
 
       const now = new Date().toISOString();
@@ -2337,6 +2415,7 @@ export async function processNextCampaignSendBatch(
         lead.sendStatus = 'SENT';
         lead.sendCount = (lead.sendCount || 0) + 1;
         lead.lastSentAt = now;
+        if (lead.engaged === undefined) lead.engaged = false;
         lead.gmailMessageId = sentMsgId;
         lead.gmailThreadId = gmailThreadId;
         lead.conversationId = conversationId;
@@ -2708,6 +2787,7 @@ export async function handleIncomingCampaignLeadReply(params: {
 
   for (const matchedLead of matchedLeads) {
     matchedLead.replyStatus = 'REPLIED';
+    matchedLead.engaged = true;
     matchedLead.repliedAt = matchedLead.repliedAt || now;
     matchedLead.updatedAt = now;
     if (params.gmailMessageId) matchedLead.gmailMessageId = params.gmailMessageId;
@@ -2817,6 +2897,7 @@ export async function updateCampaignLeadStatus(params: {
   if (params.replyStatus) {
     targetLead.replyStatus = params.replyStatus;
     if (params.replyStatus === 'REPLIED') {
+      targetLead.engaged = true;
       targetLead.repliedAt = targetLead.repliedAt || now;
     } else {
       targetLead.repliedAt = undefined;

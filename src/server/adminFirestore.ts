@@ -10,7 +10,7 @@
  *
  * Because it bypasses rules, ALL tenant scoping must go through tenantRepo(ctx).
  */
-import { FieldValue, FieldPath } from 'firebase-admin/firestore';
+import { FieldValue, FieldPath, AggregateField } from 'firebase-admin/firestore';
 import type {
   DocumentData,
   DocumentReference as AdminDocumentReference,
@@ -115,6 +115,17 @@ export function query(base: Query | CollectionReference, ...constraints: Constra
 export async function countDocs(q: Query | CollectionReference): Promise<number> {
   const s = await (q as any).count().get();
   return Number(s.data().count || 0);
+}
+
+/** SUM aggregation over several numeric fields in one query (about 1 read per 1000 matching documents). */
+export async function sumDocs(q: Query | CollectionReference, fields: string[]): Promise<Record<string, number>> {
+  const spec: Record<string, any> = {};
+  for (const f of fields) spec[f] = AggregateField.sum(f);
+  const s = await (q as any).aggregate(spec).get();
+  const data = s.data();
+  const out: Record<string, number> = {};
+  for (const f of fields) out[f] = Number(data[f] || 0);
+  return out;
 }
 
 export const increment = (n: number) => FieldValue.increment(n);

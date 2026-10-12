@@ -1,4 +1,5 @@
-import { getDoc } from './adminFirestore.js';
+import { getDoc, updateDoc, increment } from './adminFirestore.js';
+import { tenantRepo } from './tenantRepo.js';
 import { isFirebaseConfigured } from '../firebase/config.js';
 import { db } from './adminFirestore.js';
 import {
@@ -211,9 +212,85 @@ export async function routeWhatsAppWebhook(req: any, res: any): Promise<boolean>
  * Universal Resend / Email Events Webhook Router
  * Handles /api/webhooks/email/resend
  */
+/** Resend sends tags as an object ({name: value}) on webhooks and as a list on the API; accept both. */
+function readTags(raw: any): Record<string, string> {
+  const out: Record<string, string> = {};
+  if (Array.isArray(raw)) {
+    for (const t of raw) if (t?.name) out[String(t.name)] = String(t.value ?? '');
+  } else if (raw && typeof raw === 'object') {
+    for (const [k, v] of Object.entries(raw)) out[k] = String(v ?? '');
+  }
+  return out;
+}
+
+const SCANNER_AGENT = /(proxy|prefetch|bot\b|scanner|barracuda|proofpoint|mimecast|safelinks|defender|symantec|trendmicro|ironport)/i;
+/** An open/click this soon after the email was created is almost always a security scanner or a mail app pre-loading it. */
+const OPEN_BOT_WINDOW_MS = 15_000;
+const CLICK_BOT_WINDOW_MS = 5_000;
+
+/**
+ * Open / click / bounce events -> the lead. Resend echoes the tags we set at send time (tenant, campaign,
+ * lead), so the lead is found with no lookup: ONE write per event, zero reads.
+ * Opens are estimates: bot-like opens are counted separately (botOpenCount) and kept out of the open rate.
+ * Emails sent before tags existed carry none and are ignored here.
+ */
+async function trackEmailEngagement(event: any): Promise<boolean> {
+  const type = String(event?.type || '');
+  if (!['email.opened', 'email.clicked', 'email.bounced', 'email.complained'].includes(type)) return false;
+  const tags = readTags(event?.data?.tags);
+  const tenantId = tags.tenant;
+  const leadId = tags.lead;
+  if (!tenantId || !leadId) return false;
+
+  const nowIso = new Date().toISOString();
+  const eventMs = Date.parse(event?.created_at || '') || Date.now();
+  const sentMs = Date.parse(event?.data?.created_at || '');
+  const sinceSentMs = Number.isFinite(sentMs) ? eventMs - sentMs : Number.POSITIVE_INFINITY;
+  const agent = String(event?.data?.click?.userAgent || event?.data?.open?.userAgent || event?.data?.user_agent || '');
+
+  let patch: Record<string, any>;
+  if (type === 'email.opened') {
+    const bot = sinceSentMs < OPEN_BOT_WINDOW_MS || SCANNER_AGENT.test(agent);
+    patch = bot
+      ? { botOpenCount: increment(1), updatedAt: nowIso }
+      : { realOpenCount: increment(1), opened: true, engaged: true, lastOpenedAt: nowIso, updatedAt: nowIso };
+  } else if (type === 'email.clicked') {
+    const bot = sinceSentMs < CLICK_BOT_WINDOW_MS || SCANNER_AGENT.test(agent);
+    patch = bot
+      ? { botClickCount: increment(1), updatedAt: nowIso }
+      : { clickCount: increment(1), clicked: true, engaged: true, lastClickedAt: nowIso, updatedAt: nowIso };
+  } else {
+    patch = { bounced: true, updatedAt: nowIso };
+  }
+
+  const ctx: TenantContext = { tenantId, uid: 'resend-webhook', email: 'webhook@system', role: 'admin' };
+  try {
+    await updateDoc(tenantRepo(ctx).campaignLeadDoc(leadId), patch);
+    return true;
+  } catch (err: any) {
+    // Lead deleted meanwhile (campaign removed): nothing to track.
+    if (err?.code !== 5 && !/NOT_FOUND/i.test(String(err?.message || ''))) {
+      console.warn('[Resend Webhook] engagement update failed:', err?.message || err);
+    }
+    return false;
+  }
+}
+
 export async function routeResendWebhook(req: any, res: any): Promise<boolean> {
   const event = req.body || {};
   const type = event.type; // e.g. "email.bounced", "email.complained", "email.delivered"
+
+  // Opens and clicks are by far the most frequent events: handle them first and stop (no tenant routing lookups).
+  if (type === 'email.opened' || type === 'email.clicked') {
+    const tracked = await trackEmailEngagement(event);
+    res.statusCode = 200;
+    res.setHeader('Content-Type', 'application/json');
+    res.end(JSON.stringify({ received: true, event: type, tracked }));
+    return true;
+  }
+  if (type === 'email.bounced' || type === 'email.complained') {
+    await trackEmailEngagement(event).catch(() => false);
+  }
   const recipient = event.data?.to?.[0] || event.data?.email;
   const resendEmailId = event.data?.email_id;
 

@@ -59,7 +59,10 @@ import {
   WHATSAPP_BUSINESS_NUMBER_FORMATTED,
 } from './services/whatsappInboundService';
 import { db, isFirebaseConfigured } from './firebase/config';
-import { collection, doc, setDoc, getDoc, getDocs, updateDoc, deleteDoc, query, where, orderBy, onSnapshot } from 'firebase/firestore';
+import { collection, doc, setDoc, getDoc, getDocs, updateDoc, deleteDoc, query, where, orderBy, limit, onSnapshot } from 'firebase/firestore';
+
+// Inbox page size: how many conversations the live listener loads at a time.
+const CONVERSATION_PAGE_SIZE = 50;
 import { initCalendarAuth } from './services/googleCalendarAuth';
 
 // Per-workspace brand strings for locally-built message records (read at call time).
@@ -320,14 +323,11 @@ export default function App() {
 
   // Initialize Firestore seeding & loading on startup
   useEffect(() => {
-    let unsubConvs: (() => void) | undefined;
-    let unsubMsgs: (() => void) | undefined;
     let unsubLeads: (() => void) | undefined;
     let unsubContacts: (() => void) | undefined;
     let unsubKb: (() => void) | undefined;
     let unsubUsers: (() => void) | undefined;
     let unsubOutboundCamps: (() => void) | undefined;
-    let unsubOutboundProspects: (() => void) | undefined;
 
     if (!currentUser || !currentTenantId) return;
 
@@ -372,9 +372,10 @@ export default function App() {
 
         if (!initMarkerSnap.exists()) {
           // Check if any contacts or leads already exist in Firestore for this tenant
-          const contactsSnap = await getDocs(tCol('contacts')).catch(() => null);
-          const leadsSnap = await getDocs(tCol('leads')).catch(() => null);
-          const convsSnap = await getDocs(tCol('conversations')).catch(() => null);
+          // limit(1): we only need to know if ANY doc exists, not read them all.
+          const contactsSnap = await getDocs(query(tCol('contacts'), limit(1))).catch(() => null);
+          const leadsSnap = await getDocs(query(tCol('leads'), limit(1))).catch(() => null);
+          const convsSnap = await getDocs(query(tCol('conversations'), limit(1))).catch(() => null);
 
           // Sample data (including the Umrah360 knowledge articles) belongs to the Umrah360 workspace only.
           // Every other workspace starts empty.
@@ -407,77 +408,11 @@ export default function App() {
           }).catch(() => {});
         }
 
-        // Load persisted entities from Firestore so state reflects actual database state
-        const [convsSnap, msgsSnap, leadsSnap, contsSnap, kbSnap, campSnap, usersSnap, prospectsSnap] = await Promise.all([
-          getDocs(query(tCol('conversations'), orderBy('lastMessageAt', 'desc'))).catch(() => null),
-          getDocs(query(tCol('messages'), orderBy('sentAt', 'asc'))).catch(() => null),
-          getDocs(tCol('leads')).catch(() => null),
-          getDocs(tCol('contacts')).catch(() => null),
-          getDocs(tCol('knowledge_documents')).catch(() => null),
-          getDocs(tCol('outbound_campaigns')).catch(() => null),
-          getDocs(query(collection(db, 'users'), where('tenantId', '==', currentTenantId))).catch(() => null),
-          getDocs(tCol('outbound_prospects')).catch(() => null),
-        ]);
-
-        // Filter and purge legacy test/default campaigns from Firestore
-        const validCampaigns: OutboundCampaign[] = [];
-        if (campSnap && !campSnap.empty) {
-          campSnap.docs.forEach((d) => {
-            const data = d.data() as OutboundCampaign;
-            const cleanName = (data.name || '').toLowerCase().trim();
-            if (
-              data.campaignId === 'camp-umrah-1448' ||
-              data.campaignId === 'camp-indian-umrah-operators' ||
-              cleanName === 'indian umrah operators 2026' ||
-              data.campaignId === 'camp-1790758967982-7his' ||
-              cleanName === 'test'
-            ) {
-              deleteDoc(tDoc('outbound_campaigns', d.id)).catch(() => {});
-              deleteDoc(tDoc('campaigns', d.id)).catch(() => {});
-            } else {
-              validCampaigns.push(data);
-            }
-          });
-        }
-
-        // Always set the exact documents present in Firestore (if user deleted documents, reflects empty/subset)
-        if (convsSnap) setConversations(convsSnap.docs.map((d) => d.data() as Conversation));
-        if (msgsSnap) setMessages(msgsSnap.docs.map((d) => d.data() as Message));
-        if (leadsSnap) setLeads(leadsSnap.docs.map((d) => sanitizeLead(d.data())));
-        if (contsSnap) setContacts(contsSnap.docs.map((d) => sanitizeContact(d.data())));
-        if (kbSnap) setKnowledgeDocs(kbSnap.docs.map((d) => d.data() as KnowledgeDocument));
-        setCampaigns(validCampaigns);
-        setProspects(prospectsSnap ? prospectsSnap.docs.map((d) => d.data() as OutboundProspect) : []);
-
-        // Initialize / sync users
-        if (!usersSnap || usersSnap.empty) {
-          setUsers([]);
-        } else {
-          setUsers(usersSnap.docs.map((d) => toAppUser(d.data())));
-        }
+        // No one-off getDocs preload here: each onSnapshot listener below returns the full current
+        // result on its first callback, so a preload paid for every document twice.
 
         // Attach realtime listeners for Firestore updates
-        unsubConvs = onSnapshot(tCol('conversations'), (snap) => {
-          const list = snap.docs.map((d) => d.data() as Conversation);
-          setConversations(
-            list.sort(
-              (a, b) =>
-                new Date(b.lastMessageAt || b.createdAt || 0).getTime() -
-                new Date(a.lastMessageAt || a.createdAt || 0).getTime()
-            )
-          );
-        }, () => {});
-
-        unsubMsgs = onSnapshot(tCol('messages'), (snap) => {
-          const list = snap.docs.map((d) => d.data() as Message);
-          setMessages(
-            list.sort(
-              (a, b) =>
-                new Date(a.sentAt || a.timestamp || a.createdAt || 0).getTime() -
-                new Date(b.sentAt || b.timestamp || b.createdAt || 0).getTime()
-            )
-          );
-        }, () => {});
+        // Conversations and messages have their own scoped listeners (see the effects below).
 
         unsubLeads = onSnapshot(tCol('leads'), (snap) => {
           const list: Lead[] = [];
@@ -524,11 +459,8 @@ export default function App() {
           setCampaigns(list);
         }, () => {});
 
-        unsubOutboundProspects = onSnapshot(tCol('outbound_prospects'), (snap) => {
-          if (!snap.empty) {
-            setProspects(snap.docs.map((d) => d.data() as OutboundProspect));
-          }
-        }, () => {});
+        // outbound_prospects is no longer streamed: no screen renders prospects, so watching the whole
+        // collection only cost reads.
 
         // Team list: only this workspace's users. The signed-in user's identity and role always come
         // from the verified session, never from a database row.
@@ -545,16 +477,89 @@ export default function App() {
     initFirestore();
 
     return () => {
-      if (unsubConvs) unsubConvs();
-      if (unsubMsgs) unsubMsgs();
       if (unsubLeads) unsubLeads();
       if (unsubContacts) unsubContacts();
       if (unsubKb) unsubKb();
       if (unsubUsers) unsubUsers();
       if (unsubOutboundCamps) unsubOutboundCamps();
-      if (unsubOutboundProspects) unsubOutboundProspects();
     };
   }, [currentUser?.userId, currentTenantId]);
+
+  // ---------------------------------------------------------------------------
+  // Inbox conversations: live, but only the newest `conversationLimit` (grows via "Load more").
+  // Sorting/limiting happens in Firestore, so we pay for ~50 docs instead of the whole collection.
+  // ---------------------------------------------------------------------------
+  const [conversationLimit, setConversationLimit] = useState<number>(CONVERSATION_PAGE_SIZE);
+  const [hasMoreConversations, setHasMoreConversations] = useState<boolean>(false);
+
+  useEffect(() => {
+    setConversationLimit(CONVERSATION_PAGE_SIZE);
+  }, [currentTenantId]);
+
+  useEffect(() => {
+    if (!currentUser || !currentTenantId || !isFirebaseConfigured || !db) return;
+    const q = query(tCol('conversations'), orderBy('lastMessageAt', 'desc'), limit(conversationLimit));
+    const unsub = onSnapshot(
+      q,
+      (snap) => {
+        setConversations(snap.docs.map((d) => d.data() as Conversation));
+        // A full page back means there may be older conversations to load.
+        setHasMoreConversations(snap.size >= conversationLimit);
+      },
+      (err) => console.warn('[Inbox] conversations listener error:', err)
+    );
+    return () => unsub();
+  }, [currentUser?.userId, currentTenantId, conversationLimit, tCol]);
+
+  const loadMoreConversations = useCallback(() => {
+    setConversationLimit((n) => n + CONVERSATION_PAGE_SIZE);
+  }, []);
+
+  // ---------------------------------------------------------------------------
+  // Messages: only for the conversations the inbox has open (the selected thread plus the same
+  // contact's other channels for the "all platforms" view). Never the whole collection.
+  // ---------------------------------------------------------------------------
+  const [watchedConversationIds, setWatchedConversationIds] = useState<string[]>([]);
+  const watchedKey = watchedConversationIds.slice().sort().join('|');
+
+  const watchConversations = useCallback((ids: string[]) => {
+    const clean = Array.from(new Set(ids.filter(Boolean)));
+    setWatchedConversationIds((prev) =>
+      prev.slice().sort().join('|') === clean.slice().sort().join('|') ? prev : clean
+    );
+  }, []);
+
+  useEffect(() => {
+    setWatchedConversationIds([]);
+  }, [currentTenantId]);
+
+  useEffect(() => {
+    if (!currentUser || !currentTenantId || !isFirebaseConfigured || !db) return;
+    const ids = watchedKey ? watchedKey.split('|') : [];
+    if (ids.length === 0) {
+      setMessages([]);
+      return;
+    }
+
+    // Firestore 'in' accepts at most 30 values, so split into chunks and merge the results.
+    const chunks: string[][] = [];
+    for (let i = 0; i < ids.length; i += 30) chunks.push(ids.slice(i, i + 30));
+    const byChunk = new Map<number, Message[]>();
+    const msgTime = (m: Message) => new Date(m.sentAt || m.timestamp || m.createdAt || 0).getTime();
+
+    const unsubs = chunks.map((chunk, idx) =>
+      onSnapshot(
+        query(tCol('messages'), where('conversationId', 'in', chunk)),
+        (snap) => {
+          byChunk.set(idx, snap.docs.map((d) => d.data() as Message));
+          const all = Array.from(byChunk.values()).flat();
+          setMessages(all.sort((a, b) => msgTime(a) - msgTime(b)));
+        },
+        (err) => console.warn('[Inbox] messages listener error:', err)
+      )
+    );
+    return () => unsubs.forEach((u) => u());
+  }, [currentUser?.userId, currentTenantId, watchedKey, tCol]);
 
   // Track message IDs ingested from backend to prevent duplicates
   const ingestedBackendMsgIds = useRef<Set<string>>(new Set());
@@ -2032,6 +2037,9 @@ export default function App() {
             {activeTab === 'inbox' && (
               <UnifiedInbox
                 conversations={conversations}
+                hasMoreConversations={hasMoreConversations}
+                onLoadMoreConversations={loadMoreConversations}
+                onWatchConversations={watchConversations}
                 messages={messages}
                 contacts={contacts}
                 leads={leads}

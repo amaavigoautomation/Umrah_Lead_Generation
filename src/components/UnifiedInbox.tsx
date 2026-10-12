@@ -56,6 +56,12 @@ import {
 
 interface UnifiedInboxProps {
   conversations: Conversation[];
+  /** True when older conversations exist beyond the loaded page. */
+  hasMoreConversations?: boolean;
+  /** Loads the next page of older conversations. */
+  onLoadMoreConversations?: () => void;
+  /** Tells the parent which conversations' messages to load (the open thread + same contact's threads). */
+  onWatchConversations?: (conversationIds: string[]) => void;
   messages: Message[];
   contacts: Contact[];
   leads: Lead[];
@@ -74,6 +80,9 @@ interface UnifiedInboxProps {
 
 export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
   conversations,
+  hasMoreConversations,
+  onLoadMoreConversations,
+  onWatchConversations,
   messages,
   contacts,
   leads,
@@ -271,6 +280,12 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
   const contactConversations = activeContact
     ? conversations.filter((c) => c.contactId === activeContact.contactId)
     : activeConversation ? [activeConversation] : [];
+
+  // Load messages only for the threads on screen (active conversation + same contact's other channels).
+  const watchIdsKey = contactConversations.map((c) => c.conversationId).sort().join('|');
+  React.useEffect(() => {
+    if (onWatchConversations) onWatchConversations(watchIdsKey ? watchIdsKey.split('|') : []);
+  }, [watchIdsKey, onWatchConversations]);
 
   // Messages to display: strictly sorted chronologically (customer email first, then reply, then followups)
   const getMsgTime = (m: Message) => new Date(m.sentAt || m.timestamp || m.createdAt || 0).getTime();
@@ -700,6 +715,17 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
                 </div>
               );
             })
+          )}
+          {hasMoreConversations && onLoadMoreConversations && (
+            <div className="p-3 text-center">
+              <button
+                type="button"
+                onClick={onLoadMoreConversations}
+                className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+              >
+                Load older conversations
+              </button>
+            </div>
           )}
         </div>
       </div>

@@ -1,5 +1,6 @@
 import crypto from 'crypto';
-import { doc, getDoc, setDoc, deleteDoc } from './adminFirestore.js';
+import { doc, getDoc, setDoc, deleteDoc, createDoc, updateDoc, getDocs, query, where } from './adminFirestore.js';
+import OpenAI from 'openai';
 import { db } from './adminFirestore.js';
 import { tenantRepo } from './tenantRepo.js';
 import { encryptSecret, decryptSecret } from './cryptoUtils.js';
@@ -245,6 +246,129 @@ function isValidMetaSignature(req: any): boolean {
   return a.length === b.length && crypto.timingSafeEqual(a, b);
 }
 
+async function processInstagramMessageEvent(tenantId: string, accountId: string, event: any, eventId: string): Promise<void> {
+  const senderId = String(event?.sender?.id || '');
+  const externalMessageId = String(event?.message?.mid || event?.id || eventId);
+  const eventRef = doc(db, 'instagram_inbound_events', eventId);
+  if (!senderId || senderId === accountId || event?.message?.is_echo) {
+    await updateDoc(eventRef, { status: 'ignored', processedAt: new Date().toISOString() });
+    return;
+  }
+  const messageText = String(event?.message?.text || '').trim();
+  const incomingText = messageText || (Array.isArray(event?.message?.attachments) && event.message.attachments.length ? '[Instagram attachment received]' : '');
+  if (!incomingText) {
+    await updateDoc(eventRef, { status: 'ignored', processedAt: new Date().toISOString() });
+    return;
+  }
+  const ctx: TenantContext = { tenantId, uid: 'instagram-webhook', email: '', role: 'admin' };
+  const repo = tenantRepo(ctx);
+  const stableHash = (value: string) => crypto.createHash('sha256').update(value).digest('hex').slice(0, 24);
+  const contactId = 'igc_' + stableHash(accountId + ':' + senderId);
+  const conversationId = 'igconv_' + stableHash(accountId + ':' + senderId);
+  const messageId = 'igmsg_' + stableHash(accountId + ':' + externalMessageId);
+  const now = new Date().toISOString();
+  const eventTime = Number(event?.timestamp);
+  const timestamp = Number.isFinite(eventTime) && eventTime > 0 ? new Date(eventTime).toISOString() : now;
+  const existingMessage = await getDoc(repo.messageDoc(messageId));
+  if (existingMessage.exists()) {
+    await updateDoc(eventRef, { status: 'duplicate', processedAt: now });
+    return;
+  }
+  const contactSnap = await getDoc(repo.contactDoc(contactId));
+  const contact = contactSnap.exists() ? contactSnap.data() : {
+    contactId, firstName: 'Instagram', lastName: 'User', email: '', phone: '',
+    companyName: 'Instagram contact', instagramUserId: senderId, tags: ['INSTAGRAM_DM'],
+    notes: '', createdAt: now, updatedAt: now,
+  };
+  await setDoc(repo.contactDoc(contactId), { ...contact, instagramUserId: senderId, updatedAt: now, lastActivityAt: timestamp }, { merge: true });
+  const conversationSnap = await getDoc(repo.conversationDoc(conversationId));
+  const previous = conversationSnap.exists() ? conversationSnap.data() as any : null;
+  const conversation = {
+    conversationId, contactId, channel: 'INSTAGRAM', direction: 'INBOUND', externalConversationId: senderId,
+    status: previous?.status || 'ACTIVE', aiEnabled: previous?.aiEnabled !== false,
+    humanHandoff: previous?.humanHandoff === true, managementMode: previous?.managementMode || 'AI',
+    conversationSummary: previous?.conversationSummary || 'Instagram direct-message conversation',
+    startedAt: previous?.startedAt || timestamp, lastMessageAt: timestamp, lastMessageText: incomingText,
+    unreadCount: Number(previous?.unreadCount || 0) + 1, isRead: false, unread: true,
+    createdAt: previous?.createdAt || now, updatedAt: now,
+  };
+  await setDoc(repo.conversationDoc(conversationId), conversation, { merge: true });
+  await setDoc(repo.messageDoc(messageId), {
+    messageId, externalMessageId, conversationId, channel: 'INSTAGRAM', senderType: 'CUSTOMER',
+    senderName: 'Instagram user', instagramUserId: senderId, text: incomingText, direction: 'INBOUND',
+    timestamp, receivedAt: now, createdAt: now, aiReplied: false, aiProcessed: false,
+  });
+  const settingsSnap = await getDoc(repo.settingsDoc('default'));
+  const settings = settingsSnap.exists() ? settingsSnap.data() as any : {};
+  const mode = settings?.channelModes?.INSTAGRAM || 'AUTO';
+  if (!conversation.aiEnabled || conversation.humanHandoff || conversation.managementMode === 'HUMAN' || mode === 'SIMULATION') {
+    await updateDoc(eventRef, { status: 'processed', processedAt: now, conversationId });
+    return;
+  }
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey || !messageText) {
+    await updateDoc(eventRef, { status: 'processed_no_reply', reason: !apiKey ? 'OPENAI_API_KEY is not configured' : 'No text available for AI reply', processedAt: now, conversationId });
+    return;
+  }
+  const knowledgeSnap = await getDocs(repo.knowledgeDocuments());
+  const knowledge = knowledgeSnap.docs
+    .map((d) => d.data() as any)
+    .filter((d) => d.status === 'PUBLISHED')
+    .slice(0, 8)
+    .map((d) => '## ' + String(d.title || 'Knowledge') + '\n' + String(d.content || '').slice(0, 2500))
+    .join('\n\n')
+    .slice(0, 12000);
+  const historySnap = await getDocs(query(repo.messages(), where('conversationId', '==', conversationId)));
+  const history = historySnap.docs
+    .map((d) => d.data() as any)
+    .filter((m) => m.messageId !== messageId)
+    .sort((a, b) => new Date(a.timestamp || 0).getTime() - new Date(b.timestamp || 0).getTime())
+    .slice(-8)
+    .map((m) => ({ role: m.direction === 'OUTBOUND' ? 'assistant' as const : 'user' as const, content: String(m.text || '').slice(0, 1500) }));
+  const openai = new OpenAI({ apiKey });
+  const completion = await openai.chat.completions.create({
+    model: process.env.INSTAGRAM_AI_MODEL || 'gpt-4o-mini',
+    temperature: 0.3,
+    messages: [
+      { role: 'system', content: 'You are this workspace customer-support and lead-qualification assistant. Reply naturally and briefly to the Instagram DM. Use only the workspace knowledge below for factual claims. If knowledge does not answer the question, ask a concise clarifying question instead of inventing facts. Do not claim a booking or action has completed unless confirmed.\n\nWorkspace knowledge:\n' + (knowledge || 'No published workspace knowledge is available. Ask a clarifying question and do not invent product details.') },
+      ...history,
+      { role: 'user', content: messageText.slice(0, 3000) },
+    ],
+  });
+  const replyText = completion.choices[0]?.message?.content?.trim();
+  if (!replyText) {
+    await updateDoc(eventRef, { status: 'processed_no_reply', reason: 'AI returned an empty response', processedAt: now, conversationId });
+    return;
+  }
+  if (mode === 'REVIEW') {
+    await updateDoc(repo.conversationDoc(conversationId), {
+      draftReply: { draftId: 'igdraft_' + stableHash(externalMessageId), text: replyText, generatedAt: now, status: 'PENDING' },
+      updatedAt: now,
+    });
+    await updateDoc(repo.messageDoc(messageId), { aiProcessed: true });
+    await updateDoc(eventRef, { status: 'draft_created', processedAt: now, conversationId });
+    return;
+  }
+  const latestSnap = await getDoc(repo.conversationDoc(conversationId));
+  const latest = latestSnap.exists() ? latestSnap.data() as any : {};
+  if (latest.aiEnabled === false || latest.humanHandoff === true || latest.managementMode === 'HUMAN') {
+    await updateDoc(eventRef, { status: 'suppressed_human_takeover', processedAt: new Date().toISOString(), conversationId });
+    return;
+  }
+  const sendResult = await sendInstagramMessage(ctx, senderId, replyText);
+  const outboundId = 'igout_' + stableHash(externalMessageId);
+  const sentAt = new Date().toISOString();
+  await setDoc(repo.messageDoc(outboundId), {
+    messageId: outboundId, externalMessageId: String(sendResult?.message_id || sendResult?.messageId || ''),
+    conversationId, channel: 'INSTAGRAM', senderType: 'AI', senderName: 'AI Assistant',
+    instagramUserId: senderId, text: replyText, direction: 'OUTBOUND', timestamp: sentAt,
+    sentAt, createdAt: sentAt, aiProcessed: true, aiGenerated: true, deliveryStatus: 'DELIVERED',
+  });
+  await updateDoc(repo.messageDoc(messageId), { aiReplied: true, repliedAt: sentAt, repliedByMessageId: outboundId, aiProcessed: true });
+  await updateDoc(repo.conversationDoc(conversationId), { lastMessageAt: sentAt, lastMessageText: replyText, updatedAt: sentAt });
+  await updateDoc(eventRef, { status: 'replied', processedAt: sentAt, conversationId, outboundMessageId: outboundId });
+}
+
 export async function handleInstagramWebhook(req: any, res: any): Promise<boolean> {
   if (req.method === 'GET') {
     const params = queryParams(req);
@@ -295,16 +419,17 @@ export async function handleInstagramWebhook(req: any, res: any): Promise<boolea
       const externalId = String(event.message?.mid || event.id || event.timestamp || crypto.randomUUID());
       const eventId = crypto.createHash('sha256').update(`${accountId}:${externalId}`).digest('hex');
       const eventRef = doc(db, 'instagram_inbound_events', eventId);
-      const existing = await getDoc(eventRef);
-      if (existing.exists()) continue;
-      await setDoc(eventRef, {
-        accountId,
-        tenantId,
-        externalId,
-        event,
-        status: 'queued',
-        receivedAt: new Date().toISOString(),
-      });
+      try {
+        await createDoc(eventRef, { accountId, tenantId, externalId, event, status: 'received', receivedAt: new Date().toISOString() });
+      } catch {
+        continue;
+      }
+      try {
+        await processInstagramMessageEvent(tenantId, accountId, event, eventId);
+      } catch (error: any) {
+        console.error('[Instagram webhook] Event processing failed:', error?.message || 'unknown error');
+        await updateDoc(eventRef, { status: 'failed', lastError: 'Processing failed; inspect server logs.', updatedAt: new Date().toISOString() }).catch(() => {});
+      }
       accepted++;
     }
   }

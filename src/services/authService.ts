@@ -5,7 +5,7 @@ import {
   sendPasswordResetEmail,
   type User as FirebaseUser,
 } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, terminate, clearIndexedDbPersistence } from 'firebase/firestore';
 import { auth, db, isFirebaseConfigured } from '../firebase/config';
 import type { AppUser } from '../types';
 
@@ -24,6 +24,18 @@ export async function signIn(email: string, password: string): Promise<void> {
 
 export async function signOutUser(): Promise<void> {
   await signOut(auth);
+  // Wipe this browser's local Firestore copy, so the next person on this computer never sees the
+  // previous user's data. Firestore must be stopped before its cache can be cleared, so the page reloads
+  // afterwards (back to the sign-in screen with a fresh Firestore).
+  if (typeof window !== 'undefined' && isFirebaseConfigured && db) {
+    try {
+      await terminate(db);
+      await clearIndexedDbPersistence(db);
+    } catch (err) {
+      console.warn('[Auth] Could not clear the local Firestore cache:', err);
+    }
+    window.location.reload();
+  }
 }
 
 export async function requestPasswordReset(email: string): Promise<void> {

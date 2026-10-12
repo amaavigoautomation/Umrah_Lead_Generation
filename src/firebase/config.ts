@@ -1,5 +1,13 @@
 import { initializeApp, getApps } from 'firebase/app';
-import { getFirestore, Firestore, doc, getDocFromServer } from 'firebase/firestore';
+import {
+  getFirestore,
+  initializeFirestore,
+  persistentLocalCache,
+  persistentMultipleTabManager,
+  Firestore,
+  doc,
+  getDocFromServer,
+} from 'firebase/firestore';
 import { getAuth, Auth } from 'firebase/auth';
 import rawFirebaseConfig from '../../firebase-applet-config.json';
 
@@ -73,10 +81,27 @@ export const app =
   getApps().find((a) => a.name === '[DEFAULT]') ||
   initializeApp(webApiKeyMissing ? { ...firebaseConfig, apiKey: 'missing-web-api-key' } : firebaseConfig);
 
-// Initialize Firestore with specific database ID
-export const db: Firestore = firebaseConfig.firestoreDatabaseId
-  ? getFirestore(app, firebaseConfig.firestoreDatabaseId)
-  : getFirestore(app);
+// Initialize Firestore with specific database ID.
+// In the browser, Firestore keeps a local copy of the data it has read (IndexedDB, shared by all open
+// tabs). After a page reload, listeners show that copy instantly and resume with a token, so the server
+// sends (and bills) only documents that changed, when the last listen was within ~30 minutes.
+// The cache lives in the user's browser: no Firebase cost. It is wiped on sign-out (authService.ts).
+// The server (Node) has no IndexedDB, so it keeps the default in-memory setup.
+function createDb(): Firestore {
+  const dbId = firebaseConfig.firestoreDatabaseId || undefined;
+  const isBrowser = typeof window !== 'undefined' && typeof indexedDB !== 'undefined';
+  if (isBrowser) {
+    try {
+      const settings = { localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) };
+      return dbId ? initializeFirestore(app, settings, dbId) : initializeFirestore(app, settings);
+    } catch (err) {
+      // Already initialised (e.g. dev hot reload) or the browser blocks IndexedDB: use the plain instance.
+      console.warn('[Firebase] Local cache not enabled:', err);
+    }
+  }
+  return dbId ? getFirestore(app, dbId) : getFirestore(app);
+}
+export const db: Firestore = createDb();
 
 // Auth for the project selected above.
 export const auth: Auth = getAuth(app);
@@ -97,5 +122,3 @@ async function testFirestoreConnection() {
   }
 }
 testFirestoreConnection();
-
-

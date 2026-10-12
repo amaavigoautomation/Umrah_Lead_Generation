@@ -1,4 +1,4 @@
-import React, { useState, Suspense } from 'react';
+import React, { useState, Suspense, useRef, useLayoutEffect, useEffect } from 'react';
 import { lazyNamed } from '../lazyLoad';
 import {
   Search,
@@ -312,6 +312,40 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
     : activeMessages;
 
   const displayMessages = isUnifiedAllPlatforms ? unifiedAllMessages : activeMessages;
+
+  // Chat scroll: opening a conversation jumps to the LATEST message (bottom). New messages keep it at the
+  // bottom only while you are already near the bottom, so reading older messages is never interrupted.
+  const threadScrollRef = useRef<HTMLDivElement>(null);
+  const stickToBottomRef = useRef(true);
+  const lastThreadKeyRef = useRef('');
+  const threadKey = `${isUnifiedAllPlatforms ? 'all' : 'one'}:${activeConversation?.conversationId || ''}`;
+  const lastMessageId = displayMessages[displayMessages.length - 1]?.messageId || '';
+  const scrollThreadToBottom = () => {
+    const el = threadScrollRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  };
+  useLayoutEffect(() => {
+    if (lastThreadKeyRef.current !== threadKey) {
+      lastThreadKeyRef.current = threadKey;
+      stickToBottomRef.current = true; // a newly opened chat always starts at the bottom
+    }
+    if (stickToBottomRef.current) scrollThreadToBottom();
+  }, [threadKey, displayMessages.length, lastMessageId]);
+  // Images / attachments finish loading after the first paint and push content down: follow them.
+  useEffect(() => {
+    const el = threadScrollRef.current;
+    if (!el) return;
+    const onLoad = () => {
+      if (stickToBottomRef.current) scrollThreadToBottom();
+    };
+    el.addEventListener('load', onLoad, true);
+    return () => el.removeEventListener('load', onLoad, true);
+  }, [threadKey]);
+  const onThreadScroll = () => {
+    const el = threadScrollRef.current;
+    if (!el) return;
+    stickToBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
+  };
 
   // Helper for channel icon
   const renderChannelIcon = (channel: Channel, size = 4) => {
@@ -927,7 +961,7 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
             )}
 
             {/* Message Thread Scroll Area */}
-            <div className="flex-1 overflow-y-auto min-h-0 p-4 space-y-4">
+            <div ref={threadScrollRef} onScroll={onThreadScroll} className="flex-1 overflow-y-auto min-h-0 p-4 space-y-4">
               {displayMessages.length === 0 ? (
                 <div className="text-center py-12 text-slate-500 text-xs">
                   No messages on this platform yet. Use &ldquo;Simulate Inbound Platform Msg&rdquo; or dispatch cold outreach.

@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useBrand } from '../context/BrandContext';
-import * as XLSX from 'xlsx';
 import {
   Send,
   Play,
@@ -1030,8 +1029,10 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
     setUploadError(null);
 
     const reader = new FileReader();
-    reader.onload = (evt) => {
+    reader.onload = async (evt) => {
       try {
+        // The spreadsheet parser (~400 KB) is downloaded only when someone uploads a lead file.
+        const XLSX = await import('xlsx');
         const data = new Uint8Array(evt.target?.result as ArrayBuffer);
         const workbook = XLSX.read(data, { type: 'array' });
         const sheetName = workbook.SheetNames[0];

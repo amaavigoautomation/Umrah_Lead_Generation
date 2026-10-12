@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, Suspense } from 'react';
+import { lazyNamed } from '../lazyLoad';
 import {
   Search,
   Bot,
@@ -39,8 +40,6 @@ import {
   KnowledgeDocument,
 } from '../types';
 import { generateOmnichannelResponse } from '../services/aiService';
-import { InboundEmailFlowModal } from './InboundEmailFlowModal';
-import { InboundWhatsAppFlowModal } from './InboundWhatsAppFlowModal';
 import { useBrand } from '../context/BrandContext';
 import {
   InboundEmailPayload,
@@ -53,6 +52,10 @@ import {
   WHATSAPP_BUSINESS_NUMBER,
   WHATSAPP_BUSINESS_NUMBER_FORMATTED,
 } from '../services/whatsappInboundService';
+
+// Simulator modals: loaded only when opened.
+const InboundEmailFlowModal = lazyNamed(() => import('./InboundEmailFlowModal'), 'InboundEmailFlowModal');
+const InboundWhatsAppFlowModal = lazyNamed(() => import('./InboundWhatsAppFlowModal'), 'InboundWhatsAppFlowModal');
 
 interface UnifiedInboxProps {
   conversations: Conversation[];
@@ -1506,6 +1509,7 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
 
       {/* Inbound Email Flow Simulator Modal for automation@amaavigo.com */}
       {showInboundFlowModal && (
+        <Suspense fallback={null}>
         <InboundEmailFlowModal
           isOpen={showInboundFlowModal}
           onClose={() => setShowInboundFlowModal(false)}
@@ -1526,10 +1530,12 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
             onViewLeadInCrm(leadId);
           }}
         />
+        </Suspense>
       )}
 
       {/* Inbound WhatsApp Flow Simulator Modal for +919820252434 */}
       {showInboundWhatsAppModal && (
+        <Suspense fallback={null}>
         <InboundWhatsAppFlowModal
           isOpen={showInboundWhatsAppModal}
           onClose={() => setShowInboundWhatsAppModal(false)}
@@ -1566,6 +1572,7 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
             onViewLeadInCrm(leadId);
           }}
         />
+        </Suspense>
       )}
 
       {/* SMTP & Live Outbound Mail Delivery Settings Modal */}

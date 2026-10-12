@@ -1,25 +1,14 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, Suspense } from 'react';
+import { lazyNamed, prefetchLazy, markAppLoaded } from './lazyLoad';
 import { BrandProvider, getCurrentBrand } from './context/BrandContext';
 import { brandHost } from './shared/brand';
 import { Navbar, ActiveTab } from './components/Navbar';
 import { HeaderBar } from './components/HeaderBar';
 import { UnifiedInbox } from './components/UnifiedInbox';
-import { CampaignManagement } from './components/CampaignManagement';
-import { OutboundCampaigns } from './components/OutboundCampaigns';
-import { CrmPipeline } from './components/CrmPipeline';
-import { KnowledgeBaseView } from './components/KnowledgeBaseView';
-import { AiTestingPlayground } from './components/AiTestingPlayground';
-import { InteractiveScenarios } from './components/InteractiveScenarios';
-import { SettingsView } from './components/SettingsView';
-import { LiveMailboxCenter } from './components/LiveMailboxCenter';
-import { DemoSchedulingView } from './components/DemoSchedulingView';
-import { AutoFollowUpDashboard } from './components/AutoFollowUpDashboard';
-import { PlatformConsole } from './components/PlatformConsole';
 import { LoginView } from './components/LoginView';
 import { onSession, signOutUser, installAuthFetch, type SessionInfo } from './services/authService';
 import { LockedModuleView } from './components/LockedModuleView';
 import { UpgradeRequiredView } from './components/UpgradeRequiredView';
-import { BillingView } from './components/BillingView';
 import { FEATURES, FEATURE_BY_TAB } from './shared/features';
 import {
   Contact,
@@ -60,6 +49,28 @@ import {
 } from './services/whatsappInboundService';
 import { db, isFirebaseConfigured } from './firebase/config';
 import { collection, doc, setDoc, getDoc, getDocs, updateDoc, deleteDoc, query, where, orderBy, limit, onSnapshot } from 'firebase/firestore';
+
+// Screens loaded on demand (own JS files). Login, navigation and the inbox stay in the main bundle.
+const CampaignManagement = lazyNamed(() => import('./components/CampaignManagement'), 'CampaignManagement');
+const CrmPipeline = lazyNamed(() => import('./components/CrmPipeline'), 'CrmPipeline');
+const KnowledgeBaseView = lazyNamed(() => import('./components/KnowledgeBaseView'), 'KnowledgeBaseView');
+const AiTestingPlayground = lazyNamed(() => import('./components/AiTestingPlayground'), 'AiTestingPlayground');
+const InteractiveScenarios = lazyNamed(() => import('./components/InteractiveScenarios'), 'InteractiveScenarios');
+const SettingsView = lazyNamed(() => import('./components/SettingsView'), 'SettingsView');
+const LiveMailboxCenter = lazyNamed(() => import('./components/LiveMailboxCenter'), 'LiveMailboxCenter');
+const DemoSchedulingView = lazyNamed(() => import('./components/DemoSchedulingView'), 'DemoSchedulingView');
+const AutoFollowUpDashboard = lazyNamed(() => import('./components/AutoFollowUpDashboard'), 'AutoFollowUpDashboard');
+const PlatformConsole = lazyNamed(() => import('./components/PlatformConsole'), 'PlatformConsole');
+const BillingView = lazyNamed(() => import('./components/BillingView'), 'BillingView');
+
+function ScreenLoading() {
+  return (
+    <div className="flex items-center justify-center py-16 text-sm text-slate-400">
+      <span className="inline-block w-4 h-4 mr-2 border-2 border-slate-300 border-t-orange-500 rounded-full animate-spin" />
+      Loading…
+    </div>
+  );
+}
 
 // Inbox page size: how many conversations the live listener loads at a time.
 const CONVERSATION_PAGE_SIZE = 50;
@@ -487,6 +498,14 @@ export default function App() {
     );
     return () => unsub();
   }, [currentUser?.userId, currentTenantId, conversationLimit, tCol]);
+
+  // App started fine: allow a future "missing file after deploy" reload again, and download the other
+  // screens in idle time so opening a tab is instant.
+  useEffect(() => {
+    if (!currentUser) return;
+    markAppLoaded();
+    prefetchLazy();
+  }, [currentUser?.userId]);
 
   const loadMoreConversations = useCallback(() => {
     setConversationLimit((n) => n + CONVERSATION_PAGE_SIZE);
@@ -1880,7 +1899,11 @@ export default function App() {
   }
 
   if (session?.isPlatformAdmin) {
-    return <PlatformConsole email={currentUser.email} onLogout={handleLogout} />;
+    return (
+      <Suspense fallback={<ScreenLoading />}>
+        <PlatformConsole email={currentUser.email} onLogout={handleLogout} />
+      </Suspense>
+    );
   }
 
   if (!currentTenantId) {
@@ -1900,7 +1923,9 @@ export default function App() {
 
   if (entitlements?.billing?.locked) {
     return currentUser.role === 'ADMIN' ? (
-      <BillingView fullScreen onLogout={handleLogout} email={currentUser.email} />
+      <Suspense fallback={<ScreenLoading />}>
+        <BillingView fullScreen onLogout={handleLogout} email={currentUser.email} />
+      </Suspense>
     ) : (
       <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 text-slate-700 gap-3 p-6 text-center">
         <p className="text-sm">Your workspace needs an active plan. Ask your workspace admin to complete billing.</p>
@@ -1977,7 +2002,7 @@ export default function App() {
             onNavigateToAllowed={(tab) => setActiveTab(tab)}
           />
         ) : (
-          <>
+          <Suspense fallback={<ScreenLoading />}>
             {activeTab === 'inbox' && (
               <UnifiedInbox
                 conversations={conversations}
@@ -2132,7 +2157,7 @@ export default function App() {
                 onSyncNow={syncWithBackendInbound}
               />
             )}
-          </>
+          </Suspense>
         )}
       </main>
     </div>

@@ -4,6 +4,8 @@ import { handleStripeWebhook } from '../../src/server/billingService.js';
 // Stripe signs the exact raw bytes, so Vercel must not parse the body.
 export const config = { api: { bodyParser: false } };
 
+
+//testing vercel deployment
 async function readRaw(req: IncomingMessage): Promise<Buffer> {
   const chunks: Buffer[] = [];
   for await (const chunk of req) chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));

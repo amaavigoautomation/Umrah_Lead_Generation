@@ -342,6 +342,8 @@ export interface Message {
   senderName: string;
   senderEmail?: string;
   recipientEmail?: string;
+  instagramUserId?: string;
+  externalMessageId?: string;
   text: string;
   timestamp: string;
   gmailMessageId?: string;

@@ -17,6 +17,7 @@ type InstagramConnection = {
   updatedAt: string;
   scopes?: string[];
   tokenExpiresAt?: string | null;
+  webhookSubscriptionStatus?: 'subscribed' | 'needs_setup';
 };
 
 function requiredEnv(name: string): string {
@@ -109,7 +110,7 @@ export async function disconnectInstagram(ctx: TenantContext): Promise<void> {
   }
 }
 
-async function exchangeCode(code: string): Promise<{ accessToken: string; accountId: string; username: string; expiresIn?: number }> {
+async function exchangeCode(code: string): Promise<{ accessToken: string; accountId: string; username: string; expiresIn?: number; webhookSubscribed: boolean }> {
   const clientId = requiredEnv('META_INSTAGRAM_APP_ID');
   const clientSecret = requiredEnv('META_INSTAGRAM_APP_SECRET');
   const redirectUri = requiredEnv('META_INSTAGRAM_REDIRECT_URI');
@@ -155,11 +156,24 @@ async function exchangeCode(code: string): Promise<{ accessToken: string; accoun
     throw new Error('Instagram authorization succeeded, but the account profile could not be verified.');
   }
 
+  const accountId = String(profile.user_id || profile.id || tokenBody.user_id);
+  let webhookSubscribed = false;
+  try {
+    const subscribeUrl = new URL('https://graph.instagram.com/' + GRAPH_VERSION + '/' + encodeURIComponent(accountId) + '/subscribed_apps');
+    subscribeUrl.searchParams.set('subscribed_fields', 'messages');
+    subscribeUrl.searchParams.set('access_token', accessToken);
+    const subscribeResponse = await fetch(subscribeUrl, { method: 'POST' });
+    webhookSubscribed = subscribeResponse.ok;
+  } catch {
+    webhookSubscribed = false;
+  }
+
   return {
     accessToken,
-    accountId: String(profile.user_id || profile.id || tokenBody.user_id),
+    accountId,
     username: String(profile.username),
     expiresIn,
+    webhookSubscribed,
   };
 }
 
@@ -214,6 +228,7 @@ export async function handleInstagramOAuthCallback(req: any, res: any): Promise<
       updatedAt: now,
       scopes: ['instagram_business_basic', 'instagram_business_manage_messages'],
       tokenExpiresAt: account.expiresIn ? new Date(Date.now() + account.expiresIn * 1000).toISOString() : null,
+      webhookSubscriptionStatus: account.webhookSubscribed ? 'subscribed' : 'needs_setup',
     };
     await setDoc(tenantRepo(ctx).secretDoc('instagram_access_token'), {
       ...encryptSecret(account.accessToken),

@@ -249,7 +249,11 @@ export interface AutoFollowUpState {
   enabledAt?: string | null;
   disabledBy?: string | null;
   disabledAt?: string | null;
-  disabledReason?: 'manual' | 'demo_booked' | 'lead_closed' | 'lead_lost' | 'do_not_contact' | 'spam' | 'opted_out' | 'admin_disabled' | null;
+  // 'completed' = every follow-up attempt was sent; the sequence ended by itself.
+  disabledReason?: 'manual' | 'demo_booked' | 'lead_closed' | 'lead_lost' | 'do_not_contact' | 'spam' | 'opted_out' | 'admin_disabled' | 'completed' | null;
+  /** Attempts allowed for the sequence that finished (shown as "Completed 3/3"). */
+  maxAttempts?: number;
+  completedAt?: string | null;
   activeFollowUpId?: string | null;
   attemptCount?: number;
   nextScheduledAt?: string | null;
@@ -361,8 +365,6 @@ export interface Message {
   senderName: string;
   senderEmail?: string;
   recipientEmail?: string;
-  instagramUserId?: string;
-  externalMessageId?: string;
   text: string;
   timestamp: string;
   gmailMessageId?: string;

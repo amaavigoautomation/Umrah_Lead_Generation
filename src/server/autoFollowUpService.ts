@@ -346,6 +346,26 @@ async function saveLeadFollowUpState(ctx: TenantContext, lead: Lead): Promise<vo
   ).catch(() => {});
 }
 
+/**
+ * All follow-up attempts are used up: switch Auto Follow-Up OFF for this lead, so the screen stops showing
+ * it as ON. Turning it ON again later starts a fresh sequence.
+ */
+async function markFollowUpSequenceCompleted(ctx: TenantContext, lead: Lead, maxAttempts: number): Promise<void> {
+  const nowIso = new Date().toISOString();
+  lead.autoFollowUp = {
+    ...(lead.autoFollowUp || { enabled: false }),
+    enabled: false,
+    disabledBy: 'AI Follow-Up Agent',
+    disabledAt: nowIso,
+    disabledReason: 'completed',
+    activeFollowUpId: null,
+    nextScheduledAt: null,
+    maxAttempts,
+    completedAt: nowIso,
+  };
+  await saveLeadFollowUpState(ctx, lead);
+}
+
 export async function cancelPendingFollowUpJob(
   ctx: TenantContext,
   conversationId: string,
@@ -401,6 +421,7 @@ export async function scheduleAutoFollowUpJob(
       user,
       timestamp: new Date().toISOString(),
     });
+    if (lead.autoFollowUp?.enabled) await markFollowUpSequenceCompleted(ctx, lead, maxAttempts);
     return null;
   }
 
@@ -505,7 +526,11 @@ export async function handleEnableAutoFollowUp(
     disabledBy: null,
     disabledAt: null,
     disabledReason: null,
-    attemptCount: lead.autoFollowUp?.attemptCount || 0,
+    // Turning it ON starts a fresh sequence (1/N). Keeping the old count meant a lead whose sequence had
+    // finished got nothing at all after being switched ON again (attempt N+1 > max).
+    attemptCount: 0,
+    maxAttempts: undefined,
+    completedAt: null,
     channelDelayOverride: delayOverride ?? lead.autoFollowUp?.channelDelayOverride ?? null,
   };
   await saveLeadFollowUpState(ctx, lead);
@@ -1117,6 +1142,21 @@ async function processOneJob(
       lead.autoFollowUp.activeFollowUpId = next.id;
       lead.autoFollowUp.nextScheduledAt = next.scheduledAt;
     }
+  } else if (lead.autoFollowUp?.enabled && job.attempt >= maxAttempts) {
+    // That was the last attempt: the sequence is finished, so it is no longer ON.
+    await markFollowUpSequenceCompleted(ctx, lead, maxAttempts);
+    await logFollowUpActivity(ctx, {
+      leadId: lead.leadId,
+      conversationId: conversation.conversationId,
+      channel: conversation.channel,
+      attempt: job.attempt,
+      type: 'COMPLETED',
+      title: 'Auto Follow-Up sequence completed',
+      description: `All ${maxAttempts} follow-up attempts sent. Auto Follow-Up switched OFF.`,
+      user: 'AI Follow-Up Agent',
+      timestamp: nowIso,
+    });
+    return { jobId: job.id, status: 'sent', message: evalResult.generatedMessage };
   } else if (lead.autoFollowUp) {
     lead.autoFollowUp.activeFollowUpId = null;
     lead.autoFollowUp.nextScheduledAt = null;

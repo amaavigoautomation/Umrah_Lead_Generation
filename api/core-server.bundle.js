@@ -285085,6 +285085,21 @@ async function saveLeadFollowUpState(ctx, lead) {
   ).catch(() => {
   });
 }
+async function markFollowUpSequenceCompleted(ctx, lead, maxAttempts) {
+  const nowIso = (/* @__PURE__ */ new Date()).toISOString();
+  lead.autoFollowUp = {
+    ...lead.autoFollowUp || { enabled: false },
+    enabled: false,
+    disabledBy: "AI Follow-Up Agent",
+    disabledAt: nowIso,
+    disabledReason: "completed",
+    activeFollowUpId: null,
+    nextScheduledAt: null,
+    maxAttempts,
+    completedAt: nowIso
+  };
+  await saveLeadFollowUpState(ctx, lead);
+}
 async function cancelPendingFollowUpJob(ctx, conversationId, cancelReason, _cancelledBy = "system") {
   const jobs = await loadJobsByField(ctx, "conversationId", conversationId);
   let count = 0;
@@ -285122,6 +285137,7 @@ async function scheduleAutoFollowUpJob(ctx, params) {
       user,
       timestamp: (/* @__PURE__ */ new Date()).toISOString()
     });
+    if (lead.autoFollowUp?.enabled) await markFollowUpSequenceCompleted(ctx, lead, maxAttempts);
     return null;
   }
   await cancelPendingFollowUpJob(ctx, conversation.conversationId, "rescheduled_by_new_outbound_interaction", user);
@@ -285204,7 +285220,11 @@ async function handleEnableAutoFollowUp(ctx, params) {
     disabledBy: null,
     disabledAt: null,
     disabledReason: null,
-    attemptCount: lead.autoFollowUp?.attemptCount || 0,
+    // Turning it ON starts a fresh sequence (1/N). Keeping the old count meant a lead whose sequence had
+    // finished got nothing at all after being switched ON again (attempt N+1 > max).
+    attemptCount: 0,
+    maxAttempts: void 0,
+    completedAt: null,
     channelDelayOverride: delayOverride ?? lead.autoFollowUp?.channelDelayOverride ?? null
   };
   await saveLeadFollowUpState(ctx, lead);
@@ -285706,6 +285726,20 @@ async function processOneJob(ctx, job, cfg) {
       lead.autoFollowUp.activeFollowUpId = next.id;
       lead.autoFollowUp.nextScheduledAt = next.scheduledAt;
     }
+  } else if (lead.autoFollowUp?.enabled && job.attempt >= maxAttempts) {
+    await markFollowUpSequenceCompleted(ctx, lead, maxAttempts);
+    await logFollowUpActivity(ctx, {
+      leadId: lead.leadId,
+      conversationId: conversation.conversationId,
+      channel: conversation.channel,
+      attempt: job.attempt,
+      type: "COMPLETED",
+      title: "Auto Follow-Up sequence completed",
+      description: `All ${maxAttempts} follow-up attempts sent. Auto Follow-Up switched OFF.`,
+      user: "AI Follow-Up Agent",
+      timestamp: nowIso
+    });
+    return { jobId: job.id, status: "sent", message: evalResult.generatedMessage };
   } else if (lead.autoFollowUp) {
     lead.autoFollowUp.activeFollowUpId = null;
     lead.autoFollowUp.nextScheduledAt = null;
@@ -318124,6 +318158,24 @@ firebase-admin/lib/auth/base-auth.js:
 
 firebase-admin/lib/auth/project-config-manager.js:
   (*! firebase-admin v14.5.0 *)
+
+@firebase/util/dist/postinstall.mjs:
+  (**
+   * @license
+   * Copyright 2025 Google LLC
+   *
+   * Licensed under the Apache License, Version 2.0 (the "License");
+   * you may not use this file except in compliance with the License.
+   * You may obtain a copy of the License at
+   *
+   *   http://www.apache.org/licenses/LICENSE-2.0
+   *
+   * Unless required by applicable law or agreed to in writing, software
+   * distributed under the License is distributed on an "AS IS" BASIS,
+   * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   * See the License for the specific language governing permissions and
+   * limitations under the License.
+   *)
 
 @firebase/util/dist/node-esm/index.node.esm.js:
   (**

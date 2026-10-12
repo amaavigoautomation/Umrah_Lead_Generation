@@ -798,7 +798,15 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
                     title="Toggle AI Auto Follow-Up for this lead"
                   >
                     <Clock className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                    <span>Auto Follow-Up [{activeLead?.autoFollowUp?.enabled ? ' ON ' : ' OFF '}]</span>
+                    <span>
+                      Auto Follow-Up [{activeLead?.autoFollowUp?.enabled ? ' ON ' : ' OFF '}]
+                      {!activeLead?.autoFollowUp?.enabled && activeLead?.autoFollowUp?.disabledReason === 'completed' && (
+                        <span className="ml-1 font-semibold text-slate-500">
+                          · Completed {activeLead.autoFollowUp.attemptCount || activeLead.autoFollowUp.maxAttempts}/
+                          {activeLead.autoFollowUp.maxAttempts || activeLead.autoFollowUp.attemptCount}
+                        </span>
+                      )}
+                    </span>
                   </button>
                 )}
 
@@ -864,6 +872,14 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
                     ) : (
                       <span className="text-blue-700 font-medium">[ ON ] — Waiting for our next message</span>
                     )
+                  ) : activeLead.autoFollowUp?.disabledReason === 'completed' ? (
+                    <span className="text-slate-600 font-medium">
+                      [ OFF ] — Completed: all {activeLead.autoFollowUp.maxAttempts || activeLead.autoFollowUp.attemptCount} follow-ups sent
+                      {activeLead.autoFollowUp.completedAt
+                        ? ` (${new Date(activeLead.autoFollowUp.completedAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })})`
+                        : ''}
+                      . Turn ON to start again.
+                    </span>
                   ) : (
                     <span className="text-slate-500 font-medium">[ OFF ] — No automatic follow-up</span>
                   )}

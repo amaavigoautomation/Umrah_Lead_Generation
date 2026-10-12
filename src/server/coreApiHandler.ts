@@ -188,6 +188,7 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
         }
         if (chunks.length > 0) {
           const rawBody = Buffer.concat(chunks).toString('utf-8');
+          req.rawBody = Buffer.from(rawBody, 'utf-8');
           if (rawBody) {
             try {
               body = JSON.parse(rawBody);

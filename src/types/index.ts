@@ -129,11 +129,17 @@ export interface CampaignSendHistory {
 
 export interface Campaign {
   campaignId: string;
+  /** When status is SCHEDULED: the moment the campaign starts sending (UTC ISO). */
+  scheduledStartAt?: string;
+  /** IANA timezone the schedule was picked in (for display), e.g. 'Asia/Kolkata'. */
+  scheduledTimezone?: string;
+  /** Email of the user who scheduled it. */
+  scheduledBy?: string;
   name: string;
   type: CampaignType;
   campaignMode?: 'PREDEFINED' | 'AI_GENERATED';
   deliveryMode?: 'LIVE_IMAP' | 'SIMULATED' | 'SMTP' | string;
-  status: 'DRAFT' | 'RUNNING' | 'PAUSED' | 'COMPLETED' | 'FAILED';
+  status: 'DRAFT' | 'SCHEDULED' | 'RUNNING' | 'PAUSED' | 'COMPLETED' | 'FAILED';
   templateId?: string;
   templateName?: string;
   sourceFileName?: string;

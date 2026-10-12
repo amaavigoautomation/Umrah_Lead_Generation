@@ -2051,6 +2051,7 @@ export default function App() {
                   setActiveTab('inbox');
                 }}
                 tenantId={currentTenantId}
+                timezone={currentTenant?.timezone || 'Asia/Kolkata'}
               />
             )}
 

@@ -59,6 +59,7 @@ import {
 } from '../types/index.js';
 import { EmailTemplateEditorModal } from './EmailTemplateEditorModal.js';
 import { INITIAL_CAMPAIGN } from '../services/dataService.js';
+import { zonedLocalToUtcIso, utcToZonedLocal, formatZoned, timeUntil } from '../shared/zonedTime';
 
 interface CampaignManagementProps {
   onOpenConversation?: (conversationId: string) => void;
@@ -71,6 +72,8 @@ interface CampaignManagementProps {
   onSendColdEmail?: (prospectId: string, customSubject?: string, customBody?: string) => void;
   onToggleCampaignStatus?: (campaignId: string) => void;
   tenantId?: string;
+  /** Workspace timezone (IANA), used by the campaign scheduler. Default Asia/Kolkata. */
+  timezone?: string;
 }
 
 export const CampaignManagement: React.FC<CampaignManagementProps> = ({
@@ -84,6 +87,7 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
   onSendColdEmail,
   onToggleCampaignStatus,
   tenantId = '',
+  timezone = 'Asia/Kolkata',
 }) => {
   const { brand } = useBrand();
   const isUmrah = brand.playbook === 'umrah360';
@@ -238,6 +242,30 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
   };
 
   const [startImmediately, setStartImmediately] = useState(true);
+  // Create modal launch choice. 'SCHEDULE' starts automatically at scheduleLocal (workspace timezone).
+  const [launchMode, setLaunchMode] = useState<'NOW' | 'DRAFT' | 'SCHEDULE'>('NOW');
+  const [scheduleLocal, setScheduleLocal] = useState('');
+  // Detail header: inline "Schedule" editor for a draft / paused / scheduled campaign.
+  const [isEditingSchedule, setIsEditingSchedule] = useState(false);
+  const [detailScheduleLocal, setDetailScheduleLocal] = useState('');
+  const [scheduleError, setScheduleError] = useState<string | null>(null);
+  const [isSavingSchedule, setIsSavingSchedule] = useState(false);
+  useEffect(() => {
+    setStartImmediately(launchMode === 'NOW');
+  }, [launchMode]);
+  // Earliest pickable time: 5 minutes from now, in the workspace timezone.
+  const minScheduleLocal = () => utcToZonedLocal(Date.now() + 5 * 60 * 1000, timezone);
+  const tzShort = (() => {
+    try {
+      return (
+        new Intl.DateTimeFormat('en-IN', { timeZone: timezone, timeZoneName: 'short' })
+          .formatToParts(new Date())
+          .find((p) => p.type === 'timeZoneName')?.value || timezone
+      );
+    } catch {
+      return timezone;
+    }
+  })();
   const [aiPreviewSamples, setAiPreviewSamples] = useState<any[]>([]);
   const [isAiPreviewModalOpen, setIsAiPreviewModalOpen] = useState(false);
   const [aiPreviewLoading, setAiPreviewLoading] = useState(false);
@@ -377,6 +405,8 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
     setLeadStatusFilter('ALL');
     setCampaignLeads([]);
     setCampaignRuns([]);
+    setIsEditingSchedule(false);
+    setScheduleError(null);
     // details are loaded by the selectedCampaignId effect
   };
 
@@ -716,6 +746,61 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
 
   refreshSearchResultsRef.current = () => {
     void refreshSearchResults().catch(() => {});
+  };
+
+  // Campaign scheduler actions
+  const openScheduleEditor = () => {
+    const current = selectedCampaign?.status === 'SCHEDULED' ? selectedCampaign.scheduledStartAt : undefined;
+    setDetailScheduleLocal(
+      current ? utcToZonedLocal(current, timezone) : utcToZonedLocal(Date.now() + 60 * 60 * 1000, timezone)
+    );
+    setScheduleError(null);
+    setIsEditingSchedule(true);
+  };
+
+  const handleScheduleCampaign = async (campaignId: string) => {
+    const startAt = zonedLocalToUtcIso(detailScheduleLocal, timezone);
+    if (!startAt) {
+      setScheduleError('Pick a date and time.');
+      return;
+    }
+    if (new Date(startAt).getTime() < Date.now() + 2 * 60 * 1000) {
+      setScheduleError('Pick a time at least 2 minutes from now.');
+      return;
+    }
+    setIsSavingSchedule(true);
+    try {
+      const res = await fetch(`/api/campaigns/${campaignId}/schedule`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ startAt, timezone }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        setScheduleError(data?.error || 'Could not schedule the campaign.');
+        return;
+      }
+      if (data?.campaign) setSelectedCampaign((prev) => (prev ? { ...prev, ...data.campaign } : data.campaign));
+      setIsEditingSchedule(false);
+    } catch {
+      setScheduleError('Could not schedule the campaign. Check your connection and try again.');
+    } finally {
+      setIsSavingSchedule(false);
+    }
+  };
+
+  const handleUnscheduleCampaign = async (campaignId: string) => {
+    try {
+      const res = await fetch(`/api/campaigns/${campaignId}/unschedule`, { method: 'POST' });
+      const data = await res.json().catch(() => null);
+      if (res.ok && data?.campaign) {
+        setSelectedCampaign((prev) =>
+          prev ? { ...prev, ...data.campaign, scheduledStartAt: undefined, scheduledTimezone: undefined } : data.campaign
+        );
+      }
+    } catch (e) {
+      console.error('Error cancelling schedule:', e);
+    }
   };
 
   // Campaign Actions
@@ -1186,6 +1271,19 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
         ? selectedTemplateFromDb
         : templates.find((t) => t.templateId === effectiveTemplateId);
 
+    let scheduledStartAt: string | null = null;
+    if (launchMode === 'SCHEDULE') {
+      scheduledStartAt = zonedLocalToUtcIso(scheduleLocal, timezone);
+      if (!scheduledStartAt) {
+        setCreateCampaignError('Pick a date and time to schedule the campaign.');
+        return;
+      }
+      if (new Date(scheduledStartAt).getTime() < Date.now() + 2 * 60 * 1000) {
+        setCreateCampaignError('Pick a time at least 2 minutes from now.');
+        return;
+      }
+    }
+
     setLoading(true);
     let createdCampaignResult: Campaign | null = null;
     let createdLeadsResult: CampaignLead[] = [];
@@ -1204,9 +1302,18 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
           templateBody: matchedTemplate?.body,
           sourceFileName: uploadedFileName || 'Leads List',
           leads: validLeads,
-          startImmediately,
+          startImmediately: launchMode === 'NOW',
+          ...(scheduledStartAt ? { scheduledStartAt, scheduledTimezone: timezone } : {}),
         }),
       });
+
+      if (!res.ok && scheduledStartAt) {
+        // A schedule the server rejected must not fall through to the offline fallback below.
+        const errData = await res.json().catch(() => null);
+        setCreateCampaignError(errData?.error || 'Could not schedule the campaign.');
+        setLoading(false);
+        return;
+      }
 
       if (res.ok) {
         const data = await res.json();
@@ -1231,7 +1338,8 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
         type: newCampaignType || 'EMAIL',
         campaignMode: mode,
         deliveryMode: deliveryMode || 'LIVE_SMTP',
-        status: startImmediately ? 'RUNNING' : 'DRAFT',
+        status: scheduledStartAt ? 'SCHEDULED' : startImmediately ? 'RUNNING' : 'DRAFT',
+        ...(scheduledStartAt ? { scheduledStartAt, scheduledTimezone: timezone } : {}),
         templateId: mode === 'AI_GENERATED' ? undefined : effectiveTemplateId,
         templateName: mode === 'AI_GENERATED' ? 'AI Intelligent Personalization' : (matchedTemplate?.name || 'Predefined Template'),
         sourceFileName: uploadedFileName || 'Leads List',
@@ -1286,6 +1394,8 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
 
     if (createdCampaignResult) {
       setIsCreateModalOpen(false);
+      setLaunchMode('NOW');
+      setScheduleLocal('');
       setNewCampaignName('');
       setUploadedFileName('');
       setPastedLeadsText('');
@@ -1673,10 +1783,15 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                                 ? 'bg-amber-50 text-amber-700 border border-amber-200'
                                 : camp.status === 'COMPLETED'
                                 ? 'bg-blue-50 text-blue-700 border border-blue-200'
+                                : camp.status === 'SCHEDULED'
+                                ? 'bg-sky-50 text-sky-700 border border-sky-200'
                                 : 'bg-slate-100 text-slate-600'
                             }`}
+                            title={camp.status === 'SCHEDULED' && camp.scheduledStartAt ? formatZoned(camp.scheduledStartAt, camp.scheduledTimezone || timezone) : undefined}
                           >
-                            {camp.status}
+                            {camp.status === 'SCHEDULED' && camp.scheduledStartAt
+                              ? `Scheduled · ${new Intl.DateTimeFormat('en-IN', { timeZone: camp.scheduledTimezone || timezone, day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' }).format(new Date(camp.scheduledStartAt))}`
+                              : camp.status}
                           </span>
                           <button
                             onClick={(e) => {
@@ -1782,6 +1897,8 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                             ? 'bg-amber-50 text-amber-700 border border-amber-200'
                             : selectedCampaign.status === 'COMPLETED'
                             ? 'bg-blue-50 text-blue-700 border border-blue-200'
+                            : selectedCampaign.status === 'SCHEDULED'
+                            ? 'bg-sky-50 text-sky-700 border border-sky-200'
                             : 'bg-slate-100 text-slate-600'
                         }`}
                       >
@@ -1801,6 +1918,62 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                         <span>Source: {selectedCampaign.sourceFileName || 'Uploaded Leads'}</span>
                       </span>
                     </div>
+
+                    {/* Schedule: shown when scheduled; inline editor for draft / paused / scheduled */}
+                    {selectedCampaign.status === 'SCHEDULED' && selectedCampaign.scheduledStartAt && !isEditingSchedule && (
+                      <div className="flex flex-wrap items-center gap-2 text-xs mt-2">
+                        <span className="text-sky-700 font-semibold">
+                          Starts {formatZoned(selectedCampaign.scheduledStartAt, selectedCampaign.scheduledTimezone || timezone)} · {timeUntil(selectedCampaign.scheduledStartAt)}
+                        </span>
+                        <button type="button" onClick={() => openScheduleEditor()} className="text-slate-500 hover:text-slate-800 underline">
+                          Change
+                        </button>
+                        <button type="button" onClick={() => handleUnscheduleCampaign(selectedCampaign.campaignId)} className="text-rose-600 hover:text-rose-700 underline">
+                          Cancel schedule
+                        </button>
+                      </div>
+                    )}
+                    {(selectedCampaign.status === 'DRAFT' || selectedCampaign.status === 'PAUSED') && !isEditingSchedule && (
+                      <button type="button" onClick={() => openScheduleEditor()} className="mt-2 text-xs text-slate-500 hover:text-slate-800 underline">
+                        Schedule for later
+                      </button>
+                    )}
+                    {isEditingSchedule && (
+                      <div className="mt-2 space-y-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <input
+                            type="datetime-local"
+                            value={detailScheduleLocal}
+                            min={minScheduleLocal()}
+                            onChange={(e) => {
+                              setDetailScheduleLocal(e.target.value);
+                              setScheduleError(null);
+                            }}
+                            className="px-2.5 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-800 focus:outline-none focus:border-orange-500"
+                          />
+                          <span className="text-xs text-slate-500">{tzShort}</span>
+                          <button
+                            type="button"
+                            disabled={isSavingSchedule}
+                            onClick={() => handleScheduleCampaign(selectedCampaign.campaignId)}
+                            className="px-2.5 py-1 bg-sky-600 hover:bg-sky-700 text-white rounded-lg text-xs font-semibold disabled:opacity-50"
+                          >
+                            {isSavingSchedule ? 'Saving…' : 'Schedule'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setIsEditingSchedule(false);
+                              setScheduleError(null);
+                            }}
+                            className="text-xs text-slate-500 hover:text-slate-800 underline"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                        {scheduleError && <div className="text-xs text-rose-600">{scheduleError}</div>}
+                      </div>
+                    )}
                   </div>
 
                   {/* Actions: Start / Pause / Restart */}
@@ -1826,7 +1999,7 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                         className="flex items-center gap-2 px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-sm font-semibold transition shadow-xs"
                       >
                         <Play className="w-4 h-4 fill-white" />
-                        <span>{selectedCampaign.status === 'PAUSED' ? 'Resume Campaign' : 'Start Campaign'}</span>
+                        <span>{selectedCampaign.status === 'PAUSED' ? 'Resume Campaign' : selectedCampaign.status === 'SCHEDULED' ? 'Start Now' : 'Start Campaign'}</span>
                       </button>
                     )}
 
@@ -3050,19 +3223,53 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                 </div>
               )}
 
-              {/* Start Immediately Checkbox */}
-              <div className="pt-2">
-                <label className="flex items-center gap-2.5 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={startImmediately}
-                    onChange={(e) => setStartImmediately(e.target.checked)}
-                    className="w-4 h-4 rounded text-orange-500 focus:ring-orange-500 bg-slate-50 border-slate-300"
-                  />
-                  <span className="text-sm text-slate-700 font-medium">
-                    Start Campaign sending immediately upon creation
-                  </span>
-                </label>
+              {/* When to send: now / draft / schedule */}
+              <div className="pt-2 space-y-2">
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                  <span className="text-sm text-slate-700 font-medium">When to send:</span>
+                  {([
+                    ['NOW', 'Now'],
+                    ['DRAFT', 'Save as draft'],
+                    ['SCHEDULE', 'Schedule'],
+                  ] as const).map(([value, label]) => (
+                    <label key={value} className="flex items-center gap-1.5 cursor-pointer text-sm text-slate-700">
+                      <input
+                        type="radio"
+                        name="campaign-launch-mode"
+                        checked={launchMode === value}
+                        onChange={() => {
+                          setLaunchMode(value);
+                          setCreateCampaignError(null);
+                          if (value === 'SCHEDULE' && !scheduleLocal) {
+                            setScheduleLocal(utcToZonedLocal(Date.now() + 60 * 60 * 1000, timezone));
+                          }
+                        }}
+                        className="w-4 h-4 text-orange-500 focus:ring-orange-500 border-slate-300"
+                      />
+                      <span>{label}</span>
+                    </label>
+                  ))}
+                </div>
+                {launchMode === 'SCHEDULE' && (
+                  <div className="flex flex-wrap items-center gap-2 pl-0.5">
+                    <input
+                      type="datetime-local"
+                      value={scheduleLocal}
+                      min={minScheduleLocal()}
+                      onChange={(e) => {
+                        setScheduleLocal(e.target.value);
+                        setCreateCampaignError(null);
+                      }}
+                      className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-800 focus:outline-none focus:border-orange-500"
+                    />
+                    <span className="text-xs text-slate-500">
+                      {tzShort} (workspace time)
+                      {zonedLocalToUtcIso(scheduleLocal, timezone)
+                        ? ` · starts ${timeUntil(zonedLocalToUtcIso(scheduleLocal, timezone)!)}`
+                        : ''}
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -3108,7 +3315,7 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                     </>
                   ) : (
                     <>
-                      <span>{startImmediately ? 'Create & Start Campaign' : 'Save as Draft'}</span>
+                      <span>{launchMode === 'SCHEDULE' ? 'Create & Schedule' : launchMode === 'NOW' ? 'Create & Start Campaign' : 'Save as Draft'}</span>
                       <ArrowRight className="w-4 h-4" />
                     </>
                   )}

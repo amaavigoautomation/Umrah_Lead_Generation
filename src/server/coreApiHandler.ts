@@ -32,6 +32,8 @@ import {
   getCampaignLeads,
   getCampaignLeadsPage,
   ensureCampaignSearchIndex,
+  scheduleCampaign,
+  unscheduleCampaign,
   type CampaignLeadFilter,
   getCampaignLeadsFromDb,
   getCampaignRuns,
@@ -2507,6 +2509,24 @@ Generate a helpful, grounded response.`;
     } catch (err: any) {
       res.statusCode = 400;
       res.end(JSON.stringify({ error: err?.message || 'Failed to restart campaign' }));
+    }
+    return true;
+  }
+
+  // Campaign scheduler: start automatically at a chosen time (the campaign cron starts it).
+  const campaignScheduleMatch = url.match(/^\/api\/campaigns\/([a-zA-Z0-9_-]+)\/(schedule|unschedule)$/);
+  if (campaignScheduleMatch && req.method === 'POST') {
+    const [, campaignId, action] = campaignScheduleMatch;
+    try {
+      const campaign =
+        action === 'schedule'
+          ? await scheduleCampaign(campaignId, String(body?.startAt || ''), body?.timezone ? String(body.timezone) : undefined)
+          : await unscheduleCampaign(campaignId);
+      res.statusCode = 200;
+      res.end(JSON.stringify({ success: true, campaign }));
+    } catch (err: any) {
+      res.statusCode = 400;
+      res.end(JSON.stringify({ error: err?.message || `Failed to ${action} campaign` }));
     }
     return true;
   }

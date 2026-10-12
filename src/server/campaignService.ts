@@ -1405,6 +1405,9 @@ export async function createCampaign(params: {
     rowNumber?: number;
   }>;
   startImmediately?: boolean;
+  /** Start automatically at this moment (UTC ISO) instead of now. Wins over startImmediately. */
+  scheduledStartAt?: string;
+  scheduledTimezone?: string;
 }): Promise<{ campaign: Campaign; leads: CampaignLead[] }> {
   await initCampaignStore();
 
@@ -1467,13 +1470,21 @@ export async function createCampaign(params: {
   const finalTemplateId = mode === 'AI_GENERATED' ? undefined : (selectedTemplate?.templateId || params.templateId);
   const finalTemplateName = mode === 'AI_GENERATED' ? 'AI Intelligent Personalization' : (selectedTemplate?.name || params.templateName || 'Predefined Template');
 
+  const schedule = params.scheduledStartAt ? validateScheduleTime(params.scheduledStartAt) : null;
   const initialCampaign: Campaign = {
     campaignId,
     name: params.name,
     type: params.type || 'EMAIL',
     campaignMode: mode,
     deliveryMode,
-    status: 'DRAFT',
+    status: schedule ? 'SCHEDULED' : 'DRAFT',
+    ...(schedule
+      ? {
+          scheduledStartAt: schedule,
+          scheduledTimezone: params.scheduledTimezone || 'Asia/Kolkata',
+          scheduledBy: getCampaignActiveCtx().email || undefined,
+        }
+      : {}),
     templateId: finalTemplateId,
     templateName: finalTemplateName,
     sourceFileName: params.sourceFileName || 'Uploaded Leads',
@@ -1567,14 +1578,118 @@ export async function createCampaign(params: {
     }
   }
 
-  // If user requested to start immediately
-  if (params.startImmediately) {
+  // If user requested to start immediately (a scheduled campaign is started later by the cron)
+  if (params.startImmediately && !schedule) {
     startCampaign(campaignId).catch((err) => {
       console.error('Error starting campaign immediately:', err);
     });
   }
 
   return { campaign: initialCampaign, leads: createdLeads };
+}
+
+// -------------------------------------------------------------
+// CAMPAIGN SCHEDULER
+// -------------------------------------------------------------
+// A SCHEDULED campaign is started by the regular campaign cron (/api/campaigns/cron, every 1-2 min)
+// once scheduledStartAt has passed, so it starts within one cron interval of the chosen time.
+const SCHEDULE_MIN_LEAD_MS = 2 * 60 * 1000;
+const SCHEDULE_MAX_AHEAD_MS = 365 * 24 * 60 * 60 * 1000;
+
+/** Returns the normalised UTC ISO time, or throws a user-facing error. */
+export function validateScheduleTime(startAt: string): string {
+  const t = Date.parse(startAt);
+  if (!Number.isFinite(t)) throw new Error('Pick a valid date and time.');
+  const now = Date.now();
+  if (t < now + SCHEDULE_MIN_LEAD_MS) throw new Error('Pick a time at least 2 minutes from now.');
+  if (t > now + SCHEDULE_MAX_AHEAD_MS) throw new Error('Pick a time within the next 12 months.');
+  return new Date(t).toISOString();
+}
+
+export async function scheduleCampaign(campaignId: string, startAt: string, timezone?: string): Promise<Campaign> {
+  const campaign = await ensureCampaignInStore(campaignId);
+  if (!campaign) throw new Error(`Campaign ${campaignId} not found`);
+  if (campaign.status === 'RUNNING') throw new Error('Pause the campaign before scheduling it.');
+  const when = validateScheduleTime(startAt);
+  const now = new Date().toISOString();
+  campaign.status = 'SCHEDULED';
+  campaign.scheduledStartAt = when;
+  campaign.scheduledTimezone = timezone || campaign.scheduledTimezone || 'Asia/Kolkata';
+  campaign.scheduledBy = getCampaignActiveCtx().email || campaign.scheduledBy;
+  campaign.updatedAt = now;
+  pausedCampaignsSet.delete(campaignId);
+  campaignsMap.set(campaignId, campaign);
+  if (isFirebaseConfigured && db) {
+    await safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignDoc(campaignId), withoutCounters(campaign), { merge: true });
+  }
+  return campaign;
+}
+
+export async function unscheduleCampaign(campaignId: string): Promise<Campaign> {
+  const campaign = await ensureCampaignInStore(campaignId);
+  if (!campaign) throw new Error(`Campaign ${campaignId} not found`);
+  if (campaign.status !== 'SCHEDULED') return campaign;
+  const now = new Date().toISOString();
+  // Back to where it was: never-started campaigns become drafts, started ones paused.
+  campaign.status = (campaign.lastRunNumber || 0) > 0 ? 'PAUSED' : 'DRAFT';
+  delete campaign.scheduledStartAt;
+  delete campaign.scheduledTimezone;
+  delete campaign.scheduledBy;
+  campaign.updatedAt = now;
+  campaignsMap.set(campaignId, campaign);
+  if (isFirebaseConfigured && db) {
+    await safeSetDoc(
+      tenantRepo(getCampaignActiveCtx()).campaignDoc(campaignId),
+      { ...withoutCounters(campaign), scheduledStartAt: null, scheduledTimezone: null, scheduledBy: null } as any,
+      { merge: true }
+    );
+  }
+  return campaign;
+}
+
+/**
+ * Starts every SCHEDULED campaign of this workspace whose time has come. Called at the start of each
+ * campaign cron run. Reads only due campaigns (1 read when none). An atomic claim document makes sure
+ * only one server starts a given schedule, even if several cron runs overlap.
+ */
+export async function startDueScheduledCampaigns(): Promise<string[]> {
+  if (!isFirebaseConfigured || !db) return [];
+  const nowIso = new Date().toISOString();
+  const col = tenantRepo(getCampaignActiveCtx()).campaigns();
+  let docs: Campaign[] = [];
+  try {
+    const snap = await getDocs(query(col, where('status', '==', 'SCHEDULED'), where('scheduledStartAt', '<=', nowIso)));
+    docs = snap.docs.map((d) => d.data() as Campaign);
+  } catch (err: any) {
+    const missingIndex = err?.code === 9 || /FAILED_PRECONDITION|requires an index/i.test(String(err?.message || ''));
+    if (!missingIndex) throw err;
+    // Index not deployed yet: all scheduled campaigns (usually few), due ones picked here.
+    const snap = await getDocs(query(col, where('status', '==', 'SCHEDULED')));
+    docs = snap.docs.map((d) => d.data() as Campaign).filter((c) => (c.scheduledStartAt || '') <= nowIso);
+  }
+
+  const started: string[] = [];
+  for (const c of docs) {
+    if (!c?.campaignId || !c.scheduledStartAt) continue;
+    const claimRef = tenantRepo(getCampaignActiveCtx()).doc(
+      'schedule_claims',
+      `${c.campaignId}_${c.scheduledStartAt.replace(/[^0-9A-Za-z]/g, '')}`
+    );
+    try {
+      await createDoc(claimRef, { campaignId: c.campaignId, scheduledStartAt: c.scheduledStartAt, claimedAt: nowIso });
+    } catch {
+      continue; // another server already started this schedule
+    }
+    try {
+      campaignsMap.set(c.campaignId, c); // fresh copy from the database
+      await startCampaign(c.campaignId);
+      started.push(c.campaignId);
+      console.log(`[Campaign Scheduler] Started ${c.campaignId} (scheduled for ${c.scheduledStartAt})`);
+    } catch (err: any) {
+      console.warn(`[Campaign Scheduler] Could not start ${c.campaignId}:`, err?.message || err);
+    }
+  }
+  return started;
 }
 
 /**
@@ -2736,6 +2851,11 @@ export async function processActiveRunningCampaignsBatch(batchSize: number = 500
 
   try {
     await initCampaignStore();
+
+    // Scheduled campaigns whose time has come become RUNNING first, so this same run sends them.
+    await startDueScheduledCampaigns().catch((err) =>
+      console.warn('[Campaign Scheduler] check failed:', err?.message || err)
+    );
 
     // Running campaigns. With Firestore, ask the database directly for RUNNING ones only (fresh across
     // server instances, and reads just those docs instead of every campaign).

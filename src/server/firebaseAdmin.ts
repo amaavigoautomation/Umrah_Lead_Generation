@@ -2,7 +2,7 @@ import { initializeApp, getApps, cert, applicationDefault, App } from 'firebase-
 import { getAuth, Auth, UserRecord } from 'firebase-admin/auth';
 import { getFirestore, Firestore } from 'firebase-admin/firestore';
 import { randomBytes } from 'node:crypto';
-import rawConfig from '../../firebase-applet-config.json';
+import rawConfig from '../../firebase-applet-config.json' with { type: 'json' };
 import type { AuthClaims, UserRole } from '../types/tenant.js';
 
 let initialized = false;

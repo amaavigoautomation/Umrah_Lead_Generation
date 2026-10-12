@@ -61,9 +61,50 @@ async function getConnection(ctx: TenantContext): Promise<InstagramConnection | 
 }
 
 async function getAccessToken(ctx: TenantContext): Promise<string> {
-  const snap = await getDoc(tenantRepo(ctx).secretDoc('instagram_access_token'));
+  const repo = tenantRepo(ctx);
+  const snap = await getDoc(repo.secretDoc('instagram_access_token'));
   if (!snap.exists()) throw new Error('Instagram is not connected. Reconnect the account.');
-  return decryptSecret(snap.data() as any);
+  let accessToken = decryptSecret(snap.data() as any);
+  const connection = await getConnection(ctx);
+  if (!connection) throw new Error('Instagram connection metadata is missing. Reconnect the account.');
+  if (connection.tokenExpiresAt) {
+    const expiresAt = Date.parse(connection.tokenExpiresAt);
+    if (Number.isFinite(expiresAt) && expiresAt <= Date.now()) {
+      throw new Error('Instagram access token has expired. Reconnect the account.');
+    }
+    // Refresh long-lived Instagram Login tokens shortly before expiry when Meta permits it.
+    if (Number.isFinite(expiresAt) && expiresAt - Date.now() < 7 * 24 * 60 * 60 * 1000) {
+      try {
+        const refreshUrl = new URL('https://graph.instagram.com/refresh_access_token');
+        refreshUrl.searchParams.set('grant_type', 'ig_refresh_token');
+        refreshUrl.searchParams.set('access_token', accessToken);
+        const refreshResponse = await fetch(refreshUrl);
+        const refreshBody: any = await refreshResponse.json().catch(() => ({}));
+        if (refreshResponse.ok && refreshBody.access_token) {
+          accessToken = String(refreshBody.access_token);
+          const now = new Date().toISOString();
+          const expiresIn = Number(refreshBody.expires_in);
+          await setDoc(repo.secretDoc('instagram_access_token'), {
+            ...encryptSecret(accessToken),
+            name: 'instagram_access_token',
+            createdAt: snap.data().createdAt || now,
+            updatedAt: now,
+          });
+          await setDoc(repo.integrationDoc('instagram'), {
+            channel: 'instagram',
+            connection: {
+              ...connection,
+              tokenExpiresAt: expiresIn ? new Date(Date.now() + expiresIn * 1000).toISOString() : connection.tokenExpiresAt,
+              updatedAt: now,
+            },
+          }, { merge: true });
+        }
+      } catch {
+        // Keep using the still-valid token; the next request can retry refresh.
+      }
+    }
+  }
+  return accessToken;
 }
 
 export async function startInstagramOAuth(ctx: TenantContext): Promise<{ authorizationUrl: string }> {

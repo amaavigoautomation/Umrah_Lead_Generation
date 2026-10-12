@@ -139,6 +139,15 @@ export async function getInstagramStatus(ctx: TenantContext) {
 export async function disconnectInstagram(ctx: TenantContext): Promise<void> {
   const repo = tenantRepo(ctx);
   const existing = await getConnection(ctx);
+  // Best-effort token revocation; disconnect still completes if Meta is unavailable.
+  try {
+    const token = await getAccessToken(ctx);
+    const revokeUrl = new URL('https://graph.instagram.com/' + GRAPH_VERSION + '/me/permissions');
+    revokeUrl.searchParams.set('access_token', token);
+    await fetch(revokeUrl, { method: 'DELETE' });
+  } catch {
+    // Token may already be expired or revoked.
+  }
   if (existing) {
     await setDoc(repo.integrationDoc('instagram'), {
       channel: 'instagram',
@@ -260,6 +269,9 @@ export async function handleInstagramOAuthCallback(req: any, res: any): Promise<
       return true;
     }
 
+    if (existing?.accountId && existing.accountId !== account.accountId) {
+      await deleteDoc(doc(db, 'instagram_account_routes', existing.accountId));
+    }
     const now = new Date().toISOString();
     const connection: InstagramConnection = {
       accountId: account.accountId,

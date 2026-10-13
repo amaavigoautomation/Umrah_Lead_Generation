@@ -1658,21 +1658,16 @@ export default function App() {
     );
 
     if (isFirebaseConfigured && db) {
+      // Tenant-scoped path: the inbox listens on tenants/{id}/conversations, and root collections are
+      // denied by the Firestore rules (the old root write failed silently, so the unread dot came back).
       try {
-        await updateDoc(doc(db, 'conversations', conversationId), {
-          isRead: true,
-          unread: false,
-          unreadCount: 0,
-          readAt: nowIso,
-        });
+        await setDoc(
+          tDoc('conversations', conversationId),
+          { isRead: true, unread: false, unreadCount: 0, readAt: nowIso },
+          { merge: true }
+        );
       } catch (e) {
-        try {
-          await setDoc(
-            doc(db, 'conversations', conversationId),
-            { isRead: true, unread: false, unreadCount: 0, readAt: nowIso },
-            { merge: true }
-          );
-        } catch {}
+        console.warn('Could not save read state:', e);
       }
     }
   };

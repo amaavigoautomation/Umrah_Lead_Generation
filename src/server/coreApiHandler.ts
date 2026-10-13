@@ -241,7 +241,9 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
     url === '/api/campaigns/cron' ||
     url === '/api/campaigns/process-active' ||
     url === '/api/auto-followup/trigger' ||
-    url === '/api/inbound-mail/cron';
+    url === '/api/inbound-mail/cron' ||
+    // Browser comes back from Microsoft here; the single-use OAuth state identifies the workspace.
+    url === '/api/oauth/microsoft/callback';
 
   let resolvedTenantId = '';
   let userUid = 'anonymous';
@@ -973,14 +975,47 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
     }
   }
 
-  // Per-company inbound mailbox (IMAP): /api/tenants/:tenantId/inbound[/test|/options|/disconnect|/poll]
+  // Microsoft OAuth callback for the inbound mailbox (public: no Firebase token on a browser redirect).
+  if (url === '/api/oauth/microsoft/callback' && req.method === 'GET') {
+    const ms = await import('./microsoftOAuth.js');
+    let location: string;
+    try {
+      const query = new URL(rawUrl, 'http://localhost').searchParams;
+      const result = await ms.exchangeMicrosoftCallback(query);
+      const svc = await import('./tenantInboundService.js');
+      await svc.connectMicrosoftInbound(result);
+      location = ms.mailboxRedirectUrl('connected');
+    } catch (err: any) {
+      const readable = typeof err?.status === 'number' && err.status < 500;
+      if (!readable) console.error('[Microsoft OAuth] callback failed:', err?.stack || err);
+      location = ms.mailboxRedirectUrl('error', readable ? err.message : 'Could not connect the Microsoft mailbox. Please try again.');
+    }
+    res.statusCode = 302;
+    res.setHeader('Location', location);
+    res.setHeader('Cache-Control', 'no-store');
+    res.end();
+    return true;
+  }
+
+  // Per-company inbound mailbox (IMAP): /api/tenants/:tenantId/inbound[/test|/options|/disconnect|/poll|/microsoft]
   // Admin-only (enforced by the tenant guard above). The password is accepted here and never returned.
-  const inboundMatch = url.split('?')[0].match(/^\/api\/tenants\/([^/]+)\/inbound(?:\/(test|options|disconnect|poll))?$/);
+  const inboundMatch = url.split('?')[0].match(/^\/api\/tenants\/([^/]+)\/inbound(?:\/(test|options|disconnect|poll|microsoft))?$/);
   if (inboundMatch) {
     const tId = inboundMatch[1];
     const action = inboundMatch[2];
     try {
       const svc = await import('./tenantInboundService.js');
+      // Outlook / Microsoft 365: returns the Microsoft sign-in URL; the browser is sent there.
+      if (action === 'microsoft' && req.method === 'POST') {
+        const ms = await import('./microsoftOAuth.js');
+        const out = await ms.startMicrosoftInboundOAuth(
+          { ...activeTenantCtx, tenantId: tId },
+          { processNewInquiries: typeof body?.processNewInquiries === 'boolean' ? body.processNewInquiries : undefined }
+        );
+        res.statusCode = 200;
+        res.end(JSON.stringify(out));
+        return true;
+      }
       if (!action && req.method === 'GET') {
         res.statusCode = 200;
         res.end(JSON.stringify(await svc.getInboundView(tId)));

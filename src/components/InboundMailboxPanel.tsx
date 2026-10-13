@@ -1,8 +1,11 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Inbox, CheckCircle2, AlertTriangle, PauseCircle, Loader2, RefreshCw, Plug, Unplug, Eye, EyeOff } from 'lucide-react';
+import { Inbox, CheckCircle2, AlertTriangle, PauseCircle, Loader2, RefreshCw, Plug, Unplug, Eye, EyeOff, LogIn } from 'lucide-react';
 
 interface InboundView {
   enabled: boolean;
+  provider?: 'gmail' | 'microsoft' | 'other';
+  authType?: 'password' | 'oauth';
+  microsoftAvailable?: boolean;
   host?: string;
   port?: number;
   user?: string;
@@ -30,13 +33,23 @@ const btnPrimary =
 const btnGhost =
   'inline-flex items-center gap-2 border border-slate-200 hover:bg-slate-50 disabled:opacity-50 text-slate-700 text-sm font-semibold rounded-lg px-4 py-2 transition-colors';
 
-const PROVIDERS: { id: string; label: string; host: string; port: number; help?: string }[] = [
-  { id: 'gmail', label: 'Gmail / Google Workspace', host: 'imap.gmail.com', port: 993, help: 'Turn on 2-Step Verification, then create an App password at myaccount.google.com/apppasswords and use it below.' },
-  { id: 'outlook', label: 'Outlook / Microsoft 365', host: 'outlook.office365.com', port: 993, help: 'Your Microsoft admin must allow IMAP. Use an app password if your account has multi-factor sign-in.' },
-  { id: 'zoho', label: 'Zoho Mail', host: 'imap.zoho.com', port: 993, help: 'Enable IMAP in Zoho Mail settings and use an app-specific password.' },
-  { id: 'yahoo', label: 'Yahoo Mail', host: 'imap.mail.yahoo.com', port: 993, help: 'Create an app password in Yahoo account security.' },
-  { id: 'custom', label: 'Other (custom server)', host: '', port: 993 },
+type ProviderId = 'gmail' | 'outlook';
+
+const PROVIDERS: { id: ProviderId; label: string; help: string }[] = [
+  {
+    id: 'gmail',
+    label: 'Gmail / Google Workspace',
+    help: 'Turn on 2-Step Verification, then create an App password at myaccount.google.com/apppasswords and use it below.',
+  },
+  {
+    id: 'outlook',
+    label: 'Outlook / Microsoft 365',
+    help: 'Microsoft no longer accepts passwords for this. Sign in with your Microsoft account instead; we never see your password. For work accounts, your IT admin may need to approve the app the first time.',
+  },
 ];
+
+const providerLabel = (v: InboundView) =>
+  v.provider === 'microsoft' ? 'Outlook / Microsoft 365' : v.provider === 'gmail' ? 'Gmail / Google Workspace' : `${v.host}:${v.port}`;
 
 function ago(iso?: string) {
   if (!iso) return 'never';
@@ -78,25 +91,19 @@ export const InboundMailboxPanel: React.FC<{ tenantId: string; canEdit: boolean 
   const [notice, setNotice] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
 
-  const [provider, setProvider] = useState('gmail');
-  const [host, setHost] = useState('imap.gmail.com');
-  const [port, setPort] = useState(993);
+  const [provider, setProvider] = useState<ProviderId>('gmail');
   const [user, setUser] = useState('');
   const [password, setPassword] = useState('');
   const [showPw, setShowPw] = useState(false);
   const [newInquiries, setNewInquiries] = useState(false);
 
   const connected = Boolean(view && view.status !== 'not_configured');
+  const isOAuth = view?.authType === 'oauth';
 
   const apply = (v: InboundView) => {
     setView(v);
-    if (v.host) {
-      const p = PROVIDERS.find((x) => x.host === v.host);
-      setProvider(p ? p.id : 'custom');
-      setHost(v.host);
-      setPort(v.port || 993);
-    }
-    setUser(v.user || '');
+    setProvider(v.provider === 'microsoft' ? 'outlook' : 'gmail');
+    setUser(v.provider === 'gmail' ? v.user || '' : '');
     setNewInquiries(Boolean(v.processNewInquiries));
     setPassword('');
   };
@@ -118,6 +125,20 @@ export const InboundMailboxPanel: React.FC<{ tenantId: string; canEdit: boolean 
     load();
   }, [load]);
 
+  // Result of "Sign in with Microsoft" (the server redirects back with ?mailbox=connected|error).
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    const result = params.get('mailbox');
+    if (!result) return;
+    if (result === 'connected') setNotice('Outlook mailbox connected. New replies will now be picked up automatically.');
+    else setError(params.get('mailbox_message') || 'The Microsoft mailbox could not be connected. Please try again.');
+    params.delete('mailbox');
+    params.delete('mailbox_message');
+    const next = window.location.pathname + (params.toString() ? `?${params.toString()}` : '') + window.location.hash;
+    window.history.replaceState({}, '', next);
+  }, []);
+
   const run = async (key: string, path: string, body?: any, okMsg?: string) => {
     setBusy(key);
     setError(null);
@@ -134,12 +155,19 @@ export const InboundMailboxPanel: React.FC<{ tenantId: string; canEdit: boolean 
     }
   };
 
-  const pickProvider = (id: string) => {
-    setProvider(id);
-    const p = PROVIDERS.find((x) => x.id === id);
-    if (p && id !== 'custom') {
-      setHost(p.host);
-      setPort(p.port);
+  const signInWithMicrosoft = async () => {
+    setBusy('microsoft');
+    setError(null);
+    setNotice(null);
+    try {
+      const out = await api<{ authorizationUrl: string }>(`${base}/microsoft`, {
+        method: 'POST',
+        body: JSON.stringify(connected ? {} : { processNewInquiries: newInquiries }),
+      });
+      window.location.href = out.authorizationUrl;
+    } catch (e: any) {
+      setError(e.message);
+      setBusy(null);
     }
   };
 
@@ -153,6 +181,8 @@ export const InboundMailboxPanel: React.FC<{ tenantId: string; canEdit: boolean 
 
   const showForm = !connected || editing;
   const help = PROVIDERS.find((p) => p.id === provider)?.help;
+  const microsoftAvailable = view?.microsoftAvailable !== false;
+  const keepSavedPassword = Boolean(editing && view?.hasPassword && view?.provider === 'gmail');
 
   return (
     <div className="bg-white border border-slate-200/90 rounded-2xl p-6 shadow-sm space-y-6">
@@ -173,9 +203,16 @@ export const InboundMailboxPanel: React.FC<{ tenantId: string; canEdit: boolean 
       {notice && <div className="text-sm bg-emerald-50 border border-emerald-100 text-emerald-700 rounded-lg px-3 py-2">{notice}</div>}
 
       {connected && view && (view.status === 'error' || view.status === 'auth_failed') && view.lastError && (
-        <div className="text-sm bg-amber-50 border border-amber-100 text-amber-800 rounded-lg px-3 py-2">
-          {view.lastError}
-          {view.status === 'auth_failed' && ' Re-enter the password below to resume.'}
+        <div className="text-sm bg-amber-50 border border-amber-100 text-amber-800 rounded-lg px-3 py-2 space-y-2">
+          <div>
+            {view.lastError}
+            {view.status === 'auth_failed' && !isOAuth && ' Re-enter the app password below to resume.'}
+          </div>
+          {view.status === 'auth_failed' && isOAuth && canEdit && (
+            <button className={btnPrimary} disabled={busy === 'microsoft'} onClick={signInWithMicrosoft}>
+              {busy === 'microsoft' ? <Loader2 className="w-4 h-4 animate-spin" /> : <LogIn className="w-4 h-4" />} Reconnect with Microsoft
+            </button>
+          )}
         </div>
       )}
 
@@ -187,9 +224,10 @@ export const InboundMailboxPanel: React.FC<{ tenantId: string; canEdit: boolean 
               <div className="font-medium text-slate-900 break-all">{view.user}</div>
             </div>
             <div className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
-              <div className="text-xs text-slate-500">Server</div>
+              <div className="text-xs text-slate-500">Provider</div>
               <div className="font-medium text-slate-900">
-                {view.host}:{view.port}
+                {providerLabel(view)}
+                {isOAuth && <span className="text-slate-500 font-normal"> · signed in with Microsoft</span>}
               </div>
             </div>
             <div className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
@@ -238,13 +276,13 @@ export const InboundMailboxPanel: React.FC<{ tenantId: string; canEdit: boolean 
               {view.status === 'paused' ? 'Resume' : 'Pause'}
             </button>
             <button className={btnGhost} disabled={!canEdit} onClick={() => setEditing(true)}>
-              Change mailbox / password
+              {isOAuth ? 'Change mailbox' : 'Change mailbox / password'}
             </button>
             <button
               className={`${btnGhost} text-red-700`}
               disabled={!canEdit || busy === 'disconnect'}
               onClick={() => {
-                if (window.confirm('Disconnect this mailbox? Its saved password is deleted and replies will stop arriving.')) {
+                if (window.confirm('Disconnect this mailbox? Its saved sign-in is deleted and replies will stop arriving.')) {
                   run('disconnect', 'disconnect', {}, 'Mailbox disconnected.');
                 }
               }}
@@ -257,70 +295,64 @@ export const InboundMailboxPanel: React.FC<{ tenantId: string; canEdit: boolean 
 
       {showForm && (
         <section className="space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <label className="block sm:col-span-2">
-              <span className="text-xs font-medium text-slate-500">Email provider</span>
-              <select className={inputCls} value={provider} disabled={!canEdit} onChange={(e) => pickProvider(e.target.value)}>
-                {PROVIDERS.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            {provider === 'custom' && (
-              <>
-                <label className="block">
-                  <span className="text-xs font-medium text-slate-500">IMAP server</span>
-                  <input className={inputCls} placeholder="imap.yourhost.com" value={host} disabled={!canEdit} onChange={(e) => setHost(e.target.value)} />
-                </label>
-                <label className="block">
-                  <span className="text-xs font-medium text-slate-500">Port</span>
-                  <select className={inputCls} value={port} disabled={!canEdit} onChange={(e) => setPort(Number(e.target.value))}>
-                    <option value={993}>993 (SSL/TLS, recommended)</option>
-                    <option value={143}>143 (STARTTLS)</option>
-                  </select>
-                </label>
-              </>
-            )}
-            <label className="block">
-              <span className="text-xs font-medium text-slate-500">Mailbox email address</span>
-              <input
-                className={inputCls}
-                type="email"
-                autoComplete="off"
-                placeholder="sales@yourcompany.com"
-                value={user}
-                disabled={!canEdit}
-                onChange={(e) => setUser(e.target.value)}
-              />
-            </label>
-            <label className="block">
-              <span className="text-xs font-medium text-slate-500">
-                Password / app password{view?.hasPassword ? ' (leave blank to keep the saved one)' : ''}
-              </span>
-              <div className="relative">
+          <label className="block">
+            <span className="text-xs font-medium text-slate-500">Email provider</span>
+            <select className={inputCls} value={provider} disabled={!canEdit} onChange={(e) => setProvider(e.target.value as ProviderId)}>
+              {PROVIDERS.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.label}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          {provider === 'gmail' && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <label className="block">
+                <span className="text-xs font-medium text-slate-500">Gmail address</span>
                 <input
-                  className={`${inputCls} pr-10`}
-                  type={showPw ? 'text' : 'password'}
-                  autoComplete="new-password"
-                  value={password}
+                  className={inputCls}
+                  type="email"
+                  autoComplete="off"
+                  placeholder="sales@yourcompany.com"
+                  value={user}
                   disabled={!canEdit}
-                  onChange={(e) => setPassword(e.target.value)}
+                  onChange={(e) => setUser(e.target.value)}
                 />
-                <button
-                  type="button"
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700"
-                  onClick={() => setShowPw((s) => !s)}
-                  title={showPw ? 'Hide' : 'Show'}
-                >
-                  {showPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
-              </div>
-            </label>
-          </div>
+              </label>
+              <label className="block">
+                <span className="text-xs font-medium text-slate-500">
+                  App password{keepSavedPassword ? ' (leave blank to keep the saved one)' : ''}
+                </span>
+                <div className="relative">
+                  <input
+                    className={`${inputCls} pr-10`}
+                    type={showPw ? 'text' : 'password'}
+                    autoComplete="new-password"
+                    value={password}
+                    disabled={!canEdit}
+                    onChange={(e) => setPassword(e.target.value)}
+                  />
+                  <button
+                    type="button"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700"
+                    onClick={() => setShowPw((s) => !s)}
+                    title={showPw ? 'Hide' : 'Show'}
+                  >
+                    {showPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </label>
+            </div>
+          )}
 
           {help && <p className="text-sm text-slate-500">{help}</p>}
+
+          {provider === 'outlook' && !microsoftAvailable && (
+            <div className="text-sm bg-amber-50 border border-amber-100 text-amber-800 rounded-lg px-3 py-2">
+              Sign in with Microsoft is not set up on this server yet. Please contact support.
+            </div>
+          )}
 
           {!connected && (
             <label className="flex items-start gap-3 text-sm">
@@ -330,21 +362,27 @@ export const InboundMailboxPanel: React.FC<{ tenantId: string; canEdit: boolean 
           )}
 
           <div className="flex gap-2">
-            <button
-              className={btnPrimary}
-              disabled={!canEdit || !user.trim() || !host.trim() || (!password && !(view?.hasPassword && editing)) || busy === 'connect'}
-              onClick={async () => {
-                const v = await run(
-                  'connect',
-                  '',
-                  { host, port, user, password, ...(connected ? {} : { processNewInquiries: newInquiries }) },
-                  'Connected. New replies will now be picked up automatically.'
-                );
-                if (v) setEditing(false);
-              }}
-            >
-              {busy === 'connect' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plug className="w-4 h-4" />} Test &amp; connect
-            </button>
+            {provider === 'gmail' ? (
+              <button
+                className={btnPrimary}
+                disabled={!canEdit || !user.trim() || (!password && !keepSavedPassword) || busy === 'connect'}
+                onClick={async () => {
+                  const v = await run(
+                    'connect',
+                    '',
+                    { host: 'imap.gmail.com', port: 993, user, password, ...(connected ? {} : { processNewInquiries: newInquiries }) },
+                    'Connected. New replies will now be picked up automatically.'
+                  );
+                  if (v) setEditing(false);
+                }}
+              >
+                {busy === 'connect' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plug className="w-4 h-4" />} Test &amp; connect
+              </button>
+            ) : (
+              <button className={btnPrimary} disabled={!canEdit || !microsoftAvailable || busy === 'microsoft'} onClick={signInWithMicrosoft}>
+                {busy === 'microsoft' ? <Loader2 className="w-4 h-4 animate-spin" /> : <LogIn className="w-4 h-4" />} Sign in with Microsoft
+              </button>
+            )}
             {editing && (
               <button className={btnGhost} onClick={() => setEditing(false)}>
                 Cancel
@@ -352,7 +390,9 @@ export const InboundMailboxPanel: React.FC<{ tenantId: string; canEdit: boolean 
             )}
           </div>
           <p className="text-xs text-slate-500">
-            Your password is encrypted and only used to read new mail. It is never shown again. We sign in once to check the details before saving.
+            {provider === 'gmail'
+              ? 'Your app password is encrypted and only used to read new mail. It is never shown again. We sign in once to check the details before saving.'
+              : 'You sign in on Microsoft’s own page. We only receive permission to read new mail, stored encrypted, and you can revoke it any time from your Microsoft account.'}
           </p>
         </section>
       )}

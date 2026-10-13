@@ -8,9 +8,24 @@ import { tenantRepo } from './tenantRepo.js';
 import { encryptSecret, decryptSecret } from './cryptoUtils.js';
 import { describeImapError } from './imapService.js';
 import type { TenantContext } from '../types/tenant.js';
+import {
+  MICROSOFT_IMAP_HOST,
+  MicrosoftReauthRequired,
+  deleteMicrosoftRefreshToken,
+  getMicrosoftAccessToken,
+  hasMicrosoftRefreshToken,
+  isMicrosoftOAuthConfigured,
+  saveMicrosoftRefreshToken,
+  type MicrosoftCallbackResult,
+} from './microsoftOAuth.js';
 
 /**
  * Per-workspace inbound mailbox (IMAP).
+ *
+ * Supported providers:
+ *   - Gmail / Google Workspace: IMAP with an app password.
+ *   - Outlook / Microsoft 365:  IMAP with OAuth ("Sign in with Microsoft"); Microsoft refuses passwords for IMAP.
+ *     Refresh token: tenants/{id}/secrets/imap_oauth_microsoft (see microsoftOAuth.ts).
  *
  * Settings (no secrets):   tenants/{id}/settings/inbound
  * Password (encrypted):    tenants/{id}/secrets/imap_password   (AES-256-GCM, server only)
@@ -22,9 +37,16 @@ import type { TenantContext } from '../types/tenant.js';
  */
 
 export type InboundStatus = 'not_configured' | 'connected' | 'error' | 'auth_failed' | 'paused';
+export type InboundProvider = 'gmail' | 'microsoft';
+export type InboundAuthType = 'password' | 'oauth';
+
+export const GMAIL_IMAP_HOST = 'imap.gmail.com';
 
 export interface TenantInboundSettings {
   enabled?: boolean;
+  provider?: InboundProvider;
+  /** 'oauth' = Microsoft access tokens; missing or 'password' = stored app password. */
+  authType?: InboundAuthType;
   host?: string;
   port?: number;
   secure?: boolean;
@@ -145,7 +167,10 @@ export interface InboundCredentials {
   port: number;
   secure: boolean;
   user: string;
-  pass: string;
+  /** App password (Gmail). */
+  pass?: string;
+  /** OAuth2 access token (Microsoft, IMAP XOAUTH2). */
+  accessToken?: string;
 }
 
 /** TLS certificates ARE verified here (unlike the legacy owner client): these are customers' mailboxes. */
@@ -155,7 +180,7 @@ export function createTenantImapClient(c: InboundCredentials, ip: string): ImapF
     port: c.port,
     secure: c.secure,
     servername: c.host,
-    auth: { user: c.user, pass: c.pass },
+    auth: c.accessToken ? { user: c.user, accessToken: c.accessToken } : { user: c.user, pass: c.pass || '' },
     logger: false,
     emitLogs: false,
     disableAutoIdle: true,
@@ -184,11 +209,13 @@ export async function safeClose(client: ImapFlow) {
 }
 
 /** Customer-readable explanation of an IMAP failure. Never contains the password. */
-export function friendlyImapError(err: any, c?: Pick<InboundCredentials, 'host' | 'port' | 'pass'>): string {
+export function friendlyImapError(err: any, c?: Pick<InboundCredentials, 'host' | 'port' | 'pass' | 'accessToken'>): string {
   let msg: string;
   const code = String(err?.code || '');
-  if (err?.authenticationFailed || /AUTHENTICATIONFAILED|Invalid credentials|Authentication failed/i.test(String(err?.responseText || err?.message || ''))) {
-    msg = 'Sign-in failed. Check the email address and password. Gmail and Microsoft accounts usually need an app password, not the normal one.';
+  if (err?.authenticationFailed || /AUTHENTICATIONFAILED|AUTHENTICATE failed|Invalid credentials|Authentication failed/i.test(String(err?.responseText || err?.message || ''))) {
+    msg = c?.accessToken
+      ? 'Microsoft refused the mailbox sign-in. IMAP may be turned off for this mailbox (Microsoft 365 admin center → user → Mail → Email apps), or access was removed. Reconnect with Microsoft after checking.'
+      : 'Sign-in failed. Check the Gmail address and the app password (not your normal Google password).';
   } else if (['ENOTFOUND', 'EAI_AGAIN'].includes(code)) {
     msg = `Could not find the mail server${c ? ` "${c.host}"` : ''}.`;
   } else if (['ECONNREFUSED', 'ETIMEDOUT', 'ECONNRESET', 'EHOSTUNREACH', 'NoConnection'].includes(code) || /timed? ?out/i.test(String(err?.message))) {
@@ -199,6 +226,7 @@ export function friendlyImapError(err: any, c?: Pick<InboundCredentials, 'host' 
     msg = describeImapError(err);
   }
   if (c?.pass) msg = msg.split(c.pass).join('***');
+  if (c?.accessToken) msg = msg.split(c.accessToken).join('***');
   return msg.slice(0, 400);
 }
 
@@ -276,10 +304,18 @@ async function readPassword(tenantId: string): Promise<string | null> {
   }
 }
 
-/** Decrypted credentials for the poller. Null when nothing (or an unreadable secret) is stored. */
+/**
+ * Decrypted credentials for the poller. Null when nothing (or an unreadable secret) is stored.
+ * For Microsoft mailboxes this fetches a fresh access token and throws MicrosoftReauthRequired when the
+ * user has to sign in again (any other throw is temporary).
+ */
 export async function getInboundCredentials(tenantId: string): Promise<InboundCredentials | null> {
   const s = await getInboundSettings(tenantId, { fresh: true });
   if (!s.host || !s.user || !s.port) return null;
+  if (s.authType === 'oauth') {
+    const accessToken = await getMicrosoftAccessToken(tenantId);
+    return { host: s.host, port: s.port, secure: true, user: s.user, accessToken };
+  }
   const pass = await readPassword(tenantId);
   if (!pass) return null;
   return { host: s.host, port: s.port, secure: s.secure ?? s.port === 993, user: s.user, pass };
@@ -288,12 +324,22 @@ export async function getInboundCredentials(tenantId: string): Promise<InboundCr
 /** What the UI may see. Never includes the password. */
 export async function getInboundView(tenantId: string) {
   const s = await getInboundSettings(tenantId, { fresh: true });
+  const authType: InboundAuthType = s.authType === 'oauth' ? 'oauth' : 'password';
   let hasPassword = false;
   if (isFirebaseConfigured && db) {
-    hasPassword = (await getDoc(tenantRepo(sysCtx(tenantId)).secretDoc(INBOUND_SECRET_NAME))).exists();
+    hasPassword =
+      authType === 'oauth'
+        ? await hasMicrosoftRefreshToken(tenantId)
+        : (await getDoc(tenantRepo(sysCtx(tenantId)).secretDoc(INBOUND_SECRET_NAME))).exists();
   }
+  const provider: InboundProvider | 'other' =
+    s.provider || (authType === 'oauth' ? 'microsoft' : s.host === GMAIL_IMAP_HOST ? 'gmail' : s.host ? 'other' : 'gmail');
   return {
     enabled: Boolean(s.enabled),
+    provider,
+    authType,
+    /** False until MICROSOFT_CLIENT_ID / SECRET are set, so the UI can explain instead of failing. */
+    microsoftAvailable: isMicrosoftOAuthConfigured(),
     host: s.host,
     port: s.port,
     user: s.user,
@@ -386,18 +432,25 @@ function requireDb() {
  */
 export async function connectInbound(tenantId: string, input: ConnectInput) {
   requireDb();
-  const host = String(input.host || '').trim().toLowerCase();
-  const port = Number(input.port) || 993;
+  // Password sign-in is only offered for Gmail / Google Workspace. Outlook / Microsoft 365 uses
+  // connectMicrosoftInbound (OAuth) because Microsoft refuses passwords for IMAP.
+  const requestedHost = String(input.host || GMAIL_IMAP_HOST).trim().toLowerCase();
+  if (requestedHost !== GMAIL_IMAP_HOST) {
+    throw new InboundError(400, 'Only Gmail / Google Workspace can be connected with a password. For Outlook / Microsoft 365 use "Sign in with Microsoft".');
+  }
+  const host = GMAIL_IMAP_HOST;
+  const port = 993;
   const user = String(input.user || '').trim();
   if (!ALLOWED_PORTS.includes(port)) throw new InboundError(400, 'Use port 993 (SSL/TLS) or 143 (STARTTLS)');
   if (!user || user.length > 254 || /[\r\n\0]/.test(user)) throw new InboundError(400, 'Enter the mailbox email address or username');
 
   const existing = await getInboundSettings(tenantId, { fresh: true });
-  const sameMailbox = existing.host === host && (existing.user || '').toLowerCase() === user.toLowerCase();
+  const sameMailbox =
+    existing.authType !== 'oauth' && existing.host === host && (existing.user || '').toLowerCase() === user.toLowerCase();
 
   let pass = String(input.password || '');
   if (!pass) {
-    if (!sameMailbox) throw new InboundError(400, 'Enter the mailbox password');
+    if (!sameMailbox) throw new InboundError(400, 'Enter the Gmail app password');
     pass = (await readPassword(tenantId)) || '';
     if (!pass) throw new InboundError(400, 'Enter the mailbox password');
   }
@@ -416,8 +469,9 @@ export async function connectInbound(tenantId: string, input: ConnectInput) {
     throw err;
   }
 
-  // A different mailbox than before: free the old claim.
+  // A different mailbox than before: free the old claim (and a previous Microsoft sign-in).
   if (existing.host && !sameMailbox) await releaseMailbox(tenantId, existing.host, existing.user).catch(() => {});
+  if (existing.authType === 'oauth') await deleteMicrosoftRefreshToken(tenantId);
 
   const repo = tenantRepo(sysCtx(tenantId));
   const enc = encryptSecret(pass);
@@ -429,6 +483,8 @@ export async function connectInbound(tenantId: string, input: ConnectInput) {
   await writeSettings(tenantId, {
     ...existing,
     enabled: true,
+    provider: 'gmail',
+    authType: 'password',
     host,
     port,
     secure: creds.secure,
@@ -449,7 +505,14 @@ export async function connectInbound(tenantId: string, input: ConnectInput) {
 /** Re-tests the stored mailbox (button in the UI). Clears an error / auth_failed state when it works. */
 export async function testStoredInbound(tenantId: string) {
   requireDb();
-  const creds = await getInboundCredentials(tenantId);
+  let creds: InboundCredentials | null;
+  try {
+    creds = await getInboundCredentials(tenantId);
+  } catch (err: any) {
+    const reauth = err instanceof MicrosoftReauthRequired;
+    await updateInboundState(tenantId, { status: reauth ? 'auth_failed' : 'error', lastError: err?.message, lastErrorAt: new Date().toISOString() });
+    throw new InboundError(reauth ? 400 : 502, err?.message || 'Could not sign in to Microsoft');
+  }
   if (!creds) throw new InboundError(400, 'No mailbox is connected');
   const ip = await resolveSafeHost(creds.host);
   const s = await getInboundSettings(tenantId, { fresh: true });
@@ -494,7 +557,62 @@ export async function disconnectInbound(tenantId: string) {
   requireDb();
   const s = await getInboundSettings(tenantId, { fresh: true });
   await deleteDoc(tenantRepo(sysCtx(tenantId)).secretDoc(INBOUND_SECRET_NAME)).catch(() => {});
+  await deleteMicrosoftRefreshToken(tenantId);
   await releaseMailbox(tenantId, s.host, s.user).catch(() => {});
   await writeSettings(tenantId, { enabled: false, status: 'not_configured' }, true);
+  return getInboundView(tenantId);
+}
+
+/**
+ * Saves a Microsoft mailbox after "Sign in with Microsoft": claims the mailbox, checks that IMAP accepts the
+ * token, stores the refresh token (encrypted) and starts the baseline. Replaces any previous mailbox.
+ */
+export async function connectMicrosoftInbound(r: MicrosoftCallbackResult) {
+  requireDb();
+  const tenantId = r.tenantId;
+  const host = MICROSOFT_IMAP_HOST;
+  const port = 993;
+  const user = r.email;
+
+  const existing = await getInboundSettings(tenantId, { fresh: true });
+  const sameMailbox = existing.authType === 'oauth' && existing.host === host && (existing.user || '').toLowerCase() === user;
+
+  const ip = await resolveSafeHost(host);
+  await claimMailbox(tenantId, host, user);
+
+  let uidState: { uidValidity: string; uidNext: number };
+  try {
+    uidState = await testImapCredentials({ host, port, secure: true, user, accessToken: r.accessToken }, ip);
+  } catch (err) {
+    if (!sameMailbox) await releaseMailbox(tenantId, host, user).catch(() => {});
+    throw err;
+  }
+
+  if (existing.host && !sameMailbox) await releaseMailbox(tenantId, existing.host, existing.user).catch(() => {});
+  // Switching from Gmail: the old app password is no longer needed.
+  await deleteDoc(tenantRepo(sysCtx(tenantId)).secretDoc(INBOUND_SECRET_NAME)).catch(() => {});
+  await saveMicrosoftRefreshToken(tenantId, r.refreshToken, r.accessToken, r.expiresIn);
+
+  const now = new Date().toISOString();
+  const keepBaseline = sameMailbox && existing.lastUid !== undefined && existing.uidValidity === uidState.uidValidity;
+  await writeSettings(tenantId, {
+    ...existing,
+    enabled: true,
+    provider: 'microsoft',
+    authType: 'oauth',
+    host,
+    port,
+    secure: true,
+    user,
+    processNewInquiries: r.processNewInquiries ?? existing.processNewInquiries ?? false,
+    status: 'connected',
+    lastError: undefined,
+    lastErrorAt: undefined,
+    consecutiveFailures: 0,
+    nextPollAt: undefined,
+    uidValidity: uidState.uidValidity,
+    lastUid: keepBaseline ? existing.lastUid : Math.max(0, uidState.uidNext - 1),
+    connectedAt: keepBaseline ? existing.connectedAt : now,
+  }, true);
   return getInboundView(tenantId);
 }

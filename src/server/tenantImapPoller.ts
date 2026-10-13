@@ -19,6 +19,7 @@ import {
   type TenantInboundSettings,
 } from './tenantInboundService.js';
 import type { TenantContext } from '../types/tenant.js';
+import { MicrosoftReauthRequired } from './microsoftOAuth.js';
 
 /**
  * Reads each workspace's OWN connected mailbox and hands relevant mail to the normal inbound pipeline
@@ -192,7 +193,24 @@ async function runCycle(tenantId: string): Promise<TenantPollResult> {
   const ctx = sysCtx(tenantId);
 
   const settings = await getInboundSettings(tenantId, { fresh: true });
-  const creds = await getInboundCredentials(tenantId);
+  let creds: InboundCredentials | null;
+  try {
+    creds = await getInboundCredentials(tenantId);
+  } catch (err: any) {
+    // Microsoft token refresh failed. Revoked/expired sign-in: wait for the admin to reconnect.
+    // Anything else (network, Microsoft outage): normal backoff.
+    const reauth = err instanceof MicrosoftReauthRequired;
+    const failures = (settings.consecutiveFailures || 0) + 1;
+    await updateInboundState(tenantId, {
+      status: reauth ? 'auth_failed' : 'error',
+      lastError: String(err?.message || 'Could not sign in to Microsoft').slice(0, 400),
+      lastErrorAt: new Date().toISOString(),
+      consecutiveFailures: failures,
+      nextPollAt: new Date(Date.now() + (reauth ? 24 * 3600_000 : backoffMs(failures))).toISOString(),
+    });
+    result.error = err?.message || 'token refresh failed';
+    return result;
+  }
   if (!creds) {
     await updateInboundState(tenantId, {
       status: 'error',

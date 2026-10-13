@@ -332,6 +332,50 @@ async function loadJobsByField(
   return out;
 }
 
+/**
+ * Only the follow-ups that are due now (oldest first), plus when the next one is due.
+ * Reads at most `max` + 1 documents instead of every scheduled job (the cron runs this for every
+ * workspace on every tick, so loading all scheduled jobs - including ones due weeks later - was the
+ * biggest repeated Firestore read cost). scheduledAt is always an ISO-8601 UTC string, so string
+ * comparison is time order. Needs the followup_jobs (status, scheduledAt) composite index in
+ * firestore.indexes.json; until it is deployed this falls back to the old full read.
+ */
+async function loadDueJobs(
+  ctx: TenantContext,
+  nowMs: number,
+  max: number
+): Promise<{ due: AutoFollowUpJob[]; nextDueMs: number | null }> {
+  if (!enabledDb()) return { due: [], nextDueMs: null };
+  const nowIso = new Date(nowMs).toISOString();
+  const toJob = (d: any): AutoFollowUpJob => ({ ...(d.data() as AutoFollowUpJob), id: (d.data() as any)?.id || d.id });
+  try {
+    const jobs = repoFor(ctx).jobs();
+    const [dueSnap, nextSnap] = await Promise.all([
+      getDocs(query(jobs, where('status', '==', 'scheduled'), where('scheduledAt', '<=', nowIso), orderBy('scheduledAt', 'asc'), limit(max))),
+      getDocs(query(jobs, where('status', '==', 'scheduled'), where('scheduledAt', '>', nowIso), orderBy('scheduledAt', 'asc'), limit(1))),
+    ]);
+    const due: AutoFollowUpJob[] = [];
+    dueSnap.forEach((d) => due.push(toJob(d)));
+    let nextDueMs: number | null = null;
+    nextSnap.forEach((d) => {
+      nextDueMs = ts((d.data() as AutoFollowUpJob).scheduledAt);
+    });
+    return { due, nextDueMs };
+  } catch (err: any) {
+    console.warn(
+      '[AutoFollowUp] Due-jobs query failed (deploy the followup_jobs status+scheduledAt index); using full read:',
+      err?.message || err
+    );
+    const scheduled = await loadJobsByField(ctx, 'status', 'scheduled');
+    const due = scheduled
+      .filter((j) => ts(j.scheduledAt) <= nowMs)
+      .sort((a, b) => ts(a.scheduledAt) - ts(b.scheduledAt))
+      .slice(0, max);
+    const future = scheduled.filter((j) => ts(j.scheduledAt) > nowMs).map((j) => ts(j.scheduledAt));
+    return { due, nextDueMs: future.length ? Math.min(...future) : null };
+  }
+}
+
 async function saveJob(ctx: TenantContext, job: AutoFollowUpJob): Promise<void> {
   if (!enabledDb()) return;
   await setDoc(repoFor(ctx).job(job.id), clean(job), { merge: true });
@@ -1179,15 +1223,9 @@ export async function processDueFollowUpJobs(
   const hint = nextCheckAt.get(ctx.tenantId) || 0;
   if (!opts.force && Date.now() < hint) return { processedCount: 0, results: [] };
 
-  const scheduled = await loadJobsByField(ctx, 'status', 'scheduled');
   const nowMs = Date.now();
-  const due = scheduled
-    .filter((j) => ts(j.scheduledAt) <= nowMs)
-    .sort((a, b) => ts(a.scheduledAt) - ts(b.scheduledAt))
-    .slice(0, opts.maxJobs ?? 10);
-
-  const future = scheduled.filter((j) => ts(j.scheduledAt) > nowMs).map((j) => ts(j.scheduledAt));
-  nextCheckAt.set(ctx.tenantId, Math.min(nowMs + IDLE_RECHECK_MS, ...(future.length ? future : [Infinity])));
+  const { due, nextDueMs } = await loadDueJobs(ctx, nowMs, opts.maxJobs ?? 10);
+  nextCheckAt.set(ctx.tenantId, Math.min(nowMs + IDLE_RECHECK_MS, nextDueMs ?? Infinity));
 
   if (due.length === 0) return { processedCount: 0, results: [] };
 

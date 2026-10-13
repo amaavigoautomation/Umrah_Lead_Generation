@@ -112,7 +112,8 @@ export async function routeWebsiteLeadWebhook(
         message: 'Lead processed and synced into CRM',
         leadId: result.lead?.leadId,
         contactId: result.contact?.contactId,
-        thankYouEmailSent: result.thankYouEmailSent,
+        thankYouEmailSent: Boolean(result.autoConfirmationSent),
+        ...(result.conversation?.thankYouError ? { thankYouError: result.conversation.thankYouError } : {}),
       })
     );
     return true;

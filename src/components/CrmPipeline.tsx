@@ -1030,11 +1030,11 @@ function renderLeadDetail(
             </div>
             <div>
               <span className="text-[10px] text-emerald-700 block font-semibold">Branches</span>
-              <span className="text-slate-900 font-bold">{selectedContact.branches || selectedLead.branches || 'Single Office'}</span>
+              <span className="text-slate-900 font-bold">{selectedLead.branches || selectedContact.branches || 'Not provided'}</span>
             </div>
             <div>
               <span className="text-[10px] text-emerald-700 block font-semibold">Team Size</span>
-              <span className="text-slate-900 font-bold">{selectedContact.teamSize || selectedLead.teamSize || '5-10 Users'}</span>
+              <span className="text-slate-900 font-bold">{selectedLead.teamSize || selectedContact.teamSize || 'Not provided'}</span>
             </div>
           </div>
 

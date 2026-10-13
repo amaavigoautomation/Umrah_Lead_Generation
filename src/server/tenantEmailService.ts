@@ -386,6 +386,8 @@ export async function setTenantSender(tenantId: string, input: { fromName?: stri
  * - tenant listed in PLATFORM_SENDER_TENANTS -> the platform RESEND_FROM (transition period)
  * - anything else -> blocked
  */
+const lastDomainRecheck = new Map<string, number>();
+
 export async function resolveTenantSender(tenantId: string): Promise<SenderResolution> {
   let s: TenantEmailSettings = {};
   try {
@@ -393,6 +395,21 @@ export async function resolveTenantSender(tenantId: string): Promise<SenderResol
   } catch (err: any) {
     // Cannot read settings: do not guess a sender.
     return { ok: false, error: `Could not load email settings: ${err?.message || 'unknown error'}` };
+  }
+
+  // The saved "verified" flag only changed when someone clicked Refresh in Settings -> Email, so a domain
+  // Resend had already verified kept blocking every email (thank-yous, replies, approved drafts) until then.
+  // Re-check with Resend ourselves, at most once a minute per workspace.
+  if (s.status !== 'verified' && s.domain && s.resendDomainId) {
+    const last = lastDomainRecheck.get(tenantId) || 0;
+    if (Date.now() - last > 60_000) {
+      lastDomainRecheck.set(tenantId, Date.now());
+      try {
+        s = await refreshTenantDomain(tenantId);
+      } catch (err: any) {
+        console.warn(`[Email] Could not re-check domain ${s.domain} for ${tenantId}:`, err?.message || err);
+      }
+    }
   }
 
   if (s.status === 'verified' && s.domain && s.fromLocalPart) {

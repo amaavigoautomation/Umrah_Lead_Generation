@@ -167,7 +167,6 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
   if (typeof body === 'string') {
     try {
       body = JSON.parse(body);
-      console.log(JSON.parse(body))
     } catch {
       try {
         const params = new URLSearchParams(body);
@@ -217,6 +216,10 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
   }
 
   if (!body || typeof body !== 'object') body = {};
+  // Sub-routers (website lead / WhatsApp webhooks) read req.body. Hand them the body parsed above:
+  // the request stream is already consumed, so a form post that arrived as text or a Buffer would
+  // otherwise reach them empty and be saved with every field missing.
+  (req as any).body = body;
 
   // Google Calendar OAuth token travels in its own header. `Authorization`
   // carries ONLY the Firebase ID token.
@@ -1100,6 +1103,21 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
           error: err?.message || String(err),
         }));
         results.push({ tenantId: ownerTenantId, mailbox: 'shared-env', polledCount: legacy.polledCount, error: (legacy as any).error });
+      }
+
+      // Website-form leads whose thank-you email did not go out the first time (provider hiccup, domain not
+      // verified yet). The retry loop lives in server.ts, which does not run on Vercel, so the cron does it.
+      try {
+        const { checkAndDispatchPendingWebsiteLeadEmails } = await import('./websiteLeadAutoResponder.js');
+        const tenantIds: string[] = runAll
+          ? (await getDocs(globalTenantsCol())).docs.filter((t: any) => t.data()?.status !== 'suspended').map((t: any) => t.id)
+          : [callerCtx!.tenantId];
+        for (const tId of tenantIds) {
+          const r = await checkAndDispatchPendingWebsiteLeadEmails({ tenantId: tId, uid: 'system-cron', email: '', role: 'admin' }).catch(() => null);
+          if (r && r.processedCount > 0) results.push({ tenantId: tId, websiteThankYous: r });
+        }
+      } catch (retryErr: any) {
+        console.warn('[Cron] Website thank-you retry notice:', retryErr?.message || retryErr);
       }
       res.statusCode = 200;
       res.setHeader('Content-Type', 'application/json');

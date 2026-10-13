@@ -189,8 +189,14 @@ document.getElementById('lead-form').addEventListener('submit', async (e) => {
               title={view.allowedOrigins.length === 0 ? 'Save a website first' : undefined}
               onClick={() =>
                 run('test', async () => {
-                  await api(`${base}/test`, { method: 'POST' });
-                  setNotice('Test lead sent. Check Unified Inbox in a few seconds.');
+                  const r: any = await api(`${base}/test`, { method: 'POST' });
+                  if (r?.thankYouEmailSent) {
+                    setNotice('Test lead sent and the thank-you email went out. Check your inbox and the Unified Inbox.');
+                  } else if (r?.thankYouSuppressed) {
+                    setNotice('Test lead saved. No thank-you was sent because this address already received one earlier (it is sent only once per address).');
+                  } else {
+                    setError(`Test lead saved, but the thank-you email was NOT sent${r?.thankYouError ? `: ${r.thankYouError}` : '.'}`);
+                  }
                 })
               }
             >

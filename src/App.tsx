@@ -930,6 +930,7 @@ export default function App() {
     const foundContact = contacts.find((c) => c.contactId === conv.contactId);
     const targetRecipientEmail = (
       foundContact?.email ||
+      conv.customerEmail ||
       lastIncoming?.senderEmail ||
       lastIncoming?.emailMeta?.from ||
       (conv.emailThreadId?.includes('@') ? conv.emailThreadId.split('thread-')[1] : '') ||
@@ -1679,8 +1680,11 @@ export default function App() {
 
     const draft = conv.draftReply;
     const contact = contacts.find((c) => c.contactId === conv.contactId);
-    const toEmail = contact?.email;
-    if (!toEmail) return;
+    const toEmail = contact?.email || conv.customerEmail;
+    if (!toEmail) {
+      window.alert('This conversation has no customer email address, so the draft cannot be sent.');
+      return;
+    }
 
     const subject = draft.subject || `Re: ${bn().companyName} Inquiry`;
     const nowIso = new Date().toISOString();
@@ -1700,11 +1704,13 @@ export default function App() {
           gmailThreadId: conv.gmailThreadId || conv.emailThreadId,
         }),
       });
-      const sendResult = await res.json();
+      const sendResult = await res.json().catch(() => ({} as any));
 
       if (!res.ok || !sendResult.success) {
-        approvedSmtpStatus = 'DELIVERY_FAILED';
-        approvedSmtpError = sendResult.error || 'SMTP Delivery Failed';
+        // Keep the draft in place so it can be retried; clearing it here made a failed send look like a
+        // sent one and the reply was lost.
+        window.alert(sendResult.error || `The reply could not be sent (HTTP ${res.status}). The draft is kept so you can try again.`);
+        return;
       }
 
       const aiMsgId = sendResult.messageId || `<reply-approved-${Date.now()}@amaavigo.com>`;
@@ -1766,8 +1772,9 @@ export default function App() {
           { merge: true }
         );
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error sending approved draft:', err);
+      window.alert(err?.message || 'The reply could not be sent (network error). The draft is kept so you can try again.');
     }
   };
 

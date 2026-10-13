@@ -28,6 +28,10 @@
       "destination": "/api/webhooks/stripe"
     },
     {
+      "source": "/api/webhooks/email/resend",
+      "destination": "/api/webhooks/resend"
+    },
+    {
       "source": "/api/leads/inbound",
       "destination": "/api/leads/inbound"
     },

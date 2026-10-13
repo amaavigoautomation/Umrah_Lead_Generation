@@ -406,10 +406,22 @@ async function sendViaResend(params: SendMailParams, override?: { from: string; 
       return { success: false, error: `Resend error: ${msg}`, simulated: false, provider: 'resend' };
     }
 
-    // Map the Resend email id to the workspace so bounce/complaint webhooks suppress in the right tenant.
+    // Map the Resend email id to the workspace (and campaign lead) so open/click/bounce
+    // webhooks still work when Resend does not echo tags.
     const tenantId = params.tenantId || params.headers?.['X-Tenant-Id'];
     if (tenantId && isFirebaseConfigured && db) {
-      setDoc(globalEmailRouteDoc(data.id), { emailId: data.id, tenantId, createdAt: new Date().toISOString() }, { merge: true }).catch(() => {});
+      const tagMap = Object.fromEntries((params.tags || []).map((t) => [t.name, t.value]));
+      setDoc(
+        globalEmailRouteDoc(data.id),
+        {
+          emailId: data.id,
+          tenantId,
+          campaignLeadId: tagMap.lead || '',
+          campaignId: tagMap.campaign || '',
+          createdAt: new Date().toISOString(),
+        },
+        { merge: true }
+      ).catch(() => {});
     }
 
     console.log(`[Resend] Sent email to ${params.to}, id: ${data.id}`);

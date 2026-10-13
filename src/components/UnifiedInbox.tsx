@@ -30,6 +30,8 @@ import {
   Settings,
   ExternalLink,
   Clock,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import {
   Conversation,
@@ -109,6 +111,8 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
   const [channelFilter, setChannelFilter] = useState<string>('ALL');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');
+  // Lead Profile 360 side panel: slides in/out from the right edge
+  const [isProfileOpen, setIsProfileOpen] = useState<boolean>(true);
   const [replyText, setReplyText] = useState<string>('');
   const [isGeneratingAi, setIsGeneratingAi] = useState<boolean>(false);
   const [isUnifiedAllPlatforms, setIsUnifiedAllPlatforms] = useState<boolean>(false);
@@ -767,8 +771,10 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
         </div>
       </div>
 
+      {/* Thread + sliding Lead Profile panel share one row, so the panel always stays on the right */}
+      <div className="flex-1 flex flex-row min-w-0 min-h-0 h-full relative">
       {/* 2. MIDDLE COLUMN: Conversation & Message Thread UI */}
-      <div className="flex-1 flex flex-col bg-white overflow-hidden min-h-0 h-full">
+      <div className="flex-1 flex flex-col bg-white overflow-hidden min-w-0 min-h-0 h-full">
         {/* Active Conversation Header */}
         {activeConversation && activeContact ? (
           <>
@@ -1220,7 +1226,30 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
 
       {/* 3. RIGHT COLUMN: Lead Profile 360 & Conversation Memory (Width: 320px) */}
       {activeConversation && activeContact && (
-        <div className="w-full lg:w-80 border-l border-slate-200/90 bg-slate-50/50 p-4 overflow-y-auto min-h-0 h-full space-y-4 shrink-0">
+        <>
+        {/* Arrow tab: toggles the panel and slides along with its edge */}
+        <button
+          type="button"
+          onClick={() => setIsProfileOpen((open) => !open)}
+          aria-expanded={isProfileOpen}
+          aria-controls="lead-profile-panel"
+          aria-label={isProfileOpen ? 'Hide lead profile' : 'Show lead profile'}
+          title={isProfileOpen ? 'Hide lead profile' : 'Show lead profile'}
+          className={`absolute top-4 z-20 w-6 h-12 flex items-center justify-center bg-white text-orange-600 border border-r-0 border-slate-200 rounded-l-xl shadow-[-2px_0_6px_rgba(15,23,42,0.06)] hover:bg-orange-50 transition-[right] duration-300 ease-in-out ${
+            isProfileOpen ? 'right-80' : 'right-0'
+          }`}
+        >
+          {isProfileOpen ? <ChevronRight className="w-3.5 h-3.5" /> : <ChevronLeft className="w-3.5 h-3.5" />}
+        </button>
+
+        {/* Sliding wrapper: animates width; inner panel keeps a fixed 320px so content never squashes */}
+        <div
+          className={`shrink-0 h-full overflow-hidden transition-[width,opacity] duration-300 ease-in-out ${
+            isProfileOpen ? 'w-80 opacity-100' : 'w-0 opacity-0'
+          }`}
+          aria-hidden={!isProfileOpen}
+        >
+        <div id="lead-profile-panel" className="w-80 border-l border-slate-200/90 bg-slate-50/50 p-4 overflow-y-auto min-h-0 h-full space-y-4">
           {/* Customer Card Header */}
           <div className="border-b border-slate-200 pb-3">
             <div className="flex items-center justify-between">
@@ -1448,7 +1477,10 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
             )}
           </div>
         </div>
+        </div>
+        </>
       )}
+      </div>
 
       {/* 4. MODAL: Simulate Inbound Customer Message from Any Platform */}
       {showSimulateModal && activeContact && (

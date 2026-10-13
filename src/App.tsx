@@ -79,8 +79,14 @@ import { initCalendarAuth } from './services/googleCalendarAuth';
 // Per-workspace brand strings for locally-built message records (read at call time).
 const bn = () => getCurrentBrand();
 const brandEmail = () => bn().salesEmail || `noreply@${brandHost(bn()) || 'workspace.local'}`;
-const brandReSubject = () => (bn().playbook === 'umrah360' ? brandReSubject() : `Re: ${bn().companyName}`);
-const brandGrowthTeam = () => (bn().playbook === 'umrah360' ? brandGrowthTeam() : bn().teamName);
+// Reply subject when the thread has no earlier email subject (website-form threads never do). It used to call
+// itself for the umrah360 brand, which overflowed the stack, so sending from such a thread did nothing.
+const brandReSubject = (threadSubject?: string) => {
+  const t = (threadSubject || '').trim();
+  if (t) return /^re:/i.test(t) ? t : `Re: ${t}`;
+  return `Re: Your ${bn().companyName} inquiry`;
+};
+const brandGrowthTeam = () => (bn().playbook === 'umrah360' ? 'Umrah360 Growth Team' : bn().teamName);
 
 function sanitizeDoc(obj: any): any {
   if (obj === undefined) return null;
@@ -959,7 +965,7 @@ export default function App() {
     if ((conv.channel === 'EMAIL' || conv.channel === 'WEBSITE') && senderType === 'AGENT' && recipientEmail) {
       const subject = lastIncoming?.emailMeta?.subject
         ? (lastIncoming.emailMeta.subject.toLowerCase().startsWith('re:') ? lastIncoming.emailMeta.subject : `Re: ${lastIncoming.emailMeta.subject}`)
-        : brandReSubject();
+        : brandReSubject(conv.subject);
 
       try {
         const sendRes = await fetch('/api/email/send', {
@@ -1021,7 +1027,7 @@ export default function App() {
           ? {
               subject: lastIncoming?.emailMeta?.subject
                 ? (lastIncoming.emailMeta.subject.toLowerCase().startsWith('re:') ? lastIncoming.emailMeta.subject : `Re: ${lastIncoming.emailMeta.subject}`)
-                : brandReSubject(),
+                : brandReSubject(conv.subject),
               from: senderType === 'AGENT' ? brandEmail() : (contact?.email || brandEmail()),
               to: senderType === 'AGENT' ? (contact?.email || brandEmail()) : brandEmail(),
               messageId: sentGmailMessageId,

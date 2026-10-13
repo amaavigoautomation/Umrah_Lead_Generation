@@ -3,7 +3,7 @@ import { isFirebaseConfigured } from '../firebase/config.js';
 import { db } from './adminFirestore.js';
 import { safeSetDoc } from './firestoreUtils.js';
 import { Contact, Lead, Conversation, Message } from '../types/index.js';
-import { sendLiveEmail, getSmtpConfig, fetchFirestoreSmtpConfig } from './smtpService.js';
+import { sendLiveEmail, getSmtpConfig, getResendConfig, fetchFirestoreSmtpConfig } from './smtpService.js';
 import { handleIncomingCampaignLeadReply } from './campaignService.js';
 import { tenantRepo } from './tenantRepo.js';
 import type { TenantContext } from '../types/tenant.js';
@@ -912,7 +912,9 @@ export async function processWebsiteLeadSubmission(
     conversationSummary: `Website Demo Request: ${companyName} (${rawFullName})`,
     subject: `Website Demo Request: ${companyName} (${product})`,
     customerEmail: cleanEmail,
-    thankYouEmailSent: true, // Always marked true so background pollers NEVER duplicate this dispatch
+    // Only true when it really went out (or went out earlier). Left false on failure so the
+    // background auto-responder retries instead of the lead silently never getting a thank-you.
+    thankYouEmailSent: alreadySent,
     thankYouSmtpMessageId: alreadySent ? 'ALREADY_SENT_PREVIOUSLY' : undefined,
     startedAt: nowIso,
     lastMessageAt: nowIso,
@@ -951,8 +953,11 @@ export async function processWebsiteLeadSubmission(
     try {
       await fetchFirestoreSmtpConfig();
       const smtpConfig = getSmtpConfig();
+      // Outbound email is Resend-only (sendLiveEmail). Gating on legacy SMTP creds skipped every
+      // thank-you on deployments that only set RESEND_API_KEY.
+      const emailReady = Boolean(getResendConfig().apiKey);
 
-      if (smtpConfig.configured) {
+      if (emailReady) {
         const emailSubject = brandDemoThankYouSubject(brand, companyName);
         const emailBody = [
           `Hello ${firstName},`,
@@ -1005,7 +1010,7 @@ export async function processWebsiteLeadSubmission(
             conversationId,
             senderType: 'AI',
             senderName: brand.senderName,
-            senderEmail: smtpConfig.user || 'amaavigo@gmail.com',
+            senderEmail: smtpConfig.user || getResendConfig().from || brand.salesEmail || '',
             recipientEmail: cleanEmail,
             channel: 'EMAIL',
             direction: 'OUTBOUND',
@@ -1030,7 +1035,7 @@ export async function processWebsiteLeadSubmission(
           console.warn(`[Website Lead Warning] SMTP delivery attempt to ${cleanEmail} failed:`, mailResult.error);
         }
       } else {
-        console.warn(`[Website Lead Notice] SMTP credentials not configured yet; skipping live email dispatch.`);
+        console.warn(`[Website Lead Notice] RESEND_API_KEY is not set; skipping thank-you email.`);
       }
     } catch (smtpErr) {
       console.warn('[Website Lead] Notice sending auto-confirmation email:', smtpErr);

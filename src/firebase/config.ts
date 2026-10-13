@@ -9,7 +9,7 @@ import {
   getDocFromServer,
 } from 'firebase/firestore';
 import { getAuth, Auth } from 'firebase/auth';
-import rawFirebaseConfig from './appletConfig';
+import rawFirebaseConfig from './appletConfig.js';
 
 // Safely detect environment variables in both Vite browser client and Node serverless functions
 const envProjectId =

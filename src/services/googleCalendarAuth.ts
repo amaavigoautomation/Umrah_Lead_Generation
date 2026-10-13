@@ -1,8 +1,6 @@
 import { GoogleAuthProvider, signInWithPopup, onAuthStateChanged, User, signOut, getAuth, type Auth } from 'firebase/auth';
 import { initializeApp, getApps } from 'firebase/app';
-import { auth, db, isFirebaseConfigured, firebaseConfig } from '../firebase/config.js';
-import { doc, getDoc } from 'firebase/firestore';
-import { safeSetDoc } from './clientFirestoreUtils.js';
+import { auth, firebaseConfig } from '../firebase/config.js';
 
 import { CALENDAR_TARGET_ACCOUNT } from '../shared/brandLabels';
 export { CALENDAR_TARGET_ACCOUNT };
@@ -18,7 +16,9 @@ let isSigningIn = false;
 // Try restoring cached token from sessionStorage if in browser
 if (typeof window !== 'undefined') {
   try {
-    cachedAccessToken = window.sessionStorage.getItem('calendar_access_token');
+    // Only a token this browser got from the popup in the last 55 minutes (see dropExpiredToken).
+    const exp = Number(window.sessionStorage.getItem('calendar_access_token_exp') || 0);
+    cachedAccessToken = exp && Date.now() < exp ? window.sessionStorage.getItem('calendar_access_token') : null;
   } catch {}
 }
 
@@ -54,11 +54,31 @@ function getCalendarOAuthAuth(): Auth {
 /**
  * Initializes Google Auth state listener and synchronizes active token to backend.
  */
+/**
+ * Google popup tokens live ~60 minutes. Past that this browser must not keep sending its token: the
+ * server would try it, get 401 and mark the calendar expired again. Treat it as gone after 55 minutes.
+ */
+const TOKEN_EXP_KEY = 'calendar_access_token_exp';
+const TOKEN_LIFETIME_MS = 55 * 60 * 1000;
+function dropExpiredToken() {
+  if (typeof window === 'undefined') return;
+  try {
+    const exp = Number(window.sessionStorage.getItem(TOKEN_EXP_KEY) || 0);
+    // No expiry recorded = saved by an older build, age unknown: drop it too.
+    if (!exp || Date.now() > exp) {
+      cachedAccessToken = null;
+      window.sessionStorage.removeItem('calendar_access_token');
+      window.sessionStorage.removeItem(TOKEN_EXP_KEY);
+    }
+  } catch {}
+}
+
 export const initCalendarAuth = (
   onAuthSuccess?: (user: User | null, token: string) => void,
   onAuthFailure?: () => void
 ) => {
-  // If we already have a session token, sync to server immediately
+  dropExpiredToken();
+  // If we already have a fresh session token, sync to server immediately
   if (cachedAccessToken && typeof window !== 'undefined') {
     syncCalendarTokenToServer(cachedAccessToken, CALENDAR_TARGET_ACCOUNT).then((ok) => {
       if (ok && onAuthSuccess) {
@@ -67,35 +87,12 @@ export const initCalendarAuth = (
     });
   }
 
-  // Also query Firestore for any previously registered active token
-  fetchStoredCalendarToken().then((stored) => {
-    if (stored?.accessToken) {
-      cachedAccessToken = stored.accessToken;
-      if (typeof window !== 'undefined') {
-        try {
-          window.sessionStorage.setItem('calendar_access_token', stored.accessToken);
-        } catch {}
-      }
-      syncCalendarTokenToServer(stored.accessToken, stored.email || CALENDAR_TARGET_ACCOUNT);
-      if (onAuthSuccess) {
-        onAuthSuccess(cachedUser, stored.accessToken);
-      }
-    }
-  });
-
   return onAuthStateChanged(auth, async (user: User | null) => {
     cachedUser = user;
     if (user) {
       if (cachedAccessToken) {
         if (onAuthSuccess) onAuthSuccess(user, cachedAccessToken);
       } else {
-        // Try fetching stored token from Firestore settings/calendar_auth
-        const stored = await fetchStoredCalendarToken();
-        if (stored && stored.accessToken) {
-          cachedAccessToken = stored.accessToken;
-          if (onAuthSuccess) onAuthSuccess(user, cachedAccessToken);
-          return;
-        }
         if (onAuthFailure && !isSigningIn) onAuthFailure();
       }
     } else {
@@ -128,10 +125,11 @@ export const signInWithGoogleCalendar = async (): Promise<{ user: User; accessTo
     if (typeof window !== 'undefined') {
       try {
         window.sessionStorage.setItem('calendar_access_token', credential.accessToken);
+        window.sessionStorage.setItem(TOKEN_EXP_KEY, String(Date.now() + TOKEN_LIFETIME_MS));
       } catch {}
     }
 
-    // Sync token to server API and Firestore settings for background pipeline access
+    // Sync token to the server (it stores it in this workspace's settings for background work)
     await syncCalendarTokenToServer(cachedAccessToken, result.user.email || CALENDAR_TARGET_ACCOUNT);
 
     return { user: result.user, accessToken: cachedAccessToken };
@@ -159,15 +157,19 @@ export const registerCalendarAccessToken = async (token: string, userEmail: stri
   if (typeof window !== 'undefined') {
     try {
       window.sessionStorage.setItem('calendar_access_token', cleanToken);
+      window.sessionStorage.setItem(TOKEN_EXP_KEY, String(Date.now() + TOKEN_LIFETIME_MS));
     } catch {}
   }
   return syncCalendarTokenToServer(cleanToken, userEmail);
 };
 
 /**
- * Gets cached in-memory access token, or fetches from sessionStorage / Firestore settings.
+ * Gets this browser's calendar token (memory, then sessionStorage) while it is still fresh.
+ * Never reads the old flat `settings/calendar_auth` doc: that held a long-dead token which was pushed
+ * back to the server on every page load and overwrote a freshly re-synced one.
  */
 export const getCalendarAccessToken = async (): Promise<string | null> => {
+  dropExpiredToken();
   if (cachedAccessToken) return cachedAccessToken;
 
   if (typeof window !== 'undefined') {
@@ -179,22 +181,11 @@ export const getCalendarAccessToken = async (): Promise<string | null> => {
       }
     } catch {}
   }
-
-  const stored = await fetchStoredCalendarToken();
-  if (stored?.accessToken) {
-    cachedAccessToken = stored.accessToken;
-    if (typeof window !== 'undefined') {
-      try {
-        window.sessionStorage.setItem('calendar_access_token', stored.accessToken);
-      } catch {}
-    }
-    return cachedAccessToken;
-  }
   return null;
 };
 
 /**
- * Syncs the acquired OAuth access token to the server endpoint and Firestore settings.
+ * Sends the acquired OAuth access token to the server, which stores it for this workspace.
  */
 export const syncCalendarTokenToServer = async (token: string, userEmail: string): Promise<boolean> => {
   try {
@@ -205,44 +196,11 @@ export const syncCalendarTokenToServer = async (token: string, userEmail: string
       body: JSON.stringify({ accessToken: token, email: userEmail, updatedAt: new Date().toISOString() }),
     }).catch(() => {});
 
-    // 2. Persist in Firestore settings for serverless / background worker access
-    if (isFirebaseConfigured && db) {
-      await safeSetDoc(
-        doc(db, 'settings', 'calendar_auth'),
-        {
-          accessToken: token,
-          email: userEmail || CALENDAR_TARGET_ACCOUNT,
-          targetAccount: CALENDAR_TARGET_ACCOUNT,
-          updatedAt: new Date().toISOString(),
-          active: true,
-        },
-        { merge: true }
-      );
-    }
     return true;
   } catch (err) {
     console.warn('[Calendar Auth Sync Notice]:', err);
     return false;
   }
-};
-
-/**
- * Fetches stored calendar token from Firestore.
- */
-export const fetchStoredCalendarToken = async (): Promise<{ accessToken: string; email: string } | null> => {
-  if (!isFirebaseConfigured || !db) return null;
-  try {
-    const snap = await getDoc(doc(db, 'settings', 'calendar_auth'));
-    if (snap.exists()) {
-      const data = snap.data();
-      if (data?.accessToken) {
-        return { accessToken: data.accessToken, email: data.email || CALENDAR_TARGET_ACCOUNT };
-      }
-    }
-  } catch (e) {
-    console.warn('[Fetch Calendar Token Notice]:', e);
-  }
-  return null;
 };
 
 /** Forgets the calendar token in this browser. Never signs the user out of the app itself. */
@@ -252,6 +210,7 @@ export const logoutCalendar = async () => {
   if (typeof window !== 'undefined') {
     try {
       window.sessionStorage.removeItem('calendar_access_token');
+      window.sessionStorage.removeItem(TOKEN_EXP_KEY);
     } catch {}
   }
 };

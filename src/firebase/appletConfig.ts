@@ -1,0 +1,23 @@
+/**
+ * Mirrors `/firebase-applet-config.json`.
+ * Keep this object in sync with that file.
+ *
+ * Node 22 (Vercel) refuses `import x from './file.json'` unless the import uses
+ * `with { type: 'json' }`. Vite/Vercel compilation often strips that attribute,
+ * which crashes the function with ERR_IMPORT_ATTRIBUTE_MISSING. A TypeScript
+ * module is valid ESM in the browser and on the server with no extra attribute.
+ */
+const appletFirebaseConfig = {
+  projectId: 'gen-lang-client-0376069258',
+  appId: '1:280237761588:web:1e0633ce031a5a49f15661',
+  apiKey: 'AIzaSyAcr6lIIH50XWD7CcmclWh9lxbPKO7TzBk',
+  authDomain: 'gen-lang-client-0376069258.firebaseapp.com',
+  storageBucket: 'gen-lang-client-0376069258.firebasestorage.app',
+  messagingSenderId: '280237761588',
+  firestoreDatabaseId: 'ai-studio-379c884e-3360-468a-ad55-8105acbd3214',
+  measurementId: '',
+  oAuthClientId: '',
+  recaptchaSiteKey: '',
+};
+
+export default appletFirebaseConfig;

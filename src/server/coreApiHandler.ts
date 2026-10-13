@@ -39,6 +39,7 @@ import {
   getCampaignLeadsFromDb,
   getCampaignRuns,
   createCampaign,
+  runWithCampaignCtx,
   startCampaign,
   pauseCampaign,
   restartCampaign,
@@ -2248,7 +2249,8 @@ Generate a helpful, grounded response.`;
 
   if (url === '/api/campaigns' && req.method === 'POST') {
     try {
-      const created = await createCampaign(body);
+      // Scoped to this request's workspace for the whole call, including the background first batch.
+      const created = await runWithCampaignCtx(activeTenantCtx, () => createCampaign(body));
       res.statusCode = 201;
       res.end(
         JSON.stringify({
@@ -2481,7 +2483,7 @@ Generate a helpful, grounded response.`;
   if (campaignStartMatch && req.method === 'POST') {
     const campaignId = campaignStartMatch[1];
     try {
-      const started = await startCampaign(campaignId);
+      const started = await runWithCampaignCtx(activeTenantCtx, () => startCampaign(campaignId));
       res.statusCode = 200;
       res.end(JSON.stringify({ success: true, campaign: started }));
     } catch (err: any) {

@@ -1361,89 +1361,25 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
         }),
       });
 
-      if (!res.ok && scheduledStartAt) {
-        // A schedule the server rejected must not fall through to the offline fallback below.
-        const errData = await res.json().catch(() => null);
-        setCreateCampaignError(errData?.error || 'Could not schedule the campaign.');
-        setLoading(false);
-        return;
-      }
-
       if (res.ok) {
         const data = await res.json();
         if (data.campaign) {
           createdCampaignResult = data.campaign;
           if (data.leads) createdLeadsResult = data.leads;
         }
+      } else {
+        // Show the server's reason. There is no browser-side fallback any more: it created a campaign
+        // that only existed in this tab (its Firestore write is blocked by the security rules).
+        const errData = await res.json().catch(() => null);
+        setCreateCampaignError(errData?.error || (scheduledStartAt ? 'Could not schedule the campaign.' : 'Could not create the campaign. Please try again.'));
+        setLoading(false);
+        return;
       }
     } catch (e: any) {
       console.warn('[Create Campaign API Note]:', e?.message || e);
-    }
-
-    // Client-side fallback if server API call timed out or failed on Vercel
-    if (!createdCampaignResult) {
-      const now = new Date().toISOString();
-      const campaignId = `camp-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-      const mode = campaignMode || 'PREDEFINED';
-
-      createdCampaignResult = {
-        campaignId,
-        name: trimmedName,
-        type: newCampaignType || 'EMAIL',
-        campaignMode: mode,
-        deliveryMode: deliveryMode || 'LIVE_SMTP',
-        status: scheduledStartAt ? 'SCHEDULED' : startImmediately ? 'RUNNING' : 'DRAFT',
-        ...(scheduledStartAt ? { scheduledStartAt, scheduledTimezone: timezone } : {}),
-        templateId: mode === 'AI_GENERATED' ? undefined : effectiveTemplateId,
-        templateName: mode === 'AI_GENERATED' ? 'AI Intelligent Personalization' : (matchedTemplate?.name || 'Predefined Template'),
-        sourceFileName: uploadedFileName || 'Leads List',
-        totalLeads: validLeads.length,
-        sentCount: 0,
-        pendingCount: validLeads.length,
-        failedCount: 0,
-        repliedCount: 0,
-        demoBookedCount: 0,
-        createdAt: now,
-        updatedAt: now,
-        lastRunNumber: startImmediately ? 1 : 0,
-      };
-
-      createdLeadsResult = validLeads.map((l, idx) => {
-        const cleanEmail = (l.email || '').trim().toLowerCase();
-        const leadName = l.name || cleanEmail.split('@')[0];
-        return {
-          campaignLeadId: `clead-${campaignId}-${idx + 1}`,
-          campaignId,
-          leadId: `lead-${cleanEmail.replace(/[^a-z0-9]/gi, '_')}`,
-          name: leadName,
-          companyName: l.companyName || `${leadName}'s Agency`,
-          email: cleanEmail,
-          phone: l.phone,
-          designation: l.designation || 'Director / Owner',
-          sourceFile: uploadedFileName || 'Leads List',
-          rowNumber: l.rowNumber || idx + 1,
-          sendStatus: 'PENDING',
-          replyStatus: 'NOT_REPLIED',
-          demoStatus: 'NOT_BOOKED',
-          demoIntent: false,
-          sendCount: 0,
-          createdAt: now,
-          updatedAt: now,
-        };
-      });
-    }
-
-    // Ensure persistence directly in Firestore from client browser if configured
-    if (createdCampaignResult && isFirebaseConfigured && db) {
-      try {
-        await setDoc(doc(db, 'campaigns', createdCampaignResult.campaignId), createdCampaignResult, { merge: true });
-        const leadSaves = createdLeadsResult.map((cl) =>
-          setDoc(doc(db, 'campaign_leads', cl.campaignLeadId), cl, { merge: true })
-        );
-        await Promise.allSettled(leadSaves);
-      } catch (fsErr) {
-        console.warn('Browser Firestore save note:', fsErr);
-      }
+      setCreateCampaignError('Could not reach the server. Check your connection and try again; the campaign was not created.');
+      setLoading(false);
+      return;
     }
 
     if (createdCampaignResult) {

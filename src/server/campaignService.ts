@@ -1,4 +1,5 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
+import { waitUntil } from '@vercel/functions';
 import { stripQuotedEmailHistory } from './quotedText.js';
 import { hasFeature } from './entitlements.js';
 import { tenantRepo } from './tenantRepo.js';
@@ -1668,14 +1669,22 @@ export async function createCampaign(params: {
     }
   }
 
-  // If user requested to start immediately (a scheduled campaign is started later by the cron)
+  // "Start now" (a scheduled campaign is started later by the cron).
+  // The switch to RUNNING is AWAITED before we respond. It used to be fire-and-forget, and on Vercel
+  // the function is frozen once the response is sent, so the campaign was often left as DRAFT.
+  // Only the first send batch runs in the background (kept alive with waitUntil); if it is cut short,
+  // the campaign cron continues it because the campaign is already RUNNING.
+  let returnedCampaign: Campaign = initialCampaign;
   if (params.startImmediately && !schedule) {
-    startCampaign(campaignId).catch((err) => {
-      console.error('Error starting campaign immediately:', err);
+    const ctx = getCampaignActiveCtx();
+    returnedCampaign = await startCampaign(campaignId, { sendInitialBatch: false });
+    const firstBatch = runWithCampaignCtx(ctx, () => processNextCampaignSendBatch(campaignId, 500)).catch((err) => {
+      console.warn(`[Campaign Engine] First batch for ${campaignId} did not finish; the cron will continue it:`, err?.message || err);
     });
+    waitUntil(firstBatch);
   }
 
-  return { campaign: initialCampaign, leads: createdLeads, duplicatesSkipped: duplicates.length, duplicates };
+  return { campaign: returnedCampaign, leads: createdLeads, duplicatesSkipped: duplicates.length, duplicates };
 }
 
 // -------------------------------------------------------------
@@ -1785,7 +1794,11 @@ export async function startDueScheduledCampaigns(): Promise<string[]> {
 /**
  * Start or resume a campaign
  */
-export async function startCampaign(campaignId: string): Promise<Campaign> {
+export async function startCampaign(
+  campaignId: string,
+  opts: { sendInitialBatch?: boolean } = {}
+): Promise<Campaign> {
+  const sendInitialBatch = opts.sendInitialBatch !== false;
   const campaign = await ensureCampaignInStore(campaignId);
   if (!campaign) throw new Error(`Campaign ${campaignId} not found`);
 
@@ -1861,6 +1874,8 @@ export async function startCampaign(campaignId: string): Promise<Campaign> {
   if (isFirebaseConfigured && db) {
     await safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignDoc(campaignId), withoutCounters(campaign), { merge: true });
   }
+
+  if (!sendInitialBatch) return campaign;
 
   // Synchronously process initial batch for immediate dispatch on Vercel & dev server
   const batchRes = await processNextCampaignSendBatch(campaignId, 500).catch((err) => {

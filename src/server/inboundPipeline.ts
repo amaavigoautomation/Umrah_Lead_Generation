@@ -58,7 +58,10 @@ import {
 } from './adminFirestore.js';
 import { safeSetDoc } from './firestoreUtils.js';
 import {
+  claimsDemoWasBooked,
   detectDemoSchedulingIntent,
+  getActiveBookingForLeadOrConversation,
+  isSchedulingFollowUp,
   processSchedulingConversationTurn,
 } from './demoSchedulingService.js';
 import { getTenantBrand } from './brandService.js';
@@ -844,7 +847,8 @@ export async function generateAutoReplyText(params: {
   // =========================================================================
   // UNIVERSAL DEMO SCHEDULING AGENT INTERCEPTION
   // =========================================================================
-  if (detectDemoSchedulingIntent(body) || detectDemoSchedulingIntent(subject)) {
+  // Also when the lead is answering our own "which time works?" question without saying "demo".
+  if (detectDemoSchedulingIntent(body) || detectDemoSchedulingIntent(subject) || isSchedulingFollowUp(body, threadHistory || [])) {
     try {
       const historyTurns = (threadHistory || []).map((m: any) => ({
         role: (m.senderType === 'CUSTOMER' || m.senderType === 'PROSPECT' ? 'user' : 'assistant') as 'user' | 'assistant',
@@ -968,7 +972,8 @@ CRITICAL INSTRUCTIONS FOR AI ANALYSIS & REPLY:
    - If 20+ users: Explicitly mention Enterprise volume licensing and senior specialist follow-up.
 3. Keep the response polite, helpful, crisp, and professional.
 4. FORMATTING & GREETING RULES (MANDATORY): Never use Markdown symbols in email replies. Do NOT use **, ##, ###, *, backticks, or similar formatting symbols. Write emails as natural, professional plain text. Use formal greetings ONLY (e.g., "Dear [Name]," or "Hello [Name],"). NEVER use Muslim/religious greetings such as "Assalamu Alaikum", "Walaikum Assalam", "Salam", etc.
-5. Conclude with:
+5. DEMO BOOKINGS (MANDATORY): You can NOT book, schedule, confirm or reschedule demos or meetings, and you can NOT send calendar invitations. Never say a demo or meeting is scheduled, booked or confirmed. If the customer proposes or accepts a time, say you will check availability and that a calendar invitation with the meeting link will follow once it is confirmed.
+6. Conclude with:
 Regards,
 Umrah360 Automation Team
 ${targetMailbox}
@@ -994,7 +999,8 @@ CRITICAL INSTRUCTIONS:
 2. ACCURACY: Ground every answer strictly in the knowledge base above. NEVER invent features, prices, dates or guarantees. If the knowledge base does not contain the answer, say you will connect them with a specialist from ${brand.companyName} and ask for any details needed.
 3. Keep the response polite, helpful, crisp, and professional.
 4. FORMATTING (MANDATORY): Never use Markdown symbols (**, ##, ###, *, backticks). Write natural plain text.
-5. Conclude with:
+5. DEMO BOOKINGS (MANDATORY): You can NOT book, schedule, confirm or reschedule demos or meetings, and you can NOT send calendar invitations. Never say a demo or meeting is scheduled, booked or confirmed. If the customer proposes or accepts a time, say you will check availability and that a calendar invitation with the meeting link will follow once it is confirmed.
+6. Conclude with:
 ${brandAutomationSignature(brand)}${targetMailbox ? `\n${targetMailbox}` : ''}`;
 
       const prompt = isUmrah ? umrahPrompt : genericPrompt;
@@ -1010,7 +1016,23 @@ ${brandAutomationSignature(brand)}${targetMailbox ? `\n${targetMailbox}` : ''}`;
 
           const rawText = completion.choices[0]?.message?.content?.trim() || '';
           if (rawText.length > 30) {
-            const replyText = sanitizeAiEmailText(rawText, senderGreetingName);
+            let replyText = sanitizeAiEmailText(rawText, senderGreetingName);
+            // Safety net: only the booking agent may confirm a demo. If the writer claims one anyway and the
+            // lead has no real upcoming booking, send a truthful holding reply and hand over to a human.
+            if (claimsDemoWasBooked(replyText)) {
+              const real = await getActiveBookingForLeadOrConversation(undefined, from).catch(() => null);
+              if (!real) {
+                console.warn(`[Inbound AI] Blocked a reply claiming a demo booking that does not exist (${from}).`);
+                replyText = sanitizeAiEmailText(
+                  `Dear ${senderGreetingName},\n\nThank you for sharing your preferred time. I am checking our calendar now, and you will receive a calendar invitation with the meeting link as soon as the demo is confirmed.\n\n${
+                    isUmrah ? `Regards,\nUmrah360 Automation Team\n${targetMailbox}\nwww.umrah360.in` : `${brandAutomationSignature(brand)}${targetMailbox ? `\n${targetMailbox}` : ''}`
+                  }`,
+                  senderGreetingName
+                );
+                handoffTriggered = true;
+                handoffReason = 'Lead proposed a demo time but no booking was made; please confirm the slot manually';
+              }
+            }
             return {
               replyText,
               handoffTriggered,

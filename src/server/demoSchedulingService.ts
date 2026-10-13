@@ -1641,46 +1641,6 @@ export function detectDemoSchedulingIntent(text: string): boolean {
 }
 
 /**
- * True when the latest message answers OUR scheduling question ("Tuesday 10am works", "the first slot",
- * "tomorrow afternoon") even though it never says "demo". Without this, such replies skipped the booking
- * agent, went to the general AI writer, and that writer could claim "I have scheduled it" with nothing booked.
- */
-export function isSchedulingFollowUp(text: string, history: Array<{ senderType?: string; role?: string; text?: string; content?: string }> = []): boolean {
-  if (!text || typeof text !== 'string') return false;
-  const t = stripQuotedEmailHistory(text).toLowerCase();
-  if (!t) return false;
-
-  // The last thing WE said must have been about arranging a demo / meeting time.
-  const ours = [...(history || [])]
-    .reverse()
-    .find((m) => {
-      const r = String(m.senderType || m.role || '').toUpperCase();
-      return r === 'AI' || r === 'AGENT' || r === 'ASSISTANT';
-    });
-  const last = String(ours?.text || ours?.content || '').toLowerCase();
-  const weAskedForATime =
-    /(demo|walkthrough|meeting|call|session)/.test(last) &&
-    /(slot|available|availability|what day|what time|which of these|works best|preferred tim|reschedule|schedule)/.test(last);
-  if (!weAskedForATime) return false;
-
-  const mentionsDayOrTime =
-    /(monday|tuesday|wednesday|thursday|friday|saturday|sunday|today|tomorrow|next week|this week)/.test(t) ||
-    /\b\d{1,2}\s*(am|pm)\b|\b\d{1,2}:\d{2}\b|morning|afternoon|evening/.test(t) ||
-    /\b\d{1,2}(st|nd|rd|th)?\s+(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)|\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+\d{1,2}\b/.test(t);
-  const agreesToOffer = /(first|second|third|1st|2nd|3rd|that|this|either|any)\s+(one|slot|option|time)|works for me|sounds good|that works|book it|go ahead|confirm/.test(t);
-  return mentionsDayOrTime || agreesToOffer;
-}
-
-/** The AI text claims a demo/meeting is already booked (only the booking agent may say that). */
-export function claimsDemoWasBooked(reply: string): boolean {
-  const r = String(reply || '');
-  return (
-    /(demo|meeting|call|walkthrough|session|invite|invitation)/i.test(r) &&
-    /\b(i\s*(have|'ve)|we\s*(have|'ve)|has been|have been|is now|is all|it'?s|i)\s+(successfully\s+|now\s+)?(scheduled|booked|confirmed|reserved|arranged|set up|sent (you )?(a |the )?(calendar )?invit)/i.test(r)
-  );
-}
-
-/**
  * Central Demo Scheduling Agent logic.
  * Evaluates the full conversation, checks Google Calendar in realtime,
  * handles scheduling, rescheduling, cancellations, and alternative offers.

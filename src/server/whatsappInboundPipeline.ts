@@ -25,10 +25,7 @@ import { db } from './adminFirestore.js';
 import { doc } from './adminFirestore.js';
 import { safeSetDoc } from './firestoreUtils.js';
 import {
-  claimsDemoWasBooked,
   detectDemoSchedulingIntent,
-  getActiveBookingForLeadOrConversation,
-  isSchedulingFollowUp,
   processSchedulingConversationTurn,
 } from './demoSchedulingService.js';
 import { handleIncomingCampaignLeadReply } from './campaignService.js';
@@ -459,8 +456,7 @@ export async function generateWhatsAppAutoReplyText(params: {
   // =========================================================================
   // UNIVERSAL DEMO SCHEDULING AGENT INTERCEPTION FOR WHATSAPP
   // =========================================================================
-  // Also when the lead is answering our own "which time works?" question without saying "demo".
-  if (detectDemoSchedulingIntent(body) || isSchedulingFollowUp(body, threadHistory || [])) {
+  if (detectDemoSchedulingIntent(body)) {
     try {
       const historyTurns = (threadHistory || []).map((m: any) => ({
         role: (m.senderType === 'CUSTOMER' || m.senderType === 'PROSPECT' ? 'user' : 'assistant') as 'user' | 'assistant',
@@ -567,8 +563,7 @@ INSTRUCTIONS FOR WHATSAPP RESPONSE:
 4. If asking about Dynamic Costing / Rail / Visas: Explain real-time Haramain train costing, automated Saudi eVisa status tracking, and multi-currency SAR/USD exchange rate hedging.
 5. If asking about 20+ users / enterprise: Acknowledge their team size warmly, state that 20+ seat deployments receive customized volume rates and a dedicated account manager, and offer to schedule a live Zoom walkthrough.
 6. If pilgrim / family asking about booking: Confirm our authorized partner agencies in India/UK/Middle East can customize their exact 5-star or budget package, and ask for tentative travel dates and group size.
-7. DEMO BOOKINGS (MANDATORY): NEVER say a demo or meeting is scheduled, booked or confirmed: you cannot book demos or send calendar invitations. If the customer proposes or accepts a time, say you will check availability and that the invitation with the meeting link will follow once confirmed.
-8. Sign off politely as:
+7. Sign off politely as:
 "Umrah360 Team
 WhatsApp: +91 98202 52434
 www.umrah360.in"`;
@@ -591,8 +586,7 @@ INSTRUCTIONS FOR WHATSAPP RESPONSE:
 1. Greet warmly with a formal greeting: "Dear ${senderGreetingName}," or "Hello ${senderGreetingName},"
 2. Tone: professional, warm, crisp and direct. Use short paragraphs suited to WhatsApp. Do not use Markdown headings.
 3. Ground every answer strictly in the knowledge base. NEVER invent features, prices or guarantees. If the answer is not in the knowledge base, say you will connect them with a specialist from ${brand.companyName} and ask for the details needed.
-4. DEMO BOOKINGS (MANDATORY): NEVER say a demo or meeting is scheduled, booked or confirmed: you cannot book demos or send calendar invitations. If the customer proposes or accepts a time, say you will check availability and that the invitation with the meeting link will follow once confirmed.
-5. Sign off politely as:
+4. Sign off politely as:
 "${waSignoff}"`;
       const prompt = isUmrah ? umrahPrompt : genericPrompt;
 
@@ -607,17 +601,7 @@ INSTRUCTIONS FOR WHATSAPP RESPONSE:
 
           const rawText = completion.choices[0]?.message?.content?.trim() || '';
           if (rawText.length > 30) {
-            let replyText = sanitizeAiEmailText(rawText, senderGreetingName);
-            // Safety net: only the booking agent may confirm a demo (see inboundPipeline).
-            if (claimsDemoWasBooked(replyText)) {
-              const real = await getActiveBookingForLeadOrConversation(undefined, undefined, undefined, fromPhone).catch(() => null);
-              if (!real) {
-                console.warn(`[WhatsApp AI] Blocked a reply claiming a demo booking that does not exist (${fromPhone}).`);
-                replyText = `Dear ${senderGreetingName},\n\nThank you for sharing your preferred time. I am checking our calendar now, and you will receive the invitation with the meeting link as soon as the demo is confirmed.\n\n${waSignoff}`;
-                handoffTriggered = true;
-                handoffReason = 'Lead proposed a demo time but no booking was made; please confirm the slot manually';
-              }
-            }
+            const replyText = sanitizeAiEmailText(rawText, senderGreetingName);
             return {
               replyText,
               handoffTriggered,

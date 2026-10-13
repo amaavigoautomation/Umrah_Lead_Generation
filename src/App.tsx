@@ -174,7 +174,10 @@ function toAppUser(u: any): AppUser {
 }
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<ActiveTab>('inbox');
+  // Coming back from "Sign in with Microsoft" (?mailbox=...) opens Settings, where the mailbox panel shows the result.
+  const [activeTab, setActiveTab] = useState<ActiveTab>(() =>
+    typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('mailbox') ? 'settings' : 'inbox'
+  );
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(false);
   const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ? [] : INITIAL_CONTACTS);
   const [leads, setLeads] = useState<Lead[]>(() => isFirebaseConfigured ? [] : INITIAL_LEADS);

@@ -8,7 +8,7 @@ import {
 import { isFirebaseConfigured } from '../firebase/config.js';
 import { db } from './adminFirestore.js';
 import { safeSetDoc } from './firestoreUtils.js';
-import { sendLiveEmail, getSmtpConfig, fetchFirestoreSmtpConfig } from './smtpService.js';
+import { sendLiveEmail, getSmtpConfig, getResendConfig, fetchFirestoreSmtpConfig } from './smtpService.js';
 import { Conversation, Contact, Message } from '../types/index.js';
 import { hasThankYouEmailBeenSent, recordThankYouEmailSent } from './websiteLeadService.js';
 import { tenantRepo } from './tenantRepo.js';
@@ -64,9 +64,8 @@ export async function checkAndDispatchPendingWebsiteLeadEmails(
     const repo = tenantRepo(ctx);
 
     // 1. Ensure SMTP config is ready
-    await fetchFirestoreSmtpConfig();
-    const smtpCfg = getSmtpConfig();
-    if (!smtpCfg.configured) {
+    // Outbound email is Resend-only; legacy SMTP creds are not required to send.
+    if (!getResendConfig().apiKey) {
       return { processedCount: 0, dispatchedCount: 0 };
     }
 
@@ -160,8 +159,8 @@ export async function dispatchThankYouEmailForConversation(
     const repo = tenantRepo(ctx);
     await fetchFirestoreSmtpConfig();
     const smtpCfg = getSmtpConfig();
-    if (!smtpCfg.configured) {
-      return { success: false, error: 'SMTP server credentials not configured.' };
+    if (!getResendConfig().apiKey) {
+      return { success: false, error: 'RESEND_API_KEY is not set on this server.' };
     }
 
     // 1. Fetch conversation

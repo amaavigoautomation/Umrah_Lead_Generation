@@ -971,13 +971,22 @@ export default function App() {
             gmailThreadId,
           }),
         });
-        const sendData = await sendRes.json();
+        const sendData = await sendRes.json().catch(() => ({}));
+        if (!sendRes.ok || !sendData.success) {
+          // Surface the real reason (e.g. "no verified sending domain") instead of failing silently.
+          window.alert(sendData.error || `Email could not be sent (HTTP ${sendRes.status}).`);
+          return;
+        }
         if (sendData.messageId) {
           sentGmailMessageId = sendData.messageId;
         }
-      } catch (err) {
-        console.warn('Live email dispatch notice:', err);
+      } catch (err: any) {
+        window.alert(err?.message || 'Email could not be sent (network error).');
+        return;
       }
+    } else if ((conv.channel === 'EMAIL' || conv.channel === 'WEBSITE') && senderType === 'AGENT' && !recipientEmail) {
+      window.alert('This conversation has no customer email address to reply to.');
+      return;
     }
 
     const direction = (senderType === 'AGENT' || senderType === 'AI') ? 'OUTBOUND' : 'INBOUND';
@@ -1021,9 +1030,10 @@ export default function App() {
     // Save to Firestore BEFORE local state update to ensure persistent state of truth
     if (isFirebaseConfigured && db) {
       try {
-        await setDoc(doc(db, 'messages', newMsg.messageId), sanitizeDoc(newMsg));
+        // Tenant-scoped paths: the inbox listens on tenants/{id}/messages, and root collections are denied by rules.
+        await setDoc(tDoc('messages', newMsg.messageId), sanitizeDoc(newMsg));
         await setDoc(
-          doc(db, 'conversations', conversationId),
+          tDoc('conversations', conversationId),
           sanitizeDoc({
             lastMessageAt: newMsg.timestamp,
             lastMessageText: newMsg.text.slice(0, 120),
@@ -1745,9 +1755,9 @@ export default function App() {
       );
 
       if (isFirebaseConfigured && db) {
-        await setDoc(doc(db, 'messages', approvedMsg.messageId), approvedMsg);
+        await setDoc(tDoc('messages', approvedMsg.messageId), sanitizeDoc(approvedMsg));
         await setDoc(
-          doc(db, 'conversations', conversationId),
+          tDoc('conversations', conversationId),
           {
             status: 'ACTIVE',
             lastMessageAt: nowIso,

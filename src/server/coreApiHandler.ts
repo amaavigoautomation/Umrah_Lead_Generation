@@ -166,6 +166,7 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
   if (typeof body === 'string') {
     try {
       body = JSON.parse(body);
+      console.log(JSON.parse(body))
     } catch {
       try {
         const params = new URLSearchParams(body);

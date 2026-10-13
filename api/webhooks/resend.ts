@@ -14,6 +14,16 @@ async function readRaw(req: IncomingMessage): Promise<Buffer> {
 
 export default async function handler(req: IncomingMessage & { body?: any }, res: ServerResponse) {
   res.setHeader('Content-Type', 'application/json');
+  res.setHeader('Allow', 'GET, HEAD, POST, OPTIONS');
+  if (req.method === 'OPTIONS') {
+    res.statusCode = 204;
+    return res.end();
+  }
+  // Browser / Vercel / Resend URL checks use GET. Real events are POST.
+  if (req.method === 'GET' || req.method === 'HEAD') {
+    res.statusCode = 200;
+    return res.end(JSON.stringify({ ok: true, webhook: 'resend', hint: 'Resend should POST email.opened / email.clicked here' }));
+  }
   if (req.method !== 'POST') {
     res.statusCode = 405;
     return res.end(JSON.stringify({ error: 'POST only' }));

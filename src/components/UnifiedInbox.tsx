@@ -582,69 +582,41 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
             />
           </div>
 
-          {/* Channel Pills */}
-          <div className="flex space-x-1 overflow-x-auto pb-1 scrollbar-none text-xs">
-            {['ALL', 'EMAIL', 'WHATSAPP', 'WEBSITE', 'INSTAGRAM', 'LINKEDIN'].map((ch) => (
-              <button
-                key={ch}
-                onClick={() => setChannelFilter(ch)}
-                className={`px-2.5 py-1 rounded-lg whitespace-nowrap font-bold transition ${
-                  channelFilter === ch
-                    ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-2xs'
-                    : 'bg-white border border-slate-200 text-slate-600 hover:text-slate-900'
+          {/* Channel + status filters (dropdowns) */}
+          <div className="grid grid-cols-2 gap-2 text-xs">
+            <label className="block">
+              <span className="sr-only">Channel</span>
+              <select
+                value={channelFilter}
+                onChange={(e) => setChannelFilter(e.target.value)}
+                className={`w-full rounded-lg border px-2.5 py-1.5 font-semibold focus:outline-none focus:border-orange-500 transition ${
+                  channelFilter !== 'ALL' ? 'border-orange-400 bg-orange-50 text-orange-800' : 'border-slate-200 bg-white text-slate-700'
                 }`}
               >
-                {ch}
-              </button>
-            ))}
-          </div>
-
-          {/* Status Filters */}
-          <div className="flex items-center space-x-1 text-[11px] overflow-x-auto pb-1">
-            <button
-              onClick={() => setStatusFilter('ALL')}
-              className={`px-2 py-0.5 rounded-md transition whitespace-nowrap font-semibold ${
-                statusFilter === 'ALL' ? 'bg-orange-500 text-white' : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              All ({conversations.length})
-            </button>
-            <button
-              onClick={() => setStatusFilter('UNREAD')}
-              className={`px-2 py-0.5 rounded-md transition whitespace-nowrap font-semibold ${
-                statusFilter === 'UNREAD' ? 'bg-orange-500 text-white' : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              Unread
-            </button>
-            <button
-              onClick={() => setStatusFilter('AI_ACTIVE')}
-              className={`px-2 py-0.5 rounded-md transition whitespace-nowrap font-semibold ${
-                statusFilter === 'AI_ACTIVE' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              AI Active
-            </button>
-            <button
-              onClick={() => setStatusFilter('HUMAN_HANDOFF')}
-              className={`px-2 py-0.5 rounded transition whitespace-nowrap ${
-                statusFilter === 'HUMAN_HANDOFF'
-                  ? 'bg-amber-600 text-white font-semibold'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              Handoff
-            </button>
-            <button
-              onClick={() => setStatusFilter('HIGH_INTENT')}
-              className={`px-2 py-0.5 rounded transition whitespace-nowrap ${
-                statusFilter === 'HIGH_INTENT'
-                  ? 'bg-emerald-600 text-white font-semibold'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              High Intent
-            </button>
+                <option value="ALL">All channels</option>
+                <option value="EMAIL">Email</option>
+                <option value="WHATSAPP">WhatsApp</option>
+                <option value="WEBSITE">Website</option>
+                <option value="INSTAGRAM">Instagram</option>
+                <option value="LINKEDIN">LinkedIn</option>
+              </select>
+            </label>
+            <label className="block">
+              <span className="sr-only">Status</span>
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className={`w-full rounded-lg border px-2.5 py-1.5 font-semibold focus:outline-none focus:border-orange-500 transition ${
+                  statusFilter !== 'ALL' ? 'border-orange-400 bg-orange-50 text-orange-800' : 'border-slate-200 bg-white text-slate-700'
+                }`}
+              >
+                <option value="ALL">All ({conversations.length})</option>
+                <option value="UNREAD">Unread</option>
+                <option value="AI_ACTIVE">AI Active</option>
+                <option value="HUMAN_HANDOFF">Handoff</option>
+                <option value="HIGH_INTENT">High Intent</option>
+              </select>
+            </label>
           </div>
         </div>
 

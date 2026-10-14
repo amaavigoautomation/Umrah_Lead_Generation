@@ -12,10 +12,6 @@
     {
       "path": "/api/campaigns/process-active",
       "schedule": "0 0 * * *"
-    },
-    {
-      "path": "/api/inbound-mail/cron",
-      "schedule": "*/5 * * * *"
     }
   ],
   "rewrites": [

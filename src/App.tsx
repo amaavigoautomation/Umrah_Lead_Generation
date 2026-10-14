@@ -1,2 +1,12 @@
 import React, { useState, useEffect, useRef, useCallback, Suspense } from 'react';
 import { lazyNamed, prefetchLazy, markAppLoaded } from './lazyLoad';
+import { BrandProvider, getCurrentBrand } from './context/BrandContext';
+import { brandHost } from './shared/brand';
+import { Navbar, ActiveTab } from './components/Navbar';
+import { HeaderBar } from './components/HeaderBar';
+import { UnifiedInbox } from './components/UnifiedInbox';
+import { LoginView } from './components/LoginView';
+import { onSession, signOutUser, installAuthFetch, type SessionInfo } from './services/authService';
+import { LockedModuleView } from './components/LockedModuleView';
+import { UpgradeRequiredView } from './components/UpgradeRequiredView';
+import { FEATURES, FEATURE_BY_TAB } from './shared/features';

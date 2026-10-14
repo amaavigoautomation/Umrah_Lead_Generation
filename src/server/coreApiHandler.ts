@@ -248,7 +248,9 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
     url === '/api/auto-followup/trigger' ||
     url === '/api/inbound-mail/cron' ||
     // Browser comes back from Microsoft here; the single-use OAuth state identifies the workspace.
-    url === '/api/oauth/microsoft/callback';
+    url === '/api/oauth/microsoft/callback' ||
+    // Calendar OAuth also returns through a state-bound, one-time callback.
+    url === '/api/oauth/microsoft-calendar/callback';
 
   let resolvedTenantId = '';
   let userUid = 'anonymous';
@@ -1002,6 +1004,37 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
     return true;
   }
 
+  // Microsoft Calendar OAuth callback. The callback is public because Microsoft redirects the
+  // browser here without the app's Firebase bearer token; the one-time OAuth state resolves the
+  // tenant and prevents the callback from selecting a different workspace.
+  if (url === '/api/oauth/microsoft-calendar/callback' && req.method === 'GET') {
+    const ms = await import('./microsoftCalendarOAuth.js');
+    let location: string;
+    try {
+      const query = new URL(rawUrl, 'http://localhost').searchParams;
+      const result = await ms.exchangeMicrosoftCalendarCallback(query);
+      await ms.saveMicrosoftCalendarRefreshToken(
+        result.tenantId,
+        result.refreshToken,
+        result.accessToken,
+        result.expiresIn
+      );
+      location = ms.calendarRedirectUrl('connected');
+    } catch (err: any) {
+      const readable = typeof err?.status === 'number' && err.status < 500;
+      if (!readable) console.error('[Microsoft Calendar OAuth] callback failed:', err?.stack || err);
+      location = ms.calendarRedirectUrl(
+        'error',
+        readable ? err.message : 'Could not connect Microsoft Calendar. Please try again.'
+      );
+    }
+    res.statusCode = 302;
+    res.setHeader('Location', location);
+    res.setHeader('Cache-Control', 'no-store');
+    res.end();
+    return true;
+  }
+
   // Per-company inbound mailbox (IMAP): /api/tenants/:tenantId/inbound[/test|/options|/disconnect|/poll|/microsoft]
   // Admin-only (enforced by the tenant guard above). The password is accepted here and never returned.
   const inboundMatch = url.split('?')[0].match(/^\/api\/tenants\/([^/]+)\/inbound(?:\/(test|options|disconnect|poll|microsoft))?$/);
@@ -1204,6 +1237,19 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
   // =========================================================================
   // UNIVERSAL DEMO SCHEDULING AGENT ENDPOINTS
   // =========================================================================
+  if (url === '/api/calendar/microsoft' && req.method === 'POST') {
+    try {
+      const ms = await import('./microsoftCalendarOAuth.js');
+      const result = await ms.startMicrosoftCalendarOAuth(activeTenantCtx);
+      res.statusCode = 200;
+      res.end(JSON.stringify(result));
+    } catch (err: any) {
+      res.statusCode = err?.status || 500;
+      res.end(JSON.stringify({ error: err?.message || 'Could not start Microsoft Calendar sign-in' }));
+    }
+    return true;
+  }
+
   if (url === '/api/calendar/auth-token' && req.method === 'POST') {
     const { accessToken, email, expiresIn } = body;
     if (accessToken) {

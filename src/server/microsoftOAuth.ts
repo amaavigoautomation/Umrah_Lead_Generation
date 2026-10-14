@@ -202,8 +202,12 @@ export async function exchangeMicrosoftCallback(query: URLSearchParams): Promise
   if (!data.refresh_token) throw new MicrosoftOAuthError(400, 'Microsoft did not grant offline access. Please try again and accept all permissions.');
 
   const claims = decodeIdToken(data.id_token);
-  const email = String(claims.email || claims.preferred_username || claims.upn || '').trim().toLowerCase();
-  if (!email || !email.includes('@')) throw new MicrosoftOAuthError(400, 'Could not read the mailbox address from your Microsoft account.');
+  // Prefer a real mailbox address. preferred_username / unique_name can be a phone or alias without @.
+  const emailCandidates = [claims.email, claims.preferred_username, claims.upn, claims.unique_name]
+    .map((v) => String(v || '').trim().toLowerCase())
+    .filter((v) => v.includes('@'));
+  const email = emailCandidates[0] || '';
+  if (!email) throw new MicrosoftOAuthError(400, 'Could not read the mailbox address from your Microsoft account.');
 
   return {
     tenantId: String(st.tenantId),
@@ -272,9 +276,14 @@ export async function getMicrosoftAccessToken(tenantId: string): Promise<string>
     throw new Error(describeMicrosoftError(data)); // network / Microsoft outage: retry later
   }
   accessCache.set(tenantId, { token: data.access_token, expiresAt: Date.now() + (Number(data.expires_in) || 3600) * 1000 });
-  // Microsoft may rotate the refresh token: keep the newest one.
+  // Microsoft may rotate the refresh token: keep the newest one. A failed write would strand the mailbox on the next refresh.
   if (data.refresh_token && data.refresh_token !== refreshToken) {
-    await saveMicrosoftRefreshToken(tenantId, data.refresh_token, data.access_token, data.expires_in).catch(() => {});
+    try {
+      await saveMicrosoftRefreshToken(tenantId, data.refresh_token, data.access_token, data.expires_in);
+    } catch (err: any) {
+      console.error('[Microsoft OAuth] Failed to persist rotated refresh token:', err?.message || err);
+      throw new Error('Could not save the refreshed Microsoft sign-in. Please reconnect the mailbox.');
+    }
   }
   return data.access_token;
 }

@@ -5,13 +5,17 @@
   "outputDirectory": "dist",
   "functions": {
     "api/**/*.ts": {
-      "includeFiles": "src/{server,firebase}/**"
+      "includeFiles": "src/server/**"
     }
   },
   "crons": [
     {
       "path": "/api/campaigns/process-active",
       "schedule": "0 0 * * *"
+    },
+    {
+      "path": "/api/inbound-mail/cron",
+      "schedule": "*/5 * * * *"
     }
   ],
   "rewrites": [
@@ -26,10 +30,6 @@
     {
       "source": "/api/webhooks/stripe",
       "destination": "/api/webhooks/stripe"
-    },
-    {
-      "source": "/api/webhooks/email/resend",
-      "destination": "/api/webhooks/resend"
     },
     {
       "source": "/api/leads/inbound",

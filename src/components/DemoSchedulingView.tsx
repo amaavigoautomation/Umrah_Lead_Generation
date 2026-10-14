@@ -42,7 +42,11 @@ export const DemoSchedulingView: React.FC<DemoSchedulingViewProps> = ({ leads = 
   const dayRange = brandWorkingDaysLabel(brand).replace(' to ', '–').replace(/Monday/g, 'Mon').replace(/Tuesday/g, 'Tue').replace(/Wednesday/g, 'Wed').replace(/Thursday/g, 'Thu').replace(/Friday/g, 'Fri').replace(/Saturday/g, 'Sat').replace(/Sunday/g, 'Sun');
   const hoursLabel = `${fmtHour(brand.workingHoursStart)} – ${fmtHour(brand.workingHoursEnd)} ${tzl}`;
   const [calendarConnected, setCalendarConnected] = useState(() => hasCalendarToken());
+  const [calendarProvider, setCalendarProvider] = useState<'google' | 'microsoft' | null>(null);
+  const [connectedEmail, setConnectedEmail] = useState<string>('');
+  const [microsoftAvailable, setMicrosoftAvailable] = useState(true);
   const [isAuthenticating, setIsAuthenticating] = useState(false);
+  const [isMsAuthenticating, setIsMsAuthenticating] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
 
   const [availableSlots, setAvailableSlots] = useState<
@@ -107,6 +111,9 @@ export const DemoSchedulingView: React.FC<DemoSchedulingViewProps> = ({ leads = 
         const data = await res.json();
         const connected = Boolean(data.configured && data.connected);
         setCalendarConnected(connected);
+        setCalendarProvider(data.provider === 'microsoft' || data.provider === 'google' ? data.provider : connected ? 'google' : null);
+        setConnectedEmail(data.email || data.targetAccount || '');
+        setMicrosoftAvailable(data.microsoftAvailable !== false);
         if (!connected) {
           console.warn('[Calendar] status says not connected', { configured: data.configured, connected: data.connected, hadToken: Boolean(token) });
         }
@@ -159,6 +166,24 @@ export const DemoSchedulingView: React.FC<DemoSchedulingViewProps> = ({ leads = 
   };
 
   useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    const cal = params.get('calendar');
+    if (!cal) return;
+    if (cal === 'microsoft') {
+      setBookingSuccessMsg('Microsoft Calendar connected. Demos will now use Microsoft Teams links. Google Calendar was disconnected.');
+      setCalendarProvider('microsoft');
+      setCalendarConnected(true);
+    } else {
+      setAuthError(params.get('calendar_message') || 'Microsoft Calendar could not be connected.');
+    }
+    params.delete('calendar');
+    params.delete('calendar_message');
+    const next = window.location.pathname + (params.toString() ? `?${params.toString()}` : '') + window.location.hash;
+    window.history.replaceState({}, '', next);
+  }, []);
+
+  useEffect(() => {
     const unsub = initCalendarAuth(
       (_user, token) => {
         if (token) {
@@ -179,6 +204,37 @@ export const DemoSchedulingView: React.FC<DemoSchedulingViewProps> = ({ leads = 
     };
   }, []);
 
+  const videoLabel = calendarProvider === 'microsoft' ? 'Microsoft Teams' : 'Google Meet';
+  const googleActive = calendarConnected && calendarProvider === 'google';
+  const microsoftActive = calendarConnected && calendarProvider === 'microsoft';
+
+  const handleDisconnectCalendar = async () => {
+    setAuthError(null);
+    try {
+      await fetch('/api/calendar/disconnect', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+      setCalendarConnected(false);
+      setCalendarProvider(null);
+      setConnectedEmail('');
+      setBookingSuccessMsg('Calendar disconnected.');
+    } catch (err: any) {
+      setAuthError(err?.message || 'Could not disconnect the calendar.');
+    }
+  };
+
+  const handleConnectMicrosoftCalendar = async () => {
+    setIsMsAuthenticating(true);
+    setAuthError(null);
+    try {
+      const res = await fetch('/api/calendar/microsoft', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || 'Could not start Microsoft Calendar sign-in');
+      window.location.href = data.authorizationUrl;
+    } catch (err: any) {
+      setAuthError(err?.message || 'Failed to start Microsoft Calendar sign-in.');
+      setIsMsAuthenticating(false);
+    }
+  };
+
   // Connect Google Calendar with popup
   const handleConnectGoogleCalendar = async () => {
     setIsAuthenticating(true);
@@ -187,7 +243,8 @@ export const DemoSchedulingView: React.FC<DemoSchedulingViewProps> = ({ leads = 
       const res = await signInWithGoogleCalendar();
       if (res?.accessToken) {
         setCalendarConnected(true);
-        setBookingSuccessMsg(`Google Calendar & Meet connected (${CALENDAR_TARGET_ACCOUNT})! Real Google Meet links and calendar slot bookings are active.`);
+        setCalendarProvider('google');
+        setBookingSuccessMsg(`Google Calendar & Meet connected. Microsoft Calendar was disconnected (only one calendar at a time).`);
         fetchAvailability();
         fetchBookings();
       }
@@ -256,7 +313,7 @@ export const DemoSchedulingView: React.FC<DemoSchedulingViewProps> = ({ leads = 
 
       const data = await bookRes.json();
       if (data.success && data.booking) {
-        setBookingSuccessMsg(`Real Google Meet Created: ${data.booking.googleMeetLink} (Calendar ID: ${data.booking.calendarEventId})`);
+        setBookingSuccessMsg(`${videoLabel} created: ${data.booking.googleMeetLink} (Calendar ID: ${data.booking.calendarEventId})`);
         fetchBookings();
         fetchAvailability();
       } else {
@@ -305,7 +362,7 @@ export const DemoSchedulingView: React.FC<DemoSchedulingViewProps> = ({ leads = 
 
       const data = await res.json();
       if (data.success && data.booking) {
-        setBookingSuccessMsg(`Demo successfully booked on Google Calendar! Real Google Meet link: ${data.booking.googleMeetLink}`);
+        setBookingSuccessMsg(`Demo booked. ${videoLabel} link: ${data.booking.googleMeetLink}`);
         setSelectedSlot(null);
         fetchAvailability();
         fetchBookings();
@@ -484,12 +541,13 @@ export const DemoSchedulingView: React.FC<DemoSchedulingViewProps> = ({ leads = 
             </div>
             <h2 className="text-xl md:text-2xl font-extrabold text-slate-900 flex items-center gap-2">
               <CalendarIcon className="w-6 h-6 text-orange-500" />
-              Google Calendar Single Source of Truth
+              Demo calendar (Google or Microsoft)
             </h2>
             <p className="text-xs sm:text-sm text-slate-600 max-w-2xl font-medium leading-relaxed">
-              All demo requests across <strong className="text-slate-900 font-bold">Website, Email, WhatsApp, and Campaigns</strong> are validated in
-              realtime against <strong className="text-slate-900 font-bold">{CALENDAR_TARGET_ACCOUNT}</strong>. Bookings generate authentic Google Meet rooms
-              and reserve slots directly on Google Calendar ({dayRange}, {hoursLabel}).
+              All demo requests across <strong className="text-slate-900 font-bold">Website, Email, WhatsApp, and Campaigns</strong> use one connected calendar.
+              Google → <strong>Google Meet</strong>. Microsoft 365 → <strong>Microsoft Teams</strong>. Only one can be connected at a time
+              ({dayRange}, {hoursLabel}
+              {connectedEmail ? <> · {connectedEmail}</> : CALENDAR_TARGET_ACCOUNT ? <> · {CALENDAR_TARGET_ACCOUNT}</> : null}).
             </p>
           </div>
 
@@ -501,87 +559,126 @@ export const DemoSchedulingView: React.FC<DemoSchedulingViewProps> = ({ leads = 
                 }`}
               />
               <span className="font-bold">
-                {calendarConnected ? 'Calendar Active & Synced' : 'Calendar Disconnected'}
+                {calendarConnected
+                  ? `Active · ${calendarProvider === 'microsoft' ? 'Microsoft / Teams' : 'Google / Meet'}`
+                  : 'No calendar connected'}
               </span>
             </div>
-
-            <button
-              onClick={handleConnectGoogleCalendar}
-              disabled={isAuthenticating}
-              className="text-xs font-bold bg-white hover:bg-slate-50 text-slate-900 border border-slate-200/90 px-4 py-2 rounded-xl shadow-2xs hover:shadow transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50"
-            >
-              <svg version="1.1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" className="w-4 h-4">
-                <path
-                  fill="#EA4335"
-                  d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"
-                />
-                <path
-                  fill="#4285F4"
-                  d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"
-                />
-                <path
-                  fill="#FBBC05"
-                  d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"
-                />
-                <path
-                  fill="#34A853"
-                  d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"
-                />
-              </svg>
-              <span>{isAuthenticating ? 'Authorizing...' : calendarConnected ? 'Re-sync Calendar' : 'Sync Calendar'}</span>
-            </button>
-
             {calendarConnected && (
               <button
                 onClick={handleTestGoogleBooking}
                 disabled={isTestingBooking}
                 className="px-3.5 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-xs font-bold transition-all shadow-2xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-                title="Book an automated test demo on the next free slot to verify authentic Google Meet creation"
+                title={`Book a test demo on the next free slot to verify ${videoLabel}`}
               >
                 <Video className={`w-3.5 h-3.5 ${isTestingBooking ? 'animate-pulse' : ''}`} />
-                <span>{isTestingBooking ? 'Booking Test...' : 'Test Meet Booking'}</span>
+                <span>{isTestingBooking ? 'Booking Test...' : `Test ${calendarProvider === 'microsoft' ? 'Teams' : 'Meet'} Booking`}</span>
               </button>
             )}
-
-            <button
-              onClick={() => setShowManualTokenInput(!showManualTokenInput)}
-              className="px-3 py-2 bg-slate-100 hover:bg-slate-200/80 text-slate-700 rounded-xl border border-slate-200/90 text-xs font-bold transition-colors cursor-pointer"
-              title="Manual Token & Configuration Options"
-            >
-              Token Setup
-            </button>
           </div>
         </div>
 
-        {/* Unconnected Warning Alert Banner */}
-        {!calendarConnected && (
-          <div className="p-4 rounded-xl bg-amber-50 border border-amber-200/90 text-amber-900 text-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-3 shadow-2xs">
-            <div className="flex items-start gap-3">
-              <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div
+            className={`rounded-xl border p-4 space-y-3 ${
+              googleActive ? 'border-emerald-300 bg-emerald-50/70' : 'border-slate-200 bg-white'
+            }`}
+          >
+            <div className="flex items-start justify-between gap-2">
               <div>
-                <strong className="text-amber-950 block text-sm mb-0.5 font-extrabold">Google Calendar & Real Google Meet Connection Required</strong>
-                <span className="font-medium text-amber-800">
-                  Connect your Google account (<strong>{CALENDAR_TARGET_ACCOUNT}</strong>) to enable authentic Google Meet video conference generation and reserve slots directly on your Google Calendar without dummy links.
-                </span>
+                <h3 className="text-sm font-extrabold text-slate-900">Google Calendar sync</h3>
+                <p className="text-xs text-slate-600 mt-0.5 font-medium">
+                  Books on Google Calendar. Invite includes a <strong>Google Meet</strong> link.
+                </p>
               </div>
+              <span
+                className={`text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full shrink-0 ${
+                  googleActive ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-500'
+                }`}
+              >
+                {googleActive ? 'Connected' : 'Off'}
+              </span>
             </div>
-            <div className="flex items-center gap-2 shrink-0">
+            {googleActive && connectedEmail && (
+              <p className="text-[11px] text-slate-600 font-medium break-all">{connectedEmail}</p>
+            )}
+            {microsoftActive && (
+              <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-100 rounded-lg px-2 py-1.5">
+                Connecting Google will disconnect Microsoft Calendar.
+              </p>
+            )}
+            <div className="flex flex-wrap gap-2">
               <button
                 onClick={handleConnectGoogleCalendar}
-                disabled={isAuthenticating}
-                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold shadow-2xs text-xs transition-colors cursor-pointer"
+                disabled={isAuthenticating || isMsAuthenticating}
+                className="text-xs font-bold bg-slate-900 hover:bg-slate-800 text-white px-3.5 py-2 rounded-lg disabled:opacity-50"
               >
-                {isAuthenticating ? 'Connecting...' : 'Connect Now'}
+                {isAuthenticating ? 'Authorizing…' : googleActive ? 'Re-sync Google Calendar' : 'Sync Google Calendar'}
               </button>
+              {googleActive && (
+                <button onClick={handleDisconnectCalendar} className="text-xs font-bold border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 px-3.5 py-2 rounded-lg">
+                  Disconnect
+                </button>
+              )}
               <button
-                onClick={() => setShowManualTokenInput(true)}
-                className="px-3 py-2 bg-white hover:bg-slate-50 text-slate-800 border border-slate-200 rounded-xl text-xs font-bold transition-colors cursor-pointer"
+                type="button"
+                onClick={() => setShowManualTokenInput(!showManualTokenInput)}
+                className="text-xs font-bold text-slate-500 hover:text-slate-800 px-2 py-2"
               >
-                Paste Token
+                Paste Google token
               </button>
             </div>
           </div>
-        )}
+
+          <div
+            className={`rounded-xl border p-4 space-y-3 ${
+              microsoftActive ? 'border-emerald-300 bg-emerald-50/70' : 'border-slate-200 bg-white'
+            }`}
+          >
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <h3 className="text-sm font-extrabold text-slate-900">Microsoft Calendar sync</h3>
+                <p className="text-xs text-slate-600 mt-0.5 font-medium">
+                  Books on Outlook / Microsoft 365. Invite includes a <strong>Microsoft Teams</strong> link.
+                </p>
+              </div>
+              <span
+                className={`text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full shrink-0 ${
+                  microsoftActive ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-500'
+                }`}
+              >
+                {microsoftActive ? 'Connected' : 'Off'}
+              </span>
+            </div>
+            {microsoftActive && connectedEmail && (
+              <p className="text-[11px] text-slate-600 font-medium break-all">{connectedEmail}</p>
+            )}
+            {googleActive && (
+              <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-100 rounded-lg px-2 py-1.5">
+                Connecting Microsoft will disconnect Google Calendar.
+              </p>
+            )}
+            {!microsoftAvailable && (
+              <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-100 rounded-lg px-2 py-1.5">
+                Microsoft Calendar is not set up on this server yet (MICROSOFT_CLIENT_ID, SECRET, APP_URL).
+              </p>
+            )}
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={handleConnectMicrosoftCalendar}
+                disabled={isAuthenticating || isMsAuthenticating || !microsoftAvailable}
+                className="text-xs font-bold bg-[#5B5FC7] hover:bg-[#4B4FAE] text-white px-3.5 py-2 rounded-lg disabled:opacity-50"
+              >
+                {isMsAuthenticating ? 'Redirecting…' : microsoftActive ? 'Re-sync Microsoft Calendar' : 'Sync Microsoft Calendar'}
+              </button>
+              {microsoftActive && (
+                <button onClick={handleDisconnectCalendar} className="text-xs font-bold border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 px-3.5 py-2 rounded-lg">
+                  Disconnect
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
 
         {/* Manual Token Setup Accordion */}
         {showManualTokenInput && (
@@ -692,7 +789,7 @@ export const DemoSchedulingView: React.FC<DemoSchedulingViewProps> = ({ leads = 
                   >
                     <div className="space-y-0.5">
                       <div className="font-bold text-slate-900">{slot.label}</div>
-                      <div className="text-[11px] text-slate-500 font-medium">Duration: 60 min • Google Meet</div>
+                      <div className="text-[11px] text-slate-500 font-medium">Duration: 60 min • {videoLabel}</div>
                     </div>
                     <span className="px-2 py-0.5 bg-orange-100 text-orange-800 border border-orange-200/80 rounded text-[10px] font-bold">
                       {rescheduleBookingId ? 'Reschedule' : 'Select'}
@@ -757,7 +854,7 @@ export const DemoSchedulingView: React.FC<DemoSchedulingViewProps> = ({ leads = 
                       <th className="py-2.5 px-3">Attendees & Invites</th>
                       <th className="py-2.5 px-3">Date & Time ({tzl})</th>
                       <th className="py-2.5 px-3">Channel</th>
-                      <th className="py-2.5 px-3">Google Meet</th>
+                      <th className="py-2.5 px-3">{videoLabel}</th>
                       <th className="py-2.5 px-3">Status</th>
                       <th className="py-2.5 px-3 text-right">Actions</th>
                     </tr>
@@ -970,7 +1067,7 @@ export const DemoSchedulingView: React.FC<DemoSchedulingViewProps> = ({ leads = 
                 ) : (
                   <>
                     <CheckCircle2 className="w-3.5 h-3.5" />
-                    <span>Confirm & Generate Google Meet Link</span>
+                    <span>Confirm & Generate {videoLabel} Link</span>
                   </>
                 )}
               </button>
@@ -1028,7 +1125,7 @@ export const DemoSchedulingView: React.FC<DemoSchedulingViewProps> = ({ leads = 
                 className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 font-medium placeholder-slate-400 focus:outline-none focus:border-orange-500 focus:bg-white shadow-2xs"
               />
               <p className="text-[11px] text-slate-500 mt-1 font-medium">
-                Google Calendar will immediately dispatch the official meeting invite and Google Meet link to these email addresses.
+                The connected calendar will send the invite and {videoLabel} link to these email addresses.
               </p>
             </div>
 
@@ -1259,7 +1356,7 @@ export const DemoSchedulingView: React.FC<DemoSchedulingViewProps> = ({ leads = 
             </div>
 
             <div className="text-[10px] text-slate-400 pt-3 border-t border-slate-200 font-medium">
-              Response is automatically formatted for the target channel (Email / WhatsApp / Website) with Google Meet
+              Response is automatically formatted for the target channel (Email / WhatsApp / Website) with {videoLabel}
               link.
             </div>
           </div>

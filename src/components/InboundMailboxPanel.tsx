@@ -3,7 +3,7 @@ import { Inbox, CheckCircle2, AlertTriangle, PauseCircle, Loader2, RefreshCw, Pl
 
 interface InboundView {
   enabled: boolean;
-  provider?: 'gmail' | 'microsoft' | 'other';
+  provider?: 'gmail' | 'microsoft' | 'imap' | 'other';
   authType?: 'password' | 'oauth';
   microsoftAvailable?: boolean;
   host?: string;
@@ -33,7 +33,7 @@ const btnPrimary =
 const btnGhost =
   'inline-flex items-center gap-2 border border-slate-200 hover:bg-slate-50 disabled:opacity-50 text-slate-700 text-sm font-semibold rounded-lg px-4 py-2 transition-colors';
 
-type ProviderId = 'gmail' | 'outlook';
+type ProviderId = 'gmail' | 'outlook' | 'imap';
 
 const PROVIDERS: { id: ProviderId; label: string; help: string }[] = [
   {
@@ -44,12 +44,23 @@ const PROVIDERS: { id: ProviderId; label: string; help: string }[] = [
   {
     id: 'outlook',
     label: 'Outlook / Microsoft 365',
-    help: 'Microsoft no longer accepts passwords for this. Sign in with your Microsoft account instead; we never see your password. For work accounts, your IT admin may need to approve the app the first time.',
+    help: 'Microsoft no longer accepts passwords for IMAP. Sign in with your Microsoft account instead; we never see your password. For work accounts, your IT admin may need to approve the app the first time. Replies use the same AI, CRM, and follow-up pipeline as Gmail.',
+  },
+  {
+    id: 'imap',
+    label: 'Other IMAP',
+    help: 'Any other mailbox that supports IMAP (custom domain, Zoho, etc.). Use port 993 with SSL/TLS when possible. Outlook / Microsoft 365 must use Sign in with Microsoft above.',
   },
 ];
 
 const providerLabel = (v: InboundView) =>
-  v.provider === 'microsoft' ? 'Outlook / Microsoft 365' : v.provider === 'gmail' ? 'Gmail / Google Workspace' : `${v.host}:${v.port}`;
+  v.provider === 'microsoft'
+    ? 'Outlook / Microsoft 365'
+    : v.provider === 'gmail'
+      ? 'Gmail / Google Workspace'
+      : v.host
+        ? `${v.host}:${v.port || 993}`
+        : 'Other IMAP';
 
 function ago(iso?: string) {
   if (!iso) return 'never';
@@ -82,6 +93,13 @@ const Pill: React.FC<{ status: InboundView['status'] }> = ({ status }) => {
   return null;
 };
 
+function providerFromView(v: InboundView): ProviderId {
+  if (v.provider === 'microsoft') return 'outlook';
+  if (v.provider === 'gmail') return 'gmail';
+  if (v.host && v.host !== 'imap.gmail.com') return 'imap';
+  return 'gmail';
+}
+
 export const InboundMailboxPanel: React.FC<{ tenantId: string; canEdit: boolean }> = ({ tenantId, canEdit }) => {
   const base = `/api/tenants/${encodeURIComponent(tenantId)}/inbound`;
   const [view, setView] = useState<InboundView | null>(null);
@@ -94,6 +112,8 @@ export const InboundMailboxPanel: React.FC<{ tenantId: string; canEdit: boolean 
   const [provider, setProvider] = useState<ProviderId>('gmail');
   const [user, setUser] = useState('');
   const [password, setPassword] = useState('');
+  const [host, setHost] = useState('');
+  const [port, setPort] = useState('993');
   const [showPw, setShowPw] = useState(false);
   const [newInquiries, setNewInquiries] = useState(false);
 
@@ -102,8 +122,11 @@ export const InboundMailboxPanel: React.FC<{ tenantId: string; canEdit: boolean 
 
   const apply = (v: InboundView) => {
     setView(v);
-    setProvider(v.provider === 'microsoft' ? 'outlook' : 'gmail');
-    setUser(v.provider === 'gmail' ? v.user || '' : '');
+    const nextProvider = providerFromView(v);
+    setProvider(nextProvider);
+    setUser(v.user || '');
+    setHost(v.host && v.host !== 'imap.gmail.com' ? v.host : '');
+    setPort(String(v.port || 993));
     setNewInquiries(Boolean(v.processNewInquiries));
     setPassword('');
   };
@@ -131,7 +154,7 @@ export const InboundMailboxPanel: React.FC<{ tenantId: string; canEdit: boolean 
     const params = new URLSearchParams(window.location.search);
     const result = params.get('mailbox');
     if (!result) return;
-    if (result === 'connected') setNotice('Outlook mailbox connected. New replies will now be picked up automatically.');
+    if (result === 'connected') setNotice('Outlook mailbox connected. New replies will now be picked up automatically — AI, CRM, and follow-ups work the same as Gmail.');
     else setError(params.get('mailbox_message') || 'The Microsoft mailbox could not be connected. Please try again.');
     params.delete('mailbox');
     params.delete('mailbox_message');
@@ -182,7 +205,10 @@ export const InboundMailboxPanel: React.FC<{ tenantId: string; canEdit: boolean 
   const showForm = !connected || editing;
   const help = PROVIDERS.find((p) => p.id === provider)?.help;
   const microsoftAvailable = view?.microsoftAvailable !== false;
-  const keepSavedPassword = Boolean(editing && view?.hasPassword && view?.provider === 'gmail');
+  const keepSavedPassword = Boolean(
+    editing && view?.hasPassword && view?.authType !== 'oauth' && (provider === 'gmail' || provider === 'imap')
+  );
+  const passwordConnect = provider === 'gmail' || provider === 'imap';
 
   return (
     <div className="bg-white border border-slate-200/90 rounded-2xl p-6 shadow-sm space-y-6">
@@ -193,7 +219,9 @@ export const InboundMailboxPanel: React.FC<{ tenantId: string; canEdit: boolean 
           </div>
           <div>
             <h3 className="text-base font-bold text-slate-900">Inbound mailbox</h3>
-            <p className="text-sm text-slate-500">Connect your own inbox so customer replies reach your workspace.</p>
+            <p className="text-sm text-slate-500">
+              Connect Gmail, Microsoft 365 / Outlook, or any IMAP inbox. New mail uses the same AI replies, CRM, and follow-ups.
+            </p>
           </div>
         </div>
         {view && <Pill status={view.status} />}
@@ -206,7 +234,7 @@ export const InboundMailboxPanel: React.FC<{ tenantId: string; canEdit: boolean 
         <div className="text-sm bg-amber-50 border border-amber-100 text-amber-800 rounded-lg px-3 py-2 space-y-2">
           <div>
             {view.lastError}
-            {view.status === 'auth_failed' && !isOAuth && ' Re-enter the app password below to resume.'}
+            {view.status === 'auth_failed' && !isOAuth && ' Re-enter the mailbox password below to resume.'}
           </div>
           {view.status === 'auth_failed' && isOAuth && canEdit && (
             <button className={btnPrimary} disabled={busy === 'microsoft'} onClick={signInWithMicrosoft}>
@@ -252,7 +280,7 @@ export const InboundMailboxPanel: React.FC<{ tenantId: string; canEdit: boolean 
               <span className="font-medium text-slate-900">Also handle brand-new enquiries</span>
               <span className="block text-slate-500">
                 Off (recommended): only replies to your campaigns and existing contacts are picked up, so personal or unrelated email is ignored. On: any
-                new email from someone we don't know can start a conversation and get an AI reply.
+                new email from someone we don&apos;t know can start a conversation and get an AI reply.
               </span>
             </span>
           </label>
@@ -346,11 +374,69 @@ export const InboundMailboxPanel: React.FC<{ tenantId: string; canEdit: boolean 
             </div>
           )}
 
+          {provider === 'imap' && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <label className="block sm:col-span-2">
+                <span className="text-xs font-medium text-slate-500">IMAP server</span>
+                <input
+                  className={inputCls}
+                  autoComplete="off"
+                  placeholder="imap.yourdomain.com"
+                  value={host}
+                  disabled={!canEdit}
+                  onChange={(e) => setHost(e.target.value)}
+                />
+              </label>
+              <label className="block">
+                <span className="text-xs font-medium text-slate-500">Port</span>
+                <select className={inputCls} value={port} disabled={!canEdit} onChange={(e) => setPort(e.target.value)}>
+                  <option value="993">993 (SSL/TLS)</option>
+                  <option value="143">143 (STARTTLS)</option>
+                </select>
+              </label>
+              <label className="block">
+                <span className="text-xs font-medium text-slate-500">Email / username</span>
+                <input
+                  className={inputCls}
+                  type="email"
+                  autoComplete="off"
+                  placeholder="sales@yourcompany.com"
+                  value={user}
+                  disabled={!canEdit}
+                  onChange={(e) => setUser(e.target.value)}
+                />
+              </label>
+              <label className="block sm:col-span-2">
+                <span className="text-xs font-medium text-slate-500">
+                  Password{keepSavedPassword ? ' (leave blank to keep the saved one)' : ''}
+                </span>
+                <div className="relative">
+                  <input
+                    className={`${inputCls} pr-10`}
+                    type={showPw ? 'text' : 'password'}
+                    autoComplete="new-password"
+                    value={password}
+                    disabled={!canEdit}
+                    onChange={(e) => setPassword(e.target.value)}
+                  />
+                  <button
+                    type="button"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700"
+                    onClick={() => setShowPw((s) => !s)}
+                    title={showPw ? 'Hide' : 'Show'}
+                  >
+                    {showPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </label>
+            </div>
+          )}
+
           {help && <p className="text-sm text-slate-500">{help}</p>}
 
           {provider === 'outlook' && !microsoftAvailable && (
             <div className="text-sm bg-amber-50 border border-amber-100 text-amber-800 rounded-lg px-3 py-2">
-              Sign in with Microsoft is not set up on this server yet. Please contact support.
+              Sign in with Microsoft is not set up on this server yet. An admin must set MICROSOFT_CLIENT_ID, MICROSOFT_CLIENT_SECRET, and APP_URL (see MICROSOFT_IMAP.md).
             </div>
           )}
 
@@ -362,15 +448,29 @@ export const InboundMailboxPanel: React.FC<{ tenantId: string; canEdit: boolean 
           )}
 
           <div className="flex gap-2">
-            {provider === 'gmail' ? (
+            {passwordConnect ? (
               <button
                 className={btnPrimary}
-                disabled={!canEdit || !user.trim() || (!password && !keepSavedPassword) || busy === 'connect'}
+                disabled={
+                  !canEdit ||
+                  !user.trim() ||
+                  (provider === 'imap' && !host.trim()) ||
+                  (!password && !keepSavedPassword) ||
+                  busy === 'connect'
+                }
                 onClick={async () => {
+                  const connectHost = provider === 'gmail' ? 'imap.gmail.com' : host.trim();
+                  const connectPort = provider === 'gmail' ? 993 : Number(port) || 993;
                   const v = await run(
                     'connect',
                     '',
-                    { host: 'imap.gmail.com', port: 993, user, password, ...(connected ? {} : { processNewInquiries: newInquiries }) },
+                    {
+                      host: connectHost,
+                      port: connectPort,
+                      user,
+                      password,
+                      ...(connected ? {} : { processNewInquiries: newInquiries }),
+                    },
                     'Connected. New replies will now be picked up automatically.'
                   );
                   if (v) setEditing(false);
@@ -390,9 +490,9 @@ export const InboundMailboxPanel: React.FC<{ tenantId: string; canEdit: boolean 
             )}
           </div>
           <p className="text-xs text-slate-500">
-            {provider === 'gmail'
-              ? 'Your app password is encrypted and only used to read new mail. It is never shown again. We sign in once to check the details before saving.'
-              : 'You sign in on Microsoft’s own page. We only receive permission to read new mail, stored encrypted, and you can revoke it any time from your Microsoft account.'}
+            {provider === 'outlook'
+              ? 'You sign in on Microsoft’s own page. We only receive permission to read new mail, stored encrypted, and you can revoke it any time from your Microsoft account.'
+              : 'Your password is encrypted and only used to read new mail. It is never shown again. We sign in once to check the details before saving.'}
           </p>
         </section>
       )}

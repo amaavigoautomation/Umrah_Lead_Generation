@@ -597,7 +597,11 @@ export async function handleEnableAutoFollowUp(
   if (!last) return { enabled: true, job: null };
 
   const lastIsOurs = last.senderType === 'AGENT' || last.senderType === 'AI' || last.senderType === 'HUMAN' || last.direction === 'OUTBOUND';
-  if (!lastIsOurs) return { enabled: true, job: null };
+  // A website-form lead that nobody has answered yet (for example the thank-you email failed) has only the
+  // form message in its thread. That lead is exactly who a follow-up is for, so time it from now instead of
+  // waiting forever for "our next message".
+  const unansweredWebsiteLead = conversation.channel === 'WEBSITE' && !lastIsOurs && last.direction !== 'OUTBOUND';
+  if (!lastIsOurs && !unansweredWebsiteLead) return { enabled: true, job: null };
 
   const job = await scheduleAutoFollowUpJob(ctx, {
     lead,

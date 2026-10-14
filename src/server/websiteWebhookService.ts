@@ -137,5 +137,10 @@ export async function sendTestLead(ctx: TenantContext) {
     },
     ctx
   );
-  return { leadId: result.lead?.leadId, thankYouEmailSent: (result as any).thankYouEmailSent };
+  return {
+    leadId: result.lead?.leadId,
+    thankYouEmailSent: Boolean(result.autoConfirmationSent),
+    thankYouSuppressed: Boolean(result.duplicateThankYouSuppressed),
+    thankYouError: result.conversation?.thankYouError,
+  };
 }

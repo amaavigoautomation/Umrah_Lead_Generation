@@ -70,7 +70,10 @@ export async function checkAndDispatchPendingWebsiteLeadEmails(
     }
 
     // 2. Query tenant conversations
-    const convsSnap = await getDocs(repo.conversations());
+    // Only website conversations still waiting for their thank-you (was: every conversation in the workspace).
+    const convsSnap = await getDocs(
+      query(repo.conversations(), where('channel', '==', 'WEBSITE'), where('thankYouEmailSent', '==', false))
+    );
     const candidateConvs: Conversation[] = [];
 
     for (const d of convsSnap.docs) {
@@ -151,6 +154,7 @@ export async function dispatchThankYouEmailForConversation(
   }
 
   const inFlight = getInFlightSet(ctx.tenantId);
+  let flightEmail = '';
   if (inFlight.has(conversationId)) {
     return { success: true, messageId: 'IN_FLIGHT' };
   }
@@ -315,6 +319,7 @@ export async function dispatchThankYouEmailForConversation(
 
     inFlight.add(conversationId);
     inFlight.add(targetEmail);
+    flightEmail = targetEmail;
 
     // 5. Construct personalized Thank You message
     const brand = await getTenantBrand(ctx.tenantId);
@@ -372,6 +377,11 @@ export async function dispatchThankYouEmailForConversation(
 
     if (!mailResult.success) {
       console.warn(`[Website Auto-Responder Error] SMTP delivery failed to ${targetEmail}:`, mailResult.error);
+      await safeSetDoc(
+        convRef,
+        { thankYouError: String(mailResult.error || 'Email delivery failed').slice(0, 300), thankYouAttemptedAt: new Date().toISOString() },
+        { merge: true }
+      );
       return { success: false, error: mailResult.error || 'SMTP delivery failed', email: targetEmail };
     }
 
@@ -414,6 +424,7 @@ export async function dispatchThankYouEmailForConversation(
         thankYouEmailSent: true,
         thankYouEmailDeliveredAt: nowIso,
         thankYouSmtpMessageId: mailResult.messageId,
+        thankYouError: null as any,
         customerEmail: targetEmail,
         lastMessageText: emailBody.slice(0, 160) + '...',
         lastMessageAt: nowIso,
@@ -445,5 +456,8 @@ export async function dispatchThankYouEmailForConversation(
     return { success: false, error: err?.message || 'Internal error' };
   } finally {
     inFlight.delete(conversationId);
+    // The address was also added while sending; leaving it behind made every later attempt for it
+    // report a fake success ("IN_FLIGHT_EMAIL") on this server instance.
+    if (flightEmail) inFlight.delete(flightEmail);
   }
 }

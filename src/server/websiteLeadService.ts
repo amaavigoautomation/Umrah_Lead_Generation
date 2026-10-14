@@ -218,8 +218,28 @@ export interface ProcessedLeadResult {
 }
 
 // Recursively flattens nested Elementor Pro form objects, arrays, and bracket keys
-function flattenAllFields(obj: any, target: Record<string, string> = {}): Record<string, string> {
+export function flattenAllFields(obj: any, target: Record<string, string> = {}): Record<string, string> {
   if (!obj || typeof obj !== 'object') return target;
+
+  // Elementor "advanced data" posted as flat bracket keys: fields[team_size][id|type|title|value|raw_value|required].
+  // Without this, id/type/title were appended to the field's own value ("team_size, number, Team Size, 40")
+  // and the label ("Team Size") was never usable as a key. Group them first, then store value under both the
+  // field id and its title.
+  const bracketGroups = new Map<string, { title?: string; value?: string }>();
+  const handledBracketKeys = new Set<string>();
+  if (!Array.isArray(obj)) {
+    for (const [rawK, rawV] of Object.entries(obj)) {
+      const m = rawK.match(/^(?:form_fields|fields)\[([^\]]+)\]\[(id|type|title|label|name|value|raw_value|required)\]$/i);
+      if (!m || (typeof rawV !== 'string' && typeof rawV !== 'number' && typeof rawV !== 'boolean')) continue;
+      handledBracketKeys.add(rawK);
+      const g = bracketGroups.get(m[1]) || {};
+      const attr = m[2].toLowerCase();
+      if (attr === 'title' || attr === 'label') g.title = String(rawV).trim();
+      else if (attr === 'value') g.value = String(rawV).trim();
+      else if (attr === 'raw_value' && g.value === undefined) g.value = String(rawV).trim();
+      bracketGroups.set(m[1], g);
+    }
+  }
 
   const setOrAppend = (k: string, v: any) => {
     if (v === null || v === undefined) return;
@@ -241,7 +261,7 @@ function flattenAllFields(obj: any, target: Record<string, string> = {}): Record
     for (let i = 0; i < obj.length; i++) {
       const item = obj[i];
       if (item && typeof item === 'object') {
-        const itemKey = item.id || item.name || item.field_id || item.key || item.label || `item_${i}`;
+        const itemKey = item.id || item.name || item.field_id || item.key || item.label || item.title || `item_${i}`;
         const itemVal = item.value ?? item.val ?? item.raw_value ?? item.text ?? '';
         if (typeof itemVal === 'string' || typeof itemVal === 'number' || typeof itemVal === 'boolean') {
           setOrAppend(String(itemKey), itemVal);
@@ -260,6 +280,7 @@ function flattenAllFields(obj: any, target: Record<string, string> = {}): Record
 
   for (const [rawK, rawV] of Object.entries(obj)) {
     if (rawV === null || rawV === undefined) continue;
+    if (handledBracketKeys.has(rawK)) continue;
 
     const lowerK = rawK.toLowerCase().trim();
 
@@ -311,12 +332,59 @@ function flattenAllFields(obj: any, target: Record<string, string> = {}): Record
           setOrAppend(innerName, nestedVal);
         }
         if ((rawV as any).label) setOrAppend(String((rawV as any).label), nestedVal);
+        // Elementor, WPForms and CF7 send the question text as `title`; a custom field's id is often random.
+        if ((rawV as any).title) setOrAppend(String((rawV as any).title), nestedVal);
       }
       flattenAllFields(rawV, target);
     }
   }
 
+  for (const [fieldId, g] of bracketGroups) {
+    if (!g.value) continue;
+    // setOrAppend is scoped inside; re-implement the simple set here to keep values clean.
+    if (!target[fieldId]) target[fieldId] = g.value;
+    if (g.title && !target[g.title]) target[g.title] = g.value;
+  }
+
   return target;
+}
+
+const NOT_PROVIDED = 'Not provided';
+
+/** Looks a value up by field id OR question text, ignoring case, spaces and punctuation. */
+function lookupField(flat: Record<string, string>, patterns: RegExp[]): string {
+  for (const pat of patterns) {
+    for (const [k, v] of Object.entries(flat)) {
+      if (!v) continue;
+      if (pat.test(k.toLowerCase().replace(/[^a-z0-9]/g, ''))) return v;
+    }
+  }
+  return '';
+}
+
+/**
+ * "Branches" answer -> 'Yes' | 'No' | 'Not provided'. Reads yes/no words, checkbox values (on, 1, checked)
+ * and branch counts. A missing field is reported as not provided instead of being guessed as "No".
+ */
+export function resolveBranches(flat: Record<string, string>): string {
+  const raw = lookupField(flat, [/^branches$/, /^hasbranches$/, /^hasbranch$/, /^branch$/, /^multibranch$/, /^multiplebranches$/, /branch/]).trim();
+  if (!raw) return NOT_PROVIDED;
+  const v = raw.toLowerCase();
+  if (/^(yes|y|true|1|on|checked|multiple|multi)\b/.test(v) || /\b(yes|multiple|multi-?branch)\b/.test(v)) return 'Yes';
+  if (/^(no|n|false|0|off|none|single)\b/.test(v) || /\b(no|none|single)\b/.test(v)) return 'No';
+  const n = parseInt(v.replace(/[^0-9]/g, ''), 10);
+  if (!Number.isNaN(n)) return n > 1 ? 'Yes' : 'No';
+  return NOT_PROVIDED;
+}
+
+/** Team size exactly as the visitor entered or selected it (a number such as "40", or a range such as "10-20"). */
+export function resolveTeamSize(flat: Record<string, string>): string {
+  const raw = lookupField(flat, [
+    /^teamsize$/, /^team$/, /^size$/, /^sizeofteam$/, /^companysize$/, /^numberofusers$/, /^noofusers$/, /^usercount$/,
+    /^employees$/, /^numberofemployees$/, /^staff$/, /^users$/, /^seats$/, /^headcount$/, /^capacity$/,
+    /teamsize/, /numberofusers/, /noofusers/, /employees/, /headcount/,
+  ]).trim();
+  return raw || NOT_PROVIDED;
 }
 
 // Detects whether a string is a product name, designation, form title, or software feature rather than an actual human name
@@ -615,13 +683,7 @@ export async function processWebsiteLeadSubmission(
 
   const website = findValue([/^website$/, /^companywebsite$/, /^url$/, /^companyurl$/]).trim();
 
-  const rawBranchesVal = findValue([/^branches$/, /^hasbranches$/, /^hasbranch$/, /^branch$/, /branch/]).trim();
-  const branches =
-    typeof rawBranchesVal === 'string' && /yes|true|multiple|branch/i.test(rawBranchesVal)
-      ? 'Yes'
-      : rawBranchesVal && /no|false|single/i.test(rawBranchesVal)
-      ? 'No'
-      : 'No';
+  const branches = resolveBranches(flatFields);
 
   // 6. Resolve Product & Team Size (gathering ALL selected products)
   const productValues: string[] = [];
@@ -669,10 +731,7 @@ export async function processWebsiteLeadSubmission(
     }
   }
 
-  const teamSize = (
-    findValue([/^teamsize$/, /^team$/, /^size$/, /^employees$/, /^users$/, /^capacity$/]) ||
-    '5-10 Users'
-  ).trim();
+  const teamSize = resolveTeamSize(flatFields);
 
   // 7. Resolve Message / Query
   const message = findValue([
@@ -728,7 +787,8 @@ export async function processWebsiteLeadSubmission(
 
   // 8. Lead Score Calculation
   let leadScore = 85; // Base high intent for direct inbound demo request
-  if (teamSize.includes('10') || teamSize.includes('20') || teamSize.includes('Enterprise')) {
+  const teamSizeNumber = Math.max(0, ...(teamSize.match(/\d+/g) || []).map(Number));
+  if (teamSizeNumber >= 10 || /enterprise/i.test(teamSize)) {
     leadScore += 10;
   }
   if (branches === 'Yes') {
@@ -740,6 +800,13 @@ export async function processWebsiteLeadSubmission(
   leadScore = Math.min(100, Math.max(70, leadScore));
 
   const nowIso = new Date().toISOString();
+
+  // Exactly what the form sent, kept so a wrong-looking value can be traced to its source.
+  const rawFormFields: Record<string, string> = {};
+  for (const [k, v] of Object.entries(flatFields)) {
+    if (k.length <= 80 && v.length <= 300) rawFormFields[k] = v;
+  }
+  console.log(`[Website Lead] Form fields received for ${ctx.tenantId}: ${JSON.stringify(rawFormFields).slice(0, 1500)} => teamSize="${teamSize}", branches="${branches}"`);
 
   // -----------------------------------------------------------------
   // 9. Check or Create Contact in Firestore
@@ -795,7 +862,7 @@ export async function processWebsiteLeadSubmission(
   const requirements = [
     product,
     `Team Size: ${teamSize}`,
-    branches === 'Yes' ? 'Multi-Branch Deployment' : 'Single Office',
+    branches === 'Yes' ? 'Multi-Branch Deployment' : branches === 'No' ? 'Single Office' : null,
     city ? `City: ${city}` : null,
     country ? `Country: ${country}` : null,
   ].filter(Boolean) as string[];
@@ -811,7 +878,7 @@ export async function processWebsiteLeadSubmission(
     buyingStage: 'CONSIDERATION',
     serviceInterest: product,
     requirements,
-    budget: teamSize.includes('20') ? 'Enterprise Quote Required' : 'Standard Tier',
+    budget: teamSizeNumber >= 20 ? 'Enterprise Quote Required' : 'Standard Tier',
     timeline: 'Immediate / Upcoming Season',
     aiSummary,
     aiRecommendation,
@@ -823,6 +890,7 @@ export async function processWebsiteLeadSubmission(
     website,
     branches,
     teamSize,
+    rawFormFields,
     productInterest: product,
     queryMessage: message,
     notes: message || `Demo requested on ${sourceUrl}`,
@@ -1032,13 +1100,19 @@ export async function processWebsiteLeadSubmission(
             smtpMessageId: mailResult.messageId,
           }, ctx);
         } else {
-          console.warn(`[Website Lead Warning] SMTP delivery attempt to ${cleanEmail} failed:`, mailResult.error);
+          console.warn(`[Website Lead Warning] Thank-you email to ${cleanEmail} failed:`, mailResult.error);
+          conversation.thankYouError = String(mailResult.error || 'The email provider rejected the message').slice(0, 300);
+          conversation.thankYouAttemptedAt = new Date().toISOString();
         }
       } else {
         console.warn(`[Website Lead Notice] RESEND_API_KEY is not set; skipping thank-you email.`);
+        conversation.thankYouError = 'RESEND_API_KEY is not set on the server';
+        conversation.thankYouAttemptedAt = new Date().toISOString();
       }
-    } catch (smtpErr) {
+    } catch (smtpErr: any) {
       console.warn('[Website Lead] Notice sending auto-confirmation email:', smtpErr);
+      conversation.thankYouError = String(smtpErr?.message || smtpErr || 'Unexpected error while sending').slice(0, 300);
+      conversation.thankYouAttemptedAt = new Date().toISOString();
     } finally {
       inFlightSet.delete(cleanEmail);
     }

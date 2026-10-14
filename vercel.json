@@ -5,7 +5,7 @@
   "outputDirectory": "dist",
   "functions": {
     "api/**/*.ts": {
-      "includeFiles": "src/server/**"
+      "includeFiles": "src/{server,firebase}/**"
     }
   },
   "crons": [
@@ -26,6 +26,10 @@
     {
       "source": "/api/webhooks/stripe",
       "destination": "/api/webhooks/stripe"
+    },
+    {
+      "source": "/api/webhooks/email/resend",
+      "destination": "/api/webhooks/resend"
     },
     {
       "source": "/api/leads/inbound",

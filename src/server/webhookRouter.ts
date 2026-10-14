@@ -16,10 +16,6 @@ import type { TenantContext, WebhookRoute, ChannelRoute, DomainRoute } from '../
 
 const DEFAULT_TENANT_ID = 'umrah360';
 
-/**
- * Universal Inbound Website Lead Webhook Router
- * Handles /api/webhooks/website/:webhookId, /api/webhooks/umrah-demo, and /api/leads/inbound
- */
 export async function routeWebsiteLeadWebhook(
   req: any,
   res: any,
@@ -28,7 +24,6 @@ export async function routeWebsiteLeadWebhook(
   const body = req.body || {};
   let resolvedTenantId = DEFAULT_TENANT_ID;
 
-  // 1. If explicit webhookId provided, resolve tenant from global routing table
   if (webhookId && webhookId !== 'umrah-demo') {
     if (isFirebaseConfigured && db) {
       try {
@@ -37,13 +32,11 @@ export async function routeWebsiteLeadWebhook(
           const route = routeSnap.data() as WebhookRoute;
           resolvedTenantId = route.tenantId || DEFAULT_TENANT_ID;
 
-          // Self-serve routes (requireOrigin) only accept the websites the company listed.
-          // Older hand-registered routes keep the previous, looser behaviour.
           const reqOrigin = (req.headers.origin || req.headers.referer || '').toString();
           if ((route as any).requireOrigin) {
             const list = route.allowedOrigins || [];
             let denyMsg = '';
-            if (list.length === 0) denyMsg = 'No website is allowed for this webhook yet. Add your website in Settings → Website leads.';
+            if (list.length === 0) denyMsg = 'No website is allowed for this webhook yet. Add your website in Settings \u2192 Website leads.';
             else if (reqOrigin && !originAllowed(reqOrigin, list)) denyMsg = 'This website is not allowed for this webhook';
             if (denyMsg) {
               res.statusCode = 403;
@@ -61,14 +54,12 @@ export async function routeWebsiteLeadWebhook(
             }
           }
         } else {
-          // If custom webhook ID not found in route registry, reject to enforce isolation
           res.statusCode = 404;
           res.setHeader('Content-Type', 'application/json');
           res.end(JSON.stringify({ error: `Webhook endpoint '${webhookId}' not registered` }));
           return true;
         }
       } catch (err) {
-        // Never guess the owner: a failed lookup must not drop a client's lead into the default workspace.
         console.error(`[WebhookRouter] Error looking up route for ${webhookId}:`, err);
         res.statusCode = 503;
         res.setHeader('Content-Type', 'application/json');
@@ -88,7 +79,6 @@ export async function routeWebsiteLeadWebhook(
   try {
     const result = await processWebsiteLeadSubmission(body, tenantCtx);
 
-    // Plain HTML forms: `_redirect` sends the visitor back to a thank-you page (only on a listed website).
     const redirectTo = typeof body?._redirect === 'string' ? body._redirect : '';
     if (redirectTo && webhookId && webhookId !== 'umrah-demo' && isFirebaseConfigured && db) {
       try {
@@ -112,7 +102,8 @@ export async function routeWebsiteLeadWebhook(
         message: 'Lead processed and synced into CRM',
         leadId: result.lead?.leadId,
         contactId: result.contact?.contactId,
-        thankYouEmailSent: result.thankYouEmailSent,
+        thankYouEmailSent: Boolean(result.autoConfirmationSent),
+        ...(result.conversation?.thankYouError ? { thankYouError: result.conversation.thankYouError } : {}),
       })
     );
     return true;
@@ -125,12 +116,7 @@ export async function routeWebsiteLeadWebhook(
   }
 }
 
-/**
- * Universal Inbound WhatsApp Webhook Router
- * Handles /api/webhooks/whatsapp and /api/inbound/whatsapp
- */
 export async function routeWhatsAppWebhook(req: any, res: any): Promise<boolean> {
-  // 1. Verification Handshake (GET)
   if (req.method === 'GET') {
     const parsedUrl = new URL(req.url || '', 'http://localhost');
     const mode = parsedUrl.searchParams.get('hub.mode') || parsedUrl.searchParams.get('hub_mode');
@@ -158,11 +144,9 @@ export async function routeWhatsAppWebhook(req: any, res: any): Promise<boolean>
     return true;
   }
 
-  // 2. Incoming Event Ingestion (POST)
   const body = req.body || {};
   let resolvedTenantId = DEFAULT_TENANT_ID;
 
-  // Extract phone_number_id from Meta webhook payload structure
   const phoneNumberId =
     body?.entry?.[0]?.changes?.[0]?.value?.metadata?.phone_number_id ||
     body?.entry?.[0]?.changes?.[0]?.value?.metadata?.display_phone_number;
@@ -190,7 +174,6 @@ export async function routeWhatsAppWebhook(req: any, res: any): Promise<boolean>
 
   try {
     const result = await processLiveInboundWhatsApp(body, tenantCtx);
-    // Track message count for tenant usage
     if (result.processed) {
       await recordTenantUsage(resolvedTenantId, { whatsappMessageCount: 1 }).catch(() => {});
     }
@@ -208,11 +191,6 @@ export async function routeWhatsAppWebhook(req: any, res: any): Promise<boolean>
   }
 }
 
-/**
- * Universal Resend / Email Events Webhook Router
- * Handles /api/webhooks/email/resend
- */
-/** Resend sends tags as an object ({name: value}) on webhooks and as a list on the API; accept both. */
 function readTags(raw: any): Record<string, string> {
   const out: Record<string, string> = {};
   if (Array.isArray(raw)) {
@@ -224,23 +202,37 @@ function readTags(raw: any): Record<string, string> {
 }
 
 const SCANNER_AGENT = /(proxy|prefetch|bot\b|scanner|barracuda|proofpoint|mimecast|safelinks|defender|symantec|trendmicro|ironport)/i;
-/** An open/click this soon after the email was created is almost always a security scanner or a mail app pre-loading it. */
 const OPEN_BOT_WINDOW_MS = 15_000;
 const CLICK_BOT_WINDOW_MS = 5_000;
 
-/**
- * Open / click / bounce events -> the lead. Resend echoes the tags we set at send time (tenant, campaign,
- * lead), so the lead is found with no lookup: ONE write per event, zero reads.
- * Opens are estimates: bot-like opens are counted separately (botOpenCount) and kept out of the open rate.
- * Emails sent before tags existed carry none and are ignored here.
- */
+async function resolveEngagementTarget(event: any): Promise<{ tenantId: string; leadId: string } | null> {
+  const tags = readTags(event?.data?.tags);
+  if (tags.tenant && tags.lead) return { tenantId: tags.tenant, leadId: tags.lead };
+
+  const emailId = String(event?.data?.email_id || event?.data?.emailId || '').trim();
+  if (!emailId || !isFirebaseConfigured || !db) return null;
+  try {
+    const snap = await getDoc(globalEmailRouteDoc(emailId));
+    if (!snap.exists()) return null;
+    const row = snap.data() as { tenantId?: string; campaignLeadId?: string; leadId?: string };
+    const tenantId = String(row.tenantId || '').trim();
+    const leadId = String(row.campaignLeadId || row.leadId || '').trim();
+    if (!tenantId || !leadId) return null;
+    return { tenantId, leadId };
+  } catch {
+    return null;
+  }
+}
+
 async function trackEmailEngagement(event: any): Promise<boolean> {
   const type = String(event?.type || '');
   if (!['email.opened', 'email.clicked', 'email.bounced', 'email.complained'].includes(type)) return false;
-  const tags = readTags(event?.data?.tags);
-  const tenantId = tags.tenant;
-  const leadId = tags.lead;
-  if (!tenantId || !leadId) return false;
+  const target = await resolveEngagementTarget(event);
+  if (!target) {
+    console.warn(`[Resend Webhook] ${type} ignored: no tenant/lead tags and no email_routes match for ${event?.data?.email_id || 'unknown'}`);
+    return false;
+  }
+  const { tenantId, leadId } = target;
 
   const nowIso = new Date().toISOString();
   const eventMs = Date.parse(event?.created_at || '') || Date.now();
@@ -268,7 +260,6 @@ async function trackEmailEngagement(event: any): Promise<boolean> {
     await updateDoc(tenantRepo(ctx).campaignLeadDoc(leadId), patch);
     return true;
   } catch (err: any) {
-    // Lead deleted meanwhile (campaign removed): nothing to track.
     if (err?.code !== 5 && !/NOT_FOUND/i.test(String(err?.message || ''))) {
       console.warn('[Resend Webhook] engagement update failed:', err?.message || err);
     }
@@ -278,9 +269,9 @@ async function trackEmailEngagement(event: any): Promise<boolean> {
 
 export async function routeResendWebhook(req: any, res: any): Promise<boolean> {
   const event = req.body || {};
-  const type = event.type; // e.g. "email.bounced", "email.complained", "email.delivered"
+  if (!event.type && event.data?.type) event.type = event.data.type;
+  const type = event.type;
 
-  // Opens and clicks are by far the most frequent events: handle them first and stop (no tenant routing lookups).
   if (type === 'email.opened' || type === 'email.clicked') {
     const tracked = await trackEmailEngagement(event);
     res.statusCode = 200;
@@ -316,7 +307,6 @@ export async function routeResendWebhook(req: any, res: any): Promise<boolean> {
     } catch {}
   }
 
-  // Handle bounce or complaint by suppressing email
   if (type === 'email.bounced' && recipient) {
     await addEmailSuppression(resolvedTenantId, recipient, 'bounce');
   } else if (type === 'email.complained' && recipient) {

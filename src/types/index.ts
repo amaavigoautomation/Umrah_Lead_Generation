@@ -295,6 +295,8 @@ export interface Lead {
   website?: string;
   branches?: string;
   teamSize?: string;
+  /** Every field the website form sent, as received (for tracing a wrong-looking value). */
+  rawFormFields?: Record<string, string>;
   productInterest?: string;
   queryMessage?: string;
   notes?: string;
@@ -335,6 +337,9 @@ export interface Conversation {
   thankYouEmailSent?: boolean;
   thankYouEmailDeliveredAt?: string;
   thankYouSmtpMessageId?: string;
+  /** Why the thank-you email was not sent (shown in the thread; cleared once it goes out). */
+  thankYouError?: string;
+  thankYouAttemptedAt?: string;
   customerEmail?: string;
   memory?: ConversationMemory;
   startedAt: string;

@@ -79,8 +79,14 @@ import { initCalendarAuth } from './services/googleCalendarAuth';
 // Per-workspace brand strings for locally-built message records (read at call time).
 const bn = () => getCurrentBrand();
 const brandEmail = () => bn().salesEmail || `noreply@${brandHost(bn()) || 'workspace.local'}`;
-const brandReSubject = () => (bn().playbook === 'umrah360' ? brandReSubject() : `Re: ${bn().companyName}`);
-const brandGrowthTeam = () => (bn().playbook === 'umrah360' ? brandGrowthTeam() : bn().teamName);
+// Reply subject when the thread has no earlier email subject (website-form threads never do). It used to call
+// itself for the umrah360 brand, which overflowed the stack, so sending from such a thread did nothing.
+const brandReSubject = (threadSubject?: string) => {
+  const t = (threadSubject || '').trim();
+  if (t) return /^re:/i.test(t) ? t : `Re: ${t}`;
+  return `Re: Your ${bn().companyName} inquiry`;
+};
+const brandGrowthTeam = () => (bn().playbook === 'umrah360' ? 'Umrah360 Growth Team' : bn().teamName);
 
 function sanitizeDoc(obj: any): any {
   if (obj === undefined) return null;
@@ -173,13 +179,65 @@ function toAppUser(u: any): AppUser {
   } as AppUser;
 }
 
+// export default function App() {
+//   // Coming back from "Sign in with Microsoft" (?mailbox=...) opens Settings, where the mailbox panel shows the result.
+//   const [activeTab, setActiveTab] = useState<ActiveTab>(() =>
+//     typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('mailbox') ? 'settings' : 'inbox'
+//   );
+//   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(false);
+const ALL_TABS: readonly ActiveTab[] = [
+  'inbox',
+  'campaigns',
+  'crm',
+  'scheduling',
+  'knowledge',
+  'playground',
+  'scenarios',
+  'settings',
+  'live-mailbox',
+  'auto-followup',
+];
+
+function isActiveTab(value: string | null | undefined): value is ActiveTab {
+  return !!value && (ALL_TABS as readonly string[]).includes(value);
+}
+
+function readTabFromLocation(): ActiveTab {
+  if (typeof window === 'undefined') return 'inbox';
+  const params = new URLSearchParams(window.location.search);
+  const tab = params.get('tab');
+  if (isActiveTab(tab)) return tab;
+  if (params.has('mailbox')) return 'settings';
+  try {
+    const stored = sessionStorage.getItem('umrah360.activeTab');
+    if (isActiveTab(stored)) return stored;
+  } catch {}
+  return 'inbox';
+}
+
+function writeTabToLocation(tab: ActiveTab) {
+  if (typeof window === 'undefined') return;
+  try {
+    sessionStorage.setItem('umrah360.activeTab', tab);
+  } catch {}
+  const url = new URL(window.location.href);
+  if (tab === 'inbox') url.searchParams.delete('tab');
+  else url.searchParams.set('tab', tab);
+  const next = `${url.pathname}${url.search}${url.hash}`;
+  const current = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+  if (next !== current) {
+    window.history.replaceState(window.history.state, '', next);
+  }
+}
+
 export default function App() {
-  // Coming back from "Sign in with Microsoft" (?mailbox=...) opens Settings, where the mailbox panel shows the result.
-  const [activeTab, setActiveTab] = useState<ActiveTab>(() =>
-    typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('mailbox') ? 'settings' : 'inbox'
-  );
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(false);
-  const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ? [] : INITIAL_CONTACTS);
+  const [activeTab, setActiveTabState] = useState<ActiveTab>(readTabFromLocation);
+  const setActiveTab = useCallback((tab: ActiveTab) => {
+    setActiveTabState(tab);
+    writeTabToLocation(tab);
+  }, []);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(false);  
+const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ? [] : INITIAL_CONTACTS);
   const [leads, setLeads] = useState<Lead[]>(() => isFirebaseConfigured ? [] : INITIAL_LEADS);
   const [conversations, setConversations] = useState<Conversation[]>(() => isFirebaseConfigured ? [] : INITIAL_CONVERSATIONS);
   const [messagesState, setMessagesState] = useState<Message[]>(() => isFirebaseConfigured ? [] : deduplicateMessages(INITIAL_MESSAGES));
@@ -210,6 +268,14 @@ export default function App() {
     createdAt: new Date().toISOString(),
   });
   const [allTenants, setAllTenants] = useState<any[]>([]);
+
+    useEffect(() => {
+    writeTabToLocation(activeTab);
+    const onPopState = () => setActiveTabState(readTabFromLocation());
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Until the workspace's own settings load, never show another company's default signature/accounts.
   useEffect(() => {
@@ -291,7 +357,13 @@ export default function App() {
         })
         .catch(() => {})
         .finally(() => {
-          window.history.replaceState({}, '', window.location.pathname);
+          // window.history.replaceState({}, '', window.location.pathname);
+          {
+            const u = new URL(window.location.href);
+            u.searchParams.delete('billing');
+            u.searchParams.delete('session_id');
+            window.history.replaceState({}, '', `${u.pathname}${u.search}${u.hash}`);
+          }
           setActivatingPlan(false);
           load();
         });
@@ -930,6 +1002,7 @@ export default function App() {
     const foundContact = contacts.find((c) => c.contactId === conv.contactId);
     const targetRecipientEmail = (
       foundContact?.email ||
+      conv.customerEmail ||
       lastIncoming?.senderEmail ||
       lastIncoming?.emailMeta?.from ||
       (conv.emailThreadId?.includes('@') ? conv.emailThreadId.split('thread-')[1] : '') ||
@@ -958,7 +1031,7 @@ export default function App() {
     if ((conv.channel === 'EMAIL' || conv.channel === 'WEBSITE') && senderType === 'AGENT' && recipientEmail) {
       const subject = lastIncoming?.emailMeta?.subject
         ? (lastIncoming.emailMeta.subject.toLowerCase().startsWith('re:') ? lastIncoming.emailMeta.subject : `Re: ${lastIncoming.emailMeta.subject}`)
-        : brandReSubject();
+        : brandReSubject(conv.subject);
 
       try {
         const sendRes = await fetch('/api/email/send', {
@@ -1020,7 +1093,7 @@ export default function App() {
           ? {
               subject: lastIncoming?.emailMeta?.subject
                 ? (lastIncoming.emailMeta.subject.toLowerCase().startsWith('re:') ? lastIncoming.emailMeta.subject : `Re: ${lastIncoming.emailMeta.subject}`)
-                : brandReSubject(),
+                : brandReSubject(conv.subject),
               from: senderType === 'AGENT' ? brandEmail() : (contact?.email || brandEmail()),
               to: senderType === 'AGENT' ? (contact?.email || brandEmail()) : brandEmail(),
               messageId: sentGmailMessageId,
@@ -1679,8 +1752,11 @@ export default function App() {
 
     const draft = conv.draftReply;
     const contact = contacts.find((c) => c.contactId === conv.contactId);
-    const toEmail = contact?.email;
-    if (!toEmail) return;
+    const toEmail = contact?.email || conv.customerEmail;
+    if (!toEmail) {
+      window.alert('This conversation has no customer email address, so the draft cannot be sent.');
+      return;
+    }
 
     const subject = draft.subject || `Re: ${bn().companyName} Inquiry`;
     const nowIso = new Date().toISOString();
@@ -1700,11 +1776,13 @@ export default function App() {
           gmailThreadId: conv.gmailThreadId || conv.emailThreadId,
         }),
       });
-      const sendResult = await res.json();
+      const sendResult = await res.json().catch(() => ({} as any));
 
       if (!res.ok || !sendResult.success) {
-        approvedSmtpStatus = 'DELIVERY_FAILED';
-        approvedSmtpError = sendResult.error || 'SMTP Delivery Failed';
+        // Keep the draft in place so it can be retried; clearing it here made a failed send look like a
+        // sent one and the reply was lost.
+        window.alert(sendResult.error || `The reply could not be sent (HTTP ${res.status}). The draft is kept so you can try again.`);
+        return;
       }
 
       const aiMsgId = sendResult.messageId || `<reply-approved-${Date.now()}@amaavigo.com>`;
@@ -1766,8 +1844,9 @@ export default function App() {
           { merge: true }
         );
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error sending approved draft:', err);
+      window.alert(err?.message || 'The reply could not be sent (network error). The draft is kept so you can try again.');
     }
   };
 

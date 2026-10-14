@@ -862,6 +862,14 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
               </div>
             </div>
 
+            {/* Website lead whose thank-you email did not go out: say why instead of failing silently */}
+            {activeConversation.channel === 'WEBSITE' && !activeConversation.thankYouEmailSent && activeConversation.thankYouError && (
+              <div className="px-3.5 py-2 bg-red-50 border-b border-red-200 text-xs text-red-800">
+                <span className="font-bold">Thank-you email was not sent:</span> {activeConversation.thankYouError}
+                <span className="text-red-600"> The system retries automatically; fix the cause (usually Settings → Email) and it will go out.</span>
+              </div>
+            )}
+
             {/* Compact Auto Follow-Up Status Bar */}
             {activeLead && (activeLead.leadType === 'INBOUND' || activeLead.leadType === 'OUTBOUND') && (
               <div className="px-3.5 py-1.5 bg-orange-50/80 border-b border-orange-100 text-xs flex items-center justify-between">

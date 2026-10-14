@@ -26,6 +26,9 @@ import {
  *   - Gmail / Google Workspace: IMAP with an app password.
  *   - Outlook / Microsoft 365:  IMAP with OAuth ("Sign in with Microsoft"); Microsoft refuses passwords for IMAP.
  *     Refresh token: tenants/{id}/secrets/imap_oauth_microsoft (see microsoftOAuth.ts).
+ *   - Other IMAP: any public IMAP host + password (Zoho, custom domain, etc.). Host is SSRF-checked.
+ *
+ * All three providers use the same poller → processLiveInboundEmail AI / CRM pipeline.
  *
  * Settings (no secrets):   tenants/{id}/settings/inbound
  * Password (encrypted):    tenants/{id}/secrets/imap_password   (AES-256-GCM, server only)
@@ -37,10 +40,22 @@ import {
  */
 
 export type InboundStatus = 'not_configured' | 'connected' | 'error' | 'auth_failed' | 'paused';
-export type InboundProvider = 'gmail' | 'microsoft';
+export type InboundProvider = 'gmail' | 'microsoft' | 'imap';
 export type InboundAuthType = 'password' | 'oauth';
 
 export const GMAIL_IMAP_HOST = 'imap.gmail.com';
+
+/** Hosts that must use Microsoft OAuth — password IMAP is rejected by Microsoft. */
+export function isMicrosoftImapHost(host: string): boolean {
+  const h = String(host || '').trim().toLowerCase();
+  return (
+    h === MICROSOFT_IMAP_HOST ||
+    h === 'imap-mail.outlook.com' ||
+    h.endsWith('.office365.com') ||
+    h.endsWith('.outlook.com') ||
+    h === 'outlook.office.com'
+  );
+}
 
 export interface TenantInboundSettings {
   enabled?: boolean;
@@ -333,7 +348,14 @@ export async function getInboundView(tenantId: string) {
         : (await getDoc(tenantRepo(sysCtx(tenantId)).secretDoc(INBOUND_SECRET_NAME))).exists();
   }
   const provider: InboundProvider | 'other' =
-    s.provider || (authType === 'oauth' ? 'microsoft' : s.host === GMAIL_IMAP_HOST ? 'gmail' : s.host ? 'other' : 'gmail');
+    s.provider ||
+    (authType === 'oauth'
+      ? 'microsoft'
+      : s.host === GMAIL_IMAP_HOST
+        ? 'gmail'
+        : s.host
+          ? 'imap'
+          : 'gmail');
   return {
     enabled: Boolean(s.enabled),
     provider,
@@ -429,17 +451,20 @@ function requireDb() {
 /**
  * Tests the mailbox and, only if the sign-in works, stores it (password encrypted) and starts the baseline:
  * mail that already exists in the inbox is never processed, only what arrives afterwards.
+ *
+ * Password IMAP: Gmail / Google Workspace, or any other public IMAP host.
+ * Outlook / Microsoft 365 must use connectMicrosoftInbound (OAuth) — Microsoft refuses passwords for IMAP.
  */
 export async function connectInbound(tenantId: string, input: ConnectInput) {
   requireDb();
-  // Password sign-in is only offered for Gmail / Google Workspace. Outlook / Microsoft 365 uses
-  // connectMicrosoftInbound (OAuth) because Microsoft refuses passwords for IMAP.
-  const requestedHost = String(input.host || GMAIL_IMAP_HOST).trim().toLowerCase();
-  if (requestedHost !== GMAIL_IMAP_HOST) {
-    throw new InboundError(400, 'Only Gmail / Google Workspace can be connected with a password. For Outlook / Microsoft 365 use "Sign in with Microsoft".');
+  const host = String(input.host || GMAIL_IMAP_HOST).trim().toLowerCase();
+  if (isMicrosoftImapHost(host)) {
+    throw new InboundError(
+      400,
+      'For Outlook / Microsoft 365 use "Sign in with Microsoft". Microsoft does not accept passwords for IMAP.'
+    );
   }
-  const host = GMAIL_IMAP_HOST;
-  const port = 993;
+  const port = Number(input.port) || 993;
   const user = String(input.user || '').trim();
   if (!ALLOWED_PORTS.includes(port)) throw new InboundError(400, 'Use port 993 (SSL/TLS) or 143 (STARTTLS)');
   if (!user || user.length > 254 || /[\r\n\0]/.test(user)) throw new InboundError(400, 'Enter the mailbox email address or username');
@@ -450,7 +475,9 @@ export async function connectInbound(tenantId: string, input: ConnectInput) {
 
   let pass = String(input.password || '');
   if (!pass) {
-    if (!sameMailbox) throw new InboundError(400, 'Enter the Gmail app password');
+    if (!sameMailbox) {
+      throw new InboundError(400, host === GMAIL_IMAP_HOST ? 'Enter the Gmail app password' : 'Enter the mailbox password');
+    }
     pass = (await readPassword(tenantId)) || '';
     if (!pass) throw new InboundError(400, 'Enter the mailbox password');
   }
@@ -480,10 +507,11 @@ export async function connectInbound(tenantId: string, input: ConnectInput) {
 
   // Keep the high-water mark when reconnecting the same, unchanged mailbox; otherwise start from "now".
   const keepBaseline = sameMailbox && existing.lastUid !== undefined && existing.uidValidity === uidState.uidValidity;
+  const provider: InboundProvider = host === GMAIL_IMAP_HOST ? 'gmail' : 'imap';
   await writeSettings(tenantId, {
     ...existing,
     enabled: true,
-    provider: 'gmail',
+    provider,
     authType: 'password',
     host,
     port,

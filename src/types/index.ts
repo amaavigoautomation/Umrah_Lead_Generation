@@ -566,6 +566,8 @@ export interface Booking {
   leadPhoneLast10?: string;
   companyName: string;
   calendarEventId: string;
+  /** 'google' | 'microsoft' — which calendar created this booking. */
+  calendarProvider?: 'google' | 'microsoft';
   googleMeetLink: string;
   date: string; // YYYY-MM-DD in Asia/Kolkata
   startTime: string; // e.g. "15:00"

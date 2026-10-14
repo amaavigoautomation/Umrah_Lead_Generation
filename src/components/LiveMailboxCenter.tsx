@@ -77,21 +77,35 @@ interface ProcessedEmail {
   timestamp: string;
 }
 
+interface TenantInboundStatus {
+  enabled?: boolean;
+  provider?: string;
+  authType?: string;
+  host?: string;
+  port?: number;
+  user?: string;
+  status?: string;
+}
+
 interface LiveMailboxCenterProps {
   onNavigateToThread?: (conversationId: string) => void;
   onNavigateToCrm?: () => void;
   onSyncNow?: () => void;
+  /** Current workspace id — used to show the Settings → Inbound mailbox (Gmail / Microsoft / IMAP). */
+  tenantId?: string;
 }
 
 export const LiveMailboxCenter: React.FC<LiveMailboxCenterProps> = ({
   onNavigateToThread,
   onNavigateToCrm,
   onSyncNow,
+  tenantId,
 }) => {
   const { brand } = useBrand();
   const isUmrah = brand.playbook === 'umrah360';
   const [smtpStatus, setSmtpStatus] = useState<SmtpStatus | null>(null);
   const [imapStatus, setImapStatus] = useState<ImapStatus | null>(null);
+  const [tenantInbound, setTenantInbound] = useState<TenantInboundStatus | null>(null);
   const [isLoadingStatus, setIsLoadingStatus] = useState<boolean>(true);
   const [isVerifyingSmtp, setIsVerifyingSmtp] = useState<boolean>(false);
   const [smtpVerifyResult, setSmtpVerifyResult] = useState<{ success: boolean; message: string } | null>(null);
@@ -109,7 +123,18 @@ export const LiveMailboxCenter: React.FC<LiveMailboxCenterProps> = ({
   const [isPollingImap, setIsPollingImap] = useState<boolean>(false);
   const [pollResult, setPollResult] = useState<{ success: boolean; count: number; message: string } | null>(null);
 
-  const activeMailbox = smtpStatus?.user || imapStatus?.user || INBOUND_MAILBOX;
+  const tenantMailboxConnected =
+    Boolean(tenantInbound?.user) && tenantInbound?.status && tenantInbound.status !== 'not_configured';
+  const activeMailbox =
+    (tenantMailboxConnected && tenantInbound?.user) || smtpStatus?.user || imapStatus?.user || INBOUND_MAILBOX;
+  const inboundProviderLabel =
+    tenantInbound?.provider === 'microsoft'
+      ? 'Microsoft 365 / Outlook (OAuth IMAP)'
+      : tenantInbound?.provider === 'gmail'
+        ? 'Gmail IMAP'
+        : tenantInbound?.provider === 'imap' || tenantInbound?.host
+          ? `IMAP (${tenantInbound.host}:${tenantInbound.port || 993})`
+          : 'IMAP';
 
   const handleSaveModalSmtp = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -211,17 +236,21 @@ export const LiveMailboxCenter: React.FC<LiveMailboxCenterProps> = ({
     setIsLoadingStatus(true);
     try {
       const safeJson = (r: Response) => (r.ok && r.headers.get('content-type')?.includes('application/json') ? r.json() : null);
-      const [smtpRes, imapRes, historyRes, waRes] = await Promise.all([
+      const [smtpRes, imapRes, historyRes, waRes, inboundRes] = await Promise.all([
         fetch('/api/smtp/status').then(safeJson).catch(() => null),
         fetch('/api/imap/status').then(safeJson).catch(() => null),
         fetch('/api/inbound/history').then(safeJson).catch(() => ({ history: [] })),
         fetch('/api/whatsapp/status').then(safeJson).catch(() => null),
+        tenantId
+          ? fetch(`/api/tenants/${encodeURIComponent(tenantId)}/inbound`).then(safeJson).catch(() => null)
+          : Promise.resolve(null),
       ]);
 
       if (smtpRes) setSmtpStatus(smtpRes);
       if (imapRes) setImapStatus(imapRes);
       if (historyRes?.history) setProcessedHistory(historyRes.history);
       if (waRes?.gateway) setWaGatewayStatus(waRes.gateway);
+      if (inboundRes) setTenantInbound(inboundRes);
     } catch (e) {
       console.error('Error fetching live mail status:', e);
     } finally {
@@ -233,7 +262,7 @@ export const LiveMailboxCenter: React.FC<LiveMailboxCenterProps> = ({
     fetchStatus();
     const interval = setInterval(fetchStatus, 15000);
     return () => clearInterval(interval);
-  }, []);
+  }, [tenantId]);
 
   // Verify SMTP
   const handleVerifySmtp = async () => {
@@ -255,20 +284,21 @@ export const LiveMailboxCenter: React.FC<LiveMailboxCenterProps> = ({
     }
   };
 
-  // Poll IMAP Inbox
+  // Poll IMAP Inbox — uses the workspace mailbox (Gmail / Microsoft / other IMAP) when connected.
   const handlePollImap = async () => {
     setIsPollingImap(true);
     setPollResult(null);
     try {
       const res = await fetch('/api/inbound/poll', { method: 'POST' });
       const data = await res.json();
+      const mailbox = data.mailbox || activeMailbox;
       if (res.ok && data.success) {
         setPollResult({
           success: true,
           count: data.polledCount || 0,
           message: data.polledCount > 0
-            ? `Successfully ingested ${data.polledCount} new email(s) from ${activeMailbox} and dispatched live SMTP auto-replies!`
-            : `Inbox ${activeMailbox} checked: IMAP connection active. No pending unread emails found right now. Ready for incoming mail.`,
+            ? `Successfully ingested ${data.polledCount} new email(s) from ${mailbox} into the AI / CRM pipeline.`
+            : `Inbox ${mailbox} checked: connection active. No new mail to process right now.`,
         });
         if (onSyncNow) {
           onSyncNow();
@@ -648,23 +678,37 @@ export const LiveMailboxCenter: React.FC<LiveMailboxCenterProps> = ({
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
           <div className="flex items-center space-x-2 text-[#c2410c] font-bold">
             <CheckCircle2 className="w-4 h-4 shrink-0 text-[#ef741a]" />
-            <span className="text-sm font-display">Active Mailbox: {activeMailbox} (Gmail IMAP & SMTP)</span>
+            <span className="text-sm font-display">
+              Active Mailbox: {activeMailbox} ({tenantMailboxConnected ? inboundProviderLabel : 'legacy env IMAP'})
+            </span>
           </div>
           <span className="px-2.5 py-0.5 rounded-full text-[11px] font-mono bg-white text-[#c2410c] border border-[#fed7aa] font-semibold w-fit">
-            IMAP: imap.gmail.com:993 • SMTP: smtp.gmail.com:465
+            {tenantMailboxConnected
+              ? `${tenantInbound?.host || 'imap'}:${tenantInbound?.port || 993}${
+                  tenantInbound?.authType === 'oauth' ? ' · Microsoft OAuth' : ''
+                }`
+              : 'IMAP: env IMAP_* · connect in Settings → Inbound for Gmail / Microsoft / IMAP'}
           </span>
         </div>
         <p className="text-slate-700 leading-relaxed text-xs">
-          The automation system is connected directly to <strong>{activeMailbox}</strong> using Gmail SSL/TLS. Any customer or tour operator inquiries received at this address will be automatically polled every 30s, analyzed by Gemini, pushed into CRM & Unified Inbox, and replied to with a personalized auto-reply.
+          {tenantMailboxConnected ? (
+            <>
+              This workspace mailbox (<strong>{activeMailbox}</strong>) is polled automatically. New mail goes through the same AI reply, CRM, Unified Inbox, and follow-up pipeline whether it is Gmail, Microsoft 365 / Outlook, or another IMAP host. Connect or change it under <strong>Settings → Inbound mailbox</strong>.
+            </>
+          ) : (
+            <>
+              No workspace mailbox is connected yet. Open <strong>Settings → Inbound mailbox</strong> to connect Gmail (app password), Microsoft 365 / Outlook (Sign in with Microsoft), or any other IMAP server. Until then, the legacy env IMAP_* mailbox is used when configured.
+            </>
+          )}
         </p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-[11px] pt-1">
           <div className="bg-white p-3 rounded-xl border border-[#fed7aa]/70 shadow-2xs">
             <span className="font-bold text-slate-900 block mb-0.5">1. Send Live Test from Outside</span>
-            <span className="text-slate-600">Send an email from another email account (e.g. personal Yahoo, Outlook, or another Gmail) to <code>{activeMailbox}</code>. Click "Check Inbox Now" or wait 30 seconds for automatic processing.</span>
+            <span className="text-slate-600">Send an email from another email account (e.g. personal Yahoo, Outlook, or another Gmail) to <code>{activeMailbox}</code>. Click &quot;Check Inbox Now&quot; or wait for automatic processing.</span>
           </div>
           <div className="bg-white p-3 rounded-xl border border-[#fed7aa]/70 shadow-2xs">
             <span className="font-bold text-[#ef741a] block mb-0.5">2. Live Inbound Simulator (Below)</span>
-            <span className="text-slate-600">You can also trigger a simulated inbound customer inquiry below. It tests the complete end-to-end pipeline, AI generation, and live SMTP delivery to the sender.</span>
+            <span className="text-slate-600">You can also trigger a simulated inbound customer inquiry below. It tests the complete end-to-end pipeline, AI generation, and live delivery to the sender.</span>
           </div>
         </div>
       </div>

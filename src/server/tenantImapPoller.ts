@@ -228,9 +228,14 @@ async function runCycle(tenantId: string): Promise<TenantPollResult> {
     const ip = await resolveSafeHost(creds.host);
     fetched = await fetchNewMessages(creds, ip, settings);
   } catch (err: any) {
-    const msg = err?.message && err?.status ? String(err.message) : friendlyImapError(err, creds);
+    let msg = err?.message && err?.status ? String(err.message) : friendlyImapError(err, creds);
     const failures = (settings.consecutiveFailures || 0) + 1;
     const authFail = isAuthFailure(err);
+    // OAuth mailboxes need a fresh Microsoft sign-in when IMAP rejects the access token.
+    if (authFail && creds.accessToken) {
+      msg =
+        'Microsoft refused the mailbox sign-in. IMAP may be turned off for this mailbox, or access was removed. Click "Reconnect with Microsoft".';
+    }
     await updateInboundState(tenantId, {
       status: authFail ? 'auth_failed' : 'error',
       lastError: msg,
@@ -238,7 +243,10 @@ async function runCycle(tenantId: string): Promise<TenantPollResult> {
       lastPolledAt: startedAt,
       consecutiveFailures: failures,
       // A wrong password will not fix itself, but a single refusal is often temporary: see authPauseMs.
-      nextPollAt: new Date(Date.now() + (authFail ? authPauseMs(failures) : backoffMs(failures))).toISOString(),
+      // For Microsoft OAuth, after the first hard auth failure wait for reconnect (same as token refresh path).
+      nextPollAt: new Date(
+        Date.now() + (authFail && creds.accessToken ? 24 * 3600_000 : authFail ? authPauseMs(failures) : backoffMs(failures))
+      ).toISOString(),
     });
     result.error = msg;
     console.warn(`[Tenant IMAP] ${tenantId}: ${msg}`);

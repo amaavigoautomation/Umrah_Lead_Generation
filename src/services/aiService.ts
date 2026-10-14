@@ -11,6 +11,7 @@ import {
 import { retrieveRelevantKnowledge, RetrievedChunk } from './ragService';
 import { getCurrentBrand } from '../context/BrandContext';
 import { brandSignature } from '../shared/brand';
+import { looksLikeSchedulingFollowUp } from '../shared/schedulingGuardrails';
 
 export interface AiResponseResult {
   responseText: string;
@@ -151,11 +152,14 @@ export async function generateOmnichannelResponse(params: {
   const knowledgeSources = knowledgeChunks.map((c) => c.title);
 
   // Step 1.5: Demo scheduling via the calendar agent. OFF unless allowBooking is explicitly true.
+  // Replies like "Tuesday 4pm" or "yes" may be answering the agent's own scheduling question, so they go to
+  // the server too; it answers "not handled" unless that lead has a scheduling exchange in progress.
   const isDemoIntent =
     allowBooking &&
-    /(schedule\s+(a\s+)?(demo|meeting|call|walkthrough)|book\s+(a\s+)?(demo|call|meeting|slot)|want\s+(a\s+)?(demo|walkthrough)|give\s+me\s+(a\s+)?demo|reschedule|cancel\s+(the\s+)?(demo|meeting|call))/i.test(
+    (/(schedule\s+(a\s+)?(demo|meeting|call|walkthrough)|book\s+(a\s+)?(demo|call|meeting|slot)|want\s+(a\s+)?(demo|walkthrough)|give\s+me\s+(a\s+)?demo|reschedule|cancel\s+(the\s+)?(demo|meeting|call))/i.test(
       freshMessage
-    );
+    ) ||
+      looksLikeSchedulingFollowUp(freshMessage));
   if (isDemoIntent) {
     try {
       const schedRes = await fetch('/api/calendar/schedule-turn', {
@@ -197,7 +201,7 @@ export async function generateOmnichannelResponse(params: {
               requirements: [...(lead?.requirements || []), 'Platform Walkthrough'],
               budget: lead?.budget || null,
               timeline: 'Immediate',
-              nextAction: schedData.action === 'CONFIRMED_BOOKING' ? 'Attend booked Google Meet walkthrough' : 'Coordinate demo slot selection',
+              nextAction: schedData.action === 'CONFIRMED_BOOKING' ? 'Attend booked Google Meet walkthrough' : schedData.action === 'AWAITING_CONFIRMATION' ? 'Waiting for lead to confirm demo slot' : 'Coordinate demo slot selection',
             },
             memoryUpdate: {
               customerFacts: [`Requested demo for ${contact.companyName}`],

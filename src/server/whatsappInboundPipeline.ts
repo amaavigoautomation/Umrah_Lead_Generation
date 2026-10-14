@@ -26,6 +26,7 @@ import { doc } from './adminFirestore.js';
 import { safeSetDoc } from './firestoreUtils.js';
 import {
   detectDemoSchedulingIntent,
+  hasPendingSchedulingState,
   processSchedulingConversationTurn,
 } from './demoSchedulingService.js';
 import { handleIncomingCampaignLeadReply } from './campaignService.js';
@@ -456,7 +457,11 @@ export async function generateWhatsAppAutoReplyText(params: {
   // =========================================================================
   // UNIVERSAL DEMO SCHEDULING AGENT INTERCEPTION FOR WHATSAPP
   // =========================================================================
-  if (detectDemoSchedulingIntent(body)) {
+  // Also route replies to our own scheduling question ("Tuesday 4pm", "yes") back to the scheduling agent.
+  if (
+    detectDemoSchedulingIntent(body) ||
+    (await hasPendingSchedulingState({ messageText: body, leadPhone: fromPhone }).catch(() => false))
+  ) {
     try {
       const historyTurns = (threadHistory || []).map((m: any) => ({
         role: (m.senderType === 'CUSTOMER' || m.senderType === 'PROSPECT' ? 'user' : 'assistant') as 'user' | 'assistant',

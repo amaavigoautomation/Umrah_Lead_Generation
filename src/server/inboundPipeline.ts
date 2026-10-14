@@ -59,6 +59,7 @@ import {
 import { safeSetDoc } from './firestoreUtils.js';
 import {
   detectDemoSchedulingIntent,
+  hasPendingSchedulingState,
   processSchedulingConversationTurn,
 } from './demoSchedulingService.js';
 import { getTenantBrand } from './brandService.js';
@@ -844,7 +845,12 @@ export async function generateAutoReplyText(params: {
   // =========================================================================
   // UNIVERSAL DEMO SCHEDULING AGENT INTERCEPTION
   // =========================================================================
-  if (detectDemoSchedulingIntent(body) || detectDemoSchedulingIntent(subject)) {
+  // Also route replies to our own scheduling question ("Tuesday 4pm", "yes") back to the scheduling agent.
+  if (
+    detectDemoSchedulingIntent(body) ||
+    detectDemoSchedulingIntent(subject) ||
+    (await hasPendingSchedulingState({ messageText: body, leadEmail: from }).catch(() => false))
+  ) {
     try {
       const historyTurns = (threadHistory || []).map((m: any) => ({
         role: (m.senderType === 'CUSTOMER' || m.senderType === 'PROSPECT' ? 'user' : 'assistant') as 'user' | 'assistant',

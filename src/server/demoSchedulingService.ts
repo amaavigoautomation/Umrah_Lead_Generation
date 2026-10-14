@@ -70,6 +70,20 @@ import { safeSetDoc } from './firestoreUtils.js';
 import { Booking, BookingStatus, Channel, Lead } from '../types/index.js';
 import { updateCampaignLeadStatus } from './campaignService.js';
 import { sendLiveEmail, getSmtpConfig } from './smtpService.js';
+import { stripQuotedEmailHistory as stripQuotedEmailHistoryShared } from './quotedText.js';
+import {
+  type OfferedSlot,
+  hasExplicitDateToken,
+  isAffirmative,
+  isIsoDate,
+  isNegative,
+  looksLikeSchedulingFollowUp,
+  namedWeekdays,
+  parseExplicitTime,
+  pickOfferedSlot,
+  preferredPeriodOf,
+  resolveSimpleDate,
+} from '../shared/schedulingGuardrails.js';
 
 export const TARGET_CALENDAR_EMAIL = 'amaavigo@gmail.com';
 export const SCHEDULING_TIMEZONE = 'Asia/Kolkata'; // IST (UTC +05:30)
@@ -562,6 +576,8 @@ export async function findNextAvailableSlots(
     targetDaysCount?: number;
     maxSlotsToReturn?: number;
     preferredDate?: string; // YYYY-MM-DD
+    /** Start scanning from this date (YYYY-MM-DD) instead of today. Past dates fall back to today. */
+    startFromDate?: string;
     preferredPeriod?: 'MORNING' | 'AFTERNOON' | 'EVENING' | 'ANY';
     accessToken?: string;
   } = {}
@@ -578,8 +594,16 @@ export async function findNextAvailableSlots(
   const nowIst = getNowInIst();
   const availableSlots: Array<{ date: string; startHour: number; label: string; startIso: string; endIso: string }> = [];
 
-  // Always start scanning from TODAY (0) to guarantee the EARLIEST upcoming available slots
+  // Start scanning from TODAY (0) to guarantee the EARLIEST upcoming available slots,
+  // or from the requested day when the caller asks for options around a specific date.
   let currentOffset = 0;
+  if (options.startFromDate && /^\d{4}-\d{2}-\d{2}$/.test(options.startFromDate) && options.startFromDate > nowIst.dateString) {
+    const diffDays = Math.round(
+      (Date.parse(`${options.startFromDate}T12:00:00Z`) - Date.parse(`${nowIst.dateString}T12:00:00Z`)) / 86_400_000
+    );
+    currentOffset = Math.min(Math.max(diffDays, 0), 60);
+  }
+  const maxOffset = currentOffset + 14;
 
   // Define hour ranges based on preferred period
   const VALID_HOURS = slotHours();
@@ -596,7 +620,7 @@ export async function findNextAvailableSlots(
 
   let daysChecked = 0;
 
-  while (daysChecked < targetDaysCount && availableSlots.length < maxSlotsToReturn && currentOffset < 14) {
+  while (daysChecked < targetDaysCount && availableSlots.length < maxSlotsToReturn && currentOffset < maxOffset) {
     const checkDate = new Date();
     checkDate.setDate(checkDate.getDate() + currentOffset);
 
@@ -1546,7 +1570,110 @@ export interface SchedulingTurnResult {
     | 'ATTENDEE_ADDED'
     | 'ASKED_ATTENDEE_EMAIL'
     | 'ADD_ATTENDEE_FAILED'
+    | 'AWAITING_CONFIRMATION'
+    | 'SLOT_UNAVAILABLE'
     | 'NOT_DEMO_INTENT';
+}
+
+// -----------------------------------------------------------------------------
+// Scheduling conversation state (guardrails)
+// Remembers, per lead, that we asked for their availability (and which slots we offered) or that we
+// are waiting for a "yes" on one exact slot. Stored in Firestore because serverless instances share
+// no memory. Path: tenants/{tenantId}/scheduling_state/{key} (server-only; client rules deny it).
+// -----------------------------------------------------------------------------
+const MAX_DAYS_AHEAD = 60;
+const MIN_LEAD_TIME_MS = 30 * 60 * 1000;
+const AVAILABILITY_STATE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const CONFIRMATION_STATE_TTL_MS = 3 * 24 * 60 * 60 * 1000;
+
+interface SchedulingState {
+  stage: 'AWAITING_AVAILABILITY' | 'AWAITING_CONFIRMATION';
+  offeredSlots?: OfferedSlot[];
+  proposedSlot?: OfferedSlot;
+  mode?: 'NEW' | 'RESCHEDULE';
+  /** Half of a slot the lead already gave us ("Thursday" -> we asked for the time). */
+  partialDate?: string | null;
+  partialHour?: number | null;
+  updatedAt?: string;
+  expiresAt?: number;
+}
+
+function addDaysToDate(dateString: string, days: number): string {
+  const [y, m, d] = dateString.split('-').map((n) => parseInt(n, 10));
+  const dt = new Date(Date.UTC(y, m - 1, d + days, 12, 0, 0));
+  return dt.toISOString().slice(0, 10);
+}
+
+/** Stable per-lead key: email first, then phone, then conversation / lead id. */
+function schedulingStateKey(p: { leadEmail?: string; leadPhone?: string; conversationId?: string; leadId?: string }): string | null {
+  const email = normalizeLeadEmail(String(p.leadEmail || '').trim());
+  let raw = '';
+  if (email.includes('@')) raw = `email:${email}`;
+  else if (phoneLast10(p.leadPhone)) raw = `phone:${phoneLast10(p.leadPhone)}`;
+  else if (p.conversationId) raw = `conv:${p.conversationId}`;
+  else if (p.leadId) raw = `lead:${p.leadId}`;
+  if (!raw) return null;
+  return `s_${crypto.createHash('sha1').update(raw).digest('hex')}`;
+}
+
+async function loadSchedulingState(key: string | null): Promise<SchedulingState | null> {
+  if (!key || !isFirebaseConfigured || !db) return null;
+  try {
+    const snap = await getDoc(tenantRepo(getSchedCtx()).doc('scheduling_state', key));
+    if (!snap.exists()) return null;
+    const data = snap.data() as SchedulingState;
+    if (!data?.stage || (typeof data.expiresAt === 'number' && data.expiresAt < Date.now())) return null;
+    return data;
+  } catch (e) {
+    console.warn('[Demo Scheduling] Could not read scheduling state:', (e as any)?.message || e);
+    return null;
+  }
+}
+
+async function saveSchedulingState(key: string | null, state: SchedulingState): Promise<void> {
+  if (!key || !isFirebaseConfigured || !db) return;
+  const ttl = state.stage === 'AWAITING_CONFIRMATION' ? CONFIRMATION_STATE_TTL_MS : AVAILABILITY_STATE_TTL_MS;
+  try {
+    await safeSetDoc(tenantRepo(getSchedCtx()).doc('scheduling_state', key), {
+      stage: state.stage,
+      offeredSlots: state.offeredSlots || [],
+      proposedSlot: state.proposedSlot || null,
+      mode: state.mode || 'NEW',
+      partialDate: state.partialDate ?? null,
+      partialHour: state.partialHour ?? null,
+      updatedAt: new Date().toISOString(),
+      expiresAt: Date.now() + ttl,
+    });
+  } catch (e) {
+    console.warn('[Demo Scheduling] Could not save scheduling state:', (e as any)?.message || e);
+  }
+}
+
+async function clearSchedulingState(key: string | null): Promise<void> {
+  if (!key || !isFirebaseConfigured || !db) return;
+  try {
+    await deleteDoc(tenantRepo(getSchedCtx()).doc('scheduling_state', key));
+  } catch {
+    // Missing doc or transient error: an expired/stale state is ignored on read anyway.
+  }
+}
+
+/**
+ * True when this lead is in the middle of a scheduling exchange (we asked for their availability or for a
+ * "yes"). Inbound pipelines use it to route replies such as "Tuesday 4pm" or "yes" back to the scheduling
+ * agent even though they don't mention a demo. Only reads Firestore for messages that could be such a reply.
+ */
+export async function hasPendingSchedulingState(params: {
+  messageText: string;
+  leadEmail?: string;
+  leadPhone?: string;
+  conversationId?: string;
+  leadId?: string;
+}): Promise<boolean> {
+  await warmSchedBrand();
+  const fresh = stripQuotedEmailHistoryShared(params.messageText || '') || String(params.messageText || '').trim();
+  if (!looksLikeSchedulingFollowUp(fresh)) return false;
+  return !!(await loadSchedulingState(schedulingStateKey(params)));
 }
 
 /**
@@ -1666,16 +1793,9 @@ export async function processSchedulingConversationTurn(params: {
   [key: string]: any;
 }): Promise<SchedulingTurnResult> {
   await warmSchedBrand();
-  // Booking only happens when the sender actually asks for it. Manual calls (Demo Scheduling tab)
-  // always proceed; automated calls (inbound email / WhatsApp) proceed only on real booking intent,
-  // judged on the sender's new text with quoted history stripped.
-  if (params.manual !== true) {
-    const newText = String(params.messageText || '');
-    if (!detectDemoSchedulingIntent(newText)) {
-      return { handled: false, replyText: '', action: 'NOT_DEMO_INTENT' };
-    }
-  }
   const messageText = params.messageText || '';
+  // Only what the lead newly wrote (no quoted thread, no signature). Dates and times are read from this alone.
+  const fresh = stripQuotedEmailHistoryShared(messageText) || messageText.trim();
   const conversationHistory = Array.isArray(params.conversationHistory) ? params.conversationHistory : [];
   const ctx: any = params.leadContext || {};
   const leadName = ctx.leadName || params.senderName || params.leadName || 'Valued Partner';
@@ -1702,6 +1822,20 @@ export async function processSchedulingConversationTurn(params: {
     accessToken,
   };
 
+  // Saved state of an in-progress scheduling exchange (we asked for availability / for a "yes").
+  // Only read for messages that could continue one, to keep Firestore reads down.
+  const stateKey = schedulingStateKey({ leadEmail, leadPhone, conversationId, leadId });
+  const schedState =
+    stateKey && (detectDemoSchedulingIntent(fresh) || looksLikeSchedulingFollowUp(fresh))
+      ? await loadSchedulingState(stateKey)
+      : null;
+
+  // Booking only happens when the sender actually asks for it, or is answering our scheduling question.
+  // Manual calls (Demo Scheduling tab simulator) always proceed to the guarded checks below.
+  if (params.manual !== true && !detectDemoSchedulingIntent(fresh) && !schedState) {
+    return { handled: false, replyText: '', action: 'NOT_DEMO_INTENT' };
+  }
+
   const nowIst = getNowInIst();
 
   // 1. Check if user already has an active booking
@@ -1716,6 +1850,7 @@ export async function processSchedulingConversationTurn(params: {
 
   // 2. Cancellation Intent
   if (/cancel\s+(the\s+)?(demo|meeting|booking|appointment|call)/i.test(lowerText)) {
+    await clearSchedulingState(stateKey);
     if (activeBooking) {
       await cancelDemoBooking(activeBooking.bookingId, 'Lead requested cancellation in conversation');
       return {
@@ -1827,256 +1962,351 @@ export async function processSchedulingConversationTurn(params: {
     }
   }
 
-  // 4. Use AI to extract intent and slot parameters from the full conversation
-  let nlpResult: {
-    isDemoIntent: boolean;
-    hasSpecificSlot: boolean;
-    dateString?: string; // YYYY-MM-DD
-    startHour?: number; // 10 - 18
-    isWeekend?: boolean;
-    isOutOfHours?: boolean;
-    outOfHoursMessage?: string;
-    preferredPeriod?: 'MORNING' | 'AFTERNOON' | 'EVENING' | 'ANY';
-    userConfirmedSlot?: boolean;
-  } = {
-    isDemoIntent: detectDemoSchedulingIntent(messageText),
-    hasSpecificSlot: false,
-  };
+  // ===========================================================================
+  // 4. GUARDED SLOT RESOLUTION
+  // The agent never picks a time for the lead. It books only after:
+  //   (a) the lead's own newest message names a specific day AND clock time (or picks one of the
+  //       slots we offered), the slot is valid and free, AND
+  //   (b) the lead says "yes" to our "Just to confirm..." message.
+  // Everything else is answered with a question (plus 2-3 free options when their time can't work).
+  // ===========================================================================
+  // Remembered with the next question when only one half of a slot is known (declared first: the helper
+  // functions at the end of this function read it).
+  const carry: { date?: string; hour?: number } = {};
+  const time = parseExplicitTime(fresh);
+  const dateMentioned = hasExplicitDateToken(fresh);
+  const offered: OfferedSlot[] = Array.isArray(schedState?.offeredSlots) ? schedState!.offeredSlots! : [];
+  const mode: 'NEW' | 'RESCHEDULE' =
+    activeBooking && (isRescheduleIntent || schedState?.mode === 'RESCHEDULE') ? 'RESCHEDULE' : 'NEW';
 
+  // 4a. Lead is answering our "Just to confirm..." question.
+  if (schedState?.stage === 'AWAITING_CONFIRMATION' && schedState.proposedSlot && !dateMentioned && !time.hasTime) {
+    if (isAffirmative(fresh)) {
+      return finalizeConfirmedSlot(schedState.proposedSlot, schedState.mode === 'RESCHEDULE' ? 'RESCHEDULE' : 'NEW');
+    }
+    if (isNegative(fresh)) {
+      return askForAvailability(
+        'ASKED_AVAILABILITY',
+        `No problem. What day and time would suit you instead? Our demos run ${daysLabel()} between ${fmtHour(workStartH())} and ${fmtHour(workEndH())} ${TZL()} (1 hour).`
+      );
+    }
+  }
+
+  // 4b. AI extraction, limited to the lead's newest words. History is context only.
+  const ai: {
+    isDemoIntent?: boolean;
+    requestedDate?: string | null;
+    requestedHour?: number | null;
+    wantsEarliest?: boolean;
+  } = {};
   const apiKey = process.env.OPENAI_API_KEY || process.env.GEMINI_API_KEY;
   if (apiKey) {
     try {
       const openai = new OpenAI({ apiKey });
-      const prompt = `You are the Demo Scheduling Agent for ${brandName()}.
-Current Date and Time (${TZL()}, ${tz()}): ${nowIst.dateString}, ${nowIst.hour}:${String(nowIst.minute).padStart(2, '0')}.
-Current Day of Week: ${['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][nowIst.dayOfWeek]}.
+      const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+      const prompt = `You extract demo-scheduling details for ${brandName()}.
+Now (${TZL()}, ${tz()}): ${dayNames[nowIst.dayOfWeek]} ${nowIst.dateString}, ${nowIst.hour}:${String(nowIst.minute).padStart(2, '0')}.
 
-Demo working rules:
-- Demos are ${daysLabel()} only. ${closedDaysLabel()} are strictly unavailable.
-- Working hours are ${fmtHour(workStartH())} to ${fmtHour(workEndH())} ${TZL()} (${workStartH()}:00 to ${workEndH()}:00).
-- Demos are 60 minutes long. Fixed start hours: ${slotHours().join(', ')}.
-- ${workEndH()}:00 (${hrShort(workEndH())}) is NOT valid because the demo would end at ${hrShort(workEndH() + 1)}, which is after ${hrShort(workEndH())}. Latest start is ${workEndH() - 1}:00 (${hrShort(workEndH() - 1)}).
+Earlier conversation (context only - NEVER take a date or time from here):
+${conversationHistory.slice(-6).map((m) => `${m.role.toUpperCase()}: ${String(m.content || '').slice(0, 600)}`).join('\n') || '(none)'}
 
-Conversation context:
-${conversationHistory.map((m) => `${m.role.toUpperCase()}: ${m.content}`).join('\n')}
-USER'S LATEST MESSAGE: "${messageText}"
+LEAD'S NEWEST MESSAGE (the ONLY source for date and time):
+"""${fresh.slice(0, 1500)}"""
 
-Analyze the conversation and latest message. Output JSON only:
-{
-  "isDemoIntent": boolean (true if user wants to schedule, reschedule, meet, see software, or is answering scheduling questions),
-  "hasSpecificSlot": boolean (true if user requested a specific day and hour or agreed to a proposed slot),
-  "dateString": string (YYYY-MM-DD resolved to future date in the company timezone, or null),
-  "startHour": number (${workStartH()} to ${workEndH() - 1} integer in 24hr format, or null),
-  "isWeekend": boolean (true if resolved date falls on a non-working day: ${closedDaysLabel()}),
-  "isOutOfHours": boolean (true if user requested time outside ${workStartH()}:00 - ${workEndH() - 1}:00, e.g. ${hrShort(workStartH() - 1)} or ${hrShort(workEndH())}),
-  "preferredPeriod": "MORNING" | "AFTERNOON" | "EVENING" | "ANY",
-  "userConfirmedSlot": boolean (true if user said "yes", "sure", "that works", "let's do it", "confirm" to a previously proposed slot)
-}`;
+Strict rules:
+- requestedDate: only if the newest message itself names a specific day (today, tomorrow, a weekday, or a calendar date). Resolve it to YYYY-MM-DD on or after today. Otherwise null.
+- requestedHour: only if the newest message itself states a clock time ("4pm", "16:00", "at 4"). Give the 24h start hour 0-23 exactly as asked, even if outside business hours. Otherwise null.
+- Never guess, never default, never use a time we suggested earlier, and never treat counts, prices, phone numbers or years as times.
+- wantsEarliest: true only if they ask for the earliest / soonest / next available time without naming one.
+Output JSON only: {"isDemoIntent": boolean, "requestedDate": string|null, "requestedHour": number|null, "wantsEarliest": boolean}`;
 
-      const candidateModels = ['gpt-4o-mini', 'gpt-4o', 'gpt-3.5-turbo'];
-      let parsed: any = null;
-
-      for (const modelName of candidateModels) {
+      for (const modelName of ['gpt-4o-mini', 'gpt-4o']) {
         try {
           const completion = await openai.chat.completions.create({
             model: modelName,
             messages: [{ role: 'user', content: prompt }],
             response_format: { type: 'json_object' },
-            temperature: 0.1,
+            temperature: 0,
           });
-
           const content = completion.choices[0]?.message?.content;
           if (content) {
-            parsed = JSON.parse(content.trim());
-            if (parsed) break;
+            Object.assign(ai, JSON.parse(content.trim()));
+            break;
           }
         } catch (mErr: any) {
           console.warn(`[Demo Scheduling OpenAI ${modelName}] Notice:`, mErr?.message || mErr);
         }
       }
-
-      if (parsed) {
-        nlpResult = { ...nlpResult, ...parsed };
-      }
     } catch (aiErr) {
-      console.warn('[Demo Scheduling AI Fallback]: Proceeding with rule-based slot parsing');
+      console.warn('[Demo Scheduling AI Fallback]: Proceeding with rule-based parsing');
     }
   }
 
-  // Rule-based fallback checks if AI parsing did not find a slot
-  if (!nlpResult.hasSpecificSlot) {
-    const lower = messageText.toLowerCase();
+  // 4c. Deterministic checks decide; the AI output is only accepted when the lead's text backs it up.
+  let requestedDate: string | null = null;
+  if (dateMentioned) {
+    const simple = resolveSimpleDate(fresh, nowIst, addDaysToDate);
+    requestedDate = isIsoDate(ai.requestedDate) ? ai.requestedDate : simple;
+    const named = namedWeekdays(fresh);
+    if (requestedDate && named.length === 1 && dayOfWeekFor(requestedDate) !== named[0]) requestedDate = simple;
+  }
 
-    // 1. Date resolution (today, tomorrow, weekdays, earliest requests)
-    if (
-      lower.includes('earliest') ||
-      lower.includes('asap') ||
-      lower.includes('soonest') ||
-      lower.includes('next available') ||
-      lower.includes('first available') ||
-      lower.includes('available slots')
-    ) {
-      nlpResult.dateString = nowIst.dateString;
-      nlpResult.isDemoIntent = true;
-    } else if (lower.includes('today') || lower.includes('tonight') || lower.includes('this evening') || lower.includes('this afternoon')) {
-      nlpResult.dateString = nowIst.dateString;
-      nlpResult.isDemoIntent = true;
-    } else if (lower.includes('tomorrow')) {
-      const nextDay = new Date();
-      nextDay.setDate(nextDay.getDate() + 1);
-      const f = new Intl.DateTimeFormat('en-CA', { timeZone: tz() });
-      nlpResult.dateString = f.format(nextDay);
-      nlpResult.isDemoIntent = true;
-    } else {
-      const weekdays = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
-      for (let i = 0; i < weekdays.length; i++) {
-        if (lower.includes(weekdays[i])) {
-          nlpResult.isDemoIntent = true;
-          let diff = i - nowIst.dayOfWeek;
-          if (diff === 0) {
-            // Same weekday as today
-            diff = nowIst.hour < workEndH() - 1 ? 0 : 7;
-          } else if (diff < 0) {
-            diff += 7;
-          }
-          const targetD = new Date();
-          targetD.setDate(targetD.getDate() + diff);
-          const f = new Intl.DateTimeFormat('en-CA', { timeZone: tz() });
-          nlpResult.dateString = f.format(targetD);
-          if (!sb().workingDays.includes(i)) nlpResult.isWeekend = true;
-          break;
-        }
+  // The lead gave the day earlier and now only the time (or the other way round): combine them.
+  // While confirming a slot, "make it 11am" keeps the day and "Friday instead" keeps the time.
+  const knownDate = isIsoDate(schedState?.partialDate) ? schedState!.partialDate! : schedState?.proposedSlot?.date;
+  const knownHour =
+    typeof schedState?.partialHour === 'number' ? schedState.partialHour : schedState?.proposedSlot?.startHour;
+  if (!requestedDate && !dateMentioned && time.hasTime && isIsoDate(knownDate)) {
+    requestedDate = knownDate;
+  }
+
+  let requestedHour: number | null = null;
+  let hourOutOfRange = false;
+  if (time.hasTime) {
+    const inHours = time.hourCandidates.filter((h) => slotHours().includes(h));
+    const aiHour = typeof ai.requestedHour === 'number' ? ai.requestedHour : null;
+    if (aiHour !== null && time.hourCandidates.includes(aiHour)) {
+      requestedHour = aiHour;
+      hourOutOfRange = !slotHours().includes(aiHour);
+    } else if (inHours.length === 1) {
+      requestedHour = inHours[0];
+    } else if (inHours.length === 0) {
+      requestedHour = time.hourCandidates[0];
+      hourOutOfRange = true;
+    }
+    // Several in-hours readings and no confirmed AI reading: leave it null and ask.
+  }
+  if (requestedHour === null && !time.hasTime && dateMentioned && typeof knownHour === 'number') {
+    requestedHour = knownHour;
+    hourOutOfRange = !slotHours().includes(requestedHour);
+  }
+
+  const wantsEarliest =
+    ai.wantsEarliest === true ||
+    /\b(earliest|asap|as soon as possible|soonest|next available|first available|any ?time|whenever)\b/i.test(fresh);
+  const period = preferredPeriodOf(fresh);
+  const pickedIdx = offered.length ? pickOfferedSlot(fresh, offered, dayOfWeekFor) : null;
+
+  const isDemoIntent =
+    detectDemoSchedulingIntent(fresh) ||
+    ai.isDemoIntent === true ||
+    pickedIdx !== null ||
+    (!!schedState && (dateMentioned || time.hasTime || wantsEarliest || period !== 'ANY')) ||
+    (params.manual === true && (dateMentioned || time.hasTime));
+
+  if (!isDemoIntent) {
+    return { handled: false, replyText: '', action: 'NOT_DEMO_INTENT' };
+  }
+
+  // 4d. Already has an upcoming demo and did not ask to move it: never book a second one.
+  if (activeBooking && mode !== 'RESCHEDULE') {
+    await clearSchedulingState(stateKey);
+    const label = requestedDate && requestedHour !== null && !hourOutOfRange ? formatSlotLabel(requestedDate, requestedHour) : undefined;
+    return { handled: true, action: 'ALREADY_BOOKED', replyText: alreadyBookedReplyText(activeBooking, label) };
+  }
+
+  // 4e. Lead picked one of the slots we offered -> confirm it.
+  if (pickedIdx !== null && !(requestedDate && requestedHour !== null && !matchesOffered(requestedDate, requestedHour))) {
+    return proposeSlot(offered[pickedIdx], mode);
+  }
+
+  // 4f. Nothing concrete yet: ask. Options only when they asked for the earliest or gave a part of the day.
+  if (!requestedDate && requestedHour === null) {
+    if (time.hasTime && !hourOutOfRange) {
+      return askForAvailability(
+        'ASKED_AVAILABILITY',
+        `Could you share the exact day and time that suits you (for example, Tuesday at 4 PM ${TZL()})?`
+      );
+    }
+    if (hourOutOfRange) {
+      return offerOptions('HOURS_NOT_ALLOWED', hoursNotAllowedText(), { period });
+    }
+    if (wantsEarliest || period !== 'ANY') {
+      return offerOptions('OFFERED_ALTERNATIVES', `Happy to set that up.`, { period }, {
+        listLead: `Here are the earliest free slots${period !== 'ANY' ? ` in the ${period.toLowerCase()}` : ''}:`,
+      });
+    }
+    return askForAvailability(
+      'ASKED_AVAILABILITY',
+      mode === 'RESCHEDULE'
+        ? `Sure, I can move your ${brandName()} demo (currently ${activeBooking!.date} at ${activeBooking!.startTime} ${TZL()}). What day and time would suit you instead? Our demos run ${daysLabel()} between ${fmtHour(workStartH())} and ${fmtHour(workEndH())} ${TZL()} (1 hour).`
+        : `I'd be glad to arrange a live walkthrough of ${brandName()} for ${companyName}! What day and time would suit you? Our demos run ${daysLabel()} between ${fmtHour(workStartH())} and ${fmtHour(workEndH())} ${TZL()} and take about an hour.`
+    );
+  }
+
+  // 4g. Day given but no usable time.
+  if (requestedDate && (requestedHour === null || hourOutOfRange)) {
+    const dateProblem = await validateDate(requestedDate);
+    if (dateProblem) return dateProblem;
+    if (hourOutOfRange) {
+      return offerOptions('HOURS_NOT_ALLOWED', hoursNotAllowedText(), { startFromDate: requestedDate, period });
+    }
+    carry.date = requestedDate;
+    return offerOptions(
+      'ASKED_AVAILABILITY',
+      `What time on ${formatDayLabel(requestedDate)} works for you?`,
+      { startFromDate: requestedDate, period },
+      {
+        listLead: 'These are the nearest free slots:',
+        outro: `Reply with the option number, or tell me a time between ${fmtHour(workStartH())} and ${fmtHour(workEndH())} ${TZL()}.`,
       }
-    }
-
-    // 2. Time resolution (e.g. "6 - 7", "6 to 7", "6-7", "6pm", "6:00", "18:00")
-    const rangeMatch = lower.match(/(\d{1,2})(?::\d{2})?\s*(?:-|to|–)\s*(\d{1,2})/i);
-    const timeMatch = lower.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/i);
-
-    let foundHour: number | undefined = undefined;
-
-    if (rangeMatch) {
-      let rawH = parseInt(rangeMatch[1], 10);
-      if (rawH >= 1 && rawH <= workEndH() - 12 - 1) rawH += 12; // 6 -> 18 (6 PM)
-      if (rawH >= workStartH() && rawH <= workEndH() - 1) {
-        foundHour = rawH;
-      } else if (rawH < workStartH() || rawH >= workEndH()) {
-        nlpResult.isOutOfHours = true;
-      }
-    } else if (timeMatch) {
-      let rawH = parseInt(timeMatch[1], 10);
-      const ampm = timeMatch[3]?.toLowerCase();
-      if (ampm === 'pm' && rawH < 12) rawH += 12;
-      else if (ampm === 'am' && rawH === 12) rawH = 0;
-      else if (!ampm && rawH >= 1 && rawH <= workEndH() - 12 - 1) rawH += 12; // 6 -> 18 (6 PM)
-
-      if (rawH >= workStartH() && rawH <= workEndH() - 1) {
-        foundHour = rawH;
-      } else if (rawH < workStartH() || rawH >= workEndH()) {
-        nlpResult.isOutOfHours = true;
-      }
-    }
-
-    if (foundHour !== undefined) {
-      nlpResult.startHour = foundHour;
-      nlpResult.isDemoIntent = true;
-    }
-
-    if (!nlpResult.dateString && nlpResult.isDemoIntent && !nlpResult.isWeekend) {
-      nlpResult.dateString = nowIst.dateString;
-    }
-
-    if (nlpResult.dateString && nlpResult.startHour !== undefined && !nlpResult.isOutOfHours && !nlpResult.isWeekend) {
-      nlpResult.hasSpecificSlot = true;
-    }
+    );
   }
 
-  // If user has NO demo intent, return unhandled
-  if (!nlpResult.isDemoIntent) {
-    return {
-      handled: false,
-      replyText: '',
-      action: 'NOT_DEMO_INTENT',
-    };
+  // 4h. Time given but no day.
+  if (!requestedDate && requestedHour !== null) {
+    if (hourOutOfRange) return offerOptions('HOURS_NOT_ALLOWED', hoursNotAllowedText(), { period });
+    carry.hour = requestedHour;
+    return askForAvailability(
+      'ASKED_AVAILABILITY',
+      `Which day would you like the demo at ${hrShort(requestedHour)}? Our demos run ${daysLabel()}.`
+    );
   }
 
-  // 5. Check Duplicate Booking: Lead asks for demo, but is already booked
-  if (activeBooking && !isRescheduleIntent && !nlpResult.hasSpecificSlot) {
-    return {
-      handled: true,
-      action: 'ALREADY_BOOKED',
-      replyText: alreadyBookedReplyText(activeBooking),
-    };
+  // 4i. Day AND time given: validate, check the calendar, then ask for confirmation.
+  const dateProblem = await validateDate(requestedDate!);
+  if (dateProblem) return dateProblem;
+  if (time.hasNonZeroMinutes) {
+    return offerOptions(
+      'HOURS_NOT_ALLOWED',
+      `Our demos start on the hour (${hrShort(workStartH())} to ${hrShort(workEndH() - 1)} ${TZL()}).`,
+      { startFromDate: requestedDate!, period }
+    );
+  }
+  return proposeSlot({ date: requestedDate!, startHour: requestedHour!, label: formatSlotLabel(requestedDate!, requestedHour!) }, mode);
+
+  // ---------------------------------------------------------------------------
+  // Helpers (closures over this turn's lead context)
+  // ---------------------------------------------------------------------------
+  function matchesOffered(date: string, hour: number): boolean {
+    return offered.some((s) => s.date === date && s.startHour === hour);
   }
 
-  // 6. REQUIREMENT 2: When lead asks for demo scheduling, FIRST refer to Google Calendar,
-  // check earliest available slots and suggest them!
-  if (!nlpResult.hasSpecificSlot && !nlpResult.isWeekend && !nlpResult.isOutOfHours) {
-    const suggestions = await findNextAvailableSlots({
-      preferredDate: nlpResult.dateString,
-      preferredPeriod: nlpResult.preferredPeriod,
-      maxSlotsToReturn: 4,
+  function hoursNotAllowedText(): string {
+    return `Our demo hours are ${fmtHour(workStartH())} to ${fmtHour(workEndH())} ${TZL()} (${daysLabel()}), and each demo is an hour, so the latest start is ${fmtHour(workEndH() - 1)}.`;
+  }
+
+  function formatDayLabel(date: string): string {
+    return new Intl.DateTimeFormat('en-US', { timeZone: tz(), weekday: 'long', month: 'short', day: 'numeric' }).format(
+      new Date(createIstIsoString(date, 12, 0))
+    );
+  }
+
+  /** Returns a reply if the date itself can't work (past, non-working day, too far out), else null. */
+  async function validateDate(date: string): Promise<SchedulingTurnResult | null> {
+    if (date < nowIst.dateString) {
+      return askForAvailability('ASKED_AVAILABILITY', `That date has already passed. Which upcoming day and time would suit you?`);
+    }
+    if (date > addDaysToDate(nowIst.dateString, MAX_DAYS_AHEAD)) {
+      return askForAvailability(
+        'ASKED_AVAILABILITY',
+        `We can schedule demos up to ${MAX_DAYS_AHEAD} days ahead. Could you pick a day and time a little sooner?`
+      );
+    }
+    if (!isWorkingDay(dayOfWeekFor(date))) {
+      return offerOptions(
+        'WEEKEND_NOT_ALLOWED',
+        `Our demo team works ${daysLabel()}, so ${formatDayLabel(date)} isn't available.`,
+        { startFromDate: date, period }
+      );
+    }
+    return null;
+  }
+
+  async function askForAvailability(action: SchedulingTurnResult['action'], replyText: string): Promise<SchedulingTurnResult> {
+    await saveSchedulingState(stateKey, { stage: 'AWAITING_AVAILABILITY', offeredSlots: [], mode, partialDate: carry.date, partialHour: carry.hour });
+    return { handled: true, action, replyText };
+  }
+
+  /** Lists 2-3 free slots the lead can pick from. Never books. */
+  async function offerOptions(
+    action: SchedulingTurnResult['action'],
+    intro: string,
+    opts: { startFromDate?: string; period?: 'MORNING' | 'AFTERNOON' | 'EVENING' | 'ANY' } = {},
+    text: { listLead?: string; outro?: string } = {}
+  ): Promise<SchedulingTurnResult> {
+    let slots = await findNextAvailableSlots({
+      maxSlotsToReturn: 3,
+      startFromDate: opts.startFromDate,
+      preferredPeriod: opts.period,
       accessToken,
     });
-
-    if (suggestions.length > 0) {
-      const slotsText = suggestions.map((s) => `• ${s.label}`).join('\n');
+    if (slots.length === 0 && opts.period && opts.period !== 'ANY') {
+      slots = await findNextAvailableSlots({ maxSlotsToReturn: 3, startFromDate: opts.startFromDate, accessToken });
+    }
+    const offeredSlots: OfferedSlot[] = slots.map((s) => ({ date: s.date, startHour: s.startHour, label: s.label }));
+    await saveSchedulingState(stateKey, { stage: 'AWAITING_AVAILABILITY', offeredSlots, mode, partialDate: carry.date, partialHour: carry.hour });
+    if (offeredSlots.length === 0) {
       return {
         handled: true,
-        action: 'OFFERED_ALTERNATIVES',
-        replyText: `I would be glad to arrange a live walkthrough of ${brandName()} for ${companyName}! Here are our earliest available slots directly from our calendar:\n\n${slotsText}\n\nWhich of these works best for you? (Or let me know another preferred timing between ${fmtHour(workStartH())} and ${fmtHour(workEndH())} ${TZL()}, ${daysLabel()}).`,
+        action,
+        replyText: `${intro} I don't see free slots on our calendar for that, so what other day and time would suit you? Our demos run ${daysLabel()} between ${fmtHour(workStartH())} and ${fmtHour(workEndH())} ${TZL()}.`.trim(),
       };
     }
-
+    const list = offeredSlots.map((s, i) => `${i + 1}. ${s.label}`).join('\n');
     return {
       handled: true,
-      action: 'ASKED_AVAILABILITY',
-      replyText: `I would be happy to schedule a demo of ${brandName()} for ${companyName}! Our demo slots run ${daysLabel()} between ${fmtHour(workStartH())} and ${fmtHour(workEndH())} ${TZL()} (1-hour duration). What day and time work best for you?`,
+      action,
+      replyText: `${intro} ${text.listLead || 'Here are some free slots:'}`.trim() +
+        `\n\n${list}\n\n${text.outro || 'Reply with the option number, or tell me another day and time that suits you.'}`,
     };
   }
 
-  // 7. Weekend Validation
-  if (nlpResult.isWeekend) {
-    const suggestions = await findNextAvailableSlots({ maxSlotsToReturn: 3, accessToken });
-    const alternativesText = suggestions.map((s) => `• ${s.label}`).join('\n');
-
-    return {
-      handled: true,
-      action: 'WEEKEND_NOT_ALLOWED',
-      replyText: `Our demo team operates ${daysLabel().replace(' to ', ' through ')} between ${hrShort(workStartH())} and ${hrShort(workEndH())} ${TZL()}, so ${closedDaysLabel()} are unavailable. I can offer these upcoming weekday slots instead:\n\n${alternativesText}\n\nWould one of these work for you?`,
-    };
-  }
-
-  // 8. Business Hours Validation (10 AM to 7 PM IST, with 6 PM as latest start)
-  if (nlpResult.isOutOfHours) {
-    const suggestions = await findNextAvailableSlots({
-      preferredDate: nlpResult.dateString || nowIst.dateString,
-      maxSlotsToReturn: 3,
-      accessToken,
+  /** Valid, free slot -> ask the lead to confirm it. Never books. */
+  async function proposeSlot(slot: OfferedSlot, slotMode: 'NEW' | 'RESCHEDULE'): Promise<SchedulingTurnResult> {
+    const problem = await slotProblem(slot);
+    if (problem) return problem;
+    await saveSchedulingState(stateKey, {
+      stage: 'AWAITING_CONFIRMATION',
+      proposedSlot: { date: slot.date, startHour: slot.startHour, label: formatSlotLabel(slot.date, slot.startHour) },
+      offeredSlots: [],
+      mode: slotMode,
     });
-    const alternativesText = suggestions.map((s) => `• ${s.label}`).join('\n');
-
+    const verb = slotMode === 'RESCHEDULE' ? `move your ${brandName()} demo to` : `book your ${brandName()} demo for`;
     return {
       handled: true,
-      action: 'HOURS_NOT_ALLOWED',
-      replyText: `Our demo hours are ${fmtHour(workStartH())} to ${fmtHour(workEndH())} ${TZL()} (${daysLabel()}). Since each demo is a full 60-minute walkthrough, the latest slot starts at ${fmtHour(workEndH() - 1)} (finishing at ${fmtHour(workEndH())}). Here are our available slots:\n\n${alternativesText}\n\nWhich slot would you prefer?`,
+      action: 'AWAITING_CONFIRMATION',
+      replyText: `Just to confirm, shall I ${verb} ${formatSlotLabel(slot.date, slot.startHour)}?\n\nReply "Yes" to confirm, or tell me a different day and time.`,
     };
   }
 
-  // 9. Lead provided a specific valid slot: Check Google Calendar in REALTIME
-  const targetDateStr = nlpResult.dateString || nowIst.dateString;
-  const startH = nlpResult.startHour !== undefined ? nlpResult.startHour : 15;
-  const startIso = createIstIsoString(targetDateStr, startH, 0);
-  const endIso = createIstIsoString(targetDateStr, startH + 1, 0);
-  const startTimeStr = `${String(startH).padStart(2, '0')}:00`;
-  const endTimeStr = `${String(startH + 1).padStart(2, '0')}:00`;
+  /** Re-checks a slot right before proposing or booking it. Returns a reply when it can't be used. */
+  async function slotProblem(slot: OfferedSlot): Promise<SchedulingTurnResult | null> {
+    const label = formatSlotLabel(slot.date, slot.startHour);
+    if (!slotHours().includes(slot.startHour)) {
+      return offerOptions('HOURS_NOT_ALLOWED', hoursNotAllowedText(), { startFromDate: slot.date });
+    }
+    if (!isWorkingDay(dayOfWeekFor(slot.date))) {
+      return offerOptions('WEEKEND_NOT_ALLOWED', `Our demo team works ${daysLabel()}.`, { startFromDate: slot.date });
+    }
+    const startIso = createIstIsoString(slot.date, slot.startHour, 0);
+    if (Date.parse(startIso) <= Date.now() + MIN_LEAD_TIME_MS) {
+      return offerOptions('SLOT_UNAVAILABLE', `${label} is too soon or has already passed.`, {}, { listLead: 'Here are the next free slots:' });
+    }
+    const endIso = createIstIsoString(slot.date, slot.startHour + 1, 0);
+    const availability = await checkRealtimeGoogleCalendarSlot(startIso, endIso, accessToken);
+    if (!availability.available) {
+      return offerOptions('SLOT_UNAVAILABLE', `${label} is already taken on our calendar.`, {
+        startFromDate: slot.date,
+      });
+    }
+    return null;
+  }
 
-  const availability = await checkRealtimeGoogleCalendarSlot(startIso, endIso, accessToken);
+  /** The lead said yes to a proposed slot: re-validate, then book or reschedule. */
+  async function finalizeConfirmedSlot(slot: OfferedSlot, slotMode: 'NEW' | 'RESCHEDULE'): Promise<SchedulingTurnResult> {
+    const problem = await slotProblem(slot);
+    if (problem) return problem;
 
-  // 10. IF SLOT IS AVAILABLE ON GOOGLE CALENDAR: BOOK IMMEDIATELY!
-  if (availability.available) {
-    if (isRescheduleIntent && activeBooking) {
-      // Reschedule existing booking
+    const startH = slot.startHour;
+    const targetDateStr = slot.date;
+    const startIso = createIstIsoString(targetDateStr, startH, 0);
+    const endIso = createIstIsoString(targetDateStr, startH + 1, 0);
+    const startTimeStr = `${String(startH).padStart(2, '0')}:00`;
+    const endTimeStr = `${String(startH + 1).padStart(2, '0')}:00`;
+    const slotLabel = formatSlotLabel(targetDateStr, startH);
+
+    if (slotMode === 'RESCHEDULE' && activeBooking) {
       const resched = await rescheduleDemoBooking(
         activeBooking.bookingId,
         startIso,
@@ -2086,9 +2316,8 @@ Analyze the conversation and latest message. Output JSON only:
         endTimeStr,
         accessToken
       );
-
       if (resched.success && resched.booking) {
-        const slotLabel = formatSlotLabel(targetDateStr, startH);
+        await clearSchedulingState(stateKey);
         return {
           handled: true,
           action: 'RESCHEDULED',
@@ -2096,15 +2325,15 @@ Analyze the conversation and latest message. Output JSON only:
           replyText: `You're all set! Your ${brandName()} demo has been rescheduled to ${slotLabel}.\n\n• Google Meet Link: ${resched.booking.googleMeetLink}\n• Company: ${companyName}\n• Attendee: ${leadName} (${leadEmail || 'Email invite updated'})\n• Timezone: ${tzDisplay()}\n\nWe have sent the updated calendar invitation to your email. We look forward to demonstrating how ${sb().playbook === 'umrah360' ? 'Umrah360 automates your pilgrimage operations' : `${brandName()} can help your business`}!`,
         };
       }
+      return offerOptions('SLOT_UNAVAILABLE', `I couldn't move the demo to ${slotLabel}.`, {
+        startFromDate: targetDateStr,
+      });
     }
 
     // Already has an upcoming demo and did not ask to reschedule: never book a second one.
     if (activeBooking) {
-      return {
-        handled: true,
-        action: 'ALREADY_BOOKED',
-        replyText: alreadyBookedReplyText(activeBooking, formatSlotLabel(targetDateStr, startH)),
-      };
+      await clearSchedulingState(stateKey);
+      return { handled: true, action: 'ALREADY_BOOKED', replyText: alreadyBookedReplyText(activeBooking, slotLabel) };
     }
 
     // New booking creation with Google Calendar & Google Meet (sends invite once)
@@ -2127,9 +2356,8 @@ Analyze the conversation and latest message. Output JSON only:
     });
 
     if (bookingResult.success && bookingResult.booking) {
-      const slotLabel = formatSlotLabel(targetDateStr, startH);
+      await clearSchedulingState(stateKey);
       const meetLink = bookingResult.googleMeetLink || 'Will be shared via calendar invitation';
-
       const replyText = [
         `You're all set! Your ${brandName()} demo is booked for ${slotLabel}.`,
         ``,
@@ -2143,15 +2371,12 @@ Analyze the conversation and latest message. Output JSON only:
           ? `I have sent the calendar invitation to your email. We look forward to showing you Umrah360's group series operations, visa tracking, and B2B portal!`
           : `I have sent the calendar invitation to your email. We look forward to showing you ${brandName()}!`,
       ].join('\n');
+      return { handled: true, action: 'CONFIRMED_BOOKING', booking: bookingResult.booking, replyText };
+    }
 
-      return {
-        handled: true,
-        action: 'CONFIRMED_BOOKING',
-        booking: bookingResult.booking,
-        replyText,
-      };
-    } else if (bookingResult.alreadyBooked) {
+    if (bookingResult.alreadyBooked) {
       // Another message from this lead booked a demo a moment ago.
+      await clearSchedulingState(stateKey);
       return {
         handled: true,
         action: 'ALREADY_BOOKED',
@@ -2159,39 +2384,15 @@ Analyze the conversation and latest message. Output JSON only:
           ? alreadyBookedReplyText(bookingResult.existingBooking)
           : `A demo for you is being booked right now. You'll get the calendar invitation by email shortly.`,
       };
-    } else if (bookingResult.conflict) {
-      // Slot was booked in a race condition
-      const alternatives = await findNextAvailableSlots({
-        preferredDate: targetDateStr,
-        maxSlotsToReturn: 3,
-        accessToken,
-      });
-      const altText = alternatives.map((s) => `• ${s.label}`).join('\n');
-
-      return {
-        handled: true,
-        action: 'OFFERED_ALTERNATIVES',
-        replyText: `That slot was just booked by another attendee. Here are our earliest available slots instead:\n\n${altText}\n\nWhich one would you prefer?`,
-      };
     }
+
+    // Slot was taken in a race, or the booking failed: offer options, never pick one.
+    return offerOptions(
+      'SLOT_UNAVAILABLE',
+      bookingResult.conflict ? `${slotLabel} was just booked by someone else.` : `I couldn't book ${slotLabel}.`,
+      { startFromDate: targetDateStr }
+    );
   }
-
-  // 11. REQUIREMENT 2: IF SLOT IS OCCUPIED ON GOOGLE CALENDAR:
-  // Reply that slot is already booked and suggest earliest available slots from Google Calendar!
-  const slotLabel = formatSlotLabel(targetDateStr, startH);
-  const alternatives = await findNextAvailableSlots({
-    preferredDate: targetDateStr,
-    maxSlotsToReturn: 4,
-    accessToken,
-  });
-
-  const altList = alternatives.map((s) => `• ${s.label}`).join('\n');
-
-  return {
-    handled: true,
-    action: 'OFFERED_ALTERNATIVES',
-    replyText: `${slotLabel} is already booked on our calendar. Here are our earliest available slots instead:\n\n${altList}\n\nWhich one would you prefer?`,
-  };
 }
 
 /**

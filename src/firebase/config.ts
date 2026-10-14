@@ -22,9 +22,6 @@ const envApiKey =
   (typeof process !== 'undefined' && process.env?.VITE_FIREBASE_API_KEY) ||
   (typeof process !== 'undefined' && process.env?.FIREBASE_API_KEY);
 
-// The remaining settings can also come from the environment, so ONE codebase can run against different
-// Firebase projects (for example: production on the main database, a test deployment on another one).
-// Each name is written out literally because Vite only replaces literal `import.meta.env.VITE_*` references.
 const envAuthDomain =
   (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_FIREBASE_AUTH_DOMAIN) ||
   (typeof process !== 'undefined' && process.env?.VITE_FIREBASE_AUTH_DOMAIN);
@@ -41,7 +38,6 @@ const envAppId =
   (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_FIREBASE_APP_ID) ||
   (typeof process !== 'undefined' && process.env?.VITE_FIREBASE_APP_ID);
 
-// Browser builds read VITE_FIRESTORE_DATABASE_ID; the server also accepts its own FIRESTORE_DATABASE_ID.
 const envDatabaseId =
   (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_FIRESTORE_DATABASE_ID) ||
   (typeof process !== 'undefined' && process.env?.VITE_FIRESTORE_DATABASE_ID) ||
@@ -49,9 +45,6 @@ const envDatabaseId =
 
 const resolvedProjectId: string = envProjectId || rawFirebaseConfig.projectId;
 
-// True when the environment selects a project OTHER than the one in firebase-applet-config.json.
-// In that case the file's project-specific values (API key, auth domain, database name...) belong to a
-// different project and must never be borrowed: use the environment value or a safe default instead.
 const usingOtherProject = resolvedProjectId !== rawFirebaseConfig.projectId;
 
 export const firebaseConfig = {
@@ -65,8 +58,6 @@ export const firebaseConfig = {
   firestoreDatabaseId: envDatabaseId || (usingOtherProject ? '(default)' : rawFirebaseConfig.firestoreDatabaseId),
 };
 
-// Another project was selected but its web API key was not provided. The browser cannot sign anyone in
-// without it, so say exactly what is missing instead of failing later with a cryptic auth error.
 const webApiKeyMissing = !firebaseConfig.apiKey;
 if (webApiKeyMissing && typeof console !== 'undefined') {
   console.error(
@@ -75,18 +66,10 @@ if (webApiKeyMissing && typeof console !== 'undefined') {
   );
 }
 
-// Initialize Firebase App singleton for Firestore & Authentication.
-// (A placeholder key keeps start-up from crashing; the server does not use the web key at all.)
 export const app =
   getApps().find((a) => a.name === '[DEFAULT]') ||
   initializeApp(webApiKeyMissing ? { ...firebaseConfig, apiKey: 'missing-web-api-key' } : firebaseConfig);
 
-// Initialize Firestore with specific database ID.
-// In the browser, Firestore keeps a local copy of the data it has read (IndexedDB, shared by all open
-// tabs). After a page reload, listeners show that copy instantly and resume with a token, so the server
-// sends (and bills) only documents that changed, when the last listen was within ~30 minutes.
-// The cache lives in the user's browser: no Firebase cost. It is wiped on sign-out (authService.ts).
-// The server (Node) has no IndexedDB, so it keeps the default in-memory setup.
 function createDb(): Firestore {
   const dbId = firebaseConfig.firestoreDatabaseId || undefined;
   const isBrowser = typeof window !== 'undefined' && typeof indexedDB !== 'undefined';
@@ -95,7 +78,6 @@ function createDb(): Firestore {
       const settings = { localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) };
       return dbId ? initializeFirestore(app, settings, dbId) : initializeFirestore(app, settings);
     } catch (err) {
-      // Already initialised (e.g. dev hot reload) or the browser blocks IndexedDB: use the plain instance.
       console.warn('[Firebase] Local cache not enabled:', err);
     }
   }
@@ -103,13 +85,10 @@ function createDb(): Firestore {
 }
 export const db: Firestore = createDb();
 
-// Auth for the project selected above.
 export const auth: Auth = getAuth(app);
 
-// The server talks to Firebase with the service account, so only the browser needs the web API key.
 export const isFirebaseConfigured = Boolean(firebaseConfig.projectId && (firebaseConfig.apiKey || typeof window === 'undefined'));
 
-// Validate connection per skill guideline (browser client only; skip during Node SSR/build)
 async function testFirestoreConnection() {
   if (typeof window === 'undefined') return;
   if (!isFirebaseConfigured || !db) return;

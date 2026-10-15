@@ -541,3 +541,97 @@ export async function sendInstagramMessage(ctx: TenantContext, recipientId: stri
   }
   return result;
 }
+
+/**
+ * Ask Instagram what it actually has on file for the connected account, and repair what is missing.
+ * Helps when DMs never arrive: shows account type, whether the app is subscribed to `messages`,
+ * and whether our own routing record points at this workspace.
+ */
+export async function diagnoseInstagram(ctx: TenantContext): Promise<Record<string, unknown>> {
+  const connection = await getConnection(ctx);
+  if (!connection || connection.status !== 'connected') {
+    return { connected: false, summary: 'Instagram is not connected for this workspace. Click Connect Instagram first.' };
+  }
+  const result: Record<string, unknown> = { connected: true, accountId: connection.accountId, username: connection.username };
+  const notes: string[] = [];
+  let token = '';
+  try {
+    token = await getAccessToken(ctx);
+  } catch (err: any) {
+    return { ...result, summary: err?.message || 'The stored Instagram token cannot be used. Click Reconnect.' };
+  }
+
+  // 1. Account type must be professional.
+  try {
+    const profileUrl = new URL(`https://graph.instagram.com/${GRAPH_VERSION}/me`);
+    profileUrl.searchParams.set('fields', 'user_id,username,account_type');
+    profileUrl.searchParams.set('access_token', token);
+    const profile: any = await (await fetch(profileUrl)).json().catch(() => ({}));
+    result.accountType = profile.account_type || 'unknown';
+    result.profileUserId = String(profile.user_id || profile.id || '');
+    if (profile.error) notes.push(`Instagram rejected the token: ${profile.error.message || 'error'}. Reconnect the account.`);
+    else if (profile.account_type && !['BUSINESS', 'MEDIA_CREATOR'].includes(String(profile.account_type))) {
+      notes.push(`Account type is ${profile.account_type}. It must be a Business or Creator (Professional) account.`);
+    }
+  } catch {
+    notes.push('Could not read the Instagram profile.');
+  }
+
+  // 2. Our routing record (webhook account id -> this workspace).
+  try {
+    const routeRef = doc(db, 'instagram_account_routes', connection.accountId);
+    const routeSnap = await getDoc(routeRef);
+    if (!routeSnap.exists()) {
+      await setDoc(routeRef, { tenantId: ctx.tenantId, accountId: connection.accountId, updatedAt: new Date().toISOString() });
+      result.routeRepaired = true;
+      notes.push('The routing record was missing and has been recreated.');
+    } else if ((routeSnap.data() as any).tenantId !== ctx.tenantId) {
+      notes.push('This Instagram account is routed to a different workspace.');
+    }
+    result.routeOk = true;
+  } catch {
+    notes.push('Could not check the routing record.');
+  }
+
+  // 3. Is the app subscribed to this account's `messages` events?
+  const subsUrl = new URL(`https://graph.instagram.com/${GRAPH_VERSION}/${encodeURIComponent(connection.accountId)}/subscribed_apps`);
+  subsUrl.searchParams.set('access_token', token);
+  const readFields = async (): Promise<string[]> => {
+    const body: any = await (await fetch(subsUrl)).json().catch(() => ({}));
+    const rows: any[] = Array.isArray(body?.data) ? body.data : [];
+    return rows.flatMap((r) => (Array.isArray(r.subscribed_fields) ? r.subscribed_fields : []));
+  };
+  try {
+    let fields = await readFields();
+    result.subscribedFields = fields;
+    if (!fields.includes('messages')) {
+      const subscribeUrl = new URL(subsUrl);
+      subscribeUrl.searchParams.set('subscribed_fields', 'messages');
+      const resp = await fetch(subscribeUrl, { method: 'POST' });
+      const body: any = await resp.json().catch(() => ({}));
+      fields = await readFields();
+      result.subscribedFields = fields;
+      result.resubscribed = resp.ok && fields.includes('messages');
+      notes.push(
+        fields.includes('messages')
+          ? 'The account was not subscribed to messages; it has now been subscribed.'
+          : `Could not subscribe to messages${body?.error?.message ? `: ${body.error.message}` : ''}.`
+      );
+    }
+  } catch {
+    notes.push('Could not read the webhook subscription.');
+  }
+
+  // 4. Server settings Meta's deliveries depend on.
+  result.appSecretSet = Boolean(process.env.META_INSTAGRAM_APP_SECRET);
+  result.verifyTokenSet = Boolean(process.env.META_INSTAGRAM_WEBHOOK_VERIFY_TOKEN || process.env.META_WEBHOOK_VERIFY_TOKEN);
+  if (!result.appSecretSet) notes.push('META_INSTAGRAM_APP_SECRET is not set, so incoming events would be rejected.');
+
+  const subscribed = Array.isArray(result.subscribedFields) && (result.subscribedFields as string[]).includes('messages');
+  result.summary = notes.length
+    ? notes.join(' ')
+    : subscribed
+    ? 'Account is professional, routed to this workspace and subscribed to messages. If DMs still do not arrive, check Instagram app > Settings > Messages and story replies > Connected tools > Allow access to messages, and that the sender has a role on the Meta app.'
+    : 'Checks finished.';
+  return result;
+}

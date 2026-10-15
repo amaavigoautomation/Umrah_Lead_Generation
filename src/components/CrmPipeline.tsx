@@ -67,15 +67,19 @@ export interface CrmPipelineProps {
   onUpdateLeadStatus?: (leadId: string, newStatus: LeadStatus) => void;
   onUpdateLead?: (updatedLead: Lead) => void;
   onAddLead?: (newLead: Lead, newContact: Contact) => void;
+  /** Workspace team members that leads can be assigned to (used for non-Umrah360 workspaces). */
+  teamMembers?: { id: string; name: string; role?: string }[];
 }
 
-// TeleCRM Default Telecallers / Agents
-const TELECALLERS = [
+// Umrah360's default telecallers. Other workspaces use their own team members (see `teamMembers` prop).
+const UMRAH360_TELECALLERS = [
   { id: 'caller-1', name: 'Zeeshan Khan', role: 'Senior Sales Telecaller', avatarColor: 'bg-emerald-500' },
   { id: 'caller-2', name: 'Aisha Rahman', role: 'Umrah Package Specialist', avatarColor: 'bg-blue-500' },
   { id: 'caller-3', name: 'Tariq Malik', role: 'B2B & Group Lead Closer', avatarColor: 'bg-purple-500' },
   { id: 'caller-4', name: 'Sarah Ahmed', role: 'Inbound Verification Agent', avatarColor: 'bg-amber-500' },
 ];
+
+const AVATAR_COLORS = ['bg-emerald-500', 'bg-blue-500', 'bg-purple-500', 'bg-amber-500', 'bg-rose-500', 'bg-cyan-500'];
 
 // TeleCRM Core Statuses with colors & labels
 const TELECRM_STAGES: { key: string; label: string; bg: string; text: string; border: string; dot: string }[] = [
@@ -99,8 +103,26 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
   onUpdateLeadStatus,
   onUpdateLead,
   onAddLead,
+  teamMembers,
 }) => {
   const { brand } = useBrand();
+  const isUmrah = brand.playbook === 'umrah360';
+  const telecallers = useMemo(
+    () =>
+      isUmrah
+        ? UMRAH360_TELECALLERS
+        : (teamMembers || []).map((m, i) => ({
+            id: m.id,
+            name: m.name,
+            role: m.role || 'Sales Team',
+            avatarColor: AVATAR_COLORS[i % AVATAR_COLORS.length],
+          })),
+    [isUmrah, teamMembers]
+  );
+  const defaultCaller = telecallers[0]?.name || 'Unassigned';
+  const defaultService = isUmrah ? 'Umrah Custom Package' : 'General Enquiry';
+  const greet = (name: string) => (isUmrah ? `Assalamu Alaikum ${name}!` : `Hi ${name}!`);
+  const fallbackName = isUmrah ? 'Brother/Sister' : 'there';
 
   // Selected lead for 360° Drawer
   const [activeDrawerLeadId, setActiveDrawerLeadId] = useState<string | null>(initialSelectedLeadId || null);
@@ -278,7 +300,7 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
       durationSeconds: callDuration,
       outcome: callDisposition,
       notes: callNote || `Call completed with outcome: ${callDisposition}`,
-      telecaller: callingLead.assignedCaller || 'Zeeshan Khan',
+      telecaller: callingLead.assignedCaller || defaultCaller,
     };
 
     const existingLogs = callingLead.callLogs || [];
@@ -323,9 +345,11 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
   const handleOpenWhatsApp = (lead: Lead) => {
     setWhatsAppModalLead(lead);
     const contact = contactsMap.get(lead.contactId);
-    const name = contact?.firstName || 'Brother/Sister';
+    const name = contact?.firstName || fallbackName;
     setWhatsAppMessage(
-      `Assalamu Alaikum ${name}! Greetings from ${brand.companyName}. We received your inquiry regarding Umrah packages. Would you like our 2026/2027 package details with direct Haramain transfers and 4/5-star Makkah hotels?`
+      isUmrah
+        ? `${greet(name)} Greetings from ${brand.companyName}. We received your inquiry regarding Umrah packages. Would you like our 2026/2027 package details with direct Haramain transfers and 4/5-star Makkah hotels?`
+        : `${greet(name)} Greetings from ${brand.companyName}. Thanks for your enquiry. When would be a good time for a quick call to understand what you need?`
     );
     setWhatsAppSentSuccess(false);
   };
@@ -358,7 +382,9 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
 
   // Bulk CSV Template Download
   const handleDownloadCsvTemplate = () => {
-    const templateCsv = `FirstName,LastName,Phone,Email,City,AssignedTelecaller,Status,Notes\nTariq,Khan,+919810023456,tariq@example.com,Hyderabad,Zeeshan Khan,NEW,Wants 14-day Deluxe Umrah package\nAyesha,Siddiqui,+919820011223,ayesha@example.com,Mumbai,Aisha Rahman,FOLLOW_UP,Call back on Friday morning`;
+    const sampleCallerA = telecallers[0]?.name || '';
+    const sampleCallerB = telecallers[1]?.name || sampleCallerA;
+    const templateCsv = `FirstName,LastName,Phone,Email,City,AssignedTelecaller,Status,Notes\nTariq,Khan,+919810023456,tariq@example.com,Hyderabad,${sampleCallerA},NEW,${isUmrah ? 'Wants 14-day Deluxe Umrah package' : 'Asked for a callback about pricing'}\nAyesha,Siddiqui,+919820011223,ayesha@example.com,Mumbai,${sampleCallerB},FOLLOW_UP,Call back on Friday morning`;
     const blob = new Blob([templateCsv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -386,12 +412,12 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
       const parts = lines[i].split(',').map((p) => p.trim().replace(/^"|"$/g, ''));
       if (parts.length < 3) continue;
 
-      const firstName = parts[0] || 'Pilgrim';
+      const firstName = parts[0] || (isUmrah ? 'Pilgrim' : 'Lead');
       const lastName = parts[1] || '';
       const phone = parts[2] || '+91 98000 00000';
       const email = parts[3] || `${firstName.toLowerCase()}@example.com`;
       const city = parts[4] || 'Mumbai';
-      const caller = parts[5] || 'Zeeshan Khan';
+      const caller = parts[5] || defaultCaller;
       const statusRaw = (parts[6] || 'NEW').toUpperCase() as LeadStatus;
       const notes = parts[7] || 'Imported via Bulk CSV';
 
@@ -404,7 +430,7 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
         lastName,
         email,
         phone,
-        companyName: 'Umrah Custom Package',
+        companyName: defaultService,
         city,
         createdAt: nowIso,
         updatedAt: nowIso,
@@ -419,9 +445,9 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
         leadScore: 78,
         intent: 'HIGH',
         buyingStage: 'AWARENESS',
-        serviceInterest: 'Umrah Custom Package',
+        serviceInterest: defaultService,
         city,
-        requirements: ['Umrah Custom Package'],
+        requirements: [defaultService],
         assignedCaller: caller,
         ownerId: caller,
         notes,
@@ -684,7 +710,7 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement('a');
     link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `TeleCRM_Umrah_Leads_${new Date().toISOString().slice(0, 10)}.csv`);
+    link.setAttribute('download', `${(isUmrah ? 'Umrah' : brand.companyName).replace(/[^A-Za-z0-9]+/g, '_')}_Leads_${new Date().toISOString().slice(0, 10)}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -855,7 +881,7 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
                 >
                   <option value="ALL">All Telecallers</option>
                   <option value="UNASSIGNED">Unassigned Only</option>
-                  {TELECALLERS.map((c) => (
+                  {telecallers.map((c) => (
                     <option key={c.id} value={c.name}>
                       {c.name}
                     </option>
@@ -938,7 +964,7 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
                   <option value="" disabled>
                     Assign Telecaller...
                   </option>
-                  {TELECALLERS.map((c) => (
+                  {telecallers.map((c) => (
                     <option key={c.id} value={c.name}>
                       {c.name}
                     </option>
@@ -1101,7 +1127,7 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
                     const currentStage =
                       TELECRM_STAGES.find((s) => s.key === lead.status) || TELECRM_STAGES[1];
                     const callerName = lead.assignedCaller || lead.ownerId || 'Unassigned';
-                    const callerObj = TELECALLERS.find((c) => c.name === callerName);
+                    const callerObj = telecallers.find((c) => c.name === callerName);
                     const followupDate = lead.nextFollowUpAt ? parseLeadDate(lead.nextFollowUpAt) : null;
                     const isFollowupOverdue = followupDate ? followupDate.getTime() < Date.now() : false;
                     const followupFormatted = followupDate
@@ -1163,7 +1189,7 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
                                 {contact?.firstName} {contact?.lastName || ''}
                               </div>
                               <div className="text-[11px] text-slate-500 truncate max-w-[180px]">
-                                {lead.serviceInterest || contact?.companyName || 'Umrah Custom Package'}
+                                {lead.serviceInterest || contact?.companyName || defaultService}
                               </div>
                               {(lead.city || contact?.city) && (
                                 <div className="flex items-center space-x-1 text-[10px] text-slate-400 mt-0.5">
@@ -1288,7 +1314,7 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
                               className="text-xs font-semibold text-slate-700 bg-transparent border-0 hover:bg-slate-100 rounded px-1 py-0.5 focus:outline-none cursor-pointer"
                             >
                               <option value="Unassigned">Unassigned</option>
-                              {TELECALLERS.map((c) => (
+                              {telecallers.map((c) => (
                                 <option key={c.id} value={c.name}>
                                   {c.name}
                                 </option>
@@ -1568,21 +1594,25 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
                   <button
                     type="button"
                     onClick={() => {
-                      const name = contactsMap.get(whatsAppModalLead.contactId)?.firstName || 'Valued Pilgrim';
+                      const name = contactsMap.get(whatsAppModalLead.contactId)?.firstName || (isUmrah ? 'Valued Pilgrim' : 'there');
                       setWhatsAppMessage(
-                        `Assalamu Alaikum ${name}! Here are our Deluxe Umrah 2026/27 packages featuring 5-star Clock Tower hotels in Makkah and direct transfers. Would you like a customized quote?`
+                        isUmrah
+                          ? `${greet(name)} Here are our Deluxe Umrah 2026/27 packages featuring 5-star Clock Tower hotels in Makkah and direct transfers. Would you like a customized quote?`
+                          : `${greet(name)} Thanks for your interest in ${brand.companyName}. Here is a quick overview of what we offer. Would you like a tailored proposal?`
                       );
                     }}
                     className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs rounded-md font-semibold border border-slate-200"
                   >
-                    Deluxe Package
+                    {isUmrah ? 'Deluxe Package' : 'Intro Message'}
                   </button>
                   <button
                     type="button"
                     onClick={() => {
-                      const name = contactsMap.get(whatsAppModalLead.contactId)?.firstName || 'Valued Pilgrim';
+                      const name = contactsMap.get(whatsAppModalLead.contactId)?.firstName || (isUmrah ? 'Valued Pilgrim' : 'there');
                       setWhatsAppMessage(
-                        `Assalamu Alaikum ${name}! Thank you for speaking with our sales team today. As discussed, I have attached our complete itinerary and pricing details.`
+                        isUmrah
+                          ? `${greet(name)} Thank you for speaking with our sales team today. As discussed, I have attached our complete itinerary and pricing details.`
+                          : `${greet(name)} Thank you for speaking with our team today. As discussed, I will share the details and next steps shortly.`
                       );
                     }}
                     className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs rounded-md font-semibold border border-slate-200"
@@ -1792,12 +1822,12 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
                   e.preventDefault();
                   const fd = new FormData(e.currentTarget);
                   const firstName = (fd.get('firstName') as string) || 'New';
-                  const lastName = (fd.get('lastName') as string) || 'Pilgrim';
+                  const lastName = (fd.get('lastName') as string) || (isUmrah ? 'Pilgrim' : '');
                   const phone = (fd.get('phone') as string) || '+91 98000 00000';
                   const email = (fd.get('email') as string) || `${firstName.toLowerCase()}@example.com`;
-                  const pkg = 'Umrah Custom Package';
+                  const pkg = defaultService;
                   const city = (fd.get('city') as string) || 'Mumbai';
-                  const caller = (fd.get('caller') as string) || 'Zeeshan Khan';
+                  const caller = (fd.get('caller') as string) || defaultCaller;
                   const status = (fd.get('status') as LeadStatus) || 'NEW';
                   const source = (fd.get('source') as LeadSource) || 'MANUAL';
                   const notes = (fd.get('notes') as string) || '';
@@ -1854,7 +1884,7 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
                     <input
                       name="firstName"
                       required
-                      placeholder="e.g. Tariq"
+                      placeholder="First name"
                       className="w-full px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-medium focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
                     />
                   </div>
@@ -1917,7 +1947,7 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
                       name="caller"
                       className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-medium focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
                     >
-                      {TELECALLERS.map((c) => (
+                      {telecallers.map((c) => (
                         <option key={c.id} value={c.name}>
                           {c.name}
                         </option>
@@ -2076,7 +2106,7 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
                     {drawerContact.firstName} {drawerContact.lastName || ''}
                   </h2>
                   <p className="text-xs text-slate-500">
-                    {drawerLead.serviceInterest || drawerContact.companyName || 'Umrah Custom Package'}
+                    {drawerLead.serviceInterest || drawerContact.companyName || defaultService}
                   </p>
                   <div className="flex items-center space-x-2 mt-1">
                     <span className="text-xs font-mono font-bold text-slate-700">{drawerContact.phone}</span>
@@ -2178,7 +2208,7 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
                 <div className="bg-white border border-slate-200 rounded-xl p-4 text-xs space-y-2">
                   <div className="flex items-center justify-between">
                     <span className="text-slate-500">Service Requested:</span>
-                    <span className="font-bold text-slate-800">{drawerLead.serviceInterest || 'Umrah Custom'}</span>
+                    <span className="font-bold text-slate-800">{drawerLead.serviceInterest || defaultService}</span>
                   </div>
                   {drawerLead.budget && (
                     <div className="flex items-center justify-between">

@@ -2182,6 +2182,9 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
                 contacts={contacts}
                 activities={activities}
                 selectedLeadId={selectedLeadIdForCrm}
+                teamMembers={users
+                  .filter((u) => u.isActive !== false)
+                  .map((u) => ({ id: u.userId, name: u.name }))}
                 onOpenConversation={(convId, leadId) => {
                   setActiveTab('inbox');
                 }}

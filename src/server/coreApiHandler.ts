@@ -1320,6 +1320,23 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
     return true;
   }
 
+  if (url === '/api/instagram/test-event' && req.method === 'POST') {
+    if (activeTenantCtx.role === 'member') {
+      res.statusCode = 403;
+      res.end(JSON.stringify({ error: 'Only workspace admins can run channel tests.' }));
+      return true;
+    }
+    try {
+      const ig = await import('./instagramIntegrationService.js');
+      res.statusCode = 200;
+      res.end(JSON.stringify({ ok: true, ...(await ig.injectTestInstagramMessage(activeTenantCtx)) }));
+    } catch (err: any) {
+      res.statusCode = err?.status || 500;
+      res.end(JSON.stringify({ error: err?.message || 'Could not create the test message.' }));
+    }
+    return true;
+  }
+
   if (url === '/api/instagram/diagnose' && req.method === 'POST') {
     if (activeTenantCtx.role === 'member') {
       res.statusCode = 403;

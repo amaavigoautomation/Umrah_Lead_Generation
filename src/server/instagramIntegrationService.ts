@@ -369,6 +369,11 @@ async function processInstagramMessageEvent(tenantId: string, accountId: string,
     senderName: 'Instagram user', instagramUserId: senderId, text: incomingText, direction: 'INBOUND',
     timestamp, receivedAt: now, createdAt: now, aiReplied: false, aiProcessed: false,
   });
+  // Synthetic test message from Settings: stop after saving it (no AI call, nothing sent to Instagram).
+  if (event?.__test === true) {
+    await updateDoc(eventRef, { status: 'test_processed', processedAt: now, conversationId });
+    return;
+  }
   const settingsSnap = await getDoc(repo.settingsDoc('default'));
   const settings = settingsSnap.exists() ? settingsSnap.data() as any : {};
   const mode = settings?.channelModes?.INSTAGRAM || 'AUTO';
@@ -634,4 +639,30 @@ export async function diagnoseInstagram(ctx: TenantContext): Promise<Record<stri
     ? 'Account is professional, routed to this workspace and subscribed to messages. If DMs still do not arrive, check Instagram app > Settings > Messages and story replies > Connected tools > Allow access to messages, and that the sender has a role on the Meta app.'
     : 'Checks finished.';
   return result;
+}
+
+/**
+ * Put a synthetic DM through the same processing code as a real webhook event, so the Unified Inbox
+ * path can be verified without Meta. Saves the message and conversation only; no AI reply, nothing sent.
+ */
+export async function injectTestInstagramMessage(ctx: TenantContext): Promise<{ conversationId: string; messageId: string }> {
+  const connection = await getConnection(ctx);
+  if (!connection || connection.status !== 'connected') throw new Error('Instagram is not connected. Connect an account first.');
+  const accountId = connection.accountId;
+  const senderId = 'test_sender';
+  const uniq = crypto.randomBytes(6).toString('hex');
+  const event = {
+    __test: true,
+    sender: { id: senderId },
+    recipient: { id: accountId },
+    timestamp: Date.now(),
+    message: { mid: `test_mid_${uniq}`, text: `Test message from Settings (${new Date().toLocaleTimeString('en-GB')})` },
+  };
+  const eventId = crypto.createHash('sha256').update(`${accountId}:${event.message.mid}`).digest('hex');
+  await createDoc(doc(db, 'instagram_inbound_events', eventId), {
+    accountId, tenantId: ctx.tenantId, externalId: event.message.mid, event, status: 'received', receivedAt: new Date().toISOString(),
+  });
+  await processInstagramMessageEvent(ctx.tenantId, accountId, event, eventId);
+  const hash = (v: string) => crypto.createHash('sha256').update(v).digest('hex').slice(0, 24);
+  return { conversationId: 'igconv_' + hash(accountId + ':' + senderId), messageId: 'igmsg_' + hash(accountId + ':' + event.message.mid) };
 }

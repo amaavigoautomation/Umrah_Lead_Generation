@@ -137,6 +137,12 @@ export const ConnectedChannelsPanel: React.FC<Props> = ({ tenantId, canEdit }) =
       setMessage(bits.join(' '));
     });
 
+  const testInstagram = () =>
+    run('instagram', async () => {
+      await api('/api/instagram/test-event', 'POST');
+      setMessage('Test message created. Open the Unified Inbox: a conversation called "Instagram User" should show "Test message from Settings…". If it does, our side works.');
+    });
+
   const disconnectInstagram = () => {
     if (!window.confirm('Disconnect Instagram from this workspace? Existing inbox history will be retained.')) return;
     return run('instagram', async () => {
@@ -378,6 +384,7 @@ export const ConnectedChannelsPanel: React.FC<Props> = ({ tenantId, canEdit }) =
               <>
                 <button onClick={connectInstagram} disabled={busy === 'instagram' || !canEdit} className={`rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 ${disabledBase}`}>Reconnect</button>
                 <button onClick={checkInstagram} disabled={busy === 'instagram' || !canEdit} className={`rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 ${disabledBase}`}>Check webhook</button>
+                <button onClick={testInstagram} disabled={busy === 'instagram' || !canEdit} className={`rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 ${disabledBase}`}>Send test message</button>
                 <button onClick={disconnectInstagram} disabled={busy === 'instagram' || !canEdit} className={`rounded-xl border border-rose-200 bg-white px-3 py-2 text-xs font-bold text-rose-700 hover:bg-rose-50 ${disabledBase}`}>Disconnect</button>
               </>
             )}

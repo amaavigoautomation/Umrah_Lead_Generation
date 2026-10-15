@@ -446,8 +446,11 @@ export async function handleInstagramWebhook(req: any, res: any): Promise<boolea
     const mode = params.get('hub.mode') || params.get('hub_mode');
     const token = params.get('hub.verify_token') || params.get('hub_verify_token');
     const challenge = params.get('hub.challenge') || params.get('hub_challenge');
-    const expected = process.env.META_INSTAGRAM_WEBHOOK_VERIFY_TOKEN;
-    if (mode === 'subscribe' && expected && token === expected && challenge) {
+    // Accept the Instagram-specific token, or the shared Meta webhook token.
+    const accepted = [process.env.META_INSTAGRAM_WEBHOOK_VERIFY_TOKEN, process.env.META_WEBHOOK_VERIFY_TOKEN]
+      .map((t) => (t || '').trim())
+      .filter(Boolean);
+    if (mode === 'subscribe' && token && accepted.includes(token) && challenge) {
       res.statusCode = 200;
       res.setHeader('Content-Type', 'text/plain');
       res.end(challenge);

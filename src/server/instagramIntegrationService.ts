@@ -507,7 +507,7 @@ export async function handleInstagramWebhook(req: any, res: any): Promise<boolea
       if (snap.exists()) { routeSnap = snap; break; }
     }
     if (!routeSnap) {
-      console.warn('[Instagram webhook] No workspace is connected for ids', candidates.join(','));
+      console.warn('[Instagram webhook] No workspace is connected for ids', candidates.join(','), 'payload:', JSON.stringify(entry).replace(/"text":"[^"]*"/g, '"text":"<redacted>"').slice(0, 1500));
       continue;
     }
     const tenantId = String(routeSnap.data().tenantId || '');

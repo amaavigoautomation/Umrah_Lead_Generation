@@ -27,6 +27,26 @@ app.post('/api/webhooks/stripe', express.raw({ type: '*/*', limit: '2mb' }), asy
   }
 });
 
+// Instagram webhook needs the exact raw body for x-hub-signature-256 verification (registered BEFORE the JSON parser).
+app.all('/api/webhooks/instagram', express.raw({ type: '*/*', limit: '2mb' }), async (req: any, res) => {
+  try {
+    const raw: Buffer = Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0);
+    if (req.method === 'POST') {
+      req.rawBody = raw;
+      try {
+        req.body = JSON.parse(raw.toString('utf8'));
+      } catch {
+        return res.status(400).json({ error: 'Invalid JSON webhook payload.' });
+      }
+    }
+    const { handleInstagramWebhook } = await import('./src/server/instagramIntegrationService.js');
+    await handleInstagramWebhook(req, res);
+  } catch (err) {
+    console.error('[Instagram webhook error]:', err);
+    if (!res.headersSent) res.status(500).json({ error: 'Instagram webhook processing failed.' });
+  }
+});
+
 // Body parsers
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));

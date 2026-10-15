@@ -250,7 +250,9 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
     // Browser comes back from Microsoft here; the single-use OAuth state identifies the workspace.
     url === '/api/oauth/microsoft/callback' ||
     // Calendar OAuth also returns through a state-bound, one-time callback.
-    url === '/api/oauth/microsoft-calendar/callback';
+    url === '/api/oauth/microsoft-calendar/callback' ||
+    // Instagram redirects the browser here; the single-use OAuth state identifies the workspace.
+    url === '/api/instagram/oauth/callback';
 
   let resolvedTenantId = '';
   let userUid = 'anonymous';
@@ -1004,6 +1006,21 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
     return true;
   }
 
+  // Instagram OAuth callback (public; state-bound, single use).
+  if (url === '/api/instagram/oauth/callback' && req.method === 'GET') {
+    try {
+      const ig = await import('./instagramIntegrationService.js');
+      await ig.handleInstagramOAuthCallback(req, res);
+    } catch (err: any) {
+      console.error('[Instagram OAuth] callback failed:', err?.message || err);
+      if (!res.writableEnded) {
+        res.statusCode = 500;
+        res.end(JSON.stringify({ error: 'Instagram authorization could not be completed.' }));
+      }
+    }
+    return true;
+  }
+
   // Microsoft Calendar OAuth callback. The callback is public because Microsoft redirects the
   // browser here without the app's Firebase bearer token; the one-time OAuth state resolves the
   // tenant and prevents the callback from selecting a different workspace.
@@ -1231,6 +1248,78 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
         timestamp: new Date().toISOString(),
       })
     );
+    return true;
+  }
+
+  // =========================================================================
+  // CONNECTED CHANNELS (WhatsApp / Instagram / Messenger) - per-workspace status & Instagram connect
+  // =========================================================================
+  if (url === '/api/channels/status' && req.method === 'GET') {
+    let instagram: any = { connected: false, connection: null };
+    try {
+      if (isFirebaseConfigured && db) {
+        const ig = await import('./instagramIntegrationService.js');
+        instagram = await ig.getInstagramStatus(activeTenantCtx);
+      }
+    } catch (err: any) {
+      instagram = { connected: false, connection: null, error: err?.message || 'Could not load Instagram status.' };
+    }
+    const instagramAvailable = Boolean(
+      process.env.META_INSTAGRAM_APP_ID && process.env.META_INSTAGRAM_APP_SECRET && process.env.META_INSTAGRAM_REDIRECT_URI
+    );
+    res.statusCode = 200;
+    res.end(JSON.stringify({
+      instagram: { ...instagram, available: instagramAvailable },
+      whatsapp: { connected: false, available: false },
+      messenger: { connected: false, available: false },
+    }));
+    return true;
+  }
+
+  if (url === '/api/instagram/status' && req.method === 'GET') {
+    try {
+      const ig = await import('./instagramIntegrationService.js');
+      res.statusCode = 200;
+      res.end(JSON.stringify(await ig.getInstagramStatus(activeTenantCtx)));
+    } catch (err: any) {
+      res.statusCode = err?.status || 500;
+      res.end(JSON.stringify({ error: err?.message || 'Could not load Instagram status.' }));
+    }
+    return true;
+  }
+
+  if (url === '/api/instagram/connect' && req.method === 'POST') {
+    if (activeTenantCtx.role === 'member') {
+      res.statusCode = 403;
+      res.end(JSON.stringify({ error: 'Only workspace admins can manage channel connections.' }));
+      return true;
+    }
+    try {
+      const ig = await import('./instagramIntegrationService.js');
+      res.statusCode = 200;
+      res.end(JSON.stringify(await ig.startInstagramOAuth(activeTenantCtx)));
+    } catch (err: any) {
+      res.statusCode = err?.status || 500;
+      res.end(JSON.stringify({ error: err?.message || 'Could not start Instagram authorization.' }));
+    }
+    return true;
+  }
+
+  if (url === '/api/instagram/disconnect' && req.method === 'POST') {
+    if (activeTenantCtx.role === 'member') {
+      res.statusCode = 403;
+      res.end(JSON.stringify({ error: 'Only workspace admins can manage channel connections.' }));
+      return true;
+    }
+    try {
+      const ig = await import('./instagramIntegrationService.js');
+      await ig.disconnectInstagram(activeTenantCtx);
+      res.statusCode = 200;
+      res.end(JSON.stringify({ ok: true }));
+    } catch (err: any) {
+      res.statusCode = err?.status || 500;
+      res.end(JSON.stringify({ error: err?.message || 'Could not disconnect Instagram.' }));
+    }
     return true;
   }
 

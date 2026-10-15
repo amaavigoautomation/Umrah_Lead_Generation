@@ -309,6 +309,23 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
     .filter((m) => m.conversationId === activeConversation?.conversationId)
     .sort(sortMsgs);
 
+
+  // Meta messaging window: WhatsApp / Instagram / Messenger allow free-form replies for 24h after the customer's last message.
+  const windowChannel = isUnifiedAllPlatforms ? (replyChannelOverride || activeConversation?.channel) : activeConversation?.channel;
+  const windowMsLeft = (() => {
+    if (!activeConversation || !windowChannel || !['WHATSAPP', 'INSTAGRAM', 'FACEBOOK'].includes(windowChannel)) return null;
+    const lastInbound = messages
+      .filter((m) => m.conversationId === activeConversation.conversationId && m.channel === windowChannel && m.direction === 'INBOUND')
+      .reduce((max, m) => Math.max(max, getMsgTime(m)), 0);
+    if (!lastInbound) return null;
+    return lastInbound + 24 * 60 * 60 * 1000 - Date.now();
+  })();
+  const windowLabel = windowMsLeft === null
+    ? null
+    : windowMsLeft <= 0
+    ? 'Reply window closed'
+    : `Reply window: ${Math.floor(windowMsLeft / 3600000)}h ${Math.floor((windowMsLeft % 3600000) / 60000)}m left`;
+
   const unifiedAllMessages = activeContact
     ? messages
         .filter((m) => contactConversations.some((c) => c.conversationId === m.conversationId))
@@ -1141,6 +1158,12 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
               </div>
             )}
 
+            {windowLabel && (
+              <div className={`px-3 py-1.5 text-[11px] font-semibold border-t ${windowMsLeft! <= 0 ? 'bg-rose-50 text-rose-700 border-rose-100' : 'bg-emerald-50 text-emerald-700 border-emerald-100'}`}>
+                {windowLabel}
+                {windowMsLeft! <= 0 && ' — free-form replies are blocked by the platform; only an approved template can be sent.'}
+              </div>
+            )}
             {/* Message Reply Box */}
             <div className="p-3 bg-white border-t border-slate-200/80 shrink-0">
               {/* Channel Selector for Unified Mode */}

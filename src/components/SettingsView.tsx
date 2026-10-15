@@ -13,10 +13,7 @@ import {
   Globe,
   Database,
   RefreshCw,
-  Instagram,
-  ExternalLink,
 } from 'lucide-react';
-import { auth } from '../firebase/config.js';
 import { SystemSettings, Channel, ChannelMode, AppUser } from '../types';
 import { UserManagementView } from './UserManagementView';
 import { EmailSettingsPanel } from './EmailSettingsPanel';
@@ -24,6 +21,7 @@ import { InboundMailboxPanel } from './InboundMailboxPanel';
 import { WebsiteWebhookPanel } from './WebsiteWebhookPanel';
 import { BrandSettingsPanel } from './BrandSettingsPanel';
 import { BillingView } from './BillingView';
+import { ConnectedChannelsPanel } from './ConnectedChannelsPanel';
 
 interface SettingsViewProps {
   settings: SystemSettings;
@@ -54,9 +52,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [maskedOpenAiKey, setMaskedOpenAiKey] = useState('');
   const [isSavingOpenAiKey, setIsSavingOpenAiKey] = useState(false);
   const [openAiKeySaveStatus, setOpenAiKeySaveStatus] = useState<string | null>(null);
-  const [instagramStatus, setInstagramStatus] = useState<{ connected: boolean; connection?: { username?: string; status?: string; webhookSubscriptionStatus?: 'subscribed' | 'needs_setup' } | null }>({ connected: false });
-  const [instagramLoading, setInstagramLoading] = useState(false);
-  const [instagramMessage, setInstagramMessage] = useState<string | null>(null);
 
   React.useEffect(() => {
     setFormData(settings);
@@ -102,73 +97,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     }
   };
 
-  const instagramApi = async (path: string, method: 'GET' | 'POST' = 'GET') => {
-    const user = auth.currentUser;
-    if (!user) throw new Error('Please sign in again before managing Instagram.');
-    const token = await user.getIdToken();
-    const response = await fetch(path, {
-      method,
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      ...(method === 'POST' ? { body: JSON.stringify({}) } : {}),
-    });
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(data.error || 'Instagram request failed.');
-    return data;
-  };
-
-  const refreshInstagramStatus = async () => {
-    if (!tenantId) return;
-    try {
-      const data = await instagramApi('/api/instagram/status');
-      setInstagramStatus({ connected: Boolean(data.connected), connection: data.connection || null });
-    } catch (error: any) {
-      setInstagramMessage(error?.message || 'Could not load Instagram status.');
-    }
-  };
-
-  React.useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const params = new URLSearchParams(window.location.search);
-      const result = params.get('instagram');
-      if (result === 'connected') setInstagramMessage('Instagram account connected. Refreshing status…');
-      if (result === 'error') setInstagramMessage('Instagram authorization was not completed. Please try again.');
-      if (result) {
-        params.delete('instagram');
-        const next = window.location.pathname + (params.toString() ? `?${params.toString()}` : '') + window.location.hash;
-        window.history.replaceState({}, '', next);
-      }
-    }
-    refreshInstagramStatus();
-  }, [tenantId]);
-
-  const connectInstagram = async () => {
-    setInstagramLoading(true);
-    setInstagramMessage(null);
-    try {
-      const data = await instagramApi('/api/instagram/connect', 'POST');
-      if (!data.authorizationUrl) throw new Error('The server did not return a Meta authorization URL.');
-      window.location.assign(data.authorizationUrl);
-    } catch (error: any) {
-      setInstagramMessage(error?.message || 'Could not start Instagram authorization.');
-      setInstagramLoading(false);
-    }
-  };
-
-  const disconnectInstagram = async () => {
-    if (!window.confirm('Disconnect Instagram from this workspace? Existing inbox history will be retained.')) return;
-    setInstagramLoading(true);
-    setInstagramMessage(null);
-    try {
-      await instagramApi('/api/instagram/disconnect', 'POST');
-      setInstagramStatus({ connected: false, connection: null });
-      setInstagramMessage('Instagram disconnected.');
-    } catch (error: any) {
-      setInstagramMessage(error?.message || 'Could not disconnect Instagram.');
-    } finally {
-      setInstagramLoading(false);
-    }
-  };
-
   const channels: Channel[] = ['WHATSAPP', 'EMAIL', 'INSTAGRAM', 'FACEBOOK', 'LINKEDIN', 'WEBSITE'];
 
   const handleModeChange = (channel: Channel, mode: ChannelMode) => {
@@ -209,6 +137,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           <span>{isSaved ? 'Saved!' : 'Save Settings'}</span>
         </button>
       </div>
+
+      <ConnectedChannelsPanel tenantId={tenantId} canEdit={canEditEmail} />
 
       {/* Production Channel Modes */}
       <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-4">
@@ -271,50 +201,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           })}
         </div>
       </div>
-
-      {/* Instagram Direct Messages */}
-      {tenantId && (
-        <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-4 text-slate-900">
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <div className="rounded-xl bg-pink-50 p-2.5"><Instagram className="w-5 h-5 text-pink-600" /></div>
-              <div>
-                <h3 className="font-extrabold text-sm">Instagram Direct Messages</h3>
-                <p className="text-xs text-slate-500 mt-1">Connect a Professional Instagram account to enable messaging integration for this workspace.</p>
-              </div>
-            </div>
-            <span className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-bold ${instagramStatus.connected ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>
-              {instagramStatus.connected ? 'CONNECTED' : 'NOT CONNECTED'}
-            </span>
-          </div>
-          {instagramStatus.connected && (
-            <div className="rounded-xl border border-emerald-100 bg-emerald-50/60 p-3 text-xs">
-              <p className="font-bold text-emerald-900">@{instagramStatus.connection?.username || 'Instagram account'}</p>
-              <p className="text-emerald-700 mt-1">This account is linked to the current workspace.</p>
-              {instagramStatus.connection?.webhookSubscriptionStatus === 'needs_setup' && (
-                <p className="mt-2 font-semibold text-amber-700">Account connected, but automatic webhook subscription was not confirmed. Check the Meta app's Instagram messaging and webhook configuration before testing incoming DMs.</p>
-              )}
-            </div>
-          )}
-          <div className="flex flex-wrap gap-2">
-            {!instagramStatus.connected ? (
-              <button onClick={connectInstagram} disabled={instagramLoading || !canEditEmail} className="inline-flex items-center gap-2 rounded-xl bg-orange-500 px-4 py-2.5 text-xs font-bold text-white hover:bg-orange-600 disabled:opacity-50">
-                {instagramLoading ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Instagram className="w-3.5 h-3.5" />}
-                {instagramLoading ? 'Connecting…' : 'Connect Instagram Account'}
-                <ExternalLink className="w-3 h-3" />
-              </button>
-            ) : (
-              <>
-                <button onClick={connectInstagram} disabled={instagramLoading || !canEditEmail} className="rounded-xl border border-slate-200 px-4 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50">Reconnect Account</button>
-                <button onClick={disconnectInstagram} disabled={instagramLoading || !canEditEmail} className="rounded-xl border border-rose-200 px-4 py-2.5 text-xs font-bold text-rose-700 hover:bg-rose-50 disabled:opacity-50">Disconnect</button>
-              </>
-            )}
-            <button onClick={refreshInstagramStatus} disabled={instagramLoading} className="rounded-xl border border-slate-200 px-3 py-2.5 text-xs font-semibold text-slate-600 hover:bg-slate-50">Refresh status</button>
-          </div>
-          <p className="text-[11px] leading-relaxed text-slate-500">Requires an eligible Instagram Professional account and a configured Meta app, OAuth redirect URI, webhook, permissions, and any applicable Meta App Review. Connection status alone does not confirm live DM delivery.</p>
-          {instagramMessage && <p role="status" className="text-xs font-semibold text-slate-600">{instagramMessage}</p>}
-        </div>
-      )}
 
       {/* OpenAI AI Model & API Key Configuration */}
       <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs space-y-4 text-slate-900">

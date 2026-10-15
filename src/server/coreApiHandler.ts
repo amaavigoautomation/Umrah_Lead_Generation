@@ -1255,23 +1255,28 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
   // CONNECTED CHANNELS (WhatsApp / Instagram / Messenger) - per-workspace status & Instagram connect
   // =========================================================================
   if (url === '/api/channels/status' && req.method === 'GET') {
-    let instagram: any = { connected: false, connection: null };
-    try {
-      if (isFirebaseConfigured && db) {
-        const ig = await import('./instagramIntegrationService.js');
-        instagram = await ig.getInstagramStatus(activeTenantCtx);
+    const meta = await import('./metaChannelsService.js');
+    const safe = async <T,>(fn: () => Promise<T>, fallback: any) => {
+      try {
+        return isFirebaseConfigured && db ? await fn() : fallback;
+      } catch (err: any) {
+        return { ...fallback, error: err?.message || 'Could not load status.' };
       }
-    } catch (err: any) {
-      instagram = { connected: false, connection: null, error: err?.message || 'Could not load Instagram status.' };
-    }
-    const instagramAvailable = Boolean(
-      process.env.META_INSTAGRAM_APP_ID && process.env.META_INSTAGRAM_APP_SECRET && process.env.META_INSTAGRAM_REDIRECT_URI
-    );
+    };
+    const ig = await import('./instagramIntegrationService.js');
+    const instagram = await safe(() => ig.getInstagramStatus(activeTenantCtx), { connected: false, connection: null });
+    const whatsapp = await safe(() => meta.getWhatsAppStatus(activeTenantCtx), { connected: false, connection: null });
+    const messenger = await safe(() => meta.getMessengerStatus(activeTenantCtx), { connected: false, connection: null });
+    const instagramMissing = ['META_INSTAGRAM_APP_ID', 'META_INSTAGRAM_APP_SECRET', 'META_INSTAGRAM_REDIRECT_URI'].filter((k) => !process.env[k]);
+    if (!process.env.SECRETS_MASTER_KEY && !process.env.TENANT_MASTER_KEY) instagramMissing.push('SECRETS_MASTER_KEY');
+    const waMissing = meta.missingMetaSettings('whatsapp');
+    const fbMissing = meta.missingMetaSettings('messenger');
     res.statusCode = 200;
     res.end(JSON.stringify({
-      instagram: { ...instagram, available: instagramAvailable },
-      whatsapp: { connected: false, available: false },
-      messenger: { connected: false, available: false },
+      instagram: { ...instagram, available: instagramMissing.length === 0, missing: instagramMissing },
+      whatsapp: { ...whatsapp, available: waMissing.length === 0, missing: waMissing },
+      messenger: { ...messenger, available: fbMissing.length === 0, missing: fbMissing },
+      metaClient: meta.getMetaClientConfig(),
     }));
     return true;
   }
@@ -1319,6 +1324,87 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
     } catch (err: any) {
       res.statusCode = err?.status || 500;
       res.end(JSON.stringify({ error: err?.message || 'Could not disconnect Instagram.' }));
+    }
+    return true;
+  }
+
+  // ----- WhatsApp / Messenger per-workspace connections (one shared Meta app) -----
+  if (
+    (url === '/api/whatsapp/connect' || url === '/api/whatsapp/disconnect' || url === '/api/messenger/pages' ||
+      url === '/api/messenger/connect' || url === '/api/messenger/disconnect' || url === '/api/whatsapp/send-template') &&
+    req.method === 'POST'
+  ) {
+    const adminOnly = url !== '/api/whatsapp/send-template';
+    if (adminOnly && activeTenantCtx.role === 'member') {
+      res.statusCode = 403;
+      res.end(JSON.stringify({ error: 'Only workspace admins can manage channel connections.' }));
+      return true;
+    }
+    try {
+      const meta = await import('./metaChannelsService.js');
+      let result: any = { ok: true };
+      if (url === '/api/whatsapp/connect') {
+        result = { ok: true, connection: await meta.connectWhatsApp(activeTenantCtx, body || {}) };
+      } else if (url === '/api/whatsapp/disconnect') {
+        await meta.disconnectWhatsApp(activeTenantCtx);
+      } else if (url === '/api/messenger/pages') {
+        result = { ok: true, pages: await meta.listMessengerPages(String(body?.userToken || '')) };
+      } else if (url === '/api/messenger/connect') {
+        result = { ok: true, connection: await meta.connectMessenger(activeTenantCtx, body || {}) };
+      } else if (url === '/api/messenger/disconnect') {
+        await meta.disconnectMessenger(activeTenantCtx);
+      } else {
+        const sent = await meta.sendWhatsAppTemplate(activeTenantCtx, String(body?.to || ''), {
+          name: String(body?.templateName || ''),
+          language: String(body?.language || ''),
+          params: Array.isArray(body?.params) ? body.params : [],
+        });
+        result = { success: true, ...sent };
+      }
+      res.statusCode = 200;
+      res.end(JSON.stringify(result));
+    } catch (err: any) {
+      res.statusCode = err?.status || 500;
+      res.end(JSON.stringify({ error: err?.message || 'Channel request failed.' }));
+    }
+    return true;
+  }
+
+  if (url === '/api/whatsapp/templates' && req.method === 'GET') {
+    try {
+      const meta = await import('./metaChannelsService.js');
+      res.statusCode = 200;
+      res.end(JSON.stringify({ templates: await meta.listWhatsAppTemplates(activeTenantCtx) }));
+    } catch (err: any) {
+      res.statusCode = err?.status || 500;
+      res.end(JSON.stringify({ error: err?.message || 'Could not load templates.' }));
+    }
+    return true;
+  }
+
+  // Outbound text on a social channel, using this workspace's own connected account.
+  if ((url === '/api/channels/send' || url === '/api/instagram/send') && req.method === 'POST') {
+    try {
+      const channel = url === '/api/instagram/send' ? 'INSTAGRAM' : String(body?.channel || '').toUpperCase();
+      const recipientId = String(body?.recipientId || '');
+      const text = String(body?.text || '');
+      let result: any;
+      if (channel === 'INSTAGRAM') {
+        const ig = await import('./instagramIntegrationService.js');
+        result = await ig.sendInstagramMessage(activeTenantCtx, recipientId, text);
+      } else if (channel === 'WHATSAPP' || channel === 'FACEBOOK') {
+        const meta = await import('./metaChannelsService.js');
+        result = await meta.sendMetaText(activeTenantCtx, channel === 'WHATSAPP' ? 'whatsapp' : 'messenger', recipientId, text);
+      } else {
+        res.statusCode = 400;
+        res.end(JSON.stringify({ error: 'Unsupported channel.' }));
+        return true;
+      }
+      res.statusCode = 200;
+      res.end(JSON.stringify({ success: true, result }));
+    } catch (err: any) {
+      res.statusCode = err?.status || 500;
+      res.end(JSON.stringify({ success: false, error: err?.message || 'Message could not be sent.' }));
     }
     return true;
   }

@@ -28,6 +28,14 @@
       "destination": "/api/webhooks/stripe"
     },
     {
+      "source": "/api/webhooks/meta",
+      "destination": "/api/webhooks/meta"
+    },
+    {
+      "source": "/api/webhooks/instagram",
+      "destination": "/api/webhooks/instagram"
+    },
+    {
       "source": "/api/leads/inbound",
       "destination": "/api/leads/inbound"
     },

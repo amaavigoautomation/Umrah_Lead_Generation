@@ -229,6 +229,7 @@ export interface Contact {
   whatsappUserId?: string;
   instagramUserId?: string;
   facebookUserId?: string;
+  whatsappId?: string;
   linkedinUserId?: string;
   apolloPersonId?: string;
   country?: string;
@@ -385,6 +386,7 @@ export interface Message {
   senderName: string;
   senderEmail?: string;
   recipientEmail?: string;
+  instagramUserId?: string;
   text: string;
   timestamp: string;
   gmailMessageId?: string;

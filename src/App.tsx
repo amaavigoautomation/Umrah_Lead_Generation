@@ -963,35 +963,77 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
   }, [conversations, messages, contacts, leads, knowledgeDocs, settings.emailSignature]);
 
   // Handle message sending (Manual or Inbound / Outbound reply)
+  const handleSendTemplate = async (
+    conversationId: string,
+    template: { name: string; language: string; params: string[] }
+  ): Promise<boolean> => {
+    const conv = conversations.find((c) => c.conversationId === conversationId);
+    if (!conv || conv.channel !== 'WHATSAPP') return false;
+    const contactRec = contacts.find((c) => c.contactId === conv.contactId);
+    const to = conv.externalConversationId || (contactRec as any)?.whatsappId || contactRec?.phone?.replace(/[^\d]/g, '') || '';
+    if (!to) {
+      window.alert('This WhatsApp conversation does not have a valid recipient number.');
+      return false;
+    }
+    try {
+      const res = await fetch('/api/whatsapp/send-template', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ to, templateName: template.name, language: template.language, params: template.params }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success) {
+        window.alert(data.error || 'Template could not be sent.');
+        return false;
+      }
+      await handleSendMessage(conversationId, data.renderedText || `[Template: ${template.name}]`, 'AGENT', { skipSend: true });
+      return true;
+    } catch (error: any) {
+      window.alert(error?.message || 'Template could not be sent.');
+      return false;
+    }
+  };
+
   const handleSendMessage = async (
     conversationId: string,
     text: string,
-    senderType: 'AGENT' | 'AI' | 'CUSTOMER' | 'PROSPECT' = 'AGENT'
+    senderType: 'AGENT' | 'AI' | 'CUSTOMER' | 'PROSPECT' = 'AGENT',
+    opts?: { skipSend?: boolean }
   ) => {
     const conv = conversations.find((c) => c.conversationId === conversationId);
     if (!conv) return;
+    const isSocialChannel = conv.channel === 'INSTAGRAM' || conv.channel === 'WHATSAPP' || conv.channel === 'FACEBOOK';
 
     const threadMsgs = messages.filter((m) => m.conversationId === conversationId);
     const lastIncoming = [...threadMsgs].reverse().find((m) => m.senderType === 'CUSTOMER' || m.senderType === 'PROSPECT');
-    if (conv.channel === 'INSTAGRAM' && (senderType === 'AGENT' || senderType === 'AI')) {
-      const recipientId = conv.externalConversationId || lastIncoming?.instagramUserId || contacts.find((c) => c.contactId === conv.contactId)?.instagramUserId || '';
+    if (isSocialChannel && !opts?.skipSend && (senderType === 'AGENT' || senderType === 'AI')) {
+      const contactRec = contacts.find((c) => c.contactId === conv.contactId);
+      const channelName = conv.channel === 'INSTAGRAM' ? 'Instagram' : conv.channel === 'WHATSAPP' ? 'WhatsApp' : 'Messenger';
+      const recipientId =
+        conv.externalConversationId ||
+        (conv.channel === 'INSTAGRAM'
+          ? lastIncoming?.instagramUserId || contactRec?.instagramUserId
+          : conv.channel === 'FACEBOOK'
+          ? contactRec?.facebookUserId
+          : (contactRec as any)?.whatsappId || contactRec?.phone?.replace(/[^\d]/g, '')) ||
+        '';
       if (!recipientId) {
-        window.alert('This Instagram conversation does not have a valid recipient ID.');
+        window.alert(`This ${channelName} conversation does not have a valid recipient ID.`);
         return;
       }
       try {
-        const sendResponse = await fetch('/api/instagram/send', {
+        const sendResponse = await fetch('/api/channels/send', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ recipientId, text }),
+          body: JSON.stringify({ channel: conv.channel, recipientId, text }),
         });
         const sendData = await sendResponse.json().catch(() => ({}));
         if (!sendResponse.ok || !sendData.success) {
-          window.alert(sendData.error || 'Instagram message could not be sent.');
+          window.alert(sendData.error || `${channelName} message could not be sent.`);
           return;
         }
       } catch (error: any) {
-        window.alert(error?.message || 'Instagram message could not be sent.');
+        window.alert(error?.message || `${channelName} message could not be sent.`);
         return;
       }
     }
@@ -1069,8 +1111,8 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
 
     const newMsg: Message = {
       messageId: `msg-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-      gmailMessageId: conv.channel === 'INSTAGRAM' ? undefined : sentGmailMessageId,
-      gmailThreadId: conv.channel === 'INSTAGRAM' ? undefined : gmailThreadId,
+      gmailMessageId: isSocialChannel ? undefined : sentGmailMessageId,
+      gmailThreadId: isSocialChannel ? undefined : gmailThreadId,
       conversationId,
       channel: conv.channel === 'WEBSITE' ? 'EMAIL' : conv.channel,
       direction,
@@ -2135,6 +2177,7 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
                 leads={leads}
                 knowledgeDocs={knowledgeDocs}
                 onSendMessage={(convId, text, type) => handleSendMessage(convId, text, type)}
+                onSendTemplate={handleSendTemplate}
                 onToggleAi={handleToggleAi}
                 onMarkAsRead={handleMarkConversationAsRead}
                 onApproveDraft={handleApproveDraft}

@@ -47,6 +47,26 @@ app.all('/api/webhooks/instagram', express.raw({ type: '*/*', limit: '2mb' }), a
   }
 });
 
+// WhatsApp + Messenger webhook (one Meta app): raw body for x-hub-signature-256 verification.
+app.all('/api/webhooks/meta', express.raw({ type: '*/*', limit: '2mb' }), async (req: any, res) => {
+  try {
+    const raw: Buffer = Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0);
+    if (req.method === 'POST') {
+      req.rawBody = raw;
+      try {
+        req.body = JSON.parse(raw.toString('utf8'));
+      } catch {
+        return res.status(400).json({ error: 'Invalid JSON webhook payload.' });
+      }
+    }
+    const { handleMetaWebhook } = await import('./src/server/metaChannelsService.js');
+    await handleMetaWebhook(req, res);
+  } catch (err) {
+    console.error('[Meta webhook error]:', err);
+    if (!res.headersSent) res.status(500).json({ error: 'Meta webhook processing failed.' });
+  }
+});
+
 // Body parsers
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));

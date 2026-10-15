@@ -1,4 +1,5 @@
 import React, { useState, Suspense, useRef, useLayoutEffect, useEffect } from 'react';
+import { WhatsAppTemplatePicker } from './WhatsAppTemplatePicker';
 import { lazyNamed } from '../lazyLoad';
 import {
   Search,
@@ -72,6 +73,7 @@ interface UnifiedInboxProps {
   leads: Lead[];
   knowledgeDocs: KnowledgeDocument[];
   onSendMessage: (conversationId: string, text: string, senderType: 'AGENT' | 'AI' | 'CUSTOMER' | 'PROSPECT') => void;
+  onSendTemplate?: (conversationId: string, template: { name: string; language: string; params: string[] }) => Promise<boolean>;
   onToggleAi: (conversationId: string, enabled: boolean) => void;
   onMarkAsRead?: (conversationId: string) => void;
   onApproveDraft?: (conversationId: string) => void;
@@ -93,6 +95,7 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
   leads,
   knowledgeDocs,
   onSendMessage,
+  onSendTemplate,
   onToggleAi,
   onMarkAsRead,
   onApproveDraft,
@@ -451,9 +454,21 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
     return timeB - timeA;
   });
 
+  const [showTemplatePicker, setShowTemplatePicker] = useState(false);
+  const getTargetConvId = () => {
+    let targetConvId = activeConversation?.conversationId || '';
+    if (isUnifiedAllPlatforms && replyChannelOverride) {
+      const matched = contactConversations.find((c) => c.channel === replyChannelOverride);
+      if (matched) targetConvId = matched.conversationId;
+    }
+    return targetConvId;
+  };
+  const whatsappWindowClosed = windowChannel === 'WHATSAPP' && windowMsLeft !== null && windowMsLeft <= 0;
+  const canUseTemplates = windowChannel === 'WHATSAPP' && Boolean(onSendTemplate);
+
   // Handle manual send
   const handleSendReply = () => {
-    if (!replyText.trim() || !activeConversation) return;
+    if (!replyText.trim() || !activeConversation || whatsappWindowClosed) return;
     let targetConvId = activeConversation.conversationId;
 
     if (isUnifiedAllPlatforms && replyChannelOverride) {
@@ -1196,7 +1211,10 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
               <div className="flex items-end space-x-2">
                 <textarea
                   rows={2}
-                  placeholder={`Reply to ${activeContact.firstName} via ${(
+                  disabled={whatsappWindowClosed}
+                  placeholder={whatsappWindowClosed
+                    ? 'The 24-hour window has closed. Send an approved template instead.'
+                    : `Reply to ${activeContact.firstName} via ${(
                     (isUnifiedAllPlatforms ? replyChannelOverride : null) || activeConversation.channel
                   ).toLowerCase()}...`}
                   value={replyText}
@@ -1211,14 +1229,29 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
                 />
                 <button
                   onClick={handleSendReply}
-                  disabled={!replyText.trim()}
+                  disabled={!replyText.trim() || whatsappWindowClosed}
                   className="h-14 px-4 rounded-xl bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 text-white text-xs font-bold flex items-center justify-center transition disabled:opacity-40 shadow-xs"
                 >
                   <Send className="w-4 h-4 mr-1.5" />
                   <span>Send</span>
                 </button>
+                {canUseTemplates && (
+                  <button
+                    onClick={() => setShowTemplatePicker(true)}
+                    className={`h-14 px-3 rounded-xl text-xs font-bold border transition ${whatsappWindowClosed ? 'bg-orange-500 text-white border-orange-500 hover:bg-orange-600' : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'}`}
+                  >
+                    Template
+                  </button>
+                )}
               </div>
             </div>
+            {showTemplatePicker && onSendTemplate && (
+              <WhatsAppTemplatePicker
+                defaultFirstParam={activeContact.firstName}
+                onClose={() => setShowTemplatePicker(false)}
+                onSend={(template) => onSendTemplate(getTargetConvId(), template)}
+              />
+            )}
           </>
         ) : (
           <div className="flex-1 flex items-center justify-center text-slate-500 text-sm">

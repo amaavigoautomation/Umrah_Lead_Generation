@@ -440,6 +440,16 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
   if (url === '/api/webhooks/whatsapp' || url === '/api/inbound/whatsapp') {
     return await routeWhatsAppWebhook(req, res);
   }
+  // Meta messaging webhooks. The dedicated Vercel functions pass the exact raw bytes in req.rawBody
+  // so the x-hub-signature-256 check can run; Express registers its own raw-body route instead.
+  if (url === '/api/webhooks/meta') {
+    const meta = await import('./metaChannelsService.js');
+    return await meta.handleMetaWebhook(req, res);
+  }
+  if (url === '/api/webhooks/instagram') {
+    const ig = await import('./instagramIntegrationService.js');
+    return await ig.handleInstagramWebhook(req, res);
+  }
   if (url === '/api/webhooks/email/resend') {
     return await routeResendWebhook(req, res);
   }

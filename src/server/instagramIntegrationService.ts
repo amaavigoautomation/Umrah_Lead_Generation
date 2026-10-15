@@ -499,21 +499,11 @@ export async function handleInstagramWebhook(req: any, res: any): Promise<boolea
     const accountId = String(entry.id || '');
     if (!accountId) continue;
     const routeSnap = await getDoc(doc(db, 'instagram_account_routes', accountId));
-    let tenantId = routeSnap.exists() ? String(routeSnap.data().tenantId || '') : '';
     if (!routeSnap.exists()) {
-      // Fallback: if every stored route belongs to one workspace, this id is another form of that account.
-      const all = await getDocs(collection(db, 'instagram_account_routes')).catch(() => null);
-      const tenants = new Set<string>();
-      all?.forEach?.((d: any) => { const t = d.data()?.tenantId; if (t) tenants.add(String(t)); });
-      if (tenants.size === 1) {
-        tenantId = Array.from(tenants)[0];
-        await setDoc(doc(db, 'instagram_account_routes', accountId), { tenantId, alias: true, updatedAt: new Date().toISOString() }).catch(() => {});
-        console.warn('[Instagram webhook] Unknown account id', accountId, 'auto-linked to the only connected workspace', tenantId);
-      } else {
-        console.warn('[Instagram webhook] No workspace is connected for account id', accountId);
-        continue;
-      }
+      console.warn('[Instagram webhook] No workspace is connected for account id', accountId, '- the DM was sent to an Instagram account that is not connected.');
+      continue;
     }
+    const tenantId = String(routeSnap.data().tenantId || '');
     if (!tenantId) continue;
 
     const events = [

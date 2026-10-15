@@ -8,12 +8,23 @@ import { handleCoreApi } from '../core-server.bundle.js';
 export const config = { api: { bodyParser: false } };
 
 export default async function handler(req: IncomingMessage & { body?: any; rawBody?: Buffer }, res: ServerResponse) {
+  console.log('[Instagram webhook] hit', JSON.stringify({
+  method: req.method,
+  url: req.url,
+  contentLength: req.headers['content-length'],
+  hasSignature: Boolean(req.headers['x-hub-signature-256']),
+  userAgent: req.headers['user-agent'],
+}));
+  
   try {
     if (req.method === 'POST') {
       const chunks: Buffer[] = [];
       for await (const chunk of req) chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
       const rawBody = Buffer.concat(chunks);
       req.rawBody = rawBody;
+
+      console.log('[Instagram webhook] body bytes', rawBody.length);
+      
       try {
         req.body = JSON.parse(rawBody.toString('utf8'));
       } catch {

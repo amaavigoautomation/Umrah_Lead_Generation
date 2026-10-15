@@ -1,5 +1,5 @@
 import crypto from 'crypto';
-import { doc, getDoc, setDoc, deleteDoc, createDoc, updateDoc, getDocs, query, where } from './adminFirestore.js';
+import { doc, collection, getDoc, setDoc, deleteDoc, createDoc, updateDoc, getDocs, query, where } from './adminFirestore.js';
 import OpenAI from 'openai';
 import { db } from './adminFirestore.js';
 import { tenantRepo } from './tenantRepo.js';
@@ -163,7 +163,7 @@ export async function disconnectInstagram(ctx: TenantContext): Promise<void> {
   }
 }
 
-async function exchangeCode(code: string): Promise<{ accessToken: string; accountId: string; username: string; expiresIn?: number; webhookSubscribed: boolean }> {
+async function exchangeCode(code: string): Promise<{ accessToken: string; accountId: string; aliasIds: string[]; username: string; expiresIn?: number; webhookSubscribed: boolean }> {
   const clientId = requiredEnv('META_INSTAGRAM_APP_ID');
   const clientSecret = requiredEnv('META_INSTAGRAM_APP_SECRET');
   const redirectUri = requiredEnv('META_INSTAGRAM_REDIRECT_URI');
@@ -221,9 +221,11 @@ async function exchangeCode(code: string): Promise<{ accessToken: string; accoun
     webhookSubscribed = false;
   }
 
+  const aliasIds = Array.from(new Set([profile.user_id, profile.id, tokenBody.user_id].filter(Boolean).map(String)));
   return {
     accessToken,
     accountId,
+    aliasIds,
     username: String(profile.username),
     expiresIn,
     webhookSubscribed,
@@ -294,6 +296,11 @@ export async function handleInstagramOAuthCallback(req: any, res: any): Promise<
     });
     await setDoc(tenantRepo(ctx).integrationDoc('instagram'), { channel: 'instagram', connection }, { merge: true });
     await setDoc(routeRef, { tenantId: ctx.tenantId, accountId: account.accountId, updatedAt: now });
+    // Meta may send webhooks under a different id form than /me returns; route every known form here.
+    for (const alias of account.aliasIds) {
+      if (alias === account.accountId) continue;
+      await setDoc(doc(db, 'instagram_account_routes', alias), { tenantId: ctx.tenantId, accountId: account.accountId, alias: true, updatedAt: now });
+    }
     const appUrl = process.env.APP_BASE_URL || process.env.APP_URL || '/';
     res.statusCode = 302;
     res.setHeader('Location', `${appUrl}${appUrl.includes('?') ? '&' : '?'}instagram=connected`);
@@ -492,11 +499,21 @@ export async function handleInstagramWebhook(req: any, res: any): Promise<boolea
     const accountId = String(entry.id || '');
     if (!accountId) continue;
     const routeSnap = await getDoc(doc(db, 'instagram_account_routes', accountId));
+    let tenantId = routeSnap.exists() ? String(routeSnap.data().tenantId || '') : '';
     if (!routeSnap.exists()) {
-      console.warn('[Instagram webhook] No workspace is connected for account id', accountId);
-      continue;
+      // Fallback: if every stored route belongs to one workspace, this id is another form of that account.
+      const all = await getDocs(collection(db, 'instagram_account_routes')).catch(() => null);
+      const tenants = new Set<string>();
+      all?.forEach?.((d: any) => { const t = d.data()?.tenantId; if (t) tenants.add(String(t)); });
+      if (tenants.size === 1) {
+        tenantId = Array.from(tenants)[0];
+        await setDoc(doc(db, 'instagram_account_routes', accountId), { tenantId, alias: true, updatedAt: new Date().toISOString() }).catch(() => {});
+        console.warn('[Instagram webhook] Unknown account id', accountId, 'auto-linked to the only connected workspace', tenantId);
+      } else {
+        console.warn('[Instagram webhook] No workspace is connected for account id', accountId);
+        continue;
+      }
     }
-    const tenantId = String(routeSnap.data().tenantId || '');
     if (!tenantId) continue;
 
     const events = [
@@ -574,6 +591,11 @@ export async function diagnoseInstagram(ctx: TenantContext): Promise<Record<stri
     const profile: any = await (await fetch(profileUrl)).json().catch(() => ({}));
     result.accountType = profile.account_type || 'unknown';
     result.profileUserId = String(profile.user_id || profile.id || '');
+    for (const alias of new Set([profile.user_id, profile.id].filter(Boolean).map(String))) {
+      if (alias === connection.accountId) continue;
+      await setDoc(doc(db, 'instagram_account_routes', alias), { tenantId: ctx.tenantId, accountId: connection.accountId, alias: true, updatedAt: new Date().toISOString() });
+      notes.push(`Registered extra account id ${alias}.`);
+    }
     if (profile.error) notes.push(`Instagram rejected the token: ${profile.error.message || 'error'}. Reconnect the account.`);
     else if (profile.account_type && !['BUSINESS', 'MEDIA_CREATOR'].includes(String(profile.account_type))) {
       notes.push(`Account type is ${profile.account_type}. It must be a Business or Creator (Professional) account.`);

@@ -66,13 +66,13 @@ var uuid4;
 var init_uuid = __esm({
   "node_modules/openai/internal/utils/uuid.mjs"() {
     uuid4 = function() {
-      const { crypto: crypto11 } = globalThis;
-      if (crypto11?.randomUUID) {
-        uuid4 = crypto11.randomUUID.bind(crypto11);
-        return crypto11.randomUUID();
+      const { crypto: crypto15 } = globalThis;
+      if (crypto15?.randomUUID) {
+        uuid4 = crypto15.randomUUID.bind(crypto15);
+        return crypto15.randomUUID();
       }
       const u8 = new Uint8Array(1);
-      const randomByte = crypto11 ? () => crypto11.getRandomValues(u8)[0] : () => Math.random() * 255 & 255;
+      const randomByte = crypto15 ? () => crypto15.getRandomValues(u8)[0] : () => Math.random() * 255 & 255;
       return "10000000-1000-4000-8000-100000000000".replace(/[018]/g, (c) => (+c ^ randomByte() & 15 >> +c / 4).toString(16));
     };
   }
@@ -1457,9 +1457,9 @@ async function defaultParseResponse(client2, props) {
       if (!bodyText) {
         return void 0;
       }
-      const json2 = JSON.parse(bodyText);
+      const json3 = JSON.parse(bodyText);
       jsonBodyLength = bodyText.length;
-      return addRequestID(json2, response);
+      return addRequestID(json3, response);
     }
     const text = await response.text();
     return text;
@@ -2515,12 +2515,12 @@ var init_workload_identity_auth = __esm({
        * @param config External identity provider, OpenAI service account, and refresh settings.
        * @param fetch Optional fetch implementation for calls to the OpenAI token endpoint.
        */
-      constructor(config, fetch3) {
+      constructor(config3, fetch3) {
         this.cachedToken = null;
         this.refreshPromise = null;
         this.tokenGeneration = 0;
         this.tokenExchangeUrl = "https://auth.openai.com/oauth/token";
-        const { identityProviderId, serviceAccountId, clientId, refreshBufferSeconds, provider } = config;
+        const { identityProviderId, serviceAccountId, clientId, refreshBufferSeconds, provider } = config3;
         this.config = {
           identityProviderId,
           serviceAccountId,
@@ -4985,13 +4985,13 @@ function findBufferedLedgerAffectedOwners(entry, graph, records, changes, work) 
   }
   return affected;
 }
-function updateBufferedLedgerMembershipChanges(owner, next, graph, records, changes, work) {
+function updateBufferedLedgerMembershipChanges(owner, next2, graph, records, changes, work) {
   for (const identity of owner.identities) {
     work.remaining -= 1;
     if (work.remaining < 0) {
       return false;
     }
-    if (!next.has(identity)) {
+    if (!next2.has(identity)) {
       const update = getBufferedLedgerChange(identity, graph, records, changes);
       if (!update) {
         return false;
@@ -4999,7 +4999,7 @@ function updateBufferedLedgerMembershipChanges(owner, next, graph, records, chan
       update.ownerDelta -= 1;
     }
   }
-  for (const identity of next) {
+  for (const identity of next2) {
     work.remaining -= 1;
     if (work.remaining < 0) {
       return false;
@@ -5018,11 +5018,11 @@ function collectBufferedLedgerMemberships(entry, graph, affected, records, chang
   const memberships = /* @__PURE__ */ new Map();
   for (const owner of affected) {
     const roots = owner === entry ? graph.roots : owner.roots;
-    const next = collectBufferedLedgerIdentities(roots, graph.nodes, records, work);
-    if (!next || !updateBufferedLedgerMembershipChanges(owner, next, graph, records, changes, work)) {
+    const next2 = collectBufferedLedgerIdentities(roots, graph.nodes, records, work);
+    if (!next2 || !updateBufferedLedgerMembershipChanges(owner, next2, graph, records, changes, work)) {
       return void 0;
     }
-    memberships.set(owner, next);
+    memberships.set(owner, next2);
   }
   return memberships;
 }
@@ -5061,18 +5061,18 @@ function applyBufferedLedgerChanges(records, changes, memberships) {
       });
     }
   }
-  for (const [owner, next] of memberships) {
+  for (const [owner, next2] of memberships) {
     for (const identity of owner.identities) {
-      if (!next.has(identity)) {
+      if (!next2.has(identity)) {
         records.get(identity)?.owners.delete(owner);
       }
     }
-    for (const identity of next) {
+    for (const identity of next2) {
       if (!owner.identities.has(identity)) {
         records.get(identity).owners.add(owner);
       }
     }
-    owner.identities = next;
+    owner.identities = next2;
   }
   for (const identity of changes.keys()) {
     if (records.get(identity)?.owners.size === 0) {
@@ -13205,17 +13205,17 @@ var init_result_collection = __esm({
       let done = false;
       try {
         while (true) {
-          const next = await iterator.next();
-          if (next.done) {
+          const next2 = await iterator.next();
+          if (next2.done) {
             done = true;
             return;
           }
           if (__classPrivateFieldGet(this, _ResultCollection_enabled, "f")) {
-            this.collector.accept(next.value);
+            this.collector.accept(next2.value);
           } else {
             __classPrivateFieldSet(this, _ResultCollection_uncollectedEvents, true, "f");
           }
-          yield next.value;
+          yield next2.value;
         }
       } catch (error) {
         if (__classPrivateFieldGet(this, _ResultCollection_enabled, "f")) {
@@ -13234,8 +13234,8 @@ var init_result_collection = __esm({
         const iterator = __classPrivateFieldGet(this, _ResultCollection_iterator, "f") ?? this.iterate();
         while (!__classPrivateFieldGet(this, _ResultCollection_ended, "f") && !this.collector.ready) {
           this.collector.checkAction(__classPrivateFieldGet(this, _ResultCollection_canHandle, "f"));
-          const next = await iterator.next();
-          if (next.done) {
+          const next2 = await iterator.next();
+          if (next2.done) {
             break;
           }
         }
@@ -15670,13 +15670,13 @@ var init_base64 = __esm({
 var readEnv;
 var init_env = __esm({
   "node_modules/openai/internal/utils/env.mjs"() {
-    readEnv = (env) => {
+    readEnv = (env2) => {
       try {
         if (typeof globalThis.process !== "undefined") {
-          return globalThis.process.env?.[env]?.trim() || void 0;
+          return globalThis.process.env?.[env2]?.trim() || void 0;
         }
         if (typeof globalThis.Deno !== "undefined") {
-          return globalThis.Deno.env?.get?.(env)?.trim() || void 0;
+          return globalThis.Deno.env?.get?.(env2)?.trim() || void 0;
         }
       } catch {
         return void 0;
@@ -23033,8 +23033,8 @@ var init_client = __esm({
             if (abortListener)
               callerSignal?.removeEventListener("abort", abortListener);
             abortListener = void 0;
-            const next = await this.retryRequest(props.options, retriesRemaining, props.retryOfRequestLogID ?? props.requestLogID, void 0, props.requestSignal);
-            Object.assign(props, next);
+            const next2 = await this.retryRequest(props.options, retriesRemaining, props.retryOfRequestLogID ?? props.requestLogID, void 0, props.requestSignal);
+            Object.assign(props, next2);
           } finally {
             if (timer2 !== void 0)
               clearTimeout(timer2);
@@ -30365,12 +30365,12 @@ var require_common = __commonJS({
         }
         return Function.prototype[Symbol.hasInstance].call(_GaxiosError, instance);
       }
-      constructor(message2, config, response, cause) {
+      constructor(message2, config3, response, cause) {
         super(message2, { cause });
-        this.config = config;
+        this.config = config3;
         this.response = response;
         this.error = cause instanceof Error ? cause : void 0;
-        this.config = (0, extend_1.default)(true, {}, config);
+        this.config = (0, extend_1.default)(true, {}, config3);
         if (this.response) {
           this.response.config = (0, extend_1.default)(true, {}, this.response.config);
         }
@@ -30534,25 +30534,25 @@ var require_retry = __commonJS({
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.getRetryConfig = getRetryConfig;
     async function getRetryConfig(err) {
-      let config = getConfig(err);
-      if (!err || !err.config || !config && !err.config.retry) {
+      let config3 = getConfig(err);
+      if (!err || !err.config || !config3 && !err.config.retry) {
         return { shouldRetry: false };
       }
-      config = config || {};
-      config.currentRetryAttempt = config.currentRetryAttempt || 0;
-      config.retry = config.retry === void 0 || config.retry === null ? 3 : config.retry;
-      config.httpMethodsToRetry = config.httpMethodsToRetry || [
+      config3 = config3 || {};
+      config3.currentRetryAttempt = config3.currentRetryAttempt || 0;
+      config3.retry = config3.retry === void 0 || config3.retry === null ? 3 : config3.retry;
+      config3.httpMethodsToRetry = config3.httpMethodsToRetry || [
         "GET",
         "HEAD",
         "PUT",
         "OPTIONS",
         "DELETE"
       ];
-      config.noResponseRetries = config.noResponseRetries === void 0 || config.noResponseRetries === null ? 2 : config.noResponseRetries;
-      config.retryDelayMultiplier = config.retryDelayMultiplier ? config.retryDelayMultiplier : 2;
-      config.timeOfFirstRequest = config.timeOfFirstRequest ? config.timeOfFirstRequest : Date.now();
-      config.totalTimeout = config.totalTimeout ? config.totalTimeout : Number.MAX_SAFE_INTEGER;
-      config.maxRetryDelay = config.maxRetryDelay ? config.maxRetryDelay : Number.MAX_SAFE_INTEGER;
+      config3.noResponseRetries = config3.noResponseRetries === void 0 || config3.noResponseRetries === null ? 2 : config3.noResponseRetries;
+      config3.retryDelayMultiplier = config3.retryDelayMultiplier ? config3.retryDelayMultiplier : 2;
+      config3.timeOfFirstRequest = config3.timeOfFirstRequest ? config3.timeOfFirstRequest : Date.now();
+      config3.totalTimeout = config3.totalTimeout ? config3.totalTimeout : Number.MAX_SAFE_INTEGER;
+      config3.maxRetryDelay = config3.maxRetryDelay ? config3.maxRetryDelay : Number.MAX_SAFE_INTEGER;
       const retryRanges = [
         // https://en.wikipedia.org/wiki/List_of_HTTP_status_codes
         // 1xx - Retry (Informational, request still processing)
@@ -30567,40 +30567,40 @@ var require_retry = __commonJS({
         [429, 429],
         [500, 599]
       ];
-      config.statusCodesToRetry = config.statusCodesToRetry || retryRanges;
-      err.config.retryConfig = config;
-      const shouldRetryFn = config.shouldRetry || shouldRetryRequest;
+      config3.statusCodesToRetry = config3.statusCodesToRetry || retryRanges;
+      err.config.retryConfig = config3;
+      const shouldRetryFn = config3.shouldRetry || shouldRetryRequest;
       if (!await shouldRetryFn(err)) {
         return { shouldRetry: false, config: err.config };
       }
-      const delay = getNextRetryDelay(config);
+      const delay = getNextRetryDelay(config3);
       err.config.retryConfig.currentRetryAttempt += 1;
-      const backoff = config.retryBackoff ? config.retryBackoff(err, delay) : new Promise((resolve) => {
+      const backoff = config3.retryBackoff ? config3.retryBackoff(err, delay) : new Promise((resolve) => {
         setTimeout(resolve, delay);
       });
-      if (config.onRetryAttempt) {
-        await config.onRetryAttempt(err);
+      if (config3.onRetryAttempt) {
+        await config3.onRetryAttempt(err);
       }
       await backoff;
       return { shouldRetry: true, config: err.config };
     }
     function shouldRetryRequest(err) {
-      const config = getConfig(err);
+      const config3 = getConfig(err);
       if (err.config.signal?.aborted && err.code !== "TimeoutError" || err.code === "AbortError") {
         return false;
       }
-      if (!config || config.retry === 0) {
+      if (!config3 || config3.retry === 0) {
         return false;
       }
-      if (!err.response && (config.currentRetryAttempt || 0) >= config.noResponseRetries) {
+      if (!err.response && (config3.currentRetryAttempt || 0) >= config3.noResponseRetries) {
         return false;
       }
-      if (!config.httpMethodsToRetry || !config.httpMethodsToRetry.includes(err.config.method?.toUpperCase() || "GET")) {
+      if (!config3.httpMethodsToRetry || !config3.httpMethodsToRetry.includes(err.config.method?.toUpperCase() || "GET")) {
         return false;
       }
       if (err.response && err.response.status) {
         let isInRange = false;
-        for (const [min, max] of config.statusCodesToRetry) {
+        for (const [min, max] of config3.statusCodesToRetry) {
           const status = err.response.status;
           if (status >= min && status <= max) {
             isInRange = true;
@@ -30611,8 +30611,8 @@ var require_retry = __commonJS({
           return false;
         }
       }
-      config.currentRetryAttempt = config.currentRetryAttempt || 0;
-      if (config.currentRetryAttempt >= config.retry) {
+      config3.currentRetryAttempt = config3.currentRetryAttempt || 0;
+      if (config3.currentRetryAttempt >= config3.retry) {
         return false;
       }
       return true;
@@ -30623,11 +30623,11 @@ var require_retry = __commonJS({
       }
       return;
     }
-    function getNextRetryDelay(config) {
-      const retryDelay = config.currentRetryAttempt ? 0 : config.retryDelay ?? 100;
-      const calculatedDelay = retryDelay + (Math.pow(config.retryDelayMultiplier, config.currentRetryAttempt) - 1) / 2 * 1e3;
-      const maxAllowableDelay = config.totalTimeout - (Date.now() - config.timeOfFirstRequest);
-      return Math.min(calculatedDelay, maxAllowableDelay, config.maxRetryDelay);
+    function getNextRetryDelay(config3) {
+      const retryDelay = config3.currentRetryAttempt ? 0 : config3.retryDelay ?? 100;
+      const calculatedDelay = retryDelay + (Math.pow(config3.retryDelayMultiplier, config3.currentRetryAttempt) - 1) / 2 * 1e3;
+      const maxAllowableDelay = config3.totalTimeout - (Date.now() - config3.timeOfFirstRequest);
+      return Math.min(calculatedDelay, maxAllowableDelay, config3.maxRetryDelay);
     }
   }
 });
@@ -30763,7 +30763,7 @@ var require_ms = __commonJS({
 // node_modules/debug/src/common.js
 var require_common2 = __commonJS({
   "node_modules/debug/src/common.js"(exports, module) {
-    function setup(env) {
+    function setup(env2) {
       createDebug.debug = createDebug;
       createDebug.default = createDebug;
       createDebug.coerce = coerce;
@@ -30772,8 +30772,8 @@ var require_common2 = __commonJS({
       createDebug.enabled = enabled;
       createDebug.humanize = require_ms();
       createDebug.destroy = destroy;
-      Object.keys(env).forEach((key) => {
-        createDebug[key] = env[key];
+      Object.keys(env2).forEach((key) => {
+        createDebug[key] = env2[key];
       });
       createDebug.names = [];
       createDebug.skips = [];
@@ -31337,7 +31337,7 @@ var require_helpers = __commonJS({
       return Buffer.concat(chunks, length);
     }
     exports.toBuffer = toBuffer;
-    async function json2(stream) {
+    async function json3(stream) {
       const buf = await toBuffer(stream);
       const str = buf.toString("utf8");
       try {
@@ -31348,7 +31348,7 @@ var require_helpers = __commonJS({
         throw err;
       }
     }
-    exports.json = json2;
+    exports.json = json3;
     function req(url, opts = {}) {
       const href = typeof url === "string" ? url : url.href;
       const req2 = (href.startsWith("https:") ? https3 : http4).request(url, opts);
@@ -34432,14 +34432,14 @@ var require_ponyfill_es2018 = __commonJS({
           }
           function pipeLoop() {
             return newPromise((resolveLoop, rejectLoop) => {
-              function next(done) {
+              function next2(done) {
                 if (done) {
                   resolveLoop();
                 } else {
-                  PerformPromiseThen(pipeStep(), next, rejectLoop);
+                  PerformPromiseThen(pipeStep(), next2, rejectLoop);
                 }
               }
-              next(false);
+              next2(false);
             });
           }
           function pipeStep() {
@@ -38341,12 +38341,12 @@ var require_gaxios = __commonJS({
         prepared = await this.#applyRequestInterceptors(prepared);
         return this.#applyResponseInterceptors(this._request(prepared));
       }
-      async _defaultAdapter(config) {
-        const fetchImpl = config.fetchImplementation || this.defaults.fetchImplementation || await _a5.#getFetch();
-        const preparedOpts = { ...config };
+      async _defaultAdapter(config3) {
+        const fetchImpl = config3.fetchImplementation || this.defaults.fetchImplementation || await _a5.#getFetch();
+        const preparedOpts = { ...config3 };
         delete preparedOpts.data;
-        const res = await fetchImpl(config.url, preparedOpts);
-        const data = await this.getResponseData(config, res);
+        const res = await fetchImpl(config3.url, preparedOpts);
+        const data = await this.getResponseData(config3, res);
         if (!Object.getOwnPropertyDescriptor(res, "data")?.configurable) {
           Object.defineProperties(res, {
             data: {
@@ -38357,7 +38357,7 @@ var require_gaxios = __commonJS({
             }
           });
         }
-        return Object.assign(res, { config, data });
+        return Object.assign(res, { config: config3, data });
       }
       /**
        * Internal, retryable version of the `request` method.
@@ -38392,9 +38392,9 @@ var require_gaxios = __commonJS({
           } else {
             err = new common_js_1.GaxiosError("Unexpected Gaxios Error", opts, void 0, e2);
           }
-          const { shouldRetry, config } = await (0, retry_js_1.getRetryConfig)(err);
-          if (shouldRetry && config) {
-            err.config.retryConfig.currentRetryAttempt = config.retryConfig.currentRetryAttempt;
+          const { shouldRetry, config: config3 } = await (0, retry_js_1.getRetryConfig)(err);
+          if (shouldRetry && config3) {
+            err.config.retryConfig.currentRetryAttempt = config3.retryConfig.currentRetryAttempt;
             opts.retryConfig = err.config?.retryConfig;
             this.#appendTimeoutToSignal(opts);
             return this._request(opts);
@@ -40291,7 +40291,7 @@ var require_parse = __commonJS({
           at,
           text
         };
-      }, next = function(c) {
+      }, next2 = function(c) {
         if (c && c !== ch) {
           error("Expected '" + c + "' instead of '" + ch + "'");
         }
@@ -40302,28 +40302,28 @@ var require_parse = __commonJS({
         var number2, string2 = "";
         if (ch === "-") {
           string2 = "-";
-          next("-");
+          next2("-");
         }
         while (ch >= "0" && ch <= "9") {
           string2 += ch;
-          next();
+          next2();
         }
         if (ch === ".") {
           string2 += ".";
-          while (next() && ch >= "0" && ch <= "9") {
+          while (next2() && ch >= "0" && ch <= "9") {
             string2 += ch;
           }
         }
         if (ch === "e" || ch === "E") {
           string2 += ch;
-          next();
+          next2();
           if (ch === "-" || ch === "+") {
             string2 += ch;
-            next();
+            next2();
           }
           while (ch >= "0" && ch <= "9") {
             string2 += ch;
-            next();
+            next2();
           }
         }
         number2 = +string2;
@@ -40340,19 +40340,19 @@ var require_parse = __commonJS({
         var hex, i2, string2 = "", uffff;
         if (ch === '"') {
           var startAt = at;
-          while (next()) {
+          while (next2()) {
             if (ch === '"') {
               if (at - 1 > startAt) string2 += text.substring(startAt, at - 1);
-              next();
+              next2();
               return string2;
             }
             if (ch === "\\") {
               if (at - 1 > startAt) string2 += text.substring(startAt, at - 1);
-              next();
+              next2();
               if (ch === "u") {
                 uffff = 0;
                 for (i2 = 0; i2 < 4; i2 += 1) {
-                  hex = parseInt(next(), 16);
+                  hex = parseInt(next2(), 16);
                   if (!isFinite(hex)) {
                     break;
                   }
@@ -40371,48 +40371,48 @@ var require_parse = __commonJS({
         error("Bad string");
       }, white = function() {
         while (ch && ch <= " ") {
-          next();
+          next2();
         }
       }, word = function() {
         switch (ch) {
           case "t":
-            next("t");
-            next("r");
-            next("u");
-            next("e");
+            next2("t");
+            next2("r");
+            next2("u");
+            next2("e");
             return true;
           case "f":
-            next("f");
-            next("a");
-            next("l");
-            next("s");
-            next("e");
+            next2("f");
+            next2("a");
+            next2("l");
+            next2("s");
+            next2("e");
             return false;
           case "n":
-            next("n");
-            next("u");
-            next("l");
-            next("l");
+            next2("n");
+            next2("u");
+            next2("l");
+            next2("l");
             return null;
         }
         error("Unexpected '" + ch + "'");
       }, value, array2 = function() {
         var array3 = [];
         if (ch === "[") {
-          next("[");
+          next2("[");
           white();
           if (ch === "]") {
-            next("]");
+            next2("]");
             return array3;
           }
           while (ch) {
             array3.push(value());
             white();
             if (ch === "]") {
-              next("]");
+              next2("]");
               return array3;
             }
-            next(",");
+            next2(",");
             white();
           }
         }
@@ -40420,16 +40420,16 @@ var require_parse = __commonJS({
       }, object = function() {
         var key, object2 = /* @__PURE__ */ Object.create(null);
         if (ch === "{") {
-          next("{");
+          next2("{");
           white();
           if (ch === "}") {
-            next("}");
+            next2("}");
             return object2;
           }
           while (ch) {
             key = string();
             white();
-            next(":");
+            next2(":");
             if (_options.strict === true && Object.hasOwnProperty.call(object2, key)) {
               error('Duplicate key "' + key + '"');
             }
@@ -40454,10 +40454,10 @@ var require_parse = __commonJS({
             }
             white();
             if (ch === "}") {
-              next("}");
+              next2("}");
               return object2;
             }
-            next(",");
+            next2(",");
             white();
           }
         }
@@ -40870,11 +40870,11 @@ var require_logging_utils = __commonJS({
         const debugLogger = this.upstream?.makeLogger(namespace);
         return (fields, ...args) => {
           const severity = fields.severity ?? types_1.LogSeverity.INFO;
-          const json2 = Object.assign({
+          const json3 = Object.assign({
             severity,
             message: util.format(...args)
           }, fields);
-          const jsonString = JSON.stringify(json2);
+          const jsonString = JSON.stringify(json3);
           if (debugLogger) {
             debugLogger(fields, jsonString);
           } else {
@@ -41483,22 +41483,22 @@ var require_crypto2 = __commonJS({
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.NodeCrypto = void 0;
-    var crypto11 = __require("crypto");
+    var crypto15 = __require("crypto");
     var NodeCrypto = class {
       async sha256DigestBase64(str) {
-        return crypto11.createHash("sha256").update(str).digest("base64");
+        return crypto15.createHash("sha256").update(str).digest("base64");
       }
       randomBytesBase64(count) {
-        return crypto11.randomBytes(count).toString("base64");
+        return crypto15.randomBytes(count).toString("base64");
       }
       async verify(pubkey, data, signature) {
-        const verifier = crypto11.createVerify("RSA-SHA256");
+        const verifier = crypto15.createVerify("RSA-SHA256");
         verifier.update(data);
         verifier.end();
         return verifier.verify(pubkey, signature, "base64");
       }
       async sign(privateKey, data) {
-        const signer = crypto11.createSign("RSA-SHA256");
+        const signer = crypto15.createSign("RSA-SHA256");
         signer.update(data);
         signer.end();
         return signer.sign(privateKey, "base64");
@@ -41516,7 +41516,7 @@ var require_crypto2 = __commonJS({
        *   string in hexadecimal encoding.
        */
       async sha256DigestHex(str) {
-        return crypto11.createHash("sha256").update(str).digest("hex");
+        return crypto15.createHash("sha256").update(str).digest("hex");
       }
       /**
        * Computes the HMAC hash of a message using the provided crypto key and the
@@ -41528,7 +41528,7 @@ var require_crypto2 = __commonJS({
        */
       async signWithHmacSha256(key, msg) {
         const cryptoKey = typeof key === "string" ? key : toBuffer(key);
-        return toArrayBuffer(crypto11.createHmac("sha256", cryptoKey).update(msg).digest());
+        return toArrayBuffer(crypto15.createHmac("sha256", cryptoKey).update(msg).digest());
       }
     };
     exports.NodeCrypto = NodeCrypto;
@@ -42172,25 +42172,25 @@ var require_authclient = __commonJS({
       }
       static log = (0, google_logging_utils_1.log)("auth");
       static DEFAULT_REQUEST_INTERCEPTOR = {
-        resolved: async (config) => {
-          if (!config.headers.has("x-goog-api-client")) {
+        resolved: async (config3) => {
+          if (!config3.headers.has("x-goog-api-client")) {
             const nodeVersion = process.version.replace(/^v/, "");
-            config.headers.set("x-goog-api-client", `gl-node/${nodeVersion}`);
+            config3.headers.set("x-goog-api-client", `gl-node/${nodeVersion}`);
           }
-          const userAgent = config.headers.get("User-Agent");
+          const userAgent = config3.headers.get("User-Agent");
           if (!userAgent) {
-            config.headers.set("User-Agent", shared_cjs_1.USER_AGENT);
+            config3.headers.set("User-Agent", shared_cjs_1.USER_AGENT);
           } else if (!userAgent.includes(`${shared_cjs_1.PRODUCT_NAME}/`)) {
-            config.headers.set("User-Agent", `${userAgent} ${shared_cjs_1.USER_AGENT}`);
+            config3.headers.set("User-Agent", `${userAgent} ${shared_cjs_1.USER_AGENT}`);
           }
           try {
-            const symbols = config;
+            const symbols = config3;
             const methodName = symbols[_AuthClient.RequestMethodNameSymbol];
             const logId = `${Math.floor(Math.random() * 1e3)}`;
             symbols[_AuthClient.RequestLogIdSymbol] = logId;
             const logObject = {
-              url: config.url,
-              headers: config.headers
+              url: config3.url,
+              headers: config3.headers
             };
             if (methodName) {
               _AuthClient.log.info("%s [%s] request %j", methodName, logId, logObject);
@@ -42199,7 +42199,7 @@ var require_authclient = __commonJS({
             }
           } catch (e2) {
           }
-          return config;
+          return config3;
         }
       };
       static DEFAULT_RESPONSE_INTERCEPTOR = {
@@ -42238,9 +42238,9 @@ var require_authclient = __commonJS({
        * @param config A Gaxios request config
        * @param methodName The method name making the call
        */
-      static setMethodName(config, methodName) {
+      static setMethodName(config3, methodName) {
         try {
-          const symbols = config;
+          const symbols = config3;
           symbols[_AuthClient.RequestMethodNameSymbol] = methodName;
         } catch (e2) {
         }
@@ -42283,8 +42283,8 @@ var require_loginticket = __commonJS({
        * @param {TokenPayload} pay Payload of the jwt
        * @constructor
        */
-      constructor(env, pay) {
-        this.envelope = env;
+      constructor(env2, pay) {
+        this.envelope = env2;
         this.payload = pay;
       }
       getEnvelope() {
@@ -42441,10 +42441,10 @@ var require_oauth2client = __commonJS({
        * https://github.com/googleapis/google-auth-library-nodejs/blob/main/samples/oauth2-codeVerifier.js
        */
       async generateCodeVerifierAsync() {
-        const crypto11 = (0, crypto_1.createCrypto)();
-        const randomString = crypto11.randomBytesBase64(96);
+        const crypto15 = (0, crypto_1.createCrypto)();
+        const randomString = crypto15.randomBytesBase64(96);
         const codeVerifier = randomString.replace(/\+/g, "~").replace(/=/g, "_").replace(/\//g, "-");
-        const unencodedCodeChallenge = await crypto11.sha256DigestBase64(codeVerifier);
+        const unencodedCodeChallenge = await crypto15.sha256DigestBase64(codeVerifier);
         const codeChallenge = unencodedCodeChallenge.split("=")[0].replace(/\+/g, "-").replace(/\//g, "_");
         return { codeVerifier, codeChallenge };
       }
@@ -42885,7 +42885,7 @@ var require_oauth2client = __commonJS({
        * @return Returns a promise resolving to LoginTicket on verification.
        */
       async verifySignedJwtWithCertsAsync(jwt, certs, requiredAudience, issuers, maxExpiry) {
-        const crypto11 = (0, crypto_1.createCrypto)();
+        const crypto15 = (0, crypto_1.createCrypto)();
         if (!maxExpiry) {
           maxExpiry = _OAuth2Client.DEFAULT_MAX_TOKEN_LIFETIME_SECS_;
         }
@@ -42898,7 +42898,7 @@ var require_oauth2client = __commonJS({
         let envelope;
         let payload;
         try {
-          envelope = JSON.parse(crypto11.decodeBase64StringUtf8(segments[0]));
+          envelope = JSON.parse(crypto15.decodeBase64StringUtf8(segments[0]));
         } catch (err) {
           if (err instanceof Error) {
             err.message = `Can't parse token envelope: ${segments[0]}': ${err.message}`;
@@ -42909,7 +42909,7 @@ var require_oauth2client = __commonJS({
           throw new Error("Can't parse token envelope: " + segments[0]);
         }
         try {
-          payload = JSON.parse(crypto11.decodeBase64StringUtf8(segments[1]));
+          payload = JSON.parse(crypto15.decodeBase64StringUtf8(segments[1]));
         } catch (err) {
           if (err instanceof Error) {
             err.message = `Can't parse token payload '${segments[0]}`;
@@ -42926,7 +42926,7 @@ var require_oauth2client = __commonJS({
         if (envelope.alg === "ES256") {
           signature = formatEcdsa.joseToDer(signature, "ES256").toString("base64");
         }
-        const verified = await crypto11.verify(cert2, signed, signature);
+        const verified = await crypto15.verify(cert2, signed, signature);
         if (!verified) {
           throw new Error("Invalid token signature: " + jwt);
         }
@@ -43145,7 +43145,7 @@ var require_envDetect = __commonJS({
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.GCPEnv = void 0;
     exports.clear = clear;
-    exports.getEnv = getEnv;
+    exports.getEnv = getEnv2;
     var gcpMetadata = require_src4();
     var GCPEnv;
     (function(GCPEnv2) {
@@ -43161,7 +43161,7 @@ var require_envDetect = __commonJS({
     function clear() {
       envPromise = void 0;
     }
-    async function getEnv() {
+    async function getEnv2() {
       if (envPromise) {
         return envPromise;
       }
@@ -43169,25 +43169,25 @@ var require_envDetect = __commonJS({
       return envPromise;
     }
     async function getEnvMemoized() {
-      let env = GCPEnv.NONE;
+      let env2 = GCPEnv.NONE;
       if (isAppEngine()) {
-        env = GCPEnv.APP_ENGINE;
+        env2 = GCPEnv.APP_ENGINE;
       } else if (isCloudFunction()) {
-        env = GCPEnv.CLOUD_FUNCTIONS;
+        env2 = GCPEnv.CLOUD_FUNCTIONS;
       } else if (await isComputeEngine()) {
         if (await isKubernetesEngine()) {
-          env = GCPEnv.KUBERNETES_ENGINE;
+          env2 = GCPEnv.KUBERNETES_ENGINE;
         } else if (isCloudRun()) {
-          env = GCPEnv.CLOUD_RUN;
+          env2 = GCPEnv.CLOUD_RUN;
         } else if (isCloudRunJob()) {
-          env = GCPEnv.CLOUD_RUN_JOBS;
+          env2 = GCPEnv.CLOUD_RUN_JOBS;
         } else {
-          env = GCPEnv.COMPUTE_ENGINE;
+          env2 = GCPEnv.COMPUTE_ENGINE;
         }
       } else {
-        env = GCPEnv.NONE;
+        env2 = GCPEnv.NONE;
       }
-      return env;
+      return env2;
     }
     function isAppEngine() {
       return !!(process.env.GAE_SERVICE || process.env.GAE_MODULE_NAME);
@@ -43301,14 +43301,14 @@ var require_buffer_equal_constant_time = __commonJS({
 var require_jwa = __commonJS({
   "node_modules/jwa/index.js"(exports, module) {
     var Buffer4 = require_safe_buffer().Buffer;
-    var crypto11 = __require("crypto");
+    var crypto15 = __require("crypto");
     var formatEcdsa = require_ecdsa_sig_formatter();
     var util = __require("util");
     var MSG_INVALID_ALGORITHM = '"%s" is not a valid algorithm.\n  Supported algorithms are:\n  "HS256", "HS384", "HS512", "RS256", "RS384", "RS512", "PS256", "PS384", "PS512", "ES256", "ES384", "ES512" and "none".';
     var MSG_INVALID_SECRET = "secret must be a string or buffer";
     var MSG_INVALID_VERIFIER_KEY = "key must be a string or a buffer";
     var MSG_INVALID_SIGNER_KEY = "key must be a string, a buffer or an object";
-    var supportsKeyObjects = typeof crypto11.createPublicKey === "function";
+    var supportsKeyObjects = typeof crypto15.createPublicKey === "function";
     if (supportsKeyObjects) {
       MSG_INVALID_VERIFIER_KEY += " or a KeyObject";
       MSG_INVALID_SECRET += "or a KeyObject";
@@ -43398,17 +43398,17 @@ var require_jwa = __commonJS({
       return function sign(thing, secret) {
         checkIsSecretKey(secret);
         thing = normalizeInput(thing);
-        var hmac2 = crypto11.createHmac("sha" + bits, secret);
+        var hmac2 = crypto15.createHmac("sha" + bits, secret);
         var sig2 = (hmac2.update(thing), hmac2.digest("base64"));
         return fromBase642(sig2);
       };
     }
     var bufferEqual;
-    var timingSafeEqual3 = "timingSafeEqual" in crypto11 ? function timingSafeEqual4(a, b) {
+    var timingSafeEqual3 = "timingSafeEqual" in crypto15 ? function timingSafeEqual4(a, b) {
       if (a.byteLength !== b.byteLength) {
         return false;
       }
-      return crypto11.timingSafeEqual(a, b);
+      return crypto15.timingSafeEqual(a, b);
     } : function timingSafeEqual4(a, b) {
       if (!bufferEqual) {
         bufferEqual = require_buffer_equal_constant_time();
@@ -43425,7 +43425,7 @@ var require_jwa = __commonJS({
       return function sign(thing, privateKey) {
         checkIsPrivateKey(privateKey);
         thing = normalizeInput(thing);
-        var signer = crypto11.createSign("RSA-SHA" + bits);
+        var signer = crypto15.createSign("RSA-SHA" + bits);
         var sig2 = (signer.update(thing), signer.sign(privateKey, "base64"));
         return fromBase642(sig2);
       };
@@ -43435,7 +43435,7 @@ var require_jwa = __commonJS({
         checkIsPublicKey(publicKey);
         thing = normalizeInput(thing);
         signature = toBase64(signature);
-        var verifier = crypto11.createVerify("RSA-SHA" + bits);
+        var verifier = crypto15.createVerify("RSA-SHA" + bits);
         verifier.update(thing);
         return verifier.verify(publicKey, signature, "base64");
       };
@@ -43444,11 +43444,11 @@ var require_jwa = __commonJS({
       return function sign(thing, privateKey) {
         checkIsPrivateKey(privateKey);
         thing = normalizeInput(thing);
-        var signer = crypto11.createSign("RSA-SHA" + bits);
+        var signer = crypto15.createSign("RSA-SHA" + bits);
         var sig2 = (signer.update(thing), signer.sign({
           key: privateKey,
-          padding: crypto11.constants.RSA_PKCS1_PSS_PADDING,
-          saltLength: crypto11.constants.RSA_PSS_SALTLEN_DIGEST
+          padding: crypto15.constants.RSA_PKCS1_PSS_PADDING,
+          saltLength: crypto15.constants.RSA_PSS_SALTLEN_DIGEST
         }, "base64"));
         return fromBase642(sig2);
       };
@@ -43458,12 +43458,12 @@ var require_jwa = __commonJS({
         checkIsPublicKey(publicKey);
         thing = normalizeInput(thing);
         signature = toBase64(signature);
-        var verifier = crypto11.createVerify("RSA-SHA" + bits);
+        var verifier = crypto15.createVerify("RSA-SHA" + bits);
         verifier.update(thing);
         return verifier.verify({
           key: publicKey,
-          padding: crypto11.constants.RSA_PKCS1_PSS_PADDING,
-          saltLength: crypto11.constants.RSA_PSS_SALTLEN_DIGEST
+          padding: crypto15.constants.RSA_PKCS1_PSS_PADDING,
+          saltLength: crypto15.constants.RSA_PSS_SALTLEN_DIGEST
         }, signature, "base64");
       };
     }
@@ -44295,20 +44295,20 @@ var require_jwtaccess = __commonJS({
        * Create a JWTAccess credentials instance using the given input options.
        * @param json The input object.
        */
-      fromJSON(json2) {
-        if (!json2) {
+      fromJSON(json3) {
+        if (!json3) {
           throw new Error("Must pass in a JSON object containing the service account auth settings.");
         }
-        if (!json2.client_email) {
+        if (!json3.client_email) {
           throw new Error("The incoming JSON object does not contain a client_email field");
         }
-        if (!json2.private_key) {
+        if (!json3.private_key) {
           throw new Error("The incoming JSON object does not contain a private_key field");
         }
-        this.email = json2.client_email;
-        this.key = json2.private_key;
-        this.keyId = json2.private_key_id;
-        this.projectId = json2.project_id;
+        this.email = json3.client_email;
+        this.key = json3.private_key;
+        this.keyId = json3.private_key_id;
+        this.projectId = json3.project_id;
       }
       fromStream(inputStream, callback) {
         if (callback) {
@@ -44541,22 +44541,22 @@ var require_jwtclient = __commonJS({
        *
        * **Important**: If you accept a credential configuration (credential JSON/File/Stream) from an external source for authentication to Google Cloud, you must validate it before providing it to any Google API or library. Providing an unvalidated credential configuration to Google APIs can compromise the security of your systems and data. For more information, refer to {@link https://cloud.google.com/docs/authentication/external/externally-sourced-credentials Validate credential configurations from external sources}.
        */
-      fromJSON(json2) {
-        if (!json2) {
+      fromJSON(json3) {
+        if (!json3) {
           throw new Error("Must pass in a JSON object containing the service account auth settings.");
         }
-        if (!json2.client_email) {
+        if (!json3.client_email) {
           throw new Error("The incoming JSON object does not contain a client_email field");
         }
-        if (!json2.private_key) {
+        if (!json3.private_key) {
           throw new Error("The incoming JSON object does not contain a private_key field");
         }
-        this.email = json2.client_email;
-        this.key = json2.private_key;
-        this.keyId = json2.private_key_id;
-        this.projectId = json2.project_id;
-        this.quotaProjectId = json2.quota_project_id;
-        this.universeDomain = json2.universe_domain || this.universeDomain;
+        this.email = json3.client_email;
+        this.key = json3.private_key;
+        this.keyId = json3.private_key_id;
+        this.projectId = json3.project_id;
+        this.quotaProjectId = json3.quota_project_id;
+        this.universeDomain = json3.universe_domain || this.universeDomain;
       }
       fromStream(inputStream, callback) {
         if (callback) {
@@ -44677,28 +44677,28 @@ var require_refreshclient = __commonJS({
        * options.
        * @param json The input object.
        */
-      fromJSON(json2) {
-        if (!json2) {
+      fromJSON(json3) {
+        if (!json3) {
           throw new Error("Must pass in a JSON object containing the user refresh token");
         }
-        if (json2.type !== "authorized_user") {
+        if (json3.type !== "authorized_user") {
           throw new Error('The incoming JSON object does not have the "authorized_user" type');
         }
-        if (!json2.client_id) {
+        if (!json3.client_id) {
           throw new Error("The incoming JSON object does not contain a client_id field");
         }
-        if (!json2.client_secret) {
+        if (!json3.client_secret) {
           throw new Error("The incoming JSON object does not contain a client_secret field");
         }
-        if (!json2.refresh_token) {
+        if (!json3.refresh_token) {
           throw new Error("The incoming JSON object does not contain a refresh_token field");
         }
-        this._clientId = json2.client_id;
-        this._clientSecret = json2.client_secret;
-        this._refreshToken = json2.refresh_token;
-        this.credentials.refresh_token = json2.refresh_token;
-        this.quotaProjectId = json2.quota_project_id;
-        this.universeDomain = json2.universe_domain || this.universeDomain;
+        this._clientId = json3.client_id;
+        this._clientSecret = json3.client_secret;
+        this._refreshToken = json3.refresh_token;
+        this.credentials.refresh_token = json3.refresh_token;
+        this.quotaProjectId = json3.quota_project_id;
+        this.universeDomain = json3.universe_domain || this.universeDomain;
       }
       fromStream(inputStream, callback) {
         if (callback) {
@@ -44729,9 +44729,9 @@ var require_refreshclient = __commonJS({
        * options.
        * @param json The input object.
        */
-      static fromJSON(json2) {
+      static fromJSON(json3) {
         const client2 = new _UserRefreshClient();
-        client2.fromJSON(json2);
+        client2.fromJSON(json3);
         return client2;
       }
     };
@@ -45585,8 +45585,8 @@ var require_filesubjecttokensupplier = __commonJS({
         if (this.formatType === "text") {
           subjectToken = rawText;
         } else if (this.formatType === "json" && this.subjectTokenFieldName) {
-          const json2 = JSON.parse(rawText);
-          subjectToken = json2[this.subjectTokenFieldName];
+          const json3 = JSON.parse(rawText);
+          subjectToken = json3[this.subjectTokenFieldName];
         }
         if (!subjectToken) {
           throw new Error("Unable to parse the subject_token from the credential_source file");
@@ -45762,9 +45762,9 @@ var require_certificatesubjecttokensupplier = __commonJS({
           throw new CertificateSourceUnavailableError(`Failed to read certificate config file at: ${configPath}`);
         }
         try {
-          const config = JSON.parse(fileContents);
-          const certPath = config?.cert_configs?.workload?.cert_path;
-          const keyPath = config?.cert_configs?.workload?.key_path;
+          const config3 = JSON.parse(fileContents);
+          const certPath = config3?.cert_configs?.workload?.cert_path;
+          const keyPath = config3?.cert_configs?.workload?.key_path;
           if (!certPath || !keyPath) {
             throw new InvalidConfigurationError(`Certificate config file (${configPath}) is missing required "cert_path" or "key_path" in the workload config.`);
           }
@@ -46039,14 +46039,14 @@ var require_awsrequestsigner = __commonJS({
       }
     };
     exports.AwsRequestSigner = AwsRequestSigner;
-    async function sign(crypto11, key, msg) {
-      return await crypto11.signWithHmacSha256(key, msg);
+    async function sign(crypto15, key, msg) {
+      return await crypto15.signWithHmacSha256(key, msg);
     }
-    async function getSigningKey(crypto11, key, dateStamp, region, serviceName) {
-      const kDate = await sign(crypto11, `AWS4${key}`, dateStamp);
-      const kRegion = await sign(crypto11, kDate, region);
-      const kService = await sign(crypto11, kRegion, serviceName);
-      const kSigning = await sign(crypto11, kService, "aws4_request");
+    async function getSigningKey(crypto15, key, dateStamp, region, serviceName) {
+      const kDate = await sign(crypto15, `AWS4${key}`, dateStamp);
+      const kRegion = await sign(crypto15, kDate, region);
+      const kService = await sign(crypto15, kRegion, serviceName);
+      const kSigning = await sign(crypto15, kService, "aws4_request");
       return kSigning;
     }
     async function generateAuthenticationHeaderMap(options2) {
@@ -47012,7 +47012,7 @@ var require_gdchclient = __commonJS({
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.GdchClient = exports.GDCH_SERVICE_ACCOUNT_TYPE = void 0;
-    var crypto11 = __require("crypto");
+    var crypto15 = __require("crypto");
     var fs5 = __require("fs");
     var https3 = __require("https");
     var oauth2client_1 = require_oauth2client();
@@ -47061,45 +47061,45 @@ var require_gdchclient = __commonJS({
           apiAudience
         });
       }
-      fromJSON(json2) {
-        if (!json2) {
+      fromJSON(json3) {
+        if (!json3) {
           throw new Error("Must pass in a JSON object containing the GDCH credentials settings.");
         }
-        if (json2.type !== exports.GDCH_SERVICE_ACCOUNT_TYPE) {
+        if (json3.type !== exports.GDCH_SERVICE_ACCOUNT_TYPE) {
           throw new Error(`The incoming JSON object does not have the "${exports.GDCH_SERVICE_ACCOUNT_TYPE}" type`);
         }
-        if (json2.format_version !== "1") {
+        if (json3.format_version !== "1") {
           throw new Error("Only format version 1 is supported.");
         }
-        if (!json2.project) {
+        if (!json3.project) {
           throw new Error("The incoming JSON object does not contain a project field");
         }
-        if (!json2.private_key_id) {
+        if (!json3.private_key_id) {
           throw new Error("The incoming JSON object does not contain a private_key_id field");
         }
-        if (!json2.private_key) {
+        if (!json3.private_key) {
           throw new Error("The incoming JSON object does not contain a private_key field");
         }
-        if (!json2.name) {
+        if (!json3.name) {
           throw new Error("The incoming JSON object does not contain a name field");
         }
-        if (!json2.token_uri) {
+        if (!json3.token_uri) {
           throw new Error("The incoming JSON object does not contain a token_uri field");
         }
-        this.projectId = json2.project;
-        this.privateKeyId = json2.private_key_id;
-        this.privateKey = json2.private_key;
-        this.serviceIdentityName = json2.name;
-        this.tokenServerUri = json2.token_uri;
-        this.caCertPath = json2.ca_cert_path;
+        this.projectId = json3.project;
+        this.privateKeyId = json3.private_key_id;
+        this.privateKey = json3.private_key;
+        this.serviceIdentityName = json3.name;
+        this.tokenServerUri = json3.token_uri;
+        this.caCertPath = json3.ca_cert_path;
         this.gdchOptions = {
           ...this.gdchOptions,
-          projectId: json2.project,
-          privateKeyId: json2.private_key_id,
-          privateKey: json2.private_key,
-          serviceIdentityName: json2.name,
-          tokenServerUri: json2.token_uri,
-          caCertPath: json2.ca_cert_path
+          projectId: json3.project,
+          privateKeyId: json3.private_key_id,
+          privateKey: json3.private_key,
+          serviceIdentityName: json3.name,
+          tokenServerUri: json3.token_uri,
+          caCertPath: json3.ca_cert_path
         };
       }
       async refreshTokenNoCache() {
@@ -47203,7 +47203,7 @@ var require_gdchclient = __commonJS({
         const encodedHeader = this.base64UrlEncode(JSON.stringify(header));
         const encodedPayload = this.base64UrlEncode(JSON.stringify(payload));
         const signingInput = `${encodedHeader}.${encodedPayload}`;
-        const signature = crypto11.sign("sha256", Buffer.from(signingInput), {
+        const signature = crypto15.sign("sha256", Buffer.from(signingInput), {
           key: this.privateKey,
           dsaEncoding: "ieee-p1363"
         });
@@ -47633,30 +47633,30 @@ var require_googleauth = __commonJS({
        * @param json The impersonated input object.
        * @returns JWT or UserRefresh Client with data
        */
-      fromImpersonatedJSON(json2) {
-        if (!json2) {
+      fromImpersonatedJSON(json3) {
+        if (!json3) {
           throw new Error("Must pass in a JSON object containing an  impersonated refresh token");
         }
-        if (json2.type !== impersonated_1.IMPERSONATED_ACCOUNT_TYPE) {
+        if (json3.type !== impersonated_1.IMPERSONATED_ACCOUNT_TYPE) {
           throw new Error(`The incoming JSON object does not have the "${impersonated_1.IMPERSONATED_ACCOUNT_TYPE}" type`);
         }
-        if (!json2.source_credentials) {
+        if (!json3.source_credentials) {
           throw new Error("The incoming JSON object does not contain a source_credentials field");
         }
-        if (!json2.service_account_impersonation_url) {
+        if (!json3.service_account_impersonation_url) {
           throw new Error("The incoming JSON object does not contain a service_account_impersonation_url field");
         }
-        const sourceClient = this.fromJSON(json2.source_credentials);
-        if (json2.service_account_impersonation_url?.length > 256) {
-          throw new RangeError(`Target principal is too long: ${json2.service_account_impersonation_url}`);
+        const sourceClient = this.fromJSON(json3.source_credentials);
+        if (json3.service_account_impersonation_url?.length > 256) {
+          throw new RangeError(`Target principal is too long: ${json3.service_account_impersonation_url}`);
         }
-        const targetPrincipal = /(?<target>[^/]+):(generateAccessToken|generateIdToken)$/.exec(json2.service_account_impersonation_url)?.groups?.target;
+        const targetPrincipal = /(?<target>[^/]+):(generateAccessToken|generateIdToken)$/.exec(json3.service_account_impersonation_url)?.groups?.target;
         if (!targetPrincipal) {
-          throw new RangeError(`Cannot extract target principal from ${json2.service_account_impersonation_url}`);
+          throw new RangeError(`Cannot extract target principal from ${json3.service_account_impersonation_url}`);
         }
-        const targetScopes = (this.scopes || json2.scopes || this.defaultScopes) ?? [];
+        const targetScopes = (this.scopes || json3.scopes || this.defaultScopes) ?? [];
         return new impersonated_1.Impersonated({
-          ...json2,
+          ...json3,
           sourceClient,
           targetPrincipal,
           targetScopes: Array.isArray(targetScopes) ? targetScopes : [targetScopes]
@@ -47704,33 +47704,33 @@ var require_googleauth = __commonJS({
        * @param options The JWT or UserRefresh options for the client
        * @returns JWT or UserRefresh Client with data
        */
-      fromJSON(json2, options2 = {}) {
+      fromJSON(json3, options2 = {}) {
         let client2;
         const preferredUniverseDomain = (0, util_1.originalOrCamelOptions)(options2).get("universe_domain");
-        if (json2.type === refreshclient_1.USER_REFRESH_ACCOUNT_TYPE) {
+        if (json3.type === refreshclient_1.USER_REFRESH_ACCOUNT_TYPE) {
           client2 = new refreshclient_1.UserRefreshClient(options2);
-          client2.fromJSON(json2);
-        } else if (json2.type === impersonated_1.IMPERSONATED_ACCOUNT_TYPE) {
-          client2 = this.fromImpersonatedJSON(json2);
-        } else if (json2.type === baseexternalclient_1.EXTERNAL_ACCOUNT_TYPE) {
+          client2.fromJSON(json3);
+        } else if (json3.type === impersonated_1.IMPERSONATED_ACCOUNT_TYPE) {
+          client2 = this.fromImpersonatedJSON(json3);
+        } else if (json3.type === baseexternalclient_1.EXTERNAL_ACCOUNT_TYPE) {
           client2 = externalclient_1.ExternalAccountClient.fromJSON({
-            ...json2,
+            ...json3,
             ...options2
           });
           client2.scopes = this.getAnyScopes();
-        } else if (json2.type === externalAccountAuthorizedUserClient_1.EXTERNAL_ACCOUNT_AUTHORIZED_USER_TYPE) {
+        } else if (json3.type === externalAccountAuthorizedUserClient_1.EXTERNAL_ACCOUNT_AUTHORIZED_USER_TYPE) {
           client2 = new externalAccountAuthorizedUserClient_1.ExternalAccountAuthorizedUserClient({
-            ...json2,
+            ...json3,
             ...options2
           });
-        } else if (json2.type === gdchclient_1.GDCH_SERVICE_ACCOUNT_TYPE) {
+        } else if (json3.type === gdchclient_1.GDCH_SERVICE_ACCOUNT_TYPE) {
           client2 = new gdchclient_1.GdchClient(options2);
-          client2.fromJSON(json2);
+          client2.fromJSON(json3);
         } else {
           options2.scopes = this.scopes;
           client2 = new jwtclient_1.JWT(options2);
           this.setGapicJWTValues(client2);
-          client2.fromJSON(json2);
+          client2.fromJSON(json3);
         }
         if (preferredUniverseDomain) {
           client2.universeDomain = preferredUniverseDomain;
@@ -47744,9 +47744,9 @@ var require_googleauth = __commonJS({
        * @param options The JWT or UserRefresh options for the client
        * @returns JWT or UserRefresh Client with data
        */
-      _cacheClientFromJSON(json2, options2) {
-        const client2 = this.fromJSON(json2, options2);
-        this.jsonContent = json2;
+      _cacheClientFromJSON(json3, options2) {
+        const client2 = this.fromJSON(json3, options2);
+        this.jsonContent = json3;
         this.cachedCredential = client2;
         return client2;
       }
@@ -48066,24 +48066,24 @@ var require_googleauth = __commonJS({
           const signed = await client2.sign(data);
           return signed.signedBlob;
         }
-        const crypto11 = (0, crypto_1.createCrypto)();
+        const crypto15 = (0, crypto_1.createCrypto)();
         if (client2 instanceof jwtclient_1.JWT && client2.key) {
-          const sign = await crypto11.sign(client2.key, data);
+          const sign = await crypto15.sign(client2.key, data);
           return sign;
         }
         const creds = await this.getCredentials();
         if (!creds.client_email) {
           throw new Error("Cannot sign data without `client_email`.");
         }
-        return this.signBlob(crypto11, creds.client_email, data, endpoint);
+        return this.signBlob(crypto15, creds.client_email, data, endpoint);
       }
-      async signBlob(crypto11, emailOrUniqueId, data, endpoint) {
+      async signBlob(crypto15, emailOrUniqueId, data, endpoint) {
         const url = new URL(endpoint + `${emailOrUniqueId}:signBlob`);
         const res = await this.request({
           method: "POST",
           url: url.href,
           data: {
-            payload: crypto11.encodeBase64StringUtf8(data)
+            payload: crypto15.encodeBase64StringUtf8(data)
           },
           retry: true,
           retryConfig: {
@@ -48536,25 +48536,25 @@ var require_error = __commonJS({
       }
       /** @returns The object representation of the error. */
       toJSON() {
-        const json2 = {
+        const json3 = {
           code: this.code,
           message: this.message
         };
         if (this.httpResponse) {
-          json2.httpResponse = {
+          json3.httpResponse = {
             status: this.httpResponse.status,
             headers: this.httpResponse.headers,
             data: this.httpResponse.data
           };
         }
         if (this.cause) {
-          json2.cause = {
+          json3.cause = {
             name: this.cause.name || "Error",
             message: this.cause.message || String(this.cause),
             stack: this.cause.stack
           };
           if ("errors" in this.cause && Array.isArray(this.cause.errors)) {
-            json2.cause.errors = this.cause.errors.map((e2) => {
+            json3.cause.errors = this.cause.errors.map((e2) => {
               if (e2 instanceof Error) {
                 return { name: e2.name, message: e2.message, stack: e2.stack };
               }
@@ -48562,7 +48562,7 @@ var require_error = __commonJS({
             });
           }
         }
-        return json2;
+        return json3;
       }
     };
     exports.FirebaseError = FirebaseError3;
@@ -48760,7 +48760,7 @@ var require_credential_internal = __commonJS({
     var google_auth_library_1 = require_src5();
     var error_1 = require_error2();
     var util = require_validator();
-    var SCOPES = [
+    var SCOPES3 = [
       "https://www.googleapis.com/auth/cloud-platform",
       "https://www.googleapis.com/auth/firebase.database",
       "https://www.googleapis.com/auth/firebase.messaging",
@@ -48770,7 +48770,7 @@ var require_credential_internal = __commonJS({
     var ApplicationDefaultCredential = class {
       constructor(httpAgent) {
         this.googleAuth = new google_auth_library_1.GoogleAuth({
-          scopes: SCOPES,
+          scopes: SCOPES3,
           clientOptions: {
             transporterOptions: {
               agent: httpAgent
@@ -48882,16 +48882,16 @@ var require_credential_internal = __commonJS({
           });
         }
       }
-      constructor(json2) {
-        if (!util.isNonNullObject(json2)) {
+      constructor(json3) {
+        if (!util.isNonNullObject(json3)) {
           throw new error_1.FirebaseAppError({
             code: error_1.AppErrorCode.INVALID_CREDENTIAL,
             message: "Service account must be an object."
           });
         }
-        copyAttr(this, json2, "projectId", "project_id");
-        copyAttr(this, json2, "privateKey", "private_key");
-        copyAttr(this, json2, "clientEmail", "client_email");
+        copyAttr(this, json3, "projectId", "project_id");
+        copyAttr(this, json3, "privateKey", "private_key");
+        copyAttr(this, json3, "clientEmail", "client_email");
         let errorMessage;
         if (!util.isNonEmptyString(this.projectId)) {
           errorMessage = 'Service account object must contain a string "project_id" property.';
@@ -48968,12 +48968,12 @@ var require_credential_internal = __commonJS({
           });
         }
       }
-      static validateFromJSON(json2) {
+      static validateFromJSON(json3) {
         const creds = { clientId: "", clientSecret: "", refreshToken: "", type: "" };
-        copyAttr(creds, json2, "clientId", "client_id");
-        copyAttr(creds, json2, "clientSecret", "client_secret");
-        copyAttr(creds, json2, "refreshToken", "refresh_token");
-        copyAttr(creds, json2, "type", "type");
+        copyAttr(creds, json3, "clientId", "client_id");
+        copyAttr(creds, json3, "clientSecret", "client_secret");
+        copyAttr(creds, json3, "refreshToken", "refresh_token");
+        copyAttr(creds, json3, "type", "type");
         let errorMessage;
         if (!util.isNonEmptyString(creds.clientId)) {
           errorMessage = 'Refresh token must contain a "client_id" property.';
@@ -49043,8 +49043,8 @@ var require_credential_internal = __commonJS({
           });
         }
       }
-      static validateFromJSON(json2) {
-        const { client_id: clientId, client_secret: clientSecret, refresh_token: refreshToken2, type } = json2["source_credentials"];
+      static validateFromJSON(json3) {
+        const { client_id: clientId, client_secret: clientSecret, refresh_token: refreshToken2, type } = json3["source_credentials"];
         let errorMessage;
         if (!util.isNonEmptyString(clientId)) {
           errorMessage = 'Impersonated Service Account must contain a "source_credentials.client_id" property.';
@@ -49075,7 +49075,7 @@ var require_credential_internal = __commonJS({
     function populateGoogleAuth(keyFile, httpAgent) {
       let client2;
       const auth2 = new google_auth_library_1.GoogleAuth({
-        scopes: SCOPES,
+        scopes: SCOPES3,
         clientOptions: {
           transporterOptions: {
             agent: httpAgent
@@ -49981,12 +49981,12 @@ var require_lifecycle = __commonJS({
     }
     exports.FIREBASE_CONFIG_VAR = "FIREBASE_CONFIG";
     function loadOptionsFromEnvVar() {
-      const config = process.env[exports.FIREBASE_CONFIG_VAR];
-      if (!validator.isNonEmptyString(config)) {
+      const config3 = process.env[exports.FIREBASE_CONFIG_VAR];
+      if (!validator.isNonEmptyString(config3)) {
         return {};
       }
       try {
-        const contents = config.startsWith("{") ? config : fs5.readFileSync(config, "utf8");
+        const contents = config3.startsWith("{") ? config3 : fs5.readFileSync(config3, "utf8");
         return JSON.parse(contents);
       } catch (error) {
         throw new error_1.FirebaseAppError({
@@ -51374,8 +51374,8 @@ var require_load_balancer = __commonJS({
     function registerDefaultLoadBalancerType(typeName) {
       defaultLoadBalancerType = typeName;
     }
-    function createLoadBalancer(config, channelControlHelper) {
-      const typeName = config.getLoadBalancerName();
+    function createLoadBalancer(config3, channelControlHelper) {
+      const typeName = config3.getLoadBalancerName();
       if (typeName in registeredLoadBalancerTypes) {
         return new registeredLoadBalancerTypes[typeName].LoadBalancer(channelControlHelper);
       } else {
@@ -51408,9 +51408,9 @@ var require_load_balancer = __commonJS({
       return new registeredLoadBalancerTypes[defaultLoadBalancerType].LoadBalancingConfig();
     }
     function selectLbConfigFromList(configs, fallbackTodefault = false) {
-      for (const config of configs) {
+      for (const config3 of configs) {
         try {
-          return parseLoadBalancingConfig(config);
+          return parseLoadBalancingConfig(config3);
         } catch (e2) {
           (0, logging_1.log)(constants_1.LogVerbosity.DEBUG, "Config parsing failed with error", e2.message);
           continue;
@@ -51639,8 +51639,8 @@ var require_service_config = __commonJS({
       }
       if ("loadBalancingConfig" in obj) {
         if (Array.isArray(obj.loadBalancingConfig)) {
-          for (const config of obj.loadBalancingConfig) {
-            result.loadBalancingConfig.push(validateLoadBalancingConfig(config));
+          for (const config3 of obj.loadBalancingConfig) {
+            result.loadBalancingConfig.push(validateLoadBalancingConfig(config3));
           }
         } else {
           throw new Error("Invalid service config: invalid loadBalancingConfig");
@@ -51728,8 +51728,8 @@ var require_service_config = __commonJS({
       if (!Array.isArray(obj)) {
         throw new Error("Invalid service config list");
       }
-      for (const config of obj) {
-        const validatedConfig = validateCanaryConfig(config);
+      for (const config3 of obj) {
+        const validatedConfig = validateCanaryConfig(config3);
         if (typeof validatedConfig.percentage === "number" && percentage > validatedConfig.percentage) {
           continue;
         }
@@ -52186,9 +52186,9 @@ var require_resolving_load_balancer = __commonJS({
       return false;
     }
     function findMatchingConfig(service, method, methodConfigs, matchLevel) {
-      for (const config of methodConfigs) {
-        if (hasMatchingName(service, method, config, matchLevel)) {
-          return config;
+      for (const config3 of methodConfigs) {
+        if (hasMatchingName(service, method, config3, matchLevel)) {
+          return config3;
         }
       }
       return null;
@@ -53743,28 +53743,28 @@ var require_client_interceptors = __commonJS({
     };
     exports.RequesterBuilder = RequesterBuilder;
     var defaultListener = {
-      onReceiveMetadata: (metadata, next) => {
-        next(metadata);
+      onReceiveMetadata: (metadata, next2) => {
+        next2(metadata);
       },
-      onReceiveMessage: (message2, next) => {
-        next(message2);
+      onReceiveMessage: (message2, next2) => {
+        next2(message2);
       },
-      onReceiveStatus: (status, next) => {
-        next(status);
+      onReceiveStatus: (status, next2) => {
+        next2(status);
       }
     };
     var defaultRequester = {
-      start: (metadata, listener, next) => {
-        next(metadata, listener);
+      start: (metadata, listener, next2) => {
+        next2(metadata, listener);
       },
-      sendMessage: (message2, next) => {
-        next(message2);
+      sendMessage: (message2, next2) => {
+        next2(message2);
       },
-      halfClose: (next) => {
-        next();
+      halfClose: (next2) => {
+        next2();
       },
-      cancel: (next) => {
-        next();
+      cancel: (next2) => {
+        next2();
       }
     };
     var InterceptingCall = class {
@@ -55996,7 +55996,7 @@ var require_umd = __commonJS({
           return this.high === 0 && this.low === 0;
         };
         LongPrototype.eqz = LongPrototype.isZero;
-        LongPrototype.isNegative = function isNegative() {
+        LongPrototype.isNegative = function isNegative2() {
           return !this.unsigned && this.high < 0;
         };
         LongPrototype.isPositive = function isPositive() {
@@ -57493,9 +57493,9 @@ var require_namespace = __commonJS({
     var Type;
     var Service;
     var Enum;
-    Namespace.fromJSON = function fromJSON2(name5, json2, depth) {
+    Namespace.fromJSON = function fromJSON2(name5, json3, depth) {
       depth = util.checkDepth(depth);
-      return new Namespace(name5, json2.options).addJSON(json2.nested, depth);
+      return new Namespace(name5, json3.options).addJSON(json3.nested, depth);
     };
     function arrayToJSON(array2, toJSONOptions) {
       if (!(array2 && array2.length))
@@ -57623,7 +57623,7 @@ var require_namespace = __commonJS({
       object.onRemove(this);
       return clearCache(this);
     };
-    Namespace.prototype.define = function define2(path3, json2) {
+    Namespace.prototype.define = function define2(path3, json3) {
       if (util.isString(path3))
         path3 = path3.split(".");
       else if (!Array.isArray(path3))
@@ -57642,8 +57642,8 @@ var require_namespace = __commonJS({
         } else
           ptr.add(ptr = new Namespace(part));
       }
-      if (json2)
-        ptr.addJSON(json2);
+      if (json3)
+        ptr.addJSON(json3);
       return ptr;
     };
     Namespace.prototype.resolveAll = function resolveAll() {
@@ -57776,8 +57776,8 @@ var require_mapfield = __commonJS({
       this.resolvedKeyType = null;
       this.map = true;
     }
-    MapField.fromJSON = function fromJSON2(name5, json2) {
-      return new MapField(name5, json2.id, json2.keyType, json2.type, json2.options, json2.comment);
+    MapField.fromJSON = function fromJSON2(name5, json3) {
+      return new MapField(name5, json3.id, json3.keyType, json3.type, json3.options, json3.comment);
     };
     MapField.prototype.toJSON = function toJSON(toJSONOptions) {
       var keepComments = toJSONOptions ? Boolean(toJSONOptions.keepComments) : false;
@@ -57848,8 +57848,8 @@ var require_method = __commonJS({
       this.comment = comment;
       this.parsedOptions = parsedOptions;
     }
-    Method.fromJSON = function fromJSON2(name5, json2) {
-      return new Method(name5, json2.type, json2.requestType, json2.responseType, json2.requestStream, json2.responseStream, json2.options, json2.comment, json2.parsedOptions);
+    Method.fromJSON = function fromJSON2(name5, json3) {
+      return new Method(name5, json3.type, json3.requestType, json3.responseType, json3.requestStream, json3.responseStream, json3.options, json3.comment, json3.parsedOptions);
     };
     Method.prototype.toJSON = function toJSON(toJSONOptions) {
       var keepComments = toJSONOptions ? Boolean(toJSONOptions.keepComments) : false;
@@ -57898,17 +57898,17 @@ var require_service2 = __commonJS({
       this.methods = {};
       this._methodsArray = null;
     }
-    Service.fromJSON = function fromJSON2(name5, json2, depth) {
+    Service.fromJSON = function fromJSON2(name5, json3, depth) {
       depth = util.checkDepth(depth);
-      var service = new Service(name5, json2.options);
-      if (json2.methods)
-        for (var names = Object.keys(json2.methods), i2 = 0; i2 < names.length; ++i2)
-          service.add(Method.fromJSON(names[i2], json2.methods[names[i2]]));
-      if (json2.nested)
-        service.addJSON(json2.nested, depth);
-      if (json2.edition)
-        service._edition = json2.edition;
-      service.comment = json2.comment;
+      var service = new Service(name5, json3.options);
+      if (json3.methods)
+        for (var names = Object.keys(json3.methods), i2 = 0; i2 < names.length; ++i2)
+          service.add(Method.fromJSON(names[i2], json3.methods[names[i2]]));
+      if (json3.nested)
+        service.addJSON(json3.nested, depth);
+      if (json3.edition)
+        service._edition = json3.edition;
+      service.comment = json3.comment;
       service._defaultEdition = "proto3";
       return service;
     };
@@ -58594,40 +58594,40 @@ var require_type = __commonJS({
       delete type.verify;
       return type;
     }
-    Type.fromJSON = function fromJSON2(name5, json2, depth) {
+    Type.fromJSON = function fromJSON2(name5, json3, depth) {
       if (depth === void 0)
         depth = 0;
       if (depth > util.nestingLimit)
         throw Error("max depth exceeded");
-      var type = new Type(name5, json2.options);
-      type.extensions = json2.extensions;
-      type.reserved = json2.reserved;
-      var names = Object.keys(json2.fields), i2 = 0;
+      var type = new Type(name5, json3.options);
+      type.extensions = json3.extensions;
+      type.reserved = json3.reserved;
+      var names = Object.keys(json3.fields), i2 = 0;
       for (; i2 < names.length; ++i2)
         type.add(
-          (typeof json2.fields[names[i2]].keyType !== "undefined" ? MapField.fromJSON : Field2.fromJSON)(names[i2], json2.fields[names[i2]])
+          (typeof json3.fields[names[i2]].keyType !== "undefined" ? MapField.fromJSON : Field2.fromJSON)(names[i2], json3.fields[names[i2]])
         );
-      if (json2.oneofs)
-        for (names = Object.keys(json2.oneofs), i2 = 0; i2 < names.length; ++i2)
-          type.add(OneOf.fromJSON(names[i2], json2.oneofs[names[i2]]));
-      if (json2.nested)
-        for (names = Object.keys(json2.nested), i2 = 0; i2 < names.length; ++i2) {
-          var nested2 = json2.nested[names[i2]];
+      if (json3.oneofs)
+        for (names = Object.keys(json3.oneofs), i2 = 0; i2 < names.length; ++i2)
+          type.add(OneOf.fromJSON(names[i2], json3.oneofs[names[i2]]));
+      if (json3.nested)
+        for (names = Object.keys(json3.nested), i2 = 0; i2 < names.length; ++i2) {
+          var nested2 = json3.nested[names[i2]];
           type.add(
             // most to least likely
             (nested2.id !== void 0 ? Field2.fromJSON : nested2.fields !== void 0 ? Type.fromJSON : nested2.values !== void 0 ? Enum.fromJSON : nested2.methods !== void 0 ? Service.fromJSON : Namespace.fromJSON)(names[i2], nested2, depth + 1)
           );
         }
-      if (json2.extensions && json2.extensions.length)
-        type.extensions = json2.extensions;
-      if (json2.reserved && json2.reserved.length)
-        type.reserved = json2.reserved;
-      if (json2.group)
+      if (json3.extensions && json3.extensions.length)
+        type.extensions = json3.extensions;
+      if (json3.reserved && json3.reserved.length)
+        type.reserved = json3.reserved;
+      if (json3.group)
         type.group = true;
-      if (json2.comment)
-        type.comment = json2.comment;
-      if (json2.edition)
-        type._edition = json2.edition;
+      if (json3.comment)
+        type.comment = json3.comment;
+      if (json3.edition)
+        type._edition = json3.edition;
       type._defaultEdition = "proto3";
       return type;
     };
@@ -58842,13 +58842,13 @@ var require_root = __commonJS({
       this._edition = "proto2";
       this._fullyQualifiedObjects = {};
     }
-    Root.fromJSON = function fromJSON2(json2, root, depth) {
+    Root.fromJSON = function fromJSON2(json3, root, depth) {
       depth = util.checkDepth(depth);
       if (!root)
         root = new Root();
-      if (json2.options)
-        root.setOptions(json2.options);
-      return root.addJSON(json2.nested, depth).resolveAll();
+      if (json3.options)
+        root.setOptions(json3.options);
+      return root.addJSON(json3.nested, depth).resolveAll();
     };
     Root.prototype.resolvePath = util.path.resolve;
     Root.prototype.fetch = util.fetch;
@@ -59390,10 +59390,10 @@ var require_field = __commonJS({
     var util = require_util3();
     var Type;
     var ruleRe = /^required|optional|repeated$/;
-    Field2.fromJSON = function fromJSON2(name5, json2) {
-      var field2 = new Field2(name5, json2.id, json2.type, json2.rule, json2.extend, json2.options, json2.comment);
-      if (json2.edition)
-        field2._edition = json2.edition;
+    Field2.fromJSON = function fromJSON2(name5, json3) {
+      var field2 = new Field2(name5, json3.id, json3.type, json3.rule, json3.extend, json3.options, json3.comment);
+      if (json3.edition)
+        field2._edition = json3.edition;
       field2._defaultEdition = "proto3";
       return field2;
     };
@@ -59596,8 +59596,8 @@ var require_oneof = __commonJS({
       this.fieldsArray = [];
       this.comment = comment;
     }
-    OneOf.fromJSON = function fromJSON2(name5, json2) {
-      return new OneOf(name5, json2.oneof, json2.options, json2.comment);
+    OneOf.fromJSON = function fromJSON2(name5, json3) {
+      return new OneOf(name5, json3.oneof, json3.options, json3.comment);
     };
     OneOf.prototype.toJSON = function toJSON(toJSONOptions) {
       var keepComments = toJSONOptions ? Boolean(toJSONOptions.keepComments) : false;
@@ -59922,11 +59922,11 @@ var require_enum = __commonJS({
       });
       return this;
     };
-    Enum.fromJSON = function fromJSON2(name5, json2) {
-      var enm = new Enum(name5, json2.values, json2.options, json2.comment, json2.comments);
-      enm.reserved = json2.reserved;
-      if (json2.edition)
-        enm._edition = json2.edition;
+    Enum.fromJSON = function fromJSON2(name5, json3) {
+      var enm = new Enum(name5, json3.values, json3.options, json3.comment, json3.comments);
+      enm.reserved = json3.reserved;
+      if (json3.edition)
+        enm._edition = json3.edition;
       enm._defaultEdition = "proto3";
       return enm;
     };
@@ -60185,7 +60185,7 @@ var require_tokenize = __commonJS({
         }
         return endOffset;
       }
-      function next() {
+      function next2() {
         if (stack.length > 0)
           return stack.shift();
         if (stringDelim)
@@ -60287,7 +60287,7 @@ var require_tokenize = __commonJS({
       }
       function peek() {
         if (!stack.length) {
-          var token = next();
+          var token = next2();
           if (token === null)
             return null;
           push(token);
@@ -60297,7 +60297,7 @@ var require_tokenize = __commonJS({
       function skip(expected, optional) {
         var actual = peek(), equals = actual === expected;
         if (equals) {
-          next();
+          next2();
           return true;
         }
         if (!optional)
@@ -60326,7 +60326,7 @@ var require_tokenize = __commonJS({
         return ret;
       }
       return Object.defineProperty({
-        next,
+        next: next2,
         peek,
         push,
         skip,
@@ -60376,7 +60376,7 @@ var require_parse2 = __commonJS({
       if (!options2)
         options2 = parse.defaults;
       var preferTrailingComment = options2.preferTrailingComment || false;
-      var tn = tokenize(source, options2.alternateCommentMode || false), next = tn.next, push = tn.push, peek = tn.peek, skip = tn.skip, cmnt = tn.cmnt;
+      var tn = tokenize(source, options2.alternateCommentMode || false), next2 = tn.next, push = tn.push, peek = tn.peek, skip = tn.skip, cmnt = tn.cmnt;
       var head = true, pkg, imports, weakImports, edition = "proto2";
       var ptr = root;
       var topLevelObjects = [];
@@ -60402,16 +60402,16 @@ var require_parse2 = __commonJS({
       function readString() {
         var values = [], token2;
         do {
-          if ((token2 = next()) !== '"' && token2 !== "'")
+          if ((token2 = next2()) !== '"' && token2 !== "'")
             throw illegal(token2);
-          values.push(next());
+          values.push(next2());
           skip(token2);
           token2 = peek();
         } while (token2 === '"' || token2 === "'");
         return values.join("");
       }
       function readValue(acceptTypeRef) {
-        var token2 = next();
+        var token2 = next2();
         switch (token2) {
           case "'":
           case '"':
@@ -60447,7 +60447,7 @@ var require_parse2 = __commonJS({
             }
           } else {
             try {
-              target.push([start = parseId(next()), skip("to", true) ? parseId(next()) : start]);
+              target.push([start = parseId(next2()), skip("to", true) ? parseId(next2()) : start]);
             } catch (err) {
               if (acceptStrings && typeRefRe.test(token2) && edition >= 2023) {
                 target.push(token2);
@@ -60527,7 +60527,7 @@ var require_parse2 = __commonJS({
       function parsePackage() {
         if (pkg !== void 0)
           throw illegal("package");
-        pkg = next();
+        pkg = next2();
         if (!typeRefRe.test(pkg))
           throw illegal(pkg, "name");
         ptr = ptr.define(pkg);
@@ -60539,10 +60539,10 @@ var require_parse2 = __commonJS({
         switch (token2) {
           case "weak":
             whichImports = weakImports || (weakImports = []);
-            next();
+            next2();
             break;
           case "public":
-            next();
+            next2();
           // eslint-disable-next-line no-fallthrough
           default:
             whichImports = imports || (imports = []);
@@ -60600,7 +60600,7 @@ var require_parse2 = __commonJS({
         }
         if (skip("{", true)) {
           var token2;
-          while ((token2 = next()) !== "}")
+          while ((token2 = next2()) !== "}")
             fnIf(token2);
           skip(";", true);
         } else {
@@ -60616,7 +60616,7 @@ var require_parse2 = __commonJS({
           depth = 0;
         if (depth > util.nestingLimit)
           throw Error("max depth exceeded");
-        if (!nameRe.test(token2 = next()))
+        if (!nameRe.test(token2 = next2()))
           throw illegal(token2, "type name");
         var type = new Type(token2);
         ifBlock(type, function parseType_block(token3) {
@@ -60666,22 +60666,22 @@ var require_parse2 = __commonJS({
         }
       }
       function parseField(parent, rule, extend, depth) {
-        var type = next();
+        var type = next2();
         if (type === "group") {
           parseGroup(parent, rule, depth);
           return;
         }
         while (type.endsWith(".") || peek().startsWith(".")) {
-          type += next();
+          type += next2();
         }
         if (!typeRefRe.test(type))
           throw illegal(type, "type");
-        var name5 = next();
+        var name5 = next2();
         if (!nameRe.test(name5))
           throw illegal(name5, "name");
         name5 = applyCase(name5);
         skip("=");
-        var field2 = new Field2(name5, parseId(next()), type, rule, extend);
+        var field2 = new Field2(name5, parseId(next2()), type, rule, extend);
         ifBlock(field2, function parseField_block(token2) {
           if (token2 === "option") {
             parseOption(field2, token2);
@@ -60711,14 +60711,14 @@ var require_parse2 = __commonJS({
         if (edition >= 2023) {
           throw illegal("group");
         }
-        var name5 = next();
+        var name5 = next2();
         if (!nameRe.test(name5))
           throw illegal(name5, "name");
         var fieldName = util.lcFirst(name5);
         if (name5 === fieldName)
           name5 = util.ucFirst(name5);
         skip("=");
-        var id = parseId(next());
+        var id = parseId(next2());
         var type = new Type(name5);
         type.group = true;
         var field2 = new Field2(fieldName, id, name5, rule);
@@ -60758,19 +60758,19 @@ var require_parse2 = __commonJS({
       }
       function parseMapField(parent) {
         skip("<");
-        var keyType = next();
+        var keyType = next2();
         if (types3.mapKey[keyType] === void 0)
           throw illegal(keyType, "type");
         skip(",");
-        var valueType = next();
+        var valueType = next2();
         if (!typeRefRe.test(valueType))
           throw illegal(valueType, "type");
         skip(">");
-        var name5 = next();
+        var name5 = next2();
         if (!nameRe.test(name5))
           throw illegal(name5, "name");
         skip("=");
-        var field2 = new MapField(applyCase(name5), parseId(next()), keyType, valueType);
+        var field2 = new MapField(applyCase(name5), parseId(next2()), keyType, valueType);
         ifBlock(field2, function parseMapField_block(token2) {
           if (token2 === "option") {
             parseOption(field2, token2);
@@ -60783,7 +60783,7 @@ var require_parse2 = __commonJS({
         parent.add(field2);
       }
       function parseOneOf(parent, token2, depth) {
-        if (!nameRe.test(token2 = next()))
+        if (!nameRe.test(token2 = next2()))
           throw illegal(token2, "name");
         var oneof = new OneOf(applyCase(token2));
         ifBlock(oneof, function parseOneOf_block(token3) {
@@ -60798,7 +60798,7 @@ var require_parse2 = __commonJS({
         parent.add(oneof);
       }
       function parseEnum(parent, token2) {
-        if (!nameRe.test(token2 = next()))
+        if (!nameRe.test(token2 = next2()))
           throw illegal(token2, "name");
         var enm = new Enum(token2);
         ifBlock(enm, function parseEnum_block(token3) {
@@ -60824,7 +60824,7 @@ var require_parse2 = __commonJS({
         if (!nameRe.test(token2))
           throw illegal(token2, "name");
         skip("=");
-        var value = parseId(next(), true), dummy = {
+        var value = parseId(next2(), true), dummy = {
           options: void 0
         };
         dummy.getOption = function(name5) {
@@ -60852,14 +60852,14 @@ var require_parse2 = __commonJS({
         var propName;
         var isOption = true;
         if (token2 === "option") {
-          token2 = next();
+          token2 = next2();
         }
         while (token2 !== "=") {
           if (token2 === null) {
             throw illegal(token2, "end of input");
           }
           if (token2 === "(") {
-            var parensValue = next();
+            var parensValue = next2();
             skip(")");
             token2 = "(" + parensValue + ")";
           }
@@ -60875,7 +60875,7 @@ var require_parse2 = __commonJS({
           } else {
             propName = propName ? propName += token2 : token2;
           }
-          token2 = next();
+          token2 = next2();
         }
         var name5 = propName ? option.concat(propName) : option;
         var optionValue = parseOptionValue(parent, name5);
@@ -60891,7 +60891,7 @@ var require_parse2 = __commonJS({
         if (skip("{", true)) {
           var objectResult = {};
           while (!skip("}", true)) {
-            if (!nameRe.test(token = next())) {
+            if (!nameRe.test(token = next2())) {
               throw illegal(token, "name");
             }
             if (token === null) {
@@ -60959,7 +60959,7 @@ var require_parse2 = __commonJS({
           depth = 0;
         if (depth > util.recursionLimit)
           throw Error("max depth exceeded");
-        if (!nameRe.test(token2 = next()))
+        if (!nameRe.test(token2 = next2()))
           throw illegal(token2, "service name");
         var service = new Service(token2);
         ifBlock(service, function parseService_block(token3) {
@@ -60979,13 +60979,13 @@ var require_parse2 = __commonJS({
       function parseMethod(parent, token2) {
         var commentText = cmnt();
         var type = token2;
-        if (!nameRe.test(token2 = next()))
+        if (!nameRe.test(token2 = next2()))
           throw illegal(token2, "name");
         var name5 = token2, requestType, requestStream, responseType, responseStream;
         skip("(");
         if (skip("stream", true))
           requestStream = true;
-        if (!typeRefRe.test(token2 = next()))
+        if (!typeRefRe.test(token2 = next2()))
           throw illegal(token2);
         requestType = token2;
         skip(")");
@@ -60993,7 +60993,7 @@ var require_parse2 = __commonJS({
         skip("(");
         if (skip("stream", true))
           responseStream = true;
-        if (!typeRefRe.test(token2 = next()))
+        if (!typeRefRe.test(token2 = next2()))
           throw illegal(token2);
         responseType = token2;
         skip(")");
@@ -61009,7 +61009,7 @@ var require_parse2 = __commonJS({
         parent.add(method);
       }
       function parseExtension(parent, token2, depth) {
-        if (!typeRefRe.test(token2 = next()))
+        if (!typeRefRe.test(token2 = next2()))
           throw illegal(token2, "reference");
         var reference = token2;
         ifBlock(null, function parseExtension_block(token3) {
@@ -61035,7 +61035,7 @@ var require_parse2 = __commonJS({
         });
       }
       var token;
-      while ((token = next()) !== null) {
+      while ((token = next2()) !== null) {
         switch (token) {
           case "package":
             if (!head)
@@ -61087,12 +61087,12 @@ var require_common3 = __commonJS({
     "use strict";
     module.exports = common;
     var commonRe = /\/|\./;
-    function common(name5, json2) {
+    function common(name5, json3) {
       if (!commonRe.test(name5)) {
         name5 = "google/protobuf/" + name5 + ".proto";
-        json2 = { nested: { google: { nested: { protobuf: { nested: json2 } } } } };
+        json3 = { nested: { google: { nested: { protobuf: { nested: json3 } } } } };
       }
-      common[name5] = json2;
+      common[name5] = json3;
     }
     common("any", {
       /**
@@ -64010,9 +64010,9 @@ var require_src7 = __commonJS({
       return createPackageDefinition(loadedRoot, options2);
     }
     exports.loadSync = loadSync;
-    function fromJSON2(json2, options2) {
+    function fromJSON2(json3, options2) {
       options2 = options2 || {};
-      const loadedRoot = Protobuf.Root.fromJSON(json2);
+      const loadedRoot = Protobuf.Root.fromJSON(json3);
       loadedRoot.resolveAll();
       return createPackageDefinition(loadedRoot, options2);
     }
@@ -64277,27 +64277,27 @@ var require_channelz = __commonJS({
       const result = [];
       return result.concat(...bytePairs);
     }
-    function isIPv6MappedIPv4(ipAddress) {
-      return (0, net_1.isIPv6)(ipAddress) && ipAddress.toLowerCase().startsWith("::ffff:") && (0, net_1.isIPv4)(ipAddress.substring(7));
+    function isIPv6MappedIPv4(ipAddress2) {
+      return (0, net_1.isIPv6)(ipAddress2) && ipAddress2.toLowerCase().startsWith("::ffff:") && (0, net_1.isIPv4)(ipAddress2.substring(7));
     }
-    function ipv4AddressStringToBuffer(ipAddress) {
-      return Buffer.from(Uint8Array.from(ipAddress.split(".").map((segment) => Number.parseInt(segment))));
+    function ipv4AddressStringToBuffer(ipAddress2) {
+      return Buffer.from(Uint8Array.from(ipAddress2.split(".").map((segment) => Number.parseInt(segment))));
     }
-    function ipAddressStringToBuffer(ipAddress) {
-      if ((0, net_1.isIPv4)(ipAddress)) {
-        return ipv4AddressStringToBuffer(ipAddress);
-      } else if (isIPv6MappedIPv4(ipAddress)) {
-        return ipv4AddressStringToBuffer(ipAddress.substring(7));
-      } else if ((0, net_1.isIPv6)(ipAddress)) {
+    function ipAddressStringToBuffer(ipAddress2) {
+      if ((0, net_1.isIPv4)(ipAddress2)) {
+        return ipv4AddressStringToBuffer(ipAddress2);
+      } else if (isIPv6MappedIPv4(ipAddress2)) {
+        return ipv4AddressStringToBuffer(ipAddress2.substring(7));
+      } else if ((0, net_1.isIPv6)(ipAddress2)) {
         let leftSection;
         let rightSection;
-        const doubleColonIndex = ipAddress.indexOf("::");
+        const doubleColonIndex = ipAddress2.indexOf("::");
         if (doubleColonIndex === -1) {
-          leftSection = ipAddress;
+          leftSection = ipAddress2;
           rightSection = "";
         } else {
-          leftSection = ipAddress.substring(0, doubleColonIndex);
-          rightSection = ipAddress.substring(doubleColonIndex + 2);
+          leftSection = ipAddress2.substring(0, doubleColonIndex);
+          rightSection = ipAddress2.substring(doubleColonIndex + 2);
         }
         const leftBuffer = Buffer.from(parseIPv6Chunk(leftSection));
         const rightBuffer = Buffer.from(parseIPv6Chunk(rightSection));
@@ -67832,9 +67832,9 @@ var require_resolving_call = __commonJS({
           return;
         }
         this.configReceivedTime = /* @__PURE__ */ new Date();
-        const config = configResult.config;
-        if (config.status !== constants_1.Status.OK) {
-          const { code, details } = (0, control_plane_status_1.restrictControlPlaneStatusCode)(config.status, "Failed to route call to method " + this.method);
+        const config3 = configResult.config;
+        if (config3.status !== constants_1.Status.OK) {
+          const { code, details } = (0, control_plane_status_1.restrictControlPlaneStatusCode)(config3.status, "Failed to route call to method " + this.method);
           this.outputStatus({
             code,
             details,
@@ -67842,17 +67842,17 @@ var require_resolving_call = __commonJS({
           });
           return;
         }
-        if (config.methodConfig.timeout) {
+        if (config3.methodConfig.timeout) {
           const configDeadline = /* @__PURE__ */ new Date();
-          configDeadline.setSeconds(configDeadline.getSeconds() + config.methodConfig.timeout.seconds);
-          configDeadline.setMilliseconds(configDeadline.getMilliseconds() + config.methodConfig.timeout.nanos / 1e6);
+          configDeadline.setSeconds(configDeadline.getSeconds() + config3.methodConfig.timeout.seconds);
+          configDeadline.setMilliseconds(configDeadline.getMilliseconds() + config3.methodConfig.timeout.nanos / 1e6);
           this.deadline = (0, deadline_1.minDeadline)(this.deadline, configDeadline);
           this.runDeadlineTimer();
         }
-        this.filterStackFactory.push(config.dynamicFilterFactories);
+        this.filterStackFactory.push(config3.dynamicFilterFactories);
         this.filterStack = this.filterStackFactory.createFilter();
         this.filterStack.sendMetadata(Promise.resolve(this.metadata)).then((filteredMetadata) => {
-          this.child = this.channel.createRetryingCall(config, this.method, this.host, this.credentials, this.deadline, this.callNumber);
+          this.child = this.channel.createRetryingCall(config3, this.method, this.host, this.credentials, this.deadline, this.callNumber);
           if (this.traceEnabled) {
             this.trace("Created child [" + this.child.getCallNumber() + "]");
           }
@@ -70347,30 +70347,30 @@ var require_server_interceptors = __commonJS({
     };
     exports.ResponderBuilder = ResponderBuilder;
     var defaultServerListener = {
-      onReceiveMetadata: (metadata, next) => {
-        next(metadata);
+      onReceiveMetadata: (metadata, next2) => {
+        next2(metadata);
       },
-      onReceiveMessage: (message2, next) => {
-        next(message2);
+      onReceiveMessage: (message2, next2) => {
+        next2(message2);
       },
-      onReceiveHalfClose: (next) => {
-        next();
+      onReceiveHalfClose: (next2) => {
+        next2();
       },
       onCancel: () => {
       }
     };
     var defaultResponder = {
-      start: (next) => {
-        next();
+      start: (next2) => {
+        next2();
       },
-      sendMetadata: (metadata, next) => {
-        next(metadata);
+      sendMetadata: (metadata, next2) => {
+        next2(metadata);
       },
-      sendMessage: (message2, next) => {
-        next(message2);
+      sendMessage: (message2, next2) => {
+        next2(message2);
       },
-      sendStatus: (status, next) => {
-        next(status);
+      sendStatus: (status, next2) => {
+        next2(status);
       }
     };
     var ServerInterceptingCall = class {
@@ -72895,8 +72895,8 @@ var require_certificate_provider = __commonJS({
     }
     var readFilePromise = (0, util_1.promisify)(fs5.readFile);
     var FileWatcherCertificateProvider = class {
-      constructor(config) {
-        this.config = config;
+      constructor(config3) {
+        this.config = config3;
         this.refreshTimer = null;
         this.fileResultPromise = null;
         this.latestCaUpdate = void 0;
@@ -72904,13 +72904,13 @@ var require_certificate_provider = __commonJS({
         this.latestIdentityUpdate = void 0;
         this.identityListeners = /* @__PURE__ */ new Set();
         this.lastUpdateTime = null;
-        if (config.certificateFile === void 0 !== (config.privateKeyFile === void 0)) {
+        if (config3.certificateFile === void 0 !== (config3.privateKeyFile === void 0)) {
           throw new Error("certificateFile and privateKeyFile must be set or unset together");
         }
-        if (config.certificateFile === void 0 && config.caCertificateFile === void 0) {
+        if (config3.certificateFile === void 0 && config3.caCertificateFile === void 0) {
           throw new Error("At least one of certificateFile and caCertificateFile must be set");
         }
-        trace2("File watcher constructed with config " + JSON.stringify(config));
+        trace2("File watcher constructed with config " + JSON.stringify(config3));
       }
       updateCertificates() {
         if (this.fileResultPromise) {
@@ -74905,11 +74905,11 @@ var require_logging_utils2 = __commonJS({
         return (fields, ...args) => {
           var _a6;
           const severity = (_a6 = fields.severity) !== null && _a6 !== void 0 ? _a6 : LogSeverity.INFO;
-          const json2 = Object.assign({
+          const json3 = Object.assign({
             severity,
             message: util.format(...args)
           }, fields);
-          const jsonString = JSON.stringify(json2);
+          const jsonString = JSON.stringify(json3);
           if (debugLogger) {
             debugLogger(fields, jsonString);
           } else {
@@ -75379,22 +75379,22 @@ var require_crypto5 = __commonJS({
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.NodeCrypto = void 0;
-    var crypto11 = __require("crypto");
+    var crypto15 = __require("crypto");
     var NodeCrypto = class {
       async sha256DigestBase64(str) {
-        return crypto11.createHash("sha256").update(str).digest("base64");
+        return crypto15.createHash("sha256").update(str).digest("base64");
       }
       randomBytesBase64(count) {
-        return crypto11.randomBytes(count).toString("base64");
+        return crypto15.randomBytes(count).toString("base64");
       }
       async verify(pubkey, data, signature) {
-        const verifier = crypto11.createVerify("RSA-SHA256");
+        const verifier = crypto15.createVerify("RSA-SHA256");
         verifier.update(data);
         verifier.end();
         return verifier.verify(pubkey, signature, "base64");
       }
       async sign(privateKey, data) {
-        const signer = crypto11.createSign("RSA-SHA256");
+        const signer = crypto15.createSign("RSA-SHA256");
         signer.update(data);
         signer.end();
         return signer.sign(privateKey, "base64");
@@ -75412,7 +75412,7 @@ var require_crypto5 = __commonJS({
        *   string in hexadecimal encoding.
        */
       async sha256DigestHex(str) {
-        return crypto11.createHash("sha256").update(str).digest("hex");
+        return crypto15.createHash("sha256").update(str).digest("hex");
       }
       /**
        * Computes the HMAC hash of a message using the provided crypto key and the
@@ -75424,7 +75424,7 @@ var require_crypto5 = __commonJS({
        */
       async signWithHmacSha256(key, msg) {
         const cryptoKey = typeof key === "string" ? key : toBuffer(key);
-        return toArrayBuffer(crypto11.createHmac("sha256", cryptoKey).update(msg).digest());
+        return toArrayBuffer(crypto15.createHmac("sha256", cryptoKey).update(msg).digest());
       }
     };
     exports.NodeCrypto = NodeCrypto;
@@ -75839,25 +75839,25 @@ var require_authclient2 = __commonJS({
       }
       static log = (0, google_logging_utils_1.log)("auth");
       static DEFAULT_REQUEST_INTERCEPTOR = {
-        resolved: async (config) => {
-          if (!config.headers.has("x-goog-api-client")) {
+        resolved: async (config3) => {
+          if (!config3.headers.has("x-goog-api-client")) {
             const nodeVersion = process.version.replace(/^v/, "");
-            config.headers.set("x-goog-api-client", `gl-node/${nodeVersion}`);
+            config3.headers.set("x-goog-api-client", `gl-node/${nodeVersion}`);
           }
-          const userAgent = config.headers.get("User-Agent");
+          const userAgent = config3.headers.get("User-Agent");
           if (!userAgent) {
-            config.headers.set("User-Agent", shared_cjs_1.USER_AGENT);
+            config3.headers.set("User-Agent", shared_cjs_1.USER_AGENT);
           } else if (!userAgent.includes(`${shared_cjs_1.PRODUCT_NAME}/`)) {
-            config.headers.set("User-Agent", `${userAgent} ${shared_cjs_1.USER_AGENT}`);
+            config3.headers.set("User-Agent", `${userAgent} ${shared_cjs_1.USER_AGENT}`);
           }
           try {
-            const symbols = config;
+            const symbols = config3;
             const methodName = symbols[_AuthClient.RequestMethodNameSymbol];
             const logId = `${Math.floor(Math.random() * 1e3)}`;
             symbols[_AuthClient.RequestLogIdSymbol] = logId;
             const logObject = {
-              url: config.url,
-              headers: config.headers
+              url: config3.url,
+              headers: config3.headers
             };
             if (methodName) {
               _AuthClient.log.info("%s [%s] request %j", methodName, logId, logObject);
@@ -75866,7 +75866,7 @@ var require_authclient2 = __commonJS({
             }
           } catch (e2) {
           }
-          return config;
+          return config3;
         }
       };
       static DEFAULT_RESPONSE_INTERCEPTOR = {
@@ -75905,9 +75905,9 @@ var require_authclient2 = __commonJS({
        * @param config A Gaxios request config
        * @param methodName The method name making the call
        */
-      static setMethodName(config, methodName) {
+      static setMethodName(config3, methodName) {
         try {
-          const symbols = config;
+          const symbols = config3;
           symbols[_AuthClient.RequestMethodNameSymbol] = methodName;
         } catch (e2) {
         }
@@ -75950,8 +75950,8 @@ var require_loginticket2 = __commonJS({
        * @param {TokenPayload} pay Payload of the jwt
        * @constructor
        */
-      constructor(env, pay) {
-        this.envelope = env;
+      constructor(env2, pay) {
+        this.envelope = env2;
         this.payload = pay;
       }
       getEnvelope() {
@@ -76108,10 +76108,10 @@ var require_oauth2client2 = __commonJS({
        * https://github.com/googleapis/google-auth-library-nodejs/blob/main/samples/oauth2-codeVerifier.js
        */
       async generateCodeVerifierAsync() {
-        const crypto11 = (0, crypto_1.createCrypto)();
-        const randomString = crypto11.randomBytesBase64(96);
+        const crypto15 = (0, crypto_1.createCrypto)();
+        const randomString = crypto15.randomBytesBase64(96);
         const codeVerifier = randomString.replace(/\+/g, "~").replace(/=/g, "_").replace(/\//g, "-");
-        const unencodedCodeChallenge = await crypto11.sha256DigestBase64(codeVerifier);
+        const unencodedCodeChallenge = await crypto15.sha256DigestBase64(codeVerifier);
         const codeChallenge = unencodedCodeChallenge.split("=")[0].replace(/\+/g, "-").replace(/\//g, "_");
         return { codeVerifier, codeChallenge };
       }
@@ -76552,7 +76552,7 @@ var require_oauth2client2 = __commonJS({
        * @return Returns a promise resolving to LoginTicket on verification.
        */
       async verifySignedJwtWithCertsAsync(jwt, certs, requiredAudience, issuers, maxExpiry) {
-        const crypto11 = (0, crypto_1.createCrypto)();
+        const crypto15 = (0, crypto_1.createCrypto)();
         if (!maxExpiry) {
           maxExpiry = _OAuth2Client.DEFAULT_MAX_TOKEN_LIFETIME_SECS_;
         }
@@ -76565,7 +76565,7 @@ var require_oauth2client2 = __commonJS({
         let envelope;
         let payload;
         try {
-          envelope = JSON.parse(crypto11.decodeBase64StringUtf8(segments[0]));
+          envelope = JSON.parse(crypto15.decodeBase64StringUtf8(segments[0]));
         } catch (err) {
           if (err instanceof Error) {
             err.message = `Can't parse token envelope: ${segments[0]}': ${err.message}`;
@@ -76576,7 +76576,7 @@ var require_oauth2client2 = __commonJS({
           throw new Error("Can't parse token envelope: " + segments[0]);
         }
         try {
-          payload = JSON.parse(crypto11.decodeBase64StringUtf8(segments[1]));
+          payload = JSON.parse(crypto15.decodeBase64StringUtf8(segments[1]));
         } catch (err) {
           if (err instanceof Error) {
             err.message = `Can't parse token payload '${segments[0]}`;
@@ -76593,7 +76593,7 @@ var require_oauth2client2 = __commonJS({
         if (envelope.alg === "ES256") {
           signature = formatEcdsa.joseToDer(signature, "ES256").toString("base64");
         }
-        const verified = await crypto11.verify(cert2, signed, signature);
+        const verified = await crypto15.verify(cert2, signed, signature);
         if (!verified) {
           throw new Error("Invalid token signature: " + jwt);
         }
@@ -76812,7 +76812,7 @@ var require_envDetect2 = __commonJS({
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.GCPEnv = void 0;
     exports.clear = clear;
-    exports.getEnv = getEnv;
+    exports.getEnv = getEnv2;
     var gcpMetadata = require_src10();
     var GCPEnv;
     (function(GCPEnv2) {
@@ -76828,7 +76828,7 @@ var require_envDetect2 = __commonJS({
     function clear() {
       envPromise = void 0;
     }
-    async function getEnv() {
+    async function getEnv2() {
       if (envPromise) {
         return envPromise;
       }
@@ -76836,25 +76836,25 @@ var require_envDetect2 = __commonJS({
       return envPromise;
     }
     async function getEnvMemoized() {
-      let env = GCPEnv.NONE;
+      let env2 = GCPEnv.NONE;
       if (isAppEngine()) {
-        env = GCPEnv.APP_ENGINE;
+        env2 = GCPEnv.APP_ENGINE;
       } else if (isCloudFunction()) {
-        env = GCPEnv.CLOUD_FUNCTIONS;
+        env2 = GCPEnv.CLOUD_FUNCTIONS;
       } else if (await isComputeEngine()) {
         if (await isKubernetesEngine()) {
-          env = GCPEnv.KUBERNETES_ENGINE;
+          env2 = GCPEnv.KUBERNETES_ENGINE;
         } else if (isCloudRun()) {
-          env = GCPEnv.CLOUD_RUN;
+          env2 = GCPEnv.CLOUD_RUN;
         } else if (isCloudRunJob()) {
-          env = GCPEnv.CLOUD_RUN_JOBS;
+          env2 = GCPEnv.CLOUD_RUN_JOBS;
         } else {
-          env = GCPEnv.COMPUTE_ENGINE;
+          env2 = GCPEnv.COMPUTE_ENGINE;
         }
       } else {
-        env = GCPEnv.NONE;
+        env2 = GCPEnv.NONE;
       }
-      return env;
+      return env2;
     }
     function isAppEngine() {
       return !!(process.env.GAE_SERVICE || process.env.GAE_MODULE_NAME);
@@ -77647,20 +77647,20 @@ var require_jwtaccess2 = __commonJS({
        * Create a JWTAccess credentials instance using the given input options.
        * @param json The input object.
        */
-      fromJSON(json2) {
-        if (!json2) {
+      fromJSON(json3) {
+        if (!json3) {
           throw new Error("Must pass in a JSON object containing the service account auth settings.");
         }
-        if (!json2.client_email) {
+        if (!json3.client_email) {
           throw new Error("The incoming JSON object does not contain a client_email field");
         }
-        if (!json2.private_key) {
+        if (!json3.private_key) {
           throw new Error("The incoming JSON object does not contain a private_key field");
         }
-        this.email = json2.client_email;
-        this.key = json2.private_key;
-        this.keyId = json2.private_key_id;
-        this.projectId = json2.project_id;
+        this.email = json3.client_email;
+        this.key = json3.private_key;
+        this.keyId = json3.private_key_id;
+        this.projectId = json3.project_id;
       }
       fromStream(inputStream, callback) {
         if (callback) {
@@ -77892,22 +77892,22 @@ var require_jwtclient2 = __commonJS({
        *
        * **Important**: If you accept a credential configuration (credential JSON/File/Stream) from an external source for authentication to Google Cloud, you must validate it before providing it to any Google API or library. Providing an unvalidated credential configuration to Google APIs can compromise the security of your systems and data. For more information, refer to {@link https://cloud.google.com/docs/authentication/external/externally-sourced-credentials Validate credential configurations from external sources}.
        */
-      fromJSON(json2) {
-        if (!json2) {
+      fromJSON(json3) {
+        if (!json3) {
           throw new Error("Must pass in a JSON object containing the service account auth settings.");
         }
-        if (!json2.client_email) {
+        if (!json3.client_email) {
           throw new Error("The incoming JSON object does not contain a client_email field");
         }
-        if (!json2.private_key) {
+        if (!json3.private_key) {
           throw new Error("The incoming JSON object does not contain a private_key field");
         }
-        this.email = json2.client_email;
-        this.key = json2.private_key;
-        this.keyId = json2.private_key_id;
-        this.projectId = json2.project_id;
-        this.quotaProjectId = json2.quota_project_id;
-        this.universeDomain = json2.universe_domain || this.universeDomain;
+        this.email = json3.client_email;
+        this.key = json3.private_key;
+        this.keyId = json3.private_key_id;
+        this.projectId = json3.project_id;
+        this.quotaProjectId = json3.quota_project_id;
+        this.universeDomain = json3.universe_domain || this.universeDomain;
       }
       fromStream(inputStream, callback) {
         if (callback) {
@@ -78027,28 +78027,28 @@ var require_refreshclient2 = __commonJS({
        * options.
        * @param json The input object.
        */
-      fromJSON(json2) {
-        if (!json2) {
+      fromJSON(json3) {
+        if (!json3) {
           throw new Error("Must pass in a JSON object containing the user refresh token");
         }
-        if (json2.type !== "authorized_user") {
+        if (json3.type !== "authorized_user") {
           throw new Error('The incoming JSON object does not have the "authorized_user" type');
         }
-        if (!json2.client_id) {
+        if (!json3.client_id) {
           throw new Error("The incoming JSON object does not contain a client_id field");
         }
-        if (!json2.client_secret) {
+        if (!json3.client_secret) {
           throw new Error("The incoming JSON object does not contain a client_secret field");
         }
-        if (!json2.refresh_token) {
+        if (!json3.refresh_token) {
           throw new Error("The incoming JSON object does not contain a refresh_token field");
         }
-        this._clientId = json2.client_id;
-        this._clientSecret = json2.client_secret;
-        this._refreshToken = json2.refresh_token;
-        this.credentials.refresh_token = json2.refresh_token;
-        this.quotaProjectId = json2.quota_project_id;
-        this.universeDomain = json2.universe_domain || this.universeDomain;
+        this._clientId = json3.client_id;
+        this._clientSecret = json3.client_secret;
+        this._refreshToken = json3.refresh_token;
+        this.credentials.refresh_token = json3.refresh_token;
+        this.quotaProjectId = json3.quota_project_id;
+        this.universeDomain = json3.universe_domain || this.universeDomain;
       }
       fromStream(inputStream, callback) {
         if (callback) {
@@ -78079,9 +78079,9 @@ var require_refreshclient2 = __commonJS({
        * options.
        * @param json The input object.
        */
-      static fromJSON(json2) {
+      static fromJSON(json3) {
         const client2 = new _UserRefreshClient();
-        client2.fromJSON(json2);
+        client2.fromJSON(json3);
         return client2;
       }
     };
@@ -78932,8 +78932,8 @@ var require_filesubjecttokensupplier2 = __commonJS({
         if (this.formatType === "text") {
           subjectToken = rawText;
         } else if (this.formatType === "json" && this.subjectTokenFieldName) {
-          const json2 = JSON.parse(rawText);
-          subjectToken = json2[this.subjectTokenFieldName];
+          const json3 = JSON.parse(rawText);
+          subjectToken = json3[this.subjectTokenFieldName];
         }
         if (!subjectToken) {
           throw new Error("Unable to parse the subject_token from the credential_source file");
@@ -79108,9 +79108,9 @@ var require_certificatesubjecttokensupplier2 = __commonJS({
           throw new CertificateSourceUnavailableError(`Failed to read certificate config file at: ${configPath}`);
         }
         try {
-          const config = JSON.parse(fileContents);
-          const certPath = config?.cert_configs?.workload?.cert_path;
-          const keyPath = config?.cert_configs?.workload?.key_path;
+          const config3 = JSON.parse(fileContents);
+          const certPath = config3?.cert_configs?.workload?.cert_path;
+          const keyPath = config3?.cert_configs?.workload?.key_path;
           if (!certPath || !keyPath) {
             throw new InvalidConfigurationError(`Certificate config file (${configPath}) is missing required "cert_path" or "key_path" in the workload config.`);
           }
@@ -79385,14 +79385,14 @@ var require_awsrequestsigner2 = __commonJS({
       }
     };
     exports.AwsRequestSigner = AwsRequestSigner;
-    async function sign(crypto11, key, msg) {
-      return await crypto11.signWithHmacSha256(key, msg);
+    async function sign(crypto15, key, msg) {
+      return await crypto15.signWithHmacSha256(key, msg);
     }
-    async function getSigningKey(crypto11, key, dateStamp, region, serviceName) {
-      const kDate = await sign(crypto11, `AWS4${key}`, dateStamp);
-      const kRegion = await sign(crypto11, kDate, region);
-      const kService = await sign(crypto11, kRegion, serviceName);
-      const kSigning = await sign(crypto11, kService, "aws4_request");
+    async function getSigningKey(crypto15, key, dateStamp, region, serviceName) {
+      const kDate = await sign(crypto15, `AWS4${key}`, dateStamp);
+      const kRegion = await sign(crypto15, kDate, region);
+      const kService = await sign(crypto15, kRegion, serviceName);
+      const kSigning = await sign(crypto15, kService, "aws4_request");
       return kSigning;
     }
     async function generateAuthenticationHeaderMap(options2) {
@@ -80688,30 +80688,30 @@ var require_googleauth2 = __commonJS({
        * @param json The impersonated input object.
        * @returns JWT or UserRefresh Client with data
        */
-      fromImpersonatedJSON(json2) {
-        if (!json2) {
+      fromImpersonatedJSON(json3) {
+        if (!json3) {
           throw new Error("Must pass in a JSON object containing an  impersonated refresh token");
         }
-        if (json2.type !== impersonated_1.IMPERSONATED_ACCOUNT_TYPE) {
+        if (json3.type !== impersonated_1.IMPERSONATED_ACCOUNT_TYPE) {
           throw new Error(`The incoming JSON object does not have the "${impersonated_1.IMPERSONATED_ACCOUNT_TYPE}" type`);
         }
-        if (!json2.source_credentials) {
+        if (!json3.source_credentials) {
           throw new Error("The incoming JSON object does not contain a source_credentials field");
         }
-        if (!json2.service_account_impersonation_url) {
+        if (!json3.service_account_impersonation_url) {
           throw new Error("The incoming JSON object does not contain a service_account_impersonation_url field");
         }
-        const sourceClient = this.fromJSON(json2.source_credentials);
-        if (json2.service_account_impersonation_url?.length > 256) {
-          throw new RangeError(`Target principal is too long: ${json2.service_account_impersonation_url}`);
+        const sourceClient = this.fromJSON(json3.source_credentials);
+        if (json3.service_account_impersonation_url?.length > 256) {
+          throw new RangeError(`Target principal is too long: ${json3.service_account_impersonation_url}`);
         }
-        const targetPrincipal = /(?<target>[^/]+):(generateAccessToken|generateIdToken)$/.exec(json2.service_account_impersonation_url)?.groups?.target;
+        const targetPrincipal = /(?<target>[^/]+):(generateAccessToken|generateIdToken)$/.exec(json3.service_account_impersonation_url)?.groups?.target;
         if (!targetPrincipal) {
-          throw new RangeError(`Cannot extract target principal from ${json2.service_account_impersonation_url}`);
+          throw new RangeError(`Cannot extract target principal from ${json3.service_account_impersonation_url}`);
         }
-        const targetScopes = (this.scopes || json2.scopes || this.defaultScopes) ?? [];
+        const targetScopes = (this.scopes || json3.scopes || this.defaultScopes) ?? [];
         return new impersonated_1.Impersonated({
-          ...json2,
+          ...json3,
           sourceClient,
           targetPrincipal,
           targetScopes: Array.isArray(targetScopes) ? targetScopes : [targetScopes]
@@ -80759,30 +80759,30 @@ var require_googleauth2 = __commonJS({
        * @param options The JWT or UserRefresh options for the client
        * @returns JWT or UserRefresh Client with data
        */
-      fromJSON(json2, options2 = {}) {
+      fromJSON(json3, options2 = {}) {
         let client2;
         const preferredUniverseDomain = (0, util_1.originalOrCamelOptions)(options2).get("universe_domain");
-        if (json2.type === refreshclient_1.USER_REFRESH_ACCOUNT_TYPE) {
+        if (json3.type === refreshclient_1.USER_REFRESH_ACCOUNT_TYPE) {
           client2 = new refreshclient_1.UserRefreshClient(options2);
-          client2.fromJSON(json2);
-        } else if (json2.type === impersonated_1.IMPERSONATED_ACCOUNT_TYPE) {
-          client2 = this.fromImpersonatedJSON(json2);
-        } else if (json2.type === baseexternalclient_1.EXTERNAL_ACCOUNT_TYPE) {
+          client2.fromJSON(json3);
+        } else if (json3.type === impersonated_1.IMPERSONATED_ACCOUNT_TYPE) {
+          client2 = this.fromImpersonatedJSON(json3);
+        } else if (json3.type === baseexternalclient_1.EXTERNAL_ACCOUNT_TYPE) {
           client2 = externalclient_1.ExternalAccountClient.fromJSON({
-            ...json2,
+            ...json3,
             ...options2
           });
           client2.scopes = this.getAnyScopes();
-        } else if (json2.type === externalAccountAuthorizedUserClient_1.EXTERNAL_ACCOUNT_AUTHORIZED_USER_TYPE) {
+        } else if (json3.type === externalAccountAuthorizedUserClient_1.EXTERNAL_ACCOUNT_AUTHORIZED_USER_TYPE) {
           client2 = new externalAccountAuthorizedUserClient_1.ExternalAccountAuthorizedUserClient({
-            ...json2,
+            ...json3,
             ...options2
           });
         } else {
           options2.scopes = this.scopes;
           client2 = new jwtclient_1.JWT(options2);
           this.setGapicJWTValues(client2);
-          client2.fromJSON(json2);
+          client2.fromJSON(json3);
         }
         if (preferredUniverseDomain) {
           client2.universeDomain = preferredUniverseDomain;
@@ -80796,9 +80796,9 @@ var require_googleauth2 = __commonJS({
        * @param options The JWT or UserRefresh options for the client
        * @returns JWT or UserRefresh Client with data
        */
-      _cacheClientFromJSON(json2, options2) {
-        const client2 = this.fromJSON(json2, options2);
-        this.jsonContent = json2;
+      _cacheClientFromJSON(json3, options2) {
+        const client2 = this.fromJSON(json3, options2);
+        this.jsonContent = json3;
         this.cachedCredential = client2;
         return client2;
       }
@@ -81106,24 +81106,24 @@ var require_googleauth2 = __commonJS({
           const signed = await client2.sign(data);
           return signed.signedBlob;
         }
-        const crypto11 = (0, crypto_1.createCrypto)();
+        const crypto15 = (0, crypto_1.createCrypto)();
         if (client2 instanceof jwtclient_1.JWT && client2.key) {
-          const sign = await crypto11.sign(client2.key, data);
+          const sign = await crypto15.sign(client2.key, data);
           return sign;
         }
         const creds = await this.getCredentials();
         if (!creds.client_email) {
           throw new Error("Cannot sign data without `client_email`.");
         }
-        return this.signBlob(crypto11, creds.client_email, data, endpoint);
+        return this.signBlob(crypto15, creds.client_email, data, endpoint);
       }
-      async signBlob(crypto11, emailOrUniqueId, data, endpoint) {
+      async signBlob(crypto15, emailOrUniqueId, data, endpoint) {
         const url = new URL(endpoint + `${emailOrUniqueId}:signBlob`);
         const res = await this.request({
           method: "POST",
           url: url.href,
           data: {
-            payload: crypto11.encodeBase64StringUtf8(data)
+            payload: crypto15.encodeBase64StringUtf8(data)
           },
           retry: true,
           retryConfig: {
@@ -81519,7 +81519,7 @@ var require_src12 = __commonJS({
 var require_object_hash = __commonJS({
   "node_modules/object-hash/index.js"(exports, module) {
     "use strict";
-    var crypto11 = __require("crypto");
+    var crypto15 = __require("crypto");
     exports = module.exports = objectHash;
     function objectHash(object, options2) {
       options2 = applyDefaults(object, options2);
@@ -81537,7 +81537,7 @@ var require_object_hash = __commonJS({
     exports.keysMD5 = function(object) {
       return objectHash(object, { algorithm: "md5", encoding: "hex", excludeValues: true });
     };
-    var hashes = crypto11.getHashes ? crypto11.getHashes().slice() : ["sha1", "md5"];
+    var hashes = crypto15.getHashes ? crypto15.getHashes().slice() : ["sha1", "md5"];
     hashes.push("passthrough");
     var encodings = ["buffer", "hex", "binary", "base64"];
     function applyDefaults(object, sourceOptions) {
@@ -81583,7 +81583,7 @@ var require_object_hash = __commonJS({
     function hash(object, options2) {
       var hashingStream;
       if (options2.algorithm !== "passthrough") {
-        hashingStream = crypto11.createHash(options2.algorithm);
+        hashingStream = crypto15.createHash(options2.algorithm);
       } else {
         hashingStream = new PassThrough3();
       }
@@ -82844,14 +82844,14 @@ var require_grpc = __commonJS({
         }
         throw new Error(filename + " could not be found in " + protoPath);
       }
-      loadProtoJSON(json2, ignoreCache = false) {
-        const hash = (0, object_hash_1.default)(JSON.stringify(json2)).toString();
+      loadProtoJSON(json3, ignoreCache = false) {
+        const hash = (0, object_hash_1.default)(JSON.stringify(json3)).toString();
         const cached = _GrpcClient.protoCache.get(hash);
         if (cached && !ignoreCache) {
           return cached;
         }
         const options2 = _GrpcClient.defaultOptions();
-        const packageDefinition = grpcProtoLoader.fromJSON(json2, options2);
+        const packageDefinition = grpcProtoLoader.fromJSON(json3, options2);
         const grpcPackage = this.grpc.loadPackageDefinition(packageDefinition);
         _GrpcClient.protoCache.set(hash, grpcPackage);
         return grpcPackage;
@@ -92045,8 +92045,8 @@ var require_bytes = __commonJS({
         return Buffer.from(obj.buffer, 0, obj.byteLength).toString("base64");
       }
     }
-    function bytesFromProto3JSON(json2) {
-      return Buffer.from(json2, "base64");
+    function bytesFromProto3JSON(json3) {
+      return Buffer.from(json3, "base64");
     }
   }
 });
@@ -92170,42 +92170,42 @@ var require_value = __commonJS({
       }
       return null;
     }
-    function googleProtobufStructFromProto3JSON(json2) {
+    function googleProtobufStructFromProto3JSON(json3) {
       const fields = {};
-      for (const [key, value] of Object.entries(json2)) {
+      for (const [key, value] of Object.entries(json3)) {
         fields[key] = googleProtobufValueFromProto3JSON(value);
       }
       return { fields };
     }
-    function googleProtobufListValueFromProto3JSON(json2) {
+    function googleProtobufListValueFromProto3JSON(json3) {
       return {
-        values: json2.map((element) => googleProtobufValueFromProto3JSON(element))
+        values: json3.map((element) => googleProtobufValueFromProto3JSON(element))
       };
     }
-    function googleProtobufValueFromProto3JSON(json2) {
-      if (json2 === null) {
+    function googleProtobufValueFromProto3JSON(json3) {
+      if (json3 === null) {
         return { nullValue: "NULL_VALUE" };
       }
-      if (typeof json2 === "number") {
-        return { numberValue: json2 };
+      if (typeof json3 === "number") {
+        return { numberValue: json3 };
       }
-      if (typeof json2 === "string") {
-        return { stringValue: json2 };
+      if (typeof json3 === "string") {
+        return { stringValue: json3 };
       }
-      if (typeof json2 === "boolean") {
-        return { boolValue: json2 };
+      if (typeof json3 === "boolean") {
+        return { boolValue: json3 };
       }
-      if (Array.isArray(json2)) {
+      if (Array.isArray(json3)) {
         return {
-          listValue: googleProtobufListValueFromProto3JSON(json2)
+          listValue: googleProtobufListValueFromProto3JSON(json3)
         };
       }
-      if (typeof json2 === "object") {
+      if (typeof json3 === "object") {
         return {
-          structValue: googleProtobufStructFromProto3JSON(json2)
+          structValue: googleProtobufStructFromProto3JSON(json3)
         };
       }
-      throw new Error(`googleProtobufValueFromProto3JSON: incorrect parameter type: ${typeof json2}`);
+      throw new Error(`googleProtobufValueFromProto3JSON: incorrect parameter type: ${typeof json3}`);
     }
   }
 });
@@ -92226,10 +92226,10 @@ var require_duration2 = __commonJS({
       durationSeconds += "s";
       return durationSeconds;
     }
-    function googleProtobufDurationFromProto3JSON(json2) {
-      const match = json2.match(/^(\d*)(?:\.(\d*))?s$/);
+    function googleProtobufDurationFromProto3JSON(json3) {
+      const match = json3.match(/^(\d*)(?:\.(\d*))?s$/);
       if (!match) {
-        throw new Error(`googleProtobufDurationFromProto3JSON: incorrect value ${json2} passed as google.protobuf.Duration`);
+        throw new Error(`googleProtobufDurationFromProto3JSON: incorrect value ${json3} passed as google.protobuf.Duration`);
       }
       let seconds = 0;
       let nanos = 0;
@@ -92267,16 +92267,16 @@ var require_timestamp = __commonJS({
       }
       return date.replace(/(?:\.\d{0,9})/, "." + nanos);
     }
-    function googleProtobufTimestampFromProto3JSON(json2) {
-      const match = json2.match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?/);
+    function googleProtobufTimestampFromProto3JSON(json3) {
+      const match = json3.match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?/);
       if (!match) {
-        throw new Error(`googleProtobufDurationFromProto3JSON: incorrect value ${json2} passed as google.protobuf.Duration`);
+        throw new Error(`googleProtobufDurationFromProto3JSON: incorrect value ${json3} passed as google.protobuf.Duration`);
       }
-      const date = new Date(json2);
+      const date = new Date(json3);
       const millisecondsSinceEpoch = date.getTime();
       const seconds = Math.floor(millisecondsSinceEpoch / 1e3);
       let nanos = 0;
-      const secondsFromDate = json2.split(".")[1];
+      const secondsFromDate = json3.split(".")[1];
       if (secondsFromDate) {
         nanos = parseInt(secondsFromDate.slice(0, -1).padEnd(9, "0"));
       }
@@ -92317,22 +92317,22 @@ var require_wrappers2 = __commonJS({
       }
       return obj.value;
     }
-    function wrapperFromProto3JSON(typeName, json2) {
-      if (json2 === null) {
+    function wrapperFromProto3JSON(typeName, json3) {
+      if (json3 === null) {
         return {
           value: null
         };
       }
       if (typeName === ".google.protobuf.BytesValue") {
-        if (typeof json2 !== "string") {
-          throw new Error(`numberWrapperFromProto3JSON: expected to get a string for google.protobuf.BytesValue but got ${typeof json2}`);
+        if (typeof json3 !== "string") {
+          throw new Error(`numberWrapperFromProto3JSON: expected to get a string for google.protobuf.BytesValue but got ${typeof json3}`);
         }
         return {
-          value: (0, bytes_1.bytesFromProto3JSON)(json2)
+          value: (0, bytes_1.bytesFromProto3JSON)(json3)
         };
       }
       return {
-        value: json2
+        value: json3
       };
     }
   }
@@ -92348,9 +92348,9 @@ var require_fieldmask = __commonJS({
     function googleProtobufFieldMaskToProto3JSON(obj) {
       return obj.paths.join(",");
     }
-    function googleProtobufFieldMaskFromProto3JSON(json2) {
+    function googleProtobufFieldMaskFromProto3JSON(json3) {
       return {
-        paths: json2.split(",")
+        paths: json3.split(",")
       };
     }
   }
@@ -92372,70 +92372,70 @@ var require_fromproto3json = __commonJS({
     var timestamp_1 = require_timestamp();
     var wrappers_1 = require_wrappers2();
     var fieldmask_1 = require_fieldmask();
-    function fromProto3JSONToInternalRepresentation(type, json2) {
+    function fromProto3JSONToInternalRepresentation(type, json3) {
       const fullyQualifiedTypeName = typeof type === "string" ? type : (0, util_1.getFullyQualifiedTypeName)(type);
       if (typeof type !== "string" && "values" in type) {
         if (fullyQualifiedTypeName === ".google.protobuf.NullValue") {
           return "NULL_VALUE";
         }
-        return (0, enum_1.resolveEnumValueToString)(type, json2);
+        return (0, enum_1.resolveEnumValueToString)(type, json3);
       }
       if (typeof type !== "string") {
         type.resolveAll();
       }
       if (typeof type === "string") {
-        return json2;
+        return json3;
       }
       if (fullyQualifiedTypeName === ".google.protobuf.Value") {
-        return (0, value_1.googleProtobufValueFromProto3JSON)(json2);
+        return (0, value_1.googleProtobufValueFromProto3JSON)(json3);
       }
       if (util_1.wrapperTypes.has(fullyQualifiedTypeName)) {
-        if (json2 !== null && typeof json2 === "object" || Array.isArray(json2)) {
-          throw new Error(`fromProto3JSONToInternalRepresentation: JSON representation for ${fullyQualifiedTypeName} expects a string, a number, or a boolean, but got ${typeof json2}`);
+        if (json3 !== null && typeof json3 === "object" || Array.isArray(json3)) {
+          throw new Error(`fromProto3JSONToInternalRepresentation: JSON representation for ${fullyQualifiedTypeName} expects a string, a number, or a boolean, but got ${typeof json3}`);
         }
-        return (0, wrappers_1.wrapperFromProto3JSON)(fullyQualifiedTypeName, json2);
+        return (0, wrappers_1.wrapperFromProto3JSON)(fullyQualifiedTypeName, json3);
       }
-      if (json2 === null) {
+      if (json3 === null) {
         return null;
       }
       if (fullyQualifiedTypeName === ".google.protobuf.Any") {
-        return (0, any_1.googleProtobufAnyFromProto3JSON)(type.root, json2);
+        return (0, any_1.googleProtobufAnyFromProto3JSON)(type.root, json3);
       }
       if (fullyQualifiedTypeName === ".google.protobuf.Struct") {
-        if (typeof json2 !== "object") {
-          throw new Error(`fromProto3JSONToInternalRepresentation: google.protobuf.Struct must be an object but got ${typeof json2}`);
+        if (typeof json3 !== "object") {
+          throw new Error(`fromProto3JSONToInternalRepresentation: google.protobuf.Struct must be an object but got ${typeof json3}`);
         }
-        if (Array.isArray(json2)) {
+        if (Array.isArray(json3)) {
           throw new Error("fromProto3JSONToInternalRepresentation: google.protobuf.Struct must be an object but got an array");
         }
-        return (0, value_1.googleProtobufStructFromProto3JSON)(json2);
+        return (0, value_1.googleProtobufStructFromProto3JSON)(json3);
       }
       if (fullyQualifiedTypeName === ".google.protobuf.ListValue") {
-        if (!Array.isArray(json2)) {
-          throw new Error(`fromProto3JSONToInternalRepresentation: google.protobuf.ListValue must be an array but got ${typeof json2}`);
+        if (!Array.isArray(json3)) {
+          throw new Error(`fromProto3JSONToInternalRepresentation: google.protobuf.ListValue must be an array but got ${typeof json3}`);
         }
-        return (0, value_1.googleProtobufListValueFromProto3JSON)(json2);
+        return (0, value_1.googleProtobufListValueFromProto3JSON)(json3);
       }
       if (fullyQualifiedTypeName === ".google.protobuf.Duration") {
-        if (typeof json2 !== "string") {
-          throw new Error(`fromProto3JSONToInternalRepresentation: google.protobuf.Duration must be a string but got ${typeof json2}`);
+        if (typeof json3 !== "string") {
+          throw new Error(`fromProto3JSONToInternalRepresentation: google.protobuf.Duration must be a string but got ${typeof json3}`);
         }
-        return (0, duration_1.googleProtobufDurationFromProto3JSON)(json2);
+        return (0, duration_1.googleProtobufDurationFromProto3JSON)(json3);
       }
       if (fullyQualifiedTypeName === ".google.protobuf.Timestamp") {
-        if (typeof json2 !== "string") {
-          throw new Error(`fromProto3JSONToInternalRepresentation: google.protobuf.Timestamp must be a string but got ${typeof json2}`);
+        if (typeof json3 !== "string") {
+          throw new Error(`fromProto3JSONToInternalRepresentation: google.protobuf.Timestamp must be a string but got ${typeof json3}`);
         }
-        return (0, timestamp_1.googleProtobufTimestampFromProto3JSON)(json2);
+        return (0, timestamp_1.googleProtobufTimestampFromProto3JSON)(json3);
       }
       if (fullyQualifiedTypeName === ".google.protobuf.FieldMask") {
-        if (typeof json2 !== "string") {
-          throw new Error(`fromProto3JSONToInternalRepresentation: google.protobuf.FieldMask must be a string but got ${typeof json2}`);
+        if (typeof json3 !== "string") {
+          throw new Error(`fromProto3JSONToInternalRepresentation: google.protobuf.FieldMask must be a string but got ${typeof json3}`);
         }
-        return (0, fieldmask_1.googleProtobufFieldMaskFromProto3JSON)(json2);
+        return (0, fieldmask_1.googleProtobufFieldMaskFromProto3JSON)(json3);
       }
       const result = {};
-      for (const [key, value] of Object.entries(json2)) {
+      for (const [key, value] of Object.entries(json3)) {
         const field2 = type.fields[key];
         if (!field2) {
           continue;
@@ -92485,12 +92485,12 @@ var require_fromproto3json = __commonJS({
       }
       return result;
     }
-    function fromProto3JSON(type, json2) {
-      const internalRepr = fromProto3JSONToInternalRepresentation(type, json2);
+    function fromProto3JSON(type, json3) {
+      const internalRepr = fromProto3JSONToInternalRepresentation(type, json3);
       if (internalRepr === null) {
         return null;
       }
-      (0, util_1.assert)(typeof internalRepr === "object" && !Array.isArray(internalRepr), `fromProto3JSON: expected an object, not ${json2}`);
+      (0, util_1.assert)(typeof internalRepr === "object" && !Array.isArray(internalRepr), `fromProto3JSON: expected an object, not ${json3}`);
       return type.fromObject(internalRepr);
     }
   }
@@ -92533,11 +92533,11 @@ var require_any = __commonJS({
       valueProto3JSON["@type"] = obj.type_url;
       return valueProto3JSON;
     }
-    function googleProtobufAnyFromProto3JSON(root, json2) {
-      if (json2 === null || typeof json2 !== "object" || Array.isArray(json2)) {
+    function googleProtobufAnyFromProto3JSON(root, json3) {
+      if (json3 === null || typeof json3 !== "object" || Array.isArray(json3)) {
         throw new Error("googleProtobufAnyFromProto3JSON: must be an object to decode google.protobuf.Any");
       }
-      const typeUrl = json2["@type"];
+      const typeUrl = json3["@type"];
       if (!typeUrl || typeof typeUrl !== "string") {
         throw new Error("googleProtobufAnyFromProto3JSON: JSON serialization of google.protobuf.Any must contain @type field");
       }
@@ -92548,12 +92548,12 @@ var require_any = __commonJS({
       } catch (err) {
         throw new Error(`googleProtobufAnyFromProto3JSON: cannot find type ${typeName}: ${err}`);
       }
-      let value = json2;
+      let value = json3;
       if (specialJSON.has(typeName)) {
-        if (!("value" in json2)) {
+        if (!("value" in json3)) {
           throw new Error(`googleProtobufAnyFromProto3JSON: JSON representation of google.protobuf.Any with type ${typeName} must contain the value field`);
         }
-        value = json2.value;
+        value = json3.value;
       }
       const valueMessage = (0, fromproto3json_1.fromProto3JSON)(type, value);
       if (valueMessage === null) {
@@ -93061,18 +93061,18 @@ var require_fallbackRest = __commonJS({
         "Content-Type": "application/json"
       };
       const message2 = rpc.resolvedRequestType.fromObject(request);
-      const json2 = serializer.toProto3JSON(message2, {
+      const json3 = serializer.toProto3JSON(message2, {
         numericEnums
       });
-      if (!json2) {
+      if (!json3) {
         throw new Error(`Cannot send null request to RPC ${rpc.name}.`);
       }
-      if (typeof json2 !== "object" || Array.isArray(json2)) {
+      if (typeof json3 !== "object" || Array.isArray(json3)) {
         throw new Error(`Request to RPC ${rpc.name} must be an object.`);
       }
-      const transcoded = (0, transcoding_1.transcode)(json2, rpc.parsedOptions);
+      const transcoded = (0, transcoding_1.transcode)(json3, rpc.parsedOptions);
       if (!transcoded) {
-        throw new Error(`Cannot build HTTP request for ${JSON.stringify(json2)}, method: ${rpc.name}`);
+        throw new Error(`Cannot build HTTP request for ${JSON.stringify(json3)}, method: ${rpc.name}`);
       }
       if (numericEnums) {
         transcoded.queryString = (transcoded.queryString ? `${transcoded.queryString}&` : "") + "$alt=json%3Benum-encoding=int";
@@ -93095,12 +93095,12 @@ var require_fallbackRest = __commonJS({
       if (!decodedString) {
         throw new Error(`Received null response from RPC ${rpc.name}`);
       }
-      const json2 = JSON.parse(decodedString);
+      const json3 = JSON.parse(decodedString);
       if (!ok) {
-        const error = googleError_1.GoogleError.parseHttpError(json2);
+        const error = googleError_1.GoogleError.parseHttpError(json3);
         throw error;
       }
-      const message2 = serializer.fromProto3JSON(rpc.resolvedResponseType, json2);
+      const message2 = serializer.fromProto3JSON(rpc.resolvedResponseType, json3);
       if (!message2) {
         throw new Error(`Received null or malformed response from JSON serializer from RPC ${rpc.name}`);
       }
@@ -94902,7 +94902,7 @@ var require_async_iterator = __commonJS({
       get stream() {
         return this[kStream];
       },
-      next: function next() {
+      next: function next2() {
         var _this = this;
         var error = this[kError];
         if (error !== null) {
@@ -95103,10 +95103,10 @@ var require_from = __commonJS({
       readable._read = function() {
         if (!reading) {
           reading = true;
-          next();
+          next2();
         }
       };
-      function next() {
+      function next2() {
         return _next2.apply(this, arguments);
       }
       function _next2() {
@@ -95116,7 +95116,7 @@ var require_from = __commonJS({
             if (done) {
               readable.push(null);
             } else if (readable.push(yield value)) {
-              next();
+              next2();
             } else {
               reading = false;
             }
@@ -96662,14 +96662,14 @@ var require_retry_request = __commonJS({
       }
     }
     module.exports = retryRequest;
-    function getNextRetryDelay(config) {
+    function getNextRetryDelay(config3) {
       const {
         maxRetryDelay,
         retryDelayMultiplier,
         retryNumber,
         timeOfFirstRequest,
         totalTimeout
-      } = config;
+      } = config3;
       const maxRetryDelayMs = maxRetryDelay * 1e3;
       const totalTimeoutMs = totalTimeout * 1e3;
       const jitter = Math.floor(Math.random() * 1e3);
@@ -97960,7 +97960,7 @@ var require_pageDescriptor = __commonJS({
         const maxResults = "maxResults" in options2 ? options2.maxResults : -1;
         let pushCount = 0;
         let started = false;
-        function callback(err, resources, next, apiResp) {
+        function callback(err, resources, next2, apiResp) {
           if (err) {
             stream.emit("error", err);
             return;
@@ -97982,7 +97982,7 @@ var require_pageDescriptor = __commonJS({
           if (stream._readableState.ended) {
             return;
           }
-          if (!next) {
+          if (!next2) {
             stream.end();
             return;
           }
@@ -97990,10 +97990,10 @@ var require_pageDescriptor = __commonJS({
             delete options2.pageToken;
           }
           if (stream.isPaused()) {
-            request = next;
+            request = next2;
             started = false;
           } else {
-            setImmediate(apiCall, next, options2, callback);
+            setImmediate(apiCall, next2, options2, callback);
           }
         }
         stream.on("resume", async () => {
@@ -99551,8 +99551,8 @@ var require_fallback = __commonJS({
         const rootObject = protobuf.Root.fromJSON(jsonObject);
         return rootObject;
       }
-      loadProtoJSON(json2, ignoreCache = false) {
-        return _GrpcClient.protobufFromJSON(json2, ignoreCache);
+      loadProtoJSON(json3, ignoreCache = false) {
+        return _GrpcClient.protobufFromJSON(json3, ignoreCache);
       }
       /**
        * Loads the protobuf root object from a JSON object created from a proto file.
@@ -99560,13 +99560,13 @@ var require_fallback = __commonJS({
        * @param {Object} jsonObject - A JSON version of a protofile created usin protobuf.js
        * @returns {Object} Root namespace of proto JSON
        */
-      static protobufFromJSON(json2, ignoreCache = false) {
-        const hash = (0, object_hash_1.default)(JSON.stringify(json2)).toString();
+      static protobufFromJSON(json3, ignoreCache = false) {
+        const hash = (0, object_hash_1.default)(JSON.stringify(json3)).toString();
         const cached = _GrpcClient.protoCache.get(hash);
         if (cached && !ignoreCache) {
           return cached;
         }
-        const root = protobuf.Root.fromJSON(json2);
+        const root = protobuf.Root.fromJSON(json3);
         _GrpcClient.protoCache.set(hash, root);
         return root;
       }
@@ -99836,26 +99836,26 @@ var require_googleError = __commonJS({
       }
       // Parse http JSON error and promote google.rpc.ErrorInfo if exist.
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      static parseHttpError(json2) {
-        if (Array.isArray(json2)) {
-          json2 = json2.find((obj) => {
+      static parseHttpError(json3) {
+        if (Array.isArray(json3)) {
+          json3 = json3.find((obj) => {
             return "error" in obj;
           });
         }
-        if (!json2["error"]) {
-          json2["error"] = {};
-          Object.keys(json2).filter((key) => key !== "error").forEach((key) => {
-            json2["error"][key] = json2[key];
-            delete json2[key];
+        if (!json3["error"]) {
+          json3["error"] = {};
+          Object.keys(json3).filter((key) => key !== "error").forEach((key) => {
+            json3["error"][key] = json3[key];
+            delete json3[key];
           });
         }
         const decoder2 = new GoogleErrorDecoder();
-        const proto3Error = decoder2.decodeHTTPError(json2["error"]);
-        const error = Object.assign(new _GoogleError(json2["error"]["message"]), proto3Error);
-        if (json2["error"]["status"] && status_1.Status[json2["error"]["status"]]) {
-          error.code = status_1.Status[json2["error"]["status"]];
-        } else if (json2["error"]["code"]) {
-          error.code = (0, status_1.rpcCodeFromHttpStatusCode)(json2["error"]["code"]);
+        const proto3Error = decoder2.decodeHTTPError(json3["error"]);
+        const error = Object.assign(new _GoogleError(json3["error"]["message"]), proto3Error);
+        if (json3["error"]["status"] && status_1.Status[json3["error"]["status"]]) {
+          error.code = status_1.Status[json3["error"]["status"]];
+        } else if (json3["error"]["code"]) {
+          error.code = (0, status_1.rpcCodeFromHttpStatusCode)(json3["error"]["code"]);
         } else {
           delete error.code;
         }
@@ -99911,13 +99911,13 @@ var require_googleError = __commonJS({
         value: unknownProto.value
       });
     };
-    var getErrorDetails = (protobuf2, json2) => {
+    var getErrorDetails = (protobuf2, json3) => {
       const error_details = {
         knownDetails: [],
         unknownDetails: []
       };
-      if (typeof json2 === "object" && json2 !== null && "details" in json2) {
-        const details = json2["details"];
+      if (typeof json3 === "object" && json3 !== null && "details" in json3) {
+        const details = json3["details"];
         for (const detail of details) {
           if (isDetailKnownProto(protobuf2, detail)) {
             error_details.knownDetails.push(detail);
@@ -100039,10 +100039,10 @@ var require_googleError = __commonJS({
         return result;
       }
       // Decodes http error which is an instance of google.rpc.Status.
-      decodeHTTPError(json2) {
-        const errorDetails = getErrorDetails(this.root, json2);
+      decodeHTTPError(json3) {
+        const errorDetails = getErrorDetails(this.root, json3);
         let details = [];
-        if (typeof json2 === "object" && json2 !== null && "details" in json2) {
+        if (typeof json3 === "object" && json3 !== null && "details" in json3) {
           if (errorDetails.knownDetails.length) {
             details = errorDetails.knownDetails;
           }
@@ -100051,12 +100051,12 @@ var require_googleError = __commonJS({
             details = [...details, ...unknowDetailsAsResourceInfo];
           }
           if (details.length) {
-            json2.details = details;
+            json3.details = details;
           }
         }
-        const errorMessage = serializer.fromProto3JSON(this.statusType, json2);
+        const errorMessage = serializer.fromProto3JSON(this.statusType, json3);
         if (!errorMessage) {
-          throw new Error(`Received error message ${json2}, but failed to serialize as proto3 message`);
+          throw new Error(`Received error message ${json3}, but failed to serialize as proto3 message`);
         }
         return this.statusType.toObject(errorMessage, fallback_1.defaultToObjectOptions);
       }
@@ -100137,9 +100137,9 @@ var require_call2 = __commonJS({
         if (this.completed) {
           return;
         }
-        const canceller = func(argument, (err, response, next, rawResponse) => {
+        const canceller = func(argument, (err, response, next2, rawResponse) => {
           this.completed = true;
-          setImmediate(this.callback, err, response, next, rawResponse);
+          setImmediate(this.callback, err, response, next2, rawResponse);
         });
         if (canceller instanceof Promise) {
           canceller.catch((err) => {
@@ -100161,7 +100161,7 @@ var require_call2 = __commonJS({
       constructor() {
         let resolveCallback;
         let rejectCallback;
-        const callback = (err, response, next, rawResponse) => {
+        const callback = (err, response, next2, rawResponse) => {
           if (err) {
             if (err.metadata) {
               rejectCallback(googleError_1.GoogleError.parseGRPCStatusDetails(err));
@@ -100169,7 +100169,7 @@ var require_call2 = __commonJS({
               rejectCallback(err);
             }
           } else if (response !== void 0) {
-            resolveCallback([response, next || null, rawResponse || null]);
+            resolveCallback([response, next2 || null, rawResponse || null]);
           } else {
             throw new googleError_1.GoogleError("Neither error nor response are defined");
           }
@@ -100314,12 +100314,12 @@ var require_retries = __commonJS({
           retries++;
           let lastError = err;
           const toCall = (0, timeout_1.addTimeoutArg)(func, timeout, otherArgs);
-          canceller = toCall(argument, (err2, response, next, rawResponse) => {
+          canceller = toCall(argument, (err2, response, next2, rawResponse) => {
             if (err2) {
               lastError = err2;
             }
             if (!err2) {
-              callback(null, response, next, rawResponse);
+              callback(null, response, next2, rawResponse);
               return;
             }
             canceller = null;
@@ -129788,8 +129788,8 @@ var require_util8 = __commonJS({
     var NUM_OF_PARTS_IN_PROTO_TYPE_NAME = 2;
     var randomUUID = () => globalThis.crypto?.randomUUID() || __require("crypto").randomUUID();
     function checkTelemetryEnabled(settings) {
-      const env = typeof process === "object" && typeof process.env === "object" ? process.env : {};
-      const envOptIn = env.GOOGLE_SDK_NODE_ENABLE_TRACING?.trim();
+      const env2 = typeof process === "object" && typeof process.env === "object" ? process.env : {};
+      const envOptIn = env2.GOOGLE_SDK_NODE_ENABLE_TRACING?.trim();
       if (envOptIn !== void 0 && envOptIn !== "") {
         const lower2 = envOptIn.toLowerCase();
         return lower2 === "true" || lower2 === "1";
@@ -130327,8 +130327,8 @@ var require_gax2 = __commonJS({
       return createRetryOptions(retryCodes, backoffSettings, shouldRetryFn, getResumptionRequestFn);
     }
     function constructSettings(serviceName, clientConfig, configOverrides, retryNames, otherArgs, enableTelemetryTracing, internalTelemetryInfo) {
-      const env = typeof process === "object" && typeof process.env === "object" ? process.env : {};
-      const envTracing = env.GOOGLE_SDK_NODE_ENABLE_TRACING?.trim();
+      const env2 = typeof process === "object" && typeof process.env === "object" ? process.env : {};
+      const envTracing = env2.GOOGLE_SDK_NODE_ENABLE_TRACING?.trim();
       const isEnvSet = envTracing !== void 0 && envTracing !== "";
       const isEnvEnabled = (0, util_1.checkTelemetryEnabled)();
       const tracingRequested = isEnvSet ? isEnvEnabled : Boolean(internalTelemetryInfo || enableTelemetryTracing);
@@ -130781,11 +130781,11 @@ var require_logging_utils3 = __commonJS({
         const debugLogger = this.upstream?.makeLogger(namespace);
         return (fields, ...args) => {
           const severity = fields.severity ?? types_1.LogSeverity.INFO;
-          const json2 = Object.assign({
+          const json3 = Object.assign({
             severity,
             message: util.format(...args)
           }, fields);
-          const jsonString = JSON.stringify(json2);
+          const jsonString = JSON.stringify(json3);
           if (debugLogger) {
             debugLogger(fields, jsonString);
           } else {
@@ -131293,22 +131293,22 @@ var require_crypto8 = __commonJS({
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.NodeCrypto = void 0;
-    var crypto11 = __require("crypto");
+    var crypto15 = __require("crypto");
     var NodeCrypto = class {
       async sha256DigestBase64(str) {
-        return crypto11.createHash("sha256").update(str).digest("base64");
+        return crypto15.createHash("sha256").update(str).digest("base64");
       }
       randomBytesBase64(count) {
-        return crypto11.randomBytes(count).toString("base64");
+        return crypto15.randomBytes(count).toString("base64");
       }
       async verify(pubkey, data, signature) {
-        const verifier = crypto11.createVerify("RSA-SHA256");
+        const verifier = crypto15.createVerify("RSA-SHA256");
         verifier.update(data);
         verifier.end();
         return verifier.verify(pubkey, signature, "base64");
       }
       async sign(privateKey, data) {
-        const signer = crypto11.createSign("RSA-SHA256");
+        const signer = crypto15.createSign("RSA-SHA256");
         signer.update(data);
         signer.end();
         return signer.sign(privateKey, "base64");
@@ -131326,7 +131326,7 @@ var require_crypto8 = __commonJS({
        *   string in hexadecimal encoding.
        */
       async sha256DigestHex(str) {
-        return crypto11.createHash("sha256").update(str).digest("hex");
+        return crypto15.createHash("sha256").update(str).digest("hex");
       }
       /**
        * Computes the HMAC hash of a message using the provided crypto key and the
@@ -131338,7 +131338,7 @@ var require_crypto8 = __commonJS({
        */
       async signWithHmacSha256(key, msg) {
         const cryptoKey = typeof key === "string" ? key : toBuffer(key);
-        return toArrayBuffer(crypto11.createHmac("sha256", cryptoKey).update(msg).digest());
+        return toArrayBuffer(crypto15.createHmac("sha256", cryptoKey).update(msg).digest());
       }
     };
     exports.NodeCrypto = NodeCrypto;
@@ -131760,25 +131760,25 @@ var require_authclient3 = __commonJS({
       }
       static log = (0, google_logging_utils_1.log)("auth");
       static DEFAULT_REQUEST_INTERCEPTOR = {
-        resolved: async (config) => {
-          if (!config.headers.has("x-goog-api-client")) {
+        resolved: async (config3) => {
+          if (!config3.headers.has("x-goog-api-client")) {
             const nodeVersion = process.version.replace(/^v/, "");
-            config.headers.set("x-goog-api-client", `gl-node/${nodeVersion}`);
+            config3.headers.set("x-goog-api-client", `gl-node/${nodeVersion}`);
           }
-          const userAgent = config.headers.get("User-Agent");
+          const userAgent = config3.headers.get("User-Agent");
           if (!userAgent) {
-            config.headers.set("User-Agent", shared_cjs_1.USER_AGENT);
+            config3.headers.set("User-Agent", shared_cjs_1.USER_AGENT);
           } else if (!userAgent.includes(`${shared_cjs_1.PRODUCT_NAME}/`)) {
-            config.headers.set("User-Agent", `${userAgent} ${shared_cjs_1.USER_AGENT}`);
+            config3.headers.set("User-Agent", `${userAgent} ${shared_cjs_1.USER_AGENT}`);
           }
           try {
-            const symbols = config;
+            const symbols = config3;
             const methodName = symbols[_AuthClient.RequestMethodNameSymbol];
             const logId = `${Math.floor(Math.random() * 1e3)}`;
             symbols[_AuthClient.RequestLogIdSymbol] = logId;
             const logObject = {
-              url: config.url,
-              headers: config.headers
+              url: config3.url,
+              headers: config3.headers
             };
             if (methodName) {
               _AuthClient.log.info("%s [%s] request %j", methodName, logId, logObject);
@@ -131787,7 +131787,7 @@ var require_authclient3 = __commonJS({
             }
           } catch (e2) {
           }
-          return config;
+          return config3;
         }
       };
       static DEFAULT_RESPONSE_INTERCEPTOR = {
@@ -131826,9 +131826,9 @@ var require_authclient3 = __commonJS({
        * @param config A Gaxios request config
        * @param methodName The method name making the call
        */
-      static setMethodName(config, methodName) {
+      static setMethodName(config3, methodName) {
         try {
-          const symbols = config;
+          const symbols = config3;
           symbols[_AuthClient.RequestMethodNameSymbol] = methodName;
         } catch (e2) {
         }
@@ -131871,8 +131871,8 @@ var require_loginticket3 = __commonJS({
        * @param {TokenPayload} pay Payload of the jwt
        * @constructor
        */
-      constructor(env, pay) {
-        this.envelope = env;
+      constructor(env2, pay) {
+        this.envelope = env2;
         this.payload = pay;
       }
       getEnvelope() {
@@ -132029,10 +132029,10 @@ var require_oauth2client3 = __commonJS({
        * https://github.com/googleapis/google-auth-library-nodejs/blob/main/samples/oauth2-codeVerifier.js
        */
       async generateCodeVerifierAsync() {
-        const crypto11 = (0, crypto_1.createCrypto)();
-        const randomString = crypto11.randomBytesBase64(96);
+        const crypto15 = (0, crypto_1.createCrypto)();
+        const randomString = crypto15.randomBytesBase64(96);
         const codeVerifier = randomString.replace(/\+/g, "~").replace(/=/g, "_").replace(/\//g, "-");
-        const unencodedCodeChallenge = await crypto11.sha256DigestBase64(codeVerifier);
+        const unencodedCodeChallenge = await crypto15.sha256DigestBase64(codeVerifier);
         const codeChallenge = unencodedCodeChallenge.split("=")[0].replace(/\+/g, "-").replace(/\//g, "_");
         return { codeVerifier, codeChallenge };
       }
@@ -132473,7 +132473,7 @@ var require_oauth2client3 = __commonJS({
        * @return Returns a promise resolving to LoginTicket on verification.
        */
       async verifySignedJwtWithCertsAsync(jwt, certs, requiredAudience, issuers, maxExpiry) {
-        const crypto11 = (0, crypto_1.createCrypto)();
+        const crypto15 = (0, crypto_1.createCrypto)();
         if (!maxExpiry) {
           maxExpiry = _OAuth2Client.DEFAULT_MAX_TOKEN_LIFETIME_SECS_;
         }
@@ -132486,7 +132486,7 @@ var require_oauth2client3 = __commonJS({
         let envelope;
         let payload;
         try {
-          envelope = JSON.parse(crypto11.decodeBase64StringUtf8(segments[0]));
+          envelope = JSON.parse(crypto15.decodeBase64StringUtf8(segments[0]));
         } catch (err) {
           if (err instanceof Error) {
             err.message = `Can't parse token envelope: ${segments[0]}': ${err.message}`;
@@ -132497,7 +132497,7 @@ var require_oauth2client3 = __commonJS({
           throw new Error("Can't parse token envelope: " + segments[0]);
         }
         try {
-          payload = JSON.parse(crypto11.decodeBase64StringUtf8(segments[1]));
+          payload = JSON.parse(crypto15.decodeBase64StringUtf8(segments[1]));
         } catch (err) {
           if (err instanceof Error) {
             err.message = `Can't parse token payload '${segments[0]}`;
@@ -132514,7 +132514,7 @@ var require_oauth2client3 = __commonJS({
         if (envelope.alg === "ES256") {
           signature = formatEcdsa.joseToDer(signature, "ES256").toString("base64");
         }
-        const verified = await crypto11.verify(cert2, signed, signature);
+        const verified = await crypto15.verify(cert2, signed, signature);
         if (!verified) {
           throw new Error("Invalid token signature: " + jwt);
         }
@@ -132733,7 +132733,7 @@ var require_envDetect3 = __commonJS({
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.GCPEnv = void 0;
     exports.clear = clear;
-    exports.getEnv = getEnv;
+    exports.getEnv = getEnv2;
     var gcpMetadata = require_src17();
     var GCPEnv;
     (function(GCPEnv2) {
@@ -132749,7 +132749,7 @@ var require_envDetect3 = __commonJS({
     function clear() {
       envPromise = void 0;
     }
-    async function getEnv() {
+    async function getEnv2() {
       if (envPromise) {
         return envPromise;
       }
@@ -132757,25 +132757,25 @@ var require_envDetect3 = __commonJS({
       return envPromise;
     }
     async function getEnvMemoized() {
-      let env = GCPEnv.NONE;
+      let env2 = GCPEnv.NONE;
       if (isAppEngine()) {
-        env = GCPEnv.APP_ENGINE;
+        env2 = GCPEnv.APP_ENGINE;
       } else if (isCloudFunction()) {
-        env = GCPEnv.CLOUD_FUNCTIONS;
+        env2 = GCPEnv.CLOUD_FUNCTIONS;
       } else if (await isComputeEngine()) {
         if (await isKubernetesEngine()) {
-          env = GCPEnv.KUBERNETES_ENGINE;
+          env2 = GCPEnv.KUBERNETES_ENGINE;
         } else if (isCloudRun()) {
-          env = GCPEnv.CLOUD_RUN;
+          env2 = GCPEnv.CLOUD_RUN;
         } else if (isCloudRunJob()) {
-          env = GCPEnv.CLOUD_RUN_JOBS;
+          env2 = GCPEnv.CLOUD_RUN_JOBS;
         } else {
-          env = GCPEnv.COMPUTE_ENGINE;
+          env2 = GCPEnv.COMPUTE_ENGINE;
         }
       } else {
-        env = GCPEnv.NONE;
+        env2 = GCPEnv.NONE;
       }
-      return env;
+      return env2;
     }
     function isAppEngine() {
       return !!(process.env.GAE_SERVICE || process.env.GAE_MODULE_NAME);
@@ -133340,20 +133340,20 @@ var require_jwtaccess3 = __commonJS({
        * Create a JWTAccess credentials instance using the given input options.
        * @param json The input object.
        */
-      fromJSON(json2) {
-        if (!json2) {
+      fromJSON(json3) {
+        if (!json3) {
           throw new Error("Must pass in a JSON object containing the service account auth settings.");
         }
-        if (!json2.client_email) {
+        if (!json3.client_email) {
           throw new Error("The incoming JSON object does not contain a client_email field");
         }
-        if (!json2.private_key) {
+        if (!json3.private_key) {
           throw new Error("The incoming JSON object does not contain a private_key field");
         }
-        this.email = json2.client_email;
-        this.key = json2.private_key;
-        this.keyId = json2.private_key_id;
-        this.projectId = json2.project_id;
+        this.email = json3.client_email;
+        this.key = json3.private_key;
+        this.keyId = json3.private_key_id;
+        this.projectId = json3.project_id;
       }
       fromStream(inputStream, callback) {
         if (callback) {
@@ -133586,22 +133586,22 @@ var require_jwtclient3 = __commonJS({
        *
        * **Important**: If you accept a credential configuration (credential JSON/File/Stream) from an external source for authentication to Google Cloud, you must validate it before providing it to any Google API or library. Providing an unvalidated credential configuration to Google APIs can compromise the security of your systems and data. For more information, refer to {@link https://cloud.google.com/docs/authentication/external/externally-sourced-credentials Validate credential configurations from external sources}.
        */
-      fromJSON(json2) {
-        if (!json2) {
+      fromJSON(json3) {
+        if (!json3) {
           throw new Error("Must pass in a JSON object containing the service account auth settings.");
         }
-        if (!json2.client_email) {
+        if (!json3.client_email) {
           throw new Error("The incoming JSON object does not contain a client_email field");
         }
-        if (!json2.private_key) {
+        if (!json3.private_key) {
           throw new Error("The incoming JSON object does not contain a private_key field");
         }
-        this.email = json2.client_email;
-        this.key = json2.private_key;
-        this.keyId = json2.private_key_id;
-        this.projectId = json2.project_id;
-        this.quotaProjectId = json2.quota_project_id;
-        this.universeDomain = json2.universe_domain || this.universeDomain;
+        this.email = json3.client_email;
+        this.key = json3.private_key;
+        this.keyId = json3.private_key_id;
+        this.projectId = json3.project_id;
+        this.quotaProjectId = json3.quota_project_id;
+        this.universeDomain = json3.universe_domain || this.universeDomain;
       }
       fromStream(inputStream, callback) {
         if (callback) {
@@ -133722,28 +133722,28 @@ var require_refreshclient3 = __commonJS({
        * options.
        * @param json The input object.
        */
-      fromJSON(json2) {
-        if (!json2) {
+      fromJSON(json3) {
+        if (!json3) {
           throw new Error("Must pass in a JSON object containing the user refresh token");
         }
-        if (json2.type !== "authorized_user") {
+        if (json3.type !== "authorized_user") {
           throw new Error('The incoming JSON object does not have the "authorized_user" type');
         }
-        if (!json2.client_id) {
+        if (!json3.client_id) {
           throw new Error("The incoming JSON object does not contain a client_id field");
         }
-        if (!json2.client_secret) {
+        if (!json3.client_secret) {
           throw new Error("The incoming JSON object does not contain a client_secret field");
         }
-        if (!json2.refresh_token) {
+        if (!json3.refresh_token) {
           throw new Error("The incoming JSON object does not contain a refresh_token field");
         }
-        this._clientId = json2.client_id;
-        this._clientSecret = json2.client_secret;
-        this._refreshToken = json2.refresh_token;
-        this.credentials.refresh_token = json2.refresh_token;
-        this.quotaProjectId = json2.quota_project_id;
-        this.universeDomain = json2.universe_domain || this.universeDomain;
+        this._clientId = json3.client_id;
+        this._clientSecret = json3.client_secret;
+        this._refreshToken = json3.refresh_token;
+        this.credentials.refresh_token = json3.refresh_token;
+        this.quotaProjectId = json3.quota_project_id;
+        this.universeDomain = json3.universe_domain || this.universeDomain;
       }
       fromStream(inputStream, callback) {
         if (callback) {
@@ -133774,9 +133774,9 @@ var require_refreshclient3 = __commonJS({
        * options.
        * @param json The input object.
        */
-      static fromJSON(json2) {
+      static fromJSON(json3) {
         const client2 = new _UserRefreshClient();
-        client2.fromJSON(json2);
+        client2.fromJSON(json3);
         return client2;
       }
     };
@@ -134630,8 +134630,8 @@ var require_filesubjecttokensupplier3 = __commonJS({
         if (this.formatType === "text") {
           subjectToken = rawText;
         } else if (this.formatType === "json" && this.subjectTokenFieldName) {
-          const json2 = JSON.parse(rawText);
-          subjectToken = json2[this.subjectTokenFieldName];
+          const json3 = JSON.parse(rawText);
+          subjectToken = json3[this.subjectTokenFieldName];
         }
         if (!subjectToken) {
           throw new Error("Unable to parse the subject_token from the credential_source file");
@@ -134807,9 +134807,9 @@ var require_certificatesubjecttokensupplier3 = __commonJS({
           throw new CertificateSourceUnavailableError(`Failed to read certificate config file at: ${configPath}`);
         }
         try {
-          const config = JSON.parse(fileContents);
-          const certPath = config?.cert_configs?.workload?.cert_path;
-          const keyPath = config?.cert_configs?.workload?.key_path;
+          const config3 = JSON.parse(fileContents);
+          const certPath = config3?.cert_configs?.workload?.cert_path;
+          const keyPath = config3?.cert_configs?.workload?.key_path;
           if (!certPath || !keyPath) {
             throw new InvalidConfigurationError(`Certificate config file (${configPath}) is missing required "cert_path" or "key_path" in the workload config.`);
           }
@@ -135084,14 +135084,14 @@ var require_awsrequestsigner3 = __commonJS({
       }
     };
     exports.AwsRequestSigner = AwsRequestSigner;
-    async function sign(crypto11, key, msg) {
-      return await crypto11.signWithHmacSha256(key, msg);
+    async function sign(crypto15, key, msg) {
+      return await crypto15.signWithHmacSha256(key, msg);
     }
-    async function getSigningKey(crypto11, key, dateStamp, region, serviceName) {
-      const kDate = await sign(crypto11, `AWS4${key}`, dateStamp);
-      const kRegion = await sign(crypto11, kDate, region);
-      const kService = await sign(crypto11, kRegion, serviceName);
-      const kSigning = await sign(crypto11, kService, "aws4_request");
+    async function getSigningKey(crypto15, key, dateStamp, region, serviceName) {
+      const kDate = await sign(crypto15, `AWS4${key}`, dateStamp);
+      const kRegion = await sign(crypto15, kDate, region);
+      const kService = await sign(crypto15, kRegion, serviceName);
+      const kSigning = await sign(crypto15, kService, "aws4_request");
       return kSigning;
     }
     async function generateAuthenticationHeaderMap(options2) {
@@ -136057,7 +136057,7 @@ var require_gdchclient2 = __commonJS({
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.GdchClient = exports.GDCH_SERVICE_ACCOUNT_TYPE = void 0;
-    var crypto11 = __require("crypto");
+    var crypto15 = __require("crypto");
     var fs5 = __require("fs");
     var https3 = __require("https");
     var oauth2client_1 = require_oauth2client3();
@@ -136106,45 +136106,45 @@ var require_gdchclient2 = __commonJS({
           apiAudience
         });
       }
-      fromJSON(json2) {
-        if (!json2) {
+      fromJSON(json3) {
+        if (!json3) {
           throw new Error("Must pass in a JSON object containing the GDCH credentials settings.");
         }
-        if (json2.type !== exports.GDCH_SERVICE_ACCOUNT_TYPE) {
+        if (json3.type !== exports.GDCH_SERVICE_ACCOUNT_TYPE) {
           throw new Error(`The incoming JSON object does not have the "${exports.GDCH_SERVICE_ACCOUNT_TYPE}" type`);
         }
-        if (json2.format_version !== "1") {
+        if (json3.format_version !== "1") {
           throw new Error("Only format version 1 is supported.");
         }
-        if (!json2.project) {
+        if (!json3.project) {
           throw new Error("The incoming JSON object does not contain a project field");
         }
-        if (!json2.private_key_id) {
+        if (!json3.private_key_id) {
           throw new Error("The incoming JSON object does not contain a private_key_id field");
         }
-        if (!json2.private_key) {
+        if (!json3.private_key) {
           throw new Error("The incoming JSON object does not contain a private_key field");
         }
-        if (!json2.name) {
+        if (!json3.name) {
           throw new Error("The incoming JSON object does not contain a name field");
         }
-        if (!json2.token_uri) {
+        if (!json3.token_uri) {
           throw new Error("The incoming JSON object does not contain a token_uri field");
         }
-        this.projectId = json2.project;
-        this.privateKeyId = json2.private_key_id;
-        this.privateKey = json2.private_key;
-        this.serviceIdentityName = json2.name;
-        this.tokenServerUri = json2.token_uri;
-        this.caCertPath = json2.ca_cert_path;
+        this.projectId = json3.project;
+        this.privateKeyId = json3.private_key_id;
+        this.privateKey = json3.private_key;
+        this.serviceIdentityName = json3.name;
+        this.tokenServerUri = json3.token_uri;
+        this.caCertPath = json3.ca_cert_path;
         this.gdchOptions = {
           ...this.gdchOptions,
-          projectId: json2.project,
-          privateKeyId: json2.private_key_id,
-          privateKey: json2.private_key,
-          serviceIdentityName: json2.name,
-          tokenServerUri: json2.token_uri,
-          caCertPath: json2.ca_cert_path
+          projectId: json3.project,
+          privateKeyId: json3.private_key_id,
+          privateKey: json3.private_key,
+          serviceIdentityName: json3.name,
+          tokenServerUri: json3.token_uri,
+          caCertPath: json3.ca_cert_path
         };
       }
       async refreshTokenNoCache() {
@@ -136248,7 +136248,7 @@ var require_gdchclient2 = __commonJS({
         const encodedHeader = this.base64UrlEncode(JSON.stringify(header));
         const encodedPayload = this.base64UrlEncode(JSON.stringify(payload));
         const signingInput = `${encodedHeader}.${encodedPayload}`;
-        const signature = crypto11.sign("sha256", Buffer.from(signingInput), {
+        const signature = crypto15.sign("sha256", Buffer.from(signingInput), {
           key: this.privateKey,
           dsaEncoding: "ieee-p1363"
         });
@@ -136678,30 +136678,30 @@ var require_googleauth3 = __commonJS({
        * @param json The impersonated input object.
        * @returns JWT or UserRefresh Client with data
        */
-      fromImpersonatedJSON(json2) {
-        if (!json2) {
+      fromImpersonatedJSON(json3) {
+        if (!json3) {
           throw new Error("Must pass in a JSON object containing an  impersonated refresh token");
         }
-        if (json2.type !== impersonated_1.IMPERSONATED_ACCOUNT_TYPE) {
+        if (json3.type !== impersonated_1.IMPERSONATED_ACCOUNT_TYPE) {
           throw new Error(`The incoming JSON object does not have the "${impersonated_1.IMPERSONATED_ACCOUNT_TYPE}" type`);
         }
-        if (!json2.source_credentials) {
+        if (!json3.source_credentials) {
           throw new Error("The incoming JSON object does not contain a source_credentials field");
         }
-        if (!json2.service_account_impersonation_url) {
+        if (!json3.service_account_impersonation_url) {
           throw new Error("The incoming JSON object does not contain a service_account_impersonation_url field");
         }
-        const sourceClient = this.fromJSON(json2.source_credentials);
-        if (json2.service_account_impersonation_url?.length > 256) {
-          throw new RangeError(`Target principal is too long: ${json2.service_account_impersonation_url}`);
+        const sourceClient = this.fromJSON(json3.source_credentials);
+        if (json3.service_account_impersonation_url?.length > 256) {
+          throw new RangeError(`Target principal is too long: ${json3.service_account_impersonation_url}`);
         }
-        const targetPrincipal = /(?<target>[^/]+):(generateAccessToken|generateIdToken)$/.exec(json2.service_account_impersonation_url)?.groups?.target;
+        const targetPrincipal = /(?<target>[^/]+):(generateAccessToken|generateIdToken)$/.exec(json3.service_account_impersonation_url)?.groups?.target;
         if (!targetPrincipal) {
-          throw new RangeError(`Cannot extract target principal from ${json2.service_account_impersonation_url}`);
+          throw new RangeError(`Cannot extract target principal from ${json3.service_account_impersonation_url}`);
         }
-        const targetScopes = (this.scopes || json2.scopes || this.defaultScopes) ?? [];
+        const targetScopes = (this.scopes || json3.scopes || this.defaultScopes) ?? [];
         return new impersonated_1.Impersonated({
-          ...json2,
+          ...json3,
           sourceClient,
           targetPrincipal,
           targetScopes: Array.isArray(targetScopes) ? targetScopes : [targetScopes]
@@ -136749,33 +136749,33 @@ var require_googleauth3 = __commonJS({
        * @param options The JWT or UserRefresh options for the client
        * @returns JWT or UserRefresh Client with data
        */
-      fromJSON(json2, options2 = {}) {
+      fromJSON(json3, options2 = {}) {
         let client2;
         const preferredUniverseDomain = (0, util_1.originalOrCamelOptions)(options2).get("universe_domain");
-        if (json2.type === refreshclient_1.USER_REFRESH_ACCOUNT_TYPE) {
+        if (json3.type === refreshclient_1.USER_REFRESH_ACCOUNT_TYPE) {
           client2 = new refreshclient_1.UserRefreshClient(options2);
-          client2.fromJSON(json2);
-        } else if (json2.type === impersonated_1.IMPERSONATED_ACCOUNT_TYPE) {
-          client2 = this.fromImpersonatedJSON(json2);
-        } else if (json2.type === baseexternalclient_1.EXTERNAL_ACCOUNT_TYPE) {
+          client2.fromJSON(json3);
+        } else if (json3.type === impersonated_1.IMPERSONATED_ACCOUNT_TYPE) {
+          client2 = this.fromImpersonatedJSON(json3);
+        } else if (json3.type === baseexternalclient_1.EXTERNAL_ACCOUNT_TYPE) {
           client2 = externalclient_1.ExternalAccountClient.fromJSON({
-            ...json2,
+            ...json3,
             ...options2
           });
           client2.scopes = this.getAnyScopes();
-        } else if (json2.type === externalAccountAuthorizedUserClient_1.EXTERNAL_ACCOUNT_AUTHORIZED_USER_TYPE) {
+        } else if (json3.type === externalAccountAuthorizedUserClient_1.EXTERNAL_ACCOUNT_AUTHORIZED_USER_TYPE) {
           client2 = new externalAccountAuthorizedUserClient_1.ExternalAccountAuthorizedUserClient({
-            ...json2,
+            ...json3,
             ...options2
           });
-        } else if (json2.type === gdchclient_1.GDCH_SERVICE_ACCOUNT_TYPE) {
+        } else if (json3.type === gdchclient_1.GDCH_SERVICE_ACCOUNT_TYPE) {
           client2 = new gdchclient_1.GdchClient(options2);
-          client2.fromJSON(json2);
+          client2.fromJSON(json3);
         } else {
           options2.scopes = this.scopes;
           client2 = new jwtclient_1.JWT(options2);
           this.setGapicJWTValues(client2);
-          client2.fromJSON(json2);
+          client2.fromJSON(json3);
         }
         if (preferredUniverseDomain) {
           client2.universeDomain = preferredUniverseDomain;
@@ -136789,9 +136789,9 @@ var require_googleauth3 = __commonJS({
        * @param options The JWT or UserRefresh options for the client
        * @returns JWT or UserRefresh Client with data
        */
-      _cacheClientFromJSON(json2, options2) {
-        const client2 = this.fromJSON(json2, options2);
-        this.jsonContent = json2;
+      _cacheClientFromJSON(json3, options2) {
+        const client2 = this.fromJSON(json3, options2);
+        this.jsonContent = json3;
         this.cachedCredential = client2;
         return client2;
       }
@@ -137111,24 +137111,24 @@ var require_googleauth3 = __commonJS({
           const signed = await client2.sign(data);
           return signed.signedBlob;
         }
-        const crypto11 = (0, crypto_1.createCrypto)();
+        const crypto15 = (0, crypto_1.createCrypto)();
         if (client2 instanceof jwtclient_1.JWT && client2.key) {
-          const sign = await crypto11.sign(client2.key, data);
+          const sign = await crypto15.sign(client2.key, data);
           return sign;
         }
         const creds = await this.getCredentials();
         if (!creds.client_email) {
           throw new Error("Cannot sign data without `client_email`.");
         }
-        return this.signBlob(crypto11, creds.client_email, data, endpoint);
+        return this.signBlob(crypto15, creds.client_email, data, endpoint);
       }
-      async signBlob(crypto11, emailOrUniqueId, data, endpoint) {
+      async signBlob(crypto15, emailOrUniqueId, data, endpoint) {
         const url = new URL(endpoint + `${emailOrUniqueId}:signBlob`);
         const res = await this.request({
           method: "POST",
           url: url.href,
           data: {
-            payload: crypto11.encodeBase64StringUtf8(data)
+            payload: crypto15.encodeBase64StringUtf8(data)
           },
           retry: true,
           retryConfig: {
@@ -137558,8 +137558,8 @@ var require_bytes2 = __commonJS({
         return Buffer.from(obj.buffer, 0, obj.byteLength).toString("base64");
       }
     }
-    function bytesFromProto3JSON(json2) {
-      return Buffer.from(json2, "base64");
+    function bytesFromProto3JSON(json3) {
+      return Buffer.from(json3, "base64");
     }
   }
 });
@@ -137683,42 +137683,42 @@ var require_value2 = __commonJS({
       }
       return null;
     }
-    function googleProtobufStructFromProto3JSON(json2) {
+    function googleProtobufStructFromProto3JSON(json3) {
       const fields = {};
-      for (const [key, value] of Object.entries(json2)) {
+      for (const [key, value] of Object.entries(json3)) {
         fields[key] = googleProtobufValueFromProto3JSON(value);
       }
       return { fields };
     }
-    function googleProtobufListValueFromProto3JSON(json2) {
+    function googleProtobufListValueFromProto3JSON(json3) {
       return {
-        values: json2.map((element) => googleProtobufValueFromProto3JSON(element))
+        values: json3.map((element) => googleProtobufValueFromProto3JSON(element))
       };
     }
-    function googleProtobufValueFromProto3JSON(json2) {
-      if (json2 === null) {
+    function googleProtobufValueFromProto3JSON(json3) {
+      if (json3 === null) {
         return { nullValue: "NULL_VALUE" };
       }
-      if (typeof json2 === "number") {
-        return { numberValue: json2 };
+      if (typeof json3 === "number") {
+        return { numberValue: json3 };
       }
-      if (typeof json2 === "string") {
-        return { stringValue: json2 };
+      if (typeof json3 === "string") {
+        return { stringValue: json3 };
       }
-      if (typeof json2 === "boolean") {
-        return { boolValue: json2 };
+      if (typeof json3 === "boolean") {
+        return { boolValue: json3 };
       }
-      if (Array.isArray(json2)) {
+      if (Array.isArray(json3)) {
         return {
-          listValue: googleProtobufListValueFromProto3JSON(json2)
+          listValue: googleProtobufListValueFromProto3JSON(json3)
         };
       }
-      if (typeof json2 === "object") {
+      if (typeof json3 === "object") {
         return {
-          structValue: googleProtobufStructFromProto3JSON(json2)
+          structValue: googleProtobufStructFromProto3JSON(json3)
         };
       }
-      throw new Error(`googleProtobufValueFromProto3JSON: incorrect parameter type: ${typeof json2}`);
+      throw new Error(`googleProtobufValueFromProto3JSON: incorrect parameter type: ${typeof json3}`);
     }
   }
 });
@@ -137739,10 +137739,10 @@ var require_duration3 = __commonJS({
       durationSeconds += "s";
       return durationSeconds;
     }
-    function googleProtobufDurationFromProto3JSON(json2) {
-      const match = json2.match(/^(\d*)(?:\.(\d*))?s$/);
+    function googleProtobufDurationFromProto3JSON(json3) {
+      const match = json3.match(/^(\d*)(?:\.(\d*))?s$/);
       if (!match) {
-        throw new Error(`googleProtobufDurationFromProto3JSON: incorrect value ${json2} passed as google.protobuf.Duration`);
+        throw new Error(`googleProtobufDurationFromProto3JSON: incorrect value ${json3} passed as google.protobuf.Duration`);
       }
       let seconds = 0;
       let nanos = 0;
@@ -137780,16 +137780,16 @@ var require_timestamp2 = __commonJS({
       }
       return date.replace(/(?:\.\d{0,9})/, "." + nanos);
     }
-    function googleProtobufTimestampFromProto3JSON(json2) {
-      const match = json2.match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?/);
+    function googleProtobufTimestampFromProto3JSON(json3) {
+      const match = json3.match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?/);
       if (!match) {
-        throw new Error(`googleProtobufDurationFromProto3JSON: incorrect value ${json2} passed as google.protobuf.Duration`);
+        throw new Error(`googleProtobufDurationFromProto3JSON: incorrect value ${json3} passed as google.protobuf.Duration`);
       }
-      const date = new Date(json2);
+      const date = new Date(json3);
       const millisecondsSinceEpoch = date.getTime();
       const seconds = Math.floor(millisecondsSinceEpoch / 1e3);
       let nanos = 0;
-      const secondsFromDate = json2.split(".")[1];
+      const secondsFromDate = json3.split(".")[1];
       if (secondsFromDate) {
         nanos = parseInt(secondsFromDate.slice(0, -1).padEnd(9, "0"));
       }
@@ -137830,22 +137830,22 @@ var require_wrappers3 = __commonJS({
       }
       return obj.value;
     }
-    function wrapperFromProto3JSON(typeName, json2) {
-      if (json2 === null) {
+    function wrapperFromProto3JSON(typeName, json3) {
+      if (json3 === null) {
         return {
           value: null
         };
       }
       if (typeName === ".google.protobuf.BytesValue") {
-        if (typeof json2 !== "string") {
-          throw new Error(`numberWrapperFromProto3JSON: expected to get a string for google.protobuf.BytesValue but got ${typeof json2}`);
+        if (typeof json3 !== "string") {
+          throw new Error(`numberWrapperFromProto3JSON: expected to get a string for google.protobuf.BytesValue but got ${typeof json3}`);
         }
         return {
-          value: (0, bytes_1.bytesFromProto3JSON)(json2)
+          value: (0, bytes_1.bytesFromProto3JSON)(json3)
         };
       }
       return {
-        value: json2
+        value: json3
       };
     }
   }
@@ -137861,9 +137861,9 @@ var require_fieldmask2 = __commonJS({
     function googleProtobufFieldMaskToProto3JSON(obj) {
       return obj.paths.join(",");
     }
-    function googleProtobufFieldMaskFromProto3JSON(json2) {
+    function googleProtobufFieldMaskFromProto3JSON(json3) {
       return {
-        paths: json2.split(",")
+        paths: json3.split(",")
       };
     }
   }
@@ -137885,70 +137885,70 @@ var require_fromproto3json2 = __commonJS({
     var timestamp_1 = require_timestamp2();
     var wrappers_1 = require_wrappers3();
     var fieldmask_1 = require_fieldmask2();
-    function fromProto3JSONToInternalRepresentation(type, json2) {
+    function fromProto3JSONToInternalRepresentation(type, json3) {
       const fullyQualifiedTypeName = typeof type === "string" ? type : (0, util_1.getFullyQualifiedTypeName)(type);
       if (typeof type !== "string" && "values" in type) {
         if (fullyQualifiedTypeName === ".google.protobuf.NullValue") {
           return "NULL_VALUE";
         }
-        return (0, enum_1.resolveEnumValueToString)(type, json2);
+        return (0, enum_1.resolveEnumValueToString)(type, json3);
       }
       if (typeof type !== "string") {
         type.resolveAll();
       }
       if (typeof type === "string") {
-        return json2;
+        return json3;
       }
       if (fullyQualifiedTypeName === ".google.protobuf.Value") {
-        return (0, value_1.googleProtobufValueFromProto3JSON)(json2);
+        return (0, value_1.googleProtobufValueFromProto3JSON)(json3);
       }
       if (util_1.wrapperTypes.has(fullyQualifiedTypeName)) {
-        if (json2 !== null && typeof json2 === "object" || Array.isArray(json2)) {
-          throw new Error(`fromProto3JSONToInternalRepresentation: JSON representation for ${fullyQualifiedTypeName} expects a string, a number, or a boolean, but got ${typeof json2}`);
+        if (json3 !== null && typeof json3 === "object" || Array.isArray(json3)) {
+          throw new Error(`fromProto3JSONToInternalRepresentation: JSON representation for ${fullyQualifiedTypeName} expects a string, a number, or a boolean, but got ${typeof json3}`);
         }
-        return (0, wrappers_1.wrapperFromProto3JSON)(fullyQualifiedTypeName, json2);
+        return (0, wrappers_1.wrapperFromProto3JSON)(fullyQualifiedTypeName, json3);
       }
-      if (json2 === null) {
+      if (json3 === null) {
         return null;
       }
       if (fullyQualifiedTypeName === ".google.protobuf.Any") {
-        return (0, any_1.googleProtobufAnyFromProto3JSON)(type.root, json2);
+        return (0, any_1.googleProtobufAnyFromProto3JSON)(type.root, json3);
       }
       if (fullyQualifiedTypeName === ".google.protobuf.Struct") {
-        if (typeof json2 !== "object") {
-          throw new Error(`fromProto3JSONToInternalRepresentation: google.protobuf.Struct must be an object but got ${typeof json2}`);
+        if (typeof json3 !== "object") {
+          throw new Error(`fromProto3JSONToInternalRepresentation: google.protobuf.Struct must be an object but got ${typeof json3}`);
         }
-        if (Array.isArray(json2)) {
+        if (Array.isArray(json3)) {
           throw new Error("fromProto3JSONToInternalRepresentation: google.protobuf.Struct must be an object but got an array");
         }
-        return (0, value_1.googleProtobufStructFromProto3JSON)(json2);
+        return (0, value_1.googleProtobufStructFromProto3JSON)(json3);
       }
       if (fullyQualifiedTypeName === ".google.protobuf.ListValue") {
-        if (!Array.isArray(json2)) {
-          throw new Error(`fromProto3JSONToInternalRepresentation: google.protobuf.ListValue must be an array but got ${typeof json2}`);
+        if (!Array.isArray(json3)) {
+          throw new Error(`fromProto3JSONToInternalRepresentation: google.protobuf.ListValue must be an array but got ${typeof json3}`);
         }
-        return (0, value_1.googleProtobufListValueFromProto3JSON)(json2);
+        return (0, value_1.googleProtobufListValueFromProto3JSON)(json3);
       }
       if (fullyQualifiedTypeName === ".google.protobuf.Duration") {
-        if (typeof json2 !== "string") {
-          throw new Error(`fromProto3JSONToInternalRepresentation: google.protobuf.Duration must be a string but got ${typeof json2}`);
+        if (typeof json3 !== "string") {
+          throw new Error(`fromProto3JSONToInternalRepresentation: google.protobuf.Duration must be a string but got ${typeof json3}`);
         }
-        return (0, duration_1.googleProtobufDurationFromProto3JSON)(json2);
+        return (0, duration_1.googleProtobufDurationFromProto3JSON)(json3);
       }
       if (fullyQualifiedTypeName === ".google.protobuf.Timestamp") {
-        if (typeof json2 !== "string") {
-          throw new Error(`fromProto3JSONToInternalRepresentation: google.protobuf.Timestamp must be a string but got ${typeof json2}`);
+        if (typeof json3 !== "string") {
+          throw new Error(`fromProto3JSONToInternalRepresentation: google.protobuf.Timestamp must be a string but got ${typeof json3}`);
         }
-        return (0, timestamp_1.googleProtobufTimestampFromProto3JSON)(json2);
+        return (0, timestamp_1.googleProtobufTimestampFromProto3JSON)(json3);
       }
       if (fullyQualifiedTypeName === ".google.protobuf.FieldMask") {
-        if (typeof json2 !== "string") {
-          throw new Error(`fromProto3JSONToInternalRepresentation: google.protobuf.FieldMask must be a string but got ${typeof json2}`);
+        if (typeof json3 !== "string") {
+          throw new Error(`fromProto3JSONToInternalRepresentation: google.protobuf.FieldMask must be a string but got ${typeof json3}`);
         }
-        return (0, fieldmask_1.googleProtobufFieldMaskFromProto3JSON)(json2);
+        return (0, fieldmask_1.googleProtobufFieldMaskFromProto3JSON)(json3);
       }
       const result = {};
-      for (const [key, value] of Object.entries(json2)) {
+      for (const [key, value] of Object.entries(json3)) {
         const field2 = type.fields[key];
         if (!field2) {
           continue;
@@ -137998,12 +137998,12 @@ var require_fromproto3json2 = __commonJS({
       }
       return result;
     }
-    function fromProto3JSON(type, json2) {
-      const internalRepr = fromProto3JSONToInternalRepresentation(type, json2);
+    function fromProto3JSON(type, json3) {
+      const internalRepr = fromProto3JSONToInternalRepresentation(type, json3);
       if (internalRepr === null) {
         return null;
       }
-      (0, util_1.assert)(typeof internalRepr === "object" && !Array.isArray(internalRepr), `fromProto3JSON: expected an object, not ${json2}`);
+      (0, util_1.assert)(typeof internalRepr === "object" && !Array.isArray(internalRepr), `fromProto3JSON: expected an object, not ${json3}`);
       return type.fromObject(internalRepr);
     }
   }
@@ -138046,11 +138046,11 @@ var require_any2 = __commonJS({
       valueProto3JSON["@type"] = obj.type_url;
       return valueProto3JSON;
     }
-    function googleProtobufAnyFromProto3JSON(root, json2) {
-      if (json2 === null || typeof json2 !== "object" || Array.isArray(json2)) {
+    function googleProtobufAnyFromProto3JSON(root, json3) {
+      if (json3 === null || typeof json3 !== "object" || Array.isArray(json3)) {
         throw new Error("googleProtobufAnyFromProto3JSON: must be an object to decode google.protobuf.Any");
       }
-      const typeUrl = json2["@type"];
+      const typeUrl = json3["@type"];
       if (!typeUrl || typeof typeUrl !== "string") {
         throw new Error("googleProtobufAnyFromProto3JSON: JSON serialization of google.protobuf.Any must contain @type field");
       }
@@ -138061,12 +138061,12 @@ var require_any2 = __commonJS({
       } catch (err) {
         throw new Error(`googleProtobufAnyFromProto3JSON: cannot find type ${typeName}: ${err}`);
       }
-      let value = json2;
+      let value = json3;
       if (specialJSON.has(typeName)) {
-        if (!("value" in json2)) {
+        if (!("value" in json3)) {
           throw new Error(`googleProtobufAnyFromProto3JSON: JSON representation of google.protobuf.Any with type ${typeName} must contain the value field`);
         }
-        value = json2.value;
+        value = json3.value;
       }
       const valueMessage = (0, fromproto3json_1.fromProto3JSON)(type, value);
       if (valueMessage === null) {
@@ -138578,26 +138578,26 @@ var require_googleError2 = __commonJS({
       }
       // Parse http JSON error and promote google.rpc.ErrorInfo if exist.
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      static parseHttpError(json2) {
-        if (Array.isArray(json2)) {
-          json2 = json2.find((obj) => {
+      static parseHttpError(json3) {
+        if (Array.isArray(json3)) {
+          json3 = json3.find((obj) => {
             return "error" in obj;
           });
         }
-        if (!json2["error"]) {
-          json2["error"] = {};
-          Object.keys(json2).filter((key) => key !== "error").forEach((key) => {
-            json2["error"][key] = json2[key];
-            delete json2[key];
+        if (!json3["error"]) {
+          json3["error"] = {};
+          Object.keys(json3).filter((key) => key !== "error").forEach((key) => {
+            json3["error"][key] = json3[key];
+            delete json3[key];
           });
         }
         const decoder2 = new GoogleErrorDecoder();
-        const proto3Error = decoder2.decodeHTTPError(json2["error"]);
-        const error = Object.assign(new _GoogleError(json2["error"]["message"]), proto3Error);
-        if (json2["error"]["status"] && status_1.Status[json2["error"]["status"]]) {
-          error.code = status_1.Status[json2["error"]["status"]];
-        } else if (json2["error"]["code"]) {
-          error.code = (0, status_1.rpcCodeFromHttpStatusCode)(json2["error"]["code"]);
+        const proto3Error = decoder2.decodeHTTPError(json3["error"]);
+        const error = Object.assign(new _GoogleError(json3["error"]["message"]), proto3Error);
+        if (json3["error"]["status"] && status_1.Status[json3["error"]["status"]]) {
+          error.code = status_1.Status[json3["error"]["status"]];
+        } else if (json3["error"]["code"]) {
+          error.code = (0, status_1.rpcCodeFromHttpStatusCode)(json3["error"]["code"]);
         } else {
           delete error.code;
         }
@@ -138653,13 +138653,13 @@ var require_googleError2 = __commonJS({
         value: unknownProto.value
       });
     };
-    var getErrorDetails = (protobuf2, json2) => {
+    var getErrorDetails = (protobuf2, json3) => {
       const error_details = {
         knownDetails: [],
         unknownDetails: []
       };
-      if (typeof json2 === "object" && json2 !== null && "details" in json2) {
-        const details = json2["details"];
+      if (typeof json3 === "object" && json3 !== null && "details" in json3) {
+        const details = json3["details"];
         for (const detail of details) {
           if (isDetailKnownProto(protobuf2, detail)) {
             error_details.knownDetails.push(detail);
@@ -138781,10 +138781,10 @@ var require_googleError2 = __commonJS({
         return result;
       }
       // Decodes http error which is an instance of google.rpc.Status.
-      decodeHTTPError(json2) {
-        const errorDetails = getErrorDetails(this.root, json2);
+      decodeHTTPError(json3) {
+        const errorDetails = getErrorDetails(this.root, json3);
         let details = [];
-        if (typeof json2 === "object" && json2 !== null && "details" in json2) {
+        if (typeof json3 === "object" && json3 !== null && "details" in json3) {
           if (errorDetails.knownDetails.length) {
             details = errorDetails.knownDetails;
           }
@@ -138793,12 +138793,12 @@ var require_googleError2 = __commonJS({
             details = [...details, ...unknowDetailsAsResourceInfo];
           }
           if (details.length) {
-            json2.details = details;
+            json3.details = details;
           }
         }
-        const errorMessage = serializer.fromProto3JSON(this.statusType, json2);
+        const errorMessage = serializer.fromProto3JSON(this.statusType, json3);
         if (!errorMessage) {
-          throw new Error(`Received error message ${json2}, but failed to serialize as proto3 message`);
+          throw new Error(`Received error message ${json3}, but failed to serialize as proto3 message`);
         }
         return this.statusType.toObject(errorMessage, fallback_1.defaultToObjectOptions);
       }
@@ -138879,9 +138879,9 @@ var require_call3 = __commonJS({
         if (this.completed) {
           return;
         }
-        const canceller = func(argument, (err, response, next, rawResponse) => {
+        const canceller = func(argument, (err, response, next2, rawResponse) => {
           this.completed = true;
-          setImmediate(this.callback, err, response, next, rawResponse);
+          setImmediate(this.callback, err, response, next2, rawResponse);
         });
         if (canceller instanceof Promise) {
           canceller.catch((err) => {
@@ -138903,7 +138903,7 @@ var require_call3 = __commonJS({
       constructor() {
         let resolveCallback;
         let rejectCallback;
-        const callback = (err, response, next, rawResponse) => {
+        const callback = (err, response, next2, rawResponse) => {
           if (err) {
             if (err.metadata) {
               rejectCallback(googleError_1.GoogleError.parseGRPCStatusDetails(err));
@@ -138911,7 +138911,7 @@ var require_call3 = __commonJS({
               rejectCallback(err);
             }
           } else if (response !== void 0) {
-            resolveCallback([response, next || null, rawResponse || null]);
+            resolveCallback([response, next2 || null, rawResponse || null]);
           } else {
             throw new googleError_1.GoogleError("Neither error nor response are defined");
           }
@@ -139059,12 +139059,12 @@ var require_retries2 = __commonJS({
           retries++;
           let lastError = err;
           const toCall = (0, timeout_1.addTimeoutArg)(func, timeout, otherArgs);
-          canceller = toCall(argument, (err2, response, next, rawResponse) => {
+          canceller = toCall(argument, (err2, response, next2, rawResponse) => {
             if (err2) {
               lastError = err2;
             }
             if (!err2) {
-              callback(null, response, next, rawResponse);
+              callback(null, response, next2, rawResponse);
               return;
             }
             canceller = null;
@@ -139315,14 +139315,14 @@ var require_retry_request2 = __commonJS({
       }
     }
     module.exports = retryRequest;
-    function getNextRetryDelay(config) {
+    function getNextRetryDelay(config3) {
       const {
         maxRetryDelay,
         retryDelayMultiplier,
         retryNumber,
         timeOfFirstRequest,
         totalTimeout
-      } = config;
+      } = config3;
       const maxRetryDelayMs = maxRetryDelay * 1e3;
       const totalTimeoutMs = totalTimeout * 1e3;
       const jitter = Math.floor(Math.random() * 1e3);
@@ -142145,25 +142145,25 @@ var require_metadataResolver = __commonJS({
       return result;
     }
     function extractFromEnvironment() {
-      const env = typeof process === "object" && typeof process.env === "object" ? process.env : {};
+      const env2 = typeof process === "object" && typeof process.env === "object" ? process.env : {};
       const result = {};
-      const service = env.GOOGLE_SDK_NODE_CLIENT_SERVICE || env.GCP_CLIENT_SERVICE;
+      const service = env2.GOOGLE_SDK_NODE_CLIENT_SERVICE || env2.GCP_CLIENT_SERVICE;
       if (service?.trim()) {
         result.gcpClientService = service.trim();
       }
-      const version7 = env.GOOGLE_SDK_NODE_CLIENT_VERSION || env.GCP_CLIENT_VERSION;
+      const version7 = env2.GOOGLE_SDK_NODE_CLIENT_VERSION || env2.GCP_CLIENT_VERSION;
       if (version7?.trim()) {
         result.gcpVersion = version7.trim();
       }
-      const artifact = env.GOOGLE_SDK_NODE_ARTIFACT || env.GCP_ARTIFACT;
+      const artifact = env2.GOOGLE_SDK_NODE_ARTIFACT || env2.GCP_ARTIFACT;
       if (artifact?.trim()) {
         result.gcpArtifact = artifact.trim();
       }
-      const serverAddress = env.GOOGLE_SDK_NODE_SERVER_ADDRESS || env.SERVER_ADDRESS;
+      const serverAddress = env2.GOOGLE_SDK_NODE_SERVER_ADDRESS || env2.SERVER_ADDRESS;
       if (serverAddress?.trim()) {
         result.serverAddress = serverAddress.trim();
       }
-      const serverPort = env.GOOGLE_SDK_NODE_SERVER_PORT || env.SERVER_PORT;
+      const serverPort = env2.GOOGLE_SDK_NODE_SERVER_PORT || env2.SERVER_PORT;
       if (serverPort && !isNaN(Number(serverPort))) {
         result.serverPort = Number(serverPort);
       }
@@ -149824,7 +149824,7 @@ var require_pageDescriptor2 = __commonJS({
         const maxResults = "maxResults" in options2 ? options2.maxResults : -1;
         let pushCount = 0;
         let started = false;
-        function callback(err, resources, next, apiResp) {
+        function callback(err, resources, next2, apiResp) {
           if (err) {
             stream.emit("error", err);
             return;
@@ -149846,7 +149846,7 @@ var require_pageDescriptor2 = __commonJS({
           if (stream._readableState.ended) {
             return;
           }
-          if (!next) {
+          if (!next2) {
             stream.end();
             return;
           }
@@ -149854,10 +149854,10 @@ var require_pageDescriptor2 = __commonJS({
             delete options2.pageToken;
           }
           if (stream.isPaused()) {
-            request = next;
+            request = next2;
             started = false;
           } else {
-            setImmediate(apiCall, next, options2, callback);
+            setImmediate(apiCall, next2, options2, callback);
           }
         }
         stream.on("resume", async () => {
@@ -150787,18 +150787,18 @@ var require_fallbackRest2 = __commonJS({
         "Content-Type": "application/json"
       };
       const message2 = rpc.resolvedRequestType.fromObject(request);
-      const json2 = serializer.toProto3JSON(message2, {
+      const json3 = serializer.toProto3JSON(message2, {
         numericEnums
       });
-      if (!json2) {
+      if (!json3) {
         throw new Error(`Cannot send null request to RPC ${rpc.name}.`);
       }
-      if (typeof json2 !== "object" || Array.isArray(json2)) {
+      if (typeof json3 !== "object" || Array.isArray(json3)) {
         throw new Error(`Request to RPC ${rpc.name} must be an object.`);
       }
-      const transcoded = (0, transcoding_1.transcode)(json2, rpc.parsedOptions);
+      const transcoded = (0, transcoding_1.transcode)(json3, rpc.parsedOptions);
       if (!transcoded) {
-        throw new Error(`Cannot build HTTP request for ${JSON.stringify(json2)}, method: ${rpc.name}`);
+        throw new Error(`Cannot build HTTP request for ${JSON.stringify(json3)}, method: ${rpc.name}`);
       }
       if (numericEnums) {
         transcoded.queryString = (transcoded.queryString ? `${transcoded.queryString}&` : "") + "$alt=json%3Benum-encoding=int";
@@ -150834,9 +150834,9 @@ var require_fallbackRest2 = __commonJS({
         }
         throw new Error(`Received null response from RPC ${rpc.name}`);
       }
-      let json2;
+      let json3;
       try {
-        json2 = JSON.parse(decodedString);
+        json3 = JSON.parse(decodedString);
       } catch (err) {
         if (ok) {
           throw err;
@@ -150846,7 +150846,7 @@ var require_fallbackRest2 = __commonJS({
       if (!ok) {
         let error;
         try {
-          error = googleError_1.GoogleError.parseHttpError(json2);
+          error = googleError_1.GoogleError.parseHttpError(json3);
         } catch (err) {
           throw _undecodableErrorResponse(rpc, httpStatusCode, "the response body is not a JSON error object", err);
         }
@@ -150855,7 +150855,7 @@ var require_fallbackRest2 = __commonJS({
         }
         throw error;
       }
-      const message2 = serializer.fromProto3JSON(rpc.resolvedResponseType, json2);
+      const message2 = serializer.fromProto3JSON(rpc.resolvedResponseType, json3);
       if (!message2) {
         throw new Error(`Received null or malformed response from JSON serializer from RPC ${rpc.name}`);
       }
@@ -151241,17 +151241,17 @@ var require_resumableUpload = __commonJS({
           throw new Category3Error(`Cannot start resumable upload for method ${rpc.name}: the resolved request type is unavailable.`);
         }
         const message2 = rpc.resolvedRequestType.fromObject(this.context.request);
-        const json2 = serializer.toProto3JSON(message2, {
+        const json3 = serializer.toProto3JSON(message2, {
           numericEnums: this.context.numericEnums ?? false
         });
-        if (!json2 || typeof json2 !== "object" || Array.isArray(json2)) {
+        if (!json3 || typeof json3 !== "object" || Array.isArray(json3)) {
           throw new Category3Error(`Cannot serialize the request for resumable upload method ${rpc.name}.`);
         }
         let queryString = "";
         let transcodedPath = "";
-        let bodyPayload = json2;
+        let bodyPayload = json3;
         try {
-          const transcoded = (0, transcoding_1.transcode)(json2, rpc.parsedOptions);
+          const transcoded = (0, transcoding_1.transcode)(json3, rpc.parsedOptions);
           if (transcoded) {
             queryString = transcoded.queryString ?? "";
             transcodedPath = transcoded.url ? transcoded.url.replace(/^\/?/, "/") : "";
@@ -151464,14 +151464,14 @@ var require_resumableUpload = __commonJS({
         }
         const chunkSize = this.effectiveChunkSize_;
         while (buffer.length < chunkSize) {
-          const next = await iterator.next();
-          if (next.done) {
+          const next2 = await iterator.next();
+          if (next2.done) {
             if (buffer.length === 0) {
               return { chunk: null, eof: true, remainder: Buffer.alloc(0) };
             }
             return { chunk: buffer, eof: true, remainder: Buffer.alloc(0) };
           }
-          buffer = Buffer.concat([buffer, asBuffer(next.value)]);
+          buffer = Buffer.concat([buffer, asBuffer(next2.value)]);
         }
         const chunk = buffer.subarray(0, chunkSize);
         return { chunk, eof: false, remainder: buffer.subarray(chunkSize) };
@@ -151488,11 +151488,11 @@ var require_resumableUpload = __commonJS({
         }
         let remaining = bytes;
         while (remaining > 0) {
-          const next = await iterator.next();
-          if (next.done) {
+          const next2 = await iterator.next();
+          if (next2.done) {
             throw new Category3Error(`The server committed ${bytes} bytes beyond the end of the provided stream; the payload appears shorter than expected.`);
           }
-          const chunk = asBuffer(next.value);
+          const chunk = asBuffer(next2.value);
           if (chunk.length >= remaining) {
             return chunk.subarray(remaining);
           }
@@ -171589,8 +171589,8 @@ var require_fallback2 = __commonJS({
         const rootObject = protobuf.Root.fromJSON(jsonObject);
         return rootObject;
       }
-      loadProtoJSON(json2, ignoreCache = false) {
-        return _GrpcClient.protobufFromJSON(json2, ignoreCache);
+      loadProtoJSON(json3, ignoreCache = false) {
+        return _GrpcClient.protobufFromJSON(json3, ignoreCache);
       }
       /**
        * Loads the protobuf root object from a JSON object created from a proto file.
@@ -171598,13 +171598,13 @@ var require_fallback2 = __commonJS({
        * @param {Object} jsonObject - A JSON version of a protofile created usin protobuf.js
        * @returns {Object} Root namespace of proto JSON
        */
-      static protobufFromJSON(json2, ignoreCache = false) {
-        const hash = (0, object_hash_1.default)(JSON.stringify(json2)).toString();
+      static protobufFromJSON(json3, ignoreCache = false) {
+        const hash = (0, object_hash_1.default)(JSON.stringify(json3)).toString();
         const cached = _GrpcClient.protoCache.get(hash);
         if (cached && !ignoreCache) {
           return cached;
         }
-        const root = protobuf.Root.fromJSON(json2);
+        const root = protobuf.Root.fromJSON(json3);
         _GrpcClient.protoCache.set(hash, root);
         return root;
       }
@@ -173036,8 +173036,8 @@ var require_load_balancer2 = __commonJS({
     function registerDefaultLoadBalancerType(typeName) {
       defaultLoadBalancerType = typeName;
     }
-    function createLoadBalancer(config, channelControlHelper) {
-      const typeName = config.getLoadBalancerName();
+    function createLoadBalancer(config3, channelControlHelper) {
+      const typeName = config3.getLoadBalancerName();
       if (typeName in registeredLoadBalancerTypes) {
         return new registeredLoadBalancerTypes[typeName].LoadBalancer(channelControlHelper);
       } else {
@@ -173070,9 +173070,9 @@ var require_load_balancer2 = __commonJS({
       return new registeredLoadBalancerTypes[defaultLoadBalancerType].LoadBalancingConfig();
     }
     function selectLbConfigFromList(configs, fallbackTodefault = false) {
-      for (const config of configs) {
+      for (const config3 of configs) {
         try {
-          return parseLoadBalancingConfig(config);
+          return parseLoadBalancingConfig(config3);
         } catch (e2) {
           (0, logging_1.log)(constants_1.LogVerbosity.DEBUG, "Config parsing failed with error", e2.message);
           continue;
@@ -173301,8 +173301,8 @@ var require_service_config2 = __commonJS({
       }
       if ("loadBalancingConfig" in obj) {
         if (Array.isArray(obj.loadBalancingConfig)) {
-          for (const config of obj.loadBalancingConfig) {
-            result.loadBalancingConfig.push(validateLoadBalancingConfig(config));
+          for (const config3 of obj.loadBalancingConfig) {
+            result.loadBalancingConfig.push(validateLoadBalancingConfig(config3));
           }
         } else {
           throw new Error("Invalid service config: invalid loadBalancingConfig");
@@ -173390,8 +173390,8 @@ var require_service_config2 = __commonJS({
       if (!Array.isArray(obj)) {
         throw new Error("Invalid service config list");
       }
-      for (const config of obj) {
-        const validatedConfig = validateCanaryConfig(config);
+      for (const config3 of obj) {
+        const validatedConfig = validateCanaryConfig(config3);
         if (typeof validatedConfig.percentage === "number" && percentage > validatedConfig.percentage) {
           continue;
         }
@@ -173848,9 +173848,9 @@ var require_resolving_load_balancer2 = __commonJS({
       return false;
     }
     function findMatchingConfig(service, method, methodConfigs, matchLevel) {
-      for (const config of methodConfigs) {
-        if (hasMatchingName(service, method, config, matchLevel)) {
-          return config;
+      for (const config3 of methodConfigs) {
+        if (hasMatchingName(service, method, config3, matchLevel)) {
+          return config3;
         }
       }
       return null;
@@ -174611,28 +174611,28 @@ var require_client_interceptors2 = __commonJS({
     };
     exports.RequesterBuilder = RequesterBuilder;
     var defaultListener = {
-      onReceiveMetadata: (metadata, next) => {
-        next(metadata);
+      onReceiveMetadata: (metadata, next2) => {
+        next2(metadata);
       },
-      onReceiveMessage: (message2, next) => {
-        next(message2);
+      onReceiveMessage: (message2, next2) => {
+        next2(message2);
       },
-      onReceiveStatus: (status, next) => {
-        next(status);
+      onReceiveStatus: (status, next2) => {
+        next2(status);
       }
     };
     var defaultRequester = {
-      start: (metadata, listener, next) => {
-        next(metadata, listener);
+      start: (metadata, listener, next2) => {
+        next2(metadata, listener);
       },
-      sendMessage: (message2, next) => {
-        next(message2);
+      sendMessage: (message2, next2) => {
+        next2(message2);
       },
-      halfClose: (next) => {
-        next();
+      halfClose: (next2) => {
+        next2();
       },
-      cancel: (next) => {
-        next();
+      cancel: (next2) => {
+        next2();
       }
     };
     var InterceptingCall = class {
@@ -175592,9 +175592,9 @@ var require_src20 = __commonJS({
       return createPackageDefinition(loadedRoot, options2);
     }
     exports.loadSync = loadSync;
-    function fromJSON2(json2, options2) {
+    function fromJSON2(json3, options2) {
       options2 = options2 || {};
-      const loadedRoot = Protobuf.Root.fromJSON(json2);
+      const loadedRoot = Protobuf.Root.fromJSON(json3);
       loadedRoot.resolveAll();
       return createPackageDefinition(loadedRoot, options2);
     }
@@ -175859,27 +175859,27 @@ var require_channelz2 = __commonJS({
       const result = [];
       return result.concat(...bytePairs);
     }
-    function isIPv6MappedIPv4(ipAddress) {
-      return (0, net_1.isIPv6)(ipAddress) && ipAddress.toLowerCase().startsWith("::ffff:") && (0, net_1.isIPv4)(ipAddress.substring(7));
+    function isIPv6MappedIPv4(ipAddress2) {
+      return (0, net_1.isIPv6)(ipAddress2) && ipAddress2.toLowerCase().startsWith("::ffff:") && (0, net_1.isIPv4)(ipAddress2.substring(7));
     }
-    function ipv4AddressStringToBuffer(ipAddress) {
-      return Buffer.from(Uint8Array.from(ipAddress.split(".").map((segment) => Number.parseInt(segment))));
+    function ipv4AddressStringToBuffer(ipAddress2) {
+      return Buffer.from(Uint8Array.from(ipAddress2.split(".").map((segment) => Number.parseInt(segment))));
     }
-    function ipAddressStringToBuffer(ipAddress) {
-      if ((0, net_1.isIPv4)(ipAddress)) {
-        return ipv4AddressStringToBuffer(ipAddress);
-      } else if (isIPv6MappedIPv4(ipAddress)) {
-        return ipv4AddressStringToBuffer(ipAddress.substring(7));
-      } else if ((0, net_1.isIPv6)(ipAddress)) {
+    function ipAddressStringToBuffer(ipAddress2) {
+      if ((0, net_1.isIPv4)(ipAddress2)) {
+        return ipv4AddressStringToBuffer(ipAddress2);
+      } else if (isIPv6MappedIPv4(ipAddress2)) {
+        return ipv4AddressStringToBuffer(ipAddress2.substring(7));
+      } else if ((0, net_1.isIPv6)(ipAddress2)) {
         let leftSection;
         let rightSection;
-        const doubleColonIndex = ipAddress.indexOf("::");
+        const doubleColonIndex = ipAddress2.indexOf("::");
         if (doubleColonIndex === -1) {
-          leftSection = ipAddress;
+          leftSection = ipAddress2;
           rightSection = "";
         } else {
-          leftSection = ipAddress.substring(0, doubleColonIndex);
-          rightSection = ipAddress.substring(doubleColonIndex + 2);
+          leftSection = ipAddress2.substring(0, doubleColonIndex);
+          rightSection = ipAddress2.substring(doubleColonIndex + 2);
         }
         const leftBuffer = Buffer.from(parseIPv6Chunk(leftSection));
         const rightBuffer = Buffer.from(parseIPv6Chunk(rightSection));
@@ -179414,9 +179414,9 @@ var require_resolving_call2 = __commonJS({
           return;
         }
         this.configReceivedTime = /* @__PURE__ */ new Date();
-        const config = configResult.config;
-        if (config.status !== constants_1.Status.OK) {
-          const { code, details } = (0, control_plane_status_1.restrictControlPlaneStatusCode)(config.status, "Failed to route call to method " + this.method);
+        const config3 = configResult.config;
+        if (config3.status !== constants_1.Status.OK) {
+          const { code, details } = (0, control_plane_status_1.restrictControlPlaneStatusCode)(config3.status, "Failed to route call to method " + this.method);
           this.outputStatus({
             code,
             details,
@@ -179424,17 +179424,17 @@ var require_resolving_call2 = __commonJS({
           });
           return;
         }
-        if (config.methodConfig.timeout) {
+        if (config3.methodConfig.timeout) {
           const configDeadline = /* @__PURE__ */ new Date();
-          configDeadline.setSeconds(configDeadline.getSeconds() + config.methodConfig.timeout.seconds);
-          configDeadline.setMilliseconds(configDeadline.getMilliseconds() + config.methodConfig.timeout.nanos / 1e6);
+          configDeadline.setSeconds(configDeadline.getSeconds() + config3.methodConfig.timeout.seconds);
+          configDeadline.setMilliseconds(configDeadline.getMilliseconds() + config3.methodConfig.timeout.nanos / 1e6);
           this.deadline = (0, deadline_1.minDeadline)(this.deadline, configDeadline);
           this.runDeadlineTimer();
         }
-        this.filterStackFactory.push(config.dynamicFilterFactories);
+        this.filterStackFactory.push(config3.dynamicFilterFactories);
         this.filterStack = this.filterStackFactory.createFilter();
         this.filterStack.sendMetadata(Promise.resolve(this.metadata)).then((filteredMetadata) => {
-          this.child = this.channel.createRetryingCall(config, this.method, this.host, this.credentials, this.deadline, this.callNumber);
+          this.child = this.channel.createRetryingCall(config3, this.method, this.host, this.credentials, this.deadline, this.callNumber);
           if (this.traceEnabled) {
             this.trace("Created child [" + this.child.getCallNumber() + "]");
           }
@@ -181929,30 +181929,30 @@ var require_server_interceptors2 = __commonJS({
     };
     exports.ResponderBuilder = ResponderBuilder;
     var defaultServerListener = {
-      onReceiveMetadata: (metadata, next) => {
-        next(metadata);
+      onReceiveMetadata: (metadata, next2) => {
+        next2(metadata);
       },
-      onReceiveMessage: (message2, next) => {
-        next(message2);
+      onReceiveMessage: (message2, next2) => {
+        next2(message2);
       },
-      onReceiveHalfClose: (next) => {
-        next();
+      onReceiveHalfClose: (next2) => {
+        next2();
       },
       onCancel: () => {
       }
     };
     var defaultResponder = {
-      start: (next) => {
-        next();
+      start: (next2) => {
+        next2();
       },
-      sendMetadata: (metadata, next) => {
-        next(metadata);
+      sendMetadata: (metadata, next2) => {
+        next2(metadata);
       },
-      sendMessage: (message2, next) => {
-        next(message2);
+      sendMessage: (message2, next2) => {
+        next2(message2);
       },
-      sendStatus: (status, next) => {
-        next(status);
+      sendStatus: (status, next2) => {
+        next2(status);
       }
     };
     var ServerInterceptingCall = class {
@@ -184477,8 +184477,8 @@ var require_certificate_provider2 = __commonJS({
     }
     var readFilePromise = (0, util_1.promisify)(fs5.readFile);
     var FileWatcherCertificateProvider = class {
-      constructor(config) {
-        this.config = config;
+      constructor(config3) {
+        this.config = config3;
         this.refreshTimer = null;
         this.fileResultPromise = null;
         this.latestCaUpdate = void 0;
@@ -184486,13 +184486,13 @@ var require_certificate_provider2 = __commonJS({
         this.latestIdentityUpdate = void 0;
         this.identityListeners = /* @__PURE__ */ new Set();
         this.lastUpdateTime = null;
-        if (config.certificateFile === void 0 !== (config.privateKeyFile === void 0)) {
+        if (config3.certificateFile === void 0 !== (config3.privateKeyFile === void 0)) {
           throw new Error("certificateFile and privateKeyFile must be set or unset together");
         }
-        if (config.certificateFile === void 0 && config.caCertificateFile === void 0) {
+        if (config3.certificateFile === void 0 && config3.caCertificateFile === void 0) {
           throw new Error("At least one of certificateFile and caCertificateFile must be set");
         }
-        trace2("File watcher constructed with config " + JSON.stringify(config));
+        trace2("File watcher constructed with config " + JSON.stringify(config3));
       }
       updateCertificates() {
         if (this.fileResultPromise) {
@@ -186544,14 +186544,14 @@ var require_grpc2 = __commonJS({
         }
         throw new Error(filename + " could not be found in " + protoPath);
       }
-      loadProtoJSON(json2, ignoreCache = false) {
-        const hash = (0, object_hash_1.default)(JSON.stringify(json2)).toString();
+      loadProtoJSON(json3, ignoreCache = false) {
+        const hash = (0, object_hash_1.default)(JSON.stringify(json3)).toString();
         const cached = _GrpcClient.protoCache.get(hash);
         if (cached && !ignoreCache) {
           return cached;
         }
         const options2 = _GrpcClient.defaultOptions();
-        const packageDefinition = grpcProtoLoader.fromJSON(json2, options2);
+        const packageDefinition = grpcProtoLoader.fromJSON(json3, options2);
         const grpcPackage = this.grpc.loadPackageDefinition(packageDefinition);
         _GrpcClient.protoCache.set(hash, grpcPackage);
         return grpcPackage;
@@ -202453,12 +202453,12 @@ var require_serializer = __commonJS({
           current.mapValue = { fields: {} };
         }
         for (let i2 = 0; i2 < path3.size; ++i2) {
-          let next = current.mapValue.fields[path3.get(i2)];
-          if (!isMapValue2(next) || !next.mapValue.fields) {
-            next = { mapValue: { fields: {} } };
-            current.mapValue.fields[path3.get(i2)] = next;
+          let next2 = current.mapValue.fields[path3.get(i2)];
+          if (!isMapValue2(next2) || !next2.mapValue.fields) {
+            next2 = { mapValue: { fields: {} } };
+            current.mapValue.fields[path3.get(i2)] = next2;
           }
-          current = next;
+          current = next2;
         }
         return current.mapValue.fields;
       }
@@ -206202,10 +206202,10 @@ var require_pool2 = __commonJS({
       activeClients;
       failedClients;
       clientIdByClient;
-      constructor(config) {
-        this.activeClients = config.activeClients;
-        this.failedClients = config.failedClients;
-        this.clientIdByClient = config.clientIdByClient;
+      constructor(config3) {
+        this.activeClients = config3.activeClients;
+        this.failedClients = config3.failedClients;
+        this.clientIdByClient = config3.clientIdByClient;
       }
       toString() {
         const activeClientsDescription = Array.from(this.activeClients.entries()).map(([client2, metadata]) => `${this.clientIdByClient.get(client2)}=${metadata.activeRequestCount}`).sort().join(", ");
@@ -212180,8 +212180,8 @@ var require_api_request = __commonJS({
        * @param config - HTTP request to be sent.
        * @returns A promise that resolves with the response details.
        */
-      send(config) {
-        return this.sendWithRetry(config);
+      send(config3) {
+        return this.sendWithRetry(config3);
       }
       /**
        * Sends an HTTP request. In the event of an error, retries the HTTP request according to the
@@ -212191,14 +212191,14 @@ var require_api_request = __commonJS({
        * @param retryAttempts - Number of retries performed up to now.
        * @returns A promise that resolves with the response details.
        */
-      sendWithRetry(config, retryAttempts = 0) {
-        return AsyncHttpCall.invoke(config).then((resp) => {
+      sendWithRetry(config3, retryAttempts = 0) {
+        return AsyncHttpCall.invoke(config3).then((resp) => {
           return this.createRequestResponse(resp);
         }).catch((err) => {
           const [delayMillis, canRetry] = this.getRetryDelayMillis(retryAttempts, err);
           if (canRetry && this.retry && delayMillis <= this.retry.maxDelayInMillis) {
             return this.waitForRetry(delayMillis).then(() => {
-              return this.sendWithRetry(config, retryAttempts + 1);
+              return this.sendWithRetry(config3, retryAttempts + 1);
             });
           }
           if (err.response) {
@@ -212239,8 +212239,8 @@ var require_api_request = __commonJS({
        * @param config - HTTP/2 request to be sent.
        * @returns A promise that resolves with the response details.
        */
-      send(config) {
-        return this.sendWithRetry(config);
+      send(config3) {
+        return this.sendWithRetry(config3);
       }
       /**
        * Sends an HTTP/2 request. In the event of an error, retries the HTTP/2 request according to the
@@ -212250,14 +212250,14 @@ var require_api_request = __commonJS({
        * @param retryAttempts - Number of retries performed up to now.
        * @returns A promise that resolves with the response details.
        */
-      sendWithRetry(config, retryAttempts = 0) {
-        return AsyncHttp2Call.invoke(config).then((resp) => {
+      sendWithRetry(config3, retryAttempts = 0) {
+        return AsyncHttp2Call.invoke(config3).then((resp) => {
           return this.createRequestResponse(resp);
         }).catch((err) => {
           const [delayMillis, canRetry] = this.getRetryDelayMillis(retryAttempts, err);
           if (canRetry && this.retry && delayMillis <= this.retry.maxDelayInMillis) {
             return this.waitForRetry(delayMillis).then(() => {
-              return this.sendWithRetry(config, retryAttempts + 1);
+              return this.sendWithRetry(config3, retryAttempts + 1);
             });
           }
           if (err.response) {
@@ -212279,7 +212279,7 @@ var require_api_request = __commonJS({
       }
     };
     exports.Http2Client = Http2Client;
-    function parseHttpResponse(response, config) {
+    function parseHttpResponse(response, config3) {
       const responseText = validator.isBuffer(response) ? response.toString("utf-8") : response;
       const endOfHeaderPos = responseText.indexOf("\r\n\r\n");
       const headerLines = responseText.substring(0, endOfHeaderPos).split("\r\n");
@@ -212303,7 +212303,7 @@ var require_api_request = __commonJS({
         status: parseInt(status, 10),
         headers,
         data,
-        config,
+        config: config3,
         request: null
       };
       if (!validator.isNumber(lowLevelResponse.status)) {
@@ -212416,11 +212416,11 @@ var require_api_request = __commonJS({
       /**
        * Sends an HTTP request based on the provided configuration.
        */
-      static invoke(config) {
-        return new _AsyncHttpCall(config).promise;
+      static invoke(config3) {
+        return new _AsyncHttpCall(config3).promise;
       }
-      constructor(config) {
-        const httpConfigImpl = new HttpRequestConfigImpl(config);
+      constructor(config3) {
+        const httpConfigImpl = new HttpRequestConfigImpl(config3);
         super(httpConfigImpl);
         try {
           this.httpConfigImpl = httpConfigImpl;
@@ -212499,11 +212499,11 @@ var require_api_request = __commonJS({
       /**
        * Sends an HTTP2 request based on the provided configuration.
        */
-      static invoke(config) {
-        return new _AsyncHttp2Call(config).promise;
+      static invoke(config3) {
+        return new _AsyncHttp2Call(config3).promise;
       }
-      constructor(config) {
-        const http2ConfigImpl = new Http2RequestConfigImpl(config);
+      constructor(config3) {
+        const http2ConfigImpl = new Http2RequestConfigImpl(config3);
         super(http2ConfigImpl);
         try {
           this.http2ConfigImpl = http2ConfigImpl;
@@ -212584,9 +212584,9 @@ var require_api_request = __commonJS({
       }
     };
     var BaseRequestConfigImpl = class {
-      constructor(config) {
-        this.config = config;
-        this.config = config;
+      constructor(config3) {
+        this.config = config3;
+        this.config = config3;
       }
       get method() {
         return this.config.method;
@@ -214535,7 +214535,7 @@ var require_tenant = __commonJS({
        * @returns A JSON-serializable representation of this object.
        */
       toJSON() {
-        const json2 = {
+        const json3 = {
           tenantId: this.tenantId,
           displayName: this.displayName,
           emailSignInConfig: this.emailSignInConfig_?.toJSON(),
@@ -214547,25 +214547,25 @@ var require_tenant = __commonJS({
           passwordPolicyConfig: (0, deep_copy_1.deepCopy)(this.passwordPolicyConfig),
           emailPrivacyConfig: (0, deep_copy_1.deepCopy)(this.emailPrivacyConfig)
         };
-        if (typeof json2.multiFactorConfig === "undefined") {
-          delete json2.multiFactorConfig;
+        if (typeof json3.multiFactorConfig === "undefined") {
+          delete json3.multiFactorConfig;
         }
-        if (typeof json2.testPhoneNumbers === "undefined") {
-          delete json2.testPhoneNumbers;
+        if (typeof json3.testPhoneNumbers === "undefined") {
+          delete json3.testPhoneNumbers;
         }
-        if (typeof json2.smsRegionConfig === "undefined") {
-          delete json2.smsRegionConfig;
+        if (typeof json3.smsRegionConfig === "undefined") {
+          delete json3.smsRegionConfig;
         }
-        if (typeof json2.recaptchaConfig === "undefined") {
-          delete json2.recaptchaConfig;
+        if (typeof json3.recaptchaConfig === "undefined") {
+          delete json3.recaptchaConfig;
         }
-        if (typeof json2.passwordPolicyConfig === "undefined") {
-          delete json2.passwordPolicyConfig;
+        if (typeof json3.passwordPolicyConfig === "undefined") {
+          delete json3.passwordPolicyConfig;
         }
-        if (typeof json2.emailPrivacyConfig === "undefined") {
-          delete json2.emailPrivacyConfig;
+        if (typeof json3.emailPrivacyConfig === "undefined") {
+          delete json3.emailPrivacyConfig;
         }
-        return json2;
+        return json3;
       }
     };
     exports.Tenant = Tenant2;
@@ -214724,7 +214724,7 @@ var require_project_config = __commonJS({
        * @returns A JSON-serializable representation of this object.
        */
       toJSON() {
-        const json2 = {
+        const json3 = {
           smsRegionConfig: (0, deep_copy_1.deepCopy)(this.smsRegionConfig),
           multiFactorConfig: (0, deep_copy_1.deepCopy)(this.multiFactorConfig),
           recaptchaConfig: (0, deep_copy_1.deepCopy)(this.recaptchaConfig),
@@ -214732,25 +214732,25 @@ var require_project_config = __commonJS({
           emailPrivacyConfig: (0, deep_copy_1.deepCopy)(this.emailPrivacyConfig),
           mobileLinksConfig: (0, deep_copy_1.deepCopy)(this.mobileLinksConfig)
         };
-        if (typeof json2.smsRegionConfig === "undefined") {
-          delete json2.smsRegionConfig;
+        if (typeof json3.smsRegionConfig === "undefined") {
+          delete json3.smsRegionConfig;
         }
-        if (typeof json2.multiFactorConfig === "undefined") {
-          delete json2.multiFactorConfig;
+        if (typeof json3.multiFactorConfig === "undefined") {
+          delete json3.multiFactorConfig;
         }
-        if (typeof json2.recaptchaConfig === "undefined") {
-          delete json2.recaptchaConfig;
+        if (typeof json3.recaptchaConfig === "undefined") {
+          delete json3.recaptchaConfig;
         }
-        if (typeof json2.passwordPolicyConfig === "undefined") {
-          delete json2.passwordPolicyConfig;
+        if (typeof json3.passwordPolicyConfig === "undefined") {
+          delete json3.passwordPolicyConfig;
         }
-        if (typeof json2.emailPrivacyConfig === "undefined") {
-          delete json2.emailPrivacyConfig;
+        if (typeof json3.emailPrivacyConfig === "undefined") {
+          delete json3.emailPrivacyConfig;
         }
-        if (typeof json2.mobileLinksConfig === "undefined") {
-          delete json2.mobileLinksConfig;
+        if (typeof json3.mobileLinksConfig === "undefined") {
+          delete json3.mobileLinksConfig;
         }
-        return json2;
+        return json3;
       }
     };
     exports.ProjectConfig = ProjectConfig2;
@@ -216375,8 +216375,8 @@ var require_crypto_signer = __commonJS({
        * @inheritDoc
        */
       sign(buffer) {
-        const crypto11 = __require("node:crypto");
-        const sign = crypto11.createSign("RSA-SHA256");
+        const crypto15 = __require("node:crypto");
+        const sign = crypto15.createSign("RSA-SHA256");
         sign.update(buffer);
         return Promise.resolve(sign.sign(this.credential.privateKey));
       }
@@ -217604,12 +217604,12 @@ var require_coerce = __commonJS({
         match = version7.match(options2.includePrerelease ? re2[t2.COERCEFULL] : re2[t2.COERCE]);
       } else {
         const coerceRtlRegex = options2.includePrerelease ? re2[t2.COERCERTLFULL] : re2[t2.COERCERTL];
-        let next;
-        while ((next = coerceRtlRegex.exec(version7)) && (!match || match.index + match[0].length !== version7.length)) {
-          if (!match || next.index + next[0].length !== match.index + match[0].length) {
-            match = next;
+        let next2;
+        while ((next2 = coerceRtlRegex.exec(version7)) && (!match || match.index + match[0].length !== version7.length)) {
+          if (!match || next2.index + next2[0].length !== match.index + match[0].length) {
+            match = next2;
           }
-          coerceRtlRegex.lastIndex = next.index + next[1].length + next[2].length;
+          coerceRtlRegex.lastIndex = next2.index + next2[1].length + next2[2].length;
         }
         coerceRtlRegex.lastIndex = -1;
       }
@@ -218921,18 +218921,18 @@ var require_verify = __commonJS({
         return done(new JsonWebTokenError("invalid token"));
       }
       const header = decodedToken.header;
-      let getSecret;
+      let getSecret2;
       if (typeof secretOrPublicKey === "function") {
         if (!callback) {
           return done(new JsonWebTokenError("verify must be called asynchronous if secret or public key is provided as a callback"));
         }
-        getSecret = secretOrPublicKey;
+        getSecret2 = secretOrPublicKey;
       } else {
-        getSecret = function(header2, secretCallback) {
+        getSecret2 = function(header2, secretCallback) {
           return secretCallback(null, secretOrPublicKey);
         };
       }
-      return getSecret(header, function(err, secretOrPublicKey2) {
+      return getSecret2(header, function(err, secretOrPublicKey2) {
         if (err) {
           return done(new JsonWebTokenError("error in secret or public key callback: " + err.message));
         }
@@ -222226,13 +222226,13 @@ function createRemoteJWKSet(url, options2) {
   }
   const reload2 = async () => {
     if (pendingFetch && isCloudflareWorkers() && (pendingFetch = void 0), !pendingFetch) {
-      const sequence = ++reloadSequence, current = pendingFetch = fetchJwks(href, headers, AbortSignal.timeout(timeoutDuration), fetchImpl).then((json2) => {
-        const next = createLocalJWKSet(json2);
+      const sequence = ++reloadSequence, current = pendingFetch = fetchJwks(href, headers, AbortSignal.timeout(timeoutDuration), fetchImpl).then((json3) => {
+        const next2 = createLocalJWKSet(json3);
         if (sequence <= appliedSequence)
           return;
-        local = next;
+        local = next2;
         const updatedAt = Date.now();
-        cache3 && (cache3.uat = updatedAt, cache3.jwks = json2), jwksTimestamp = updatedAt, appliedSequence = sequence;
+        cache3 && (cache3.uat = updatedAt, cache3.jwks = json3), jwksTimestamp = updatedAt, appliedSequence = sequence;
       }).finally(() => {
         pendingFetch === current && (pendingFetch = void 0);
       });
@@ -226330,7 +226330,7 @@ var require_user_record = __commonJS({
        * @returns A JSON-serializable representation of this object.
        */
       toJSON() {
-        const json2 = {
+        const json3 = {
           uid: this.uid,
           email: this.email,
           emailVerified: this.emailVerified,
@@ -226347,13 +226347,13 @@ var require_user_record = __commonJS({
           tenantId: this.tenantId
         };
         if (this.multiFactor) {
-          json2.multiFactor = this.multiFactor.toJSON();
+          json3.multiFactor = this.multiFactor.toJSON();
         }
-        json2.providerData = [];
+        json3.providerData = [];
         for (const entry of this.providerData) {
-          json2.providerData.push(entry.toJSON());
+          json3.providerData.push(entry.toJSON());
         }
-        return json2;
+        return json3;
       }
     };
     exports.UserRecord = UserRecord3;
@@ -227183,16 +227183,16 @@ var require_base_auth = __commonJS({
        * @param config - The provider configuration to create.
        * @returns A promise that resolves with the created provider configuration.
        */
-      createProviderConfig(config) {
-        if (!validator.isNonNullObject(config)) {
+      createProviderConfig(config3) {
+        if (!validator.isNonNullObject(config3)) {
           return Promise.reject(new error_1.FirebaseAuthError(error_1.authClientErrorCode.INVALID_CONFIG, 'Request is missing "AuthProviderConfig" configuration.'));
         }
-        if (auth_config_1.OIDCConfig.isProviderId(config.providerId)) {
-          return this.authRequestHandler.createOAuthIdpConfig(config).then((response) => {
+        if (auth_config_1.OIDCConfig.isProviderId(config3.providerId)) {
+          return this.authRequestHandler.createOAuthIdpConfig(config3).then((response) => {
             return new auth_config_1.OIDCConfig(response);
           });
-        } else if (auth_config_1.SAMLConfig.isProviderId(config.providerId)) {
-          return this.authRequestHandler.createInboundSamlConfig(config).then((response) => {
+        } else if (auth_config_1.SAMLConfig.isProviderId(config3.providerId)) {
+          return this.authRequestHandler.createInboundSamlConfig(config3).then((response) => {
             return new auth_config_1.SAMLConfig(response);
           });
         }
@@ -227612,11 +227612,11 @@ var init_auth = __esm({
   }
 });
 
-// firebase-applet-config.json with { type: 'json' }
-var firebase_applet_config_default;
-var init_firebase_applet_config = __esm({
-  "firebase-applet-config.json with { type: 'json' }"() {
-    firebase_applet_config_default = {
+// src/firebase/appletConfig.ts
+var appletFirebaseConfig, appletConfig_default;
+var init_appletConfig = __esm({
+  "src/firebase/appletConfig.ts"() {
+    appletFirebaseConfig = {
       projectId: "gen-lang-client-0376069258",
       appId: "1:280237761588:web:1e0633ce031a5a49f15661",
       apiKey: "AIzaSyAcr6lIIH50XWD7CcmclWh9lxbPKO7TzBk",
@@ -227628,6 +227628,7 @@ var init_firebase_applet_config = __esm({
       oAuthClientId: "",
       recaptchaSiteKey: ""
     };
+    appletConfig_default = appletFirebaseConfig;
   }
 });
 
@@ -227638,7 +227639,7 @@ function getFirebaseAdminApp() {
   if (existingApps.length > 0) {
     return existingApps[0];
   }
-  const projectId = process.env.FIREBASE_PROJECT_ID || process.env.VITE_FIREBASE_PROJECT_ID || firebase_applet_config_default.projectId;
+  const projectId = process.env.FIREBASE_PROJECT_ID || process.env.VITE_FIREBASE_PROJECT_ID || appletConfig_default.projectId;
   const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
   if (serviceAccountJson) {
     try {
@@ -227678,7 +227679,7 @@ function getAdminAuth() {
 function getAdminFirestore() {
   const app2 = getFirebaseAdminApp();
   const activeProjectId = String(app2.options?.projectId || "");
-  const dbId = (process.env.FIRESTORE_DATABASE_ID || "").trim() || (activeProjectId && activeProjectId !== firebase_applet_config_default.projectId ? "(default)" : firebase_applet_config_default.firestoreDatabaseId);
+  const dbId = (process.env.FIRESTORE_DATABASE_ID || "").trim() || (activeProjectId && activeProjectId !== appletConfig_default.projectId ? "(default)" : appletConfig_default.firestoreDatabaseId);
   let fs5;
   if (dbId && dbId !== "(default)") {
     try {
@@ -227758,7 +227759,7 @@ var init_firebaseAdmin = __esm({
     init_app();
     init_auth();
     init_firestore();
-    init_firebase_applet_config();
+    init_appletConfig();
     firestoreConfigured = false;
   }
 });
@@ -229378,12 +229379,12 @@ function initializeApp2(_options, rawConfig = {}) {
     const name6 = rawConfig;
     rawConfig = { name: name6 };
   }
-  const config = {
+  const config3 = {
     name: DEFAULT_ENTRY_NAME2,
     automaticDataCollectionEnabled: true,
     ...rawConfig
   };
-  const name5 = config.name;
+  const name5 = config3.name;
   if (typeof name5 !== "string" || !name5) {
     throw ERROR_FACTORY.create("bad-app-name", {
       appName: String(name5)
@@ -229405,12 +229406,12 @@ function initializeApp2(_options, rawConfig = {}) {
         oldValue: JSON.stringify(existingApp.options),
         newValue: JSON.stringify(options2)
       });
-    } else if (!deepEqual(config, existingApp.config)) {
+    } else if (!deepEqual(config3, existingApp.config)) {
       throw ERROR_FACTORY.create("duplicate-app", {
         appName: name5,
         mismatchedParam: "config",
         oldValue: JSON.stringify(existingApp.config),
-        newValue: JSON.stringify(config)
+        newValue: JSON.stringify(config3)
       });
     } else {
       return existingApp;
@@ -229420,7 +229421,7 @@ function initializeApp2(_options, rawConfig = {}) {
   for (const component of _components.values()) {
     container.addComponent(component);
   }
-  const newApp = new FirebaseAppImpl(options2, config, container);
+  const newApp = new FirebaseAppImpl(options2, config3, container);
   _apps.set(name5, newApp);
   return newApp;
 }
@@ -229747,12 +229748,12 @@ var init_index_esm3 = __esm({
     };
     ERROR_FACTORY = new ErrorFactory("app", "Firebase", ERRORS);
     FirebaseAppImpl = class {
-      constructor(options2, config, container) {
+      constructor(options2, config3, container) {
         this._isDeleted = false;
         this._options = { ...options2 };
-        this._config = { ...config };
-        this._name = config.name;
-        this._automaticDataCollectionEnabled = config.automaticDataCollectionEnabled;
+        this._config = { ...config3 };
+        this._name = config3.name;
+        this._automaticDataCollectionEnabled = config3.automaticDataCollectionEnabled;
         this._container = container;
         this.container.addComponent(new Component(
           "app",
@@ -231214,8 +231215,8 @@ var require_load_balancer3 = __commonJS({
     function registerDefaultLoadBalancerType(typeName) {
       defaultLoadBalancerType = typeName;
     }
-    function createLoadBalancer(config, channelControlHelper) {
-      const typeName = config.getLoadBalancerName();
+    function createLoadBalancer(config3, channelControlHelper) {
+      const typeName = config3.getLoadBalancerName();
       if (typeName in registeredLoadBalancerTypes) {
         return new registeredLoadBalancerTypes[typeName].LoadBalancer(channelControlHelper);
       } else {
@@ -231226,9 +231227,9 @@ var require_load_balancer3 = __commonJS({
       return typeName in registeredLoadBalancerTypes;
     }
     function getFirstUsableConfig(configs, fallbackTodefault = false) {
-      for (const config of configs) {
-        if (config.getLoadBalancerName() in registeredLoadBalancerTypes) {
-          return config;
+      for (const config3 of configs) {
+        if (config3.getLoadBalancerName() in registeredLoadBalancerTypes) {
+          return config3;
         }
       }
       if (fallbackTodefault) {
@@ -231455,8 +231456,8 @@ var require_service_config3 = __commonJS({
       }
       if ("loadBalancingConfig" in obj) {
         if (Array.isArray(obj.loadBalancingConfig)) {
-          for (const config of obj.loadBalancingConfig) {
-            result.loadBalancingConfig.push((0, load_balancer_1.validateLoadBalancingConfig)(config));
+          for (const config3 of obj.loadBalancingConfig) {
+            result.loadBalancingConfig.push((0, load_balancer_1.validateLoadBalancingConfig)(config3));
           }
         } else {
           throw new Error("Invalid service config: invalid loadBalancingConfig");
@@ -231544,8 +231545,8 @@ var require_service_config3 = __commonJS({
       if (!Array.isArray(obj)) {
         throw new Error("Invalid service config list");
       }
-      for (const config of obj) {
-        const validatedConfig = validateCanaryConfig(config);
+      for (const config3 of obj) {
+        const validatedConfig = validateCanaryConfig(config3);
         if (typeof validatedConfig.percentage === "number" && percentage > validatedConfig.percentage) {
           continue;
         }
@@ -232101,9 +232102,9 @@ var require_resolving_load_balancer3 = __commonJS({
       return false;
     }
     function findMatchingConfig(service, method, methodConfigs, matchLevel) {
-      for (const config of methodConfigs) {
-        if (hasMatchingName(service, method, config, matchLevel)) {
-          return config;
+      for (const config3 of methodConfigs) {
+        if (hasMatchingName(service, method, config3, matchLevel)) {
+          return config3;
         }
       }
       return null;
@@ -232686,28 +232687,28 @@ var require_client_interceptors3 = __commonJS({
     };
     exports.RequesterBuilder = RequesterBuilder;
     var defaultListener = {
-      onReceiveMetadata: (metadata, next) => {
-        next(metadata);
+      onReceiveMetadata: (metadata, next2) => {
+        next2(metadata);
       },
-      onReceiveMessage: (message2, next) => {
-        next(message2);
+      onReceiveMessage: (message2, next2) => {
+        next2(message2);
       },
-      onReceiveStatus: (status, next) => {
-        next(status);
+      onReceiveStatus: (status, next2) => {
+        next2(status);
       }
     };
     var defaultRequester = {
-      start: (metadata, listener, next) => {
-        next(metadata, listener);
+      start: (metadata, listener, next2) => {
+        next2(metadata, listener);
       },
-      sendMessage: (message2, next) => {
-        next(message2);
+      sendMessage: (message2, next2) => {
+        next2(message2);
       },
-      halfClose: (next) => {
-        next();
+      halfClose: (next2) => {
+        next2();
       },
-      cancel: (next) => {
-        next();
+      cancel: (next2) => {
+        next2();
       }
     };
     var InterceptingCall = class {
@@ -233657,9 +233658,9 @@ var require_src25 = __commonJS({
       return createPackageDefinition(loadedRoot, options2);
     }
     exports.loadSync = loadSync;
-    function fromJSON2(json2, options2) {
+    function fromJSON2(json3, options2) {
       options2 = options2 || {};
-      const loadedRoot = Protobuf.Root.fromJSON(json2);
+      const loadedRoot = Protobuf.Root.fromJSON(json3);
       loadedRoot.resolveAll();
       return createPackageDefinition(loadedRoot, options2);
     }
@@ -233941,19 +233942,19 @@ var require_channelz3 = __commonJS({
       const result = [];
       return result.concat(...bytePairs);
     }
-    function ipAddressStringToBuffer(ipAddress) {
-      if ((0, net_1.isIPv4)(ipAddress)) {
-        return Buffer.from(Uint8Array.from(ipAddress.split(".").map((segment) => Number.parseInt(segment))));
-      } else if ((0, net_1.isIPv6)(ipAddress)) {
+    function ipAddressStringToBuffer(ipAddress2) {
+      if ((0, net_1.isIPv4)(ipAddress2)) {
+        return Buffer.from(Uint8Array.from(ipAddress2.split(".").map((segment) => Number.parseInt(segment))));
+      } else if ((0, net_1.isIPv6)(ipAddress2)) {
         let leftSection;
         let rightSection;
-        const doubleColonIndex = ipAddress.indexOf("::");
+        const doubleColonIndex = ipAddress2.indexOf("::");
         if (doubleColonIndex === -1) {
-          leftSection = ipAddress;
+          leftSection = ipAddress2;
           rightSection = "";
         } else {
-          leftSection = ipAddress.substring(0, doubleColonIndex);
-          rightSection = ipAddress.substring(doubleColonIndex + 2);
+          leftSection = ipAddress2.substring(0, doubleColonIndex);
+          rightSection = ipAddress2.substring(doubleColonIndex + 2);
         }
         const leftBuffer = Buffer.from(parseIPv6Chunk(leftSection));
         const rightBuffer = Buffer.from(parseIPv6Chunk(rightSection));
@@ -236822,9 +236823,9 @@ var require_resolving_call3 = __commonJS({
           }
           return;
         }
-        const config = configResult.config;
-        if (config.status !== constants_1.Status.OK) {
-          const { code, details } = (0, control_plane_status_1.restrictControlPlaneStatusCode)(config.status, "Failed to route call to method " + this.method);
+        const config3 = configResult.config;
+        if (config3.status !== constants_1.Status.OK) {
+          const { code, details } = (0, control_plane_status_1.restrictControlPlaneStatusCode)(config3.status, "Failed to route call to method " + this.method);
           this.outputStatus({
             code,
             details,
@@ -236832,17 +236833,17 @@ var require_resolving_call3 = __commonJS({
           });
           return;
         }
-        if (config.methodConfig.timeout) {
+        if (config3.methodConfig.timeout) {
           const configDeadline = /* @__PURE__ */ new Date();
-          configDeadline.setSeconds(configDeadline.getSeconds() + config.methodConfig.timeout.seconds);
-          configDeadline.setMilliseconds(configDeadline.getMilliseconds() + config.methodConfig.timeout.nanos / 1e6);
+          configDeadline.setSeconds(configDeadline.getSeconds() + config3.methodConfig.timeout.seconds);
+          configDeadline.setMilliseconds(configDeadline.getMilliseconds() + config3.methodConfig.timeout.nanos / 1e6);
           this.deadline = (0, deadline_1.minDeadline)(this.deadline, configDeadline);
           this.runDeadlineTimer();
         }
-        this.filterStackFactory.push(config.dynamicFilterFactories);
+        this.filterStackFactory.push(config3.dynamicFilterFactories);
         this.filterStack = this.filterStackFactory.createFilter();
         this.filterStack.sendMetadata(Promise.resolve(this.metadata)).then((filteredMetadata) => {
-          this.child = this.channel.createInnerCall(config, this.method, this.host, this.credentials, this.deadline);
+          this.child = this.channel.createInnerCall(config3, this.method, this.host, this.credentials, this.deadline);
           this.trace("Created child [" + this.child.getCallNumber() + "]");
           this.child.start(filteredMetadata, {
             onReceiveMetadata: (metadata) => {
@@ -243212,11 +243213,11 @@ var init_build2 = __esm({
       }
       step(state2, charCode, anchor) {
         if (charCode <= Unicode.MAX_LATIN1) if (anchor === RE2Flags.UNANCHORED) {
-          const next = state2.nextLatin1[charCode];
-          if (next !== null) return next;
+          const next2 = state2.nextLatin1[charCode];
+          if (next2 !== null) return next2;
         } else {
-          const next = state2.nextLatin1Anchored[charCode];
-          if (next !== null) return next;
+          const next2 = state2.nextLatin1Anchored[charCode];
+          if (next2 !== null) return next2;
         }
         else {
           const key = charCode + (anchor === RE2Flags.UNANCHORED ? 0 : Unicode.MAX_RUNE + 1);
@@ -243556,7 +243557,7 @@ var init_build2 = __esm({
       const rightLen = rightRunes.length;
       let lx = 0, rx = 0;
       const merged = [];
-      const next = [];
+      const next2 = [];
       let ok = true;
       let ix = -1;
       const extend = (isLeft) => {
@@ -243568,7 +243569,7 @@ var init_build2 = __esm({
         if (isLeft) lx += 2;
         else rx += 2;
         ix += 2;
-        next.push(pc);
+        next2.push(pc);
         return true;
       };
       while (lx < leftLen || rx < rightLen) {
@@ -243580,7 +243581,7 @@ var init_build2 = __esm({
       }
       return {
         merged,
-        next
+        next: next2
       };
     };
     OnePassProg = class {
@@ -247585,8 +247586,8 @@ function property(typeString, optionalValue) {
   }
   return result;
 }
-function validateJSON(json2, schema) {
-  if (!isPlainObject(json2)) {
+function validateJSON(json3, schema) {
+  if (!isPlainObject(json3)) {
     throw new FirestoreError(Code.INVALID_ARGUMENT, "JSON must be an object");
   }
   let error = void 0;
@@ -247594,11 +247595,11 @@ function validateJSON(json2, schema) {
     if (schema[key]) {
       const typeString = schema[key].typeString;
       const value = "value" in schema[key] ? { value: schema[key].value } : void 0;
-      if (!(key in json2)) {
+      if (!(key in json3)) {
         error = `JSON missing required field: '${key}'`;
         break;
       }
-      const fieldValue = json2[key];
+      const fieldValue = json3[key];
       if (typeString && typeof fieldValue !== typeString) {
         error = `JSON field '${key}' must be a ${typeString}.`;
         break;
@@ -251425,8 +251426,8 @@ function decodeResourcePath(path3) {
     if (end < 0 || end > lastReasonableEscapeIndex) {
       fail(50515, { path: path3 });
     }
-    const next = path3.charAt(end + 1);
-    switch (next) {
+    const next2 = path3.charAt(end + 1);
+    switch (next2) {
       case encodedSeparatorChar:
         const currentPiece = path3.substring(start, end);
         let segment;
@@ -255282,11 +255283,11 @@ var init_common_BKJf2lb8_node = __esm({
             if (i2 + 1 === path3.length) {
               throw new FirestoreError(Code.INVALID_ARGUMENT, "Path has trailing escape character: " + path3);
             }
-            const next = path3[i2 + 1];
-            if (!(next === "\\" || next === "." || next === "`")) {
+            const next2 = path3[i2 + 1];
+            if (!(next2 === "\\" || next2 === "." || next2 === "`")) {
               throw new FirestoreError(Code.INVALID_ARGUMENT, "Path has invalid escape sequence: " + path3);
             }
-            current += next;
+            current += next2;
             i2 += 2;
           } else if (c === "`") {
             inBackticks = !inBackticks;
@@ -255557,9 +255558,9 @@ var init_common_BKJf2lb8_node = __esm({
       /**
        * Builds a `Timestamp` instance from a JSON object created by {@link Timestamp.toJSON}.
        */
-      static fromJSON(json2) {
-        if (validateJSON(json2, _Timestamp._jsonSchema)) {
-          return new _Timestamp(json2.seconds, json2.nanoseconds);
+      static fromJSON(json3) {
+        if (validateJSON(json3, _Timestamp._jsonSchema)) {
+          return new _Timestamp(json3.seconds, json3.nanoseconds);
         }
       }
       /**
@@ -255796,12 +255797,12 @@ var init_common_BKJf2lb8_node = __esm({
           current.mapValue = { fields: {} };
         }
         for (let i2 = 0; i2 < path3.length; ++i2) {
-          let next = current.mapValue.fields[path3.get(i2)];
-          if (!isMapValue(next) || !next.mapValue.fields) {
-            next = { mapValue: { fields: {} } };
-            current.mapValue.fields[path3.get(i2)] = next;
+          let next2 = current.mapValue.fields[path3.get(i2)];
+          if (!isMapValue(next2) || !next2.mapValue.fields) {
+            next2 = { mapValue: { fields: {} } };
+            current.mapValue.fields[path3.get(i2)] = next2;
           }
-          current = next;
+          current = next2;
         }
         return current.mapValue.fields;
       }
@@ -257300,9 +257301,9 @@ var init_common_BKJf2lb8_node = __esm({
        * @returns an instance of {@link Bytes} if the JSON object could be parsed. Throws a
        * {@link FirestoreError} if an error occurs.
        */
-      static fromJSON(json2) {
-        if (validateJSON(json2, _Bytes._jsonSchema)) {
-          return _Bytes.fromBase64String(json2.bytes);
+      static fromJSON(json3) {
+        if (validateJSON(json3, _Bytes._jsonSchema)) {
+          return _Bytes.fromBase64String(json3.bytes);
         }
       }
     };
@@ -257409,9 +257410,9 @@ var init_common_BKJf2lb8_node = __esm({
        * @returns an instance of {@link GeoPoint} if the JSON object could be parsed. Throws a
        * {@link FirestoreError} if an error occurs.
        */
-      static fromJSON(json2) {
-        if (validateJSON(json2, _GeoPoint._jsonSchema)) {
-          return new _GeoPoint(json2.latitude, json2.longitude);
+      static fromJSON(json3) {
+        if (validateJSON(json3, _GeoPoint._jsonSchema)) {
+          return new _GeoPoint(json3.latitude, json3.longitude);
         }
       }
     };
@@ -264009,9 +264010,9 @@ Total Duration: ${removedDocumentsTs - startTs}ms`;
           referencePath: this._key.toString()
         };
       }
-      static fromJSON(firestore, json2, converter) {
-        if (validateJSON(json2, _DocumentReference._jsonSchema)) {
-          return new _DocumentReference(firestore, converter ? converter : null, new DocumentKey(ResourcePath.fromString(json2.referencePath)));
+      static fromJSON(firestore, json3, converter) {
+        if (validateJSON(json3, _DocumentReference._jsonSchema)) {
+          return new _DocumentReference(firestore, converter ? converter : null, new DocumentKey(ResourcePath.fromString(json3.referencePath)));
         }
       }
     };
@@ -264097,10 +264098,10 @@ Total Duration: ${removedDocumentsTs - startTs}ms`;
        * @returns an instance of {@link VectorValue} if the JSON object could be parsed. Throws a
        * {@link FirestoreError} if an error occurs.
        */
-      static fromJSON(json2) {
-        if (validateJSON(json2, _VectorValue._jsonSchema)) {
-          if (Array.isArray(json2.vectorValues) && json2.vectorValues.every((element) => typeof element === "number")) {
-            return new _VectorValue(json2.vectorValues);
+      static fromJSON(json3) {
+        if (validateJSON(json3, _VectorValue._jsonSchema)) {
+          if (Array.isArray(json3.vectorValues) && json3.vectorValues.every((element) => typeof element === "number")) {
+            return new _VectorValue(json3.vectorValues);
           }
           throw new FirestoreError(Code.INVALID_ARGUMENT, "Expected 'vectorValues' field to be a number array");
         }
@@ -269219,10 +269220,10 @@ Total Duration: ${removedDocumentsTs - startTs}ms`;
        */
       toOrderedBits(val) {
         const value = doubleToLongBits(val);
-        const isNegative = (value[0] & 128) !== 0;
-        value[0] ^= isNegative ? 255 : 128;
+        const isNegative2 = (value[0] & 128) !== 0;
+        value[0] ^= isNegative2 ? 255 : 128;
         for (let i2 = 1; i2 < value.length; ++i2) {
-          value[i2] ^= isNegative ? 255 : 0;
+          value[i2] ^= isNegative2 ? 255 : 0;
         }
         return value;
       }
@@ -269959,7 +269960,7 @@ Total Duration: ${removedDocumentsTs - startTs}ms`;
       updateCollectionGroup(transaction, collectionGroup2, offset) {
         const indexes = indexConfigurationStore(transaction);
         const states = indexStateStore(transaction);
-        return this.getNextSequenceNumber(transaction).next((nextSequenceNumber) => indexes.loadAll(DbIndexConfigurationCollectionGroupIndex, IDBKeyRange.bound(collectionGroup2, collectionGroup2)).next((configs) => PersistencePromise.forEach(configs, (config) => states.put(toDbIndexState(config.indexId, this.uid, nextSequenceNumber, offset)))));
+        return this.getNextSequenceNumber(transaction).next((nextSequenceNumber) => indexes.loadAll(DbIndexConfigurationCollectionGroupIndex, IDBKeyRange.bound(collectionGroup2, collectionGroup2)).next((configs) => PersistencePromise.forEach(configs, (config3) => states.put(toDbIndexState(config3.indexId, this.uid, nextSequenceNumber, offset)))));
       }
       updateIndexEntries(transaction, documents) {
         const memoizedIndexes = /* @__PURE__ */ new Map();
@@ -273693,8 +273694,8 @@ This typically indicates that your device does not have a healthy Internet conne
         this.setItem(targetKey, targetMetadata.toWebStorageJSON());
       }
       persistBundleLoadedState(collectionGroups) {
-        const json2 = JSON.stringify(Array.from(collectionGroups));
-        this.setItem(this.bundleLoadedKey, json2);
+        const json3 = JSON.stringify(Array.from(collectionGroups));
+        this.setItem(this.bundleLoadedKey, json3);
       }
       /**
        * Parses a client state key in WebStorage. Returns null if the key does not
@@ -275965,9 +275966,9 @@ function _getUserLanguage() {
     null
   );
 }
-function _emulatorUrl(config, path3) {
-  debugAssert2(config.emulator, "Emulator should always be set here");
-  const { url } = config.emulator;
+function _emulatorUrl(config3, path3) {
+  debugAssert2(config3.emulator, "Emulator should always be set here");
+  const { url } = config3.emulator;
   if (!path3) {
     return url;
   }
@@ -276034,21 +276035,21 @@ async function _performFetchWithErrorHandling(auth2, customErrorMap, fetchFn) {
       networkTimeout.promise
     ]);
     networkTimeout.clearNetworkTimeout();
-    const json2 = await response.json();
-    if ("needConfirmation" in json2) {
-      throw _makeTaggedError(auth2, "account-exists-with-different-credential", json2);
+    const json3 = await response.json();
+    if ("needConfirmation" in json3) {
+      throw _makeTaggedError(auth2, "account-exists-with-different-credential", json3);
     }
-    if (response.ok && !("errorMessage" in json2)) {
-      return json2;
+    if (response.ok && !("errorMessage" in json3)) {
+      return json3;
     } else {
-      const errorMessage = response.ok ? json2.errorMessage : json2.error.message;
+      const errorMessage = response.ok ? json3.errorMessage : json3.error.message;
       const [serverErrorCode, serverErrorMessage] = errorMessage.split(" : ");
       if (serverErrorCode === "FEDERATED_USER_ID_ALREADY_LINKED") {
-        throw _makeTaggedError(auth2, "credential-already-in-use", json2);
+        throw _makeTaggedError(auth2, "credential-already-in-use", json3);
       } else if (serverErrorCode === "EMAIL_EXISTS") {
-        throw _makeTaggedError(auth2, "email-already-in-use", json2);
+        throw _makeTaggedError(auth2, "email-already-in-use", json3);
       } else if (serverErrorCode === "USER_DISABLED") {
-        throw _makeTaggedError(auth2, "user-disabled", json2);
+        throw _makeTaggedError(auth2, "user-disabled", json3);
       }
       const authError = errorMap[serverErrorCode] || serverErrorCode.toLowerCase().replace(/[_\s]+/g, "-");
       if (serverErrorMessage) {
@@ -276689,7 +276690,7 @@ function registerAuth(clientPlatform) {
       const appCheckServiceProvider = container.getProvider("app-check-internal");
       const { apiKey, authDomain } = app2.options;
       _assert(apiKey && !apiKey.includes(":"), "invalid-api-key", { appName: app2.name });
-      const config = {
+      const config3 = {
         apiKey,
         authDomain,
         clientPlatform,
@@ -276698,7 +276699,7 @@ function registerAuth(clientPlatform) {
         apiScheme: "https",
         sdkClientVersion: _getClientVersion(clientPlatform)
       };
-      const authInstance = new AuthImpl(app2, heartbeatServiceProvider, appCheckServiceProvider, config);
+      const authInstance = new AuthImpl(app2, heartbeatServiceProvider, appCheckServiceProvider, config3);
       _initializeAuthInstance(authInstance, deps);
       return authInstance;
     },
@@ -277620,9 +277621,9 @@ var init_totp_BU9AvxK8 = __esm({
         this.persistence = persistence;
         this.auth = auth2;
         this.userKey = userKey;
-        const { config, name: name5 } = this.auth;
-        this.fullUserKey = _persistenceKeyName(this.userKey, config.apiKey, name5);
-        this.fullPersistenceKey = _persistenceKeyName("persistence", config.apiKey, name5);
+        const { config: config3, name: name5 } = this.auth;
+        this.fullUserKey = _persistenceKeyName(this.userKey, config3.apiKey, name5);
+        this.fullPersistenceKey = _persistenceKeyName("persistence", config3.apiKey, name5);
         this.boundEventHandler = auth2._onStorageEvent.bind(auth2);
         try {
           this.persistence._addListener(this.fullUserKey, this.boundEventHandler);
@@ -277898,11 +277899,11 @@ var init_totp_BU9AvxK8 = __esm({
       }
     };
     AuthImpl = class {
-      constructor(app2, heartbeatServiceProvider, appCheckServiceProvider, config) {
+      constructor(app2, heartbeatServiceProvider, appCheckServiceProvider, config3) {
         this.app = app2;
         this.heartbeatServiceProvider = heartbeatServiceProvider;
         this.appCheckServiceProvider = appCheckServiceProvider;
-        this.config = config;
+        this.config = config3;
         this.currentUser = null;
         this.emulatorConfig = null;
         this.operations = Promise.resolve();
@@ -277929,7 +277930,7 @@ var init_totp_BU9AvxK8 = __esm({
         this.settings = { appVerificationDisabledForTesting: false };
         this.frameworks = [];
         this.name = app2.name;
-        this.clientVersion = config.sdkClientVersion;
+        this.clientVersion = config3.sdkClientVersion;
         this._persistenceManagerAvailable = new Promise((resolve) => this._resolvePersistenceManagerAvailable = resolve);
       }
       _initializeWithPersistence(persistenceHierarchy, popupRedirectResolver) {
@@ -278531,13 +278532,13 @@ var init_totp_BU9AvxK8 = __esm({
               if (response.recaptchaKey === void 0) {
                 reject(new Error("recaptcha Enterprise site key undefined"));
               } else {
-                const config = new RecaptchaConfig(response);
+                const config3 = new RecaptchaConfig(response);
                 if (auth2.tenantId == null) {
-                  auth2._agentRecaptchaConfig = config;
+                  auth2._agentRecaptchaConfig = config3;
                 } else {
-                  auth2._tenantRecaptchaConfigs[auth2.tenantId] = config;
+                  auth2._tenantRecaptchaConfigs[auth2.tenantId] = config3;
                 }
-                return resolve(config.siteKey);
+                return resolve(config3.siteKey);
               }
             }).catch((error) => {
               reject(error);
@@ -278660,8 +278661,8 @@ var init_totp_BU9AvxK8 = __esm({
        *
        * @returns If the JSON input does not represent an {@link AuthCredential}, null is returned.
        */
-      static fromJSON(json2) {
-        const obj = typeof json2 === "string" ? JSON.parse(json2) : json2;
+      static fromJSON(json3) {
+        const obj = typeof json3 === "string" ? JSON.parse(json3) : json3;
         if (obj?.email && obj?.password) {
           if (obj.signInMethod === "password") {
             return this._fromEmailAndPassword(obj.email, obj.password);
@@ -278782,8 +278783,8 @@ var init_totp_BU9AvxK8 = __esm({
        *
        * @returns If the JSON input does not represent an {@link  AuthCredential}, null is returned.
        */
-      static fromJSON(json2) {
-        const obj = typeof json2 === "string" ? JSON.parse(json2) : json2;
+      static fromJSON(json3) {
+        const obj = typeof json3 === "string" ? JSON.parse(json3) : json3;
         const { providerId, signInMethod, ...rest } = obj;
         if (!providerId || !signInMethod) {
           return null;
@@ -279498,25 +279499,6 @@ var init_dist5 = __esm({
   }
 });
 
-// firebase-applet-config.json
-var firebase_applet_config_default2;
-var init_firebase_applet_config2 = __esm({
-  "firebase-applet-config.json"() {
-    firebase_applet_config_default2 = {
-      projectId: "gen-lang-client-0376069258",
-      appId: "1:280237761588:web:1e0633ce031a5a49f15661",
-      apiKey: "AIzaSyAcr6lIIH50XWD7CcmclWh9lxbPKO7TzBk",
-      authDomain: "gen-lang-client-0376069258.firebaseapp.com",
-      storageBucket: "gen-lang-client-0376069258.firebasestorage.app",
-      messagingSenderId: "280237761588",
-      firestoreDatabaseId: "ai-studio-379c884e-3360-468a-ad55-8105acbd3214",
-      measurementId: "",
-      oAuthClientId: "",
-      recaptchaSiteKey: ""
-    };
-  }
-});
-
 // src/firebase/config.ts
 function createDb() {
   const dbId = firebaseConfig.firestoreDatabaseId || void 0;
@@ -279548,7 +279530,7 @@ var init_config = __esm({
     init_dist3();
     init_dist4();
     init_dist5();
-    init_firebase_applet_config2();
+    init_appletConfig();
     envProjectId = typeof import.meta !== "undefined" && import.meta.env?.VITE_FIREBASE_PROJECT_ID || typeof process !== "undefined" && process.env?.VITE_FIREBASE_PROJECT_ID || typeof process !== "undefined" && process.env?.FIREBASE_PROJECT_ID;
     envApiKey = typeof import.meta !== "undefined" && import.meta.env?.VITE_FIREBASE_API_KEY || typeof process !== "undefined" && process.env?.VITE_FIREBASE_API_KEY || typeof process !== "undefined" && process.env?.FIREBASE_API_KEY;
     envAuthDomain = typeof import.meta !== "undefined" && import.meta.env?.VITE_FIREBASE_AUTH_DOMAIN || typeof process !== "undefined" && process.env?.VITE_FIREBASE_AUTH_DOMAIN;
@@ -279556,17 +279538,17 @@ var init_config = __esm({
     envMessagingSenderId = typeof import.meta !== "undefined" && import.meta.env?.VITE_FIREBASE_MESSAGING_SENDER_ID || typeof process !== "undefined" && process.env?.VITE_FIREBASE_MESSAGING_SENDER_ID;
     envAppId = typeof import.meta !== "undefined" && import.meta.env?.VITE_FIREBASE_APP_ID || typeof process !== "undefined" && process.env?.VITE_FIREBASE_APP_ID;
     envDatabaseId = typeof import.meta !== "undefined" && import.meta.env?.VITE_FIRESTORE_DATABASE_ID || typeof process !== "undefined" && process.env?.VITE_FIRESTORE_DATABASE_ID || typeof process !== "undefined" && process.env?.FIRESTORE_DATABASE_ID;
-    resolvedProjectId = envProjectId || firebase_applet_config_default2.projectId;
-    usingOtherProject = resolvedProjectId !== firebase_applet_config_default2.projectId;
+    resolvedProjectId = envProjectId || appletConfig_default.projectId;
+    usingOtherProject = resolvedProjectId !== appletConfig_default.projectId;
     firebaseConfig = {
-      ...firebase_applet_config_default2,
+      ...appletConfig_default,
       projectId: resolvedProjectId,
-      apiKey: envApiKey || (usingOtherProject ? "" : firebase_applet_config_default2.apiKey),
-      authDomain: envAuthDomain || (usingOtherProject ? `${resolvedProjectId}.firebaseapp.com` : firebase_applet_config_default2.authDomain),
-      storageBucket: envStorageBucket || (usingOtherProject ? `${resolvedProjectId}.firebasestorage.app` : firebase_applet_config_default2.storageBucket),
-      messagingSenderId: envMessagingSenderId || (usingOtherProject ? "" : firebase_applet_config_default2.messagingSenderId),
-      appId: envAppId || (usingOtherProject ? "" : firebase_applet_config_default2.appId),
-      firestoreDatabaseId: envDatabaseId || (usingOtherProject ? "(default)" : firebase_applet_config_default2.firestoreDatabaseId)
+      apiKey: envApiKey || (usingOtherProject ? "" : appletConfig_default.apiKey),
+      authDomain: envAuthDomain || (usingOtherProject ? `${resolvedProjectId}.firebaseapp.com` : appletConfig_default.authDomain),
+      storageBucket: envStorageBucket || (usingOtherProject ? `${resolvedProjectId}.firebasestorage.app` : appletConfig_default.storageBucket),
+      messagingSenderId: envMessagingSenderId || (usingOtherProject ? "" : appletConfig_default.messagingSenderId),
+      appId: envAppId || (usingOtherProject ? "" : appletConfig_default.appId),
+      firestoreDatabaseId: envDatabaseId || (usingOtherProject ? "(default)" : appletConfig_default.firestoreDatabaseId)
     };
     webApiKeyMissing = !firebaseConfig.apiKey;
     if (webApiKeyMissing && typeof console !== "undefined") {
@@ -279926,14 +279908,14 @@ function getImapConfig() {
   const configured = Boolean(host && pass && user);
   return { host, port, secure, user, pass, configured };
 }
-function createResilientImapClient(config) {
+function createResilientImapClient(config3) {
   const client2 = new ImapFlow({
-    host: config.host,
-    port: config.port,
-    secure: config.secure,
+    host: config3.host,
+    port: config3.port,
+    secure: config3.secure,
     auth: {
-      user: config.user,
-      pass: config.pass
+      user: config3.user,
+      pass: config3.pass
     },
     logger: false,
     emitLogs: false,
@@ -279964,29 +279946,29 @@ async function safeCloseClient(client2) {
   }
 }
 async function checkImapStatus() {
-  const config = getImapConfig();
-  if (!config.configured) {
+  const config3 = getImapConfig();
+  if (!config3.configured) {
     return {
       configured: false,
-      host: config.host || "(not set)",
-      port: config.port,
-      secure: config.secure,
-      user: config.user,
+      host: config3.host || "(not set)",
+      port: config3.port,
+      secure: config3.secure,
+      user: config3.user,
       verified: false,
-      error: "IMAP_HOST and IMAP_PASS not configured in environment. Set these to enable live email polling from " + config.user + "."
+      error: "IMAP_HOST and IMAP_PASS not configured in environment. Set these to enable live email polling from " + config3.user + "."
     };
   }
-  const client2 = createResilientImapClient(config);
+  const client2 = createResilientImapClient(config3);
   try {
     await client2.connect();
     await safeCloseClient(client2);
     registerImapSuccess();
     return {
       configured: true,
-      host: config.host,
-      port: config.port,
-      secure: config.secure,
-      user: config.user,
+      host: config3.host,
+      port: config3.port,
+      secure: config3.secure,
+      user: config3.user,
       verified: true
     };
   } catch (err) {
@@ -279995,10 +279977,10 @@ async function checkImapStatus() {
     await safeCloseClient(client2);
     return {
       configured: true,
-      host: config.host,
-      port: config.port,
-      secure: config.secure,
-      user: config.user,
+      host: config3.host,
+      port: config3.port,
+      secure: config3.secure,
+      user: config3.user,
       verified: false,
       error: detail || "Failed to authenticate with IMAP server"
     };
@@ -280016,13 +279998,13 @@ function isBotOrNewsletter(fromAddress, subject) {
   return false;
 }
 async function pollUnreadEmails(markAsSeen = true) {
-  const config = getImapConfig();
+  const config3 = getImapConfig();
   const now = (/* @__PURE__ */ new Date()).toISOString();
-  if (!config.configured) {
+  if (!config3.configured) {
     return {
       success: false,
       configured: false,
-      checkedMailbox: config.user,
+      checkedMailbox: config3.user,
       messagesFound: 0,
       emails: [],
       error: "IMAP credentials (IMAP_HOST, IMAP_USER, IMAP_PASS) are not yet configured in environment.",
@@ -280034,14 +280016,14 @@ async function pollUnreadEmails(markAsSeen = true) {
     return {
       success: false,
       configured: true,
-      checkedMailbox: config.user,
+      checkedMailbox: config3.user,
       messagesFound: 0,
       emails: [],
       error: `IMAP polling paused for ${waitSec}s after a failure. Last error: ${lastImapErrorText}`,
       timestamp: now
     };
   }
-  const client2 = createResilientImapClient(config);
+  const client2 = createResilientImapClient(config3);
   const fetchedEmails = [];
   try {
     await client2.connect();
@@ -280055,7 +280037,7 @@ async function pollUnreadEmails(markAsSeen = true) {
         return {
           success: true,
           configured: true,
-          checkedMailbox: config.user,
+          checkedMailbox: config3.user,
           messagesFound: 0,
           emails: [],
           timestamp: now
@@ -280163,8 +280145,8 @@ async function pollUnreadEmails(markAsSeen = true) {
             }
             continue;
           }
-          const toAddress = parsed.to && Array.isArray(parsed.to) ? parsed.to[0]?.value?.[0]?.address || config.user : parsed.to?.value?.[0]?.address || config.user;
-          const finalMsgId = parsed.messageId || `<inbound-seq-${seq}-${parsed.date ? parsed.date.getTime() : "nodate"}@${config.user.split("@")[1] || "gmail.com"}>`;
+          const toAddress = parsed.to && Array.isArray(parsed.to) ? parsed.to[0]?.value?.[0]?.address || config3.user : parsed.to?.value?.[0]?.address || config3.user;
+          const finalMsgId = parsed.messageId || `<inbound-seq-${seq}-${parsed.date ? parsed.date.getTime() : "nodate"}@${config3.user.split("@")[1] || "gmail.com"}>`;
           const finalNormId = normalizeIdentifier(finalMsgId);
           if (processedEmailIdentifiers.has(finalMsgId) || processedEmailIdentifiers.has(finalNormId)) {
             continue;
@@ -280217,7 +280199,7 @@ async function pollUnreadEmails(markAsSeen = true) {
     return {
       success: true,
       configured: true,
-      checkedMailbox: config.user,
+      checkedMailbox: config3.user,
       messagesFound: fetchedEmails.length,
       emails: fetchedEmails,
       timestamp: now
@@ -280230,7 +280212,7 @@ async function pollUnreadEmails(markAsSeen = true) {
     return {
       success: false,
       configured: true,
-      checkedMailbox: config.user,
+      checkedMailbox: config3.user,
       messagesFound: 0,
       emails: [],
       error: detail || "IMAP connection failed",
@@ -280252,13 +280234,239 @@ var init_imapService = __esm({
   }
 });
 
+// src/server/microsoftOAuth.ts
+var microsoftOAuth_exports = {};
+__export(microsoftOAuth_exports, {
+  MICROSOFT_IMAP_HOST: () => MICROSOFT_IMAP_HOST,
+  MICROSOFT_SECRET_NAME: () => MICROSOFT_SECRET_NAME,
+  MicrosoftOAuthError: () => MicrosoftOAuthError,
+  MicrosoftReauthRequired: () => MicrosoftReauthRequired,
+  deleteMicrosoftRefreshToken: () => deleteMicrosoftRefreshToken,
+  describeMicrosoftError: () => describeMicrosoftError,
+  exchangeMicrosoftCallback: () => exchangeMicrosoftCallback,
+  getMicrosoftAccessToken: () => getMicrosoftAccessToken,
+  hasMicrosoftRefreshToken: () => hasMicrosoftRefreshToken,
+  isMicrosoftOAuthConfigured: () => isMicrosoftOAuthConfigured,
+  mailboxRedirectUrl: () => mailboxRedirectUrl,
+  saveMicrosoftRefreshToken: () => saveMicrosoftRefreshToken,
+  startMicrosoftInboundOAuth: () => startMicrosoftInboundOAuth
+});
+import crypto4 from "node:crypto";
+function config() {
+  const clientId = (process.env.MICROSOFT_CLIENT_ID || "").trim();
+  const clientSecret = (process.env.MICROSOFT_CLIENT_SECRET || "").trim();
+  const appUrl = (process.env.APP_URL || "").trim().replace(/\/+$/, "");
+  const redirectUri = (process.env.MICROSOFT_REDIRECT_URI || (appUrl ? `${appUrl}/api/oauth/microsoft/callback` : "")).trim();
+  const authTenant = (process.env.MICROSOFT_AUTH_TENANT || "common").trim();
+  return { clientId, clientSecret, redirectUri, authTenant, appUrl };
+}
+function isMicrosoftOAuthConfigured() {
+  const c = config();
+  return Boolean(c.clientId && c.clientSecret && c.redirectUri);
+}
+function requireConfig() {
+  const c = config();
+  if (!c.clientId || !c.clientSecret || !c.redirectUri) {
+    throw new MicrosoftOAuthError(503, "Sign in with Microsoft is not set up on this server yet (MICROSOFT_CLIENT_ID / MICROSOFT_CLIENT_SECRET / APP_URL).");
+  }
+  return c;
+}
+async function startMicrosoftInboundOAuth(ctx, opts = {}) {
+  if (!isFirebaseConfigured || !db) throw new MicrosoftOAuthError(503, "Database is not configured");
+  const c = requireConfig();
+  const state2 = b64url(crypto4.randomBytes(32));
+  const codeVerifier = b64url(crypto4.randomBytes(48));
+  const codeChallenge = b64url(crypto4.createHash("sha256").update(codeVerifier).digest());
+  await setDoc(doc(db, STATE_COLLECTION, stateKey(state2)), {
+    provider: "microsoft_inbound",
+    tenantId: ctx.tenantId,
+    uid: ctx.uid,
+    codeVerifier,
+    processNewInquiries: typeof opts.processNewInquiries === "boolean" ? opts.processNewInquiries : null,
+    createdAt: (/* @__PURE__ */ new Date()).toISOString(),
+    expiresAt: new Date(Date.now() + STATE_TTL_MS).toISOString()
+  });
+  const params = new URLSearchParams({
+    client_id: c.clientId,
+    response_type: "code",
+    redirect_uri: c.redirectUri,
+    response_mode: "query",
+    scope: SCOPES.join(" "),
+    state: state2,
+    code_challenge: codeChallenge,
+    code_challenge_method: "S256",
+    prompt: "select_account"
+  });
+  return { authorizationUrl: `https://login.microsoftonline.com/${encodeURIComponent(c.authTenant)}/oauth2/v2.0/authorize?${params.toString()}` };
+}
+async function tokenRequest(body) {
+  const c = requireConfig();
+  const res = await fetch(`https://login.microsoftonline.com/${encodeURIComponent(c.authTenant)}/oauth2/v2.0/token`, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ client_id: c.clientId, client_secret: c.clientSecret, ...body }).toString()
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok && !data.error) data.error = `http_${res.status}`;
+  return data;
+}
+function describeMicrosoftError(data) {
+  const d = String(data.error_description || "");
+  if (/AADSTS65001|AADSTS90094|admin.*(consent|approval)|needs permission/i.test(d)) {
+    return "Your Microsoft 365 administrator needs to approve this app before mailboxes can be connected. Ask your IT admin to grant consent, then try again.";
+  }
+  if (/AADSTS50020|AADSTS50034|does not exist/i.test(d)) return "That Microsoft account could not be found. Check you picked the right account.";
+  if (/AADSTS70008|AADSTS700082|AADSTS50173|AADSTS50076|AADSTS50079|expired|revoked/i.test(d)) {
+    return 'Microsoft sign-in has expired or was revoked. Click "Reconnect with Microsoft".';
+  }
+  if (data.error === "access_denied") return "Microsoft sign-in was cancelled.";
+  return `Microsoft sign-in failed${data.error ? ` (${data.error})` : ""}.`;
+}
+function decodeIdToken(idToken) {
+  if (!idToken) return {};
+  try {
+    return JSON.parse(Buffer.from(idToken.split(".")[1] || "", "base64url").toString("utf8"));
+  } catch {
+    return {};
+  }
+}
+async function exchangeMicrosoftCallback(query2) {
+  if (!isFirebaseConfigured || !db) throw new MicrosoftOAuthError(503, "Database is not configured");
+  const c = requireConfig();
+  const state2 = query2.get("state") || "";
+  if (!state2) throw new MicrosoftOAuthError(400, "Missing sign-in state. Please try again.");
+  const ref = doc(db, STATE_COLLECTION, stateKey(state2));
+  const snap = await getDoc(ref);
+  await deleteDoc(ref).catch(() => {
+  });
+  const st = snap.exists() ? snap.data() : null;
+  if (!st || st.provider !== "microsoft_inbound" || !st.tenantId || new Date(st.expiresAt).getTime() < Date.now()) {
+    throw new MicrosoftOAuthError(400, "This sign-in link has expired. Please start again from Settings.");
+  }
+  if (query2.get("error")) {
+    throw new MicrosoftOAuthError(400, describeMicrosoftError({ error: query2.get("error") || void 0, error_description: query2.get("error_description") || void 0 }));
+  }
+  const code = query2.get("code") || "";
+  if (!code) throw new MicrosoftOAuthError(400, "Microsoft did not return a sign-in code. Please try again.");
+  const data = await tokenRequest({
+    grant_type: "authorization_code",
+    code,
+    redirect_uri: c.redirectUri,
+    code_verifier: st.codeVerifier,
+    scope: SCOPES.join(" ")
+  });
+  if (data.error || !data.access_token) throw new MicrosoftOAuthError(400, describeMicrosoftError(data));
+  if (!data.refresh_token) throw new MicrosoftOAuthError(400, "Microsoft did not grant offline access. Please try again and accept all permissions.");
+  const claims = decodeIdToken(data.id_token);
+  const emailCandidates = [claims.email, claims.preferred_username, claims.upn, claims.unique_name].map((v) => String(v || "").trim().toLowerCase()).filter((v) => v.includes("@"));
+  const email = emailCandidates[0] || "";
+  if (!email) throw new MicrosoftOAuthError(400, "Could not read the mailbox address from your Microsoft account.");
+  return {
+    tenantId: String(st.tenantId),
+    email,
+    refreshToken: data.refresh_token,
+    accessToken: data.access_token,
+    expiresIn: Number(data.expires_in) || 3600,
+    processNewInquiries: typeof st.processNewInquiries === "boolean" ? st.processNewInquiries : null
+  };
+}
+async function saveMicrosoftRefreshToken(tenantId, refreshToken2, accessToken, expiresIn) {
+  const now = (/* @__PURE__ */ new Date()).toISOString();
+  await setDoc(
+    tenantRepo(sysCtx(tenantId)).secretDoc(MICROSOFT_SECRET_NAME),
+    { name: MICROSOFT_SECRET_NAME, ...encryptSecret(JSON.stringify({ refreshToken: refreshToken2 })), createdAt: now, updatedAt: now },
+    { merge: false }
+  );
+  if (accessToken) accessCache.set(tenantId, { token: accessToken, expiresAt: Date.now() + (expiresIn || 3600) * 1e3 });
+  else accessCache.delete(tenantId);
+}
+async function deleteMicrosoftRefreshToken(tenantId) {
+  accessCache.delete(tenantId);
+  await deleteDoc(tenantRepo(sysCtx(tenantId)).secretDoc(MICROSOFT_SECRET_NAME)).catch(() => {
+  });
+}
+async function hasMicrosoftRefreshToken(tenantId) {
+  if (!isFirebaseConfigured || !db) return false;
+  return (await getDoc(tenantRepo(sysCtx(tenantId)).secretDoc(MICROSOFT_SECRET_NAME))).exists();
+}
+async function readRefreshToken(tenantId) {
+  const snap = await getDoc(tenantRepo(sysCtx(tenantId)).secretDoc(MICROSOFT_SECRET_NAME));
+  if (!snap.exists()) return null;
+  try {
+    return JSON.parse(decryptSecret(snap.data())).refreshToken || null;
+  } catch {
+    return null;
+  }
+}
+async function getMicrosoftAccessToken(tenantId) {
+  const cached = accessCache.get(tenantId);
+  if (cached && cached.expiresAt - 5 * 6e4 > Date.now()) return cached.token;
+  const refreshToken2 = await readRefreshToken(tenantId);
+  if (!refreshToken2) throw new MicrosoftReauthRequired('The saved Microsoft sign-in could not be read. Click "Reconnect with Microsoft".');
+  const data = await tokenRequest({ grant_type: "refresh_token", refresh_token: refreshToken2, scope: SCOPES.join(" ") });
+  if (data.error || !data.access_token) {
+    if (data.error === "invalid_grant" || data.error === "interaction_required" || data.error === "consent_required") {
+      accessCache.delete(tenantId);
+      throw new MicrosoftReauthRequired(describeMicrosoftError(data));
+    }
+    throw new Error(describeMicrosoftError(data));
+  }
+  accessCache.set(tenantId, { token: data.access_token, expiresAt: Date.now() + (Number(data.expires_in) || 3600) * 1e3 });
+  if (data.refresh_token && data.refresh_token !== refreshToken2) {
+    try {
+      await saveMicrosoftRefreshToken(tenantId, data.refresh_token, data.access_token, data.expires_in);
+    } catch (err) {
+      console.error("[Microsoft OAuth] Failed to persist rotated refresh token:", err?.message || err);
+      throw new Error("Could not save the refreshed Microsoft sign-in. Please reconnect the mailbox.");
+    }
+  }
+  return data.access_token;
+}
+function mailboxRedirectUrl(result, message2) {
+  const { appUrl } = config();
+  const params = new URLSearchParams({ mailbox: result });
+  if (message2) params.set("mailbox_message", message2.slice(0, 300));
+  return `${appUrl || ""}/?${params.toString()}`;
+}
+var MICROSOFT_IMAP_HOST, MICROSOFT_SECRET_NAME, STATE_COLLECTION, STATE_TTL_MS, SCOPES, MicrosoftReauthRequired, MicrosoftOAuthError, sysCtx, b64url, stateKey, accessCache;
+var init_microsoftOAuth = __esm({
+  "src/server/microsoftOAuth.ts"() {
+    init_adminFirestore();
+    init_config();
+    init_tenantRepo();
+    init_cryptoUtils();
+    MICROSOFT_IMAP_HOST = "outlook.office365.com";
+    MICROSOFT_SECRET_NAME = "imap_oauth_microsoft";
+    STATE_COLLECTION = "oauth_states";
+    STATE_TTL_MS = 10 * 6e4;
+    SCOPES = ["https://outlook.office.com/IMAP.AccessAsUser.All", "offline_access", "openid", "email", "profile"];
+    MicrosoftReauthRequired = class extends Error {
+      constructor(message2 = 'Microsoft sign-in has expired or was revoked. Click "Reconnect with Microsoft".') {
+        super(message2);
+      }
+    };
+    MicrosoftOAuthError = class extends Error {
+      constructor(status, message2) {
+        super(message2);
+        this.status = status;
+      }
+    };
+    sysCtx = (tenantId) => ({ tenantId, uid: "system", email: "", role: "admin" });
+    b64url = (buf) => buf.toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+    stateKey = (state2) => crypto4.createHash("sha256").update(state2).digest("hex");
+    accessCache = /* @__PURE__ */ new Map();
+  }
+});
+
 // src/server/tenantInboundService.ts
 var tenantInboundService_exports = {};
 __export(tenantInboundService_exports, {
+  GMAIL_IMAP_HOST: () => GMAIL_IMAP_HOST,
   INBOUND_SECRET_NAME: () => INBOUND_SECRET_NAME,
   INBOUND_SETTINGS_DOC: () => INBOUND_SETTINGS_DOC,
   InboundError: () => InboundError,
   connectInbound: () => connectInbound,
+  connectMicrosoftInbound: () => connectMicrosoftInbound,
   createTenantImapClient: () => createTenantImapClient,
   disconnectInbound: () => disconnectInbound,
   friendlyImapError: () => friendlyImapError,
@@ -280267,6 +280475,7 @@ __export(tenantInboundService_exports, {
   getInboundSettings: () => getInboundSettings,
   getInboundView: () => getInboundView,
   invalidateInboundSettings: () => invalidateInboundSettings,
+  isMicrosoftImapHost: () => isMicrosoftImapHost,
   isPrivateAddress: () => isPrivateAddress,
   listInboundTenantIds: () => listInboundTenantIds,
   mailboxKey: () => mailboxKey,
@@ -280279,8 +280488,12 @@ __export(tenantInboundService_exports, {
 });
 import dns from "node:dns/promises";
 import net from "node:net";
-import crypto4 from "node:crypto";
+import crypto5 from "node:crypto";
 import { ImapFlow as ImapFlow2 } from "imapflow";
+function isMicrosoftImapHost(host) {
+  const h2 = String(host || "").trim().toLowerCase();
+  return h2 === MICROSOFT_IMAP_HOST || h2 === "imap-mail.outlook.com" || h2.endsWith(".office365.com") || h2.endsWith(".outlook.com") || h2 === "outlook.office.com";
+}
 function isPrivateIPv4(ip) {
   const p = ip.split(".").map(Number);
   if (p.length !== 4 || p.some((n) => !Number.isInteger(n) || n < 0 || n > 255)) return true;
@@ -280337,7 +280550,7 @@ function createTenantImapClient(c, ip) {
     port: c.port,
     secure: c.secure,
     servername: c.host,
-    auth: { user: c.user, pass: c.pass },
+    auth: c.accessToken ? { user: c.user, accessToken: c.accessToken } : { user: c.user, pass: c.pass || "" },
     logger: false,
     emitLogs: false,
     disableAutoIdle: true,
@@ -280367,8 +280580,8 @@ async function safeClose(client2) {
 function friendlyImapError(err, c) {
   let msg;
   const code = String(err?.code || "");
-  if (err?.authenticationFailed || /AUTHENTICATIONFAILED|Invalid credentials|Authentication failed/i.test(String(err?.responseText || err?.message || ""))) {
-    msg = "Sign-in failed. Check the email address and password. Gmail and Microsoft accounts usually need an app password, not the normal one.";
+  if (err?.authenticationFailed || /AUTHENTICATIONFAILED|AUTHENTICATE failed|Invalid credentials|Authentication failed/i.test(String(err?.responseText || err?.message || ""))) {
+    msg = c?.accessToken ? "Microsoft refused the mailbox sign-in. IMAP may be turned off for this mailbox (Microsoft 365 admin center \u2192 user \u2192 Mail \u2192 Email apps), or access was removed. Reconnect with Microsoft after checking." : "Sign-in failed. Check the Gmail address and the app password (not your normal Google password).";
   } else if (["ENOTFOUND", "EAI_AGAIN"].includes(code)) {
     msg = `Could not find the mail server${c ? ` "${c.host}"` : ""}.`;
   } else if (["ECONNREFUSED", "ETIMEDOUT", "ECONNRESET", "EHOSTUNREACH", "NoConnection"].includes(code) || /timed? ?out/i.test(String(err?.message))) {
@@ -280379,6 +280592,7 @@ function friendlyImapError(err, c) {
     msg = describeImapError(err);
   }
   if (c?.pass) msg = msg.split(c.pass).join("***");
+  if (c?.accessToken) msg = msg.split(c.accessToken).join("***");
   return msg.slice(0, 400);
 }
 async function testImapCredentials(c, ip) {
@@ -280403,15 +280617,15 @@ async function getInboundSettings(tenantId, opts = {}) {
   const cached = settingsCache.get(tenantId);
   if (!opts.fresh && cached && Date.now() - cached.at < CACHE_MS) return cached.value;
   if (!isFirebaseConfigured || !db) return {};
-  const snap = await getDoc(tenantRepo(sysCtx(tenantId)).settingsDoc(INBOUND_SETTINGS_DOC));
+  const snap = await getDoc(tenantRepo(sysCtx2(tenantId)).settingsDoc(INBOUND_SETTINGS_DOC));
   const value = (snap.exists() ? snap.data() : {}) || {};
   settingsCache.set(tenantId, { at: Date.now(), value });
   return value;
 }
-async function writeSettings(tenantId, next, replace = false) {
-  const repo = tenantRepo(sysCtx(tenantId));
+async function writeSettings(tenantId, next2, replace = false) {
+  const repo = tenantRepo(sysCtx2(tenantId));
   const clean2 = JSON.parse(
-    JSON.stringify({ ...next, updatedAt: (/* @__PURE__ */ new Date()).toISOString() }, replace ? void 0 : (_key, value) => value === void 0 ? null : value)
+    JSON.stringify({ ...next2, updatedAt: (/* @__PURE__ */ new Date()).toISOString() }, replace ? void 0 : (_key, value) => value === void 0 ? null : value)
   );
   await setDoc(repo.settingsDoc(INBOUND_SETTINGS_DOC), clean2, replace ? { merge: false } : { merge: true });
   const merged = replace ? clean2 : { ...await getInboundSettings(tenantId, { fresh: true }) };
@@ -280428,7 +280642,7 @@ function invalidateInboundSettings(tenantId) {
 }
 async function readPassword(tenantId) {
   if (!isFirebaseConfigured || !db) return null;
-  const snap = await getDoc(tenantRepo(sysCtx(tenantId)).secretDoc(INBOUND_SECRET_NAME));
+  const snap = await getDoc(tenantRepo(sysCtx2(tenantId)).secretDoc(INBOUND_SECRET_NAME));
   if (!snap.exists()) return null;
   try {
     return decryptSecret(snap.data());
@@ -280439,18 +280653,28 @@ async function readPassword(tenantId) {
 async function getInboundCredentials(tenantId) {
   const s2 = await getInboundSettings(tenantId, { fresh: true });
   if (!s2.host || !s2.user || !s2.port) return null;
+  if (s2.authType === "oauth") {
+    const accessToken = await getMicrosoftAccessToken(tenantId);
+    return { host: s2.host, port: s2.port, secure: true, user: s2.user, accessToken };
+  }
   const pass = await readPassword(tenantId);
   if (!pass) return null;
   return { host: s2.host, port: s2.port, secure: s2.secure ?? s2.port === 993, user: s2.user, pass };
 }
 async function getInboundView(tenantId) {
   const s2 = await getInboundSettings(tenantId, { fresh: true });
+  const authType = s2.authType === "oauth" ? "oauth" : "password";
   let hasPassword = false;
   if (isFirebaseConfigured && db) {
-    hasPassword = (await getDoc(tenantRepo(sysCtx(tenantId)).secretDoc(INBOUND_SECRET_NAME))).exists();
+    hasPassword = authType === "oauth" ? await hasMicrosoftRefreshToken(tenantId) : (await getDoc(tenantRepo(sysCtx2(tenantId)).secretDoc(INBOUND_SECRET_NAME))).exists();
   }
+  const provider = s2.provider || (authType === "oauth" ? "microsoft" : s2.host === GMAIL_IMAP_HOST ? "gmail" : s2.host ? "imap" : "gmail");
   return {
     enabled: Boolean(s2.enabled),
+    provider,
+    authType,
+    /** False until MICROSOFT_CLIENT_ID / SECRET are set, so the UI can explain instead of failing. */
+    microsoftAvailable: isMicrosoftOAuthConfigured(),
     host: s2.host,
     port: s2.port,
     user: s2.user,
@@ -280473,7 +280697,7 @@ async function getConnectedMailboxAddress(tenantId) {
   return void 0;
 }
 function mailboxKey(host, user) {
-  return crypto4.createHash("sha256").update(`${host.toLowerCase()}|${user.toLowerCase()}`).digest("hex").slice(0, 32);
+  return crypto5.createHash("sha256").update(`${host.toLowerCase()}|${user.toLowerCase()}`).digest("hex").slice(0, 32);
 }
 async function listInboundTenantIds() {
   if (!isFirebaseConfigured || !db) return [];
@@ -280515,16 +280739,24 @@ function requireDb() {
 }
 async function connectInbound(tenantId, input) {
   requireDb();
-  const host = String(input.host || "").trim().toLowerCase();
+  const host = String(input.host || GMAIL_IMAP_HOST).trim().toLowerCase();
+  if (isMicrosoftImapHost(host)) {
+    throw new InboundError(
+      400,
+      'For Outlook / Microsoft 365 use "Sign in with Microsoft". Microsoft does not accept passwords for IMAP.'
+    );
+  }
   const port = Number(input.port) || 993;
   const user = String(input.user || "").trim();
   if (!ALLOWED_PORTS.includes(port)) throw new InboundError(400, "Use port 993 (SSL/TLS) or 143 (STARTTLS)");
   if (!user || user.length > 254 || /[\r\n\0]/.test(user)) throw new InboundError(400, "Enter the mailbox email address or username");
   const existing = await getInboundSettings(tenantId, { fresh: true });
-  const sameMailbox = existing.host === host && (existing.user || "").toLowerCase() === user.toLowerCase();
+  const sameMailbox = existing.authType !== "oauth" && existing.host === host && (existing.user || "").toLowerCase() === user.toLowerCase();
   let pass = String(input.password || "");
   if (!pass) {
-    if (!sameMailbox) throw new InboundError(400, "Enter the mailbox password");
+    if (!sameMailbox) {
+      throw new InboundError(400, host === GMAIL_IMAP_HOST ? "Enter the Gmail app password" : "Enter the mailbox password");
+    }
     pass = await readPassword(tenantId) || "";
     if (!pass) throw new InboundError(400, "Enter the mailbox password");
   }
@@ -280542,14 +280774,18 @@ async function connectInbound(tenantId, input) {
   }
   if (existing.host && !sameMailbox) await releaseMailbox(tenantId, existing.host, existing.user).catch(() => {
   });
-  const repo = tenantRepo(sysCtx(tenantId));
+  if (existing.authType === "oauth") await deleteMicrosoftRefreshToken(tenantId);
+  const repo = tenantRepo(sysCtx2(tenantId));
   const enc = encryptSecret(pass);
   const now = (/* @__PURE__ */ new Date()).toISOString();
   await setDoc(repo.secretDoc(INBOUND_SECRET_NAME), { name: INBOUND_SECRET_NAME, ...enc, createdAt: now, updatedAt: now }, { merge: false });
   const keepBaseline = sameMailbox && existing.lastUid !== void 0 && existing.uidValidity === uidState.uidValidity;
+  const provider = host === GMAIL_IMAP_HOST ? "gmail" : "imap";
   await writeSettings(tenantId, {
     ...existing,
     enabled: true,
+    provider,
+    authType: "password",
     host,
     port,
     secure: creds.secure,
@@ -280568,7 +280804,14 @@ async function connectInbound(tenantId, input) {
 }
 async function testStoredInbound(tenantId) {
   requireDb();
-  const creds = await getInboundCredentials(tenantId);
+  let creds;
+  try {
+    creds = await getInboundCredentials(tenantId);
+  } catch (err) {
+    const reauth = err instanceof MicrosoftReauthRequired;
+    await updateInboundState(tenantId, { status: reauth ? "auth_failed" : "error", lastError: err?.message, lastErrorAt: (/* @__PURE__ */ new Date()).toISOString() });
+    throw new InboundError(reauth ? 400 : 502, err?.message || "Could not sign in to Microsoft");
+  }
   if (!creds) throw new InboundError(400, "No mailbox is connected");
   const ip = await resolveSafeHost(creds.host);
   const s2 = await getInboundSettings(tenantId, { fresh: true });
@@ -280609,14 +280852,61 @@ async function setInboundOptions(tenantId, opts) {
 async function disconnectInbound(tenantId) {
   requireDb();
   const s2 = await getInboundSettings(tenantId, { fresh: true });
-  await deleteDoc(tenantRepo(sysCtx(tenantId)).secretDoc(INBOUND_SECRET_NAME)).catch(() => {
+  await deleteDoc(tenantRepo(sysCtx2(tenantId)).secretDoc(INBOUND_SECRET_NAME)).catch(() => {
   });
+  await deleteMicrosoftRefreshToken(tenantId);
   await releaseMailbox(tenantId, s2.host, s2.user).catch(() => {
   });
   await writeSettings(tenantId, { enabled: false, status: "not_configured" }, true);
   return getInboundView(tenantId);
 }
-var InboundError, INBOUND_SETTINGS_DOC, INBOUND_SECRET_NAME, MAILBOX_REGISTRY, ALLOWED_PORTS, sysCtx, HOST_RE, settingsCache, CACHE_MS;
+async function connectMicrosoftInbound(r2) {
+  requireDb();
+  const tenantId = r2.tenantId;
+  const host = MICROSOFT_IMAP_HOST;
+  const port = 993;
+  const user = r2.email;
+  const existing = await getInboundSettings(tenantId, { fresh: true });
+  const sameMailbox = existing.authType === "oauth" && existing.host === host && (existing.user || "").toLowerCase() === user;
+  const ip = await resolveSafeHost(host);
+  await claimMailbox(tenantId, host, user);
+  let uidState;
+  try {
+    uidState = await testImapCredentials({ host, port, secure: true, user, accessToken: r2.accessToken }, ip);
+  } catch (err) {
+    if (!sameMailbox) await releaseMailbox(tenantId, host, user).catch(() => {
+    });
+    throw err;
+  }
+  if (existing.host && !sameMailbox) await releaseMailbox(tenantId, existing.host, existing.user).catch(() => {
+  });
+  await deleteDoc(tenantRepo(sysCtx2(tenantId)).secretDoc(INBOUND_SECRET_NAME)).catch(() => {
+  });
+  await saveMicrosoftRefreshToken(tenantId, r2.refreshToken, r2.accessToken, r2.expiresIn);
+  const now = (/* @__PURE__ */ new Date()).toISOString();
+  const keepBaseline = sameMailbox && existing.lastUid !== void 0 && existing.uidValidity === uidState.uidValidity;
+  await writeSettings(tenantId, {
+    ...existing,
+    enabled: true,
+    provider: "microsoft",
+    authType: "oauth",
+    host,
+    port,
+    secure: true,
+    user,
+    processNewInquiries: r2.processNewInquiries ?? existing.processNewInquiries ?? false,
+    status: "connected",
+    lastError: void 0,
+    lastErrorAt: void 0,
+    consecutiveFailures: 0,
+    nextPollAt: void 0,
+    uidValidity: uidState.uidValidity,
+    lastUid: keepBaseline ? existing.lastUid : Math.max(0, uidState.uidNext - 1),
+    connectedAt: keepBaseline ? existing.connectedAt : now
+  }, true);
+  return getInboundView(tenantId);
+}
+var GMAIL_IMAP_HOST, InboundError, INBOUND_SETTINGS_DOC, INBOUND_SECRET_NAME, MAILBOX_REGISTRY, ALLOWED_PORTS, sysCtx2, HOST_RE, settingsCache, CACHE_MS;
 var init_tenantInboundService = __esm({
   "src/server/tenantInboundService.ts"() {
     init_adminFirestore();
@@ -280624,6 +280914,8 @@ var init_tenantInboundService = __esm({
     init_tenantRepo();
     init_cryptoUtils();
     init_imapService();
+    init_microsoftOAuth();
+    GMAIL_IMAP_HOST = "imap.gmail.com";
     InboundError = class extends Error {
       constructor(status, message2) {
         super(message2);
@@ -280634,7 +280926,7 @@ var init_tenantInboundService = __esm({
     INBOUND_SECRET_NAME = "imap_password";
     MAILBOX_REGISTRY = "imap_mailboxes";
     ALLOWED_PORTS = [993, 143];
-    sysCtx = (tenantId) => ({ tenantId, uid: "system", email: "", role: "admin" });
+    sysCtx2 = (tenantId) => ({ tenantId, uid: "system", email: "", role: "admin" });
     HOST_RE = /^[a-z0-9]([a-z0-9.-]{0,251}[a-z0-9])?$/;
     settingsCache = /* @__PURE__ */ new Map();
     CACHE_MS = 3e4;
@@ -280688,8 +280980,8 @@ function cacheTenantEmailSettings(tenantId, value) {
 async function saveSettings(tenantId, patch) {
   const repo = tenantRepo({ tenantId });
   const current = await getTenantEmailSettings(tenantId, { fresh: true });
-  const next = { ...current, ...patch, updatedAt: (/* @__PURE__ */ new Date()).toISOString() };
-  const clean2 = JSON.parse(JSON.stringify(next));
+  const next2 = { ...current, ...patch, updatedAt: (/* @__PURE__ */ new Date()).toISOString() };
+  const clean2 = JSON.parse(JSON.stringify(next2));
   await setDoc(repo.settingsDoc("email"), clean2, { merge: false });
   settingsCache2.set(tenantId, { at: Date.now(), value: clean2 });
   return clean2;
@@ -280918,6 +281210,17 @@ async function resolveTenantSender(tenantId) {
   } catch (err) {
     return { ok: false, error: `Could not load email settings: ${err?.message || "unknown error"}` };
   }
+  if (s2.status !== "verified" && s2.domain && s2.resendDomainId) {
+    const last = lastDomainRecheck.get(tenantId) || 0;
+    if (Date.now() - last > 6e4) {
+      lastDomainRecheck.set(tenantId, Date.now());
+      try {
+        s2 = await refreshTenantDomain(tenantId);
+      } catch (err) {
+        console.warn(`[Email] Could not re-check domain ${s2.domain} for ${tenantId}:`, err?.message || err);
+      }
+    }
+  }
   if (s2.status === "verified" && s2.domain && s2.fromLocalPart) {
     return {
       ok: true,
@@ -280937,7 +281240,7 @@ async function resolveTenantSender(tenantId) {
   }
   return { ok: false, error: "Sending is blocked: this workspace has no verified sending domain. Open Settings \u2192 Email to add one." };
 }
-var DOMAIN_RE, LOCAL_RE, client, clientKey, settingsCache2, CACHE_MS2, isTrackingEnabled, HttpError;
+var DOMAIN_RE, LOCAL_RE, client, clientKey, settingsCache2, CACHE_MS2, isTrackingEnabled, lastDomainRecheck, HttpError;
 var init_tenantEmailService = __esm({
   "src/server/tenantEmailService.ts"() {
     init_dist();
@@ -280952,6 +281255,7 @@ var init_tenantEmailService = __esm({
     settingsCache2 = /* @__PURE__ */ new Map();
     CACHE_MS2 = 3e4;
     isTrackingEnabled = (s2) => s2.trackingEnabled !== false;
+    lastDomainRecheck = /* @__PURE__ */ new Map();
     HttpError = class extends Error {
       constructor(status, message2) {
         super(message2);
@@ -281019,13 +281323,13 @@ async function fetchFirestoreSmtpConfig() {
   return getSmtpConfig();
 }
 function createTransporter(customPort, customSecure) {
-  const config = getSmtpConfig();
-  if (!config.configured) {
+  const config3 = getSmtpConfig();
+  if (!config3.configured) {
     return null;
   }
-  const port = customPort ?? config.port;
-  const isGmail = config.host.toLowerCase().includes("gmail") || config.user.toLowerCase().includes("gmail.com");
-  const cleanPass = config.pass.replace(/\s+/g, "");
+  const port = customPort ?? config3.port;
+  const isGmail = config3.host.toLowerCase().includes("gmail") || config3.user.toLowerCase().includes("gmail.com");
+  const cleanPass = config3.pass.replace(/\s+/g, "");
   if (isGmail && (!customPort || customPort === 465 || customPort === 587)) {
     if (port === 587) {
       return nodemailer.createTransport({
@@ -281034,7 +281338,7 @@ function createTransporter(customPort, customSecure) {
         secure: false,
         // STARTTLS
         auth: {
-          user: config.user,
+          user: config3.user,
           pass: cleanPass
         },
         tls: {
@@ -281048,7 +281352,7 @@ function createTransporter(customPort, customSecure) {
     return nodemailer.createTransport({
       service: "gmail",
       auth: {
-        user: config.user,
+        user: config3.user,
         pass: cleanPass
       },
       tls: {
@@ -281059,13 +281363,13 @@ function createTransporter(customPort, customSecure) {
       socketTimeout: 1e4
     });
   }
-  const secure = customSecure !== void 0 ? customSecure : config.secure && port === 465;
+  const secure = customSecure !== void 0 ? customSecure : config3.secure && port === 465;
   return nodemailer.createTransport({
-    host: config.host,
+    host: config3.host,
     port,
     secure,
     auth: {
-      user: config.user,
+      user: config3.user,
       pass: cleanPass
     },
     tls: {
@@ -281078,7 +281382,7 @@ function createTransporter(customPort, customSecure) {
   });
 }
 async function verifySmtpConnection() {
-  const config = getSmtpConfig();
+  const config3 = getSmtpConfig();
   const now = (/* @__PURE__ */ new Date()).toISOString();
   const resend = getResendConfig();
   if (resend.configured) {
@@ -281087,21 +281391,21 @@ async function verifySmtpConnection() {
       host: "Resend",
       port: 443,
       secure: true,
-      user: config.user,
+      user: config3.user,
       from: resend.from,
       verified: true,
       lastChecked: now
     };
     return cachedSmtpStatus;
   }
-  if (!config.configured) {
+  if (!config3.configured) {
     cachedSmtpStatus = {
       configured: false,
-      host: config.host || "(not set)",
-      port: config.port,
-      secure: config.secure,
-      user: config.user,
-      from: config.from,
+      host: config3.host || "(not set)",
+      port: config3.port,
+      secure: config3.secure,
+      user: config3.user,
+      from: config3.from,
       verified: false,
       lastChecked: now,
       lastError: "SMTP_HOST or SMTP_PASS environment variable is missing. Set these to enable live email dispatch."
@@ -281116,11 +281420,11 @@ async function verifySmtpConnection() {
     await transporter.verify();
     cachedSmtpStatus = {
       configured: true,
-      host: config.host,
-      port: config.port,
-      secure: config.secure,
-      user: config.user,
-      from: config.from,
+      host: config3.host,
+      port: config3.port,
+      secure: config3.secure,
+      user: config3.user,
+      from: config3.from,
       verified: true,
       lastChecked: now
     };
@@ -281129,11 +281433,11 @@ async function verifySmtpConnection() {
     console.error("SMTP Connection verification failed:", err);
     cachedSmtpStatus = {
       configured: true,
-      host: config.host,
-      port: config.port,
-      secure: config.secure,
-      user: config.user,
-      from: config.from,
+      host: config3.host,
+      port: config3.port,
+      secure: config3.secure,
+      user: config3.user,
+      from: config3.from,
       verified: false,
       lastChecked: now,
       lastError: err.message || "Failed to authenticate or connect with SMTP server"
@@ -281219,7 +281523,18 @@ async function sendViaResend(params, override) {
     }
     const tenantId = params.tenantId || params.headers?.["X-Tenant-Id"];
     if (tenantId && isFirebaseConfigured && db) {
-      setDoc(globalEmailRouteDoc(data.id), { emailId: data.id, tenantId, createdAt: (/* @__PURE__ */ new Date()).toISOString() }, { merge: true }).catch(() => {
+      const tagMap = Object.fromEntries((params.tags || []).map((t2) => [t2.name, t2.value]));
+      setDoc(
+        globalEmailRouteDoc(data.id),
+        {
+          emailId: data.id,
+          tenantId,
+          campaignLeadId: tagMap.lead || "",
+          campaignId: tagMap.campaign || "",
+          createdAt: (/* @__PURE__ */ new Date()).toISOString()
+        },
+        { merge: true }
+      ).catch(() => {
       });
     }
     console.log(`[Resend] Sent email to ${params.to}, id: ${data.id}`);
@@ -281856,6 +282171,4980 @@ var init_knowledgeService = __esm({
   }
 });
 
+// node_modules/@vercel/functions/headers.js
+var require_headers = __commonJS({
+  "node_modules/@vercel/functions/headers.js"(exports, module) {
+    "use strict";
+    var __defProp2 = Object.defineProperty;
+    var __getOwnPropDesc2 = Object.getOwnPropertyDescriptor;
+    var __getOwnPropNames2 = Object.getOwnPropertyNames;
+    var __hasOwnProp2 = Object.prototype.hasOwnProperty;
+    var __export2 = (target, all) => {
+      for (var name5 in all)
+        __defProp2(target, name5, { get: all[name5], enumerable: true });
+    };
+    var __copyProps2 = (to, from, except, desc) => {
+      if (from && typeof from === "object" || typeof from === "function") {
+        for (let key of __getOwnPropNames2(from))
+          if (!__hasOwnProp2.call(to, key) && key !== except)
+            __defProp2(to, key, { get: () => from[key], enumerable: !(desc = __getOwnPropDesc2(from, key)) || desc.enumerable });
+      }
+      return to;
+    };
+    var __toCommonJS2 = (mod4) => __copyProps2(__defProp2({}, "__esModule", { value: true }), mod4);
+    var headers_exports = {};
+    __export2(headers_exports, {
+      CITY_HEADER_NAME: () => CITY_HEADER_NAME,
+      COUNTRY_HEADER_NAME: () => COUNTRY_HEADER_NAME,
+      EMOJI_FLAG_UNICODE_STARTING_POSITION: () => EMOJI_FLAG_UNICODE_STARTING_POSITION,
+      IP_HEADER_NAME: () => IP_HEADER_NAME,
+      LATITUDE_HEADER_NAME: () => LATITUDE_HEADER_NAME,
+      LONGITUDE_HEADER_NAME: () => LONGITUDE_HEADER_NAME,
+      POSTAL_CODE_HEADER_NAME: () => POSTAL_CODE_HEADER_NAME,
+      REGION_HEADER_NAME: () => REGION_HEADER_NAME,
+      REQUEST_ID_HEADER_NAME: () => REQUEST_ID_HEADER_NAME,
+      geolocation: () => geolocation2,
+      ipAddress: () => ipAddress2
+    });
+    module.exports = __toCommonJS2(headers_exports);
+    var CITY_HEADER_NAME = "x-vercel-ip-city";
+    var COUNTRY_HEADER_NAME = "x-vercel-ip-country";
+    var IP_HEADER_NAME = "x-real-ip";
+    var LATITUDE_HEADER_NAME = "x-vercel-ip-latitude";
+    var LONGITUDE_HEADER_NAME = "x-vercel-ip-longitude";
+    var REGION_HEADER_NAME = "x-vercel-ip-country-region";
+    var POSTAL_CODE_HEADER_NAME = "x-vercel-ip-postal-code";
+    var REQUEST_ID_HEADER_NAME = "x-vercel-id";
+    var EMOJI_FLAG_UNICODE_STARTING_POSITION = 127397;
+    function getHeader(headers, key) {
+      return headers.get(key) ?? void 0;
+    }
+    function getHeaderWithDecode(request, key) {
+      const header = getHeader(request.headers, key);
+      return header ? decodeURIComponent(header) : void 0;
+    }
+    function getFlag(countryCode) {
+      const regex = new RegExp("^[A-Z]{2}$").test(countryCode);
+      if (!countryCode || !regex)
+        return void 0;
+      return String.fromCodePoint(
+        ...countryCode.split("").map((char) => EMOJI_FLAG_UNICODE_STARTING_POSITION + char.charCodeAt(0))
+      );
+    }
+    function ipAddress2(input) {
+      const headers = "headers" in input ? input.headers : input;
+      return getHeader(headers, IP_HEADER_NAME);
+    }
+    function getRegionFromRequestId(requestId) {
+      if (!requestId) {
+        return "dev1";
+      }
+      return requestId.split(":")[0];
+    }
+    function geolocation2(request) {
+      return {
+        // city name may be encoded to support multi-byte characters
+        city: getHeaderWithDecode(request, CITY_HEADER_NAME),
+        country: getHeader(request.headers, COUNTRY_HEADER_NAME),
+        flag: getFlag(getHeader(request.headers, COUNTRY_HEADER_NAME)),
+        countryRegion: getHeader(request.headers, REGION_HEADER_NAME),
+        region: getRegionFromRequestId(
+          getHeader(request.headers, REQUEST_ID_HEADER_NAME)
+        ),
+        latitude: getHeader(request.headers, LATITUDE_HEADER_NAME),
+        longitude: getHeader(request.headers, LONGITUDE_HEADER_NAME),
+        postalCode: getHeader(request.headers, POSTAL_CODE_HEADER_NAME)
+      };
+    }
+  }
+});
+
+// node_modules/@vercel/functions/get-env.js
+var require_get_env = __commonJS({
+  "node_modules/@vercel/functions/get-env.js"(exports, module) {
+    "use strict";
+    var __defProp2 = Object.defineProperty;
+    var __getOwnPropDesc2 = Object.getOwnPropertyDescriptor;
+    var __getOwnPropNames2 = Object.getOwnPropertyNames;
+    var __hasOwnProp2 = Object.prototype.hasOwnProperty;
+    var __export2 = (target, all) => {
+      for (var name5 in all)
+        __defProp2(target, name5, { get: all[name5], enumerable: true });
+    };
+    var __copyProps2 = (to, from, except, desc) => {
+      if (from && typeof from === "object" || typeof from === "function") {
+        for (let key of __getOwnPropNames2(from))
+          if (!__hasOwnProp2.call(to, key) && key !== except)
+            __defProp2(to, key, { get: () => from[key], enumerable: !(desc = __getOwnPropDesc2(from, key)) || desc.enumerable });
+      }
+      return to;
+    };
+    var __toCommonJS2 = (mod4) => __copyProps2(__defProp2({}, "__esModule", { value: true }), mod4);
+    var get_env_exports = {};
+    __export2(get_env_exports, {
+      getEnv: () => getEnv2
+    });
+    module.exports = __toCommonJS2(get_env_exports);
+    var getEnv2 = (env2 = process.env) => ({
+      /**
+       * An indicator to show that System Environment Variables have been exposed to your project's Deployments.
+       * @example "1"
+       */
+      VERCEL: get(env2, "VERCEL"),
+      /**
+       * An indicator that the code is running in a Continuous Integration environment.
+       * @example "1"
+       */
+      CI: get(env2, "CI"),
+      /**
+       * The Environment that the app is deployed and running on.
+       * @example "production"
+       */
+      VERCEL_ENV: get(env2, "VERCEL_ENV"),
+      /**
+       * The domain name of the generated deployment URL. The value does not include the protocol scheme https://.
+       * NOTE: This Variable cannot be used in conjunction with Standard Deployment Protection.
+       * @example "*.vercel.app"
+       */
+      VERCEL_URL: get(env2, "VERCEL_URL"),
+      /**
+       * The domain name of the generated Git branch URL. The value does not include the protocol scheme https://.
+       * @example "*-git-*.vercel.app"
+       */
+      VERCEL_BRANCH_URL: get(env2, "VERCEL_BRANCH_URL"),
+      /**
+       * A production domain name of the project. This is useful to reliably generate links that point to production such as OG-image URLs.
+       * The value does not include the protocol scheme https://.
+       * @example "myproject.vercel.app"
+       */
+      VERCEL_PROJECT_PRODUCTION_URL: get(env2, "VERCEL_PROJECT_PRODUCTION_URL"),
+      /**
+       * The ID of the Region where the app is running.
+       *
+       * Possible values:
+       * - arn1 (Stockholm, Sweden)
+       * - bom1 (Mumbai, India)
+       * - cdg1 (Paris, France)
+       * - cle1 (Cleveland, USA)
+       * - cpt1 (Cape Town, South Africa)
+       * - dub1 (Dublin, Ireland)
+       * - fra1 (Frankfurt, Germany)
+       * - gru1 (São Paulo, Brazil)
+       * - hkg1 (Hong Kong)
+       * - hnd1 (Tokyo, Japan)
+       * - iad1 (Washington, D.C., USA)
+       * - icn1 (Seoul, South Korea)
+       * - kix1 (Osaka, Japan)
+       * - lhr1 (London, United Kingdom)
+       * - pdx1 (Portland, USA)
+       * - sfo1 (San Francisco, USA)
+       * - sin1 (Singapore)
+       * - syd1 (Sydney, Australia)
+       * - dev1 (Development Region)
+       *
+       * @example "iad1"
+       */
+      VERCEL_REGION: get(env2, "VERCEL_REGION"),
+      /**
+       * The unique identifier for the deployment, which can be used to implement Skew Protection.
+       * @example "dpl_7Gw5ZMBpQA8h9GF832KGp7nwbuh3"
+       */
+      VERCEL_DEPLOYMENT_ID: get(env2, "VERCEL_DEPLOYMENT_ID"),
+      /**
+       * When Skew Protection is enabled in Project Settings, this value is set to 1.
+       * @example "1"
+       */
+      VERCEL_SKEW_PROTECTION_ENABLED: get(env2, "VERCEL_SKEW_PROTECTION_ENABLED"),
+      /**
+       * The Protection Bypass for Automation value, if the secret has been generated in the project's Deployment Protection settings.
+       */
+      VERCEL_AUTOMATION_BYPASS_SECRET: get(env2, "VERCEL_AUTOMATION_BYPASS_SECRET"),
+      /**
+       * The Git Provider the deployment is triggered from.
+       * @example "github"
+       */
+      VERCEL_GIT_PROVIDER: get(env2, "VERCEL_GIT_PROVIDER"),
+      /**
+       * The origin repository the deployment is triggered from.
+       * @example "my-site"
+       */
+      VERCEL_GIT_REPO_SLUG: get(env2, "VERCEL_GIT_REPO_SLUG"),
+      /**
+       * The account that owns the repository the deployment is triggered from.
+       * @example "acme"
+       */
+      VERCEL_GIT_REPO_OWNER: get(env2, "VERCEL_GIT_REPO_OWNER"),
+      /**
+       * The ID of the repository the deployment is triggered from.
+       * @example "117716146"
+       */
+      VERCEL_GIT_REPO_ID: get(env2, "VERCEL_GIT_REPO_ID"),
+      /**
+       * The git branch of the commit the deployment was triggered by.
+       * @example "improve-about-page"
+       */
+      VERCEL_GIT_COMMIT_REF: get(env2, "VERCEL_GIT_COMMIT_REF"),
+      /**
+       * The git SHA of the commit the deployment was triggered by.
+       * @example "fa1eade47b73733d6312d5abfad33ce9e4068081"
+       */
+      VERCEL_GIT_COMMIT_SHA: get(env2, "VERCEL_GIT_COMMIT_SHA"),
+      /**
+       * The message attached to the commit the deployment was triggered by.
+       * @example "Update about page"
+       */
+      VERCEL_GIT_COMMIT_MESSAGE: get(env2, "VERCEL_GIT_COMMIT_MESSAGE"),
+      /**
+       * The username attached to the author of the commit that the project was deployed by.
+       * @example "johndoe"
+       */
+      VERCEL_GIT_COMMIT_AUTHOR_LOGIN: get(env2, "VERCEL_GIT_COMMIT_AUTHOR_LOGIN"),
+      /**
+       * The name attached to the author of the commit that the project was deployed by.
+       * @example "John Doe"
+       */
+      VERCEL_GIT_COMMIT_AUTHOR_NAME: get(env2, "VERCEL_GIT_COMMIT_AUTHOR_NAME"),
+      /**
+       * The git SHA of the last successful deployment for the project and branch.
+       * NOTE: This Variable is only exposed when an Ignored Build Step is provided.
+       * @example "fa1eade47b73733d6312d5abfad33ce9e4068080"
+       */
+      VERCEL_GIT_PREVIOUS_SHA: get(env2, "VERCEL_GIT_PREVIOUS_SHA"),
+      /**
+       * The pull request id the deployment was triggered by. If a deployment is created on a branch before a pull request is made, this value will be an empty string.
+       * @example "23"
+       */
+      VERCEL_GIT_PULL_REQUEST_ID: get(env2, "VERCEL_GIT_PULL_REQUEST_ID")
+    });
+    var get = (env2, key) => {
+      const value = env2[key];
+      return value === "" ? void 0 : value;
+    };
+  }
+});
+
+// node_modules/@vercel/functions/get-context.js
+var require_get_context = __commonJS({
+  "node_modules/@vercel/functions/get-context.js"(exports, module) {
+    "use strict";
+    var __defProp2 = Object.defineProperty;
+    var __getOwnPropDesc2 = Object.getOwnPropertyDescriptor;
+    var __getOwnPropNames2 = Object.getOwnPropertyNames;
+    var __hasOwnProp2 = Object.prototype.hasOwnProperty;
+    var __export2 = (target, all) => {
+      for (var name5 in all)
+        __defProp2(target, name5, { get: all[name5], enumerable: true });
+    };
+    var __copyProps2 = (to, from, except, desc) => {
+      if (from && typeof from === "object" || typeof from === "function") {
+        for (let key of __getOwnPropNames2(from))
+          if (!__hasOwnProp2.call(to, key) && key !== except)
+            __defProp2(to, key, { get: () => from[key], enumerable: !(desc = __getOwnPropDesc2(from, key)) || desc.enumerable });
+      }
+      return to;
+    };
+    var __toCommonJS2 = (mod4) => __copyProps2(__defProp2({}, "__esModule", { value: true }), mod4);
+    var get_context_exports = {};
+    __export2(get_context_exports, {
+      SYMBOL_FOR_REQ_CONTEXT: () => SYMBOL_FOR_REQ_CONTEXT,
+      getContext: () => getContext
+    });
+    module.exports = __toCommonJS2(get_context_exports);
+    var SYMBOL_FOR_REQ_CONTEXT = Symbol.for("@vercel/request-context");
+    function getContext() {
+      const fromSymbol = globalThis;
+      return fromSymbol[SYMBOL_FOR_REQ_CONTEXT]?.get?.() ?? {};
+    }
+  }
+});
+
+// node_modules/@vercel/functions/deadline.js
+var require_deadline4 = __commonJS({
+  "node_modules/@vercel/functions/deadline.js"(exports, module) {
+    "use strict";
+    var __defProp2 = Object.defineProperty;
+    var __getOwnPropDesc2 = Object.getOwnPropertyDescriptor;
+    var __getOwnPropNames2 = Object.getOwnPropertyNames;
+    var __hasOwnProp2 = Object.prototype.hasOwnProperty;
+    var __export2 = (target, all) => {
+      for (var name5 in all)
+        __defProp2(target, name5, { get: all[name5], enumerable: true });
+    };
+    var __copyProps2 = (to, from, except, desc) => {
+      if (from && typeof from === "object" || typeof from === "function") {
+        for (let key of __getOwnPropNames2(from))
+          if (!__hasOwnProp2.call(to, key) && key !== except)
+            __defProp2(to, key, { get: () => from[key], enumerable: !(desc = __getOwnPropDesc2(from, key)) || desc.enumerable });
+      }
+      return to;
+    };
+    var __toCommonJS2 = (mod4) => __copyProps2(__defProp2({}, "__esModule", { value: true }), mod4);
+    var deadline_exports = {};
+    __export2(deadline_exports, {
+      getDeadline: () => getDeadline2
+    });
+    module.exports = __toCommonJS2(deadline_exports);
+    var import_get_context = require_get_context();
+    function getDeadline2() {
+      const deadline = (0, import_get_context.getContext)().deadline;
+      if (deadline === void 0) {
+        return void 0;
+      }
+      const date = new Date(deadline);
+      if (isNaN(date.getTime())) {
+        return void 0;
+      }
+      return date;
+    }
+  }
+});
+
+// node_modules/@vercel/functions/wait-until.js
+var require_wait_until = __commonJS({
+  "node_modules/@vercel/functions/wait-until.js"(exports, module) {
+    "use strict";
+    var __defProp2 = Object.defineProperty;
+    var __getOwnPropDesc2 = Object.getOwnPropertyDescriptor;
+    var __getOwnPropNames2 = Object.getOwnPropertyNames;
+    var __hasOwnProp2 = Object.prototype.hasOwnProperty;
+    var __export2 = (target, all) => {
+      for (var name5 in all)
+        __defProp2(target, name5, { get: all[name5], enumerable: true });
+    };
+    var __copyProps2 = (to, from, except, desc) => {
+      if (from && typeof from === "object" || typeof from === "function") {
+        for (let key of __getOwnPropNames2(from))
+          if (!__hasOwnProp2.call(to, key) && key !== except)
+            __defProp2(to, key, { get: () => from[key], enumerable: !(desc = __getOwnPropDesc2(from, key)) || desc.enumerable });
+      }
+      return to;
+    };
+    var __toCommonJS2 = (mod4) => __copyProps2(__defProp2({}, "__esModule", { value: true }), mod4);
+    var wait_until_exports = {};
+    __export2(wait_until_exports, {
+      waitUntil: () => waitUntil3
+    });
+    module.exports = __toCommonJS2(wait_until_exports);
+    var import_get_context = require_get_context();
+    var waitUntil3 = (promise) => {
+      if (promise === null || typeof promise !== "object" || typeof promise.then !== "function") {
+        throw new TypeError(
+          `waitUntil can only be called with a Promise, got ${typeof promise}`
+        );
+      }
+      return (0, import_get_context.getContext)().waitUntil?.(promise);
+    };
+  }
+});
+
+// node_modules/@vercel/functions/metric.js
+var require_metric = __commonJS({
+  "node_modules/@vercel/functions/metric.js"(exports, module) {
+    "use strict";
+    var __defProp2 = Object.defineProperty;
+    var __getOwnPropDesc2 = Object.getOwnPropertyDescriptor;
+    var __getOwnPropNames2 = Object.getOwnPropertyNames;
+    var __hasOwnProp2 = Object.prototype.hasOwnProperty;
+    var __export2 = (target, all) => {
+      for (var name5 in all)
+        __defProp2(target, name5, { get: all[name5], enumerable: true });
+    };
+    var __copyProps2 = (to, from, except, desc) => {
+      if (from && typeof from === "object" || typeof from === "function") {
+        for (let key of __getOwnPropNames2(from))
+          if (!__hasOwnProp2.call(to, key) && key !== except)
+            __defProp2(to, key, { get: () => from[key], enumerable: !(desc = __getOwnPropDesc2(from, key)) || desc.enumerable });
+      }
+      return to;
+    };
+    var __toCommonJS2 = (mod4) => __copyProps2(__defProp2({}, "__esModule", { value: true }), mod4);
+    var metric_exports = {};
+    __export2(metric_exports, {
+      metric: () => metric2
+    });
+    module.exports = __toCommonJS2(metric_exports);
+    var RUSTY_RUNTIME_IPC_SYMBOL = Symbol.for("@vercel/rusty-runtime-ipc");
+    function metric2(name5, value, tags) {
+      const ipc = globalThis[RUSTY_RUNTIME_IPC_SYMBOL];
+      ipc?.sendMetric?.(name5, value, tags);
+    }
+  }
+});
+
+// node_modules/@vercel/functions/middleware.js
+var require_middleware = __commonJS({
+  "node_modules/@vercel/functions/middleware.js"(exports, module) {
+    "use strict";
+    var __defProp2 = Object.defineProperty;
+    var __getOwnPropDesc2 = Object.getOwnPropertyDescriptor;
+    var __getOwnPropNames2 = Object.getOwnPropertyNames;
+    var __hasOwnProp2 = Object.prototype.hasOwnProperty;
+    var __export2 = (target, all) => {
+      for (var name5 in all)
+        __defProp2(target, name5, { get: all[name5], enumerable: true });
+    };
+    var __copyProps2 = (to, from, except, desc) => {
+      if (from && typeof from === "object" || typeof from === "function") {
+        for (let key of __getOwnPropNames2(from))
+          if (!__hasOwnProp2.call(to, key) && key !== except)
+            __defProp2(to, key, { get: () => from[key], enumerable: !(desc = __getOwnPropDesc2(from, key)) || desc.enumerable });
+      }
+      return to;
+    };
+    var __toCommonJS2 = (mod4) => __copyProps2(__defProp2({}, "__esModule", { value: true }), mod4);
+    var middleware_exports = {};
+    __export2(middleware_exports, {
+      next: () => next2,
+      rewrite: () => rewrite2
+    });
+    module.exports = __toCommonJS2(middleware_exports);
+    function handleMiddlewareField(init, headers) {
+      if (init?.request?.headers) {
+        if (!(init.request.headers instanceof Headers)) {
+          throw new Error("request.headers must be an instance of Headers");
+        }
+        const keys = [];
+        for (const [key, value] of init.request.headers) {
+          headers.set("x-middleware-request-" + key, value);
+          keys.push(key);
+        }
+        headers.set("x-middleware-override-headers", keys.join(","));
+      }
+    }
+    function rewrite2(destination, init) {
+      const headers = new Headers(init?.headers ?? {});
+      headers.set("x-middleware-rewrite", String(destination));
+      handleMiddlewareField(init, headers);
+      return new Response(null, {
+        ...init,
+        headers
+      });
+    }
+    function next2(init) {
+      const headers = new Headers(init?.headers ?? {});
+      headers.set("x-middleware-next", "1");
+      handleMiddlewareField(init, headers);
+      return new Response(null, {
+        ...init,
+        headers
+      });
+    }
+  }
+});
+
+// node_modules/@vercel/functions/cache/in-memory-cache.js
+var require_in_memory_cache = __commonJS({
+  "node_modules/@vercel/functions/cache/in-memory-cache.js"(exports, module) {
+    "use strict";
+    var __defProp2 = Object.defineProperty;
+    var __getOwnPropDesc2 = Object.getOwnPropertyDescriptor;
+    var __getOwnPropNames2 = Object.getOwnPropertyNames;
+    var __hasOwnProp2 = Object.prototype.hasOwnProperty;
+    var __export2 = (target, all) => {
+      for (var name5 in all)
+        __defProp2(target, name5, { get: all[name5], enumerable: true });
+    };
+    var __copyProps2 = (to, from, except, desc) => {
+      if (from && typeof from === "object" || typeof from === "function") {
+        for (let key of __getOwnPropNames2(from))
+          if (!__hasOwnProp2.call(to, key) && key !== except)
+            __defProp2(to, key, { get: () => from[key], enumerable: !(desc = __getOwnPropDesc2(from, key)) || desc.enumerable });
+      }
+      return to;
+    };
+    var __toCommonJS2 = (mod4) => __copyProps2(__defProp2({}, "__esModule", { value: true }), mod4);
+    var in_memory_cache_exports = {};
+    __export2(in_memory_cache_exports, {
+      InMemoryCache: () => InMemoryCache
+    });
+    module.exports = __toCommonJS2(in_memory_cache_exports);
+    var InMemoryCache = class {
+      constructor() {
+        this.cache = {};
+      }
+      async get(key) {
+        const entry = this.cache[key];
+        if (entry) {
+          if (entry.ttl && entry.lastModified + entry.ttl * 1e3 < Date.now()) {
+            await this.delete(key);
+            return null;
+          }
+          return JSON.parse(entry.value);
+        }
+        return null;
+      }
+      async set(key, value, options2) {
+        const serialized = JSON.stringify(value ?? null);
+        this.cache[key] = {
+          value: serialized,
+          lastModified: Date.now(),
+          ttl: options2?.ttl,
+          tags: new Set(options2?.tags || [])
+        };
+      }
+      async delete(key) {
+        delete this.cache[key];
+      }
+      async expireTag(tag2) {
+        const tags = Array.isArray(tag2) ? tag2 : [tag2];
+        for (const key in this.cache) {
+          if (Object.prototype.hasOwnProperty.call(this.cache, key)) {
+            const entry = this.cache[key];
+            if (tags.some((t2) => entry.tags.has(t2))) {
+              delete this.cache[key];
+            }
+          }
+        }
+      }
+    };
+  }
+});
+
+// node_modules/@vercel/functions/cache/build-client.js
+var require_build_client = __commonJS({
+  "node_modules/@vercel/functions/cache/build-client.js"(exports, module) {
+    "use strict";
+    var __defProp2 = Object.defineProperty;
+    var __getOwnPropDesc2 = Object.getOwnPropertyDescriptor;
+    var __getOwnPropNames2 = Object.getOwnPropertyNames;
+    var __hasOwnProp2 = Object.prototype.hasOwnProperty;
+    var __export2 = (target, all) => {
+      for (var name5 in all)
+        __defProp2(target, name5, { get: all[name5], enumerable: true });
+    };
+    var __copyProps2 = (to, from, except, desc) => {
+      if (from && typeof from === "object" || typeof from === "function") {
+        for (let key of __getOwnPropNames2(from))
+          if (!__hasOwnProp2.call(to, key) && key !== except)
+            __defProp2(to, key, { get: () => from[key], enumerable: !(desc = __getOwnPropDesc2(from, key)) || desc.enumerable });
+      }
+      return to;
+    };
+    var __toCommonJS2 = (mod4) => __copyProps2(__defProp2({}, "__esModule", { value: true }), mod4);
+    var build_client_exports = {};
+    __export2(build_client_exports, {
+      BuildCache: () => BuildCache
+    });
+    module.exports = __toCommonJS2(build_client_exports);
+    var import_index3 = require_cache2();
+    var BuildCache = class {
+      constructor({
+        endpoint,
+        headers,
+        onError,
+        timeout = 500
+      }) {
+        this.get = async (key) => {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), this.timeout);
+          try {
+            const res = await fetch(`${this.endpoint}${key}`, {
+              headers: this.headers,
+              method: "GET",
+              signal: controller.signal
+            });
+            if (res.status === 404) {
+              clearTimeout(timeoutId);
+              return null;
+            }
+            if (res.status === 200) {
+              const cacheState = res.headers.get(
+                import_index3.HEADERS_VERCEL_CACHE_STATE
+              );
+              if (cacheState !== import_index3.PkgCacheState.Fresh) {
+                res.body?.cancel?.();
+                clearTimeout(timeoutId);
+                return null;
+              }
+              const result = await res.json();
+              clearTimeout(timeoutId);
+              return result;
+            } else {
+              clearTimeout(timeoutId);
+              throw new Error(`Failed to get cache: ${res.statusText}`);
+            }
+          } catch (error) {
+            clearTimeout(timeoutId);
+            if (error.name === "AbortError") {
+              const timeoutError = new Error(
+                `Cache request timed out after ${this.timeout}ms`
+              );
+              timeoutError.stack = error.stack;
+              this.onError?.(timeoutError);
+            } else {
+              this.onError?.(error);
+            }
+            return null;
+          }
+        };
+        this.set = async (key, value, options2) => {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), this.timeout);
+          try {
+            const optionalHeaders = {};
+            if (options2?.ttl) {
+              optionalHeaders[import_index3.HEADERS_VERCEL_REVALIDATE] = options2.ttl.toString();
+            }
+            if (options2?.tags && options2.tags.length > 0) {
+              optionalHeaders[import_index3.HEADERS_VERCEL_CACHE_TAGS] = options2.tags.join(",");
+            }
+            if (options2?.name) {
+              optionalHeaders[import_index3.HEADERS_VERCEL_CACHE_ITEM_NAME] = options2.name;
+            }
+            const res = await fetch(`${this.endpoint}${key}`, {
+              method: "POST",
+              headers: {
+                ...this.headers,
+                ...optionalHeaders
+              },
+              body: JSON.stringify(value),
+              signal: controller.signal
+            });
+            clearTimeout(timeoutId);
+            if (res.status !== 200) {
+              throw new Error(`Failed to set cache: ${res.status} ${res.statusText}`);
+            }
+          } catch (error) {
+            clearTimeout(timeoutId);
+            if (error.name === "AbortError") {
+              const timeoutError = new Error(
+                `Cache request timed out after ${this.timeout}ms`
+              );
+              timeoutError.stack = error.stack;
+              this.onError?.(timeoutError);
+            } else {
+              this.onError?.(error);
+            }
+          }
+        };
+        this.delete = async (key) => {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), this.timeout);
+          try {
+            const res = await fetch(`${this.endpoint}${key}`, {
+              method: "DELETE",
+              headers: this.headers,
+              signal: controller.signal
+            });
+            clearTimeout(timeoutId);
+            if (res.status !== 200) {
+              throw new Error(`Failed to delete cache: ${res.statusText}`);
+            }
+          } catch (error) {
+            clearTimeout(timeoutId);
+            if (error.name === "AbortError") {
+              const timeoutError = new Error(
+                `Cache request timed out after ${this.timeout}ms`
+              );
+              timeoutError.stack = error.stack;
+              this.onError?.(timeoutError);
+            } else {
+              this.onError?.(error);
+            }
+          }
+        };
+        this.expireTag = async (tag2) => {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), this.timeout);
+          try {
+            if (Array.isArray(tag2)) {
+              tag2 = tag2.join(",");
+            }
+            const res = await fetch(`${this.endpoint}revalidate?tags=${tag2}`, {
+              method: "POST",
+              headers: this.headers,
+              signal: controller.signal
+            });
+            clearTimeout(timeoutId);
+            if (res.status !== 200) {
+              throw new Error(`Failed to revalidate tag: ${res.statusText}`);
+            }
+          } catch (error) {
+            clearTimeout(timeoutId);
+            if (error.name === "AbortError") {
+              const timeoutError = new Error(
+                `Cache request timed out after ${this.timeout}ms`
+              );
+              timeoutError.stack = error.stack;
+              this.onError?.(timeoutError);
+            } else {
+              this.onError?.(error);
+            }
+          }
+        };
+        this.endpoint = endpoint;
+        this.headers = headers;
+        this.onError = onError;
+        this.timeout = timeout;
+      }
+    };
+  }
+});
+
+// node_modules/@vercel/functions/cache/index.js
+var require_cache2 = __commonJS({
+  "node_modules/@vercel/functions/cache/index.js"(exports, module) {
+    "use strict";
+    var __defProp2 = Object.defineProperty;
+    var __getOwnPropDesc2 = Object.getOwnPropertyDescriptor;
+    var __getOwnPropNames2 = Object.getOwnPropertyNames;
+    var __hasOwnProp2 = Object.prototype.hasOwnProperty;
+    var __export2 = (target, all) => {
+      for (var name5 in all)
+        __defProp2(target, name5, { get: all[name5], enumerable: true });
+    };
+    var __copyProps2 = (to, from, except, desc) => {
+      if (from && typeof from === "object" || typeof from === "function") {
+        for (let key of __getOwnPropNames2(from))
+          if (!__hasOwnProp2.call(to, key) && key !== except)
+            __defProp2(to, key, { get: () => from[key], enumerable: !(desc = __getOwnPropDesc2(from, key)) || desc.enumerable });
+      }
+      return to;
+    };
+    var __toCommonJS2 = (mod4) => __copyProps2(__defProp2({}, "__esModule", { value: true }), mod4);
+    var cache_exports = {};
+    __export2(cache_exports, {
+      HEADERS_VERCEL_CACHE_ITEM_NAME: () => HEADERS_VERCEL_CACHE_ITEM_NAME,
+      HEADERS_VERCEL_CACHE_STATE: () => HEADERS_VERCEL_CACHE_STATE,
+      HEADERS_VERCEL_CACHE_TAGS: () => HEADERS_VERCEL_CACHE_TAGS,
+      HEADERS_VERCEL_REVALIDATE: () => HEADERS_VERCEL_REVALIDATE,
+      PkgCacheState: () => PkgCacheState,
+      getCache: () => getCache2
+    });
+    module.exports = __toCommonJS2(cache_exports);
+    var import_get_context = require_get_context();
+    var import_in_memory_cache = require_in_memory_cache();
+    var import_build_client = require_build_client();
+    var defaultKeyHashFunction = (key) => {
+      let hash = 5381;
+      for (let i2 = 0; i2 < key.length; i2++) {
+        hash = hash * 33 ^ key.charCodeAt(i2);
+      }
+      return (hash >>> 0).toString(16);
+    };
+    var defaultNamespaceSeparator = "$";
+    var inMemoryCacheInstance = null;
+    var buildCacheInstance = null;
+    var getCache2 = (cacheOptions) => {
+      const resolveCache = () => {
+        let cache3;
+        if ((0, import_get_context.getContext)().cache) {
+          cache3 = (0, import_get_context.getContext)().cache;
+        } else {
+          cache3 = getCacheImplementation(
+            process.env.SUSPENSE_CACHE_DEBUG === "true"
+          );
+        }
+        return cache3;
+      };
+      return wrapWithKeyTransformation(
+        resolveCache,
+        createKeyTransformer(cacheOptions)
+      );
+    };
+    function createKeyTransformer(cacheOptions) {
+      const hashFunction = cacheOptions?.keyHashFunction || defaultKeyHashFunction;
+      return (key) => {
+        if (!cacheOptions?.namespace)
+          return hashFunction(key);
+        const separator = cacheOptions.namespaceSeparator || defaultNamespaceSeparator;
+        return `${cacheOptions.namespace}${separator}${hashFunction(key)}`;
+      };
+    }
+    function wrapWithKeyTransformation(resolveCache, makeKey) {
+      return {
+        get: (key) => {
+          return resolveCache().get(makeKey(key));
+        },
+        set: (key, value, options2) => {
+          return resolveCache().set(makeKey(key), value, {
+            ...options2,
+            name: options2?.name ?? key
+          });
+        },
+        delete: (key) => {
+          return resolveCache().delete(makeKey(key));
+        },
+        expireTag: (tag2) => {
+          return resolveCache().expireTag(tag2);
+        }
+      };
+    }
+    var warnedCacheUnavailable = false;
+    function getCacheImplementation(debug) {
+      if (!inMemoryCacheInstance) {
+        inMemoryCacheInstance = new import_in_memory_cache.InMemoryCache();
+      }
+      if (process.env.RUNTIME_CACHE_DISABLE_BUILD_CACHE === "true") {
+        debug && console.log("Using InMemoryCache as build cache is disabled");
+        return inMemoryCacheInstance;
+      }
+      const { RUNTIME_CACHE_ENDPOINT, RUNTIME_CACHE_HEADERS } = process.env;
+      if (debug) {
+        console.log("Runtime cache environment variables:", {
+          RUNTIME_CACHE_ENDPOINT,
+          RUNTIME_CACHE_HEADERS
+        });
+      }
+      if (!RUNTIME_CACHE_ENDPOINT || !RUNTIME_CACHE_HEADERS) {
+        if (!warnedCacheUnavailable) {
+          console.warn(
+            "Runtime Cache unavailable in this environment. Falling back to in-memory cache."
+          );
+          warnedCacheUnavailable = true;
+        }
+        return inMemoryCacheInstance;
+      }
+      if (!buildCacheInstance) {
+        let parsedHeaders = {};
+        try {
+          parsedHeaders = JSON.parse(RUNTIME_CACHE_HEADERS);
+        } catch (e2) {
+          console.error("Failed to parse RUNTIME_CACHE_HEADERS:", e2);
+          return inMemoryCacheInstance;
+        }
+        let timeout = 500;
+        if (process.env.RUNTIME_CACHE_TIMEOUT) {
+          const parsed = parseInt(process.env.RUNTIME_CACHE_TIMEOUT, 10);
+          if (!isNaN(parsed) && parsed > 0) {
+            timeout = parsed;
+          } else {
+            console.warn(
+              `Invalid RUNTIME_CACHE_TIMEOUT value: "${process.env.RUNTIME_CACHE_TIMEOUT}". Using default: ${timeout}ms`
+            );
+          }
+        }
+        buildCacheInstance = new import_build_client.BuildCache({
+          endpoint: RUNTIME_CACHE_ENDPOINT,
+          headers: parsedHeaders,
+          onError: (error) => console.error(error),
+          timeout
+        });
+      }
+      return buildCacheInstance;
+    }
+    var PkgCacheState = /* @__PURE__ */ ((PkgCacheState2) => {
+      PkgCacheState2["Fresh"] = "fresh";
+      PkgCacheState2["Stale"] = "stale";
+      PkgCacheState2["Expired"] = "expired";
+      PkgCacheState2["NotFound"] = "notFound";
+      PkgCacheState2["Error"] = "error";
+      return PkgCacheState2;
+    })(PkgCacheState || {});
+    var HEADERS_VERCEL_CACHE_STATE = "x-vercel-cache-state";
+    var HEADERS_VERCEL_REVALIDATE = "x-vercel-revalidate";
+    var HEADERS_VERCEL_CACHE_TAGS = "x-vercel-cache-tags";
+    var HEADERS_VERCEL_CACHE_ITEM_NAME = "x-vercel-cache-item-name";
+  }
+});
+
+// node_modules/@vercel/functions/db-connections/index.js
+var require_db_connections = __commonJS({
+  "node_modules/@vercel/functions/db-connections/index.js"(exports, module) {
+    "use strict";
+    var __defProp2 = Object.defineProperty;
+    var __getOwnPropDesc2 = Object.getOwnPropertyDescriptor;
+    var __getOwnPropNames2 = Object.getOwnPropertyNames;
+    var __hasOwnProp2 = Object.prototype.hasOwnProperty;
+    var __export2 = (target, all) => {
+      for (var name5 in all)
+        __defProp2(target, name5, { get: all[name5], enumerable: true });
+    };
+    var __copyProps2 = (to, from, except, desc) => {
+      if (from && typeof from === "object" || typeof from === "function") {
+        for (let key of __getOwnPropNames2(from))
+          if (!__hasOwnProp2.call(to, key) && key !== except)
+            __defProp2(to, key, { get: () => from[key], enumerable: !(desc = __getOwnPropDesc2(from, key)) || desc.enumerable });
+      }
+      return to;
+    };
+    var __toCommonJS2 = (mod4) => __copyProps2(__defProp2({}, "__esModule", { value: true }), mod4);
+    var db_connections_exports = {};
+    __export2(db_connections_exports, {
+      attachDatabasePool: () => attachDatabasePool2,
+      experimental_attachDatabasePool: () => experimental_attachDatabasePool2
+    });
+    module.exports = __toCommonJS2(db_connections_exports);
+    var import_get_context = require_get_context();
+    var import_deadline = require_deadline4();
+    var DEBUG = !!process.env.DEBUG;
+    function getIdleTimeout(dbPool) {
+      if ("options" in dbPool && dbPool.options) {
+        if ("idleTimeoutMillis" in dbPool.options) {
+          return typeof dbPool.options.idleTimeoutMillis === "number" ? dbPool.options.idleTimeoutMillis : 1e4;
+        }
+        if ("maxIdleTimeMS" in dbPool.options) {
+          return typeof dbPool.options.maxIdleTimeMS === "number" ? dbPool.options.maxIdleTimeMS : 0;
+        }
+        if ("status" in dbPool) {
+          return 5e3;
+        }
+        if ("connect" in dbPool && "execute" in dbPool) {
+          return 3e4;
+        }
+      }
+      if ("config" in dbPool && dbPool.config) {
+        if ("connectionConfig" in dbPool.config && dbPool.config.connectionConfig) {
+          return dbPool.config.connectionConfig.idleTimeout || 6e4;
+        }
+        if ("idleTimeout" in dbPool.config) {
+          return typeof dbPool.config.idleTimeout === "number" ? dbPool.config.idleTimeout : 6e4;
+        }
+      }
+      if ("poolTimeout" in dbPool) {
+        return typeof dbPool.poolTimeout === "number" ? dbPool.poolTimeout : 6e4;
+      }
+      if ("idleTimeout" in dbPool) {
+        return typeof dbPool.idleTimeout === "number" ? dbPool.idleTimeout : 0;
+      }
+      return 1e4;
+    }
+    var idleTimeout = null;
+    var idleTimeoutResolve = () => {
+    };
+    var maximumDuration = 15 * 60 * 1e3 - 1e3;
+    function waitUntilIdleTimeout(dbPool) {
+      if (!process.env.VERCEL_URL || // This is not set during builds where we don't need to wait for idle connections using the mechanism
+      !process.env.VERCEL_REGION) {
+        return;
+      }
+      if (idleTimeout) {
+        clearTimeout(idleTimeout);
+        idleTimeoutResolve();
+      }
+      const promise = new Promise((resolve) => {
+        idleTimeoutResolve = resolve;
+      });
+      const deadline = (0, import_deadline.getDeadline)();
+      const remainingDuration = deadline ? deadline.getTime() - Date.now() - 1e3 : maximumDuration;
+      const waitTime = Math.min(
+        getIdleTimeout(dbPool) + 100,
+        Math.max(100, remainingDuration)
+      );
+      idleTimeout = setTimeout(() => {
+        idleTimeoutResolve?.();
+        if (DEBUG) {
+          console.log("Database pool idle timeout reached. Releasing connections.");
+        }
+      }, waitTime);
+      const requestContext = (0, import_get_context.getContext)();
+      if (requestContext?.waitUntil) {
+        requestContext.waitUntil(promise);
+      } else {
+        console.warn("Pool release event triggered outside of request scope.");
+      }
+    }
+    function attachDatabasePool2(dbPool) {
+      if (idleTimeout) {
+        idleTimeoutResolve?.();
+        clearTimeout(idleTimeout);
+      }
+      if ("on" in dbPool && dbPool.on && "options" in dbPool && "idleTimeoutMillis" in dbPool.options) {
+        const pgPool = dbPool;
+        pgPool.on("release", () => {
+          if (DEBUG) {
+            console.log("Client released from pool");
+          }
+          waitUntilIdleTimeout(dbPool);
+        });
+        return;
+      } else if ("on" in dbPool && dbPool.on && "config" in dbPool && dbPool.config && "connectionConfig" in dbPool.config) {
+        const mysqlPool = dbPool;
+        mysqlPool.on("release", () => {
+          if (DEBUG) {
+            console.log("MySQL client released from pool");
+          }
+          waitUntilIdleTimeout(dbPool);
+        });
+        return;
+      } else if ("on" in dbPool && dbPool.on && "config" in dbPool && dbPool.config && "idleTimeout" in dbPool.config) {
+        const mysql2Pool = dbPool;
+        mysql2Pool.on("release", () => {
+          if (DEBUG) {
+            console.log("MySQL2/MariaDB client released from pool");
+          }
+          waitUntilIdleTimeout(dbPool);
+        });
+        return;
+      }
+      if ("on" in dbPool && dbPool.on && "options" in dbPool && dbPool.options && "maxIdleTimeMS" in dbPool.options) {
+        const mongoPool = dbPool;
+        mongoPool.on("connectionCheckedOut", () => {
+          if (DEBUG) {
+            console.log("MongoDB connection checked out");
+          }
+          waitUntilIdleTimeout(dbPool);
+        });
+        return;
+      }
+      if ("on" in dbPool && dbPool.on && "options" in dbPool && dbPool.options && "socket" in dbPool.options) {
+        const redisPool = dbPool;
+        redisPool.on("end", () => {
+          if (DEBUG) {
+            console.log("Redis connection ended");
+          }
+          waitUntilIdleTimeout(dbPool);
+        });
+        return;
+      }
+      throw new Error("Unsupported database pool type");
+    }
+    var experimental_attachDatabasePool2 = attachDatabasePool2;
+  }
+});
+
+// node_modules/@vercel/functions/purge/index.js
+var require_purge = __commonJS({
+  "node_modules/@vercel/functions/purge/index.js"(exports, module) {
+    "use strict";
+    var __defProp2 = Object.defineProperty;
+    var __getOwnPropDesc2 = Object.getOwnPropertyDescriptor;
+    var __getOwnPropNames2 = Object.getOwnPropertyNames;
+    var __hasOwnProp2 = Object.prototype.hasOwnProperty;
+    var __export2 = (target, all) => {
+      for (var name5 in all)
+        __defProp2(target, name5, { get: all[name5], enumerable: true });
+    };
+    var __copyProps2 = (to, from, except, desc) => {
+      if (from && typeof from === "object" || typeof from === "function") {
+        for (let key of __getOwnPropNames2(from))
+          if (!__hasOwnProp2.call(to, key) && key !== except)
+            __defProp2(to, key, { get: () => from[key], enumerable: !(desc = __getOwnPropDesc2(from, key)) || desc.enumerable });
+      }
+      return to;
+    };
+    var __toCommonJS2 = (mod4) => __copyProps2(__defProp2({}, "__esModule", { value: true }), mod4);
+    var purge_exports = {};
+    __export2(purge_exports, {
+      dangerouslyDeleteBySrcImage: () => dangerouslyDeleteBySrcImage2,
+      dangerouslyDeleteByTag: () => dangerouslyDeleteByTag2,
+      invalidateBySrcImage: () => invalidateBySrcImage2,
+      invalidateByTag: () => invalidateByTag2
+    });
+    module.exports = __toCommonJS2(purge_exports);
+    var import_get_context = require_get_context();
+    var invalidateByTag2 = (tag2) => {
+      const api = (0, import_get_context.getContext)().purge;
+      if (api) {
+        return api.invalidateByTag(tag2);
+      }
+      return Promise.resolve();
+    };
+    var dangerouslyDeleteByTag2 = (tag2, options2) => {
+      const api = (0, import_get_context.getContext)().purge;
+      if (api) {
+        return api.dangerouslyDeleteByTag(tag2, options2);
+      }
+      return Promise.resolve();
+    };
+    var invalidateBySrcImage2 = (src) => {
+      const api = (0, import_get_context.getContext)().purge;
+      return api ? api.invalidateBySrcImage(src) : Promise.resolve();
+    };
+    var dangerouslyDeleteBySrcImage2 = (src, options2) => {
+      const api = (0, import_get_context.getContext)().purge;
+      return api ? api.dangerouslyDeleteBySrcImage(src, options2) : Promise.resolve();
+    };
+  }
+});
+
+// node_modules/@vercel/functions/addcachetag/index.js
+var require_addcachetag = __commonJS({
+  "node_modules/@vercel/functions/addcachetag/index.js"(exports, module) {
+    "use strict";
+    var __defProp2 = Object.defineProperty;
+    var __getOwnPropDesc2 = Object.getOwnPropertyDescriptor;
+    var __getOwnPropNames2 = Object.getOwnPropertyNames;
+    var __hasOwnProp2 = Object.prototype.hasOwnProperty;
+    var __export2 = (target, all) => {
+      for (var name5 in all)
+        __defProp2(target, name5, { get: all[name5], enumerable: true });
+    };
+    var __copyProps2 = (to, from, except, desc) => {
+      if (from && typeof from === "object" || typeof from === "function") {
+        for (let key of __getOwnPropNames2(from))
+          if (!__hasOwnProp2.call(to, key) && key !== except)
+            __defProp2(to, key, { get: () => from[key], enumerable: !(desc = __getOwnPropDesc2(from, key)) || desc.enumerable });
+      }
+      return to;
+    };
+    var __toCommonJS2 = (mod4) => __copyProps2(__defProp2({}, "__esModule", { value: true }), mod4);
+    var addcachetag_exports = {};
+    __export2(addcachetag_exports, {
+      addCacheTag: () => addCacheTag2
+    });
+    module.exports = __toCommonJS2(addcachetag_exports);
+    var import_get_context = require_get_context();
+    var addCacheTag2 = (tag2) => {
+      const addCacheTag22 = (0, import_get_context.getContext)().addCacheTag;
+      if (addCacheTag22) {
+        return addCacheTag22(tag2);
+      }
+      return Promise.resolve();
+    };
+  }
+});
+
+// node_modules/ws/lib/constants.js
+var require_constants6 = __commonJS({
+  "node_modules/ws/lib/constants.js"(exports, module) {
+    "use strict";
+    var BINARY_TYPES = ["nodebuffer", "arraybuffer", "fragments"];
+    var hasBlob = typeof Blob !== "undefined";
+    if (hasBlob) BINARY_TYPES.push("blob");
+    module.exports = {
+      BINARY_TYPES,
+      CLOSE_TIMEOUT: 3e4,
+      EMPTY_BUFFER: Buffer.alloc(0),
+      GUID: "258EAFA5-E914-47DA-95CA-C5AB0DC85B11",
+      hasBlob,
+      kForOnEventAttribute: Symbol("kIsForOnEventAttribute"),
+      kListener: Symbol("kListener"),
+      kStatusCode: Symbol("status-code"),
+      kWebSocket: Symbol("websocket"),
+      NOOP: () => {
+      }
+    };
+  }
+});
+
+// node_modules/ws/lib/buffer-util.js
+var require_buffer_util = __commonJS({
+  "node_modules/ws/lib/buffer-util.js"(exports, module) {
+    "use strict";
+    var { EMPTY_BUFFER } = require_constants6();
+    var FastBuffer = Buffer[Symbol.species];
+    function concat3(list, totalLength) {
+      if (list.length === 0) return EMPTY_BUFFER;
+      if (list.length === 1) return list[0];
+      const target = Buffer.allocUnsafe(totalLength);
+      let offset = 0;
+      for (let i2 = 0; i2 < list.length; i2++) {
+        const buf = list[i2];
+        target.set(buf, offset);
+        offset += buf.length;
+      }
+      if (offset < totalLength) {
+        return new FastBuffer(target.buffer, target.byteOffset, offset);
+      }
+      return target;
+    }
+    function _mask(source, mask, output, offset, length) {
+      for (let i2 = 0; i2 < length; i2++) {
+        output[offset + i2] = source[i2] ^ mask[i2 & 3];
+      }
+    }
+    function _unmask(buffer, mask) {
+      for (let i2 = 0; i2 < buffer.length; i2++) {
+        buffer[i2] ^= mask[i2 & 3];
+      }
+    }
+    function toArrayBuffer(buf) {
+      if (buf.length === buf.buffer.byteLength) {
+        return buf.buffer;
+      }
+      return buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.length);
+    }
+    function toBuffer(data) {
+      toBuffer.readOnly = true;
+      if (Buffer.isBuffer(data)) return data;
+      let buf;
+      if (data instanceof ArrayBuffer) {
+        buf = new FastBuffer(data);
+      } else if (ArrayBuffer.isView(data)) {
+        buf = new FastBuffer(data.buffer, data.byteOffset, data.byteLength);
+      } else {
+        buf = Buffer.from(data);
+        toBuffer.readOnly = false;
+      }
+      return buf;
+    }
+    module.exports = {
+      concat: concat3,
+      mask: _mask,
+      toArrayBuffer,
+      toBuffer,
+      unmask: _unmask
+    };
+    if (!process.env.WS_NO_BUFFER_UTIL) {
+      try {
+        const bufferUtil = __require("bufferutil");
+        module.exports.mask = function(source, mask, output, offset, length) {
+          if (length < 48) _mask(source, mask, output, offset, length);
+          else bufferUtil.mask(source, mask, output, offset, length);
+        };
+        module.exports.unmask = function(buffer, mask) {
+          if (buffer.length < 32) _unmask(buffer, mask);
+          else bufferUtil.unmask(buffer, mask);
+        };
+      } catch (e2) {
+      }
+    }
+  }
+});
+
+// node_modules/ws/lib/limiter.js
+var require_limiter2 = __commonJS({
+  "node_modules/ws/lib/limiter.js"(exports, module) {
+    "use strict";
+    var kDone = Symbol("kDone");
+    var kRun = Symbol("kRun");
+    var Limiter = class {
+      /**
+       * Creates a new `Limiter`.
+       *
+       * @param {Number} [concurrency=Infinity] The maximum number of jobs allowed
+       *     to run concurrently
+       */
+      constructor(concurrency) {
+        this[kDone] = () => {
+          this.pending--;
+          this[kRun]();
+        };
+        this.concurrency = concurrency || Infinity;
+        this.jobs = [];
+        this.pending = 0;
+      }
+      /**
+       * Adds a job to the queue.
+       *
+       * @param {Function} job The job to run
+       * @public
+       */
+      add(job) {
+        this.jobs.push(job);
+        this[kRun]();
+      }
+      /**
+       * Removes a job from the queue and runs it if possible.
+       *
+       * @private
+       */
+      [kRun]() {
+        if (this.pending === this.concurrency) return;
+        if (this.jobs.length) {
+          const job = this.jobs.shift();
+          this.pending++;
+          job(this[kDone]);
+        }
+      }
+    };
+    module.exports = Limiter;
+  }
+});
+
+// node_modules/ws/lib/permessage-deflate.js
+var require_permessage_deflate = __commonJS({
+  "node_modules/ws/lib/permessage-deflate.js"(exports, module) {
+    "use strict";
+    var zlib2 = __require("zlib");
+    var bufferUtil = require_buffer_util();
+    var Limiter = require_limiter2();
+    var { kStatusCode } = require_constants6();
+    var FastBuffer = Buffer[Symbol.species];
+    var TRAILER = Buffer.from([0, 0, 255, 255]);
+    var kPerMessageDeflate = Symbol("permessage-deflate");
+    var kTotalLength = Symbol("total-length");
+    var kCallback = Symbol("callback");
+    var kBuffers = Symbol("buffers");
+    var kError = Symbol("error");
+    var zlibLimiter;
+    var PerMessageDeflate2 = class {
+      /**
+       * Creates a PerMessageDeflate instance.
+       *
+       * @param {Object} [options] Configuration options
+       * @param {(Boolean|Number)} [options.clientMaxWindowBits] Advertise support
+       *     for, or request, a custom client window size
+       * @param {Boolean} [options.clientNoContextTakeover=false] Advertise/
+       *     acknowledge disabling of client context takeover
+       * @param {Number} [options.concurrencyLimit=10] The number of concurrent
+       *     calls to zlib
+       * @param {Boolean} [options.isServer=false] Create the instance in either
+       *     server or client mode
+       * @param {Number} [options.maxPayload=0] The maximum allowed message length
+       * @param {(Boolean|Number)} [options.serverMaxWindowBits] Request/confirm the
+       *     use of a custom server window size
+       * @param {Boolean} [options.serverNoContextTakeover=false] Request/accept
+       *     disabling of server context takeover
+       * @param {Number} [options.threshold=1024] Size (in bytes) below which
+       *     messages should not be compressed if context takeover is disabled
+       * @param {Object} [options.zlibDeflateOptions] Options to pass to zlib on
+       *     deflate
+       * @param {Object} [options.zlibInflateOptions] Options to pass to zlib on
+       *     inflate
+       */
+      constructor(options2) {
+        this._options = options2 || {};
+        this._threshold = this._options.threshold !== void 0 ? this._options.threshold : 1024;
+        this._maxPayload = this._options.maxPayload | 0;
+        this._isServer = !!this._options.isServer;
+        this._deflate = null;
+        this._inflate = null;
+        this.params = null;
+        if (!zlibLimiter) {
+          const concurrency = this._options.concurrencyLimit !== void 0 ? this._options.concurrencyLimit : 10;
+          zlibLimiter = new Limiter(concurrency);
+        }
+      }
+      /**
+       * @type {String}
+       */
+      static get extensionName() {
+        return "permessage-deflate";
+      }
+      /**
+       * Create an extension negotiation offer.
+       *
+       * @return {Object} Extension parameters
+       * @public
+       */
+      offer() {
+        const params = {};
+        if (this._options.serverNoContextTakeover) {
+          params.server_no_context_takeover = true;
+        }
+        if (this._options.clientNoContextTakeover) {
+          params.client_no_context_takeover = true;
+        }
+        if (this._options.serverMaxWindowBits) {
+          params.server_max_window_bits = this._options.serverMaxWindowBits;
+        }
+        if (this._options.clientMaxWindowBits) {
+          params.client_max_window_bits = this._options.clientMaxWindowBits;
+        } else if (this._options.clientMaxWindowBits == null) {
+          params.client_max_window_bits = true;
+        }
+        return params;
+      }
+      /**
+       * Accept an extension negotiation offer/response.
+       *
+       * @param {Array} configurations The extension negotiation offers/reponse
+       * @return {Object} Accepted configuration
+       * @public
+       */
+      accept(configurations) {
+        configurations = this.normalizeParams(configurations);
+        this.params = this._isServer ? this.acceptAsServer(configurations) : this.acceptAsClient(configurations);
+        return this.params;
+      }
+      /**
+       * Releases all resources used by the extension.
+       *
+       * @public
+       */
+      cleanup() {
+        if (this._inflate) {
+          this._inflate.close();
+          this._inflate = null;
+        }
+        if (this._deflate) {
+          const callback = this._deflate[kCallback];
+          this._deflate.close();
+          this._deflate = null;
+          if (callback) {
+            callback(
+              new Error(
+                "The deflate stream was closed while data was being processed"
+              )
+            );
+          }
+        }
+      }
+      /**
+       *  Accept an extension negotiation offer.
+       *
+       * @param {Array} offers The extension negotiation offers
+       * @return {Object} Accepted configuration
+       * @private
+       */
+      acceptAsServer(offers) {
+        const opts = this._options;
+        const accepted = offers.find((params) => {
+          if (opts.serverNoContextTakeover === false && params.server_no_context_takeover || params.server_max_window_bits && (opts.serverMaxWindowBits === false || typeof opts.serverMaxWindowBits === "number" && opts.serverMaxWindowBits > params.server_max_window_bits) || typeof opts.clientMaxWindowBits === "number" && (typeof params.client_max_window_bits === "number" ? opts.clientMaxWindowBits > params.client_max_window_bits : !params.client_max_window_bits)) {
+            return false;
+          }
+          return true;
+        });
+        if (!accepted) {
+          throw new Error("None of the extension offers can be accepted");
+        }
+        if (opts.serverNoContextTakeover) {
+          accepted.server_no_context_takeover = true;
+        }
+        if (opts.clientNoContextTakeover) {
+          accepted.client_no_context_takeover = true;
+        }
+        if (typeof opts.serverMaxWindowBits === "number") {
+          accepted.server_max_window_bits = opts.serverMaxWindowBits;
+        }
+        if (typeof opts.clientMaxWindowBits === "number") {
+          accepted.client_max_window_bits = opts.clientMaxWindowBits;
+        } else if (accepted.client_max_window_bits === true || opts.clientMaxWindowBits === false) {
+          delete accepted.client_max_window_bits;
+        }
+        return accepted;
+      }
+      /**
+       * Accept the extension negotiation response.
+       *
+       * @param {Array} response The extension negotiation response
+       * @return {Object} Accepted configuration
+       * @private
+       */
+      acceptAsClient(response) {
+        const params = response[0];
+        if (this._options.clientNoContextTakeover === false && params.client_no_context_takeover) {
+          throw new Error('Unexpected parameter "client_no_context_takeover"');
+        }
+        if (!params.client_max_window_bits) {
+          if (typeof this._options.clientMaxWindowBits === "number") {
+            params.client_max_window_bits = this._options.clientMaxWindowBits;
+          }
+        } else if (this._options.clientMaxWindowBits === false || typeof this._options.clientMaxWindowBits === "number" && params.client_max_window_bits > this._options.clientMaxWindowBits) {
+          throw new Error(
+            'Unexpected or invalid parameter "client_max_window_bits"'
+          );
+        }
+        return params;
+      }
+      /**
+       * Normalize parameters.
+       *
+       * @param {Array} configurations The extension negotiation offers/reponse
+       * @return {Array} The offers/response with normalized parameters
+       * @private
+       */
+      normalizeParams(configurations) {
+        configurations.forEach((params) => {
+          Object.keys(params).forEach((key) => {
+            let value = params[key];
+            if (value.length > 1) {
+              throw new Error(`Parameter "${key}" must have only a single value`);
+            }
+            value = value[0];
+            if (key === "client_max_window_bits") {
+              if (value !== true) {
+                const num = +value;
+                if (!Number.isInteger(num) || num < 8 || num > 15) {
+                  throw new TypeError(
+                    `Invalid value for parameter "${key}": ${value}`
+                  );
+                }
+                value = num;
+              } else if (!this._isServer) {
+                throw new TypeError(
+                  `Invalid value for parameter "${key}": ${value}`
+                );
+              }
+            } else if (key === "server_max_window_bits") {
+              const num = +value;
+              if (!Number.isInteger(num) || num < 8 || num > 15) {
+                throw new TypeError(
+                  `Invalid value for parameter "${key}": ${value}`
+                );
+              }
+              value = num;
+            } else if (key === "client_no_context_takeover" || key === "server_no_context_takeover") {
+              if (value !== true) {
+                throw new TypeError(
+                  `Invalid value for parameter "${key}": ${value}`
+                );
+              }
+            } else {
+              throw new Error(`Unknown parameter "${key}"`);
+            }
+            params[key] = value;
+          });
+        });
+        return configurations;
+      }
+      /**
+       * Decompress data. Concurrency limited.
+       *
+       * @param {Buffer} data Compressed data
+       * @param {Boolean} fin Specifies whether or not this is the last fragment
+       * @param {Function} callback Callback
+       * @public
+       */
+      decompress(data, fin, callback) {
+        zlibLimiter.add((done) => {
+          this._decompress(data, fin, (err, result) => {
+            done();
+            callback(err, result);
+          });
+        });
+      }
+      /**
+       * Compress data. Concurrency limited.
+       *
+       * @param {(Buffer|String)} data Data to compress
+       * @param {Boolean} fin Specifies whether or not this is the last fragment
+       * @param {Function} callback Callback
+       * @public
+       */
+      compress(data, fin, callback) {
+        zlibLimiter.add((done) => {
+          this._compress(data, fin, (err, result) => {
+            done();
+            callback(err, result);
+          });
+        });
+      }
+      /**
+       * Decompress data.
+       *
+       * @param {Buffer} data Compressed data
+       * @param {Boolean} fin Specifies whether or not this is the last fragment
+       * @param {Function} callback Callback
+       * @private
+       */
+      _decompress(data, fin, callback) {
+        const endpoint = this._isServer ? "client" : "server";
+        if (!this._inflate) {
+          const key = `${endpoint}_max_window_bits`;
+          const windowBits = typeof this.params[key] !== "number" ? zlib2.Z_DEFAULT_WINDOWBITS : this.params[key];
+          this._inflate = zlib2.createInflateRaw({
+            ...this._options.zlibInflateOptions,
+            windowBits
+          });
+          this._inflate[kPerMessageDeflate] = this;
+          this._inflate[kTotalLength] = 0;
+          this._inflate[kBuffers] = [];
+          this._inflate.on("error", inflateOnError);
+          this._inflate.on("data", inflateOnData);
+        }
+        this._inflate[kCallback] = callback;
+        this._inflate.write(data);
+        if (fin) this._inflate.write(TRAILER);
+        this._inflate.flush(() => {
+          const err = this._inflate[kError];
+          if (err) {
+            this._inflate.close();
+            this._inflate = null;
+            callback(err);
+            return;
+          }
+          const data2 = bufferUtil.concat(
+            this._inflate[kBuffers],
+            this._inflate[kTotalLength]
+          );
+          if (this._inflate._readableState.endEmitted) {
+            this._inflate.close();
+            this._inflate = null;
+          } else {
+            this._inflate[kTotalLength] = 0;
+            this._inflate[kBuffers] = [];
+            if (fin && this.params[`${endpoint}_no_context_takeover`]) {
+              this._inflate.reset();
+            }
+          }
+          callback(null, data2);
+        });
+      }
+      /**
+       * Compress data.
+       *
+       * @param {(Buffer|String)} data Data to compress
+       * @param {Boolean} fin Specifies whether or not this is the last fragment
+       * @param {Function} callback Callback
+       * @private
+       */
+      _compress(data, fin, callback) {
+        const endpoint = this._isServer ? "server" : "client";
+        if (!this._deflate) {
+          const key = `${endpoint}_max_window_bits`;
+          const windowBits = typeof this.params[key] !== "number" ? zlib2.Z_DEFAULT_WINDOWBITS : this.params[key];
+          this._deflate = zlib2.createDeflateRaw({
+            ...this._options.zlibDeflateOptions,
+            windowBits
+          });
+          this._deflate[kTotalLength] = 0;
+          this._deflate[kBuffers] = [];
+          this._deflate.on("data", deflateOnData);
+        }
+        this._deflate[kCallback] = callback;
+        this._deflate.write(data);
+        this._deflate.flush(zlib2.Z_SYNC_FLUSH, () => {
+          if (!this._deflate) {
+            return;
+          }
+          let data2 = bufferUtil.concat(
+            this._deflate[kBuffers],
+            this._deflate[kTotalLength]
+          );
+          if (fin) {
+            data2 = new FastBuffer(data2.buffer, data2.byteOffset, data2.length - 4);
+          }
+          this._deflate[kCallback] = null;
+          this._deflate[kTotalLength] = 0;
+          this._deflate[kBuffers] = [];
+          if (fin && this.params[`${endpoint}_no_context_takeover`]) {
+            this._deflate.reset();
+          }
+          callback(null, data2);
+        });
+      }
+    };
+    module.exports = PerMessageDeflate2;
+    function deflateOnData(chunk) {
+      this[kBuffers].push(chunk);
+      this[kTotalLength] += chunk.length;
+    }
+    function inflateOnData(chunk) {
+      this[kTotalLength] += chunk.length;
+      if (this[kPerMessageDeflate]._maxPayload < 1 || this[kTotalLength] <= this[kPerMessageDeflate]._maxPayload) {
+        this[kBuffers].push(chunk);
+        return;
+      }
+      this[kError] = new RangeError("Max payload size exceeded");
+      this[kError].code = "WS_ERR_UNSUPPORTED_MESSAGE_LENGTH";
+      this[kError][kStatusCode] = 1009;
+      this.removeListener("data", inflateOnData);
+      this.reset();
+    }
+    function inflateOnError(err) {
+      this[kPerMessageDeflate]._inflate = null;
+      if (this[kError]) {
+        this[kCallback](this[kError]);
+        return;
+      }
+      err[kStatusCode] = 1007;
+      this[kCallback](err);
+    }
+  }
+});
+
+// node_modules/ws/lib/validation.js
+var require_validation = __commonJS({
+  "node_modules/ws/lib/validation.js"(exports, module) {
+    "use strict";
+    var { isUtf8 } = __require("buffer");
+    var { hasBlob } = require_constants6();
+    var tokenChars = [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      // 0 - 15
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      // 16 - 31
+      0,
+      1,
+      0,
+      1,
+      1,
+      1,
+      1,
+      1,
+      0,
+      0,
+      1,
+      1,
+      0,
+      1,
+      1,
+      0,
+      // 32 - 47
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      // 48 - 63
+      0,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      // 64 - 79
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      0,
+      0,
+      0,
+      1,
+      1,
+      // 80 - 95
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      // 96 - 111
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      0,
+      1,
+      0,
+      1,
+      0
+      // 112 - 127
+    ];
+    function isValidStatusCode(code) {
+      return code >= 1e3 && code <= 1014 && code !== 1004 && code !== 1005 && code !== 1006 || code >= 3e3 && code <= 4999;
+    }
+    function _isValidUTF8(buf) {
+      const len = buf.length;
+      let i2 = 0;
+      while (i2 < len) {
+        if ((buf[i2] & 128) === 0) {
+          i2++;
+        } else if ((buf[i2] & 224) === 192) {
+          if (i2 + 1 === len || (buf[i2 + 1] & 192) !== 128 || (buf[i2] & 254) === 192) {
+            return false;
+          }
+          i2 += 2;
+        } else if ((buf[i2] & 240) === 224) {
+          if (i2 + 2 >= len || (buf[i2 + 1] & 192) !== 128 || (buf[i2 + 2] & 192) !== 128 || buf[i2] === 224 && (buf[i2 + 1] & 224) === 128 || // Overlong
+          buf[i2] === 237 && (buf[i2 + 1] & 224) === 160) {
+            return false;
+          }
+          i2 += 3;
+        } else if ((buf[i2] & 248) === 240) {
+          if (i2 + 3 >= len || (buf[i2 + 1] & 192) !== 128 || (buf[i2 + 2] & 192) !== 128 || (buf[i2 + 3] & 192) !== 128 || buf[i2] === 240 && (buf[i2 + 1] & 240) === 128 || // Overlong
+          buf[i2] === 244 && buf[i2 + 1] > 143 || buf[i2] > 244) {
+            return false;
+          }
+          i2 += 4;
+        } else {
+          return false;
+        }
+      }
+      return true;
+    }
+    function isBlob3(value) {
+      return hasBlob && typeof value === "object" && typeof value.arrayBuffer === "function" && typeof value.type === "string" && typeof value.stream === "function" && (value[Symbol.toStringTag] === "Blob" || value[Symbol.toStringTag] === "File");
+    }
+    module.exports = {
+      isBlob: isBlob3,
+      isValidStatusCode,
+      isValidUTF8: _isValidUTF8,
+      tokenChars
+    };
+    if (isUtf8) {
+      module.exports.isValidUTF8 = function(buf) {
+        return buf.length < 24 ? _isValidUTF8(buf) : isUtf8(buf);
+      };
+    } else if (!process.env.WS_NO_UTF_8_VALIDATE) {
+      try {
+        const isValidUTF8 = __require("utf-8-validate");
+        module.exports.isValidUTF8 = function(buf) {
+          return buf.length < 32 ? _isValidUTF8(buf) : isValidUTF8(buf);
+        };
+      } catch (e2) {
+      }
+    }
+  }
+});
+
+// node_modules/ws/lib/receiver.js
+var require_receiver = __commonJS({
+  "node_modules/ws/lib/receiver.js"(exports, module) {
+    "use strict";
+    var { Writable } = __require("stream");
+    var PerMessageDeflate2 = require_permessage_deflate();
+    var {
+      BINARY_TYPES,
+      EMPTY_BUFFER,
+      kStatusCode,
+      kWebSocket
+    } = require_constants6();
+    var { concat: concat3, toArrayBuffer, unmask } = require_buffer_util();
+    var { isValidStatusCode, isValidUTF8 } = require_validation();
+    var FastBuffer = Buffer[Symbol.species];
+    var GET_INFO = 0;
+    var GET_PAYLOAD_LENGTH_16 = 1;
+    var GET_PAYLOAD_LENGTH_64 = 2;
+    var GET_MASK = 3;
+    var GET_DATA = 4;
+    var INFLATING = 5;
+    var DEFER_EVENT = 6;
+    var Receiver2 = class extends Writable {
+      /**
+       * Creates a Receiver instance.
+       *
+       * @param {Object} [options] Options object
+       * @param {Boolean} [options.allowSynchronousEvents=true] Specifies whether
+       *     any of the `'message'`, `'ping'`, and `'pong'` events can be emitted
+       *     multiple times in the same tick
+       * @param {String} [options.binaryType=nodebuffer] The type for binary data
+       * @param {Object} [options.extensions] An object containing the negotiated
+       *     extensions
+       * @param {Boolean} [options.isServer=false] Specifies whether to operate in
+       *     client or server mode
+       * @param {Number} [options.maxBufferedChunks=0] The maximum number of
+       *     buffered data chunks
+       * @param {Number} [options.maxFragments=0] The maximum number of message
+       *     fragments
+       * @param {Number} [options.maxPayload=0] The maximum allowed message length
+       * @param {Boolean} [options.skipUTF8Validation=false] Specifies whether or
+       *     not to skip UTF-8 validation for text and close messages
+       */
+      constructor(options2 = {}) {
+        super();
+        this._allowSynchronousEvents = options2.allowSynchronousEvents !== void 0 ? options2.allowSynchronousEvents : true;
+        this._binaryType = options2.binaryType || BINARY_TYPES[0];
+        this._extensions = options2.extensions || {};
+        this._isServer = !!options2.isServer;
+        this._maxBufferedChunks = options2.maxBufferedChunks | 0;
+        this._maxFragments = options2.maxFragments | 0;
+        this._maxPayload = options2.maxPayload | 0;
+        this._skipUTF8Validation = !!options2.skipUTF8Validation;
+        this[kWebSocket] = void 0;
+        this._bufferedBytes = 0;
+        this._buffers = [];
+        this._compressed = false;
+        this._payloadLength = 0;
+        this._mask = void 0;
+        this._fragmented = 0;
+        this._masked = false;
+        this._fin = false;
+        this._opcode = 0;
+        this._totalPayloadLength = 0;
+        this._messageLength = 0;
+        this._numFragments = 0;
+        this._fragments = [];
+        this._errored = false;
+        this._loop = false;
+        this._state = GET_INFO;
+      }
+      /**
+       * Implements `Writable.prototype._write()`.
+       *
+       * @param {Buffer} chunk The chunk of data to write
+       * @param {String} encoding The character encoding of `chunk`
+       * @param {Function} cb Callback
+       * @private
+       */
+      _write(chunk, encoding, cb) {
+        if (this._opcode === 8 && this._state == GET_INFO) return cb();
+        if (this._maxBufferedChunks > 0 && this._buffers.length >= this._maxBufferedChunks) {
+          cb(
+            this.createError(
+              RangeError,
+              "Too many buffered chunks",
+              false,
+              1008,
+              "WS_ERR_TOO_MANY_BUFFERED_PARTS"
+            )
+          );
+          return;
+        }
+        this._bufferedBytes += chunk.length;
+        this._buffers.push(chunk);
+        this.startLoop(cb);
+      }
+      /**
+       * Consumes `n` bytes from the buffered data.
+       *
+       * @param {Number} n The number of bytes to consume
+       * @return {Buffer} The consumed bytes
+       * @private
+       */
+      consume(n) {
+        this._bufferedBytes -= n;
+        if (n === this._buffers[0].length) return this._buffers.shift();
+        if (n < this._buffers[0].length) {
+          const buf = this._buffers[0];
+          this._buffers[0] = new FastBuffer(
+            buf.buffer,
+            buf.byteOffset + n,
+            buf.length - n
+          );
+          return new FastBuffer(buf.buffer, buf.byteOffset, n);
+        }
+        const dst = Buffer.allocUnsafe(n);
+        do {
+          const buf = this._buffers[0];
+          const offset = dst.length - n;
+          if (n >= buf.length) {
+            dst.set(this._buffers.shift(), offset);
+          } else {
+            dst.set(new Uint8Array(buf.buffer, buf.byteOffset, n), offset);
+            this._buffers[0] = new FastBuffer(
+              buf.buffer,
+              buf.byteOffset + n,
+              buf.length - n
+            );
+          }
+          n -= buf.length;
+        } while (n > 0);
+        return dst;
+      }
+      /**
+       * Starts the parsing loop.
+       *
+       * @param {Function} cb Callback
+       * @private
+       */
+      startLoop(cb) {
+        this._loop = true;
+        do {
+          switch (this._state) {
+            case GET_INFO:
+              this.getInfo(cb);
+              break;
+            case GET_PAYLOAD_LENGTH_16:
+              this.getPayloadLength16(cb);
+              break;
+            case GET_PAYLOAD_LENGTH_64:
+              this.getPayloadLength64(cb);
+              break;
+            case GET_MASK:
+              this.getMask();
+              break;
+            case GET_DATA:
+              this.getData(cb);
+              break;
+            case INFLATING:
+            case DEFER_EVENT:
+              this._loop = false;
+              return;
+          }
+        } while (this._loop);
+        if (!this._errored) cb();
+      }
+      /**
+       * Reads the first two bytes of a frame.
+       *
+       * @param {Function} cb Callback
+       * @private
+       */
+      getInfo(cb) {
+        if (this._bufferedBytes < 2) {
+          this._loop = false;
+          return;
+        }
+        const buf = this.consume(2);
+        if ((buf[0] & 48) !== 0) {
+          const error = this.createError(
+            RangeError,
+            "RSV2 and RSV3 must be clear",
+            true,
+            1002,
+            "WS_ERR_UNEXPECTED_RSV_2_3"
+          );
+          cb(error);
+          return;
+        }
+        const compressed = (buf[0] & 64) === 64;
+        if (compressed && !this._extensions[PerMessageDeflate2.extensionName]) {
+          const error = this.createError(
+            RangeError,
+            "RSV1 must be clear",
+            true,
+            1002,
+            "WS_ERR_UNEXPECTED_RSV_1"
+          );
+          cb(error);
+          return;
+        }
+        this._fin = (buf[0] & 128) === 128;
+        this._opcode = buf[0] & 15;
+        this._payloadLength = buf[1] & 127;
+        if (this._opcode === 0) {
+          if (compressed) {
+            const error = this.createError(
+              RangeError,
+              "RSV1 must be clear",
+              true,
+              1002,
+              "WS_ERR_UNEXPECTED_RSV_1"
+            );
+            cb(error);
+            return;
+          }
+          if (!this._fragmented) {
+            const error = this.createError(
+              RangeError,
+              "invalid opcode 0",
+              true,
+              1002,
+              "WS_ERR_INVALID_OPCODE"
+            );
+            cb(error);
+            return;
+          }
+          this._opcode = this._fragmented;
+        } else if (this._opcode === 1 || this._opcode === 2) {
+          if (this._fragmented) {
+            const error = this.createError(
+              RangeError,
+              `invalid opcode ${this._opcode}`,
+              true,
+              1002,
+              "WS_ERR_INVALID_OPCODE"
+            );
+            cb(error);
+            return;
+          }
+          this._compressed = compressed;
+        } else if (this._opcode > 7 && this._opcode < 11) {
+          if (!this._fin) {
+            const error = this.createError(
+              RangeError,
+              "FIN must be set",
+              true,
+              1002,
+              "WS_ERR_EXPECTED_FIN"
+            );
+            cb(error);
+            return;
+          }
+          if (compressed) {
+            const error = this.createError(
+              RangeError,
+              "RSV1 must be clear",
+              true,
+              1002,
+              "WS_ERR_UNEXPECTED_RSV_1"
+            );
+            cb(error);
+            return;
+          }
+          if (this._payloadLength > 125 || this._opcode === 8 && this._payloadLength === 1) {
+            const error = this.createError(
+              RangeError,
+              `invalid payload length ${this._payloadLength}`,
+              true,
+              1002,
+              "WS_ERR_INVALID_CONTROL_PAYLOAD_LENGTH"
+            );
+            cb(error);
+            return;
+          }
+        } else {
+          const error = this.createError(
+            RangeError,
+            `invalid opcode ${this._opcode}`,
+            true,
+            1002,
+            "WS_ERR_INVALID_OPCODE"
+          );
+          cb(error);
+          return;
+        }
+        if (!this._fin && !this._fragmented) this._fragmented = this._opcode;
+        this._masked = (buf[1] & 128) === 128;
+        if (this._isServer) {
+          if (!this._masked) {
+            const error = this.createError(
+              RangeError,
+              "MASK must be set",
+              true,
+              1002,
+              "WS_ERR_EXPECTED_MASK"
+            );
+            cb(error);
+            return;
+          }
+        } else if (this._masked) {
+          const error = this.createError(
+            RangeError,
+            "MASK must be clear",
+            true,
+            1002,
+            "WS_ERR_UNEXPECTED_MASK"
+          );
+          cb(error);
+          return;
+        }
+        if (this._payloadLength === 126) this._state = GET_PAYLOAD_LENGTH_16;
+        else if (this._payloadLength === 127) this._state = GET_PAYLOAD_LENGTH_64;
+        else this.haveLength(cb);
+      }
+      /**
+       * Gets extended payload length (7+16).
+       *
+       * @param {Function} cb Callback
+       * @private
+       */
+      getPayloadLength16(cb) {
+        if (this._bufferedBytes < 2) {
+          this._loop = false;
+          return;
+        }
+        this._payloadLength = this.consume(2).readUInt16BE(0);
+        this.haveLength(cb);
+      }
+      /**
+       * Gets extended payload length (7+64).
+       *
+       * @param {Function} cb Callback
+       * @private
+       */
+      getPayloadLength64(cb) {
+        if (this._bufferedBytes < 8) {
+          this._loop = false;
+          return;
+        }
+        const buf = this.consume(8);
+        const num = buf.readUInt32BE(0);
+        if (num > Math.pow(2, 53 - 32) - 1) {
+          const error = this.createError(
+            RangeError,
+            "Unsupported WebSocket frame: payload length > 2^53 - 1",
+            false,
+            1009,
+            "WS_ERR_UNSUPPORTED_DATA_PAYLOAD_LENGTH"
+          );
+          cb(error);
+          return;
+        }
+        this._payloadLength = num * Math.pow(2, 32) + buf.readUInt32BE(4);
+        this.haveLength(cb);
+      }
+      /**
+       * Payload length has been read.
+       *
+       * @param {Function} cb Callback
+       * @private
+       */
+      haveLength(cb) {
+        if (this._payloadLength && this._opcode < 8) {
+          this._totalPayloadLength += this._payloadLength;
+          if (this._totalPayloadLength > this._maxPayload && this._maxPayload > 0) {
+            const error = this.createError(
+              RangeError,
+              "Max payload size exceeded",
+              false,
+              1009,
+              "WS_ERR_UNSUPPORTED_MESSAGE_LENGTH"
+            );
+            cb(error);
+            return;
+          }
+        }
+        if (this._masked) this._state = GET_MASK;
+        else this._state = GET_DATA;
+      }
+      /**
+       * Reads mask bytes.
+       *
+       * @private
+       */
+      getMask() {
+        if (this._bufferedBytes < 4) {
+          this._loop = false;
+          return;
+        }
+        this._mask = this.consume(4);
+        this._state = GET_DATA;
+      }
+      /**
+       * Reads data bytes.
+       *
+       * @param {Function} cb Callback
+       * @private
+       */
+      getData(cb) {
+        let data = EMPTY_BUFFER;
+        if (this._payloadLength) {
+          if (this._bufferedBytes < this._payloadLength) {
+            this._loop = false;
+            return;
+          }
+          data = this.consume(this._payloadLength);
+          if (this._masked && (this._mask[0] | this._mask[1] | this._mask[2] | this._mask[3]) !== 0) {
+            unmask(data, this._mask);
+          }
+        }
+        if (this._opcode > 7) {
+          this.controlMessage(data, cb);
+          return;
+        }
+        if (this._maxFragments > 0 && ++this._numFragments > this._maxFragments) {
+          const error = this.createError(
+            RangeError,
+            "Too many message fragments",
+            false,
+            1008,
+            "WS_ERR_TOO_MANY_BUFFERED_PARTS"
+          );
+          cb(error);
+          return;
+        }
+        if (this._compressed) {
+          this._state = INFLATING;
+          this.decompress(data, cb);
+          return;
+        }
+        if (data.length) {
+          this._messageLength = this._totalPayloadLength;
+          this._fragments.push(data);
+        }
+        this.dataMessage(cb);
+      }
+      /**
+       * Decompresses data.
+       *
+       * @param {Buffer} data Compressed data
+       * @param {Function} cb Callback
+       * @private
+       */
+      decompress(data, cb) {
+        const perMessageDeflate = this._extensions[PerMessageDeflate2.extensionName];
+        perMessageDeflate.decompress(data, this._fin, (err, buf) => {
+          if (err) return cb(err);
+          if (buf.length) {
+            this._messageLength += buf.length;
+            if (this._messageLength > this._maxPayload && this._maxPayload > 0) {
+              const error = this.createError(
+                RangeError,
+                "Max payload size exceeded",
+                false,
+                1009,
+                "WS_ERR_UNSUPPORTED_MESSAGE_LENGTH"
+              );
+              cb(error);
+              return;
+            }
+            this._fragments.push(buf);
+          }
+          this.dataMessage(cb);
+          if (this._state === GET_INFO) this.startLoop(cb);
+        });
+      }
+      /**
+       * Handles a data message.
+       *
+       * @param {Function} cb Callback
+       * @private
+       */
+      dataMessage(cb) {
+        if (!this._fin) {
+          this._state = GET_INFO;
+          return;
+        }
+        const messageLength = this._messageLength;
+        const fragments = this._fragments;
+        this._totalPayloadLength = 0;
+        this._messageLength = 0;
+        this._fragmented = 0;
+        this._numFragments = 0;
+        this._fragments = [];
+        if (this._opcode === 2) {
+          let data;
+          if (this._binaryType === "nodebuffer") {
+            data = concat3(fragments, messageLength);
+          } else if (this._binaryType === "arraybuffer") {
+            data = toArrayBuffer(concat3(fragments, messageLength));
+          } else if (this._binaryType === "blob") {
+            data = new Blob(fragments);
+          } else {
+            data = fragments;
+          }
+          if (this._allowSynchronousEvents) {
+            this.emit("message", data, true);
+            this._state = GET_INFO;
+          } else {
+            this._state = DEFER_EVENT;
+            setImmediate(() => {
+              this.emit("message", data, true);
+              this._state = GET_INFO;
+              this.startLoop(cb);
+            });
+          }
+        } else {
+          const buf = concat3(fragments, messageLength);
+          if (!this._skipUTF8Validation && !isValidUTF8(buf)) {
+            const error = this.createError(
+              Error,
+              "invalid UTF-8 sequence",
+              true,
+              1007,
+              "WS_ERR_INVALID_UTF8"
+            );
+            cb(error);
+            return;
+          }
+          if (this._state === INFLATING || this._allowSynchronousEvents) {
+            this.emit("message", buf, false);
+            this._state = GET_INFO;
+          } else {
+            this._state = DEFER_EVENT;
+            setImmediate(() => {
+              this.emit("message", buf, false);
+              this._state = GET_INFO;
+              this.startLoop(cb);
+            });
+          }
+        }
+      }
+      /**
+       * Handles a control message.
+       *
+       * @param {Buffer} data Data to handle
+       * @return {(Error|RangeError|undefined)} A possible error
+       * @private
+       */
+      controlMessage(data, cb) {
+        if (this._opcode === 8) {
+          if (data.length === 0) {
+            this._loop = false;
+            this.emit("conclude", 1005, EMPTY_BUFFER);
+            this.end();
+          } else {
+            const code = data.readUInt16BE(0);
+            if (!isValidStatusCode(code)) {
+              const error = this.createError(
+                RangeError,
+                `invalid status code ${code}`,
+                true,
+                1002,
+                "WS_ERR_INVALID_CLOSE_CODE"
+              );
+              cb(error);
+              return;
+            }
+            const buf = new FastBuffer(
+              data.buffer,
+              data.byteOffset + 2,
+              data.length - 2
+            );
+            if (!this._skipUTF8Validation && !isValidUTF8(buf)) {
+              const error = this.createError(
+                Error,
+                "invalid UTF-8 sequence",
+                true,
+                1007,
+                "WS_ERR_INVALID_UTF8"
+              );
+              cb(error);
+              return;
+            }
+            this._loop = false;
+            this.emit("conclude", code, buf);
+            this.end();
+          }
+          this._state = GET_INFO;
+          return;
+        }
+        if (this._allowSynchronousEvents) {
+          this.emit(this._opcode === 9 ? "ping" : "pong", data);
+          this._state = GET_INFO;
+        } else {
+          this._state = DEFER_EVENT;
+          setImmediate(() => {
+            this.emit(this._opcode === 9 ? "ping" : "pong", data);
+            this._state = GET_INFO;
+            this.startLoop(cb);
+          });
+        }
+      }
+      /**
+       * Builds an error object.
+       *
+       * @param {function(new:Error|RangeError)} ErrorCtor The error constructor
+       * @param {String} message The error message
+       * @param {Boolean} prefix Specifies whether or not to add a default prefix to
+       *     `message`
+       * @param {Number} statusCode The status code
+       * @param {String} errorCode The exposed error code
+       * @return {(Error|RangeError)} The error
+       * @private
+       */
+      createError(ErrorCtor, message2, prefix, statusCode, errorCode) {
+        this._loop = false;
+        this._errored = true;
+        const err = new ErrorCtor(
+          prefix ? `Invalid WebSocket frame: ${message2}` : message2
+        );
+        Error.captureStackTrace(err, this.createError);
+        err.code = errorCode;
+        err[kStatusCode] = statusCode;
+        return err;
+      }
+    };
+    module.exports = Receiver2;
+  }
+});
+
+// node_modules/ws/lib/sender.js
+var require_sender = __commonJS({
+  "node_modules/ws/lib/sender.js"(exports, module) {
+    "use strict";
+    var { Duplex } = __require("stream");
+    var { randomFillSync } = __require("crypto");
+    var {
+      types: { isUint8Array }
+    } = __require("util");
+    var PerMessageDeflate2 = require_permessage_deflate();
+    var { EMPTY_BUFFER, kWebSocket, NOOP } = require_constants6();
+    var { isBlob: isBlob3, isValidStatusCode } = require_validation();
+    var { mask: applyMask, toBuffer } = require_buffer_util();
+    var kByteLength = Symbol("kByteLength");
+    var maskBuffer = Buffer.alloc(4);
+    var RANDOM_POOL_SIZE = 8 * 1024;
+    var randomPool;
+    var randomPoolPointer = RANDOM_POOL_SIZE;
+    var DEFAULT = 0;
+    var DEFLATING = 1;
+    var GET_BLOB_DATA = 2;
+    var Sender2 = class _Sender {
+      /**
+       * Creates a Sender instance.
+       *
+       * @param {Duplex} socket The connection socket
+       * @param {Object} [extensions] An object containing the negotiated extensions
+       * @param {Function} [generateMask] The function used to generate the masking
+       *     key
+       */
+      constructor(socket, extensions, generateMask) {
+        this._extensions = extensions || {};
+        if (generateMask) {
+          this._generateMask = generateMask;
+          this._maskBuffer = Buffer.alloc(4);
+        }
+        this._socket = socket;
+        this._firstFragment = true;
+        this._compress = false;
+        this._bufferedBytes = 0;
+        this._queue = [];
+        this._state = DEFAULT;
+        this.onerror = NOOP;
+        this[kWebSocket] = void 0;
+      }
+      /**
+       * Frames a piece of data according to the HyBi WebSocket protocol.
+       *
+       * @param {(Buffer|String)} data The data to frame
+       * @param {Object} options Options object
+       * @param {Boolean} [options.fin=false] Specifies whether or not to set the
+       *     FIN bit
+       * @param {Function} [options.generateMask] The function used to generate the
+       *     masking key
+       * @param {Boolean} [options.mask=false] Specifies whether or not to mask
+       *     `data`
+       * @param {Buffer} [options.maskBuffer] The buffer used to store the masking
+       *     key
+       * @param {Number} options.opcode The opcode
+       * @param {Boolean} [options.readOnly=false] Specifies whether `data` can be
+       *     modified
+       * @param {Boolean} [options.rsv1=false] Specifies whether or not to set the
+       *     RSV1 bit
+       * @return {(Buffer|String)[]} The framed data
+       * @public
+       */
+      static frame(data, options2) {
+        let mask;
+        let merge = false;
+        let offset = 2;
+        let skipMasking = false;
+        if (options2.mask) {
+          mask = options2.maskBuffer || maskBuffer;
+          if (options2.generateMask) {
+            options2.generateMask(mask);
+          } else {
+            if (randomPoolPointer === RANDOM_POOL_SIZE) {
+              if (randomPool === void 0) {
+                randomPool = Buffer.alloc(RANDOM_POOL_SIZE);
+              }
+              randomFillSync(randomPool, 0, RANDOM_POOL_SIZE);
+              randomPoolPointer = 0;
+            }
+            mask[0] = randomPool[randomPoolPointer++];
+            mask[1] = randomPool[randomPoolPointer++];
+            mask[2] = randomPool[randomPoolPointer++];
+            mask[3] = randomPool[randomPoolPointer++];
+          }
+          skipMasking = (mask[0] | mask[1] | mask[2] | mask[3]) === 0;
+          offset = 6;
+        }
+        let dataLength;
+        if (typeof data === "string") {
+          if ((!options2.mask || skipMasking) && options2[kByteLength] !== void 0) {
+            dataLength = options2[kByteLength];
+          } else {
+            data = Buffer.from(data);
+            dataLength = data.length;
+          }
+        } else {
+          dataLength = data.length;
+          merge = options2.mask && options2.readOnly && !skipMasking;
+        }
+        let payloadLength = dataLength;
+        if (dataLength >= 65536) {
+          offset += 8;
+          payloadLength = 127;
+        } else if (dataLength > 125) {
+          offset += 2;
+          payloadLength = 126;
+        }
+        const target = Buffer.allocUnsafe(merge ? dataLength + offset : offset);
+        target[0] = options2.fin ? options2.opcode | 128 : options2.opcode;
+        if (options2.rsv1) target[0] |= 64;
+        target[1] = payloadLength;
+        if (payloadLength === 126) {
+          target.writeUInt16BE(dataLength, 2);
+        } else if (payloadLength === 127) {
+          target[2] = target[3] = 0;
+          target.writeUIntBE(dataLength, 4, 6);
+        }
+        if (!options2.mask) return [target, data];
+        target[1] |= 128;
+        target[offset - 4] = mask[0];
+        target[offset - 3] = mask[1];
+        target[offset - 2] = mask[2];
+        target[offset - 1] = mask[3];
+        if (skipMasking) return [target, data];
+        if (merge) {
+          applyMask(data, mask, target, offset, dataLength);
+          return [target];
+        }
+        applyMask(data, mask, data, 0, dataLength);
+        return [target, data];
+      }
+      /**
+       * Sends a close message to the other peer.
+       *
+       * @param {Number} [code] The status code component of the body
+       * @param {(String|Buffer)} [data] The message component of the body
+       * @param {Boolean} [mask=false] Specifies whether or not to mask the message
+       * @param {Function} [cb] Callback
+       * @public
+       */
+      close(code, data, mask, cb) {
+        let buf;
+        if (code === void 0) {
+          buf = EMPTY_BUFFER;
+        } else if (typeof code !== "number" || !isValidStatusCode(code)) {
+          throw new TypeError("First argument must be a valid error code number");
+        } else if (data === void 0 || !data.length) {
+          buf = Buffer.allocUnsafe(2);
+          buf.writeUInt16BE(code, 0);
+        } else {
+          const length = Buffer.byteLength(data);
+          if (length > 123) {
+            throw new RangeError("The message must not be greater than 123 bytes");
+          }
+          buf = Buffer.allocUnsafe(2 + length);
+          buf.writeUInt16BE(code, 0);
+          if (typeof data === "string") {
+            buf.write(data, 2);
+          } else if (isUint8Array(data)) {
+            buf.set(data, 2);
+          } else {
+            throw new TypeError("Second argument must be a string or a Uint8Array");
+          }
+        }
+        const options2 = {
+          [kByteLength]: buf.length,
+          fin: true,
+          generateMask: this._generateMask,
+          mask,
+          maskBuffer: this._maskBuffer,
+          opcode: 8,
+          readOnly: false,
+          rsv1: false
+        };
+        if (this._state !== DEFAULT) {
+          this.enqueue([this.dispatch, buf, false, options2, cb]);
+        } else {
+          this.sendFrame(_Sender.frame(buf, options2), cb);
+        }
+      }
+      /**
+       * Sends a ping message to the other peer.
+       *
+       * @param {*} data The message to send
+       * @param {Boolean} [mask=false] Specifies whether or not to mask `data`
+       * @param {Function} [cb] Callback
+       * @public
+       */
+      ping(data, mask, cb) {
+        let byteLength;
+        let readOnly;
+        if (typeof data === "string") {
+          byteLength = Buffer.byteLength(data);
+          readOnly = false;
+        } else if (isBlob3(data)) {
+          byteLength = data.size;
+          readOnly = false;
+        } else {
+          data = toBuffer(data);
+          byteLength = data.length;
+          readOnly = toBuffer.readOnly;
+        }
+        if (byteLength > 125) {
+          throw new RangeError("The data size must not be greater than 125 bytes");
+        }
+        const options2 = {
+          [kByteLength]: byteLength,
+          fin: true,
+          generateMask: this._generateMask,
+          mask,
+          maskBuffer: this._maskBuffer,
+          opcode: 9,
+          readOnly,
+          rsv1: false
+        };
+        if (isBlob3(data)) {
+          if (this._state !== DEFAULT) {
+            this.enqueue([this.getBlobData, data, false, options2, cb]);
+          } else {
+            this.getBlobData(data, false, options2, cb);
+          }
+        } else if (this._state !== DEFAULT) {
+          this.enqueue([this.dispatch, data, false, options2, cb]);
+        } else {
+          this.sendFrame(_Sender.frame(data, options2), cb);
+        }
+      }
+      /**
+       * Sends a pong message to the other peer.
+       *
+       * @param {*} data The message to send
+       * @param {Boolean} [mask=false] Specifies whether or not to mask `data`
+       * @param {Function} [cb] Callback
+       * @public
+       */
+      pong(data, mask, cb) {
+        let byteLength;
+        let readOnly;
+        if (typeof data === "string") {
+          byteLength = Buffer.byteLength(data);
+          readOnly = false;
+        } else if (isBlob3(data)) {
+          byteLength = data.size;
+          readOnly = false;
+        } else {
+          data = toBuffer(data);
+          byteLength = data.length;
+          readOnly = toBuffer.readOnly;
+        }
+        if (byteLength > 125) {
+          throw new RangeError("The data size must not be greater than 125 bytes");
+        }
+        const options2 = {
+          [kByteLength]: byteLength,
+          fin: true,
+          generateMask: this._generateMask,
+          mask,
+          maskBuffer: this._maskBuffer,
+          opcode: 10,
+          readOnly,
+          rsv1: false
+        };
+        if (isBlob3(data)) {
+          if (this._state !== DEFAULT) {
+            this.enqueue([this.getBlobData, data, false, options2, cb]);
+          } else {
+            this.getBlobData(data, false, options2, cb);
+          }
+        } else if (this._state !== DEFAULT) {
+          this.enqueue([this.dispatch, data, false, options2, cb]);
+        } else {
+          this.sendFrame(_Sender.frame(data, options2), cb);
+        }
+      }
+      /**
+       * Sends a data message to the other peer.
+       *
+       * @param {*} data The message to send
+       * @param {Object} options Options object
+       * @param {Boolean} [options.binary=false] Specifies whether `data` is binary
+       *     or text
+       * @param {Boolean} [options.compress=false] Specifies whether or not to
+       *     compress `data`
+       * @param {Boolean} [options.fin=false] Specifies whether the fragment is the
+       *     last one
+       * @param {Boolean} [options.mask=false] Specifies whether or not to mask
+       *     `data`
+       * @param {Function} [cb] Callback
+       * @public
+       */
+      send(data, options2, cb) {
+        const perMessageDeflate = this._extensions[PerMessageDeflate2.extensionName];
+        let opcode = options2.binary ? 2 : 1;
+        let rsv1 = options2.compress;
+        let byteLength;
+        let readOnly;
+        if (typeof data === "string") {
+          byteLength = Buffer.byteLength(data);
+          readOnly = false;
+        } else if (isBlob3(data)) {
+          byteLength = data.size;
+          readOnly = false;
+        } else {
+          data = toBuffer(data);
+          byteLength = data.length;
+          readOnly = toBuffer.readOnly;
+        }
+        if (this._firstFragment) {
+          this._firstFragment = false;
+          if (rsv1 && perMessageDeflate && perMessageDeflate.params[perMessageDeflate._isServer ? "server_no_context_takeover" : "client_no_context_takeover"]) {
+            rsv1 = byteLength >= perMessageDeflate._threshold;
+          }
+          this._compress = rsv1;
+        } else {
+          rsv1 = false;
+          opcode = 0;
+        }
+        if (options2.fin) this._firstFragment = true;
+        const opts = {
+          [kByteLength]: byteLength,
+          fin: options2.fin,
+          generateMask: this._generateMask,
+          mask: options2.mask,
+          maskBuffer: this._maskBuffer,
+          opcode,
+          readOnly,
+          rsv1
+        };
+        if (isBlob3(data)) {
+          if (this._state !== DEFAULT) {
+            this.enqueue([this.getBlobData, data, this._compress, opts, cb]);
+          } else {
+            this.getBlobData(data, this._compress, opts, cb);
+          }
+        } else if (this._state !== DEFAULT) {
+          this.enqueue([this.dispatch, data, this._compress, opts, cb]);
+        } else {
+          this.dispatch(data, this._compress, opts, cb);
+        }
+      }
+      /**
+       * Gets the contents of a blob as binary data.
+       *
+       * @param {Blob} blob The blob
+       * @param {Boolean} [compress=false] Specifies whether or not to compress
+       *     the data
+       * @param {Object} options Options object
+       * @param {Boolean} [options.fin=false] Specifies whether or not to set the
+       *     FIN bit
+       * @param {Function} [options.generateMask] The function used to generate the
+       *     masking key
+       * @param {Boolean} [options.mask=false] Specifies whether or not to mask
+       *     `data`
+       * @param {Buffer} [options.maskBuffer] The buffer used to store the masking
+       *     key
+       * @param {Number} options.opcode The opcode
+       * @param {Boolean} [options.readOnly=false] Specifies whether `data` can be
+       *     modified
+       * @param {Boolean} [options.rsv1=false] Specifies whether or not to set the
+       *     RSV1 bit
+       * @param {Function} [cb] Callback
+       * @private
+       */
+      getBlobData(blob, compress2, options2, cb) {
+        this._bufferedBytes += options2[kByteLength];
+        this._state = GET_BLOB_DATA;
+        blob.arrayBuffer().then((arrayBuffer) => {
+          if (this._socket.destroyed) {
+            const err = new Error(
+              "The socket was closed while the blob was being read"
+            );
+            process.nextTick(callCallbacks, this, err, cb);
+            return;
+          }
+          this._bufferedBytes -= options2[kByteLength];
+          const data = toBuffer(arrayBuffer);
+          if (!compress2) {
+            this._state = DEFAULT;
+            this.sendFrame(_Sender.frame(data, options2), cb);
+            this.dequeue();
+          } else {
+            this.dispatch(data, compress2, options2, cb);
+          }
+        }).catch((err) => {
+          process.nextTick(onError, this, err, cb);
+        });
+      }
+      /**
+       * Dispatches a message.
+       *
+       * @param {(Buffer|String)} data The message to send
+       * @param {Boolean} [compress=false] Specifies whether or not to compress
+       *     `data`
+       * @param {Object} options Options object
+       * @param {Boolean} [options.fin=false] Specifies whether or not to set the
+       *     FIN bit
+       * @param {Function} [options.generateMask] The function used to generate the
+       *     masking key
+       * @param {Boolean} [options.mask=false] Specifies whether or not to mask
+       *     `data`
+       * @param {Buffer} [options.maskBuffer] The buffer used to store the masking
+       *     key
+       * @param {Number} options.opcode The opcode
+       * @param {Boolean} [options.readOnly=false] Specifies whether `data` can be
+       *     modified
+       * @param {Boolean} [options.rsv1=false] Specifies whether or not to set the
+       *     RSV1 bit
+       * @param {Function} [cb] Callback
+       * @private
+       */
+      dispatch(data, compress2, options2, cb) {
+        if (!compress2) {
+          this.sendFrame(_Sender.frame(data, options2), cb);
+          return;
+        }
+        const perMessageDeflate = this._extensions[PerMessageDeflate2.extensionName];
+        this._bufferedBytes += options2[kByteLength];
+        this._state = DEFLATING;
+        perMessageDeflate.compress(data, options2.fin, (_, buf) => {
+          if (this._socket.destroyed) {
+            const err = new Error(
+              "The socket was closed while data was being compressed"
+            );
+            callCallbacks(this, err, cb);
+            return;
+          }
+          this._bufferedBytes -= options2[kByteLength];
+          this._state = DEFAULT;
+          options2.readOnly = false;
+          this.sendFrame(_Sender.frame(buf, options2), cb);
+          this.dequeue();
+        });
+      }
+      /**
+       * Executes queued send operations.
+       *
+       * @private
+       */
+      dequeue() {
+        while (this._state === DEFAULT && this._queue.length) {
+          const params = this._queue.shift();
+          this._bufferedBytes -= params[3][kByteLength];
+          Reflect.apply(params[0], this, params.slice(1));
+        }
+      }
+      /**
+       * Enqueues a send operation.
+       *
+       * @param {Array} params Send operation parameters.
+       * @private
+       */
+      enqueue(params) {
+        this._bufferedBytes += params[3][kByteLength];
+        this._queue.push(params);
+      }
+      /**
+       * Sends a frame.
+       *
+       * @param {(Buffer | String)[]} list The frame to send
+       * @param {Function} [cb] Callback
+       * @private
+       */
+      sendFrame(list, cb) {
+        if (list.length === 2) {
+          this._socket.cork();
+          this._socket.write(list[0]);
+          this._socket.write(list[1], cb);
+          this._socket.uncork();
+        } else {
+          this._socket.write(list[0], cb);
+        }
+      }
+    };
+    module.exports = Sender2;
+    function callCallbacks(sender, err, cb) {
+      if (typeof cb === "function") cb(err);
+      for (let i2 = 0; i2 < sender._queue.length; i2++) {
+        const params = sender._queue[i2];
+        const callback = params[params.length - 1];
+        if (typeof callback === "function") callback(err);
+      }
+    }
+    function onError(sender, err, cb) {
+      callCallbacks(sender, err, cb);
+      sender.onerror(err);
+    }
+  }
+});
+
+// node_modules/ws/lib/event-target.js
+var require_event_target = __commonJS({
+  "node_modules/ws/lib/event-target.js"(exports, module) {
+    "use strict";
+    var { kForOnEventAttribute, kListener } = require_constants6();
+    var kCode = Symbol("kCode");
+    var kData = Symbol("kData");
+    var kError = Symbol("kError");
+    var kMessage = Symbol("kMessage");
+    var kReason = Symbol("kReason");
+    var kTarget = Symbol("kTarget");
+    var kType = Symbol("kType");
+    var kWasClean = Symbol("kWasClean");
+    var Event = class {
+      /**
+       * Create a new `Event`.
+       *
+       * @param {String} type The name of the event
+       * @throws {TypeError} If the `type` argument is not specified
+       */
+      constructor(type) {
+        this[kTarget] = null;
+        this[kType] = type;
+      }
+      /**
+       * @type {*}
+       */
+      get target() {
+        return this[kTarget];
+      }
+      /**
+       * @type {String}
+       */
+      get type() {
+        return this[kType];
+      }
+    };
+    Object.defineProperty(Event.prototype, "target", { enumerable: true });
+    Object.defineProperty(Event.prototype, "type", { enumerable: true });
+    var CloseEvent = class extends Event {
+      /**
+       * Create a new `CloseEvent`.
+       *
+       * @param {String} type The name of the event
+       * @param {Object} [options] A dictionary object that allows for setting
+       *     attributes via object members of the same name
+       * @param {Number} [options.code=0] The status code explaining why the
+       *     connection was closed
+       * @param {String} [options.reason=''] A human-readable string explaining why
+       *     the connection was closed
+       * @param {Boolean} [options.wasClean=false] Indicates whether or not the
+       *     connection was cleanly closed
+       */
+      constructor(type, options2 = {}) {
+        super(type);
+        this[kCode] = options2.code === void 0 ? 0 : options2.code;
+        this[kReason] = options2.reason === void 0 ? "" : options2.reason;
+        this[kWasClean] = options2.wasClean === void 0 ? false : options2.wasClean;
+      }
+      /**
+       * @type {Number}
+       */
+      get code() {
+        return this[kCode];
+      }
+      /**
+       * @type {String}
+       */
+      get reason() {
+        return this[kReason];
+      }
+      /**
+       * @type {Boolean}
+       */
+      get wasClean() {
+        return this[kWasClean];
+      }
+    };
+    Object.defineProperty(CloseEvent.prototype, "code", { enumerable: true });
+    Object.defineProperty(CloseEvent.prototype, "reason", { enumerable: true });
+    Object.defineProperty(CloseEvent.prototype, "wasClean", { enumerable: true });
+    var ErrorEvent = class extends Event {
+      /**
+       * Create a new `ErrorEvent`.
+       *
+       * @param {String} type The name of the event
+       * @param {Object} [options] A dictionary object that allows for setting
+       *     attributes via object members of the same name
+       * @param {*} [options.error=null] The error that generated this event
+       * @param {String} [options.message=''] The error message
+       */
+      constructor(type, options2 = {}) {
+        super(type);
+        this[kError] = options2.error === void 0 ? null : options2.error;
+        this[kMessage] = options2.message === void 0 ? "" : options2.message;
+      }
+      /**
+       * @type {*}
+       */
+      get error() {
+        return this[kError];
+      }
+      /**
+       * @type {String}
+       */
+      get message() {
+        return this[kMessage];
+      }
+    };
+    Object.defineProperty(ErrorEvent.prototype, "error", { enumerable: true });
+    Object.defineProperty(ErrorEvent.prototype, "message", { enumerable: true });
+    var MessageEvent = class extends Event {
+      /**
+       * Create a new `MessageEvent`.
+       *
+       * @param {String} type The name of the event
+       * @param {Object} [options] A dictionary object that allows for setting
+       *     attributes via object members of the same name
+       * @param {*} [options.data=null] The message content
+       */
+      constructor(type, options2 = {}) {
+        super(type);
+        this[kData] = options2.data === void 0 ? null : options2.data;
+      }
+      /**
+       * @type {*}
+       */
+      get data() {
+        return this[kData];
+      }
+    };
+    Object.defineProperty(MessageEvent.prototype, "data", { enumerable: true });
+    var EventTarget = {
+      /**
+       * Register an event listener.
+       *
+       * @param {String} type A string representing the event type to listen for
+       * @param {(Function|Object)} handler The listener to add
+       * @param {Object} [options] An options object specifies characteristics about
+       *     the event listener
+       * @param {Boolean} [options.once=false] A `Boolean` indicating that the
+       *     listener should be invoked at most once after being added. If `true`,
+       *     the listener would be automatically removed when invoked.
+       * @public
+       */
+      addEventListener(type, handler, options2 = {}) {
+        for (const listener of this.listeners(type)) {
+          if (!options2[kForOnEventAttribute] && listener[kListener] === handler && !listener[kForOnEventAttribute]) {
+            return;
+          }
+        }
+        let wrapper;
+        if (type === "message") {
+          wrapper = function onMessage(data, isBinary) {
+            const event = new MessageEvent("message", {
+              data: isBinary ? data : data.toString()
+            });
+            event[kTarget] = this;
+            callListener(handler, this, event);
+          };
+        } else if (type === "close") {
+          wrapper = function onClose(code, message2) {
+            const event = new CloseEvent("close", {
+              code,
+              reason: message2.toString(),
+              wasClean: this._closeFrameReceived && this._closeFrameSent
+            });
+            event[kTarget] = this;
+            callListener(handler, this, event);
+          };
+        } else if (type === "error") {
+          wrapper = function onError(error) {
+            const event = new ErrorEvent("error", {
+              error,
+              message: error.message
+            });
+            event[kTarget] = this;
+            callListener(handler, this, event);
+          };
+        } else if (type === "open") {
+          wrapper = function onOpen() {
+            const event = new Event("open");
+            event[kTarget] = this;
+            callListener(handler, this, event);
+          };
+        } else {
+          return;
+        }
+        wrapper[kForOnEventAttribute] = !!options2[kForOnEventAttribute];
+        wrapper[kListener] = handler;
+        if (options2.once) {
+          this.once(type, wrapper);
+        } else {
+          this.on(type, wrapper);
+        }
+      },
+      /**
+       * Remove an event listener.
+       *
+       * @param {String} type A string representing the event type to remove
+       * @param {(Function|Object)} handler The listener to remove
+       * @public
+       */
+      removeEventListener(type, handler) {
+        for (const listener of this.listeners(type)) {
+          if (listener[kListener] === handler && !listener[kForOnEventAttribute]) {
+            this.removeListener(type, listener);
+            break;
+          }
+        }
+      }
+    };
+    module.exports = {
+      CloseEvent,
+      ErrorEvent,
+      Event,
+      EventTarget,
+      MessageEvent
+    };
+    function callListener(listener, thisArg, event) {
+      if (typeof listener === "object" && listener.handleEvent) {
+        listener.handleEvent.call(listener, event);
+      } else {
+        listener.call(thisArg, event);
+      }
+    }
+  }
+});
+
+// node_modules/ws/lib/extension.js
+var require_extension = __commonJS({
+  "node_modules/ws/lib/extension.js"(exports, module) {
+    "use strict";
+    var { tokenChars } = require_validation();
+    function push(dest, name5, elem) {
+      if (dest[name5] === void 0) dest[name5] = [elem];
+      else dest[name5].push(elem);
+    }
+    function parse(header) {
+      const offers = /* @__PURE__ */ Object.create(null);
+      let params = /* @__PURE__ */ Object.create(null);
+      let mustUnescape = false;
+      let isEscaping = false;
+      let inQuotes = false;
+      let extensionName;
+      let paramName;
+      let start = -1;
+      let code = -1;
+      let end = -1;
+      let i2 = 0;
+      for (; i2 < header.length; i2++) {
+        code = header.charCodeAt(i2);
+        if (extensionName === void 0) {
+          if (end === -1 && tokenChars[code] === 1) {
+            if (start === -1) start = i2;
+          } else if (i2 !== 0 && (code === 32 || code === 9)) {
+            if (end === -1 && start !== -1) end = i2;
+          } else if (code === 59 || code === 44) {
+            if (start === -1) {
+              throw new SyntaxError(`Unexpected character at index ${i2}`);
+            }
+            if (end === -1) end = i2;
+            const name5 = header.slice(start, end);
+            if (code === 44) {
+              push(offers, name5, params);
+              params = /* @__PURE__ */ Object.create(null);
+            } else {
+              extensionName = name5;
+            }
+            start = end = -1;
+          } else {
+            throw new SyntaxError(`Unexpected character at index ${i2}`);
+          }
+        } else if (paramName === void 0) {
+          if (end === -1 && tokenChars[code] === 1) {
+            if (start === -1) start = i2;
+          } else if (code === 32 || code === 9) {
+            if (end === -1 && start !== -1) end = i2;
+          } else if (code === 59 || code === 44) {
+            if (start === -1) {
+              throw new SyntaxError(`Unexpected character at index ${i2}`);
+            }
+            if (end === -1) end = i2;
+            push(params, header.slice(start, end), true);
+            if (code === 44) {
+              push(offers, extensionName, params);
+              params = /* @__PURE__ */ Object.create(null);
+              extensionName = void 0;
+            }
+            start = end = -1;
+          } else if (code === 61 && start !== -1 && end === -1) {
+            paramName = header.slice(start, i2);
+            start = end = -1;
+          } else {
+            throw new SyntaxError(`Unexpected character at index ${i2}`);
+          }
+        } else {
+          if (isEscaping) {
+            if (tokenChars[code] !== 1) {
+              throw new SyntaxError(`Unexpected character at index ${i2}`);
+            }
+            if (start === -1) start = i2;
+            else if (!mustUnescape) mustUnescape = true;
+            isEscaping = false;
+          } else if (inQuotes) {
+            if (tokenChars[code] === 1) {
+              if (start === -1) start = i2;
+            } else if (code === 34 && start !== -1) {
+              inQuotes = false;
+              end = i2;
+            } else if (code === 92) {
+              isEscaping = true;
+            } else {
+              throw new SyntaxError(`Unexpected character at index ${i2}`);
+            }
+          } else if (code === 34 && header.charCodeAt(i2 - 1) === 61) {
+            inQuotes = true;
+          } else if (end === -1 && tokenChars[code] === 1) {
+            if (start === -1) start = i2;
+          } else if (start !== -1 && (code === 32 || code === 9)) {
+            if (end === -1) end = i2;
+          } else if (code === 59 || code === 44) {
+            if (start === -1) {
+              throw new SyntaxError(`Unexpected character at index ${i2}`);
+            }
+            if (end === -1) end = i2;
+            let value = header.slice(start, end);
+            if (mustUnescape) {
+              value = value.replace(/\\/g, "");
+              mustUnescape = false;
+            }
+            push(params, paramName, value);
+            if (code === 44) {
+              push(offers, extensionName, params);
+              params = /* @__PURE__ */ Object.create(null);
+              extensionName = void 0;
+            }
+            paramName = void 0;
+            start = end = -1;
+          } else {
+            throw new SyntaxError(`Unexpected character at index ${i2}`);
+          }
+        }
+      }
+      if (start === -1 || inQuotes || code === 32 || code === 9) {
+        throw new SyntaxError("Unexpected end of input");
+      }
+      if (end === -1) end = i2;
+      const token = header.slice(start, end);
+      if (extensionName === void 0) {
+        push(offers, token, params);
+      } else {
+        if (paramName === void 0) {
+          push(params, token, true);
+        } else if (mustUnescape) {
+          push(params, paramName, token.replace(/\\/g, ""));
+        } else {
+          push(params, paramName, token);
+        }
+        push(offers, extensionName, params);
+      }
+      return offers;
+    }
+    function format(extensions) {
+      return Object.keys(extensions).map((extension2) => {
+        let configurations = extensions[extension2];
+        if (!Array.isArray(configurations)) configurations = [configurations];
+        return configurations.map((params) => {
+          return [extension2].concat(
+            Object.keys(params).map((k) => {
+              let values = params[k];
+              if (!Array.isArray(values)) values = [values];
+              return values.map((v) => v === true ? k : `${k}=${v}`).join("; ");
+            })
+          ).join("; ");
+        }).join(", ");
+      }).join(", ");
+    }
+    module.exports = { format, parse };
+  }
+});
+
+// node_modules/ws/lib/websocket.js
+var require_websocket = __commonJS({
+  "node_modules/ws/lib/websocket.js"(exports, module) {
+    "use strict";
+    var EventEmitter2 = __require("events");
+    var https3 = __require("https");
+    var http4 = __require("http");
+    var net2 = __require("net");
+    var tls = __require("tls");
+    var { randomBytes: randomBytes4, createHash: createHash2 } = __require("crypto");
+    var { Duplex, Readable } = __require("stream");
+    var { URL: URL2 } = __require("url");
+    var PerMessageDeflate2 = require_permessage_deflate();
+    var Receiver2 = require_receiver();
+    var Sender2 = require_sender();
+    var { isBlob: isBlob3 } = require_validation();
+    var {
+      BINARY_TYPES,
+      CLOSE_TIMEOUT,
+      EMPTY_BUFFER,
+      GUID,
+      kForOnEventAttribute,
+      kListener,
+      kStatusCode,
+      kWebSocket,
+      NOOP
+    } = require_constants6();
+    var {
+      EventTarget: { addEventListener, removeEventListener }
+    } = require_event_target();
+    var { format, parse } = require_extension();
+    var { toBuffer } = require_buffer_util();
+    var kAborted = Symbol("kAborted");
+    var protocolVersions = [8, 13];
+    var readyStates = ["CONNECTING", "OPEN", "CLOSING", "CLOSED"];
+    var subprotocolRegex = /^[!#$%&'*+\-.0-9A-Z^_`|a-z~]+$/;
+    var WebSocket2 = class _WebSocket extends EventEmitter2 {
+      /**
+       * Create a new `WebSocket`.
+       *
+       * @param {(String|URL)} address The URL to which to connect
+       * @param {(String|String[])} [protocols] The subprotocols
+       * @param {Object} [options] Connection options
+       */
+      constructor(address, protocols, options2) {
+        super();
+        this._binaryType = BINARY_TYPES[0];
+        this._closeCode = 1006;
+        this._closeFrameReceived = false;
+        this._closeFrameSent = false;
+        this._closeMessage = EMPTY_BUFFER;
+        this._closeTimer = null;
+        this._errorEmitted = false;
+        this._extensions = {};
+        this._paused = false;
+        this._protocol = "";
+        this._readyState = _WebSocket.CONNECTING;
+        this._receiver = null;
+        this._sender = null;
+        this._socket = null;
+        if (address !== null) {
+          this._bufferedAmount = 0;
+          this._isServer = false;
+          this._redirects = 0;
+          if (protocols === void 0) {
+            if (!options2 || options2.protocols === void 0) {
+              protocols = [];
+            } else if (Array.isArray(options2.protocols)) {
+              protocols = options2.protocols;
+            } else {
+              protocols = [options2.protocols];
+            }
+          } else if (!Array.isArray(protocols)) {
+            if (typeof protocols === "object" && protocols !== null) {
+              options2 = protocols;
+              if (options2.protocols === void 0) {
+                protocols = [];
+              } else if (Array.isArray(options2.protocols)) {
+                protocols = options2.protocols;
+              } else {
+                protocols = [options2.protocols];
+              }
+            } else {
+              protocols = [protocols];
+            }
+          }
+          initAsClient(this, address, protocols, options2);
+        } else {
+          this._autoPong = options2.autoPong;
+          this._closeTimeout = options2.closeTimeout;
+          this._isServer = true;
+        }
+      }
+      /**
+       * For historical reasons, the custom "nodebuffer" type is used by the default
+       * instead of "blob".
+       *
+       * @type {String}
+       */
+      get binaryType() {
+        return this._binaryType;
+      }
+      set binaryType(type) {
+        if (!BINARY_TYPES.includes(type)) return;
+        this._binaryType = type;
+        if (this._receiver) this._receiver._binaryType = type;
+      }
+      /**
+       * @type {Number}
+       */
+      get bufferedAmount() {
+        if (!this._socket) return this._bufferedAmount;
+        return this._socket._writableState.length + this._sender._bufferedBytes;
+      }
+      /**
+       * @type {String}
+       */
+      get extensions() {
+        return Object.keys(this._extensions).join();
+      }
+      /**
+       * @type {Boolean}
+       */
+      get isPaused() {
+        return this._paused;
+      }
+      /**
+       * @type {Function}
+       */
+      /* istanbul ignore next */
+      get onclose() {
+        return null;
+      }
+      /**
+       * @type {Function}
+       */
+      /* istanbul ignore next */
+      get onerror() {
+        return null;
+      }
+      /**
+       * @type {Function}
+       */
+      /* istanbul ignore next */
+      get onopen() {
+        return null;
+      }
+      /**
+       * @type {Function}
+       */
+      /* istanbul ignore next */
+      get onmessage() {
+        return null;
+      }
+      /**
+       * @type {String}
+       */
+      get protocol() {
+        return this._protocol;
+      }
+      /**
+       * @type {Number}
+       */
+      get readyState() {
+        return this._readyState;
+      }
+      /**
+       * @type {String}
+       */
+      get url() {
+        return this._url;
+      }
+      /**
+       * Set up the socket and the internal resources.
+       *
+       * @param {Duplex} socket The network socket between the server and client
+       * @param {Buffer} head The first packet of the upgraded stream
+       * @param {Object} options Options object
+       * @param {Boolean} [options.allowSynchronousEvents=false] Specifies whether
+       *     any of the `'message'`, `'ping'`, and `'pong'` events can be emitted
+       *     multiple times in the same tick
+       * @param {Function} [options.generateMask] The function used to generate the
+       *     masking key
+       * @param {Number} [options.maxBufferedChunks=0] The maximum number of
+       *     buffered data chunks
+       * @param {Number} [options.maxFragments=0] The maximum number of message
+       *     fragments
+       * @param {Number} [options.maxPayload=0] The maximum allowed message size
+       * @param {Boolean} [options.skipUTF8Validation=false] Specifies whether or
+       *     not to skip UTF-8 validation for text and close messages
+       * @private
+       */
+      setSocket(socket, head, options2) {
+        const receiver = new Receiver2({
+          allowSynchronousEvents: options2.allowSynchronousEvents,
+          binaryType: this.binaryType,
+          extensions: this._extensions,
+          isServer: this._isServer,
+          maxBufferedChunks: options2.maxBufferedChunks,
+          maxFragments: options2.maxFragments,
+          maxPayload: options2.maxPayload,
+          skipUTF8Validation: options2.skipUTF8Validation
+        });
+        const sender = new Sender2(socket, this._extensions, options2.generateMask);
+        this._receiver = receiver;
+        this._sender = sender;
+        this._socket = socket;
+        receiver[kWebSocket] = this;
+        sender[kWebSocket] = this;
+        socket[kWebSocket] = this;
+        receiver.on("conclude", receiverOnConclude);
+        receiver.on("drain", receiverOnDrain);
+        receiver.on("error", receiverOnError);
+        receiver.on("message", receiverOnMessage);
+        receiver.on("ping", receiverOnPing);
+        receiver.on("pong", receiverOnPong);
+        sender.onerror = senderOnError;
+        if (socket.setTimeout) socket.setTimeout(0);
+        if (socket.setNoDelay) socket.setNoDelay();
+        if (head.length > 0) socket.unshift(head);
+        socket.on("close", socketOnClose);
+        socket.on("data", socketOnData);
+        socket.on("end", socketOnEnd);
+        socket.on("error", socketOnError);
+        this._readyState = _WebSocket.OPEN;
+        this.emit("open");
+      }
+      /**
+       * Emit the `'close'` event.
+       *
+       * @private
+       */
+      emitClose() {
+        if (!this._socket) {
+          this._readyState = _WebSocket.CLOSED;
+          this.emit("close", this._closeCode, this._closeMessage);
+          return;
+        }
+        if (this._extensions[PerMessageDeflate2.extensionName]) {
+          this._extensions[PerMessageDeflate2.extensionName].cleanup();
+        }
+        this._receiver.removeAllListeners();
+        this._readyState = _WebSocket.CLOSED;
+        this.emit("close", this._closeCode, this._closeMessage);
+      }
+      /**
+       * Start a closing handshake.
+       *
+       *          +----------+   +-----------+   +----------+
+       *     - - -|ws.close()|-->|close frame|-->|ws.close()|- - -
+       *    |     +----------+   +-----------+   +----------+     |
+       *          +----------+   +-----------+         |
+       * CLOSING  |ws.close()|<--|close frame|<--+-----+       CLOSING
+       *          +----------+   +-----------+   |
+       *    |           |                        |   +---+        |
+       *                +------------------------+-->|fin| - - - -
+       *    |         +---+                      |   +---+
+       *     - - - - -|fin|<---------------------+
+       *              +---+
+       *
+       * @param {Number} [code] Status code explaining why the connection is closing
+       * @param {(String|Buffer)} [data] The reason why the connection is
+       *     closing
+       * @public
+       */
+      close(code, data) {
+        if (this.readyState === _WebSocket.CLOSED) return;
+        if (this.readyState === _WebSocket.CONNECTING) {
+          const msg = "WebSocket was closed before the connection was established";
+          abortHandshake(this, this._req, msg);
+          return;
+        }
+        if (this.readyState === _WebSocket.CLOSING) {
+          if (this._closeFrameSent && (this._closeFrameReceived || this._receiver._writableState.errorEmitted)) {
+            this._socket.end();
+          }
+          return;
+        }
+        this._sender.close(code, data, !this._isServer, (err) => {
+          if (err) return;
+          this._closeFrameSent = true;
+          if (this._closeFrameReceived || this._receiver._writableState.errorEmitted) {
+            this._socket.end();
+          }
+        });
+        this._readyState = _WebSocket.CLOSING;
+        setCloseTimer(this);
+      }
+      /**
+       * Pause the socket.
+       *
+       * @public
+       */
+      pause() {
+        if (this.readyState === _WebSocket.CONNECTING || this.readyState === _WebSocket.CLOSED) {
+          return;
+        }
+        this._paused = true;
+        this._socket.pause();
+      }
+      /**
+       * Send a ping.
+       *
+       * @param {*} [data] The data to send
+       * @param {Boolean} [mask] Indicates whether or not to mask `data`
+       * @param {Function} [cb] Callback which is executed when the ping is sent
+       * @public
+       */
+      ping(data, mask, cb) {
+        if (this.readyState === _WebSocket.CONNECTING) {
+          throw new Error("WebSocket is not open: readyState 0 (CONNECTING)");
+        }
+        if (typeof data === "function") {
+          cb = data;
+          data = mask = void 0;
+        } else if (typeof mask === "function") {
+          cb = mask;
+          mask = void 0;
+        }
+        if (typeof data === "number") data = data.toString();
+        if (this.readyState !== _WebSocket.OPEN) {
+          sendAfterClose(this, data, cb);
+          return;
+        }
+        if (mask === void 0) mask = !this._isServer;
+        this._sender.ping(data || EMPTY_BUFFER, mask, cb);
+      }
+      /**
+       * Send a pong.
+       *
+       * @param {*} [data] The data to send
+       * @param {Boolean} [mask] Indicates whether or not to mask `data`
+       * @param {Function} [cb] Callback which is executed when the pong is sent
+       * @public
+       */
+      pong(data, mask, cb) {
+        if (this.readyState === _WebSocket.CONNECTING) {
+          throw new Error("WebSocket is not open: readyState 0 (CONNECTING)");
+        }
+        if (typeof data === "function") {
+          cb = data;
+          data = mask = void 0;
+        } else if (typeof mask === "function") {
+          cb = mask;
+          mask = void 0;
+        }
+        if (typeof data === "number") data = data.toString();
+        if (this.readyState !== _WebSocket.OPEN) {
+          sendAfterClose(this, data, cb);
+          return;
+        }
+        if (mask === void 0) mask = !this._isServer;
+        this._sender.pong(data || EMPTY_BUFFER, mask, cb);
+      }
+      /**
+       * Resume the socket.
+       *
+       * @public
+       */
+      resume() {
+        if (this.readyState === _WebSocket.CONNECTING || this.readyState === _WebSocket.CLOSED) {
+          return;
+        }
+        this._paused = false;
+        if (!this._receiver._writableState.needDrain) this._socket.resume();
+      }
+      /**
+       * Send a data message.
+       *
+       * @param {*} data The message to send
+       * @param {Object} [options] Options object
+       * @param {Boolean} [options.binary] Specifies whether `data` is binary or
+       *     text
+       * @param {Boolean} [options.compress] Specifies whether or not to compress
+       *     `data`
+       * @param {Boolean} [options.fin=true] Specifies whether the fragment is the
+       *     last one
+       * @param {Boolean} [options.mask] Specifies whether or not to mask `data`
+       * @param {Function} [cb] Callback which is executed when data is written out
+       * @public
+       */
+      send(data, options2, cb) {
+        if (this.readyState === _WebSocket.CONNECTING) {
+          throw new Error("WebSocket is not open: readyState 0 (CONNECTING)");
+        }
+        if (typeof options2 === "function") {
+          cb = options2;
+          options2 = {};
+        }
+        if (typeof data === "number") data = data.toString();
+        if (this.readyState !== _WebSocket.OPEN) {
+          sendAfterClose(this, data, cb);
+          return;
+        }
+        const opts = {
+          binary: typeof data !== "string",
+          mask: !this._isServer,
+          compress: true,
+          fin: true,
+          ...options2
+        };
+        if (!this._extensions[PerMessageDeflate2.extensionName]) {
+          opts.compress = false;
+        }
+        this._sender.send(data || EMPTY_BUFFER, opts, cb);
+      }
+      /**
+       * Forcibly close the connection.
+       *
+       * @public
+       */
+      terminate() {
+        if (this.readyState === _WebSocket.CLOSED) return;
+        if (this.readyState === _WebSocket.CONNECTING) {
+          const msg = "WebSocket was closed before the connection was established";
+          abortHandshake(this, this._req, msg);
+          return;
+        }
+        if (this._socket) {
+          this._readyState = _WebSocket.CLOSING;
+          this._socket.destroy();
+        }
+      }
+    };
+    Object.defineProperty(WebSocket2, "CONNECTING", {
+      enumerable: true,
+      value: readyStates.indexOf("CONNECTING")
+    });
+    Object.defineProperty(WebSocket2.prototype, "CONNECTING", {
+      enumerable: true,
+      value: readyStates.indexOf("CONNECTING")
+    });
+    Object.defineProperty(WebSocket2, "OPEN", {
+      enumerable: true,
+      value: readyStates.indexOf("OPEN")
+    });
+    Object.defineProperty(WebSocket2.prototype, "OPEN", {
+      enumerable: true,
+      value: readyStates.indexOf("OPEN")
+    });
+    Object.defineProperty(WebSocket2, "CLOSING", {
+      enumerable: true,
+      value: readyStates.indexOf("CLOSING")
+    });
+    Object.defineProperty(WebSocket2.prototype, "CLOSING", {
+      enumerable: true,
+      value: readyStates.indexOf("CLOSING")
+    });
+    Object.defineProperty(WebSocket2, "CLOSED", {
+      enumerable: true,
+      value: readyStates.indexOf("CLOSED")
+    });
+    Object.defineProperty(WebSocket2.prototype, "CLOSED", {
+      enumerable: true,
+      value: readyStates.indexOf("CLOSED")
+    });
+    [
+      "binaryType",
+      "bufferedAmount",
+      "extensions",
+      "isPaused",
+      "protocol",
+      "readyState",
+      "url"
+    ].forEach((property2) => {
+      Object.defineProperty(WebSocket2.prototype, property2, { enumerable: true });
+    });
+    ["open", "error", "close", "message"].forEach((method) => {
+      Object.defineProperty(WebSocket2.prototype, `on${method}`, {
+        enumerable: true,
+        get() {
+          for (const listener of this.listeners(method)) {
+            if (listener[kForOnEventAttribute]) return listener[kListener];
+          }
+          return null;
+        },
+        set(handler) {
+          for (const listener of this.listeners(method)) {
+            if (listener[kForOnEventAttribute]) {
+              this.removeListener(method, listener);
+              break;
+            }
+          }
+          if (typeof handler !== "function") return;
+          this.addEventListener(method, handler, {
+            [kForOnEventAttribute]: true
+          });
+        }
+      });
+    });
+    WebSocket2.prototype.addEventListener = addEventListener;
+    WebSocket2.prototype.removeEventListener = removeEventListener;
+    module.exports = WebSocket2;
+    function initAsClient(websocket, address, protocols, options2) {
+      const opts = {
+        allowSynchronousEvents: true,
+        autoPong: true,
+        closeTimeout: CLOSE_TIMEOUT,
+        protocolVersion: protocolVersions[1],
+        maxBufferedChunks: 256 * 1024,
+        maxFragments: 16 * 1024,
+        maxPayload: 100 * 1024 * 1024,
+        skipUTF8Validation: false,
+        perMessageDeflate: true,
+        followRedirects: false,
+        maxRedirects: 10,
+        ...options2,
+        socketPath: void 0,
+        hostname: void 0,
+        protocol: void 0,
+        protocols: void 0,
+        timeout: void 0,
+        method: "GET",
+        host: void 0,
+        path: void 0,
+        port: void 0
+      };
+      websocket._autoPong = opts.autoPong;
+      websocket._closeTimeout = opts.closeTimeout;
+      if (!protocolVersions.includes(opts.protocolVersion)) {
+        throw new RangeError(
+          `Unsupported protocol version: ${opts.protocolVersion} (supported versions: ${protocolVersions.join(", ")})`
+        );
+      }
+      let parsedUrl;
+      if (address instanceof URL2) {
+        parsedUrl = address;
+      } else {
+        try {
+          parsedUrl = new URL2(address);
+        } catch {
+          throw new SyntaxError(`Invalid URL: ${address}`);
+        }
+      }
+      if (parsedUrl.protocol === "http:") {
+        parsedUrl.protocol = "ws:";
+      } else if (parsedUrl.protocol === "https:") {
+        parsedUrl.protocol = "wss:";
+      }
+      websocket._url = parsedUrl.href;
+      const isSecure = parsedUrl.protocol === "wss:";
+      const isIpcUrl = parsedUrl.protocol === "ws+unix:";
+      let invalidUrlMessage;
+      if (parsedUrl.protocol !== "ws:" && !isSecure && !isIpcUrl) {
+        invalidUrlMessage = `The URL's protocol must be one of "ws:", "wss:", "http:", "https:", or "ws+unix:"`;
+      } else if (isIpcUrl && !parsedUrl.pathname) {
+        invalidUrlMessage = "The URL's pathname is empty";
+      } else if (parsedUrl.hash) {
+        invalidUrlMessage = "The URL contains a fragment identifier";
+      }
+      if (invalidUrlMessage) {
+        const err = new SyntaxError(invalidUrlMessage);
+        if (websocket._redirects === 0) {
+          throw err;
+        } else {
+          emitErrorAndClose(websocket, err);
+          return;
+        }
+      }
+      const defaultPort = isSecure ? 443 : 80;
+      const key = randomBytes4(16).toString("base64");
+      const request = isSecure ? https3.request : http4.request;
+      const protocolSet = /* @__PURE__ */ new Set();
+      let perMessageDeflate;
+      opts.createConnection = opts.createConnection || (isSecure ? tlsConnect : netConnect);
+      opts.defaultPort = opts.defaultPort || defaultPort;
+      opts.port = parsedUrl.port || defaultPort;
+      opts.host = parsedUrl.hostname.startsWith("[") ? parsedUrl.hostname.slice(1, -1) : parsedUrl.hostname;
+      opts.headers = {
+        ...opts.headers,
+        "Sec-WebSocket-Version": opts.protocolVersion,
+        "Sec-WebSocket-Key": key,
+        Connection: "Upgrade",
+        Upgrade: "websocket"
+      };
+      opts.path = parsedUrl.pathname + parsedUrl.search;
+      opts.timeout = opts.handshakeTimeout;
+      if (opts.perMessageDeflate) {
+        perMessageDeflate = new PerMessageDeflate2({
+          ...opts.perMessageDeflate,
+          isServer: false,
+          maxPayload: opts.maxPayload
+        });
+        opts.headers["Sec-WebSocket-Extensions"] = format({
+          [PerMessageDeflate2.extensionName]: perMessageDeflate.offer()
+        });
+      }
+      if (protocols.length) {
+        for (const protocol of protocols) {
+          if (typeof protocol !== "string" || !subprotocolRegex.test(protocol) || protocolSet.has(protocol)) {
+            throw new SyntaxError(
+              "An invalid or duplicated subprotocol was specified"
+            );
+          }
+          protocolSet.add(protocol);
+        }
+        opts.headers["Sec-WebSocket-Protocol"] = protocols.join(",");
+      }
+      if (opts.origin) {
+        if (opts.protocolVersion < 13) {
+          opts.headers["Sec-WebSocket-Origin"] = opts.origin;
+        } else {
+          opts.headers.Origin = opts.origin;
+        }
+      }
+      if (parsedUrl.username || parsedUrl.password) {
+        opts.auth = `${parsedUrl.username}:${parsedUrl.password}`;
+      }
+      if (isIpcUrl) {
+        const parts = opts.path.split(":");
+        opts.socketPath = parts[0];
+        opts.path = parts[1];
+      }
+      let req;
+      if (opts.followRedirects) {
+        if (websocket._redirects === 0) {
+          websocket._originalIpc = isIpcUrl;
+          websocket._originalSecure = isSecure;
+          websocket._originalHostOrSocketPath = isIpcUrl ? opts.socketPath : parsedUrl.host;
+          const headers = options2 && options2.headers;
+          options2 = { ...options2, headers: {} };
+          if (headers) {
+            for (const [key2, value] of Object.entries(headers)) {
+              options2.headers[key2.toLowerCase()] = value;
+            }
+          }
+        } else if (websocket.listenerCount("redirect") === 0) {
+          const isSameHost = isIpcUrl ? websocket._originalIpc ? opts.socketPath === websocket._originalHostOrSocketPath : false : websocket._originalIpc ? false : parsedUrl.host === websocket._originalHostOrSocketPath;
+          if (!isSameHost || websocket._originalSecure && !isSecure) {
+            delete opts.headers.authorization;
+            delete opts.headers.cookie;
+            if (!isSameHost) delete opts.headers.host;
+            opts.auth = void 0;
+          }
+        }
+        if (opts.auth && !options2.headers.authorization) {
+          options2.headers.authorization = "Basic " + Buffer.from(opts.auth).toString("base64");
+        }
+        req = websocket._req = request(opts);
+        if (websocket._redirects) {
+          websocket.emit("redirect", websocket.url, req);
+        }
+      } else {
+        req = websocket._req = request(opts);
+      }
+      if (opts.timeout) {
+        req.on("timeout", () => {
+          abortHandshake(websocket, req, "Opening handshake has timed out");
+        });
+      }
+      req.on("error", (err) => {
+        if (req === null || req[kAborted]) return;
+        req = websocket._req = null;
+        emitErrorAndClose(websocket, err);
+      });
+      req.on("response", (res) => {
+        const location = res.headers.location;
+        const statusCode = res.statusCode;
+        if (location && opts.followRedirects && statusCode >= 300 && statusCode < 400) {
+          if (++websocket._redirects > opts.maxRedirects) {
+            abortHandshake(websocket, req, "Maximum redirects exceeded");
+            return;
+          }
+          req.abort();
+          let addr;
+          try {
+            addr = new URL2(location, address);
+          } catch (e2) {
+            const err = new SyntaxError(`Invalid URL: ${location}`);
+            emitErrorAndClose(websocket, err);
+            return;
+          }
+          initAsClient(websocket, addr, protocols, options2);
+        } else if (!websocket.emit("unexpected-response", req, res)) {
+          abortHandshake(
+            websocket,
+            req,
+            `Unexpected server response: ${res.statusCode}`
+          );
+        }
+      });
+      req.on("upgrade", (res, socket, head) => {
+        websocket.emit("upgrade", res);
+        if (websocket.readyState !== WebSocket2.CONNECTING) return;
+        req = websocket._req = null;
+        const upgrade = res.headers.upgrade;
+        if (upgrade === void 0 || upgrade.toLowerCase() !== "websocket") {
+          abortHandshake(websocket, socket, "Invalid Upgrade header");
+          return;
+        }
+        const digest2 = createHash2("sha1").update(key + GUID).digest("base64");
+        if (res.headers["sec-websocket-accept"] !== digest2) {
+          abortHandshake(websocket, socket, "Invalid Sec-WebSocket-Accept header");
+          return;
+        }
+        const serverProt = res.headers["sec-websocket-protocol"];
+        let protError;
+        if (serverProt !== void 0) {
+          if (!protocolSet.size) {
+            protError = "Server sent a subprotocol but none was requested";
+          } else if (!protocolSet.has(serverProt)) {
+            protError = "Server sent an invalid subprotocol";
+          }
+        } else if (protocolSet.size) {
+          protError = "Server sent no subprotocol";
+        }
+        if (protError) {
+          abortHandshake(websocket, socket, protError);
+          return;
+        }
+        if (serverProt) websocket._protocol = serverProt;
+        const secWebSocketExtensions = res.headers["sec-websocket-extensions"];
+        if (secWebSocketExtensions !== void 0) {
+          if (!perMessageDeflate) {
+            const message2 = "Server sent a Sec-WebSocket-Extensions header but no extension was requested";
+            abortHandshake(websocket, socket, message2);
+            return;
+          }
+          let extensions;
+          try {
+            extensions = parse(secWebSocketExtensions);
+          } catch (err) {
+            const message2 = "Invalid Sec-WebSocket-Extensions header";
+            abortHandshake(websocket, socket, message2);
+            return;
+          }
+          const extensionNames = Object.keys(extensions);
+          if (extensionNames.length !== 1 || extensionNames[0] !== PerMessageDeflate2.extensionName) {
+            const message2 = "Server indicated an extension that was not requested";
+            abortHandshake(websocket, socket, message2);
+            return;
+          }
+          try {
+            perMessageDeflate.accept(extensions[PerMessageDeflate2.extensionName]);
+          } catch (err) {
+            const message2 = "Invalid Sec-WebSocket-Extensions header";
+            abortHandshake(websocket, socket, message2);
+            return;
+          }
+          websocket._extensions[PerMessageDeflate2.extensionName] = perMessageDeflate;
+        }
+        websocket.setSocket(socket, head, {
+          allowSynchronousEvents: opts.allowSynchronousEvents,
+          generateMask: opts.generateMask,
+          maxBufferedChunks: opts.maxBufferedChunks,
+          maxFragments: opts.maxFragments,
+          maxPayload: opts.maxPayload,
+          skipUTF8Validation: opts.skipUTF8Validation
+        });
+      });
+      if (opts.finishRequest) {
+        opts.finishRequest(req, websocket);
+      } else {
+        req.end();
+      }
+    }
+    function emitErrorAndClose(websocket, err) {
+      websocket._readyState = WebSocket2.CLOSING;
+      websocket._errorEmitted = true;
+      websocket.emit("error", err);
+      websocket.emitClose();
+    }
+    function netConnect(options2) {
+      options2.path = options2.socketPath;
+      return net2.connect(options2);
+    }
+    function tlsConnect(options2) {
+      options2.path = void 0;
+      if (!options2.servername && options2.servername !== "") {
+        options2.servername = net2.isIP(options2.host) ? "" : options2.host;
+      }
+      return tls.connect(options2);
+    }
+    function abortHandshake(websocket, stream, message2) {
+      websocket._readyState = WebSocket2.CLOSING;
+      const err = new Error(message2);
+      Error.captureStackTrace(err, abortHandshake);
+      if (stream.setHeader) {
+        stream[kAborted] = true;
+        stream.abort();
+        if (stream.socket && !stream.socket.destroyed) {
+          stream.socket.destroy();
+        }
+        process.nextTick(emitErrorAndClose, websocket, err);
+      } else {
+        stream.destroy(err);
+        stream.once("error", websocket.emit.bind(websocket, "error"));
+        stream.once("close", websocket.emitClose.bind(websocket));
+      }
+    }
+    function sendAfterClose(websocket, data, cb) {
+      if (data) {
+        const length = isBlob3(data) ? data.size : toBuffer(data).length;
+        if (websocket._socket) websocket._sender._bufferedBytes += length;
+        else websocket._bufferedAmount += length;
+      }
+      if (cb) {
+        const err = new Error(
+          `WebSocket is not open: readyState ${websocket.readyState} (${readyStates[websocket.readyState]})`
+        );
+        process.nextTick(cb, err);
+      }
+    }
+    function receiverOnConclude(code, reason) {
+      const websocket = this[kWebSocket];
+      websocket._closeFrameReceived = true;
+      websocket._closeMessage = reason;
+      websocket._closeCode = code;
+      if (websocket._socket[kWebSocket] === void 0) return;
+      websocket._socket.removeListener("data", socketOnData);
+      process.nextTick(resume, websocket._socket);
+      if (code === 1005) websocket.close();
+      else websocket.close(code, reason);
+    }
+    function receiverOnDrain() {
+      const websocket = this[kWebSocket];
+      if (!websocket.isPaused) websocket._socket.resume();
+    }
+    function receiverOnError(err) {
+      const websocket = this[kWebSocket];
+      if (websocket._socket[kWebSocket] !== void 0) {
+        websocket._socket.removeListener("data", socketOnData);
+        process.nextTick(resume, websocket._socket);
+        websocket.close(err[kStatusCode]);
+      }
+      if (!websocket._errorEmitted) {
+        websocket._errorEmitted = true;
+        websocket.emit("error", err);
+      }
+    }
+    function receiverOnFinish() {
+      this[kWebSocket].emitClose();
+    }
+    function receiverOnMessage(data, isBinary) {
+      this[kWebSocket].emit("message", data, isBinary);
+    }
+    function receiverOnPing(data) {
+      const websocket = this[kWebSocket];
+      if (websocket._autoPong) websocket.pong(data, !this._isServer, NOOP);
+      websocket.emit("ping", data);
+    }
+    function receiverOnPong(data) {
+      this[kWebSocket].emit("pong", data);
+    }
+    function resume(stream) {
+      stream.resume();
+    }
+    function senderOnError(err) {
+      const websocket = this[kWebSocket];
+      if (websocket.readyState === WebSocket2.CLOSED) return;
+      if (websocket.readyState === WebSocket2.OPEN) {
+        websocket._readyState = WebSocket2.CLOSING;
+        setCloseTimer(websocket);
+      }
+      this._socket.end();
+      if (!websocket._errorEmitted) {
+        websocket._errorEmitted = true;
+        websocket.emit("error", err);
+      }
+    }
+    function setCloseTimer(websocket) {
+      websocket._closeTimer = setTimeout(
+        websocket._socket.destroy.bind(websocket._socket),
+        websocket._closeTimeout
+      );
+    }
+    function socketOnClose() {
+      const websocket = this[kWebSocket];
+      this.removeListener("close", socketOnClose);
+      this.removeListener("data", socketOnData);
+      this.removeListener("end", socketOnEnd);
+      websocket._readyState = WebSocket2.CLOSING;
+      if (!this._readableState.endEmitted && !websocket._closeFrameReceived && !websocket._receiver._writableState.errorEmitted && this._readableState.length !== 0) {
+        const chunk = this.read(this._readableState.length);
+        websocket._receiver.write(chunk);
+      }
+      websocket._receiver.end();
+      this[kWebSocket] = void 0;
+      clearTimeout(websocket._closeTimer);
+      if (websocket._receiver._writableState.finished || websocket._receiver._writableState.errorEmitted) {
+        websocket.emitClose();
+      } else {
+        websocket._receiver.on("error", receiverOnFinish);
+        websocket._receiver.on("finish", receiverOnFinish);
+      }
+    }
+    function socketOnData(chunk) {
+      if (!this[kWebSocket]._receiver.write(chunk)) {
+        this.pause();
+      }
+    }
+    function socketOnEnd() {
+      const websocket = this[kWebSocket];
+      websocket._readyState = WebSocket2.CLOSING;
+      websocket._receiver.end();
+      this.end();
+    }
+    function socketOnError() {
+      const websocket = this[kWebSocket];
+      this.removeListener("error", socketOnError);
+      this.on("error", NOOP);
+      if (websocket) {
+        websocket._readyState = WebSocket2.CLOSING;
+        this.destroy();
+      }
+    }
+  }
+});
+
+// node_modules/ws/lib/stream.js
+var require_stream2 = __commonJS({
+  "node_modules/ws/lib/stream.js"(exports, module) {
+    "use strict";
+    var WebSocket2 = require_websocket();
+    var { Duplex } = __require("stream");
+    function emitClose(stream) {
+      stream.emit("close");
+    }
+    function duplexOnEnd() {
+      if (!this.destroyed && this._writableState.finished) {
+        this.destroy();
+      }
+    }
+    function duplexOnError(err) {
+      this.removeListener("error", duplexOnError);
+      this.destroy();
+      if (this.listenerCount("error") === 0) {
+        this.emit("error", err);
+      }
+    }
+    function createWebSocketStream2(ws, options2) {
+      let terminateOnDestroy = true;
+      const duplex = new Duplex({
+        ...options2,
+        autoDestroy: false,
+        emitClose: false,
+        objectMode: false,
+        writableObjectMode: false
+      });
+      ws.on("message", function message2(msg, isBinary) {
+        const data = !isBinary && duplex._readableState.objectMode ? msg.toString() : msg;
+        if (!duplex.push(data)) ws.pause();
+      });
+      ws.once("error", function error(err) {
+        if (duplex.destroyed) return;
+        terminateOnDestroy = false;
+        duplex.destroy(err);
+      });
+      ws.once("close", function close() {
+        if (duplex.destroyed) return;
+        duplex.push(null);
+      });
+      duplex._destroy = function(err, callback) {
+        if (ws.readyState === ws.CLOSED) {
+          callback(err);
+          process.nextTick(emitClose, duplex);
+          return;
+        }
+        let called = false;
+        ws.once("error", function error(err2) {
+          called = true;
+          callback(err2);
+        });
+        ws.once("close", function close() {
+          if (!called) callback(err);
+          process.nextTick(emitClose, duplex);
+        });
+        if (terminateOnDestroy) ws.terminate();
+      };
+      duplex._final = function(callback) {
+        if (ws.readyState === ws.CONNECTING) {
+          ws.once("open", function open() {
+            duplex._final(callback);
+          });
+          return;
+        }
+        if (ws._socket === null) return;
+        if (ws._socket._writableState.finished) {
+          callback();
+          if (duplex._readableState.endEmitted) duplex.destroy();
+        } else {
+          ws._socket.once("finish", function finish() {
+            callback();
+          });
+          ws.close();
+        }
+      };
+      duplex._read = function() {
+        if (ws.isPaused) ws.resume();
+      };
+      duplex._write = function(chunk, encoding, callback) {
+        if (ws.readyState === ws.CONNECTING) {
+          ws.once("open", function open() {
+            duplex._write(chunk, encoding, callback);
+          });
+          return;
+        }
+        ws.send(chunk, callback);
+      };
+      duplex.on("end", duplexOnEnd);
+      duplex.on("error", duplexOnError);
+      return duplex;
+    }
+    module.exports = createWebSocketStream2;
+  }
+});
+
+// node_modules/ws/lib/subprotocol.js
+var require_subprotocol = __commonJS({
+  "node_modules/ws/lib/subprotocol.js"(exports, module) {
+    "use strict";
+    var { tokenChars } = require_validation();
+    function parse(header) {
+      const protocols = /* @__PURE__ */ new Set();
+      let start = -1;
+      let end = -1;
+      let i2 = 0;
+      for (i2; i2 < header.length; i2++) {
+        const code = header.charCodeAt(i2);
+        if (end === -1 && tokenChars[code] === 1) {
+          if (start === -1) start = i2;
+        } else if (i2 !== 0 && (code === 32 || code === 9)) {
+          if (end === -1 && start !== -1) end = i2;
+        } else if (code === 44) {
+          if (start === -1) {
+            throw new SyntaxError(`Unexpected character at index ${i2}`);
+          }
+          if (end === -1) end = i2;
+          const protocol2 = header.slice(start, end);
+          if (protocols.has(protocol2)) {
+            throw new SyntaxError(`The "${protocol2}" subprotocol is duplicated`);
+          }
+          protocols.add(protocol2);
+          start = end = -1;
+        } else {
+          throw new SyntaxError(`Unexpected character at index ${i2}`);
+        }
+      }
+      if (start === -1 || end !== -1) {
+        throw new SyntaxError("Unexpected end of input");
+      }
+      const protocol = header.slice(start, i2);
+      if (protocols.has(protocol)) {
+        throw new SyntaxError(`The "${protocol}" subprotocol is duplicated`);
+      }
+      protocols.add(protocol);
+      return protocols;
+    }
+    module.exports = { parse };
+  }
+});
+
+// node_modules/ws/lib/websocket-server.js
+var require_websocket_server = __commonJS({
+  "node_modules/ws/lib/websocket-server.js"(exports, module) {
+    "use strict";
+    var EventEmitter2 = __require("events");
+    var http4 = __require("http");
+    var { Duplex } = __require("stream");
+    var { createHash: createHash2 } = __require("crypto");
+    var extension2 = require_extension();
+    var PerMessageDeflate2 = require_permessage_deflate();
+    var subprotocol2 = require_subprotocol();
+    var WebSocket2 = require_websocket();
+    var { CLOSE_TIMEOUT, GUID, kWebSocket } = require_constants6();
+    var keyRegex = /^[+/0-9A-Za-z]{22}==$/;
+    var RUNNING = 0;
+    var CLOSING = 1;
+    var CLOSED = 2;
+    var WebSocketServer2 = class extends EventEmitter2 {
+      /**
+       * Create a `WebSocketServer` instance.
+       *
+       * @param {Object} options Configuration options
+       * @param {Boolean} [options.allowSynchronousEvents=true] Specifies whether
+       *     any of the `'message'`, `'ping'`, and `'pong'` events can be emitted
+       *     multiple times in the same tick
+       * @param {Boolean} [options.autoPong=true] Specifies whether or not to
+       *     automatically send a pong in response to a ping
+       * @param {Number} [options.backlog=511] The maximum length of the queue of
+       *     pending connections
+       * @param {Boolean} [options.clientTracking=true] Specifies whether or not to
+       *     track clients
+       * @param {Number} [options.closeTimeout=30000] Duration in milliseconds to
+       *     wait for the closing handshake to finish after `websocket.close()` is
+       *     called
+       * @param {Function} [options.handleProtocols] A hook to handle protocols
+       * @param {String} [options.host] The hostname where to bind the server
+       * @param {Number} [options.maxBufferedChunks=262144] The maximum number of
+       *     buffered data chunks
+       * @param {Number} [options.maxFragments=16384] The maximum number of message
+       *     fragments
+       * @param {Number} [options.maxPayload=104857600] The maximum allowed message
+       *     size
+       * @param {Boolean} [options.noServer=false] Enable no server mode
+       * @param {String} [options.path] Accept only connections matching this path
+       * @param {(Boolean|Object)} [options.perMessageDeflate=false] Enable/disable
+       *     permessage-deflate
+       * @param {Number} [options.port] The port where to bind the server
+       * @param {(http.Server|https.Server)} [options.server] A pre-created HTTP/S
+       *     server to use
+       * @param {Boolean} [options.skipUTF8Validation=false] Specifies whether or
+       *     not to skip UTF-8 validation for text and close messages
+       * @param {Function} [options.verifyClient] A hook to reject connections
+       * @param {Function} [options.WebSocket=WebSocket] Specifies the `WebSocket`
+       *     class to use. It must be the `WebSocket` class or class that extends it
+       * @param {Function} [callback] A listener for the `listening` event
+       */
+      constructor(options2, callback) {
+        super();
+        options2 = {
+          allowSynchronousEvents: true,
+          autoPong: true,
+          maxBufferedChunks: 256 * 1024,
+          maxFragments: 16 * 1024,
+          maxPayload: 100 * 1024 * 1024,
+          skipUTF8Validation: false,
+          perMessageDeflate: false,
+          handleProtocols: null,
+          clientTracking: true,
+          closeTimeout: CLOSE_TIMEOUT,
+          verifyClient: null,
+          noServer: false,
+          backlog: null,
+          // use default (511 as implemented in net.js)
+          server: null,
+          host: null,
+          path: null,
+          port: null,
+          WebSocket: WebSocket2,
+          ...options2
+        };
+        if (options2.port == null && !options2.server && !options2.noServer || options2.port != null && (options2.server || options2.noServer) || options2.server && options2.noServer) {
+          throw new TypeError(
+            'One and only one of the "port", "server", or "noServer" options must be specified'
+          );
+        }
+        if (options2.port != null) {
+          this._server = http4.createServer((req, res) => {
+            const body = http4.STATUS_CODES[426];
+            res.writeHead(426, {
+              "Content-Length": body.length,
+              "Content-Type": "text/plain"
+            });
+            res.end(body);
+          });
+          this._server.listen(
+            options2.port,
+            options2.host,
+            options2.backlog,
+            callback
+          );
+        } else if (options2.server) {
+          this._server = options2.server;
+        }
+        if (this._server) {
+          const emitConnection = this.emit.bind(this, "connection");
+          this._removeListeners = addListeners(this._server, {
+            listening: this.emit.bind(this, "listening"),
+            error: this.emit.bind(this, "error"),
+            upgrade: (req, socket, head) => {
+              this.handleUpgrade(req, socket, head, emitConnection);
+            }
+          });
+        }
+        if (options2.perMessageDeflate === true) options2.perMessageDeflate = {};
+        if (options2.clientTracking) {
+          this.clients = /* @__PURE__ */ new Set();
+          this._shouldEmitClose = false;
+        }
+        this.options = options2;
+        this._state = RUNNING;
+      }
+      /**
+       * Returns the bound address, the address family name, and port of the server
+       * as reported by the operating system if listening on an IP socket.
+       * If the server is listening on a pipe or UNIX domain socket, the name is
+       * returned as a string.
+       *
+       * @return {(Object|String|null)} The address of the server
+       * @public
+       */
+      address() {
+        if (this.options.noServer) {
+          throw new Error('The server is operating in "noServer" mode');
+        }
+        if (!this._server) return null;
+        return this._server.address();
+      }
+      /**
+       * Stop the server from accepting new connections and emit the `'close'` event
+       * when all existing connections are closed.
+       *
+       * @param {Function} [cb] A one-time listener for the `'close'` event
+       * @public
+       */
+      close(cb) {
+        if (this._state === CLOSED) {
+          if (cb) {
+            this.once("close", () => {
+              cb(new Error("The server is not running"));
+            });
+          }
+          process.nextTick(emitClose, this);
+          return;
+        }
+        if (cb) this.once("close", cb);
+        if (this._state === CLOSING) return;
+        this._state = CLOSING;
+        if (this.options.noServer || this.options.server) {
+          if (this._server) {
+            this._removeListeners();
+            this._removeListeners = this._server = null;
+          }
+          if (this.clients) {
+            if (!this.clients.size) {
+              process.nextTick(emitClose, this);
+            } else {
+              this._shouldEmitClose = true;
+            }
+          } else {
+            process.nextTick(emitClose, this);
+          }
+        } else {
+          const server = this._server;
+          this._removeListeners();
+          this._removeListeners = this._server = null;
+          server.close(() => {
+            emitClose(this);
+          });
+        }
+      }
+      /**
+       * See if a given request should be handled by this server instance.
+       *
+       * @param {http.IncomingMessage} req Request object to inspect
+       * @return {Boolean} `true` if the request is valid, else `false`
+       * @public
+       */
+      shouldHandle(req) {
+        if (this.options.path) {
+          const index = req.url.indexOf("?");
+          const pathname = index !== -1 ? req.url.slice(0, index) : req.url;
+          if (pathname !== this.options.path) return false;
+        }
+        return true;
+      }
+      /**
+       * Handle a HTTP Upgrade request.
+       *
+       * @param {http.IncomingMessage} req The request object
+       * @param {Duplex} socket The network socket between the server and client
+       * @param {Buffer} head The first packet of the upgraded stream
+       * @param {Function} cb Callback
+       * @public
+       */
+      handleUpgrade(req, socket, head, cb) {
+        socket.on("error", socketOnError);
+        const key = req.headers["sec-websocket-key"];
+        const upgrade = req.headers.upgrade;
+        const version7 = +req.headers["sec-websocket-version"];
+        if (req.method !== "GET") {
+          const message2 = "Invalid HTTP method";
+          abortHandshakeOrEmitwsClientError(this, req, socket, 405, message2);
+          return;
+        }
+        if (upgrade === void 0 || upgrade.toLowerCase() !== "websocket") {
+          const message2 = "Invalid Upgrade header";
+          abortHandshakeOrEmitwsClientError(this, req, socket, 400, message2);
+          return;
+        }
+        if (key === void 0 || !keyRegex.test(key)) {
+          const message2 = "Missing or invalid Sec-WebSocket-Key header";
+          abortHandshakeOrEmitwsClientError(this, req, socket, 400, message2);
+          return;
+        }
+        if (version7 !== 13 && version7 !== 8) {
+          const message2 = "Missing or invalid Sec-WebSocket-Version header";
+          abortHandshakeOrEmitwsClientError(this, req, socket, 400, message2, {
+            "Sec-WebSocket-Version": "13, 8"
+          });
+          return;
+        }
+        if (!this.shouldHandle(req)) {
+          abortHandshake(socket, 400);
+          return;
+        }
+        const secWebSocketProtocol = req.headers["sec-websocket-protocol"];
+        let protocols = /* @__PURE__ */ new Set();
+        if (secWebSocketProtocol !== void 0) {
+          try {
+            protocols = subprotocol2.parse(secWebSocketProtocol);
+          } catch (err) {
+            const message2 = "Invalid Sec-WebSocket-Protocol header";
+            abortHandshakeOrEmitwsClientError(this, req, socket, 400, message2);
+            return;
+          }
+        }
+        const secWebSocketExtensions = req.headers["sec-websocket-extensions"];
+        const extensions = {};
+        if (this.options.perMessageDeflate && secWebSocketExtensions !== void 0) {
+          const perMessageDeflate = new PerMessageDeflate2({
+            ...this.options.perMessageDeflate,
+            isServer: true,
+            maxPayload: this.options.maxPayload
+          });
+          try {
+            const offers = extension2.parse(secWebSocketExtensions);
+            if (offers[PerMessageDeflate2.extensionName]) {
+              perMessageDeflate.accept(offers[PerMessageDeflate2.extensionName]);
+              extensions[PerMessageDeflate2.extensionName] = perMessageDeflate;
+            }
+          } catch (err) {
+            const message2 = "Invalid or unacceptable Sec-WebSocket-Extensions header";
+            abortHandshakeOrEmitwsClientError(this, req, socket, 400, message2);
+            return;
+          }
+        }
+        if (this.options.verifyClient) {
+          const info = {
+            origin: req.headers[`${version7 === 8 ? "sec-websocket-origin" : "origin"}`],
+            secure: !!(req.socket.authorized || req.socket.encrypted),
+            req
+          };
+          if (this.options.verifyClient.length === 2) {
+            this.options.verifyClient(info, (verified, code, message2, headers) => {
+              if (!verified) {
+                return abortHandshake(socket, code || 401, message2, headers);
+              }
+              this.completeUpgrade(
+                extensions,
+                key,
+                protocols,
+                req,
+                socket,
+                head,
+                cb
+              );
+            });
+            return;
+          }
+          if (!this.options.verifyClient(info)) return abortHandshake(socket, 401);
+        }
+        this.completeUpgrade(extensions, key, protocols, req, socket, head, cb);
+      }
+      /**
+       * Upgrade the connection to WebSocket.
+       *
+       * @param {Object} extensions The accepted extensions
+       * @param {String} key The value of the `Sec-WebSocket-Key` header
+       * @param {Set} protocols The subprotocols
+       * @param {http.IncomingMessage} req The request object
+       * @param {Duplex} socket The network socket between the server and client
+       * @param {Buffer} head The first packet of the upgraded stream
+       * @param {Function} cb Callback
+       * @throws {Error} If called more than once with the same socket
+       * @private
+       */
+      completeUpgrade(extensions, key, protocols, req, socket, head, cb) {
+        if (!socket.readable || !socket.writable) return socket.destroy();
+        if (socket[kWebSocket]) {
+          throw new Error(
+            "server.handleUpgrade() was called more than once with the same socket, possibly due to a misconfiguration"
+          );
+        }
+        if (this._state > RUNNING) return abortHandshake(socket, 503);
+        const digest2 = createHash2("sha1").update(key + GUID).digest("base64");
+        const headers = [
+          "HTTP/1.1 101 Switching Protocols",
+          "Upgrade: websocket",
+          "Connection: Upgrade",
+          `Sec-WebSocket-Accept: ${digest2}`
+        ];
+        const ws = new this.options.WebSocket(null, void 0, this.options);
+        if (protocols.size) {
+          const protocol = this.options.handleProtocols ? this.options.handleProtocols(protocols, req) : protocols.values().next().value;
+          if (protocol) {
+            headers.push(`Sec-WebSocket-Protocol: ${protocol}`);
+            ws._protocol = protocol;
+          }
+        }
+        if (extensions[PerMessageDeflate2.extensionName]) {
+          const params = extensions[PerMessageDeflate2.extensionName].params;
+          const value = extension2.format({
+            [PerMessageDeflate2.extensionName]: [params]
+          });
+          headers.push(`Sec-WebSocket-Extensions: ${value}`);
+          ws._extensions = extensions;
+        }
+        this.emit("headers", headers, req);
+        socket.write(headers.concat("\r\n").join("\r\n"));
+        socket.removeListener("error", socketOnError);
+        ws.setSocket(socket, head, {
+          allowSynchronousEvents: this.options.allowSynchronousEvents,
+          maxBufferedChunks: this.options.maxBufferedChunks,
+          maxFragments: this.options.maxFragments,
+          maxPayload: this.options.maxPayload,
+          skipUTF8Validation: this.options.skipUTF8Validation
+        });
+        if (this.clients) {
+          this.clients.add(ws);
+          ws.on("close", () => {
+            this.clients.delete(ws);
+            if (this._shouldEmitClose && !this.clients.size) {
+              process.nextTick(emitClose, this);
+            }
+          });
+        }
+        cb(ws, req);
+      }
+    };
+    module.exports = WebSocketServer2;
+    function addListeners(server, map) {
+      for (const event of Object.keys(map)) server.on(event, map[event]);
+      return function removeListeners() {
+        for (const event of Object.keys(map)) {
+          server.removeListener(event, map[event]);
+        }
+      };
+    }
+    function emitClose(server) {
+      server._state = CLOSED;
+      server.emit("close");
+    }
+    function socketOnError() {
+      this.destroy();
+    }
+    function abortHandshake(socket, code, message2, headers) {
+      message2 = message2 || http4.STATUS_CODES[code];
+      headers = {
+        Connection: "close",
+        "Content-Type": "text/html",
+        "Content-Length": Buffer.byteLength(message2),
+        ...headers
+      };
+      socket.once("finish", socket.destroy);
+      socket.end(
+        `HTTP/1.1 ${code} ${http4.STATUS_CODES[code]}\r
+` + Object.keys(headers).map((h2) => `${h2}: ${headers[h2]}`).join("\r\n") + "\r\n\r\n" + message2
+      );
+    }
+    function abortHandshakeOrEmitwsClientError(server, req, socket, code, message2, headers) {
+      if (server.listenerCount("wsClientError")) {
+        const err = new Error(message2);
+        Error.captureStackTrace(err, abortHandshakeOrEmitwsClientError);
+        server.emit("wsClientError", err, socket, req);
+      } else {
+        abortHandshake(socket, code, message2, headers);
+      }
+    }
+  }
+});
+
+// node_modules/ws/wrapper.mjs
+var wrapper_exports = {};
+__export(wrapper_exports, {
+  PerMessageDeflate: () => import_permessage_deflate.default,
+  Receiver: () => import_receiver.default,
+  Sender: () => import_sender.default,
+  WebSocket: () => import_websocket.default,
+  WebSocketServer: () => import_websocket_server.default,
+  createWebSocketStream: () => import_stream.default,
+  default: () => wrapper_default,
+  extension: () => import_extension.default,
+  subprotocol: () => import_subprotocol.default
+});
+var import_stream, import_extension, import_permessage_deflate, import_receiver, import_sender, import_subprotocol, import_websocket, import_websocket_server, wrapper_default;
+var init_wrapper = __esm({
+  "node_modules/ws/wrapper.mjs"() {
+    import_stream = __toESM(require_stream2(), 1);
+    import_extension = __toESM(require_extension(), 1);
+    import_permessage_deflate = __toESM(require_permessage_deflate(), 1);
+    import_receiver = __toESM(require_receiver(), 1);
+    import_sender = __toESM(require_sender(), 1);
+    import_subprotocol = __toESM(require_subprotocol(), 1);
+    import_websocket = __toESM(require_websocket(), 1);
+    import_websocket_server = __toESM(require_websocket_server(), 1);
+    wrapper_default = import_websocket.default;
+  }
+});
+
+// node_modules/@vercel/functions/websocket/index.js
+var require_websocket2 = __commonJS({
+  "node_modules/@vercel/functions/websocket/index.js"(exports, module) {
+    "use strict";
+    var __defProp2 = Object.defineProperty;
+    var __getOwnPropDesc2 = Object.getOwnPropertyDescriptor;
+    var __getOwnPropNames2 = Object.getOwnPropertyNames;
+    var __hasOwnProp2 = Object.prototype.hasOwnProperty;
+    var __export2 = (target, all) => {
+      for (var name5 in all)
+        __defProp2(target, name5, { get: all[name5], enumerable: true });
+    };
+    var __copyProps2 = (to, from, except, desc) => {
+      if (from && typeof from === "object" || typeof from === "function") {
+        for (let key of __getOwnPropNames2(from))
+          if (!__hasOwnProp2.call(to, key) && key !== except)
+            __defProp2(to, key, { get: () => from[key], enumerable: !(desc = __getOwnPropDesc2(from, key)) || desc.enumerable });
+      }
+      return to;
+    };
+    var __toCommonJS2 = (mod4) => __copyProps2(__defProp2({}, "__esModule", { value: true }), mod4);
+    var websocket_exports = {};
+    __export2(websocket_exports, {
+      experimental_upgradeWebSocket: () => experimental_upgradeWebSocket2
+    });
+    module.exports = __toCommonJS2(websocket_exports);
+    var import_get_context = require_get_context();
+    var DEFAULT_MAX_PAYLOAD = 256 * 1024;
+    async function loadWebSocketServer() {
+      try {
+        const ws = await Promise.resolve().then(() => (init_wrapper(), wrapper_exports));
+        return ws.WebSocketServer;
+      } catch {
+        throw new Error(
+          'The "ws" package is required for experimental_upgradeWebSocket(). Install it with: npm install ws'
+        );
+      }
+    }
+    async function experimental_upgradeWebSocket2(handler, options2 = {}) {
+      const ctx = (0, import_get_context.getContext)();
+      if (typeof ctx.upgradeWebSocket !== "function") {
+        throw new Error(
+          "experimental_upgradeWebSocket is not available in the current runtime environment. This feature requires a Vercel runtime that supports WebSocket upgrades."
+        );
+      }
+      const WebSocketServer2 = await loadWebSocketServer();
+      const { req, socket, head } = ctx.upgradeWebSocket();
+      const wss = new WebSocketServer2({
+        noServer: true,
+        maxPayload: options2.maxPayload ?? DEFAULT_MAX_PAYLOAD
+      });
+      const ws = await new Promise((resolve, reject) => {
+        const cleanup = () => {
+          socket.removeListener("error", onError);
+          socket.removeListener("close", onClose);
+        };
+        const rejectUpgrade = (err) => {
+          cleanup();
+          if (err instanceof Error) {
+            reject(err);
+            return;
+          }
+          const error = new Error("WebSocket upgrade failed");
+          error.cause = err;
+          reject(error);
+        };
+        const resolveUpgrade = (ws2) => {
+          cleanup();
+          resolve(ws2);
+        };
+        const onError = (err) => rejectUpgrade(err);
+        const onClose = () => rejectUpgrade(
+          new Error("socket closed before the WebSocket upgrade completed")
+        );
+        socket.once("error", onError);
+        socket.once("close", onClose);
+        try {
+          wss.handleUpgrade(req, socket, head, resolveUpgrade);
+        } catch (err) {
+          rejectUpgrade(err);
+        }
+      });
+      try {
+        await handler(ws);
+      } catch (err) {
+        ws.close(1011, "WebSocket handler failed");
+        throw err;
+      }
+      return new Response(null, { status: 204 });
+    }
+  }
+});
+
+// node_modules/@vercel/functions/index.js
+var require_functions = __commonJS({
+  "node_modules/@vercel/functions/index.js"(exports, module) {
+    "use strict";
+    var __defProp2 = Object.defineProperty;
+    var __getOwnPropDesc2 = Object.getOwnPropertyDescriptor;
+    var __getOwnPropNames2 = Object.getOwnPropertyNames;
+    var __hasOwnProp2 = Object.prototype.hasOwnProperty;
+    var __export2 = (target, all) => {
+      for (var name5 in all)
+        __defProp2(target, name5, { get: all[name5], enumerable: true });
+    };
+    var __copyProps2 = (to, from, except, desc) => {
+      if (from && typeof from === "object" || typeof from === "function") {
+        for (let key of __getOwnPropNames2(from))
+          if (!__hasOwnProp2.call(to, key) && key !== except)
+            __defProp2(to, key, { get: () => from[key], enumerable: !(desc = __getOwnPropDesc2(from, key)) || desc.enumerable });
+      }
+      return to;
+    };
+    var __toCommonJS2 = (mod4) => __copyProps2(__defProp2({}, "__esModule", { value: true }), mod4);
+    var src_exports2 = {};
+    __export2(src_exports2, {
+      addCacheTag: () => import_addcachetag.addCacheTag,
+      attachDatabasePool: () => import_db_connections.attachDatabasePool,
+      dangerouslyDeleteBySrcImage: () => import_purge.dangerouslyDeleteBySrcImage,
+      dangerouslyDeleteByTag: () => import_purge.dangerouslyDeleteByTag,
+      experimental_attachDatabasePool: () => import_db_connections.experimental_attachDatabasePool,
+      experimental_upgradeWebSocket: () => import_websocket2.experimental_upgradeWebSocket,
+      geolocation: () => import_headers56.geolocation,
+      getCache: () => import_cache.getCache,
+      getDeadline: () => import_deadline.getDeadline,
+      getEnv: () => import_get_env.getEnv,
+      invalidateBySrcImage: () => import_purge.invalidateBySrcImage,
+      invalidateByTag: () => import_purge.invalidateByTag,
+      ipAddress: () => import_headers56.ipAddress,
+      metric: () => import_metric.metric,
+      next: () => import_middleware.next,
+      rewrite: () => import_middleware.rewrite,
+      waitUntil: () => import_wait_until.waitUntil
+    });
+    module.exports = __toCommonJS2(src_exports2);
+    var import_headers56 = require_headers();
+    var import_get_env = require_get_env();
+    var import_deadline = require_deadline4();
+    var import_wait_until = require_wait_until();
+    var import_metric = require_metric();
+    var import_middleware = require_middleware();
+    var import_cache = require_cache2();
+    var import_db_connections = require_db_connections();
+    var import_purge = require_purge();
+    var import_addcachetag = require_addcachetag();
+    var import_websocket2 = require_websocket2();
+  }
+});
+
 // src/server/quotedText.ts
 function stripQuotedEmailHistory(text) {
   if (!text) return "";
@@ -282274,12 +287563,12 @@ async function getTenantBrand(tenantId) {
 }
 async function saveTenantBrand(tenantId, patch) {
   const current = await getTenantBrand(tenantId);
-  const next = mergeBrand(current, patch);
+  const next2 = mergeBrand(current, patch);
   if (isFirebaseConfigured) {
-    await setDoc(tenantRepo(ctxFor(tenantId)).settingsDoc("brand"), JSON.parse(JSON.stringify(next)), { merge: true });
+    await setDoc(tenantRepo(ctxFor(tenantId)).settingsDoc("brand"), JSON.parse(JSON.stringify(next2)), { merge: true });
   }
-  cache2.set(tenantId, { brand: next, at: Date.now() });
-  return next;
+  cache2.set(tenantId, { brand: next2, at: Date.now() });
+  return next2;
 }
 var TTL_MS, cache2, ctxFor;
 var init_brandService = __esm({
@@ -282296,7 +287585,7 @@ var init_brandService = __esm({
 
 // src/server/campaignService.ts
 import { AsyncLocalStorage } from "node:async_hooks";
-import crypto5 from "crypto";
+import crypto6 from "crypto";
 async function campaignRecordedSender(tenantId) {
   try {
     const s2 = await getTenantEmailSettings(tenantId);
@@ -283397,7 +288686,7 @@ async function createCampaign(params) {
       return;
     }
     firstRowByEmail.set(cleanEmail, rowNum);
-    const campaignLeadId = `clead-${campaignId}-${crypto5.createHash("sha1").update(cleanEmail).digest("hex").slice(0, 16)}`;
+    const campaignLeadId = `clead-${campaignId}-${crypto6.createHash("sha1").update(cleanEmail).digest("hex").slice(0, 16)}`;
     const leadId = `lead-${cleanEmail.replace(/[^a-z0-9]/gi, "_")}`;
     const leadName = l.name || [l.firstName, l.lastName].filter(Boolean).join(" ") || cleanEmail.split("@")[0];
     const company = l.companyName || `${leadName}'s Agency`;
@@ -283460,12 +288749,16 @@ async function createCampaign(params) {
       console.warn("Firestore write notice during campaign creation:", e2);
     }
   }
+  let returnedCampaign = initialCampaign;
   if (params.startImmediately && !schedule) {
-    startCampaign(campaignId).catch((err) => {
-      console.error("Error starting campaign immediately:", err);
+    const ctx = getCampaignActiveCtx();
+    returnedCampaign = await startCampaign(campaignId, { sendInitialBatch: false });
+    const firstBatch = runWithCampaignCtx(ctx, () => processNextCampaignSendBatch(campaignId, 500)).catch((err) => {
+      console.warn(`[Campaign Engine] First batch for ${campaignId} did not finish; the cron will continue it:`, err?.message || err);
     });
+    (0, import_functions.waitUntil)(firstBatch);
   }
-  return { campaign: initialCampaign, leads: createdLeads, duplicatesSkipped: duplicates.length, duplicates };
+  return { campaign: returnedCampaign, leads: createdLeads, duplicatesSkipped: duplicates.length, duplicates };
 }
 function validateScheduleTime(startAt) {
   const t2 = Date.parse(startAt);
@@ -283550,7 +288843,8 @@ async function startDueScheduledCampaigns() {
   }
   return started;
 }
-async function startCampaign(campaignId) {
+async function startCampaign(campaignId, opts = {}) {
+  const sendInitialBatch = opts.sendInitialBatch !== false;
   const campaign = await ensureCampaignInStore(campaignId);
   if (!campaign) throw new Error(`Campaign ${campaignId} not found`);
   pausedCampaignsSet.delete(campaignId);
@@ -283615,6 +288909,7 @@ async function startCampaign(campaignId) {
   if (isFirebaseConfigured && db) {
     await safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignDoc(campaignId), withoutCounters(campaign), { merge: true });
   }
+  if (!sendInitialBatch) return campaign;
   const batchRes = await processNextCampaignSendBatch(campaignId, 500).catch((err) => {
     console.warn(`[Campaign Engine] Note processing initial batch on start:`, err);
     return null;
@@ -284472,9 +289767,10 @@ async function processActiveRunningCampaignsBatch(batchSize = 500) {
     isAutoProcessingCampaigns = false;
   }
 }
-var campaignSenderName, defaultTemplateSubject, companyResearchCache, DEFAULT_EMAIL_TEMPLATES, DEFAULT_CAMPAIGNS, DEFAULT_CAMPAIGN_LEADS, DEFAULT_CAMPAIGN_RUNS, DEFAULT_UMRAH_CTX3, activeCampaignCtx, campaignCtxStore, tenantCampaignStores, campaignsMap, campaignLeadsMap, campaignRunsMap, emailTemplatesMap, sendHistorySet, inFlightLeadSendsSet, pausedCampaignsSet, activeCampaignAbortControllers, initializedTenants, syncState, SYNC_MIN_INTERVAL_MS, SYNC_FORCED_MIN_GAP_MS, SYNC_RESPONSE_BUDGET_MS, hasLoadedInitialDefaults, DEMO_TREAT_SMTP_LOGIN_ERROR_AS_SENT, DEMO_SMTP_LOGIN_ERROR_RE, demoPendingWrites, leadsCol, SEARCH_CHUNK_SIZE, SEARCH_FIELD_SEP, searchCol, IGNORED_AFTER_DAYS, ignoredCutoffIso, SCHEDULE_MIN_LEAD_MS, SCHEDULE_MAX_AHEAD_MS, SEND_CLAIM_STALE_MS, isAutoProcessingCampaigns;
+var import_functions, campaignSenderName, defaultTemplateSubject, companyResearchCache, DEFAULT_EMAIL_TEMPLATES, DEFAULT_CAMPAIGNS, DEFAULT_CAMPAIGN_LEADS, DEFAULT_CAMPAIGN_RUNS, DEFAULT_UMRAH_CTX3, activeCampaignCtx, campaignCtxStore, tenantCampaignStores, campaignsMap, campaignLeadsMap, campaignRunsMap, emailTemplatesMap, sendHistorySet, inFlightLeadSendsSet, pausedCampaignsSet, activeCampaignAbortControllers, initializedTenants, syncState, SYNC_MIN_INTERVAL_MS, SYNC_FORCED_MIN_GAP_MS, SYNC_RESPONSE_BUDGET_MS, hasLoadedInitialDefaults, DEMO_TREAT_SMTP_LOGIN_ERROR_AS_SENT, DEMO_SMTP_LOGIN_ERROR_RE, demoPendingWrites, leadsCol, SEARCH_CHUNK_SIZE, SEARCH_FIELD_SEP, searchCol, IGNORED_AFTER_DAYS, ignoredCutoffIso, SCHEDULE_MIN_LEAD_MS, SCHEDULE_MAX_AHEAD_MS, SEND_CLAIM_STALE_MS, isAutoProcessingCampaigns;
 var init_campaignService = __esm({
   "src/server/campaignService.ts"() {
+    import_functions = __toESM(require_functions(), 1);
     init_quotedText();
     init_entitlements();
     init_tenantRepo();
@@ -284679,6 +289975,172 @@ www.umrah360.in`,
     SCHEDULE_MAX_AHEAD_MS = 365 * 24 * 60 * 60 * 1e3;
     SEND_CLAIM_STALE_MS = 10 * 60 * 1e3;
     isAutoProcessingCampaigns = false;
+  }
+});
+
+// src/shared/schedulingGuardrails.ts
+function namedWeekdays(text) {
+  const t2 = text.toLowerCase();
+  const out = /* @__PURE__ */ new Set();
+  WEEKDAYS.forEach((d, i2) => {
+    if (new RegExp(`\\b${d}\\b`).test(t2)) out.add(i2);
+  });
+  WEEKDAY_SHORT.forEach((d, i2) => {
+    if (new RegExp(`\\b${d}\\b\\.?`).test(t2) && !/\bsat\s+(down|on|with)\b/.test(t2)) out.add(i2);
+  });
+  if (/\btues\b/.test(t2)) out.add(2);
+  if (/\bweds\b/.test(t2)) out.add(3);
+  if (/\bthurs?\b/.test(t2)) out.add(4);
+  return Array.from(out);
+}
+function hasExplicitDateToken(text) {
+  const t2 = text.toLowerCase();
+  if (/\b(today|tonight|tomorrow|tmrw|tmr|day after tomorrow)\b/.test(t2)) return true;
+  if (namedWeekdays(t2).length > 0) return true;
+  const month = `(?:${MONTHS.join("|")})[a-z]*\\.?`;
+  if (new RegExp(`\\b\\d{1,2}(?:st|nd|rd|th)?\\s*(?:of\\s+)?${month}\\b`).test(t2)) return true;
+  if (new RegExp(`\\b${month}\\s*\\d{1,2}(?:st|nd|rd|th)?\\b`).test(t2)) return true;
+  if (/\b\d{1,2}[/.-]\d{1,2}(?:[/.-]\d{2,4})?\b/.test(t2) && !/\b\d{1,2}[.:]\d{2}\s*(am|pm)\b/.test(t2)) return true;
+  if (/\b\d{4}-\d{2}-\d{2}\b/.test(t2)) return true;
+  if (/\bthe\s+\d{1,2}(?:st|nd|rd|th)\b/.test(t2)) return true;
+  return false;
+}
+function parseExplicitTime(text) {
+  let t2 = text.toLowerCase().replace(/\s+/g, " ");
+  const hours = /* @__PURE__ */ new Set();
+  let hasNonZeroMinutes = false;
+  const both = (h2) => {
+    if (h2 >= 0 && h2 <= 23) hours.add(h2);
+    if (h2 >= 1 && h2 <= 11) hours.add(h2 + 12);
+  };
+  const withSuffix = (h2, suffix) => {
+    const pm = suffix.startsWith("p");
+    if (h2 < 1 || h2 > 12) return;
+    hours.add(pm ? h2 === 12 ? 12 : h2 + 12 : h2 === 12 ? 0 : h2);
+  };
+  let m2;
+  const rangeRe = /\b(\d{1,2})(?::(\d{2}))?\s*(?:-|–|to)\s*(\d{1,2})(?::\d{2})?\s*(a\.?\s?m\.?|p\.?\s?m\.?)/g;
+  while (m2 = rangeRe.exec(t2)) {
+    withSuffix(parseInt(m2[1], 10), m2[4].replace(/[.\s]/g, ""));
+    if (m2[2] && m2[2] !== "00") hasNonZeroMinutes = true;
+  }
+  t2 = t2.replace(rangeRe, " ");
+  const ampmRe = /\b(\d{1,2})(?:[:.](\d{2}))?\s*(a\.?\s?m\.?|p\.?\s?m\.?)(?![a-z])/g;
+  while (m2 = ampmRe.exec(t2)) {
+    withSuffix(parseInt(m2[1], 10), m2[3].replace(/[.\s]/g, ""));
+    if (m2[2] && m2[2] !== "00") hasNonZeroMinutes = true;
+  }
+  const colonRe = /\b(\d{1,2}):(\d{2})\b(?!\s*(?:a\.?\s?m|p\.?\s?m))/g;
+  while (m2 = colonRe.exec(t2)) {
+    const h2 = parseInt(m2[1], 10);
+    if (h2 > 23 || parseInt(m2[2], 10) > 59) continue;
+    if (m2[2] !== "00") hasNonZeroMinutes = true;
+    if (h2 >= 13) hours.add(h2);
+    else both(h2);
+  }
+  const hrsRe = /\b(\d{1,2})(\d{2})?\s*hrs?\b/g;
+  while (m2 = hrsRe.exec(t2)) {
+    const h2 = parseInt(m2[1], 10);
+    if (h2 <= 23) hours.add(h2);
+    if (m2[2] && m2[2] !== "00") hasNonZeroMinutes = true;
+  }
+  const atRe = /\b(?:at|around|by|after|before)\s+(\d{1,2})\b(?!\s*(?:%|people|persons|users|agents|members|pax|seats|staff|employees|branches|offices|days?|weeks?|months?|years?|mins?|minutes?|hours?|[:./-]\d))/g;
+  while (m2 = atRe.exec(t2)) both(parseInt(m2[1], 10));
+  const oclockRe = /\b(\d{1,2})\s*o'?\s?clock\b/g;
+  while (m2 = oclockRe.exec(t2)) both(parseInt(m2[1], 10));
+  if (/\bnoon\b|\bmidday\b/.test(t2)) hours.add(12);
+  return { hasTime: hours.size > 0, hourCandidates: Array.from(hours).sort((a, b) => a - b), hasNonZeroMinutes };
+}
+function preferredPeriodOf(text) {
+  const t2 = text.toLowerCase();
+  if (/\bmorning\b/.test(t2)) return "MORNING";
+  if (/\bafternoon\b|\bpost\s*lunch\b|\bafter\s+lunch\b/.test(t2)) return "AFTERNOON";
+  if (/\bevening\b|\btonight\b/.test(t2)) return "EVENING";
+  return "ANY";
+}
+function wordCount(text) {
+  return text.trim().split(/\s+/).filter(Boolean).length;
+}
+function isAffirmative(text) {
+  const t2 = text.toLowerCase().trim();
+  if (!t2 || wordCount(t2) > 30) return false;
+  if (isNegative(t2)) return false;
+  return /\b(yes|yeah|yea|yep|yup|ya|haan|ha|sure|ok|okay|okk?|confirm(ed)?|please (do|book|confirm|go ahead)|book it|go ahead|sounds good|that works|works for me|works fine|perfect|great|done|absolutely|definitely|fine with me|that'?s fine|lock it|correct|right)\b/.test(
+    t2
+  );
+}
+function isNegative(text) {
+  const t2 = text.toLowerCase().trim();
+  return /\b(no|nope|nah|not\s+(that|this|then|available|possible|good|ok|okay)|don'?t|do not|can'?t|cannot|won'?t|wouldn'?t work|doesn'?t work|not free|busy then|another (time|day|slot)|different (time|day|slot)|some other)\b/.test(
+    t2
+  );
+}
+function looksLikeSchedulingFollowUp(text) {
+  if (!text) return false;
+  return hasExplicitDateToken(text) || parseExplicitTime(text).hasTime || isAffirmative(text) || isNegative(text) || /\b(morning|afternoon|evening|first|second|third|last|option|slot|1st|2nd|3rd)\b/i.test(text);
+}
+function pickOfferedSlot(text, offered, dayOfWeekFor2) {
+  if (!offered.length) return null;
+  const t2 = text.toLowerCase();
+  const notAPick = /\b(first|1st|second|2nd|third|3rd|fourth|4th)\s+(available|possible|week|half|of)\b/;
+  const ordinals = [
+    [/\b(first|1st)\b/, 0],
+    [/\b(second|2nd)\b/, 1],
+    [/\b(third|3rd)\b/, 2],
+    [/\b(fourth|4th)\b/, 3]
+  ];
+  if (!notAPick.test(t2) && !hasMonthName(t2)) {
+    for (const [re2, idx] of ordinals) {
+      if (re2.test(t2) && idx < offered.length) return idx;
+    }
+  }
+  if (/\blast (one|slot|option)\b/.test(t2)) return offered.length - 1;
+  const opt = t2.match(/\b(?:option|slot|choice|number|no\.?)\s*#?\s*(\d)\b|#\s*(\d)\b/);
+  if (opt) {
+    const n = parseInt(opt[1] || opt[2], 10) - 1;
+    if (n >= 0 && n < offered.length) return n;
+  }
+  if (wordCount(t2) <= 3) {
+    const bare = t2.match(/^\D*(\d)\D*$/);
+    if (bare) {
+      const n = parseInt(bare[1], 10) - 1;
+      if (n >= 0 && n < offered.length && !parseExplicitTime(t2).hasTime) return n;
+    }
+  }
+  const days = namedWeekdays(t2);
+  const time = parseExplicitTime(t2);
+  if (!days.length && !time.hasTime) return null;
+  const matches = offered.map((s2, i2) => ({ s: s2, i: i2 })).filter(({ s: s2 }) => {
+    const dayOk = days.length === 0 || days.includes(dayOfWeekFor2(s2.date));
+    const timeOk = !time.hasTime || time.hourCandidates.includes(s2.startHour);
+    return dayOk && timeOk;
+  });
+  return matches.length === 1 ? matches[0].i : null;
+}
+function resolveSimpleDate(text, now, addDays) {
+  const t2 = text.toLowerCase();
+  if (/\bday after tomorrow\b/.test(t2)) return addDays(now.dateString, 2);
+  if (/\b(tomorrow|tmrw|tmr)\b/.test(t2)) return addDays(now.dateString, 1);
+  if (/\b(today|tonight)\b/.test(t2)) return now.dateString;
+  const days = namedWeekdays(t2);
+  if (days.length !== 1) return null;
+  let diff = (days[0] - now.dayOfWeek + 7) % 7;
+  if (/\bnext\s+week\b/.test(t2) && diff === 0) diff = 7;
+  return addDays(now.dateString, diff);
+}
+function hasMonthName(t2) {
+  const month = `(?:${MONTHS.join("|")})[a-z]*\\.?`;
+  return new RegExp(`\\b\\d{1,2}(?:st|nd|rd|th)?\\s*(?:of\\s+)?${month}\\b`).test(t2) || new RegExp(`\\b${month}\\s*\\d{1,2}(?:st|nd|rd|th)?\\b`).test(t2);
+}
+function isIsoDate(s2) {
+  return typeof s2 === "string" && /^\d{4}-\d{2}-\d{2}$/.test(s2);
+}
+var WEEKDAYS, WEEKDAY_SHORT, MONTHS;
+var init_schedulingGuardrails = __esm({
+  "src/shared/schedulingGuardrails.ts"() {
+    WEEKDAYS = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
+    WEEKDAY_SHORT = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
+    MONTHS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
   }
 });
 
@@ -284999,7 +290461,7 @@ async function getAutoFollowUpConfig(ctx) {
 }
 async function updateAutoFollowUpConfig(ctx, updates) {
   const current = await getAutoFollowUpConfig(ctx);
-  const next = {
+  const next2 = {
     ...current,
     ...updates.mode ? { mode: updates.mode } : {},
     ...updates.timezone ? { timezone: String(updates.timezone) } : {},
@@ -285009,11 +290471,11 @@ async function updateAutoFollowUpConfig(ctx, updates) {
     businessHours: { ...current.businessHours, ...updates.businessHours || {} }
   };
   if (enabledDb()) {
-    await setDoc(tenantRepo(ctx).settingsDoc("auto_followup_config"), clean(next), { merge: true });
+    await setDoc(tenantRepo(ctx).settingsDoc("auto_followup_config"), clean(next2), { merge: true });
   }
-  configCache.set(ctx.tenantId, { at: Date.now(), cfg: next });
+  configCache.set(ctx.tenantId, { at: Date.now(), cfg: next2 });
   markWorkerDirty(ctx.tenantId);
-  return next;
+  return next2;
 }
 async function logFollowUpActivity(ctx, activity) {
   const entry = {
@@ -285071,6 +290533,34 @@ async function loadJobsByField(ctx, field2, value) {
   const out = [];
   snap.forEach((d) => out.push({ ...d.data(), id: d.data()?.id || d.id }));
   return out;
+}
+async function loadDueJobs(ctx, nowMs, max) {
+  if (!enabledDb()) return { due: [], nextDueMs: null };
+  const nowIso = new Date(nowMs).toISOString();
+  const toJob = (d) => ({ ...d.data(), id: d.data()?.id || d.id });
+  try {
+    const jobs = repoFor(ctx).jobs();
+    const [dueSnap, nextSnap] = await Promise.all([
+      getDocs(query(jobs, where("status", "==", "scheduled"), where("scheduledAt", "<=", nowIso), orderBy("scheduledAt", "asc"), limit2(max))),
+      getDocs(query(jobs, where("status", "==", "scheduled"), where("scheduledAt", ">", nowIso), orderBy("scheduledAt", "asc"), limit2(1)))
+    ]);
+    const due = [];
+    dueSnap.forEach((d) => due.push(toJob(d)));
+    let nextDueMs = null;
+    nextSnap.forEach((d) => {
+      nextDueMs = ts(d.data().scheduledAt);
+    });
+    return { due, nextDueMs };
+  } catch (err) {
+    console.warn(
+      "[AutoFollowUp] Due-jobs query failed (deploy the followup_jobs status+scheduledAt index); using full read:",
+      err?.message || err
+    );
+    const scheduled = await loadJobsByField(ctx, "status", "scheduled");
+    const due = scheduled.filter((j) => ts(j.scheduledAt) <= nowMs).sort((a, b) => ts(a.scheduledAt) - ts(b.scheduledAt)).slice(0, max);
+    const future = scheduled.filter((j) => ts(j.scheduledAt) > nowMs).map((j) => ts(j.scheduledAt));
+    return { due, nextDueMs: future.length ? Math.min(...future) : null };
+  }
 }
 async function saveJob(ctx, job) {
   if (!enabledDb()) return;
@@ -285242,7 +290732,8 @@ async function handleEnableAutoFollowUp(ctx, params) {
   const last = thread[thread.length - 1];
   if (!last) return { enabled: true, job: null };
   const lastIsOurs = last.senderType === "AGENT" || last.senderType === "AI" || last.senderType === "HUMAN" || last.direction === "OUTBOUND";
-  if (!lastIsOurs) return { enabled: true, job: null };
+  const unansweredWebsiteLead = conversation.channel === "WEBSITE" && !lastIsOurs && last.direction !== "OUTBOUND";
+  if (!lastIsOurs && !unansweredWebsiteLead) return { enabled: true, job: null };
   const job = await scheduleAutoFollowUpJob(ctx, {
     lead,
     conversation,
@@ -285550,15 +291041,15 @@ async function processOneJob(ctx, job, cfg) {
     job.cancelledAt = (/* @__PURE__ */ new Date()).toISOString();
     job.cancelReason = "Newer message from our side found; rescheduled";
     await finishJob(ctx, job);
-    const next = await scheduleAutoFollowUpJob(ctx, {
+    const next2 = await scheduleAutoFollowUpJob(ctx, {
       lead,
       conversation,
       referenceMessage: { id: newerOurs.messageId, text: newerOurs.text, timestamp: newerOurs.timestamp || (/* @__PURE__ */ new Date()).toISOString() },
       attemptNumber: job.attempt
     });
-    if (next && lead.autoFollowUp) {
-      lead.autoFollowUp.activeFollowUpId = next.id;
-      lead.autoFollowUp.nextScheduledAt = next.scheduledAt;
+    if (next2 && lead.autoFollowUp) {
+      lead.autoFollowUp.activeFollowUpId = next2.id;
+      lead.autoFollowUp.nextScheduledAt = next2.scheduledAt;
       await saveLeadFollowUpState(ctx, lead);
     }
     return { jobId: job.id, status: "cancelled", reason: job.cancelReason };
@@ -285715,16 +291206,16 @@ async function processOneJob(ctx, job, cfg) {
   const channelCfg = cfg.channels[channel] || cfg.channels["EMAIL"];
   const maxAttempts = channelCfg?.maxFollowUps || 3;
   if (job.attempt < maxAttempts && lead.autoFollowUp?.enabled) {
-    const next = await scheduleAutoFollowUpJob(ctx, {
+    const next2 = await scheduleAutoFollowUpJob(ctx, {
       lead,
       conversation,
       referenceMessage: { id: messageId, text: evalResult.generatedMessage, timestamp: nowIso },
       attemptNumber: job.attempt + 1,
       user: "AI Follow-Up Agent"
     });
-    if (next && lead.autoFollowUp) {
-      lead.autoFollowUp.activeFollowUpId = next.id;
-      lead.autoFollowUp.nextScheduledAt = next.scheduledAt;
+    if (next2 && lead.autoFollowUp) {
+      lead.autoFollowUp.activeFollowUpId = next2.id;
+      lead.autoFollowUp.nextScheduledAt = next2.scheduledAt;
     }
   } else if (lead.autoFollowUp?.enabled && job.attempt >= maxAttempts) {
     await markFollowUpSequenceCompleted(ctx, lead, maxAttempts);
@@ -285751,11 +291242,9 @@ async function processDueFollowUpJobs(ctx, opts = {}) {
   if (!enabledDb()) return { processedCount: 0, results: [] };
   const hint = nextCheckAt.get(ctx.tenantId) || 0;
   if (!opts.force && Date.now() < hint) return { processedCount: 0, results: [] };
-  const scheduled = await loadJobsByField(ctx, "status", "scheduled");
   const nowMs = Date.now();
-  const due = scheduled.filter((j) => ts(j.scheduledAt) <= nowMs).sort((a, b) => ts(a.scheduledAt) - ts(b.scheduledAt)).slice(0, opts.maxJobs ?? 10);
-  const future = scheduled.filter((j) => ts(j.scheduledAt) > nowMs).map((j) => ts(j.scheduledAt));
-  nextCheckAt.set(ctx.tenantId, Math.min(nowMs + IDLE_RECHECK_MS, ...future.length ? future : [Infinity]));
+  const { due, nextDueMs } = await loadDueJobs(ctx, nowMs, opts.maxJobs ?? 10);
+  nextCheckAt.set(ctx.tenantId, Math.min(nowMs + IDLE_RECHECK_MS, nextDueMs ?? Infinity));
   if (due.length === 0) return { processedCount: 0, results: [] };
   const cfg = await getAutoFollowUpConfig(ctx);
   const results = [];
@@ -285786,7 +291275,7 @@ async function runAutoFollowUpWorkerCycle(ctx, opts = {}) {
   }
 }
 async function getAutoFollowUpDashboardData(ctx) {
-  const config = await getAutoFollowUpConfig(ctx);
+  const config3 = await getAutoFollowUpConfig(ctx);
   const jobs = [];
   const logs = [];
   if (enabledDb()) {
@@ -285812,7 +291301,7 @@ async function getAutoFollowUpDashboardData(ctx) {
     },
     jobs,
     logs,
-    config
+    config: config3
   };
 }
 var DEFAULT_FOLLOWUP_CONFIG, INELIGIBLE_STATUSES, AUTO_SEND_CHANNELS, safeId, randSuffix, ts, configCache, CONFIG_TTL_MS, nextCheckAt, IDLE_RECHECK_MS;
@@ -285861,6 +291350,7 @@ var init_autoFollowUpService = __esm({
 });
 
 // src/server/demoSchedulingService.ts
+import crypto7 from "crypto";
 function setSchedulingActiveContext(ctx) {
   activeSchedulingCtx = ctx;
 }
@@ -286215,6 +291705,13 @@ async function findNextAvailableSlots(options2 = {}) {
   const nowIst = getNowInIst();
   const availableSlots = [];
   let currentOffset = 0;
+  if (options2.startFromDate && /^\d{4}-\d{2}-\d{2}$/.test(options2.startFromDate) && options2.startFromDate > nowIst.dateString) {
+    const diffDays = Math.round(
+      (Date.parse(`${options2.startFromDate}T12:00:00Z`) - Date.parse(`${nowIst.dateString}T12:00:00Z`)) / 864e5
+    );
+    currentOffset = Math.min(Math.max(diffDays, 0), 60);
+  }
+  const maxOffset = currentOffset + 14;
   const VALID_HOURS = slotHours();
   let allowedHours = VALID_HOURS;
   if (preferredPeriod === "MORNING") {
@@ -286226,7 +291723,7 @@ async function findNextAvailableSlots(options2 = {}) {
   }
   if (allowedHours.length === 0) allowedHours = VALID_HOURS;
   let daysChecked = 0;
-  while (daysChecked < targetDaysCount && availableSlots.length < maxSlotsToReturn && currentOffset < 14) {
+  while (daysChecked < targetDaysCount && availableSlots.length < maxSlotsToReturn && currentOffset < maxOffset) {
     const checkDate = /* @__PURE__ */ new Date();
     checkDate.setDate(checkDate.getDate() + currentOffset);
     const formatter = new Intl.DateTimeFormat("en-CA", {
@@ -286265,7 +291762,88 @@ async function findNextAvailableSlots(options2 = {}) {
   }
   return availableSlots;
 }
+function isUpcomingBooking(b) {
+  const end = Date.parse(b.endDateTimeIso || b.startDateTimeIso || "");
+  return Number.isFinite(end) ? end > Date.now() : true;
+}
+function bookingWhen(b) {
+  return `${b.date} from ${b.startTime} \u2013 ${b.endTime} ${TZL()}`;
+}
+function alreadyBookedReplyText(b, requestedLabel) {
+  const lines = [
+    `You already have a ${brandName()} demo scheduled for ${bookingWhen(b)}.`,
+    ``,
+    `\u2022 Google Meet Link: ${b.googleMeetLink || "in your calendar invitation"}`,
+    ``,
+    requestedLabel ? `If you'd like to move it to ${requestedLabel} instead, just reply "reschedule to ${requestedLabel}".` : `Would you like to reschedule it to another date or time? Just reply with the day and time.`
+  ];
+  return lines.join("\n");
+}
+async function acquireDemoBookingLock(key) {
+  const noop4 = { ok: true, release: async () => {
+  } };
+  if (!key || !isFirebaseConfigured || !db) return noop4;
+  const id = crypto7.createHash("sha1").update(key).digest("hex").slice(0, 24);
+  const ref = tenantRepo(getSchedCtx()).doc("demo_booking_locks", id);
+  const release2 = async () => {
+    await deleteDoc(ref).catch(() => {
+    });
+  };
+  const tryCreate = async () => {
+    await createDoc(ref, { key, createdAt: (/* @__PURE__ */ new Date()).toISOString() });
+  };
+  try {
+    await tryCreate();
+    return { ok: true, release: release2 };
+  } catch {
+    const snap = await getDoc(ref).catch(() => null);
+    const at = Date.parse(String(snap?.data()?.createdAt || ""));
+    if (!snap?.exists() || !Number.isFinite(at) || Date.now() - at > LOCK_STALE_MS) {
+      await deleteDoc(ref).catch(() => {
+      });
+      try {
+        await tryCreate();
+        return { ok: true, release: release2 };
+      } catch {
+      }
+    }
+    return { ok: false, release: async () => {
+    } };
+  }
+}
 async function createGoogleCalendarDemoBooking(params) {
+  if (params.replacingBookingId) return createGoogleCalendarDemoBookingInner(params);
+  await warmSchedBrand();
+  const email = normalizeLeadEmail(params.leadEmail);
+  const existing = await getActiveBookingForLeadOrConversation(params.leadId, email, params.conversationId, params.leadPhone);
+  if (existing) {
+    return {
+      success: false,
+      alreadyBooked: true,
+      existingBooking: existing,
+      error: `${params.leadName || "This lead"} already has a demo booked for ${bookingWhen(existing)}. Reschedule that one instead.`
+    };
+  }
+  const lock = await acquireDemoBookingLock(email || params.leadId || phoneLast10(params.leadPhone) || params.conversationId || "");
+  if (!lock.ok) {
+    return { success: false, alreadyBooked: true, error: "A demo for this lead is being booked right now. Please refresh in a moment." };
+  }
+  try {
+    const again = await getActiveBookingForLeadOrConversation(params.leadId, email, params.conversationId, params.leadPhone);
+    if (again) {
+      return {
+        success: false,
+        alreadyBooked: true,
+        existingBooking: again,
+        error: `${params.leadName || "This lead"} already has a demo booked for ${bookingWhen(again)}. Reschedule that one instead.`
+      };
+    }
+    return await createGoogleCalendarDemoBookingInner({ ...params, leadEmail: email });
+  } finally {
+    await lock.release();
+  }
+}
+async function createGoogleCalendarDemoBookingInner(params) {
   await warmSchedBrand();
   const {
     leadId,
@@ -286431,8 +292009,9 @@ async function createGoogleCalendarDemoBooking(params) {
     conversationId: conversationId || "",
     channel,
     leadName: leadName || "Valued Partner",
-    leadEmail: leadEmail || "",
+    leadEmail: normalizeLeadEmail(leadEmail),
     leadPhone: leadPhone || "",
+    leadPhoneLast10: phoneLast10(leadPhone) || void 0,
     companyName: companyName || "Travel Agency",
     calendarEventId,
     googleMeetLink,
@@ -286451,7 +292030,9 @@ async function createGoogleCalendarDemoBooking(params) {
   };
   if (isFirebaseConfigured && db) {
     try {
-      await safeSetDoc(tenantRepo(getSchedCtx()).bookingDoc(bookingId), booking, { merge: true });
+      if (!params.replacingBookingId) {
+        await safeSetDoc(tenantRepo(getSchedCtx()).bookingDoc(bookingId), booking, { merge: true });
+      }
       if (leadId) {
         await safeSetDoc(
           tenantRepo(getSchedCtx()).leadDoc(leadId),
@@ -286603,7 +292184,8 @@ async function rescheduleDemoBooking(bookingId, newStartIso, newEndIso, newDateS
     let newCalendarEventId = `mock-cal-${Date.now()}`;
     let newGoogleMeetLink = booking.googleMeetLink;
     if (token) {
-      const createRes = await createGoogleCalendarDemoBooking({
+      const createRes = await createGoogleCalendarDemoBookingInner({
+        replacingBookingId: booking.bookingId,
         leadId: booking.leadId,
         contactId: booking.contactId,
         campaignId: booking.campaignId,
@@ -286849,45 +292431,94 @@ Primary Contact: ${booking.leadName} (${booking.leadEmail})`,
     return { success: false, error: err?.message || "Failed to add attendee" };
   }
 }
-async function getActiveBookingForLeadOrConversation(leadId, leadEmail, conversationId) {
+function addDaysToDate(dateString, days) {
+  const [y, m2, d] = dateString.split("-").map((n) => parseInt(n, 10));
+  const dt = new Date(Date.UTC(y, m2 - 1, d + days, 12, 0, 0));
+  return dt.toISOString().slice(0, 10);
+}
+function schedulingStateKey(p) {
+  const email = normalizeLeadEmail(String(p.leadEmail || "").trim());
+  let raw = "";
+  if (email.includes("@")) raw = `email:${email}`;
+  else if (phoneLast10(p.leadPhone)) raw = `phone:${phoneLast10(p.leadPhone)}`;
+  else if (p.conversationId) raw = `conv:${p.conversationId}`;
+  else if (p.leadId) raw = `lead:${p.leadId}`;
+  if (!raw) return null;
+  return `s_${crypto7.createHash("sha1").update(raw).digest("hex")}`;
+}
+async function loadSchedulingState(key) {
+  if (!key || !isFirebaseConfigured || !db) return null;
+  try {
+    const snap = await getDoc(tenantRepo(getSchedCtx()).doc("scheduling_state", key));
+    if (!snap.exists()) return null;
+    const data = snap.data();
+    if (!data?.stage || typeof data.expiresAt === "number" && data.expiresAt < Date.now()) return null;
+    return data;
+  } catch (e2) {
+    console.warn("[Demo Scheduling] Could not read scheduling state:", e2?.message || e2);
+    return null;
+  }
+}
+async function saveSchedulingState(key, state2) {
+  if (!key || !isFirebaseConfigured || !db) return;
+  const ttl = state2.stage === "AWAITING_CONFIRMATION" ? CONFIRMATION_STATE_TTL_MS : AVAILABILITY_STATE_TTL_MS;
+  try {
+    await safeSetDoc(tenantRepo(getSchedCtx()).doc("scheduling_state", key), {
+      stage: state2.stage,
+      offeredSlots: state2.offeredSlots || [],
+      proposedSlot: state2.proposedSlot || null,
+      mode: state2.mode || "NEW",
+      partialDate: state2.partialDate ?? null,
+      partialHour: state2.partialHour ?? null,
+      updatedAt: (/* @__PURE__ */ new Date()).toISOString(),
+      expiresAt: Date.now() + ttl
+    });
+  } catch (e2) {
+    console.warn("[Demo Scheduling] Could not save scheduling state:", e2?.message || e2);
+  }
+}
+async function clearSchedulingState(key) {
+  if (!key || !isFirebaseConfigured || !db) return;
+  try {
+    await deleteDoc(tenantRepo(getSchedCtx()).doc("scheduling_state", key));
+  } catch {
+  }
+}
+async function hasPendingSchedulingState(params) {
+  await warmSchedBrand();
+  const fresh = stripQuotedEmailHistory(params.messageText || "") || String(params.messageText || "").trim();
+  if (!looksLikeSchedulingFollowUp(fresh)) return false;
+  return !!await loadSchedulingState(schedulingStateKey(params));
+}
+async function getActiveBookingForLeadOrConversation(leadId, leadEmail, conversationId, leadPhone) {
   await warmSchedBrand();
   if (!isFirebaseConfigured || !db) return null;
+  const firstUpcoming = async (field2, value) => {
+    const snap = await getDocs(
+      query(tenantRepo(getSchedCtx()).bookings(), where(field2, "==", value), where("status", "in", ["BOOKED", "RESCHEDULED"]), limit2(10))
+    );
+    const upcoming = snap.docs.map((d) => d.data()).filter(isUpcomingBooking).sort((a, b) => Date.parse(a.startDateTimeIso) - Date.parse(b.startDateTimeIso));
+    return upcoming[0] || null;
+  };
   try {
-    if (leadEmail && leadEmail.includes("@")) {
-      const q = query(
-        tenantRepo(getSchedCtx()).bookings(),
-        where("leadEmail", "==", leadEmail.trim().toLowerCase()),
-        where("status", "in", ["BOOKED", "RESCHEDULED"]),
-        limit2(1)
-      );
-      const snap = await getDocs(q);
-      if (!snap.empty) {
-        return snap.docs[0].data();
-      }
+    const raw = String(leadEmail || "").trim();
+    const email = normalizeLeadEmail(raw);
+    if (email.includes("@")) {
+      const hit = await firstUpcoming("leadEmail", email) || (raw !== email ? await firstUpcoming("leadEmail", raw) : null);
+      if (hit) return hit;
     }
     if (leadId) {
-      const q = query(
-        tenantRepo(getSchedCtx()).bookings(),
-        where("leadId", "==", leadId),
-        where("status", "in", ["BOOKED", "RESCHEDULED"]),
-        limit2(1)
-      );
-      const snap = await getDocs(q);
-      if (!snap.empty) {
-        return snap.docs[0].data();
-      }
+      const hit = await firstUpcoming("leadId", leadId);
+      if (hit) return hit;
+    }
+    const last10 = phoneLast10(leadPhone);
+    if (last10) {
+      const hit = await firstUpcoming("leadPhoneLast10", last10);
+      if (hit) return hit;
     }
     if (conversationId) {
-      const q = query(
-        tenantRepo(getSchedCtx()).bookings(),
-        where("conversationId", "==", conversationId),
-        where("status", "in", ["BOOKED", "RESCHEDULED"]),
-        limit2(1)
-      );
-      const snap = await getDocs(q);
-      if (!snap.empty) {
-        return snap.docs[0].data();
-      }
+      const hit = await firstUpcoming("conversationId", conversationId);
+      if (hit) return hit;
     }
   } catch (e2) {
     console.warn("[Calendar Service Notice] Error finding active booking:", e2);
@@ -286924,13 +292555,8 @@ function detectDemoSchedulingIntent(text) {
 }
 async function processSchedulingConversationTurn(params) {
   await warmSchedBrand();
-  if (params.manual !== true) {
-    const newText = String(params.messageText || "");
-    if (!detectDemoSchedulingIntent(newText)) {
-      return { handled: false, replyText: "", action: "NOT_DEMO_INTENT" };
-    }
-  }
   const messageText = params.messageText || "";
+  const fresh = stripQuotedEmailHistory(messageText) || messageText.trim();
   const conversationHistory = Array.isArray(params.conversationHistory) ? params.conversationHistory : [];
   const ctx = params.leadContext || {};
   const leadName = ctx.leadName || params.senderName || params.leadName || "Valued Partner";
@@ -286955,14 +292581,21 @@ async function processSchedulingConversationTurn(params) {
     conversationId,
     accessToken
   };
+  const stateKey3 = schedulingStateKey({ leadEmail, leadPhone, conversationId, leadId });
+  const schedState = stateKey3 && (detectDemoSchedulingIntent(fresh) || looksLikeSchedulingFollowUp(fresh)) ? await loadSchedulingState(stateKey3) : null;
+  if (params.manual !== true && !detectDemoSchedulingIntent(fresh) && !schedState) {
+    return { handled: false, replyText: "", action: "NOT_DEMO_INTENT" };
+  }
   const nowIst = getNowInIst();
   const activeBooking = await getActiveBookingForLeadOrConversation(
     leadId,
     leadEmail,
-    conversationId
+    conversationId,
+    leadPhone
   );
   const lowerText = messageText.toLowerCase();
   if (/cancel\s+(the\s+)?(demo|meeting|booking|appointment|call)/i.test(lowerText)) {
+    await clearSchedulingState(stateKey3);
     if (activeBooking) {
       await cancelDemoBooking(activeBooking.bookingId, "Lead requested cancellation in conversation");
       return {
@@ -287011,7 +292644,7 @@ async function processSchedulingConversationTurn(params) {
         accessToken
       });
       if (addRes.success && addRes.booking) {
-        const slotLabel2 = formatSlotLabel(
+        const slotLabel = formatSlotLabel(
           addRes.booking.date,
           parseInt((addRes.booking.startTime || "15:00").split(":")[0], 10)
         );
@@ -287026,7 +292659,7 @@ async function processSchedulingConversationTurn(params) {
           handled: true,
           action: "ATTENDEE_ADDED",
           booking: addRes.booking,
-          replyText: `You're all set! I have added ${freshEmailsInMsg.join(", ")} as an attendee to your ${brandName()} demo on ${slotLabel2}.
+          replyText: `You're all set! I have added ${freshEmailsInMsg.join(", ")} as an attendee to your ${brandName()} demo on ${slotLabel}.
 
 \u2022 Google Meet Link: ${meetLink}
 \u2022 Date & Time: ${addRes.booking.date} from ${addRes.booking.startTime} \u2013 ${addRes.booking.endTime} ${TZL()}
@@ -287049,215 +292682,279 @@ I have updated Google Calendar and sent the invitation directly to ${freshEmails
       };
     }
   }
-  let nlpResult = {
-    isDemoIntent: detectDemoSchedulingIntent(messageText),
-    hasSpecificSlot: false
-  };
+  const carry = {};
+  const time = parseExplicitTime(fresh);
+  const dateMentioned = hasExplicitDateToken(fresh);
+  const offered = Array.isArray(schedState?.offeredSlots) ? schedState.offeredSlots : [];
+  const mode = activeBooking && (isRescheduleIntent || schedState?.mode === "RESCHEDULE") ? "RESCHEDULE" : "NEW";
+  if (schedState?.stage === "AWAITING_CONFIRMATION" && schedState.proposedSlot && !dateMentioned && !time.hasTime) {
+    if (isAffirmative(fresh)) {
+      return finalizeConfirmedSlot(schedState.proposedSlot, schedState.mode === "RESCHEDULE" ? "RESCHEDULE" : "NEW");
+    }
+    if (isNegative(fresh)) {
+      return askForAvailability(
+        "ASKED_AVAILABILITY",
+        `No problem. What day and time would suit you instead? Our demos run ${daysLabel()} between ${fmtHour(workStartH())} and ${fmtHour(workEndH())} ${TZL()} (1 hour).`
+      );
+    }
+  }
+  const ai = {};
   const apiKey = process.env.OPENAI_API_KEY || process.env.GEMINI_API_KEY;
   if (apiKey) {
     try {
       const openai = new OpenAI({ apiKey });
-      const prompt = `You are the Demo Scheduling Agent for ${brandName()}.
-Current Date and Time (${TZL()}, ${tz()}): ${nowIst.dateString}, ${nowIst.hour}:${String(nowIst.minute).padStart(2, "0")}.
-Current Day of Week: ${["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][nowIst.dayOfWeek]}.
+      const dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+      const prompt = `You extract demo-scheduling details for ${brandName()}.
+Now (${TZL()}, ${tz()}): ${dayNames[nowIst.dayOfWeek]} ${nowIst.dateString}, ${nowIst.hour}:${String(nowIst.minute).padStart(2, "0")}.
 
-Demo working rules:
-- Demos are ${daysLabel()} only. ${closedDaysLabel()} are strictly unavailable.
-- Working hours are ${fmtHour(workStartH())} to ${fmtHour(workEndH())} ${TZL()} (${workStartH()}:00 to ${workEndH()}:00).
-- Demos are 60 minutes long. Fixed start hours: ${slotHours().join(", ")}.
-- ${workEndH()}:00 (${hrShort(workEndH())}) is NOT valid because the demo would end at ${hrShort(workEndH() + 1)}, which is after ${hrShort(workEndH())}. Latest start is ${workEndH() - 1}:00 (${hrShort(workEndH() - 1)}).
+Earlier conversation (context only - NEVER take a date or time from here):
+${conversationHistory.slice(-6).map((m2) => `${m2.role.toUpperCase()}: ${String(m2.content || "").slice(0, 600)}`).join("\n") || "(none)"}
 
-Conversation context:
-${conversationHistory.map((m2) => `${m2.role.toUpperCase()}: ${m2.content}`).join("\n")}
-USER'S LATEST MESSAGE: "${messageText}"
+LEAD'S NEWEST MESSAGE (the ONLY source for date and time):
+"""${fresh.slice(0, 1500)}"""
 
-Analyze the conversation and latest message. Output JSON only:
-{
-  "isDemoIntent": boolean (true if user wants to schedule, reschedule, meet, see software, or is answering scheduling questions),
-  "hasSpecificSlot": boolean (true if user requested a specific day and hour or agreed to a proposed slot),
-  "dateString": string (YYYY-MM-DD resolved to future date in the company timezone, or null),
-  "startHour": number (${workStartH()} to ${workEndH() - 1} integer in 24hr format, or null),
-  "isWeekend": boolean (true if resolved date falls on a non-working day: ${closedDaysLabel()}),
-  "isOutOfHours": boolean (true if user requested time outside ${workStartH()}:00 - ${workEndH() - 1}:00, e.g. ${hrShort(workStartH() - 1)} or ${hrShort(workEndH())}),
-  "preferredPeriod": "MORNING" | "AFTERNOON" | "EVENING" | "ANY",
-  "userConfirmedSlot": boolean (true if user said "yes", "sure", "that works", "let's do it", "confirm" to a previously proposed slot)
-}`;
-      const candidateModels = ["gpt-4o-mini", "gpt-4o", "gpt-3.5-turbo"];
-      let parsed = null;
-      for (const modelName of candidateModels) {
+Strict rules:
+- requestedDate: only if the newest message itself names a specific day (today, tomorrow, a weekday, or a calendar date). Resolve it to YYYY-MM-DD on or after today. Otherwise null.
+- requestedHour: only if the newest message itself states a clock time ("4pm", "16:00", "at 4"). Give the 24h start hour 0-23 exactly as asked, even if outside business hours. Otherwise null.
+- Never guess, never default, never use a time we suggested earlier, and never treat counts, prices, phone numbers or years as times.
+- wantsEarliest: true only if they ask for the earliest / soonest / next available time without naming one.
+Output JSON only: {"isDemoIntent": boolean, "requestedDate": string|null, "requestedHour": number|null, "wantsEarliest": boolean}`;
+      for (const modelName of ["gpt-4o-mini", "gpt-4o"]) {
         try {
           const completion = await openai.chat.completions.create({
             model: modelName,
             messages: [{ role: "user", content: prompt }],
             response_format: { type: "json_object" },
-            temperature: 0.1
+            temperature: 0
           });
           const content = completion.choices[0]?.message?.content;
           if (content) {
-            parsed = JSON.parse(content.trim());
-            if (parsed) break;
+            Object.assign(ai, JSON.parse(content.trim()));
+            break;
           }
         } catch (mErr) {
           console.warn(`[Demo Scheduling OpenAI ${modelName}] Notice:`, mErr?.message || mErr);
         }
       }
-      if (parsed) {
-        nlpResult = { ...nlpResult, ...parsed };
-      }
     } catch (aiErr) {
-      console.warn("[Demo Scheduling AI Fallback]: Proceeding with rule-based slot parsing");
+      console.warn("[Demo Scheduling AI Fallback]: Proceeding with rule-based parsing");
     }
   }
-  if (!nlpResult.hasSpecificSlot) {
-    const lower2 = messageText.toLowerCase();
-    if (lower2.includes("earliest") || lower2.includes("asap") || lower2.includes("soonest") || lower2.includes("next available") || lower2.includes("first available") || lower2.includes("available slots")) {
-      nlpResult.dateString = nowIst.dateString;
-      nlpResult.isDemoIntent = true;
-    } else if (lower2.includes("today") || lower2.includes("tonight") || lower2.includes("this evening") || lower2.includes("this afternoon")) {
-      nlpResult.dateString = nowIst.dateString;
-      nlpResult.isDemoIntent = true;
-    } else if (lower2.includes("tomorrow")) {
-      const nextDay = /* @__PURE__ */ new Date();
-      nextDay.setDate(nextDay.getDate() + 1);
-      const f3 = new Intl.DateTimeFormat("en-CA", { timeZone: tz() });
-      nlpResult.dateString = f3.format(nextDay);
-      nlpResult.isDemoIntent = true;
-    } else {
-      const weekdays = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
-      for (let i2 = 0; i2 < weekdays.length; i2++) {
-        if (lower2.includes(weekdays[i2])) {
-          nlpResult.isDemoIntent = true;
-          let diff = i2 - nowIst.dayOfWeek;
-          if (diff === 0) {
-            diff = nowIst.hour < workEndH() - 1 ? 0 : 7;
-          } else if (diff < 0) {
-            diff += 7;
-          }
-          const targetD = /* @__PURE__ */ new Date();
-          targetD.setDate(targetD.getDate() + diff);
-          const f3 = new Intl.DateTimeFormat("en-CA", { timeZone: tz() });
-          nlpResult.dateString = f3.format(targetD);
-          if (!sb().workingDays.includes(i2)) nlpResult.isWeekend = true;
-          break;
-        }
+  let requestedDate = null;
+  if (dateMentioned) {
+    const simple = resolveSimpleDate(fresh, nowIst, addDaysToDate);
+    requestedDate = isIsoDate(ai.requestedDate) ? ai.requestedDate : simple;
+    const named = namedWeekdays(fresh);
+    if (requestedDate && named.length === 1 && dayOfWeekFor(requestedDate) !== named[0]) requestedDate = simple;
+  }
+  const knownDate = isIsoDate(schedState?.partialDate) ? schedState.partialDate : schedState?.proposedSlot?.date;
+  const knownHour = typeof schedState?.partialHour === "number" ? schedState.partialHour : schedState?.proposedSlot?.startHour;
+  if (!requestedDate && !dateMentioned && time.hasTime && isIsoDate(knownDate)) {
+    requestedDate = knownDate;
+  }
+  let requestedHour = null;
+  let hourOutOfRange = false;
+  if (time.hasTime) {
+    const inHours = time.hourCandidates.filter((h2) => slotHours().includes(h2));
+    const aiHour = typeof ai.requestedHour === "number" ? ai.requestedHour : null;
+    if (aiHour !== null && time.hourCandidates.includes(aiHour)) {
+      requestedHour = aiHour;
+      hourOutOfRange = !slotHours().includes(aiHour);
+    } else if (inHours.length === 1) {
+      requestedHour = inHours[0];
+    } else if (inHours.length === 0) {
+      requestedHour = time.hourCandidates[0];
+      hourOutOfRange = true;
+    }
+  }
+  if (requestedHour === null && !time.hasTime && dateMentioned && typeof knownHour === "number") {
+    requestedHour = knownHour;
+    hourOutOfRange = !slotHours().includes(requestedHour);
+  }
+  const wantsEarliest = ai.wantsEarliest === true || /\b(earliest|asap|as soon as possible|soonest|next available|first available|any ?time|whenever)\b/i.test(fresh);
+  const period = preferredPeriodOf(fresh);
+  const pickedIdx = offered.length ? pickOfferedSlot(fresh, offered, dayOfWeekFor) : null;
+  const isDemoIntent = detectDemoSchedulingIntent(fresh) || ai.isDemoIntent === true || pickedIdx !== null || !!schedState && (dateMentioned || time.hasTime || wantsEarliest || period !== "ANY") || params.manual === true && (dateMentioned || time.hasTime);
+  if (!isDemoIntent) {
+    return { handled: false, replyText: "", action: "NOT_DEMO_INTENT" };
+  }
+  if (activeBooking && mode !== "RESCHEDULE") {
+    await clearSchedulingState(stateKey3);
+    const label = requestedDate && requestedHour !== null && !hourOutOfRange ? formatSlotLabel(requestedDate, requestedHour) : void 0;
+    return { handled: true, action: "ALREADY_BOOKED", replyText: alreadyBookedReplyText(activeBooking, label) };
+  }
+  if (pickedIdx !== null && !(requestedDate && requestedHour !== null && !matchesOffered(requestedDate, requestedHour))) {
+    return proposeSlot(offered[pickedIdx], mode);
+  }
+  if (!requestedDate && requestedHour === null) {
+    if (time.hasTime && !hourOutOfRange) {
+      return askForAvailability(
+        "ASKED_AVAILABILITY",
+        `Could you share the exact day and time that suits you (for example, Tuesday at 4 PM ${TZL()})?`
+      );
+    }
+    if (hourOutOfRange) {
+      return offerOptions("HOURS_NOT_ALLOWED", hoursNotAllowedText(), { period });
+    }
+    if (wantsEarliest || period !== "ANY") {
+      return offerOptions("OFFERED_ALTERNATIVES", `Happy to set that up.`, { period }, {
+        listLead: `Here are the earliest free slots${period !== "ANY" ? ` in the ${period.toLowerCase()}` : ""}:`
+      });
+    }
+    return askForAvailability(
+      "ASKED_AVAILABILITY",
+      mode === "RESCHEDULE" ? `Sure, I can move your ${brandName()} demo (currently ${activeBooking.date} at ${activeBooking.startTime} ${TZL()}). What day and time would suit you instead? Our demos run ${daysLabel()} between ${fmtHour(workStartH())} and ${fmtHour(workEndH())} ${TZL()} (1 hour).` : `I'd be glad to arrange a live walkthrough of ${brandName()} for ${companyName}! What day and time would suit you? Our demos run ${daysLabel()} between ${fmtHour(workStartH())} and ${fmtHour(workEndH())} ${TZL()} and take about an hour.`
+    );
+  }
+  if (requestedDate && (requestedHour === null || hourOutOfRange)) {
+    const dateProblem2 = await validateDate(requestedDate);
+    if (dateProblem2) return dateProblem2;
+    if (hourOutOfRange) {
+      return offerOptions("HOURS_NOT_ALLOWED", hoursNotAllowedText(), { startFromDate: requestedDate, period });
+    }
+    carry.date = requestedDate;
+    return offerOptions(
+      "ASKED_AVAILABILITY",
+      `What time on ${formatDayLabel(requestedDate)} works for you?`,
+      { startFromDate: requestedDate, period },
+      {
+        listLead: "These are the nearest free slots:",
+        outro: `Reply with the option number, or tell me a time between ${fmtHour(workStartH())} and ${fmtHour(workEndH())} ${TZL()}.`
       }
-    }
-    const rangeMatch = lower2.match(/(\d{1,2})(?::\d{2})?\s*(?:-|to|–)\s*(\d{1,2})/i);
-    const timeMatch = lower2.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/i);
-    let foundHour = void 0;
-    if (rangeMatch) {
-      let rawH = parseInt(rangeMatch[1], 10);
-      if (rawH >= 1 && rawH <= workEndH() - 12 - 1) rawH += 12;
-      if (rawH >= workStartH() && rawH <= workEndH() - 1) {
-        foundHour = rawH;
-      } else if (rawH < workStartH() || rawH >= workEndH()) {
-        nlpResult.isOutOfHours = true;
-      }
-    } else if (timeMatch) {
-      let rawH = parseInt(timeMatch[1], 10);
-      const ampm = timeMatch[3]?.toLowerCase();
-      if (ampm === "pm" && rawH < 12) rawH += 12;
-      else if (ampm === "am" && rawH === 12) rawH = 0;
-      else if (!ampm && rawH >= 1 && rawH <= workEndH() - 12 - 1) rawH += 12;
-      if (rawH >= workStartH() && rawH <= workEndH() - 1) {
-        foundHour = rawH;
-      } else if (rawH < workStartH() || rawH >= workEndH()) {
-        nlpResult.isOutOfHours = true;
-      }
-    }
-    if (foundHour !== void 0) {
-      nlpResult.startHour = foundHour;
-      nlpResult.isDemoIntent = true;
-    }
-    if (!nlpResult.dateString && nlpResult.isDemoIntent && !nlpResult.isWeekend) {
-      nlpResult.dateString = nowIst.dateString;
-    }
-    if (nlpResult.dateString && nlpResult.startHour !== void 0 && !nlpResult.isOutOfHours && !nlpResult.isWeekend) {
-      nlpResult.hasSpecificSlot = true;
-    }
+    );
   }
-  if (!nlpResult.isDemoIntent) {
-    return {
-      handled: false,
-      replyText: "",
-      action: "NOT_DEMO_INTENT"
-    };
+  if (!requestedDate && requestedHour !== null) {
+    if (hourOutOfRange) return offerOptions("HOURS_NOT_ALLOWED", hoursNotAllowedText(), { period });
+    carry.hour = requestedHour;
+    return askForAvailability(
+      "ASKED_AVAILABILITY",
+      `Which day would you like the demo at ${hrShort(requestedHour)}? Our demos run ${daysLabel()}.`
+    );
   }
-  if (activeBooking && !isRescheduleIntent && !nlpResult.hasSpecificSlot) {
-    return {
-      handled: true,
-      action: "ALREADY_BOOKED",
-      replyText: `You already have a ${brandName()} demo scheduled for ${activeBooking.date} from ${activeBooking.startTime} \u2013 ${activeBooking.endTime} ${TZL()}.
-
-\u2022 Google Meet Link: ${activeBooking.googleMeetLink}
-
-Would you like to reschedule it to another date or time?`
-    };
+  const dateProblem = await validateDate(requestedDate);
+  if (dateProblem) return dateProblem;
+  if (time.hasNonZeroMinutes) {
+    return offerOptions(
+      "HOURS_NOT_ALLOWED",
+      `Our demos start on the hour (${hrShort(workStartH())} to ${hrShort(workEndH() - 1)} ${TZL()}).`,
+      { startFromDate: requestedDate, period }
+    );
   }
-  if (!nlpResult.hasSpecificSlot && !nlpResult.isWeekend && !nlpResult.isOutOfHours) {
-    const suggestions = await findNextAvailableSlots({
-      preferredDate: nlpResult.dateString,
-      preferredPeriod: nlpResult.preferredPeriod,
-      maxSlotsToReturn: 4,
+  return proposeSlot({ date: requestedDate, startHour: requestedHour, label: formatSlotLabel(requestedDate, requestedHour) }, mode);
+  function matchesOffered(date, hour) {
+    return offered.some((s2) => s2.date === date && s2.startHour === hour);
+  }
+  function hoursNotAllowedText() {
+    return `Our demo hours are ${fmtHour(workStartH())} to ${fmtHour(workEndH())} ${TZL()} (${daysLabel()}), and each demo is an hour, so the latest start is ${fmtHour(workEndH() - 1)}.`;
+  }
+  function formatDayLabel(date) {
+    return new Intl.DateTimeFormat("en-US", { timeZone: tz(), weekday: "long", month: "short", day: "numeric" }).format(
+      new Date(createIstIsoString(date, 12, 0))
+    );
+  }
+  async function validateDate(date) {
+    if (date < nowIst.dateString) {
+      return askForAvailability("ASKED_AVAILABILITY", `That date has already passed. Which upcoming day and time would suit you?`);
+    }
+    if (date > addDaysToDate(nowIst.dateString, MAX_DAYS_AHEAD)) {
+      return askForAvailability(
+        "ASKED_AVAILABILITY",
+        `We can schedule demos up to ${MAX_DAYS_AHEAD} days ahead. Could you pick a day and time a little sooner?`
+      );
+    }
+    if (!isWorkingDay(dayOfWeekFor(date))) {
+      return offerOptions(
+        "WEEKEND_NOT_ALLOWED",
+        `Our demo team works ${daysLabel()}, so ${formatDayLabel(date)} isn't available.`,
+        { startFromDate: date, period }
+      );
+    }
+    return null;
+  }
+  async function askForAvailability(action, replyText) {
+    await saveSchedulingState(stateKey3, { stage: "AWAITING_AVAILABILITY", offeredSlots: [], mode, partialDate: carry.date, partialHour: carry.hour });
+    return { handled: true, action, replyText };
+  }
+  async function offerOptions(action, intro, opts = {}, text = {}) {
+    let slots = await findNextAvailableSlots({
+      maxSlotsToReturn: 3,
+      startFromDate: opts.startFromDate,
+      preferredPeriod: opts.period,
       accessToken
     });
-    if (suggestions.length > 0) {
-      const slotsText = suggestions.map((s2) => `\u2022 ${s2.label}`).join("\n");
+    if (slots.length === 0 && opts.period && opts.period !== "ANY") {
+      slots = await findNextAvailableSlots({ maxSlotsToReturn: 3, startFromDate: opts.startFromDate, accessToken });
+    }
+    const offeredSlots = slots.map((s2) => ({ date: s2.date, startHour: s2.startHour, label: s2.label }));
+    await saveSchedulingState(stateKey3, { stage: "AWAITING_AVAILABILITY", offeredSlots, mode, partialDate: carry.date, partialHour: carry.hour });
+    if (offeredSlots.length === 0) {
       return {
         handled: true,
-        action: "OFFERED_ALTERNATIVES",
-        replyText: `I would be glad to arrange a live walkthrough of ${brandName()} for ${companyName}! Here are our earliest available slots directly from our calendar:
-
-${slotsText}
-
-Which of these works best for you? (Or let me know another preferred timing between ${fmtHour(workStartH())} and ${fmtHour(workEndH())} ${TZL()}, ${daysLabel()}).`
+        action,
+        replyText: `${intro} I don't see free slots on our calendar for that, so what other day and time would suit you? Our demos run ${daysLabel()} between ${fmtHour(workStartH())} and ${fmtHour(workEndH())} ${TZL()}.`.trim()
       };
     }
+    const list = offeredSlots.map((s2, i2) => `${i2 + 1}. ${s2.label}`).join("\n");
     return {
       handled: true,
-      action: "ASKED_AVAILABILITY",
-      replyText: `I would be happy to schedule a demo of ${brandName()} for ${companyName}! Our demo slots run ${daysLabel()} between ${fmtHour(workStartH())} and ${fmtHour(workEndH())} ${TZL()} (1-hour duration). What day and time work best for you?`
+      action,
+      replyText: `${intro} ${text.listLead || "Here are some free slots:"}`.trim() + `
+
+${list}
+
+${text.outro || "Reply with the option number, or tell me another day and time that suits you."}`
     };
   }
-  if (nlpResult.isWeekend) {
-    const suggestions = await findNextAvailableSlots({ maxSlotsToReturn: 3, accessToken });
-    const alternativesText = suggestions.map((s2) => `\u2022 ${s2.label}`).join("\n");
-    return {
-      handled: true,
-      action: "WEEKEND_NOT_ALLOWED",
-      replyText: `Our demo team operates ${daysLabel().replace(" to ", " through ")} between ${hrShort(workStartH())} and ${hrShort(workEndH())} ${TZL()}, so ${closedDaysLabel()} are unavailable. I can offer these upcoming weekday slots instead:
-
-${alternativesText}
-
-Would one of these work for you?`
-    };
-  }
-  if (nlpResult.isOutOfHours) {
-    const suggestions = await findNextAvailableSlots({
-      preferredDate: nlpResult.dateString || nowIst.dateString,
-      maxSlotsToReturn: 3,
-      accessToken
+  async function proposeSlot(slot, slotMode) {
+    const problem = await slotProblem(slot);
+    if (problem) return problem;
+    await saveSchedulingState(stateKey3, {
+      stage: "AWAITING_CONFIRMATION",
+      proposedSlot: { date: slot.date, startHour: slot.startHour, label: formatSlotLabel(slot.date, slot.startHour) },
+      offeredSlots: [],
+      mode: slotMode
     });
-    const alternativesText = suggestions.map((s2) => `\u2022 ${s2.label}`).join("\n");
+    const verb = slotMode === "RESCHEDULE" ? `move your ${brandName()} demo to` : `book your ${brandName()} demo for`;
     return {
       handled: true,
-      action: "HOURS_NOT_ALLOWED",
-      replyText: `Our demo hours are ${fmtHour(workStartH())} to ${fmtHour(workEndH())} ${TZL()} (${daysLabel()}). Since each demo is a full 60-minute walkthrough, the latest slot starts at ${fmtHour(workEndH() - 1)} (finishing at ${fmtHour(workEndH())}). Here are our available slots:
+      action: "AWAITING_CONFIRMATION",
+      replyText: `Just to confirm, shall I ${verb} ${formatSlotLabel(slot.date, slot.startHour)}?
 
-${alternativesText}
-
-Which slot would you prefer?`
+Reply "Yes" to confirm, or tell me a different day and time.`
     };
   }
-  const targetDateStr = nlpResult.dateString || nowIst.dateString;
-  const startH = nlpResult.startHour !== void 0 ? nlpResult.startHour : 15;
-  const startIso = createIstIsoString(targetDateStr, startH, 0);
-  const endIso = createIstIsoString(targetDateStr, startH + 1, 0);
-  const startTimeStr = `${String(startH).padStart(2, "0")}:00`;
-  const endTimeStr = `${String(startH + 1).padStart(2, "0")}:00`;
-  const availability = await checkRealtimeGoogleCalendarSlot(startIso, endIso, accessToken);
-  if (availability.available) {
-    if (isRescheduleIntent && activeBooking) {
+  async function slotProblem(slot) {
+    const label = formatSlotLabel(slot.date, slot.startHour);
+    if (!slotHours().includes(slot.startHour)) {
+      return offerOptions("HOURS_NOT_ALLOWED", hoursNotAllowedText(), { startFromDate: slot.date });
+    }
+    if (!isWorkingDay(dayOfWeekFor(slot.date))) {
+      return offerOptions("WEEKEND_NOT_ALLOWED", `Our demo team works ${daysLabel()}.`, { startFromDate: slot.date });
+    }
+    const startIso = createIstIsoString(slot.date, slot.startHour, 0);
+    if (Date.parse(startIso) <= Date.now() + MIN_LEAD_TIME_MS) {
+      return offerOptions("SLOT_UNAVAILABLE", `${label} is too soon or has already passed.`, {}, { listLead: "Here are the next free slots:" });
+    }
+    const endIso = createIstIsoString(slot.date, slot.startHour + 1, 0);
+    const availability = await checkRealtimeGoogleCalendarSlot(startIso, endIso, accessToken);
+    if (!availability.available) {
+      return offerOptions("SLOT_UNAVAILABLE", `${label} is already taken on our calendar.`, {
+        startFromDate: slot.date
+      });
+    }
+    return null;
+  }
+  async function finalizeConfirmedSlot(slot, slotMode) {
+    const problem = await slotProblem(slot);
+    if (problem) return problem;
+    const startH = slot.startHour;
+    const targetDateStr = slot.date;
+    const startIso = createIstIsoString(targetDateStr, startH, 0);
+    const endIso = createIstIsoString(targetDateStr, startH + 1, 0);
+    const startTimeStr = `${String(startH).padStart(2, "0")}:00`;
+    const endTimeStr = `${String(startH + 1).padStart(2, "0")}:00`;
+    const slotLabel = formatSlotLabel(targetDateStr, startH);
+    if (slotMode === "RESCHEDULE" && activeBooking) {
       const resched = await rescheduleDemoBooking(
         activeBooking.bookingId,
         startIso,
@@ -287268,12 +292965,12 @@ Which slot would you prefer?`
         accessToken
       );
       if (resched.success && resched.booking) {
-        const slotLabel2 = formatSlotLabel(targetDateStr, startH);
+        await clearSchedulingState(stateKey3);
         return {
           handled: true,
           action: "RESCHEDULED",
           booking: resched.booking,
-          replyText: `You're all set! Your ${brandName()} demo has been rescheduled to ${slotLabel2}.
+          replyText: `You're all set! Your ${brandName()} demo has been rescheduled to ${slotLabel}.
 
 \u2022 Google Meet Link: ${resched.booking.googleMeetLink}
 \u2022 Company: ${companyName}
@@ -287283,6 +292980,13 @@ Which slot would you prefer?`
 We have sent the updated calendar invitation to your email. We look forward to demonstrating how ${sb().playbook === "umrah360" ? "Umrah360 automates your pilgrimage operations" : `${brandName()} can help your business`}!`
         };
       }
+      return offerOptions("SLOT_UNAVAILABLE", `I couldn't move the demo to ${slotLabel}.`, {
+        startFromDate: targetDateStr
+      });
+    }
+    if (activeBooking) {
+      await clearSchedulingState(stateKey3);
+      return { handled: true, action: "ALREADY_BOOKED", replyText: alreadyBookedReplyText(activeBooking, slotLabel) };
     }
     const bookingResult = await createGoogleCalendarDemoBooking({
       leadId: leadContext.leadId,
@@ -287302,10 +293006,10 @@ We have sent the updated calendar invitation to your email. We look forward to d
       accessToken
     });
     if (bookingResult.success && bookingResult.booking) {
-      const slotLabel2 = formatSlotLabel(targetDateStr, startH);
+      await clearSchedulingState(stateKey3);
       const meetLink = bookingResult.googleMeetLink || "Will be shared via calendar invitation";
       const replyText = [
-        `You're all set! Your ${brandName()} demo is booked for ${slotLabel2}.`,
+        `You're all set! Your ${brandName()} demo is booked for ${slotLabel}.`,
         ``,
         `Demo Details:`,
         `\u2022 Attendee: ${leadName}${leadEmail ? ` (${leadEmail})` : ""}`,
@@ -287315,46 +293019,22 @@ We have sent the updated calendar invitation to your email. We look forward to d
         ``,
         sb().playbook === "umrah360" ? `I have sent the calendar invitation to your email. We look forward to showing you Umrah360's group series operations, visa tracking, and B2B portal!` : `I have sent the calendar invitation to your email. We look forward to showing you ${brandName()}!`
       ].join("\n");
+      return { handled: true, action: "CONFIRMED_BOOKING", booking: bookingResult.booking, replyText };
+    }
+    if (bookingResult.alreadyBooked) {
+      await clearSchedulingState(stateKey3);
       return {
         handled: true,
-        action: "CONFIRMED_BOOKING",
-        booking: bookingResult.booking,
-        replyText
-      };
-    } else if (bookingResult.conflict) {
-      const alternatives2 = await findNextAvailableSlots({
-        preferredDate: targetDateStr,
-        maxSlotsToReturn: 3,
-        accessToken
-      });
-      const altText = alternatives2.map((s2) => `\u2022 ${s2.label}`).join("\n");
-      return {
-        handled: true,
-        action: "OFFERED_ALTERNATIVES",
-        replyText: `That slot was just booked by another attendee. Here are our earliest available slots instead:
-
-${altText}
-
-Which one would you prefer?`
+        action: "ALREADY_BOOKED",
+        replyText: bookingResult.existingBooking ? alreadyBookedReplyText(bookingResult.existingBooking) : `A demo for you is being booked right now. You'll get the calendar invitation by email shortly.`
       };
     }
+    return offerOptions(
+      "SLOT_UNAVAILABLE",
+      bookingResult.conflict ? `${slotLabel} was just booked by someone else.` : `I couldn't book ${slotLabel}.`,
+      { startFromDate: targetDateStr }
+    );
   }
-  const slotLabel = formatSlotLabel(targetDateStr, startH);
-  const alternatives = await findNextAvailableSlots({
-    preferredDate: targetDateStr,
-    maxSlotsToReturn: 4,
-    accessToken
-  });
-  const altList = alternatives.map((s2) => `\u2022 ${s2.label}`).join("\n");
-  return {
-    handled: true,
-    action: "OFFERED_ALTERNATIVES",
-    replyText: `${slotLabel} is already booked on our calendar. Here are our earliest available slots instead:
-
-${altList}
-
-Which one would you prefer?`
-  };
 }
 async function getAllBookings() {
   if (!isFirebaseConfigured || !db) return [];
@@ -287367,7 +293047,7 @@ async function getAllBookings() {
     return [];
   }
 }
-var DEFAULT_UMRAH_CTX4, activeSchedulingCtx, sb, warmSchedBrand, tz, TZL, tzDisplay, workStartH, workEndH, slotHours, hrShort, daysLabel, closedDaysLabel, brandName, hostCalendarEmail, hostEmailList, serverCalendarAccessToken, serverTokenExpiresAt;
+var DEFAULT_UMRAH_CTX4, activeSchedulingCtx, sb, warmSchedBrand, tz, TZL, tzDisplay, workStartH, workEndH, slotHours, hrShort, daysLabel, brandName, hostCalendarEmail, hostEmailList, serverCalendarAccessToken, serverTokenExpiresAt, normalizeLeadEmail, phoneLast10, LOCK_STALE_MS, MAX_DAYS_AHEAD, MIN_LEAD_TIME_MS, AVAILABILITY_STATE_TTL_MS, CONFIRMATION_STATE_TTL_MS;
 var init_demoSchedulingService = __esm({
   "src/server/demoSchedulingService.ts"() {
     init_tenantRepo();
@@ -287380,6 +293060,8 @@ var init_demoSchedulingService = __esm({
     init_firestoreUtils();
     init_campaignService();
     init_smtpService();
+    init_quotedText();
+    init_schedulingGuardrails();
     DEFAULT_UMRAH_CTX4 = {
       tenantId: "umrah360",
       uid: "system",
@@ -287401,11 +293083,6 @@ var init_demoSchedulingService = __esm({
     };
     hrShort = (h2) => `${(h2 + 11) % 12 + 1} ${h2 % 24 >= 12 ? "PM" : "AM"}`;
     daysLabel = () => brandWorkingDaysLabel(sb());
-    closedDaysLabel = () => {
-      const closed = [0, 1, 2, 3, 4, 5, 6].filter((d) => !sb().workingDays.includes(d)).sort((a, b) => (a + 1) % 7 - (b + 1) % 7);
-      const names = closed.map((d) => DAY_NAMES[d]);
-      return names.length ? names.length === 2 ? names.join(" and ") : names.join(", ") : "no days";
-    };
     brandName = () => sb().companyName;
     hostCalendarEmail = () => sb().calendarEmail;
     hostEmailList = (smtpUser, smtpFrom) => [
@@ -287416,12 +293093,22 @@ var init_demoSchedulingService = __esm({
     ].map((e2) => e2.toLowerCase().trim()).filter((e2) => e2.length > 0);
     serverCalendarAccessToken = null;
     serverTokenExpiresAt = 0;
+    normalizeLeadEmail = (e2) => String(e2 || "").trim().toLowerCase();
+    phoneLast10 = (p) => {
+      const d = String(p || "").replace(/\D/g, "");
+      return d.length >= 7 ? d.slice(-10) : "";
+    };
+    LOCK_STALE_MS = 12e4;
+    MAX_DAYS_AHEAD = 60;
+    MIN_LEAD_TIME_MS = 30 * 60 * 1e3;
+    AVAILABILITY_STATE_TTL_MS = 7 * 24 * 60 * 60 * 1e3;
+    CONFIRMATION_STATE_TTL_MS = 3 * 24 * 60 * 60 * 1e3;
   }
 });
 
 // src/server/inboundPipeline.ts
 import { AsyncLocalStorage as AsyncLocalStorage2 } from "node:async_hooks";
-import crypto6 from "node:crypto";
+import crypto8 from "node:crypto";
 function setInboundActiveContext(ctx) {
   activeInboundCtx = ctx;
 }
@@ -287506,7 +293193,7 @@ function resolveGmailMessageId(payload, targetMailbox) {
   const cleanFrom = (payload.from || "").toLowerCase().trim();
   const cleanSubj = (payload.subject || "").toLowerCase().trim();
   const cleanBody = (payload.body || "").trim().slice(0, 300);
-  const hash = crypto6.createHash("sha256").update(`${cleanFrom}|${cleanSubj}|${cleanBody}`).digest("hex").slice(0, 16);
+  const hash = crypto8.createHash("sha256").update(`${cleanFrom}|${cleanSubj}|${cleanBody}`).digest("hex").slice(0, 16);
   return `<msg-hash-${hash}@${domain}>`;
 }
 function getPipelineConfig() {
@@ -287798,7 +293485,7 @@ async function generateAutoReplyText(params) {
 ${body}`.toLowerCase();
   const brand = await getTenantBrand(getInboundCtx().tenantId);
   const isUmrah = brand.playbook === "umrah360";
-  if (detectDemoSchedulingIntent(body) || detectDemoSchedulingIntent(subject)) {
+  if (detectDemoSchedulingIntent(body) || detectDemoSchedulingIntent(subject) || await hasPendingSchedulingState({ messageText: body, leadEmail: from }).catch(() => false)) {
     try {
       const historyTurns = (threadHistory || []).map((m2) => ({
         role: m2.senderType === "CUSTOMER" || m2.senderType === "PROSPECT" ? "user" : "assistant",
@@ -288882,9 +294569,12 @@ var init_inboundPipeline = __esm({
 // src/server/websiteLeadService.ts
 var websiteLeadService_exports = {};
 __export(websiteLeadService_exports, {
+  flattenAllFields: () => flattenAllFields,
   hasThankYouEmailBeenSent: () => hasThankYouEmailBeenSent,
   processWebsiteLeadSubmission: () => processWebsiteLeadSubmission,
-  recordThankYouEmailSent: () => recordThankYouEmailSent
+  recordThankYouEmailSent: () => recordThankYouEmailSent,
+  resolveBranches: () => resolveBranches,
+  resolveTeamSize: () => resolveTeamSize
 });
 function getSentCache(tenantId) {
   let cache3 = tenantSentThankYouCaches.get(tenantId);
@@ -288976,6 +294666,21 @@ async function recordThankYouEmailSent(rawEmail, meta2, ctx = DEFAULT_UMRAH_CTX7
 }
 function flattenAllFields(obj, target = {}) {
   if (!obj || typeof obj !== "object") return target;
+  const bracketGroups = /* @__PURE__ */ new Map();
+  const handledBracketKeys = /* @__PURE__ */ new Set();
+  if (!Array.isArray(obj)) {
+    for (const [rawK, rawV] of Object.entries(obj)) {
+      const m2 = rawK.match(/^(?:form_fields|fields)\[([^\]]+)\]\[(id|type|title|label|name|value|raw_value|required)\]$/i);
+      if (!m2 || typeof rawV !== "string" && typeof rawV !== "number" && typeof rawV !== "boolean") continue;
+      handledBracketKeys.add(rawK);
+      const g = bracketGroups.get(m2[1]) || {};
+      const attr = m2[2].toLowerCase();
+      if (attr === "title" || attr === "label") g.title = String(rawV).trim();
+      else if (attr === "value") g.value = String(rawV).trim();
+      else if (attr === "raw_value" && g.value === void 0) g.value = String(rawV).trim();
+      bracketGroups.set(m2[1], g);
+    }
+  }
   const setOrAppend = (k, v) => {
     if (v === null || v === void 0) return;
     const cleanK = String(k).trim();
@@ -288994,7 +294699,7 @@ function flattenAllFields(obj, target = {}) {
     for (let i2 = 0; i2 < obj.length; i2++) {
       const item = obj[i2];
       if (item && typeof item === "object") {
-        const itemKey = item.id || item.name || item.field_id || item.key || item.label || `item_${i2}`;
+        const itemKey = item.id || item.name || item.field_id || item.key || item.label || item.title || `item_${i2}`;
         const itemVal = item.value ?? item.val ?? item.raw_value ?? item.text ?? "";
         if (typeof itemVal === "string" || typeof itemVal === "number" || typeof itemVal === "boolean") {
           setOrAppend(String(itemKey), itemVal);
@@ -289012,6 +294717,7 @@ function flattenAllFields(obj, target = {}) {
   }
   for (const [rawK, rawV] of Object.entries(obj)) {
     if (rawV === null || rawV === void 0) continue;
+    if (handledBracketKeys.has(rawK)) continue;
     const lowerK = rawK.toLowerCase().trim();
     if (lowerK === "form" && typeof rawV === "object" && rawV !== null) {
       if (rawV.id) setOrAppend("form_id", rawV.id);
@@ -289054,11 +294760,61 @@ function flattenAllFields(obj, target = {}) {
           setOrAppend(innerName, nestedVal);
         }
         if (rawV.label) setOrAppend(String(rawV.label), nestedVal);
+        if (rawV.title) setOrAppend(String(rawV.title), nestedVal);
       }
       flattenAllFields(rawV, target);
     }
   }
+  for (const [fieldId, g] of bracketGroups) {
+    if (!g.value) continue;
+    if (!target[fieldId]) target[fieldId] = g.value;
+    if (g.title && !target[g.title]) target[g.title] = g.value;
+  }
   return target;
+}
+function lookupField(flat, patterns) {
+  for (const pat of patterns) {
+    for (const [k, v] of Object.entries(flat)) {
+      if (!v) continue;
+      if (pat.test(k.toLowerCase().replace(/[^a-z0-9]/g, ""))) return v;
+    }
+  }
+  return "";
+}
+function resolveBranches(flat) {
+  const raw = lookupField(flat, [/^branches$/, /^hasbranches$/, /^hasbranch$/, /^branch$/, /^multibranch$/, /^multiplebranches$/, /branch/]).trim();
+  if (!raw) return NOT_PROVIDED;
+  const v = raw.toLowerCase();
+  if (/^(yes|y|true|1|on|checked|multiple|multi)\b/.test(v) || /\b(yes|multiple|multi-?branch)\b/.test(v)) return "Yes";
+  if (/^(no|n|false|0|off|none|single)\b/.test(v) || /\b(no|none|single)\b/.test(v)) return "No";
+  const n = parseInt(v.replace(/[^0-9]/g, ""), 10);
+  if (!Number.isNaN(n)) return n > 1 ? "Yes" : "No";
+  return NOT_PROVIDED;
+}
+function resolveTeamSize(flat) {
+  const raw = lookupField(flat, [
+    /^teamsize$/,
+    /^team$/,
+    /^size$/,
+    /^sizeofteam$/,
+    /^companysize$/,
+    /^numberofusers$/,
+    /^noofusers$/,
+    /^usercount$/,
+    /^employees$/,
+    /^numberofemployees$/,
+    /^staff$/,
+    /^users$/,
+    /^seats$/,
+    /^headcount$/,
+    /^capacity$/,
+    /teamsize/,
+    /numberofusers/,
+    /noofusers/,
+    /employees/,
+    /headcount/
+  ]).trim();
+  return raw || NOT_PROVIDED;
 }
 function isInvalidHumanName(val) {
   if (!val || typeof val !== "string") return true;
@@ -289337,8 +295093,7 @@ async function processWebsiteLeadSubmission(rawInput, ctx = DEFAULT_UMRAH_CTX7) 
     }
   }
   const website = findValue([/^website$/, /^companywebsite$/, /^url$/, /^companyurl$/]).trim();
-  const rawBranchesVal = findValue([/^branches$/, /^hasbranches$/, /^hasbranch$/, /^branch$/, /branch/]).trim();
-  const branches = typeof rawBranchesVal === "string" && /yes|true|multiple|branch/i.test(rawBranchesVal) ? "Yes" : rawBranchesVal && /no|false|single/i.test(rawBranchesVal) ? "No" : "No";
+  const branches = resolveBranches(flatFields);
   const productValues = [];
   for (const [k, v] of Object.entries(flatFields)) {
     if (!v) continue;
@@ -289372,7 +295127,7 @@ async function processWebsiteLeadSubmission(rawInput, ctx = DEFAULT_UMRAH_CTX7) 
       product = flatFields["form_name"];
     }
   }
-  const teamSize = (findValue([/^teamsize$/, /^team$/, /^size$/, /^employees$/, /^users$/, /^capacity$/]) || "5-10 Users").trim();
+  const teamSize = resolveTeamSize(flatFields);
   const message2 = findValue([
     /^message$/,
     /^yourmessage$/,
@@ -289420,7 +295175,8 @@ async function processWebsiteLeadSubmission(rawInput, ctx = DEFAULT_UMRAH_CTX7) 
     unmapped.push(`\u2022 ${k}: ${v}`);
   }
   let leadScore = 85;
-  if (teamSize.includes("10") || teamSize.includes("20") || teamSize.includes("Enterprise")) {
+  const teamSizeNumber = Math.max(0, ...(teamSize.match(/\d+/g) || []).map(Number));
+  if (teamSizeNumber >= 10 || /enterprise/i.test(teamSize)) {
     leadScore += 10;
   }
   if (branches === "Yes") {
@@ -289431,6 +295187,11 @@ async function processWebsiteLeadSubmission(rawInput, ctx = DEFAULT_UMRAH_CTX7) 
   }
   leadScore = Math.min(100, Math.max(70, leadScore));
   const nowIso = (/* @__PURE__ */ new Date()).toISOString();
+  const rawFormFields = {};
+  for (const [k, v] of Object.entries(flatFields)) {
+    if (k.length <= 80 && v.length <= 300) rawFormFields[k] = v;
+  }
+  console.log(`[Website Lead] Form fields received for ${ctx.tenantId}: ${JSON.stringify(rawFormFields).slice(0, 1500)} => teamSize="${teamSize}", branches="${branches}"`);
   let contactId = `contact-web-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
   let existingContactData = {};
   if (isFirebaseConfigured && db) {
@@ -289473,7 +295234,7 @@ async function processWebsiteLeadSubmission(rawInput, ctx = DEFAULT_UMRAH_CTX7) 
   const requirements = [
     product,
     `Team Size: ${teamSize}`,
-    branches === "Yes" ? "Multi-Branch Deployment" : "Single Office",
+    branches === "Yes" ? "Multi-Branch Deployment" : branches === "No" ? "Single Office" : null,
     city ? `City: ${city}` : null,
     country ? `Country: ${country}` : null
   ].filter(Boolean);
@@ -289488,7 +295249,7 @@ async function processWebsiteLeadSubmission(rawInput, ctx = DEFAULT_UMRAH_CTX7) 
     buyingStage: "CONSIDERATION",
     serviceInterest: product,
     requirements,
-    budget: teamSize.includes("20") ? "Enterprise Quote Required" : "Standard Tier",
+    budget: teamSizeNumber >= 20 ? "Enterprise Quote Required" : "Standard Tier",
     timeline: "Immediate / Upcoming Season",
     aiSummary,
     aiRecommendation,
@@ -289500,6 +295261,7 @@ async function processWebsiteLeadSubmission(rawInput, ctx = DEFAULT_UMRAH_CTX7) 
     website,
     branches,
     teamSize,
+    rawFormFields,
     productInterest: product,
     queryMessage: message2,
     notes: message2 || `Demo requested on ${sourceUrl}`,
@@ -289569,8 +295331,9 @@ async function processWebsiteLeadSubmission(rawInput, ctx = DEFAULT_UMRAH_CTX7) 
     conversationSummary: `Website Demo Request: ${companyName} (${rawFullName})`,
     subject: `Website Demo Request: ${companyName} (${product})`,
     customerEmail: cleanEmail,
-    thankYouEmailSent: true,
-    // Always marked true so background pollers NEVER duplicate this dispatch
+    // Only true when it really went out (or went out earlier). Left false on failure so the
+    // background auto-responder retries instead of the lead silently never getting a thank-you.
+    thankYouEmailSent: alreadySent,
     thankYouSmtpMessageId: alreadySent ? "ALREADY_SENT_PREVIOUSLY" : void 0,
     startedAt: nowIso,
     lastMessageAt: nowIso,
@@ -289604,7 +295367,8 @@ async function processWebsiteLeadSubmission(rawInput, ctx = DEFAULT_UMRAH_CTX7) 
     try {
       await fetchFirestoreSmtpConfig();
       const smtpConfig = getSmtpConfig();
-      if (smtpConfig.configured) {
+      const emailReady = Boolean(getResendConfig().apiKey);
+      if (emailReady) {
         const emailSubject = brandDemoThankYouSubject(brand, companyName);
         const emailBody = [
           `Hello ${firstName},`,
@@ -289649,7 +295413,7 @@ async function processWebsiteLeadSubmission(rawInput, ctx = DEFAULT_UMRAH_CTX7) 
             conversationId,
             senderType: "AI",
             senderName: brand.senderName,
-            senderEmail: smtpConfig.user || "amaavigo@gmail.com",
+            senderEmail: smtpConfig.user || getResendConfig().from || brand.salesEmail || "",
             recipientEmail: cleanEmail,
             channel: "EMAIL",
             direction: "OUTBOUND",
@@ -289669,13 +295433,19 @@ async function processWebsiteLeadSubmission(rawInput, ctx = DEFAULT_UMRAH_CTX7) 
             smtpMessageId: mailResult.messageId
           }, ctx);
         } else {
-          console.warn(`[Website Lead Warning] SMTP delivery attempt to ${cleanEmail} failed:`, mailResult.error);
+          console.warn(`[Website Lead Warning] Thank-you email to ${cleanEmail} failed:`, mailResult.error);
+          conversation.thankYouError = String(mailResult.error || "The email provider rejected the message").slice(0, 300);
+          conversation.thankYouAttemptedAt = (/* @__PURE__ */ new Date()).toISOString();
         }
       } else {
-        console.warn(`[Website Lead Notice] SMTP credentials not configured yet; skipping live email dispatch.`);
+        console.warn(`[Website Lead Notice] RESEND_API_KEY is not set; skipping thank-you email.`);
+        conversation.thankYouError = "RESEND_API_KEY is not set on the server";
+        conversation.thankYouAttemptedAt = (/* @__PURE__ */ new Date()).toISOString();
       }
     } catch (smtpErr) {
       console.warn("[Website Lead] Notice sending auto-confirmation email:", smtpErr);
+      conversation.thankYouError = String(smtpErr?.message || smtpErr || "Unexpected error while sending").slice(0, 300);
+      conversation.thankYouAttemptedAt = (/* @__PURE__ */ new Date()).toISOString();
     } finally {
       inFlightSet.delete(cleanEmail);
     }
@@ -289709,7 +295479,7 @@ async function processWebsiteLeadSubmission(rawInput, ctx = DEFAULT_UMRAH_CTX7) 
     duplicateThankYouSuppressed
   };
 }
-var DEFAULT_UMRAH_CTX7, tenantSentThankYouCaches, tenantInFlightThankYouSends;
+var DEFAULT_UMRAH_CTX7, tenantSentThankYouCaches, tenantInFlightThankYouSends, NOT_PROVIDED;
 var init_websiteLeadService = __esm({
   "src/server/websiteLeadService.ts"() {
     init_adminFirestore();
@@ -289729,6 +295499,7 @@ var init_websiteLeadService = __esm({
     };
     tenantSentThankYouCaches = /* @__PURE__ */ new Map();
     tenantInFlightThankYouSends = /* @__PURE__ */ new Map();
+    NOT_PROVIDED = "Not provided";
   }
 });
 
@@ -290657,19 +296428,19 @@ var require_redaction = __commonJS({
       const shape = paths.reduce((o, str) => {
         rx.lastIndex = 0;
         const first = rx.exec(str);
-        const next = rx.exec(str);
+        const next2 = rx.exec(str);
         let ns = first[1] !== void 0 ? first[1].replace(/^(?:"|'|`)(.*)(?:"|'|`)$/, "$1") : first[0];
         if (ns === "*") {
           ns = wildcardFirstSym;
         }
-        if (next === null) {
+        if (next2 === null) {
           o[ns] = null;
           return o;
         }
         if (o[ns] === null) {
           return o;
         }
-        const { index } = next;
+        const { index } = next2;
         const nextPath = `${str.substr(index, str.length - 1)}`;
         o[ns] = o[ns] || [];
         if (ns !== wildcardFirstSym && o[ns].length === 0) {
@@ -292283,15 +298054,15 @@ var require_transport4 = __commonJS({
       for (let i2 = 0; i2 < tokens.length; i2++) {
         const token = tokens[i2];
         if (token === "--require" || token === "-r" || token === "--import") {
-          const next = tokens[i2 + 1];
-          if (next && shouldDropPreload(next)) {
+          const next2 = tokens[i2 + 1];
+          if (next2 && shouldDropPreload(next2)) {
             changed = true;
             i2++;
             continue;
           }
           sanitized.push(token);
-          if (next) {
-            sanitized.push(next);
+          if (next2) {
+            sanitized.push(next2);
             i2++;
           }
           continue;
@@ -292802,7 +298573,7 @@ var require_tools = __commonJS({
 });
 
 // node_modules/pino/lib/constants.js
-var require_constants6 = __commonJS({
+var require_constants7 = __commonJS({
   "node_modules/pino/lib/constants.js"(exports, module) {
     var DEFAULT_LEVELS = {
       trace: 10,
@@ -292837,7 +298608,7 @@ var require_levels = __commonJS({
       levelCompSym
     } = require_symbols();
     var { noop: noop4, genLog } = require_tools();
-    var { DEFAULT_LEVELS, SORTING_ORDER } = require_constants6();
+    var { DEFAULT_LEVELS, SORTING_ORDER } = require_constants7();
     var levelMethods = {
       fatal: (hook) => {
         const logFatal = genLog(DEFAULT_LEVELS.fatal, hook);
@@ -293855,7 +299626,7 @@ var require_multistream = __commonJS({
   "node_modules/pino/lib/multistream.js"(exports, module) {
     "use strict";
     var metadata = Symbol.for("pino.metadata");
-    var { DEFAULT_LEVELS } = require_constants6();
+    var { DEFAULT_LEVELS } = require_constants7();
     var DEFAULT_INFO_LEVEL = DEFAULT_LEVELS.info;
     function multistream(streamsArray, opts) {
       streamsArray = streamsArray || [];
@@ -294033,7 +299804,7 @@ var require_pino = __commonJS({
     var symbols = require_symbols();
     var { configure } = require_safe_stable_stringify();
     var { assertDefaultLevelFound, mappings, genLsCache, genLevelComparison, assertLevelComparison } = require_levels();
-    var { DEFAULT_LEVELS, SORTING_ORDER } = require_constants6();
+    var { DEFAULT_LEVELS, SORTING_ORDER } = require_constants7();
     var {
       createArgsNormalizer,
       asChindings,
@@ -294262,10 +300033,10 @@ __export(websiteWebhookService_exports, {
   sendTestLead: () => sendTestLead,
   setAllowedOrigins: () => setAllowedOrigins
 });
-import crypto10 from "crypto";
+import crypto11 from "crypto";
 function newKey(tenantId) {
   const slug = tenantId.toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 12) || "co";
-  return `${slug}-${crypto10.randomBytes(12).toString("base64url")}`;
+  return `${slug}-${crypto11.randomBytes(12).toString("base64url")}`;
 }
 function normalizeOrigin(raw) {
   let s2 = String(raw || "").trim().toLowerCase();
@@ -294357,7 +300128,12 @@ async function sendTestLead(ctx) {
     },
     ctx
   );
-  return { leadId: result.lead?.leadId, thankYouEmailSent: result.thankYouEmailSent };
+  return {
+    leadId: result.lead?.leadId,
+    thankYouEmailSent: Boolean(result.autoConfirmationSent),
+    thankYouSuppressed: Boolean(result.duplicateThankYouSuppressed),
+    thankYouError: result.conversation?.thankYouError
+  };
 }
 var WebhookSettingsError, SETTINGS_DOC;
 var init_websiteWebhookService = __esm({
@@ -294373,6 +300149,1552 @@ var init_websiteWebhookService = __esm({
       }
     };
     SETTINGS_DOC = "website_webhook";
+  }
+});
+
+// src/server/metaChannelsService.ts
+var metaChannelsService_exports = {};
+__export(metaChannelsService_exports, {
+  connectMessenger: () => connectMessenger,
+  connectWhatsApp: () => connectWhatsApp,
+  disconnectMessenger: () => disconnectMessenger,
+  disconnectWhatsApp: () => disconnectWhatsApp,
+  getMessengerStatus: () => getMessengerStatus,
+  getMetaClientConfig: () => getMetaClientConfig,
+  getWhatsAppStatus: () => getWhatsAppStatus,
+  handleMetaWebhook: () => handleMetaWebhook,
+  listMessengerPages: () => listMessengerPages,
+  listWhatsAppTemplates: () => listWhatsAppTemplates,
+  missingMetaSettings: () => missingMetaSettings,
+  sendMetaText: () => sendMetaText,
+  sendWhatsAppTemplate: () => sendWhatsAppTemplate
+});
+import crypto12 from "crypto";
+function env(name5) {
+  return (process.env[name5] || "").trim();
+}
+function missingMetaSettings(channel) {
+  const missing = [];
+  if (!env("META_APP_ID")) missing.push("META_APP_ID");
+  if (!env("META_APP_SECRET")) missing.push("META_APP_SECRET");
+  if (!env("META_WEBHOOK_VERIFY_TOKEN")) missing.push("META_WEBHOOK_VERIFY_TOKEN");
+  if (!env("SECRETS_MASTER_KEY") && !env("TENANT_MASTER_KEY")) missing.push("SECRETS_MASTER_KEY");
+  if (channel === "whatsapp" && !env("META_WA_EMBEDDED_SIGNUP_CONFIG_ID")) missing.push("META_WA_EMBEDDED_SIGNUP_CONFIG_ID");
+  return missing;
+}
+function getMetaClientConfig() {
+  return {
+    appId: env("META_APP_ID"),
+    whatsappConfigId: env("META_WA_EMBEDDED_SIGNUP_CONFIG_ID"),
+    graphVersion: GRAPH_VERSION
+  };
+}
+function requireConfigured(channel) {
+  const missing = missingMetaSettings(channel);
+  if (missing.length) {
+    throw new MetaChannelError(503, `This server is not set up for ${channel === "whatsapp" ? "WhatsApp" : "Messenger"} yet. Missing: ${missing.join(", ")}.`);
+  }
+}
+async function graphJson(url, init) {
+  const response = await fetch(url, init);
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const code = body?.error?.code;
+    const err = new MetaChannelError(response.status >= 500 ? 502 : 400, body?.error?.message || `Meta request failed (HTTP ${response.status}).`);
+    err.metaCode = code;
+    err.metaSubcode = body?.error?.error_subcode;
+    throw err;
+  }
+  return body;
+}
+async function getWhatsAppConnection(ctx) {
+  const snap = await getDoc(tenantRepo(ctx).integrationDoc("whatsapp"));
+  if (!snap.exists()) return null;
+  const data = snap.data();
+  return data?.channel === "whatsapp" ? data.connection || null : null;
+}
+async function getSecret(ctx, name5) {
+  const snap = await getDoc(tenantRepo(ctx).secretDoc(name5));
+  if (!snap.exists()) throw new MetaChannelError(409, "This channel is not connected. Reconnect the account.");
+  return decryptSecret(snap.data());
+}
+async function putSecret(ctx, name5, value) {
+  const now = (/* @__PURE__ */ new Date()).toISOString();
+  await setDoc(tenantRepo(ctx).secretDoc(name5), { ...encryptSecret(value), name: name5, createdAt: now, updatedAt: now });
+}
+async function getWhatsAppStatus(ctx) {
+  const connection = await getWhatsAppConnection(ctx);
+  return { connected: connection?.status === "connected", connection };
+}
+async function connectWhatsApp(ctx, input) {
+  requireConfigured("whatsapp");
+  const code = String(input.code || "").trim();
+  const wabaId = String(input.wabaId || "").trim();
+  const phoneNumberId = String(input.phoneNumberId || "").trim();
+  if (!code || !wabaId || !phoneNumberId) {
+    throw new MetaChannelError(400, "WhatsApp sign-up did not return a business account and phone number. Please try again.");
+  }
+  const tokenUrl = new URL(`${GRAPH}/oauth/access_token`);
+  tokenUrl.searchParams.set("client_id", env("META_APP_ID"));
+  tokenUrl.searchParams.set("client_secret", env("META_APP_SECRET"));
+  tokenUrl.searchParams.set("code", code);
+  const tokenBody = await graphJson(tokenUrl.toString());
+  const accessToken = String(tokenBody.access_token || "");
+  if (!accessToken) throw new MetaChannelError(400, "Meta did not return an access token for this WhatsApp account.");
+  const infoUrl = new URL(`${GRAPH}/${encodeURIComponent(phoneNumberId)}`);
+  infoUrl.searchParams.set("fields", "display_phone_number,verified_name,quality_rating");
+  infoUrl.searchParams.set("access_token", accessToken);
+  const info = await graphJson(infoUrl.toString());
+  const routeRef = doc(db, "channel_routes", phoneNumberId);
+  const routeSnap = await getDoc(routeRef);
+  if (routeSnap.exists() && routeSnap.data().tenantId !== ctx.tenantId) {
+    throw new MetaChannelError(409, "This WhatsApp number is already connected to another workspace.");
+  }
+  await graphJson(`${GRAPH}/${encodeURIComponent(wabaId)}/subscribed_apps`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${accessToken}` }
+  });
+  try {
+    const pin = String(crypto12.randomInt(1e5, 999999));
+    await graphJson(`${GRAPH}/${encodeURIComponent(phoneNumberId)}/register`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ messaging_product: "whatsapp", pin })
+    });
+    await putSecret(ctx, "whatsapp_pin", pin);
+  } catch {
+  }
+  const existing = await getWhatsAppConnection(ctx);
+  if (existing?.phoneNumberId && existing.phoneNumberId !== phoneNumberId) {
+    await deleteDoc(doc(db, "channel_routes", existing.phoneNumberId)).catch(() => {
+    });
+  }
+  const now = (/* @__PURE__ */ new Date()).toISOString();
+  const connection = {
+    phoneNumberId,
+    wabaId,
+    displayPhoneNumber: String(info.display_phone_number || ""),
+    verifiedName: String(info.verified_name || ""),
+    qualityRating: info.quality_rating ? String(info.quality_rating) : void 0,
+    status: "connected",
+    connectedAt: existing?.connectedAt || now,
+    updatedAt: now
+  };
+  await putSecret(ctx, "whatsapp_access_token", accessToken);
+  await setDoc(tenantRepo(ctx).integrationDoc("whatsapp"), { channel: "whatsapp", connection: JSON.parse(JSON.stringify(connection)) }, { merge: true });
+  await setDoc(routeRef, { phoneNumberId, tenantId: ctx.tenantId, businessAccountId: wabaId, channel: "whatsapp", createdAt: now });
+  return connection;
+}
+async function disconnectWhatsApp(ctx) {
+  const existing = await getWhatsAppConnection(ctx);
+  if (!existing) return;
+  try {
+    const token = await getSecret(ctx, "whatsapp_access_token");
+    await fetch(`${GRAPH}/${encodeURIComponent(existing.wabaId)}/subscribed_apps`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${token}` }
+    });
+  } catch {
+  }
+  await setDoc(tenantRepo(ctx).integrationDoc("whatsapp"), {
+    channel: "whatsapp",
+    connection: { ...existing, status: "disconnected", updatedAt: (/* @__PURE__ */ new Date()).toISOString() }
+  }, { merge: true });
+  await deleteDoc(tenantRepo(ctx).secretDoc("whatsapp_access_token")).catch(() => {
+  });
+  await deleteDoc(tenantRepo(ctx).secretDoc("whatsapp_pin")).catch(() => {
+  });
+  await deleteDoc(doc(db, "channel_routes", existing.phoneNumberId)).catch(() => {
+  });
+}
+async function listWhatsAppTemplates(ctx) {
+  const connection = await getWhatsAppConnection(ctx);
+  if (!connection || connection.status !== "connected") throw new MetaChannelError(409, "WhatsApp is not connected.");
+  const token = await getSecret(ctx, "whatsapp_access_token");
+  const url = new URL(`${GRAPH}/${encodeURIComponent(connection.wabaId)}/message_templates`);
+  url.searchParams.set("fields", "name,language,status,category,components");
+  url.searchParams.set("limit", "100");
+  const body = await graphJson(url.toString(), { headers: { Authorization: `Bearer ${token}` } });
+  return (Array.isArray(body.data) ? body.data : []).filter((t2) => t2.status === "APPROVED").map((t2) => {
+    const bodyComp = (t2.components || []).find((c) => c.type === "BODY");
+    const text = String(bodyComp?.text || "");
+    const params = text.match(/\{\{\d+\}\}/g) || [];
+    return {
+      name: String(t2.name),
+      language: String(t2.language),
+      category: t2.category ? String(t2.category) : void 0,
+      body: text,
+      paramCount: new Set(params).size
+    };
+  });
+}
+function friendlyWhatsAppError(err) {
+  const code = Number(err?.metaCode);
+  if (code === 131047 || code === 131026 || /re-engagement|24 hour/i.test(String(err?.message))) {
+    return new MetaChannelError(422, "The 24-hour reply window has closed. Send an approved template instead.");
+  }
+  return err instanceof MetaChannelError ? err : new MetaChannelError(500, err?.message || "WhatsApp message could not be sent.");
+}
+async function sendWhatsAppTemplate(ctx, to, template) {
+  const connection = await getWhatsAppConnection(ctx);
+  if (!connection || connection.status !== "connected") throw new MetaChannelError(409, "WhatsApp is not connected.");
+  const recipient = String(to || "").replace(/[^\d]/g, "");
+  if (!recipient || !template?.name || !template?.language) throw new MetaChannelError(400, "Recipient and template are required.");
+  const token = await getSecret(ctx, "whatsapp_access_token");
+  const params = (template.params || []).map((p) => String(p));
+  const components = params.length ? [{ type: "body", parameters: params.map((text) => ({ type: "text", text })) }] : void 0;
+  try {
+    const result = await graphJson(`${GRAPH}/${encodeURIComponent(connection.phoneNumberId)}/messages`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        messaging_product: "whatsapp",
+        to: recipient,
+        type: "template",
+        template: { name: template.name, language: { code: template.language }, ...components ? { components } : {} }
+      })
+    });
+    let renderedText = `[Template: ${template.name}]`;
+    try {
+      const all = await listWhatsAppTemplates(ctx);
+      const match = all.find((t2) => t2.name === template.name && t2.language === template.language);
+      if (match) renderedText = match.body.replace(/\{\{(\d+)\}\}/g, (_m, n) => params[Number(n) - 1] ?? "");
+    } catch {
+    }
+    return { messageId: String(result?.messages?.[0]?.id || ""), renderedText };
+  } catch (err) {
+    throw friendlyWhatsAppError(err);
+  }
+}
+async function getMessengerConnection(ctx) {
+  const snap = await getDoc(tenantRepo(ctx).integrationDoc("messenger"));
+  if (!snap.exists()) return null;
+  const data = snap.data();
+  return data?.channel === "messenger" ? data.connection || null : null;
+}
+async function getMessengerStatus(ctx) {
+  const connection = await getMessengerConnection(ctx);
+  return { connected: connection?.status === "connected", connection };
+}
+async function longLivedUserToken(userToken) {
+  const url = new URL(`${GRAPH}/oauth/access_token`);
+  url.searchParams.set("grant_type", "fb_exchange_token");
+  url.searchParams.set("client_id", env("META_APP_ID"));
+  url.searchParams.set("client_secret", env("META_APP_SECRET"));
+  url.searchParams.set("fb_exchange_token", userToken);
+  const body = await graphJson(url.toString());
+  return String(body.access_token || userToken);
+}
+async function fetchManagedPages(userToken) {
+  const url = new URL(`${GRAPH}/me/accounts`);
+  url.searchParams.set("fields", "id,name,access_token");
+  url.searchParams.set("limit", "100");
+  url.searchParams.set("access_token", userToken);
+  const body = await graphJson(url.toString());
+  return Array.isArray(body.data) ? body.data : [];
+}
+async function listMessengerPages(userToken) {
+  requireConfigured("messenger");
+  if (!userToken) throw new MetaChannelError(400, "Facebook login did not return an access token.");
+  const longToken = await longLivedUserToken(userToken);
+  return (await fetchManagedPages(longToken)).map((p) => ({ id: String(p.id), name: String(p.name) }));
+}
+async function connectMessenger(ctx, input) {
+  requireConfigured("messenger");
+  const userToken = String(input.userToken || "").trim();
+  const pageId = String(input.pageId || "").trim();
+  if (!userToken || !pageId) throw new MetaChannelError(400, "A Facebook login and a Page are required.");
+  const longToken = await longLivedUserToken(userToken);
+  const page = (await fetchManagedPages(longToken)).find((p) => String(p.id) === pageId);
+  if (!page?.access_token) throw new MetaChannelError(403, "You do not manage that Facebook Page, or messaging permission was not granted.");
+  const routeRef = doc(db, "meta_page_routes", pageId);
+  const routeSnap = await getDoc(routeRef);
+  if (routeSnap.exists() && routeSnap.data().tenantId !== ctx.tenantId) {
+    throw new MetaChannelError(409, "This Facebook Page is already connected to another workspace.");
+  }
+  let subscribed = false;
+  try {
+    const subUrl = new URL(`${GRAPH}/${encodeURIComponent(pageId)}/subscribed_apps`);
+    subUrl.searchParams.set("subscribed_fields", "messages,messaging_postbacks");
+    subUrl.searchParams.set("access_token", page.access_token);
+    await graphJson(subUrl.toString(), { method: "POST" });
+    subscribed = true;
+  } catch {
+    subscribed = false;
+  }
+  const existing = await getMessengerConnection(ctx);
+  if (existing?.pageId && existing.pageId !== pageId) {
+    await deleteDoc(doc(db, "meta_page_routes", existing.pageId)).catch(() => {
+    });
+  }
+  const now = (/* @__PURE__ */ new Date()).toISOString();
+  const connection = {
+    pageId,
+    pageName: String(page.name),
+    status: "connected",
+    connectedAt: existing?.connectedAt || now,
+    updatedAt: now,
+    webhookSubscriptionStatus: subscribed ? "subscribed" : "needs_setup"
+  };
+  await putSecret(ctx, "messenger_page_token", page.access_token);
+  await setDoc(tenantRepo(ctx).integrationDoc("messenger"), { channel: "messenger", connection }, { merge: true });
+  await setDoc(routeRef, { pageId, tenantId: ctx.tenantId, updatedAt: now });
+  return connection;
+}
+async function disconnectMessenger(ctx) {
+  const existing = await getMessengerConnection(ctx);
+  if (!existing) return;
+  try {
+    const token = await getSecret(ctx, "messenger_page_token");
+    const url = new URL(`${GRAPH}/${encodeURIComponent(existing.pageId)}/subscribed_apps`);
+    url.searchParams.set("access_token", token);
+    await fetch(url, { method: "DELETE" });
+  } catch {
+  }
+  await setDoc(tenantRepo(ctx).integrationDoc("messenger"), {
+    channel: "messenger",
+    connection: { ...existing, status: "disconnected", updatedAt: (/* @__PURE__ */ new Date()).toISOString() }
+  }, { merge: true });
+  await deleteDoc(tenantRepo(ctx).secretDoc("messenger_page_token")).catch(() => {
+  });
+  await deleteDoc(doc(db, "meta_page_routes", existing.pageId)).catch(() => {
+  });
+}
+async function sendMetaText(ctx, channel, recipientId, text) {
+  const body = String(text || "").trim();
+  const to = String(recipientId || "").trim();
+  if (!to || !body) throw new MetaChannelError(400, "Recipient and message text are required.");
+  if (channel === "whatsapp") {
+    const connection2 = await getWhatsAppConnection(ctx);
+    if (!connection2 || connection2.status !== "connected") throw new MetaChannelError(409, "WhatsApp is not connected.");
+    const token2 = await getSecret(ctx, "whatsapp_access_token");
+    try {
+      const result = await graphJson(`${GRAPH}/${encodeURIComponent(connection2.phoneNumberId)}/messages`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token2}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ messaging_product: "whatsapp", to: to.replace(/[^\d]/g, ""), type: "text", text: { body, preview_url: false } })
+      });
+      return { messageId: String(result?.messages?.[0]?.id || "") };
+    } catch (err) {
+      throw friendlyWhatsAppError(err);
+    }
+  }
+  const connection = await getMessengerConnection(ctx);
+  if (!connection || connection.status !== "connected") throw new MetaChannelError(409, "Messenger is not connected.");
+  const token = await getSecret(ctx, "messenger_page_token");
+  try {
+    const result = await graphJson(`${GRAPH}/${encodeURIComponent(connection.pageId)}/messages`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ recipient: { id: to }, messaging_type: "RESPONSE", message: { text: body } })
+    });
+    return { messageId: String(result?.message_id || "") };
+  } catch (err) {
+    if (Number(err?.metaCode) === 10 || /outside of allowed window/i.test(String(err?.message))) {
+      throw new MetaChannelError(422, "The 24-hour reply window has closed for this Messenger conversation.");
+    }
+    throw err;
+  }
+}
+function json(res, status, payload) {
+  res.statusCode = status;
+  res.setHeader("Content-Type", "application/json");
+  res.end(JSON.stringify(payload));
+}
+function isValidMetaSignature(req) {
+  const secret = env("META_APP_SECRET");
+  const signature = req.headers?.["x-hub-signature-256"];
+  const rawBody = req.rawBody;
+  if (!secret || !signature || !rawBody) return false;
+  const raw = Buffer.isBuffer(rawBody) ? rawBody : Buffer.from(String(rawBody));
+  const expected = `sha256=${crypto12.createHmac("sha256", secret).update(raw).digest("hex")}`;
+  const a = Buffer.from(String(signature));
+  const b = Buffer.from(expected);
+  return a.length === b.length && crypto12.timingSafeEqual(a, b);
+}
+async function processInbound(tenantId, event, eventId) {
+  const eventRef = doc(db, "meta_inbound_events", eventId);
+  const ctx = { tenantId, uid: "meta-webhook", email: "", role: "admin" };
+  const repo = tenantRepo(ctx);
+  const isWA = event.channel === "WHATSAPP";
+  const prefix = isWA ? "wa" : "fb";
+  const label = isWA ? "WhatsApp" : "Messenger";
+  const contactId = `${prefix}c_${hash24(event.accountId + ":" + event.senderId)}`;
+  const conversationId = `${prefix}conv_${hash24(event.accountId + ":" + event.senderId)}`;
+  const messageId = `${prefix}msg_${hash24(event.accountId + ":" + event.externalMessageId)}`;
+  const now = (/* @__PURE__ */ new Date()).toISOString();
+  if (event.senderId === event.accountId) {
+    await updateDoc(eventRef, { status: "ignored", processedAt: now });
+    return;
+  }
+  if ((await getDoc(repo.messageDoc(messageId))).exists()) {
+    await updateDoc(eventRef, { status: "duplicate", processedAt: now });
+    return;
+  }
+  const displayName = event.senderName?.trim() || `${label} user`;
+  const [firstName, ...rest] = displayName.split(" ");
+  const contactSnap = await getDoc(repo.contactDoc(contactId));
+  const base = contactSnap.exists() ? contactSnap.data() : {
+    contactId,
+    firstName: firstName || label,
+    lastName: rest.join(" "),
+    email: "",
+    phone: isWA ? `+${event.senderId}` : "",
+    companyName: `${label} contact`,
+    tags: [isWA ? "WHATSAPP" : "MESSENGER"],
+    notes: "",
+    createdAt: now
+  };
+  await setDoc(repo.contactDoc(contactId), {
+    ...base,
+    ...isWA ? { whatsappId: event.senderId } : { facebookUserId: event.senderId },
+    updatedAt: now,
+    lastActivityAt: event.timestamp
+  }, { merge: true });
+  const prevSnap = await getDoc(repo.conversationDoc(conversationId));
+  const previous = prevSnap.exists() ? prevSnap.data() : null;
+  const conversation = {
+    conversationId,
+    contactId,
+    channel: event.channel,
+    direction: "INBOUND",
+    externalConversationId: event.senderId,
+    status: previous?.status || "ACTIVE",
+    aiEnabled: previous?.aiEnabled !== false,
+    humanHandoff: previous?.humanHandoff === true,
+    managementMode: previous?.managementMode || "AI",
+    conversationSummary: previous?.conversationSummary || `${label} conversation`,
+    startedAt: previous?.startedAt || event.timestamp,
+    lastMessageAt: event.timestamp,
+    lastMessageText: event.text,
+    unreadCount: Number(previous?.unreadCount || 0) + 1,
+    isRead: false,
+    unread: true,
+    createdAt: previous?.createdAt || now,
+    updatedAt: now
+  };
+  await setDoc(repo.conversationDoc(conversationId), conversation, { merge: true });
+  await setDoc(repo.messageDoc(messageId), {
+    messageId,
+    externalMessageId: event.externalMessageId,
+    conversationId,
+    channel: event.channel,
+    senderType: "CUSTOMER",
+    senderName: displayName,
+    text: event.text,
+    direction: "INBOUND",
+    timestamp: event.timestamp,
+    receivedAt: now,
+    createdAt: now,
+    aiReplied: false,
+    aiProcessed: false
+  });
+  const settingsSnap = await getDoc(repo.settingsDoc("default"));
+  const settings = settingsSnap.exists() ? settingsSnap.data() : {};
+  const mode = settings?.channelModes?.[event.channel] || "AUTO";
+  if (!conversation.aiEnabled || conversation.humanHandoff || conversation.managementMode === "HUMAN" || mode === "SIMULATION") {
+    await updateDoc(eventRef, { status: "processed", processedAt: now, conversationId });
+    return;
+  }
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey || !event.hasText) {
+    await updateDoc(eventRef, { status: "processed_no_reply", reason: !apiKey ? "OPENAI_API_KEY is not configured" : "No text available for AI reply", processedAt: now, conversationId });
+    return;
+  }
+  const knowledgeSnap = await getDocs(repo.knowledgeDocuments());
+  const knowledge = knowledgeSnap.docs.map((d) => d.data()).filter((d) => d.status === "PUBLISHED").slice(0, 8).map((d) => "## " + String(d.title || "Knowledge") + "\n" + String(d.content || "").slice(0, 2500)).join("\n\n").slice(0, 12e3);
+  const historySnap = await getDocs(query(repo.messages(), where("conversationId", "==", conversationId)));
+  const history = historySnap.docs.map((d) => d.data()).filter((m2) => m2.messageId !== messageId).sort((a, b) => new Date(a.timestamp || 0).getTime() - new Date(b.timestamp || 0).getTime()).slice(-8).map((m2) => ({ role: m2.direction === "OUTBOUND" ? "assistant" : "user", content: String(m2.text || "").slice(0, 1500) }));
+  const openai = new OpenAI({ apiKey });
+  const completion = await openai.chat.completions.create({
+    model: process.env.META_CHANNELS_AI_MODEL || process.env.INSTAGRAM_AI_MODEL || "gpt-4o-mini",
+    temperature: 0.3,
+    messages: [
+      {
+        role: "system",
+        content: `You are this workspace customer-support and lead-qualification assistant. Reply naturally and briefly to the ${label} message. Use only the workspace knowledge below for factual claims. If knowledge does not answer the question, ask a concise clarifying question instead of inventing facts. Do not claim a booking or action has completed unless confirmed.
+
+Workspace knowledge:
+` + (knowledge || "No published workspace knowledge is available. Ask a clarifying question and do not invent product details.")
+      },
+      ...history,
+      { role: "user", content: event.text.slice(0, 3e3) }
+    ]
+  });
+  const replyText = completion.choices[0]?.message?.content?.trim();
+  if (!replyText) {
+    await updateDoc(eventRef, { status: "processed_no_reply", reason: "AI returned an empty response", processedAt: now, conversationId });
+    return;
+  }
+  if (mode === "REVIEW") {
+    await updateDoc(repo.conversationDoc(conversationId), {
+      draftReply: { draftId: `${prefix}draft_${hash24(event.externalMessageId)}`, text: replyText, generatedAt: now, status: "PENDING" },
+      updatedAt: now
+    });
+    await updateDoc(repo.messageDoc(messageId), { aiProcessed: true });
+    await updateDoc(eventRef, { status: "draft_created", processedAt: now, conversationId });
+    return;
+  }
+  const latestSnap = await getDoc(repo.conversationDoc(conversationId));
+  const latest = latestSnap.exists() ? latestSnap.data() : {};
+  if (latest.aiEnabled === false || latest.humanHandoff === true || latest.managementMode === "HUMAN") {
+    await updateDoc(eventRef, { status: "suppressed_human_takeover", processedAt: (/* @__PURE__ */ new Date()).toISOString(), conversationId });
+    return;
+  }
+  const sent = await sendMetaText(ctx, isWA ? "whatsapp" : "messenger", event.senderId, replyText);
+  const outboundId = `${prefix}out_${hash24(event.externalMessageId)}`;
+  const sentAt = (/* @__PURE__ */ new Date()).toISOString();
+  await setDoc(repo.messageDoc(outboundId), {
+    messageId: outboundId,
+    externalMessageId: sent.messageId,
+    conversationId,
+    channel: event.channel,
+    senderType: "AI",
+    senderName: "AI Assistant",
+    text: replyText,
+    direction: "OUTBOUND",
+    timestamp: sentAt,
+    sentAt,
+    createdAt: sentAt,
+    aiProcessed: true,
+    aiGenerated: true,
+    deliveryStatus: "DELIVERED"
+  });
+  await updateDoc(repo.messageDoc(messageId), { aiReplied: true, repliedAt: sentAt, repliedByMessageId: outboundId, aiProcessed: true });
+  await updateDoc(repo.conversationDoc(conversationId), { lastMessageAt: sentAt, lastMessageText: replyText, updatedAt: sentAt });
+  await updateDoc(eventRef, { status: "replied", processedAt: sentAt, conversationId, outboundMessageId: outboundId });
+}
+function waText(message2) {
+  const type = String(message2?.type || "");
+  const text = message2?.text?.body || message2?.button?.text || message2?.interactive?.button_reply?.title || message2?.interactive?.list_reply?.title || "";
+  if (String(text).trim()) return { text: String(text).trim(), hasText: true };
+  return { text: `[WhatsApp ${type || "message"} received]`, hasText: false };
+}
+async function dispatch(tenantId, event, externalKey, raw) {
+  const eventId = crypto12.createHash("sha256").update(externalKey).digest("hex");
+  const eventRef = doc(db, "meta_inbound_events", eventId);
+  try {
+    await createDoc(eventRef, { tenantId, channel: event.channel, accountId: event.accountId, externalId: event.externalMessageId, status: "received", receivedAt: (/* @__PURE__ */ new Date()).toISOString() });
+  } catch {
+    return false;
+  }
+  try {
+    await processInbound(tenantId, event, eventId);
+  } catch (error) {
+    console.error("[Meta webhook] Event processing failed:", error?.message || "unknown error");
+    await updateDoc(eventRef, { status: "failed", lastError: "Processing failed; inspect server logs.", updatedAt: (/* @__PURE__ */ new Date()).toISOString() }).catch(() => {
+    });
+  }
+  void raw;
+  return true;
+}
+async function handleMetaWebhook(req, res) {
+  if (req.method === "GET") {
+    const params = new URL(req.url || "/", "http://localhost").searchParams;
+    const mode = params.get("hub.mode");
+    const token = params.get("hub.verify_token");
+    const challenge = params.get("hub.challenge");
+    const expected = env("META_WEBHOOK_VERIFY_TOKEN");
+    if (mode === "subscribe" && expected && token === expected && challenge) {
+      res.statusCode = 200;
+      res.setHeader("Content-Type", "text/plain");
+      res.end(challenge);
+    } else {
+      res.statusCode = 403;
+      res.end("Forbidden");
+    }
+    return true;
+  }
+  if (req.method !== "POST") {
+    json(res, 405, { error: "Method not allowed" });
+    return true;
+  }
+  const signatureOk = isValidMetaSignature(req);
+  console.log("[Meta webhook] POST received", JSON.stringify({
+    signatureOk,
+    object: req.body?.object,
+    entries: Array.isArray(req.body?.entry) ? req.body.entry.map((e2) => ({ id: e2?.id })) : []
+  }));
+  if (!signatureOk) {
+    json(res, 401, { error: "Invalid webhook signature or raw request body unavailable." });
+    return true;
+  }
+  const body = req.body || {};
+  let accepted = 0;
+  if (body.object === "whatsapp_business_account") {
+    for (const entry of Array.isArray(body.entry) ? body.entry : []) {
+      for (const change of Array.isArray(entry.changes) ? entry.changes : []) {
+        if (change?.field !== "messages") continue;
+        const value = change.value || {};
+        const phoneNumberId = String(value?.metadata?.phone_number_id || "");
+        if (!phoneNumberId) continue;
+        const routeSnap = await getDoc(doc(db, "channel_routes", phoneNumberId));
+        const tenantId = routeSnap.exists() ? String(routeSnap.data().tenantId || "") : "";
+        if (!tenantId) continue;
+        const names = {};
+        for (const c of Array.isArray(value.contacts) ? value.contacts : []) {
+          if (c?.wa_id) names[String(c.wa_id)] = String(c?.profile?.name || "");
+        }
+        for (const message2 of Array.isArray(value.messages) ? value.messages : []) {
+          const from = String(message2?.from || "");
+          const id = String(message2?.id || "");
+          if (!from || !id) continue;
+          const { text, hasText } = waText(message2);
+          const ts2 = Number(message2?.timestamp);
+          const ok = await dispatch(
+            tenantId,
+            {
+              channel: "WHATSAPP",
+              accountId: phoneNumberId,
+              senderId: from,
+              senderName: names[from],
+              externalMessageId: id,
+              text,
+              hasText,
+              timestamp: Number.isFinite(ts2) && ts2 > 0 ? new Date(ts2 * 1e3).toISOString() : (/* @__PURE__ */ new Date()).toISOString()
+            },
+            `wa:${phoneNumberId}:${id}`,
+            message2
+          );
+          if (ok) accepted++;
+        }
+      }
+    }
+  } else if (body.object === "page") {
+    for (const entry of Array.isArray(body.entry) ? body.entry : []) {
+      const pageId = String(entry?.id || "");
+      if (!pageId) continue;
+      const routeSnap = await getDoc(doc(db, "meta_page_routes", pageId));
+      const tenantId = routeSnap.exists() ? String(routeSnap.data().tenantId || "") : "";
+      if (!tenantId) continue;
+      for (const m2 of Array.isArray(entry.messaging) ? entry.messaging : []) {
+        if (!m2?.message || m2.message.is_echo) continue;
+        const senderId = String(m2?.sender?.id || "");
+        const mid = String(m2.message.mid || "");
+        if (!senderId || !mid) continue;
+        const text = String(m2.message.text || "").trim();
+        const ts2 = Number(m2?.timestamp);
+        const ok = await dispatch(
+          tenantId,
+          {
+            channel: "FACEBOOK",
+            accountId: pageId,
+            senderId,
+            externalMessageId: mid,
+            text: text || "[Messenger attachment received]",
+            hasText: Boolean(text),
+            timestamp: Number.isFinite(ts2) && ts2 > 0 ? new Date(ts2).toISOString() : (/* @__PURE__ */ new Date()).toISOString()
+          },
+          `fb:${pageId}:${mid}`,
+          m2
+        );
+        if (ok) accepted++;
+      }
+    }
+  } else {
+    json(res, 400, { error: "Unsupported webhook object." });
+    return true;
+  }
+  json(res, 200, { success: true, accepted });
+  return true;
+}
+var GRAPH_VERSION, GRAPH, MetaChannelError, hash24;
+var init_metaChannelsService = __esm({
+  "src/server/metaChannelsService.ts"() {
+    init_openai();
+    init_adminFirestore();
+    init_tenantRepo();
+    init_cryptoUtils();
+    GRAPH_VERSION = process.env.META_GRAPH_API_VERSION || "v23.0";
+    GRAPH = `https://graph.facebook.com/${GRAPH_VERSION}`;
+    MetaChannelError = class extends Error {
+      constructor(status, message2) {
+        super(message2);
+        this.status = status;
+      }
+    };
+    hash24 = (value) => crypto12.createHash("sha256").update(value).digest("hex").slice(0, 24);
+  }
+});
+
+// src/server/instagramIntegrationService.ts
+var instagramIntegrationService_exports = {};
+__export(instagramIntegrationService_exports, {
+  diagnoseInstagram: () => diagnoseInstagram,
+  disconnectInstagram: () => disconnectInstagram,
+  getInstagramStatus: () => getInstagramStatus,
+  handleInstagramOAuthCallback: () => handleInstagramOAuthCallback,
+  handleInstagramWebhook: () => handleInstagramWebhook,
+  injectTestInstagramMessage: () => injectTestInstagramMessage,
+  sendInstagramMessage: () => sendInstagramMessage,
+  startInstagramOAuth: () => startInstagramOAuth
+});
+import crypto13 from "crypto";
+function requiredEnv(name5) {
+  const value = process.env[name5]?.trim();
+  if (!value) throw new Error(`Missing required server environment variable: ${name5}`);
+  return value;
+}
+function json2(res, status, payload) {
+  res.statusCode = status;
+  res.setHeader("Content-Type", "application/json");
+  res.end(JSON.stringify(payload));
+}
+function queryParams(req) {
+  return new URL(req.url || "/", "http://localhost").searchParams;
+}
+function stateDocId(state2) {
+  return crypto13.createHash("sha256").update(state2).digest("hex");
+}
+function contextFromState(state2) {
+  if (!state2?.tenantId || !state2?.uid || !state2?.role) {
+    throw new Error("Invalid Instagram OAuth state context");
+  }
+  return {
+    tenantId: String(state2.tenantId),
+    uid: String(state2.uid),
+    email: String(state2.email || ""),
+    role: state2.role,
+    isPlatformAdmin: false
+  };
+}
+async function getConnection(ctx) {
+  const snap = await getDoc(tenantRepo(ctx).integrationDoc("instagram"));
+  if (!snap.exists()) return null;
+  const data = snap.data();
+  return data?.channel === "instagram" ? data.connection || null : null;
+}
+async function getAccessToken(ctx) {
+  const repo = tenantRepo(ctx);
+  const snap = await getDoc(repo.secretDoc("instagram_access_token"));
+  if (!snap.exists()) throw new Error("Instagram is not connected. Reconnect the account.");
+  let accessToken = decryptSecret(snap.data());
+  const connection = await getConnection(ctx);
+  if (!connection) throw new Error("Instagram connection metadata is missing. Reconnect the account.");
+  if (connection.tokenExpiresAt) {
+    const expiresAt = Date.parse(connection.tokenExpiresAt);
+    if (Number.isFinite(expiresAt) && expiresAt <= Date.now()) {
+      throw new Error("Instagram access token has expired. Reconnect the account.");
+    }
+    if (Number.isFinite(expiresAt) && expiresAt - Date.now() < 7 * 24 * 60 * 60 * 1e3) {
+      try {
+        const refreshUrl = new URL("https://graph.instagram.com/refresh_access_token");
+        refreshUrl.searchParams.set("grant_type", "ig_refresh_token");
+        refreshUrl.searchParams.set("access_token", accessToken);
+        const refreshResponse = await fetch(refreshUrl);
+        const refreshBody = await refreshResponse.json().catch(() => ({}));
+        if (refreshResponse.ok && refreshBody.access_token) {
+          accessToken = String(refreshBody.access_token);
+          const now = (/* @__PURE__ */ new Date()).toISOString();
+          const expiresIn = Number(refreshBody.expires_in);
+          await setDoc(repo.secretDoc("instagram_access_token"), {
+            ...encryptSecret(accessToken),
+            name: "instagram_access_token",
+            createdAt: snap.data().createdAt || now,
+            updatedAt: now
+          });
+          await setDoc(repo.integrationDoc("instagram"), {
+            channel: "instagram",
+            connection: {
+              ...connection,
+              tokenExpiresAt: expiresIn ? new Date(Date.now() + expiresIn * 1e3).toISOString() : connection.tokenExpiresAt,
+              updatedAt: now
+            }
+          }, { merge: true });
+        }
+      } catch {
+      }
+    }
+  }
+  return accessToken;
+}
+async function startInstagramOAuth(ctx) {
+  const clientId = requiredEnv("META_INSTAGRAM_APP_ID");
+  const redirectUri = requiredEnv("META_INSTAGRAM_REDIRECT_URI");
+  requiredEnv("META_INSTAGRAM_APP_SECRET");
+  if (!process.env.SECRETS_MASTER_KEY && !process.env.TENANT_MASTER_KEY) {
+    throw new Error("SECRETS_MASTER_KEY or TENANT_MASTER_KEY must be configured before connecting Instagram.");
+  }
+  const state2 = crypto13.randomBytes(32).toString("base64url");
+  const now = Date.now();
+  await setDoc(doc(db, "instagram_oauth_states", stateDocId(state2)), {
+    tenantId: ctx.tenantId,
+    uid: ctx.uid,
+    email: ctx.email || "",
+    role: ctx.role,
+    createdAt: now,
+    expiresAt: now + OAUTH_STATE_TTL_MS
+  });
+  const params = new URLSearchParams({
+    client_id: clientId,
+    redirect_uri: redirectUri,
+    response_type: "code",
+    scope: "instagram_business_basic,instagram_business_manage_messages",
+    state: state2
+  });
+  return { authorizationUrl: `https://www.instagram.com/oauth/authorize?${params.toString()}` };
+}
+async function getInstagramStatus(ctx) {
+  const connection = await getConnection(ctx);
+  return { connected: connection?.status === "connected", connection };
+}
+async function disconnectInstagram(ctx) {
+  const repo = tenantRepo(ctx);
+  const existing = await getConnection(ctx);
+  try {
+    const token = await getAccessToken(ctx);
+    const revokeUrl = new URL("https://graph.instagram.com/" + GRAPH_VERSION2 + "/me/permissions");
+    revokeUrl.searchParams.set("access_token", token);
+    await fetch(revokeUrl, { method: "DELETE" });
+  } catch {
+  }
+  if (existing) {
+    await setDoc(repo.integrationDoc("instagram"), {
+      channel: "instagram",
+      connection: { ...existing, status: "disconnected", updatedAt: (/* @__PURE__ */ new Date()).toISOString() }
+    }, { merge: true });
+  }
+  await deleteDoc(repo.secretDoc("instagram_access_token"));
+  if (existing?.accountId) {
+    await deleteDoc(doc(db, "instagram_account_routes", existing.accountId));
+  }
+}
+async function exchangeCode(code) {
+  const clientId = requiredEnv("META_INSTAGRAM_APP_ID");
+  const clientSecret = requiredEnv("META_INSTAGRAM_APP_SECRET");
+  const redirectUri = requiredEnv("META_INSTAGRAM_REDIRECT_URI");
+  const form = new URLSearchParams({
+    client_id: clientId,
+    client_secret: clientSecret,
+    grant_type: "authorization_code",
+    redirect_uri: redirectUri,
+    code
+  });
+  const tokenResponse = await fetch("https://api.instagram.com/oauth/access_token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: form.toString()
+  });
+  const tokenBody = await tokenResponse.json().catch(() => ({}));
+  if (!tokenResponse.ok || !tokenBody.access_token || !tokenBody.user_id) {
+    throw new Error("Meta could not exchange the Instagram authorization code. Check app configuration and permissions.");
+  }
+  let accessToken = String(tokenBody.access_token);
+  let expiresIn = Number(tokenBody.expires_in) || void 0;
+  const longLivedUrl = new URL("https://graph.instagram.com/access_token");
+  longLivedUrl.searchParams.set("grant_type", "ig_exchange_token");
+  longLivedUrl.searchParams.set("client_secret", clientSecret);
+  longLivedUrl.searchParams.set("access_token", accessToken);
+  const longLivedResponse = await fetch(longLivedUrl);
+  const longLivedBody = await longLivedResponse.json().catch(() => ({}));
+  if (longLivedResponse.ok && longLivedBody.access_token) {
+    accessToken = String(longLivedBody.access_token);
+    expiresIn = Number(longLivedBody.expires_in) || expiresIn;
+  }
+  const profileUrl = new URL(`https://graph.instagram.com/${GRAPH_VERSION2}/me`);
+  profileUrl.searchParams.set("fields", "user_id,username");
+  profileUrl.searchParams.set("access_token", accessToken);
+  const profileResponse = await fetch(profileUrl);
+  const profile = await profileResponse.json().catch(() => ({}));
+  if (!profileResponse.ok || !(profile.user_id || profile.id) || !profile.username) {
+    throw new Error("Instagram authorization succeeded, but the account profile could not be verified.");
+  }
+  const accountId = String(profile.user_id || profile.id || tokenBody.user_id);
+  let webhookSubscribed = false;
+  try {
+    const subscribeUrl = new URL("https://graph.instagram.com/" + GRAPH_VERSION2 + "/" + encodeURIComponent(accountId) + "/subscribed_apps");
+    subscribeUrl.searchParams.set("subscribed_fields", "messages");
+    subscribeUrl.searchParams.set("access_token", accessToken);
+    const subscribeResponse = await fetch(subscribeUrl, { method: "POST" });
+    webhookSubscribed = subscribeResponse.ok;
+  } catch {
+    webhookSubscribed = false;
+  }
+  const aliasIds = Array.from(new Set([profile.user_id, profile.id, tokenBody.user_id].filter(Boolean).map(String)));
+  return {
+    accessToken,
+    accountId,
+    aliasIds,
+    username: String(profile.username),
+    expiresIn,
+    webhookSubscribed
+  };
+}
+async function handleInstagramOAuthCallback(req, res) {
+  const params = queryParams(req);
+  const state2 = params.get("state") || "";
+  const code = params.get("code") || "";
+  const error = params.get("error_description") || params.get("error");
+  if (!state2) {
+    json2(res, 400, { error: "Missing OAuth state." });
+    return true;
+  }
+  const stateRef = doc(db, "instagram_oauth_states", stateDocId(state2));
+  const stateSnap = await getDoc(stateRef);
+  if (!stateSnap.exists()) {
+    json2(res, 400, { error: "Instagram authorization state is invalid or has already been used." });
+    return true;
+  }
+  const stateData = stateSnap.data();
+  await deleteDoc(stateRef);
+  if (Date.now() > Number(stateData.expiresAt || 0)) {
+    json2(res, 400, { error: "Instagram authorization expired. Please try again." });
+    return true;
+  }
+  if (error || !code) {
+    const appUrl = process.env.APP_BASE_URL || process.env.APP_URL || "/";
+    res.statusCode = 302;
+    res.setHeader("Location", `${appUrl}${appUrl.includes("?") ? "&" : "?"}instagram=error`);
+    res.end();
+    return true;
+  }
+  try {
+    const ctx = contextFromState(stateData);
+    const account = await exchangeCode(code);
+    const existing = await getConnection(ctx);
+    const routeRef = doc(db, "instagram_account_routes", account.accountId);
+    const routeSnap = await getDoc(routeRef);
+    if (routeSnap.exists() && routeSnap.data().tenantId !== ctx.tenantId) {
+      json2(res, 409, { error: "This Instagram account is already connected to another workspace." });
+      return true;
+    }
+    if (existing?.accountId && existing.accountId !== account.accountId) {
+      await deleteDoc(doc(db, "instagram_account_routes", existing.accountId));
+    }
+    const now = (/* @__PURE__ */ new Date()).toISOString();
+    const connection = {
+      accountId: account.accountId,
+      username: account.username,
+      status: "connected",
+      connectedAt: existing?.connectedAt || now,
+      updatedAt: now,
+      scopes: ["instagram_business_basic", "instagram_business_manage_messages"],
+      tokenExpiresAt: account.expiresIn ? new Date(Date.now() + account.expiresIn * 1e3).toISOString() : null,
+      webhookSubscriptionStatus: account.webhookSubscribed ? "subscribed" : "needs_setup"
+    };
+    await setDoc(tenantRepo(ctx).secretDoc("instagram_access_token"), {
+      ...encryptSecret(account.accessToken),
+      name: "instagram_access_token",
+      updatedAt: now,
+      createdAt: now
+    });
+    await setDoc(tenantRepo(ctx).integrationDoc("instagram"), { channel: "instagram", connection }, { merge: true });
+    await setDoc(routeRef, { tenantId: ctx.tenantId, accountId: account.accountId, updatedAt: now });
+    for (const alias of account.aliasIds) {
+      if (alias === account.accountId) continue;
+      await setDoc(doc(db, "instagram_account_routes", alias), { tenantId: ctx.tenantId, accountId: account.accountId, alias: true, updatedAt: now });
+    }
+    const appUrl = process.env.APP_BASE_URL || process.env.APP_URL || "/";
+    res.statusCode = 302;
+    res.setHeader("Location", `${appUrl}${appUrl.includes("?") ? "&" : "?"}instagram=connected`);
+    res.end();
+  } catch (err) {
+    console.error("[Instagram OAuth] Connection failed:", err?.message || "unknown error");
+    json2(res, 500, { error: "Could not connect Instagram. Check server configuration and Meta app permissions." });
+  }
+  return true;
+}
+function isValidMetaSignature2(req) {
+  const secret = process.env.META_INSTAGRAM_APP_SECRET;
+  const signature = req.headers?.["x-hub-signature-256"];
+  const rawBody = req.rawBody;
+  if (!secret || !signature || !rawBody) return false;
+  const raw = Buffer.isBuffer(rawBody) ? rawBody : Buffer.from(String(rawBody));
+  const expected = `sha256=${crypto13.createHmac("sha256", secret).update(raw).digest("hex")}`;
+  const a = Buffer.from(String(signature));
+  const b = Buffer.from(expected);
+  return a.length === b.length && crypto13.timingSafeEqual(a, b);
+}
+async function processInstagramMessageEvent(tenantId, accountId, event, eventId) {
+  const senderId = String(event?.sender?.id || "");
+  const externalMessageId = String(event?.message?.mid || event?.id || eventId);
+  const eventRef = doc(db, "instagram_inbound_events", eventId);
+  if (!senderId || senderId === accountId || event?.message?.is_echo) {
+    await updateDoc(eventRef, { status: "ignored", processedAt: (/* @__PURE__ */ new Date()).toISOString() });
+    return;
+  }
+  const messageText = String(event?.message?.text || "").trim();
+  const incomingText = messageText || (Array.isArray(event?.message?.attachments) && event.message.attachments.length ? "[Instagram attachment received]" : "");
+  if (!incomingText) {
+    await updateDoc(eventRef, { status: "ignored", processedAt: (/* @__PURE__ */ new Date()).toISOString() });
+    return;
+  }
+  const ctx = { tenantId, uid: "instagram-webhook", email: "", role: "admin" };
+  const repo = tenantRepo(ctx);
+  const stableHash = (value) => crypto13.createHash("sha256").update(value).digest("hex").slice(0, 24);
+  const contactId = "igc_" + stableHash(accountId + ":" + senderId);
+  const conversationId = "igconv_" + stableHash(accountId + ":" + senderId);
+  const messageId = "igmsg_" + stableHash(accountId + ":" + externalMessageId);
+  const now = (/* @__PURE__ */ new Date()).toISOString();
+  const eventTime = Number(event?.timestamp);
+  const timestamp = Number.isFinite(eventTime) && eventTime > 0 ? new Date(eventTime).toISOString() : now;
+  const existingMessage = await getDoc(repo.messageDoc(messageId));
+  if (existingMessage.exists()) {
+    await updateDoc(eventRef, { status: "duplicate", processedAt: now });
+    return;
+  }
+  const contactSnap = await getDoc(repo.contactDoc(contactId));
+  const contact = contactSnap.exists() ? contactSnap.data() : {
+    contactId,
+    firstName: "Instagram",
+    lastName: "User",
+    email: "",
+    phone: "",
+    companyName: "Instagram contact",
+    instagramUserId: senderId,
+    tags: ["INSTAGRAM_DM"],
+    notes: "",
+    createdAt: now,
+    updatedAt: now
+  };
+  await setDoc(repo.contactDoc(contactId), { ...contact, instagramUserId: senderId, updatedAt: now, lastActivityAt: timestamp }, { merge: true });
+  const conversationSnap = await getDoc(repo.conversationDoc(conversationId));
+  const previous = conversationSnap.exists() ? conversationSnap.data() : null;
+  const conversation = {
+    conversationId,
+    contactId,
+    channel: "INSTAGRAM",
+    direction: "INBOUND",
+    externalConversationId: senderId,
+    status: previous?.status || "ACTIVE",
+    aiEnabled: previous?.aiEnabled !== false,
+    humanHandoff: previous?.humanHandoff === true,
+    managementMode: previous?.managementMode || "AI",
+    conversationSummary: previous?.conversationSummary || "Instagram direct-message conversation",
+    startedAt: previous?.startedAt || timestamp,
+    lastMessageAt: timestamp,
+    lastMessageText: incomingText,
+    unreadCount: Number(previous?.unreadCount || 0) + 1,
+    isRead: false,
+    unread: true,
+    createdAt: previous?.createdAt || now,
+    updatedAt: now
+  };
+  await setDoc(repo.conversationDoc(conversationId), conversation, { merge: true });
+  await setDoc(repo.messageDoc(messageId), {
+    messageId,
+    externalMessageId,
+    conversationId,
+    channel: "INSTAGRAM",
+    senderType: "CUSTOMER",
+    senderName: "Instagram user",
+    instagramUserId: senderId,
+    text: incomingText,
+    direction: "INBOUND",
+    timestamp,
+    receivedAt: now,
+    createdAt: now,
+    aiReplied: false,
+    aiProcessed: false
+  });
+  if (event?.__test === true) {
+    await updateDoc(eventRef, { status: "test_processed", processedAt: now, conversationId });
+    return;
+  }
+  const settingsSnap = await getDoc(repo.settingsDoc("default"));
+  const settings = settingsSnap.exists() ? settingsSnap.data() : {};
+  const mode = settings?.channelModes?.INSTAGRAM || "AUTO";
+  if (!conversation.aiEnabled || conversation.humanHandoff || conversation.managementMode === "HUMAN" || mode === "SIMULATION") {
+    await updateDoc(eventRef, { status: "processed", processedAt: now, conversationId });
+    return;
+  }
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey || !messageText) {
+    await updateDoc(eventRef, { status: "processed_no_reply", reason: !apiKey ? "OPENAI_API_KEY is not configured" : "No text available for AI reply", processedAt: now, conversationId });
+    return;
+  }
+  const knowledgeSnap = await getDocs(repo.knowledgeDocuments());
+  const knowledge = knowledgeSnap.docs.map((d) => d.data()).filter((d) => d.status === "PUBLISHED").slice(0, 8).map((d) => "## " + String(d.title || "Knowledge") + "\n" + String(d.content || "").slice(0, 2500)).join("\n\n").slice(0, 12e3);
+  const historySnap = await getDocs(query(repo.messages(), where("conversationId", "==", conversationId)));
+  const history = historySnap.docs.map((d) => d.data()).filter((m2) => m2.messageId !== messageId).sort((a, b) => new Date(a.timestamp || 0).getTime() - new Date(b.timestamp || 0).getTime()).slice(-8).map((m2) => ({ role: m2.direction === "OUTBOUND" ? "assistant" : "user", content: String(m2.text || "").slice(0, 1500) }));
+  const openai = new OpenAI({ apiKey });
+  const completion = await openai.chat.completions.create({
+    model: process.env.INSTAGRAM_AI_MODEL || "gpt-4o-mini",
+    temperature: 0.3,
+    messages: [
+      { role: "system", content: "You are this workspace customer-support and lead-qualification assistant. Reply naturally and briefly to the Instagram DM. Use only the workspace knowledge below for factual claims. If knowledge does not answer the question, ask a concise clarifying question instead of inventing facts. Do not claim a booking or action has completed unless confirmed.\n\nWorkspace knowledge:\n" + (knowledge || "No published workspace knowledge is available. Ask a clarifying question and do not invent product details.") },
+      ...history,
+      { role: "user", content: messageText.slice(0, 3e3) }
+    ]
+  });
+  const replyText = completion.choices[0]?.message?.content?.trim();
+  if (!replyText) {
+    await updateDoc(eventRef, { status: "processed_no_reply", reason: "AI returned an empty response", processedAt: now, conversationId });
+    return;
+  }
+  if (mode === "REVIEW") {
+    await updateDoc(repo.conversationDoc(conversationId), {
+      draftReply: { draftId: "igdraft_" + stableHash(externalMessageId), text: replyText, generatedAt: now, status: "PENDING" },
+      updatedAt: now
+    });
+    await updateDoc(repo.messageDoc(messageId), { aiProcessed: true });
+    await updateDoc(eventRef, { status: "draft_created", processedAt: now, conversationId });
+    return;
+  }
+  const latestSnap = await getDoc(repo.conversationDoc(conversationId));
+  const latest = latestSnap.exists() ? latestSnap.data() : {};
+  if (latest.aiEnabled === false || latest.humanHandoff === true || latest.managementMode === "HUMAN") {
+    await updateDoc(eventRef, { status: "suppressed_human_takeover", processedAt: (/* @__PURE__ */ new Date()).toISOString(), conversationId });
+    return;
+  }
+  const sendResult = await sendInstagramMessage(ctx, senderId, replyText);
+  const outboundId = "igout_" + stableHash(externalMessageId);
+  const sentAt = (/* @__PURE__ */ new Date()).toISOString();
+  await setDoc(repo.messageDoc(outboundId), {
+    messageId: outboundId,
+    externalMessageId: String(sendResult?.message_id || sendResult?.messageId || ""),
+    conversationId,
+    channel: "INSTAGRAM",
+    senderType: "AI",
+    senderName: "AI Assistant",
+    instagramUserId: senderId,
+    text: replyText,
+    direction: "OUTBOUND",
+    timestamp: sentAt,
+    sentAt,
+    createdAt: sentAt,
+    aiProcessed: true,
+    aiGenerated: true,
+    deliveryStatus: "DELIVERED"
+  });
+  await updateDoc(repo.messageDoc(messageId), { aiReplied: true, repliedAt: sentAt, repliedByMessageId: outboundId, aiProcessed: true });
+  await updateDoc(repo.conversationDoc(conversationId), { lastMessageAt: sentAt, lastMessageText: replyText, updatedAt: sentAt });
+  await updateDoc(eventRef, { status: "replied", processedAt: sentAt, conversationId, outboundMessageId: outboundId });
+}
+async function handleInstagramWebhook(req, res) {
+  if (req.method === "GET") {
+    const params = queryParams(req);
+    const mode = params.get("hub.mode") || params.get("hub_mode");
+    const token = params.get("hub.verify_token") || params.get("hub_verify_token");
+    const challenge = params.get("hub.challenge") || params.get("hub_challenge");
+    const accepted2 = [process.env.META_INSTAGRAM_WEBHOOK_VERIFY_TOKEN, process.env.META_WEBHOOK_VERIFY_TOKEN].map((t2) => (t2 || "").trim()).filter(Boolean);
+    if (mode === "subscribe" && token && accepted2.includes(token) && challenge) {
+      res.statusCode = 200;
+      res.setHeader("Content-Type", "text/plain");
+      res.end(challenge);
+    } else {
+      res.statusCode = 403;
+      res.end("Forbidden");
+    }
+    return true;
+  }
+  if (req.method !== "POST") {
+    json2(res, 405, { error: "Method not allowed" });
+    return true;
+  }
+  const signatureOk = isValidMetaSignature2(req);
+  console.log("[Instagram webhook] POST received", JSON.stringify({
+    signatureOk,
+    object: req.body?.object,
+    entries: Array.isArray(req.body?.entry) ? req.body.entry.map((e2) => ({ id: e2?.id, messaging: Array.isArray(e2?.messaging) ? e2.messaging.length : 0, changes: Array.isArray(e2?.changes) ? e2.changes.length : 0 })) : []
+  }));
+  if (!signatureOk) {
+    json2(res, 401, { error: "Invalid webhook signature or raw request body unavailable." });
+    return true;
+  }
+  const body = req.body || {};
+  if (body.object !== "instagram") {
+    json2(res, 400, { error: "Unsupported webhook object." });
+    return true;
+  }
+  let accepted = 0;
+  for (const entry of Array.isArray(body.entry) ? body.entry : []) {
+    const accountId = String(entry.id || "");
+    if (!accountId) continue;
+    const routeSnap = await getDoc(doc(db, "instagram_account_routes", accountId));
+    let tenantId = routeSnap.exists() ? String(routeSnap.data().tenantId || "") : "";
+    if (!routeSnap.exists()) {
+      const all = await getDocs(collection(db, "instagram_account_routes")).catch(() => null);
+      const tenants = /* @__PURE__ */ new Set();
+      all?.forEach?.((d) => {
+        const t2 = d.data()?.tenantId;
+        if (t2) tenants.add(String(t2));
+      });
+      if (tenants.size === 1) {
+        tenantId = Array.from(tenants)[0];
+        await setDoc(doc(db, "instagram_account_routes", accountId), { tenantId, alias: true, updatedAt: (/* @__PURE__ */ new Date()).toISOString() }).catch(() => {
+        });
+        console.warn("[Instagram webhook] Unknown account id", accountId, "auto-linked to the only connected workspace", tenantId);
+      } else {
+        console.warn("[Instagram webhook] No workspace is connected for account id", accountId);
+        continue;
+      }
+    }
+    if (!tenantId) continue;
+    const events = [
+      ...Array.isArray(entry.messaging) ? entry.messaging : [],
+      ...Array.isArray(entry.changes) ? entry.changes : []
+    ];
+    for (const event of events) {
+      const externalId = String(event.message?.mid || event.id || event.timestamp || crypto13.randomUUID());
+      const eventId = crypto13.createHash("sha256").update(`${accountId}:${externalId}`).digest("hex");
+      const eventRef = doc(db, "instagram_inbound_events", eventId);
+      try {
+        await createDoc(eventRef, { accountId, tenantId, externalId, event, status: "received", receivedAt: (/* @__PURE__ */ new Date()).toISOString() });
+      } catch {
+        continue;
+      }
+      try {
+        await processInstagramMessageEvent(tenantId, accountId, event, eventId);
+      } catch (error) {
+        console.error("[Instagram webhook] Event processing failed:", error?.message || "unknown error");
+        await updateDoc(eventRef, { status: "failed", lastError: "Processing failed; inspect server logs.", updatedAt: (/* @__PURE__ */ new Date()).toISOString() }).catch(() => {
+        });
+      }
+      accepted++;
+    }
+  }
+  json2(res, 200, { success: true, accepted });
+  return true;
+}
+async function sendInstagramMessage(ctx, recipientId, text) {
+  if (!recipientId?.trim() || !text?.trim()) throw new Error("Instagram recipient and message text are required.");
+  const connection = await getConnection(ctx);
+  if (!connection || connection.status !== "connected") throw new Error("Instagram account is not connected.");
+  if (connection.tokenExpiresAt && Date.parse(connection.tokenExpiresAt) <= Date.now()) {
+    throw new Error("Instagram access token may have expired. Reconnect the account.");
+  }
+  const accessToken = await getAccessToken(ctx);
+  const url = `https://graph.instagram.com/${GRAPH_VERSION2}/${encodeURIComponent(connection.accountId)}/messages`;
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ recipient: { id: recipientId }, message: { text: text.trim() } })
+  });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(`Instagram message send failed (HTTP ${response.status}). Check account permissions and messaging eligibility.`);
+  }
+  return result;
+}
+async function diagnoseInstagram(ctx) {
+  const connection = await getConnection(ctx);
+  if (!connection || connection.status !== "connected") {
+    return { connected: false, summary: "Instagram is not connected for this workspace. Click Connect Instagram first." };
+  }
+  const result = { connected: true, accountId: connection.accountId, username: connection.username };
+  const notes = [];
+  let token = "";
+  try {
+    token = await getAccessToken(ctx);
+  } catch (err) {
+    return { ...result, summary: err?.message || "The stored Instagram token cannot be used. Click Reconnect." };
+  }
+  try {
+    const profileUrl = new URL(`https://graph.instagram.com/${GRAPH_VERSION2}/me`);
+    profileUrl.searchParams.set("fields", "user_id,username,account_type");
+    profileUrl.searchParams.set("access_token", token);
+    const profile = await (await fetch(profileUrl)).json().catch(() => ({}));
+    result.accountType = profile.account_type || "unknown";
+    result.profileUserId = String(profile.user_id || profile.id || "");
+    for (const alias of new Set([profile.user_id, profile.id].filter(Boolean).map(String))) {
+      if (alias === connection.accountId) continue;
+      await setDoc(doc(db, "instagram_account_routes", alias), { tenantId: ctx.tenantId, accountId: connection.accountId, alias: true, updatedAt: (/* @__PURE__ */ new Date()).toISOString() });
+      notes.push(`Registered extra account id ${alias}.`);
+    }
+    if (profile.error) notes.push(`Instagram rejected the token: ${profile.error.message || "error"}. Reconnect the account.`);
+    else if (profile.account_type && !["BUSINESS", "MEDIA_CREATOR"].includes(String(profile.account_type))) {
+      notes.push(`Account type is ${profile.account_type}. It must be a Business or Creator (Professional) account.`);
+    }
+  } catch {
+    notes.push("Could not read the Instagram profile.");
+  }
+  try {
+    const routeRef = doc(db, "instagram_account_routes", connection.accountId);
+    const routeSnap = await getDoc(routeRef);
+    if (!routeSnap.exists()) {
+      await setDoc(routeRef, { tenantId: ctx.tenantId, accountId: connection.accountId, updatedAt: (/* @__PURE__ */ new Date()).toISOString() });
+      result.routeRepaired = true;
+      notes.push("The routing record was missing and has been recreated.");
+    } else if (routeSnap.data().tenantId !== ctx.tenantId) {
+      notes.push("This Instagram account is routed to a different workspace.");
+    }
+    result.routeOk = true;
+  } catch {
+    notes.push("Could not check the routing record.");
+  }
+  const subsUrl = new URL(`https://graph.instagram.com/${GRAPH_VERSION2}/${encodeURIComponent(connection.accountId)}/subscribed_apps`);
+  subsUrl.searchParams.set("access_token", token);
+  const readFields = async () => {
+    const body = await (await fetch(subsUrl)).json().catch(() => ({}));
+    const rows = Array.isArray(body?.data) ? body.data : [];
+    return rows.flatMap((r2) => Array.isArray(r2.subscribed_fields) ? r2.subscribed_fields : []);
+  };
+  try {
+    let fields = await readFields();
+    result.subscribedFields = fields;
+    if (!fields.includes("messages")) {
+      const subscribeUrl = new URL(subsUrl);
+      subscribeUrl.searchParams.set("subscribed_fields", "messages");
+      const resp = await fetch(subscribeUrl, { method: "POST" });
+      const body = await resp.json().catch(() => ({}));
+      fields = await readFields();
+      result.subscribedFields = fields;
+      result.resubscribed = resp.ok && fields.includes("messages");
+      notes.push(
+        fields.includes("messages") ? "The account was not subscribed to messages; it has now been subscribed." : `Could not subscribe to messages${body?.error?.message ? `: ${body.error.message}` : ""}.`
+      );
+    }
+  } catch {
+    notes.push("Could not read the webhook subscription.");
+  }
+  result.appSecretSet = Boolean(process.env.META_INSTAGRAM_APP_SECRET);
+  result.verifyTokenSet = Boolean(process.env.META_INSTAGRAM_WEBHOOK_VERIFY_TOKEN || process.env.META_WEBHOOK_VERIFY_TOKEN);
+  if (!result.appSecretSet) notes.push("META_INSTAGRAM_APP_SECRET is not set, so incoming events would be rejected.");
+  const subscribed = Array.isArray(result.subscribedFields) && result.subscribedFields.includes("messages");
+  result.summary = notes.length ? notes.join(" ") : subscribed ? "Account is professional, routed to this workspace and subscribed to messages. If DMs still do not arrive, check Instagram app > Settings > Messages and story replies > Connected tools > Allow access to messages, and that the sender has a role on the Meta app." : "Checks finished.";
+  return result;
+}
+async function injectTestInstagramMessage(ctx) {
+  const connection = await getConnection(ctx);
+  if (!connection || connection.status !== "connected") throw new Error("Instagram is not connected. Connect an account first.");
+  const accountId = connection.accountId;
+  const senderId = "test_sender";
+  const uniq = crypto13.randomBytes(6).toString("hex");
+  const event = {
+    __test: true,
+    sender: { id: senderId },
+    recipient: { id: accountId },
+    timestamp: Date.now(),
+    message: { mid: `test_mid_${uniq}`, text: `Test message from Settings (${(/* @__PURE__ */ new Date()).toLocaleTimeString("en-GB")})` }
+  };
+  const eventId = crypto13.createHash("sha256").update(`${accountId}:${event.message.mid}`).digest("hex");
+  await createDoc(doc(db, "instagram_inbound_events", eventId), {
+    accountId,
+    tenantId: ctx.tenantId,
+    externalId: event.message.mid,
+    event,
+    status: "received",
+    receivedAt: (/* @__PURE__ */ new Date()).toISOString()
+  });
+  await processInstagramMessageEvent(ctx.tenantId, accountId, event, eventId);
+  const hash = (v) => crypto13.createHash("sha256").update(v).digest("hex").slice(0, 24);
+  return { conversationId: "igconv_" + hash(accountId + ":" + senderId), messageId: "igmsg_" + hash(accountId + ":" + event.message.mid) };
+}
+var GRAPH_VERSION2, OAUTH_STATE_TTL_MS;
+var init_instagramIntegrationService = __esm({
+  "src/server/instagramIntegrationService.ts"() {
+    init_adminFirestore();
+    init_openai();
+    init_adminFirestore();
+    init_tenantRepo();
+    init_cryptoUtils();
+    GRAPH_VERSION2 = process.env.META_GRAPH_API_VERSION || "v23.0";
+    OAUTH_STATE_TTL_MS = 10 * 60 * 1e3;
+  }
+});
+
+// src/server/microsoftCalendarOAuth.ts
+var microsoftCalendarOAuth_exports = {};
+__export(microsoftCalendarOAuth_exports, {
+  MICROSOFT_CALENDAR_SECRET_NAME: () => MICROSOFT_CALENDAR_SECRET_NAME,
+  MicrosoftOAuthError: () => MicrosoftOAuthError,
+  MicrosoftReauthRequired: () => MicrosoftReauthRequired,
+  calendarRedirectUrl: () => calendarRedirectUrl,
+  deleteMicrosoftCalendarRefreshToken: () => deleteMicrosoftCalendarRefreshToken,
+  exchangeMicrosoftCalendarCallback: () => exchangeMicrosoftCalendarCallback,
+  getMicrosoftCalendarAccessToken: () => getMicrosoftCalendarAccessToken,
+  hasMicrosoftCalendarRefreshToken: () => hasMicrosoftCalendarRefreshToken,
+  isMicrosoftCalendarOAuthConfigured: () => isMicrosoftCalendarOAuthConfigured,
+  saveMicrosoftCalendarRefreshToken: () => saveMicrosoftCalendarRefreshToken,
+  startMicrosoftCalendarOAuth: () => startMicrosoftCalendarOAuth
+});
+import crypto14 from "node:crypto";
+function config2() {
+  const clientId = (process.env.MICROSOFT_CLIENT_ID || "").trim();
+  const clientSecret = (process.env.MICROSOFT_CLIENT_SECRET || "").trim();
+  const appUrl = (process.env.APP_URL || "").trim().replace(/\/+$/, "");
+  const redirectUri = (process.env.MICROSOFT_CALENDAR_REDIRECT_URI || (appUrl ? `${appUrl}/api/oauth/microsoft-calendar/callback` : "")).trim();
+  const authTenant = (process.env.MICROSOFT_AUTH_TENANT || "common").trim();
+  return { clientId, clientSecret, redirectUri, authTenant, appUrl };
+}
+function isMicrosoftCalendarOAuthConfigured() {
+  const c = config2();
+  return Boolean(c.clientId && c.clientSecret && c.redirectUri);
+}
+function requireConfig2() {
+  const c = config2();
+  if (!c.clientId || !c.clientSecret || !c.redirectUri) {
+    throw new MicrosoftOAuthError(
+      503,
+      "Microsoft Calendar is not set up on this server yet (MICROSOFT_CLIENT_ID / MICROSOFT_CLIENT_SECRET / APP_URL)."
+    );
+  }
+  return c;
+}
+async function tokenRequest2(body) {
+  const c = requireConfig2();
+  const res = await fetch(`https://login.microsoftonline.com/${encodeURIComponent(c.authTenant)}/oauth2/v2.0/token`, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ client_id: c.clientId, client_secret: c.clientSecret, ...body }).toString()
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok && !data.error) data.error = `http_${res.status}`;
+  return data;
+}
+function decodeIdToken2(idToken) {
+  if (!idToken) return {};
+  try {
+    return JSON.parse(Buffer.from(idToken.split(".")[1] || "", "base64url").toString("utf8"));
+  } catch {
+    return {};
+  }
+}
+async function startMicrosoftCalendarOAuth(ctx) {
+  if (!isFirebaseConfigured || !db) throw new MicrosoftOAuthError(503, "Database is not configured");
+  if (!isMicrosoftOAuthConfigured() && !isMicrosoftCalendarOAuthConfigured()) {
+    throw new MicrosoftOAuthError(503, "Microsoft Calendar is not set up on this server yet.");
+  }
+  const c = requireConfig2();
+  const state2 = b64url2(crypto14.randomBytes(32));
+  const codeVerifier = b64url2(crypto14.randomBytes(48));
+  const codeChallenge = b64url2(crypto14.createHash("sha256").update(codeVerifier).digest());
+  await setDoc(doc(db, STATE_COLLECTION2, stateKey2(state2)), {
+    provider: "microsoft_calendar",
+    tenantId: ctx.tenantId,
+    uid: ctx.uid,
+    codeVerifier,
+    createdAt: (/* @__PURE__ */ new Date()).toISOString(),
+    expiresAt: new Date(Date.now() + STATE_TTL_MS2).toISOString()
+  });
+  const params = new URLSearchParams({
+    client_id: c.clientId,
+    response_type: "code",
+    redirect_uri: c.redirectUri,
+    response_mode: "query",
+    scope: SCOPES2.join(" "),
+    state: state2,
+    code_challenge: codeChallenge,
+    code_challenge_method: "S256",
+    prompt: "select_account"
+  });
+  return {
+    authorizationUrl: `https://login.microsoftonline.com/${encodeURIComponent(c.authTenant)}/oauth2/v2.0/authorize?${params.toString()}`
+  };
+}
+async function exchangeMicrosoftCalendarCallback(query2) {
+  if (!isFirebaseConfigured || !db) throw new MicrosoftOAuthError(503, "Database is not configured");
+  const c = requireConfig2();
+  const state2 = query2.get("state") || "";
+  if (!state2) throw new MicrosoftOAuthError(400, "Missing sign-in state. Please try again.");
+  const ref = doc(db, STATE_COLLECTION2, stateKey2(state2));
+  const snap = await getDoc(ref);
+  await deleteDoc(ref).catch(() => {
+  });
+  const st = snap.exists() ? snap.data() : null;
+  if (!st || st.provider !== "microsoft_calendar" || !st.tenantId || new Date(st.expiresAt).getTime() < Date.now()) {
+    throw new MicrosoftOAuthError(400, "This sign-in link has expired. Please start again from Demo Scheduling.");
+  }
+  if (query2.get("error")) {
+    throw new MicrosoftOAuthError(
+      400,
+      describeMicrosoftError({ error: query2.get("error") || void 0, error_description: query2.get("error_description") || void 0 })
+    );
+  }
+  const code = query2.get("code") || "";
+  if (!code) throw new MicrosoftOAuthError(400, "Microsoft did not return a sign-in code. Please try again.");
+  const data = await tokenRequest2({
+    grant_type: "authorization_code",
+    code,
+    redirect_uri: c.redirectUri,
+    code_verifier: st.codeVerifier,
+    scope: SCOPES2.join(" ")
+  });
+  if (data.error || !data.access_token) throw new MicrosoftOAuthError(400, describeMicrosoftError(data));
+  if (!data.refresh_token) {
+    throw new MicrosoftOAuthError(400, "Microsoft did not grant offline access. Please try again and accept all permissions.");
+  }
+  const claims = decodeIdToken2(data.id_token);
+  const emailCandidates = [claims.email, claims.preferred_username, claims.upn, claims.unique_name].map((v) => String(v || "").trim().toLowerCase()).filter((v) => v.includes("@"));
+  const email = emailCandidates[0] || "";
+  if (!email) throw new MicrosoftOAuthError(400, "Could not read the Microsoft account email.");
+  return {
+    tenantId: String(st.tenantId),
+    email,
+    refreshToken: data.refresh_token,
+    accessToken: data.access_token,
+    expiresIn: Number(data.expires_in) || 3600
+  };
+}
+async function saveMicrosoftCalendarRefreshToken(tenantId, refreshToken2, accessToken, expiresIn) {
+  const now = (/* @__PURE__ */ new Date()).toISOString();
+  await setDoc(
+    tenantRepo(sysCtx3(tenantId)).secretDoc(MICROSOFT_CALENDAR_SECRET_NAME),
+    { name: MICROSOFT_CALENDAR_SECRET_NAME, ...encryptSecret(JSON.stringify({ refreshToken: refreshToken2 })), createdAt: now, updatedAt: now },
+    { merge: false }
+  );
+  if (accessToken) accessCache2.set(tenantId, { token: accessToken, expiresAt: Date.now() + (expiresIn || 3600) * 1e3 });
+  else accessCache2.delete(tenantId);
+}
+async function deleteMicrosoftCalendarRefreshToken(tenantId) {
+  accessCache2.delete(tenantId);
+  await deleteDoc(tenantRepo(sysCtx3(tenantId)).secretDoc(MICROSOFT_CALENDAR_SECRET_NAME)).catch(() => {
+  });
+}
+async function hasMicrosoftCalendarRefreshToken(tenantId) {
+  if (!isFirebaseConfigured || !db) return false;
+  return (await getDoc(tenantRepo(sysCtx3(tenantId)).secretDoc(MICROSOFT_CALENDAR_SECRET_NAME))).exists();
+}
+async function readRefreshToken2(tenantId) {
+  const snap = await getDoc(tenantRepo(sysCtx3(tenantId)).secretDoc(MICROSOFT_CALENDAR_SECRET_NAME));
+  if (!snap.exists()) return null;
+  try {
+    return JSON.parse(decryptSecret(snap.data())).refreshToken || null;
+  } catch {
+    return null;
+  }
+}
+async function getMicrosoftCalendarAccessToken(tenantId) {
+  const cached = accessCache2.get(tenantId);
+  if (cached && cached.expiresAt - 5 * 6e4 > Date.now()) return cached.token;
+  const refreshToken2 = await readRefreshToken2(tenantId);
+  if (!refreshToken2) {
+    throw new MicrosoftReauthRequired("The saved Microsoft Calendar sign-in could not be read. Connect Microsoft Calendar again.");
+  }
+  const data = await tokenRequest2({ grant_type: "refresh_token", refresh_token: refreshToken2, scope: SCOPES2.join(" ") });
+  if (data.error || !data.access_token) {
+    if (data.error === "invalid_grant" || data.error === "interaction_required" || data.error === "consent_required") {
+      accessCache2.delete(tenantId);
+      throw new MicrosoftReauthRequired(describeMicrosoftError(data));
+    }
+    throw new Error(describeMicrosoftError(data));
+  }
+  accessCache2.set(tenantId, { token: data.access_token, expiresAt: Date.now() + (Number(data.expires_in) || 3600) * 1e3 });
+  if (data.refresh_token && data.refresh_token !== refreshToken2) {
+    await saveMicrosoftCalendarRefreshToken(tenantId, data.refresh_token, data.access_token, data.expires_in);
+  }
+  return data.access_token;
+}
+function calendarRedirectUrl(result, message2) {
+  const { appUrl } = config2();
+  const params = new URLSearchParams({ calendar: result === "connected" ? "microsoft" : "error" });
+  if (message2) params.set("calendar_message", message2.slice(0, 300));
+  return `${appUrl || ""}/?${params.toString()}`;
+}
+var MICROSOFT_CALENDAR_SECRET_NAME, STATE_COLLECTION2, STATE_TTL_MS2, SCOPES2, sysCtx3, b64url2, stateKey2, accessCache2;
+var init_microsoftCalendarOAuth = __esm({
+  "src/server/microsoftCalendarOAuth.ts"() {
+    init_adminFirestore();
+    init_config();
+    init_tenantRepo();
+    init_cryptoUtils();
+    init_microsoftOAuth();
+    MICROSOFT_CALENDAR_SECRET_NAME = "calendar_oauth_microsoft";
+    STATE_COLLECTION2 = "oauth_states";
+    STATE_TTL_MS2 = 10 * 6e4;
+    SCOPES2 = [
+      "https://graph.microsoft.com/Calendars.ReadWrite",
+      "https://graph.microsoft.com/OnlineMeetings.ReadWrite",
+      "offline_access",
+      "openid",
+      "email",
+      "profile"
+    ];
+    sysCtx3 = (tenantId) => ({ tenantId, uid: "system", email: "", role: "admin" });
+    b64url2 = (buf) => buf.toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+    stateKey2 = (state2) => crypto14.createHash("sha256").update(state2).digest("hex");
+    accessCache2 = /* @__PURE__ */ new Map();
   }
 });
 
@@ -294582,9 +301904,24 @@ async function fetchNewMessages(creds, ip, settings) {
 }
 async function runCycle(tenantId) {
   const result = { tenantId, ran: true, processed: 0, skipped: 0 };
-  const ctx = sysCtx2(tenantId);
+  const ctx = sysCtx4(tenantId);
   const settings = await getInboundSettings(tenantId, { fresh: true });
-  const creds = await getInboundCredentials(tenantId);
+  let creds;
+  try {
+    creds = await getInboundCredentials(tenantId);
+  } catch (err) {
+    const reauth = err instanceof MicrosoftReauthRequired;
+    const failures = (settings.consecutiveFailures || 0) + 1;
+    await updateInboundState(tenantId, {
+      status: reauth ? "auth_failed" : "error",
+      lastError: String(err?.message || "Could not sign in to Microsoft").slice(0, 400),
+      lastErrorAt: (/* @__PURE__ */ new Date()).toISOString(),
+      consecutiveFailures: failures,
+      nextPollAt: new Date(Date.now() + (reauth ? 24 * 36e5 : backoffMs(failures))).toISOString()
+    });
+    result.error = err?.message || "token refresh failed";
+    return result;
+  }
   if (!creds) {
     await updateInboundState(tenantId, {
       status: "error",
@@ -294601,9 +301938,12 @@ async function runCycle(tenantId) {
     const ip = await resolveSafeHost(creds.host);
     fetched = await fetchNewMessages(creds, ip, settings);
   } catch (err) {
-    const msg = err?.message && err?.status ? String(err.message) : friendlyImapError(err, creds);
+    let msg = err?.message && err?.status ? String(err.message) : friendlyImapError(err, creds);
     const failures = (settings.consecutiveFailures || 0) + 1;
     const authFail = isAuthFailure(err);
+    if (authFail && creds.accessToken) {
+      msg = 'Microsoft refused the mailbox sign-in. IMAP may be turned off for this mailbox, or access was removed. Click "Reconnect with Microsoft".';
+    }
     await updateInboundState(tenantId, {
       status: authFail ? "auth_failed" : "error",
       lastError: msg,
@@ -294611,7 +301951,10 @@ async function runCycle(tenantId) {
       lastPolledAt: startedAt,
       consecutiveFailures: failures,
       // A wrong password will not fix itself, but a single refusal is often temporary: see authPauseMs.
-      nextPollAt: new Date(Date.now() + (authFail ? authPauseMs(failures) : backoffMs(failures))).toISOString()
+      // For Microsoft OAuth, after the first hard auth failure wait for reconnect (same as token refresh path).
+      nextPollAt: new Date(
+        Date.now() + (authFail && creds.accessToken ? 24 * 36e5 : authFail ? authPauseMs(failures) : backoffMs(failures))
+      ).toISOString()
     });
     result.error = msg;
     console.warn(`[Tenant IMAP] ${tenantId}: ${msg}`);
@@ -294775,7 +302118,7 @@ function startTenantMailboxPoller() {
   timer.unref?.();
   console.log("[Tenant IMAP] Per-workspace mailbox poller started.");
 }
-var JOB_NAME, JOB_LEASE_MS, MIN_POLL_INTERVAL_MS, MAX_MESSAGES_PER_CYCLE, MAX_MESSAGE_BYTES, TICK_MS, CONCURRENCY, MAX_BACKOFF_MS, lastAttempt, sysCtx2, tickRunning, timer;
+var JOB_NAME, JOB_LEASE_MS, MIN_POLL_INTERVAL_MS, MAX_MESSAGES_PER_CYCLE, MAX_MESSAGE_BYTES, TICK_MS, CONCURRENCY, MAX_BACKOFF_MS, lastAttempt, sysCtx4, tickRunning, timer;
 var init_tenantImapPoller = __esm({
   "src/server/tenantImapPoller.ts"() {
     init_jobLeaseService();
@@ -294786,6 +302129,7 @@ var init_tenantImapPoller = __esm({
     init_imapService();
     init_inboundPipeline();
     init_tenantInboundService();
+    init_microsoftOAuth();
     JOB_NAME = "tenant_imap_inbound";
     JOB_LEASE_MS = 3 * 6e4;
     MIN_POLL_INTERVAL_MS = 45e3;
@@ -294795,9 +302139,357 @@ var init_tenantImapPoller = __esm({
     CONCURRENCY = 3;
     MAX_BACKOFF_MS = 30 * 6e4;
     lastAttempt = /* @__PURE__ */ new Map();
-    sysCtx2 = (tenantId) => ({ tenantId, uid: "system", email: "", role: "admin" });
+    sysCtx4 = (tenantId) => ({ tenantId, uid: "system", email: "", role: "admin" });
     tickRunning = false;
     timer = null;
+  }
+});
+
+// src/server/websiteLeadAutoResponder.ts
+var websiteLeadAutoResponder_exports = {};
+__export(websiteLeadAutoResponder_exports, {
+  checkAndDispatchPendingWebsiteLeadEmails: () => checkAndDispatchPendingWebsiteLeadEmails,
+  dispatchThankYouEmailForConversation: () => dispatchThankYouEmailForConversation
+});
+function getInFlightSet2(tenantId) {
+  let set = tenantInFlightDispatches.get(tenantId);
+  if (!set) {
+    set = /* @__PURE__ */ new Set();
+    tenantInFlightDispatches.set(tenantId, set);
+  }
+  return set;
+}
+async function checkAndDispatchPendingWebsiteLeadEmails(ctx = DEFAULT_UMRAH_CTX8) {
+  if (tenantRunningChecks.has(ctx.tenantId)) {
+    return { processedCount: 0, dispatchedCount: 0 };
+  }
+  if (!isFirebaseConfigured || !db) {
+    return { processedCount: 0, dispatchedCount: 0 };
+  }
+  tenantRunningChecks.add(ctx.tenantId);
+  let processedCount = 0;
+  let dispatchedCount = 0;
+  try {
+    const repo = tenantRepo(ctx);
+    if (!getResendConfig().apiKey) {
+      return { processedCount: 0, dispatchedCount: 0 };
+    }
+    const convsSnap = await getDocs(
+      query(repo.conversations(), where("channel", "==", "WEBSITE"), where("thankYouEmailSent", "==", false))
+    );
+    const candidateConvs = [];
+    for (const d of convsSnap.docs) {
+      const conv = d.data();
+      const isWebsiteLead = conv.conversationId?.startsWith("conv-web-") || conv.channel === "WEBSITE" || conv.conversationSummary && conv.conversationSummary.includes("Website Demo Request") || conv.subject?.includes("Website Demo Request");
+      if (!isWebsiteLead) continue;
+      if (conv.thankYouEmailSent) {
+        continue;
+      }
+      const createdAtMs = conv.createdAt ? new Date(conv.createdAt).getTime() : conv.startedAt ? new Date(conv.startedAt).getTime() : 0;
+      if (createdAtMs > 0 && Date.now() - createdAtMs < 45e3) {
+        continue;
+      }
+      if (conv.customerEmail && conv.customerEmail.includes("@")) {
+        const alreadySent = await hasThankYouEmailBeenSent(conv.customerEmail, ctx);
+        if (alreadySent) {
+          safeSetDoc(
+            repo.conversationDoc(conv.conversationId),
+            {
+              thankYouEmailSent: true,
+              thankYouSmtpMessageId: conv.thankYouSmtpMessageId || "ALREADY_SENT_PREVIOUSLY"
+            },
+            { merge: true }
+          ).catch(() => {
+          });
+          continue;
+        }
+      }
+      candidateConvs.push(conv);
+    }
+    for (const conv of candidateConvs) {
+      processedCount++;
+      const result = await dispatchThankYouEmailForConversation(conv.conversationId, ctx);
+      if (result.success) {
+        dispatchedCount++;
+      }
+    }
+    return { processedCount, dispatchedCount };
+  } catch (err) {
+    console.error(`[Website Auto-Responder] Error running check for tenant ${ctx.tenantId}:`, err);
+    return { processedCount, dispatchedCount };
+  } finally {
+    tenantRunningChecks.delete(ctx.tenantId);
+  }
+}
+async function dispatchThankYouEmailForConversation(conversationId, ctx = DEFAULT_UMRAH_CTX8) {
+  if (!isFirebaseConfigured || !db) {
+    return { success: false, error: "Database is not initialized." };
+  }
+  const inFlight = getInFlightSet2(ctx.tenantId);
+  let flightEmail = "";
+  if (inFlight.has(conversationId)) {
+    return { success: true, messageId: "IN_FLIGHT" };
+  }
+  try {
+    const repo = tenantRepo(ctx);
+    await fetchFirestoreSmtpConfig();
+    const smtpCfg = getSmtpConfig();
+    if (!getResendConfig().apiKey) {
+      return { success: false, error: "RESEND_API_KEY is not set on this server." };
+    }
+    const convRef = repo.conversationDoc(conversationId);
+    const convSnap = await getDoc(convRef);
+    if (!convSnap.exists()) {
+      return { success: false, error: `Conversation ${conversationId} not found in tenant ${ctx.tenantId}.` };
+    }
+    const conv = convSnap.data();
+    if (conv.thankYouEmailSent && conv.thankYouSmtpMessageId) {
+      return { success: true, messageId: conv.thankYouSmtpMessageId, email: conv.customerEmail };
+    }
+    const msgsQuery = query(repo.messages(), where("conversationId", "==", conversationId));
+    const msgsSnap = await getDocs(msgsQuery);
+    let alreadyDelivered = Boolean(conv.thankYouEmailSent);
+    let targetEmail = conv.customerEmail || "";
+    let extractedDetails = {};
+    let deliveredMsgDocId = null;
+    let pendingMsgDocId = null;
+    const staleDuplicateDocIds = [];
+    msgsSnap.forEach((mDoc) => {
+      const m2 = mDoc.data();
+      const isOutboundThankYou = m2.direction === "OUTBOUND" && (m2.text?.includes("Thank you for requesting") || m2.text?.includes("We have received your requirements") || m2.text?.includes("As-salamu alaykum"));
+      if (isOutboundThankYou) {
+        alreadyDelivered = true;
+        if (m2.deliveryStatus === "DELIVERED" || Boolean(m2.smtpMessageId && m2.smtpMessageId.startsWith("<"))) {
+          if (!deliveredMsgDocId) {
+            deliveredMsgDocId = mDoc.id;
+            if (m2.smtpMessageId && !conv.thankYouSmtpMessageId) {
+              conv.thankYouSmtpMessageId = m2.smtpMessageId;
+            }
+          } else {
+            staleDuplicateDocIds.push(mDoc.id);
+          }
+        } else {
+          if (!pendingMsgDocId) {
+            pendingMsgDocId = mDoc.id;
+          } else {
+            staleDuplicateDocIds.push(mDoc.id);
+          }
+        }
+      }
+      if (!targetEmail && m2.recipientEmail && m2.recipientEmail.includes("@")) {
+        targetEmail = m2.recipientEmail;
+      }
+      if (m2.direction === "INBOUND" && m2.text) {
+        const emailMatch = m2.text.match(/•\s*Email:\s*([^\s\n\r]+@[^\s\n\r]+)/i);
+        if (emailMatch && emailMatch[1]) {
+          targetEmail = emailMatch[1].trim();
+        }
+        const nameMatch = m2.text.match(/•\s*Name:\s*([^\n\r(]+)/i);
+        if (nameMatch && nameMatch[1]) {
+          extractedDetails.fullName = nameMatch[1].trim();
+        }
+        const companyMatch = m2.text.match(/•\s*Company:\s*([^\n\r(]+)/i);
+        if (companyMatch && companyMatch[1]) {
+          extractedDetails.companyName = companyMatch[1].trim();
+        }
+        const productMatch = m2.text.match(/•\s*Product Interest:\s*([^\n\r]+)/i);
+        if (productMatch && productMatch[1]) {
+          extractedDetails.product = productMatch[1].trim();
+        }
+        const phoneMatch = m2.text.match(/•\s*Phone:\s*([^\n\r]+)/i);
+        if (phoneMatch && phoneMatch[1]) {
+          extractedDetails.phone = phoneMatch[1].trim();
+        }
+      }
+    });
+    targetEmail = targetEmail.trim().toLowerCase();
+    let contact = null;
+    if ((!targetEmail || !targetEmail.includes("@")) && conv.contactId) {
+      try {
+        const contactRef = repo.contactDoc(conv.contactId);
+        const contactSnap = await getDoc(contactRef);
+        if (contactSnap.exists()) {
+          contact = contactSnap.data();
+          if (contact.email && contact.email.includes("@") && !contact.email.includes("@umrah360.in")) {
+            targetEmail = contact.email.trim().toLowerCase();
+          }
+        }
+      } catch (cErr) {
+        console.warn(`[Website Auto-Responder] Notice loading contact ${conv.contactId} for ${ctx.tenantId}:`, cErr);
+      }
+    }
+    if (targetEmail && targetEmail.includes("@")) {
+      const emailAlreadySent = await hasThankYouEmailBeenSent(targetEmail, ctx);
+      if (emailAlreadySent) {
+        console.log(`[Website Auto-Responder] Recipient ${targetEmail} has already received a thank-you email for ${ctx.tenantId}. Suppressing duplicate.`);
+        alreadyDelivered = true;
+      }
+    }
+    if (alreadyDelivered) {
+      if (pendingMsgDocId) {
+        deleteDoc(repo.messageDoc(pendingMsgDocId)).catch(() => {
+        });
+      }
+      for (const dupId of staleDuplicateDocIds) {
+        deleteDoc(repo.messageDoc(dupId)).catch(() => {
+        });
+      }
+      if (!conv.thankYouEmailSent) {
+        safeSetDoc(
+          convRef,
+          {
+            thankYouEmailSent: true,
+            thankYouSmtpMessageId: conv.thankYouSmtpMessageId || "verified_single",
+            customerEmail: targetEmail
+          },
+          { merge: true }
+        ).catch(() => {
+        });
+      }
+      return { success: true, messageId: conv.thankYouSmtpMessageId || "already_delivered", email: targetEmail };
+    }
+    if (!targetEmail || !targetEmail.includes("@") || targetEmail.includes("@placeholder") || targetEmail.endsWith("@umrah360.in")) {
+      return {
+        success: false,
+        error: `No valid customer email address found for lead in conversation ${conversationId}.`
+      };
+    }
+    if (inFlight.has(targetEmail)) {
+      return { success: true, messageId: "IN_FLIGHT_EMAIL", email: targetEmail };
+    }
+    inFlight.add(conversationId);
+    inFlight.add(targetEmail);
+    flightEmail = targetEmail;
+    const brand = await getTenantBrand(ctx.tenantId);
+    const firstName = contact?.firstName || extractedDetails.fullName?.split(/\s+/)[0] || "there";
+    const companyName = contact?.companyName || extractedDetails.companyName || "your agency";
+    const product = extractedDetails.product || contact?.tags?.find((t2) => t2 !== "WEBSITE_DEMO_FORM" && t2 !== "UMRAH360_IN") || brand.defaultProduct;
+    const phone = contact?.phone || extractedDetails.phone || "";
+    const subject = brandDemoThankYouSubject(brand, companyName);
+    const emailBody = [
+      `Dear ${firstName},`,
+      ``,
+      `Thank you for requesting a live demo of ${brand.companyName} for ${companyName}!`,
+      ``,
+      `We have received your requirements:`,
+      `- Product Interest: ${product}`,
+      ...contact?.city || contact?.country ? [`- Location: ${[contact?.city, contact?.country].filter(Boolean).join(", ")}`] : [],
+      ...contact?.teamSize ? [`- Team Size: ${contact.teamSize}`] : [],
+      ...contact?.branches ? [`- Multi-Branch Setup: ${contact.branches}`] : [],
+      ``,
+      brandSpecialistLine(brand, phone || targetEmail),
+      ``,
+      brand.playbook === "umrah360" ? `If you have specific Saudi visa tracking, Makkah/Madinah hotel contracting, or B2B sub-agent workflows you would like to test, simply reply to this email.` : `If you have specific workflows you would like to test, simply reply to this email.`,
+      ``,
+      `Warm regards,`,
+      ...brandThankYouSignoff(brand)
+    ].join("\n");
+    console.log(`[Website Auto-Responder] Dispatching single Thank You email to ${targetEmail} for ${companyName} (${ctx.tenantId})...`);
+    const mailResult = await sendLiveEmail({
+      tenantId: ctx.tenantId,
+      to: targetEmail,
+      subject,
+      text: emailBody,
+      headers: {
+        "X-Conversation-Id": conversationId,
+        "X-Lead-Id": conv.leadId || "",
+        "X-Contact-Id": conv.contactId || "",
+        "X-Tenant-Id": ctx.tenantId
+      }
+    });
+    if (!mailResult.success) {
+      console.warn(`[Website Auto-Responder Error] SMTP delivery failed to ${targetEmail}:`, mailResult.error);
+      await safeSetDoc(
+        convRef,
+        { thankYouError: String(mailResult.error || "Email delivery failed").slice(0, 300), thankYouAttemptedAt: (/* @__PURE__ */ new Date()).toISOString() },
+        { merge: true }
+      );
+      return { success: false, error: mailResult.error || "SMTP delivery failed", email: targetEmail };
+    }
+    const nowIso = (/* @__PURE__ */ new Date()).toISOString();
+    const autoReplyMsgId = pendingMsgDocId || `msg-thankyou-${conversationId}`;
+    const outboundMessage = {
+      messageId: autoReplyMsgId,
+      conversationId,
+      senderType: "AI",
+      senderName: brand.senderName,
+      senderEmail: smtpCfg.user || "amaavigo@gmail.com",
+      recipientEmail: targetEmail,
+      channel: "EMAIL",
+      direction: "OUTBOUND",
+      text: emailBody,
+      timestamp: nowIso,
+      sentAt: nowIso,
+      receivedAt: nowIso,
+      aiReplied: true,
+      deliveryStatus: "DELIVERED",
+      smtpMessageId: mailResult.messageId,
+      emailDeliveredAt: nowIso
+    };
+    await safeSetDoc(repo.messageDoc(autoReplyMsgId), outboundMessage, { merge: true });
+    for (const dupId of staleDuplicateDocIds) {
+      if (dupId !== autoReplyMsgId) {
+        deleteDoc(repo.messageDoc(dupId)).catch(() => {
+        });
+      }
+    }
+    await safeSetDoc(
+      convRef,
+      {
+        thankYouEmailSent: true,
+        thankYouEmailDeliveredAt: nowIso,
+        thankYouSmtpMessageId: mailResult.messageId,
+        thankYouError: null,
+        customerEmail: targetEmail,
+        lastMessageText: emailBody.slice(0, 160) + "...",
+        lastMessageAt: nowIso,
+        updatedAt: nowIso
+      },
+      { merge: true }
+    );
+    await recordThankYouEmailSent(
+      targetEmail,
+      {
+        leadId: conv.leadId,
+        conversationId,
+        smtpMessageId: mailResult.messageId
+      },
+      ctx
+    );
+    console.log(`[Website Auto-Responder Success] \u2713 Real Thank You email delivered to ${targetEmail} (Message ID: ${mailResult.messageId}) for tenant ${ctx.tenantId}!`);
+    return {
+      success: true,
+      messageId: mailResult.messageId,
+      email: targetEmail
+    };
+  } catch (err) {
+    console.error(`[Website Auto-Responder Exception] Error dispatching for ${conversationId} in tenant ${ctx.tenantId}:`, err);
+    return { success: false, error: err?.message || "Internal error" };
+  } finally {
+    inFlight.delete(conversationId);
+    if (flightEmail) inFlight.delete(flightEmail);
+  }
+}
+var DEFAULT_UMRAH_CTX8, tenantRunningChecks, tenantInFlightDispatches;
+var init_websiteLeadAutoResponder = __esm({
+  "src/server/websiteLeadAutoResponder.ts"() {
+    init_adminFirestore();
+    init_config();
+    init_adminFirestore();
+    init_firestoreUtils();
+    init_smtpService();
+    init_websiteLeadService();
+    init_tenantRepo();
+    init_brandService();
+    init_brand();
+    DEFAULT_UMRAH_CTX8 = {
+      tenantId: "umrah360",
+      uid: "system",
+      email: "system@umrah360.in",
+      role: "admin"
+    };
+    tenantRunningChecks = /* @__PURE__ */ new Set();
+    tenantInFlightDispatches = /* @__PURE__ */ new Map();
   }
 });
 
@@ -295026,7 +302718,7 @@ async function generateWhatsAppAutoReplyText(params) {
   const combinedText = body.toLowerCase();
   const brand = await getTenantBrand(getWACtx().tenantId);
   const isUmrah = brand.playbook === "umrah360";
-  if (detectDemoSchedulingIntent(body)) {
+  if (detectDemoSchedulingIntent(body) || await hasPendingSchedulingState({ messageText: body, leadPhone: fromPhone }).catch(() => false)) {
     try {
       const historyTurns = (threadHistory || []).map((m2) => ({
         role: m2.senderType === "CUSTOMER" || m2.senderType === "PROSPECT" ? "user" : "assistant",
@@ -296151,9 +303843,9 @@ var AI_AGENTS = [
   ["OPENCODE", "open_code"]
   // The end of the section generated from our OpenAPI spec
 ];
-function detectAIAgent(env) {
+function detectAIAgent(env2) {
   for (const [envVar, agentName] of AI_AGENTS) {
-    if (env[envVar]) {
+    if (env2[envVar]) {
       return agentName;
     }
   }
@@ -297666,9 +305358,9 @@ function getItemCallback(args) {
   if (onItem.length > 2) {
     throw Error(`The \`onItem\` callback function passed to autoPagingEach must accept at most two arguments; got ${onItem}`);
   }
-  return function _onItem(item, next) {
+  return function _onItem(item, next2) {
     const shouldContinue = onItem(item);
-    next(shouldContinue);
+    next2(shouldContinue);
   };
 }
 function getLastId(listResult, reverseIteration) {
@@ -297741,8 +305433,8 @@ function wrapAsyncIteratorWithCallback(asyncIteratorNext, onItem) {
         return;
       }
       const item = iterResult.value;
-      return new Promise((next) => {
-        onItem(item, next);
+      return new Promise((next2) => {
+        onItem(item, next2);
       }).then((shouldContinue) => {
         if (shouldContinue === false) {
           return handleIteration({ done: true, value: void 0 });
@@ -297886,14 +305578,14 @@ var StripeContext = class _StripeContext {
 };
 
 // node_modules/stripe/esm/platform/NodePlatformFunctions.js
-import * as crypto8 from "crypto";
+import * as crypto10 from "crypto";
 import * as fs4 from "fs";
 import * as os from "os";
 import * as path2 from "path";
 import { EventEmitter } from "events";
 
 // node_modules/stripe/esm/crypto/NodeCryptoProvider.js
-import * as crypto7 from "crypto";
+import * as crypto9 from "crypto";
 
 // node_modules/stripe/esm/crypto/CryptoProvider.js
 var CryptoProvider = class {
@@ -297936,7 +305628,7 @@ var CryptoProviderOnlySupportsAsyncError = class extends Error {
 var NodeCryptoProvider = class extends CryptoProvider {
   /** @override */
   computeHMACSignature(payload, secret) {
-    return crypto7.createHmac("sha256", secret).update(payload, "utf8").digest("hex");
+    return crypto9.createHmac("sha256", secret).update(payload, "utf8").digest("hex");
   }
   /** @override */
   async computeHMACSignatureAsync(payload, secret) {
@@ -297945,7 +305637,7 @@ var NodeCryptoProvider = class extends CryptoProvider {
   }
   /** @override */
   async computeSHA256Async(data) {
-    return new Uint8Array(await crypto7.createHash("sha256").update(data).digest());
+    return new Uint8Array(await crypto9.createHash("sha256").update(data).digest());
   }
 };
 
@@ -298402,7 +306094,7 @@ var NodePlatformFunctions = class extends PlatformFunctions {
       }
     } catch {
     }
-    const newId = crypto8.randomBytes(16).toString("hex");
+    const newId = crypto10.randomBytes(16).toString("hex");
     try {
       fs4.mkdirSync(path2.dirname(filePath), { recursive: true });
       fs4.writeFileSync(filePath, newId, "utf8");
@@ -298440,11 +306132,11 @@ var NodePlatformFunctions = class extends PlatformFunctions {
     if (a.length !== b.length) {
       return false;
     }
-    if (crypto8.timingSafeEqual) {
+    if (crypto10.timingSafeEqual) {
       const textEncoder2 = new TextEncoder();
       const aEncoded = textEncoder2.encode(a);
       const bEncoded = textEncoder2.encode(b);
-      return crypto8.timingSafeEqual(aEncoded, bEncoded);
+      return crypto10.timingSafeEqual(aEncoded, bEncoded);
     }
     return super.secureCompare(a, b);
   }
@@ -313532,15 +321224,15 @@ var Stripe = class _Stripe {
     _Stripe.createFetchHttpClient = platformFunctions.createFetchHttpClient;
     _Stripe.createNodeCryptoProvider = platformFunctions.createNodeCryptoProvider;
     _Stripe.createSubtleCryptoProvider = platformFunctions.createSubtleCryptoProvider;
-    const env = platformFunctions.getEnv();
+    const env2 = platformFunctions.getEnv();
     const runtimeVersion = platformFunctions.getRuntimeVersion();
-    if (env?.CLAUDECODE || env?.CLAUDE_CODE_CHILD_SESSION) {
+    if (env2?.CLAUDECODE || env2?.CLAUDE_CODE_CHILD_SESSION) {
       try {
         platformFunctions.writeStderr('<claude-code-hint v="1" type="plugin" value="stripe@claude-plugins-official" />\n');
       } catch {
       }
     }
-    _Stripe.aiAgent = env ? detectAIAgent(env) : "";
+    _Stripe.aiAgent = env2 ? detectAIAgent(env2) : "";
     _Stripe.AI_AGENT = _Stripe.aiAgent;
     _Stripe.USER_AGENT = {
       bindings_version: _Stripe.PACKAGE_VERSION,
@@ -313550,9 +321242,9 @@ var Stripe = class _Stripe {
       ..._Stripe.aiAgent ? { ai_agent: _Stripe.aiAgent } : {}
     };
   }
-  constructor(key, config = {}, constructorOptions) {
+  constructor(key, config3 = {}, constructorOptions) {
     this._authenticator = null;
-    const props = this._getPropsFromConfig(config);
+    const props = this._getPropsFromConfig(config3);
     this._platformFunctions = _Stripe._platformFunctions;
     Object.defineProperty(this, "_emitter", {
       value: constructorOptions?.emitter ?? this._platformFunctions.createEmitter(),
@@ -313861,25 +321553,25 @@ var Stripe = class _Stripe {
    * @private
    * This may be removed in the future.
    */
-  _getPropsFromConfig(config) {
-    if (!config) {
+  _getPropsFromConfig(config3) {
+    if (!config3) {
       return {};
     }
-    const isString2 = typeof config === "string";
-    const isObject4 = config === Object(config) && !Array.isArray(config);
+    const isString2 = typeof config3 === "string";
+    const isObject4 = config3 === Object(config3) && !Array.isArray(config3);
     if (!isObject4 && !isString2) {
       throw new Error("Config must either be an object or a string");
     }
     if (isString2) {
       return {
-        apiVersion: config
+        apiVersion: config3
       };
     }
-    const values = Object.keys(config).filter((value) => !ALLOWED_CONFIG_PROPERTIES.includes(value));
+    const values = Object.keys(config3).filter((value) => !ALLOWED_CONFIG_PROPERTIES.includes(value));
     if (values.length > 0) {
       throw new Error(`Config object may only contain the following: ${ALLOWED_CONFIG_PROPERTIES.join(", ")}`);
     }
-    return config;
+    return config3;
   }
   /**
    * @private
@@ -314251,523 +321943,6 @@ async function authenticateRequest(req) {
 // src/server/coreApiHandler.ts
 init_autoFollowUpService();
 init_cryptoUtils();
-
-// src/server/instagramIntegrationService.ts
-init_adminFirestore();
-init_openai();
-init_adminFirestore();
-init_tenantRepo();
-init_cryptoUtils();
-import crypto9 from "crypto";
-var GRAPH_VERSION = process.env.META_GRAPH_API_VERSION || "v23.0";
-var OAUTH_STATE_TTL_MS = 10 * 60 * 1e3;
-function requiredEnv(name5) {
-  const value = process.env[name5]?.trim();
-  if (!value) throw new Error(`Missing required server environment variable: ${name5}`);
-  return value;
-}
-function json(res, status, payload) {
-  res.statusCode = status;
-  res.setHeader("Content-Type", "application/json");
-  res.end(JSON.stringify(payload));
-}
-function queryParams(req) {
-  return new URL(req.url || "/", "http://localhost").searchParams;
-}
-function stateDocId(state2) {
-  return crypto9.createHash("sha256").update(state2).digest("hex");
-}
-function contextFromState(state2) {
-  if (!state2?.tenantId || !state2?.uid || !state2?.role) {
-    throw new Error("Invalid Instagram OAuth state context");
-  }
-  return {
-    tenantId: String(state2.tenantId),
-    uid: String(state2.uid),
-    email: String(state2.email || ""),
-    role: state2.role,
-    isPlatformAdmin: false
-  };
-}
-async function getConnection(ctx) {
-  const snap = await getDoc(tenantRepo(ctx).integrationDoc("instagram"));
-  if (!snap.exists()) return null;
-  const data = snap.data();
-  return data?.channel === "instagram" ? data.connection || null : null;
-}
-async function getAccessToken(ctx) {
-  const repo = tenantRepo(ctx);
-  const snap = await getDoc(repo.secretDoc("instagram_access_token"));
-  if (!snap.exists()) throw new Error("Instagram is not connected. Reconnect the account.");
-  let accessToken = decryptSecret(snap.data());
-  const connection = await getConnection(ctx);
-  if (!connection) throw new Error("Instagram connection metadata is missing. Reconnect the account.");
-  if (connection.tokenExpiresAt) {
-    const expiresAt = Date.parse(connection.tokenExpiresAt);
-    if (Number.isFinite(expiresAt) && expiresAt <= Date.now()) {
-      throw new Error("Instagram access token has expired. Reconnect the account.");
-    }
-    if (Number.isFinite(expiresAt) && expiresAt - Date.now() < 7 * 24 * 60 * 60 * 1e3) {
-      try {
-        const refreshUrl = new URL("https://graph.instagram.com/refresh_access_token");
-        refreshUrl.searchParams.set("grant_type", "ig_refresh_token");
-        refreshUrl.searchParams.set("access_token", accessToken);
-        const refreshResponse = await fetch(refreshUrl);
-        const refreshBody = await refreshResponse.json().catch(() => ({}));
-        if (refreshResponse.ok && refreshBody.access_token) {
-          accessToken = String(refreshBody.access_token);
-          const now = (/* @__PURE__ */ new Date()).toISOString();
-          const expiresIn = Number(refreshBody.expires_in);
-          await setDoc(repo.secretDoc("instagram_access_token"), {
-            ...encryptSecret(accessToken),
-            name: "instagram_access_token",
-            createdAt: snap.data().createdAt || now,
-            updatedAt: now
-          });
-          await setDoc(repo.integrationDoc("instagram"), {
-            channel: "instagram",
-            connection: {
-              ...connection,
-              tokenExpiresAt: expiresIn ? new Date(Date.now() + expiresIn * 1e3).toISOString() : connection.tokenExpiresAt,
-              updatedAt: now
-            }
-          }, { merge: true });
-        }
-      } catch {
-      }
-    }
-  }
-  return accessToken;
-}
-async function startInstagramOAuth(ctx) {
-  const clientId = requiredEnv("META_INSTAGRAM_APP_ID");
-  const redirectUri = requiredEnv("META_INSTAGRAM_REDIRECT_URI");
-  requiredEnv("META_INSTAGRAM_APP_SECRET");
-  if (!process.env.SECRETS_MASTER_KEY && !process.env.TENANT_MASTER_KEY) {
-    throw new Error("SECRETS_MASTER_KEY or TENANT_MASTER_KEY must be configured before connecting Instagram.");
-  }
-  const state2 = crypto9.randomBytes(32).toString("base64url");
-  const now = Date.now();
-  await setDoc(doc(db, "instagram_oauth_states", stateDocId(state2)), {
-    tenantId: ctx.tenantId,
-    uid: ctx.uid,
-    email: ctx.email || "",
-    role: ctx.role,
-    createdAt: now,
-    expiresAt: now + OAUTH_STATE_TTL_MS
-  });
-  const params = new URLSearchParams({
-    client_id: clientId,
-    redirect_uri: redirectUri,
-    response_type: "code",
-    scope: "instagram_business_basic,instagram_business_manage_messages",
-    state: state2
-  });
-  return { authorizationUrl: `https://www.instagram.com/oauth/authorize?${params.toString()}` };
-}
-async function getInstagramStatus(ctx) {
-  const connection = await getConnection(ctx);
-  return { connected: connection?.status === "connected", connection };
-}
-async function disconnectInstagram(ctx) {
-  const repo = tenantRepo(ctx);
-  const existing = await getConnection(ctx);
-  try {
-    const token = await getAccessToken(ctx);
-    const revokeUrl = new URL("https://graph.instagram.com/" + GRAPH_VERSION + "/me/permissions");
-    revokeUrl.searchParams.set("access_token", token);
-    await fetch(revokeUrl, { method: "DELETE" });
-  } catch {
-  }
-  if (existing) {
-    await setDoc(repo.integrationDoc("instagram"), {
-      channel: "instagram",
-      connection: { ...existing, status: "disconnected", updatedAt: (/* @__PURE__ */ new Date()).toISOString() }
-    }, { merge: true });
-  }
-  await deleteDoc(repo.secretDoc("instagram_access_token"));
-  if (existing?.accountId) {
-    await deleteDoc(doc(db, "instagram_account_routes", existing.accountId));
-  }
-}
-async function exchangeCode(code) {
-  const clientId = requiredEnv("META_INSTAGRAM_APP_ID");
-  const clientSecret = requiredEnv("META_INSTAGRAM_APP_SECRET");
-  const redirectUri = requiredEnv("META_INSTAGRAM_REDIRECT_URI");
-  const form = new URLSearchParams({
-    client_id: clientId,
-    client_secret: clientSecret,
-    grant_type: "authorization_code",
-    redirect_uri: redirectUri,
-    code
-  });
-  const tokenResponse = await fetch("https://api.instagram.com/oauth/access_token", {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: form.toString()
-  });
-  const tokenBody = await tokenResponse.json().catch(() => ({}));
-  if (!tokenResponse.ok || !tokenBody.access_token || !tokenBody.user_id) {
-    throw new Error("Meta could not exchange the Instagram authorization code. Check app configuration and permissions.");
-  }
-  let accessToken = String(tokenBody.access_token);
-  let expiresIn = Number(tokenBody.expires_in) || void 0;
-  const longLivedUrl = new URL("https://graph.instagram.com/access_token");
-  longLivedUrl.searchParams.set("grant_type", "ig_exchange_token");
-  longLivedUrl.searchParams.set("client_secret", clientSecret);
-  longLivedUrl.searchParams.set("access_token", accessToken);
-  const longLivedResponse = await fetch(longLivedUrl);
-  const longLivedBody = await longLivedResponse.json().catch(() => ({}));
-  if (longLivedResponse.ok && longLivedBody.access_token) {
-    accessToken = String(longLivedBody.access_token);
-    expiresIn = Number(longLivedBody.expires_in) || expiresIn;
-  }
-  const profileUrl = new URL(`https://graph.instagram.com/${GRAPH_VERSION}/me`);
-  profileUrl.searchParams.set("fields", "user_id,username");
-  profileUrl.searchParams.set("access_token", accessToken);
-  const profileResponse = await fetch(profileUrl);
-  const profile = await profileResponse.json().catch(() => ({}));
-  if (!profileResponse.ok || !(profile.user_id || profile.id) || !profile.username) {
-    throw new Error("Instagram authorization succeeded, but the account profile could not be verified.");
-  }
-  const accountId = String(profile.user_id || profile.id || tokenBody.user_id);
-  let webhookSubscribed = false;
-  try {
-    const subscribeUrl = new URL("https://graph.instagram.com/" + GRAPH_VERSION + "/" + encodeURIComponent(accountId) + "/subscribed_apps");
-    subscribeUrl.searchParams.set("subscribed_fields", "messages");
-    subscribeUrl.searchParams.set("access_token", accessToken);
-    const subscribeResponse = await fetch(subscribeUrl, { method: "POST" });
-    webhookSubscribed = subscribeResponse.ok;
-  } catch {
-    webhookSubscribed = false;
-  }
-  return {
-    accessToken,
-    accountId,
-    username: String(profile.username),
-    expiresIn,
-    webhookSubscribed
-  };
-}
-async function handleInstagramOAuthCallback(req, res) {
-  const params = queryParams(req);
-  const state2 = params.get("state") || "";
-  const code = params.get("code") || "";
-  const error = params.get("error_description") || params.get("error");
-  if (!state2) {
-    json(res, 400, { error: "Missing OAuth state." });
-    return true;
-  }
-  const stateRef = doc(db, "instagram_oauth_states", stateDocId(state2));
-  const stateSnap = await getDoc(stateRef);
-  if (!stateSnap.exists()) {
-    json(res, 400, { error: "Instagram authorization state is invalid or has already been used." });
-    return true;
-  }
-  const stateData = stateSnap.data();
-  await deleteDoc(stateRef);
-  if (Date.now() > Number(stateData.expiresAt || 0)) {
-    json(res, 400, { error: "Instagram authorization expired. Please try again." });
-    return true;
-  }
-  if (error || !code) {
-    const appUrl = process.env.APP_BASE_URL || process.env.APP_URL || "/";
-    res.statusCode = 302;
-    res.setHeader("Location", `${appUrl}${appUrl.includes("?") ? "&" : "?"}instagram=error`);
-    res.end();
-    return true;
-  }
-  try {
-    const ctx = contextFromState(stateData);
-    const account = await exchangeCode(code);
-    const existing = await getConnection(ctx);
-    const routeRef = doc(db, "instagram_account_routes", account.accountId);
-    const routeSnap = await getDoc(routeRef);
-    if (routeSnap.exists() && routeSnap.data().tenantId !== ctx.tenantId) {
-      json(res, 409, { error: "This Instagram account is already connected to another workspace." });
-      return true;
-    }
-    if (existing?.accountId && existing.accountId !== account.accountId) {
-      await deleteDoc(doc(db, "instagram_account_routes", existing.accountId));
-    }
-    const now = (/* @__PURE__ */ new Date()).toISOString();
-    const connection = {
-      accountId: account.accountId,
-      username: account.username,
-      status: "connected",
-      connectedAt: existing?.connectedAt || now,
-      updatedAt: now,
-      scopes: ["instagram_business_basic", "instagram_business_manage_messages"],
-      tokenExpiresAt: account.expiresIn ? new Date(Date.now() + account.expiresIn * 1e3).toISOString() : null,
-      webhookSubscriptionStatus: account.webhookSubscribed ? "subscribed" : "needs_setup"
-    };
-    await setDoc(tenantRepo(ctx).secretDoc("instagram_access_token"), {
-      ...encryptSecret(account.accessToken),
-      name: "instagram_access_token",
-      updatedAt: now,
-      createdAt: now
-    });
-    await setDoc(tenantRepo(ctx).integrationDoc("instagram"), { channel: "instagram", connection }, { merge: true });
-    await setDoc(routeRef, { tenantId: ctx.tenantId, accountId: account.accountId, updatedAt: now });
-    const appUrl = process.env.APP_BASE_URL || process.env.APP_URL || "/";
-    res.statusCode = 302;
-    res.setHeader("Location", `${appUrl}${appUrl.includes("?") ? "&" : "?"}instagram=connected`);
-    res.end();
-  } catch (err) {
-    console.error("[Instagram OAuth] Connection failed:", err?.message || "unknown error");
-    json(res, 500, { error: "Could not connect Instagram. Check server configuration and Meta app permissions." });
-  }
-  return true;
-}
-function isValidMetaSignature(req) {
-  const secret = process.env.META_INSTAGRAM_APP_SECRET;
-  const signature = req.headers?.["x-hub-signature-256"];
-  const rawBody = req.rawBody;
-  if (!secret || !signature || !rawBody) return false;
-  const raw = Buffer.isBuffer(rawBody) ? rawBody : Buffer.from(String(rawBody));
-  const expected = `sha256=${crypto9.createHmac("sha256", secret).update(raw).digest("hex")}`;
-  const a = Buffer.from(String(signature));
-  const b = Buffer.from(expected);
-  return a.length === b.length && crypto9.timingSafeEqual(a, b);
-}
-async function processInstagramMessageEvent(tenantId, accountId, event, eventId) {
-  const senderId = String(event?.sender?.id || "");
-  const externalMessageId = String(event?.message?.mid || event?.id || eventId);
-  const eventRef = doc(db, "instagram_inbound_events", eventId);
-  if (!senderId || senderId === accountId || event?.message?.is_echo) {
-    await updateDoc(eventRef, { status: "ignored", processedAt: (/* @__PURE__ */ new Date()).toISOString() });
-    return;
-  }
-  const messageText = String(event?.message?.text || "").trim();
-  const incomingText = messageText || (Array.isArray(event?.message?.attachments) && event.message.attachments.length ? "[Instagram attachment received]" : "");
-  if (!incomingText) {
-    await updateDoc(eventRef, { status: "ignored", processedAt: (/* @__PURE__ */ new Date()).toISOString() });
-    return;
-  }
-  const ctx = { tenantId, uid: "instagram-webhook", email: "", role: "admin" };
-  const repo = tenantRepo(ctx);
-  const stableHash = (value) => crypto9.createHash("sha256").update(value).digest("hex").slice(0, 24);
-  const contactId = "igc_" + stableHash(accountId + ":" + senderId);
-  const conversationId = "igconv_" + stableHash(accountId + ":" + senderId);
-  const messageId = "igmsg_" + stableHash(accountId + ":" + externalMessageId);
-  const now = (/* @__PURE__ */ new Date()).toISOString();
-  const eventTime = Number(event?.timestamp);
-  const timestamp = Number.isFinite(eventTime) && eventTime > 0 ? new Date(eventTime).toISOString() : now;
-  const existingMessage = await getDoc(repo.messageDoc(messageId));
-  if (existingMessage.exists()) {
-    await updateDoc(eventRef, { status: "duplicate", processedAt: now });
-    return;
-  }
-  const contactSnap = await getDoc(repo.contactDoc(contactId));
-  const contact = contactSnap.exists() ? contactSnap.data() : {
-    contactId,
-    firstName: "Instagram",
-    lastName: "User",
-    email: "",
-    phone: "",
-    companyName: "Instagram contact",
-    instagramUserId: senderId,
-    tags: ["INSTAGRAM_DM"],
-    notes: "",
-    createdAt: now,
-    updatedAt: now
-  };
-  await setDoc(repo.contactDoc(contactId), { ...contact, instagramUserId: senderId, updatedAt: now, lastActivityAt: timestamp }, { merge: true });
-  const conversationSnap = await getDoc(repo.conversationDoc(conversationId));
-  const previous = conversationSnap.exists() ? conversationSnap.data() : null;
-  const conversation = {
-    conversationId,
-    contactId,
-    channel: "INSTAGRAM",
-    direction: "INBOUND",
-    externalConversationId: senderId,
-    status: previous?.status || "ACTIVE",
-    aiEnabled: previous?.aiEnabled !== false,
-    humanHandoff: previous?.humanHandoff === true,
-    managementMode: previous?.managementMode || "AI",
-    conversationSummary: previous?.conversationSummary || "Instagram direct-message conversation",
-    startedAt: previous?.startedAt || timestamp,
-    lastMessageAt: timestamp,
-    lastMessageText: incomingText,
-    unreadCount: Number(previous?.unreadCount || 0) + 1,
-    isRead: false,
-    unread: true,
-    createdAt: previous?.createdAt || now,
-    updatedAt: now
-  };
-  await setDoc(repo.conversationDoc(conversationId), conversation, { merge: true });
-  await setDoc(repo.messageDoc(messageId), {
-    messageId,
-    externalMessageId,
-    conversationId,
-    channel: "INSTAGRAM",
-    senderType: "CUSTOMER",
-    senderName: "Instagram user",
-    instagramUserId: senderId,
-    text: incomingText,
-    direction: "INBOUND",
-    timestamp,
-    receivedAt: now,
-    createdAt: now,
-    aiReplied: false,
-    aiProcessed: false
-  });
-  const settingsSnap = await getDoc(repo.settingsDoc("default"));
-  const settings = settingsSnap.exists() ? settingsSnap.data() : {};
-  const mode = settings?.channelModes?.INSTAGRAM || "AUTO";
-  if (!conversation.aiEnabled || conversation.humanHandoff || conversation.managementMode === "HUMAN" || mode === "SIMULATION") {
-    await updateDoc(eventRef, { status: "processed", processedAt: now, conversationId });
-    return;
-  }
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey || !messageText) {
-    await updateDoc(eventRef, { status: "processed_no_reply", reason: !apiKey ? "OPENAI_API_KEY is not configured" : "No text available for AI reply", processedAt: now, conversationId });
-    return;
-  }
-  const knowledgeSnap = await getDocs(repo.knowledgeDocuments());
-  const knowledge = knowledgeSnap.docs.map((d) => d.data()).filter((d) => d.status === "PUBLISHED").slice(0, 8).map((d) => "## " + String(d.title || "Knowledge") + "\n" + String(d.content || "").slice(0, 2500)).join("\n\n").slice(0, 12e3);
-  const historySnap = await getDocs(query(repo.messages(), where("conversationId", "==", conversationId)));
-  const history = historySnap.docs.map((d) => d.data()).filter((m2) => m2.messageId !== messageId).sort((a, b) => new Date(a.timestamp || 0).getTime() - new Date(b.timestamp || 0).getTime()).slice(-8).map((m2) => ({ role: m2.direction === "OUTBOUND" ? "assistant" : "user", content: String(m2.text || "").slice(0, 1500) }));
-  const openai = new OpenAI({ apiKey });
-  const completion = await openai.chat.completions.create({
-    model: process.env.INSTAGRAM_AI_MODEL || "gpt-4o-mini",
-    temperature: 0.3,
-    messages: [
-      { role: "system", content: "You are this workspace customer-support and lead-qualification assistant. Reply naturally and briefly to the Instagram DM. Use only the workspace knowledge below for factual claims. If knowledge does not answer the question, ask a concise clarifying question instead of inventing facts. Do not claim a booking or action has completed unless confirmed.\n\nWorkspace knowledge:\n" + (knowledge || "No published workspace knowledge is available. Ask a clarifying question and do not invent product details.") },
-      ...history,
-      { role: "user", content: messageText.slice(0, 3e3) }
-    ]
-  });
-  const replyText = completion.choices[0]?.message?.content?.trim();
-  if (!replyText) {
-    await updateDoc(eventRef, { status: "processed_no_reply", reason: "AI returned an empty response", processedAt: now, conversationId });
-    return;
-  }
-  if (mode === "REVIEW") {
-    await updateDoc(repo.conversationDoc(conversationId), {
-      draftReply: { draftId: "igdraft_" + stableHash(externalMessageId), text: replyText, generatedAt: now, status: "PENDING" },
-      updatedAt: now
-    });
-    await updateDoc(repo.messageDoc(messageId), { aiProcessed: true });
-    await updateDoc(eventRef, { status: "draft_created", processedAt: now, conversationId });
-    return;
-  }
-  const latestSnap = await getDoc(repo.conversationDoc(conversationId));
-  const latest = latestSnap.exists() ? latestSnap.data() : {};
-  if (latest.aiEnabled === false || latest.humanHandoff === true || latest.managementMode === "HUMAN") {
-    await updateDoc(eventRef, { status: "suppressed_human_takeover", processedAt: (/* @__PURE__ */ new Date()).toISOString(), conversationId });
-    return;
-  }
-  const sendResult = await sendInstagramMessage(ctx, senderId, replyText);
-  const outboundId = "igout_" + stableHash(externalMessageId);
-  const sentAt = (/* @__PURE__ */ new Date()).toISOString();
-  await setDoc(repo.messageDoc(outboundId), {
-    messageId: outboundId,
-    externalMessageId: String(sendResult?.message_id || sendResult?.messageId || ""),
-    conversationId,
-    channel: "INSTAGRAM",
-    senderType: "AI",
-    senderName: "AI Assistant",
-    instagramUserId: senderId,
-    text: replyText,
-    direction: "OUTBOUND",
-    timestamp: sentAt,
-    sentAt,
-    createdAt: sentAt,
-    aiProcessed: true,
-    aiGenerated: true,
-    deliveryStatus: "DELIVERED"
-  });
-  await updateDoc(repo.messageDoc(messageId), { aiReplied: true, repliedAt: sentAt, repliedByMessageId: outboundId, aiProcessed: true });
-  await updateDoc(repo.conversationDoc(conversationId), { lastMessageAt: sentAt, lastMessageText: replyText, updatedAt: sentAt });
-  await updateDoc(eventRef, { status: "replied", processedAt: sentAt, conversationId, outboundMessageId: outboundId });
-}
-async function handleInstagramWebhook(req, res) {
-  if (req.method === "GET") {
-    const params = queryParams(req);
-    const mode = params.get("hub.mode") || params.get("hub_mode");
-    const token = params.get("hub.verify_token") || params.get("hub_verify_token");
-    const challenge = params.get("hub.challenge") || params.get("hub_challenge");
-    const expected = process.env.META_INSTAGRAM_WEBHOOK_VERIFY_TOKEN;
-    if (mode === "subscribe" && expected && token === expected && challenge) {
-      res.statusCode = 200;
-      res.setHeader("Content-Type", "text/plain");
-      res.end(challenge);
-    } else {
-      res.statusCode = 403;
-      res.end("Forbidden");
-    }
-    return true;
-  }
-  if (req.method !== "POST") {
-    json(res, 405, { error: "Method not allowed" });
-    return true;
-  }
-  if (!isValidMetaSignature(req)) {
-    json(res, 401, { error: "Invalid webhook signature or raw request body unavailable." });
-    return true;
-  }
-  const body = req.body || {};
-  if (body.object !== "instagram") {
-    json(res, 400, { error: "Unsupported webhook object." });
-    return true;
-  }
-  let accepted = 0;
-  for (const entry of Array.isArray(body.entry) ? body.entry : []) {
-    const accountId = String(entry.id || "");
-    if (!accountId) continue;
-    const routeSnap = await getDoc(doc(db, "instagram_account_routes", accountId));
-    if (!routeSnap.exists()) continue;
-    const tenantId = String(routeSnap.data().tenantId || "");
-    if (!tenantId) continue;
-    const events = [
-      ...Array.isArray(entry.messaging) ? entry.messaging : [],
-      ...Array.isArray(entry.changes) ? entry.changes : []
-    ];
-    for (const event of events) {
-      const externalId = String(event.message?.mid || event.id || event.timestamp || crypto9.randomUUID());
-      const eventId = crypto9.createHash("sha256").update(`${accountId}:${externalId}`).digest("hex");
-      const eventRef = doc(db, "instagram_inbound_events", eventId);
-      try {
-        await createDoc(eventRef, { accountId, tenantId, externalId, event, status: "received", receivedAt: (/* @__PURE__ */ new Date()).toISOString() });
-      } catch {
-        continue;
-      }
-      try {
-        await processInstagramMessageEvent(tenantId, accountId, event, eventId);
-      } catch (error) {
-        console.error("[Instagram webhook] Event processing failed:", error?.message || "unknown error");
-        await updateDoc(eventRef, { status: "failed", lastError: "Processing failed; inspect server logs.", updatedAt: (/* @__PURE__ */ new Date()).toISOString() }).catch(() => {
-        });
-      }
-      accepted++;
-    }
-  }
-  json(res, 200, { success: true, accepted });
-  return true;
-}
-async function sendInstagramMessage(ctx, recipientId, text) {
-  if (!recipientId?.trim() || !text?.trim()) throw new Error("Instagram recipient and message text are required.");
-  const connection = await getConnection(ctx);
-  if (!connection || connection.status !== "connected") throw new Error("Instagram account is not connected.");
-  if (connection.tokenExpiresAt && Date.parse(connection.tokenExpiresAt) <= Date.now()) {
-    throw new Error("Instagram access token may have expired. Reconnect the account.");
-  }
-  const accessToken = await getAccessToken(ctx);
-  const url = `https://graph.instagram.com/${GRAPH_VERSION}/${encodeURIComponent(connection.accountId)}/messages`;
-  const response = await fetch(url, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ recipient: { id: recipientId }, message: { text: text.trim() } })
-  });
-  const result = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    throw new Error(`Instagram message send failed (HTTP ${response.status}). Check account permissions and messaging eligibility.`);
-  }
-  return result;
-}
-
-// src/server/coreApiHandler.ts
 init_usageService();
 
 // src/server/webhookRouter.ts
@@ -314858,7 +322033,8 @@ async function routeWebsiteLeadWebhook(req, res, webhookId) {
         message: "Lead processed and synced into CRM",
         leadId: result.lead?.leadId,
         contactId: result.contact?.contactId,
-        thankYouEmailSent: result.thankYouEmailSent
+        thankYouEmailSent: Boolean(result.autoConfirmationSent),
+        ...result.conversation?.thankYouError ? { thankYouError: result.conversation.thankYouError } : {}
       })
     );
     return true;
@@ -314940,13 +322116,32 @@ function readTags(raw) {
 var SCANNER_AGENT = /(proxy|prefetch|bot\b|scanner|barracuda|proofpoint|mimecast|safelinks|defender|symantec|trendmicro|ironport)/i;
 var OPEN_BOT_WINDOW_MS = 15e3;
 var CLICK_BOT_WINDOW_MS = 5e3;
+async function resolveEngagementTarget(event) {
+  const tags = readTags(event?.data?.tags);
+  if (tags.tenant && tags.lead) return { tenantId: tags.tenant, leadId: tags.lead };
+  const emailId = String(event?.data?.email_id || event?.data?.emailId || "").trim();
+  if (!emailId || !isFirebaseConfigured || !db) return null;
+  try {
+    const snap = await getDoc(globalEmailRouteDoc(emailId));
+    if (!snap.exists()) return null;
+    const row = snap.data();
+    const tenantId = String(row.tenantId || "").trim();
+    const leadId = String(row.campaignLeadId || row.leadId || "").trim();
+    if (!tenantId || !leadId) return null;
+    return { tenantId, leadId };
+  } catch {
+    return null;
+  }
+}
 async function trackEmailEngagement(event) {
   const type = String(event?.type || "");
   if (!["email.opened", "email.clicked", "email.bounced", "email.complained"].includes(type)) return false;
-  const tags = readTags(event?.data?.tags);
-  const tenantId = tags.tenant;
-  const leadId = tags.lead;
-  if (!tenantId || !leadId) return false;
+  const target = await resolveEngagementTarget(event);
+  if (!target) {
+    console.warn(`[Resend Webhook] ${type} ignored: no tenant/lead tags and no email_routes match for ${event?.data?.email_id || "unknown"}`);
+    return false;
+  }
+  const { tenantId, leadId } = target;
   const nowIso = (/* @__PURE__ */ new Date()).toISOString();
   const eventMs = Date.parse(event?.created_at || "") || Date.now();
   const sentMs = Date.parse(event?.data?.created_at || "");
@@ -314975,6 +322170,7 @@ async function trackEmailEngagement(event) {
 }
 async function routeResendWebhook(req, res) {
   const event = req.body || {};
+  if (!event.type && event.data?.type) event.type = event.data.type;
   const type = event.type;
   if (type === "email.opened" || type === "email.clicked") {
     const tracked = await trackEmailEngagement(event);
@@ -315079,7 +322275,6 @@ async function handleCoreApi(req, res) {
         }
         if (chunks.length > 0) {
           const rawBody = Buffer.concat(chunks).toString("utf-8");
-          req.rawBody = Buffer.from(rawBody, "utf-8");
           if (rawBody) {
             try {
               body = JSON.parse(rawBody);
@@ -315101,10 +322296,14 @@ async function handleCoreApi(req, res) {
     }
   }
   if (!body || typeof body !== "object") body = {};
+  req.body = body;
   const rawCalendarToken = req.headers["x-google-access-token"];
   let requestBearerToken = typeof rawCalendarToken === "string" && rawCalendarToken.trim() && rawCalendarToken !== "null" && rawCalendarToken !== "undefined" ? rawCalendarToken.trim() : null;
   if (requestBearerToken) setServerCalendarAccessToken(requestBearerToken);
-  const isPublicPath = url === "/api/health" || url === "/api/instagram/oauth/callback" || url.startsWith("/api/webhooks/") || url === "/api/inbound/whatsapp" || url === "/api/leads/inbound" || url === "/api/campaigns/cron" || url === "/api/campaigns/process-active" || url === "/api/auto-followup/trigger" || url === "/api/inbound-mail/cron";
+  const isPublicPath = url === "/api/health" || url.startsWith("/api/webhooks/") || url === "/api/inbound/whatsapp" || url === "/api/leads/inbound" || url === "/api/campaigns/cron" || url === "/api/campaigns/process-active" || url === "/api/auto-followup/trigger" || url === "/api/inbound-mail/cron" || // Browser comes back from Microsoft here; the single-use OAuth state identifies the workspace.
+  url === "/api/oauth/microsoft/callback" || // Calendar OAuth also returns through a state-bound, one-time callback.
+  url === "/api/oauth/microsoft-calendar/callback" || // Instagram redirects the browser here; the single-use OAuth state identifies the workspace.
+  url === "/api/instagram/oauth/callback";
   let resolvedTenantId = "";
   let userUid = "anonymous";
   let userEmail = "";
@@ -315266,75 +322465,16 @@ async function handleCoreApi(req, res) {
   if (url === "/api/webhooks/whatsapp" || url === "/api/inbound/whatsapp") {
     return await routeWhatsAppWebhook(req, res);
   }
-  if (url === "/api/webhooks/email/resend") {
-    return await routeResendWebhook(req, res);
+  if (url === "/api/webhooks/meta") {
+    const meta2 = await Promise.resolve().then(() => (init_metaChannelsService(), metaChannelsService_exports));
+    return await meta2.handleMetaWebhook(req, res);
   }
   if (url === "/api/webhooks/instagram") {
-    return await handleInstagramWebhook(req, res);
+    const ig = await Promise.resolve().then(() => (init_instagramIntegrationService(), instagramIntegrationService_exports));
+    return await ig.handleInstagramWebhook(req, res);
   }
-  if (url === "/api/instagram/oauth/callback") {
-    return await handleInstagramOAuthCallback(req, res);
-  }
-  if (url === "/api/instagram/status" && req.method === "GET") {
-    try {
-      const status = await getInstagramStatus(activeTenantCtx);
-      res.statusCode = 200;
-      res.end(JSON.stringify(status));
-    } catch (err) {
-      res.statusCode = 500;
-      res.end(JSON.stringify({ error: err?.message || "Could not read Instagram status." }));
-    }
-    return true;
-  }
-  if (url === "/api/instagram/connect" && req.method === "POST") {
-    if (userRole !== "admin" && !isPlatformAdmin) {
-      res.statusCode = 403;
-      res.end(JSON.stringify({ error: "Workspace admin access is required to connect Instagram." }));
-      return true;
-    }
-    try {
-      const result = await startInstagramOAuth(activeTenantCtx);
-      res.statusCode = 200;
-      res.end(JSON.stringify(result));
-    } catch (err) {
-      res.statusCode = 400;
-      res.end(JSON.stringify({ error: err?.message || "Could not start Instagram authorization." }));
-    }
-    return true;
-  }
-  if (url === "/api/instagram/send" && req.method === "POST") {
-    const recipientId = typeof body.recipientId === "string" ? body.recipientId.trim() : "";
-    const messageText = typeof body.text === "string" ? body.text.trim() : "";
-    if (!recipientId || !messageText) {
-      res.statusCode = 400;
-      res.end(JSON.stringify({ error: "recipientId and text are required." }));
-      return true;
-    }
-    try {
-      const result = await sendInstagramMessage(activeTenantCtx, recipientId, messageText);
-      res.statusCode = 200;
-      res.end(JSON.stringify({ success: true, result }));
-    } catch (err) {
-      res.statusCode = 400;
-      res.end(JSON.stringify({ error: err?.message || "Instagram message could not be sent." }));
-    }
-    return true;
-  }
-  if (url === "/api/instagram/disconnect" && req.method === "POST") {
-    if (userRole !== "admin" && !isPlatformAdmin) {
-      res.statusCode = 403;
-      res.end(JSON.stringify({ error: "Workspace admin access is required to disconnect Instagram." }));
-      return true;
-    }
-    try {
-      await disconnectInstagram(activeTenantCtx);
-      res.statusCode = 200;
-      res.end(JSON.stringify({ success: true }));
-    } catch (err) {
-      res.statusCode = 400;
-      res.end(JSON.stringify({ error: err?.message || "Could not disconnect Instagram." }));
-    }
-    return true;
+  if (url === "/api/webhooks/email/resend") {
+    return await routeResendWebhook(req, res);
   }
   if (url === "/api/auth/me" && req.method === "GET") {
     let globalUser = null;
@@ -315830,12 +322970,82 @@ async function handleCoreApi(req, res) {
       return true;
     }
   }
-  const inboundMatch = url.split("?")[0].match(/^\/api\/tenants\/([^/]+)\/inbound(?:\/(test|options|disconnect|poll))?$/);
+  if (url === "/api/oauth/microsoft/callback" && req.method === "GET") {
+    const ms = await Promise.resolve().then(() => (init_microsoftOAuth(), microsoftOAuth_exports));
+    let location;
+    try {
+      const query2 = new URL(rawUrl, "http://localhost").searchParams;
+      const result = await ms.exchangeMicrosoftCallback(query2);
+      const svc = await Promise.resolve().then(() => (init_tenantInboundService(), tenantInboundService_exports));
+      await svc.connectMicrosoftInbound(result);
+      location = ms.mailboxRedirectUrl("connected");
+    } catch (err) {
+      const readable = typeof err?.status === "number" && err.status < 500;
+      if (!readable) console.error("[Microsoft OAuth] callback failed:", err?.stack || err);
+      location = ms.mailboxRedirectUrl("error", readable ? err.message : "Could not connect the Microsoft mailbox. Please try again.");
+    }
+    res.statusCode = 302;
+    res.setHeader("Location", location);
+    res.setHeader("Cache-Control", "no-store");
+    res.end();
+    return true;
+  }
+  if (url === "/api/instagram/oauth/callback" && req.method === "GET") {
+    try {
+      const ig = await Promise.resolve().then(() => (init_instagramIntegrationService(), instagramIntegrationService_exports));
+      await ig.handleInstagramOAuthCallback(req, res);
+    } catch (err) {
+      console.error("[Instagram OAuth] callback failed:", err?.message || err);
+      if (!res.writableEnded) {
+        res.statusCode = 500;
+        res.end(JSON.stringify({ error: "Instagram authorization could not be completed." }));
+      }
+    }
+    return true;
+  }
+  if (url === "/api/oauth/microsoft-calendar/callback" && req.method === "GET") {
+    const ms = await Promise.resolve().then(() => (init_microsoftCalendarOAuth(), microsoftCalendarOAuth_exports));
+    let location;
+    try {
+      const query2 = new URL(rawUrl, "http://localhost").searchParams;
+      const result = await ms.exchangeMicrosoftCalendarCallback(query2);
+      await ms.saveMicrosoftCalendarRefreshToken(
+        result.tenantId,
+        result.refreshToken,
+        result.accessToken,
+        result.expiresIn
+      );
+      location = ms.calendarRedirectUrl("connected");
+    } catch (err) {
+      const readable = typeof err?.status === "number" && err.status < 500;
+      if (!readable) console.error("[Microsoft Calendar OAuth] callback failed:", err?.stack || err);
+      location = ms.calendarRedirectUrl(
+        "error",
+        readable ? err.message : "Could not connect Microsoft Calendar. Please try again."
+      );
+    }
+    res.statusCode = 302;
+    res.setHeader("Location", location);
+    res.setHeader("Cache-Control", "no-store");
+    res.end();
+    return true;
+  }
+  const inboundMatch = url.split("?")[0].match(/^\/api\/tenants\/([^/]+)\/inbound(?:\/(test|options|disconnect|poll|microsoft))?$/);
   if (inboundMatch) {
     const tId = inboundMatch[1];
     const action = inboundMatch[2];
     try {
       const svc = await Promise.resolve().then(() => (init_tenantInboundService(), tenantInboundService_exports));
+      if (action === "microsoft" && req.method === "POST") {
+        const ms = await Promise.resolve().then(() => (init_microsoftOAuth(), microsoftOAuth_exports));
+        const out = await ms.startMicrosoftInboundOAuth(
+          { ...activeTenantCtx, tenantId: tId },
+          { processNewInquiries: typeof body?.processNewInquiries === "boolean" ? body.processNewInquiries : void 0 }
+        );
+        res.statusCode = 200;
+        res.end(JSON.stringify(out));
+        return true;
+      }
       if (!action && req.method === "GET") {
         res.statusCode = 200;
         res.end(JSON.stringify(await svc.getInboundView(tId)));
@@ -315907,6 +323117,16 @@ async function handleCoreApi(req, res) {
           error: err?.message || String(err)
         }));
         results.push({ tenantId: ownerTenantId, mailbox: "shared-env", polledCount: legacy.polledCount, error: legacy.error });
+      }
+      try {
+        const { checkAndDispatchPendingWebsiteLeadEmails: checkAndDispatchPendingWebsiteLeadEmails2 } = await Promise.resolve().then(() => (init_websiteLeadAutoResponder(), websiteLeadAutoResponder_exports));
+        const tenantIds = runAll ? (await getDocs(globalTenantsCol())).docs.filter((t2) => t2.data()?.status !== "suspended").map((t2) => t2.id) : [callerCtx.tenantId];
+        for (const tId of tenantIds) {
+          const r2 = await checkAndDispatchPendingWebsiteLeadEmails2({ tenantId: tId, uid: "system-cron", email: "", role: "admin" }).catch(() => null);
+          if (r2 && r2.processedCount > 0) results.push({ tenantId: tId, websiteThankYous: r2 });
+        }
+      } catch (retryErr) {
+        console.warn("[Cron] Website thank-you retry notice:", retryErr?.message || retryErr);
       }
       res.statusCode = 200;
       res.setHeader("Content-Type", "application/json");
@@ -315983,6 +323203,192 @@ async function handleCoreApi(req, res) {
         timestamp: (/* @__PURE__ */ new Date()).toISOString()
       })
     );
+    return true;
+  }
+  if (url === "/api/channels/status" && req.method === "GET") {
+    const meta2 = await Promise.resolve().then(() => (init_metaChannelsService(), metaChannelsService_exports));
+    const safe = async (fn, fallback) => {
+      try {
+        return isFirebaseConfigured && db ? await fn() : fallback;
+      } catch (err) {
+        return { ...fallback, error: err?.message || "Could not load status." };
+      }
+    };
+    const ig = await Promise.resolve().then(() => (init_instagramIntegrationService(), instagramIntegrationService_exports));
+    const instagram = await safe(() => ig.getInstagramStatus(activeTenantCtx), { connected: false, connection: null });
+    const whatsapp = await safe(() => meta2.getWhatsAppStatus(activeTenantCtx), { connected: false, connection: null });
+    const messenger = await safe(() => meta2.getMessengerStatus(activeTenantCtx), { connected: false, connection: null });
+    const instagramMissing = ["META_INSTAGRAM_APP_ID", "META_INSTAGRAM_APP_SECRET", "META_INSTAGRAM_REDIRECT_URI"].filter((k) => !process.env[k]);
+    if (!process.env.SECRETS_MASTER_KEY && !process.env.TENANT_MASTER_KEY) instagramMissing.push("SECRETS_MASTER_KEY");
+    const waMissing = meta2.missingMetaSettings("whatsapp");
+    const fbMissing = meta2.missingMetaSettings("messenger");
+    res.statusCode = 200;
+    res.end(JSON.stringify({
+      instagram: { ...instagram, available: instagramMissing.length === 0, missing: instagramMissing },
+      whatsapp: { ...whatsapp, available: waMissing.length === 0, missing: waMissing },
+      messenger: { ...messenger, available: fbMissing.length === 0, missing: fbMissing },
+      metaClient: meta2.getMetaClientConfig()
+    }));
+    return true;
+  }
+  if (url === "/api/instagram/status" && req.method === "GET") {
+    try {
+      const ig = await Promise.resolve().then(() => (init_instagramIntegrationService(), instagramIntegrationService_exports));
+      res.statusCode = 200;
+      res.end(JSON.stringify(await ig.getInstagramStatus(activeTenantCtx)));
+    } catch (err) {
+      res.statusCode = err?.status || 500;
+      res.end(JSON.stringify({ error: err?.message || "Could not load Instagram status." }));
+    }
+    return true;
+  }
+  if (url === "/api/instagram/connect" && req.method === "POST") {
+    if (activeTenantCtx.role === "member") {
+      res.statusCode = 403;
+      res.end(JSON.stringify({ error: "Only workspace admins can manage channel connections." }));
+      return true;
+    }
+    try {
+      const ig = await Promise.resolve().then(() => (init_instagramIntegrationService(), instagramIntegrationService_exports));
+      res.statusCode = 200;
+      res.end(JSON.stringify(await ig.startInstagramOAuth(activeTenantCtx)));
+    } catch (err) {
+      res.statusCode = err?.status || 500;
+      res.end(JSON.stringify({ error: err?.message || "Could not start Instagram authorization." }));
+    }
+    return true;
+  }
+  if (url === "/api/instagram/test-event" && req.method === "POST") {
+    if (activeTenantCtx.role === "member") {
+      res.statusCode = 403;
+      res.end(JSON.stringify({ error: "Only workspace admins can run channel tests." }));
+      return true;
+    }
+    try {
+      const ig = await Promise.resolve().then(() => (init_instagramIntegrationService(), instagramIntegrationService_exports));
+      res.statusCode = 200;
+      res.end(JSON.stringify({ ok: true, ...await ig.injectTestInstagramMessage(activeTenantCtx) }));
+    } catch (err) {
+      res.statusCode = err?.status || 500;
+      res.end(JSON.stringify({ error: err?.message || "Could not create the test message." }));
+    }
+    return true;
+  }
+  if (url === "/api/instagram/diagnose" && req.method === "POST") {
+    if (activeTenantCtx.role === "member") {
+      res.statusCode = 403;
+      res.end(JSON.stringify({ error: "Only workspace admins can run channel checks." }));
+      return true;
+    }
+    try {
+      const ig = await Promise.resolve().then(() => (init_instagramIntegrationService(), instagramIntegrationService_exports));
+      res.statusCode = 200;
+      res.end(JSON.stringify(await ig.diagnoseInstagram(activeTenantCtx)));
+    } catch (err) {
+      res.statusCode = err?.status || 500;
+      res.end(JSON.stringify({ error: err?.message || "Could not run the Instagram check." }));
+    }
+    return true;
+  }
+  if (url === "/api/instagram/disconnect" && req.method === "POST") {
+    if (activeTenantCtx.role === "member") {
+      res.statusCode = 403;
+      res.end(JSON.stringify({ error: "Only workspace admins can manage channel connections." }));
+      return true;
+    }
+    try {
+      const ig = await Promise.resolve().then(() => (init_instagramIntegrationService(), instagramIntegrationService_exports));
+      await ig.disconnectInstagram(activeTenantCtx);
+      res.statusCode = 200;
+      res.end(JSON.stringify({ ok: true }));
+    } catch (err) {
+      res.statusCode = err?.status || 500;
+      res.end(JSON.stringify({ error: err?.message || "Could not disconnect Instagram." }));
+    }
+    return true;
+  }
+  if ((url === "/api/whatsapp/connect" || url === "/api/whatsapp/disconnect" || url === "/api/messenger/pages" || url === "/api/messenger/connect" || url === "/api/messenger/disconnect" || url === "/api/whatsapp/send-template") && req.method === "POST") {
+    const adminOnly = url !== "/api/whatsapp/send-template";
+    if (adminOnly && activeTenantCtx.role === "member") {
+      res.statusCode = 403;
+      res.end(JSON.stringify({ error: "Only workspace admins can manage channel connections." }));
+      return true;
+    }
+    try {
+      const meta2 = await Promise.resolve().then(() => (init_metaChannelsService(), metaChannelsService_exports));
+      let result = { ok: true };
+      if (url === "/api/whatsapp/connect") {
+        result = { ok: true, connection: await meta2.connectWhatsApp(activeTenantCtx, body || {}) };
+      } else if (url === "/api/whatsapp/disconnect") {
+        await meta2.disconnectWhatsApp(activeTenantCtx);
+      } else if (url === "/api/messenger/pages") {
+        result = { ok: true, pages: await meta2.listMessengerPages(String(body?.userToken || "")) };
+      } else if (url === "/api/messenger/connect") {
+        result = { ok: true, connection: await meta2.connectMessenger(activeTenantCtx, body || {}) };
+      } else if (url === "/api/messenger/disconnect") {
+        await meta2.disconnectMessenger(activeTenantCtx);
+      } else {
+        const sent = await meta2.sendWhatsAppTemplate(activeTenantCtx, String(body?.to || ""), {
+          name: String(body?.templateName || ""),
+          language: String(body?.language || ""),
+          params: Array.isArray(body?.params) ? body.params : []
+        });
+        result = { success: true, ...sent };
+      }
+      res.statusCode = 200;
+      res.end(JSON.stringify(result));
+    } catch (err) {
+      res.statusCode = err?.status || 500;
+      res.end(JSON.stringify({ error: err?.message || "Channel request failed." }));
+    }
+    return true;
+  }
+  if (url === "/api/whatsapp/templates" && req.method === "GET") {
+    try {
+      const meta2 = await Promise.resolve().then(() => (init_metaChannelsService(), metaChannelsService_exports));
+      res.statusCode = 200;
+      res.end(JSON.stringify({ templates: await meta2.listWhatsAppTemplates(activeTenantCtx) }));
+    } catch (err) {
+      res.statusCode = err?.status || 500;
+      res.end(JSON.stringify({ error: err?.message || "Could not load templates." }));
+    }
+    return true;
+  }
+  if ((url === "/api/channels/send" || url === "/api/instagram/send") && req.method === "POST") {
+    try {
+      const channel = url === "/api/instagram/send" ? "INSTAGRAM" : String(body?.channel || "").toUpperCase();
+      const recipientId = String(body?.recipientId || "");
+      const text = String(body?.text || "");
+      let result;
+      if (channel === "INSTAGRAM") {
+        const ig = await Promise.resolve().then(() => (init_instagramIntegrationService(), instagramIntegrationService_exports));
+        result = await ig.sendInstagramMessage(activeTenantCtx, recipientId, text);
+      } else if (channel === "WHATSAPP" || channel === "FACEBOOK") {
+        const meta2 = await Promise.resolve().then(() => (init_metaChannelsService(), metaChannelsService_exports));
+        result = await meta2.sendMetaText(activeTenantCtx, channel === "WHATSAPP" ? "whatsapp" : "messenger", recipientId, text);
+      } else {
+        res.statusCode = 400;
+        res.end(JSON.stringify({ error: "Unsupported channel." }));
+        return true;
+      }
+      res.statusCode = 200;
+      res.end(JSON.stringify({ success: true, result }));
+    } catch (err) {
+      res.statusCode = err?.status || 500;
+      res.end(JSON.stringify({ success: false, error: err?.message || "Message could not be sent." }));
+    }
+    return true;
+  }
+  if (url === "/api/calendar/microsoft" && req.method === "POST") {
+    try {
+      const ms = await Promise.resolve().then(() => (init_microsoftCalendarOAuth(), microsoftCalendarOAuth_exports));
+      const result = await ms.startMicrosoftCalendarOAuth(activeTenantCtx);
+      res.statusCode = 200;
+      res.end(JSON.stringify(result));
+    } catch (err) {
+      res.statusCode = err?.status || 500;
+      res.end(JSON.stringify({ error: err?.message || "Could not start Microsoft Calendar sign-in" }));
+    }
     return true;
   }
   if (url === "/api/calendar/auth-token" && req.method === "POST") {
@@ -316074,10 +323480,12 @@ async function handleCoreApi(req, res) {
     try {
       const bookingPayload = {
         ...body,
-        accessToken: body.accessToken || requestBearerToken || void 0
+        accessToken: body.accessToken || requestBearerToken || void 0,
+        replacingBookingId: void 0
+        // internal only: the duplicate check can't be skipped from outside
       };
       const result = await createGoogleCalendarDemoBooking(bookingPayload);
-      res.statusCode = result.success ? 200 : result.conflict ? 409 : 400;
+      res.statusCode = result.success ? 200 : result.conflict || result.alreadyBooked ? 409 : 400;
       res.end(JSON.stringify(result));
     } catch (err) {
       res.statusCode = 500;
@@ -316599,17 +324007,17 @@ ${signature || defSig}`;
   }
   if (url === "/api/smtp/config") {
     if (req.method === "GET") {
-      const config = getSmtpConfig();
+      const config3 = getSmtpConfig();
       res.statusCode = 200;
       res.end(
         JSON.stringify({
-          configured: config.configured,
-          host: config.host || "",
-          port: config.port,
-          secure: config.secure,
-          user: config.user,
-          from: config.from,
-          hasPassword: Boolean(config.pass),
+          configured: config3.configured,
+          host: config3.host || "",
+          port: config3.port,
+          secure: config3.secure,
+          user: config3.user,
+          from: config3.from,
+          hasPassword: Boolean(config3.pass),
           emailProvider: getResendConfig().configured ? "resend" : "smtp"
         })
       );
@@ -316644,18 +324052,18 @@ ${signature || defSig}`;
     }
   }
   if (url === "/api/smtp/status" && req.method === "GET") {
-    const config = getSmtpConfig();
+    const config3 = getSmtpConfig();
     res.statusCode = 200;
     res.end(
       JSON.stringify({
-        configured: config.configured,
-        host: config.host || "(not set)",
-        port: config.port,
-        secure: config.secure,
-        user: config.user,
-        from: config.from,
-        passConfigured: Boolean(config.pass),
-        hasPassword: Boolean(config.pass),
+        configured: config3.configured,
+        host: config3.host || "(not set)",
+        port: config3.port,
+        secure: config3.secure,
+        user: config3.user,
+        from: config3.from,
+        passConfigured: Boolean(config3.pass),
+        hasPassword: Boolean(config3.pass),
         emailProvider: getResendConfig().configured ? "resend" : "smtp"
       })
     );
@@ -316703,16 +324111,16 @@ ${signature || defSig}`;
   }
   if (url === "/api/imap/config") {
     if (req.method === "GET") {
-      const config = getImapConfig();
+      const config3 = getImapConfig();
       res.statusCode = 200;
       res.end(
         JSON.stringify({
-          configured: config.configured,
-          host: config.host || "",
-          port: config.port,
-          secure: config.secure,
-          user: config.user,
-          hasPassword: Boolean(config.pass)
+          configured: config3.configured,
+          host: config3.host || "",
+          port: config3.port,
+          secure: config3.secure,
+          user: config3.user,
+          hasPassword: Boolean(config3.pass)
         })
       );
       return true;
@@ -316739,16 +324147,16 @@ ${signature || defSig}`;
     }
   }
   if (url === "/api/imap/status" && req.method === "GET") {
-    const config = getImapConfig();
+    const config3 = getImapConfig();
     res.statusCode = 200;
     res.end(
       JSON.stringify({
-        configured: config.configured,
-        host: config.host || "(not set)",
-        port: config.port,
-        secure: config.secure,
-        user: config.user,
-        passConfigured: Boolean(config.pass)
+        configured: config3.configured,
+        host: config3.host || "(not set)",
+        port: config3.port,
+        secure: config3.secure,
+        user: config3.user,
+        passConfigured: Boolean(config3.pass)
       })
     );
     return true;
@@ -316956,7 +324364,7 @@ ${signature || defSig}`;
   }
   if (url === "/api/campaigns" && req.method === "POST") {
     try {
-      const created = await createCampaign(body);
+      const created = await runWithCampaignCtx(activeTenantCtx, () => createCampaign(body));
       res.statusCode = 201;
       res.end(
         JSON.stringify({
@@ -317050,10 +324458,10 @@ ${signature || defSig}`;
   if (url === "/api/auto-followup/config") {
     try {
       if (req.method === "GET") {
-        const config = await getAutoFollowUpConfig(activeTenantCtx);
+        const config3 = await getAutoFollowUpConfig(activeTenantCtx);
         res.statusCode = 200;
         res.setHeader("Content-Type", "application/json");
-        res.end(JSON.stringify({ success: true, config }));
+        res.end(JSON.stringify({ success: true, config: config3 }));
         return true;
       }
       if (req.method === "POST" || req.method === "PATCH") {
@@ -317063,10 +324471,10 @@ ${signature || defSig}`;
           res.end(JSON.stringify({ success: false, error: "Only workspace admins can change follow-up settings" }));
           return true;
         }
-        const config = await updateAutoFollowUpConfig(activeTenantCtx, body || {});
+        const config3 = await updateAutoFollowUpConfig(activeTenantCtx, body || {});
         res.statusCode = 200;
         res.setHeader("Content-Type", "application/json");
-        res.end(JSON.stringify({ success: true, config }));
+        res.end(JSON.stringify({ success: true, config: config3 }));
         return true;
       }
     } catch (err) {
@@ -317172,7 +324580,7 @@ ${signature || defSig}`;
   if (campaignStartMatch && req.method === "POST") {
     const campaignId = campaignStartMatch[1];
     try {
-      const started = await startCampaign(campaignId);
+      const started = await runWithCampaignCtx(activeTenantCtx, () => startCampaign(campaignId));
       res.statusCode = 200;
       res.end(JSON.stringify({ success: true, campaign: started }));
     } catch (err) {
@@ -318158,24 +325566,6 @@ firebase-admin/lib/auth/base-auth.js:
 
 firebase-admin/lib/auth/project-config-manager.js:
   (*! firebase-admin v14.5.0 *)
-
-@firebase/util/dist/postinstall.mjs:
-  (**
-   * @license
-   * Copyright 2025 Google LLC
-   *
-   * Licensed under the Apache License, Version 2.0 (the "License");
-   * you may not use this file except in compliance with the License.
-   * You may obtain a copy of the License at
-   *
-   *   http://www.apache.org/licenses/LICENSE-2.0
-   *
-   * Unless required by applicable law or agreed to in writing, software
-   * distributed under the License is distributed on an "AS IS" BASIS,
-   * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-   * See the License for the specific language governing permissions and
-   * limitations under the License.
-   *)
 
 @firebase/util/dist/node-esm/index.node.esm.js:
   (**

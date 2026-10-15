@@ -669,7 +669,13 @@ export async function handleMetaWebhook(req: any, res: any): Promise<boolean> {
     json(res, 405, { error: 'Method not allowed' });
     return true;
   }
-  if (!isValidMetaSignature(req)) {
+  const signatureOk = isValidMetaSignature(req);
+  console.log('[Meta webhook] POST received', JSON.stringify({
+    signatureOk,
+    object: req.body?.object,
+    entries: Array.isArray(req.body?.entry) ? req.body.entry.map((e: any) => ({ id: e?.id })) : [],
+  }));
+  if (!signatureOk) {
     json(res, 401, { error: 'Invalid webhook signature or raw request body unavailable.' });
     return true;
   }

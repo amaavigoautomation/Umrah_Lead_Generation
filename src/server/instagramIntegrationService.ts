@@ -465,7 +465,13 @@ export async function handleInstagramWebhook(req: any, res: any): Promise<boolea
     json(res, 405, { error: 'Method not allowed' });
     return true;
   }
-  if (!isValidMetaSignature(req)) {
+  const signatureOk = isValidMetaSignature(req);
+  console.log('[Instagram webhook] POST received', JSON.stringify({
+    signatureOk,
+    object: req.body?.object,
+    entries: Array.isArray(req.body?.entry) ? req.body.entry.map((e: any) => ({ id: e?.id, messaging: Array.isArray(e?.messaging) ? e.messaging.length : 0, changes: Array.isArray(e?.changes) ? e.changes.length : 0 })) : [],
+  }));
+  if (!signatureOk) {
     json(res, 401, { error: 'Invalid webhook signature or raw request body unavailable.' });
     return true;
   }
@@ -481,7 +487,10 @@ export async function handleInstagramWebhook(req: any, res: any): Promise<boolea
     const accountId = String(entry.id || '');
     if (!accountId) continue;
     const routeSnap = await getDoc(doc(db, 'instagram_account_routes', accountId));
-    if (!routeSnap.exists()) continue;
+    if (!routeSnap.exists()) {
+      console.warn('[Instagram webhook] No workspace is connected for account id', accountId);
+      continue;
+    }
     const tenantId = String(routeSnap.data().tenantId || '');
     if (!tenantId) continue;
 

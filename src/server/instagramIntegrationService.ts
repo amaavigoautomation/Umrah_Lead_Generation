@@ -481,7 +481,7 @@ export async function handleInstagramWebhook(req: any, res: any): Promise<boolea
   console.log('[Instagram webhook] POST received', JSON.stringify({
     signatureOk,
     object: req.body?.object,
-    entries: Array.isArray(req.body?.entry) ? req.body.entry.map((e: any) => ({ id: e?.id, messaging: Array.isArray(e?.messaging) ? e.messaging.length : 0, changes: Array.isArray(e?.changes) ? e.changes.length : 0 })) : [],
+    entries: Array.isArray(req.body?.entry) ? req.body.entry.map((e: any) => ({ id: e?.id, messaging: Array.isArray(e?.messaging) ? e.messaging.length : 0, parties: Array.isArray(e?.messaging) ? e.messaging.map((m: any) => ({ sender: m?.sender?.id, recipient: m?.recipient?.id, echo: Boolean(m?.message?.is_echo) })) : [], changes: Array.isArray(e?.changes) ? e.changes.length : 0 })) : [],
   }));
   if (!signatureOk) {
     json(res, 401, { error: 'Invalid webhook signature or raw request body unavailable.' });
@@ -498,9 +498,16 @@ export async function handleInstagramWebhook(req: any, res: any): Promise<boolea
   for (const entry of Array.isArray(body.entry) ? body.entry : []) {
     const accountId = String(entry.id || '');
     if (!accountId) continue;
-    const routeSnap = await getDoc(doc(db, 'instagram_account_routes', accountId));
-    if (!routeSnap.exists()) {
-      console.warn('[Instagram webhook] No workspace is connected for account id', accountId, '- the DM was sent to an Instagram account that is not connected.');
+    // Meta may key the entry by a different id form; try the ids in the events (connected accounts only).
+    const candidates = [accountId, ...(Array.isArray(entry.messaging) ? entry.messaging.flatMap((m: any) => [m?.recipient?.id, m?.sender?.id]) : [])]
+      .filter(Boolean).map(String);
+    let routeSnap: any = null;
+    for (const cid of Array.from(new Set(candidates))) {
+      const snap = await getDoc(doc(db, 'instagram_account_routes', cid));
+      if (snap.exists()) { routeSnap = snap; break; }
+    }
+    if (!routeSnap) {
+      console.warn('[Instagram webhook] No workspace is connected for ids', candidates.join(','));
       continue;
     }
     const tenantId = String(routeSnap.data().tenantId || '');

@@ -2186,31 +2186,46 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
                   setActiveTab('inbox');
                 }}
                 onUpdateLeadStatus={(leadId, newStatus) => {
+                  const nowIso = new Date().toISOString();
+                  const demoFields =
+                    newStatus === 'DEMO_BOOKED'
+                      ? { demoStatus: 'BOOKED' as const, demoSource: 'MANUAL' as const, demoBookedAt: nowIso }
+                      : {};
                   setLeads((prev) =>
                     prev.map((l) =>
                       l.leadId === leadId
-                        ? {
-                            ...l,
-                            status: newStatus,
-                            demoStatus: newStatus === 'DEMO_BOOKED' ? 'BOOKED' : l.demoStatus,
-                            demoSource: newStatus === 'DEMO_BOOKED' ? 'MANUAL' : l.demoSource,
-                            demoBookedAt:
-                              newStatus === 'DEMO_BOOKED' ? new Date().toISOString() : l.demoBookedAt,
-                          }
+                        ? { ...l, status: newStatus, updatedAt: nowIso, lastActivityAt: nowIso, ...demoFields }
                         : l
                     )
                   );
                   if (isFirebaseConfigured && db) {
-                    updateDoc(doc(db, 'leads', leadId), {
-                      status: newStatus,
-                      ...(newStatus === 'DEMO_BOOKED'
-                        ? {
-                            demoStatus: 'BOOKED',
-                            demoSource: 'MANUAL',
-                            demoBookedAt: new Date().toISOString(),
-                          }
-                        : {}),
-                    }).catch(() => {});
+                    setDoc(
+                      tDoc('leads', leadId),
+                      sanitizeDoc({ status: newStatus, updatedAt: nowIso, lastActivityAt: nowIso, ...demoFields }),
+                      { merge: true }
+                    ).catch((err) => console.error('[Firestore] Failed updating lead status:', err));
+                  }
+                }}
+                onUpdateLead={(updatedLead) => {
+                  const nowIso = new Date().toISOString();
+                  const leadToSave = { ...updatedLead, updatedAt: nowIso, lastActivityAt: nowIso };
+                  setLeads((prev) => prev.map((l) => (l.leadId === leadToSave.leadId ? leadToSave : l)));
+                  if (isFirebaseConfigured && db) {
+                    setDoc(tDoc('leads', leadToSave.leadId), sanitizeDoc(leadToSave), { merge: true }).catch((err) =>
+                      console.error('[Firestore] Failed updating lead:', err)
+                    );
+                  }
+                }}
+                onAddLead={(newLead, newContact) => {
+                  setLeads((prev) => [newLead, ...prev]);
+                  setContacts((prev) => [newContact, ...prev]);
+                  if (isFirebaseConfigured && db) {
+                    setDoc(tDoc('leads', newLead.leadId), sanitizeDoc(newLead), { merge: true }).catch((err) =>
+                      console.error('[Firestore] Failed adding lead:', err)
+                    );
+                    setDoc(tDoc('contacts', newContact.contactId), sanitizeDoc(newContact), { merge: true }).catch((err) =>
+                      console.error('[Firestore] Failed adding contact:', err)
+                    );
                   }
                 }}
               />

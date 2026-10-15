@@ -12,7 +12,7 @@ export type ActiveTab =
 
 export type Channel = 'WEBSITE' | 'WHATSAPP' | 'INSTAGRAM' | 'FACEBOOK' | 'LINKEDIN' | 'EMAIL';
 
-export type LeadSource = 'WEBSITE' | 'WHATSAPP' | 'INSTAGRAM' | 'FACEBOOK' | 'LINKEDIN' | 'EMAIL' | 'APOLLO';
+export type LeadSource = 'WEBSITE' | 'WHATSAPP' | 'INSTAGRAM' | 'FACEBOOK' | 'LINKEDIN' | 'EMAIL' | 'APOLLO' | 'MANUAL' | 'OUTBOUND';
 
 export type LeadType = 'INBOUND' | 'OUTBOUND';
 
@@ -179,6 +179,8 @@ export interface Campaign {
 
 export type LeadStatus =
   | 'NEW'
+  | 'CONTACTED'
+  | 'FOLLOW_UP'
   | 'ENGAGED'
   | 'QUALIFIED'
   | 'DEMO_SCHEDULED'
@@ -297,6 +299,19 @@ export interface Lead {
   teamSize?: string;
   /** Every field the website form sent, as received (for tracing a wrong-looking value). */
   rawFormFields?: Record<string, string>;
+  /** TeleCRM: when the next call-back is due (ISO). */
+  nextFollowUpAt?: string;
+  /** TeleCRM: telecaller this lead is assigned to. */
+  assignedCaller?: string;
+  /** TeleCRM: call history, newest first. */
+  callLogs?: Array<{
+    id: string;
+    timestamp: string;
+    durationSeconds: number;
+    outcome: string;
+    notes: string;
+    telecaller: string;
+  }>;
   productInterest?: string;
   queryMessage?: string;
   notes?: string;

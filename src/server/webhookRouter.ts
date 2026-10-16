@@ -201,9 +201,19 @@ function readTags(raw: any): Record<string, string> {
   return out;
 }
 
-const SCANNER_AGENT = /(proxy|prefetch|bot\b|scanner|barracuda|proofpoint|mimecast|safelinks|defender|symantec|trendmicro|ironport)/i;
-const OPEN_BOT_WINDOW_MS = 15_000;
+// Security scanners that fetch the tracking pixel / links before a human does.
+// NOTE: do not add generic words like "proxy" or "prefetch" here. Real inboxes load images through proxies
+// (Gmail's "GoogleImageProxy"), so those words would count every Gmail open as a bot.
+const SCANNER_AGENT = /(bot\b|scanner|barracuda|proofpoint|mimecast|safelinks|defender|symantec|trendmicro|ironport)/i;
+// A real mail client proxy: always a human open, even if the agent string also contains a scanner-ish word.
+const REAL_CLIENT_PROXY_AGENT = /(googleimageproxy|ggpht\.com)/i;
+const OPEN_BOT_WINDOW_MS = 5_000;
 const CLICK_BOT_WINDOW_MS = 5_000;
+
+function isScannerAgent(agent: string): boolean {
+  if (REAL_CLIENT_PROXY_AGENT.test(agent)) return false;
+  return SCANNER_AGENT.test(agent);
+}
 
 async function resolveEngagementTarget(event: any): Promise<{ tenantId: string; leadId: string } | null> {
   const tags = readTags(event?.data?.tags);
@@ -242,12 +252,14 @@ async function trackEmailEngagement(event: any): Promise<boolean> {
 
   let patch: Record<string, any>;
   if (type === 'email.opened') {
-    const bot = sinceSentMs < OPEN_BOT_WINDOW_MS || SCANNER_AGENT.test(agent);
+    const bot = sinceSentMs < OPEN_BOT_WINDOW_MS || isScannerAgent(agent);
+    console.log(`[Resend Webhook] ${type} lead=${leadId} sinceSentMs=${Number.isFinite(sinceSentMs) ? sinceSentMs : 'unknown'} agent="${agent.slice(0, 80)}" -> ${bot ? 'bot' : 'real'}`);
     patch = bot
       ? { botOpenCount: increment(1), updatedAt: nowIso }
       : { realOpenCount: increment(1), opened: true, engaged: true, lastOpenedAt: nowIso, updatedAt: nowIso };
   } else if (type === 'email.clicked') {
-    const bot = sinceSentMs < CLICK_BOT_WINDOW_MS || SCANNER_AGENT.test(agent);
+    const bot = sinceSentMs < CLICK_BOT_WINDOW_MS || isScannerAgent(agent);
+    console.log(`[Resend Webhook] ${type} lead=${leadId} sinceSentMs=${Number.isFinite(sinceSentMs) ? sinceSentMs : 'unknown'} agent="${agent.slice(0, 80)}" -> ${bot ? 'bot' : 'real'}`);
     patch = bot
       ? { botClickCount: increment(1), updatedAt: nowIso }
       : { clickCount: increment(1), clicked: true, engaged: true, lastClickedAt: nowIso, updatedAt: nowIso };

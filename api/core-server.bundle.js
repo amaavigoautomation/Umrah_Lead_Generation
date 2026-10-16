@@ -322108,9 +322108,14 @@ function readTags(raw) {
   }
   return out;
 }
-var SCANNER_AGENT = /(proxy|prefetch|bot\b|scanner|barracuda|proofpoint|mimecast|safelinks|defender|symantec|trendmicro|ironport)/i;
-var OPEN_BOT_WINDOW_MS = 15e3;
+var SCANNER_AGENT = /(bot\b|scanner|barracuda|proofpoint|mimecast|safelinks|defender|symantec|trendmicro|ironport)/i;
+var REAL_CLIENT_PROXY_AGENT = /(googleimageproxy|ggpht\.com)/i;
+var OPEN_BOT_WINDOW_MS = 5e3;
 var CLICK_BOT_WINDOW_MS = 5e3;
+function isScannerAgent(agent) {
+  if (REAL_CLIENT_PROXY_AGENT.test(agent)) return false;
+  return SCANNER_AGENT.test(agent);
+}
 async function resolveEngagementTarget(event) {
   const tags = readTags(event?.data?.tags);
   if (tags.tenant && tags.lead) return { tenantId: tags.tenant, leadId: tags.lead };
@@ -322144,10 +322149,12 @@ async function trackEmailEngagement(event) {
   const agent = String(event?.data?.click?.userAgent || event?.data?.open?.userAgent || event?.data?.user_agent || "");
   let patch;
   if (type === "email.opened") {
-    const bot = sinceSentMs < OPEN_BOT_WINDOW_MS || SCANNER_AGENT.test(agent);
+    const bot = sinceSentMs < OPEN_BOT_WINDOW_MS || isScannerAgent(agent);
+    console.log(`[Resend Webhook] ${type} lead=${leadId} sinceSentMs=${Number.isFinite(sinceSentMs) ? sinceSentMs : "unknown"} agent="${agent.slice(0, 80)}" -> ${bot ? "bot" : "real"}`);
     patch = bot ? { botOpenCount: increment(1), updatedAt: nowIso } : { realOpenCount: increment(1), opened: true, engaged: true, lastOpenedAt: nowIso, updatedAt: nowIso };
   } else if (type === "email.clicked") {
-    const bot = sinceSentMs < CLICK_BOT_WINDOW_MS || SCANNER_AGENT.test(agent);
+    const bot = sinceSentMs < CLICK_BOT_WINDOW_MS || isScannerAgent(agent);
+    console.log(`[Resend Webhook] ${type} lead=${leadId} sinceSentMs=${Number.isFinite(sinceSentMs) ? sinceSentMs : "unknown"} agent="${agent.slice(0, 80)}" -> ${bot ? "bot" : "real"}`);
     patch = bot ? { botClickCount: increment(1), updatedAt: nowIso } : { clickCount: increment(1), clicked: true, engaged: true, lastClickedAt: nowIso, updatedAt: nowIso };
   } else {
     patch = { bounced: true, updatedAt: nowIso };

@@ -1,5 +1,5 @@
 import crypto from 'crypto';
-import { doc, getDoc, setDoc, deleteDoc, createDoc, updateDoc, getDocs, query, where } from './adminFirestore.js';
+import { doc, collection, getDoc, setDoc, deleteDoc, createDoc, updateDoc, getDocs, query, where } from './adminFirestore.js';
 import OpenAI from 'openai';
 import { db } from './adminFirestore.js';
 import { tenantRepo } from './tenantRepo.js';
@@ -163,7 +163,7 @@ export async function disconnectInstagram(ctx: TenantContext): Promise<void> {
   }
 }
 
-async function exchangeCode(code: string): Promise<{ accessToken: string; accountId: string; username: string; expiresIn?: number; webhookSubscribed: boolean }> {
+async function exchangeCode(code: string): Promise<{ accessToken: string; accountId: string; aliasIds: string[]; username: string; expiresIn?: number; webhookSubscribed: boolean }> {
   const clientId = requiredEnv('META_INSTAGRAM_APP_ID');
   const clientSecret = requiredEnv('META_INSTAGRAM_APP_SECRET');
   const redirectUri = requiredEnv('META_INSTAGRAM_REDIRECT_URI');
@@ -221,9 +221,11 @@ async function exchangeCode(code: string): Promise<{ accessToken: string; accoun
     webhookSubscribed = false;
   }
 
+  const aliasIds = Array.from(new Set([profile.user_id, profile.id, tokenBody.user_id].filter(Boolean).map(String)));
   return {
     accessToken,
     accountId,
+    aliasIds,
     username: String(profile.username),
     expiresIn,
     webhookSubscribed,
@@ -294,6 +296,11 @@ export async function handleInstagramOAuthCallback(req: any, res: any): Promise<
     });
     await setDoc(tenantRepo(ctx).integrationDoc('instagram'), { channel: 'instagram', connection }, { merge: true });
     await setDoc(routeRef, { tenantId: ctx.tenantId, accountId: account.accountId, updatedAt: now });
+    // Meta may send webhooks under a different id form than /me returns; route every known form here.
+    for (const alias of account.aliasIds) {
+      if (alias === account.accountId) continue;
+      await setDoc(doc(db, 'instagram_account_routes', alias), { tenantId: ctx.tenantId, accountId: account.accountId, alias: true, updatedAt: now });
+    }
     const appUrl = process.env.APP_BASE_URL || process.env.APP_URL || '/';
     res.statusCode = 302;
     res.setHeader('Location', `${appUrl}${appUrl.includes('?') ? '&' : '?'}instagram=connected`);
@@ -369,6 +376,11 @@ async function processInstagramMessageEvent(tenantId: string, accountId: string,
     senderName: 'Instagram user', instagramUserId: senderId, text: incomingText, direction: 'INBOUND',
     timestamp, receivedAt: now, createdAt: now, aiReplied: false, aiProcessed: false,
   });
+  // Synthetic test message from Settings: stop after saving it (no AI call, nothing sent to Instagram).
+  if (event?.__test === true) {
+    await updateDoc(eventRef, { status: 'test_processed', processedAt: now, conversationId });
+    return;
+  }
   const settingsSnap = await getDoc(repo.settingsDoc('default'));
   const settings = settingsSnap.exists() ? settingsSnap.data() as any : {};
   const mode = settings?.channelModes?.INSTAGRAM || 'AUTO';
@@ -465,7 +477,13 @@ export async function handleInstagramWebhook(req: any, res: any): Promise<boolea
     json(res, 405, { error: 'Method not allowed' });
     return true;
   }
-  if (!isValidMetaSignature(req)) {
+  const signatureOk = isValidMetaSignature(req);
+  console.log('[Instagram webhook] POST received', JSON.stringify({
+    signatureOk,
+    object: req.body?.object,
+    entries: Array.isArray(req.body?.entry) ? req.body.entry.map((e: any) => ({ id: e?.id, messaging: Array.isArray(e?.messaging) ? e.messaging.length : 0, changes: Array.isArray(e?.changes) ? e.changes.length : 0 })) : [],
+  }));
+  if (!signatureOk) {
     json(res, 401, { error: 'Invalid webhook signature or raw request body unavailable.' });
     return true;
   }
@@ -481,8 +499,21 @@ export async function handleInstagramWebhook(req: any, res: any): Promise<boolea
     const accountId = String(entry.id || '');
     if (!accountId) continue;
     const routeSnap = await getDoc(doc(db, 'instagram_account_routes', accountId));
-    if (!routeSnap.exists()) continue;
-    const tenantId = String(routeSnap.data().tenantId || '');
+    let tenantId = routeSnap.exists() ? String(routeSnap.data().tenantId || '') : '';
+    if (!routeSnap.exists()) {
+      // Fallback: if every stored route belongs to one workspace, this id is another form of that account.
+      const all = await getDocs(collection(db, 'instagram_account_routes')).catch(() => null);
+      const tenants = new Set<string>();
+      all?.forEach?.((d: any) => { const t = d.data()?.tenantId; if (t) tenants.add(String(t)); });
+      if (tenants.size === 1) {
+        tenantId = Array.from(tenants)[0];
+        await setDoc(doc(db, 'instagram_account_routes', accountId), { tenantId, alias: true, updatedAt: new Date().toISOString() }).catch(() => {});
+        console.warn('[Instagram webhook] Unknown account id', accountId, 'auto-linked to the only connected workspace', tenantId);
+      } else {
+        console.warn('[Instagram webhook] No workspace is connected for account id', accountId);
+        continue;
+      }
+    }
     if (!tenantId) continue;
 
     const events = [
@@ -531,4 +562,129 @@ export async function sendInstagramMessage(ctx: TenantContext, recipientId: stri
     throw new Error(`Instagram message send failed (HTTP ${response.status}). Check account permissions and messaging eligibility.`);
   }
   return result;
+}
+
+/**
+ * Ask Instagram what it actually has on file for the connected account, and repair what is missing.
+ * Helps when DMs never arrive: shows account type, whether the app is subscribed to `messages`,
+ * and whether our own routing record points at this workspace.
+ */
+export async function diagnoseInstagram(ctx: TenantContext): Promise<Record<string, unknown>> {
+  const connection = await getConnection(ctx);
+  if (!connection || connection.status !== 'connected') {
+    return { connected: false, summary: 'Instagram is not connected for this workspace. Click Connect Instagram first.' };
+  }
+  const result: Record<string, unknown> = { connected: true, accountId: connection.accountId, username: connection.username };
+  const notes: string[] = [];
+  let token = '';
+  try {
+    token = await getAccessToken(ctx);
+  } catch (err: any) {
+    return { ...result, summary: err?.message || 'The stored Instagram token cannot be used. Click Reconnect.' };
+  }
+
+  // 1. Account type must be professional.
+  try {
+    const profileUrl = new URL(`https://graph.instagram.com/${GRAPH_VERSION}/me`);
+    profileUrl.searchParams.set('fields', 'user_id,username,account_type');
+    profileUrl.searchParams.set('access_token', token);
+    const profile: any = await (await fetch(profileUrl)).json().catch(() => ({}));
+    result.accountType = profile.account_type || 'unknown';
+    result.profileUserId = String(profile.user_id || profile.id || '');
+    for (const alias of new Set([profile.user_id, profile.id].filter(Boolean).map(String))) {
+      if (alias === connection.accountId) continue;
+      await setDoc(doc(db, 'instagram_account_routes', alias), { tenantId: ctx.tenantId, accountId: connection.accountId, alias: true, updatedAt: new Date().toISOString() });
+      notes.push(`Registered extra account id ${alias}.`);
+    }
+    if (profile.error) notes.push(`Instagram rejected the token: ${profile.error.message || 'error'}. Reconnect the account.`);
+    else if (profile.account_type && !['BUSINESS', 'MEDIA_CREATOR'].includes(String(profile.account_type))) {
+      notes.push(`Account type is ${profile.account_type}. It must be a Business or Creator (Professional) account.`);
+    }
+  } catch {
+    notes.push('Could not read the Instagram profile.');
+  }
+
+  // 2. Our routing record (webhook account id -> this workspace).
+  try {
+    const routeRef = doc(db, 'instagram_account_routes', connection.accountId);
+    const routeSnap = await getDoc(routeRef);
+    if (!routeSnap.exists()) {
+      await setDoc(routeRef, { tenantId: ctx.tenantId, accountId: connection.accountId, updatedAt: new Date().toISOString() });
+      result.routeRepaired = true;
+      notes.push('The routing record was missing and has been recreated.');
+    } else if ((routeSnap.data() as any).tenantId !== ctx.tenantId) {
+      notes.push('This Instagram account is routed to a different workspace.');
+    }
+    result.routeOk = true;
+  } catch {
+    notes.push('Could not check the routing record.');
+  }
+
+  // 3. Is the app subscribed to this account's `messages` events?
+  const subsUrl = new URL(`https://graph.instagram.com/${GRAPH_VERSION}/${encodeURIComponent(connection.accountId)}/subscribed_apps`);
+  subsUrl.searchParams.set('access_token', token);
+  const readFields = async (): Promise<string[]> => {
+    const body: any = await (await fetch(subsUrl)).json().catch(() => ({}));
+    const rows: any[] = Array.isArray(body?.data) ? body.data : [];
+    return rows.flatMap((r) => (Array.isArray(r.subscribed_fields) ? r.subscribed_fields : []));
+  };
+  try {
+    let fields = await readFields();
+    result.subscribedFields = fields;
+    if (!fields.includes('messages')) {
+      const subscribeUrl = new URL(subsUrl);
+      subscribeUrl.searchParams.set('subscribed_fields', 'messages');
+      const resp = await fetch(subscribeUrl, { method: 'POST' });
+      const body: any = await resp.json().catch(() => ({}));
+      fields = await readFields();
+      result.subscribedFields = fields;
+      result.resubscribed = resp.ok && fields.includes('messages');
+      notes.push(
+        fields.includes('messages')
+          ? 'The account was not subscribed to messages; it has now been subscribed.'
+          : `Could not subscribe to messages${body?.error?.message ? `: ${body.error.message}` : ''}.`
+      );
+    }
+  } catch {
+    notes.push('Could not read the webhook subscription.');
+  }
+
+  // 4. Server settings Meta's deliveries depend on.
+  result.appSecretSet = Boolean(process.env.META_INSTAGRAM_APP_SECRET);
+  result.verifyTokenSet = Boolean(process.env.META_INSTAGRAM_WEBHOOK_VERIFY_TOKEN || process.env.META_WEBHOOK_VERIFY_TOKEN);
+  if (!result.appSecretSet) notes.push('META_INSTAGRAM_APP_SECRET is not set, so incoming events would be rejected.');
+
+  const subscribed = Array.isArray(result.subscribedFields) && (result.subscribedFields as string[]).includes('messages');
+  result.summary = notes.length
+    ? notes.join(' ')
+    : subscribed
+    ? 'Account is professional, routed to this workspace and subscribed to messages. If DMs still do not arrive, check Instagram app > Settings > Messages and story replies > Connected tools > Allow access to messages, and that the sender has a role on the Meta app.'
+    : 'Checks finished.';
+  return result;
+}
+
+/**
+ * Put a synthetic DM through the same processing code as a real webhook event, so the Unified Inbox
+ * path can be verified without Meta. Saves the message and conversation only; no AI reply, nothing sent.
+ */
+export async function injectTestInstagramMessage(ctx: TenantContext): Promise<{ conversationId: string; messageId: string }> {
+  const connection = await getConnection(ctx);
+  if (!connection || connection.status !== 'connected') throw new Error('Instagram is not connected. Connect an account first.');
+  const accountId = connection.accountId;
+  const senderId = 'test_sender';
+  const uniq = crypto.randomBytes(6).toString('hex');
+  const event = {
+    __test: true,
+    sender: { id: senderId },
+    recipient: { id: accountId },
+    timestamp: Date.now(),
+    message: { mid: `test_mid_${uniq}`, text: `Test message from Settings (${new Date().toLocaleTimeString('en-GB')})` },
+  };
+  const eventId = crypto.createHash('sha256').update(`${accountId}:${event.message.mid}`).digest('hex');
+  await createDoc(doc(db, 'instagram_inbound_events', eventId), {
+    accountId, tenantId: ctx.tenantId, externalId: event.message.mid, event, status: 'received', receivedAt: new Date().toISOString(),
+  });
+  await processInstagramMessageEvent(ctx.tenantId, accountId, event, eventId);
+  const hash = (v: string) => crypto.createHash('sha256').update(v).digest('hex').slice(0, 24);
+  return { conversationId: 'igconv_' + hash(accountId + ':' + senderId), messageId: 'igmsg_' + hash(accountId + ':' + event.message.mid) };
 }

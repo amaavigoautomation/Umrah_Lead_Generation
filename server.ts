@@ -8,6 +8,7 @@ import { checkAndDispatchPendingWebsiteLeadEmails } from './src/server/websiteLe
 import { processActiveRunningCampaignsBatch } from './src/server/campaignService.js';
 import { runAutoFollowUpWorkerCycle, isFollowUpWorkerDue } from './src/server/autoFollowUpService.js';
 import { hasFeature } from './src/server/entitlements.js';
+import { runInTenantScope } from './src/server/tenantScope.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -109,33 +110,36 @@ const safeBackgroundPoll = async () => {
         role: 'admin',
       };
 
-      // A. Inbound website demo lead auto-responder
-      await runWithJobLease(tId, 'website_leads_worker', 15_000, async () => {
-        await checkAndDispatchPendingWebsiteLeadEmails(ctx).catch(() => {});
+      // Everything below runs scoped to THIS tenant, so no service can see another tenant's context.
+      await runInTenantScope(ctx, async () => {
+        // A. Inbound website demo lead auto-responder
+        await runWithJobLease(tId, 'website_leads_worker', 15_000, async () => {
+          await checkAndDispatchPendingWebsiteLeadEmails(ctx).catch(() => {});
+        }).catch(() => {});
+
+        // B. Poll IMAP if configured
+        const cfg = getImapConfig();
+        if (cfg && cfg.configured) {
+          await runWithJobLease(tId, 'imap_poller_worker', 30_000, async () => {
+            await pollAndProcessImapMailbox(ctx).catch(() => {});
+          }).catch(() => {});
+        }
+
+        // C. Process active campaign batches
+        if (await hasFeature(tId, 'campaigns')) {
+          await runWithJobLease(tId, 'campaign_dispatch_worker', 20_000, async () => {
+            await processActiveRunningCampaignsBatch(3, ctx).catch(() => {});
+          }).catch(() => {});
+        }
+
+        // D. AI Auto Follow-Up (cheap: reads only this tenant's scheduled jobs, and skips
+        //    the read entirely until a job could be due)
+        if (isFollowUpWorkerDue(tId) && (await hasFeature(tId, 'auto_followup'))) {
+          await runWithJobLease(tId, 'auto_followup_worker', 30_000, async () => {
+            await runAutoFollowUpWorkerCycle(ctx).catch(() => {});
+          }).catch(() => {});
+        }
       }).catch(() => {});
-
-      // B. Poll IMAP if configured
-      const cfg = getImapConfig();
-      if (cfg && cfg.configured) {
-        await runWithJobLease(tId, 'imap_poller_worker', 30_000, async () => {
-          await pollAndProcessImapMailbox(ctx).catch(() => {});
-        }).catch(() => {});
-      }
-
-      // C. Process active campaign batches
-      if (await hasFeature(tId, 'campaigns')) {
-        await runWithJobLease(tId, 'campaign_dispatch_worker', 20_000, async () => {
-          await processActiveRunningCampaignsBatch(3, ctx).catch(() => {});
-        }).catch(() => {});
-      }
-
-      // D. AI Auto Follow-Up (cheap: reads only this tenant's scheduled jobs, and skips
-      //    the read entirely until a job could be due)
-      if (isFollowUpWorkerDue(tId) && (await hasFeature(tId, 'auto_followup'))) {
-        await runWithJobLease(tId, 'auto_followup_worker', 30_000, async () => {
-          await runAutoFollowUpWorkerCycle(ctx).catch(() => {});
-        }).catch(() => {});
-      }
     }
   } catch (e) {
     // ignore background errors

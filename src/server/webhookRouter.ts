@@ -9,6 +9,7 @@ import {
   globalEmailRouteDoc,
 } from './tenantRepo.js';
 import { processWebsiteLeadSubmission } from './websiteLeadService.js';
+import { runInTenantScope } from './tenantScope.js';
 import { originAllowed, normalizeOrigin } from './websiteWebhookService.js';
 import { processLiveInboundWhatsApp, getWhatsAppGatewayStatus } from './whatsappInboundPipeline.js';
 import { addEmailSuppression, recordTenantUsage } from './usageService.js';
@@ -77,7 +78,7 @@ export async function routeWebsiteLeadWebhook(
   };
 
   try {
-    const result = await processWebsiteLeadSubmission(body, tenantCtx);
+    const result = await runInTenantScope(tenantCtx, () => processWebsiteLeadSubmission(body, tenantCtx));
 
     const redirectTo = typeof body?._redirect === 'string' ? body._redirect : '';
     if (redirectTo && webhookId && webhookId !== 'umrah-demo' && isFirebaseConfigured && db) {
@@ -173,7 +174,7 @@ export async function routeWhatsAppWebhook(req: any, res: any): Promise<boolean>
   };
 
   try {
-    const result = await processLiveInboundWhatsApp(body, tenantCtx);
+    const result = await runInTenantScope(tenantCtx, () => processLiveInboundWhatsApp(body, tenantCtx));
     if (result.processed) {
       await recordTenantUsage(resolvedTenantId, { whatsappMessageCount: 1 }).catch(() => {});
     }

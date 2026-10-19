@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { tenantRepo } from './tenantRepo.js';
 import type { TenantContext } from '../types/tenant.js';
 
@@ -9,10 +10,27 @@ const DEFAULT_UMRAH_CTX: TenantContext = {
 };
 
 let activeWhatsAppCtx: TenantContext = DEFAULT_UMRAH_CTX;
+/** @deprecated Legacy process-wide fallback. Prefer runWithWhatsAppCtx / enterWhatsAppCtx (see tenantScope.ts). */
 export function setWhatsAppActiveContext(ctx: TenantContext) {
   activeWhatsAppCtx = ctx;
 }
+// Per-call tenant scope (survives awaits). The global above is only a last-resort fallback.
+const whatsAppCtxStore = new AsyncLocalStorage<TenantContext>();
+export function runWithWhatsAppCtx<T>(ctx: TenantContext, fn: () => Promise<T>): Promise<T> {
+  return whatsAppCtxStore.run(ctx, fn);
+}
+/** Scope the REST of the current async chain (e.g. one API request) to this tenant. */
+export function enterWhatsAppCtx(ctx: TenantContext): void {
+  whatsAppCtxStore.enterWith(ctx);
+}
+let warnedUnscopedWhatsApp = false;
 function getWACtx(): TenantContext {
+  const scoped = whatsAppCtxStore.getStore();
+  if (scoped) return scoped;
+  if (!warnedUnscopedWhatsApp) {
+    warnedUnscopedWhatsApp = true;
+    console.warn('[Tenant isolation] WhatsApp code ran outside a tenant scope; falling back to the default workspace.', new Error().stack?.split('\n').slice(2, 5).join(' | '));
+  }
   return activeWhatsAppCtx;
 }
 import OpenAI from 'openai';
@@ -144,6 +162,8 @@ export interface InboundWhatsAppCrmEntities {
 }
 
 export interface ProcessedInboundWhatsAppResult {
+  /** Set by callers that count handled messages for usage metering (optional; not set by the pipeline itself). */
+  processed?: boolean;
   messageId: string;
   from: string;
   fromName: string;
@@ -771,6 +791,10 @@ www.umrah360.in`;
  * 9. Lead activity logging
  * 10. Single-source Firestore persistence
  */
+function runWhatsAppScoped(ctx: TenantContext, payload: Parameters<typeof processLiveInboundWhatsApp>[0]) {
+  return runWithWhatsAppCtx(ctx, () => processLiveInboundWhatsApp(payload));
+}
+
 export async function processLiveInboundWhatsApp(payload: {
   from: string;
   fromName?: string;
@@ -781,7 +805,11 @@ export async function processLiveInboundWhatsApp(payload: {
   direction?: 'INBOUND' | 'OUTBOUND';
   senderType?: 'CUSTOMER' | 'PROSPECT' | 'AI' | 'AGENT';
   isTestSimulation?: boolean;
-}): Promise<ProcessedInboundWhatsAppResult> {
+}, ctx?: TenantContext): Promise<ProcessedInboundWhatsAppResult> {
+  // Webhook callers resolve the tenant from the channel route and pass it in; run inside that scope.
+  if (ctx) {
+    return runWhatsAppScoped(ctx, payload);
+  }
   const targetNumber = TARGET_WHATSAPP_NUMBER;
   const targetNumberFormatted = TARGET_WHATSAPP_NUMBER_DISPLAY;
   const brand = await getTenantBrand(getWACtx().tenantId);

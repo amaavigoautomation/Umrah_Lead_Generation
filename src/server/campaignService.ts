@@ -395,16 +395,29 @@ const DEFAULT_UMRAH_CTX: TenantContext = {
 };
 
 let activeCampaignCtx: TenantContext = DEFAULT_UMRAH_CTX;
+/** @deprecated Legacy process-wide fallback. Prefer runWithCampaignCtx / enterCampaignCtx (see tenantScope.ts). */
 export function setCampaignActiveContext(ctx: TenantContext) {
   activeCampaignCtx = ctx;
 }
-// Per-call tenant scope (survives awaits); falls back to the legacy global set by API requests.
+// Per-call tenant scope (survives awaits). The global above is only a last-resort fallback for code
+// that runs outside any scope; it is never written by API requests any more.
 const campaignCtxStore = new AsyncLocalStorage<TenantContext>();
 export function runWithCampaignCtx<T>(ctx: TenantContext, fn: () => Promise<T>): Promise<T> {
   return campaignCtxStore.run(ctx, fn);
 }
+/** Scope the REST of the current async chain (e.g. one API request) to this tenant. */
+export function enterCampaignCtx(ctx: TenantContext): void {
+  campaignCtxStore.enterWith(ctx);
+}
+let warnedUnscopedCampaign = false;
 export function getCampaignActiveCtx(): TenantContext {
-  return campaignCtxStore.getStore() ?? activeCampaignCtx;
+  const scoped = campaignCtxStore.getStore();
+  if (scoped) return scoped;
+  if (!warnedUnscopedCampaign) {
+    warnedUnscopedCampaign = true;
+    console.warn('[Tenant isolation] campaign code ran outside a tenant scope; falling back to the default workspace.', new Error().stack?.split('\n').slice(2, 5).join(' | '));
+  }
+  return activeCampaignCtx;
 }
 
 export interface TenantCampaignStore {
@@ -2949,19 +2962,28 @@ export async function updateCampaignLeadStatus(params: {
  * Finds all RUNNING campaigns (in memory and Firestore) and processes their next send batch.
  * This runs continuously on the server regardless of whether a browser client is open.
  */
-let isAutoProcessingCampaigns = false;
-export async function processActiveRunningCampaignsBatch(batchSize: number = 500): Promise<{
+// One run at a time PER TENANT (a single global flag made one busy workspace starve every other one).
+const autoProcessingTenants = new Set<string>();
+export async function processActiveRunningCampaignsBatch(
+  batchSize: number = 500,
+  ctx?: TenantContext
+): Promise<{
   activeCount: number;
   processedCampaigns: Array<{ campaignId: string; processedCount: number; remainingPendingCount: number }>;
 }> {
-  if (isAutoProcessingCampaigns) {
+  // Callers that know the tenant (background worker, cron) pass it; the work then runs inside that scope.
+  if (ctx) {
+    return runWithCampaignCtx(ctx, () => processActiveRunningCampaignsBatch(batchSize));
+  }
+  const autoProcessingTenantId = getCampaignActiveCtx().tenantId;
+  if (autoProcessingTenants.has(autoProcessingTenantId)) {
     return { activeCount: 0, processedCampaigns: [] };
   }
   // Plan gate: a workspace whose plan has no campaigns must not send anything.
-  if (!(await hasFeature(getCampaignActiveCtx().tenantId, 'campaigns'))) {
+  if (!(await hasFeature(autoProcessingTenantId, 'campaigns'))) {
     return { activeCount: 0, processedCampaigns: [] };
   }
-  isAutoProcessingCampaigns = true;
+  autoProcessingTenants.add(autoProcessingTenantId);
 
   try {
     await initCampaignStore();
@@ -3016,6 +3038,6 @@ export async function processActiveRunningCampaignsBatch(batchSize: number = 500
       processedCampaigns: results,
     };
   } finally {
-    isAutoProcessingCampaigns = false;
+    autoProcessingTenants.delete(autoProcessingTenantId);
   }
 }

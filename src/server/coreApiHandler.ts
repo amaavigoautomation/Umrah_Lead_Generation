@@ -74,17 +74,14 @@ import { db } from './adminFirestore.js';
 import { getDoc, getDocs, setDoc, updateDoc, deleteDoc, collection, doc, query as fsQuery, where as fsWhere } from './adminFirestore.js';
 import { safeSetDoc } from './firestoreUtils.js';
 import {
-  setCampaignActiveContext,
   getCampaignActiveCtx,
 } from './campaignService.js';
 import { getTenantBrand } from './brandService.js';
 import { brandSignature, brandIntro, brandTzLabel, brandWorkingDaysLabel, fmtHour } from '../shared/brand.js';
-import { setSchedulingActiveContext } from './demoSchedulingService.js';
-import { setInboundActiveContext } from './inboundPipeline.js';
 import { getEntitlements, hasFeature, featureForUrl, listPlans, savePlan, getEffectiveLimits, invalidateEntitlements } from './entitlements.js';
 import { FEATURES, LIMITS } from '../shared/features.js';
 import { createCheckout, createPortal, syncCheckoutSession, billingConfig, BillingError } from './billingService.js';
-import { setWhatsAppActiveContext } from './whatsappInboundPipeline.js';
+import { enterTenantScope, runInTenantScope } from './tenantScope.js';
 import {
   tenantRepo,
   globalTenantDoc,
@@ -283,13 +280,11 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
     isPlatformAdmin,
   };
 
-  // TEMPORARY: global active-context setters (removed in the "explicit ctx"
-  // phase). Only set for authenticated requests, never for public paths.
+  // Scope every tenant-aware service to THIS request's tenant for the rest of the request. This is
+  // async-local (AsyncLocalStorage), so concurrent requests and background workers can no longer
+  // overwrite each other's tenant. Public paths (webhooks) scope themselves once they resolve the tenant.
   if (!isPublicPath) {
-    setCampaignActiveContext(activeTenantCtx);
-    setSchedulingActiveContext(activeTenantCtx);
-    setInboundActiveContext(activeTenantCtx);
-    setWhatsAppActiveContext(activeTenantCtx);
+    enterTenantScope(activeTenantCtx);
   }
 
   // =========================================================================
@@ -2744,12 +2739,12 @@ Generate a helpful, grounded response.`;
         for (const t of snap.docs) {
           const data: any = t.data();
           if (data?.status === 'suspended') continue;
-          setCampaignActiveContext({ tenantId: t.id, uid: 'system-cron', email: '', role: 'admin' });
-          results.push({ tenantId: t.id, ...(await processActiveRunningCampaignsBatch(500)) });
+          const cronCtx: TenantContext = { tenantId: t.id, uid: 'system-cron', email: '', role: 'admin' };
+          results.push({ tenantId: t.id, ...(await runInTenantScope(cronCtx, () => processActiveRunningCampaignsBatch(500, cronCtx))) });
         }
       } else {
-        setCampaignActiveContext(callerCtx!);
-        results.push({ tenantId: callerCtx!.tenantId, ...(await processActiveRunningCampaignsBatch(500)) });
+        const ownCtx = callerCtx!;
+        results.push({ tenantId: ownCtx.tenantId, ...(await runInTenantScope(ownCtx, () => processActiveRunningCampaignsBatch(500, ownCtx))) });
       }
       res.statusCode = 200;
       res.setHeader('Content-Type', 'application/json');

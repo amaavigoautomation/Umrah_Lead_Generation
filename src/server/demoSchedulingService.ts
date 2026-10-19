@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { tenantRepo } from './tenantRepo.js';
 import type { TenantContext } from '../types/tenant.js';
 import { getTenantBrand, getBrandSync } from './brandService.js';
@@ -11,10 +12,27 @@ const DEFAULT_UMRAH_CTX: TenantContext = {
 };
 
 let activeSchedulingCtx: TenantContext = DEFAULT_UMRAH_CTX;
+/** @deprecated Legacy process-wide fallback. Prefer runWithSchedulingCtx / enterSchedulingCtx (see tenantScope.ts). */
 export function setSchedulingActiveContext(ctx: TenantContext) {
   activeSchedulingCtx = ctx;
 }
+// Per-call tenant scope (survives awaits). The global above is only a last-resort fallback.
+const schedulingCtxStore = new AsyncLocalStorage<TenantContext>();
+export function runWithSchedulingCtx<T>(ctx: TenantContext, fn: () => Promise<T>): Promise<T> {
+  return schedulingCtxStore.run(ctx, fn);
+}
+/** Scope the REST of the current async chain (e.g. one API request) to this tenant. */
+export function enterSchedulingCtx(ctx: TenantContext): void {
+  schedulingCtxStore.enterWith(ctx);
+}
+let warnedUnscopedScheduling = false;
 function getSchedCtx(): TenantContext {
+  const scoped = schedulingCtxStore.getStore();
+  if (scoped) return scoped;
+  if (!warnedUnscopedScheduling) {
+    warnedUnscopedScheduling = true;
+    console.warn('[Tenant isolation] scheduling code ran outside a tenant scope; falling back to the default workspace.', new Error().stack?.split('\n').slice(2, 5).join(' | '));
+  }
   return activeSchedulingCtx;
 }
 

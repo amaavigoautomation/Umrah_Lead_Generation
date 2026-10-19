@@ -10,17 +10,29 @@ const DEFAULT_UMRAH_CTX: TenantContext = {
 };
 
 let activeInboundCtx: TenantContext = DEFAULT_UMRAH_CTX;
+/** @deprecated Legacy process-wide fallback. Prefer runWithInboundCtx / enterInboundCtx (see tenantScope.ts). */
 export function setInboundActiveContext(ctx: TenantContext) {
   activeInboundCtx = ctx;
 }
 // Per-call tenant scope. Work started with runWithInboundCtx() always sees its own tenant, even if
-// another request changes the global active context while it is awaiting.
+// another request is in flight while it is awaiting. The global above is only a last-resort fallback.
 const inboundCtxStore = new AsyncLocalStorage<TenantContext>();
 export function runWithInboundCtx<T>(ctx: TenantContext, fn: () => Promise<T>): Promise<T> {
   return inboundCtxStore.run(ctx, fn);
 }
+/** Scope the REST of the current async chain (e.g. one API request) to this tenant. */
+export function enterInboundCtx(ctx: TenantContext): void {
+  inboundCtxStore.enterWith(ctx);
+}
+let warnedUnscopedInbound = false;
 function getInboundCtx(): TenantContext {
-  return inboundCtxStore.getStore() ?? activeInboundCtx;
+  const scoped = inboundCtxStore.getStore();
+  if (scoped) return scoped;
+  if (!warnedUnscopedInbound) {
+    warnedUnscopedInbound = true;
+    console.warn('[Tenant isolation] inbound code ran outside a tenant scope; falling back to the default workspace.', new Error().stack?.split('\n').slice(2, 5).join(' | '));
+  }
+  return activeInboundCtx;
 }
 
 /**

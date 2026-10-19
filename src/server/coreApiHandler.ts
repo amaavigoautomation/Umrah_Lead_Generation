@@ -249,7 +249,9 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
     // Calendar OAuth also returns through a state-bound, one-time callback.
     url === '/api/oauth/microsoft-calendar/callback' ||
     // Instagram redirects the browser here; the single-use OAuth state identifies the workspace.
-    url === '/api/instagram/oauth/callback';
+    url === '/api/instagram/oauth/callback' ||
+    // Brand logos are shown on pages that load before/without a session (and in emails).
+    url.startsWith('/api/brand-logo/');
 
   let resolvedTenantId = '';
   let userUid = 'anonymous';
@@ -285,6 +287,35 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
   // overwrite each other's tenant. Public paths (webhooks) scope themselves once they resolve the tenant.
   if (!isPublicPath) {
     enterTenantScope(activeTenantCtx);
+  }
+
+  // Public brand logo (image bytes, cached). The tenant id in the URL only selects which logo to show.
+  if (url.startsWith('/api/brand-logo/') && req.method === 'GET') {
+    const logoTenantId = decodeURIComponent(url.slice('/api/brand-logo/'.length).split('/')[0] || '');
+    const { getTenantLogo } = await import('./brandLogoService.js');
+    const logo = await getTenantLogo(logoTenantId);
+    if (!logo) {
+      res.statusCode = 404;
+      res.setHeader('Content-Type', 'application/json');
+      res.end(JSON.stringify({ error: 'No logo' }));
+      return true;
+    }
+    const etag = `"logo-${logo.updatedAt}-${logo.buffer.length}"`;
+    res.setHeader('ETag', etag);
+    res.setHeader('Cache-Control', 'public, max-age=300, stale-while-revalidate=86400');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Content-Security-Policy', "default-src 'none'; sandbox");
+    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+    if (req.headers['if-none-match'] === etag) {
+      res.statusCode = 304;
+      res.end();
+      return true;
+    }
+    res.statusCode = 200;
+    res.setHeader('Content-Type', logo.contentType);
+    res.setHeader('Content-Length', String(logo.buffer.length));
+    res.end(logo.buffer);
+    return true;
   }
 
   // =========================================================================
@@ -822,6 +853,26 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
       res.end(JSON.stringify({ error: err?.message || 'Brand request failed' }));
       return true;
     }
+  }
+
+  // Brand logo upload: /api/tenants/:tenantId/brand/logo (POST: workspace admin, DELETE: workspace admin).
+  // The generic /api/tenants/* guard above already enforces "own workspace" and "admin for writes".
+  const brandLogoMatch = url.match(/^\/api\/tenants\/([^/?]+)\/brand\/logo$/);
+  if (brandLogoMatch && (req.method === 'POST' || req.method === 'DELETE')) {
+    const tId = brandLogoMatch[1];
+    res.setHeader('Content-Type', 'application/json');
+    try {
+      const logoSvc = await import('./brandLogoService.js');
+      const { invalidateTenantBrand } = await import('./brandService.js');
+      const brand = req.method === 'POST' ? await logoSvc.saveTenantLogo(tId, body?.image) : await logoSvc.deleteTenantLogo(tId);
+      invalidateTenantBrand(tId);
+      res.statusCode = 200;
+      res.end(JSON.stringify({ brand }));
+    } catch (err: any) {
+      res.statusCode = err?.status || 500;
+      res.end(JSON.stringify({ error: err?.message || 'Logo request failed' }));
+    }
+    return true;
   }
 
   // Tenant Usage Metrics: /api/tenants/:tenantId/usage

@@ -617,14 +617,14 @@ const WorkspacePanel: React.FC<{ tenant: Tenant; catalog: Catalog; onClose: () =
                 ))}
               </select>
               <button
-                disabled={!planId || planId === tenant.planId || busy === 'plan'}
+                disabled={!planId || busy === 'plan'}
                 onClick={() => patch({ planId }, 'plan', { planId, billingStatus: 'manual', planSource: 'manual' })}
                 className="px-4 py-2 rounded-lg bg-slate-900 text-white text-sm font-semibold disabled:opacity-40"
               >
-                {busy === 'plan' ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Grant'}
+                {busy === 'plan' ? <Loader2 className="w-4 h-4 animate-spin" /> : planId && planId === tenant.planId ? 'Re-apply' : 'Grant'}
               </button>
             </div>
-            <p className="text-xs text-slate-500">Granting a plan by hand marks the workspace as “granted manually”; Stripe events will never overwrite it.</p>
+            <p className="text-xs text-slate-500">Granting a plan by hand marks the workspace as “granted manually”; Stripe events will never overwrite it. On an agency plan this also sets up the agency (Re-apply does it for a workspace that was already on the plan).</p>
             <div className="flex gap-2">
               <select value={billingStatus} onChange={(e) => setBillingStatus(e.target.value)} className={inputCls}>
                 <option value="">Existing customer (never locked)</option>

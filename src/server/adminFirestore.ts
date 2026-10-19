@@ -97,6 +97,8 @@ export async function deleteDoc(ref: DocumentReference): Promise<void> {
 type Constraint = (q: any) => any;
 export const where = (field: string, op: any, value: any): Constraint => (q) => q.where(field, op, value);
 export const orderBy = (field: string, dir: 'asc' | 'desc' = 'asc'): Constraint => (q) => q.orderBy(field, dir);
+/** Fetch only these fields (less data over the wire; reads are still billed per document). */
+export const select = (...fields: string[]): Constraint => (q) => (q as any).select(...fields);
 export const limit = (n: number): Constraint => (q) => q.limit(n);
 /** Order by document ID. Works with equality filters without any composite index. */
 export const orderByDocumentId = (): Constraint => (q) => q.orderBy(FieldPath.documentId());

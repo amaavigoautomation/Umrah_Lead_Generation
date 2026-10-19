@@ -11,6 +11,7 @@ import {
   Bot,
   RefreshCw,
   Mail,
+  LayoutDashboard,
   Radio,
   MessageSquare,
   Lock,
@@ -29,6 +30,7 @@ import { Umrah360Logo } from './Umrah360Logo';
 import { useBrand } from '../context/BrandContext';
 
 export type ActiveTab =
+  | 'dashboard'
   | 'inbox'
   | 'campaigns'
   | 'crm'
@@ -96,6 +98,11 @@ export const Navbar: React.FC<NavbarProps> = ({
   };
 
   const navItems: { id: ActiveTab; label: string; icon: React.ReactNode; badgeCount?: number; hasPulse?: boolean }[] = [
+    {
+      id: 'dashboard',
+      label: 'Dashboard',
+      icon: <LayoutDashboard className="w-4 h-4 shrink-0" />,
+    },
     {
       id: 'inbox',
       label: 'Unified Inbox',

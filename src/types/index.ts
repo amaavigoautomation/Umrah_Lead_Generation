@@ -1,4 +1,5 @@
 export type ActiveTab =
+  | 'dashboard'
   | 'inbox'
   | 'campaigns'
   | 'crm'

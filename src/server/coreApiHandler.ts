@@ -83,6 +83,7 @@ import { FEATURES, LIMITS } from '../shared/features.js';
 import { createCheckout, createPortal, syncCheckoutSession, billingConfig, BillingError } from './billingService.js';
 import { enterTenantScope, runInTenantScope } from './tenantScope.js';
 import { handleOrgApi } from './orgApi.js';
+import { handleDashboardApi } from './dashboardApi.js';
 import { isUnlimited } from '../shared/features.js';
 import {
   tenantRepo,
@@ -298,6 +299,7 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
   // Handled before the per-workspace plan/billing gates, because these routes work without a selected client.
   if (!isPublicPath) {
     if (await handleOrgApi(req, res, url, body, activeTenantCtx)) return true;
+    if (await handleDashboardApi(req, res, url, activeTenantCtx)) return true;
   }
 
   // An organization admin who has not selected a client brand can only use organization-level routes.

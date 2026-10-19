@@ -61,6 +61,7 @@ const LiveMailboxCenter = lazyNamed(() => import('./components/LiveMailboxCenter
 const DemoSchedulingView = lazyNamed(() => import('./components/DemoSchedulingView'), 'DemoSchedulingView');
 const AutoFollowUpDashboard = lazyNamed(() => import('./components/AutoFollowUpDashboard'), 'AutoFollowUpDashboard');
 const PlatformConsole = lazyNamed(() => import('./components/PlatformConsole'), 'PlatformConsole');
+const DashboardView = React.lazy(() => import('./components/DashboardView'));
 const OrgShell = React.lazy(() => import('./components/OrgShell'));
 const BillingView = lazyNamed(() => import('./components/BillingView'), 'BillingView');
 
@@ -187,6 +188,7 @@ function toAppUser(u: any): AppUser {
 //   );
 //   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(false);
 const ALL_TABS: readonly ActiveTab[] = [
+  'dashboard',
   'inbox',
   'campaigns',
   'crm',
@@ -301,6 +303,14 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
       setSession(s);
       setCurrentUser(s ? s.appUser : null);
       setCurrentTenantId(s?.tenantId || '');
+      // Admins land on the dashboard unless they were already somewhere (deep link or reload).
+      if (s?.isTenantAdmin && !s.isPlatformAdmin && typeof window !== 'undefined') {
+        let remembered: string | null = null;
+        try { remembered = sessionStorage.getItem('umrah360.activeTab'); } catch {}
+        if (!remembered && !new URLSearchParams(window.location.search).has('tab') && !new URLSearchParams(window.location.search).has('mailbox')) {
+          setActiveTab('dashboard');
+        }
+      }
       if (err) setAuthError(err.message);
       else if (s) setAuthError(null);
       setAuthLoading(false);
@@ -2209,6 +2219,12 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
                   }
                 }}
               />
+            )}
+
+            {activeTab === 'dashboard' && (
+              <Suspense fallback={<ScreenLoading />}>
+                <DashboardView />
+              </Suspense>
             )}
 
             {activeTab === 'campaigns' && (

@@ -3307,9 +3307,9 @@ var init_x509_workload_identity_auth = __esm({
         }
         __classPrivateFieldGet(this, _X509WorkloadIdentityAuth_instances, "m", _X509WorkloadIdentityAuth_preflight).call(this, context2);
         const scope = options2 ? __classPrivateFieldGet(this, _X509WorkloadIdentityAuth_instances, "m", _X509WorkloadIdentityAuth_scope).call(this) : void 0;
-        const cached = __classPrivateFieldGet(this, _X509WorkloadIdentityAuth_cachedToken, "f");
-        if (cached && performance.now() < cached.refreshAt && Date.now() < cached.wallRefreshAt) {
-          return __classPrivateFieldGet(_a, _a, "m", _X509WorkloadIdentityAuth_assignToken).call(_a, scope, cached);
+        const cached2 = __classPrivateFieldGet(this, _X509WorkloadIdentityAuth_cachedToken, "f");
+        if (cached2 && performance.now() < cached2.refreshAt && Date.now() < cached2.wallRefreshAt) {
+          return __classPrivateFieldGet(_a, _a, "m", _X509WorkloadIdentityAuth_assignToken).call(_a, scope, cached2);
         }
         const remaining = context2 && options2 ? this.remainingTimeout(options2, context2.timeout) : context2?.timeout;
         const { signal, dispose } = exchangeDeadline(remaining, callerSignal);
@@ -3328,7 +3328,7 @@ var init_x509_workload_identity_auth = __esm({
           }
           return __classPrivateFieldGet(_a, _a, "m", _X509WorkloadIdentityAuth_assignToken).call(_a, scope, refreshed);
         } catch (error) {
-          return await __classPrivateFieldGet(this, _X509WorkloadIdentityAuth_instances, "m", _X509WorkloadIdentityAuth_recoverRefreshFailure).call(this, error, attempt, cached, scope, options2, context2);
+          return await __classPrivateFieldGet(this, _X509WorkloadIdentityAuth_instances, "m", _X509WorkloadIdentityAuth_recoverRefreshFailure).call(this, error, attempt, cached2, scope, options2, context2);
         } finally {
           waiter.dispose();
           dispose();
@@ -3421,7 +3421,7 @@ var init_x509_workload_identity_auth = __esm({
         scope.tokenGeneration = token.generation;
       }
       return token.accessToken;
-    }, _X509WorkloadIdentityAuth_recoverRefreshFailure = async function _X509WorkloadIdentityAuth_recoverRefreshFailure2(error, attempt, cached, scope, options2, context2) {
+    }, _X509WorkloadIdentityAuth_recoverRefreshFailure = async function _X509WorkloadIdentityAuth_recoverRefreshFailure2(error, attempt, cached2, scope, options2, context2) {
       const callerSignal = context2 ? context2.signal : options2?.signal;
       if (callerSignal?.aborted) {
         throw userAbortError(callerSignal);
@@ -3429,7 +3429,7 @@ var init_x509_workload_identity_auth = __esm({
       if (attempt.controller.signal.aborted && attempt.generation !== __classPrivateFieldGet(this, _X509WorkloadIdentityAuth_tokenGeneration, "f")) {
         return await this.getToken(options2, context2);
       }
-      const fallback = __classPrivateFieldGet(this, _X509WorkloadIdentityAuth_instances, "m", _X509WorkloadIdentityAuth_fallbackToken).call(this, error, cached, scope);
+      const fallback = __classPrivateFieldGet(this, _X509WorkloadIdentityAuth_instances, "m", _X509WorkloadIdentityAuth_fallbackToken).call(this, error, cached2, scope);
       if (fallback !== void 0) {
         return fallback;
       }
@@ -3440,8 +3440,8 @@ var init_x509_workload_identity_auth = __esm({
         }
       }
       throw error;
-    }, _X509WorkloadIdentityAuth_fallbackToken = function _X509WorkloadIdentityAuth_fallbackToken2(error, cached, scope) {
-      if (!cached || cached !== __classPrivateFieldGet(this, _X509WorkloadIdentityAuth_cachedToken, "f") || performance.now() >= cached.expiresAt || Date.now() >= cached.wallExpiresAt || !_a.isRetryableFailure(error)) {
+    }, _X509WorkloadIdentityAuth_fallbackToken = function _X509WorkloadIdentityAuth_fallbackToken2(error, cached2, scope) {
+      if (!cached2 || cached2 !== __classPrivateFieldGet(this, _X509WorkloadIdentityAuth_cachedToken, "f") || performance.now() >= cached2.expiresAt || Date.now() >= cached2.wallExpiresAt || !_a.isRetryableFailure(error)) {
         return void 0;
       }
       const headers = _a.retryHeaders(error);
@@ -3453,9 +3453,9 @@ var init_x509_workload_identity_auth = __esm({
         requested = Number.isNaN(seconds) ? Date.parse(retryAfter) - Date.now() : seconds * 1e3;
       }
       const cooldown = requested !== void 0 && Number.isFinite(requested) && requested >= 0 && requested <= 6e4 ? Math.max(FAILED_REFRESH_COOLDOWN_MS, requested) : FAILED_REFRESH_COOLDOWN_MS;
-      cached.refreshAt = Math.min(cached.expiresAt, performance.now() + cooldown);
-      cached.wallRefreshAt = Math.min(cached.wallExpiresAt, Date.now() + cooldown);
-      return __classPrivateFieldGet(_a, _a, "m", _X509WorkloadIdentityAuth_assignToken).call(_a, scope, cached);
+      cached2.refreshAt = Math.min(cached2.expiresAt, performance.now() + cooldown);
+      cached2.wallRefreshAt = Math.min(cached2.wallExpiresAt, Date.now() + cooldown);
+      return __classPrivateFieldGet(_a, _a, "m", _X509WorkloadIdentityAuth_assignToken).call(_a, scope, cached2);
     }, _X509WorkloadIdentityAuth_retireRefresh = function _X509WorkloadIdentityAuth_retireRefresh2(attempt) {
       if (attempt.waiters !== 0 || __classPrivateFieldGet(this, _X509WorkloadIdentityAuth_refresh, "f") !== attempt) {
         return;
@@ -3715,9 +3715,9 @@ function isArrayBuffer(value) {
 }
 function supportsFormData(fetchObject) {
   const fetch3 = typeof fetchObject === "function" ? fetchObject : fetchObject.fetch;
-  const cached = supportsFormDataMap.get(fetch3);
-  if (cached) {
-    return cached;
+  const cached2 = supportsFormDataMap.get(fetch3);
+  if (cached2) {
+    return cached2;
   }
   const promise = (async () => {
     try {
@@ -19539,9 +19539,9 @@ function createResponseOutputIdentityIndex(snapshot) {
   return identityIndex;
 }
 function getResponseOutputIdentityIndex(context2, snapshot) {
-  const cached = responseOutputIdentityIndexes.get(context2);
-  if (cached && cached.snapshot === snapshot && cached.output === snapshot.output && cached.length === snapshot.output.length) {
-    return cached;
+  const cached2 = responseOutputIdentityIndexes.get(context2);
+  if (cached2 && cached2.snapshot === snapshot && cached2.output === snapshot.output && cached2.length === snapshot.output.length) {
+    return cached2;
   }
   const identityIndex = createResponseOutputIdentityIndex(snapshot);
   responseOutputIdentityIndexes.set(context2, identityIndex);
@@ -22346,8 +22346,8 @@ async function resolveRealtimeAPIKey(client2, deferCache = false) {
     isProvider,
     commit: () => {
       const hookKey = current.providerKey !== void 0 && apiKey !== void 0 && apiKey !== current.providerKey ? validateCapturedAPIKey(client2, apiKey) : void 0;
-      const cached = current.commit();
-      return hookKey === void 0 ? validateCapturedAPIKey(client2, cached) : hookKey;
+      const cached2 = current.commit();
+      return hookKey === void 0 ? validateCapturedAPIKey(client2, cached2) : hookKey;
     }
   };
 }
@@ -22851,16 +22851,16 @@ var init_client = __esm({
             return resolvedToken;
           }
           this.apiKey = resolvedToken;
-          const cached2 = capture ? this.apiKey : resolvedToken;
+          const cached3 = capture ? this.apiKey : resolvedToken;
           this._lastCachedAPIKeyInvocation = invocation;
-          return cached2;
+          return cached3;
         };
         if (deferredCache) {
           deferredCache.providerKey = resolvedToken;
           deferredCache.commit = commit;
         }
-        const cached = deferredCache ? validateCapturedAPIKey(this, resolvedToken) : commit();
-        capture?.(cached);
+        const cached2 = deferredCache ? validateCapturedAPIKey(this, resolvedToken) : commit();
+        capture?.(cached2);
         return true;
       }
       buildURL(path3, query2, defaultBaseURL) {
@@ -41042,14 +41042,14 @@ var require_src4 = __commonJS({
       "bios-only": "treat the result of a BIOS probe as canonical (don't fall back to pinging)",
       "ping-only": "skip the BIOS probe, and go straight to pinging"
     });
-    function getBaseUrl(baseUrl) {
-      if (!baseUrl) {
-        baseUrl = process.env.GCE_METADATA_IP || process.env.GCE_METADATA_HOST || exports.HOST_ADDRESS;
+    function getBaseUrl(baseUrl2) {
+      if (!baseUrl2) {
+        baseUrl2 = process.env.GCE_METADATA_IP || process.env.GCE_METADATA_HOST || exports.HOST_ADDRESS;
       }
-      if (!/^https?:\/\//.test(baseUrl)) {
-        baseUrl = `http://${baseUrl}`;
+      if (!/^https?:\/\//.test(baseUrl2)) {
+        baseUrl2 = `http://${baseUrl2}`;
       }
-      return new URL(exports.BASE_PATH, baseUrl).href;
+      return new URL(exports.BASE_PATH, baseUrl2).href;
     }
     function validate(options2) {
       Object.keys(options2).forEach((key) => {
@@ -55827,24 +55827,24 @@ var require_umd = __commonJS({
         var INT_CACHE = {};
         var UINT_CACHE = {};
         function fromInt(value, unsigned) {
-          var obj, cachedObj, cache3;
+          var obj, cachedObj, cache4;
           if (unsigned) {
             value >>>= 0;
-            if (cache3 = 0 <= value && value < 256) {
+            if (cache4 = 0 <= value && value < 256) {
               cachedObj = UINT_CACHE[value];
               if (cachedObj) return cachedObj;
             }
             obj = fromBits(value, 0, true);
-            if (cache3) UINT_CACHE[value] = obj;
+            if (cache4) UINT_CACHE[value] = obj;
             return obj;
           } else {
             value |= 0;
-            if (cache3 = -128 <= value && value < 128) {
+            if (cache4 = -128 <= value && value < 128) {
               cachedObj = INT_CACHE[value];
               if (cachedObj) return cachedObj;
             }
             obj = fromBits(value, value < 0 ? -1 : 0, false);
-            if (cache3) INT_CACHE[value] = obj;
+            if (cache4) INT_CACHE[value] = obj;
             return obj;
           }
         }
@@ -75078,14 +75078,14 @@ var require_src10 = __commonJS({
       "bios-only": "treat the result of a BIOS probe as canonical (don't fall back to pinging)",
       "ping-only": "skip the BIOS probe, and go straight to pinging"
     });
-    function getBaseUrl(baseUrl) {
-      if (!baseUrl) {
-        baseUrl = process.env.GCE_METADATA_IP || process.env.GCE_METADATA_HOST || exports.HOST_ADDRESS;
+    function getBaseUrl(baseUrl2) {
+      if (!baseUrl2) {
+        baseUrl2 = process.env.GCE_METADATA_IP || process.env.GCE_METADATA_HOST || exports.HOST_ADDRESS;
       }
-      if (!/^https?:\/\//.test(baseUrl)) {
-        baseUrl = `http://${baseUrl}`;
+      if (!/^https?:\/\//.test(baseUrl2)) {
+        baseUrl2 = `http://${baseUrl2}`;
       }
-      return new URL(exports.BASE_PATH, baseUrl).href;
+      return new URL(exports.BASE_PATH, baseUrl2).href;
     }
     function validate(options2) {
       Object.keys(options2).forEach((key) => {
@@ -82846,9 +82846,9 @@ var require_grpc = __commonJS({
       }
       loadProtoJSON(json3, ignoreCache = false) {
         const hash = (0, object_hash_1.default)(JSON.stringify(json3)).toString();
-        const cached = _GrpcClient.protoCache.get(hash);
-        if (cached && !ignoreCache) {
-          return cached;
+        const cached2 = _GrpcClient.protoCache.get(hash);
+        if (cached2 && !ignoreCache) {
+          return cached2;
         }
         const options2 = _GrpcClient.defaultOptions();
         const packageDefinition = grpcProtoLoader.fromJSON(json3, options2);
@@ -98019,37 +98019,37 @@ var require_pageDescriptor = __commonJS({
         const asyncIterable = {
           [Symbol.asyncIterator]() {
             let nextPageRequest = request;
-            const cache3 = [];
+            const cache4 = [];
             return {
               async next() {
-                if (cache3.length > 0) {
+                if (cache4.length > 0) {
                   return Promise.resolve({
                     done: false,
-                    value: cache3.shift()
+                    value: cache4.shift()
                   });
                 }
                 let attempts = 0;
-                while (cache3.length === 0 && nextPageRequest) {
+                while (cache4.length === 0 && nextPageRequest) {
                   let result;
                   [result, nextPageRequest] = await apiCall(nextPageRequest, options2);
                   if (result && !Array.isArray(result)) {
                     for (const [key, value] of Object.entries(result)) {
-                      cache3.push([key, value]);
+                      cache4.push([key, value]);
                     }
                   } else {
-                    cache3.push(...result);
+                    cache4.push(...result);
                   }
-                  if (cache3.length === 0) {
+                  if (cache4.length === 0) {
                     ++attempts;
                     if (attempts > maxAttemptsEmptyResponse) {
                       break;
                     }
                   }
                 }
-                if (cache3.length === 0) {
+                if (cache4.length === 0) {
                   return Promise.resolve({ done: true, value: void 0 });
                 }
-                return Promise.resolve({ done: false, value: cache3.shift() });
+                return Promise.resolve({ done: false, value: cache4.shift() });
               }
             };
           }
@@ -99562,9 +99562,9 @@ var require_fallback = __commonJS({
        */
       static protobufFromJSON(json3, ignoreCache = false) {
         const hash = (0, object_hash_1.default)(JSON.stringify(json3)).toString();
-        const cached = _GrpcClient.protoCache.get(hash);
-        if (cached && !ignoreCache) {
-          return cached;
+        const cached2 = _GrpcClient.protoCache.get(hash);
+        if (cached2 && !ignoreCache) {
+          return cached2;
         }
         const root = protobuf.Root.fromJSON(json3);
         _GrpcClient.protoCache.set(hash, root);
@@ -130953,14 +130953,14 @@ var require_src17 = __commonJS({
       "bios-only": "treat the result of a BIOS probe as canonical (don't fall back to pinging)",
       "ping-only": "skip the BIOS probe, and go straight to pinging"
     });
-    function getBaseUrl(baseUrl) {
-      if (!baseUrl) {
-        baseUrl = process.env.GCE_METADATA_IP || process.env.GCE_METADATA_HOST || exports.HOST_ADDRESS;
+    function getBaseUrl(baseUrl2) {
+      if (!baseUrl2) {
+        baseUrl2 = process.env.GCE_METADATA_IP || process.env.GCE_METADATA_HOST || exports.HOST_ADDRESS;
       }
-      if (!/^https?:\/\//.test(baseUrl)) {
-        baseUrl = `http://${baseUrl}`;
+      if (!/^https?:\/\//.test(baseUrl2)) {
+        baseUrl2 = `http://${baseUrl2}`;
       }
-      return new URL(exports.BASE_PATH, baseUrl).href;
+      return new URL(exports.BASE_PATH, baseUrl2).href;
     }
     function validate(options2) {
       Object.keys(options2).forEach((key) => {
@@ -142178,12 +142178,12 @@ var require_metadataResolver = __commonJS({
       const explicit = settings?.otherArgs?.internalTelemetryInfo;
       let dynamic;
       if (settings?.apiName) {
-        let cached = metadataCache.get(settings.apiName);
-        if (!cached) {
-          cached = extractFromSettings(settings);
-          metadataCache.set(settings.apiName, cached);
+        let cached2 = metadataCache.get(settings.apiName);
+        if (!cached2) {
+          cached2 = extractFromSettings(settings);
+          metadataCache.set(settings.apiName, cached2);
         }
-        dynamic = cached;
+        dynamic = cached2;
       } else {
         dynamic = extractFromSettings(settings);
       }
@@ -149883,37 +149883,37 @@ var require_pageDescriptor2 = __commonJS({
         const asyncIterable = {
           [Symbol.asyncIterator]() {
             let nextPageRequest = request;
-            const cache3 = [];
+            const cache4 = [];
             return {
               async next() {
-                if (cache3.length > 0) {
+                if (cache4.length > 0) {
                   return Promise.resolve({
                     done: false,
-                    value: cache3.shift()
+                    value: cache4.shift()
                   });
                 }
                 let attempts = 0;
-                while (cache3.length === 0 && nextPageRequest) {
+                while (cache4.length === 0 && nextPageRequest) {
                   let result;
                   [result, nextPageRequest] = await apiCall(nextPageRequest, options2);
                   if (result && !Array.isArray(result)) {
                     for (const [key, value] of Object.entries(result)) {
-                      cache3.push([key, value]);
+                      cache4.push([key, value]);
                     }
                   } else {
-                    cache3.push(...result);
+                    cache4.push(...result);
                   }
-                  if (cache3.length === 0) {
+                  if (cache4.length === 0) {
                     ++attempts;
                     if (attempts > maxAttemptsEmptyResponse) {
                       break;
                     }
                   }
                 }
-                if (cache3.length === 0) {
+                if (cache4.length === 0) {
                   return Promise.resolve({ done: true, value: void 0 });
                 }
-                return Promise.resolve({ done: false, value: cache3.shift() });
+                return Promise.resolve({ done: false, value: cache4.shift() });
               }
             };
           }
@@ -171600,9 +171600,9 @@ var require_fallback2 = __commonJS({
        */
       static protobufFromJSON(json3, ignoreCache = false) {
         const hash = (0, object_hash_1.default)(JSON.stringify(json3)).toString();
-        const cached = _GrpcClient.protoCache.get(hash);
-        if (cached && !ignoreCache) {
-          return cached;
+        const cached2 = _GrpcClient.protoCache.get(hash);
+        if (cached2 && !ignoreCache) {
+          return cached2;
         }
         const root = protobuf.Root.fromJSON(json3);
         _GrpcClient.protoCache.set(hash, root);
@@ -186546,9 +186546,9 @@ var require_grpc2 = __commonJS({
       }
       loadProtoJSON(json3, ignoreCache = false) {
         const hash = (0, object_hash_1.default)(JSON.stringify(json3)).toString();
-        const cached = _GrpcClient.protoCache.get(hash);
-        if (cached && !ignoreCache) {
-          return cached;
+        const cached2 = _GrpcClient.protoCache.get(hash);
+        if (cached2 && !ignoreCache) {
+          return cached2;
         }
         const options2 = _GrpcClient.defaultOptions();
         const packageDefinition = grpcProtoLoader.fromJSON(json3, options2);
@@ -214858,8 +214858,8 @@ var require_auth_api_request = __commonJS({
             projectId,
             api: api || ""
           };
-          const baseUrl = utils.formatString(this.urlFormat, baseParams);
-          return utils.formatString(baseUrl, params || {});
+          const baseUrl2 = utils.formatString(this.urlFormat, baseParams);
+          return utils.formatString(baseUrl2, params || {});
         });
       }
       getProjectId() {
@@ -217779,9 +217779,9 @@ var require_range = __commonJS({
         range = range.replace(BUILDSTRIPRE, "");
         const memoOpts = (this.options.includePrerelease && FLAG_INCLUDE_PRERELEASE) | (this.options.loose && FLAG_LOOSE);
         const memoKey = memoOpts + ":" + range;
-        const cached = cache3.get(memoKey);
-        if (cached) {
-          return cached;
+        const cached2 = cache4.get(memoKey);
+        if (cached2) {
+          return cached2;
         }
         const loose = this.options.loose;
         const hr = loose ? re2[t2.HYPHENRANGELOOSE] : re2[t2.HYPHENRANGE];
@@ -217813,7 +217813,7 @@ var require_range = __commonJS({
           rangeMap.delete("");
         }
         const result = [...rangeMap.values()];
-        cache3.set(memoKey, result);
+        cache4.set(memoKey, result);
         return result;
       }
       intersects(range, options2) {
@@ -217852,7 +217852,7 @@ var require_range = __commonJS({
     };
     module.exports = Range;
     var LRU = require_lrucache();
-    var cache3 = new LRU();
+    var cache4 = new LRU();
     var parseOptions = require_parse_options();
     var Comparator = require_comparator();
     var debug = require_debug();
@@ -220086,14 +220086,14 @@ async function prepareKey(entry, key, usage) {
   }
   cache ||= /* @__PURE__ */ new WeakMap();
   const cacheKey = key;
-  let cached = cache.get(cacheKey);
-  if (cached?.[alg])
-    return cached[alg];
-  if (cached || cache.set(cacheKey, cached = {}), keyObject && typeof keyObject.toCryptoKey == "function") {
+  let cached2 = cache.get(cacheKey);
+  if (cached2?.[alg])
+    return cached2[alg];
+  if (cached2 || cache.set(cacheKey, cached2 = {}), keyObject && typeof keyObject.toCryptoKey == "function") {
     const isPublic = keyObject.type === "public", crv = nist[keyObject.asymmetricKeyDetails?.namedCurve], params = entry.resolve?.({ crv, asymmetricKeyType: keyObject.asymmetricKeyType }) ?? entry.subtle;
-    return cached[alg] = keyObject.toCryptoKey(params, isPublic, entry.usages[isPublic ? 0 : 1]);
+    return cached2[alg] = keyObject.toCryptoKey(params, isPublic, entry.usages[isPublic ? 0 : 1]);
   }
-  return normalized ??= keyObject.export({ format: "jwk" }), normalized.alg = alg, cached[alg] = await jwkToKey(entry, normalized);
+  return normalized ??= keyObject.export({ format: "jwk" }), normalized.alg = alg, cached2[alg] = await jwkToKey(entry, normalized);
 }
 function assertCryptoKey(key) {
   if (!isCryptoKey(key))
@@ -222124,19 +222124,19 @@ function isUsableJWK(jwk, entry, alg, kid) {
   const { kty, key_ops: keyOps, ext, kid: jwkKid, alg: jwkAlg, use, crv } = jwk;
   return (ext === void 0 || typeof ext == "boolean") && (keyOps === void 0 || Array.isArray(keyOps) && keyOps.every((operation, index) => typeof operation == "string" && keyOps.indexOf(operation) === index) && keyOps.includes("verify")) && entry.kty.includes(kty) && (kid === void 0 || typeof kid == "string" && kid === jwkKid) && (jwkAlg === void 0 ? kty !== "AKP" : alg === jwkAlg) && (use === void 0 || use === "sig") && (!entry.crv || crv === entry.crv);
 }
-async function importWithAlgCache(cache3, jwk, entry) {
-  const cached = cache3.get(jwk) || cache3.set(jwk, {}).get(jwk), { alg } = entry;
-  if (cached[alg] === void 0) {
+async function importWithAlgCache(cache4, jwk, entry) {
+  const cached2 = cache4.get(jwk) || cache4.set(jwk, {}).get(jwk), { alg } = entry;
+  if (cached2[alg] === void 0) {
     const pending = jwkToKey(entry, jwk, true).then((key) => {
       if (key.type !== "public")
         throw new JWKSInvalid("JSON Web Key Set members must be public keys");
-      return cached[alg] = key, key;
+      return cached2[alg] = key, key;
     }).catch((error) => {
-      throw cached[alg] === pending && delete cached[alg], error;
+      throw cached2[alg] === pending && delete cached2[alg], error;
     });
-    cached[alg] = pending;
+    cached2[alg] = pending;
   }
-  return cached[alg];
+  return cached2[alg];
 }
 function createLocalJWKSet(jwks) {
   let snapshot;
@@ -222149,7 +222149,7 @@ function createLocalJWKSet(jwks) {
   const metadata = snapshot.keys.map((jwk) => {
     const normalized = snapshotJwk(jwk);
     return Array.isArray(normalized.key_ops) && (normalized.key_ops = [...normalized.key_ops]), normalized;
-  }), cached = /* @__PURE__ */ new WeakMap();
+  }), cached2 = /* @__PURE__ */ new WeakMap();
   return Object.defineProperty(async (protectedHeader, token) => {
     const { alg, kid } = { ...protectedHeader, ...token?.header }, entry = typeof alg == "string" ? JWS[alg] : void 0;
     if (!entry || entry.secret)
@@ -222162,12 +222162,12 @@ function createLocalJWKSet(jwks) {
       throw error[Symbol.asyncIterator] = async function* () {
         for (const jwk2 of candidates)
           try {
-            yield await importWithAlgCache(cached, jwk2, entry);
+            yield await importWithAlgCache(cached2, jwk2, entry);
           } catch {
           }
       }, error;
     }
-    return importWithAlgCache(cached, jwk, entry);
+    return importWithAlgCache(cached2, jwk, entry);
   }, "jwks", {
     value: () => structuredClone(snapshot)
   });
@@ -222218,10 +222218,10 @@ function createRemoteJWKSet(url, options2) {
     throw new TypeError('"timeoutDuration" option must be a non-negative integer');
   const timeoutDuration = typeof timeoutOption == "number" ? timeoutOption : 5e3, cooldownDuration = validateDuration(opts.cooldownDuration, 3e4, "cooldownDuration"), cacheMaxAge = validateDuration(opts.cacheMaxAge, 6e5, "cacheMaxAge"), headers = new Headers(opts.headers);
   USER_AGENT && !headers.has("User-Agent") && headers.set("User-Agent", USER_AGENT), headers.has("accept") || headers.set("accept", "application/json, application/jwk-set+json");
-  const fetchImpl = opts[customFetch], cache3 = opts[jwksCache];
+  const fetchImpl = opts[customFetch], cache4 = opts[jwksCache];
   let jwksTimestamp, pendingFetch, reloadSequence = 0, appliedSequence = 0, local;
-  if (cache3 && typeof cache3 == "object") {
-    const { uat, jwks } = cache3;
+  if (cache4 && typeof cache4 == "object") {
+    const { uat, jwks } = cache4;
     isFreshFor(uat, cacheMaxAge) && isJwkSet(jwks) && (jwksTimestamp = uat, local = createLocalJWKSet(jwks));
   }
   const reload2 = async () => {
@@ -222232,7 +222232,7 @@ function createRemoteJWKSet(url, options2) {
           return;
         local = next2;
         const updatedAt = Date.now();
-        cache3 && (cache3.uat = updatedAt, cache3.jwks = json3), jwksTimestamp = updatedAt, appliedSequence = sequence;
+        cache4 && (cache4.uat = updatedAt, cache4.jwks = json3), jwksTimestamp = updatedAt, appliedSequence = sequence;
       }).finally(() => {
         pendingFetch === current && (pendingFetch = void 0);
       });
@@ -223641,16 +223641,16 @@ var require_lodash9 = __commonJS({
       return this.__data__.has(key);
     }
     function stackSet(key, value) {
-      var cache3 = this.__data__;
-      if (cache3 instanceof ListCache) {
-        var pairs = cache3.__data__;
+      var cache4 = this.__data__;
+      if (cache4 instanceof ListCache) {
+        var pairs = cache4.__data__;
         if (!Map2 || pairs.length < LARGE_ARRAY_SIZE - 1) {
           pairs.push([key, value]);
           return this;
         }
-        cache3 = this.__data__ = new MapCache(pairs);
+        cache4 = this.__data__ = new MapCache(pairs);
       }
-      cache3.set(key, value);
+      cache4.set(key, value);
       return this;
     }
     Stack.prototype.clear = stackClear;
@@ -224012,7 +224012,7 @@ var require_sync = __commonJS({
     var lodash_clonedeep_1 = __importDefault(require_lodash9());
     var freeze_1 = require_freeze();
     function syncMemoizer(options2) {
-      const cache3 = new lru_cache_1.LRUCache(options2);
+      const cache4 = new lru_cache_1.LRUCache(options2);
       const load = options2.load;
       const hash = options2.hash;
       const bypass = options2.bypass;
@@ -224022,8 +224022,8 @@ var require_sync = __commonJS({
       const emitter = new events_1.EventEmitter();
       const defaultResult = Object.assign({
         del,
-        reset: () => cache3.clear(),
-        keys: () => [...cache3.keys()],
+        reset: () => cache4.clear(),
+        keys: () => [...cache4.keys()],
         on: emitter.on.bind(emitter),
         once: emitter.once.bind(emitter)
       }, options2);
@@ -224032,7 +224032,7 @@ var require_sync = __commonJS({
       }
       function del() {
         const key = hash(...arguments);
-        cache3.delete(key);
+        cache4.delete(key);
       }
       function emit(event, ...parameters) {
         emitter.emit(event, ...parameters);
@@ -224064,7 +224064,7 @@ var require_sync = __commonJS({
           return load(...args);
         }
         var key = hash(...args);
-        var fromCache = cache3.get(key);
+        var fromCache = cache4.get(key);
         if (fromCache) {
           emit("hit", ...args);
           return processResult(fromCache);
@@ -224072,9 +224072,9 @@ var require_sync = __commonJS({
         emit("miss", ...args);
         const result2 = load(...args);
         if (itemTTL) {
-          cache3.set(key, result2, { ttl: itemTTL(...args.concat([result2])) });
+          cache4.set(key, result2, { ttl: itemTTL(...args.concat([result2])) });
         } else {
-          cache3.set(key, result2);
+          cache4.set(key, result2);
         }
         return processResult(result2);
       };
@@ -224099,7 +224099,7 @@ var require_async = __commonJS({
     var freeze_1 = require_freeze();
     var sync_1 = require_sync();
     function asyncMemoizer(options2) {
-      const cache3 = new lru_cache_1.LRUCache(options2);
+      const cache4 = new lru_cache_1.LRUCache(options2);
       const load = options2.load;
       const hash = options2.hash;
       const bypass = options2.bypass;
@@ -224111,8 +224111,8 @@ var require_async = __commonJS({
       const emitter = new events_1.EventEmitter();
       const memoizerMethods = Object.assign({
         del,
-        reset: () => cache3.clear(),
-        keys: () => [...cache3.keys()],
+        reset: () => cache4.clear(),
+        keys: () => [...cache4.keys()],
         on: emitter.on.bind(emitter),
         once: emitter.once.bind(emitter)
       }, options2);
@@ -224121,16 +224121,16 @@ var require_async = __commonJS({
       }
       function del(...args) {
         const key = hash(...args);
-        cache3.delete(key);
+        cache4.delete(key);
       }
       function add(key, parameters, result) {
         if (freeze) {
           result.forEach(freeze_1.deepFreeze);
         }
         if (itemTTL) {
-          cache3.set(key, result, { ttl: itemTTL(...parameters.concat(result)) });
+          cache4.set(key, result, { ttl: itemTTL(...parameters.concat(result)) });
         } else {
-          cache3.set(key, result);
+          cache4.set(key, result);
         }
       }
       function runCallbacks(callbacks, args) {
@@ -224158,7 +224158,7 @@ var require_async = __commonJS({
         } else {
           key = hash(...parameters);
         }
-        const fromCache = cache3.get(key);
+        const fromCache = cache4.get(key);
         if (fromCache) {
           emit("hit", ...parameters);
           return runCallbacks([callback], [null].concat(fromCache));
@@ -227703,6 +227703,8 @@ async function setTenantUserClaims(uid, claims) {
   const auth2 = getAdminAuth();
   await auth2.setCustomUserClaims(uid, {
     tenantId: claims.tenantId || null,
+    // Organization admins carry orgId instead of a single tenant; the active client brand is chosen per request.
+    orgId: claims.orgId || null,
     role: claims.role || "member",
     platformAdmin: Boolean(claims.platformAdmin)
   });
@@ -227720,10 +227722,17 @@ async function createTenantUser(params) {
     if (existing.platformAdmin) {
       throw new Error("This email belongs to a platform administrator");
     }
-    if (existing.tenantId && existing.tenantId !== params.tenantId) {
-      throw new Error("This email already belongs to another workspace");
+    if (params.orgId) {
+      if (existing.tenantId) throw new Error("This email already belongs to another workspace");
+      if (existing.orgId && existing.orgId !== params.orgId) throw new Error("This email already belongs to another organization");
+    } else {
+      if (existing.orgId) throw new Error("This email already belongs to another organization");
+      if (existing.tenantId && existing.tenantId !== params.tenantId) {
+        throw new Error("This email already belongs to another workspace");
+      }
     }
-    if (params.password && existing.tenantId === params.tenantId) {
+    const sameScope = params.orgId ? existing.orgId === params.orgId : existing.tenantId === params.tenantId;
+    if (params.password && sameScope) {
       await auth2.updateUser(userRecord.uid, { password: params.password });
     } else {
       passwordSet = false;
@@ -227741,7 +227750,8 @@ async function createTenantUser(params) {
     }
   }
   await setTenantUserClaims(userRecord.uid, {
-    tenantId: params.tenantId,
+    tenantId: params.orgId ? void 0 : params.tenantId,
+    orgId: params.orgId,
     role: params.role,
     platformAdmin: params.role === "platformAdmin"
   });
@@ -227817,7 +227827,7 @@ async function sumDocs(q, fields) {
   for (const f3 of fields) out[f3] = Number(data[f3] || 0);
   return out;
 }
-var db, fs2, isRoot, where, orderBy, limit2, orderByDocumentId, startAfterId, startAfterValues, increment;
+var db, fs2, isRoot, where, orderBy, select, limit2, orderByDocumentId, startAfterId, startAfterValues, increment;
 var init_adminFirestore = __esm({
   "src/server/adminFirestore.ts"() {
     init_firestore();
@@ -227827,6 +227837,7 @@ var init_adminFirestore = __esm({
     isRoot = (p) => Boolean(p && p.__adminFirestore);
     where = (field2, op, value) => (q) => q.where(field2, op, value);
     orderBy = (field2, dir = "asc") => (q) => q.orderBy(field2, dir);
+    select = (...fields) => (q) => q.select(...fields);
     limit2 = (n) => (q) => q.limit(n);
     orderByDocumentId = () => (q) => q.orderBy(FieldPath.documentId());
     startAfterId = (id) => (q) => q.startAfter(id);
@@ -227912,6 +227923,12 @@ function globalTenantsCol() {
 }
 function globalTenantDoc(tenantId) {
   return doc(db, "tenants", assertValidTenantId(tenantId));
+}
+function globalOrgsCol() {
+  return collection(db, "orgs");
+}
+function globalOrgDoc(orgId) {
+  return doc(db, "orgs", assertValidTenantId(orgId));
 }
 function globalUsersCol() {
   return collection(db, "users");
@@ -252680,9 +252697,9 @@ function localStoreAllocateTarget(localStore, target) {
   const localStoreImpl = debugCast(localStore);
   return localStoreImpl.persistence.runTransaction("Allocate target", "readwrite", (txn) => {
     let targetData;
-    return localStoreImpl.targetCache.getTargetData(txn, target).next((cached) => {
-      if (cached) {
-        targetData = cached;
+    return localStoreImpl.targetCache.getTargetData(txn, target).next((cached2) => {
+      if (cached2) {
+        targetData = cached2;
         return PersistencePromise.resolve(targetData);
       } else {
         return localStoreImpl.targetCache.allocateTargetId(txn).next((targetId) => {
@@ -271844,17 +271861,17 @@ Total Duration: ${removedDocumentsTs - startTs}ms`;
       removeTarget(txn, targetData) {
         const orphaned = this.localViewReferences.removeReferencesForId(targetData.targetId);
         orphaned.forEach((key) => this.orphanedDocuments.add(key.toString()));
-        const cache3 = this.persistence.getTargetCache();
-        return cache3.getMatchingKeysForTargetId(txn, targetData.targetId).next((keys) => {
+        const cache4 = this.persistence.getTargetCache();
+        return cache4.getMatchingKeysForTargetId(txn, targetData.targetId).next((keys) => {
           keys.forEach((key) => this.orphanedDocuments.add(key.toString()));
-        }).next(() => cache3.removeTargetData(txn, targetData));
+        }).next(() => cache4.removeTargetData(txn, targetData));
       }
       onTransactionStarted() {
         this._orphanedDocuments = /* @__PURE__ */ new Set();
       }
       onTransactionCommitted(txn) {
-        const cache3 = this.persistence.getRemoteDocumentCache();
-        const changeBuffer = cache3.newChangeBuffer();
+        const cache4 = this.persistence.getRemoteDocumentCache();
+        const changeBuffer = cache4.newChangeBuffer();
         return PersistencePromise.forEach(this.orphanedDocuments, (path3) => {
           const key = DocumentKey.fromPath(path3);
           return this.isReferenced(txn, key).next((isReferenced) => {
@@ -271933,9 +271950,9 @@ Total Duration: ${removedDocumentsTs - startTs}ms`;
       }
       removeOrphanedDocuments(txn, upperBound) {
         let count = 0;
-        const cache3 = this.persistence.getRemoteDocumentCache();
-        const changeBuffer = cache3.newChangeBuffer();
-        const p = cache3.forEachDocumentKey(txn, (key) => {
+        const cache4 = this.persistence.getRemoteDocumentCache();
+        const changeBuffer = cache4.newChangeBuffer();
+        const p = cache4.forEachDocumentKey(txn, (key) => {
           return this.isPinned(txn, key, upperBound).next((isPinned) => {
             if (!isPinned) {
               count++;
@@ -272152,9 +272169,9 @@ Total Duration: ${removedDocumentsTs - startTs}ms`;
           keyPath: DbCollectionParentKeyPath
         });
         const collectionParentsStore2 = txn.store(DbCollectionParentStore);
-        const cache3 = new MemoryCollectionParentIndex();
+        const cache4 = new MemoryCollectionParentIndex();
         const addEntry = (collectionPath) => {
-          if (cache3.add(collectionPath)) {
+          if (cache4.add(collectionPath)) {
             const collectionId = collectionPath.lastSegment();
             const parentPath = collectionPath.popLast();
             return collectionParentsStore2.put({
@@ -279655,16 +279672,16 @@ var init_firestoreUtils = __esm({
 // src/server/firestorePersistence.ts
 import crypto3 from "crypto";
 function getTenantCache(tenantId) {
-  let cache3 = tenantMemoryCaches.get(tenantId);
-  if (!cache3) {
-    cache3 = {
+  let cache4 = tenantMemoryCaches.get(tenantId);
+  if (!cache4) {
+    cache4 = {
       processed: /* @__PURE__ */ new Set(),
       replied: /* @__PURE__ */ new Set(),
       loaded: false
     };
-    tenantMemoryCaches.set(tenantId, cache3);
+    tenantMemoryCaches.set(tenantId, cache4);
   }
-  return cache3;
+  return cache4;
 }
 function docIdFromMessageId(messageId) {
   const normalized = (messageId || "").trim().toLowerCase();
@@ -279676,9 +279693,9 @@ function normalizeIdentifier(id) {
   return (id || "").trim().toLowerCase().replace(/[<>]/g, "");
 }
 async function initPersistentIdempotencyStore(ctx = DEFAULT_UMRAH_CTX) {
-  const cache3 = getTenantCache(ctx.tenantId);
+  const cache4 = getTenantCache(ctx.tenantId);
   if (!isFirebaseConfigured || !db) {
-    return { totalLoaded: cache3.processed.size, repliedCount: cache3.replied.size };
+    return { totalLoaded: cache4.processed.size, repliedCount: cache4.replied.size };
   }
   try {
     const repo = tenantRepo(ctx);
@@ -279690,12 +279707,12 @@ async function initPersistentIdempotencyStore(ctx = DEFAULT_UMRAH_CTX) {
       const data = d.data();
       if (data.messageId) {
         const norm = normalizeIdentifier(data.messageId);
-        cache3.processed.add(norm);
-        cache3.processed.add(data.messageId);
-        if (data.cleanKey) cache3.processed.add(data.cleanKey);
+        cache4.processed.add(norm);
+        cache4.processed.add(data.messageId);
+        if (data.cleanKey) cache4.processed.add(data.cleanKey);
         if (data.aiReplied || data.status === "REPLIED") {
-          cache3.replied.add(norm);
-          cache3.replied.add(data.messageId);
+          cache4.replied.add(norm);
+          cache4.replied.add(data.messageId);
           repliedCount++;
         }
         loadedCount++;
@@ -279708,43 +279725,43 @@ async function initPersistentIdempotencyStore(ctx = DEFAULT_UMRAH_CTX) {
         const m2 = d.data();
         if (m2.gmailMessageId) {
           const norm = normalizeIdentifier(m2.gmailMessageId);
-          cache3.processed.add(norm);
-          cache3.processed.add(m2.gmailMessageId);
+          cache4.processed.add(norm);
+          cache4.processed.add(m2.gmailMessageId);
           if (m2.direction === "OUTBOUND" || m2.aiReplied) {
-            cache3.replied.add(norm);
-            cache3.replied.add(m2.gmailMessageId);
+            cache4.replied.add(norm);
+            cache4.replied.add(m2.gmailMessageId);
           }
         }
         if (m2.emailMeta?.inReplyTo) {
           const normReplyTo = normalizeIdentifier(m2.emailMeta.inReplyTo);
-          cache3.processed.add(normReplyTo);
-          cache3.replied.add(normReplyTo);
+          cache4.processed.add(normReplyTo);
+          cache4.replied.add(normReplyTo);
         }
       });
     } catch (e2) {
       console.warn(`[Firestore Idempotency] Notice loading messages for tenant ${ctx.tenantId}:`, e2);
     }
-    cache3.loaded = true;
+    cache4.loaded = true;
     return { totalLoaded: loadedCount, repliedCount };
   } catch (err) {
     console.error(`[Firestore Idempotency] Failed to load idempotency ledger for tenant ${ctx.tenantId}:`, err);
-    return { totalLoaded: cache3.processed.size, repliedCount: cache3.replied.size };
+    return { totalLoaded: cache4.processed.size, repliedCount: cache4.replied.size };
   }
 }
 async function isMessageAlreadyProcessed(messageId, fromEmail, ctx = DEFAULT_UMRAH_CTX) {
   if (!messageId) {
     return { processed: false, replied: false };
   }
-  const cache3 = getTenantCache(ctx.tenantId);
+  const cache4 = getTenantCache(ctx.tenantId);
   const normId = normalizeIdentifier(messageId);
-  if (cache3.replied.has(normId) || cache3.replied.has(messageId)) {
+  if (cache4.replied.has(normId) || cache4.replied.has(messageId)) {
     return {
       processed: true,
       replied: true,
       reason: `Message ${messageId} already replied (found in memory cache for ${ctx.tenantId})`
     };
   }
-  if (cache3.processed.has(normId) || cache3.processed.has(messageId)) {
+  if (cache4.processed.has(normId) || cache4.processed.has(messageId)) {
     return {
       processed: true,
       replied: false,
@@ -279759,12 +279776,12 @@ async function isMessageAlreadyProcessed(messageId, fromEmail, ctx = DEFAULT_UMR
       const snap = await getDoc(docRef);
       if (snap.exists()) {
         const data = snap.data();
-        cache3.processed.add(normId);
-        cache3.processed.add(messageId);
+        cache4.processed.add(normId);
+        cache4.processed.add(messageId);
         const wasReplied = Boolean(data.aiReplied || data.status === "REPLIED");
         if (wasReplied) {
-          cache3.replied.add(normId);
-          cache3.replied.add(messageId);
+          cache4.replied.add(normId);
+          cache4.replied.add(messageId);
         }
         return {
           processed: true,
@@ -279778,8 +279795,8 @@ async function isMessageAlreadyProcessed(messageId, fromEmail, ctx = DEFAULT_UMR
       if (!qSnap.empty) {
         const msgData = qSnap.docs[0].data();
         const wasReplied = Boolean(msgData.aiReplied || msgData.direction === "OUTBOUND");
-        cache3.processed.add(normId);
-        if (wasReplied) cache3.replied.add(normId);
+        cache4.processed.add(normId);
+        if (wasReplied) cache4.replied.add(normId);
         return {
           processed: true,
           replied: wasReplied,
@@ -279793,15 +279810,15 @@ async function isMessageAlreadyProcessed(messageId, fromEmail, ctx = DEFAULT_UMR
   return { processed: false, replied: false };
 }
 async function recordProcessedInboundEmail(record, ctx = DEFAULT_UMRAH_CTX) {
-  const cache3 = getTenantCache(ctx.tenantId);
+  const cache4 = getTenantCache(ctx.tenantId);
   const normId = normalizeIdentifier(record.messageId);
   const nowIso = record.timestamp || (/* @__PURE__ */ new Date()).toISOString();
   const cleanKey = normId;
-  cache3.processed.add(normId);
-  cache3.processed.add(record.messageId);
+  cache4.processed.add(normId);
+  cache4.processed.add(record.messageId);
   if (record.aiReplied || record.status === "REPLIED") {
-    cache3.replied.add(normId);
-    cache3.replied.add(record.messageId);
+    cache4.replied.add(normId);
+    cache4.replied.add(record.messageId);
   }
   if (isFirebaseConfigured && db) {
     try {
@@ -280399,8 +280416,8 @@ async function readRefreshToken(tenantId) {
   }
 }
 async function getMicrosoftAccessToken(tenantId) {
-  const cached = accessCache.get(tenantId);
-  if (cached && cached.expiresAt - 5 * 6e4 > Date.now()) return cached.token;
+  const cached2 = accessCache.get(tenantId);
+  if (cached2 && cached2.expiresAt - 5 * 6e4 > Date.now()) return cached2.token;
   const refreshToken2 = await readRefreshToken(tenantId);
   if (!refreshToken2) throw new MicrosoftReauthRequired('The saved Microsoft sign-in could not be read. Click "Reconnect with Microsoft".');
   const data = await tokenRequest({ grant_type: "refresh_token", refresh_token: refreshToken2, scope: SCOPES.join(" ") });
@@ -280614,8 +280631,8 @@ async function testImapCredentials(c, ip) {
   }
 }
 async function getInboundSettings(tenantId, opts = {}) {
-  const cached = settingsCache.get(tenantId);
-  if (!opts.fresh && cached && Date.now() - cached.at < CACHE_MS) return cached.value;
+  const cached2 = settingsCache.get(tenantId);
+  if (!opts.fresh && cached2 && Date.now() - cached2.at < CACHE_MS) return cached2.value;
   if (!isFirebaseConfigured || !db) return {};
   const snap = await getDoc(tenantRepo(sysCtx2(tenantId)).settingsDoc(INBOUND_SETTINGS_DOC));
   const value = (snap.exists() ? snap.data() : {}) || {};
@@ -280965,8 +280982,8 @@ function platformSenderTenants() {
   return (process.env.PLATFORM_SENDER_TENANTS || "").split(",").map((s2) => s2.trim()).filter(Boolean);
 }
 async function getTenantEmailSettings(tenantId, opts = {}) {
-  const cached = settingsCache2.get(tenantId);
-  if (!opts.fresh && cached && Date.now() - cached.at < CACHE_MS2) return cached.value;
+  const cached2 = settingsCache2.get(tenantId);
+  if (!opts.fresh && cached2 && Date.now() - cached2.at < CACHE_MS2) return cached2.value;
   if (!isFirebaseConfigured || !db) return {};
   const repo = tenantRepo({ tenantId });
   const snap = await getDoc(repo.settingsDoc("email"));
@@ -281982,38 +281999,38 @@ var init_knowledgeData = __esm({
 
 // src/server/knowledgeService.ts
 function getTenantCache2(tenantId) {
-  let cache3 = tenantKnowledgeCaches.get(tenantId);
-  if (!cache3) {
-    cache3 = /* @__PURE__ */ new Map();
-    tenantKnowledgeCaches.set(tenantId, cache3);
+  let cache4 = tenantKnowledgeCaches.get(tenantId);
+  if (!cache4) {
+    cache4 = /* @__PURE__ */ new Map();
+    tenantKnowledgeCaches.set(tenantId, cache4);
   }
-  return cache3;
+  return cache4;
 }
 async function initKnowledgeStore(ctx = DEFAULT_UMRAH_CTX2) {
-  const cache3 = getTenantCache2(ctx.tenantId);
+  const cache4 = getTenantCache2(ctx.tenantId);
   const seedsDefaults = ctx.tenantId === DEFAULT_UMRAH_CTX2.tenantId;
-  if (seedsDefaults && cache3.size === 0) {
+  if (seedsDefaults && cache4.size === 0) {
     for (const docItem of INITIAL_KNOWLEDGE_DOCUMENTS) {
-      cache3.set(docItem.id, { ...docItem });
+      cache4.set(docItem.id, { ...docItem });
     }
   }
   if (!isFirebaseConfigured || !db) {
     tenantInitialized.add(ctx.tenantId);
-    return cache3.size;
+    return cache4.size;
   }
   try {
     const repo = tenantRepo(ctx);
     const colRef = repo.knowledgeDocuments();
     const snap = await getDocs(colRef);
     if (!snap.empty) {
-      cache3.clear();
+      cache4.clear();
       snap.forEach((d) => {
         const item = d.data();
         if (item && item.id) {
-          cache3.set(item.id, item);
+          cache4.set(item.id, item);
         }
       });
-      console.log(`[Knowledge Store] Successfully loaded ${cache3.size} articles for tenant ${ctx.tenantId}.`);
+      console.log(`[Knowledge Store] Successfully loaded ${cache4.size} articles for tenant ${ctx.tenantId}.`);
     } else {
       if (seedsDefaults) {
         for (const docItem of INITIAL_KNOWLEDGE_DOCUMENTS) {
@@ -282021,25 +282038,25 @@ async function initKnowledgeStore(ctx = DEFAULT_UMRAH_CTX2) {
         }
         console.log(`[Knowledge Store] Seeded ${INITIAL_KNOWLEDGE_DOCUMENTS.length} initial articles for tenant ${ctx.tenantId}.`);
       } else {
-        cache3.clear();
+        cache4.clear();
       }
     }
     tenantInitialized.add(ctx.tenantId);
-    return cache3.size;
+    return cache4.size;
   } catch (err) {
     console.warn(`[Knowledge Store] Warning during Firestore KB sync for ${ctx.tenantId}:`, err);
     tenantInitialized.add(ctx.tenantId);
-    return cache3.size;
+    return cache4.size;
   }
 }
 function getAllKnowledgeDocs(ctx = DEFAULT_UMRAH_CTX2) {
-  const cache3 = getTenantCache2(ctx.tenantId);
-  if (ctx.tenantId === DEFAULT_UMRAH_CTX2.tenantId && !tenantInitialized.has(ctx.tenantId) && cache3.size === 0) {
+  const cache4 = getTenantCache2(ctx.tenantId);
+  if (ctx.tenantId === DEFAULT_UMRAH_CTX2.tenantId && !tenantInitialized.has(ctx.tenantId) && cache4.size === 0) {
     for (const docItem of INITIAL_KNOWLEDGE_DOCUMENTS) {
-      cache3.set(docItem.id, { ...docItem });
+      cache4.set(docItem.id, { ...docItem });
     }
   }
-  return Array.from(cache3.values()).sort(
+  return Array.from(cache4.values()).sort(
     (a, b) => new Date(b.updatedAt || 0).getTime() - new Date(a.updatedAt || 0).getTime()
   );
 }
@@ -282047,7 +282064,7 @@ function getPublishedKnowledgeDocs(ctx = DEFAULT_UMRAH_CTX2) {
   return getAllKnowledgeDocs(ctx).filter((d) => d.status === "PUBLISHED");
 }
 async function saveKnowledgeDoc(docData, ctx = DEFAULT_UMRAH_CTX2) {
-  const cache3 = getTenantCache2(ctx.tenantId);
+  const cache4 = getTenantCache2(ctx.tenantId);
   const sanitizedDoc = {
     ...docData,
     id: docData.id || `kb-${Date.now()}`,
@@ -282061,7 +282078,7 @@ async function saveKnowledgeDoc(docData, ctx = DEFAULT_UMRAH_CTX2) {
     createdAt: docData.createdAt || (/* @__PURE__ */ new Date()).toISOString(),
     updatedAt: (/* @__PURE__ */ new Date()).toISOString()
   };
-  cache3.set(sanitizedDoc.id, sanitizedDoc);
+  cache4.set(sanitizedDoc.id, sanitizedDoc);
   if (isFirebaseConfigured && db) {
     try {
       const repo = tenantRepo(ctx);
@@ -282074,8 +282091,8 @@ async function saveKnowledgeDoc(docData, ctx = DEFAULT_UMRAH_CTX2) {
 }
 async function deleteKnowledgeDoc(id, ctx = DEFAULT_UMRAH_CTX2) {
   if (!id) return false;
-  const cache3 = getTenantCache2(ctx.tenantId);
-  cache3.delete(id);
+  const cache4 = getTenantCache2(ctx.tenantId);
+  cache4.delete(id);
   if (isFirebaseConfigured && db) {
     try {
       const repo = tenantRepo(ctx);
@@ -282927,15 +282944,15 @@ var require_cache2 = __commonJS({
     var buildCacheInstance = null;
     var getCache2 = (cacheOptions) => {
       const resolveCache = () => {
-        let cache3;
+        let cache4;
         if ((0, import_get_context.getContext)().cache) {
-          cache3 = (0, import_get_context.getContext)().cache;
+          cache4 = (0, import_get_context.getContext)().cache;
         } else {
-          cache3 = getCacheImplementation(
+          cache4 = getCacheImplementation(
             process.env.SUSPENSE_CACHE_DEBUG === "true"
           );
         }
-        return cache3;
+        return cache4;
       };
       return wrapWithKeyTransformation(
         resolveCache,
@@ -287164,7 +287181,7 @@ var init_quotedText = __esm({
 });
 
 // src/shared/features.ts
-var FEATURES, LIMITS, FEATURE_BY_TAB;
+var FEATURES, LIMITS, UNLIMITED, isUnlimited, FEATURE_BY_TAB;
 var init_features = __esm({
   "src/shared/features.ts"() {
     FEATURES = [
@@ -287178,8 +287195,12 @@ var init_features = __esm({
       { key: "seats", label: "Team seats", unit: "users", fallback: 10 },
       { key: "dailyOutboundSends", label: "Emails per day", unit: "emails", fallback: 3e3 },
       { key: "hourlyOutboundSends", label: "Emails per hour", unit: "emails", fallback: 500 },
-      { key: "monthlyAiTokens", label: "AI tokens per month", unit: "tokens", fallback: 2e6 }
+      { key: "monthlyAiTokens", label: "AI tokens per month", unit: "tokens", fallback: 2e6 },
+      // Agency plans only: how many client brands an organization may onboard. 0 = not an agency plan.
+      { key: "maxClients", label: "Client brands (agency plans)", unit: "clients", fallback: 0 }
     ];
+    UNLIMITED = 1e12;
+    isUnlimited = (n) => typeof n === "number" && n >= UNLIMITED;
     FEATURE_BY_TAB = Object.fromEntries(
       FEATURES.filter((f3) => f3.tab).map((f3) => [f3.tab, f3.key])
     );
@@ -287265,11 +287286,13 @@ async function savePlan(input) {
   invalidateEntitlements();
   return plan;
 }
-function computeEntitlements(plan, tenant) {
+function computeEntitlements(plan, tenant, org) {
   const features = {};
   for (const f3 of FEATURES) {
     let v = f3.defaultEnabled;
     if (plan && f3.key in plan.features) v = Boolean(plan.features[f3.key]);
+    const orgFeat = org?.overrides?.features;
+    if (orgFeat && f3.key in orgFeat) v = Boolean(orgFeat[f3.key]);
     const o = tenant?.overrides?.features;
     if (o && f3.key in o) v = Boolean(o[f3.key]);
     features[f3.key] = v;
@@ -287277,13 +287300,27 @@ function computeEntitlements(plan, tenant) {
   const limits = {};
   for (const l of LIMITS) {
     let v = l.fallback;
-    const own = Number(tenant?.limits?.[l.key]);
-    if (Number.isFinite(own) && tenant?.limits?.[l.key] !== void 0) v = own;
-    const pl = plan?.limits?.[l.key];
-    if (pl !== void 0) v = pl;
+    if (org) {
+      v = l.key === "maxClients" ? 0 : UNLIMITED;
+    } else {
+      const own = Number(tenant?.limits?.[l.key]);
+      if (Number.isFinite(own) && tenant?.limits?.[l.key] !== void 0) v = own;
+      const pl = plan?.limits?.[l.key];
+      if (pl !== void 0) v = pl;
+    }
     const ol = tenant?.overrides?.limits?.[l.key];
     if (ol !== void 0) v = ol;
     limits[l.key] = v;
+  }
+  if (org) {
+    const billing2 = { ...computeBilling(org), planSource: "org" };
+    return {
+      planId: plan?.id || org?.planId || LEGACY_PLAN_ID,
+      planName: plan?.name || "Organization plan",
+      features,
+      limits,
+      billing: billing2
+    };
   }
   const billing = computeBilling(tenant);
   const hasPlan = Boolean(plan && (tenant?.planId || !tenant?.billingStatus));
@@ -287296,8 +287333,8 @@ function computeEntitlements(plan, tenant) {
   };
 }
 async function getEntitlements(tenantId, opts = {}) {
-  const cached = entCache.get(tenantId);
-  if (!opts.fresh && cached && Date.now() - cached.at < CACHE_MS3) return cached.value;
+  const cached2 = entCache.get(tenantId);
+  if (!opts.fresh && cached2 && Date.now() - cached2.at < CACHE_MS3) return cached2.value;
   if (opts.fresh) plansCache = null;
   let value;
   if (!isFirebaseConfigured || !db || !tenantId) {
@@ -287306,11 +287343,36 @@ async function getEntitlements(tenantId, opts = {}) {
     const tSnap = await getDoc(globalTenantDoc(tenantId));
     const tenant = tSnap.exists() ? tSnap.data() : void 0;
     const plans = await listPlans();
-    const wanted = tenant?.planId || LEGACY_PLAN_ID;
-    const plan = plans.find((p) => p.id === wanted) || plans.find((p) => p.id === LEGACY_PLAN_ID) || SEED_PLANS[0];
-    value = computeEntitlements(plan, tenant);
+    if (tenant?.orgId) {
+      const oSnap = await getDoc(globalOrgDoc(String(tenant.orgId)));
+      const org = oSnap.exists() ? oSnap.data() : { billingStatus: "canceled" };
+      const orgPlan = plans.find((p) => p.id === org.planId) || plans.find((p) => p.id === LEGACY_PLAN_ID) || SEED_PLANS[0];
+      value = computeEntitlements(orgPlan, tenant, org);
+    } else {
+      const wanted = tenant?.planId || LEGACY_PLAN_ID;
+      const plan = plans.find((p) => p.id === wanted) || plans.find((p) => p.id === LEGACY_PLAN_ID) || SEED_PLANS[0];
+      value = computeEntitlements(plan, tenant);
+    }
   }
   entCache.set(tenantId, { at: Date.now(), value });
+  return value;
+}
+async function getOrgEntitlements(orgId, opts = {}) {
+  const key = `org:${orgId}`;
+  const cached2 = entCache.get(key);
+  if (!opts.fresh && cached2 && Date.now() - cached2.at < CACHE_MS3) return cached2.value;
+  if (opts.fresh) plansCache = null;
+  let value;
+  if (!isFirebaseConfigured || !db || !orgId) {
+    value = computeEntitlements(SEED_PLANS[0], void 0);
+  } else {
+    const oSnap = await getDoc(globalOrgDoc(orgId));
+    const org = oSnap.exists() ? oSnap.data() : void 0;
+    const plans = await listPlans();
+    const plan = plans.find((p) => p.id === org?.planId);
+    value = computeEntitlements(plan, { ...org || {}, billingStatus: org?.billingStatus || "awaiting_plan" });
+  }
+  entCache.set(key, { at: Date.now(), value });
   return value;
 }
 async function hasFeature(tenantId, feature) {
@@ -287376,6 +287438,17 @@ var init_entitlements = __esm({
         features: { ...allOn(), auto_followup: false },
         limits: { seats: 5, dailyOutboundSends: 1e3, hourlyOutboundSends: 200, monthlyAiTokens: 2e6 },
         sortOrder: 2,
+        active: true
+      },
+      {
+        id: "agency",
+        name: "Agency",
+        priceMonthly: 499,
+        currency: "USD",
+        features: allOn(),
+        // Placeholder. Edit in the Platform Console. maxClients is how many client brands an organization may onboard.
+        limits: { maxClients: 5, seats: 10 },
+        sortOrder: 4,
         active: true
       },
       {
@@ -287618,8 +287691,8 @@ async function generateAiEmailForLead(lead) {
   const company = lead.companyName || `${leadName}'s ${isUmrah ? "Agency" : "Company"}`;
   const companyKey = `${campCtx.tenantId}:${company.toLowerCase().trim()}`;
   if (companyResearchCache.has(companyKey)) {
-    const cached = companyResearchCache.get(companyKey);
-    return generateEmailWithCachedResearch(lead, cached, brand);
+    const cached2 = companyResearchCache.get(companyKey);
+    return generateEmailWithCachedResearch(lead, cached2, brand);
   }
   const genericFallback = () => {
     const g = genericOutreach(brand, "Dear", leadName, company, `I noticed your work at ${company}.`);
@@ -287847,14 +287920,20 @@ www.umrah360.in`,
     qualityCheckStatus: "PASSED"
   };
 }
-function setCampaignActiveContext(ctx) {
-  activeCampaignCtx = ctx;
-}
 function runWithCampaignCtx(ctx, fn) {
   return campaignCtxStore.run(ctx, fn);
 }
+function enterCampaignCtx(ctx) {
+  campaignCtxStore.enterWith(ctx);
+}
 function getCampaignActiveCtx() {
-  return campaignCtxStore.getStore() ?? activeCampaignCtx;
+  const scoped = campaignCtxStore.getStore();
+  if (scoped) return scoped;
+  if (!warnedUnscopedCampaign) {
+    warnedUnscopedCampaign = true;
+    console.warn("[Tenant isolation] campaign code ran outside a tenant scope; falling back to the default workspace.", new Error().stack?.split("\n").slice(2, 5).join(" | "));
+  }
+  return activeCampaignCtx;
 }
 function getTenantCampaignStore(tenantId = "umrah360") {
   let store = tenantCampaignStores.get(tenantId);
@@ -289712,14 +289791,18 @@ async function updateCampaignLeadStatus(params) {
   await recalculateAndPersistCampaignMetrics(targetLead.campaignId);
   return targetLead;
 }
-async function processActiveRunningCampaignsBatch(batchSize = 500) {
-  if (isAutoProcessingCampaigns) {
+async function processActiveRunningCampaignsBatch(batchSize = 500, ctx) {
+  if (ctx) {
+    return runWithCampaignCtx(ctx, () => processActiveRunningCampaignsBatch(batchSize));
+  }
+  const autoProcessingTenantId = getCampaignActiveCtx().tenantId;
+  if (autoProcessingTenants.has(autoProcessingTenantId)) {
     return { activeCount: 0, processedCampaigns: [] };
   }
-  if (!await hasFeature(getCampaignActiveCtx().tenantId, "campaigns")) {
+  if (!await hasFeature(autoProcessingTenantId, "campaigns")) {
     return { activeCount: 0, processedCampaigns: [] };
   }
-  isAutoProcessingCampaigns = true;
+  autoProcessingTenants.add(autoProcessingTenantId);
   try {
     await initCampaignStore();
     await startDueScheduledCampaigns().catch(
@@ -289764,10 +289847,10 @@ async function processActiveRunningCampaignsBatch(batchSize = 500) {
       processedCampaigns: results
     };
   } finally {
-    isAutoProcessingCampaigns = false;
+    autoProcessingTenants.delete(autoProcessingTenantId);
   }
 }
-var import_functions, campaignSenderName, defaultTemplateSubject, companyResearchCache, DEFAULT_EMAIL_TEMPLATES, DEFAULT_CAMPAIGNS, DEFAULT_CAMPAIGN_LEADS, DEFAULT_CAMPAIGN_RUNS, DEFAULT_UMRAH_CTX3, activeCampaignCtx, campaignCtxStore, tenantCampaignStores, campaignsMap, campaignLeadsMap, campaignRunsMap, emailTemplatesMap, sendHistorySet, inFlightLeadSendsSet, pausedCampaignsSet, activeCampaignAbortControllers, initializedTenants, syncState, SYNC_MIN_INTERVAL_MS, SYNC_FORCED_MIN_GAP_MS, SYNC_RESPONSE_BUDGET_MS, hasLoadedInitialDefaults, DEMO_TREAT_SMTP_LOGIN_ERROR_AS_SENT, DEMO_SMTP_LOGIN_ERROR_RE, demoPendingWrites, leadsCol, SEARCH_CHUNK_SIZE, SEARCH_FIELD_SEP, searchCol, IGNORED_AFTER_DAYS, ignoredCutoffIso, SCHEDULE_MIN_LEAD_MS, SCHEDULE_MAX_AHEAD_MS, SEND_CLAIM_STALE_MS, isAutoProcessingCampaigns;
+var import_functions, campaignSenderName, defaultTemplateSubject, companyResearchCache, DEFAULT_EMAIL_TEMPLATES, DEFAULT_CAMPAIGNS, DEFAULT_CAMPAIGN_LEADS, DEFAULT_CAMPAIGN_RUNS, DEFAULT_UMRAH_CTX3, activeCampaignCtx, campaignCtxStore, warnedUnscopedCampaign, tenantCampaignStores, campaignsMap, campaignLeadsMap, campaignRunsMap, emailTemplatesMap, sendHistorySet, inFlightLeadSendsSet, pausedCampaignsSet, activeCampaignAbortControllers, initializedTenants, syncState, SYNC_MIN_INTERVAL_MS, SYNC_FORCED_MIN_GAP_MS, SYNC_RESPONSE_BUDGET_MS, hasLoadedInitialDefaults, DEMO_TREAT_SMTP_LOGIN_ERROR_AS_SENT, DEMO_SMTP_LOGIN_ERROR_RE, demoPendingWrites, leadsCol, SEARCH_CHUNK_SIZE, SEARCH_FIELD_SEP, searchCol, IGNORED_AFTER_DAYS, ignoredCutoffIso, SCHEDULE_MIN_LEAD_MS, SCHEDULE_MAX_AHEAD_MS, SEND_CLAIM_STALE_MS, autoProcessingTenants;
 var init_campaignService = __esm({
   "src/server/campaignService.ts"() {
     import_functions = __toESM(require_functions(), 1);
@@ -289861,6 +289944,7 @@ www.umrah360.in`,
     };
     activeCampaignCtx = DEFAULT_UMRAH_CTX3;
     campaignCtxStore = new AsyncLocalStorage();
+    warnedUnscopedCampaign = false;
     tenantCampaignStores = /* @__PURE__ */ new Map();
     campaignsMap = {
       get: (k) => getTenantCampaignStore(getCampaignActiveCtx().tenantId).campaignsMap.get(k),
@@ -289974,7 +290058,7 @@ www.umrah360.in`,
     SCHEDULE_MIN_LEAD_MS = 2 * 60 * 1e3;
     SCHEDULE_MAX_AHEAD_MS = 365 * 24 * 60 * 60 * 1e3;
     SEND_CLAIM_STALE_MS = 10 * 60 * 1e3;
-    isAutoProcessingCampaigns = false;
+    autoProcessingTenants = /* @__PURE__ */ new Set();
   }
 });
 
@@ -290436,8 +290520,8 @@ function isFollowUpWorkerDue(tenantId) {
   return Date.now() >= (nextCheckAt.get(tenantId) || 0);
 }
 async function getAutoFollowUpConfig(ctx) {
-  const cached = configCache.get(ctx.tenantId);
-  if (cached && Date.now() - cached.at < CONFIG_TTL_MS) return cached.cfg;
+  const cached2 = configCache.get(ctx.tenantId);
+  if (cached2 && Date.now() - cached2.at < CONFIG_TTL_MS) return cached2.cfg;
   let cfg = { ...DEFAULT_FOLLOWUP_CONFIG };
   if (enabledDb()) {
     try {
@@ -291350,11 +291434,21 @@ var init_autoFollowUpService = __esm({
 });
 
 // src/server/demoSchedulingService.ts
+import { AsyncLocalStorage as AsyncLocalStorage2 } from "node:async_hooks";
 import crypto7 from "crypto";
-function setSchedulingActiveContext(ctx) {
-  activeSchedulingCtx = ctx;
+function runWithSchedulingCtx(ctx, fn) {
+  return schedulingCtxStore.run(ctx, fn);
+}
+function enterSchedulingCtx(ctx) {
+  schedulingCtxStore.enterWith(ctx);
 }
 function getSchedCtx() {
+  const scoped = schedulingCtxStore.getStore();
+  if (scoped) return scoped;
+  if (!warnedUnscopedScheduling) {
+    warnedUnscopedScheduling = true;
+    console.warn("[Tenant isolation] scheduling code ran outside a tenant scope; falling back to the default workspace.", new Error().stack?.split("\n").slice(2, 5).join(" | "));
+  }
   return activeSchedulingCtx;
 }
 async function handleExpiredCalendarToken() {
@@ -293047,7 +293141,7 @@ async function getAllBookings() {
     return [];
   }
 }
-var DEFAULT_UMRAH_CTX4, activeSchedulingCtx, sb, warmSchedBrand, tz, TZL, tzDisplay, workStartH, workEndH, slotHours, hrShort, daysLabel, brandName, hostCalendarEmail, hostEmailList, serverCalendarAccessToken, serverTokenExpiresAt, normalizeLeadEmail, phoneLast10, LOCK_STALE_MS, MAX_DAYS_AHEAD, MIN_LEAD_TIME_MS, AVAILABILITY_STATE_TTL_MS, CONFIRMATION_STATE_TTL_MS;
+var DEFAULT_UMRAH_CTX4, activeSchedulingCtx, schedulingCtxStore, warnedUnscopedScheduling, sb, warmSchedBrand, tz, TZL, tzDisplay, workStartH, workEndH, slotHours, hrShort, daysLabel, brandName, hostCalendarEmail, hostEmailList, serverCalendarAccessToken, serverTokenExpiresAt, normalizeLeadEmail, phoneLast10, LOCK_STALE_MS, MAX_DAYS_AHEAD, MIN_LEAD_TIME_MS, AVAILABILITY_STATE_TTL_MS, CONFIRMATION_STATE_TTL_MS;
 var init_demoSchedulingService = __esm({
   "src/server/demoSchedulingService.ts"() {
     init_tenantRepo();
@@ -293069,6 +293163,8 @@ var init_demoSchedulingService = __esm({
       role: "admin"
     };
     activeSchedulingCtx = DEFAULT_UMRAH_CTX4;
+    schedulingCtxStore = new AsyncLocalStorage2();
+    warnedUnscopedScheduling = false;
     sb = () => getBrandSync(getSchedCtx().tenantId);
     warmSchedBrand = () => getTenantBrand(getSchedCtx().tenantId).catch(() => sb());
     tz = () => sb().timezone;
@@ -293107,16 +293203,22 @@ var init_demoSchedulingService = __esm({
 });
 
 // src/server/inboundPipeline.ts
-import { AsyncLocalStorage as AsyncLocalStorage2 } from "node:async_hooks";
+import { AsyncLocalStorage as AsyncLocalStorage3 } from "node:async_hooks";
 import crypto8 from "node:crypto";
-function setInboundActiveContext(ctx) {
-  activeInboundCtx = ctx;
-}
 function runWithInboundCtx(ctx, fn) {
   return inboundCtxStore.run(ctx, fn);
 }
+function enterInboundCtx(ctx) {
+  inboundCtxStore.enterWith(ctx);
+}
 function getInboundCtx() {
-  return inboundCtxStore.getStore() ?? activeInboundCtx;
+  const scoped = inboundCtxStore.getStore();
+  if (scoped) return scoped;
+  if (!warnedUnscopedInbound) {
+    warnedUnscopedInbound = true;
+    console.warn("[Tenant isolation] inbound code ran outside a tenant scope; falling back to the default workspace.", new Error().stack?.split("\n").slice(2, 5).join(" | "));
+  }
+  return activeInboundCtx;
 }
 function getImapOwnerTenantId() {
   return (process.env.IMAP_OWNER_TENANT_ID || "umrah360").trim();
@@ -294439,7 +294541,7 @@ async function pollImapForOwner(force) {
     isImapPollingActive = false;
   }
 }
-var DEFAULT_UMRAH_CTX5, activeInboundCtx, inboundCtxStore, recentProcessedEmails, conversationThreadMessagesMap, repliedMessageIds, conversationTurnMap, processedRecordsMap, inFlightMessageIds, INITIAL_PROCESSED_SEEDS, pipelineConfig, conversationHumanHandoffMap, conversationAiStateMap, isImapPollingActive, lastImapPollTimestamp, IMAP_POLL_MIN_INTERVAL_MS;
+var DEFAULT_UMRAH_CTX5, activeInboundCtx, inboundCtxStore, warnedUnscopedInbound, recentProcessedEmails, conversationThreadMessagesMap, repliedMessageIds, conversationTurnMap, processedRecordsMap, inFlightMessageIds, INITIAL_PROCESSED_SEEDS, pipelineConfig, conversationHumanHandoffMap, conversationAiStateMap, isImapPollingActive, lastImapPollTimestamp, IMAP_POLL_MIN_INTERVAL_MS;
 var init_inboundPipeline = __esm({
   "src/server/inboundPipeline.ts"() {
     init_tenantRepo();
@@ -294464,7 +294566,8 @@ var init_inboundPipeline = __esm({
       role: "admin"
     };
     activeInboundCtx = DEFAULT_UMRAH_CTX5;
-    inboundCtxStore = new AsyncLocalStorage2();
+    inboundCtxStore = new AsyncLocalStorage3();
+    warnedUnscopedInbound = false;
     recentProcessedEmails = [];
     conversationThreadMessagesMap = /* @__PURE__ */ new Map();
     repliedMessageIds = /* @__PURE__ */ new Set();
@@ -294577,12 +294680,12 @@ __export(websiteLeadService_exports, {
   resolveTeamSize: () => resolveTeamSize
 });
 function getSentCache(tenantId) {
-  let cache3 = tenantSentThankYouCaches.get(tenantId);
-  if (!cache3) {
-    cache3 = /* @__PURE__ */ new Set();
-    tenantSentThankYouCaches.set(tenantId, cache3);
+  let cache4 = tenantSentThankYouCaches.get(tenantId);
+  if (!cache4) {
+    cache4 = /* @__PURE__ */ new Set();
+    tenantSentThankYouCaches.set(tenantId, cache4);
   }
-  return cache3;
+  return cache4;
 }
 function getInFlightSet(tenantId) {
   let set = tenantInFlightThankYouSends.get(tenantId);
@@ -298640,12 +298743,12 @@ var require_levels = __commonJS({
     function genLsCache(instance) {
       const formatter = instance[formattersSym].level;
       const { labels } = instance.levels;
-      const cache3 = {};
+      const cache4 = {};
       for (const label in labels) {
         const level = formatter(labels[label], Number(label));
-        cache3[label] = JSON.stringify(level).slice(0, -1);
+        cache4[label] = JSON.stringify(level).slice(0, -1);
       }
-      instance[lsCacheSym] = cache3;
+      instance[lsCacheSym] = cache4;
       return instance;
     }
     function isStandardLevel(level, useOnlyCustomLevels) {
@@ -300064,11 +300167,11 @@ async function writeRoute(tenantId, key, allowedOrigins, createdAt) {
     { merge: false }
   );
 }
-function requireDb2() {
+function requireDb3() {
   if (!isFirebaseConfigured || !db) throw new WebhookSettingsError("Database not configured", 503);
 }
 async function getWebhookView(tenantId) {
-  requireDb2();
+  requireDb3();
   const ref = tenantRepo({ tenantId }).settingsDoc(SETTINGS_DOC);
   const snap = await getDoc(ref);
   const data = snap.exists() ? snap.data() : null;
@@ -300084,7 +300187,7 @@ async function getWebhookView(tenantId) {
   return view(key, [], createdAt);
 }
 async function setAllowedOrigins(tenantId, origins) {
-  requireDb2();
+  requireDb3();
   if (!Array.isArray(origins)) throw new WebhookSettingsError("allowedOrigins must be a list of websites");
   const clean2 = [];
   for (const o of origins.slice(0, 20)) {
@@ -300102,7 +300205,7 @@ async function setAllowedOrigins(tenantId, origins) {
   return view(current.key, clean2, current.createdAt);
 }
 async function regenerateKey(tenantId) {
-  requireDb2();
+  requireDb3();
   const current = await getWebhookView(tenantId);
   const key = newKey(tenantId);
   const createdAt = (/* @__PURE__ */ new Date()).toISOString();
@@ -300117,7 +300220,7 @@ async function regenerateKey(tenantId) {
   return view(key, current.allowedOrigins, createdAt);
 }
 async function sendTestLead(ctx) {
-  requireDb2();
+  requireDb3();
   if (!ctx.email) throw new WebhookSettingsError("Your account has no email address to send the test to");
   const result = await processWebsiteLeadSubmission(
     {
@@ -300149,6 +300252,107 @@ var init_websiteWebhookService = __esm({
       }
     };
     SETTINGS_DOC = "website_webhook";
+  }
+});
+
+// src/server/brandLogoService.ts
+var brandLogoService_exports = {};
+__export(brandLogoService_exports, {
+  LogoError: () => LogoError,
+  MAX_LOGO_BYTES: () => MAX_LOGO_BYTES,
+  deleteTenantLogo: () => deleteTenantLogo,
+  getTenantLogo: () => getTenantLogo,
+  logoUrlFor: () => logoUrlFor,
+  parseLogoDataUrl: () => parseLogoDataUrl,
+  saveTenantLogo: () => saveTenantLogo
+});
+function sniffImageType(buf) {
+  if (buf.length >= 8 && buf.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))) return "image/png";
+  if (buf.length >= 3 && buf[0] === 255 && buf[1] === 216 && buf[2] === 255) return "image/jpeg";
+  if (buf.length >= 12 && buf.subarray(0, 4).toString("ascii") === "RIFF" && buf.subarray(8, 12).toString("ascii") === "WEBP") return "image/webp";
+  return null;
+}
+function parseLogoDataUrl(input) {
+  if (typeof input !== "string" || !input.startsWith("data:")) throw new LogoError("Send the logo as an image data URL");
+  const m2 = input.match(/^data:([a-zA-Z0-9.+/-]+);base64,([A-Za-z0-9+/=\s]+)$/);
+  if (!m2) throw new LogoError("Logo must be a base64-encoded image");
+  const declared = m2[1].toLowerCase();
+  if (!ALLOWED_TYPES.has(declared)) throw new LogoError("Logo must be a PNG, JPG or WebP image (SVG is not allowed)");
+  if (m2[2].length > Math.ceil(MAX_LOGO_BYTES * 4 / 3) + 8) throw new LogoError("Logo is too large (max 512 KB)", 413);
+  const buffer = Buffer.from(m2[2], "base64");
+  if (buffer.length === 0) throw new LogoError("Logo is empty");
+  if (buffer.length > MAX_LOGO_BYTES) throw new LogoError("Logo is too large (max 512 KB)", 413);
+  const real = sniffImageType(buffer);
+  if (!real) throw new LogoError("That file is not a valid PNG, JPG or WebP image");
+  return { contentType: real, buffer };
+}
+function logoUrlFor(tenantId, version7) {
+  return `${baseUrl()}/api/brand-logo/${encodeURIComponent(tenantId)}?v=${version7}`;
+}
+async function saveTenantLogo(tenantId, dataUrl) {
+  if (!isFirebaseConfigured) throw new LogoError("Storage is not configured on this server", 503);
+  const { contentType, buffer } = parseLogoDataUrl(dataUrl);
+  const updatedAt = Date.now();
+  await setDoc(logoDoc(tenantId), {
+    contentType,
+    dataBase64: buffer.toString("base64"),
+    size: buffer.length,
+    updatedAt
+  });
+  logoCache.delete(tenantId);
+  const brand = await saveTenantBrand(tenantId, { logoUrl: logoUrlFor(tenantId, updatedAt) });
+  return brand;
+}
+async function deleteTenantLogo(tenantId) {
+  if (isFirebaseConfigured) {
+    await deleteDoc(logoDoc(tenantId)).catch(() => {
+    });
+  }
+  logoCache.delete(tenantId);
+  return saveTenantBrand(tenantId, { logoUrl: "" });
+}
+async function getTenantLogo(tenantId) {
+  if (!/^[a-z0-9_-]+$/i.test(tenantId) || !isFirebaseConfigured) return null;
+  const hit = logoCache.get(tenantId);
+  if (hit && Date.now() - hit.at < LOGO_CACHE_MS) return hit.value;
+  let value = null;
+  try {
+    const snap = await getDoc(logoDoc(tenantId));
+    if (snap.exists()) {
+      const d = snap.data();
+      const buffer = Buffer.from(String(d.dataBase64 || ""), "base64");
+      const real = sniffImageType(buffer);
+      if (real && ALLOWED_TYPES.has(real) && buffer.length <= MAX_LOGO_BYTES) {
+        value = { contentType: real, buffer, updatedAt: Number(d.updatedAt) || 0 };
+      }
+    }
+  } catch {
+    value = null;
+  }
+  logoCache.set(tenantId, { value, at: Date.now() });
+  return value;
+}
+var MAX_LOGO_BYTES, ALLOWED_TYPES, LogoError, ctxFor3, logoDoc, baseUrl, logoCache, LOGO_CACHE_MS;
+var init_brandLogoService = __esm({
+  "src/server/brandLogoService.ts"() {
+    init_adminFirestore();
+    init_tenantRepo();
+    init_config();
+    init_brandService();
+    MAX_LOGO_BYTES = 512 * 1024;
+    ALLOWED_TYPES = /* @__PURE__ */ new Set(["image/png", "image/jpeg", "image/webp"]);
+    LogoError = class extends Error {
+      constructor(message2, status = 400) {
+        super(message2);
+        this.status = 400;
+        this.status = status;
+      }
+    };
+    ctxFor3 = (tenantId) => ({ tenantId, uid: "system", email: "system@brand-logo", role: "admin" });
+    logoDoc = (tenantId) => tenantRepo(ctxFor3(tenantId)).settingsDoc("brand_logo");
+    baseUrl = () => String(process.env.APP_URL || "").trim().replace(/\/+$/, "");
+    logoCache = /* @__PURE__ */ new Map();
+    LOGO_CACHE_MS = 6e4;
   }
 });
 
@@ -301641,8 +301845,8 @@ async function readRefreshToken2(tenantId) {
   }
 }
 async function getMicrosoftCalendarAccessToken(tenantId) {
-  const cached = accessCache2.get(tenantId);
-  if (cached && cached.expiresAt - 5 * 6e4 > Date.now()) return cached.token;
+  const cached2 = accessCache2.get(tenantId);
+  if (cached2 && cached2.expiresAt - 5 * 6e4 > Date.now()) return cached2.token;
   const refreshToken2 = await readRefreshToken2(tenantId);
   if (!refreshToken2) {
     throw new MicrosoftReauthRequired("The saved Microsoft Calendar sign-in could not be read. Connect Microsoft Calendar again.");
@@ -302507,6 +302711,7 @@ init_campaignService();
 init_emailSanitizer();
 init_brandService();
 init_brand();
+import { AsyncLocalStorage as AsyncLocalStorage4 } from "node:async_hooks";
 var DEFAULT_UMRAH_CTX6 = {
   tenantId: "umrah360",
   uid: "system",
@@ -302514,10 +302719,21 @@ var DEFAULT_UMRAH_CTX6 = {
   role: "admin"
 };
 var activeWhatsAppCtx = DEFAULT_UMRAH_CTX6;
-function setWhatsAppActiveContext(ctx) {
-  activeWhatsAppCtx = ctx;
+var whatsAppCtxStore = new AsyncLocalStorage4();
+function runWithWhatsAppCtx(ctx, fn) {
+  return whatsAppCtxStore.run(ctx, fn);
 }
+function enterWhatsAppCtx(ctx) {
+  whatsAppCtxStore.enterWith(ctx);
+}
+var warnedUnscopedWhatsApp = false;
 function getWACtx() {
+  const scoped = whatsAppCtxStore.getStore();
+  if (scoped) return scoped;
+  if (!warnedUnscopedWhatsApp) {
+    warnedUnscopedWhatsApp = true;
+    console.warn("[Tenant isolation] WhatsApp code ran outside a tenant scope; falling back to the default workspace.", new Error().stack?.split("\n").slice(2, 5).join(" | "));
+  }
   return activeWhatsAppCtx;
 }
 var TARGET_WHATSAPP_NUMBER = "+919820252434";
@@ -302999,7 +303215,13 @@ www.umrah360.in`;
     buyingStage
   };
 }
-async function processLiveInboundWhatsApp(payload) {
+function runWhatsAppScoped(ctx, payload) {
+  return runWithWhatsAppCtx(ctx, () => processLiveInboundWhatsApp(payload));
+}
+async function processLiveInboundWhatsApp(payload, ctx) {
+  if (ctx) {
+    return runWhatsAppScoped(ctx, payload);
+  }
   const targetNumber = TARGET_WHATSAPP_NUMBER;
   const targetNumberFormatted = TARGET_WHATSAPP_NUMBER_DISPLAY;
   const brand = await getTenantBrand(getWACtx().tenantId);
@@ -303350,11 +303572,8 @@ init_config();
 init_adminFirestore();
 init_adminFirestore();
 init_firestoreUtils();
-init_campaignService();
 init_brandService();
 init_brand();
-init_demoSchedulingService();
-init_inboundPipeline();
 init_entitlements();
 init_features();
 
@@ -321822,9 +322041,28 @@ async function syncCheckoutSession(tenantId, sessionId) {
   return { activated: true };
 }
 
-// src/server/coreApiHandler.ts
+// src/server/tenantScope.ts
+init_campaignService();
+init_inboundPipeline();
+init_demoSchedulingService();
+function enterTenantScope(ctx) {
+  enterCampaignCtx(ctx);
+  enterInboundCtx(ctx);
+  enterSchedulingCtx(ctx);
+  enterWhatsAppCtx(ctx);
+}
+function runInTenantScope(ctx, fn) {
+  return runWithCampaignCtx(
+    ctx,
+    () => runWithInboundCtx(ctx, () => runWithSchedulingCtx(ctx, () => runWithWhatsAppCtx(ctx, fn)))
+  );
+}
+
+// src/server/orgService.ts
+init_adminFirestore();
 init_tenantRepo();
 init_firebaseAdmin();
+init_entitlements();
 
 // src/server/authMiddleware.ts
 init_firebaseAdmin();
@@ -321871,15 +322109,32 @@ function createTenantLogger(tenantId, extraContext = {}) {
 // src/server/authMiddleware.ts
 var PLATFORM_TENANT_ID = "platform";
 var tenantStatusCache = /* @__PURE__ */ new Map();
+var orgStatusCache = /* @__PURE__ */ new Map();
 var CACHE_TTL_MS = 3e4;
-async function getTenantStatus(tenantId) {
-  const cached = tenantStatusCache.get(tenantId);
+async function getTenantInfo(tenantId) {
+  const cached2 = tenantStatusCache.get(tenantId);
   const now = Date.now();
-  if (cached && now - cached.cachedAt < CACHE_TTL_MS) return cached.status;
+  if (cached2 && now - cached2.cachedAt < CACHE_TTL_MS) return cached2.info;
   const snap = await getAdminFirestore().collection("tenants").doc(tenantId).get();
+  const data = snap.exists ? snap.data() : void 0;
+  const info = !snap.exists ? { status: "missing" } : { status: data?.status === "suspended" ? "suspended" : "active", orgId: typeof data?.orgId === "string" && data.orgId ? data.orgId : void 0 };
+  tenantStatusCache.set(tenantId, { info, cachedAt: now });
+  return info;
+}
+async function getOrgStatus(orgId) {
+  const cached2 = orgStatusCache.get(orgId);
+  const now = Date.now();
+  if (cached2 && now - cached2.cachedAt < CACHE_TTL_MS) return cached2.status;
+  const snap = await getAdminFirestore().collection("orgs").doc(orgId).get();
   const status = !snap.exists ? "missing" : snap.data()?.status === "suspended" ? "suspended" : "active";
-  tenantStatusCache.set(tenantId, { status, cachedAt: now });
+  orgStatusCache.set(orgId, { status, cachedAt: now });
   return status;
+}
+function invalidateTenantStatusCache(tenantId) {
+  tenantStatusCache.delete(tenantId);
+}
+function invalidateOrgStatusCache(orgId) {
+  orgStatusCache.delete(orgId);
 }
 function extractBearerToken(req) {
   const header = req.headers["authorization"];
@@ -321904,18 +322159,48 @@ async function authenticateRequest(req) {
     return { ok: false, status: 401, error: "Invalid or expired session", code };
   }
   const isPlatformAdmin = decoded.platformAdmin === true;
-  const tenantId = isPlatformAdmin ? PLATFORM_TENANT_ID : decoded.tenantId;
-  if (!tenantId || typeof tenantId !== "string") {
+  const claimOrgId = !isPlatformAdmin && typeof decoded.orgId === "string" && decoded.orgId ? decoded.orgId : void 0;
+  let tenantId;
+  if (isPlatformAdmin) {
+    tenantId = PLATFORM_TENANT_ID;
+  } else if (claimOrgId) {
+    const raw = req.headers["x-tenant-id"];
+    const requested = typeof raw === "string" ? raw.trim() : "";
+    tenantId = requested;
+  } else {
+    tenantId = decoded.tenantId;
+  }
+  if (!claimOrgId && (!tenantId || typeof tenantId !== "string")) {
     return { ok: false, status: 403, error: "User is not assigned to a workspace", code: "NO_TENANT_ASSIGNED" };
   }
   if (!isPlatformAdmin) {
     try {
-      const status = await getTenantStatus(tenantId);
-      if (status === "suspended") {
-        return { ok: false, status: 403, error: "This workspace is suspended", code: "TENANT_SUSPENDED" };
+      if (claimOrgId) {
+        const orgStatus = await getOrgStatus(claimOrgId);
+        if (orgStatus === "missing") {
+          return { ok: false, status: 403, error: "Organization not found", code: "ORG_NOT_FOUND" };
+        }
+        if (orgStatus === "suspended") {
+          return { ok: false, status: 403, error: "This organization is suspended", code: "ORG_SUSPENDED" };
+        }
       }
-      if (status === "missing") {
-        return { ok: false, status: 403, error: "Workspace not found", code: "TENANT_NOT_FOUND" };
+      if (tenantId) {
+        const info = await getTenantInfo(tenantId);
+        if (info.status === "missing") {
+          return { ok: false, status: 403, error: "Workspace not found", code: "TENANT_NOT_FOUND" };
+        }
+        if (claimOrgId && info.orgId !== claimOrgId) {
+          return { ok: false, status: 403, error: "You do not have access to this client", code: "TENANT_FORBIDDEN" };
+        }
+        if (info.status === "suspended") {
+          return { ok: false, status: 403, error: "This workspace is suspended", code: "TENANT_SUSPENDED" };
+        }
+        if (!claimOrgId && info.orgId) {
+          const orgStatus = await getOrgStatus(info.orgId);
+          if (orgStatus === "suspended") {
+            return { ok: false, status: 403, error: "This organization is suspended", code: "ORG_SUSPENDED" };
+          }
+        }
       }
     } catch (err) {
       createTenantLogger("system").error({ err }, "Tenant status lookup failed");
@@ -321926,7 +322211,8 @@ async function authenticateRequest(req) {
   return {
     ok: true,
     ctx: {
-      tenantId,
+      tenantId: tenantId || "",
+      ...claimOrgId ? { orgId: claimOrgId } : {},
       uid: decoded.uid,
       email: decoded.email || "",
       role,
@@ -321935,7 +322221,641 @@ async function authenticateRequest(req) {
   };
 }
 
+// src/server/orgService.ts
+init_config();
+var OrgError = class extends Error {
+  constructor(message2, status = 400, code, extra) {
+    super(message2);
+    this.status = status;
+    this.code = code;
+    this.extra = extra;
+  }
+};
+var RESERVED_IDS = /* @__PURE__ */ new Set(["platform", "admin", "api", "new", "null", "undefined"]);
+var slugify = (v) => String(v || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40);
+function requireDb2() {
+  if (!isFirebaseConfigured) throw new OrgError("Database not configured", 503);
+}
+var orgLocks = /* @__PURE__ */ new Map();
+function withOrgLock(orgId, fn) {
+  const prev = orgLocks.get(orgId) || Promise.resolve();
+  const run = prev.catch(() => {
+  }).then(fn);
+  orgLocks.set(orgId, run);
+  run.finally(() => {
+    if (orgLocks.get(orgId) === run) orgLocks.delete(orgId);
+  }).catch(() => {
+  });
+  return run;
+}
+async function getOrg(orgId) {
+  requireDb2();
+  const snap = await getDoc(globalOrgDoc(orgId));
+  return snap.exists() ? { ...snap.data(), id: orgId } : null;
+}
+async function listOrgs() {
+  requireDb2();
+  const snap = await getDocs(globalOrgsCol());
+  const orgs = snap.docs.map((d) => ({ ...d.data(), id: d.id }));
+  const tenants = await getDocs(globalTenantsCol());
+  const counts = /* @__PURE__ */ new Map();
+  tenants.docs.forEach((d) => {
+    const oid = d.data()?.orgId;
+    if (oid) counts.set(oid, (counts.get(oid) || 0) + 1);
+  });
+  return orgs.map((o) => ({ ...o, clientCount: counts.get(o.id) || 0 })).sort((a, b) => String(a.name).localeCompare(String(b.name)));
+}
+async function listClients(orgId) {
+  requireDb2();
+  const snap = await getDocs(query(globalTenantsCol(), where("orgId", "==", orgId)));
+  return snap.docs.map((d) => d.data()).map((t2) => ({
+    id: t2.id,
+    name: t2.name || t2.id,
+    status: t2.status || "active",
+    timezone: t2.timezone,
+    contactEmail: t2.contactEmail,
+    createdAt: t2.createdAt
+  })).sort((a, b) => String(a.name).localeCompare(String(b.name)));
+}
+async function createOrg(input) {
+  requireDb2();
+  const name5 = String(input.name || "").trim().slice(0, 80);
+  if (!name5) throw new OrgError("Organization name is required");
+  const plans = await listPlans();
+  if (!plans.some((p) => p.id === input.planId)) throw new OrgError("Choose a plan for the organization");
+  const base = slugify(name5) || "org";
+  let id = base;
+  for (let i2 = 0; i2 < 20; i2++) {
+    const clash = (await getDoc(globalOrgDoc(id))).exists() || (await getDoc(globalTenantDoc(id))).exists() || RESERVED_IDS.has(id);
+    if (!clash) break;
+    id = `${base}-${Math.random().toString(36).slice(2, 6)}`;
+  }
+  const now = (/* @__PURE__ */ new Date()).toISOString();
+  const org = {
+    id,
+    name: name5,
+    status: "active",
+    planId: input.planId,
+    billingStatus: "manual",
+    planSource: "manual",
+    ...input.contactEmail ? { contactEmail: String(input.contactEmail).trim().toLowerCase() } : {},
+    createdAt: now,
+    updatedAt: now
+  };
+  await setDoc(globalOrgDoc(id), org);
+  invalidateEntitlements();
+  return org;
+}
+async function updateOrg(orgId, patch) {
+  requireDb2();
+  const org = await getOrg(orgId);
+  if (!org) throw new OrgError("Organization not found", 404);
+  const next2 = { ...org, updatedAt: (/* @__PURE__ */ new Date()).toISOString() };
+  if (patch.name !== void 0) {
+    const n = String(patch.name).trim().slice(0, 80);
+    if (!n) throw new OrgError("Organization name cannot be empty");
+    next2.name = n;
+  }
+  if (patch.planId !== void 0) {
+    if (!(await listPlans()).some((p) => p.id === patch.planId)) throw new OrgError("Unknown plan");
+    const plan = (await listPlans()).find((p) => p.id === patch.planId);
+    const max = plan.limits?.maxClients ?? 0;
+    const count = (await listClients(orgId)).length;
+    if (count > max) {
+      throw new OrgError(`This plan allows ${max} client brand${max === 1 ? "" : "s"} but the organization already has ${count}.`, 409, "too_many_clients");
+    }
+    next2.planId = patch.planId;
+  }
+  if (patch.status !== void 0) {
+    if (patch.status !== "active" && patch.status !== "suspended") throw new OrgError("Invalid status");
+    next2.status = patch.status;
+  }
+  await setDoc(globalOrgDoc(orgId), JSON.parse(JSON.stringify(next2)));
+  invalidateOrgStatusCache(orgId);
+  invalidateEntitlements();
+  return next2;
+}
+async function inviteOrgAdmin(orgId, input) {
+  requireDb2();
+  const org = await getOrg(orgId);
+  if (!org) throw new OrgError("Organization not found", 404);
+  const email = String(input.email || "").trim().toLowerCase();
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) throw new OrgError("A valid email is required");
+  const password = input.password ? String(input.password) : void 0;
+  if (password && password.length < 8) throw new OrgError("Password must be at least 8 characters");
+  const seatLimit = (await getOrgEntitlements(orgId)).limits.seats;
+  const admins = await listOrgAdmins(orgId);
+  const already = admins.some((a) => a.email.toLowerCase() === email);
+  if (!already && Number.isFinite(seatLimit) && admins.filter((a) => a.active !== false).length >= seatLimit) {
+    throw new OrgError(`Your plan allows ${seatLimit} admin seat${seatLimit === 1 ? "" : "s"}. Upgrade to add more.`, 402, "upgrade_required", { limit: "seats" });
+  }
+  let rec;
+  try {
+    rec = await createTenantUser({ email, password, displayName: input.name || void 0, orgId, role: "admin" });
+  } catch (e2) {
+    throw new OrgError(e2?.message || "Could not add the admin", /another (workspace|organization)|platform administrator/i.test(e2?.message || "") ? 409 : 500);
+  }
+  const nowIso = (/* @__PURE__ */ new Date()).toISOString();
+  await setDoc(
+    globalUserDoc(rec.uid),
+    {
+      uid: rec.uid,
+      email,
+      name: input.name || rec.displayName || email.split("@")[0],
+      orgId,
+      role: "admin",
+      active: true,
+      createdAt: nowIso,
+      updatedAt: nowIso
+    },
+    { merge: true }
+  );
+  const setupLink = password ? void 0 : await createPasswordSetupLink(email).catch(() => void 0);
+  return { uid: rec.uid, email, existed: Boolean(rec.existed), passwordSet: Boolean(rec.passwordSet), setupLink };
+}
+async function listOrgAdmins(orgId) {
+  requireDb2();
+  const snap = await getDocs(query(globalUsersCol(), where("orgId", "==", orgId)));
+  return snap.docs.map((d) => {
+    const u = d.data();
+    return { uid: d.id, email: String(u.email || ""), name: u.name, active: u.active };
+  });
+}
+async function getOrgOverview(orgId) {
+  const org = await getOrg(orgId);
+  if (!org) throw new OrgError("Organization not found", 404);
+  const [ent, clients, admins] = await Promise.all([getOrgEntitlements(orgId, { fresh: true }), listClients(orgId), listOrgAdmins(orgId)]);
+  return {
+    org: { id: org.id, name: org.name, status: org.status },
+    plan: { id: ent.planId, name: ent.planName },
+    billing: ent.billing,
+    limits: { maxClients: ent.limits.maxClients ?? 0, seats: ent.limits.seats },
+    usedClients: clients.length,
+    clients,
+    admins
+  };
+}
+async function createClient(orgId, input) {
+  requireDb2();
+  return withOrgLock(orgId, async () => {
+    const org = await getOrg(orgId);
+    if (!org) throw new OrgError("Organization not found", 404);
+    if (org.status === "suspended") throw new OrgError("This organization is suspended", 403, "ORG_SUSPENDED");
+    const name5 = String(input.name || "").trim().slice(0, 80);
+    if (!name5) throw new OrgError("Client name is required");
+    const ent = await getOrgEntitlements(orgId, { fresh: true });
+    if (ent.billing.locked) throw new OrgError("Your organization plan is not active. Contact the platform administrator.", 402, "billing_required");
+    const max = ent.limits.maxClients ?? 0;
+    const existing = await listClients(orgId);
+    if (existing.length >= max) {
+      throw new OrgError(
+        max === 0 ? "Your plan does not include client brands. Upgrade to onboard clients." : `Your plan allows ${max} client brand${max === 1 ? "" : "s"}. Upgrade to add more.`,
+        402,
+        "upgrade_required",
+        { limit: "maxClients", max, used: existing.length }
+      );
+    }
+    const base = slugify(name5) || "client";
+    let id = base;
+    for (let i2 = 0; i2 < 25; i2++) {
+      const clash = RESERVED_IDS.has(id) || (await getDoc(globalTenantDoc(id))).exists() || (await getDoc(globalOrgDoc(id))).exists();
+      if (!clash) break;
+      id = `${base}-${Math.random().toString(36).slice(2, 6)}`;
+    }
+    const now = (/* @__PURE__ */ new Date()).toISOString();
+    const tenant = {
+      id,
+      name: name5,
+      slug: id,
+      status: "active",
+      plan: "growth",
+      // Plan/limits really come from the organization (see computeEntitlements); these are only legacy display fields.
+      limits: { monthlyAiTokens: 0, dailyOutboundSends: 0, hourlyOutboundSends: 0, seats: 0 },
+      orgId,
+      billingStatus: "inherited",
+      planSource: "org",
+      contactEmail: input.contactEmail ? String(input.contactEmail).trim().toLowerCase() : "",
+      timezone: input.timezone || "Asia/Kolkata",
+      defaultCurrency: "USD",
+      createdAt: now,
+      updatedAt: now
+    };
+    await setDoc(globalTenantDoc(id), JSON.parse(JSON.stringify(tenant)));
+    invalidateEntitlements(id);
+    return { id, name: name5, status: "active", timezone: tenant.timezone, contactEmail: tenant.contactEmail, createdAt: now };
+  });
+}
+async function updateClient(orgId, clientId, patch) {
+  requireDb2();
+  const snap = await getDoc(globalTenantDoc(clientId));
+  const t2 = snap.exists() ? snap.data() : null;
+  if (!t2 || t2.orgId !== orgId) throw new OrgError("Client not found", 404);
+  const next2 = { ...t2, updatedAt: (/* @__PURE__ */ new Date()).toISOString() };
+  if (patch.name !== void 0) {
+    const n = String(patch.name).trim().slice(0, 80);
+    if (!n) throw new OrgError("Client name cannot be empty");
+    next2.name = n;
+  }
+  if (patch.status !== void 0) {
+    if (patch.status !== "active" && patch.status !== "suspended") throw new OrgError("Invalid status");
+    next2.status = patch.status;
+  }
+  await setDoc(globalTenantDoc(clientId), JSON.parse(JSON.stringify(next2)));
+  invalidateTenantStatusCache(clientId);
+  invalidateEntitlements(clientId);
+  return { id: clientId, name: next2.name, status: next2.status, timezone: next2.timezone, contactEmail: next2.contactEmail, createdAt: next2.createdAt };
+}
+async function adoptTenant(orgId, tenantId) {
+  requireDb2();
+  return withOrgLock(orgId, async () => {
+    const org = await getOrg(orgId);
+    if (!org) throw new OrgError("Organization not found", 404);
+    const snap = await getDoc(globalTenantDoc(tenantId));
+    const t2 = snap.exists() ? snap.data() : null;
+    if (!t2) throw new OrgError("Workspace not found", 404);
+    if (t2.orgId === orgId) throw new OrgError("That workspace is already part of this organization", 409);
+    if (t2.orgId) throw new OrgError("That workspace already belongs to another organization", 409);
+    if (t2.stripeSubscriptionId) {
+      throw new OrgError("That workspace has its own paid subscription. Cancel it first, then move the workspace.", 409, "has_subscription");
+    }
+    const ent = await getOrgEntitlements(orgId, { fresh: true });
+    const max = ent.limits.maxClients ?? 0;
+    const used = (await listClients(orgId)).length;
+    if (used >= max) throw new OrgError(`The organization's plan allows ${max} client brand${max === 1 ? "" : "s"}.`, 402, "upgrade_required", { limit: "maxClients", max, used });
+    const next2 = {
+      ...t2,
+      orgId,
+      // Keep what it had, so the move can be undone by hand if needed.
+      adoptedFrom: { billingStatus: t2.billingStatus ?? null, planSource: t2.planSource ?? null, planId: t2.planId ?? null, at: (/* @__PURE__ */ new Date()).toISOString() },
+      billingStatus: "inherited",
+      planSource: "org",
+      updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+    };
+    delete next2.planId;
+    await setDoc(globalTenantDoc(tenantId), JSON.parse(JSON.stringify(next2)));
+    invalidateTenantStatusCache(tenantId);
+    invalidateEntitlements(tenantId);
+    return { id: tenantId, name: next2.name || tenantId, status: next2.status || "active", timezone: next2.timezone, contactEmail: next2.contactEmail, createdAt: next2.createdAt };
+  });
+}
+
+// src/server/orgApi.ts
+async function handleOrgApi(req, res, url, body, ctx) {
+  const isOrgRoute = url === "/api/org" || url.startsWith("/api/org/");
+  const isOrgsRoute = url === "/api/orgs" || url.startsWith("/api/orgs/");
+  if (!isOrgRoute && !isOrgsRoute) return false;
+  const send = (status, payload) => {
+    res.statusCode = status;
+    res.setHeader("Content-Type", "application/json");
+    res.end(JSON.stringify(payload));
+    return true;
+  };
+  const fail2 = (err) => {
+    if (err instanceof OrgError) {
+      return send(err.status, { error: err.message, ...err.code ? { code: err.code } : {}, ...err.extra || {} });
+    }
+    console.error("[Org API error]:", err);
+    return send(500, { error: err?.message || "Organization request failed" });
+  };
+  if (isOrgsRoute) {
+    if (!ctx.isPlatformAdmin) return send(403, { error: "Platform admin only" });
+    try {
+      if (url === "/api/orgs" && req.method === "GET") {
+        return send(200, { orgs: await listOrgs() });
+      }
+      if (url === "/api/orgs" && req.method === "POST") {
+        const org = await createOrg({ name: body?.name, planId: body?.planId, contactEmail: body?.contactEmail });
+        let admin = null;
+        if (body?.adminEmail) {
+          try {
+            admin = await inviteOrgAdmin(org.id, { email: body.adminEmail, name: body.adminName });
+          } catch (e2) {
+            return send(201, { org, adminError: e2?.message || "Could not invite the first admin", ...e2?.status ? { adminErrorStatus: e2.status } : {} });
+          }
+        }
+        return send(201, { org, admin });
+      }
+      const m2 = url.match(/^\/api\/orgs\/([^/]+)(?:\/(admins|adopt-tenant))?$/);
+      if (m2) {
+        const orgId2 = decodeURIComponent(m2[1]);
+        const sub = m2[2];
+        if (!sub && req.method === "GET") return send(200, await getOrgOverview(orgId2));
+        if (!sub && req.method === "PATCH") {
+          return send(200, { org: await updateOrg(orgId2, { name: body?.name, planId: body?.planId, status: body?.status }) });
+        }
+        if (sub === "admins" && req.method === "POST") {
+          return send(201, { admin: await inviteOrgAdmin(orgId2, { email: body?.email, name: body?.name, password: body?.password }) });
+        }
+        if (sub === "adopt-tenant" && req.method === "POST") {
+          return send(200, { client: await adoptTenant(orgId2, String(body?.tenantId || "").trim()) });
+        }
+      }
+    } catch (err) {
+      return fail2(err);
+    }
+    return send(404, { error: "Endpoint not found" });
+  }
+  if (!ctx.orgId) return send(403, { error: "Organization admin only" });
+  if (ctx.role !== "admin") return send(403, { error: "Organization admin only" });
+  const orgId = ctx.orgId;
+  try {
+    if (url === "/api/org" && req.method === "GET") {
+      return send(200, await getOrgOverview(orgId));
+    }
+    if (url === "/api/org/clients" && req.method === "POST") {
+      const client2 = await createClient(orgId, { name: body?.name, timezone: body?.timezone, contactEmail: body?.contactEmail });
+      return send(201, { client: client2 });
+    }
+    const cm = url.match(/^\/api\/org\/clients\/([^/]+)$/);
+    if (cm && req.method === "PATCH") {
+      return send(200, { client: await updateClient(orgId, decodeURIComponent(cm[1]), { name: body?.name, status: body?.status }) });
+    }
+    if (url === "/api/org/admins" && req.method === "POST") {
+      if (!await getOrg(orgId)) return send(404, { error: "Organization not found" });
+      return send(201, { admin: await inviteOrgAdmin(orgId, { email: body?.email, name: body?.name, password: body?.password }) });
+    }
+  } catch (err) {
+    return fail2(err);
+  }
+  return send(404, { error: "Endpoint not found" });
+}
+
+// src/server/dashboardService.ts
+init_adminFirestore();
+init_tenantRepo();
+init_config();
+var ctxFor2 = (tenantId) => ({ tenantId, uid: "system", email: "system@dashboard", role: "admin" });
+var CACHE_MS4 = 6e4;
+var cache3 = /* @__PURE__ */ new Map();
+async function cached(key, fn) {
+  const hit = cache3.get(key);
+  if (hit && Date.now() - hit.at < CACHE_MS4) return hit.value;
+  const value = await fn();
+  cache3.set(key, { at: Date.now(), value });
+  if (cache3.size > 500) cache3.delete(cache3.keys().next().value);
+  return value;
+}
+var COUNTRY_ALIASES = {
+  uae: "United Arab Emirates",
+  "u.a.e": "United Arab Emirates",
+  emirates: "United Arab Emirates",
+  usa: "United States of America",
+  us: "United States of America",
+  "u.s.": "United States of America",
+  "u.s.a": "United States of America",
+  "united states": "United States of America",
+  america: "United States of America",
+  uk: "United Kingdom",
+  "u.k.": "United Kingdom",
+  england: "United Kingdom",
+  britain: "United Kingdom",
+  "great britain": "United Kingdom",
+  ksa: "Saudi Arabia",
+  "saudi": "Saudi Arabia",
+  "korea": "South Korea",
+  russia: "Russia",
+  "viet nam": "Vietnam",
+  "bharat": "India",
+  "bangla desh": "Bangladesh",
+  "t\xFCrkiye": "Turkey",
+  turkiye: "Turkey",
+  czechia: "Czechia",
+  "czech republic": "Czechia"
+};
+function normalizeCountry(raw) {
+  const t2 = String(raw ?? "").trim().replace(/\s+/g, " ");
+  if (!t2) return "";
+  const alias = COUNTRY_ALIASES[t2.toLowerCase()];
+  if (alias) return alias;
+  return t2.length <= 3 ? t2.toUpperCase() : t2.replace(/\b\w/g, (c) => c.toUpperCase()).replace(/\b(Of|And|The)\b/g, (c) => c.toLowerCase()).replace(/^the /i, "");
+}
+function growthBuckets(range, now = /* @__PURE__ */ new Date()) {
+  const out = [];
+  if (range === "12m") {
+    for (let i2 = 11; i2 >= 0; i2--) {
+      const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - i2, 1));
+      const end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - i2 + 1, 1));
+      out.push({ label: start.toISOString().slice(0, 7), from: start.toISOString(), to: end.toISOString() });
+    }
+    return out;
+  }
+  const days = range === "30d" ? 30 : 90;
+  const step = range === "30d" ? 1 : 7;
+  const today = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  const firstStart = today - (days - 1) * 864e5;
+  for (let t2 = firstStart; t2 <= today; t2 += step * 864e5) {
+    const end = Math.min(t2 + step * 864e5, today + 864e5);
+    out.push({ label: new Date(t2).toISOString().slice(0, 10), from: new Date(t2).toISOString(), to: new Date(end).toISOString() });
+  }
+  return out;
+}
+async function mapLimit(items, n, fn) {
+  const out = new Array(items.length);
+  let i2 = 0;
+  await Promise.all(
+    Array.from({ length: Math.min(n, items.length) }, async () => {
+      while (i2 < items.length) {
+        const idx = i2++;
+        out[idx] = await fn(items[idx]);
+      }
+    })
+  );
+  return out;
+}
+var MAX_LOCATION_SCAN = 2e4;
+async function getTenantDashboard(tenantId, opts) {
+  const empty = {
+    kpis: { totalLeads: 0, activeCampaigns: 0, demosScheduled: 0, emailsSent: 0, aiTokens: 0 },
+    funnel: { total: 0, sent: 0, opened: 0, clicked: 0, replied: 0, demoBooked: 0, failed: 0, bounced: 0 },
+    growth: [],
+    growthBase: 0,
+    locations: { countries: [], cities: [], unknown: 0, scanned: 0, truncated: false },
+    usageByMonth: []
+  };
+  if (!isFirebaseConfigured) return empty;
+  const campaignId = opts.campaignId || "";
+  return cached(`dash:${tenantId}:${campaignId}:${opts.range}`, async () => {
+    const repo = tenantRepo(ctxFor2(tenantId));
+    const leadsBase = campaignId ? query(repo.leads(), where("campaignId", "==", campaignId)) : repo.leads();
+    const clBase = (...c) => query(repo.campaignLeads(), ...campaignId ? [where("campaignId", "==", campaignId)] : [], ...c);
+    const buckets = growthBuckets(opts.range);
+    const [totalLeads, activeCampaigns, demosScheduled, usageSnap, f3, growthCounts, growthBase, locations] = await Promise.all([
+      countDocs(leadsBase),
+      countDocs(query(repo.campaigns(), where("status", "==", "RUNNING"))),
+      countDocs(query(repo.bookings(), where("status", "in", ["BOOKED", "RESCHEDULED"]))),
+      getDocs(repo.usageCol()),
+      Promise.all([
+        countDocs(clBase()),
+        countDocs(clBase(where("sendStatus", "in", ["SENT", "COMPLETED"]))),
+        countDocs(clBase(where("opened", "==", true))),
+        countDocs(clBase(where("clicked", "==", true))),
+        countDocs(clBase(where("replyStatus", "==", "REPLIED"))),
+        countDocs(clBase(where("demoStatus", "==", "BOOKED"))),
+        countDocs(clBase(where("sendStatus", "==", "FAILED"))),
+        countDocs(clBase(where("bounced", "==", true)))
+      ]),
+      mapLimit(buckets, 8, (b) => countDocs(query(leadsBase, where("createdAt", ">=", b.from), where("createdAt", "<", b.to)))),
+      countDocs(query(leadsBase, where("createdAt", "<", buckets[0].from))),
+      scanLocations(repo, campaignId)
+    ]);
+    const usageByMonth = usageSnap.docs.filter((d) => /^\d{4}-\d{2}$/.test(d.id)).map((d) => {
+      const u = d.data();
+      return { month: d.id, emails: Number(u.solicitedEmailCount || 0) + Number(u.coldEmailCount || 0), tokens: Number(u.aiTotalTokens || 0) };
+    }).sort((a, b) => a.month.localeCompare(b.month));
+    return {
+      kpis: {
+        totalLeads,
+        activeCampaigns,
+        demosScheduled,
+        emailsSent: usageByMonth.reduce((s2, m2) => s2 + m2.emails, 0),
+        aiTokens: usageByMonth.reduce((s2, m2) => s2 + m2.tokens, 0)
+      },
+      funnel: { total: f3[0], sent: f3[1], opened: f3[2], clicked: f3[3], replied: f3[4], demoBooked: f3[5], failed: f3[6], bounced: f3[7] },
+      growth: buckets.map((b, i2) => ({ label: b.label, added: growthCounts[i2] })),
+      growthBase,
+      locations,
+      usageByMonth
+    };
+  });
+}
+async function scanLocations(repo, campaignId) {
+  const countries = /* @__PURE__ */ new Map();
+  const cities = /* @__PURE__ */ new Map();
+  let unknown = 0;
+  let scanned = 0;
+  let last = "";
+  let truncated = false;
+  const base = campaignId ? query(repo.leads(), where("campaignId", "==", campaignId)) : repo.leads();
+  for (; ; ) {
+    const snap = await getDocs(query(base, orderByDocumentId(), ...last ? [startAfterId(last)] : [], select("country", "city"), limit2(1e3)));
+    for (const d of snap.docs) {
+      const x2 = d.data();
+      const c = normalizeCountry(x2.country);
+      if (!c) unknown++;
+      else {
+        countries.set(c, (countries.get(c) || 0) + 1);
+        const city = String(x2.city ?? "").trim().replace(/\b\w/g, (m2) => m2.toUpperCase());
+        if (city) {
+          const k = `${c}|${city.toLowerCase()}`;
+          const e2 = cities.get(k) || { name: city, country: c, count: 0 };
+          e2.count++;
+          cities.set(k, e2);
+        }
+      }
+    }
+    scanned += snap.docs.length;
+    if (snap.docs.length < 1e3) break;
+    last = snap.docs[snap.docs.length - 1].id;
+    if (scanned >= MAX_LOCATION_SCAN) {
+      truncated = true;
+      break;
+    }
+  }
+  return {
+    countries: [...countries].map(([name5, count]) => ({ name: name5, count })).sort((a, b) => b.count - a.count),
+    cities: [...cities.values()].sort((a, b) => b.count - a.count).slice(0, 50),
+    unknown,
+    scanned,
+    truncated
+  };
+}
+function mergeDashboards(list) {
+  const first = list[0];
+  const sum = (k) => list.reduce((s2, d) => s2 + d.kpis[k], 0);
+  const fk = ["total", "sent", "opened", "clicked", "replied", "demoBooked", "failed", "bounced"];
+  const countries = /* @__PURE__ */ new Map();
+  const cities = /* @__PURE__ */ new Map();
+  const usage = /* @__PURE__ */ new Map();
+  for (const d of list) {
+    d.locations.countries.forEach((c) => countries.set(c.name, (countries.get(c.name) || 0) + c.count));
+    d.locations.cities.forEach((c) => {
+      const k = `${c.country}|${c.name.toLowerCase()}`;
+      const e2 = cities.get(k) || { ...c, count: 0 };
+      e2.count += c.count;
+      cities.set(k, e2);
+    });
+    d.usageByMonth.forEach((m2) => {
+      const e2 = usage.get(m2.month) || { month: m2.month, emails: 0, tokens: 0 };
+      e2.emails += m2.emails;
+      e2.tokens += m2.tokens;
+      usage.set(m2.month, e2);
+    });
+  }
+  return {
+    kpis: { totalLeads: sum("totalLeads"), activeCampaigns: sum("activeCampaigns"), demosScheduled: sum("demosScheduled"), emailsSent: sum("emailsSent"), aiTokens: sum("aiTokens") },
+    funnel: Object.fromEntries(fk.map((k) => [k, list.reduce((s2, d) => s2 + d.funnel[k], 0)])),
+    growth: first.growth.map((g, i2) => ({ label: g.label, added: list.reduce((s2, d) => s2 + (d.growth[i2]?.added || 0), 0) })),
+    growthBase: list.reduce((s2, d) => s2 + d.growthBase, 0),
+    locations: {
+      countries: [...countries].map(([name5, count]) => ({ name: name5, count })).sort((a, b) => b.count - a.count),
+      cities: [...cities.values()].sort((a, b) => b.count - a.count).slice(0, 50),
+      unknown: list.reduce((s2, d) => s2 + d.locations.unknown, 0),
+      scanned: list.reduce((s2, d) => s2 + d.locations.scanned, 0),
+      truncated: list.some((d) => d.locations.truncated)
+    },
+    usageByMonth: [...usage.values()].sort((a, b) => a.month.localeCompare(b.month))
+  };
+}
+async function listCampaignOptions(tenantId) {
+  if (!isFirebaseConfigured) return [];
+  const repo = tenantRepo(ctxFor2(tenantId));
+  const snap = await getDocs(query(repo.campaigns(), limit2(300)));
+  return snap.docs.map((d) => ({ id: d.id, name: String(d.data().name || d.id), status: String(d.data().status || "") })).sort((a, b) => a.name.localeCompare(b.name));
+}
+
+// src/server/dashboardApi.ts
+async function handleDashboardApi(req, res, url, ctx) {
+  if (url !== "/api/dashboard") return false;
+  const send = (status, payload) => {
+    res.statusCode = status;
+    res.setHeader("Content-Type", "application/json");
+    res.end(JSON.stringify(payload));
+    return true;
+  };
+  if (req.method !== "GET") return send(405, { error: "Method not allowed" });
+  const params = new URL(req.url || "/", "http://x").searchParams;
+  const rangeIn = params.get("range");
+  const range = rangeIn === "90d" || rangeIn === "12m" ? rangeIn : "30d";
+  const campaignId = (params.get("campaignId") || "").slice(0, 200);
+  const clientParam = params.get("client") || "";
+  try {
+    if (ctx.orgId && !ctx.isPlatformAdmin) {
+      const clients = (await listClients(ctx.orgId)).filter((c) => c.status !== "deleted");
+      const options2 = clients.map((c) => ({ id: c.id, name: c.name, status: c.status }));
+      const wanted = clientParam && clientParam !== "all" ? clientParam : ctx.tenantId && !clientParam ? ctx.tenantId : "all";
+      if (wanted !== "all") {
+        const client2 = clients.find((c) => c.id === wanted);
+        if (!client2) return send(403, { error: "That client does not belong to your organization" });
+        const [data2, campaigns2] = await Promise.all([getTenantDashboard(wanted, { campaignId, range }), listCampaignOptions(wanted)]);
+        return send(200, { scope: wanted, clients: options2, campaigns: campaigns2, range, ...data2 });
+      }
+      if (!clients.length) return send(200, { scope: "all", clients: options2, campaigns: [], range, empty: true });
+      const parts = await Promise.all(clients.map((c) => getTenantDashboard(c.id, { range })));
+      const merged = mergeDashboards(parts);
+      const breakdown = clients.map((c, i2) => ({
+        id: c.id,
+        name: c.name,
+        totalLeads: parts[i2].kpis.totalLeads,
+        activeCampaigns: parts[i2].kpis.activeCampaigns,
+        demosScheduled: parts[i2].kpis.demosScheduled,
+        emailsSent: parts[i2].kpis.emailsSent,
+        aiTokens: parts[i2].kpis.aiTokens
+      }));
+      return send(200, { scope: "all", clients: options2, campaigns: [], breakdown, range, ...merged });
+    }
+    if (!ctx.tenantId) return send(400, { error: "Select a client first.", code: "TENANT_REQUIRED" });
+    const [data, campaigns] = await Promise.all([getTenantDashboard(ctx.tenantId, { campaignId, range }), listCampaignOptions(ctx.tenantId)]);
+    return send(200, { scope: ctx.tenantId, clients: [], campaigns, range, ...data });
+  } catch (err) {
+    console.error("[Dashboard API error]:", err);
+    return send(500, { error: err?.message || "Could not load the dashboard" });
+  }
+}
+
 // src/server/coreApiHandler.ts
+init_features();
+init_tenantRepo();
+init_firebaseAdmin();
 init_autoFollowUpService();
 init_cryptoUtils();
 init_usageService();
@@ -322003,7 +322923,7 @@ async function routeWebsiteLeadWebhook(req, res, webhookId) {
     role: "admin"
   };
   try {
-    const result = await processWebsiteLeadSubmission(body, tenantCtx);
+    const result = await runInTenantScope(tenantCtx, () => processWebsiteLeadSubmission(body, tenantCtx));
     const redirectTo = typeof body?._redirect === "string" ? body._redirect : "";
     if (redirectTo && webhookId && webhookId !== "umrah-demo" && isFirebaseConfigured && db) {
       try {
@@ -322082,7 +323002,7 @@ async function routeWhatsAppWebhook(req, res) {
     role: "admin"
   };
   try {
-    const result = await processLiveInboundWhatsApp(body, tenantCtx);
+    const result = await runInTenantScope(tenantCtx, () => processLiveInboundWhatsApp(body, tenantCtx));
     if (result.processed) {
       await recordTenantUsage(resolvedTenantId, { whatsappMessageCount: 1 }).catch(() => {
       });
@@ -322240,7 +323160,7 @@ async function handleCoreApi(req, res) {
   res.setHeader("Content-Type", "application/json");
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Google-Access-Token");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Google-Access-Token, X-Tenant-Id");
   if (req.method === "OPTIONS") {
     res.statusCode = 204;
     res.end();
@@ -322305,8 +323225,10 @@ async function handleCoreApi(req, res) {
   const isPublicPath = url === "/api/health" || url.startsWith("/api/webhooks/") || url === "/api/inbound/whatsapp" || url === "/api/leads/inbound" || url === "/api/campaigns/cron" || url === "/api/campaigns/process-active" || url === "/api/auto-followup/trigger" || url === "/api/inbound-mail/cron" || // Browser comes back from Microsoft here; the single-use OAuth state identifies the workspace.
   url === "/api/oauth/microsoft/callback" || // Calendar OAuth also returns through a state-bound, one-time callback.
   url === "/api/oauth/microsoft-calendar/callback" || // Instagram redirects the browser here; the single-use OAuth state identifies the workspace.
-  url === "/api/instagram/oauth/callback";
+  url === "/api/instagram/oauth/callback" || // Brand logos are shown on pages that load before/without a session (and in emails).
+  url.startsWith("/api/brand-logo/");
   let resolvedTenantId = "";
+  let resolvedOrgId = "";
   let userUid = "anonymous";
   let userEmail = "";
   let userRole = "member";
@@ -322320,6 +323242,7 @@ async function handleCoreApi(req, res) {
     }
     const c = auth2.ctx;
     resolvedTenantId = c.tenantId;
+    resolvedOrgId = c.orgId || "";
     userUid = c.uid;
     userEmail = c.email;
     userRole = c.role;
@@ -322327,16 +323250,54 @@ async function handleCoreApi(req, res) {
   }
   const activeTenantCtx = {
     tenantId: resolvedTenantId,
+    ...resolvedOrgId ? { orgId: resolvedOrgId } : {},
     uid: userUid,
     email: userEmail,
     role: userRole,
     isPlatformAdmin
   };
+  if (!isPublicPath && activeTenantCtx.tenantId) {
+    enterTenantScope(activeTenantCtx);
+  }
   if (!isPublicPath) {
-    setCampaignActiveContext(activeTenantCtx);
-    setSchedulingActiveContext(activeTenantCtx);
-    setInboundActiveContext(activeTenantCtx);
-    setWhatsAppActiveContext(activeTenantCtx);
+    if (await handleOrgApi(req, res, url, body, activeTenantCtx)) return true;
+    if (await handleDashboardApi(req, res, url, activeTenantCtx)) return true;
+  }
+  if (!isPublicPath && resolvedOrgId && !resolvedTenantId) {
+    const orgLevelOk = url === "/api/health" || url === "/api/auth/me" || url === "/api/dashboard" || url.startsWith("/api/dashboard/");
+    if (!orgLevelOk) {
+      res.statusCode = 400;
+      res.setHeader("Content-Type", "application/json");
+      res.end(JSON.stringify({ error: "Select a client first.", code: "TENANT_REQUIRED" }));
+      return true;
+    }
+  }
+  if (url.startsWith("/api/brand-logo/") && req.method === "GET") {
+    const logoTenantId = decodeURIComponent(url.slice("/api/brand-logo/".length).split("/")[0] || "");
+    const { getTenantLogo: getTenantLogo2 } = await Promise.resolve().then(() => (init_brandLogoService(), brandLogoService_exports));
+    const logo = await getTenantLogo2(logoTenantId);
+    if (!logo) {
+      res.statusCode = 404;
+      res.setHeader("Content-Type", "application/json");
+      res.end(JSON.stringify({ error: "No logo" }));
+      return true;
+    }
+    const etag = `"logo-${logo.updatedAt}-${logo.buffer.length}"`;
+    res.setHeader("ETag", etag);
+    res.setHeader("Cache-Control", "public, max-age=300, stale-while-revalidate=86400");
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("Content-Security-Policy", "default-src 'none'; sandbox");
+    res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
+    if (req.headers["if-none-match"] === etag) {
+      res.statusCode = 304;
+      res.end();
+      return true;
+    }
+    res.statusCode = 200;
+    res.setHeader("Content-Type", logo.contentType);
+    res.setHeader("Content-Length", String(logo.buffer.length));
+    res.end(logo.buffer);
+    return true;
   }
   if (!isPublicPath && !isPlatformAdmin) {
     const gatedFeature = featureForUrl(url);
@@ -322485,8 +323446,10 @@ async function handleCoreApi(req, res) {
       try {
         const uSnap = await getDoc(globalUserDoc(userUid));
         if (uSnap.exists()) globalUser = uSnap.data();
-        const tSnap = await getDoc(globalTenantDoc(resolvedTenantId));
-        if (tSnap.exists()) tenantInfo = tSnap.data();
+        if (resolvedTenantId) {
+          const tSnap = await getDoc(globalTenantDoc(resolvedTenantId));
+          if (tSnap.exists()) tenantInfo = tSnap.data();
+        }
       } catch (e2) {
       }
     }
@@ -322820,6 +323783,23 @@ async function handleCoreApi(req, res) {
       return true;
     }
   }
+  const brandLogoMatch = url.match(/^\/api\/tenants\/([^/?]+)\/brand\/logo$/);
+  if (brandLogoMatch && (req.method === "POST" || req.method === "DELETE")) {
+    const tId = brandLogoMatch[1];
+    res.setHeader("Content-Type", "application/json");
+    try {
+      const logoSvc = await Promise.resolve().then(() => (init_brandLogoService(), brandLogoService_exports));
+      const { invalidateTenantBrand: invalidateTenantBrand2 } = await Promise.resolve().then(() => (init_brandService(), brandService_exports));
+      const brand = req.method === "POST" ? await logoSvc.saveTenantLogo(tId, body?.image) : await logoSvc.deleteTenantLogo(tId);
+      invalidateTenantBrand2(tId);
+      res.statusCode = 200;
+      res.end(JSON.stringify({ brand }));
+    } catch (err) {
+      res.statusCode = err?.status || 500;
+      res.end(JSON.stringify({ error: err?.message || "Logo request failed" }));
+    }
+    return true;
+  }
   const usageMatch = url.match(/^\/api\/tenants\/([^/?]+)\/usage$/);
   if (usageMatch && req.method === "GET") {
     const tId = usageMatch[1];
@@ -322836,15 +323816,29 @@ async function handleCoreApi(req, res) {
         const t2 = snap.data();
         if (t2.limits) limits = t2.limits;
       }
+      const eff = await getEffectiveLimits(tId).catch(() => null);
+      if (eff) {
+        limits = {
+          monthlyAiTokens: eff.monthlyAiTokens ?? limits.monthlyAiTokens,
+          dailyOutboundSends: eff.dailyOutboundSends ?? limits.dailyOutboundSends,
+          hourlyOutboundSends: eff.hourlyOutboundSends ?? limits.hourlyOutboundSends,
+          seats: eff.seats ?? limits.seats
+        };
+      }
     }
+    const pct = (used, cap) => !cap || isUnlimited(cap) ? 0 : Math.min(100, Math.round(used / cap * 100));
     res.statusCode = 200;
     res.end(
       JSON.stringify({
         usage,
         limits,
+        unlimited: {
+          aiTokens: isUnlimited(limits.monthlyAiTokens),
+          dailySends: isUnlimited(limits.dailyOutboundSends)
+        },
         percentages: {
-          aiTokens: Math.min(100, Math.round((usage.aiTotalTokens || 0) / limits.monthlyAiTokens * 100)),
-          dailySends: Math.min(100, Math.round((usage.coldEmailCount || 0) / limits.dailyOutboundSends * 100))
+          aiTokens: pct(usage.aiTotalTokens || 0, limits.monthlyAiTokens),
+          dailySends: pct(usage.coldEmailCount || 0, limits.dailyOutboundSends)
         }
       })
     );
@@ -324561,12 +325555,12 @@ ${signature || defSig}`;
         for (const t2 of snap.docs) {
           const data = t2.data();
           if (data?.status === "suspended") continue;
-          setCampaignActiveContext({ tenantId: t2.id, uid: "system-cron", email: "", role: "admin" });
-          results.push({ tenantId: t2.id, ...await processActiveRunningCampaignsBatch(500) });
+          const cronCtx = { tenantId: t2.id, uid: "system-cron", email: "", role: "admin" };
+          results.push({ tenantId: t2.id, ...await runInTenantScope(cronCtx, () => processActiveRunningCampaignsBatch(500, cronCtx)) });
         }
       } else {
-        setCampaignActiveContext(callerCtx);
-        results.push({ tenantId: callerCtx.tenantId, ...await processActiveRunningCampaignsBatch(500) });
+        const ownCtx = callerCtx;
+        results.push({ tenantId: ownCtx.tenantId, ...await runInTenantScope(ownCtx, () => processActiveRunningCampaignsBatch(500, ownCtx)) });
       }
       res.statusCode = 200;
       res.setHeader("Content-Type", "application/json");

@@ -18,6 +18,7 @@ import {
   Settings,
   Bot,
   Mail,
+  LayoutDashboard,
 } from 'lucide-react';
 import { WHATSAPP_BUSINESS_NUMBER_FORMATTED } from '../services/whatsappInboundService';
 import { ActiveTab } from './Navbar';
@@ -38,6 +39,7 @@ interface HeaderBarProps {
 }
 
 const TAB_TITLES: Record<ActiveTab, { title: string; icon: React.ReactNode }> = {
+  dashboard: { title: 'Dashboard', icon: <LayoutDashboard className="w-4 h-4 text-orange-600" /> },
   inbox: { title: 'Unified Inbox', icon: <Inbox className="w-4 h-4 text-orange-600" /> },
   'auto-followup': { title: 'Auto Follow-Up Agent', icon: <Bot className="w-4 h-4 text-orange-600" /> },
   campaigns: { title: 'Outbound Campaigns', icon: <Send className="w-4 h-4 text-orange-600" /> },

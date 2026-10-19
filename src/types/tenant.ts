@@ -30,6 +30,8 @@ export interface Org {
   currentPeriodEnd?: string;
   pastDueSince?: string;
   contactEmail?: string;
+  /** The customer's own workspace, when the org was created by an agency plan (its admins are org admins). */
+  homeTenantId?: string;
   /** Per-organization overrides of plan features/limits, same shape as tenant overrides. */
   overrides?: { features?: Record<string, boolean>; limits?: Record<string, number> };
   createdAt: string;

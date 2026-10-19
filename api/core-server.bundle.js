@@ -227763,6 +227763,9 @@ async function createPasswordSetupLink(email, continueUrl) {
     continueUrl ? { url: continueUrl } : void 0
   );
 }
+async function revokeUserSessions(uid) {
+  await getAdminAuth().revokeRefreshTokens(uid);
+}
 var firestoreConfigured;
 var init_firebaseAdmin = __esm({
   "src/server/firebaseAdmin.ts"() {
@@ -322498,6 +322501,39 @@ async function adoptTenant(orgId, tenantId) {
     return { id: tenantId, name: next2.name || tenantId, status: next2.status || "active", timezone: next2.timezone, contactEmail: next2.contactEmail, createdAt: next2.createdAt };
   });
 }
+async function convertTenantToAgency(tenantId) {
+  requireDb2();
+  const snap = await getDoc(globalTenantDoc(tenantId));
+  const t2 = snap.exists() ? snap.data() : null;
+  if (!t2) throw new OrgError("Workspace not found", 404);
+  if (t2.orgId) return { converted: false, orgId: t2.orgId, reason: "already_in_org" };
+  const plan = (await listPlans()).find((p) => p.id === t2.planId);
+  if (!plan || (plan.limits?.maxClients ?? 0) <= 0) return { converted: false, reason: "plan_has_no_clients" };
+  if (t2.stripeSubscriptionId) return { converted: false, reason: "has_subscription" };
+  const org = await createOrg({ name: t2.name || tenantId, planId: plan.id, contactEmail: t2.contactEmail });
+  try {
+    await adoptTenant(org.id, tenantId);
+    await setDoc(globalOrgDoc(org.id), { homeTenantId: tenantId }, { merge: true });
+  } catch (e2) {
+    await setDoc(globalOrgDoc(org.id), { ...org, status: "suspended", updatedAt: (/* @__PURE__ */ new Date()).toISOString(), note: "conversion failed" }).catch(() => {
+    });
+    throw e2;
+  }
+  const users = await getDocs(query(globalUsersCol(), where("tenantId", "==", tenantId)));
+  let admins = 0;
+  for (const d of users.docs) {
+    const u = d.data();
+    if (u.role !== "admin" || u.active === false) continue;
+    await setTenantUserClaims(d.id, { tenantId: void 0, orgId: org.id, role: "admin" });
+    await setDoc(globalUserDoc(d.id), { orgId: org.id, tenantId: null, updatedAt: (/* @__PURE__ */ new Date()).toISOString() }, { merge: true });
+    await revokeUserSessions(d.id).catch(() => {
+    });
+    admins++;
+  }
+  invalidateOrgStatusCache(org.id);
+  invalidateEntitlements();
+  return { converted: true, orgId: org.id, admins };
+}
 
 // src/server/orgApi.ts
 async function handleOrgApi(req, res, url, body, ctx) {
@@ -323568,8 +323604,17 @@ async function handleCoreApi(req, res) {
       }
       await safeSetDoc(globalTenantDoc(tenantId), newTenant, { merge: true });
     }
+    let agency;
+    if (isFirebaseConfigured && db && newTenant.planId) {
+      try {
+        agency = await convertTenantToAgency(tenantId);
+      } catch (e2) {
+        console.error("[Agency conversion failed]:", e2);
+        agency = { converted: false, error: e2?.message || "Could not set up the agency" };
+      }
+    }
     res.statusCode = 201;
-    res.end(JSON.stringify({ success: true, tenant: newTenant }));
+    res.end(JSON.stringify({ success: true, tenant: newTenant, ...agency ? { agency } : {} }));
     return true;
   }
   const tenantMatch = url.match(/^\/api\/tenants\/([^/?]+)$/);
@@ -323648,8 +323693,17 @@ async function handleCoreApi(req, res) {
         updates.updatedAt = (/* @__PURE__ */ new Date()).toISOString();
         await updateDoc(globalTenantDoc(tId), updates);
         invalidateEntitlements(tId);
+        let agency;
+        if (updates.planId && isPlatformAdmin) {
+          try {
+            agency = await convertTenantToAgency(tId);
+          } catch (e2) {
+            console.error("[Agency conversion failed]:", e2);
+            agency = { converted: false, error: e2?.message || "Could not set up the agency" };
+          }
+        }
         res.statusCode = 200;
-        res.end(JSON.stringify({ success: true, updated: updates }));
+        res.end(JSON.stringify({ success: true, updated: updates, ...agency ? { agency } : {} }));
         return true;
       }
     }
@@ -323705,6 +323759,13 @@ async function handleCoreApi(req, res) {
         if (!tSnap.exists()) {
           res.statusCode = 404;
           res.end(JSON.stringify({ error: "Workspace not found" }));
+          return true;
+        }
+        const homeOrgId = tSnap.data()?.orgId;
+        if (role === "admin" && homeOrgId && (await getOrg(homeOrgId))?.homeTenantId === tId) {
+          const a = await inviteOrgAdmin(homeOrgId, { email, name: name5, password });
+          res.statusCode = 201;
+          res.end(JSON.stringify({ success: true, user: { uid: a.uid, email, role: "admin" }, existed: a.existed, passwordSet: a.passwordSet, setupLink: a.setupLink }));
           return true;
         }
         const seatLimit = (await getEffectiveLimits(tId)).seats;

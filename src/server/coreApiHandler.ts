@@ -83,6 +83,7 @@ import { FEATURES, LIMITS } from '../shared/features.js';
 import { createCheckout, createPortal, syncCheckoutSession, billingConfig, BillingError } from './billingService.js';
 import { enterTenantScope, runInTenantScope } from './tenantScope.js';
 import { handleOrgApi } from './orgApi.js';
+import { convertTenantToAgency, getOrg, inviteOrgAdmin } from './orgService.js';
 import { handleDashboardApi } from './dashboardApi.js';
 import { isUnlimited } from '../shared/features.js';
 import {
@@ -656,8 +657,19 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
       await safeSetDoc(globalTenantDoc(tenantId), newTenant, { merge: true });
     }
 
+    // A workspace created straight onto an agency plan becomes an agency right away.
+    let agency: any;
+    if (isFirebaseConfigured && db && newTenant.planId) {
+      try {
+        agency = await convertTenantToAgency(tenantId);
+      } catch (e: any) {
+        console.error('[Agency conversion failed]:', e);
+        agency = { converted: false, error: e?.message || 'Could not set up the agency' };
+      }
+    }
+
     res.statusCode = 201;
-    res.end(JSON.stringify({ success: true, tenant: newTenant }));
+    res.end(JSON.stringify({ success: true, tenant: newTenant, ...(agency ? { agency } : {}) }));
     return true;
   }
 
@@ -741,8 +753,18 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
         updates.updatedAt = new Date().toISOString();
         await updateDoc(globalTenantDoc(tId), updates);
         invalidateEntitlements(tId);
+        // An agency plan turns the workspace into an agency (its admins become organization admins).
+        let agency: any;
+        if (updates.planId && isPlatformAdmin) {
+          try {
+            agency = await convertTenantToAgency(tId);
+          } catch (e: any) {
+            console.error('[Agency conversion failed]:', e);
+            agency = { converted: false, error: e?.message || 'Could not set up the agency' };
+          }
+        }
         res.statusCode = 200;
-        res.end(JSON.stringify({ success: true, updated: updates }));
+        res.end(JSON.stringify({ success: true, updated: updates, ...(agency ? { agency } : {}) }));
         return true;
       }
     }
@@ -802,6 +824,14 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
         if (!tSnap.exists()) {
           res.statusCode = 404;
           res.end(JSON.stringify({ error: 'Workspace not found' }));
+          return true;
+        }
+        // The agency customer's own workspace: its admins are organization admins (they manage all client brands).
+        const homeOrgId = (tSnap.data() as any)?.orgId;
+        if (role === 'admin' && homeOrgId && (await getOrg(homeOrgId))?.homeTenantId === tId) {
+          const a = await inviteOrgAdmin(homeOrgId, { email, name, password });
+          res.statusCode = 201;
+          res.end(JSON.stringify({ success: true, user: { uid: a.uid, email, role: 'admin' }, existed: a.existed, passwordSet: a.passwordSet, setupLink: a.setupLink }));
           return true;
         }
         // Seat limit (plan + overrides). Re-adding an existing member never counts as a new seat.

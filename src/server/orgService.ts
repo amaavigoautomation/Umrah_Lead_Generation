@@ -1,6 +1,6 @@
 import { getDoc, getDocs, setDoc, query as fsQuery, where as fsWhere } from './adminFirestore.js';
 import { globalOrgDoc, globalOrgsCol, globalTenantDoc, globalTenantsCol, globalUserDoc, globalUsersCol } from './tenantRepo.js';
-import { createTenantUser, createPasswordSetupLink } from './firebaseAdmin.js';
+import { createTenantUser, createPasswordSetupLink, setTenantUserClaims, revokeUserSessions } from './firebaseAdmin.js';
 import { getOrgEntitlements, invalidateEntitlements, listPlans } from './entitlements.js';
 import { invalidateOrgStatusCache, invalidateTenantStatusCache } from './authMiddleware.js';
 import { isFirebaseConfigured } from '../firebase/config.js';
@@ -331,4 +331,48 @@ export async function adoptTenant(orgId: string, tenantId: string): Promise<Clie
     invalidateEntitlements(tenantId);
     return { id: tenantId, name: next.name || tenantId, status: next.status || 'active', timezone: next.timezone, contactEmail: next.contactEmail, createdAt: next.createdAt };
   });
+}
+
+/**
+ * Agency plans make a workspace an agency automatically.
+ *
+ * Called when a platform admin gives a workspace a plan that allows client brands (limit maxClients > 0).
+ * The workspace becomes the customer's first client brand under a new organization, and the workspace's
+ * admins become organization admins (same logins). Their sessions are revoked once so the new permissions
+ * apply on the next sign-in. Idempotent: a workspace that is already part of an organization is left alone.
+ */
+export async function convertTenantToAgency(tenantId: string): Promise<{ converted: boolean; orgId?: string; admins?: number; reason?: string }> {
+  requireDb();
+  const snap = await getDoc(globalTenantDoc(tenantId));
+  const t: any = snap.exists() ? snap.data() : null;
+  if (!t) throw new OrgError('Workspace not found', 404);
+  if (t.orgId) return { converted: false, orgId: t.orgId, reason: 'already_in_org' };
+  const plan = (await listPlans()).find((p) => p.id === t.planId);
+  if (!plan || (plan.limits?.maxClients ?? 0) <= 0) return { converted: false, reason: 'plan_has_no_clients' };
+  if (t.stripeSubscriptionId) return { converted: false, reason: 'has_subscription' };
+
+  const org = await createOrg({ name: t.name || tenantId, planId: plan.id, contactEmail: t.contactEmail });
+  try {
+    await adoptTenant(org.id, tenantId);
+    // Remember the customer's own workspace: admins invited to it later become organization admins too.
+    await setDoc(globalOrgDoc(org.id), { homeTenantId: tenantId }, { merge: true });
+  } catch (e) {
+    // Do not leave an empty organization behind.
+    await setDoc(globalOrgDoc(org.id), { ...org, status: 'suspended', updatedAt: new Date().toISOString(), note: 'conversion failed' }).catch(() => {});
+    throw e;
+  }
+
+  const users = await getDocs(fsQuery(globalUsersCol(), fsWhere('tenantId', '==', tenantId)));
+  let admins = 0;
+  for (const d of users.docs) {
+    const u: any = d.data();
+    if (u.role !== 'admin' || u.active === false) continue;
+    await setTenantUserClaims(d.id, { tenantId: undefined, orgId: org.id, role: 'admin' } as any);
+    await setDoc(globalUserDoc(d.id), { orgId: org.id, tenantId: null, updatedAt: new Date().toISOString() }, { merge: true });
+    await revokeUserSessions(d.id).catch(() => {});
+    admins++;
+  }
+  invalidateOrgStatusCache(org.id);
+  invalidateEntitlements();
+  return { converted: true, orgId: org.id, admins };
 }

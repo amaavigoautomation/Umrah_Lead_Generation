@@ -1,5 +1,4 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import OrganizationsPanel from './OrganizationsPanel';
 import {
   Building2,
   Plus,
@@ -93,7 +92,7 @@ export const PlatformConsole: React.FC<Props> = ({ email, onLogout }) => {
   const [search, setSearch] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
-  const [view, setView] = useState<'workspaces' | 'organizations' | 'plans'>('workspaces');
+  const [view, setView] = useState<'workspaces' | 'plans'>('workspaces');
   const [catalog, setCatalog] = useState<Catalog>({ plans: [], features: [], limits: [] });
   const loadCatalog = useCallback(async () => {
     try {
@@ -162,7 +161,7 @@ export const PlatformConsole: React.FC<Props> = ({ email, onLogout }) => {
 
       <div className="max-w-6xl mx-auto px-4 sm:px-6 pt-5">
         <div className="inline-flex rounded-lg bg-slate-200/60 p-1 text-sm font-semibold">
-          {(['workspaces', 'organizations', 'plans'] as const).map((v) => (
+          {(['workspaces', 'plans'] as const).map((v) => (
             <button
               key={v}
               onClick={() => setView(v)}
@@ -173,8 +172,6 @@ export const PlatformConsole: React.FC<Props> = ({ email, onLogout }) => {
           ))}
         </div>
       </div>
-
-      {view === 'organizations' && <OrganizationsPanel plans={catalog.plans.map((p: any) => ({ id: p.id, name: p.name }))} />}
 
       {view === 'plans' && (
         <main className="max-w-6xl mx-auto px-4 sm:px-6 py-6">
@@ -462,6 +459,7 @@ const WorkspacePanel: React.FC<{ tenant: Tenant; catalog: Catalog; onClose: () =
   const [ovLimits, setOvLimits] = useState<Record<string, string>>(Object.fromEntries(Object.entries(tenant.overrides?.limits || {}).map(([k, v]) => [k, String(v)])));
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [info, setInfo] = useState<string | null>(null);
 
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState<'admin' | 'member'>('admin');
@@ -487,7 +485,10 @@ const WorkspacePanel: React.FC<{ tenant: Tenant; catalog: Catalog; onClose: () =
     setBusy(label);
     setErr(null);
     try {
-      await api(`/api/tenants/${tenant.id}`, { method: 'PATCH', body: JSON.stringify(body) });
+      const res = await api<{ agency?: { converted?: boolean; admins?: number; error?: string } }>(`/api/tenants/${tenant.id}`, { method: 'PATCH', body: JSON.stringify(body) });
+      setInfo(null);
+      if (res.agency?.converted) setInfo(`Agency set up. This workspace is now the first client brand, and its ${res.agency.admins || 0} admin(s) can add more clients after signing out and back in.`);
+      else if (res.agency?.error) setErr(`Plan saved, but the agency setup failed: ${res.agency.error}`);
       onChanged(local);
       if (body.planId || body.overrides) loadDetail();
     } catch (e: any) {
@@ -559,6 +560,9 @@ const WorkspacePanel: React.FC<{ tenant: Tenant; catalog: Catalog; onClose: () =
             <div className="flex items-center gap-2 p-2.5 rounded-lg bg-red-50 border border-red-200 text-red-800 text-xs">
               <AlertCircle className="w-4 h-4 shrink-0" /> {err}
             </div>
+          )}
+          {info && (
+            <div className="flex items-center gap-2 p-2.5 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs">{info}</div>
           )}
 
           {/* Usage */}

@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import OrganizationsPanel from './OrganizationsPanel';
 import {
   Building2,
   Plus,
@@ -92,7 +93,7 @@ export const PlatformConsole: React.FC<Props> = ({ email, onLogout }) => {
   const [search, setSearch] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
-  const [view, setView] = useState<'workspaces' | 'plans'>('workspaces');
+  const [view, setView] = useState<'workspaces' | 'organizations' | 'plans'>('workspaces');
   const [catalog, setCatalog] = useState<Catalog>({ plans: [], features: [], limits: [] });
   const loadCatalog = useCallback(async () => {
     try {
@@ -161,7 +162,7 @@ export const PlatformConsole: React.FC<Props> = ({ email, onLogout }) => {
 
       <div className="max-w-6xl mx-auto px-4 sm:px-6 pt-5">
         <div className="inline-flex rounded-lg bg-slate-200/60 p-1 text-sm font-semibold">
-          {(['workspaces', 'plans'] as const).map((v) => (
+          {(['workspaces', 'organizations', 'plans'] as const).map((v) => (
             <button
               key={v}
               onClick={() => setView(v)}
@@ -172,6 +173,8 @@ export const PlatformConsole: React.FC<Props> = ({ email, onLogout }) => {
           ))}
         </div>
       </div>
+
+      {view === 'organizations' && <OrganizationsPanel plans={catalog.plans.map((p: any) => ({ id: p.id, name: p.name }))} />}
 
       {view === 'plans' && (
         <main className="max-w-6xl mx-auto px-4 sm:px-6 py-6">

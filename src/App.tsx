@@ -61,6 +61,7 @@ const LiveMailboxCenter = lazyNamed(() => import('./components/LiveMailboxCenter
 const DemoSchedulingView = lazyNamed(() => import('./components/DemoSchedulingView'), 'DemoSchedulingView');
 const AutoFollowUpDashboard = lazyNamed(() => import('./components/AutoFollowUpDashboard'), 'AutoFollowUpDashboard');
 const PlatformConsole = lazyNamed(() => import('./components/PlatformConsole'), 'PlatformConsole');
+const OrgShell = React.lazy(() => import('./components/OrgShell'));
 const BillingView = lazyNamed(() => import('./components/BillingView'), 'BillingView');
 
 function ScreenLoading() {
@@ -2069,6 +2070,14 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
     );
   }
 
+  if (session?.orgId && !currentTenantId) {
+    return (
+      <Suspense fallback={<ScreenLoading />}>
+        <OrgShell email={currentUser.email} onLogout={handleLogout} />
+      </Suspense>
+    );
+  }
+
   if (!currentTenantId) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 text-slate-700 gap-3 p-6 text-center">
@@ -2135,6 +2144,7 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
           onResetSeedData={handleResetSeedData}
           currentUser={currentUser}
           onLogout={handleLogout}
+          isOrgAdmin={!!session?.orgId}
         />
 
         <main className={`flex-1 min-w-0 min-h-0 ${activeTab === 'inbox' ? 'p-0 h-full overflow-hidden flex flex-col' : 'p-3 sm:p-5 overflow-y-auto'}`}>

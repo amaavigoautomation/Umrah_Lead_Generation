@@ -22,6 +22,7 @@ import {
 import { WHATSAPP_BUSINESS_NUMBER_FORMATTED } from '../services/whatsappInboundService';
 import { ActiveTab } from './Navbar';
 import { AppUser } from '../types';
+import ClientSwitcher from './ClientSwitcher';
 
 interface HeaderBarProps {
   activeTab: ActiveTab;
@@ -33,6 +34,7 @@ interface HeaderBarProps {
   onResetSeedData: () => void;
   currentUser?: AppUser | null;
   onLogout?: () => void;
+  isOrgAdmin?: boolean;
 }
 
 const TAB_TITLES: Record<ActiveTab, { title: string; icon: React.ReactNode }> = {
@@ -58,6 +60,7 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
   onResetSeedData,
   currentUser,
   onLogout,
+  isOrgAdmin,
 }) => {
   const { brand } = useBrand();
   const isUmrahBrand = brand.playbook === 'umrah360';
@@ -88,6 +91,8 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
             />
           </div>
         )}
+
+        {isOrgAdmin && <ClientSwitcher />}
 
         <button
           onClick={onToggleCollapse}

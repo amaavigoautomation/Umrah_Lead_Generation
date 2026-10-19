@@ -11,9 +11,32 @@ import type { AppUser } from '../types';
 
 export interface SessionInfo {
   appUser: AppUser;
-  tenantId: string | null; // null for platform admins (they have no workspace)
+  tenantId: string | null; // null for platform admins (they have no workspace) and for organization admins until they pick a client
+  orgId: string | null; // set for organization (agency) admins, who manage several client brands
   isPlatformAdmin: boolean;
   isTenantAdmin: boolean;
+}
+
+const ACTIVE_CLIENT_KEY = 'activeClientTenantId';
+
+/** The client brand an organization admin is currently working in (per browser tab). */
+export function getActiveClientId(): string {
+  try {
+    return sessionStorage.getItem(ACTIVE_CLIENT_KEY) || '';
+  } catch {
+    return '';
+  }
+}
+
+/** Switch client. The page reloads so every live listener restarts cleanly on the new client. */
+export function setActiveClientId(tenantId: string | null, reload = true): void {
+  try {
+    if (tenantId) sessionStorage.setItem(ACTIVE_CLIENT_KEY, tenantId);
+    else sessionStorage.removeItem(ACTIVE_CLIENT_KEY);
+  } catch {
+    /* ignore */
+  }
+  if (reload && typeof window !== 'undefined') window.location.reload();
 }
 
 const DEFAULT_MODULES = ['inbox', 'campaigns', 'crm', 'scheduling', 'knowledge', 'settings'];
@@ -23,6 +46,7 @@ export async function signIn(email: string, password: string): Promise<void> {
 }
 
 export async function signOutUser(): Promise<void> {
+  setActiveClientId(null, false);
   await signOut(auth);
   // Wipe this browser's local Firestore copy, so the next person on this computer never sees the
   // previous user's data. Firestore must be stopped before its cache can be cleared, so the page reloads
@@ -52,9 +76,11 @@ export async function getIdToken(forceRefresh = false): Promise<string | null> {
 export async function buildSession(fbUser: FirebaseUser): Promise<SessionInfo> {
   // forceRefresh so freshly-set claims (e.g. right after an invite) are seen
   const tokenResult = await fbUser.getIdTokenResult(true);
-  const claims = tokenResult.claims as { tenantId?: string; role?: string; platformAdmin?: boolean };
+  const claims = tokenResult.claims as { tenantId?: string; orgId?: string; role?: string; platformAdmin?: boolean };
   const isPlatformAdmin = claims.platformAdmin === true;
-  const tenantId = isPlatformAdmin ? null : claims.tenantId || null;
+  const orgId = isPlatformAdmin ? null : claims.orgId || null;
+  // Organization admins have no fixed workspace: the active client is chosen in the app.
+  const tenantId = isPlatformAdmin ? null : orgId ? getActiveClientId() || null : claims.tenantId || null;
   const isTenantAdmin = isPlatformAdmin || claims.role === 'admin';
 
   let allowedModules = DEFAULT_MODULES;
@@ -77,6 +103,7 @@ export async function buildSession(fbUser: FirebaseUser): Promise<SessionInfo> {
   const now = new Date().toISOString();
   return {
     tenantId,
+    orgId,
     isPlatformAdmin,
     isTenantAdmin,
     appUser: {
@@ -138,6 +165,11 @@ export function installAuthFetch(): void {
 
     const headers = new Headers(init?.headers || (input instanceof Request ? input.headers : undefined));
     headers.set('Authorization', `Bearer ${token}`);
+    // Organization admins pick which client brand a request is for (the server re-verifies it belongs to their org).
+    const path = url.replace(window.location.origin, '');
+    const orgLevel = /^\/api\/(org|orgs|dashboard)(\/|\?|$)/.test(path);
+    const active = getActiveClientId();
+    if (active && !orgLevel && !headers.has('X-Tenant-Id')) headers.set('X-Tenant-Id', active);
     return original(input, { ...init, headers });
   };
 }

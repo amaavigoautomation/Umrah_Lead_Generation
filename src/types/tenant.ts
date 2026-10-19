@@ -13,6 +13,29 @@ export interface TenantLimits {
   seats: number;
 }
 
+export type OrgStatus = 'active' | 'suspended';
+
+/**
+ * An organization (agency account) owns several client brands. Each client brand is a normal tenant with
+ * `orgId` set. Organization admins are admins of every client brand under their organization.
+ */
+export interface Org {
+  id: string;
+  name: string;
+  status: OrgStatus;
+  planId?: string;
+  /** Billing is manual for now (platform admin grants the plan). */
+  billingStatus: 'manual' | 'active' | 'trialing' | 'past_due' | 'canceled' | 'awaiting_plan';
+  planSource: 'manual' | 'stripe';
+  currentPeriodEnd?: string;
+  pastDueSince?: string;
+  contactEmail?: string;
+  /** Per-organization overrides of plan features/limits, same shape as tenant overrides. */
+  overrides?: { features?: Record<string, boolean>; limits?: Record<string, number> };
+  createdAt: string;
+  updatedAt?: string;
+}
+
 export interface TenantPlan {
   id: 'starter' | 'growth' | 'enterprise';
   name: string;
@@ -34,6 +57,8 @@ export interface Tenant {
   contactPhone?: string;
   timezone?: string; // Default: 'Asia/Kolkata'
   defaultCurrency?: string; // Default: 'USD' or 'INR'
+  /** Set when this workspace is a client brand of an organization (agency). Billing/plan then come from the org. */
+  orgId?: string;
 }
 
 export interface GlobalUser {
@@ -46,18 +71,24 @@ export interface GlobalUser {
   displayName?: string;
   photoURL?: string;
   allowedModules?: string[]; // Module RBAC for UI
+  /** Set for organization admins (they have no single tenant; they act in any client of their org). */
+  orgId?: string;
   createdAt: string;
   updatedAt?: string;
 }
 
 export interface AuthClaims {
   tenantId?: string;
+  orgId?: string;
   role?: UserRole;
   platformAdmin?: boolean;
 }
 
 export interface TenantContext {
+  /** '' for an organization admin who has not selected a client brand (org-level requests only). */
   tenantId: string;
+  /** Set when the caller is an organization admin; the selected tenant is verified to belong to this org. */
+  orgId?: string;
   uid: string;
   email: string;
   role: UserRole;

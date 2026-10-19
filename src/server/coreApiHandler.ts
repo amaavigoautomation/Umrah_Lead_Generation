@@ -82,6 +82,8 @@ import { getEntitlements, hasFeature, featureForUrl, listPlans, savePlan, getEff
 import { FEATURES, LIMITS } from '../shared/features.js';
 import { createCheckout, createPortal, syncCheckoutSession, billingConfig, BillingError } from './billingService.js';
 import { enterTenantScope, runInTenantScope } from './tenantScope.js';
+import { handleOrgApi } from './orgApi.js';
+import { isUnlimited } from '../shared/features.js';
 import {
   tenantRepo,
   globalTenantDoc,
@@ -150,7 +152,7 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
   res.setHeader('Content-Type', 'application/json');
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PATCH, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Google-Access-Token');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Google-Access-Token, X-Tenant-Id');
 
   if (req.method === 'OPTIONS') {
     res.statusCode = 204;
@@ -254,6 +256,7 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
     url.startsWith('/api/brand-logo/');
 
   let resolvedTenantId = '';
+  let resolvedOrgId = '';
   let userUid = 'anonymous';
   let userEmail = '';
   let userRole: UserRole = 'member';
@@ -268,6 +271,7 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
     }
     const c = auth.ctx!;
     resolvedTenantId = c.tenantId;
+    resolvedOrgId = c.orgId || '';
     userUid = c.uid;
     userEmail = c.email;
     userRole = c.role;
@@ -276,6 +280,7 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
 
   const activeTenantCtx: TenantContext = {
     tenantId: resolvedTenantId,
+    ...(resolvedOrgId ? { orgId: resolvedOrgId } : {}),
     uid: userUid,
     email: userEmail,
     role: userRole,
@@ -285,8 +290,29 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
   // Scope every tenant-aware service to THIS request's tenant for the rest of the request. This is
   // async-local (AsyncLocalStorage), so concurrent requests and background workers can no longer
   // overwrite each other's tenant. Public paths (webhooks) scope themselves once they resolve the tenant.
-  if (!isPublicPath) {
+  if (!isPublicPath && activeTenantCtx.tenantId) {
     enterTenantScope(activeTenantCtx);
+  }
+
+  // Organization (agency) API: org admins manage their client brands; platform admins manage organizations.
+  // Handled before the per-workspace plan/billing gates, because these routes work without a selected client.
+  if (!isPublicPath) {
+    if (await handleOrgApi(req, res, url, body, activeTenantCtx)) return true;
+  }
+
+  // An organization admin who has not selected a client brand can only use organization-level routes.
+  if (!isPublicPath && resolvedOrgId && !resolvedTenantId) {
+    const orgLevelOk =
+      url === '/api/health' ||
+      url === '/api/auth/me' ||
+      url === '/api/dashboard' ||
+      url.startsWith('/api/dashboard/');
+    if (!orgLevelOk) {
+      res.statusCode = 400;
+      res.setHeader('Content-Type', 'application/json');
+      res.end(JSON.stringify({ error: 'Select a client first.', code: 'TENANT_REQUIRED' }));
+      return true;
+    }
   }
 
   // Public brand logo (image bytes, cached). The tenant id in the URL only selects which logo to show.
@@ -492,8 +518,10 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
         const uSnap = await getDoc(globalUserDoc(userUid));
         if (uSnap.exists()) globalUser = uSnap.data() as GlobalUser;
 
-        const tSnap = await getDoc(globalTenantDoc(resolvedTenantId));
-        if (tSnap.exists()) tenantInfo = tSnap.data() as Tenant;
+        if (resolvedTenantId) {
+          const tSnap = await getDoc(globalTenantDoc(resolvedTenantId));
+          if (tSnap.exists()) tenantInfo = tSnap.data() as Tenant;
+        }
       } catch (e) {}
     }
 
@@ -892,16 +920,31 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
         const t = snap.data() as Tenant;
         if (t.limits) limits = t.limits;
       }
+      // Effective limits (plan + overrides; client brands of an organization are unlimited).
+      const eff = await getEffectiveLimits(tId).catch(() => null);
+      if (eff) {
+        limits = {
+          monthlyAiTokens: eff.monthlyAiTokens ?? limits.monthlyAiTokens,
+          dailyOutboundSends: eff.dailyOutboundSends ?? limits.dailyOutboundSends,
+          hourlyOutboundSends: eff.hourlyOutboundSends ?? limits.hourlyOutboundSends,
+          seats: eff.seats ?? limits.seats,
+        };
+      }
     }
+    const pct = (used: number, cap: number) => (!cap || isUnlimited(cap) ? 0 : Math.min(100, Math.round((used / cap) * 100)));
 
     res.statusCode = 200;
     res.end(
       JSON.stringify({
         usage,
         limits,
+        unlimited: {
+          aiTokens: isUnlimited(limits.monthlyAiTokens),
+          dailySends: isUnlimited(limits.dailyOutboundSends),
+        },
         percentages: {
-          aiTokens: Math.min(100, Math.round(((usage.aiTotalTokens || 0) / limits.monthlyAiTokens) * 100)),
-          dailySends: Math.min(100, Math.round(((usage.coldEmailCount || 0) / limits.dailyOutboundSends) * 100)),
+          aiTokens: pct(usage.aiTotalTokens || 0, limits.monthlyAiTokens),
+          dailySends: pct(usage.coldEmailCount || 0, limits.dailyOutboundSends),
         },
       })
     );

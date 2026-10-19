@@ -1,7 +1,7 @@
 import { db, doc, getDoc, getDocs, setDoc, collection } from './adminFirestore.js';
-import { globalTenantDoc } from './tenantRepo.js';
+import { globalTenantDoc, globalOrgDoc } from './tenantRepo.js';
 import { isFirebaseConfigured } from '../firebase/config.js';
-import { FEATURES, LIMITS } from '../shared/features.js';
+import { FEATURES, LIMITS, UNLIMITED } from '../shared/features.js';
 
 /**
  * Plans are data (Firestore `plans/{id}`); a workspace stores only `planId` + optional `overrides`.
@@ -22,13 +22,13 @@ export interface PlanDoc {
   updatedAt?: string;
 }
 
-export type BillingStatus = 'awaiting_plan' | 'trialing' | 'active' | 'past_due' | 'canceled' | 'manual';
+export type BillingStatus = 'awaiting_plan' | 'trialing' | 'active' | 'past_due' | 'canceled' | 'manual' | 'inherited';
 
 export interface BillingInfo {
   status: BillingStatus;
   /** True when the workspace must pay (or fix payment) before using the app. */
   locked: boolean;
-  planSource: 'stripe' | 'manual' | 'legacy';
+  planSource: 'stripe' | 'manual' | 'legacy' | 'org';
   currentPeriodEnd?: string;
   graceEndsAt?: string;
 }
@@ -104,6 +104,17 @@ export const SEED_PLANS: PlanDoc[] = [
     features: { ...allOn(), auto_followup: false },
     limits: { seats: 5, dailyOutboundSends: 1_000, hourlyOutboundSends: 200, monthlyAiTokens: 2_000_000 },
     sortOrder: 2,
+    active: true,
+  },
+  {
+    id: 'agency',
+    name: 'Agency',
+    priceMonthly: 499,
+    currency: 'USD',
+    features: allOn(),
+    // Placeholder. Edit in the Platform Console. maxClients is how many client brands an organization may onboard.
+    limits: { maxClients: 5, seats: 10 },
+    sortOrder: 4,
     active: true,
   },
   {
@@ -191,15 +202,24 @@ export async function savePlan(input: Partial<PlanDoc> & { id: string }): Promis
   return plan;
 }
 
-/** Pure merge, exported for tests. */
+/**
+ * Pure merge, exported for tests.
+ *  - Standalone workspace: `computeEntitlements(plan, tenant)`.
+ *  - Organization itself:  `computeEntitlements(plan, orgDoc)` (an org doc has the same plan/overrides/billing fields).
+ *  - Client brand of an organization: `computeEntitlements(orgPlan, tenant, org)`. Features and billing come from
+ *    the organization; AI tokens and sends are unlimited unless the client has its own override.
+ */
 export function computeEntitlements(
   plan: PlanDoc | undefined,
-  tenant: any
+  tenant: any,
+  org?: any
 ): Entitlements {
   const features: Record<string, boolean> = {};
   for (const f of FEATURES) {
     let v = f.defaultEnabled;
     if (plan && f.key in plan.features) v = Boolean(plan.features[f.key]);
+    const orgFeat = org?.overrides?.features;
+    if (orgFeat && f.key in orgFeat) v = Boolean(orgFeat[f.key]);
     const o = tenant?.overrides?.features;
     if (o && f.key in o) v = Boolean(o[f.key]);
     features[f.key] = v;
@@ -207,13 +227,28 @@ export function computeEntitlements(
   const limits: Record<string, number> = {};
   for (const l of LIMITS) {
     let v = l.fallback;
-    const own = Number(tenant?.limits?.[l.key]);
-    if (Number.isFinite(own) && tenant?.limits?.[l.key] !== undefined) v = own;
-    const pl = plan?.limits?.[l.key];
-    if (pl !== undefined) v = pl;
+    if (org) {
+      // Client brand: no caps for now. A per-client override (set by the platform admin) is the way to add one later.
+      v = l.key === 'maxClients' ? 0 : UNLIMITED;
+    } else {
+      const own = Number(tenant?.limits?.[l.key]);
+      if (Number.isFinite(own) && tenant?.limits?.[l.key] !== undefined) v = own;
+      const pl = plan?.limits?.[l.key];
+      if (pl !== undefined) v = pl;
+    }
     const ol = tenant?.overrides?.limits?.[l.key];
     if (ol !== undefined) v = ol;
     limits[l.key] = v;
+  }
+  if (org) {
+    const billing: BillingInfo = { ...computeBilling(org), planSource: 'org' };
+    return {
+      planId: plan?.id || org?.planId || LEGACY_PLAN_ID,
+      planName: plan?.name || 'Organization plan',
+      features,
+      limits,
+      billing,
+    };
   }
   const billing = computeBilling(tenant);
   const hasPlan = Boolean(plan && (tenant?.planId || !tenant?.billingStatus));
@@ -237,12 +272,42 @@ export async function getEntitlements(tenantId: string, opts: { fresh?: boolean 
     const tSnap = await getDoc(globalTenantDoc(tenantId));
     const tenant = tSnap.exists() ? (tSnap.data() as any) : undefined;
     const plans = await listPlans();
-    const wanted = tenant?.planId || LEGACY_PLAN_ID;
-    // An unknown plan id must never lock a workspace out: fall back to legacy.
-    const plan = plans.find((p) => p.id === wanted) || plans.find((p) => p.id === LEGACY_PLAN_ID) || SEED_PLANS[0];
-    value = computeEntitlements(plan, tenant);
+    if (tenant?.orgId) {
+      // Client brand of an organization: plan, features and billing come from the organization.
+      const oSnap = await getDoc(globalOrgDoc(String(tenant.orgId)));
+      // An orphaned client (its org is gone) is locked rather than silently given everything.
+      const org: any = oSnap.exists() ? oSnap.data() : { billingStatus: 'canceled' };
+      const orgPlan = plans.find((p) => p.id === org.planId) || plans.find((p) => p.id === LEGACY_PLAN_ID) || SEED_PLANS[0];
+      value = computeEntitlements(orgPlan, tenant, org);
+    } else {
+      const wanted = tenant?.planId || LEGACY_PLAN_ID;
+      // An unknown plan id must never lock a workspace out: fall back to legacy.
+      const plan = plans.find((p) => p.id === wanted) || plans.find((p) => p.id === LEGACY_PLAN_ID) || SEED_PLANS[0];
+      value = computeEntitlements(plan, tenant);
+    }
   }
   entCache.set(tenantId, { at: Date.now(), value });
+  return value;
+}
+
+/** Entitlements of an organization itself (its plan, seats and how many client brands it may onboard). */
+export async function getOrgEntitlements(orgId: string, opts: { fresh?: boolean } = {}): Promise<Entitlements> {
+  const key = `org:${orgId}`;
+  const cached = entCache.get(key);
+  if (!opts.fresh && cached && Date.now() - cached.at < CACHE_MS) return cached.value;
+  if (opts.fresh) plansCache = null;
+  let value: Entitlements;
+  if (!isFirebaseConfigured || !db || !orgId) {
+    value = computeEntitlements(SEED_PLANS[0], undefined);
+  } else {
+    const oSnap = await getDoc(globalOrgDoc(orgId));
+    const org: any = oSnap.exists() ? oSnap.data() : undefined;
+    const plans = await listPlans();
+    const plan = plans.find((p) => p.id === org?.planId);
+    // An org needs an explicit plan: without one it has no client allowance and is shown as "No plan yet".
+    value = computeEntitlements(plan, { ...(org || {}), billingStatus: org?.billingStatus || 'awaiting_plan' });
+  }
+  entCache.set(key, { at: Date.now(), value });
   return value;
 }
 

@@ -24,26 +24,41 @@ export interface AuthResult {
 }
 
 // Short cache so we don't read Firestore on every request. Fails CLOSED.
-const tenantStatusCache = new Map<string, { status: 'active' | 'suspended' | 'missing'; cachedAt: number }>();
+type TenantInfo = { status: 'active' | 'suspended' | 'missing'; orgId?: string };
+const tenantStatusCache = new Map<string, { info: TenantInfo; cachedAt: number }>();
+const orgStatusCache = new Map<string, { status: 'active' | 'suspended' | 'missing'; cachedAt: number }>();
 const CACHE_TTL_MS = 30_000;
 
-async function getTenantStatus(tenantId: string): Promise<'active' | 'suspended' | 'missing'> {
+async function getTenantInfo(tenantId: string): Promise<TenantInfo> {
   const cached = tenantStatusCache.get(tenantId);
   const now = Date.now();
-  if (cached && now - cached.cachedAt < CACHE_TTL_MS) return cached.status;
+  if (cached && now - cached.cachedAt < CACHE_TTL_MS) return cached.info;
 
   const snap = await getAdminFirestore().collection('tenants').doc(tenantId).get();
-  const status: 'active' | 'suspended' | 'missing' = !snap.exists
-    ? 'missing'
-    : snap.data()?.status === 'suspended'
-      ? 'suspended'
-      : 'active';
-  tenantStatusCache.set(tenantId, { status, cachedAt: now });
+  const data: any = snap.exists ? snap.data() : undefined;
+  const info: TenantInfo = !snap.exists
+    ? { status: 'missing' }
+    : { status: data?.status === 'suspended' ? 'suspended' : 'active', orgId: typeof data?.orgId === 'string' && data.orgId ? data.orgId : undefined };
+  tenantStatusCache.set(tenantId, { info, cachedAt: now });
+  return info;
+}
+
+async function getOrgStatus(orgId: string): Promise<'active' | 'suspended' | 'missing'> {
+  const cached = orgStatusCache.get(orgId);
+  const now = Date.now();
+  if (cached && now - cached.cachedAt < CACHE_TTL_MS) return cached.status;
+  const snap = await getAdminFirestore().collection('orgs').doc(orgId).get();
+  const status: 'active' | 'suspended' | 'missing' = !snap.exists ? 'missing' : snap.data()?.status === 'suspended' ? 'suspended' : 'active';
+  orgStatusCache.set(orgId, { status, cachedAt: now });
   return status;
 }
 
 export function invalidateTenantStatusCache(tenantId: string) {
   tenantStatusCache.delete(tenantId);
+}
+
+export function invalidateOrgStatusCache(orgId: string) {
+  orgStatusCache.delete(orgId);
 }
 
 export function extractBearerToken(req: { headers: Record<string, any> }): string | null {
@@ -78,20 +93,55 @@ export async function authenticateRequest(req: { headers: Record<string, any> })
   }
 
   const isPlatformAdmin = decoded.platformAdmin === true;
-  const tenantId: string | undefined = isPlatformAdmin ? PLATFORM_TENANT_ID : decoded.tenantId;
+  const claimOrgId: string | undefined = !isPlatformAdmin && typeof decoded.orgId === 'string' && decoded.orgId ? decoded.orgId : undefined;
 
-  if (!tenantId || typeof tenantId !== 'string') {
+  let tenantId: string | undefined;
+  if (isPlatformAdmin) {
+    tenantId = PLATFORM_TENANT_ID;
+  } else if (claimOrgId) {
+    // Organization admin: the client brand they are working in is chosen per request (X-Tenant-Id), and the
+    // server verifies below that it really belongs to THEIR organization. No header = organization-level only.
+    const raw = req.headers['x-tenant-id'];
+    const requested = typeof raw === 'string' ? raw.trim() : '';
+    tenantId = requested;
+  } else {
+    tenantId = decoded.tenantId;
+  }
+
+  if (!claimOrgId && (!tenantId || typeof tenantId !== 'string')) {
     return { ok: false, status: 403, error: 'User is not assigned to a workspace', code: 'NO_TENANT_ASSIGNED' };
   }
 
   if (!isPlatformAdmin) {
     try {
-      const status = await getTenantStatus(tenantId);
-      if (status === 'suspended') {
-        return { ok: false, status: 403, error: 'This workspace is suspended', code: 'TENANT_SUSPENDED' };
+      if (claimOrgId) {
+        const orgStatus = await getOrgStatus(claimOrgId);
+        if (orgStatus === 'missing') {
+          return { ok: false, status: 403, error: 'Organization not found', code: 'ORG_NOT_FOUND' };
+        }
+        if (orgStatus === 'suspended') {
+          return { ok: false, status: 403, error: 'This organization is suspended', code: 'ORG_SUSPENDED' };
+        }
       }
-      if (status === 'missing') {
-        return { ok: false, status: 403, error: 'Workspace not found', code: 'TENANT_NOT_FOUND' };
+      if (tenantId) {
+        const info = await getTenantInfo(tenantId);
+        if (info.status === 'missing') {
+          return { ok: false, status: 403, error: 'Workspace not found', code: 'TENANT_NOT_FOUND' };
+        }
+        if (claimOrgId && info.orgId !== claimOrgId) {
+          // Never reveal whether the workspace exists: same answer for "not yours" and "does not exist".
+          return { ok: false, status: 403, error: 'You do not have access to this client', code: 'TENANT_FORBIDDEN' };
+        }
+        if (info.status === 'suspended') {
+          return { ok: false, status: 403, error: 'This workspace is suspended', code: 'TENANT_SUSPENDED' };
+        }
+        // A regular user of a client brand is also blocked while the whole organization is suspended.
+        if (!claimOrgId && info.orgId) {
+          const orgStatus = await getOrgStatus(info.orgId);
+          if (orgStatus === 'suspended') {
+            return { ok: false, status: 403, error: 'This organization is suspended', code: 'ORG_SUSPENDED' };
+          }
+        }
       }
     } catch (err) {
       createTenantLogger('system').error({ err }, 'Tenant status lookup failed');
@@ -108,7 +158,8 @@ export async function authenticateRequest(req: { headers: Record<string, any> })
   return {
     ok: true,
     ctx: {
-      tenantId,
+      tenantId: tenantId || '',
+      ...(claimOrgId ? { orgId: claimOrgId } : {}),
       uid: decoded.uid,
       email: decoded.email || '',
       role,

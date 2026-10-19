@@ -132,6 +132,14 @@ export function globalTenantDoc(tenantId: string): DocumentReference<DocumentDat
   return doc(db, 'tenants', assertValidTenantId(tenantId));
 }
 
+export function globalOrgsCol(): CollectionReference<DocumentData> {
+  return collection(db, 'orgs');
+}
+
+export function globalOrgDoc(orgId: string): DocumentReference<DocumentData> {
+  return doc(db, 'orgs', assertValidTenantId(orgId));
+}
+
 export function globalUsersCol(): CollectionReference<DocumentData> {
   return collection(db, 'users');
 }

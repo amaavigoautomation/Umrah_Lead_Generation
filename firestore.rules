@@ -14,17 +14,29 @@ service cloud.firestore {
       return isSignedIn() && request.auth.token.platformAdmin == true;
     }
 
+    // Organization (agency) admins carry an `orgId` claim instead of one fixed tenantId. They may act in a
+    // client brand only when that brand's tenant document says it belongs to THEIR organization.
+    function isOrgAdminOf(tenantId) {
+      return isSignedIn()
+        && ('orgId' in request.auth.token)
+        && request.auth.token.orgId != null
+        && request.auth.token.role == 'admin'
+        && get(/databases/$(database)/documents/tenants/$(tenantId)).data.get('orgId', '') == request.auth.token.orgId;
+    }
+
     function isTenantUser(tenantId) {
       return isSignedIn() && (
         isPlatformAdmin() ||
-        request.auth.token.tenantId == tenantId
+        request.auth.token.tenantId == tenantId ||
+        isOrgAdminOf(tenantId)
       );
     }
 
     function isTenantAdmin(tenantId) {
       return isSignedIn() && (
         isPlatformAdmin() ||
-        (request.auth.token.tenantId == tenantId && request.auth.token.role == 'admin')
+        (request.auth.token.tenantId == tenantId && request.auth.token.role == 'admin') ||
+        isOrgAdminOf(tenantId)
       );
     }
 
@@ -44,6 +56,13 @@ service cloud.firestore {
     match /tenants/{tenantId} {
       allow read: if isTenantUser(tenantId) || isPlatformAdmin();
       allow write: if isPlatformAdmin() || tenantId == 'umrah360';
+    }
+
+    // Organizations: members of the org may read it; only the server (Admin SDK) writes.
+    match /orgs/{orgId} {
+      allow read: if isPlatformAdmin()
+        || (isSignedIn() && ('orgId' in request.auth.token) && request.auth.token.orgId == orgId);
+      allow write: if false;
     }
 
     match /users/{uid} {

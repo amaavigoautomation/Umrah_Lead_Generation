@@ -99,6 +99,8 @@ export async function setTenantUserClaims(
   const auth = getAdminAuth();
   await auth.setCustomUserClaims(uid, {
     tenantId: claims.tenantId || null,
+    // Organization admins carry orgId instead of a single tenant; the active client brand is chosen per request.
+    orgId: claims.orgId || null,
     role: claims.role || 'member',
     platformAdmin: Boolean(claims.platformAdmin),
   });
@@ -114,7 +116,10 @@ export async function createTenantUser(params: {
   email: string;
   password?: string;
   displayName?: string;
-  tenantId: string;
+  /** Workspace the user belongs to. Leave empty for an organization admin (pass orgId instead). */
+  tenantId?: string;
+  /** Makes the user an organization admin: admin of every client brand under this organization. */
+  orgId?: string;
   role: UserRole;
 }): Promise<UserRecord & { existed?: boolean; passwordSet?: boolean }> {
   const auth = getAdminAuth();
@@ -130,13 +135,21 @@ export async function createTenantUser(params: {
     if (existing.platformAdmin) {
       throw new Error('This email belongs to a platform administrator');
     }
-    if (existing.tenantId && existing.tenantId !== params.tenantId) {
-      throw new Error('This email already belongs to another workspace');
+    if (params.orgId) {
+      // Organization admin: must not already be a regular workspace user or an admin of another organization.
+      if (existing.tenantId) throw new Error('This email already belongs to another workspace');
+      if (existing.orgId && existing.orgId !== params.orgId) throw new Error('This email already belongs to another organization');
+    } else {
+      if (existing.orgId) throw new Error('This email already belongs to another organization');
+      if (existing.tenantId && existing.tenantId !== params.tenantId) {
+        throw new Error('This email already belongs to another workspace');
+      }
     }
     // An admin re-adding someone from the same workspace sets their password (the account already exists,
     // so without this the typed password would be silently ignored). Accounts that are not yet in this
     // workspace are never modified.
-    if (params.password && existing.tenantId === params.tenantId) {
+    const sameScope = params.orgId ? existing.orgId === params.orgId : existing.tenantId === params.tenantId;
+    if (params.password && sameScope) {
       await auth.updateUser(userRecord.uid, { password: params.password });
     } else {
       passwordSet = false;
@@ -155,7 +168,8 @@ export async function createTenantUser(params: {
   }
 
   await setTenantUserClaims(userRecord.uid, {
-    tenantId: params.tenantId,
+    tenantId: params.orgId ? undefined : params.tenantId,
+    orgId: params.orgId,
     role: params.role,
     platformAdmin: params.role === 'platformAdmin',
   });

@@ -36,7 +36,17 @@ export const LIMITS: LimitDef[] = [
   { key: 'dailyOutboundSends', label: 'Emails per day', unit: 'emails', fallback: 3_000 },
   { key: 'hourlyOutboundSends', label: 'Emails per hour', unit: 'emails', fallback: 500 },
   { key: 'monthlyAiTokens', label: 'AI tokens per month', unit: 'tokens', fallback: 2_000_000 },
+  // Agency plans only: how many client brands an organization may onboard. 0 = not an agency plan.
+  { key: 'maxClients', label: 'Client brands (agency plans)', unit: 'clients', fallback: 0 },
 ];
+
+/**
+ * Stand-in for "no cap". A large finite number (not Infinity) so it survives JSON and every `n >= limit`
+ * check in the code base keeps working. Client brands inside an organization use it for AI tokens and sends
+ * until per-client caps are introduced (set a tenant override to cap one).
+ */
+export const UNLIMITED = 1_000_000_000_000;
+export const isUnlimited = (n: number | null | undefined): boolean => typeof n === 'number' && n >= UNLIMITED;
 
 export type FeatureKey = (typeof FEATURES)[number]['key'];
 

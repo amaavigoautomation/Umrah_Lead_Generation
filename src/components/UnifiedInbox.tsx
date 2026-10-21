@@ -491,7 +491,7 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
     .filter((m) => m.direction === 'INBOUND' || m.senderType === 'CUSTOMER' || m.senderType === 'PROSPECT')
     .reduce<Message | null>((latest, message) => !latest || getMsgTime(message) > getMsgTime(latest) ? message : latest, null);
   const latestOutboundFollowUpMessage = activeMessages
-    .filter((m) => m.direction === 'OUTBOUND' || m.senderType === 'AI' || m.senderType === 'AGENT' || m.senderType === 'HUMAN')
+    .filter((m) => m.senderType === 'AI')
     .reduce<Message | null>((latest, message) => !latest || getMsgTime(message) > getMsgTime(latest) ? message : latest, null);
   const leadRepliedAfterFollowUp = Boolean(
     latestInboundFollowUpMessage &&

@@ -532,7 +532,7 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
   );
   const followUpDisabledReason = activeLead?.autoFollowUp?.disabledReason;
   const followUpCompleted = followUpDisabledReason === 'completed';
-  const followUpClosedByReply = !activeLead?.autoFollowUp?.enabled && leadRepliedAfterFollowUp &&
+  const followUpClosedByReply = leadRepliedAfterFollowUp &&
     !followUpCompleted && followUpDisabledReason !== 'manual' && followUpDisabledReason !== 'admin_disabled';
   const isAutoFollowUpUiActive = Boolean(activeLead?.autoFollowUp?.enabled) &&
     !leadRepliedAfterFollowUp && !followUpCompleted;

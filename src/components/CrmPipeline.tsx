@@ -74,6 +74,9 @@ export interface CrmPipelineProps {
 }
 
 // TeleCRM Default Telecallers / Agents
+const DEFAULT_CRM_SERVICE = 'Umrah Custom Package';
+const DEFAULT_CRM_CALLER = 'Zeeshan Khan';
+
 const TELECALLERS = [
   { id: 'caller-1', name: 'Zeeshan Khan', role: 'Senior Sales Telecaller', avatarColor: 'bg-emerald-500' },
   { id: 'caller-2', name: 'Aisha Rahman', role: 'Umrah Package Specialist', avatarColor: 'bg-blue-500' },
@@ -448,7 +451,7 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
           return;
         }
         const phone = value(row, 'phone'), email = value(row, 'email'), companyName = value(row, 'company');
-        const city = value(row, 'city'), caller = value(row, 'caller') || defaultCaller;
+        const city = value(row, 'city'), caller = value(row, 'caller') || DEFAULT_CRM_CALLER;
         const statusRaw = (value(row, 'status') || 'NEW').toUpperCase() as LeadStatus;
         const notes = value(row, 'notes');
         if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
@@ -469,7 +472,7 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
           leadId, contactId, source: 'MANUAL', leadType: 'INBOUND',
           status: ['NEW', 'CONTACTED', 'FOLLOW_UP', 'ENGAGED', 'QUALIFIED', 'DEMO_BOOKED', 'CLOSED_WON', 'CLOSED_LOST'].includes(statusRaw) ? statusRaw : 'NEW',
           leadScore: 78, intent: 'HIGH', buyingStage: 'AWARENESS',
-          serviceInterest: defaultService, city, requirements: [defaultService],
+          serviceInterest: DEFAULT_CRM_SERVICE, city, requirements: [DEFAULT_CRM_SERVICE],
           assignedCaller: caller, ownerId: caller, notes,
           createdAt: nowIso, updatedAt: nowIso, lastActivityAt: nowIso,
         };
@@ -1844,7 +1847,7 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
                   const email = String(fd.get('email') ?? '').trim();
                   const pkg = 'Umrah Custom Package';
                   const city = String(fd.get('city') ?? '').trim();
-                  const caller = (fd.get('caller') as string) || defaultCaller;
+                  const caller = (fd.get('caller') as string) || DEFAULT_CRM_CALLER;
                   const status = (fd.get('status') as LeadStatus) || 'NEW';
                   const source = (fd.get('source') as LeadSource) || 'MANUAL';
                   const notes = String(fd.get('notes') ?? '').trim();

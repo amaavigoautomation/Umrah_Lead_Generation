@@ -55,6 +55,7 @@ import {
   LeadStatus,
   LeadType,
   LeadSource,
+  AppUser,
 } from '../types';
 import { WebsiteLeadIntegrationModal } from './WebsiteLeadIntegrationModal';
 
@@ -69,6 +70,7 @@ export interface CrmPipelineProps {
   onAddLead?: (newLead: Lead, newContact: Contact) => void;
   /** Workspace team members that leads can be assigned to (used for non-Umrah360 workspaces). */
   teamMembers?: { id: string; name: string; role?: string }[];
+  users?: AppUser[];
 }
 
 // Umrah360's default telecallers. Other workspaces use their own team members (see `teamMembers` prop).
@@ -104,21 +106,37 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
   onUpdateLead,
   onAddLead,
   teamMembers,
+  users,
 }) => {
   const { brand } = useBrand();
   const isUmrah = brand.playbook === 'umrah360';
-  const telecallers = useMemo(
-    () =>
-      isUmrah
-        ? UMRAH360_TELECALLERS
-        : (teamMembers || []).map((m, i) => ({
-            id: m.id,
-            name: m.name,
-            role: m.role || 'Sales Team',
-            avatarColor: AVATAR_COLORS[i % AVATAR_COLORS.length],
-          })),
-    [isUmrah, teamMembers]
-  );
+  const telecallers = useMemo(() => {
+    const salesUsers = (users || [])
+      .filter((u) => (u.role === 'SALES' || (u as any).appRole === 'SALES') && u.isActive !== false)
+      .map((u, i) => ({
+        id: u.userId,
+        name: u.name,
+        role: 'Sales Representative',
+        avatarColor: AVATAR_COLORS[i % AVATAR_COLORS.length],
+      }));
+
+    const base = isUmrah
+      ? UMRAH360_TELECALLERS
+      : (teamMembers || []).map((m, i) => ({
+          id: m.id,
+          name: m.name,
+          role: m.role || 'Sales Team',
+          avatarColor: AVATAR_COLORS[i % AVATAR_COLORS.length],
+        }));
+
+    const combined = [...base];
+    for (const su of salesUsers) {
+      if (!combined.some((c) => c.name.toLowerCase() === su.name.toLowerCase())) {
+        combined.push(su);
+      }
+    }
+    return combined;
+  }, [isUmrah, teamMembers, users]);
   const defaultCaller = telecallers[0]?.name || 'Unassigned';
   const defaultService = isUmrah ? 'Umrah Custom Package' : 'General Enquiry';
   const greet = (name: string) => (isUmrah ? `Assalamu Alaikum ${name}!` : `Hi ${name}!`);

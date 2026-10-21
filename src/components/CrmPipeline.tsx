@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
+import * as XLSX from 'xlsx';
 import { useBrand } from '../context/BrandContext';
 import {
   Users,
@@ -58,6 +59,7 @@ import {
   AppUser,
 } from '../types';
 import { WebsiteLeadIntegrationModal } from './WebsiteLeadIntegrationModal';
+import { findDuplicateContact } from '../services/dataService';
 
 export interface CrmPipelineProps {
   leads: Lead[];
@@ -133,6 +135,8 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
   const [addLeadMode, setAddLeadMode] = useState<'SINGLE' | 'BULK'>('SINGLE');
   const [bulkCsvText, setBulkCsvText] = useState<string>('');
   const [bulkUploadSuccessCount, setBulkUploadSuccessCount] = useState<number | null>(null);
+  const [bulkUploadDuplicateCount, setBulkUploadDuplicateCount] = useState(0);
+  const [bulkUploadInvalidCount, setBulkUploadInvalidCount] = useState(0);
 
   const [isWebsiteModalOpen, setIsWebsiteModalOpen] = useState(false);
   const [callingLead, setCallingLead] = useState<Lead | null>(null);
@@ -385,42 +389,86 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
     document.body.removeChild(link);
   };
 
-  // Process Bulk CSV Upload
+  // Process CSV / Excel rows using their header names so optional columns can be omitted.
   const handleProcessBulkUpload = () => {
     if (!bulkCsvText.trim()) return;
-    const lines = bulkCsvText.split('\n').map((l) => l.trim()).filter(Boolean);
-    if (lines.length < 2) {
-      alert('Please provide valid CSV data with header row and at least one lead row.');
+
+    let rows: unknown[][];
+    try {
+      const workbook = XLSX.read(bulkCsvText, { type: 'string' });
+      const firstSheetName = workbook.SheetNames[0];
+      if (!firstSheetName) throw new Error('No worksheet found.');
+      rows = XLSX.utils.sheet_to_json<unknown[]>(workbook.Sheets[firstSheetName], {
+        header: 1,
+        defval: '',
+        raw: false,
+      }) as unknown[][];
+    } catch {
+      alert('Could not read this file. Please upload a valid CSV or Excel spreadsheet.');
+      return;
+    }
+
+    if (rows.length < 2) {
+      alert('Please provide a header row and at least one lead row.');
+      return;
+    }
+
+    const normalizeHeader = (value: unknown) =>
+      String(value ?? '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+    const headers = (rows[0] || []).map(normalizeHeader);
+    const getValue = (row: unknown[], aliases: string[]) => {
+      const index = headers.findIndex((header) => aliases.includes(header));
+      return index < 0 ? '' : String(row[index] ?? '').trim();
+    };
+    const hasNameColumn = headers.some((header) =>
+      ['name', 'fullname', 'contactname', 'leadname', 'firstname', 'givenname', 'first'].includes(header)
+    );
+    if (!hasNameColumn) {
+      alert('The spreadsheet must include a Name or First Name column.');
       return;
     }
 
     let count = 0;
+    let duplicateCount = 0;
+    let invalidCount = 0;
     const nowIso = new Date().toISOString();
+    const contactsSeen = [...contacts];
 
-    // Skip header line (index 0)
-    for (let i = 1; i < lines.length; i++) {
-      const parts = lines[i].split(',').map((p) => p.trim().replace(/^"|"$/g, ''));
-      if (parts.length < 3) continue;
+    for (let i = 1; i < rows.length; i++) {
+      const row = rows[i] || [];
+      if (row.every((cell) => String(cell ?? '').trim() === '')) continue;
 
-      const firstName = parts[0] || 'Pilgrim';
-      const lastName = parts[1] || '';
-      const phone = parts[2] || '+91 98000 00000';
-      const email = parts[3] || `${firstName.toLowerCase()}@example.com`;
-      const city = parts[4] || 'Mumbai';
-      const caller = parts[5] || 'Zeeshan Khan';
-      const statusRaw = (parts[6] || 'NEW').toUpperCase() as LeadStatus;
-      const notes = parts[7] || 'Imported via Bulk CSV';
+      const explicitFirstName = getValue(row, ['firstname', 'givenname', 'first']);
+      const firstName = explicitFirstName || getValue(row, ['name', 'fullname', 'contactname', 'leadname']);
+      const lastName = getValue(row, ['lastname', 'surname', 'familyname']);
+      if (!firstName && !lastName) {
+        invalidCount++;
+        continue;
+      }
+
+      const phone = getValue(row, ['phone', 'phonenumber', 'mobile', 'mobilenumber', 'telephone', 'whatsapp', 'whatsappnumber']);
+      const email = getValue(row, ['email', 'emailaddress', 'mail']);
+      const companyName = getValue(row, ['company', 'companyname', 'organization', 'organisation', 'business', 'businessname']);
+      const city = getValue(row, ['city', 'location', 'area']);
+      const caller = getValue(row, ['assignedtelecaller', 'assignedcaller', 'owner', 'assignedto']) || defaultCaller;
+      const statusRaw = (getValue(row, ['status', 'leadstatus', 'stage']) || 'NEW').toUpperCase() as LeadStatus;
+      const notes = getValue(row, ['notes', 'note', 'remarks', 'description', 'requirement', 'requirements']);
+
+      const duplicate = findDuplicateContact({ email, phone, companyName }, contactsSeen);
+      if (duplicate) {
+        duplicateCount++;
+        continue;
+      }
 
       const contactId = `contact-bulk-${Date.now()}-${i}`;
       const leadId = `lead-bulk-${Date.now()}-${i}`;
-
       const newContact: Contact = {
         contactId,
         firstName,
         lastName,
         email,
         phone,
-        companyName: 'Umrah Custom Package',
+        companyName,
         city,
         createdAt: nowIso,
         updatedAt: nowIso,
@@ -435,9 +483,9 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
         leadScore: 78,
         intent: 'HIGH',
         buyingStage: 'AWARENESS',
-        serviceInterest: 'Umrah Custom Package',
+        serviceInterest: defaultService,
         city,
-        requirements: ['Umrah Custom Package'],
+        requirements: [defaultService],
         assignedCaller: caller,
         ownerId: caller,
         notes,
@@ -448,16 +496,21 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
 
       if (onAddLead) {
         onAddLead(newLead, newContact);
+        contactsSeen.push(newContact);
+        count++;
       }
-      count++;
     }
 
     setBulkUploadSuccessCount(count);
+    setBulkUploadDuplicateCount(duplicateCount);
+    setBulkUploadInvalidCount(invalidCount);
     setTimeout(() => {
       setBulkUploadSuccessCount(null);
+      setBulkUploadDuplicateCount(0);
+      setBulkUploadInvalidCount(0);
       setIsAddLeadModalOpen(false);
       setBulkCsvText('');
-    }, 1500);
+    }, 2500);
   };
 
   // 1. Pre-computed Search Index across ALL leads for instant, scalable multi-field querying
@@ -1800,16 +1853,27 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
                 onSubmit={(e) => {
                   e.preventDefault();
                   const fd = new FormData(e.currentTarget);
-                  const firstName = (fd.get('firstName') as string) || 'New';
-                  const lastName = (fd.get('lastName') as string) || 'Pilgrim';
-                  const phone = (fd.get('phone') as string) || '+91 98000 00000';
-                  const email = (fd.get('email') as string) || `${firstName.toLowerCase()}@example.com`;
+                  const firstName = String(fd.get('firstName') ?? '').trim();
+                  const lastName = String(fd.get('lastName') ?? '').trim();
+                  const phone = String(fd.get('phone') ?? '').trim();
+                  const email = String(fd.get('email') ?? '').trim();
                   const pkg = 'Umrah Custom Package';
-                  const city = (fd.get('city') as string) || 'Mumbai';
-                  const caller = (fd.get('caller') as string) || 'Zeeshan Khan';
+                  const city = String(fd.get('city') ?? '').trim();
+                  const caller = (fd.get('caller') as string) || defaultCaller;
                   const status = (fd.get('status') as LeadStatus) || 'NEW';
                   const source = (fd.get('source') as LeadSource) || 'MANUAL';
-                  const notes = (fd.get('notes') as string) || '';
+                  const notes = String(fd.get('notes') ?? '').trim();
+
+                  if (!firstName) {
+                    alert('Please enter a first name.');
+                    return;
+                  }
+                  const duplicate = findDuplicateContact({ email, phone }, contacts);
+                  if (duplicate) {
+                    const duplicateName = [duplicate.firstName, duplicate.lastName].filter(Boolean).join(' ');
+                    alert(`A contact with this email or phone already exists${duplicateName ? ` (${duplicateName})` : ''}.`);
+                    return;
+                  }
 
                   const nowIso = new Date().toISOString();
                   const contactId = `contact-manual-${Date.now()}`;
@@ -1821,7 +1885,7 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
                     lastName,
                     email,
                     phone,
-                    companyName: pkg,
+                    companyName: '',
                     city,
                     createdAt: nowIso,
                     updatedAt: nowIso,
@@ -1882,11 +1946,10 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">
-                      Phone Number *
+                      Phone Number
                     </label>
                     <input
                       name="phone"
-                      required
                       placeholder="+91 98100 23456"
                       className="w-full px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-medium focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 font-mono"
                     />
@@ -2026,10 +2089,19 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
                         if (!file) return;
                         const reader = new FileReader();
                         reader.onload = (evt) => {
-                          const content = evt.target?.result as string;
-                          if (content) setBulkCsvText(content);
+                          try {
+                            const buffer = evt.target?.result;
+                            if (!(buffer instanceof ArrayBuffer)) throw new Error('File could not be read.');
+                            const workbook = XLSX.read(buffer, { type: 'array' });
+                            const firstSheetName = workbook.SheetNames[0];
+                            if (!firstSheetName) throw new Error('No worksheet found.');
+                            const content = XLSX.utils.sheet_to_csv(workbook.Sheets[firstSheetName]);
+                            setBulkCsvText(content);
+                          } catch {
+                            alert('Could not read this file. Please upload a valid CSV or Excel spreadsheet.');
+                          }
                         };
-                        reader.readAsText(file);
+                        reader.readAsArrayBuffer(file);
                       }}
                     />
                   </label>
@@ -2043,7 +2115,11 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
                 {bulkUploadSuccessCount !== null && (
                   <div className="p-3 bg-emerald-100 text-emerald-900 rounded-lg text-xs font-bold text-center flex items-center justify-center space-x-1.5 animate-in fade-in">
                     <CheckCircle className="w-4 h-4 text-emerald-700" />
-                    <span>Successfully created {bulkUploadSuccessCount} leads in TeleCRM!</span>
+                    <span>
+                      Created {bulkUploadSuccessCount} leads in TeleCRM.
+                      {bulkUploadDuplicateCount > 0 ? ` Skipped ${bulkUploadDuplicateCount} duplicate rows.` : ''}
+                      {bulkUploadInvalidCount > 0 ? ` Skipped ${bulkUploadInvalidCount} rows without a name.` : ''}
+                    </span>
                   </div>
                 )}
 

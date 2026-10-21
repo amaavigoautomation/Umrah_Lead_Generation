@@ -909,25 +909,30 @@ export function findDuplicateContact(
   candidate: { email?: string; phone?: string; companyName?: string; apolloPersonId?: string },
   existingContacts: Contact[]
 ): Contact | null {
-  const targetEmail = candidate.email?.trim().toLowerCase();
-  const targetPhone = candidate.phone?.replace(/[^\d]/g, '');
-  const targetCompany = candidate.companyName?.trim().toLowerCase();
+  const targetEmail = candidate.email?.trim().toLowerCase() || '';
+  const targetPhone = candidate.phone?.replace(/[^\d]/g, '') || '';
+  const targetCompany = candidate.companyName?.trim().toLowerCase() || '';
+  const targetEmailDomain = targetEmail.includes('@') ? targetEmail.split('@')[1] : '';
 
   for (const c of existingContacts) {
+    const existingEmail = String(c.email || '').trim().toLowerCase();
+    const existingPhone = String(c.phone || '').replace(/[^\d]/g, '');
+    const existingCompany = String(c.companyName || '').trim().toLowerCase();
+
     // Check Apollo Person ID
     if (candidate.apolloPersonId && c.apolloPersonId === candidate.apolloPersonId) {
       return c;
     }
-    // Check exact email
-    if (targetEmail && c.email.toLowerCase() === targetEmail) {
+    // Empty values are not identifiers; only compare contact details that were supplied.
+    if (targetEmail && existingEmail === targetEmail) {
       return c;
     }
-    // Check phone
-    if (targetPhone && c.phone && c.phone.replace(/[^\d]/g, '') === targetPhone) {
+    if (targetPhone && existingPhone && existingPhone === targetPhone) {
       return c;
     }
-    // Check company + similar name
-    if (targetCompany && c.companyName.toLowerCase() === targetCompany && targetEmail && c.email.toLowerCase().split('@')[1] === targetEmail.split('@')[1]) {
+    // Check company + email domain only when a real email address was supplied.
+    const existingEmailDomain = existingEmail.includes('@') ? existingEmail.split('@')[1] : '';
+    if (targetCompany && existingCompany === targetCompany && targetEmailDomain && existingEmailDomain === targetEmailDomain) {
       return c;
     }
   }

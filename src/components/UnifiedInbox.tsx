@@ -1,5 +1,4 @@
 import React, { useState, Suspense, useRef, useLayoutEffect, useEffect } from 'react';
-import { WhatsAppTemplatePicker } from './WhatsAppTemplatePicker';
 import { lazyNamed } from '../lazyLoad';
 import {
   Search,
@@ -73,7 +72,6 @@ interface UnifiedInboxProps {
   leads: Lead[];
   knowledgeDocs: KnowledgeDocument[];
   onSendMessage: (conversationId: string, text: string, senderType: 'AGENT' | 'AI' | 'CUSTOMER' | 'PROSPECT') => void;
-  onSendTemplate?: (conversationId: string, template: { name: string; language: string; params: string[] }) => Promise<boolean>;
   onToggleAi: (conversationId: string, enabled: boolean) => void;
   onMarkAsRead?: (conversationId: string) => void;
   onApproveDraft?: (conversationId: string) => void;
@@ -95,7 +93,6 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
   leads,
   knowledgeDocs,
   onSendMessage,
-  onSendTemplate,
   onToggleAi,
   onMarkAsRead,
   onApproveDraft,
@@ -312,23 +309,6 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
     .filter((m) => m.conversationId === activeConversation?.conversationId)
     .sort(sortMsgs);
 
-
-  // Meta messaging window: WhatsApp / Instagram / Messenger allow free-form replies for 24h after the customer's last message.
-  const windowChannel = isUnifiedAllPlatforms ? (replyChannelOverride || activeConversation?.channel) : activeConversation?.channel;
-  const windowMsLeft = (() => {
-    if (!activeConversation || !windowChannel || !['WHATSAPP', 'INSTAGRAM', 'FACEBOOK'].includes(windowChannel)) return null;
-    const lastInbound = messages
-      .filter((m) => m.conversationId === activeConversation.conversationId && m.channel === windowChannel && m.direction === 'INBOUND')
-      .reduce((max, m) => Math.max(max, getMsgTime(m)), 0);
-    if (!lastInbound) return null;
-    return lastInbound + 24 * 60 * 60 * 1000 - Date.now();
-  })();
-  const windowLabel = windowMsLeft === null
-    ? null
-    : windowMsLeft <= 0
-    ? 'Reply window closed'
-    : `Reply window: ${Math.floor(windowMsLeft / 3600000)}h ${Math.floor((windowMsLeft % 3600000) / 60000)}m left`;
-
   const unifiedAllMessages = activeContact
     ? messages
         .filter((m) => contactConversations.some((c) => c.conversationId === m.conversationId))
@@ -454,21 +434,9 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
     return timeB - timeA;
   });
 
-  const [showTemplatePicker, setShowTemplatePicker] = useState(false);
-  const getTargetConvId = () => {
-    let targetConvId = activeConversation?.conversationId || '';
-    if (isUnifiedAllPlatforms && replyChannelOverride) {
-      const matched = contactConversations.find((c) => c.channel === replyChannelOverride);
-      if (matched) targetConvId = matched.conversationId;
-    }
-    return targetConvId;
-  };
-  const whatsappWindowClosed = windowChannel === 'WHATSAPP' && windowMsLeft !== null && windowMsLeft <= 0;
-  const canUseTemplates = windowChannel === 'WHATSAPP' && Boolean(onSendTemplate);
-
   // Handle manual send
   const handleSendReply = () => {
-    if (!replyText.trim() || !activeConversation || whatsappWindowClosed) return;
+    if (!replyText.trim() || !activeConversation) return;
     let targetConvId = activeConversation.conversationId;
 
     if (isUnifiedAllPlatforms && replyChannelOverride) {
@@ -517,6 +485,25 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
       setIsGeneratingAi(false);
     }
   };
+
+  // UI-only terminal-state detection; the existing follow-up worker and cancellation flow are unchanged.
+  const latestInboundFollowUpMessage = activeMessages
+    .filter((m) => m.direction === 'INBOUND' || m.senderType === 'CUSTOMER' || m.senderType === 'PROSPECT')
+    .reduce<Message | null>((latest, message) => !latest || getMsgTime(message) > getMsgTime(latest) ? message : latest, null);
+  const latestOutboundFollowUpMessage = activeMessages
+    .filter((m) => m.senderType === 'AI')
+    .reduce<Message | null>((latest, message) => !latest || getMsgTime(message) > getMsgTime(latest) ? message : latest, null);
+  const leadRepliedAfterFollowUp = Boolean(
+    latestInboundFollowUpMessage &&
+    latestOutboundFollowUpMessage &&
+    getMsgTime(latestInboundFollowUpMessage) > getMsgTime(latestOutboundFollowUpMessage)
+  );
+  const followUpDisabledReason = activeLead?.autoFollowUp?.disabledReason;
+  const followUpCompleted = followUpDisabledReason === 'completed';
+  const followUpClosedByReply = leadRepliedAfterFollowUp &&
+    !followUpCompleted && followUpDisabledReason !== 'manual' && followUpDisabledReason !== 'admin_disabled';
+  const isAutoFollowUpUiActive = Boolean(activeLead?.autoFollowUp?.enabled) &&
+    !leadRepliedAfterFollowUp && !followUpCompleted;
 
   // Toggle Auto Follow-Up on/off for the active lead
   const handleToggleAutoFollowUp = async (enabled: boolean) => {
@@ -614,41 +601,69 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
             />
           </div>
 
-          {/* Channel + status filters (dropdowns) */}
-          <div className="grid grid-cols-2 gap-2 text-xs">
-            <label className="block">
-              <span className="sr-only">Channel</span>
-              <select
-                value={channelFilter}
-                onChange={(e) => setChannelFilter(e.target.value)}
-                className={`w-full rounded-lg border px-2.5 py-1.5 font-semibold focus:outline-none focus:border-orange-500 transition ${
-                  channelFilter !== 'ALL' ? 'border-orange-400 bg-orange-50 text-orange-800' : 'border-slate-200 bg-white text-slate-700'
+          {/* Channel Pills */}
+          <div className="flex space-x-1 overflow-x-auto pb-1 scrollbar-none text-xs">
+            {['ALL', 'EMAIL', 'WHATSAPP', 'WEBSITE', 'INSTAGRAM', 'LINKEDIN'].map((ch) => (
+              <button
+                key={ch}
+                onClick={() => setChannelFilter(ch)}
+                className={`px-2.5 py-1 rounded-lg whitespace-nowrap font-bold transition ${
+                  channelFilter === ch
+                    ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-2xs'
+                    : 'bg-white border border-slate-200 text-slate-600 hover:text-slate-900'
                 }`}
               >
-                <option value="ALL">All channels</option>
-                <option value="EMAIL">Email</option>
-                <option value="WHATSAPP">WhatsApp</option>
-                <option value="WEBSITE">Website</option>
-                <option value="INSTAGRAM">Instagram</option>
-                <option value="LINKEDIN">LinkedIn</option>
-              </select>
-            </label>
-            <label className="block">
-              <span className="sr-only">Status</span>
-              <select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                className={`w-full rounded-lg border px-2.5 py-1.5 font-semibold focus:outline-none focus:border-orange-500 transition ${
-                  statusFilter !== 'ALL' ? 'border-orange-400 bg-orange-50 text-orange-800' : 'border-slate-200 bg-white text-slate-700'
-                }`}
-              >
-                <option value="ALL">All ({conversations.length})</option>
-                <option value="UNREAD">Unread</option>
-                <option value="AI_ACTIVE">AI Active</option>
-                <option value="HUMAN_HANDOFF">Handoff</option>
-                <option value="HIGH_INTENT">High Intent</option>
-              </select>
-            </label>
+                {ch}
+              </button>
+            ))}
+          </div>
+
+          {/* Status Filters */}
+          <div className="flex items-center space-x-1 text-[11px] overflow-x-auto pb-1">
+            <button
+              onClick={() => setStatusFilter('ALL')}
+              className={`px-2 py-0.5 rounded-md transition whitespace-nowrap font-semibold ${
+                statusFilter === 'ALL' ? 'bg-orange-500 text-white' : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              All ({conversations.length})
+            </button>
+            <button
+              onClick={() => setStatusFilter('UNREAD')}
+              className={`px-2 py-0.5 rounded-md transition whitespace-nowrap font-semibold ${
+                statusFilter === 'UNREAD' ? 'bg-orange-500 text-white' : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Unread
+            </button>
+            <button
+              onClick={() => setStatusFilter('AI_ACTIVE')}
+              className={`px-2 py-0.5 rounded-md transition whitespace-nowrap font-semibold ${
+                statusFilter === 'AI_ACTIVE' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              AI Active
+            </button>
+            <button
+              onClick={() => setStatusFilter('HUMAN_HANDOFF')}
+              className={`px-2 py-0.5 rounded transition whitespace-nowrap ${
+                statusFilter === 'HUMAN_HANDOFF'
+                  ? 'bg-amber-600 text-white font-semibold'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Handoff
+            </button>
+            <button
+              onClick={() => setStatusFilter('HIGH_INTENT')}
+              className={`px-2 py-0.5 rounded transition whitespace-nowrap ${
+                statusFilter === 'HIGH_INTENT'
+                  ? 'bg-emerald-600 text-white font-semibold'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              High Intent
+            </button>
           </div>
         </div>
 
@@ -832,10 +847,10 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
                 {/* Auto Follow-Up Toggle Button */}
                 {activeLead && (activeLead.leadType === 'INBOUND' || activeLead.leadType === 'OUTBOUND') && (
                   <button
-                    onClick={() => handleToggleAutoFollowUp(!activeLead?.autoFollowUp?.enabled)}
+                    onClick={() => handleToggleAutoFollowUp(!isAutoFollowUpUiActive)}
                     disabled={isTogglingAutoFollowUp}
                     className={`flex items-center space-x-1.5 px-2.5 py-1 rounded-lg text-xs font-bold border transition ${
-                      activeLead?.autoFollowUp?.enabled
+                      isAutoFollowUpUiActive
                         ? 'bg-emerald-50 border-emerald-300 text-emerald-800 hover:bg-emerald-100'
                         : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
                     }`}
@@ -843,7 +858,7 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
                   >
                     <Clock className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
                     <span>
-                      Auto Follow-Up [{activeLead?.autoFollowUp?.enabled ? ' ON ' : ' OFF '}]
+                      Auto Follow-Up [{isAutoFollowUpUiActive ? ' ON ' : ' OFF '}]
                       {!activeLead?.autoFollowUp?.enabled && activeLead?.autoFollowUp?.disabledReason === 'completed' && (
                         <span className="ml-1 font-semibold text-slate-500">
                           · Completed {activeLead.autoFollowUp.attemptCount || activeLead.autoFollowUp.maxAttempts}/
@@ -894,26 +909,20 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
               </div>
             </div>
 
-            {/* Website lead whose thank-you email did not go out: say why instead of failing silently */}
-            {activeConversation.channel === 'WEBSITE' && !activeConversation.thankYouEmailSent && activeConversation.thankYouError && (
-              <div className="px-3.5 py-2 bg-red-50 border-b border-red-200 text-xs text-red-800">
-                <span className="font-bold">Thank-you email was not sent:</span> {activeConversation.thankYouError}
-                <span className="text-red-600"> The system retries automatically; fix the cause (usually Settings → Email) and it will go out.</span>
-              </div>
-            )}
-
             {/* Compact Auto Follow-Up Status Bar */}
             {activeLead && (activeLead.leadType === 'INBOUND' || activeLead.leadType === 'OUTBOUND') && (
               <div className="px-3.5 py-1.5 bg-orange-50/80 border-b border-orange-100 text-xs flex items-center justify-between">
                 <div className="flex items-center space-x-2">
                   <span className="flex items-center space-x-1.5">
-                    <span className={`w-2 h-2 rounded-full ${activeLead.autoFollowUp?.enabled ? 'bg-orange-500 animate-pulse' : 'bg-slate-400'}`} />
+                    <span className={`w-2 h-2 rounded-full ${isAutoFollowUpUiActive ? 'bg-orange-500 animate-pulse' : 'bg-slate-400'}`} />
                     <span className="font-semibold text-slate-800">Auto Follow-Up:</span>
                   </span>
                   {activeLead.demoStatus === 'BOOKED' || activeLead.status === 'DEMO_BOOKED' ? (
                     <span className="text-amber-700 font-medium">[ OFF ] — Demo booked</span>
-                  ) : activeLead.autoFollowUp?.enabled ? (
-                    activeLead.autoFollowUp.nextScheduledAt ? (
+                  ) : followUpClosedByReply ? (
+                    <span className="text-slate-600 font-medium">[ OFF ] — CLOSED: Lead replied</span>
+                  ) : isAutoFollowUpUiActive ? (
+                    activeLead.autoFollowUp?.nextScheduledAt ? (
                       new Date(activeLead.autoFollowUp.nextScheduledAt).getTime() <= Date.now() ? (
                         <span className="text-amber-700 font-medium animate-pulse">[ ON ] — Due now (processing follow-up...)</span>
                       ) : (
@@ -1173,12 +1182,6 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
               </div>
             )}
 
-            {windowLabel && (
-              <div className={`px-3 py-1.5 text-[11px] font-semibold border-t ${windowMsLeft! <= 0 ? 'bg-rose-50 text-rose-700 border-rose-100' : 'bg-emerald-50 text-emerald-700 border-emerald-100'}`}>
-                {windowLabel}
-                {windowMsLeft! <= 0 && ' — free-form replies are blocked by the platform; only an approved template can be sent.'}
-              </div>
-            )}
             {/* Message Reply Box */}
             <div className="p-3 bg-white border-t border-slate-200/80 shrink-0">
               {/* Channel Selector for Unified Mode */}
@@ -1211,10 +1214,7 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
               <div className="flex items-end space-x-2">
                 <textarea
                   rows={2}
-                  disabled={whatsappWindowClosed}
-                  placeholder={whatsappWindowClosed
-                    ? 'The 24-hour window has closed. Send an approved template instead.'
-                    : `Reply to ${activeContact.firstName} via ${(
+                  placeholder={`Reply to ${activeContact.firstName} via ${(
                     (isUnifiedAllPlatforms ? replyChannelOverride : null) || activeConversation.channel
                   ).toLowerCase()}...`}
                   value={replyText}
@@ -1229,29 +1229,14 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
                 />
                 <button
                   onClick={handleSendReply}
-                  disabled={!replyText.trim() || whatsappWindowClosed}
+                  disabled={!replyText.trim()}
                   className="h-14 px-4 rounded-xl bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 text-white text-xs font-bold flex items-center justify-center transition disabled:opacity-40 shadow-xs"
                 >
                   <Send className="w-4 h-4 mr-1.5" />
                   <span>Send</span>
                 </button>
-                {canUseTemplates && (
-                  <button
-                    onClick={() => setShowTemplatePicker(true)}
-                    className={`h-14 px-3 rounded-xl text-xs font-bold border transition ${whatsappWindowClosed ? 'bg-orange-500 text-white border-orange-500 hover:bg-orange-600' : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'}`}
-                  >
-                    Template
-                  </button>
-                )}
               </div>
             </div>
-            {showTemplatePicker && onSendTemplate && (
-              <WhatsAppTemplatePicker
-                defaultFirstParam={activeContact.firstName}
-                onClose={() => setShowTemplatePicker(false)}
-                onSend={(template) => onSendTemplate(getTargetConvId(), template)}
-              />
-            )}
           </>
         ) : (
           <div className="flex-1 flex items-center justify-center text-slate-500 text-sm">

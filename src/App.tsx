@@ -2246,25 +2246,30 @@ export default function App() {
                   }
                 }}
                 onAddLead={(newLead, newContact) => {
+                  const contactToSave: Contact = {
+                    ...newContact,
+                    firstName: String(newContact.firstName ?? '').trim(),
+                    lastName: String(newContact.lastName ?? '').trim(),
+                    email: String(newContact.email ?? '').trim(),
+                    phone: String(newContact.phone ?? '').trim(),
+                    companyName: String(newContact.companyName ?? '').trim(),
+                    city: String(newContact.city ?? '').trim(),
+                  };
                   setLeads((prev) => {
                     const next = [newLead, ...prev];
-                    try {
-                      localStorage.setItem('umrah360_leads_cache', JSON.stringify(next));
-                    } catch {}
+                    try { localStorage.setItem('umrah360_leads_cache', JSON.stringify(next)); } catch {}
                     return next;
                   });
                   setContacts((prev) => {
-                    const next = [newContact, ...prev];
-                    try {
-                      localStorage.setItem('umrah360_contacts_cache', JSON.stringify(next));
-                    } catch {}
+                    const next = [contactToSave, ...prev];
+                    try { localStorage.setItem('umrah360_contacts_cache', JSON.stringify(next)); } catch {}
                     return next;
                   });
                   if (isFirebaseConfigured && db) {
                     setDoc(tDoc('leads', newLead.leadId), cleanForFirestore(newLead), { merge: true }).catch((err) => {
                       console.error('[Firestore] Failed adding lead:', err);
                     });
-                    setDoc(tDoc('contacts', newContact.contactId), cleanForFirestore(newContact), { merge: true }).catch((err) => {
+                    setDoc(tDoc('contacts', contactToSave.contactId), cleanForFirestore(contactToSave), { merge: true }).catch((err) => {
                       console.error('[Firestore] Failed adding contact:', err);
                     });
                   }

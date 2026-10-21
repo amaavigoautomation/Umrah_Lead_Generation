@@ -909,27 +909,19 @@ export function findDuplicateContact(
   candidate: { email?: string; phone?: string; companyName?: string; apolloPersonId?: string },
   existingContacts: Contact[]
 ): Contact | null {
-  const targetEmail = candidate.email?.trim().toLowerCase();
-  const targetPhone = candidate.phone?.replace(/[^\d]/g, '');
-  const targetCompany = candidate.companyName?.trim().toLowerCase();
-
+  const targetEmail = candidate.email?.trim().toLowerCase() || '';
+  const targetPhone = candidate.phone?.replace(/[^\d]/g, '') || '';
+  const targetCompany = candidate.companyName?.trim().toLowerCase() || '';
+  const targetDomain = targetEmail.includes('@') ? targetEmail.split('@')[1] : '';
   for (const c of existingContacts) {
-    // Check Apollo Person ID
-    if (candidate.apolloPersonId && c.apolloPersonId === candidate.apolloPersonId) {
-      return c;
-    }
-    // Check exact email
-    if (targetEmail && c.email.toLowerCase() === targetEmail) {
-      return c;
-    }
-    // Check phone
-    if (targetPhone && c.phone && c.phone.replace(/[^\d]/g, '') === targetPhone) {
-      return c;
-    }
-    // Check company + similar name
-    if (targetCompany && c.companyName.toLowerCase() === targetCompany && targetEmail && c.email.toLowerCase().split('@')[1] === targetEmail.split('@')[1]) {
-      return c;
-    }
+    const email = String(c.email || '').trim().toLowerCase();
+    const phone = String(c.phone || '').replace(/[^\d]/g, '');
+    const company = String(c.companyName || '').trim().toLowerCase();
+    if (candidate.apolloPersonId && c.apolloPersonId === candidate.apolloPersonId) return c;
+    if (targetEmail && email === targetEmail) return c;
+    if (targetPhone && phone && phone === targetPhone) return c;
+    const domain = email.includes('@') ? email.split('@')[1] : '';
+    if (targetCompany && company === targetCompany && targetDomain && domain === targetDomain) return c;
   }
 
   return null;

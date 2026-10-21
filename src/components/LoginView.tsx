@@ -170,6 +170,14 @@ export const LoginView: React.FC<LoginViewProps> = ({ isFirebaseActive, initialE
             </button>
           </div>
         </div>
+
+        <footer className="text-center text-[11px] text-slate-500">
+          <nav aria-label="Legal" className="flex items-center justify-center gap-4">
+            <a href="/privacy-policy.html" className="hover:text-slate-800 underline underline-offset-2">Privacy Policy</a>
+            <a href="/terms-and-conditions.html" className="hover:text-slate-800 underline underline-offset-2">Terms &amp; Conditions</a>
+            <a href="mailto:sales@umrah360.in" className="hover:text-slate-800 underline underline-offset-2">Contact</a>
+          </nav>
+        </footer>
       </div>
     </div>
   );

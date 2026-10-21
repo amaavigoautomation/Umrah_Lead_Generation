@@ -439,7 +439,7 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
         if (!row || row.every(cell => String(cell ?? '').trim() === '')) return;
         const rawFirst = value(row, 'firstName');
         const fullName = value(row, 'fullName');
-        const splitName = fullName ? fullName.trim().split(/\\s+/) : [];
+        const splitName = fullName ? fullName.trim().split(/\s+/) : [];
         const firstName = rawFirst || splitName.shift() || '';
         const lastName = value(row, 'lastName') || splitName.join(' ');
         if (!firstName) {
@@ -451,7 +451,7 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
         const city = value(row, 'city'), caller = value(row, 'caller') || defaultCaller;
         const statusRaw = (value(row, 'status') || 'NEW').toUpperCase() as LeadStatus;
         const notes = value(row, 'notes');
-        if (email && !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)) {
+        if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
           invalid++;
           if (rowErrors.length < 3) rowErrors.push(`Row ${index + 2}: email format is invalid.`);
           return;

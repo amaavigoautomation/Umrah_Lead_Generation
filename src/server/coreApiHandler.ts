@@ -43,6 +43,7 @@ import {
   startCampaign,
   pauseCampaign,
   restartCampaign,
+  getCampaignRestartTemplateResolution,
   getAllTemplates,
   getTemplatesFromDbOrCache,
   getTemplateById,
@@ -2812,32 +2813,36 @@ Generate a helpful, grounded response.`;
     const campaignId = campaignRestartPreviewMatch[1];
     await initCampaignStore();
     const camp = getCampaignById(campaignId);
-    if (!camp) {
-      res.statusCode = 404;
-      res.end(JSON.stringify({ error: 'Campaign not found' }));
+    if (!camp) { res.statusCode = 404; res.end(JSON.stringify({ error: 'Campaign not found' })); return true; }
+
+    let templateResolution;
+    try {
+      templateResolution = await getCampaignRestartTemplateResolution(camp);
+    } catch (err: any) {
+      res.statusCode = err?.code === 'CAMPAIGN_TEMPLATE_VERIFY_FAILED' ? 503 : 400;
+      res.end(JSON.stringify({ error: err?.message || 'Unable to verify the campaign email template', code: err?.code || 'CAMPAIGN_TEMPLATE_VERIFY_FAILED' }));
       return true;
     }
-    // Rare, explicit action: reads this campaign's leads once (memory may only hold a partial set now).
+
     const leads = await getCampaignLeadsFromDb(campaignId);
     const repliedLeads = leads.filter((l) => l.replyStatus === 'REPLIED');
     const unrepliedLeads = leads.filter((l) => l.replyStatus !== 'REPLIED');
     const allQualified = leads.length > 0 && repliedLeads.length === leads.length;
     const nextRunNumber = (camp.lastRunNumber || 0) + 1;
+    const availableTemplates = templateResolution.missing ? templateResolution.availableTemplates.map((template) => ({
+      templateId: template.templateId, name: template.name, subject: template.subject,
+      body: template.body, htmlBody: template.htmlBody, format: template.format, isHtml: template.isHtml,
+      createdAt: template.createdAt, updatedAt: template.updatedAt,
+    })) : [];
 
     res.statusCode = 200;
-    res.end(
-      JSON.stringify({
-        success: true,
-        campaignId,
-        nextRunNumber,
-        totalLeads: leads.length,
-        unrepliedCount: unrepliedLeads.length,
-        repliedCount: repliedLeads.length,
-        allQualified,
-        unrepliedLeads,
-        repliedLeads,
-      })
-    );
+    res.end(JSON.stringify({
+      success: true, campaignId, nextRunNumber, totalLeads: leads.length,
+      unrepliedCount: unrepliedLeads.length, repliedCount: repliedLeads.length, allQualified, unrepliedLeads, repliedLeads,
+      templateRequired: templateResolution.required, templateMissing: templateResolution.missing,
+      campaignTemplateId: templateResolution.currentTemplateId, campaignTemplateName: templateResolution.currentTemplateName,
+      availableTemplates,
+    }));
     return true;
   }
 
@@ -2859,8 +2864,21 @@ Generate a helpful, grounded response.`;
         })
       );
     } catch (err: any) {
-      res.statusCode = 400;
-      res.end(JSON.stringify({ error: err?.message || 'Failed to restart campaign' }));
+      const code = err?.code as string | undefined;
+      let availableTemplates: any[] = [];
+      if (code === 'CAMPAIGN_TEMPLATE_MISSING') {
+        try {
+          availableTemplates = (await getTemplatesFromDbOrCache()).map((template) => ({
+            templateId: template.templateId, name: template.name, subject: template.subject,
+            body: template.body, htmlBody: template.htmlBody, format: template.format, isHtml: template.isHtml,
+            createdAt: template.createdAt, updatedAt: template.updatedAt,
+          }));
+        } catch {}
+      }
+      res.statusCode = code === 'CAMPAIGN_TEMPLATE_MISSING' ? 409
+        : code === 'CAMPAIGN_TEMPLATE_INCOMPATIBLE' ? 422
+        : code === 'CAMPAIGN_TEMPLATE_VERIFY_FAILED' ? 503 : 400;
+      res.end(JSON.stringify({ error: err?.message || 'Failed to restart campaign', code, missingVariables: err?.missingVariables, availableTemplates }));
     }
     return true;
   }

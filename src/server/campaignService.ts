@@ -37,6 +37,7 @@ import { sanitizeAiEmailText } from './emailSanitizer.js';
 import { getTenantBrand, getBrandSync } from './brandService.js';
 import { initKnowledgeStore, getPublishedKnowledgeDocs } from './knowledgeService.js';
 import { brandIntro, brandHost, type TenantBrand } from '../shared/brand.js';
+import { getUnsupportedEmailTemplateVariables, SUPPORTED_EMAIL_TEMPLATE_VARIABLES } from '../shared/emailTemplateValidation.js';
 
 const campaignSenderName = (b: TenantBrand) => (b.playbook === 'umrah360' ? 'Umrah360 Growth Team' : b.teamName);
 
@@ -1935,6 +1936,61 @@ export async function pauseCampaign(campaignId: string): Promise<Campaign> {
  *   2. Leads who have NOT replied (replyStatus !== 'REPLIED', whether previous send failed or had no reply) are QUEUED (sendStatus = 'PENDING') for this follow-up run.
  *   3. If ALL leads have replied (allQualified = true, 0 unreplied leads), no emails are sent and the run records that all leads have qualified.
  */
+type CampaignRestartTemplateErrorCode = 'CAMPAIGN_TEMPLATE_MISSING' | 'CAMPAIGN_TEMPLATE_INCOMPATIBLE' | 'CAMPAIGN_TEMPLATE_VERIFY_FAILED';
+function campaignRestartTemplateError(
+  code: CampaignRestartTemplateErrorCode,
+  message: string,
+  missingVariables?: string[]
+): Error & { code: CampaignRestartTemplateErrorCode; missingVariables?: string[] } {
+  const error = new Error(message) as Error & { code: CampaignRestartTemplateErrorCode; missingVariables?: string[] };
+  error.code = code;
+  if (missingVariables?.length) error.missingVariables = missingVariables;
+  return error;
+}
+/** Read the workspace source of truth instead of trusting a possibly stale in-memory template. */
+async function getEmailTemplateForCampaignRestart(templateId: string): Promise<EmailTemplate> {
+  if (isFirebaseConfigured && db) {
+    let snapshot;
+    try {
+      snapshot = await getDoc(tenantRepo(getCampaignActiveCtx()).emailTemplateDoc(templateId));
+    } catch {
+      throw campaignRestartTemplateError('CAMPAIGN_TEMPLATE_VERIFY_FAILED',
+        'The email template could not be verified right now. The campaign has not been restarted. Please try again.');
+    }
+    if (!snapshot.exists()) {
+      emailTemplatesMap.delete(templateId);
+      throw campaignRestartTemplateError('CAMPAIGN_TEMPLATE_MISSING',
+        'The email template used by this campaign is no longer available. Select a replacement template to restart the campaign.');
+    }
+    const template = snapshot.data() as EmailTemplate;
+    emailTemplatesMap.set(templateId, template);
+    return template;
+  }
+  const template = getTemplateById(templateId) || DEFAULT_EMAIL_TEMPLATES.find((item) => item.templateId === templateId);
+  if (!template) throw campaignRestartTemplateError('CAMPAIGN_TEMPLATE_MISSING',
+    'The email template used by this campaign is no longer available. Select a replacement template to restart the campaign.');
+  return template;
+}
+/** Resolve restart template status without changing campaign or run state. */
+export async function getCampaignRestartTemplateResolution(campaign: Campaign): Promise<{
+  required: boolean; missing: boolean; currentTemplateId: string; currentTemplateName: string; availableTemplates: EmailTemplate[];
+}> {
+  const required = (campaign.type === 'EMAIL' || campaign.type === 'WHATSAPP_EMAIL') && Boolean(campaign.templateId);
+  const currentTemplateId = campaign.templateId || '';
+  if (!required) return { required: false, missing: false, currentTemplateId, currentTemplateName: campaign.templateName || '', availableTemplates: [] };
+  try {
+    const template = await getEmailTemplateForCampaignRestart(currentTemplateId);
+    return { required: true, missing: false, currentTemplateId, currentTemplateName: template.name || campaign.templateName || currentTemplateId, availableTemplates: [] };
+  } catch (error: any) {
+    if (error?.code !== 'CAMPAIGN_TEMPLATE_MISSING') throw error;
+    const loadedTemplates = await getTemplatesFromDbOrCache();
+    const availableTemplates = loadedTemplates.length || !isFirebaseConfigured
+      ? (loadedTemplates.length ? loadedTemplates : DEFAULT_EMAIL_TEMPLATES)
+      : loadedTemplates;
+    return { required: true, missing: true, currentTemplateId, currentTemplateName: campaign.templateName || currentTemplateId, availableTemplates };
+  }
+}
+
 export async function restartCampaign(
   campaignId: string,
   options?: { resetFailedOnly?: boolean; newTemplateId?: string }
@@ -1949,6 +2005,27 @@ export async function restartCampaign(
   const campaign = await ensureCampaignInStore(campaignId);
   if (!campaign) throw new Error(`Campaign ${campaignId} not found`);
 
+  // Validate before aborting send loops, queuing leads, or mutating the campaign.
+  const requiresEmailTemplate = campaign.type === 'EMAIL' || campaign.type === 'WHATSAPP_EMAIL';
+  const requestedReplacementId = typeof options?.newTemplateId === 'string' ? options.newTemplateId.trim() : '';
+  let validatedTemplateId: string | undefined;
+  let validatedTemplateName: string | undefined;
+  if (requiresEmailTemplate && (requestedReplacementId || campaign.templateId)) {
+    const templateIdToValidate = requestedReplacementId || campaign.templateId || '';
+    const validatedTemplate = await getEmailTemplateForCampaignRestart(templateIdToValidate);
+    if (requestedReplacementId) {
+      const unsupportedVariables = getUnsupportedEmailTemplateVariables(validatedTemplate);
+      if (unsupportedVariables.length > 0) {
+        const variables = unsupportedVariables.map((name) => `{{${name}}}`).join(', ');
+        const supported = SUPPORTED_EMAIL_TEMPLATE_VARIABLES.map((name) => `{{${name}}}`).join(', ');
+        throw campaignRestartTemplateError('CAMPAIGN_TEMPLATE_INCOMPATIBLE',
+          `This replacement template uses unsupported personalization variable(s): ${variables}. Supported variables are: ${supported}. Choose another template or edit the replacement before restarting.`,
+          unsupportedVariables);
+      }
+    }
+    validatedTemplateId = templateIdToValidate;
+    validatedTemplateName = validatedTemplate.name;
+  }
   pausedCampaignsSet.delete(campaignId);
 
   // Halt any currently active send loops for this campaign
@@ -1962,7 +2039,7 @@ export async function restartCampaign(
   const nextRunNumber = (campaign.lastRunNumber || 0) + 1;
   const newRunId = `run-${campaignId}-${nextRunNumber}`;
   const allAvailable = getAllTemplates();
-  const templateId = options?.newTemplateId || campaign.templateId || (allAvailable.length > 0 ? allAvailable[0].templateId : DEFAULT_EMAIL_TEMPLATES[0].templateId);
+  const templateId = validatedTemplateId || campaign.templateId || (allAvailable.length > 0 ? allAvailable[0].templateId : DEFAULT_EMAIL_TEMPLATES[0].templateId);
 
   // Mark previous run as COMPLETED if it was running or paused
   if (campaign.currentRunId) {
@@ -2008,6 +2085,7 @@ export async function restartCampaign(
     campaign.status = 'COMPLETED';
     campaign.completedAt = now;
     campaign.templateId = templateId;
+    if (validatedTemplateName) campaign.templateName = validatedTemplateName;
     campaign.updatedAt = now;
     campaignsMap.set(campaignId, campaign);
 

@@ -61,6 +61,7 @@ import { EmailTemplateEditorModal } from './EmailTemplateEditorModal.js';
 import { INITIAL_CAMPAIGN } from '../services/dataService.js';
 import { zonedLocalToUtcIso, utcToZonedLocal, formatZoned, timeUntil } from '../shared/zonedTime';
 import { markDuplicateEmails, summarizeLeads } from '../shared/leadDedupe';
+import { getUnsupportedEmailTemplateVariables, SUPPORTED_EMAIL_TEMPLATE_VARIABLES } from '../shared/emailTemplateValidation';
 
 interface CampaignManagementProps {
   onOpenConversation?: (conversationId: string) => void;
@@ -135,6 +136,12 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
   const [editingTemplate, setEditingTemplate] = useState<EmailTemplate | null>(null);
   const [isRestartConfirmOpen, setIsRestartConfirmOpen] = useState(false);
   const [restartPreview, setRestartPreview] = useState<{ repliedLeads: CampaignLead[]; unrepliedLeads: CampaignLead[] } | null>(null);
+  const [restartTemplateResolution, setRestartTemplateResolution] = useState<{
+    loading: boolean; required: boolean; missing: boolean; currentTemplateId: string;
+    currentTemplateName: string; availableTemplates: EmailTemplate[]; error?: string;
+  }>({ loading: false, required: false, missing: false, currentTemplateId: '', currentTemplateName: '', availableTemplates: [] });
+  const [replacementTemplateId, setReplacementTemplateId] = useState('');
+  const [restartTemplateSelectionError, setRestartTemplateSelectionError] = useState<string | null>(null);
   // Leads table paging (one page at a time; the server never sends the whole list).
   const [leadsCursor, setLeadsCursor] = useState<string | null>(null);
   const [isLoadingLeads, setIsLoadingLeads] = useState(false);
@@ -671,23 +678,38 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
     };
   }, [selectedCampaignId]);
 
-  // Restart dialog: load the replied / not-replied split once when it opens.
+  // Refresh the lead split and verify the saved email template whenever restart opens.
   useEffect(() => {
     if (!isRestartConfirmOpen || !selectedCampaignId) {
       setRestartPreview(null);
+      setRestartTemplateResolution({ loading: false, required: false, missing: false, currentTemplateId: '', currentTemplateName: '', availableTemplates: [] });
+      setReplacementTemplateId('');
+      setRestartTemplateSelectionError(null);
       return;
     }
     let cancelled = false;
-    fetchJsonWithTimeout(`/api/campaigns/${selectedCampaignId}/restart-preview`).then((d) => {
-      if (cancelled || !d) return;
-      setRestartPreview({
-        repliedLeads: Array.isArray(d.repliedLeads) ? d.repliedLeads : [],
-        unrepliedLeads: Array.isArray(d.unrepliedLeads) ? d.unrepliedLeads : [],
+    setRestartTemplateResolution({ loading: true, required: false, missing: false, currentTemplateId: '', currentTemplateName: '', availableTemplates: [] });
+    setReplacementTemplateId('');
+    setRestartTemplateSelectionError(null);
+    fetchJsonWithTimeout(`/api/campaigns/${selectedCampaignId}/restart-preview`).then((data) => {
+      if (cancelled) return;
+      if (!data || !data.success) {
+        setRestartPreview(null);
+        setRestartTemplateResolution({ loading: false, required: true, missing: false, currentTemplateId: '', currentTemplateName: '', availableTemplates: [], error: data?.error || 'Unable to verify the campaign template. The campaign cannot be restarted until the status is checked.' });
+        return;
+      }
+      setRestartPreview({ repliedLeads: Array.isArray(data.repliedLeads) ? data.repliedLeads : [], unrepliedLeads: Array.isArray(data.unrepliedLeads) ? data.unrepliedLeads : [] });
+      setRestartTemplateResolution({
+        loading: false, required: Boolean(data.templateRequired), missing: Boolean(data.templateMissing),
+        currentTemplateId: String(data.campaignTemplateId || ''), currentTemplateName: String(data.campaignTemplateName || ''),
+        availableTemplates: Array.isArray(data.availableTemplates) ? data.availableTemplates : [],
       });
+    }).catch((error) => {
+      if (cancelled) return;
+      setRestartPreview(null);
+      setRestartTemplateResolution({ loading: false, required: true, missing: false, currentTemplateId: '', currentTemplateName: '', availableTemplates: [], error: error?.message || 'Unable to verify the campaign template. Please try again.' });
     });
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, [isRestartConfirmOpen, selectedCampaignId]);
 
   // ---------------------------------------------------------------------------
@@ -924,65 +946,55 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
     }
   };
 
-  const handleRestartCampaign = async (campaignId: string) => {
+  const handleRestartCampaign = async (campaignId: string, newTemplateId?: string) => {
     try {
       setIsRestarting(true);
-      const nowIso = new Date().toISOString();
-
-      if (isFirebaseConfigured && db) {
-        try {
-          await setDoc(doc(db, 'campaigns', campaignId), { status: 'RUNNING', updatedAt: nowIso }, { merge: true });
-        } catch (e) {}
-      }
-
+      setRestartTemplateSelectionError(null);
       const res = await fetch(`/api/campaigns/${campaignId}/restart`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({}),
+        body: JSON.stringify(newTemplateId ? { newTemplateId } : {}),
       });
-      const data = await res.json();
-      setIsRestartConfirmOpen(false);
-
-      if (data.success || data.campaign) {
-        if (data.allQualified) {
-          setCampaignNotification({
-            type: 'warning',
-            title: 'All Leads Qualified! 🎉',
-            message: data.message || 'All leads in this campaign have replied and qualified. 0 emails were dispatched as no unreplied leads remain.',
-            subtext: `Run #${data.run?.runNumber || (selectedCampaign?.lastRunNumber || 1) + 1} recorded with 0 new sends.`,
-          });
-        } else {
-          setCampaignNotification({
-            type: 'success',
-            title: `Run #${data.run?.runNumber || (selectedCampaign?.lastRunNumber || 0) + 1} Dispatched!`,
-            message: data.message || `Started follow-up run for unreplied leads.`,
-            subtext: `${data.alreadyRepliedCount || 0} lead(s) who already replied were safely excluded from sending.`,
-          });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success || !data.campaign) {
+        const message = data.error || 'Campaign restart was rejected. No new run was started.';
+        if (data.code === 'CAMPAIGN_TEMPLATE_MISSING') {
+          setRestartTemplateResolution((previous) => ({ ...previous, loading: false, required: true, missing: true, availableTemplates: Array.isArray(data.availableTemplates) ? data.availableTemplates : previous.availableTemplates, error: undefined }));
+          setReplacementTemplateId('');
+          setRestartTemplateSelectionError(null);
+          return;
         }
-
-        if (data.campaign) setSelectedCampaign(data.campaign);
-        await loadData();
-        await loadSelectedCampaignDetails(campaignId);
+        if (data.code === 'CAMPAIGN_TEMPLATE_INCOMPATIBLE') { setRestartTemplateSelectionError(message); return; }
+        if (data.code === 'CAMPAIGN_TEMPLATE_VERIFY_FAILED') {
+          setRestartTemplateResolution((previous) => ({ ...previous, loading: false, error: message }));
+          return;
+        }
+        setCampaignNotification({ type: 'warning', title: 'Campaign Restart Failed', message });
+        return;
+      }
+      setIsRestartConfirmOpen(false);
+      setRestartTemplateResolution({ loading: false, required: false, missing: false, currentTemplateId: '', currentTemplateName: '', availableTemplates: [] });
+      setReplacementTemplateId('');
+      if (data.allQualified) {
+        setCampaignNotification({
+          type: 'warning', title: 'All Leads Qualified! 🎉',
+          message: data.message || 'All leads in this campaign have replied and qualified. 0 emails were dispatched as no unreplied leads remain.',
+          subtext: `Run #${data.run?.runNumber || (selectedCampaign?.lastRunNumber || 1) + 1} recorded with 0 new sends.`,
+        });
       } else {
         setCampaignNotification({
-          type: 'success',
-          title: 'Campaign Restarted!',
-          message: 'Campaign follow-up run has been re-triggered.',
+          type: 'success', title: `Run #${data.run?.runNumber || (selectedCampaign?.lastRunNumber || 0) + 1} Dispatched!`,
+          message: data.message || 'Started follow-up run for unreplied leads.',
+          subtext: `${data.alreadyRepliedCount || 0} lead(s) who already replied were safely excluded from sending.`,
         });
-        setCampaigns((prev) =>
-          prev.map((c) => (c.campaignId === campaignId ? { ...c, status: 'RUNNING', updatedAt: nowIso } : c))
-        );
       }
-    } catch (e: any) {
-      console.error('Error restarting campaign:', e);
-      setCampaignNotification({
-        type: 'warning',
-        title: 'Restart Triggered',
-        message: 'Campaign restarted in local state.',
-      });
-    } finally {
-      setIsRestarting(false);
-    }
+      setSelectedCampaign(data.campaign);
+      await loadData();
+      await loadSelectedCampaignDetails(campaignId);
+    } catch (error: any) {
+      console.error('Error restarting campaign:', error);
+      setCampaignNotification({ type: 'warning', title: 'Campaign Restart Failed', message: error?.message || 'The campaign could not be restarted. No new run was confirmed.' });
+    } finally { setIsRestarting(false); }
   };
 
   // Update lead reply status (e.g. when manually qualifying or syncing lead state)
@@ -3462,11 +3474,68 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
         const previewTotal = repliedLeads.length + unrepliedLeads.length;
         const allQualified = previewTotal > 0 && repliedLeads.length === previewTotal;
         const nextRun = (selectedCampaign.lastRunNumber || 0) + 1;
+        const replacementTemplate = restartTemplateResolution.availableTemplates.find((template) => template.templateId === replacementTemplateId);
+        const unsupportedReplacementVariables = replacementTemplate ? getUnsupportedEmailTemplateVariables(replacementTemplate) : [];
 
         return (
           <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
             <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-lg p-6 space-y-4 shadow-2xl text-slate-900 animate-in fade-in zoom-in-95 duration-150">
-              {allQualified ? (
+              {restartTemplateResolution.loading ? (
+                <div className="py-8 flex flex-col items-center gap-3 text-center">
+                  <RefreshCw className="w-6 h-6 text-orange-500 animate-spin" />
+                  <h3 className="text-base font-bold text-slate-900">Checking Campaign Template</h3>
+                  <p className="text-xs text-slate-500">Verifying that the current email template is still available before restarting.</p>
+                </div>
+              ) : restartTemplateResolution.error ? (
+                <>
+                  <div className="flex items-start gap-3">
+                    <div className="p-2.5 bg-rose-50 border border-rose-200 rounded-xl text-rose-600"><AlertTriangle className="w-5 h-5" /></div>
+                    <div><h3 className="text-base font-bold text-slate-900">Cannot Verify Campaign Template</h3><p className="text-xs text-slate-600 mt-1">{restartTemplateResolution.error}</p></div>
+                  </div>
+                  <div className="flex justify-end pt-2"><button onClick={() => setIsRestartConfirmOpen(false)} className="px-4 py-2 text-xs text-slate-600 hover:text-slate-900 font-medium">Close</button></div>
+                </>
+              ) : restartTemplateResolution.missing ? (
+                <>
+                  <div className="flex items-start gap-3">
+                    <div className="p-2.5 bg-amber-50 border border-amber-200 rounded-xl text-amber-600 shrink-0"><AlertTriangle className="w-5 h-5" /></div>
+                    <div>
+                      <h3 className="text-base font-bold text-slate-900">Email Template Missing</h3>
+                      <p className="text-xs text-slate-600 mt-1">The template used by this campaign{restartTemplateResolution.currentTemplateName ? ` (“${restartTemplateResolution.currentTemplateName}”)` : ''} is no longer available. The campaign has not been restarted. Choose a replacement template to continue.</p>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="block text-xs font-semibold text-slate-700" htmlFor="restart-replacement-template">Replacement email template</label>
+                    <select id="restart-replacement-template" value={replacementTemplateId}
+                      onChange={(event) => { setReplacementTemplateId(event.target.value); setRestartTemplateSelectionError(null); }}
+                      disabled={isRestarting || restartTemplateResolution.availableTemplates.length === 0}
+                      className="w-full px-3 py-2.5 bg-white border border-slate-300 rounded-lg text-sm text-slate-800 focus:outline-none focus:border-orange-500 disabled:bg-slate-100">
+                      <option value="">Select an available template…</option>
+                      {restartTemplateResolution.availableTemplates.map((template) => (
+                        <option key={template.templateId} value={template.templateId}>{template.name}{template.subject ? ` — ${template.subject.slice(0, 65)}` : ''}</option>
+                      ))}
+                    </select>
+                    {restartTemplateResolution.availableTemplates.length === 0 && <p className="text-xs text-rose-700">No replacement templates are available. Create or restore an email template, then reopen Restart Campaign.</p>}
+                    {replacementTemplateId && !replacementTemplate && <p className="text-xs text-rose-700">This replacement is no longer available. Refresh the campaign and select another template.</p>}
+                    {unsupportedReplacementVariables.length > 0 && (
+                      <div className="p-3 rounded-lg border border-rose-200 bg-rose-50 text-xs text-rose-800 space-y-1">
+                        <p className="font-semibold">This template is incompatible with the campaign renderer.</p>
+                        <p>Unsupported personalization variable(s): {unsupportedReplacementVariables.map((name) => `{{${name}}}`).join(', ')}</p>
+                        <p>Supported variables: {SUPPORTED_EMAIL_TEMPLATE_VARIABLES.map((name) => `{{${name}}}`).join(', ')}</p>
+                        <p>Supported variables with empty lead values keep the normal renderer fallback behaviour.</p>
+                      </div>
+                    )}
+                    {restartTemplateSelectionError && <p className="p-3 rounded-lg border border-rose-200 bg-rose-50 text-xs text-rose-800">{restartTemplateSelectionError}</p>}
+                  </div>
+                  <div className="flex items-center justify-end gap-3 pt-2">
+                    <button onClick={() => setIsRestartConfirmOpen(false)} className="px-4 py-2 text-xs text-slate-600 hover:text-slate-900 font-medium">Cancel</button>
+                    <button disabled={isRestarting || !replacementTemplateId || !replacementTemplate || unsupportedReplacementVariables.length > 0}
+                      onClick={() => handleRestartCampaign(selectedCampaign.campaignId, replacementTemplateId)}
+                      className="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg text-xs font-semibold transition flex items-center gap-2 shadow-xs disabled:opacity-50 disabled:cursor-not-allowed">
+                      {isRestarting ? <><RefreshCw className="w-3.5 h-3.5 animate-spin" /><span>Replacing Template...</span></> : <span>Replace & Restart</span>}
+                    </button>
+                  </div>
+                </>
+              ) : allQualified ? (
                 // ALL LEADS QUALIFIED POPUP
                 <>
                   <div className="flex items-start gap-3">

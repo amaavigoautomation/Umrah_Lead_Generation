@@ -1,0 +1,17 @@
+import type { IncomingMessage, ServerResponse } from 'http';
+import { handleCoreApi } from '../../src/server/coreApiHandler.js';
+
+export default async function handler(req: IncomingMessage & { body?: any }, res: ServerResponse) {
+  try {
+    const handled = await handleCoreApi(req, res);
+    if (handled) return;
+  } catch (err: any) {
+    console.error('[Webhook umrah-demo Error]:', err);
+  }
+
+  if (!res.writableEnded) {
+    res.statusCode = 200;
+    res.setHeader('Content-Type', 'application/json');
+    res.end(JSON.stringify({ success: true, service: 'Umrah360 Inbound Webhook' }));
+  }
+}

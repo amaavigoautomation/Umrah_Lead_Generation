@@ -1,0 +1,6 @@
+{
+  "name": "Umrah360 AI Lead & Engagement Platform",
+  "description": "Production-ready AI Lead Generation, Outbound Prospecting and Omnichannel Customer Engagement Platform for Umrah360 with Gemini intelligence and Firestore persistence.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,3012 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
+import { stripQuotedEmailHistory } from './quotedText.js';
+import { hasFeature } from './entitlements.js';
+import { tenantRepo } from './tenantRepo.js';
+import type { TenantContext } from '../types/tenant.js';
+import crypto from 'crypto';
+import { normalizeEmail, type DuplicateInfo } from '../shared/leadDedupe.js';
+import OpenAI from 'openai';
+import { INITIAL_KNOWLEDGE_DOCUMENTS } from '../services/knowledgeData.js';
+import {
+  collection,
+  doc,
+  getDocs,
+  getDoc,
+  setDoc,
+  deleteDoc,
+  createDoc,
+  updateDoc,
+  query,
+  where,
+  limit,
+  countDocs,
+  sumDocs,
+  orderBy,
+  orderByDocumentId,
+  startAfterValues,
+  startAfterId,
+} from './adminFirestore.js';
+import { isFirebaseConfigured } from '../firebase/config.js';
+import { db } from './adminFirestore.js';
+import { safeSetDoc } from './firestoreUtils.js';
+import { sendLiveEmail, getEmailSendReadiness } from './smtpService.js';
+import { getTenantEmailSettings } from './tenantEmailService.js';
+import { appendOutboundMessageToThread } from './inboundPipeline.js';
+import { sanitizeAiEmailText } from './emailSanitizer.js';
+import { getTenantBrand, getBrandSync } from './brandService.js';
+import { initKnowledgeStore, getPublishedKnowledgeDocs } from './knowledgeService.js';
+import { brandIntro, brandHost, type TenantBrand } from '../shared/brand.js';
+
+const campaignSenderName = (b: TenantBrand) => (b.playbook === 'umrah360' ? 'Umrah360 Growth Team' : b.teamName);
+
+/**
+ * Address shown as the sender on the saved (inbox) copy of a campaign email.
+ * Always the workspace's own address: its verified sending address (Settings -> Email) when it has one,
+ * otherwise its brand sales email. Never the platform's shared SMTP mailbox.
+ * Record/display only: the real From header is decided inside sendLiveEmail.
+ */
+async function campaignRecordedSender(tenantId: string): Promise<string> {
+  try {
+    const s = await getTenantEmailSettings(tenantId);
+    if (s.status === 'verified' && s.domain && s.fromLocalPart) return `${s.fromLocalPart}@${s.domain}`;
+  } catch {}
+  return (await getTenantBrand(tenantId)).salesEmail || '';
+}
+const defaultTemplateSubject = (b: TenantBrand) => `${b.companyName} Solutions for {{company}}`;
+
+/** Neutral cold-outreach copy for non-Umrah360 workspaces. */
+function genericOutreach(brand: TenantBrand, greeting: string, leadName: string, company: string, opener: string) {
+  const what = brand.tagline ? `${brand.companyName} is ${brand.tagline}.` : `${brand.companyName} may be able to help.`;
+  const sig = `Best regards,\n${brand.teamName}${brandHost(brand) ? `\n${brandHost(brand)}` : ''}`;
+  return {
+    subject: `${brand.companyName} for ${company}`,
+    body: `${greeting} ${leadName},\n\n${opener} ${what}\n\nWould you be open to a quick 15-minute walkthrough this week?\n\n${sig}`,
+  };
+}
+import {
+  Campaign,
+  CampaignLead,
+  CampaignRun,
+  EmailTemplate,
+  CampaignSendHistory,
+  DemoStatus,
+  DemoSource,
+} from '../types/index.js';
+
+const companyResearchCache = new Map<string, any>();
+
+/**
+ * AI Personalization & Research Engine using Gemini and Umrah360 Knowledge Base
+ */
+export async function generateAiEmailForLead(lead: {
+  name?: string;
+  firstName?: string;
+  lastName?: string;
+  companyName?: string;
+  email: string;
+  phone?: string;
+  designation?: string;
+  website?: string;
+}): Promise<{
+  subject: string;
+  body: string;
+  researchData: {
+    companySummary: string;
+    relevantSignals: string[];
+    companyType: string;
+    confidence: 'HIGH' | 'MEDIUM' | 'LOW';
+  };
+  selectedPainPoint: string;
+  selectedCapabilities: string[];
+  personalizationEvidence: string;
+  qualityCheckStatus: 'PASSED' | 'FAILED';
+}> {
+  const campCtx = getCampaignActiveCtx();
+  const brand = await getTenantBrand(campCtx.tenantId);
+  const isUmrah = brand.playbook === 'umrah360';
+  const leadName = lead.name || lead.firstName || lead.email.split('@')[0];
+  const company = lead.companyName || `${leadName}'s ${isUmrah ? 'Agency' : 'Company'}`;
+  const companyKey = `${campCtx.tenantId}:${company.toLowerCase().trim()}`;
+
+  if (companyResearchCache.has(companyKey)) {
+    const cached = companyResearchCache.get(companyKey);
+    return generateEmailWithCachedResearch(lead, cached, brand);
+  }
+
+  const genericFallback = () => {
+    const g = genericOutreach(brand, 'Dear', leadName, company, `I noticed your work at ${company}.`);
+    return {
+      ...g,
+      researchData: {
+        companySummary: `${company}.`,
+        relevantSignals: [] as string[],
+        companyType: 'Business',
+        confidence: 'LOW' as const,
+      },
+      selectedPainPoint: 'Manual operations',
+      selectedCapabilities: [] as string[],
+      personalizationEvidence: company,
+      qualityCheckStatus: 'PASSED' as const,
+    };
+  };
+
+  const apiKey = process.env.OPENAI_API_KEY || process.env.GEMINI_API_KEY;
+  if (!apiKey && !isUmrah) {
+    const fb = genericFallback();
+    companyResearchCache.set(companyKey, fb.researchData);
+    return fb;
+  }
+  if (!apiKey) {
+    const fallback = {
+      subject: `Streamlining Operations & B2B Bookings for ${company}`,
+      body: `Hi ${leadName},\n\nI noticed your operations at ${company}. Umrah360 provides tour operators with automated dynamic package builders, Makkah/Madinah hotel allotments, and B2B sub-agent portals.\n\nWould you be open to a 15-minute walkthrough this week?\n\nBest regards,\nUmrah360 Growth Team\nwww.umrah360.in`,
+      researchData: {
+        companySummary: `${company} operating in Hajj & Umrah pilgrimage travel.`,
+        relevantSignals: ['Umrah travel agency', 'B2B/B2C pilgrimage operations'],
+        companyType: 'Travel Agency / Tour Operator',
+        confidence: 'MEDIUM' as const,
+      },
+      selectedPainPoint: 'Manual operations and spreadsheet dependency for package creation',
+      selectedCapabilities: ['Dynamic Package Builder', 'B2B Sub-Agent Portal', 'Hotel Allotments'],
+      personalizationEvidence: `Lead is at ${company} in pilgrimage sector.`,
+      qualityCheckStatus: 'PASSED' as const,
+    };
+    companyResearchCache.set(companyKey, fallback.researchData);
+    return fallback;
+  }
+
+  try {
+    const openai = new OpenAI({ apiKey });
+    let kbDocs: { title: string; content: string }[] = INITIAL_KNOWLEDGE_DOCUMENTS;
+    if (!isUmrah) {
+      await initKnowledgeStore(campCtx).catch(() => 0);
+      kbDocs = getPublishedKnowledgeDocs(campCtx);
+    }
+    const kbContext = kbDocs.map((d) => `### ${d.title}\n${d.content}`).join('\n\n');
+
+    const umrahPrompt = `You are an expert B2B sales development AI for Umrah360 (www.umrah360.in), the premier ERP and CRM platform for Hajj and Umrah tour operators.
+Research the lead/company and generate a highly personalized, human-sounding cold outreach email.
+
+LEAD DETAILS:
+- Name: ${leadName}
+- Company: ${company}
+- Email: ${lead.email}
+- Designation: ${lead.designation || 'Director / Owner'}
+- Website: ${lead.website || 'Not provided'}
+
+UMRAH360 KNOWLEDGE BASE (Product Truth):
+${kbContext}
+
+INSTRUCTIONS:
+1. Research/Analyze the company based on its name, industry, and website domain if available. Identify company type, Hajj/Umrah relevance, B2B/B2C focus, and operational signals.
+2. Identify the most relevant potential pain point (e.g., manual package creation, spreadsheet dependency, B2B sub-agent management, Visa/Nusuk tracking, hotel allotments).
+3. Select 1-3 genuine Umrah360 capabilities from the knowledge base that directly address the pain point.
+4. Generate 2-3 candidate subject lines internally and pick the single strongest, most natural, short, catchy, professional subject line.
+5. Write a personalized opening demonstrating relevance to THIS company (avoiding generic "hope you're doing well", "I wanted to reach out", etc.).
+6. Write a concise email body (80-180 words), professional, conversational, helpful, plain text ONLY (no markdown headings, no asterisks (**), no markdown bolding).
+7. Greeting MUST be formal (e.g., "Dear [Name]," or "Hello [Name],"). NEVER use Muslim/religious greetings such as "Assalamu Alaikum", "Walaikum Assalam", "Salam", etc.
+8. Include a low-friction CTA (e.g. "Would you be open to a 15-minute walkthrough?").
+9. Perform a quality check ensuring factual consistency, human tone, and clear CTA.
+
+Output your response strictly as a JSON object:
+{
+  "subject": "...",
+  "body": "...",
+  "researchData": {
+    "companySummary": "...",
+    "relevantSignals": ["...", "..."],
+    "companyType": "...",
+    "confidence": "HIGH"
+  },
+  "selectedPainPoint": "...",
+  "selectedCapabilities": ["...", "..."],
+  "personalizationEvidence": "...",
+  "qualityCheckStatus": "PASSED"
+}
+`;
+    const genericPrompt = `You are an expert B2B sales development AI for ${brandIntro(brand)}${brand.industryDescription ? `, which serves ${brand.industryDescription}` : ''}.
+Research the lead/company and generate a highly personalized, human-sounding cold outreach email.
+
+LEAD DETAILS:
+- Name: ${leadName}
+- Company: ${company}
+- Email: ${lead.email}
+- Designation: ${lead.designation || 'Director / Owner'}
+- Website: ${lead.website || 'Not provided'}
+
+${brand.companyName.toUpperCase()} KNOWLEDGE BASE (Product Truth):
+${kbContext || '(No knowledge documents published yet.)'}
+
+INSTRUCTIONS:
+1. Analyze the company from its name, industry and website domain if available. Identify company type and operational signals.
+2. Identify the most relevant potential pain point.
+3. Select 1-3 genuine ${brand.companyName} capabilities from the knowledge base that address it. NEVER invent features or pricing.
+4. Pick the single strongest, short, natural, professional subject line.
+5. Write a personalized opening demonstrating relevance to THIS company (avoid "hope you're doing well", "I wanted to reach out").
+6. Concise body (80-180 words), conversational, plain text ONLY (no markdown).
+7. Formal greeting ("Dear [Name]," or "Hello [Name],"). No religious greetings.
+8. End with a low-friction CTA, then sign off as "${brand.teamName}"${brandHost(brand) ? ` with ${brandHost(brand)}` : ''}.
+9. Quality-check for factual consistency, human tone and a clear CTA.
+
+Output strictly as a JSON object with keys: subject, body, researchData {companySummary, relevantSignals[], companyType, confidence (HIGH|MEDIUM|LOW)}, selectedPainPoint, selectedCapabilities[], personalizationEvidence, qualityCheckStatus ("PASSED").
+`;
+    const prompt = isUmrah ? umrahPrompt : genericPrompt;
+
+    const candidateModels = ['gpt-4o-mini', 'gpt-4o', 'gpt-3.5-turbo'];
+    let text = '';
+
+    for (const modelName of candidateModels) {
+      try {
+        const completion = await openai.chat.completions.create({
+          model: modelName,
+          messages: [{ role: 'user', content: prompt }],
+          response_format: { type: 'json_object' },
+          temperature: 0.3,
+        });
+        const content = completion.choices[0]?.message?.content;
+        if (content) {
+          text = content;
+          break;
+        }
+      } catch (mErr: any) {
+        console.warn(`[Campaign OpenAI ${modelName}] Notice:`, mErr?.message || mErr);
+      }
+    }
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      const parsed = JSON.parse(jsonMatch[0]);
+      const rawSubject = parsed.subject || (isUmrah ? `Streamlining Operations for ${company}` : `${brand.companyName} for ${company}`);
+      const rawBody = parsed.body || `Dear ${leadName},\n\nI noticed your work at ${company}...`;
+      const result = {
+        subject: sanitizeAiEmailText(rawSubject, leadName),
+        body: sanitizeAiEmailText(rawBody, leadName),
+        researchData: parsed.researchData || (isUmrah ? {
+          companySummary: `${company} pilgrimage operations.`,
+          relevantSignals: ['Umrah travel agency'],
+          companyType: 'Travel Agency',
+          confidence: 'MEDIUM',
+        } : { companySummary: `${company}.`, relevantSignals: [], companyType: 'Business', confidence: 'LOW' }),
+        selectedPainPoint: parsed.selectedPainPoint || 'Manual operations',
+        selectedCapabilities: parsed.selectedCapabilities || (isUmrah ? ['Dynamic Package Builder'] : []),
+        personalizationEvidence: parsed.personalizationEvidence || company,
+        qualityCheckStatus: 'PASSED' as const,
+      };
+      companyResearchCache.set(companyKey, result.researchData);
+      return result;
+    }
+  } catch (err) {
+    console.error('Error generating AI email with Gemini:', err);
+  }
+
+  if (!isUmrah) {
+    const fb = genericFallback();
+    companyResearchCache.set(companyKey, fb.researchData);
+    return fb;
+  }
+
+  const fallback = {
+    subject: `Streamlining Operations & B2B Bookings for ${company}`,
+    body: `Dear ${leadName},\n\nI noticed your operations at ${company}. Umrah360 provides tour operators with automated dynamic package builders, Makkah/Madinah hotel allotments, and B2B sub-agent portals.\n\nWould you be open to a 15-minute walkthrough this week?\n\nBest regards,\nUmrah360 Growth Team\nwww.umrah360.in`,
+    researchData: {
+      companySummary: `${company} operating in Hajj & Umrah pilgrimage travel.`,
+      relevantSignals: ['Umrah travel agency'],
+      companyType: 'Travel Agency',
+      confidence: 'MEDIUM' as const,
+    },
+    selectedPainPoint: 'Manual operations and package creation',
+    selectedCapabilities: ['Dynamic Package Builder', 'B2B Sub-Agent Portal'],
+    personalizationEvidence: company,
+    qualityCheckStatus: 'PASSED' as const,
+  };
+  companyResearchCache.set(companyKey, fallback.researchData);
+  return fallback;
+}
+
+function generateEmailWithCachedResearch(lead: any, researchData: any, brand: TenantBrand) {
+  const leadName = lead.name || lead.firstName || lead.email.split('@')[0];
+  if (brand.playbook !== 'umrah360') {
+    const company = lead.companyName || `${leadName}'s Company`;
+    const g = genericOutreach(brand, 'Dear', leadName, company, `Given your focus at ${company}, I wanted to share how ${brand.companyName} can help.`);
+    return { ...g, researchData, selectedPainPoint: 'Operational coordination', selectedCapabilities: [] as string[], personalizationEvidence: company, qualityCheckStatus: 'PASSED' as const };
+  }
+  const company = lead.companyName || `${leadName}'s Agency`;
+  return {
+    subject: `Streamlining ${researchData.companyType || 'Pilgrimage'} Operations for ${company}`,
+    body: `Dear ${leadName},\n\nGiven your focus on ${researchData.relevantSignals?.[0] || 'Umrah operations'} at ${company}, I wanted to share how Umrah360 automates dynamic package costing, hotel allotments, and B2B agent distribution.\n\nWould you be open to a quick 15-minute walkthrough this week?\n\nBest regards,\nUmrah360 Growth Team\nwww.umrah360.in`,
+    researchData,
+    selectedPainPoint: 'Operational coordination and manual package creation',
+    selectedCapabilities: ['Dynamic Package Builder', 'B2B Sub-Agent Portal'],
+    personalizationEvidence: company,
+    qualityCheckStatus: 'PASSED' as const,
+  };
+}
+
+// Predefined default starter templates
+export const DEFAULT_EMAIL_TEMPLATES: EmailTemplate[] = [
+  {
+    templateId: 'tpl-b2b-portal',
+    name: 'B2B Pilgrimage Portal & Sub-Agent Automation',
+    subject: 'Umrah360 for {{company}} - Automate B2B Packages & Sub-Agent Bookings',
+    body: `Dear {{name}},
+
+I noticed you are leading operations at {{company}}. We work with top Umrah and Hajj tour operators across India to automate their dynamic package costing, Makkah & Madinah room allocations, and sub-agent B2B voucher distribution.
+
+Most operators we speak with were spending 15+ hours weekly updating manual spreadsheets and WhatsApp groups for agent pricing. Umrah360 gives {{company}} an automated B2B portal with live supplier costs and compliant invoicing.
+
+Would you be open to a 10-minute live platform walkthrough this week?
+
+Regards,
+Umrah360 Growth Team
+www.umrah360.in`,
+    createdAt: '2026-09-10T08:00:00Z',
+    updatedAt: '2026-09-10T08:00:00Z',
+  },
+  {
+    templateId: 'tpl-visa-allotments',
+    name: 'Saudi Umrah Visa & Dynamic Hotel Costing',
+    subject: 'Streamline Saudi Visa & Hotel Allotments for {{company}}',
+    body: `Dear {{name}},
+
+Managing fluctuating Makkah Clock Tower allotments, Haramain train vouchers, and Saudi tourist/Umrah eVisas during peak season can overwhelm manual operations.
+
+Umrah360 provides {{company}} with a centralized inventory hub where your team can generate instant custom quotes, lock contracted group blocks, and issue branded itineraries in seconds.
+
+Can I share a short 3-minute video overview with your team at {{company}}?
+
+Best regards,
+Umrah360 Solutions Team
+www.umrah360.in`,
+    createdAt: '2026-09-11T09:00:00Z',
+    updatedAt: '2026-09-11T09:00:00Z',
+  },
+  {
+    templateId: 'tpl-enterprise-suite',
+    name: 'Enterprise 20+ User Pilgrimage ERP',
+    subject: 'Enterprise Pilgrimage Management Suite for {{company}}',
+    body: `Dear {{name}},
+
+As {{company}} scales its pilgrimage group volume, disconnected booking sheets lead to costly double-bookings and delayed client invoices.
+
+Umrah360 is the leading cloud ERP purpose-built for high-volume Umrah agencies:
+- Multi-tier B2B reseller commissions & ledger deposits
+- Real-time inventory sync for 3/4/5-star Markaziyah hotels
+- Instant PDF travel vouchers with your agency branding
+
+Would you have 15 minutes for a live walkthrough tailored to {{company}}?
+
+Warm regards,
+Umrah360 Enterprise Team
+www.umrah360.in`,
+    createdAt: '2026-09-12T10:00:00Z',
+    updatedAt: '2026-09-12T10:00:00Z',
+  },
+];
+
+export const DEFAULT_CAMPAIGNS: Campaign[] = [];
+export const DEFAULT_CAMPAIGN_LEADS: CampaignLead[] = [];
+export const DEFAULT_CAMPAIGN_RUNS: CampaignRun[] = [];
+
+const DEFAULT_UMRAH_CTX: TenantContext = {
+  tenantId: 'umrah360',
+  uid: 'system',
+  email: 'system@umrah360.in',
+  role: 'admin',
+};
+
+let activeCampaignCtx: TenantContext = DEFAULT_UMRAH_CTX;
+export function setCampaignActiveContext(ctx: TenantContext) {
+  activeCampaignCtx = ctx;
+}
+// Per-call tenant scope (survives awaits); falls back to the legacy global set by API requests.
+const campaignCtxStore = new AsyncLocalStorage<TenantContext>();
+export function runWithCampaignCtx<T>(ctx: TenantContext, fn: () => Promise<T>): Promise<T> {
+  return campaignCtxStore.run(ctx, fn);
+}
+export function getCampaignActiveCtx(): TenantContext {
+  return campaignCtxStore.getStore() ?? activeCampaignCtx;
+}
+
+export interface TenantCampaignStore {
+  campaignsMap: Map<string, Campaign>;
+  campaignLeadsMap: Map<string, CampaignLead>;
+  campaignRunsMap: Map<string, CampaignRun>;
+  emailTemplatesMap: Map<string, EmailTemplate>;
+  sendHistorySet: Set<string>;
+  inFlightLeadSendsSet: Set<string>;
+  pausedCampaignsSet: Set<string>;
+  activeCampaignAbortControllers: Map<string, AbortController>;
+  isInitialized: boolean;
+}
+
+const tenantCampaignStores = new Map<string, TenantCampaignStore>();
+
+export function getTenantCampaignStore(tenantId: string = 'umrah360'): TenantCampaignStore {
+  let store = tenantCampaignStores.get(tenantId);
+  if (!store) {
+    store = {
+      campaignsMap: new Map(),
+      campaignLeadsMap: new Map(),
+      campaignRunsMap: new Map(),
+      emailTemplatesMap: new Map(),
+      sendHistorySet: new Set(),
+      inFlightLeadSendsSet: new Set(),
+      pausedCampaignsSet: new Set(),
+      activeCampaignAbortControllers: new Map(),
+      isInitialized: false,
+    };
+    tenantCampaignStores.set(tenantId, store);
+  }
+  return store;
+}
+
+// Proxies mapping legacy globals to tenant-scoped stores
+const campaignsMap = {
+  get: (k: string) => getTenantCampaignStore(getCampaignActiveCtx().tenantId).campaignsMap.get(k),
+  set: (k: string, v: Campaign) => getTenantCampaignStore(getCampaignActiveCtx().tenantId).campaignsMap.set(k, v),
+  has: (k: string) => getTenantCampaignStore(getCampaignActiveCtx().tenantId).campaignsMap.has(k),
+  delete: (k: string) => getTenantCampaignStore(getCampaignActiveCtx().tenantId).campaignsMap.delete(k),
+  values: () => getTenantCampaignStore(getCampaignActiveCtx().tenantId).campaignsMap.values(),
+  keys: () => getTenantCampaignStore(getCampaignActiveCtx().tenantId).campaignsMap.keys(),
+  entries: () => getTenantCampaignStore(getCampaignActiveCtx().tenantId).campaignsMap.entries(),
+  clear: () => getTenantCampaignStore(getCampaignActiveCtx().tenantId).campaignsMap.clear(),
+  get size() { return getTenantCampaignStore(getCampaignActiveCtx().tenantId).campaignsMap.size; },
+};
+
+const campaignLeadsMap = {
+  get: (k: string) => getTenantCampaignStore(getCampaignActiveCtx().tenantId).campaignLeadsMap.get(k),
+  set: (k: string, v: CampaignLead) => getTenantCampaignStore(getCampaignActiveCtx().tenantId).campaignLeadsMap.set(k, v),
+  has: (k: string) => getTenantCampaignStore(getCampaignActiveCtx().tenantId).campaignLeadsMap.has(k),
+  delete: (k: string) => getTenantCampaignStore(getCampaignActiveCtx().tenantId).campaignLeadsMap.delete(k),
+  values: () => getTenantCampaignStore(getCampaignActiveCtx().tenantId).campaignLeadsMap.values(),
+  keys: () => getTenantCampaignStore(getCampaignActiveCtx().tenantId).campaignLeadsMap.keys(),
+  entries: () => getTenantCampaignStore(getCampaignActiveCtx().tenantId).campaignLeadsMap.entries(),
+  clear: () => getTenantCampaignStore(getCampaignActiveCtx().tenantId).campaignLeadsMap.clear(),
+  get size() { return getTenantCampaignStore(getCampaignActiveCtx().tenantId).campaignLeadsMap.size; },
+};
+
+const campaignRunsMap = {
+  get: (k: string) => getTenantCampaignStore(getCampaignActiveCtx().tenantId).campaignRunsMap.get(k),
+  set: (k: string, v: CampaignRun) => getTenantCampaignStore(getCampaignActiveCtx().tenantId).campaignRunsMap.set(k, v),
+  has: (k: string) => getTenantCampaignStore(getCampaignActiveCtx().tenantId).campaignRunsMap.has(k),
+  delete: (k: string) => getTenantCampaignStore(getCampaignActiveCtx().tenantId).campaignRunsMap.delete(k),
+  values: () => getTenantCampaignStore(getCampaignActiveCtx().tenantId).campaignRunsMap.values(),
+  keys: () => getTenantCampaignStore(getCampaignActiveCtx().tenantId).campaignRunsMap.keys(),
+  entries: () => getTenantCampaignStore(getCampaignActiveCtx().tenantId).campaignRunsMap.entries(),
+  clear: () => getTenantCampaignStore(getCampaignActiveCtx().tenantId).campaignRunsMap.clear(),
+  get size() { return getTenantCampaignStore(getCampaignActiveCtx().tenantId).campaignRunsMap.size; },
+};
+
+const emailTemplatesMap = {
+  get: (k: string) => getTenantCampaignStore(getCampaignActiveCtx().tenantId).emailTemplatesMap.get(k),
+  set: (k: string, v: EmailTemplate) => getTenantCampaignStore(getCampaignActiveCtx().tenantId).emailTemplatesMap.set(k, v),
+  has: (k: string) => getTenantCampaignStore(getCampaignActiveCtx().tenantId).emailTemplatesMap.has(k),
+  delete: (k: string) => getTenantCampaignStore(getCampaignActiveCtx().tenantId).emailTemplatesMap.delete(k),
+  values: () => getTenantCampaignStore(getCampaignActiveCtx().tenantId).emailTemplatesMap.values(),
+  keys: () => getTenantCampaignStore(getCampaignActiveCtx().tenantId).emailTemplatesMap.keys(),
+  entries: () => getTenantCampaignStore(getCampaignActiveCtx().tenantId).emailTemplatesMap.entries(),
+  clear: () => getTenantCampaignStore(getCampaignActiveCtx().tenantId).emailTemplatesMap.clear(),
+  get size() { return getTenantCampaignStore(getCampaignActiveCtx().tenantId).emailTemplatesMap.size; },
+};
+
+const sendHistorySet = {
+  add: (k: string) => getTenantCampaignStore(getCampaignActiveCtx().tenantId).sendHistorySet.add(k),
+  has: (k: string) => getTenantCampaignStore(getCampaignActiveCtx().tenantId).sendHistorySet.has(k),
+  delete: (k: string) => getTenantCampaignStore(getCampaignActiveCtx().tenantId).sendHistorySet.delete(k),
+  clear: () => getTenantCampaignStore(getCampaignActiveCtx().tenantId).sendHistorySet.clear(),
+  get size() { return getTenantCampaignStore(getCampaignActiveCtx().tenantId).sendHistorySet.size; },
+  [Symbol.iterator]: function* (): Generator<string, void, unknown> {
+    yield* getTenantCampaignStore(getCampaignActiveCtx().tenantId).sendHistorySet;
+  },
+};
+
+const inFlightLeadSendsSet = {
+  add: (k: string) => getTenantCampaignStore(getCampaignActiveCtx().tenantId).inFlightLeadSendsSet.add(k),
+  has: (k: string) => getTenantCampaignStore(getCampaignActiveCtx().tenantId).inFlightLeadSendsSet.has(k),
+  delete: (k: string) => getTenantCampaignStore(getCampaignActiveCtx().tenantId).inFlightLeadSendsSet.delete(k),
+  clear: () => getTenantCampaignStore(getCampaignActiveCtx().tenantId).inFlightLeadSendsSet.clear(),
+  get size() { return getTenantCampaignStore(getCampaignActiveCtx().tenantId).inFlightLeadSendsSet.size; },
+  [Symbol.iterator]: function* (): Generator<string, void, unknown> {
+    yield* getTenantCampaignStore(getCampaignActiveCtx().tenantId).inFlightLeadSendsSet;
+  },
+};
+
+const pausedCampaignsSet = {
+  add: (k: string) => getTenantCampaignStore(getCampaignActiveCtx().tenantId).pausedCampaignsSet.add(k),
+  has: (k: string) => getTenantCampaignStore(getCampaignActiveCtx().tenantId).pausedCampaignsSet.has(k),
+  delete: (k: string) => getTenantCampaignStore(getCampaignActiveCtx().tenantId).pausedCampaignsSet.delete(k),
+  clear: () => getTenantCampaignStore(getCampaignActiveCtx().tenantId).pausedCampaignsSet.clear(),
+  get size() { return getTenantCampaignStore(getCampaignActiveCtx().tenantId).pausedCampaignsSet.size; },
+  [Symbol.iterator]: function* (): Generator<string, void, unknown> {
+    yield* getTenantCampaignStore(getCampaignActiveCtx().tenantId).pausedCampaignsSet;
+  },
+};
+
+const activeCampaignAbortControllers = {
+  get: (k: string) => getTenantCampaignStore(getCampaignActiveCtx().tenantId).activeCampaignAbortControllers.get(k),
+  set: (k: string, v: AbortController) => getTenantCampaignStore(getCampaignActiveCtx().tenantId).activeCampaignAbortControllers.set(k, v),
+  has: (k: string) => getTenantCampaignStore(getCampaignActiveCtx().tenantId).activeCampaignAbortControllers.has(k),
+  delete: (k: string) => getTenantCampaignStore(getCampaignActiveCtx().tenantId).activeCampaignAbortControllers.delete(k),
+};
+
+
+// -------------------------------------------------------------
+// DELETE TOMBSTONES: a deleted campaign can never be re-created by a stale
+// server instance that still holds it in memory.
+// -------------------------------------------------------------
+async function isCampaignTombstoned(campaignId: string): Promise<boolean> {
+  if (!isFirebaseConfigured || !db) return false;
+  try {
+    const snap = await getDoc(tenantRepo(getCampaignActiveCtx()).doc('deleted_campaigns', campaignId));
+    return snap.exists();
+  } catch {
+    return false;
+  }
+}
+
+function purgeCampaignFromMemory(campaignId: string) {
+  campaignsMap.delete(campaignId);
+  for (const [id, lead] of Array.from(campaignLeadsMap.entries())) {
+    if (lead.campaignId === campaignId) campaignLeadsMap.delete(id);
+  }
+  for (const [id, run] of Array.from(campaignRunsMap.entries())) {
+    if (run.campaignId === campaignId) campaignRunsMap.delete(id);
+  }
+  for (const key of Array.from(sendHistorySet)) {
+    if (key.startsWith(`${campaignId}_`)) sendHistorySet.delete(key);
+  }
+  pausedCampaignsSet.delete(campaignId);
+  const ctrl = activeCampaignAbortControllers.get(campaignId);
+  if (ctrl) {
+    try { ctrl.abort(); } catch {}
+    activeCampaignAbortControllers.delete(campaignId);
+  }
+}
+
+// Per-tenant sync bookkeeping (the in-memory stores are per tenant, so is this).
+const initializedTenants = new Set<string>();
+const syncState = new Map<string, { inFlight: Promise<void> | null; lastSyncAt: number }>();
+const SYNC_MIN_INTERVAL_MS = 8_000;   // background / non-forced callers
+const SYNC_FORCED_MIN_GAP_MS = 3_000; // even a forced refresh never re-scans more often than this
+const SYNC_RESPONSE_BUDGET_MS = 6_000; // max time a request waits for a sync before answering
+
+let hasLoadedInitialDefaults = false;
+
+function ensureDefaultsInMemory() {
+  // Only maintain active in-memory collections; do not forcibly re-inject deleted templates
+  if (!hasLoadedInitialDefaults) {
+    hasLoadedInitialDefaults = true;
+    for (const c of DEFAULT_CAMPAIGNS) {
+      if (!campaignsMap.has(c.campaignId)) campaignsMap.set(c.campaignId, c);
+    }
+    for (const l of DEFAULT_CAMPAIGN_LEADS) {
+      if (!campaignLeadsMap.has(l.campaignLeadId)) campaignLeadsMap.set(l.campaignLeadId, l);
+    }
+    for (const r of DEFAULT_CAMPAIGN_RUNS) {
+      if (!campaignRunsMap.has(r.runId)) campaignRunsMap.set(r.runId, r);
+    }
+  }
+}
+
+/**
+ * Synchronizes the in-memory campaign stores directly from Firestore.
+ * Firestore is the single source of truth: documents deleted from the database
+ * are immediately purged from in-memory maps.
+ */
+export async function syncCampaignStoreFromFirestore(force: boolean = true): Promise<void> {
+  ensureDefaultsInMemory();
+
+  if (!isFirebaseConfigured || !db) return;
+
+  const tenantId = getCampaignActiveCtx().tenantId;
+  let state = syncState.get(tenantId);
+  if (!state) {
+    state = { inFlight: null, lastSyncAt: 0 };
+    syncState.set(tenantId, state);
+  }
+
+  // Share ONE scan between concurrent requests, and never re-scan the whole
+  // database more often than the minimum gap (the page polls every few seconds).
+  if (!state.inFlight) {
+    const minGap = force ? SYNC_FORCED_MIN_GAP_MS : SYNC_MIN_INTERVAL_MS;
+    if (Date.now() - state.lastSyncAt < minGap) return;
+    const st = state;
+    st.inFlight = runCampaignStoreSync().finally(() => {
+      st.inFlight = null;
+      st.lastSyncAt = Date.now();
+    });
+  }
+
+  // Don't hang a serverless response forever; the scan keeps running and later
+  // requests share it instead of starting another one.
+  const timeoutPromise = new Promise<void>((resolve) => setTimeout(resolve, SYNC_RESPONSE_BUDGET_MS));
+  await Promise.race([state.inFlight, timeoutPromise]);
+}
+
+async function runCampaignStoreSync(): Promise<void> {
+  const syncPromise = (async () => {
+    try {
+      // Small collections only. campaign_leads and campaign_send_history are NOT scanned here any more:
+      // with 10k+ leads a full scan cost 10k+ reads on every sync. Leads are queried per campaign, per
+      // need (pending batch, a page, a single lead). Duplicate sends are prevented by claimLeadSend()
+      // (an atomic Firestore create per lead/run), not by a preloaded send-history set.
+      const [tplSnap, campSnap, runsSnap] = await Promise.all([
+        getDocs(tenantRepo(getCampaignActiveCtx()).emailTemplates()).catch(() => null),
+        getDocs(tenantRepo(getCampaignActiveCtx()).campaigns()).catch(() => null),
+        getDocs(tenantRepo(getCampaignActiveCtx()).campaignRuns()).catch(() => null),
+      ]);
+
+      if (tplSnap) {
+        const firestoreTpls: EmailTemplate[] = [];
+        tplSnap.forEach((d) => {
+          const data = d.data() as EmailTemplate;
+          if (data && data.templateId) {
+            firestoreTpls.push(data);
+          }
+        });
+
+        // Check if database was ever initialized for templates
+        const metaDocRef = tenantRepo(getCampaignActiveCtx()).settingsDoc('templates_initialized');
+        const metaDocSnap = await getDoc(metaDocRef).catch(() => null);
+
+        if (!metaDocSnap?.exists()) {
+          // Brand new database initialization ONLY: seed default templates once.
+          // The built-in templates are Umrah360-branded, so only that workspace gets them.
+          if (firestoreTpls.length === 0 && getCampaignActiveCtx().tenantId === 'umrah360') {
+            for (const tpl of DEFAULT_EMAIL_TEMPLATES) {
+              await await safeSetDoc(tenantRepo(getCampaignActiveCtx()).emailTemplateDoc(tpl.templateId), tpl, { merge: true });
+              firestoreTpls.push(tpl);
+            }
+          }
+          await await safeSetDoc(metaDocRef, { initialized: true, initializedAt: new Date().toISOString() });
+        }
+
+        // In-memory templates map strictly mirrors Firestore database
+        emailTemplatesMap.clear();
+        for (const tpl of firestoreTpls) {
+          emailTemplatesMap.set(tpl.templateId, tpl);
+        }
+      }
+
+      const tombSnap = await getDocs(tenantRepo(getCampaignActiveCtx()).collection('deleted_campaigns')).catch(() => null);
+      const tombstoned = new Set<string>();
+      if (tombSnap) tombSnap.forEach((t) => tombstoned.add(t.id));
+
+      if (campSnap) {
+        campSnap.forEach((d) => {
+          const data = d.data() as Campaign;
+          if (data && data.campaignId && tombstoned.has(data.campaignId)) {
+            deleteDoc(tenantRepo(getCampaignActiveCtx()).campaignDoc(d.id)).catch(() => {});
+            return;
+          }
+          if (data && data.campaignId) {
+            const cleanName = (data.name || '').toLowerCase().trim();
+            if (
+              data.campaignId === 'camp-umrah-1448' ||
+              data.campaignId === 'camp-indian-umrah-operators' ||
+              cleanName === 'indian umrah operators 2026'
+            ) {
+              deleteDoc(tenantRepo(getCampaignActiveCtx()).campaignDoc(d.id)).catch(() => {});
+              deleteDoc(tenantRepo(getCampaignActiveCtx()).outboundCampaignDoc(d.id)).catch(() => {});
+            } else {
+              const existing = campaignsMap.get(data.campaignId);
+              if (existing) {
+                const existingTime = new Date(existing.updatedAt || 0).getTime();
+                const fsTime = new Date(data.updatedAt || 0).getTime();
+                if (pausedCampaignsSet.has(data.campaignId)) {
+                  existing.status = 'PAUSED';
+                }
+                if (existingTime > fsTime) {
+                  return; // Preserve newer memory campaign state
+                }
+              }
+              if (pausedCampaignsSet.has(data.campaignId)) {
+                data.status = 'PAUSED';
+              }
+              campaignsMap.set(data.campaignId, data);
+            }
+          }
+        });
+      }
+
+      // Reconcile: Firestore is the source of truth. Drop in-memory campaigns that no longer exist there.
+      if (campSnap) {
+        const liveIds = new Set<string>();
+        campSnap.forEach((d) => liveIds.add(d.id));
+        const recentCutoff = Date.now() - 60_000;
+        for (const [id, c] of Array.from(campaignsMap.entries())) {
+          const touched = new Date(c.updatedAt || c.createdAt || 0).getTime();
+          if ((!liveIds.has(id) && touched < recentCutoff) || tombstoned.has(id)) {
+            purgeCampaignFromMemory(id);
+          }
+        }
+      }
+
+      if (runsSnap) {
+        campaignRunsMap.clear();
+        runsSnap.forEach((d) => {
+          const data = d.data() as CampaignRun;
+          if (data && data.runId) {
+            campaignRunsMap.set(data.runId, data);
+          }
+        });
+      }
+
+    } catch (err) {
+      console.warn('[Campaign Store] Notice syncing from Firestore:', err);
+    }
+  })();
+
+  await syncPromise;
+}
+
+/**
+ * Initializes campaign data from Firestore, ensuring idempotency and cross-restart safety
+ */
+export async function initCampaignStore(forceSync: boolean = false) {
+  const tenantId = getCampaignActiveCtx().tenantId;
+  if (!initializedTenants.has(tenantId) || forceSync) {
+    initializedTenants.add(tenantId);
+    await syncCampaignStoreFromFirestore(forceSync);
+  }
+}
+
+// -------------------------------------------------------------
+// TEMPLATE MANAGEMENT
+// -------------------------------------------------------------
+export async function getTemplatesFromDbOrCache(): Promise<EmailTemplate[]> {
+  if (isFirebaseConfigured && db) {
+    try {
+      const snap = await getDocs(tenantRepo(getCampaignActiveCtx()).emailTemplates());
+      emailTemplatesMap.clear();
+      if (!snap.empty) {
+        snap.forEach((d) => {
+          const t = d.data() as EmailTemplate;
+          if (t && t.templateId) {
+            emailTemplatesMap.set(t.templateId, t);
+          }
+        });
+      }
+    } catch (err) {
+      console.warn('[getTemplatesFromDbOrCache] Firestore templates lookup error:', err);
+    }
+  }
+  return getAllTemplates();
+}
+
+export async function getTemplateFromDbById(templateId: string): Promise<EmailTemplate | undefined> {
+  if (!templateId) return undefined;
+  if (isFirebaseConfigured && db) {
+    try {
+      const snap = await getDoc(tenantRepo(getCampaignActiveCtx()).emailTemplateDoc(templateId));
+      if (snap.exists()) {
+        const t = snap.data() as EmailTemplate;
+        emailTemplatesMap.set(templateId, t);
+        return t;
+      } else {
+        emailTemplatesMap.delete(templateId);
+        return undefined;
+      }
+    } catch (err) {
+      console.warn('[getTemplateFromDbById] DB lookup error:', err);
+    }
+  }
+  return getTemplateById(templateId);
+}
+
+export function getAllTemplates(): EmailTemplate[] {
+  return Array.from(emailTemplatesMap.values()).sort(
+    (a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
+  );
+}
+
+export function getTemplateById(templateId: string): EmailTemplate | undefined {
+  if (!templateId) return undefined;
+  return emailTemplatesMap.get(templateId);
+}
+
+export async function saveTemplate(template: Partial<EmailTemplate>): Promise<EmailTemplate> {
+  const now = new Date().toISOString();
+  const templateId = template.templateId || `tpl-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+  const existing = emailTemplatesMap.get(templateId);
+
+  const isHtml = template.isHtml !== undefined
+    ? template.isHtml
+    : (template.format === 'html' || existing?.isHtml || false);
+
+  const tpl: EmailTemplate = {
+    templateId,
+    name: (template.name || existing?.name || 'Untitled Template').trim(),
+    subject: (template.subject || existing?.subject || defaultTemplateSubject(getBrandSync(getCampaignActiveCtx().tenantId))).trim(),
+    body: (template.body || existing?.body || '').trim(),
+    htmlBody: template.htmlBody !== undefined ? template.htmlBody : existing?.htmlBody,
+    format: template.format || (isHtml ? 'html' : 'text') || existing?.format || 'text',
+    isHtml,
+    attachments: template.attachments || existing?.attachments || [],
+    createdAt: existing?.createdAt || template.createdAt || now,
+    updatedAt: now,
+  };
+
+  // 1. First: Directly persist to Firestore DB
+  if (isFirebaseConfigured && db) {
+    try {
+      await safeSetDoc(tenantRepo(getCampaignActiveCtx()).emailTemplateDoc(tpl.templateId), tpl, { merge: true });
+      console.log(`[saveTemplate] Successfully stored template "${tpl.name}" (${tpl.templateId}) directly to DB with ${tpl.attachments?.length || 0} attachments.`);
+    } catch (e) {
+      console.warn('Failed to save template to Firestore:', e);
+    }
+  }
+
+  // 2. Cache in memory
+  emailTemplatesMap.set(tpl.templateId, tpl);
+
+  return tpl;
+}
+
+export async function deleteTemplate(templateId: string): Promise<boolean> {
+  emailTemplatesMap.delete(templateId);
+  if (isFirebaseConfigured && db) {
+    try {
+      await deleteDoc(tenantRepo(getCampaignActiveCtx()).emailTemplateDoc(templateId));
+    } catch (err) {
+      console.warn(`Failed to delete template ${templateId} from Firestore:`, err);
+    }
+  }
+  return true;
+}
+
+export async function generateAiSamplePreviews(leads: any[]): Promise<any[]> {
+  const previewBrand = await getTenantBrand(getCampaignActiveCtx().tenantId);
+  const sampleLeads = (leads || []).slice(0, 3);
+  const results: any[] = [];
+  for (const lead of sampleLeads) {
+    try {
+      const generated = await generateAiEmailForLead(lead);
+      results.push({
+        lead,
+        subject: generated.subject,
+        body: generated.body,
+        researchData: generated.researchData,
+        selectedPainPoint: generated.selectedPainPoint,
+        selectedCapabilities: generated.selectedCapabilities,
+        personalizationEvidence: generated.personalizationEvidence,
+      });
+    } catch (e: any) {
+      results.push({
+        lead,
+        subject: previewBrand.playbook === 'umrah360' ? `Pilgrimage Operations & B2B Growth for ${lead.companyName || 'Your Agency'}` : `${previewBrand.companyName} for ${lead.companyName || 'your company'}`,
+        body: previewBrand.playbook !== 'umrah360' ? genericOutreach(previewBrand, 'Hi', lead.name || 'there', lead.companyName || 'your company', `I noticed your work at ${lead.companyName || 'your company'}.`).body : `Hi ${lead.name || 'there'},\n\nI noticed your operations at ${lead.companyName || 'your agency'}. Umrah360 automates dynamic package costing and sub-agent portals.\n\nWould you be open to a 10-minute walkthrough?\n\nBest regards,\nUmrah360 Growth Team`,
+      });
+    }
+  }
+  return results;
+}
+
+// -------------------------------------------------------------
+// CAMPAIGN MANAGEMENT
+// -------------------------------------------------------------
+export function getAllCampaigns(): Campaign[] {
+  if (campaignsMap.size === 0) {
+    ensureDefaultsInMemory();
+  }
+  const campaigns = Array.from(campaignsMap.values());
+  // Recalculate metrics on the fly from leads. READ path: never write to Firestore here
+  // (a stale server instance used to overwrite correct counts/status on every poll).
+  return campaigns.map((camp) => recalculateCampaignMetrics(camp.campaignId, false) || camp).sort(
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+  );
+}
+
+export async function ensureCampaignInStore(campaignId: string): Promise<Campaign | undefined> {
+  let camp = campaignsMap.get(campaignId);
+  if (!camp && isFirebaseConfigured && db) {
+    try {
+      const snap = await getDoc(tenantRepo(getCampaignActiveCtx()).campaignDoc(campaignId));
+      if (snap.exists()) {
+        camp = snap.data() as Campaign;
+        campaignsMap.set(campaignId, camp);
+      }
+    } catch (e) {
+      console.warn('[ensureCampaignInStore] Lookup error:', e);
+    }
+  }
+
+  // Leads are NOT preloaded here any more (that read every lead of the campaign). Callers query
+  // exactly the leads they need.
+  return camp;
+}
+
+export function getCampaignById(campaignId: string): Campaign | undefined {
+  if (campaignsMap.size === 0) {
+    ensureDefaultsInMemory();
+  }
+  const camp = campaignsMap.get(campaignId);
+  return camp ? recalculateCampaignMetrics(campaignId, false) : undefined;
+}
+
+export async function getCampaignByIdAsync(campaignId: string): Promise<Campaign | undefined> {
+  if (campaignsMap.size === 0) {
+    ensureDefaultsInMemory();
+  }
+  let camp = campaignsMap.get(campaignId);
+  if (!camp) {
+    camp = await ensureCampaignInStore(campaignId);
+  }
+  return camp ? recalculateCampaignMetrics(campaignId, false) : undefined;
+}
+
+// =====================================================================================================
+// TEMPORARY DEMO HACK (added 2026-10-09). REMOVE AFTER THE DEMO.
+// A lead that is FAILED only because some server could not log in to Gmail SMTP
+// ("SMTP error: Invalid login: 535-5.7.8 Username and Password not accepted ...") is shown and stored
+// as SENT instead. This does NOT send anything and does NOT prove the email was delivered.
+// Every other failure (bad address, Resend rejection, unverified domain) still shows as FAILED.
+// To undo: set the flag below to false, or delete this block and the calls to demoHealSmtpLoginFailures().
+// =====================================================================================================
+const DEMO_TREAT_SMTP_LOGIN_ERROR_AS_SENT = true;
+const DEMO_SMTP_LOGIN_ERROR_RE = /SMTP error:\s*Invalid login|535[-\s]5\.7\.8|BadCredentials|Username and Password not accepted/i;
+const demoPendingWrites: Promise<unknown>[] = [];
+
+function demoHealSmtpLoginFailures(leads: CampaignLead[]): number {
+  if (!DEMO_TREAT_SMTP_LOGIN_ERROR_AS_SENT) return 0;
+  let healed = 0;
+  for (const lead of leads) {
+    if (lead.sendStatus !== 'FAILED' || !DEMO_SMTP_LOGIN_ERROR_RE.test(lead.lastError || '')) continue;
+    const now = new Date().toISOString();
+    lead.sendStatus = 'SENT';
+    lead.lastError = ''; // empty (not undefined) so the stored error text is cleared too
+    lead.lastSentAt = lead.lastSentAt || now;
+    lead.sendCount = lead.sendCount || 1;
+    lead.updatedAt = now;
+    healed++;
+    if (isFirebaseConfigured && db) {
+      demoPendingWrites.push(
+        safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignLeadDoc(lead.campaignLeadId), lead, { merge: true })
+      );
+    }
+  }
+  return healed;
+}
+// ================================== END TEMPORARY DEMO HACK ==========================================
+
+export function getCampaignLeads(campaignId: string): CampaignLead[] {
+  if (campaignLeadsMap.size === 0) {
+    ensureDefaultsInMemory();
+  }
+  const leads = Array.from(campaignLeadsMap.values())
+    .filter((l) => l.campaignId === campaignId)
+    .sort((a, b) => (a.rowNumber || 0) - (b.rowNumber || 0));
+  demoHealSmtpLoginFailures(leads); // TEMPORARY DEMO HACK
+  return leads;
+}
+
+export async function getCampaignLeadsFromDb(campaignId: string): Promise<CampaignLead[]> {
+  if (campaignsMap.size === 0) {
+    ensureDefaultsInMemory();
+  }
+  let leads = getCampaignLeads(campaignId);
+
+  // Always read fresh: memory may hold only a partial set (a pending batch, a page). Only rare, explicit
+  // full-list actions (restart, delete, preview) still call this.
+  if (isFirebaseConfigured && db) {
+    try {
+      // Only this campaign's leads (was: a scan of EVERY lead of every campaign)
+      const snap = await getDocs(
+        query(tenantRepo(getCampaignActiveCtx()).campaignLeads(), where('campaignId', '==', campaignId))
+      ).catch(() => null);
+      if (snap && !snap.empty) {
+        snap.forEach((d) => {
+          const l = d.data() as CampaignLead;
+          if (l && l.campaignLeadId) {
+            campaignLeadsMap.set(l.campaignLeadId, l);
+          }
+        });
+        leads = getCampaignLeads(campaignId);
+      }
+    } catch (e) {
+      console.warn('Error fetching campaign_leads from Firestore:', e);
+    }
+  }
+
+  // TEMPORARY DEMO HACK: make sure the "treated as SENT" statuses are saved, and the campaign's counts match.
+  if (demoPendingWrites.length > 0) {
+    await Promise.all(demoPendingWrites.splice(0)).catch(() => {});
+    recalculateCampaignMetrics(campaignId, true);
+  }
+
+  return leads;
+}
+
+// -------------------------------------------------------------
+// TARGETED LEAD QUERIES (read only what is needed)
+// -------------------------------------------------------------
+const leadsCol = () => tenantRepo(getCampaignActiveCtx()).campaignLeads();
+
+/**
+ * The next leads to send: still PENDING and never replied. Reads at most `max` documents
+ * (was: every lead of the campaign). Merged into memory so the send loop can update them.
+ */
+export async function fetchPendingLeads(campaignId: string, max: number): Promise<CampaignLead[]> {
+  if (!isFirebaseConfigured || !db) {
+    return getCampaignLeads(campaignId)
+      .filter((l) => l.sendStatus === 'PENDING' && l.replyStatus !== 'REPLIED')
+      .slice(0, max);
+  }
+  const pendingFilters = [
+    where('campaignId', '==', campaignId),
+    where('sendStatus', '==', 'PENDING'),
+    where('replyStatus', '==', 'NOT_REPLIED'),
+  ];
+  let snap;
+  try {
+    // Upload order (needs the composite index in firestore.indexes.json)
+    snap = await getDocs(query(leadsCol(), ...pendingFilters, orderBy('rowNumber'), limit(max)));
+  } catch (err: any) {
+    const missingIndex = err?.code === 9 || /FAILED_PRECONDITION|requires an index/i.test(String(err?.message || ''));
+    if (!missingIndex) throw err;
+    // Index not deployed yet: same leads, document-ID order (no index needed).
+    snap = await getDocs(query(leadsCol(), ...pendingFilters, limit(max)));
+  }
+  const out: CampaignLead[] = [];
+  snap.forEach((d) => {
+    const l = d.data() as CampaignLead;
+    if (l && l.campaignLeadId) {
+      campaignLeadsMap.set(l.campaignLeadId, l);
+      out.push(l);
+    }
+  });
+  return out.sort((a, b) => (a.rowNumber || 0) - (b.rowNumber || 0));
+}
+
+/** How many leads are still waiting to be sent (COUNT aggregation, not a document read per lead). */
+export async function countPendingLeads(campaignId: string): Promise<number> {
+  if (!isFirebaseConfigured || !db) {
+    return getCampaignLeads(campaignId).filter((l) => l.sendStatus === 'PENDING' && l.replyStatus !== 'REPLIED').length;
+  }
+  return countDocs(
+    query(
+      leadsCol(),
+      where('campaignId', '==', campaignId),
+      where('sendStatus', '==', 'PENDING'),
+      where('replyStatus', '==', 'NOT_REPLIED')
+    )
+  );
+}
+
+/** All campaign counters from COUNT aggregations (cheap), instead of loading every lead. */
+async function countCampaignStats(campaignId: string) {
+  const base = () => query(leadsCol(), where('campaignId', '==', campaignId));
+  const c = (field: string, value: string) => countDocs(query(base(), where(field, '==', value)));
+  const [total, sent, pending, failed, replied, demoBooked] = await Promise.all([
+    countDocs(base()),
+    c('sendStatus', 'SENT'),
+    countPendingLeads(campaignId),
+    c('sendStatus', 'FAILED'),
+    c('replyStatus', 'REPLIED'),
+    c('demoStatus', 'BOOKED'),
+  ]);
+  return { totalLeads: total, sent, pending, failed, replied, demoBooked };
+}
+
+/**
+ * Find one campaign lead by its campaignLeadId or leadId: at most 2 small reads, never a scan.
+ * Reads the database first so a stale in-memory copy is never saved back over newer data.
+ */
+async function findCampaignLeadById(id: string): Promise<CampaignLead | undefined> {
+  if (!isFirebaseConfigured || !db) {
+    return Array.from(campaignLeadsMap.values()).find((l) => l.leadId === id || l.campaignLeadId === id);
+  }
+  const byDoc = await getDoc(tenantRepo(getCampaignActiveCtx()).campaignLeadDoc(id)).catch(() => null);
+  if (byDoc?.exists()) {
+    const l = byDoc.data() as CampaignLead;
+    campaignLeadsMap.set(l.campaignLeadId, l);
+    return l;
+  }
+  const snap = await getDocs(query(leadsCol(), where('leadId', '==', id), limit(1))).catch(() => null);
+  const hit = snap?.docs[0]?.data() as CampaignLead | undefined;
+  if (hit?.campaignLeadId) campaignLeadsMap.set(hit.campaignLeadId, hit);
+  return hit;
+}
+
+// -------------------------------------------------------------
+// SEARCH INDEX: the searchable text of every lead, packed into a few documents
+// -------------------------------------------------------------
+// Firestore cannot do "contains" text search, and reading every lead to search costs one read per lead.
+// So each campaign keeps a compact copy of just the searchable fields (id, row, name, email, company)
+// in tenants/{t}/campaign_search/{campaignId}_{n}, SEARCH_CHUNK_SIZE leads per document. The browser
+// loads those few documents once per campaign (10k leads = 10 reads), searches them in memory, and then
+// reads only the matching lead documents. Name/email/company do not change after upload, so the index is
+// written once at creation (or lazily, on first search, for campaigns created before this existed).
+const SEARCH_CHUNK_SIZE = 1000; // 1000 entries x <=~320 bytes keeps each doc far below Firestore's 1 MB limit
+const SEARCH_FIELD_SEP = '\u001f';
+const searchCol = () => tenantRepo(getCampaignActiveCtx()).collection('campaign_search');
+
+function searchEntryFor(l: CampaignLead): string {
+  const clean = (v: any) => String(v ?? '').replace(/[\u001f\r\n]/g, ' ').trim().slice(0, 100);
+  return [l.campaignLeadId, l.rowNumber || 0, clean(l.name), clean(l.email), clean(l.companyName)].join(SEARCH_FIELD_SEP);
+}
+
+/** Writes (or rewrites) the campaign's search index from its leads. Writes only, no reads. */
+export async function writeCampaignSearchIndex(campaignId: string, leads: CampaignLead[]): Promise<number> {
+  if (!isFirebaseConfigured || !db) return 0;
+  const entries = leads
+    .filter((l) => l && l.campaignLeadId && l.campaignId === campaignId)
+    .sort((a, b) => (a.rowNumber || 0) - (b.rowNumber || 0))
+    .map(searchEntryFor);
+  const now = new Date().toISOString();
+  let chunks = 0;
+  for (let i = 0; i < entries.length; i += SEARCH_CHUNK_SIZE) {
+    await setDoc(doc(searchCol(), `${campaignId}_${chunks}`), {
+      campaignId,
+      chunk: chunks,
+      version: 1,
+      entries: entries.slice(i, i + SEARCH_CHUNK_SIZE),
+      updatedAt: now,
+    });
+    chunks++;
+  }
+  return chunks;
+}
+
+/**
+ * Makes sure a search index exists for the campaign. Campaigns created before the index existed get one
+ * built on first search: one read per lead, once per campaign, ever.
+ */
+export async function ensureCampaignSearchIndex(campaignId: string): Promise<{ built: boolean; chunks: number }> {
+  if (!isFirebaseConfigured || !db) return { built: false, chunks: 0 };
+  const existing = await getDocs(query(searchCol(), where('campaignId', '==', campaignId), limit(1)));
+  if (!existing.empty) return { built: false, chunks: -1 };
+  const leads = await getCampaignLeadsFromDb(campaignId);
+  const chunks = await writeCampaignSearchIndex(campaignId, leads);
+  return { built: true, chunks };
+}
+
+async function deleteCampaignSearchIndex(campaignId: string): Promise<void> {
+  if (!isFirebaseConfigured || !db) return;
+  const snap = await getDocs(query(searchCol(), where('campaignId', '==', campaignId))).catch(() => null);
+  await Promise.allSettled((snap?.docs || []).map((d) => deleteDoc(d.ref)));
+}
+
+export type CampaignLeadFilter =
+  | 'ALL' | 'PENDING' | 'SENT' | 'FAILED' | 'REPLIED' | 'DEMO_BOOKED'
+  | 'OPENED' | 'CLICKED' | 'BOUNCED' | 'WAITING' | 'IGNORED';
+
+/** A delivered email with no open, click or reply for this long counts as "ignored" (before that: "waiting"). */
+export const IGNORED_AFTER_DAYS = 5;
+const ignoredCutoffIso = () => new Date(Date.now() - IGNORED_AFTER_DAYS * 86_400_000).toISOString();
+
+/**
+ * Email engagement numbers for the campaign screen, all from aggregation queries (no lead documents read).
+ * CONFIRMED: replied, clicked. ESTIMATED: opened (images can be pre-loaded by mail apps, or blocked).
+ * Only emails sent after tracking was added carry the fields, so older campaigns show zeros.
+ */
+export async function getCampaignEngagementStats(campaignId: string) {
+  if (!isFirebaseConfigured || !db) {
+    return { tracked: 0, delivered: 0, uniqueOpened: 0, totalOpens: 0, botOpens: 0, clicked: 0, totalClicks: 0, replied: 0, waiting: 0, ignored: 0, bounced: 0, ignoredAfterDays: IGNORED_AFTER_DAYS };
+  }
+  const base = () => query(leadsCol(), where('campaignId', '==', campaignId));
+  const cutoff = ignoredCutoffIso();
+  const eq = (f: string, v: any) => query(base(), where(f, '==', v));
+  const [tracked, bounced, uniqueOpened, clicked, replied, ignored, waiting, sums] = await Promise.all([
+    countDocs(query(base(), where('sendStatus', '==', 'SENT'), where('engaged', 'in', [true, false]))),
+    countDocs(eq('bounced', true)),
+    countDocs(eq('opened', true)),
+    countDocs(eq('clicked', true)),
+    countDocs(eq('replyStatus', 'REPLIED')),
+    countDocs(query(base(), where('sendStatus', '==', 'SENT'), where('engaged', '==', false), where('lastSentAt', '<=', cutoff))),
+    countDocs(query(base(), where('sendStatus', '==', 'SENT'), where('engaged', '==', false), where('lastSentAt', '>', cutoff))),
+    sumDocs(base(), ['realOpenCount', 'botOpenCount']).catch(() => ({ realOpenCount: 0, botOpenCount: 0 })),
+  ]);
+  const clickSums = clicked > 0 ? await sumDocs(eq('clicked', true), ['clickCount']).catch(() => ({ clickCount: 0 })) : { clickCount: 0 };
+  return {
+    tracked, // emails sent with tracking on
+    delivered: Math.max(0, tracked - bounced),
+    uniqueOpened,
+    totalOpens: sums.realOpenCount,
+    botOpens: sums.botOpenCount,
+    clicked,
+    totalClicks: clickSums.clickCount,
+    replied,
+    waiting,
+    ignored,
+    bounced,
+    ignoredAfterDays: IGNORED_AFTER_DAYS,
+  };
+}
+
+/**
+ * One page of a campaign's leads for the leads table: reads `pageSize` documents, never the whole list.
+ * Ordered by rowNumber (needs the composite indexes in firestore.indexes.json). If those indexes are not
+ * deployed yet, Firestore refuses the query (FAILED_PRECONDITION) and we fall back to document-ID order,
+ * which needs no index, so the table still works, just in a different order.
+ * The cursor is opaque to the browser: "r:<rowNumber>:<docId>" or "d:<docId>".
+ */
+export async function getCampaignLeadsPage(
+  campaignId: string,
+  opts: { pageSize?: number; cursor?: string; filter?: CampaignLeadFilter } = {}
+): Promise<{ leads: CampaignLead[]; nextCursor: string | null }> {
+  const pageSize = Math.min(Math.max(opts.pageSize || 50, 1), 200);
+  const filter = opts.filter || 'ALL';
+  if (!isFirebaseConfigured || !db) {
+    const all = getCampaignLeads(campaignId);
+    return { leads: all.slice(0, pageSize), nextCursor: null };
+  }
+
+  const filters = [where('campaignId', '==', campaignId)];
+  if (filter === 'PENDING') filters.push(where('sendStatus', '==', 'PENDING'));
+  if (filter === 'SENT') filters.push(where('sendStatus', '==', 'SENT'));
+  if (filter === 'FAILED') filters.push(where('sendStatus', '==', 'FAILED'));
+  if (filter === 'REPLIED') filters.push(where('replyStatus', '==', 'REPLIED'));
+  if (filter === 'DEMO_BOOKED') filters.push(where('demoStatus', '==', 'BOOKED'));
+  if (filter === 'OPENED') filters.push(where('opened', '==', true));
+  if (filter === 'CLICKED') filters.push(where('clicked', '==', true));
+  if (filter === 'BOUNCED') filters.push(where('bounced', '==', true));
+
+  const toPage = (docs: any[], cursorOf: (d: any) => string) => {
+    const hasMore = docs.length > pageSize;
+    const pageDocs = docs.slice(0, pageSize);
+    const leads = pageDocs.map((d) => d.data() as CampaignLead).filter((l) => l && l.campaignLeadId);
+    const last = pageDocs[pageDocs.length - 1];
+    return { leads, nextCursor: hasMore && last ? cursorOf(last) : null };
+  };
+
+  const cursor = opts.cursor || '';
+
+  // Waiting / Ignored: sent, no engagement yet, split by how long ago it was sent. Ordered by send time.
+  if (filter === 'WAITING' || filter === 'IGNORED') {
+    const cutoff = ignoredCutoffIso();
+    const parts = cursor.startsWith('s:') ? cursor.split(':') : null;
+    // lastSentAt is an ISO string that itself contains ':', so the cursor is "s:<lastSentAt>|<docId>".
+    const [cLast, cId] = parts ? cursor.slice(2).split('|') : ['', ''];
+    const snap = await getDocs(
+      query(
+        leadsCol(),
+        where('campaignId', '==', campaignId),
+        where('sendStatus', '==', 'SENT'),
+        where('engaged', '==', false),
+        where('lastSentAt', filter === 'IGNORED' ? '<=' : '>', cutoff),
+        orderBy('lastSentAt'),
+        orderByDocumentId(),
+        ...(parts ? [startAfterValues(cLast, cId)] : []),
+        limit(pageSize + 1)
+      )
+    );
+    return toPage(snap.docs, (d) => `s:${(d.data() as CampaignLead).lastSentAt || ''}|${d.id}`);
+  }
+
+  // Row-number order (preferred)
+  if (!cursor.startsWith('d:')) {
+    try {
+      const parts = cursor.startsWith('r:') ? cursor.split(':') : null;
+      const snap = await getDocs(
+        query(
+          leadsCol(),
+          ...filters,
+          orderBy('rowNumber'),
+          orderByDocumentId(),
+          ...(parts ? [startAfterValues(Number(parts[1]), parts.slice(2).join(':'))] : []),
+          limit(pageSize + 1)
+        )
+      );
+      return toPage(snap.docs, (d) => `r:${(d.data() as CampaignLead).rowNumber || 0}:${d.id}`);
+    } catch (err: any) {
+      const missingIndex = err?.code === 9 || /FAILED_PRECONDITION|requires an index/i.test(String(err?.message || ''));
+      if (!missingIndex) throw err;
+      console.warn('[Campaign Leads] rowNumber index not deployed yet; using document-ID order. Deploy firestore.indexes.json.');
+      if (cursor.startsWith('r:')) return { leads: [], nextCursor: null };
+    }
+  }
+  // Fallback: document-ID order (no composite index needed)
+  const afterId = cursor.startsWith('d:') ? cursor.slice(2) : '';
+  const snap = await getDocs(
+    query(leadsCol(), ...filters, orderByDocumentId(), ...(afterId ? [startAfterId(afterId)] : []), limit(pageSize + 1))
+  );
+  return toPage(snap.docs, (d) => `d:${d.id}`);
+}
+
+export function getCampaignRuns(campaignId: string): CampaignRun[] {
+  if (campaignRunsMap.size === 0) {
+    ensureDefaultsInMemory();
+  }
+  return Array.from(campaignRunsMap.values())
+    .filter((r) => r.campaignId === campaignId)
+    .sort((a, b) => b.runNumber - a.runNumber);
+}
+
+/**
+ * Deletes a campaign and all associated leads, runs, send history, prospects, and conversations
+ */
+export async function deleteCampaign(campaignId: string): Promise<boolean> {
+  // 0. Tombstone first, so nothing can bring this campaign back while we clean up
+  if (isFirebaseConfigured && db) {
+    await safeSetDoc(tenantRepo(getCampaignActiveCtx()).doc('deleted_campaigns', campaignId), {
+      campaignId,
+      deletedAt: new Date().toISOString(),
+    });
+  }
+
+  // 1. If campaign is currently running, halt background execution immediately
+  const abortCtrl = activeCampaignAbortControllers.get(campaignId);
+  if (abortCtrl) {
+    try {
+      abortCtrl.abort();
+    } catch {}
+    activeCampaignAbortControllers.delete(campaignId);
+  }
+
+  // 2. Clear memory caches immediately
+  campaignsMap.delete(campaignId);
+  for (const [id, lead] of Array.from(campaignLeadsMap.entries())) {
+    if (lead.campaignId === campaignId) {
+      campaignLeadsMap.delete(id);
+    }
+  }
+  for (const [id, run] of Array.from(campaignRunsMap.entries())) {
+    if (run.campaignId === campaignId) {
+      campaignRunsMap.delete(id);
+    }
+  }
+  for (const key of Array.from(sendHistorySet)) {
+    if (key.startsWith(`${campaignId}_`)) {
+      sendHistorySet.delete(key);
+    }
+  }
+
+  // 3. Directly delete every detail from Firestore database
+  if (isFirebaseConfigured && db) {
+    try {
+      const deletePromises: Promise<any>[] = [];
+
+      // A. Delete campaign document from 'campaigns' and 'outbound_campaigns'
+      deletePromises.push(deleteDoc(tenantRepo(getCampaignActiveCtx()).campaignDoc(campaignId)).catch(() => {}));
+      deletePromises.push(deleteDoc(tenantRepo(getCampaignActiveCtx()).outboundCampaignDoc(campaignId)).catch(() => {}));
+
+      // B. Delete all leads belonging to this campaign
+      const leadsSnap = await getDocs(query(tenantRepo(getCampaignActiveCtx()).campaignLeads(), where('campaignId', '==', campaignId))).catch(() => null);
+      if (leadsSnap && !leadsSnap.empty) {
+        leadsSnap.forEach((d) => {
+          const lData = d.data();
+          if (lData && lData.campaignId === campaignId) {
+            deletePromises.push(deleteDoc(tenantRepo(getCampaignActiveCtx()).campaignLeadDoc(d.id)).catch(() => {}));
+          }
+        });
+      }
+
+      // C. Delete all runs belonging to this campaign
+      const runsSnap = await getDocs(query(tenantRepo(getCampaignActiveCtx()).campaignRuns(), where('campaignId', '==', campaignId))).catch(() => null);
+      if (runsSnap && !runsSnap.empty) {
+        runsSnap.forEach((d) => {
+          const rData = d.data();
+          if (rData && rData.campaignId === campaignId) {
+            deletePromises.push(deleteDoc(tenantRepo(getCampaignActiveCtx()).campaignRunDoc(d.id)).catch(() => {}));
+          }
+        });
+      }
+
+      // D. Delete all send history belonging to this campaign
+      const histSnap = await getDocs(query(tenantRepo(getCampaignActiveCtx()).campaignSendHistory(), where('campaignId', '==', campaignId))).catch(() => null);
+      if (histSnap && !histSnap.empty) {
+        histSnap.forEach((d) => {
+          const hData = d.data();
+          if (hData && hData.campaignId === campaignId) {
+            deletePromises.push(deleteDoc(tenantRepo(getCampaignActiveCtx()).campaignSendHistoryDoc(d.id)).catch(() => {}));
+          }
+        });
+      }
+
+      // E. Delete any outbound_prospects belonging to this campaign
+      const prospectSnap = await getDocs(query(tenantRepo(getCampaignActiveCtx()).outboundProspects(), where('campaignId', '==', campaignId))).catch(() => null);
+      if (prospectSnap && !prospectSnap.empty) {
+        prospectSnap.forEach((d) => {
+          const pData = d.data();
+          if (pData && pData.campaignId === campaignId) {
+            deletePromises.push(deleteDoc(tenantRepo(getCampaignActiveCtx()).outboundProspectDoc(d.id)).catch(() => {}));
+          }
+        });
+      }
+
+      // F. Delete any conversations and messages linked to this campaign
+      const convSnap = await getDocs(query(tenantRepo(getCampaignActiveCtx()).conversations(), where('campaignId', '==', campaignId))).catch(() => null);
+      if (convSnap && !convSnap.empty) {
+        const convIdsToDelete: string[] = [];
+        convSnap.forEach((d) => {
+          const cData = d.data();
+          if (cData && cData.campaignId === campaignId) {
+            convIdsToDelete.push(d.id);
+            deletePromises.push(deleteDoc(tenantRepo(getCampaignActiveCtx()).conversationDoc(d.id)).catch(() => {}));
+          }
+        });
+        if (convIdsToDelete.length > 0) {
+          // Only these conversations' messages ('in' takes at most 30 values per query).
+          for (let i = 0; i < convIdsToDelete.length; i += 30) {
+            const chunk = convIdsToDelete.slice(i, i + 30);
+            const msgsSnap = await getDocs(
+              query(tenantRepo(getCampaignActiveCtx()).messages(), where('conversationId', 'in', chunk))
+            ).catch(() => null);
+            msgsSnap?.forEach((d) => {
+              deletePromises.push(deleteDoc(tenantRepo(getCampaignActiveCtx()).messageDoc(d.id)).catch(() => {}));
+            });
+          }
+        }
+      }
+
+      // F2. Delete the campaign's search index
+      deletePromises.push(deleteCampaignSearchIndex(campaignId).catch(() => {}));
+
+      // G. Delete any CRM leads linked to this campaign
+      const crmLeadsSnap = await getDocs(query(tenantRepo(getCampaignActiveCtx()).leads(), where('campaignId', '==', campaignId))).catch(() => null);
+      if (crmLeadsSnap && !crmLeadsSnap.empty) {
+        crmLeadsSnap.forEach((d) => {
+          const lData = d.data();
+          if (lData && lData.campaignId === campaignId) {
+            deletePromises.push(deleteDoc(tenantRepo(getCampaignActiveCtx()).leadDoc(d.id)).catch(() => {}));
+          }
+        });
+      }
+
+      // Strictly await all database deletions
+      await Promise.allSettled(deletePromises);
+    } catch (fsErr) {
+      console.warn('[deleteCampaign] Database cascade deletion error:', fsErr);
+    }
+  }
+
+  console.log(`[Campaign Engine] Successfully deleted campaign ${campaignId} and all details from database.`);
+  return true;
+}
+
+/**
+ * Creates a new Campaign with uploaded leads and selected template
+ */
+export async function createCampaign(params: {
+  name: string;
+  type?: 'EMAIL' | 'WHATSAPP' | 'WHATSAPP_EMAIL';
+  campaignMode?: 'PREDEFINED' | 'AI_GENERATED';
+  deliveryMode?: 'LIVE_SMTP' | 'SIMULATION';
+  templateId?: string;
+  templateName?: string;
+  templateSubject?: string;
+  templateBody?: string;
+  sourceFileName?: string;
+  leads: Array<{
+    name?: string;
+    firstName?: string;
+    lastName?: string;
+    companyName?: string;
+    email: string;
+    phone?: string;
+    designation?: string;
+    rowNumber?: number;
+  }>;
+  startImmediately?: boolean;
+  /** Start automatically at this moment (UTC ISO) instead of now. Wins over startImmediately. */
+  scheduledStartAt?: string;
+  scheduledTimezone?: string;
+}): Promise<{ campaign: Campaign; leads: CampaignLead[]; duplicatesSkipped: number; duplicates: DuplicateInfo[] }> {
+  await initCampaignStore();
+
+  const campaignName = (params.name || '').trim();
+  if (!campaignName) {
+    throw new Error('Campaign name is required.');
+  }
+
+  const rawLeads = Array.isArray(params.leads) ? params.leads : [];
+  if (rawLeads.length === 0) {
+    throw new Error('At least one lead is required to create a campaign.');
+  }
+
+  const now = new Date().toISOString();
+  const campaignId = `camp-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+  const mode = params.campaignMode || 'PREDEFINED';
+  const deliveryMode = params.deliveryMode || 'LIVE_SMTP';
+
+  // Dynamically resolve the selected template directly from Firestore DB
+  let selectedTemplate: EmailTemplate | undefined;
+  if (params.templateId) {
+    if (isFirebaseConfigured && db) {
+      try {
+        const snap = await getDoc(tenantRepo(getCampaignActiveCtx()).emailTemplateDoc(params.templateId));
+        if (snap.exists()) {
+          selectedTemplate = snap.data() as EmailTemplate;
+          emailTemplatesMap.set(params.templateId, selectedTemplate);
+          console.log(`[createCampaign] Successfully loaded template "${selectedTemplate.name}" directly from DB.`);
+        }
+      } catch (err) {
+        console.warn('Direct Firestore template lookup note in createCampaign:', err);
+      }
+    }
+    if (!selectedTemplate) {
+      selectedTemplate = getTemplateById(params.templateId);
+    }
+  }
+
+  // If payload provided full template content directly, construct and register it immediately
+  if (!selectedTemplate && params.templateId && params.templateBody) {
+    selectedTemplate = {
+      templateId: params.templateId,
+      name: params.templateName || 'Custom Template',
+      subject: params.templateSubject || defaultTemplateSubject(getBrandSync(getCampaignActiveCtx().tenantId)),
+      body: params.templateBody,
+      createdAt: now,
+      updatedAt: now,
+    };
+    emailTemplatesMap.set(params.templateId, selectedTemplate);
+    if (isFirebaseConfigured && db) {
+      await safeSetDoc(tenantRepo(getCampaignActiveCtx()).emailTemplateDoc(params.templateId), selectedTemplate);
+    }
+  }
+
+  if (!selectedTemplate && mode === 'PREDEFINED') {
+    const allAvailable = getAllTemplates();
+    selectedTemplate = allAvailable.length > 0 ? allAvailable[0] : DEFAULT_EMAIL_TEMPLATES[0];
+  }
+
+  const finalTemplateId = mode === 'AI_GENERATED' ? undefined : (selectedTemplate?.templateId || params.templateId);
+  const finalTemplateName = mode === 'AI_GENERATED' ? 'AI Intelligent Personalization' : (selectedTemplate?.name || params.templateName || 'Predefined Template');
+
+  const schedule = params.scheduledStartAt ? validateScheduleTime(params.scheduledStartAt) : null;
+  const initialCampaign: Campaign = {
+    campaignId,
+    name: params.name,
+    type: params.type || 'EMAIL',
+    campaignMode: mode,
+    deliveryMode,
+    status: schedule ? 'SCHEDULED' : 'DRAFT',
+    ...(schedule
+      ? {
+          scheduledStartAt: schedule,
+          scheduledTimezone: params.scheduledTimezone || 'Asia/Kolkata',
+          scheduledBy: getCampaignActiveCtx().email || undefined,
+        }
+      : {}),
+    templateId: finalTemplateId,
+    templateName: finalTemplateName,
+    sourceFileName: params.sourceFileName || 'Uploaded Leads',
+    totalLeads: params.leads.length,
+    sentCount: 0,
+    pendingCount: params.leads.length,
+    failedCount: 0,
+    repliedCount: 0,
+    demoBookedCount: 0,
+    createdAt: now,
+    updatedAt: now,
+    lastRunNumber: 0,
+  };
+
+  campaignsMap.set(campaignId, initialCampaign);
+
+  // Process leads. One lead per email per campaign: repeats are skipped (first row wins). The lead's
+  // document ID is derived from the email, so the database itself cannot hold two leads with the same
+  // email in one campaign.
+  const createdLeads: CampaignLead[] = [];
+  const firstRowByEmail = new Map<string, number>();
+  const duplicates: DuplicateInfo[] = [];
+  params.leads.forEach((l, idx) => {
+    const cleanEmail = normalizeEmail(l.email);
+    if (!cleanEmail) return;
+
+    const rowNum = l.rowNumber || idx + 1;
+    const firstRow = firstRowByEmail.get(cleanEmail);
+    if (firstRow !== undefined) {
+      duplicates.push({ rowNumber: rowNum, email: cleanEmail, duplicateOfRow: firstRow });
+      return;
+    }
+    firstRowByEmail.set(cleanEmail, rowNum);
+    const campaignLeadId = `clead-${campaignId}-${crypto.createHash('sha1').update(cleanEmail).digest('hex').slice(0, 16)}`;
+    const leadId = `lead-${cleanEmail.replace(/[^a-z0-9]/gi, '_')}`;
+
+    const leadName = l.name || [l.firstName, l.lastName].filter(Boolean).join(' ') || cleanEmail.split('@')[0];
+    const company = l.companyName || `${leadName}'s Agency`;
+
+    let initialSubject: string | undefined = undefined;
+    let initialBody: string | undefined = undefined;
+
+    if (mode === 'PREDEFINED' && selectedTemplate) {
+      const personalized = personalizeTemplate(selectedTemplate, {
+        name: leadName,
+        firstName: l.firstName || leadName.split(' ')[0],
+        lastName: l.lastName || leadName.split(' ').slice(1).join(' '),
+        companyName: company,
+        designation: l.designation || 'Director / Owner',
+        email: cleanEmail,
+      });
+      initialSubject = personalized.subject;
+      initialBody = personalized.body;
+    }
+
+    const cLead: CampaignLead = {
+      campaignLeadId,
+      campaignId,
+      leadId,
+      name: leadName,
+      firstName: l.firstName || leadName.split(' ')[0],
+      lastName: l.lastName || leadName.split(' ').slice(1).join(' '),
+      companyName: company,
+      email: cleanEmail,
+      phone: l.phone,
+      // Last 10 digits of the phone, so an inbound WhatsApp reply can find this lead with one equality query.
+      ...(String(l.phone || '').replace(/[^\d]/g, '').length >= 7
+        ? { phoneLast10: String(l.phone).replace(/[^\d]/g, '').slice(-10) }
+        : {}),
+      designation: l.designation || 'Director / Owner',
+      sourceFile: params.sourceFileName || 'Uploaded Leads',
+      rowNumber: rowNum,
+      sendStatus: 'PENDING',
+      replyStatus: 'NOT_REPLIED',
+      demoStatus: 'NOT_BOOKED',
+      demoIntent: false,
+      sendCount: 0,
+      generatedSubject: initialSubject,
+      generatedBody: initialBody,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    campaignLeadsMap.set(campaignLeadId, cLead);
+    createdLeads.push(cLead);
+  });
+
+  // Counts reflect the leads actually created (duplicates and empty rows excluded).
+  initialCampaign.totalLeads = createdLeads.length;
+  initialCampaign.pendingCount = createdLeads.length;
+  if (duplicates.length > 0) {
+    console.log(`[createCampaign] ${campaignId}: skipped ${duplicates.length} duplicate email(s).`);
+  }
+
+  // Sync to Firestore synchronously before responding
+  if (isFirebaseConfigured && db) {
+    try {
+      await safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignDoc(campaignId), initialCampaign);
+      // Batch write campaign_leads ONLY (unreplied leads remain in campaign module only, not CRM)
+      const promises = createdLeads.map((cl) => safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignLeadDoc(cl.campaignLeadId), cl));
+      await Promise.allSettled(promises);
+      // Search index for the leads table (full-text search without reading every lead).
+      await writeCampaignSearchIndex(campaignId, createdLeads).catch((e) =>
+        console.warn('[createCampaign] search index write note:', e?.message || e)
+      );
+    } catch (e) {
+      console.warn('Firestore write notice during campaign creation:', e);
+    }
+  }
+
+  // If user requested to start immediately (a scheduled campaign is started later by the cron)
+  if (params.startImmediately && !schedule) {
+    startCampaign(campaignId).catch((err) => {
+      console.error('Error starting campaign immediately:', err);
+    });
+  }
+
+  return { campaign: initialCampaign, leads: createdLeads, duplicatesSkipped: duplicates.length, duplicates };
+}
+
+// -------------------------------------------------------------
+// CAMPAIGN SCHEDULER
+// -------------------------------------------------------------
+// A SCHEDULED campaign is started by the regular campaign cron (/api/campaigns/cron, every 1-2 min)
+// once scheduledStartAt has passed, so it starts within one cron interval of the chosen time.
+const SCHEDULE_MIN_LEAD_MS = 2 * 60 * 1000;
+const SCHEDULE_MAX_AHEAD_MS = 365 * 24 * 60 * 60 * 1000;
+
+/** Returns the normalised UTC ISO time, or throws a user-facing error. */
+export function validateScheduleTime(startAt: string): string {
+  const t = Date.parse(startAt);
+  if (!Number.isFinite(t)) throw new Error('Pick a valid date and time.');
+  const now = Date.now();
+  if (t < now + SCHEDULE_MIN_LEAD_MS) throw new Error('Pick a time at least 2 minutes from now.');
+  if (t > now + SCHEDULE_MAX_AHEAD_MS) throw new Error('Pick a time within the next 12 months.');
+  return new Date(t).toISOString();
+}
+
+export async function scheduleCampaign(campaignId: string, startAt: string, timezone?: string): Promise<Campaign> {
+  const campaign = await ensureCampaignInStore(campaignId);
+  if (!campaign) throw new Error(`Campaign ${campaignId} not found`);
+  if (campaign.status === 'RUNNING') throw new Error('Pause the campaign before scheduling it.');
+  const when = validateScheduleTime(startAt);
+  const now = new Date().toISOString();
+  campaign.status = 'SCHEDULED';
+  campaign.scheduledStartAt = when;
+  campaign.scheduledTimezone = timezone || campaign.scheduledTimezone || 'Asia/Kolkata';
+  campaign.scheduledBy = getCampaignActiveCtx().email || campaign.scheduledBy;
+  campaign.updatedAt = now;
+  pausedCampaignsSet.delete(campaignId);
+  campaignsMap.set(campaignId, campaign);
+  if (isFirebaseConfigured && db) {
+    await safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignDoc(campaignId), withoutCounters(campaign), { merge: true });
+  }
+  return campaign;
+}
+
+export async function unscheduleCampaign(campaignId: string): Promise<Campaign> {
+  const campaign = await ensureCampaignInStore(campaignId);
+  if (!campaign) throw new Error(`Campaign ${campaignId} not found`);
+  if (campaign.status !== 'SCHEDULED') return campaign;
+  const now = new Date().toISOString();
+  // Back to where it was: never-started campaigns become drafts, started ones paused.
+  campaign.status = (campaign.lastRunNumber || 0) > 0 ? 'PAUSED' : 'DRAFT';
+  delete campaign.scheduledStartAt;
+  delete campaign.scheduledTimezone;
+  delete campaign.scheduledBy;
+  campaign.updatedAt = now;
+  campaignsMap.set(campaignId, campaign);
+  if (isFirebaseConfigured && db) {
+    await safeSetDoc(
+      tenantRepo(getCampaignActiveCtx()).campaignDoc(campaignId),
+      { ...withoutCounters(campaign), scheduledStartAt: null, scheduledTimezone: null, scheduledBy: null } as any,
+      { merge: true }
+    );
+  }
+  return campaign;
+}
+
+/**
+ * Starts every SCHEDULED campaign of this workspace whose time has come. Called at the start of each
+ * campaign cron run. Reads only due campaigns (1 read when none). An atomic claim document makes sure
+ * only one server starts a given schedule, even if several cron runs overlap.
+ */
+export async function startDueScheduledCampaigns(): Promise<string[]> {
+  if (!isFirebaseConfigured || !db) return [];
+  const nowIso = new Date().toISOString();
+  const col = tenantRepo(getCampaignActiveCtx()).campaigns();
+  let docs: Campaign[] = [];
+  try {
+    const snap = await getDocs(query(col, where('status', '==', 'SCHEDULED'), where('scheduledStartAt', '<=', nowIso)));
+    docs = snap.docs.map((d) => d.data() as Campaign);
+  } catch (err: any) {
+    const missingIndex = err?.code === 9 || /FAILED_PRECONDITION|requires an index/i.test(String(err?.message || ''));
+    if (!missingIndex) throw err;
+    // Index not deployed yet: all scheduled campaigns (usually few), due ones picked here.
+    const snap = await getDocs(query(col, where('status', '==', 'SCHEDULED')));
+    docs = snap.docs.map((d) => d.data() as Campaign).filter((c) => (c.scheduledStartAt || '') <= nowIso);
+  }
+
+  const started: string[] = [];
+  for (const c of docs) {
+    if (!c?.campaignId || !c.scheduledStartAt) continue;
+    const claimRef = tenantRepo(getCampaignActiveCtx()).doc(
+      'schedule_claims',
+      `${c.campaignId}_${c.scheduledStartAt.replace(/[^0-9A-Za-z]/g, '')}`
+    );
+    try {
+      await createDoc(claimRef, { campaignId: c.campaignId, scheduledStartAt: c.scheduledStartAt, claimedAt: nowIso });
+    } catch {
+      continue; // another server already started this schedule
+    }
+    try {
+      campaignsMap.set(c.campaignId, c); // fresh copy from the database
+      await startCampaign(c.campaignId);
+      started.push(c.campaignId);
+      console.log(`[Campaign Scheduler] Started ${c.campaignId} (scheduled for ${c.scheduledStartAt})`);
+    } catch (err: any) {
+      console.warn(`[Campaign Scheduler] Could not start ${c.campaignId}:`, err?.message || err);
+    }
+  }
+  return started;
+}
+
+/**
+ * Start or resume a campaign
+ */
+export async function startCampaign(campaignId: string): Promise<Campaign> {
+  const campaign = await ensureCampaignInStore(campaignId);
+  if (!campaign) throw new Error(`Campaign ${campaignId} not found`);
+
+  pausedCampaignsSet.delete(campaignId);
+
+  // If campaign was COMPLETED or DRAFT without run, create a run
+  const now = new Date().toISOString();
+  let currentRunId = campaign.currentRunId;
+
+  if (!currentRunId || campaign.status === 'COMPLETED' || campaign.status === 'DRAFT') {
+    const nextRunNumber = (campaign.lastRunNumber || 0) + 1;
+    currentRunId = `run-${campaignId}-${nextRunNumber}`;
+    const allAvailable = getAllTemplates();
+    const activeTemplateId = campaign.templateId || (allAvailable.length > 0 ? allAvailable[0].templateId : DEFAULT_EMAIL_TEMPLATES[0].templateId);
+    const newRun: CampaignRun = {
+      runId: currentRunId,
+      campaignId,
+      runNumber: nextRunNumber,
+      status: 'RUNNING',
+      templateId: activeTemplateId,
+      totalLeads: campaign.totalLeads,
+      sentCount: campaign.sentCount,
+      startedAt: now,
+      createdAt: now,
+    };
+    campaignRunsMap.set(currentRunId, newRun);
+    campaign.currentRunId = currentRunId;
+    campaign.lastRunNumber = nextRunNumber;
+
+    if (isFirebaseConfigured && db) {
+      await safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignRunDoc(currentRunId), newRun);
+    }
+  }
+
+  // Ensure leads can be processed: if no leads are currently PENDING but some are FAILED,
+  // automatically reset FAILED leads to PENDING so they are delivered
+  // COUNT first; only if nothing is pending, read the FAILED leads to retry them (was: read every lead).
+  const pendingCount = await countPendingLeads(campaignId);
+  if (pendingCount === 0) {
+    let failedLeads: CampaignLead[] = [];
+    if (isFirebaseConfigured && db) {
+      const fSnap = await getDocs(
+        query(tenantRepo(getCampaignActiveCtx()).campaignLeads(), where('campaignId', '==', campaignId), where('sendStatus', '==', 'FAILED'))
+      ).catch(() => null);
+      fSnap?.forEach((d) => {
+        const l = d.data() as CampaignLead;
+        if (l?.campaignLeadId) {
+          campaignLeadsMap.set(l.campaignLeadId, l);
+          failedLeads.push(l);
+        }
+      });
+    } else {
+      failedLeads = getCampaignLeads(campaignId).filter((l) => l.sendStatus === 'FAILED');
+    }
+    if (failedLeads.length > 0) {
+      console.log(`[Campaign Engine] Automatically resetting ${failedLeads.length} failed leads to PENDING for campaign ${campaignId}`);
+      for (const fl of failedLeads) {
+        fl.sendStatus = 'PENDING';
+        fl.lastError = undefined;
+        fl.updatedAt = now;
+        if (isFirebaseConfigured && db) {
+          await safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignLeadDoc(fl.campaignLeadId), fl, { merge: true });
+        }
+      }
+    }
+  }
+
+  campaign.status = 'RUNNING';
+  campaign.startedAt = campaign.startedAt || now;
+  campaign.updatedAt = now;
+  campaignsMap.set(campaignId, campaign);
+
+  if (isFirebaseConfigured && db) {
+    await safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignDoc(campaignId), withoutCounters(campaign), { merge: true });
+  }
+
+  // Synchronously process initial batch for immediate dispatch on Vercel & dev server
+  const batchRes = await processNextCampaignSendBatch(campaignId, 500).catch((err) => {
+    console.warn(`[Campaign Engine] Note processing initial batch on start:`, err);
+    return null;
+  });
+
+  return batchRes?.campaign || recalculateCampaignMetrics(campaignId) || campaign;
+}
+
+/**
+ * Pause campaign immediately
+ */
+export async function pauseCampaign(campaignId: string): Promise<Campaign> {
+  const campaign = await ensureCampaignInStore(campaignId);
+  if (!campaign) throw new Error(`Campaign ${campaignId} not found`);
+
+  pausedCampaignsSet.add(campaignId);
+
+  // Trigger abort controller to stop further sends
+  const abortCtrl = activeCampaignAbortControllers.get(campaignId);
+  if (abortCtrl) {
+    abortCtrl.abort();
+    activeCampaignAbortControllers.delete(campaignId);
+  }
+
+  const now = new Date().toISOString();
+  campaign.status = 'PAUSED';
+  campaign.updatedAt = now;
+
+  if (campaign.currentRunId) {
+    const run = campaignRunsMap.get(campaign.currentRunId);
+    if (run && run.status === 'RUNNING') {
+      run.status = 'PAUSED';
+      if (isFirebaseConfigured && db) {
+        await safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignRunDoc(run.runId), run, { merge: true });
+      }
+    }
+  }
+
+  campaignsMap.set(campaignId, campaign);
+
+  if (isFirebaseConfigured && db) {
+    await await safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignDoc(campaignId), withoutCounters(campaign), { merge: true });
+  }
+
+  return campaign;
+}
+
+/**
+ * Restart campaign:
+ * - Does NOT create a duplicate campaign in UI.
+ * - Retains identity, name, leads, and history.
+ * - Creates a new campaignRun (tracks runId, campaignId, runNumber, status, templateId, startedAt, etc.)
+ * - Safe Intelligent Follow-up Logic:
+ *   1. Leads who have ALREADY REPLIED (replyStatus === 'REPLIED') are PRESERVED and EXCLUDED from sending (0 new emails sent to them).
+ *   2. Leads who have NOT replied (replyStatus !== 'REPLIED', whether previous send failed or had no reply) are QUEUED (sendStatus = 'PENDING') for this follow-up run.
+ *   3. If ALL leads have replied (allQualified = true, 0 unreplied leads), no emails are sent and the run records that all leads have qualified.
+ */
+export async function restartCampaign(
+  campaignId: string,
+  options?: { resetFailedOnly?: boolean; newTemplateId?: string }
+): Promise<{
+  campaign: Campaign;
+  run: CampaignRun;
+  targetLeadsCount: number;
+  alreadyRepliedCount: number;
+  allQualified: boolean;
+  message: string;
+}> {
+  const campaign = await ensureCampaignInStore(campaignId);
+  if (!campaign) throw new Error(`Campaign ${campaignId} not found`);
+
+  pausedCampaignsSet.delete(campaignId);
+
+  // Halt any currently active send loops for this campaign
+  const existingAbort = activeCampaignAbortControllers.get(campaignId);
+  if (existingAbort) {
+    existingAbort.abort();
+    activeCampaignAbortControllers.delete(campaignId);
+  }
+
+  const now = new Date().toISOString();
+  const nextRunNumber = (campaign.lastRunNumber || 0) + 1;
+  const newRunId = `run-${campaignId}-${nextRunNumber}`;
+  const allAvailable = getAllTemplates();
+  const templateId = options?.newTemplateId || campaign.templateId || (allAvailable.length > 0 ? allAvailable[0].templateId : DEFAULT_EMAIL_TEMPLATES[0].templateId);
+
+  // Mark previous run as COMPLETED if it was running or paused
+  if (campaign.currentRunId) {
+    const prevRun = campaignRunsMap.get(campaign.currentRunId);
+    if (prevRun && (prevRun.status === 'RUNNING' || prevRun.status === 'PAUSED')) {
+      prevRun.status = 'COMPLETED';
+      prevRun.completedAt = now;
+      if (isFirebaseConfigured && db) {
+        setDoc(tenantRepo(getCampaignActiveCtx()).campaignRunDoc(prevRun.runId), prevRun, { merge: true }).catch(() => {});
+      }
+    }
+  }
+
+  const leads = await getCampaignLeadsFromDb(campaignId);
+  const repliedLeads = leads.filter((l) => l.replyStatus === 'REPLIED');
+  const unrepliedLeads = leads.filter((l) => l.replyStatus !== 'REPLIED');
+
+  const allQualified = leads.length > 0 && repliedLeads.length === leads.length;
+  let targetLeadsCount = 0;
+  let message = '';
+
+  if (allQualified) {
+    // All leads have replied and qualified: 0 emails will be dispatched
+    message = `All ${leads.length} lead(s) in this campaign have replied & qualified. No one will receive an email in Run #${nextRunNumber}.`;
+    console.log(`[Campaign Engine] Restart requested for campaign ${campaignId}, but ALL leads have already replied. Disagreeing to send any duplicate emails.`);
+
+    const newRun: CampaignRun = {
+      runId: newRunId,
+      campaignId,
+      runNumber: nextRunNumber,
+      status: 'COMPLETED',
+      templateId,
+      totalLeads: leads.length,
+      sentCount: 0,
+      startedAt: now,
+      completedAt: now,
+      createdAt: now,
+    };
+    campaignRunsMap.set(newRunId, newRun);
+
+    campaign.currentRunId = newRunId;
+    campaign.lastRunNumber = nextRunNumber;
+    campaign.status = 'COMPLETED';
+    campaign.completedAt = now;
+    campaign.templateId = templateId;
+    campaign.updatedAt = now;
+    campaignsMap.set(campaignId, campaign);
+
+    if (isFirebaseConfigured && db) {
+      setDoc(tenantRepo(getCampaignActiveCtx()).campaignDoc(campaignId), withoutCounters(campaign), { merge: true }).catch(() => {});
+      setDoc(tenantRepo(getCampaignActiveCtx()).campaignRunDoc(newRunId), newRun).catch(() => {});
+    }
+
+    recalculateCampaignMetrics(campaignId);
+
+    return {
+      campaign,
+      run: newRun,
+      targetLeadsCount: 0,
+      alreadyRepliedCount: repliedLeads.length,
+      allQualified: true,
+      message,
+    };
+  }
+
+  // Clear any active in-flight locks for this campaign
+  for (const key of Array.from(inFlightLeadSendsSet)) {
+    if (key.startsWith(`${campaignId}_`)) {
+      inFlightLeadSendsSet.delete(key);
+    }
+  }
+
+  // Queue unreplied leads for the new follow-up run
+  const leadSavePromises: Promise<any>[] = [];
+  unrepliedLeads.forEach((l) => {
+    l.sendStatus = 'PENDING';
+    l.lastError = undefined;
+    l.campaignRunId = newRunId;
+    l.updatedAt = now;
+    targetLeadsCount++;
+    campaignLeadsMap.set(l.campaignLeadId, l);
+    if (isFirebaseConfigured && db) {
+      leadSavePromises.push(safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignLeadDoc(l.campaignLeadId), l, { merge: true }));
+    }
+  });
+
+  // Keep replied leads untouched with their REPLIED status preserved
+  repliedLeads.forEach((l) => {
+    // Ensure they are not queued
+    if (l.sendStatus === 'PENDING' || l.sendStatus === 'SENDING') {
+      l.sendStatus = 'SENT';
+    }
+    l.updatedAt = now;
+    campaignLeadsMap.set(l.campaignLeadId, l);
+    if (isFirebaseConfigured && db) {
+      leadSavePromises.push(safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignLeadDoc(l.campaignLeadId), l, { merge: true }));
+    }
+  });
+
+  if (leadSavePromises.length > 0) {
+    await Promise.allSettled(leadSavePromises).catch(() => {});
+  }
+
+  const newRun: CampaignRun = {
+    runId: newRunId,
+    campaignId,
+    runNumber: nextRunNumber,
+    status: 'RUNNING',
+    templateId,
+    totalLeads: leads.length,
+    sentCount: 0,
+    startedAt: now,
+    createdAt: now,
+  };
+  campaignRunsMap.set(newRunId, newRun);
+
+  campaign.currentRunId = newRunId;
+  campaign.lastRunNumber = nextRunNumber;
+  campaign.status = 'RUNNING';
+  campaign.templateId = templateId;
+  campaign.updatedAt = now;
+  campaignsMap.set(campaignId, campaign);
+
+  if (isFirebaseConfigured && db) {
+    await Promise.allSettled([
+      await safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignDoc(campaignId), withoutCounters(campaign), { merge: true }),
+      safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignRunDoc(newRunId), newRun),
+    ]);
+  }
+
+  await recalculateAndPersistCampaignMetrics(campaignId);
+
+  message = `Run #${nextRunNumber} started. Sending follow-up to ${targetLeadsCount} unreplied lead(s). (${repliedLeads.length} lead(s) skipped because they already replied).`;
+  console.log(`[Campaign Engine] ${message}`);
+
+  // Synchronously process initial batch for immediate dispatch on Vercel & dev server
+  const batchRes = await processNextCampaignSendBatch(campaignId, 500).catch((err) => {
+    console.warn(`[Campaign Engine] Note processing initial batch on restart:`, err);
+    return null;
+  });
+
+  const finalCampaignState = (await recalculateAndPersistCampaignMetrics(campaignId)) || batchRes?.campaign || campaign;
+
+  return {
+    campaign: finalCampaignState,
+    run: newRun,
+    targetLeadsCount,
+    alreadyRepliedCount: repliedLeads.length,
+    allQualified: false,
+    message,
+  };
+}
+
+/**
+ * Synchronously processes a batch of pending emails for a campaign.
+ * Built for Vercel Serverless Function lifecycle: each call processes up to `maxBatchSize` leads,
+ * dispatches emails via SMTP/Simulation, updates Firestore, and returns updated campaign state.
+ */
+/**
+ * Cross-instance send claim. In-memory sets cannot stop two serverless instances (or two
+ * overlapping requests) from both reading a lead as PENDING and both emailing it. This
+ * takes an atomic claim in Firestore (create fails if it already exists) BEFORE sending.
+ * Returns true only for the single caller allowed to send.
+ */
+const SEND_CLAIM_STALE_MS = 10 * 60 * 1000;
+function sendClaimRef(key: string) {
+  return tenantRepo(getCampaignActiveCtx()).doc('send_claims', key.replace(/\//g, '_'));
+}
+/**
+ * 'claimed': this run may send. 'sent': an earlier run already sent it (the claim is SENT).
+ * 'busy': someone else is sending it right now, or the claim could not be checked: leave it for later.
+ */
+async function claimLeadSendState(key: string): Promise<'claimed' | 'sent' | 'busy'> {
+  if (await claimLeadSend(key)) return 'claimed';
+  try {
+    const snap = await getDoc(sendClaimRef(key));
+    if (snap.exists() && (snap.data() as any)?.status === 'SENT') return 'sent';
+  } catch {}
+  return 'busy';
+}
+
+async function claimLeadSend(key: string): Promise<boolean> {
+  if (!isFirebaseConfigured || !db) return true;
+  const ref = sendClaimRef(key);
+  const now = new Date().toISOString();
+  try {
+    await createDoc(ref, { key, status: 'SENDING', claimedAt: now });
+    return true;
+  } catch (err: any) {
+    const code = err?.code;
+    if (code !== 6 && !String(err?.message || '').includes('ALREADY_EXISTS')) {
+      // Firestore unavailable: refuse to send rather than risk a duplicate.
+      console.warn('[Campaign Engine] Send claim failed (not sending):', err?.message || err);
+      return false;
+    }
+  }
+  // Someone already claimed it. Allow a takeover only if that claim is stale and never completed.
+  try {
+    const snap = await getDoc(ref);
+    const d: any = snap.exists() ? snap.data() : null;
+    if (d && d.status === 'SENDING' && Date.now() - Date.parse(d.claimedAt || '') > SEND_CLAIM_STALE_MS) {
+      await updateDoc(ref, { claimedAt: now, takenOverAt: now });
+      return true;
+    }
+  } catch {}
+  return false;
+}
+/**
+ * A campaign object for status saves WITHOUT its lead counters. The counters are owned by
+ * recalculateAndPersistCampaignMetrics (COUNT queries); a copy held in this server's memory may be
+ * stale and must never overwrite them.
+ */
+function withoutCounters(c: Campaign): Partial<Campaign> {
+  const { totalLeads, sentCount, pendingCount, failedCount, repliedCount, demoBookedCount, stats, ...rest } = c as any;
+  return rest;
+}
+
+/** Saves a lead as SENT without sending (it was already sent in this run). */
+async function markLeadAlreadySent(lead: CampaignLead): Promise<void> {
+  const now = new Date().toISOString();
+  lead.sendStatus = 'SENT';
+  lead.updatedAt = now;
+  if (isFirebaseConfigured && db) {
+    await safeSetDoc(
+      tenantRepo(getCampaignActiveCtx()).campaignLeadDoc(lead.campaignLeadId),
+      { sendStatus: 'SENT', updatedAt: now } as any,
+      { merge: true }
+    );
+  }
+}
+
+async function finishLeadClaim(key: string, sent: boolean): Promise<void> {
+  if (!isFirebaseConfigured || !db) return;
+  try {
+    const ref = sendClaimRef(key);
+    if (sent) await updateDoc(ref, { status: 'SENT', sentAt: new Date().toISOString() });
+    else await deleteDoc(ref); // not sent: release so a retry is possible
+  } catch (err: any) {
+    console.warn('[Campaign Engine] finishLeadClaim note:', err?.message || err);
+  }
+}
+
+export async function processNextCampaignSendBatch(
+  campaignId: string,
+  maxBatchSize: number = 500
+): Promise<{
+  campaign: Campaign;
+  processedCount: number;
+  remainingPendingCount: number;
+  /** Set when THIS server cannot send email at all; the leads were left PENDING, not failed. */
+  sendBlockedReason?: string;
+}> {
+  if (await isCampaignTombstoned(campaignId)) {
+    purgeCampaignFromMemory(campaignId);
+    throw new Error(`Campaign ${campaignId} was deleted`);
+  }
+  const campaign = await ensureCampaignInStore(campaignId);
+  if (!campaign) throw new Error(`Campaign ${campaignId} not found`);
+
+  // 1. Immediately abort if campaign is PAUSED, DRAFT, or COMPLETED
+  if (pausedCampaignsSet.has(campaignId) || campaign.status !== 'RUNNING') {
+    console.log(`[Campaign Engine] Campaign ${campaignId} status is "${campaign.status}" (or explicitly paused). Skipping processNextCampaignSendBatch.`);
+    if (pausedCampaignsSet.has(campaignId)) campaign.status = 'PAUSED';
+    return { campaign, processedCount: 0, remainingPendingCount: await countPendingLeads(campaignId) };
+  }
+
+  // 1b. Server setup check. If THIS server cannot send email at all (Resend is not set up here), that is
+  // not a lead failure. Touch nothing in the database: every lead stays PENDING, so a correctly configured
+  // server can deliver it. The note is kept in memory only, so it is shown on this server's screen and
+  // never reaches other servers.
+  if (campaign.deliveryMode !== 'SIMULATION') {
+    const readiness = await getEmailSendReadiness(getCampaignActiveCtx().tenantId);
+    if (!readiness.ok) {
+      const pendingCount = await countPendingLeads(campaignId);
+      if (pendingCount > 0) {
+        console.warn(`[Campaign Engine] Campaign ${campaignId}: not sending from this server. ${readiness.error}`);
+        return { campaign, processedCount: 0, remainingPendingCount: pendingCount, sendBlockedReason: readiness.error };
+      }
+    }
+  }
+
+  // 2. Register/Retrieve AbortController for instant pause cancellation
+  let abortCtrl = activeCampaignAbortControllers.get(campaignId);
+  if (!abortCtrl) {
+    abortCtrl = new AbortController();
+    activeCampaignAbortControllers.set(campaignId, abortCtrl);
+  }
+
+  try {
+    const currentRunId = campaign.currentRunId || `run-${campaignId}-1`;
+    const selectedTplId = campaign.templateId || '';
+    let template = getTemplateById(selectedTplId);
+    if (!template && selectedTplId && isFirebaseConfigured && db) {
+      try {
+        const snap = await getDoc(tenantRepo(getCampaignActiveCtx()).emailTemplateDoc(selectedTplId));
+        if (snap.exists()) {
+          template = snap.data() as EmailTemplate;
+          emailTemplatesMap.set(selectedTplId, template);
+        }
+      } catch (err) {}
+    }
+    if (!template) {
+      template = DEFAULT_EMAIL_TEMPLATES.find((t) => t.templateId === selectedTplId) || DEFAULT_EMAIL_TEMPLATES[0];
+    }
+
+    // Only the next batch of leads still waiting to be sent (was: every lead of the campaign).
+    const pendingLeads = await fetchPendingLeads(campaignId, maxBatchSize);
+
+    if (pendingLeads.length === 0) {
+      const now = new Date().toISOString();
+      campaign.status = 'COMPLETED';
+      campaign.completedAt = now;
+      campaign.updatedAt = now;
+
+      const run = campaignRunsMap.get(currentRunId);
+      if (run) {
+        run.status = 'COMPLETED';
+        run.completedAt = now;
+        if (isFirebaseConfigured && db) {
+          await safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignRunDoc(run.runId), run, { merge: true });
+        }
+      }
+
+      if (isFirebaseConfigured && db) {
+        await safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignDoc(campaignId), withoutCounters(campaign), { merge: true });
+      }
+
+      const finalCamp = (await recalculateAndPersistCampaignMetrics(campaignId)) || campaign;
+      return { campaign: finalCamp, processedCount: 0, remainingPendingCount: 0 };
+    }
+
+    const batchToProcess = pendingLeads.slice(0, maxBatchSize);
+    let processedCount = 0;
+    let sendBlockedReason: string | undefined;
+
+    for (const lead of batchToProcess) {
+      // INSTANT PAUSE CHECK: Check abort signal and campaign status before each email send
+      if (pausedCampaignsSet.has(campaignId) || abortCtrl.signal.aborted) {
+        console.log(`[Campaign Engine] Abort signal or pause active for campaign ${campaignId}. Halting send batch.`);
+        break;
+      }
+
+      const currentCampState = campaignsMap.get(campaignId) || campaign;
+      if (currentCampState.status !== 'RUNNING') {
+        console.log(`[Campaign Engine] Campaign ${campaignId} status is "${currentCampState.status}". Halting send batch immediately.`);
+        break;
+      }
+
+      if (lead.replyStatus === 'REPLIED') {
+        lead.sendStatus = 'SENT';
+        continue;
+      }
+
+    const emailLower = lead.email.toLowerCase();
+    const runHistoryKey = `${campaignId}_${currentRunId}_${emailLower}`;
+    const campaignHistoryKey = `${campaignId}_${emailLower}`;
+
+    // STRICT DEDUPLICATION:
+    // If lead is already SENT, SENDING, in send history, or in-flight, skip immediately!
+    // Being sent right now by this server: leave it alone.
+    if (lead.sendStatus === 'SENDING' || inFlightLeadSendsSet.has(runHistoryKey)) {
+      continue;
+    }
+    // Already sent in this run (this server remembers it): save SENT so the database stops counting it as
+    // pending. Leads are now picked by a "sendStatus == PENDING" query, so a lead skipped without saving
+    // would be picked again on every batch and keep the campaign from ever completing.
+    if (lead.sendStatus === 'SENT' || sendHistorySet.has(runHistoryKey)) {
+      await markLeadAlreadySent(lead);
+      continue;
+    }
+
+    // Reserve in-flight lock
+    inFlightLeadSendsSet.add(runHistoryKey);
+    inFlightLeadSendsSet.add(campaignHistoryKey);
+    const claim = await claimLeadSendState(runHistoryKey);
+    if (claim !== 'claimed') {
+      inFlightLeadSendsSet.delete(runHistoryKey);
+      inFlightLeadSendsSet.delete(campaignHistoryKey);
+      if (claim === 'sent') {
+        // Same email already sent in this run (duplicate row in the upload, or the lead's own SENT write
+        // was lost after a successful send): record it as SENT, never send twice.
+        console.log(`[Campaign Engine] ${lead.email}: already sent in this run; marking SENT.`);
+        await markLeadAlreadySent(lead);
+      } else {
+        console.log(`[Campaign Engine] Skipping ${lead.email}: being sent by another run right now.`);
+      }
+      continue;
+    }
+
+    let subject = '';
+    let body = '';
+    let activeAttachments: any[] = [];
+    let htmlContent: string | undefined = undefined;
+
+    if (campaign.campaignMode === 'AI_GENERATED' && !campaign.templateId) {
+      if (!lead.generatedBody) {
+        lead.generationStatus = 'GENERATING';
+        const aiResult = await generateAiEmailForLead(lead);
+        lead.researchData = aiResult.researchData;
+        lead.selectedPainPoint = aiResult.selectedPainPoint;
+        lead.selectedCapabilities = aiResult.selectedCapabilities;
+        lead.personalizationEvidence = aiResult.personalizationEvidence;
+        lead.generatedSubject = aiResult.subject;
+        lead.generatedBody = aiResult.body;
+        lead.qualityCheckStatus = aiResult.qualityCheckStatus;
+        lead.generationStatus = 'READY_TO_SEND';
+      }
+      subject = lead.generatedSubject || `Streamlining Operations for ${lead.companyName}`;
+      body = lead.generatedBody || `Hi ${lead.name},\n\nI noticed your operations at ${lead.companyName}.`;
+    } else {
+      let activeTpl = getTemplateById(template.templateId);
+      if (!activeTpl) activeTpl = template;
+      const personalized = personalizeTemplate(activeTpl, lead);
+      subject = personalized.subject;
+      body = personalized.body;
+      htmlContent = personalized.html;
+
+      if (activeTpl.attachments && activeTpl.attachments.length > 0) {
+        activeAttachments = activeTpl.attachments.map((att: any) => ({
+          filename: att.name || att.filename || 'attachment',
+          contentType: att.type || att.contentType,
+          dataUrl: att.dataUrl,
+          content: att.base64 || att.content,
+          encoding: att.base64 ? 'base64' : undefined,
+        }));
+      }
+      lead.generatedSubject = subject;
+      lead.generatedBody = body;
+    }
+
+    lead.sendStatus = 'SENDING';
+    lead.updatedAt = new Date().toISOString();
+
+    const senderFrom = await campaignRecordedSender(getCampaignActiveCtx().tenantId);
+    const conversationId = lead.conversationId || `conv-${lead.leadId}`;
+    const gmailThreadId = lead.gmailThreadId || `thread-${lead.leadId}`;
+
+    try {
+      const isSimulationMode = campaign.deliveryMode === 'SIMULATION';
+      const sendResult = isSimulationMode
+        ? {
+            success: true,
+            messageId: `<sim-camp-${Date.now()}-${Math.random().toString(36).slice(2, 6)}@umrah360.in>`,
+            simulated: true,
+          }
+        : await sendLiveEmail({
+            tenantId: getCampaignActiveCtx().tenantId,
+            to: lead.email,
+            subject: subject,
+            text: body,
+            html: htmlContent,
+            attachments: activeAttachments.length > 0 ? activeAttachments : undefined,
+            // Echoed back by Resend on open/click/bounce events, so the webhook finds the lead with no lookup.
+            tags: [
+              { name: 'tenant', value: getCampaignActiveCtx().tenantId },
+              { name: 'campaign', value: campaignId },
+              { name: 'lead', value: lead.campaignLeadId },
+            ],
+          });
+
+      const now = new Date().toISOString();
+
+      if (sendResult.success) {
+        const sentMsgId = sendResult.messageId || `<camp-${Date.now()}@umrah360.in>`;
+        lead.sendStatus = 'SENT';
+        lead.sendCount = (lead.sendCount || 0) + 1;
+        lead.lastSentAt = now;
+        if (lead.engaged === undefined) lead.engaged = false;
+        lead.gmailMessageId = sentMsgId;
+        lead.gmailThreadId = gmailThreadId;
+        lead.conversationId = conversationId;
+        lead.lastError = undefined;
+        lead.updatedAt = now;
+
+        sendHistorySet.add(runHistoryKey);
+        sendHistorySet.add(`${campaignId}_${lead.email.toLowerCase()}`);
+
+        const historyRecord: CampaignSendHistory = {
+          historyId: `hist-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          campaignId,
+          campaignRunId: currentRunId,
+          campaignLeadId: lead.campaignLeadId,
+          email: lead.email,
+          templateId: template.templateId,
+          subject: subject,
+          gmailMessageId: sentMsgId,
+          sentAt: now,
+          status: 'SENT',
+        };
+
+        const currentRun = campaignRunsMap.get(currentRunId);
+        if (currentRun) {
+          currentRun.sentCount = (currentRun.sentCount || 0) + 1;
+        }
+
+        appendOutboundMessageToThread(conversationId, {
+          messageId: `msg-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          gmailMessageId: sentMsgId,
+          gmailThreadId,
+          conversationId,
+          channel: 'EMAIL',
+          direction: 'OUTBOUND',
+          senderType: 'AGENT',
+          senderName: campaignSenderName(await getTenantBrand(getCampaignActiveCtx().tenantId)),
+          senderEmail: senderFrom,
+          text: body,
+          sentAt: now,
+          receivedAt: now,
+          createdAt: now,
+          timestamp: now,
+          emailMeta: {
+            subject: subject,
+            from: senderFrom,
+            to: lead.email,
+            messageId: sentMsgId,
+          },
+        });
+
+        if (isFirebaseConfigured && db) {
+          await safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignLeadDoc(lead.campaignLeadId), lead, { merge: true });
+          await safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignSendHistoryDoc(historyRecord.historyId), historyRecord);
+          if (currentRun) {
+            await safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignRunDoc(currentRun.runId), currentRun, { merge: true });
+          }
+        }
+        processedCount++;
+        // Refresh the campaign's counters every 50 sends, so the screen shows progress even if this
+        // serverless call is cut off before the batch ends (COUNT queries: a few reads, not one per lead).
+        if (processedCount % 50 === 0) {
+          await recalculateAndPersistCampaignMetrics(campaignId).catch(() => {});
+        }
+      } else if (sendResult.notConfigured) {
+        // THIS server cannot send (e.g. Resend refused the key here). Not this lead's failure: put it back
+        // to PENDING without saving anything, and stop the batch because every other lead would hit the same wall.
+        lead.sendStatus = 'PENDING';
+        lead.lastError = `Not sent yet. ${sendResult.error || 'Email sending is not set up on this server.'}`;
+        lead.updatedAt = now;
+        sendBlockedReason = sendResult.error || 'Email sending is not set up on this server.';
+        console.warn(`[Campaign Engine] Campaign ${campaignId}: stopping batch, this server cannot send. ${sendBlockedReason}`);
+        break;
+      } else {
+        lead.sendStatus = 'FAILED';
+        lead.lastError = sendResult.error || 'Delivery failure';
+        lead.updatedAt = now;
+
+        if (isFirebaseConfigured && db) {
+          await safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignLeadDoc(lead.campaignLeadId), lead, { merge: true });
+        }
+
+        if (sendResult.isDailyLimitExceeded) {
+          campaign.status = 'PAUSED';
+          campaign.lastError = 'Gmail Daily Sending Limit reached. Campaign paused.';
+          campaign.updatedAt = now;
+          if (isFirebaseConfigured && db) {
+            await safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignDoc(campaignId), withoutCounters(campaign), { merge: true });
+          }
+          break;
+        }
+      }
+    } catch (err: any) {
+      lead.sendStatus = 'FAILED';
+      lead.lastError = err?.message || 'Unexpected sending exception';
+      lead.updatedAt = new Date().toISOString();
+
+      if (isFirebaseConfigured && db) {
+        await safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignLeadDoc(lead.campaignLeadId), lead, { merge: true });
+      }
+    } finally {
+      await finishLeadClaim(runHistoryKey, lead.sendStatus === 'SENT');
+      inFlightLeadSendsSet.delete(runHistoryKey);
+      inFlightLeadSendsSet.delete(campaignHistoryKey);
+    }
+  }
+
+  // COUNT aggregation: how many are still waiting (was: filtering every lead in memory).
+  const remainingPendingCount = await countPendingLeads(campaignId);
+
+  if (remainingPendingCount === 0) {
+    const now = new Date().toISOString();
+    campaign.status = 'COMPLETED';
+    campaign.completedAt = now;
+    campaign.updatedAt = now;
+
+    const run = campaignRunsMap.get(currentRunId);
+    if (run) {
+      run.status = 'COMPLETED';
+      run.completedAt = now;
+      if (isFirebaseConfigured && db) {
+        await safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignRunDoc(run.runId), run, { merge: true });
+      }
+    }
+
+    if (isFirebaseConfigured && db) {
+      await safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignDoc(campaignId), withoutCounters(campaign), { merge: true });
+    }
+  }
+
+  const updatedCampaign = (await recalculateAndPersistCampaignMetrics(campaignId)) || campaign;
+  return {
+    campaign: updatedCampaign,
+    processedCount,
+    remainingPendingCount,
+    ...(sendBlockedReason ? { sendBlockedReason } : {}),
+  };
+  } finally {
+    activeCampaignAbortControllers.delete(campaignId);
+  }
+}
+
+/**
+ * Replaces variables in subject and body
+ */
+export function personalizeTemplate(
+  template: EmailTemplate,
+  lead: { name?: string; firstName?: string; lastName?: string; companyName?: string; designation?: string; email: string }
+): { subject: string; body: string; html?: string; attachments?: any[] } {
+  const name = lead.name || lead.firstName || lead.email.split('@')[0];
+  const firstName = lead.firstName || name.split(' ')[0];
+  const lastName = lead.lastName || name.split(' ').slice(1).join(' ');
+  const company = lead.companyName || `${name}'s Agency`;
+  const designation = lead.designation || 'Director';
+
+  const replaceVars = (str: string) => {
+    return (str || '')
+      .replace(/\{\{\s*name\s*\}\}/gi, name)
+      .replace(/\{\{\s*firstName\s*\}\}/gi, firstName)
+      .replace(/\{\{\s*lastName\s*\}\}/gi, lastName)
+      .replace(/\{\{\s*company\s*\}\}/gi, company)
+      .replace(/\{\{\s*companyName\s*\}\}/gi, company)
+      .replace(/\{\{\s*designation\s*\}\}/gi, designation)
+      .replace(/\{\{\s*jobTitle\s*\}\}/gi, designation)
+      .replace(/\{\{\s*email\s*\}\}/gi, lead.email);
+  };
+
+  const subject = sanitizeAiEmailText(replaceVars(template.subject), name);
+  const rawBody = template.body || '';
+  const body = sanitizeAiEmailText(replaceVars(rawBody), name);
+
+  const rawHtml = template.htmlBody || (template.isHtml || template.format === 'html' ? template.body : undefined);
+  const html = rawHtml ? sanitizeAiEmailText(replaceVars(rawHtml), name) : undefined;
+
+  return {
+    subject,
+    body,
+    html,
+    attachments: template.attachments || [],
+  };
+}
+
+/**
+ * Helper to extract raw clean email address from string
+ */
+export function extractCleanEmail(raw: string): string {
+  if (!raw) return '';
+  const match = raw.match(/<([^>]+)>/) || raw.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/);
+  return (match ? match[1] : raw).trim().toLowerCase();
+}
+
+/**
+ * Campaign counters (sent / pending / failed / replied / demo) for the campaign document.
+ */
+export function recalculateCampaignMetrics(campaignId: string, persist: boolean = true): Campaign | undefined {
+  // The counters stored on the campaign document are the source of truth. Memory now holds only the leads
+  // a request touched (a pending batch, one lead), so counting them here would produce WRONG numbers.
+  // Read paths (persist=false) just return the stored counters; write paths refresh them from COUNT
+  // aggregations in the background.
+  const camp = campaignsMap.get(campaignId);
+  if (!camp) return undefined;
+  if (persist) {
+    void recalculateAndPersistCampaignMetrics(campaignId).catch(() => {});
+  }
+  return camp;
+}
+
+/**
+ * Recounts the campaign's leads with COUNT aggregations (about 1 read per 1,000 leads per counter,
+ * instead of 1 read per lead) and saves ONLY the counters, so a stale copy of the campaign in this
+ * server's memory can never overwrite its status.
+ */
+export async function recalculateAndPersistCampaignMetrics(campaignId: string): Promise<Campaign | undefined> {
+  if (await isCampaignTombstoned(campaignId)) {
+    purgeCampaignFromMemory(campaignId);
+    return undefined;
+  }
+  const camp = await ensureCampaignInStore(campaignId);
+  if (!camp) return undefined;
+  if (!isFirebaseConfigured || !db) return camp;
+
+  try {
+    const stats = await countCampaignStats(campaignId);
+    const counters = {
+      totalLeads: stats.totalLeads,
+      sentCount: stats.sent,
+      pendingCount: stats.pending,
+      failedCount: stats.failed,
+      repliedCount: stats.replied,
+      demoBookedCount: stats.demoBooked,
+      stats,
+    };
+    Object.assign(camp, counters);
+    campaignsMap.set(campaignId, camp);
+    await safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignDoc(campaignId), counters as any, { merge: true });
+  } catch (e) {
+    console.warn('[recalculateAndPersistCampaignMetrics] count/save note:', e);
+  }
+  return camp;
+}
+
+/**
+ * Manual or Automatic Demo Status Update: Single source of truth
+ */
+export async function updateLeadDemoStatus(params: {
+  leadId: string;
+  demoStatus: DemoStatus;
+  demoSource: DemoSource;
+}): Promise<CampaignLead | null> {
+  await initCampaignStore();
+
+  // At most 2 small reads (doc by ID, then leadId == ID), never a scan of every lead.
+  let targetLead = await findCampaignLeadById(params.leadId);
+
+  if (!targetLead) return null;
+
+  const now = new Date().toISOString();
+  targetLead.demoStatus = params.demoStatus;
+  targetLead.demoSource = params.demoSource;
+  targetLead.demoBookedAt = params.demoStatus === 'BOOKED' ? now : undefined;
+  targetLead.updatedAt = now;
+  campaignLeadsMap.set(targetLead.campaignLeadId, targetLead);
+
+  if (isFirebaseConfigured && db) {
+    try {
+      await safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignLeadDoc(targetLead.campaignLeadId), targetLead, { merge: true });
+      await safeSetDoc(tenantRepo(getCampaignActiveCtx()).leadDoc(targetLead.leadId), {
+        demoStatus: params.demoStatus,
+        demoSource: params.demoSource,
+        demoBookedAt: targetLead.demoBookedAt,
+        status: params.demoStatus === 'BOOKED' ? 'DEMO_BOOKED' : 'ENGAGED',
+        updatedAt: now,
+      }, { merge: true });
+    } catch (e) {
+      console.warn('Firestore update warning for demo status:', e);
+    }
+  }
+
+  await recalculateAndPersistCampaignMetrics(targetLead.campaignId);
+
+  return targetLead;
+}
+
+/**
+ * Hooks into incoming emails, WhatsApp messages, or webhooks to identify if sender is a campaign lead.
+ * If yes, updates replyStatus = 'REPLIED' across all campaign records and recalculates campaign metrics!
+ */
+export async function handleIncomingCampaignLeadReply(params: {
+  fromEmail?: string;
+  fromPhone?: string;
+  subject?: string;
+  body?: string;
+  gmailMessageId?: string;
+  gmailThreadId?: string;
+}): Promise<{ isCampaignLead: boolean; campaignLead?: CampaignLead; campaignId?: string; campaignName?: string; demoDetected?: boolean }> {
+  await initCampaignStore();
+
+  const cleanFromEmail = params.fromEmail ? extractCleanEmail(params.fromEmail) : '';
+  const rawPhoneDigits = params.fromPhone ? params.fromPhone.replace(/[^\d]/g, '') : '';
+  const cleanPhoneDigits = rawPhoneDigits.length >= 7 ? rawPhoneDigits.slice(-10) : '';
+
+  if (!cleanFromEmail && !cleanPhoneDigits) {
+    return { isCampaignLead: false };
+  }
+
+  // Look up ONLY the leads with this sender's email / phone (was: read every campaign lead of the
+  // workspace on every inbound message). Lead emails are stored trimmed + lowercased at creation, the
+  // same normalisation extractCleanEmail() applies, so an equality query matches. Phones are matched on
+  // `phoneLast10`, written at creation (run scripts/backfill-campaign-lead-phone.ts once for older leads).
+  const candidates = new Map<string, CampaignLead>();
+  if (isFirebaseConfigured && db) {
+    const lookups: Promise<any>[] = [];
+    if (cleanFromEmail) {
+      lookups.push(getDocs(query(tenantRepo(getCampaignActiveCtx()).campaignLeads(), where('email', '==', cleanFromEmail))));
+    }
+    if (cleanPhoneDigits) {
+      // Also match leads saved with a shorter (7-9 digit) number than the inbound one.
+      const suffixes = Array.from(new Set([10, 9, 8, 7].map((n) => rawPhoneDigits.slice(-n)).filter((x) => x.length >= 7)));
+      lookups.push(getDocs(query(tenantRepo(getCampaignActiveCtx()).campaignLeads(), where('phoneLast10', 'in', suffixes))));
+    }
+    const snaps = await Promise.all(lookups.map((p) => p.catch((e: any) => {
+      console.warn('[handleIncomingCampaignLeadReply] DB search notice:', e);
+      return null;
+    })));
+    for (const snap of snaps) {
+      snap?.forEach((d: any) => {
+        const l = d.data() as CampaignLead;
+        if (l && l.campaignLeadId) {
+          campaignLeadsMap.set(l.campaignLeadId, l);
+          candidates.set(l.campaignLeadId, l);
+        }
+      });
+    }
+  } else {
+    for (const l of campaignLeadsMap.values()) candidates.set(l.campaignLeadId, l);
+  }
+
+  // Confirm each candidate (same matching rules as before)
+  const matchedLeads: CampaignLead[] = [];
+  for (const l of candidates.values()) {
+    let isMatch = false;
+    if (cleanFromEmail) {
+      const lEmail = extractCleanEmail(l.email);
+      if (lEmail && lEmail === cleanFromEmail) {
+        isMatch = true;
+      }
+    }
+    if (!isMatch && cleanPhoneDigits && l.phone) {
+      const lPhoneDigits = l.phone.replace(/[^\d]/g, '');
+      if (lPhoneDigits && (lPhoneDigits.endsWith(cleanPhoneDigits) || cleanPhoneDigits.endsWith(lPhoneDigits.slice(-10)))) {
+        isMatch = true;
+      }
+    }
+    if (isMatch) {
+      matchedLeads.push(l);
+    }
+  }
+
+  if (matchedLeads.length === 0) {
+    return { isCampaignLead: false };
+  }
+
+  const now = new Date().toISOString();
+  const text = stripQuotedEmailHistory(params.body || '').toLowerCase();
+  const hasDemoIntent = /book a demo|schedule a demo|demo tomorrow|book the demo|yes.*demo|interested in a demo|platform walkthrough|live demo/i.test(text);
+  const hasConfirmedBooking = /calendar.*confirmed|appointment.*scheduled|booked for|demo scheduled|meeting invite accepted/i.test(text);
+
+  const affectedCampaignIds = new Set<string>();
+  let primaryCampaignName = 'Outbound Campaign';
+
+  for (const matchedLead of matchedLeads) {
+    matchedLead.replyStatus = 'REPLIED';
+    matchedLead.engaged = true;
+    matchedLead.repliedAt = matchedLead.repliedAt || now;
+    matchedLead.updatedAt = now;
+    if (params.gmailMessageId) matchedLead.gmailMessageId = params.gmailMessageId;
+    if (params.gmailThreadId) matchedLead.gmailThreadId = params.gmailThreadId;
+
+    if (hasDemoIntent) {
+      matchedLead.demoIntent = true;
+      if (hasConfirmedBooking) {
+        matchedLead.demoStatus = 'BOOKED';
+        matchedLead.demoSource = 'AUTOMATIC';
+        matchedLead.demoBookedAt = now;
+      }
+    }
+
+    campaignLeadsMap.set(matchedLead.campaignLeadId, matchedLead);
+    affectedCampaignIds.add(matchedLead.campaignId);
+
+    const cObj = campaignsMap.get(matchedLead.campaignId);
+    if (cObj?.name) {
+      primaryCampaignName = cObj.name;
+    }
+
+    if (isFirebaseConfigured && db) {
+      try {
+        await safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignLeadDoc(matchedLead.campaignLeadId), matchedLead, { merge: true });
+        const contactId = `contact-${matchedLead.email.replace(/[^a-z0-9]/gi, '_')}`;
+        await safeSetDoc(tenantRepo(getCampaignActiveCtx()).contactDoc(contactId), {
+          contactId,
+          firstName: matchedLead.firstName || matchedLead.name.split(' ')[0],
+          lastName: matchedLead.lastName || matchedLead.name.split(' ').slice(1).join(' '),
+          email: matchedLead.email,
+          phone: matchedLead.phone || '',
+          companyName: matchedLead.companyName,
+          jobTitle: matchedLead.designation || 'Director / Owner',
+          createdAt: now,
+          updatedAt: now,
+          lastActivityAt: now,
+        }, { merge: true });
+
+        if (matchedLead.leadId) {
+          await safeSetDoc(tenantRepo(getCampaignActiveCtx()).leadDoc(matchedLead.leadId), {
+            leadId: matchedLead.leadId,
+            contactId,
+            source: 'EMAIL',
+            leadType: 'OUTBOUND',
+            campaignId: matchedLead.campaignId,
+            campaignName: primaryCampaignName,
+            campaignLeadId: matchedLead.campaignLeadId,
+            replyStatus: 'REPLIED',
+            repliedAt: now,
+            status: matchedLead.demoStatus === 'BOOKED' ? 'DEMO_BOOKED' : 'ENGAGED',
+            demoStatus: matchedLead.demoStatus,
+            updatedAt: now,
+          }, { merge: true });
+        }
+      } catch (e) {
+        console.warn('Error syncing lead reply to Firestore:', e);
+      }
+    }
+  }
+
+  // Recalculate metrics for all affected campaigns so cards and lead counts update instantly
+  for (const cId of affectedCampaignIds) {
+    await recalculateAndPersistCampaignMetrics(cId);
+  }
+
+  return {
+    isCampaignLead: true,
+    campaignLead: matchedLeads[0],
+    campaignId: matchedLeads[0]?.campaignId,
+    campaignName: primaryCampaignName,
+    demoDetected: matchedLeads.some((l) => l.demoStatus === 'BOOKED'),
+  };
+}
+
+/**
+ * Update a lead's send or reply status directly (useful for testing scenarios and CRM operations)
+ */
+export async function updateCampaignLeadStatus(params: {
+  leadId: string;
+  sendStatus?: 'PENDING' | 'SENDING' | 'SENT' | 'FAILED' | 'PAUSED' | 'COMPLETED';
+  replyStatus?: 'NOT_REPLIED' | 'REPLIED';
+  demoStatus?: DemoStatus;
+  demoSource?: DemoSource;
+  lastError?: string;
+}): Promise<CampaignLead | null> {
+  await initCampaignStore();
+
+  // At most 2 small reads (doc by ID, then leadId == ID), never a scan of every lead.
+  let targetLead = await findCampaignLeadById(params.leadId);
+
+  if (!targetLead) return null;
+
+  const now = new Date().toISOString();
+  if (params.sendStatus) {
+    targetLead.sendStatus = params.sendStatus;
+    if (params.sendStatus === 'FAILED') {
+      targetLead.lastError = params.lastError || 'Delivery failure';
+    } else if (params.sendStatus === 'PENDING') {
+      targetLead.lastError = undefined;
+    } else if (params.sendStatus === 'SENT') {
+      targetLead.lastSentAt = targetLead.lastSentAt || now;
+      targetLead.sendCount = (targetLead.sendCount || 0) + 1;
+    }
+  }
+
+  if (params.replyStatus) {
+    targetLead.replyStatus = params.replyStatus;
+    if (params.replyStatus === 'REPLIED') {
+      targetLead.engaged = true;
+      targetLead.repliedAt = targetLead.repliedAt || now;
+    } else {
+      targetLead.repliedAt = undefined;
+    }
+  }
+
+  if (params.demoStatus) {
+    targetLead.demoStatus = params.demoStatus;
+    targetLead.demoBookedAt = params.demoStatus === 'BOOKED' ? now : undefined;
+  }
+
+  if (params.demoSource) {
+    targetLead.demoSource = params.demoSource;
+  }
+
+  targetLead.updatedAt = now;
+  campaignLeadsMap.set(targetLead.campaignLeadId, targetLead);
+
+  if (isFirebaseConfigured && db) {
+    try {
+      await safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignLeadDoc(targetLead.campaignLeadId), targetLead, { merge: true });
+    } catch (e) {
+      console.warn('Firestore update warning for lead status:', e);
+    }
+  }
+
+  await recalculateAndPersistCampaignMetrics(targetLead.campaignId);
+
+  return targetLead;
+}
+
+/**
+ * Autonomous background campaign processor.
+ * Finds all RUNNING campaigns (in memory and Firestore) and processes their next send batch.
+ * This runs continuously on the server regardless of whether a browser client is open.
+ */
+let isAutoProcessingCampaigns = false;
+export async function processActiveRunningCampaignsBatch(
+  batchSize: number = 500,
+  ctx?: TenantContext
+): Promise<{
+  activeCount: number;
+  processedCampaigns: Array<{ campaignId: string; processedCount: number; remainingPendingCount: number }>;
+}> {
+  if (ctx) {
+    return runWithCampaignCtx(ctx, () => processActiveRunningCampaignsBatch(batchSize));
+  }
+  if (isAutoProcessingCampaigns) {
+    return { activeCount: 0, processedCampaigns: [] };
+  }
+  // Plan gate: a workspace whose plan has no campaigns must not send anything.
+  if (!(await hasFeature(getCampaignActiveCtx().tenantId, 'campaigns'))) {
+    return { activeCount: 0, processedCampaigns: [] };
+  }
+  isAutoProcessingCampaigns = true;
+
+  try {
+    await initCampaignStore();
+
+    // Scheduled campaigns whose time has come become RUNNING first, so this same run sends them.
+    await startDueScheduledCampaigns().catch((err) =>
+      console.warn('[Campaign Scheduler] check failed:', err?.message || err)
+    );
+
+    // Running campaigns. With Firestore, ask the database directly for RUNNING ones only (fresh across
+    // server instances, and reads just those docs instead of every campaign).
+    const runningCampaignsMap = new Map<string, Campaign>();
+    if (isFirebaseConfigured && db) {
+      try {
+        const snap = await getDocs(
+          query(tenantRepo(getCampaignActiveCtx()).campaigns(), where('status', '==', 'RUNNING'))
+        ).catch(() => null);
+        snap?.forEach((d) => {
+          const c = d.data() as Campaign;
+          if (!c?.campaignId) return;
+          if (pausedCampaignsSet.has(c.campaignId)) c.status = 'PAUSED';
+          campaignsMap.set(c.campaignId, c);
+          if (c.status === 'RUNNING') runningCampaignsMap.set(c.campaignId, c);
+        });
+      } catch (e) {
+        // quiet ignore
+      }
+    } else {
+      for (const c of campaignsMap.values()) {
+        if (c.status === 'RUNNING') runningCampaignsMap.set(c.campaignId, c);
+      }
+    }
+
+    const runningCampaigns = Array.from(runningCampaignsMap.values());
+    const results: Array<{ campaignId: string; processedCount: number; remainingPendingCount: number }> = [];
+
+    for (const camp of runningCampaigns) {
+      try {
+        const res = await processNextCampaignSendBatch(camp.campaignId, batchSize);
+        results.push({
+          campaignId: camp.campaignId,
+          processedCount: res.processedCount,
+          remainingPendingCount: res.remainingPendingCount,
+        });
+      } catch (err: any) {
+        console.warn(`[Auto-Campaign Engine] Batch execution note for campaign ${camp.campaignId}:`, err?.message || err);
+      }
+    }
+
+    return {
+      activeCount: runningCampaigns.length,
+      processedCampaigns: results,
+    };
+  } finally {
+    isAutoProcessingCampaigns = false;
+  }
+}

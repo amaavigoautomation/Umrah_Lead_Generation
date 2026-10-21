@@ -1,0 +1,1787 @@
+import React, { useState, Suspense, useRef, useLayoutEffect, useEffect } from 'react';
+import { lazyNamed } from '../lazyLoad';
+import {
+  Search,
+  Bot,
+  User,
+  Send,
+  AlertTriangle,
+  CheckCircle,
+  CheckCircle2,
+  Mail,
+  MessageCircle,
+  Instagram,
+  Facebook,
+  Linkedin,
+  Globe,
+  Sparkles,
+  ArrowUpRight,
+  ShieldCheck,
+  Building,
+  UserCheck,
+  Zap,
+  Layers,
+  Smartphone,
+  Share2,
+  X,
+  MessageSquare,
+  RefreshCw,
+  Key,
+  Settings,
+  ExternalLink,
+  Clock,
+  ChevronLeft,
+  ChevronRight,
+} from 'lucide-react';
+import {
+  Conversation,
+  Message,
+  Contact,
+  Lead,
+  Channel,
+  KnowledgeDocument,
+} from '../types';
+import { generateOmnichannelResponse } from '../services/aiService';
+import { useBrand } from '../context/BrandContext';
+import {
+  InboundEmailPayload,
+  InboundProcessingResult,
+  INBOUND_MAILBOX,
+} from '../services/emailInboundService';
+import {
+  InboundWhatsAppPayload,
+  InboundWhatsAppProcessingResult,
+  WHATSAPP_BUSINESS_NUMBER,
+  WHATSAPP_BUSINESS_NUMBER_FORMATTED,
+} from '../services/whatsappInboundService';
+
+// Simulator modals: loaded only when opened.
+const InboundEmailFlowModal = lazyNamed(() => import('./InboundEmailFlowModal'), 'InboundEmailFlowModal');
+const InboundWhatsAppFlowModal = lazyNamed(() => import('./InboundWhatsAppFlowModal'), 'InboundWhatsAppFlowModal');
+
+interface UnifiedInboxProps {
+  conversations: Conversation[];
+  /** True when older conversations exist beyond the loaded page. */
+  hasMoreConversations?: boolean;
+  /** Loads the next page of older conversations. */
+  onLoadMoreConversations?: () => void;
+  /** Tells the parent which conversations' messages to load (the open thread + same contact's threads). */
+  onWatchConversations?: (conversationIds: string[]) => void;
+  messages: Message[];
+  contacts: Contact[];
+  leads: Lead[];
+  knowledgeDocs: KnowledgeDocument[];
+  onSendMessage: (conversationId: string, text: string, senderType: 'AGENT' | 'AI' | 'CUSTOMER' | 'PROSPECT') => void;
+  onToggleAi: (conversationId: string, enabled: boolean) => void;
+  onMarkAsRead?: (conversationId: string) => void;
+  onApproveDraft?: (conversationId: string) => void;
+  onUpdateLeadScore: (leadId: string, delta: number) => void;
+  onViewLeadInCrm: (leadId: string) => void;
+  onProcessInboundEmail?: (payload: InboundEmailPayload) => Promise<InboundProcessingResult>;
+  onProcessInboundWhatsApp?: (payload: InboundWhatsAppPayload) => Promise<InboundWhatsAppProcessingResult>;
+  onSyncNow?: () => void;
+  onAutoFollowUpChanged?: (leadId: string, autoFollowUp: any) => void;
+}
+
+export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
+  conversations,
+  hasMoreConversations,
+  onLoadMoreConversations,
+  onWatchConversations,
+  messages,
+  contacts,
+  leads,
+  knowledgeDocs,
+  onSendMessage,
+  onToggleAi,
+  onMarkAsRead,
+  onApproveDraft,
+  onUpdateLeadScore,
+  onViewLeadInCrm,
+  onProcessInboundEmail,
+  onProcessInboundWhatsApp,
+  onSyncNow,
+  onAutoFollowUpChanged,
+}) => {
+  const { brand } = useBrand();
+  const isUmrah = brand.playbook === 'umrah360';
+  const [selectedConversationId, setSelectedConversationId] = useState<string>(
+    conversations[0]?.conversationId || ''
+  );
+  const [channelFilter, setChannelFilter] = useState<string>('ALL');
+  const [statusFilter, setStatusFilter] = useState<string>('ALL');
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  // Lead Profile 360 side panel: slides in/out from the right edge
+  const [isProfileOpen, setIsProfileOpen] = useState<boolean>(true);
+  const [replyText, setReplyText] = useState<string>('');
+  const [isGeneratingAi, setIsGeneratingAi] = useState<boolean>(false);
+  const [isUnifiedAllPlatforms, setIsUnifiedAllPlatforms] = useState<boolean>(false);
+  const [replyChannelOverride, setReplyChannelOverride] = useState<Channel | ''>('');
+  const [showSimulateModal, setShowSimulateModal] = useState<boolean>(false);
+  const [showInboundFlowModal, setShowInboundFlowModal] = useState<boolean>(false);
+  const [showInboundWhatsAppModal, setShowInboundWhatsAppModal] = useState<boolean>(false);
+  const [simulatedPlatform, setSimulatedPlatform] = useState<Channel>('WHATSAPP');
+  const [simulatedText, setSimulatedText] = useState<string>(isUmrah ? 'Hi, can you send us your B2B package cost breakdown for 5-star Makkah hotels?' : `Hi, I would like to know more about ${brand.companyName}.`);
+
+  // SMTP Configuration & Delivery State
+  const [smtpStatus, setSmtpStatus] = useState<{
+    configured: boolean;
+    host: string;
+    port: number;
+    user: string;
+    from: string;
+    hasPassword: boolean;
+    emailProvider?: 'resend' | 'smtp';
+  } | null>(null);
+  const [showSmtpModal, setShowSmtpModal] = useState<boolean>(false);
+  const [smtpHostInput, setSmtpHostInput] = useState<string>('smtp.gmail.com');
+  const [smtpPortInput, setSmtpPortInput] = useState<number>(465);
+  const [smtpUserInput, setSmtpUserInput] = useState<string>('');
+  const [smtpPassInput, setSmtpPassInput] = useState<string>('');
+  const [smtpFromInput, setSmtpFromInput] = useState<string>('');
+  const [isSavingSmtp, setIsSavingSmtp] = useState<boolean>(false);
+  const [smtpSaveMessage, setSmtpSaveMessage] = useState<{ success: boolean; text: string } | null>(null);
+  const [retryingMessageId, setRetryingMessageId] = useState<string | null>(null);
+  const [isTogglingAutoFollowUp, setIsTogglingAutoFollowUp] = useState<boolean>(false);
+
+  // Fetch SMTP status on load
+  const fetchSmtpConfig = async () => {
+    try {
+      const res = await fetch('/api/smtp/config');
+      if (res.ok) {
+        const data = await res.json();
+        setSmtpStatus(data);
+        if (data.host) setSmtpHostInput(data.host);
+        if (data.port) setSmtpPortInput(data.port);
+        if (data.user) setSmtpUserInput(data.user);
+        if (data.from) setSmtpFromInput(data.from);
+      }
+    } catch {}
+  };
+
+  React.useEffect(() => {
+    fetchSmtpConfig();
+  }, []);
+
+  // Save & Test SMTP credentials directly from Unified Inbox
+  const handleSaveSmtpConfig = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSavingSmtp(true);
+    setSmtpSaveMessage(null);
+    try {
+      const res = await fetch('/api/smtp/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          host: smtpHostInput,
+          port: smtpPortInput,
+          user: smtpUserInput,
+          pass: smtpPassInput,
+          from: smtpFromInput,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        // Now verify connection
+        const verifyRes = await fetch('/api/smtp/verify', { method: 'POST' });
+        const verifyData = await verifyRes.json();
+        if (verifyRes.ok && verifyData.verified) {
+          setSmtpSaveMessage({
+            success: true,
+            text: `SMTP Connected successfully to ${smtpHostInput}! Auto-retrying any pending outbound emails now...`,
+          });
+          // Auto retry any failed outbound messages in current active conversation
+          const failedOutbound = activeMessages.filter(
+            (m) => m.channel === 'EMAIL' && m.direction === 'OUTBOUND' && m.smtpStatus !== 'DELIVERED'
+          );
+          for (const m of failedOutbound) {
+            await handleRetrySendEmail(m);
+          }
+        } else {
+          setSmtpSaveMessage({
+            success: false,
+            text: `Settings saved, but connection test reported: ${verifyData.error || 'Check username & App Password'}`,
+          });
+        }
+        fetchSmtpConfig();
+        if (onSyncNow) {
+          onSyncNow();
+        }
+      } else {
+        setSmtpSaveMessage({
+          success: false,
+          text: data.error || 'Failed to save SMTP configuration',
+        });
+      }
+    } catch (err: any) {
+      setSmtpSaveMessage({
+        success: false,
+        text: err?.message || 'Network error saving SMTP config',
+      });
+    } finally {
+      setIsSavingSmtp(false);
+    }
+  };
+
+  // Retry sending an email message over SMTP
+  const handleRetrySendEmail = async (msg: Message) => {
+    const toEmail = activeContact.email || msg.emailMeta?.to || msg.senderEmail;
+    if (!toEmail) return;
+    setRetryingMessageId(msg.messageId);
+
+    try {
+      const res = await fetch('/api/email/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          to: toEmail,
+          subject: msg.emailMeta?.subject || `Re: ${brand.companyName} Inquiry`,
+          text: msg.text,
+          inReplyTo: msg.emailMeta?.inReplyTo,
+          conversationId: msg.conversationId,
+          senderName: msg.senderName || `${brand.aiAgentName} Automation`,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        msg.smtpStatus = 'DELIVERED';
+        msg.smtpError = undefined;
+        if (data.messageId) {
+          msg.gmailMessageId = data.messageId;
+          if (msg.emailMeta) msg.emailMeta.messageId = data.messageId;
+        }
+        if (onSyncNow) onSyncNow();
+      } else {
+        msg.smtpStatus = 'DELIVERY_FAILED';
+        msg.smtpError = data.error || 'Failed to dispatch via SMTP';
+        setShowSmtpModal(true);
+      }
+    } catch (err: any) {
+      msg.smtpStatus = 'DELIVERY_FAILED';
+      msg.smtpError = err?.message || 'SMTP Network Failure';
+    } finally {
+      setRetryingMessageId(null);
+    }
+  };
+
+  // Active conversation and linked objects
+  const activeConversation =
+    conversations.find((c) => c.conversationId === selectedConversationId) || conversations[0];
+  const foundContact = contacts.find((c) => c.contactId === activeConversation?.contactId);
+  const activeContact: Contact = foundContact || {
+    contactId: activeConversation?.contactId || 'unknown',
+    firstName: 'Tour',
+    lastName: 'Operator',
+    email: '',
+    phone: '',
+    companyName: 'Umrah Travel Agency',
+    jobTitle: 'Tour Operator',
+    tags: ['WEBSITE_DEMO_FORM'],
+    notes: '',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+  const activeLead = leads.find((l) => l.leadId === activeConversation?.leadId);
+
+  // All conversations for this active contact across different platforms (Section 55 Unified Customer View)
+  const contactConversations = activeContact
+    ? conversations.filter((c) => c.contactId === activeContact.contactId)
+    : activeConversation ? [activeConversation] : [];
+
+  // Load messages only for the threads on screen (active conversation + same contact's other channels).
+  const watchIdsKey = contactConversations.map((c) => c.conversationId).sort().join('|');
+  React.useEffect(() => {
+    if (onWatchConversations) onWatchConversations(watchIdsKey ? watchIdsKey.split('|') : []);
+  }, [watchIdsKey, onWatchConversations]);
+
+  // Messages to display: strictly sorted chronologically (customer email first, then reply, then followups)
+  const getMsgTime = (m: Message) => new Date(m.sentAt || m.timestamp || m.createdAt || 0).getTime();
+  const sortMsgs = (a: Message, b: Message) => {
+    const diff = getMsgTime(a) - getMsgTime(b);
+    if (diff !== 0) return diff;
+    // Inbound customer message ordered before outbound reply if timestamp is identical
+    if (a.direction === 'INBOUND' && b.direction === 'OUTBOUND') return -1;
+    if (a.direction === 'OUTBOUND' && b.direction === 'INBOUND') return 1;
+    return 0;
+  };
+
+  const activeMessages = messages
+    .filter((m) => m.conversationId === activeConversation?.conversationId)
+    .sort(sortMsgs);
+
+  const unifiedAllMessages = activeContact
+    ? messages
+        .filter((m) => contactConversations.some((c) => c.conversationId === m.conversationId))
+        .sort(sortMsgs)
+    : activeMessages;
+
+  const displayMessages = isUnifiedAllPlatforms ? unifiedAllMessages : activeMessages;
+
+  // Chat scroll: opening a conversation jumps to the LATEST message (bottom). New messages keep it at the
+  // bottom only while you are already near the bottom, so reading older messages is never interrupted.
+  const threadScrollRef = useRef<HTMLDivElement>(null);
+  const stickToBottomRef = useRef(true);
+  const lastThreadKeyRef = useRef('');
+  const threadKey = `${isUnifiedAllPlatforms ? 'all' : 'one'}:${activeConversation?.conversationId || ''}`;
+  const lastMessageId = displayMessages[displayMessages.length - 1]?.messageId || '';
+  const scrollThreadToBottom = () => {
+    const el = threadScrollRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  };
+  useLayoutEffect(() => {
+    if (lastThreadKeyRef.current !== threadKey) {
+      lastThreadKeyRef.current = threadKey;
+      stickToBottomRef.current = true; // a newly opened chat always starts at the bottom
+    }
+    if (stickToBottomRef.current) scrollThreadToBottom();
+  }, [threadKey, displayMessages.length, lastMessageId]);
+  // Images / attachments finish loading after the first paint and push content down: follow them.
+  useEffect(() => {
+    const el = threadScrollRef.current;
+    if (!el) return;
+    const onLoad = () => {
+      if (stickToBottomRef.current) scrollThreadToBottom();
+    };
+    el.addEventListener('load', onLoad, true);
+    return () => el.removeEventListener('load', onLoad, true);
+  }, [threadKey]);
+  const onThreadScroll = () => {
+    const el = threadScrollRef.current;
+    if (!el) return;
+    stickToBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
+  };
+
+  // Helper for channel icon
+  const renderChannelIcon = (channel: Channel, size = 4) => {
+    const cls = `w-${size} h-${size}`;
+    switch (channel) {
+      case 'WHATSAPP':
+        return <MessageCircle className={`${cls} text-emerald-500`} />;
+      case 'EMAIL':
+        return <Mail className={`${cls} text-blue-500`} />;
+      case 'INSTAGRAM':
+        return <Instagram className={`${cls} text-pink-500`} />;
+      case 'FACEBOOK':
+        return <Facebook className={`${cls} text-indigo-500`} />;
+      case 'LINKEDIN':
+        return <Linkedin className={`${cls} text-sky-600`} />;
+      default:
+        return <Globe className={`${cls} text-teal-500`} />;
+    }
+  };
+
+  const getChannelColor = (channel: Channel) => {
+    switch (channel) {
+      case 'WHATSAPP':
+        return 'bg-emerald-50 text-emerald-800 border-emerald-200';
+      case 'EMAIL':
+        return 'bg-blue-50 text-blue-800 border-blue-200';
+      case 'INSTAGRAM':
+        return 'bg-pink-50 text-pink-800 border-pink-200';
+      case 'FACEBOOK':
+        return 'bg-indigo-50 text-indigo-800 border-indigo-200';
+      case 'LINKEDIN':
+        return 'bg-sky-50 text-sky-800 border-sky-200';
+      default:
+        return 'bg-teal-50 text-teal-800 border-teal-200';
+    }
+  };
+
+  // Filter conversations
+  const filteredConversations = conversations.filter((conv) => {
+    const contact = contacts.find((c) => c.contactId === conv.contactId);
+    const lead = leads.find((l) => l.leadId === conv.leadId);
+
+    // Channel filter
+    if (channelFilter !== 'ALL') {
+      if (channelFilter === 'EMAIL') {
+        const matchesEmail =
+          conv.channel === 'EMAIL' ||
+          messages.some((m) => m.conversationId === conv.conversationId && m.channel === 'EMAIL');
+        if (!matchesEmail) return false;
+      } else if (channelFilter === 'WEBSITE') {
+        const matchesWebsite =
+          conv.channel === 'WEBSITE' ||
+          conv.conversationId?.startsWith('conv-web-') ||
+          conv.conversationSummary?.toLowerCase().includes('website demo');
+        if (!matchesWebsite) return false;
+      } else if (conv.channel !== channelFilter) {
+        return false;
+      }
+    }
+
+    // Status / Mode filter
+    if (statusFilter === 'UNREAD' && !conv.unread && conv.isRead !== false && (conv.unreadCount || 0) === 0) return false;
+    if (statusFilter === 'AI_ACTIVE' && !conv.aiEnabled) return false;
+    if (statusFilter === 'HUMAN_HANDOFF' && !conv.humanHandoff) return false;
+    if (statusFilter === 'HIGH_INTENT' && lead?.intent !== 'HIGH') return false;
+    if (statusFilter === 'INBOUND' && conv.direction !== 'INBOUND') return false;
+    if (statusFilter === 'OUTBOUND' && conv.direction !== 'OUTBOUND') return false;
+
+    // Search query
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      const matchName = `${contact?.firstName} ${contact?.lastName}`.toLowerCase().includes(q);
+      const matchCompany = contact?.companyName?.toLowerCase().includes(q);
+      const matchText = conv.lastMessageText?.toLowerCase().includes(q);
+      if (!matchName && !matchCompany && !matchText) return false;
+    }
+
+    return true;
+  }).sort((a, b) => {
+    const timeA = new Date(a.lastMessageAt || a.updatedAt || a.createdAt || 0).getTime();
+    const timeB = new Date(b.lastMessageAt || b.updatedAt || b.createdAt || 0).getTime();
+    return timeB - timeA;
+  });
+
+  // Handle manual send
+  const handleSendReply = () => {
+    if (!replyText.trim() || !activeConversation) return;
+    let targetConvId = activeConversation.conversationId;
+
+    if (isUnifiedAllPlatforms && replyChannelOverride) {
+      const matched = contactConversations.find((c) => c.channel === replyChannelOverride);
+      if (matched) targetConvId = matched.conversationId;
+    }
+
+    onSendMessage(targetConvId, replyText, 'AGENT');
+    setReplyText('');
+  };
+
+  // Handle simulating customer message on specific platform
+  const handleSimulateInbound = () => {
+    if (!simulatedText.trim()) return;
+    const targetConv = contactConversations.find((c) => c.channel === simulatedPlatform) || activeConversation;
+    if (!targetConv) return;
+    onSendMessage(targetConv.conversationId, simulatedText, 'CUSTOMER');
+    setShowSimulateModal(false);
+  };
+
+  // Handle AI Auto-generate button
+  const handleAiAutoGenerate = async () => {
+    if (!activeConversation || !activeContact) return;
+    setIsGeneratingAi(true);
+
+    try {
+      const lastCustomerMsg = [...displayMessages]
+        .reverse()
+        .find((m) => m.senderType === 'CUSTOMER' || m.senderType === 'PROSPECT');
+
+      const incomingText = lastCustomerMsg ? lastCustomerMsg.text : `Can you provide more information regarding ${brand.companyName}?`;
+
+      const result = await generateOmnichannelResponse({
+        incomingMessage: incomingText,
+        contact: activeContact,
+        lead: activeLead,
+        conversation: activeConversation,
+        recentMessages: displayMessages,
+        knowledgeDocs,
+      });
+
+      setReplyText(result.responseText);
+    } catch (error) {
+      console.error('Error generating AI response:', error);
+    } finally {
+      setIsGeneratingAi(false);
+    }
+  };
+
+  // Toggle Auto Follow-Up on/off for the active lead
+  const handleToggleAutoFollowUp = async (enabled: boolean) => {
+    if (!activeLead || !activeConversation) return;
+    setIsTogglingAutoFollowUp(true);
+    try {
+      const res = await fetch('/api/auto-followup/toggle', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          lead: activeLead,
+          conversation: activeConversation,
+          // Only the recent thread is needed to decide whether a follow-up is due
+          messages: displayMessages.filter((m) => m.conversationId === activeConversation.conversationId).slice(-30),
+          enabled,
+          userName: 'Team Member',
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && data.lead) {
+          activeLead.autoFollowUp = data.lead.autoFollowUp;
+          if (onAutoFollowUpChanged) onAutoFollowUpChanged(activeLead.leadId, data.lead.autoFollowUp);
+          if (onSyncNow) onSyncNow();
+        }
+      }
+    } catch (err) {
+      console.error('Error toggling auto follow-up:', err);
+    } finally {
+      setIsTogglingAutoFollowUp(false);
+    }
+  };
+
+  return (
+    <div className="flex flex-col lg:flex-row h-full w-full bg-white text-slate-900 overflow-hidden relative">
+      {/* 1. LEFT COLUMN: Conversation List & Filters (Width: 340px) */}
+      <div className="w-full lg:w-84 border-r border-slate-200/90 flex flex-col bg-slate-50/60 h-full min-h-0 shrink-0">
+        {/* Search Header */}
+        <div className="p-3 border-b border-slate-200 space-y-2 shrink-0">
+          {/* Live Inbound Mailbox & WhatsApp Triggers */}
+          <div className="space-y-1.5">
+            <div className="flex items-center space-x-1.5">
+              <button
+                onClick={() => setShowInboundFlowModal(true)}
+                className="flex-1 flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-orange-50/80 hover:bg-orange-100/90 border border-orange-200 text-orange-950 transition text-left group"
+              >
+                <div className="flex items-center space-x-2 truncate">
+                  <Mail className="w-3.5 h-3.5 text-orange-600 shrink-0" />
+                  <div className="truncate">
+                    <span className="text-[11px] font-bold block truncate text-slate-800">{INBOUND_MAILBOX}</span>
+                  </div>
+                </div>
+                <span className="flex items-center space-x-1 text-[10px] text-orange-700 bg-orange-100 px-1.5 py-0.5 rounded font-semibold shrink-0 border border-orange-200">
+                  <span className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse"></span>
+                  <span>Email</span>
+                </span>
+              </button>
+
+              {onSyncNow && (
+                <button
+                  onClick={onSyncNow}
+                  title="Sync Inbound Mailbox with Live Server"
+                  className="p-1.5 rounded-lg bg-white hover:bg-slate-100 text-slate-700 hover:text-slate-900 border border-slate-200 transition shrink-0"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+
+            <button
+              onClick={() => setShowInboundWhatsAppModal(true)}
+              className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-emerald-50/80 hover:bg-emerald-100/90 border border-emerald-200 text-emerald-950 transition text-left group"
+            >
+              <div className="flex items-center space-x-2 truncate">
+                <MessageSquare className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                <div className="truncate">
+                  <span className="text-[11px] font-bold block truncate font-mono text-slate-800">{WHATSAPP_BUSINESS_NUMBER_FORMATTED}</span>
+                </div>
+              </div>
+              <span className="flex items-center space-x-1 text-[10px] text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded font-semibold shrink-0 border border-emerald-200">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                <span>WhatsApp Flow</span>
+              </span>
+            </button>
+          </div>
+
+          <div className="relative">
+            <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
+            <input
+              type="text"
+              placeholder="Search conversations, contacts..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full bg-white border border-slate-200 rounded-xl pl-9 pr-3 py-1.5 text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-orange-500 transition font-medium"
+            />
+          </div>
+
+          {/* Channel Pills */}
+          <div className="flex space-x-1 overflow-x-auto pb-1 scrollbar-none text-xs">
+            {['ALL', 'EMAIL', 'WHATSAPP', 'WEBSITE', 'INSTAGRAM', 'LINKEDIN'].map((ch) => (
+              <button
+                key={ch}
+                onClick={() => setChannelFilter(ch)}
+                className={`px-2.5 py-1 rounded-lg whitespace-nowrap font-bold transition ${
+                  channelFilter === ch
+                    ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-2xs'
+                    : 'bg-white border border-slate-200 text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                {ch}
+              </button>
+            ))}
+          </div>
+
+          {/* Status Filters */}
+          <div className="flex items-center space-x-1 text-[11px] overflow-x-auto pb-1">
+            <button
+              onClick={() => setStatusFilter('ALL')}
+              className={`px-2 py-0.5 rounded-md transition whitespace-nowrap font-semibold ${
+                statusFilter === 'ALL' ? 'bg-orange-500 text-white' : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              All ({conversations.length})
+            </button>
+            <button
+              onClick={() => setStatusFilter('UNREAD')}
+              className={`px-2 py-0.5 rounded-md transition whitespace-nowrap font-semibold ${
+                statusFilter === 'UNREAD' ? 'bg-orange-500 text-white' : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Unread
+            </button>
+            <button
+              onClick={() => setStatusFilter('AI_ACTIVE')}
+              className={`px-2 py-0.5 rounded-md transition whitespace-nowrap font-semibold ${
+                statusFilter === 'AI_ACTIVE' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              AI Active
+            </button>
+            <button
+              onClick={() => setStatusFilter('HUMAN_HANDOFF')}
+              className={`px-2 py-0.5 rounded transition whitespace-nowrap ${
+                statusFilter === 'HUMAN_HANDOFF'
+                  ? 'bg-amber-600 text-white font-semibold'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Handoff
+            </button>
+            <button
+              onClick={() => setStatusFilter('HIGH_INTENT')}
+              className={`px-2 py-0.5 rounded transition whitespace-nowrap ${
+                statusFilter === 'HIGH_INTENT'
+                  ? 'bg-emerald-600 text-white font-semibold'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              High Intent
+            </button>
+          </div>
+        </div>
+
+        {/* Conversation List */}
+        <div className="flex-1 overflow-y-auto min-h-0 divide-y divide-slate-200">
+          {filteredConversations.length === 0 ? (
+            <div className="p-8 text-center text-slate-500 text-xs">
+              No conversations found matching filters.
+            </div>
+          ) : (
+            filteredConversations.map((conv) => {
+              const contact = contacts.find((c) => c.contactId === conv.contactId);
+              const lead = leads.find((l) => l.leadId === conv.leadId);
+              const isSelected = conv.conversationId === activeConversation?.conversationId;
+              const isUnread = conv.unread || conv.isRead === false || ((conv.unreadCount || 0) > 0);
+              const hasPendingDraft = conv.draftReply && conv.draftReply.status === 'PENDING';
+
+              return (
+                <div
+                  key={conv.conversationId}
+                  onClick={() => {
+                    setSelectedConversationId(conv.conversationId);
+                    setIsUnifiedAllPlatforms(false);
+                    if (isUnread) {
+                      onMarkAsRead?.(conv.conversationId);
+                    }
+                  }}
+                  className={`p-3 cursor-pointer transition relative ${
+                    isSelected
+                      ? 'bg-orange-50/90 border-l-4 border-orange-500 shadow-2xs'
+                      : isUnread
+                      ? 'bg-slate-100/70 hover:bg-slate-100'
+                      : 'hover:bg-slate-50'
+                  }`}
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-center space-x-2">
+                      {renderChannelIcon(conv.channel, 4)}
+                      <span className={`text-xs ${isUnread ? 'font-bold text-slate-900' : 'font-semibold text-slate-800'}`}>
+                        {contact?.firstName} {contact?.lastName}
+                      </span>
+                      {isUnread && (
+                        <span className="w-2 h-2 rounded-full bg-orange-500 animate-pulse" title="Unread Message" />
+                      )}
+                    </div>
+                    <span className="text-[10px] text-slate-500">
+                      {new Date(conv.lastMessageAt || conv.createdAt || 0).toLocaleDateString([], {
+                        month: 'short',
+                        day: 'numeric',
+                      })}
+                    </span>
+                  </div>
+
+                  <p className="text-[11px] text-slate-500 font-medium mt-0.5 truncate">
+                    {contact?.companyName}
+                  </p>
+
+                  <p className={`text-xs mt-1 line-clamp-2 leading-relaxed ${isUnread ? 'text-slate-900 font-bold' : 'text-slate-700 font-normal'}`}>
+                    {conv.lastMessageText || 'New conversation started'}
+                  </p>
+
+                  <div className="flex items-center justify-between mt-2 pt-1 border-t border-slate-200/80 text-[10px]">
+                    <div className="flex items-center space-x-1.5 flex-wrap gap-y-1">
+                      {conv.direction === 'OUTBOUND' || (Boolean(conv.campaignId || lead?.campaignId || lead?.campaignLeadId) && conv.channel !== 'WEBSITE' && lead?.source !== 'WEBSITE' && !conv.conversationId?.startsWith('conv-web-')) ? (
+                        <span className="px-1.5 py-0.5 rounded bg-purple-50 text-purple-700 border border-purple-200 font-semibold">
+                          Outbound
+                        </span>
+                      ) : (
+                        <span className="px-1.5 py-0.5 rounded bg-teal-50 text-teal-700 border border-teal-200 font-semibold">
+                          Inbound
+                        </span>
+                      )}
+
+                      {lead?.intent === 'HIGH' && (
+                        <span className="px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 font-semibold">
+                          High Intent
+                        </span>
+                      )}
+
+                      {hasPendingDraft && (
+                        <span className="px-1.5 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-300 font-bold">
+                          Draft Ready
+                        </span>
+                      )}
+
+                      {conv.managementMode && (
+                        <span className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-200 font-mono text-[9px]">
+                          {conv.managementMode}
+                        </span>
+                      )}
+                    </div>
+
+                    <div>
+                      {conv.humanHandoff ? (
+                        <span className="flex items-center space-x-1 text-amber-700 font-bold">
+                          <AlertTriangle className="w-3 h-3 text-amber-600" />
+                          <span>Handoff</span>
+                        </span>
+                      ) : conv.aiEnabled ? (
+                        <span className="flex items-center space-x-1 text-blue-700 font-bold">
+                          <Bot className="w-3 h-3 text-blue-600" />
+                          <span>AI On</span>
+                        </span>
+                      ) : (
+                        <span className="text-slate-600 font-semibold">Manual</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })
+          )}
+          {hasMoreConversations && onLoadMoreConversations && (
+            <div className="p-3 text-center">
+              <button
+                type="button"
+                onClick={onLoadMoreConversations}
+                className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+              >
+                Load older conversations
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Thread + sliding Lead Profile panel share one row, so the panel always stays on the right */}
+      <div className="flex-1 flex flex-row min-w-0 min-h-0 h-full relative">
+      {/* 2. MIDDLE COLUMN: Conversation & Message Thread UI */}
+      <div className="flex-1 flex flex-col bg-white overflow-hidden min-w-0 min-h-0 h-full">
+        {/* Active Conversation Header */}
+        {activeConversation && activeContact ? (
+          <>
+            <div className="p-3.5 border-b border-slate-200/80 bg-white flex items-center justify-between shrink-0">
+              <div className="flex items-center space-x-3">
+                <div className="w-9 h-9 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center font-bold text-slate-800 text-sm shadow-2xs">
+                  {activeContact.firstName?.[0]}
+                  {activeContact.lastName?.[0]}
+                </div>
+                <div>
+                  <div className="flex items-center space-x-2">
+                    <h3 className="font-bold text-sm text-slate-900">
+                      {activeContact.firstName} {activeContact.lastName}
+                    </h3>
+                    <div className="flex items-center space-x-1 text-xs text-slate-500 font-medium">
+                      {renderChannelIcon(activeConversation.channel, 3.5)}
+                      <span className="capitalize">{activeConversation.channel.toLowerCase()}</span>
+                    </div>
+                    {(activeLead?.demoStatus === 'BOOKED' || activeLead?.status === 'DEMO_BOOKED') && (
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-orange-50 text-orange-700 border border-orange-200 flex items-center gap-1">
+                        <Sparkles className="w-2.5 h-2.5 text-orange-500" />
+                        <span>Demo Booked</span>
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-slate-500 font-medium">
+                    {activeContact.jobTitle || 'Decision Maker'} at{' '}
+                    <span className="text-slate-800 font-bold">{activeContact.companyName}</span> •{' '}
+                    {activeContact.email}
+                  </p>
+                </div>
+              </div>
+
+              {/* AI vs Human Takeover Toggle & SMTP Settings */}
+              <div className="flex items-center space-x-2">
+                {(activeConversation.channel === 'EMAIL' || activeConversation.channel === 'WEBSITE') && (
+                  <button
+                    onClick={() => setShowSmtpModal(true)}
+                    className={`flex items-center space-x-1 px-2.5 py-1 rounded-lg text-xs font-bold border transition ${
+                      smtpStatus?.configured
+                        ? 'bg-emerald-50 border-emerald-200 text-emerald-800 hover:bg-emerald-100'
+                        : 'bg-amber-50 border-amber-200 text-amber-800 hover:bg-amber-100 animate-pulse'
+                    }`}
+                    title="Configure SMTP Delivery & Gmail App Password"
+                  >
+                    <Key className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                    <span>{smtpStatus?.emailProvider === 'resend' ? 'Resend Live' : smtpStatus?.configured ? 'SMTP Live' : 'Configure SMTP'}</span>
+                  </button>
+                )}
+
+                {/* Auto Follow-Up Toggle Button */}
+                {activeLead && (activeLead.leadType === 'INBOUND' || activeLead.leadType === 'OUTBOUND') && (
+                  <button
+                    onClick={() => handleToggleAutoFollowUp(!activeLead?.autoFollowUp?.enabled)}
+                    disabled={isTogglingAutoFollowUp}
+                    className={`flex items-center space-x-1.5 px-2.5 py-1 rounded-lg text-xs font-bold border transition ${
+                      activeLead?.autoFollowUp?.enabled
+                        ? 'bg-emerald-50 border-emerald-300 text-emerald-800 hover:bg-emerald-100'
+                        : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
+                    }`}
+                    title="Toggle AI Auto Follow-Up for this lead"
+                  >
+                    <Clock className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                    <span>
+                      Auto Follow-Up [{activeLead?.autoFollowUp?.enabled ? ' ON ' : ' OFF '}]
+                      {!activeLead?.autoFollowUp?.enabled && activeLead?.autoFollowUp?.disabledReason === 'completed' && (
+                        <span className="ml-1 font-semibold text-slate-500">
+                          · Completed {activeLead.autoFollowUp.attemptCount || activeLead.autoFollowUp.maxAttempts}/
+                          {activeLead.autoFollowUp.maxAttempts || activeLead.autoFollowUp.attemptCount}
+                        </span>
+                      )}
+                    </span>
+                  </button>
+                )}
+
+                {activeConversation.humanHandoff ? (
+                  <button
+                    onClick={() => onToggleAi(activeConversation.conversationId, true)}
+                    className="flex items-center space-x-1.5 px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition shadow-2xs"
+                  >
+                    <Bot className="w-3.5 h-3.5" />
+                    <span>Resume AI</span>
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => onToggleAi(activeConversation.conversationId, false)}
+                    className="flex items-center space-x-1.5 px-3 py-1 rounded-lg bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold transition shadow-2xs"
+                  >
+                    <User className="w-3.5 h-3.5" />
+                    <span>Take Over (Human)</span>
+                  </button>
+                )}
+
+                <div
+                  className={`px-2.5 py-1 rounded-lg text-xs font-extrabold flex items-center space-x-1 border ${
+                    activeConversation.aiEnabled && !activeConversation.humanHandoff
+                      ? 'bg-blue-50 border-blue-200 text-blue-800'
+                      : 'bg-amber-50 border-amber-200 text-amber-900'
+                  }`}
+                >
+                  {activeConversation.aiEnabled && !activeConversation.humanHandoff ? (
+                    <>
+                      <Zap className="w-3.5 h-3.5 text-blue-600" />
+                      <span>AI AUTO-REPLY ON</span>
+                    </>
+                  ) : (
+                    <>
+                      <UserCheck className="w-3.5 h-3.5 text-amber-600" />
+                      <span>HUMAN MANAGED</span>
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Compact Auto Follow-Up Status Bar */}
+            {activeLead && (activeLead.leadType === 'INBOUND' || activeLead.leadType === 'OUTBOUND') && (
+              <div className="px-3.5 py-1.5 bg-orange-50/80 border-b border-orange-100 text-xs flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <span className="flex items-center space-x-1.5">
+                    <span className={`w-2 h-2 rounded-full ${activeLead.autoFollowUp?.enabled ? 'bg-orange-500 animate-pulse' : 'bg-slate-400'}`} />
+                    <span className="font-semibold text-slate-800">Auto Follow-Up:</span>
+                  </span>
+                  {activeLead.demoStatus === 'BOOKED' || activeLead.status === 'DEMO_BOOKED' ? (
+                    <span className="text-amber-700 font-medium">[ OFF ] — Demo booked</span>
+                  ) : activeLead.autoFollowUp?.enabled ? (
+                    activeLead.autoFollowUp.nextScheduledAt ? (
+                      new Date(activeLead.autoFollowUp.nextScheduledAt).getTime() <= Date.now() ? (
+                        <span className="text-amber-700 font-medium animate-pulse">[ ON ] — Due now (processing follow-up...)</span>
+                      ) : (
+                        <span className="text-orange-700 font-medium">
+                          [ ON ] — Next follow-up: {new Date(activeLead.autoFollowUp.nextScheduledAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })}
+                        </span>
+                      )
+                    ) : (
+                      <span className="text-blue-700 font-medium">[ ON ] — Waiting for our next message</span>
+                    )
+                  ) : activeLead.autoFollowUp?.disabledReason === 'completed' ? (
+                    <span className="text-slate-600 font-medium">
+                      [ OFF ] — Completed: all {activeLead.autoFollowUp.maxAttempts || activeLead.autoFollowUp.attemptCount} follow-ups sent
+                      {activeLead.autoFollowUp.completedAt
+                        ? ` (${new Date(activeLead.autoFollowUp.completedAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })})`
+                        : ''}
+                      . Turn ON to start again.
+                    </span>
+                  ) : (
+                    <span className="text-slate-500 font-medium">[ OFF ] — No automatic follow-up</span>
+                  )}
+                </div>
+                <span className="text-[10px] text-slate-500 font-mono">Human Control Layer</span>
+              </div>
+            )}
+
+            {/* Email Metadata banner if email channel */}
+            {!isUnifiedAllPlatforms && activeConversation.channel === 'EMAIL' && (
+              <div className="px-4 py-2 bg-slate-50 border-b border-slate-200 text-xs text-slate-700 flex items-center justify-between">
+                <div className="flex items-center space-x-2 truncate">
+                  <span className="font-semibold text-slate-500">Subject:</span>
+                  <span className="font-medium text-slate-900 truncate">
+                    {activeMessages[0]?.emailMeta?.subject || activeConversation.conversationSummary || `${brand.companyName} Inquiry`}
+                  </span>
+                </div>
+                 <div className="flex items-center space-x-3 text-[11px] text-slate-500 font-mono">
+                  {activeConversation.managementMode && (
+                    <span className={`px-1.5 py-0.5 rounded text-[10px] font-sans font-semibold uppercase ${
+                      activeConversation.managementMode === 'AI' || (activeConversation.managementMode as any) === 'AUTONOMOUS'
+                        ? 'bg-orange-100 text-orange-800 border border-orange-200'
+                        : 'bg-amber-100 text-amber-800 border border-amber-200'
+                    }`}>
+                      {activeConversation.managementMode} MODE
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Unified Stream Notification Banner */}
+            {isUnifiedAllPlatforms && (
+              <div className="px-4 py-1.5 bg-orange-50 border-b border-orange-200 text-[11px] text-orange-950 flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <Globe className="w-3.5 h-3.5 text-orange-600" />
+                  <span>
+                    Unified Stream active: Showing complete chronological history across{' '}
+                    <strong>{contactConversations.length} connected platforms</strong> (
+                    {contactConversations.map((c) => c.channel).join(', ')}).
+                  </span>
+                </div>
+                <span className="text-orange-700 font-semibold">All Interactions Linked</span>
+              </div>
+            )}
+
+            {/* Message Thread Scroll Area */}
+            <div ref={threadScrollRef} onScroll={onThreadScroll} className="flex-1 overflow-y-auto min-h-0 p-4 space-y-4">
+              {displayMessages.length === 0 ? (
+                <div className="text-center py-12 text-slate-500 text-xs">
+                  No messages on this platform yet. Use &ldquo;Simulate Inbound Platform Msg&rdquo; or dispatch cold outreach.
+                </div>
+              ) : (
+                displayMessages.map((msg) => {
+                  const isIncoming = msg.senderType === 'CUSTOMER' || msg.senderType === 'PROSPECT';
+                  const isAi = msg.senderType === 'AI';
+
+                  return (
+                    <div
+                      key={msg.messageId}
+                      className={`flex flex-col ${isIncoming ? 'items-start' : 'items-end'}`}
+                    >
+                      {/* Sender label & Platform Badge */}
+                      <div className="flex items-center space-x-2 text-[11px] text-slate-400 mb-1 px-1">
+                        {/* Channel Badge */}
+                        <span
+                          className={`px-1.5 py-0.2 rounded text-[10px] font-semibold border flex items-center space-x-1 ${getChannelColor(
+                            msg.channel
+                          )}`}
+                        >
+                          {renderChannelIcon(msg.channel, 2.5)}
+                          <span className="uppercase">{msg.channel}</span>
+                        </span>
+
+                        <span className="font-medium">
+                          {msg.senderName || (isIncoming ? activeContact.firstName : `${brand.companyName} Agent`)}
+                        </span>
+                        {isAi && (
+                          <span className="px-1.5 py-0.2 rounded bg-blue-500/20 text-blue-400 font-semibold border border-blue-500/30 flex items-center space-x-1">
+                            <Bot className="w-2.5 h-2.5" />
+                            <span>AI Grounded</span>
+                          </span>
+                        )}
+                        <span>•</span>
+                        <span>
+                          {new Date(msg.timestamp).toLocaleTimeString([], {
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })}
+                        </span>
+                      </div>
+
+                      {/* Bubble */}
+                      <div
+                        className={`max-w-xl p-3.5 rounded-2xl text-xs leading-relaxed ${
+                          isIncoming
+                            ? 'bg-slate-100 text-slate-900 rounded-tl-none border border-slate-200/80 shadow-2xs'
+                            : isAi
+                            ? 'bg-orange-50 text-orange-950 rounded-tr-none border border-orange-200/80 shadow-2xs'
+                            : 'bg-gradient-to-r from-orange-500 to-amber-500 text-white rounded-tr-none shadow-xs'
+                        }`}
+                      >
+                        <div className="whitespace-pre-wrap">{msg.text}</div>
+
+                        {/* RAG sources indicator */}
+                        {msg.knowledgeSources && msg.knowledgeSources.length > 0 && (
+                          <div className="mt-2.5 pt-2 border-t border-blue-800/40 text-[10px] text-blue-300/80 flex items-center space-x-1.5">
+                            <ShieldCheck className="w-3 h-3 text-blue-400" />
+                            <span>Knowledge Sources: {msg.knowledgeSources.join(', ')}</span>
+                          </div>
+                        )}
+
+                        {/* Email Live Delivery Status Badge (Outbound) */}
+                        {!isIncoming && (msg.channel === 'EMAIL' || msg.emailMeta) && (
+                          <div className="mt-2.5 pt-2 border-t border-slate-700/60 flex items-center justify-between text-[10px]">
+                            {msg.smtpStatus === 'DELIVERED' ? (
+                              <span className="flex items-center space-x-1 text-emerald-400 font-medium">
+                                <CheckCircle2 className="w-3 h-3 text-emerald-400 shrink-0" />
+                                <span>Delivered via SMTP to {msg.emailMeta?.to || activeContact.email}</span>
+                              </span>
+                            ) : msg.smtpStatus === 'DELIVERY_FAILED' ? (
+                              <div className="flex items-center justify-between w-full">
+                                <span className="flex items-center space-x-1 text-amber-300 font-medium">
+                                  <AlertTriangle className="w-3 h-3 text-amber-400 shrink-0" />
+                                  <span className="truncate max-w-[260px]">
+                                    Not delivered: {msg.smtpError || 'SMTP connection required'}
+                                  </span>
+                                </span>
+                                <div className="flex items-center space-x-1.5 ml-2">
+                                  <button
+                                    onClick={() => setShowSmtpModal(true)}
+                                    className="px-2 py-0.5 rounded bg-amber-600 hover:bg-amber-500 text-white font-semibold transition"
+                                  >
+                                    Setup SMTP
+                                  </button>
+                                  <button
+                                    onClick={() => handleRetrySendEmail(msg)}
+                                    disabled={retryingMessageId === msg.messageId}
+                                    className="px-2 py-0.5 rounded bg-slate-700 hover:bg-slate-600 text-slate-200 transition flex items-center space-x-1"
+                                  >
+                                    <RefreshCw className={`w-2.5 h-2.5 ${retryingMessageId === msg.messageId ? 'animate-spin' : ''}`} />
+                                    <span>Retry</span>
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
+                              <span className="flex items-center space-x-1 text-blue-300">
+                                <Mail className="w-3 h-3 text-blue-400 shrink-0" />
+                                <span>Sent to {msg.emailMeta?.to || activeContact.email}</span>
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            {/* Quick Actions & AI Draft generation bar */}
+            <div className="p-2.5 bg-slate-50 border-t border-slate-200/80 flex items-center justify-between text-xs shrink-0">
+              <div className="flex items-center space-x-1.5 overflow-x-auto scrollbar-none">
+                <span className="text-slate-500 font-medium text-[11px] mr-1">Quick Prompts:</span>
+                {isUmrah && (<>
+                <button
+                  onClick={() =>
+                    setReplyText(
+                      `Yes! Umrah360 provides a complete white-label B2B Sub-Agent Portal with custom markups, credit limits, and instant PDF vouchers with their agency logo.`
+                    )
+                  }
+                  className="px-2.5 py-1 rounded-lg bg-white hover:bg-slate-100 text-slate-700 text-[11px] font-semibold border border-slate-200 shadow-2xs transition whitespace-nowrap"
+                >
+                  B2B Agent Specs
+                </button>
+                <button
+                  onClick={() =>
+                    setReplyText(
+                      `Starter: $199/mo (up to 3 users) | Growth: $499/mo (up to 10 users). For 20+ users, an Enterprise custom quote is prepared by our senior solutions team.`
+                    )
+                  }
+                  className="px-2.5 py-1 rounded-lg bg-white hover:bg-slate-100 text-slate-700 text-[11px] font-semibold border border-slate-200 shadow-2xs transition whitespace-nowrap"
+                >
+                  Approved Pricing
+                </button>
+                </>)}
+                <button
+                  onClick={() =>
+                    setReplyText(
+                      `We would be delighted to schedule a 20-minute live demonstration tailored to ${isUmrah ? 'your pilgrimage operations' : 'your business'}. What time works best for you this week?`
+                    )
+                  }
+                  className="px-2.5 py-1 rounded-lg bg-white hover:bg-slate-100 text-slate-700 text-[11px] font-semibold border border-slate-200 shadow-2xs transition whitespace-nowrap"
+                >
+                  Schedule Demo
+                </button>
+              </div>
+
+              <button
+                onClick={handleAiAutoGenerate}
+                disabled={isGeneratingAi}
+                className="flex items-center space-x-1.5 px-3.5 py-1.5 rounded-lg bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 text-white font-semibold text-xs transition disabled:opacity-50 shadow-xs whitespace-nowrap"
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>{isGeneratingAi ? 'Consulting KB...' : 'AI Auto-Draft'}</span>
+              </button>
+            </div>
+
+            {/* AI Draft Reply Awaiting Verification Card (REVIEW Mode) */}
+            {activeConversation.draftReply && activeConversation.draftReply.status === 'PENDING' && (
+              <div className="p-3.5 bg-orange-50/70 border-t border-b border-orange-200 flex flex-col space-y-2">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="flex items-center space-x-1.5 font-bold text-orange-800">
+                    <Sparkles className="w-4 h-4 text-orange-500" />
+                    <span>AI Drafted Auto-Reply Awaiting Human Review</span>
+                  </span>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-orange-100 text-orange-700 border border-orange-200 uppercase font-bold">
+                    REVIEW MODE
+                  </span>
+                </div>
+                <div className="p-2.5 rounded-xl bg-white border border-orange-200 text-xs text-slate-800 whitespace-pre-wrap leading-relaxed shadow-2xs">
+                  {activeConversation.draftReply.text}
+                </div>
+                <div className="flex items-center justify-end space-x-2 pt-1">
+                  <button
+                    onClick={() => setReplyText(activeConversation.draftReply!.text)}
+                    className="px-3 py-1 rounded-lg bg-white hover:bg-slate-100 text-slate-700 text-xs font-semibold border border-slate-200 transition"
+                  >
+                    Edit in Composer
+                  </button>
+                  <button
+                    onClick={() => onApproveDraft?.(activeConversation.conversationId)}
+                    className="px-3.5 py-1.5 rounded-lg bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 text-white text-xs font-bold flex items-center space-x-1.5 transition shadow-xs"
+                  >
+                    <Send className="w-3.5 h-3.5" />
+                    <span>Approve &amp; Send Live Email</span>
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Message Reply Box */}
+            <div className="p-3 bg-white border-t border-slate-200/80 shrink-0">
+              {/* Channel Selector for Unified Mode */}
+              {isUnifiedAllPlatforms && (
+                <div className="flex items-center space-x-2 mb-2 text-xs">
+                  <span className="text-slate-500 text-[11px] font-semibold">Send reply via:</span>
+                  <div className="flex items-center space-x-1">
+                    {contactConversations.map((c) => {
+                      const isTarget =
+                        (replyChannelOverride || activeConversation.channel) === c.channel;
+                      return (
+                        <button
+                          key={c.channel}
+                          onClick={() => setReplyChannelOverride(c.channel)}
+                          className={`px-2 py-0.5 rounded-lg text-[11px] font-semibold flex items-center space-x-1 border transition ${
+                            isTarget
+                              ? 'bg-orange-500 text-white border-orange-500 shadow-2xs'
+                              : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                          }`}
+                        >
+                          {renderChannelIcon(c.channel, 3)}
+                          <span className="capitalize">{c.channel.toLowerCase()}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              <div className="flex items-end space-x-2">
+                <textarea
+                  rows={2}
+                  placeholder={`Reply to ${activeContact.firstName} via ${(
+                    (isUnifiedAllPlatforms ? replyChannelOverride : null) || activeConversation.channel
+                  ).toLowerCase()}...`}
+                  value={replyText}
+                  onChange={(e) => setReplyText(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      handleSendReply();
+                    }
+                  }}
+                  className="flex-1 bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-orange-500 resize-none transition font-medium"
+                />
+                <button
+                  onClick={handleSendReply}
+                  disabled={!replyText.trim()}
+                  className="h-14 px-4 rounded-xl bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 text-white text-xs font-bold flex items-center justify-center transition disabled:opacity-40 shadow-xs"
+                >
+                  <Send className="w-4 h-4 mr-1.5" />
+                  <span>Send</span>
+                </button>
+              </div>
+            </div>
+          </>
+        ) : (
+          <div className="flex-1 flex items-center justify-center text-slate-500 text-sm">
+            Select a conversation from the left to view thread
+          </div>
+        )}
+      </div>
+
+      {/* 3. RIGHT COLUMN: Lead Profile 360 & Conversation Memory (Width: 320px) */}
+      {activeConversation && activeContact && (
+        <>
+        {/* Arrow tab: toggles the panel and slides along with its edge */}
+        <button
+          type="button"
+          onClick={() => setIsProfileOpen((open) => !open)}
+          aria-expanded={isProfileOpen}
+          aria-controls="lead-profile-panel"
+          aria-label={isProfileOpen ? 'Hide lead profile' : 'Show lead profile'}
+          title={isProfileOpen ? 'Hide lead profile' : 'Show lead profile'}
+          className={`absolute top-4 z-20 w-6 h-12 flex items-center justify-center bg-white text-orange-600 border border-r-0 border-slate-200 rounded-l-xl shadow-[-2px_0_6px_rgba(15,23,42,0.06)] hover:bg-orange-50 transition-[right] duration-300 ease-in-out ${
+            isProfileOpen ? 'right-80' : 'right-0'
+          }`}
+        >
+          {isProfileOpen ? <ChevronRight className="w-3.5 h-3.5" /> : <ChevronLeft className="w-3.5 h-3.5" />}
+        </button>
+
+        {/* Sliding wrapper: animates width; inner panel keeps a fixed 320px so content never squashes */}
+        <div
+          className={`shrink-0 h-full overflow-hidden transition-[width,opacity] duration-300 ease-in-out ${
+            isProfileOpen ? 'w-80 opacity-100' : 'w-0 opacity-0'
+          }`}
+          aria-hidden={!isProfileOpen}
+        >
+        <div id="lead-profile-panel" className="w-80 border-l border-slate-200/90 bg-slate-50/50 p-4 overflow-y-auto min-h-0 h-full space-y-4">
+          {/* Customer Card Header */}
+          <div className="border-b border-slate-200 pb-3">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                Lead Profile 360
+              </span>
+              {activeLead && (
+                <button
+                  onClick={() => onViewLeadInCrm(activeLead.leadId)}
+                  className="text-[11px] text-orange-600 hover:text-orange-700 font-bold flex items-center space-x-0.5"
+                >
+                  <span>Open CRM</span>
+                  <ArrowUpRight className="w-3 h-3" />
+                </button>
+              )}
+            </div>
+            <h4 className="font-extrabold text-sm text-slate-900 mt-2">
+              {activeContact.firstName} {activeContact.lastName}
+            </h4>
+            <div className="flex items-center space-x-1.5 text-xs text-slate-600 mt-0.5">
+              <Building className="w-3.5 h-3.5 text-slate-400" />
+              <span>{activeContact.companyName}</span>
+            </div>
+          </div>
+
+          {/* Connected Channels & Platform Streams */}
+          <div className="p-3.5 bg-white rounded-2xl border border-slate-200 shadow-2xs space-y-2">
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-slate-800 font-bold flex items-center space-x-1.5">
+                <Smartphone className="w-3.5 h-3.5 text-orange-500" />
+                <span>Connected Platforms</span>
+              </span>
+              <span className="text-[10px] text-slate-400 font-mono">
+                {contactConversations.length} Active
+              </span>
+            </div>
+
+            <div className="space-y-1.5 pt-1">
+              {contactConversations.map((conv) => {
+                const convMsgs = messages.filter((m) => m.conversationId === conv.conversationId);
+                const isSelected =
+                  !isUnifiedAllPlatforms && conv.conversationId === activeConversation.conversationId;
+
+                return (
+                  <div
+                    key={conv.conversationId}
+                    onClick={() => {
+                      setIsUnifiedAllPlatforms(false);
+                      setSelectedConversationId(conv.conversationId);
+                    }}
+                    className={`p-2 rounded-xl border text-xs cursor-pointer transition flex items-center justify-between ${
+                      isSelected
+                        ? 'bg-orange-50 border-orange-300 text-orange-950 font-semibold'
+                        : 'bg-slate-50 border-slate-200 hover:bg-slate-100 text-slate-700'
+                    }`}
+                  >
+                    <div className="flex items-center space-x-2">
+                      {renderChannelIcon(conv.channel, 3.5)}
+                      <span className="capitalize font-medium">{conv.channel.toLowerCase()}</span>
+                    </div>
+
+                    <div className="flex items-center space-x-1.5">
+                      <span className="text-[10px] text-slate-400">
+                        {convMsgs.length} msgs
+                      </span>
+                      {conv.humanHandoff ? (
+                        <span className="w-2 h-2 rounded-full bg-amber-500" title="Human Handoff" />
+                      ) : (
+                        <span className="w-2 h-2 rounded-full bg-emerald-500" title="AI Active" />
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <button
+              onClick={() => setIsUnifiedAllPlatforms(true)}
+              className={`w-full py-1.5 rounded-xl text-xs font-semibold flex items-center justify-center space-x-1.5 border transition ${
+                isUnifiedAllPlatforms
+                  ? 'bg-slate-900 text-white border-slate-900 shadow-2xs'
+                  : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+              }`}
+            >
+              <Globe className="w-3.5 h-3.5 text-orange-500" />
+              <span>Open All-Platform Timeline</span>
+            </button>
+          </div>
+
+          {/* Lead Qualification Score & Intent */}
+          {activeLead && (
+            <div className="p-3.5 bg-white rounded-2xl border border-slate-200 shadow-2xs space-y-2">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-slate-500 font-semibold">Lead Score</span>
+                <span className="font-extrabold text-orange-600 text-sm">
+                  {activeLead.leadScore} / 100
+                </span>
+              </div>
+              <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
+                <div
+                  className="bg-gradient-to-r from-orange-500 to-amber-500 h-2 rounded-full transition-all duration-500"
+                  style={{ width: `${activeLead.leadScore}%` }}
+                />
+              </div>
+              <div className="flex items-center justify-between pt-1 text-[11px]">
+                <span className="text-slate-500">Intent:</span>
+                <span
+                  className={`px-2 py-0.5 rounded-full font-bold text-[10px] ${
+                    activeLead.intent === 'HIGH'
+                      ? 'bg-orange-50 text-orange-700 border border-orange-200'
+                      : 'bg-amber-50 text-amber-700 border border-amber-200'
+                  }`}
+                >
+                  {activeLead.intent}
+                </span>
+              </div>
+              <div className="flex items-center justify-between text-[11px]">
+                <span className="text-slate-500">Buying Stage:</span>
+                <span className="text-slate-800 font-bold">{activeLead.buyingStage}</span>
+              </div>
+            </div>
+          )}
+
+          {/* Demo Booking (Single Source of Truth) */}
+          {activeLead && (
+            <div className="p-3.5 bg-white rounded-2xl border border-slate-200 shadow-2xs flex items-center justify-between">
+              <div>
+                <span className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5 text-orange-500" />
+                  <span>Demo Status</span>
+                </span>
+                <span className="text-[11px] text-slate-500 font-medium block mt-0.5">
+                  {activeLead.demoStatus === 'BOOKED' || activeLead.status === 'DEMO_BOOKED'
+                    ? `Booked (${activeLead.demoSource || 'Manual'})`
+                    : 'Not Booked'}
+                </span>
+              </div>
+              <button
+                onClick={async () => {
+                  const isBooked = activeLead.demoStatus === 'BOOKED' || activeLead.status === 'DEMO_BOOKED';
+                  const nextStatus = isBooked ? 'NOT_BOOKED' : 'BOOKED';
+                  try {
+                    await fetch(`/api/campaigns/lead/${activeLead.leadId}/demo-status`, {
+                      method: 'PATCH',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        demoStatus: nextStatus,
+                        demoSource: 'MANUAL',
+                      }),
+                    });
+                    // Also fire score delta or update to trigger refresh
+                    onUpdateLeadScore(activeLead.leadId, 0);
+                  } catch (e) {
+                    console.error('Error toggling demo status:', e);
+                  }
+                }}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1 border transition shadow-2xs ${
+                  activeLead.demoStatus === 'BOOKED' || activeLead.status === 'DEMO_BOOKED'
+                    ? 'bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100'
+                    : 'bg-orange-500 text-white border-orange-500 hover:bg-orange-600'
+                }`}
+              >
+                <span>
+                  {activeLead.demoStatus === 'BOOKED' || activeLead.status === 'DEMO_BOOKED'
+                    ? 'Booked ✓'
+                    : 'Book Demo'}
+                </span>
+              </button>
+            </div>
+          )}
+
+          {/* Section 23 Conversation Memory (Customer Facts & Extracted Requirements) */}
+          <div className="space-y-3">
+            <h5 className="text-xs font-bold text-slate-800 flex items-center space-x-1.5">
+              <Bot className="w-3.5 h-3.5 text-orange-500" />
+              <span>Conversation Memory</span>
+            </h5>
+
+            {/* Requirements */}
+            <div className="p-3 bg-white rounded-2xl border border-slate-200 shadow-2xs text-xs space-y-1.5">
+              <span className="text-[11px] text-slate-500 font-semibold block">Extracted Needs:</span>
+              <div className="flex flex-wrap gap-1.5">
+                {(Array.isArray(activeLead?.requirements)
+                  ? activeLead.requirements
+                  : typeof activeLead?.requirements === 'string'
+                  ? (activeLead.requirements as string).split('|').map((s) => s.trim())
+                  : ['Umrah Packages', 'Costing Engine']
+                ).map((req, i) => (
+                  <span
+                    key={i}
+                    className="px-2.5 py-1 rounded-lg bg-orange-50 text-orange-950 border border-orange-200 text-xs font-semibold shadow-2xs"
+                  >
+                    {req}
+                  </span>
+                ))}
+              </div>
+            </div>
+
+            {/* Customer Facts */}
+            {activeConversation.memory?.customerFacts && (
+              <div className="p-3 bg-white rounded-2xl border border-slate-200 shadow-2xs text-xs space-y-1.5">
+                <span className="text-[11px] text-slate-500 font-semibold block">Customer Facts:</span>
+                <ul className="space-y-1 text-xs text-slate-800 font-medium">
+                  {activeConversation.memory.customerFacts.map((fact, i) => (
+                    <li key={i} className="flex items-start space-x-1.5">
+                      <span className="text-orange-500 font-bold mt-0.5">•</span>
+                      <span>{fact}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {/* AI Recommendation */}
+            {activeLead?.aiRecommendation && (
+              <div className="p-3 bg-emerald-50 rounded-2xl border border-emerald-200 shadow-2xs text-xs space-y-1.5">
+                <span className="text-xs font-bold text-emerald-900 flex items-center space-x-1">
+                  <CheckCircle className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Next Recommended Action:</span>
+                </span>
+                <p className="text-xs text-emerald-950 font-medium leading-relaxed">
+                  {activeLead.aiRecommendation}
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+        </div>
+        </>
+      )}
+      </div>
+
+      {/* 4. MODAL: Simulate Inbound Customer Message from Any Platform */}
+      {showSimulateModal && activeContact && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white border border-slate-200 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center space-x-2">
+                <Sparkles className="w-4 h-4 text-orange-500" />
+                <h3 className="font-bold text-sm text-slate-900 font-display">
+                  Simulate Inbound Platform Message
+                </h3>
+              </div>
+              <button
+                onClick={() => setShowSimulateModal(false)}
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg transition"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-600">
+              Simulate an incoming message from <strong>{activeContact.firstName} {activeContact.lastName}</strong> across different external platforms to verify omnichannel ingestion and AI grounding.
+            </p>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                Select Platform Channel
+              </label>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                {(['WHATSAPP', 'INSTAGRAM', 'EMAIL', 'LINKEDIN'] as Channel[]).map((ch) => (
+                  <button
+                    key={ch}
+                    type="button"
+                    onClick={() => setSimulatedPlatform(ch)}
+                    className={`px-2.5 py-2 rounded-lg border text-xs font-semibold flex items-center justify-center space-x-1.5 transition ${
+                      simulatedPlatform === ch
+                        ? 'bg-orange-500 text-white border-orange-500 shadow-xs'
+                        : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                    }`}
+                  >
+                    {renderChannelIcon(ch, 3.5)}
+                    <span className="capitalize">{ch.toLowerCase()}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                Customer Message Text
+              </label>
+              <textarea
+                rows={3}
+                value={simulatedText}
+                onChange={(e) => setSimulatedText(e.target.value)}
+                className="w-full bg-white border border-slate-200 rounded-lg p-2.5 text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-orange-500 resize-none transition"
+              />
+            </div>
+
+            {/* Quick Presets */}
+            <div className="space-y-1.5">
+              <span className="text-[11px] text-slate-500 font-medium">Quick Prompts:</span>
+              <div className="flex flex-wrap gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setSimulatedText('Can you send the dynamic costing sheet for 4-star packages?')}
+                  className="px-2 py-1 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 text-[10px] border border-slate-200 transition"
+                >
+                  Dynamic Costing Inquiry
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSimulatedText('Do you support white-label PDF vouchers for sub-agents?')}
+                  className="px-2 py-1 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 text-[10px] border border-slate-200 transition"
+                >
+                  B2B Vouchers Inquiry
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSimulatedText('What are your monthly subscription charges and user limits?')}
+                  className="px-2 py-1 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 text-[10px] border border-slate-200 transition"
+                >
+                  Pricing Inquiry
+                </button>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end space-x-2 pt-3 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setShowSimulateModal(false)}
+                className="px-3.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSimulateInbound}
+                className="px-4 py-1.5 rounded-lg bg-orange-500 hover:bg-orange-600 text-white text-xs font-semibold flex items-center space-x-1.5 shadow-xs transition"
+              >
+                <Send className="w-3.5 h-3.5" />
+                <span>Inject Message</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Inbound Email Flow Simulator Modal for automation@amaavigo.com */}
+      {showInboundFlowModal && (
+        <Suspense fallback={null}>
+        <InboundEmailFlowModal
+          isOpen={showInboundFlowModal}
+          onClose={() => setShowInboundFlowModal(false)}
+          onProcessEmail={async (payload) => {
+            if (onProcessInboundEmail) {
+              const res = await onProcessInboundEmail(payload);
+              if (res.conversation) {
+                setSelectedConversationId(res.conversation.conversationId);
+              }
+              return res;
+            }
+            throw new Error('Inbound processor not configured');
+          }}
+          onNavigateToThread={(convId) => {
+            setSelectedConversationId(convId);
+          }}
+          onNavigateToCrmLead={(leadId) => {
+            onViewLeadInCrm(leadId);
+          }}
+        />
+        </Suspense>
+      )}
+
+      {/* Inbound WhatsApp Flow Simulator Modal for +919820252434 */}
+      {showInboundWhatsAppModal && (
+        <Suspense fallback={null}>
+        <InboundWhatsAppFlowModal
+          isOpen={showInboundWhatsAppModal}
+          onClose={() => setShowInboundWhatsAppModal(false)}
+          contacts={contacts}
+          leads={leads}
+          conversations={conversations}
+          messages={messages}
+          knowledgeDocs={knowledgeDocs}
+          settings={{
+            autoPilot: true,
+            defaultTone: 'PROFESSIONAL',
+            humanHandoffThreshold: 0.7,
+            officeHoursOnly: false,
+            maxAutoRepliesPerLead: 5,
+          } as any}
+          onInboundComplete={(res) => {
+            if (onProcessInboundWhatsApp && res.incomingMessage) {
+              onProcessInboundWhatsApp({
+                from: res.contact.phone || '',
+                fromName: `${res.contact.firstName} ${res.contact.lastName}`,
+                to: WHATSAPP_BUSINESS_NUMBER,
+                body: res.incomingMessage.text,
+                companyName: res.contact.companyName,
+              }).catch(() => {});
+            }
+            if (res.conversation) {
+              setSelectedConversationId(res.conversation.conversationId);
+            }
+          }}
+          onNavigateToConversation={(convId) => {
+            setSelectedConversationId(convId);
+          }}
+          onNavigateToLead={(leadId) => {
+            onViewLeadInCrm(leadId);
+          }}
+        />
+        </Suspense>
+      )}
+
+      {/* SMTP & Live Outbound Mail Delivery Settings Modal */}
+      {showSmtpModal && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-lg p-6 shadow-2xl space-y-5 text-slate-900">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center space-x-2">
+                <div className="w-8 h-8 rounded-lg bg-orange-50 border border-orange-200 flex items-center justify-center text-orange-600">
+                  <Mail className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-900 font-display">Live Outbound SMTP Delivery Settings</h3>
+                  <p className="text-[11px] text-slate-500">Configure email delivery to send real responses to leads.</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowSmtpModal(false)}
+                className="p-1 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveSmtpConfig} className="space-y-4">
+              <div className="grid grid-cols-3 gap-3">
+                <div className="col-span-2 space-y-1">
+                  <label className="text-xs font-semibold text-slate-700">SMTP Host</label>
+                  <input
+                    type="text"
+                    required
+                    value={smtpHostInput}
+                    onChange={(e) => setSmtpHostInput(e.target.value)}
+                    placeholder="smtp.gmail.com"
+                    className="w-full bg-white border border-slate-200 rounded-lg p-2 text-xs text-slate-900 focus:outline-none focus:border-orange-500 font-mono"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-slate-700">Port</label>
+                  <input
+                    type="number"
+                    required
+                    value={smtpPortInput}
+                    onChange={(e) => setSmtpPortInput(parseInt(e.target.value, 10) || 465)}
+                    className="w-full bg-white border border-slate-200 rounded-lg p-2 text-xs text-slate-900 focus:outline-none focus:border-orange-500 font-mono"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-slate-700">SMTP User / Email</label>
+                <input
+                  type="email"
+                  required
+                  value={smtpUserInput}
+                  onChange={(e) => setSmtpUserInput(e.target.value)}
+                  placeholder="you@yourcompany.com"
+                  className="w-full bg-white border border-slate-200 rounded-lg p-2 text-xs text-slate-900 focus:outline-none focus:border-orange-500 font-mono"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-semibold text-slate-700">Gmail App Password (16 chars) / SMTP Password</label>
+                  <span className="text-[10px] text-orange-600 font-medium">Required for live sending</span>
+                </div>
+                <input
+                  type="password"
+                  value={smtpPassInput}
+                  onChange={(e) => setSmtpPassInput(e.target.value)}
+                  placeholder={smtpStatus?.hasPassword ? '•••••••••••••••• (Password configured)' : 'Enter 16-character Gmail App Password'}
+                  className="w-full bg-white border border-slate-200 rounded-lg p-2 text-xs text-slate-900 focus:outline-none focus:border-orange-500 font-mono"
+                />
+                <p className="text-[10px] text-slate-500 leading-normal pt-0.5">
+                  For Gmail: Go to <strong className="text-slate-800">myaccount.google.com/apppasswords</strong> &rarr; generate 16-character password (e.g. <code>abcd efgh ijkl mnop</code>).
+                </p>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-slate-700">From Name &amp; Header</label>
+                <input
+                  type="text"
+                  value={smtpFromInput}
+                  onChange={(e) => setSmtpFromInput(e.target.value)}
+                  placeholder={`${brand.senderName} <you@yourcompany.com>`}
+                  className="w-full bg-white border border-slate-200 rounded-lg p-2 text-xs text-slate-900 focus:outline-none focus:border-orange-500 font-mono"
+                />
+              </div>
+
+              {smtpSaveMessage && (
+                <div
+                  className={`p-3 rounded-xl border flex items-start space-x-2 text-xs ${
+                    smtpSaveMessage.success
+                      ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                      : 'bg-amber-50 border-amber-200 text-amber-800'
+                  }`}
+                >
+                  {smtpSaveMessage.success ? (
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                  ) : (
+                    <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                  )}
+                  <div className="flex-1">{smtpSaveMessage.text}</div>
+                </div>
+              )}
+
+              <div className="flex items-center justify-end space-x-2 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setShowSmtpModal(false)}
+                  className="px-3.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition"
+                >
+                  Close
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSavingSmtp}
+                  className="px-4 py-1.5 rounded-lg bg-orange-500 hover:bg-orange-600 text-white text-xs font-semibold flex items-center space-x-1.5 transition disabled:opacity-50 shadow-xs"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${isSavingSmtp ? 'animate-spin' : ''}`} />
+                  <span>{isSavingSmtp ? 'Verifying & Saving...' : 'Save & Verify Connection'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};

@@ -1,0 +1,2295 @@
+import React, { useState, useEffect, useRef, useCallback, Suspense } from 'react';
+import { lazyNamed, prefetchLazy, markAppLoaded } from './lazyLoad';
+import { BrandProvider, getCurrentBrand } from './context/BrandContext';
+import { brandHost } from './shared/brand';
+import { Navbar, ActiveTab } from './components/Navbar';
+import { HeaderBar } from './components/HeaderBar';
+import { UnifiedInbox } from './components/UnifiedInbox';
+import { LoginView } from './components/LoginView';
+import { onSession, signOutUser, installAuthFetch, type SessionInfo } from './services/authService';
+import { LockedModuleView } from './components/LockedModuleView';
+import { UpgradeRequiredView } from './components/UpgradeRequiredView';
+import { FEATURES, FEATURE_BY_TAB } from './shared/features';
+import {
+  Contact,
+  Lead,
+  Conversation,
+  Message,
+  KnowledgeDocument,
+  OutboundCampaign,
+  OutboundProspect,
+  LeadActivity,
+  SystemSettings,
+  AppUser,
+} from './types';
+import {
+  INITIAL_CONTACTS,
+  INITIAL_LEADS,
+  INITIAL_CONVERSATIONS,
+  INITIAL_MESSAGES,
+  INITIAL_CAMPAIGN,
+  INITIAL_PROSPECTS,
+  INITIAL_ACTIVITIES,
+  DEFAULT_SETTINGS,
+  defaultSettingsFor,
+} from './services/dataService';
+import { INITIAL_KNOWLEDGE_DOCUMENTS } from './services/knowledgeData';
+import { generateOmnichannelResponse } from './services/aiService';
+import {
+  processInboundEmail,
+  InboundEmailPayload,
+  InboundProcessingResult,
+} from './services/emailInboundService';
+import {
+  processInboundWhatsAppMessage,
+  InboundWhatsAppPayload,
+  InboundWhatsAppProcessingResult,
+  WHATSAPP_BUSINESS_NUMBER,
+  WHATSAPP_BUSINESS_NUMBER_FORMATTED,
+} from './services/whatsappInboundService';
+import { db, isFirebaseConfigured } from './firebase/config';
+import { collection, doc, setDoc, getDoc, getDocs, updateDoc, deleteDoc, query, where, orderBy, limit, onSnapshot } from 'firebase/firestore';
+
+// thsi is a test Screens loaded on demand (own JS files). Login, navigation and the inbox stay in the main bundle.
+const CampaignManagement = lazyNamed(() => import('./components/CampaignManagement'), 'CampaignManagement');
+const CrmPipeline = lazyNamed(() => import('./components/CrmPipeline'), 'CrmPipeline');
+const KnowledgeBaseView = lazyNamed(() => import('./components/KnowledgeBaseView'), 'KnowledgeBaseView');
+const AiTestingPlayground = lazyNamed(() => import('./components/AiTestingPlayground'), 'AiTestingPlayground');
+const InteractiveScenarios = lazyNamed(() => import('./components/InteractiveScenarios'), 'InteractiveScenarios');
+const SettingsView = lazyNamed(() => import('./components/SettingsView'), 'SettingsView');
+const LiveMailboxCenter = lazyNamed(() => import('./components/LiveMailboxCenter'), 'LiveMailboxCenter');
+const DemoSchedulingView = lazyNamed(() => import('./components/DemoSchedulingView'), 'DemoSchedulingView');
+const AutoFollowUpDashboard = lazyNamed(() => import('./components/AutoFollowUpDashboard'), 'AutoFollowUpDashboard');
+const PlatformConsole = lazyNamed(() => import('./components/PlatformConsole'), 'PlatformConsole');
+const BillingView = lazyNamed(() => import('./components/BillingView'), 'BillingView');
+
+function ScreenLoading() {
+  return (
+    <div className="flex items-center justify-center py-16 text-sm text-slate-400">
+      <span className="inline-block w-4 h-4 mr-2 border-2 border-slate-300 border-t-orange-500 rounded-full animate-spin" />
+      Loading…
+    </div>
+  );
+}
+
+// Inbox page size: how many conversations the live listener loads at a time.
+const CONVERSATION_PAGE_SIZE = 50;
+import { initCalendarAuth } from './services/googleCalendarAuth';
+
+// Per-workspace brand strings for locally-built message records (read at call time).
+const bn = () => getCurrentBrand();
+const brandEmail = () => bn().salesEmail || `noreply@${brandHost(bn()) || 'workspace.local'}`;
+const brandReSubject = () => (bn().playbook === 'umrah360' ? brandReSubject() : `Re: ${bn().companyName}`);
+const brandGrowthTeam = () => (bn().playbook === 'umrah360' ? brandGrowthTeam() : bn().teamName);
+
+function sanitizeDoc(obj: any): any {
+  if (obj === undefined) return null;
+  if (obj === null || typeof obj !== 'object') return obj;
+  if (Array.isArray(obj)) return obj.map(sanitizeDoc);
+  const clean: Record<string, any> = {};
+  for (const [k, v] of Object.entries(obj)) {
+    if (v !== undefined) {
+      clean[k] = sanitizeDoc(v);
+    }
+  }
+  return clean;
+}
+
+function deduplicateMessages(msgs: Message[]): Message[] {
+  const seenMap = new Map<string, Message>();
+  for (const msg of msgs) {
+    if (!msg || !msg.messageId) continue;
+    let key = '';
+    if (msg.gmailMessageId && !msg.gmailMessageId.startsWith('<out-')) {
+      key = `gmail-${msg.gmailMessageId}`;
+    } else {
+      const timeBucket = Math.floor(new Date(msg.timestamp || msg.createdAt || Date.now()).getTime() / 60000);
+      key = `${msg.conversationId}-${msg.direction}-${msg.senderType}-${msg.text.trim()}-${timeBucket}`;
+    }
+
+    if (seenMap.has(key)) {
+      const existing = seenMap.get(key)!;
+      if (msg.gmailMessageId && !msg.gmailMessageId.startsWith('<out-') && existing.gmailMessageId?.startsWith('<out-')) {
+        seenMap.set(key, { ...existing, ...msg });
+      }
+    } else {
+      seenMap.set(key, msg);
+    }
+  }
+  return Array.from(seenMap.values());
+}
+
+function cleanForFirestore(obj: any): any {
+  if (obj === null || obj === undefined) return null;
+  if (typeof obj !== 'object') return obj;
+  if (Array.isArray(obj)) {
+    return obj.map(cleanForFirestore);
+  }
+  const clean: Record<string, any> = {};
+  for (const [k, v] of Object.entries(obj)) {
+    if (v !== undefined) {
+      clean[k] = cleanForFirestore(v);
+    }
+  }
+  return clean;
+}
+
+function sanitizeLead(l: any): Lead {
+  if (!l) return {} as Lead;
+  let reqs: string[] = [];
+  if (Array.isArray(l.requirements)) {
+    reqs = l.requirements.map(String);
+  } else if (typeof l.requirements === 'string') {
+    reqs = l.requirements.split('|').map((s: string) => s.trim()).filter(Boolean);
+  }
+  if (reqs.length === 0) {
+    reqs = ['Umrah ERP & B2B Portal'];
+  }
+  return {
+    ...l,
+    leadScore: Number(l.leadScore) || 75,
+    intent: l.intent || 'HIGH',
+    buyingStage: l.buyingStage || 'ENGAGED',
+    status: l.status || 'NEW',
+    assignedCaller: l.assignedCaller || l.ownerId || 'Unassigned',
+    notes: l.notes || '',
+    requirements: reqs,
+    tags: Array.isArray(l.tags) ? l.tags : [],
+  };
+}
+
+function sanitizeContact(c: any): Contact {
+  if (!c) return {} as Contact;
+  const firstName = c.firstName || (c.fullName ? c.fullName.split(' ')[0] : 'Tour') || 'Tour';
+  const lastName = c.lastName || (c.fullName ? c.fullName.split(' ').slice(1).join(' ') : 'Operator') || 'Operator';
+  return {
+    ...c,
+    firstName,
+    lastName,
+    fullName: c.fullName || `${firstName} ${lastName}`,
+    companyName: c.companyName || 'Umrah Travel Agency',
+    jobTitle: c.jobTitle || c.designation || 'Tour Operator',
+    email: c.email || '',
+    phone: c.phone || '',
+    tags: Array.isArray(c.tags) ? c.tags : [],
+  };
+}
+
+function toAppUser(u: any): AppUser {
+  return {
+    userId: u.uid || u.userId,
+    name: u.name || u.email?.split('@')[0] || 'Operator',
+    email: u.email || '',
+    username: u.username || u.email?.split('@')[0] || '',
+    password: '******',
+    role: u.role === 'admin' || u.role === 'ADMIN' ? 'ADMIN' : 'SPECIALIST',
+    accessLevel: 'ALL',
+    allowedModules: Array.isArray(u.allowedModules) ? u.allowedModules : ['inbox', 'campaigns', 'crm', 'scheduling', 'knowledge', 'settings'],
+    createdAt: u.createdAt || new Date().toISOString(),
+    updatedAt: u.updatedAt || u.createdAt || new Date().toISOString(),
+  } as AppUser;
+}
+
+export default function App() {
+  const [activeTab, setActiveTab] = useState<ActiveTab>('inbox');
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(false);
+  const [contacts, setContacts] = useState<Contact[]>(() => {
+    try {
+      const cached = localStorage.getItem('umrah360_contacts_cache');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {}
+    return isFirebaseConfigured ? [] : INITIAL_CONTACTS;
+  });
+  const [leads, setLeads] = useState<Lead[]>(() => {
+    try {
+      const cached = localStorage.getItem('umrah360_leads_cache');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {}
+    return isFirebaseConfigured ? [] : INITIAL_LEADS;
+  });
+  const [conversations, setConversations] = useState<Conversation[]>(() => isFirebaseConfigured ? [] : INITIAL_CONVERSATIONS);
+  const [messagesState, setMessagesState] = useState<Message[]>(() => isFirebaseConfigured ? [] : deduplicateMessages(INITIAL_MESSAGES));
+  const setMessages = (updater: Message[] | ((prev: Message[]) => Message[])) => {
+    setMessagesState((prev) => {
+      const next = typeof updater === 'function' ? updater(prev) : updater;
+      return deduplicateMessages(next);
+    });
+  };
+  const messages = messagesState;
+  const [campaigns, setCampaigns] = useState<OutboundCampaign[]>([]);
+  const [prospects, setProspects] = useState<OutboundProspect[]>(() => isFirebaseConfigured ? [] : INITIAL_PROSPECTS);
+  const [activities, setActivities] = useState<LeadActivity[]>(() => isFirebaseConfigured ? [] : INITIAL_ACTIVITIES);
+  const [knowledgeDocs, setKnowledgeDocs] = useState<KnowledgeDocument[]>(() => isFirebaseConfigured ? [] : INITIAL_KNOWLEDGE_DOCUMENTS);
+  const [settings, setSettings] = useState<SystemSettings>(DEFAULT_SETTINGS);
+  const [selectedLeadIdForCrm, setSelectedLeadIdForCrm] = useState<string | null>(null);
+  const [isFirebaseActive, setIsFirebaseActive] = useState<boolean>(isFirebaseConfigured);
+
+  // Multi-Tenant Context & Workspace State
+  const [currentTenantId, setCurrentTenantId] = useState<string>('');
+  const [currentTenant, setCurrentTenant] = useState<any>({
+    id: '',
+    name: '',
+    slug: '',
+    status: 'active',
+    plan: 'enterprise',
+    limits: { monthlyAiTokens: 5000000, dailyOutboundSends: 10000, hourlyOutboundSends: 1000, seats: 25 },
+    createdAt: new Date().toISOString(),
+  });
+  const [allTenants, setAllTenants] = useState<any[]>([]);
+
+  // Until the workspace's own settings load, never show another company's default signature/accounts.
+  useEffect(() => {
+    if (currentTenantId && currentTenantId !== 'umrah360') {
+      setSettings((prev) => (prev === DEFAULT_SETTINGS ? defaultSettingsFor(currentTenantId, currentTenant?.name) : prev));
+    }
+  }, [currentTenantId, currentTenant?.name]);
+
+  const tCol = useCallback((colName: string) => collection(db, 'tenants', currentTenantId, colName), [currentTenantId]);
+  const tDoc = useCallback((colName: string, docId: string) => doc(db, 'tenants', currentTenantId, colName, docId), [currentTenantId]);
+
+  // Users & Authentication State (Firebase Auth is the single source of truth)
+  const [users, setUsers] = useState<AppUser[]>([]);
+  const [currentUser, setCurrentUser] = useState<AppUser | null>(null);
+  const [session, setSession] = useState<SessionInfo | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [authError, setAuthError] = useState<string | null>(null);
+
+  useEffect(() => {
+    installAuthFetch();
+    return onSession((s, err) => {
+      setSession(s);
+      setCurrentUser(s ? s.appUser : null);
+      setCurrentTenantId(s?.tenantId || '');
+      if (err) setAuthError(err.message);
+      else if (s) setAuthError(null);
+      setAuthLoading(false);
+    });
+  }, []);
+
+  // Load tenant info for the signed-in user's workspace (platform admins list all)
+  useEffect(() => {
+    if (!session) return;
+    if (session.isPlatformAdmin) {
+      fetch('/api/tenants')
+        .then((r) => r.json())
+        .then((data) => {
+          if (Array.isArray(data?.tenants)) setAllTenants(data.tenants);
+        })
+        .catch(() => {});
+    } else if (currentTenantId) {
+      fetch(`/api/tenants/${currentTenantId}`)
+        .then((r) => r.json())
+        .then((data) => {
+          const t = data?.tenant || data;
+          if (t?.id) {
+            setCurrentTenant(t);
+            setAllTenants([t]);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [session, currentTenantId]);
+
+  // What the workspace's plan includes (the server enforces it too; this only drives the UI).
+  const [entitlements, setEntitlements] = useState<{ planName: string; features: Record<string, boolean>; billing?: { status: string; locked: boolean; graceEndsAt?: string } } | null>(null);
+  const [activatingPlan, setActivatingPlan] = useState(false);
+  const [entitlementsLoaded, setEntitlementsLoaded] = useState(false);
+  useEffect(() => {
+    if (!session || session.isPlatformAdmin || !currentTenantId) return;
+    let cancelled = false;
+    const load = () =>
+      fetch('/api/entitlements')
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => {
+          if (!cancelled && d?.features) setEntitlements({ planName: d.planName, features: d.features, billing: d.billing });
+        })
+        .catch(() => {})
+        .finally(() => setEntitlementsLoaded(true));
+    // Back from Stripe Checkout: activate the plan right away instead of waiting for the webhook.
+    const params = new URLSearchParams(window.location.search);
+    const checkoutSession = params.get('session_id');
+    if (params.get('billing') === 'success' && checkoutSession) {
+      setActivatingPlan(true);
+      fetch('/api/billing/sync', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: checkoutSession }) })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => {
+          if (d?.entitlements?.features) setEntitlements({ planName: d.entitlements.planName, features: d.entitlements.features, billing: d.entitlements.billing });
+        })
+        .catch(() => {})
+        .finally(() => {
+          window.history.replaceState({}, '', window.location.pathname);
+          setActivatingPlan(false);
+          load();
+        });
+    } else {
+      load();
+    }
+    const t = setInterval(load, 60_000);
+    return () => {
+      cancelled = true;
+      clearInterval(t);
+    };
+  }, [session, currentTenantId]);
+  const planLocked = useCallback(
+    (tab: string) => {
+      const feature = FEATURE_BY_TAB[tab];
+      return Boolean(feature && entitlements && entitlements.features[feature] === false);
+    },
+    [entitlements]
+  );
+
+  // Initialize Firestore seeding & loading on startup
+  useEffect(() => {
+    let unsubLeads: (() => void) | undefined;
+    let unsubContacts: (() => void) | undefined;
+    let unsubKb: (() => void) | undefined;
+    let unsubUsers: (() => void) | undefined;
+    let unsubOutboundCamps: (() => void) | undefined;
+
+    if (!currentUser || !currentTenantId) return;
+
+    async function initFirestore() {
+      // Initialize Google Calendar authentication & sync token to backend
+      initCalendarAuth();
+
+      // Sync settings from backend API
+      try {
+        const apiSetRes = await fetch('/api/settings');
+        if (apiSetRes.ok) {
+          const apiSet = await apiSetRes.json();
+          if (apiSet?.emailMode) {
+            setSettings((prev) => ({
+              ...prev,
+              channelModes: {
+                ...prev.channelModes,
+                EMAIL: apiSet.emailMode,
+              },
+              emailSignature: apiSet.emailSignature || prev.emailSignature,
+              debounceSeconds: apiSet.debounceSeconds ?? prev.debounceSeconds,
+            }));
+          }
+        }
+      } catch {}
+
+      if (!isFirebaseConfigured || !db) return;
+      try {
+        // Load or seed settings in Firestore tenant scope
+        const settingsRef = tDoc('settings', 'default');
+        const settingsSnap = await getDoc(settingsRef);
+        if (settingsSnap.exists()) {
+          const loadedSettings = settingsSnap.data() as SystemSettings;
+          setSettings(loadedSettings);
+        } else {
+          await setDoc(settingsRef, defaultSettingsFor(currentTenantId, currentTenant?.name)).catch(() => {});
+        }
+
+        // Check if database was ever initialized before for this tenant
+        const initMarkerRef = tDoc('settings', 'db_initialized');
+        const initMarkerSnap = await getDoc(initMarkerRef);
+
+        if (!initMarkerSnap.exists()) {
+          // Check if any contacts or leads already exist in Firestore for this tenant
+          // limit(1): we only need to know if ANY doc exists, not read them all.
+          const contactsSnap = await getDocs(query(tCol('contacts'), limit(1))).catch(() => null);
+          const leadsSnap = await getDocs(query(tCol('leads'), limit(1))).catch(() => null);
+          const convsSnap = await getDocs(query(tCol('conversations'), limit(1))).catch(() => null);
+
+          // Sample data (including the Umrah360 knowledge articles) belongs to the Umrah360 workspace only.
+          // Every other workspace starts empty.
+          if (currentTenantId === 'umrah360' && (!contactsSnap || (contactsSnap.empty && leadsSnap?.empty && convsSnap?.empty))) {
+            // Seed initial data ONLY on brand-new setup
+            for (const c of INITIAL_CONTACTS) {
+              await setDoc(tDoc('contacts', c.contactId), c).catch(() => {});
+            }
+            for (const l of INITIAL_LEADS) {
+              await setDoc(tDoc('leads', l.leadId), l).catch(() => {});
+            }
+            for (const conv of INITIAL_CONVERSATIONS) {
+              await setDoc(tDoc('conversations', conv.conversationId), conv).catch(() => {});
+            }
+            for (const m of INITIAL_MESSAGES) {
+              await setDoc(tDoc('messages', m.messageId), m).catch(() => {});
+            }
+            for (const kb of INITIAL_KNOWLEDGE_DOCUMENTS) {
+              await setDoc(tDoc('knowledge_documents', kb.id), kb).catch(() => {});
+            }
+            for (const p of INITIAL_PROSPECTS) {
+              await setDoc(tDoc('outbound_prospects', p.prospectId), p).catch(() => {});
+            }
+          }
+
+          // Mark database as permanently initialized so deletions are never resurrected on reload
+          await setDoc(initMarkerRef, {
+            initialized: true,
+            initializedAt: new Date().toISOString(),
+          }).catch(() => {});
+        }
+
+        // No one-off getDocs preload here: each onSnapshot listener below returns the full current
+        // result on its first callback, so a preload paid for every document twice.
+
+        // Attach realtime listeners for Firestore updates
+        // Conversations and messages have their own scoped listeners (see the effects below).
+
+        unsubLeads = onSnapshot(tCol('leads'), (snap) => {
+          const list: Lead[] = [];
+          snap.docs.forEach((d) => {
+            const data = d.data();
+            const lead = sanitizeLead(data);
+            const isCampaignLead = Boolean(lead.campaignId || lead.campaignLeadId || (lead.leadType === 'OUTBOUND' && lead.source === 'EMAIL'));
+            if (isCampaignLead && lead.replyStatus !== 'REPLIED') {
+              deleteDoc(tDoc('leads', d.id)).catch(() => {});
+            } else {
+              list.push(lead);
+            }
+          });
+          setLeads(list);
+          try {
+            localStorage.setItem('umrah360_leads_cache', JSON.stringify(list));
+          } catch {}
+        }, () => {});
+
+        unsubContacts = onSnapshot(tCol('contacts'), (snap) => {
+          const list = snap.docs.map((d) => sanitizeContact(d.data()));
+          setContacts(list);
+        }, () => {});
+
+        unsubKb = onSnapshot(tCol('knowledge_documents'), (snap) => {
+          setKnowledgeDocs(snap.docs.map((d) => d.data() as KnowledgeDocument));
+        }, () => {});
+
+        unsubOutboundCamps = onSnapshot(tCol('outbound_campaigns'), (snap) => {
+          const list: OutboundCampaign[] = [];
+          snap.docs.forEach((d) => {
+            const data = d.data() as OutboundCampaign;
+            const cleanName = (data.name || '').toLowerCase().trim();
+            if (
+              data.campaignId === 'camp-umrah-1448' ||
+              data.campaignId === 'camp-indian-umrah-operators' ||
+              cleanName === 'indian umrah operators 2026' ||
+              data.campaignId === 'camp-1790758967982-7his' ||
+              cleanName === 'test'
+            ) {
+              deleteDoc(tDoc('outbound_campaigns', d.id)).catch(() => {});
+              deleteDoc(tDoc('campaigns', d.id)).catch(() => {});
+            } else {
+              list.push(data);
+            }
+          });
+          setCampaigns(list);
+        }, () => {});
+
+        // outbound_prospects is no longer streamed: no screen renders prospects, so watching the whole
+        // collection only cost reads.
+
+        // Team list: only this workspace's users. The signed-in user's identity and role always come
+        // from the verified session, never from a database row.
+        unsubUsers = onSnapshot(query(collection(db, 'users'), where('tenantId', '==', currentTenantId)), (snap) => {
+          setUsers(snap.docs.map((d) => toAppUser(d.data())));
+        }, () => {});
+
+        setIsFirebaseActive(true);
+      } catch (err) {
+        console.warn('Firestore sync fallback to in-memory state:', err);
+      }
+    }
+
+    initFirestore();
+
+    return () => {
+      if (unsubLeads) unsubLeads();
+      if (unsubContacts) unsubContacts();
+      if (unsubKb) unsubKb();
+      if (unsubUsers) unsubUsers();
+      if (unsubOutboundCamps) unsubOutboundCamps();
+    };
+  }, [currentUser?.userId, currentTenantId]);
+
+  // ---------------------------------------------------------------------------
+  // Inbox conversations: live, but only the newest `conversationLimit` (grows via "Load more").
+  // Sorting/limiting happens in Firestore, so we pay for ~50 docs instead of the whole collection.
+  // ---------------------------------------------------------------------------
+  const [conversationLimit, setConversationLimit] = useState<number>(CONVERSATION_PAGE_SIZE);
+  const [hasMoreConversations, setHasMoreConversations] = useState<boolean>(false);
+
+  useEffect(() => {
+    setConversationLimit(CONVERSATION_PAGE_SIZE);
+  }, [currentTenantId]);
+
+  useEffect(() => {
+    if (!currentUser || !currentTenantId || !isFirebaseConfigured || !db) return;
+    const q = query(tCol('conversations'), orderBy('lastMessageAt', 'desc'), limit(conversationLimit));
+    const unsub = onSnapshot(
+      q,
+      (snap) => {
+        setConversations(snap.docs.map((d) => d.data() as Conversation));
+        // A full page back means there may be older conversations to load.
+        setHasMoreConversations(snap.size >= conversationLimit);
+      },
+      (err) => console.warn('[Inbox] conversations listener error:', err)
+    );
+    return () => unsub();
+  }, [currentUser?.userId, currentTenantId, conversationLimit, tCol]);
+
+  // App started fine: allow a future "missing file after deploy" reload again, and download the other
+  // screens in idle time so opening a tab is instant.
+  useEffect(() => {
+    if (!currentUser) return;
+    markAppLoaded();
+    prefetchLazy();
+  }, [currentUser?.userId]);
+
+  const loadMoreConversations = useCallback(() => {
+    setConversationLimit((n) => n + CONVERSATION_PAGE_SIZE);
+  }, []);
+
+  // ---------------------------------------------------------------------------
+  // Messages: only for the conversations the inbox has open (the selected thread plus the same
+  // contact's other channels for the "all platforms" view). Never the whole collection.
+  // ---------------------------------------------------------------------------
+  const [watchedConversationIds, setWatchedConversationIds] = useState<string[]>([]);
+  const watchedKey = watchedConversationIds.slice().sort().join('|');
+
+  const watchConversations = useCallback((ids: string[]) => {
+    const clean = Array.from(new Set(ids.filter(Boolean)));
+    setWatchedConversationIds((prev) =>
+      prev.slice().sort().join('|') === clean.slice().sort().join('|') ? prev : clean
+    );
+  }, []);
+
+  useEffect(() => {
+    setWatchedConversationIds([]);
+  }, [currentTenantId]);
+
+  useEffect(() => {
+    if (!currentUser || !currentTenantId || !isFirebaseConfigured || !db) return;
+    const ids = watchedKey ? watchedKey.split('|') : [];
+    if (ids.length === 0) {
+      setMessages([]);
+      return;
+    }
+
+    // Firestore 'in' accepts at most 30 values, so split into chunks and merge the results.
+    const chunks: string[][] = [];
+    for (let i = 0; i < ids.length; i += 30) chunks.push(ids.slice(i, i + 30));
+    const byChunk = new Map<number, Message[]>();
+    const msgTime = (m: Message) => new Date(m.sentAt || m.timestamp || m.createdAt || 0).getTime();
+
+    const unsubs = chunks.map((chunk, idx) =>
+      onSnapshot(
+        query(tCol('messages'), where('conversationId', 'in', chunk)),
+        (snap) => {
+          byChunk.set(idx, snap.docs.map((d) => d.data() as Message));
+          const all = Array.from(byChunk.values()).flat();
+          setMessages(all.sort((a, b) => msgTime(a) - msgTime(b)));
+        },
+        (err) => console.warn('[Inbox] messages listener error:', err)
+      )
+    );
+    return () => unsubs.forEach((u) => u());
+  }, [currentUser?.userId, currentTenantId, watchedKey, tCol]);
+
+  // Track message IDs ingested from backend to prevent duplicates
+  const ingestedBackendMsgIds = useRef<Set<string>>(new Set());
+  const isSyncingInboundRef = useRef<boolean>(false);
+
+  // Background sync for live inbound emails (from IMAP or direct webhook)
+  const syncWithBackendInbound = useCallback(async () => {
+    if (isSyncingInboundRef.current) return;
+    isSyncingInboundRef.current = true;
+    try {
+      const res = await fetch('/api/inbound/sync');
+      if (!res.ok) return;
+      const contentType = res.headers.get('content-type') || '';
+      if (!contentType.includes('application/json')) return;
+      const data = await res.json();
+      if (!data || !data.history || !Array.isArray(data.history)) return;
+
+      for (const item of data.history) {
+        if (!item.crmEntities || !item.messageId) continue;
+        if (ingestedBackendMsgIds.current.has(item.messageId)) continue;
+        ingestedBackendMsgIds.current.add(item.messageId);
+
+        const { contact, lead, conversation, incomingMessage, aiReplyMessage, activity } = item.crmEntities;
+
+        if (contact) {
+          setContacts((prev) => {
+            const idx = prev.findIndex(
+              (c) =>
+                c.contactId === contact.contactId ||
+                c.email.toLowerCase() === contact.email.toLowerCase()
+            );
+            if (idx >= 0) {
+              const next = [...prev];
+              next[idx] = { ...next[idx], ...contact, lastActivityAt: contact.lastActivityAt };
+              return next;
+            }
+            return [contact, ...prev];
+          });
+        }
+
+        if (lead) {
+          setLeads((prev) => {
+            const idx = prev.findIndex(
+              (l) => l.leadId === lead.leadId || l.contactId === lead.contactId
+            );
+            if (idx >= 0) {
+              const next = [...prev];
+              const updated = { ...next[idx], ...lead };
+              next.splice(idx, 1);
+              return [updated, ...next];
+            }
+            return [lead, ...prev];
+          });
+        }
+
+        if (conversation) {
+          setConversations((prev) => {
+            const idx = prev.findIndex(
+              (c) =>
+                c.conversationId === conversation.conversationId ||
+                (conversation.emailThreadId && c.emailThreadId === conversation.emailThreadId)
+            );
+            if (idx >= 0) {
+              const next = [...prev];
+              const updated = {
+                ...next[idx],
+                ...conversation,
+                lastMessageAt: conversation.lastMessageAt,
+                lastMessageText: conversation.lastMessageText,
+              };
+              next.splice(idx, 1);
+              return [updated, ...next];
+            }
+            return [conversation, ...prev];
+          });
+        }
+
+        const threadMsgs: Message[] = Array.isArray(item.crmEntities?.allThreadMessages) && item.crmEntities.allThreadMessages.length > 0
+          ? item.crmEntities.allThreadMessages
+          : ([incomingMessage, aiReplyMessage].filter(Boolean) as Message[]);
+
+        setMessages((prev) => {
+          let updated = [...prev];
+          for (const msg of threadMsgs) {
+            if (!msg) continue;
+            const existingIdx = updated.findIndex((m) => m.messageId === msg.messageId || (msg.gmailMessageId && m.gmailMessageId === msg.gmailMessageId && !m.gmailMessageId.startsWith('<out-')));
+            if (existingIdx >= 0) {
+              updated[existingIdx] = { ...updated[existingIdx], ...msg };
+            } else {
+              updated.push(msg);
+            }
+          }
+          return updated;
+        });
+
+        if (activity) {
+          setActivities((prev) => {
+            if (prev.some((a) => a.activityId === activity.activityId)) return prev;
+            return [activity, ...prev];
+          });
+        }
+
+        if (isFirebaseConfigured && db) {
+          try {
+            if (incomingMessage) {
+              setDoc(doc(db, 'messages', incomingMessage.messageId), sanitizeDoc(incomingMessage), { merge: true }).catch(() => {});
+            }
+            if (aiReplyMessage) {
+              setDoc(doc(db, 'messages', aiReplyMessage.messageId), sanitizeDoc(aiReplyMessage), { merge: true }).catch(() => {});
+            }
+            if (conversation) {
+              setDoc(doc(db, 'conversations', conversation.conversationId), sanitizeDoc(conversation), { merge: true }).catch(() => {});
+            }
+          } catch {}
+        }
+      }
+
+      if (data.allThreadMessages && typeof data.allThreadMessages === 'object') {
+        const allMsgList: Message[] = Object.values(data.allThreadMessages).flat() as Message[];
+        if (allMsgList.length > 0) {
+          setMessages((prev) => {
+            const toAdd = allMsgList.filter((m) => m && !prev.some((p) => p.messageId === m.messageId));
+            return toAdd.length > 0 ? [...prev, ...toAdd] : prev;
+          });
+        }
+      }
+    } catch (e) {
+      console.warn('Inbound sync polling notice:', e);
+    } finally {
+      isSyncingInboundRef.current = false;
+    }
+  }, []);
+
+  // Campaign sending and mailbox checks are server jobs (cron-job.org -> /api/campaigns/cron and
+  // /api/inbound-mail/cron). The browser no longer triggers them on a timer: every open tab doing so
+  // made the server re-read whole collections every few seconds. New mail and campaign progress reach
+  // the screen through the Firestore listeners. One sync on sign-in, plus the manual "Sync now" button.
+  useEffect(() => {
+    if (!currentUser || !currentTenantId) return;
+    syncWithBackendInbound();
+  }, [syncWithBackendInbound, currentUser?.userId, currentTenantId]);
+
+  // Active AI Auto-Reply Engine: checks for any unreplied inbound customer messages in AI-enabled threads
+  const autoRepliedTurnsRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (conversations.length === 0 || messages.length === 0) return;
+
+    for (const conv of conversations) {
+      if (!conv.aiEnabled || conv.humanHandoff) continue;
+
+      // CRITICAL: Website Demo Leads must NEVER be auto-replied by generic inbox AI.
+      // Website leads receive their single verified thank-you email upon submission.
+      const isWebsiteLeadConv =
+        conv.channel === 'WEBSITE' ||
+        conv.conversationId?.startsWith('conv-web-') ||
+        conv.conversationSummary?.includes('Website Demo Request') ||
+        conv.subject?.includes('Website Demo Request') ||
+        Boolean(conv.thankYouEmailSent);
+
+      if (isWebsiteLeadConv) {
+        continue;
+      }
+
+      const threadMsgs = messages.filter((m) => m.conversationId === conv.conversationId);
+      if (threadMsgs.length === 0) continue;
+
+      const lastMsg = threadMsgs[threadMsgs.length - 1];
+      if (
+        lastMsg &&
+        lastMsg.direction === 'INBOUND' &&
+        (lastMsg.senderType === 'CUSTOMER' || lastMsg.senderType === 'PROSPECT') &&
+        !lastMsg.aiReplied
+      ) {
+        const turnKey = `${conv.conversationId}-${lastMsg.messageId}`;
+        if (autoRepliedTurnsRef.current.has(turnKey)) continue;
+        autoRepliedTurnsRef.current.add(turnKey);
+
+        const foundContact = contacts.find((c) => c.contactId === conv.contactId);
+        const targetRecipientEmail = (
+          foundContact?.email ||
+          lastMsg.senderEmail ||
+          lastMsg.emailMeta?.from ||
+          (conv.emailThreadId?.includes('@') ? conv.emailThreadId.split('thread-')[1] : '') ||
+          (conv.conversationId?.includes('@') ? conv.conversationId.replace('conv-', '').replace(/_/g, '.') : '') ||
+          ''
+        ).trim();
+        const recipientEmail = targetRecipientEmail.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/)?.[0] || targetRecipientEmail;
+
+        const contact: Contact = {
+          contactId: foundContact?.contactId || conv.contactId || `contact-${Date.now()}`,
+          firstName: foundContact?.firstName || (lastMsg.senderName ? lastMsg.senderName.split(' ')[0] : 'Customer'),
+          lastName: foundContact?.lastName || (lastMsg.senderName ? lastMsg.senderName.split(' ').slice(1).join(' ') : ''),
+          email: recipientEmail,
+          phone: foundContact?.phone || '',
+          companyName: foundContact?.companyName || 'Umrah Travel Agency',
+          jobTitle: foundContact?.jobTitle || 'Tour Operator',
+          createdAt: foundContact?.createdAt || new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          lastActivityAt: new Date().toISOString(),
+        };
+        const lead = leads.find((l) => l.leadId === conv.leadId);
+
+        generateOmnichannelResponse({
+          incomingMessage: lastMsg.text,
+          contact,
+          lead,
+          conversation: conv,
+          recentMessages: threadMsgs,
+          knowledgeDocs,
+          signature: settings.emailSignature,
+        }).then(async (aiResult) => {
+          if (aiResult?.ignored) {
+            console.log('Auto-reply skipped: message ignored by AI qualification filter', aiResult.reason);
+            return;
+          }
+          const replyNowIso = new Date().toISOString();
+          const inReplyTo = lastMsg.gmailMessageId || lastMsg.emailMeta?.messageId || lastMsg.messageId;
+          const aiMsg: Message = {
+            messageId: `msg-ai-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+            gmailMessageId: `<ai-reply-${Date.now()}@umrah360.in>`,
+            conversationId: conv.conversationId,
+            channel: conv.channel,
+            direction: 'OUTBOUND',
+            senderType: 'AI',
+            senderName: bn().aiAgentName,
+            senderEmail: brandEmail(),
+            text: aiResult.responseText,
+            timestamp: replyNowIso,
+            sentAt: replyNowIso,
+            receivedAt: replyNowIso,
+            createdAt: replyNowIso,
+            aiProcessed: true,
+            aiGenerated: true,
+            confidence: aiResult.confidence,
+            knowledgeSources: aiResult.knowledgeSources || [],
+            emailMeta: conv.channel === 'EMAIL' ? {
+              subject: lastMsg.emailMeta?.subject
+                ? (lastMsg.emailMeta.subject.toLowerCase().startsWith('re:') ? lastMsg.emailMeta.subject : `Re: ${lastMsg.emailMeta.subject}`)
+                : brandReSubject(),
+              from: brandEmail(),
+              to: recipientEmail || brandEmail(),
+              inReplyTo,
+              references: inReplyTo ? [inReplyTo] : undefined,
+              messageId: `<ai-reply-${Date.now()}@umrah360.in>`,
+            } : undefined,
+          };
+
+          const updatedLastMsg: Message = {
+            ...lastMsg,
+            aiReplied: true,
+            repliedAt: replyNowIso,
+            repliedByMessageId: aiMsg.messageId,
+          };
+
+          // Dispatch real email to customer over live SMTP
+          if (conv.channel === 'EMAIL' && recipientEmail) {
+            try {
+              const sendRes = await fetch('/api/email/send', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  to: recipientEmail,
+                  subject: aiMsg.emailMeta?.subject || `Re: ${lastMsg.emailMeta?.subject || `${bn().companyName} Platform`}`,
+                  text: aiResult.responseText,
+                  inReplyTo: inReplyTo || lastMsg.messageId,
+                  references: inReplyTo ? [inReplyTo] : undefined,
+                  conversationId: conv.conversationId,
+                  gmailThreadId: conv.gmailThreadId || conv.emailThreadId,
+                  senderName: `${bn().aiAgentName} Automation`,
+                }),
+              });
+              const sendData = await sendRes.json();
+              if (sendRes.ok && sendData?.messageId) {
+                aiMsg.gmailMessageId = sendData.messageId;
+                aiMsg.smtpStatus = 'DELIVERED';
+                if (aiMsg.emailMeta) {
+                  aiMsg.emailMeta.messageId = sendData.messageId;
+                }
+              } else {
+                aiMsg.smtpStatus = 'DELIVERY_FAILED';
+                aiMsg.smtpError = sendData?.error || 'SMTP Delivery Failed';
+              }
+            } catch (smtpErr: any) {
+              aiMsg.smtpStatus = 'DELIVERY_FAILED';
+              aiMsg.smtpError = smtpErr?.message || 'SMTP Connection Error';
+              console.warn('[AI Email Dispatch] Notice dispatching auto-reply email:', smtpErr);
+            }
+          }
+
+          if (isFirebaseConfigured && db) {
+            try {
+              await setDoc(doc(db, 'messages', lastMsg.messageId), sanitizeDoc(updatedLastMsg), { merge: true });
+              await setDoc(doc(db, 'messages', aiMsg.messageId), sanitizeDoc(aiMsg));
+              await setDoc(
+                doc(db, 'conversations', conv.conversationId),
+                sanitizeDoc({
+                  lastMessageAt: replyNowIso,
+                  lastMessageText: aiMsg.text.slice(0, 120),
+                  updatedAt: replyNowIso,
+                }),
+                { merge: true }
+              );
+            } catch (e) {
+              console.warn('Firestore auto-reply sync notice:', e);
+            }
+          }
+
+          setMessages((prev) => [
+            ...prev.map((m) => (m.messageId === lastMsg.messageId ? updatedLastMsg : m)),
+            aiMsg,
+          ]);
+
+          setConversations((prev) =>
+            prev.map((c) =>
+              c.conversationId === conv.conversationId
+                ? {
+                    ...c,
+                    lastMessageAt: replyNowIso,
+                    lastMessageText: aiMsg.text,
+                    updatedAt: replyNowIso,
+                  }
+                : c
+            )
+          );
+        }).catch((err) => {
+          console.warn('[Auto-Reply Engine] Error generating auto-reply:', err);
+        });
+      }
+    }
+  }, [conversations, messages, contacts, leads, knowledgeDocs, settings.emailSignature]);
+
+  // Handle message sending (Manual or Inbound / Outbound reply)
+  const handleSendMessage = async (
+    conversationId: string,
+    text: string,
+    senderType: 'AGENT' | 'AI' | 'CUSTOMER' | 'PROSPECT' = 'AGENT'
+  ) => {
+    const conv = conversations.find((c) => c.conversationId === conversationId);
+    if (!conv) return;
+
+    const threadMsgs = messages.filter((m) => m.conversationId === conversationId);
+    const lastIncoming = [...threadMsgs].reverse().find((m) => m.senderType === 'CUSTOMER' || m.senderType === 'PROSPECT');
+    if (conv.channel === 'INSTAGRAM' && (senderType === 'AGENT' || senderType === 'AI')) {
+      const recipientId = conv.externalConversationId || lastIncoming?.instagramUserId || contacts.find((c) => c.contactId === conv.contactId)?.instagramUserId || '';
+      if (!recipientId) {
+        window.alert('This Instagram conversation does not have a valid recipient ID.');
+        return;
+      }
+      try {
+        const sendResponse = await fetch('/api/instagram/send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ recipientId, text }),
+        });
+        const sendData = await sendResponse.json().catch(() => ({}));
+        if (!sendResponse.ok || !sendData.success) {
+          window.alert(sendData.error || 'Instagram message could not be sent.');
+          return;
+        }
+      } catch (error: any) {
+        window.alert(error?.message || 'Instagram message could not be sent.');
+        return;
+      }
+    }
+    const inReplyTo = lastIncoming?.gmailMessageId || lastIncoming?.emailMeta?.messageId;
+    const gmailThreadId = conv.gmailThreadId || conv.emailThreadId || `thread-${conversationId}`;
+    const nowIso = new Date().toISOString();
+
+    const foundContact = contacts.find((c) => c.contactId === conv.contactId);
+    const targetRecipientEmail = (
+      foundContact?.email ||
+      lastIncoming?.senderEmail ||
+      lastIncoming?.emailMeta?.from ||
+      (conv.emailThreadId?.includes('@') ? conv.emailThreadId.split('thread-')[1] : '') ||
+      (conv.conversationId?.includes('@') ? conv.conversationId.replace('conv-', '').replace(/_/g, '.') : '') ||
+      ''
+    ).trim();
+    const recipientEmail = targetRecipientEmail.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/)?.[0] || targetRecipientEmail;
+
+    const contact: Contact = {
+      contactId: foundContact?.contactId || conv.contactId || `contact-${Date.now()}`,
+      firstName: foundContact?.firstName || ((senderType === 'CUSTOMER' || senderType === 'PROSPECT') ? (lastIncoming?.senderName ? lastIncoming.senderName.split(' ')[0] : 'Customer') : 'Tour'),
+      lastName: foundContact?.lastName || ((senderType === 'CUSTOMER' || senderType === 'PROSPECT') ? (lastIncoming?.senderName ? lastIncoming.senderName.split(' ').slice(1).join(' ') : '') : 'Operator'),
+      email: recipientEmail,
+      phone: foundContact?.phone || '',
+      companyName: foundContact?.companyName || 'Umrah Travel Agency',
+      jobTitle: foundContact?.jobTitle || 'Tour Operator',
+      createdAt: foundContact?.createdAt || nowIso,
+      updatedAt: nowIso,
+      lastActivityAt: nowIso,
+    };
+    const lead = leads.find((l) => l.leadId === conv.leadId);
+
+    let sentGmailMessageId = `<out-${Date.now()}@amaavigo.com>`;
+
+    // If sending an email manually over SMTP
+    if ((conv.channel === 'EMAIL' || conv.channel === 'WEBSITE') && senderType === 'AGENT' && recipientEmail) {
+      const subject = lastIncoming?.emailMeta?.subject
+        ? (lastIncoming.emailMeta.subject.toLowerCase().startsWith('re:') ? lastIncoming.emailMeta.subject : `Re: ${lastIncoming.emailMeta.subject}`)
+        : brandReSubject();
+
+      try {
+        const sendRes = await fetch('/api/email/send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            to: recipientEmail,
+            subject,
+            text,
+            inReplyTo,
+            references: inReplyTo ? [inReplyTo] : undefined,
+            conversationId,
+            gmailThreadId,
+          }),
+        });
+        const sendData = await sendRes.json();
+        if (sendData.messageId) {
+          sentGmailMessageId = sendData.messageId;
+        }
+      } catch (err) {
+        console.warn('Live email dispatch notice:', err);
+      }
+    }
+
+    const direction = (senderType === 'AGENT' || senderType === 'AI') ? 'OUTBOUND' : 'INBOUND';
+
+    const newMsg: Message = {
+      messageId: `msg-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      gmailMessageId: conv.channel === 'INSTAGRAM' ? undefined : sentGmailMessageId,
+      gmailThreadId: conv.channel === 'INSTAGRAM' ? undefined : gmailThreadId,
+      conversationId,
+      channel: conv.channel === 'WEBSITE' ? 'EMAIL' : conv.channel,
+      direction,
+      senderType,
+      senderName:
+        senderType === 'AGENT'
+          ? `${bn().companyName} Agent`
+          : senderType === 'AI'
+          ? bn().aiAgentName
+          : contact?.firstName || 'Customer',
+      senderEmail: senderType === 'AGENT' ? brandEmail() : contact?.email,
+      text,
+      aiReplied: false,
+      timestamp: nowIso,
+      sentAt: nowIso,
+      receivedAt: nowIso,
+      createdAt: nowIso,
+      emailMeta:
+        conv.channel === 'EMAIL' || conv.channel === 'WEBSITE' || Boolean(recipientEmail)
+          ? {
+              subject: lastIncoming?.emailMeta?.subject
+                ? (lastIncoming.emailMeta.subject.toLowerCase().startsWith('re:') ? lastIncoming.emailMeta.subject : `Re: ${lastIncoming.emailMeta.subject}`)
+                : brandReSubject(),
+              from: senderType === 'AGENT' ? brandEmail() : (contact?.email || brandEmail()),
+              to: senderType === 'AGENT' ? (contact?.email || brandEmail()) : brandEmail(),
+              messageId: sentGmailMessageId,
+              inReplyTo,
+              references: inReplyTo ? [inReplyTo] : undefined,
+            }
+          : undefined,
+    };
+
+    // Save to Firestore BEFORE local state update to ensure persistent state of truth
+    if (isFirebaseConfigured && db) {
+      try {
+        await setDoc(doc(db, 'messages', newMsg.messageId), sanitizeDoc(newMsg));
+        await setDoc(
+          doc(db, 'conversations', conversationId),
+          sanitizeDoc({
+            lastMessageAt: newMsg.timestamp,
+            lastMessageText: newMsg.text.slice(0, 120),
+            updatedAt: newMsg.timestamp,
+          }),
+          { merge: true }
+        );
+        if (conv.channel === 'INSTAGRAM') {
+          await setDoc(tDoc('messages', newMsg.messageId), sanitizeDoc(newMsg), { merge: true });
+          await setDoc(tDoc('conversations', conversationId), sanitizeDoc({
+            conversationId,
+            contactId: conv.contactId,
+            channel: 'INSTAGRAM',
+            direction: 'OUTBOUND',
+            lastMessageAt: newMsg.timestamp,
+            lastMessageText: newMsg.text.slice(0, 120),
+            updatedAt: newMsg.timestamp,
+          }), { merge: true });
+        }
+      } catch (e) {
+        console.warn('Firestore write warning:', e);
+      }
+    }
+
+    const updatedMessages = [...messages.filter(m => !(newMsg.gmailMessageId && m.gmailMessageId === newMsg.gmailMessageId && !m.gmailMessageId.startsWith('<out-'))), newMsg];
+    setMessages(updatedMessages);
+
+    // Update conversation in local state
+    setConversations((prev) =>
+      prev.map((c) =>
+        c.conversationId === conversationId
+          ? {
+              ...c,
+              lastMessageAt: newMsg.timestamp,
+              lastMessageText: newMsg.text,
+              updatedAt: newMsg.timestamp,
+            }
+          : c
+      )
+    );
+
+    // IDEMPOTENCY CHECK:
+    // AI must trigger ONLY when a genuinely NEW inbound CUSTOMER message is received.
+    // Check: gmailMessageId + direction=INBOUND + senderType=CUSTOMER + aiReplied=true
+    if (
+      direction === 'INBOUND' &&
+      (senderType === 'CUSTOMER' || senderType === 'PROSPECT') &&
+      conv.aiEnabled &&
+      !conv.humanHandoff &&
+      !newMsg.aiReplied
+    ) {
+      setTimeout(async () => {
+        const aiResult = await generateOmnichannelResponse({
+          incomingMessage: text,
+          contact,
+          lead,
+          conversation: conv,
+          recentMessages: updatedMessages.filter((m) => m.conversationId === conversationId),
+          knowledgeDocs,
+          signature: settings.emailSignature,
+        });
+
+        if (aiResult?.ignored) {
+          console.log('Auto-reply skipped: message ignored by AI qualification filter', aiResult.reason);
+          return;
+        }
+
+        const replyNowIso = new Date().toISOString();
+        const aiMsg: Message = {
+          messageId: `msg-ai-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          gmailMessageId: `<ai-reply-${Date.now()}@umrah360.in>`,
+          conversationId,
+          channel: conv.channel,
+          direction: 'OUTBOUND',
+          senderType: 'AI',
+          senderName: bn().aiAgentName,
+          senderEmail: brandEmail(),
+          text: aiResult.responseText,
+          timestamp: replyNowIso,
+          sentAt: replyNowIso,
+          receivedAt: replyNowIso,
+          createdAt: replyNowIso,
+          aiProcessed: true,
+          aiGenerated: true,
+          confidence: aiResult.confidence,
+          knowledgeSources: aiResult.knowledgeSources || [],
+          emailMeta: conv.channel === 'EMAIL' ? {
+            subject: lastIncoming?.emailMeta?.subject
+              ? (lastIncoming.emailMeta.subject.toLowerCase().startsWith('re:') ? lastIncoming.emailMeta.subject : `Re: ${lastIncoming.emailMeta.subject}`)
+              : brandReSubject(),
+            from: brandEmail(),
+            to: contact.email || brandEmail(),
+            inReplyTo: inReplyTo || newMsg.messageId,
+            references: inReplyTo ? [inReplyTo] : undefined,
+            messageId: `<ai-reply-${Date.now()}@umrah360.in>`,
+          } : undefined,
+        };
+
+        // Mark incoming message as replied
+        newMsg.aiReplied = true;
+        newMsg.repliedAt = replyNowIso;
+        newMsg.repliedByMessageId = aiMsg.messageId;
+
+        // Dispatch real email to customer over live SMTP
+        if (conv.channel === 'EMAIL' && contact.email) {
+          try {
+            const sendRes = await fetch('/api/email/send', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                to: contact.email,
+                subject: aiMsg.emailMeta?.subject || `Re: ${lastIncoming?.emailMeta?.subject || `${bn().companyName} Platform`}`,
+                text: aiResult.responseText,
+                inReplyTo: inReplyTo || newMsg.messageId,
+                references: inReplyTo ? [inReplyTo] : undefined,
+                conversationId: conv.conversationId,
+                gmailThreadId: conv.gmailThreadId || conv.emailThreadId,
+                senderName: `${bn().aiAgentName} Automation`,
+              }),
+            });
+            const sendData = await sendRes.json();
+            if (sendRes.ok && sendData?.messageId) {
+              aiMsg.gmailMessageId = sendData.messageId;
+              aiMsg.smtpStatus = 'DELIVERED';
+              if (aiMsg.emailMeta) {
+                aiMsg.emailMeta.messageId = sendData.messageId;
+              }
+            } else {
+              aiMsg.smtpStatus = 'DELIVERY_FAILED';
+              aiMsg.smtpError = sendData?.error || 'SMTP Delivery Failed';
+            }
+          } catch (smtpErr: any) {
+            aiMsg.smtpStatus = 'DELIVERY_FAILED';
+            aiMsg.smtpError = smtpErr?.message || 'SMTP Connection Error';
+            console.warn('[AI Email Dispatch] Notice dispatching AI reply email:', smtpErr);
+          }
+        }
+
+        if (isFirebaseConfigured && db) {
+          try {
+            await setDoc(doc(db, 'messages', newMsg.messageId), sanitizeDoc(newMsg), { merge: true });
+            await setDoc(doc(db, 'messages', aiMsg.messageId), sanitizeDoc(aiMsg));
+            await setDoc(
+              doc(db, 'conversations', conversationId),
+              sanitizeDoc({
+                lastMessageAt: replyNowIso,
+                lastMessageText: aiMsg.text.slice(0, 120),
+                updatedAt: replyNowIso,
+              }),
+              { merge: true }
+            );
+          } catch (e) {
+            console.warn('Firestore write warning:', e);
+          }
+        }
+
+        setMessages((prev) => [
+          ...prev.map((m) => (m.messageId === newMsg.messageId ? { ...m, aiReplied: true, repliedAt: replyNowIso, repliedByMessageId: aiMsg.messageId } : m)),
+          aiMsg,
+        ]);
+
+        // If human handoff triggered
+        if (aiResult.humanHandoffTriggered) {
+          setConversations((prev) =>
+            prev.map((c) =>
+              c.conversationId === conversationId
+                ? {
+                    ...c,
+                    humanHandoff: true,
+                    aiEnabled: false,
+                    lastMessageAt: aiMsg.timestamp,
+                    lastMessageText: aiMsg.text,
+                  }
+                : c
+            )
+          );
+
+          if (lead) {
+            setLeads((prev) =>
+              prev.map((l) =>
+                l.leadId === lead.leadId
+                  ? {
+                      ...l,
+                      status: 'HUMAN_HANDOFF',
+                      leadScore: aiResult.leadQualification.leadScore,
+                      intent: aiResult.leadQualification.intent,
+                      buyingStage: aiResult.leadQualification.buyingStage,
+                      aiRecommendation: 'Human intervention required for custom Enterprise pricing.',
+                    }
+                  : l
+              )
+            );
+          }
+
+          // Add activity
+          const handoffAct: LeadActivity = {
+            activityId: `act-${Date.now()}`,
+            leadId: lead?.leadId || 'lead-generic',
+            contactId: contact.contactId,
+            type: 'HUMAN_TAKEOVER',
+            title: 'Human Handoff Triggered (AI = OFF)',
+            description: aiResult.handoffReason || 'Pricing inquiry for 20+ seats requires senior specialist.',
+            timestamp: new Date().toISOString(),
+          };
+          setActivities((prev) => [handoffAct, ...prev]);
+        } else {
+          // Regular AI reply
+          setConversations((prev) =>
+            prev.map((c) =>
+              c.conversationId === conversationId
+                ? {
+                    ...c,
+                    lastMessageAt: aiMsg.timestamp,
+                    lastMessageText: aiMsg.text,
+                  }
+                : c
+            )
+          );
+
+          if (lead) {
+            setLeads((prev) =>
+              prev.map((l) =>
+                l.leadId === lead.leadId
+                  ? {
+                      ...l,
+                      leadScore: aiResult.leadQualification.leadScore,
+                      intent: aiResult.leadQualification.intent,
+                      buyingStage: aiResult.leadQualification.buyingStage,
+                      requirements: aiResult.leadQualification.requirements,
+                    }
+                  : l
+              )
+            );
+          }
+        }
+      }, 1000);
+    }
+  };
+
+  // Toggle AI / Human Takeover (Section 30 & 31)
+  const handleToggleAi = async (conversationId: string, enabled: boolean) => {
+    setConversations((prev) =>
+      prev.map((c) =>
+        c.conversationId === conversationId
+          ? {
+              ...c,
+              aiEnabled: enabled,
+              humanHandoff: !enabled,
+            }
+          : c
+      )
+    );
+
+    try {
+      await fetch('/api/conversation/ai-state', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          conversationId,
+          aiEnabled: enabled,
+          humanHandoff: !enabled,
+        }),
+      });
+    } catch (err) {
+      console.warn('Failed to sync AI state to backend:', err);
+    }
+
+    const conv = conversations.find((c) => c.conversationId === conversationId);
+    if (conv?.leadId) {
+      const act: LeadActivity = {
+        activityId: `act-${Date.now()}`,
+        leadId: conv.leadId,
+        contactId: conv.contactId,
+        type: enabled ? 'AI_RESUMED' : 'HUMAN_TAKEOVER',
+        title: enabled ? 'AI Auto-Pilot Resumed' : 'Human Specialist Takeover',
+        description: enabled
+          ? 'Agent resumed automated AI conversation responses.'
+          : 'Human operator took control of conversation; automated AI replies disabled.',
+        timestamp: new Date().toISOString(),
+      };
+      setActivities((prev) => [act, ...prev]);
+    }
+  };
+
+  // Process inbound email sent to automation@amaavigo.com
+  const handleProcessInboundEmail = async (
+    payload: InboundEmailPayload
+  ): Promise<InboundProcessingResult> => {
+    const result = await processInboundEmail({
+      payload,
+      contacts,
+      leads,
+      conversations,
+      messages,
+      knowledgeDocs,
+      settings,
+    });
+
+    // Merge Contact
+    setContacts((prev) => {
+      const idx = prev.findIndex((c) => c.contactId === result.contact.contactId);
+      if (idx >= 0) {
+        const next = [...prev];
+        next[idx] = result.contact;
+        return next;
+      }
+      return [result.contact, ...prev];
+    });
+
+    // Merge Lead
+    setLeads((prev) => {
+      const idx = prev.findIndex((l) => l.leadId === result.lead.leadId);
+      if (idx >= 0) {
+        const next = [...prev];
+        next[idx] = result.lead;
+        return next;
+      }
+      return [result.lead, ...prev];
+    });
+
+    // Merge Conversation
+    setConversations((prev) => {
+      const idx = prev.findIndex((c) => c.conversationId === result.conversation.conversationId);
+      if (idx >= 0) {
+        const next = [...prev];
+        next[idx] = result.conversation;
+        return next;
+      }
+      return [result.conversation, ...prev];
+    });
+
+    // Append Messages (Incoming and AI reply)
+    setMessages((prev) => {
+      const toAdd = [result.incomingMessage];
+      if (result.aiReplyMessage) toAdd.push(result.aiReplyMessage);
+      return [...prev, ...toAdd];
+    });
+
+    // Prepend Activities
+    if (result.activities && result.activities.length > 0) {
+      setActivities((prev) => [...result.activities, ...prev]);
+    }
+
+    return result;
+  };
+
+  // Process inbound WhatsApp sent to +919820252434
+  const handleProcessInboundWhatsApp = async (
+    payload: InboundWhatsAppPayload
+  ): Promise<InboundWhatsAppProcessingResult> => {
+    const result = await processInboundWhatsAppMessage({
+      payload,
+      contacts,
+      leads,
+      conversations,
+      messages,
+      knowledgeDocs,
+      settings,
+    });
+
+    // Merge Contact
+    setContacts((prev) => {
+      const idx = prev.findIndex((c) => c.contactId === result.contact.contactId);
+      if (idx >= 0) {
+        const next = [...prev];
+        next[idx] = result.contact;
+        return next;
+      }
+      return [result.contact, ...prev];
+    });
+
+    // Merge Lead
+    setLeads((prev) => {
+      const idx = prev.findIndex((l) => l.leadId === result.lead.leadId);
+      if (idx >= 0) {
+        const next = [...prev];
+        next[idx] = result.lead;
+        return next;
+      }
+      return [result.lead, ...prev];
+    });
+
+    // Merge Conversation
+    setConversations((prev) => {
+      const idx = prev.findIndex((c) => c.conversationId === result.conversation.conversationId);
+      if (idx >= 0) {
+        const next = [...prev];
+        next[idx] = result.conversation;
+        return next;
+      }
+      return [result.conversation, ...prev];
+    });
+
+    // Append Messages (Incoming and AI reply)
+    setMessages((prev) => {
+      const toAdd = [result.incomingMessage];
+      if (result.aiReplyMessage) toAdd.push(result.aiReplyMessage);
+      return [...prev, ...toAdd];
+    });
+
+    // Prepend Activities
+    if (result.activities && result.activities.length > 0) {
+      setActivities((prev) => [...result.activities, ...prev]);
+    }
+
+    return result;
+  };
+
+  // Send cold outreach for Apollo prospect (Section 14 & 15)
+  const handleSendColdEmail = async (prospectId: string, customSubject?: string, customBody?: string) => {
+    const prospect = prospects.find((p) => p.prospectId === prospectId);
+    if (!prospect) return;
+
+    // 1. Ensure contact exists or create contact
+    let contact = contacts.find((c) => c.email === prospect.email);
+    if (!contact) {
+      contact = {
+        contactId: `contact-${Date.now()}`,
+        firstName: prospect.firstName,
+        lastName: prospect.lastName,
+        email: prospect.email,
+        phone: prospect.phone,
+        companyName: prospect.companyName,
+        jobTitle: prospect.jobTitle,
+        apolloPersonId: prospect.apolloPersonId,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        lastActivityAt: new Date().toISOString(),
+      };
+      setContacts((prev) => [contact!, ...prev]);
+      if (isFirebaseConfigured && db) {
+        setDoc(doc(db, 'contacts', contact.contactId), contact).catch(() => {});
+      }
+    }
+
+    // 2. Create Lead
+    const leadId = `lead-${Date.now()}`;
+    const newLead: Lead = {
+      leadId,
+      contactId: contact.contactId,
+      source: 'APOLLO',
+      leadType: 'OUTBOUND',
+      status: 'ENGAGED',
+      leadScore: prospect.qualificationScore || 85,
+      intent: 'MEDIUM',
+      buyingStage: 'AWARENESS',
+      serviceInterest: bn().playbook === 'umrah360' ? 'Umrah360 B2B & Package Builder' : bn().defaultProduct,
+      requirements: ['B2B Reseller Portal'],
+      aiSummary: `Discovered via Apollo (${prospect.jobTitle} at ${prospect.companyName}). Cold outreach sent.`,
+      aiRecommendation: 'Monitor for reply and let AI continue thread contextually.',
+      campaignId: prospect.campaignId,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      lastActivityAt: new Date().toISOString(),
+    };
+    setLeads((prev) => [newLead, ...prev]);
+    if (isFirebaseConfigured && db) {
+      setDoc(doc(db, 'leads', leadId), newLead).catch(() => {});
+    }
+
+    // 3. Create Conversation & Email Thread immediately (Section 14 & 15)
+    const conversationId = `conv-${Date.now()}`;
+    const emailThreadId = `thread-${Date.now()}`;
+
+    const coldMsgText =
+      customBody ||
+      (bn().playbook !== 'umrah360'
+        ? `Hi ${prospect.firstName},\n\nI noticed you are leading operations at ${prospect.companyName}. ${bn().companyName}${bn().tagline ? ` is ${bn().tagline}` : ' may be able to help'}.\n\nWould you be open to a quick walkthrough?\n\nRegards,\n${bn().teamName}`
+        : `Hi ${prospect.firstName},\n\nI noticed you are leading operations at ${prospect.companyName}. We work with top Umrah operators across India to automate their dynamic package costing, Makkah/Madinah room allotments, and sub-agent B2B voucher distribution.\n\nUmrah360 gives your agency an automated B2B portal with live supplier costs and compliant invoicing.\n\nWould you be open to exploring how this could streamline your upcoming season?\n\nRegards,\nUmrah360 Growth Team`);
+
+    const newConversation: Conversation = {
+      conversationId,
+      contactId: contact.contactId,
+      leadId,
+      channel: 'EMAIL',
+      direction: 'OUTBOUND',
+      campaignId: prospect.campaignId,
+      status: 'ACTIVE',
+      aiEnabled: true,
+      humanHandoff: false,
+      emailThreadId,
+      conversationSummary: `Cold outreach sent to ${prospect.firstName} at ${prospect.companyName}.`,
+      startedAt: new Date().toISOString(),
+      lastMessageAt: new Date().toISOString(),
+      lastMessageText: coldMsgText,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    setConversations((prev) => [newConversation, ...prev]);
+    if (isFirebaseConfigured && db) {
+      setDoc(doc(db, 'conversations', conversationId), newConversation).catch(() => {});
+    }
+
+    const coldMessage: Message = {
+      messageId: `msg-${Date.now()}`,
+      conversationId,
+      channel: 'EMAIL',
+      senderType: 'AGENT',
+      senderName: brandGrowthTeam(),
+      senderEmail: brandEmail(),
+      text: coldMsgText,
+      timestamp: new Date().toISOString(),
+      emailMeta: {
+        subject:
+          customSubject ||
+          bn().playbook === 'umrah360' ? `Umrah360 for ${prospect.companyName} - Automate B2B Packages & Visa Operations` : `${bn().companyName} for ${prospect.companyName}`,
+        from: brandEmail(),
+        to: prospect.email,
+        messageId: `<cold-${Date.now()}@umrah360.in>`,
+      },
+    };
+    setMessages((prev) => [...prev, coldMessage]);
+    if (isFirebaseConfigured && db) {
+      setDoc(doc(db, 'messages', coldMessage.messageId), coldMessage).catch(() => {});
+    }
+
+    // Update prospect status
+    const updatedProspect = {
+      ...prospect,
+      status: 'EMAIL_SENT' as const,
+      emailThreadId,
+      conversationId,
+      updatedAt: new Date().toISOString(),
+    };
+    setProspects((prev) =>
+      prev.map((p) => (p.prospectId === prospectId ? updatedProspect : p))
+    );
+    if (isFirebaseConfigured && db) {
+      setDoc(doc(db, 'outbound_prospects', prospectId), updatedProspect, { merge: true }).catch(() => {});
+    }
+
+    // Log Activity
+    const act: LeadActivity = {
+      activityId: `act-${Date.now()}`,
+      leadId,
+      contactId: contact.contactId,
+      type: 'COLD_EMAIL_SENT',
+      title: 'Cold Outreach Dispatched',
+      description: `Sent Introduction to ${bn().companyName} with personalized companyName: ${prospect.companyName}`,
+      timestamp: new Date().toISOString(),
+    };
+    setActivities((prev) => [act, ...prev]);
+    if (isFirebaseConfigured && db) {
+      setDoc(doc(db, 'lead_activities', act.activityId), act).catch(() => {});
+    }
+  };
+
+  // Add Apollo Prospect (Persistent to Firestore)
+  const handleAddProspect = async (prospect: OutboundProspect) => {
+    setProspects((prev) => [prospect, ...prev]);
+    if (isFirebaseConfigured && db) {
+      try {
+        await setDoc(doc(db, 'outbound_prospects', prospect.prospectId), prospect);
+      } catch (err) {
+        console.warn('Error saving prospect to Firestore:', err);
+      }
+    }
+  };
+
+  // Toggle Outbound Campaign Running/Paused Status
+  const handleToggleCampaignStatus = async (campaignId: string) => {
+    let nextStatus: 'RUNNING' | 'PAUSED' = 'RUNNING';
+    setCampaigns((prev) =>
+      prev.map((c) => {
+        if (c.campaignId === campaignId) {
+          nextStatus = c.status === 'RUNNING' ? 'PAUSED' : 'RUNNING';
+          return { ...c, status: nextStatus, updatedAt: new Date().toISOString() };
+        }
+        return c;
+      })
+    );
+    if (isFirebaseConfigured && db) {
+      try {
+        await updateDoc(doc(db, 'outbound_campaigns', campaignId), {
+          status: nextStatus,
+          updatedAt: new Date().toISOString(),
+        });
+      } catch (err) {
+        console.warn('Error toggling campaign status in Firestore:', err);
+      }
+    }
+  };
+
+  // Reset demo seed data
+  const handleResetSeedData = () => {
+    // The built-in sample data is Umrah360-specific: other workspaces reset to empty.
+    if (currentTenantId !== 'umrah360') {
+      setContacts([]);
+      setLeads([]);
+      setConversations([]);
+      setMessages([]);
+      setCampaigns([]);
+      setProspects([]);
+      setActivities([]);
+      setKnowledgeDocs([]);
+      setSettings(defaultSettingsFor(currentTenantId, currentTenant?.name));
+      return;
+    }
+    setContacts(INITIAL_CONTACTS);
+    setLeads(INITIAL_LEADS);
+    setConversations(INITIAL_CONVERSATIONS);
+    setMessages(INITIAL_MESSAGES);
+    setCampaigns([]);
+    setProspects(INITIAL_PROSPECTS);
+    setActivities(INITIAL_ACTIVITIES);
+    setKnowledgeDocs(INITIAL_KNOWLEDGE_DOCUMENTS);
+    setSettings(DEFAULT_SETTINGS);
+  };
+
+  // Mark conversation as read (persistent in Firestore)
+  const handleMarkConversationAsRead = async (conversationId: string) => {
+    const nowIso = new Date().toISOString();
+    setConversations((prev) =>
+      prev.map((c) =>
+        c.conversationId === conversationId
+          ? { ...c, isRead: true, unread: false, unreadCount: 0, readAt: nowIso }
+          : c
+      )
+    );
+
+    if (isFirebaseConfigured && db) {
+      try {
+        await updateDoc(doc(db, 'conversations', conversationId), {
+          isRead: true,
+          unread: false,
+          unreadCount: 0,
+          readAt: nowIso,
+        });
+      } catch (e) {
+        try {
+          await setDoc(
+            doc(db, 'conversations', conversationId),
+            { isRead: true, unread: false, unreadCount: 0, readAt: nowIso },
+            { merge: true }
+          );
+        } catch {}
+      }
+    }
+  };
+
+  // Approve AI-drafted reply (REVIEW mode) and send via real SMTP
+  const handleApproveDraft = async (conversationId: string) => {
+    const conv = conversations.find((c) => c.conversationId === conversationId);
+    if (!conv || !conv.draftReply) return;
+
+    const draft = conv.draftReply;
+    const contact = contacts.find((c) => c.contactId === conv.contactId);
+    const toEmail = contact?.email;
+    if (!toEmail) return;
+
+    const subject = draft.subject || `Re: ${bn().companyName} Inquiry`;
+    const nowIso = new Date().toISOString();
+
+    let approvedSmtpStatus: 'DELIVERED' | 'DELIVERY_FAILED' = 'DELIVERED';
+    let approvedSmtpError: string | undefined = undefined;
+
+    try {
+      const res = await fetch('/api/email/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          to: toEmail,
+          subject,
+          text: draft.text,
+          conversationId,
+          gmailThreadId: conv.gmailThreadId || conv.emailThreadId,
+        }),
+      });
+      const sendResult = await res.json();
+
+      if (!res.ok || !sendResult.success) {
+        approvedSmtpStatus = 'DELIVERY_FAILED';
+        approvedSmtpError = sendResult.error || 'SMTP Delivery Failed';
+      }
+
+      const aiMsgId = sendResult.messageId || `<reply-approved-${Date.now()}@amaavigo.com>`;
+      const approvedMsg: Message = {
+        messageId: `msg-reply-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        gmailMessageId: aiMsgId,
+        gmailThreadId: conv.gmailThreadId || conv.emailThreadId || `thread-${conversationId}`,
+        conversationId,
+        channel: 'EMAIL',
+        direction: 'OUTBOUND',
+        senderType: 'AI',
+        senderName: `${bn().aiAgentName} Automation (Approved)`,
+        senderEmail: brandEmail(),
+        text: draft.text,
+        timestamp: nowIso,
+        sentAt: nowIso,
+        receivedAt: nowIso,
+        createdAt: nowIso,
+        aiProcessed: true,
+        aiGenerated: true,
+        confidence: 0.98,
+        emailMeta: {
+          subject,
+          from: brandEmail(),
+          to: toEmail,
+          messageId: aiMsgId,
+        },
+        smtpStatus: approvedSmtpStatus,
+        smtpError: approvedSmtpError,
+      };
+
+      setMessages((prev) => [...prev, approvedMsg]);
+      setConversations((prev) =>
+        prev.map((c) =>
+          c.conversationId === conversationId
+            ? {
+                ...c,
+                status: 'ACTIVE',
+                lastMessageAt: nowIso,
+                lastMessageText: draft.text.slice(0, 120),
+                draftReply: undefined,
+                updatedAt: nowIso,
+              }
+            : c
+        )
+      );
+
+      if (isFirebaseConfigured && db) {
+        await setDoc(doc(db, 'messages', approvedMsg.messageId), approvedMsg);
+        await setDoc(
+          doc(db, 'conversations', conversationId),
+          {
+            status: 'ACTIVE',
+            lastMessageAt: nowIso,
+            lastMessageText: draft.text.slice(0, 120),
+            draftReply: null,
+            updatedAt: nowIso,
+          },
+          { merge: true }
+        );
+      }
+    } catch (err) {
+      console.error('Error sending approved draft:', err);
+    }
+  };
+
+  // Persistent System Settings save (Firestore + Backend API pipeline config)
+  const handleSaveSettings = async (newSettings: SystemSettings) => {
+    setSettings(newSettings);
+    if (isFirebaseConfigured && db) {
+      try {
+        await setDoc(doc(db, 'system_settings', 'default'), newSettings, { merge: true });
+      } catch (err) {
+        console.warn('Error persisting settings to Firestore:', err);
+      }
+    }
+
+    try {
+      await fetch('/api/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          emailMode: newSettings.channelModes.EMAIL,
+          emailSignature: newSettings.emailSignature,
+          debounceSeconds: newSettings.debounceSeconds,
+        }),
+      });
+    } catch (err) {
+      console.warn('Error syncing settings to backend API:', err);
+    }
+  };
+
+  // Switch to CRM lead
+  const handleViewLeadInCrm = (leadId: string) => {
+    setSelectedLeadIdForCrm(leadId);
+    setActiveTab('crm');
+  };
+
+  // Knowledge Document Save/Update with instant local state, Firestore persistence, and Backend RAG cache synchronization
+  const handleSaveKnowledgeDoc = async (docItem: KnowledgeDocument) => {
+    // 1. Instant local state update for zero latency
+    setKnowledgeDocs((prev) => {
+      const idx = prev.findIndex((d) => d.id === docItem.id);
+      if (idx >= 0) {
+        const next = [...prev];
+        next[idx] = docItem;
+        return next;
+      }
+      return [docItem, ...prev];
+    });
+
+    // 2. Persist to Firestore
+    if (isFirebaseConfigured && db) {
+      try {
+        await setDoc(tDoc('knowledge_documents', docItem.id), docItem, { merge: true });
+      } catch (err) {
+        console.warn('Firestore KB save error:', err);
+      }
+    }
+
+    // 3. Sync to backend API cache (0ms lookup on server for auto-replies)
+    try {
+      await fetch('/api/knowledge', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(docItem),
+      });
+    } catch (apiErr) {
+      console.warn('Backend KB cache sync error:', apiErr);
+    }
+  };
+
+  // Knowledge Document Delete with Firestore & Backend cache removal
+  const handleDeleteKnowledgeDoc = async (id: string) => {
+    // 1. Instant local removal
+    setKnowledgeDocs((prev) => prev.filter((d) => d.id !== id));
+
+    // 2. Remove from Firestore
+    if (isFirebaseConfigured && db) {
+      try {
+        await deleteDoc(tDoc('knowledge_documents', id));
+      } catch (err) {
+        console.warn('Firestore KB delete error:', err);
+      }
+    }
+
+    // 3. Remove from backend cache
+    try {
+      await fetch(`/api/knowledge?id=${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+      });
+    } catch (apiErr) {
+      console.warn('Backend KB delete sync error:', apiErr);
+    }
+  };
+
+  // Count unread & handoff with Firestore persistent unread tracking
+  const handoffCount = conversations.filter((c) => c.humanHandoff).length;
+  const unreadCount = conversations.reduce(
+    (acc, c) => acc + (c.unread || !c.isRead ? (c.unreadCount || 1) : 0),
+    0
+  );
+
+  // User Authentication Handlers
+  const handleLogout = async () => {
+    await signOutUser().catch(() => {});
+    setCurrentUser(null);
+    setSession(null);
+    setCurrentTenantId('');
+  };
+
+  const handleSaveUser = async (userToSave: AppUser) => {
+    const isNew = !users.some((u) => u.userId === userToSave.userId);
+
+    if (isNew) {
+      // A new teammate needs a real login (Firebase Auth) – saving only a database row cannot sign anyone in.
+      const res = await fetch(`/api/tenants/${encodeURIComponent(currentTenantId)}/users`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: userToSave.email,
+          name: userToSave.name,
+          role: userToSave.role === 'ADMIN' ? 'admin' : 'member',
+          password: userToSave.password,
+          allowedModules: userToSave.allowedModules,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || `Could not create user (${res.status})`);
+      setUsers((prev) => [...prev.filter((u) => u.userId !== data.user.uid), { ...userToSave, userId: data.user.uid, password: '******' }]);
+      if (data.existed && !data.passwordSet) {
+        throw new Error('This email already had an account, so its password was NOT changed. Use "Forgot password" on the login page to set a new one.');
+      }
+      return;
+    }
+
+    setUsers((prev) => prev.map((u) => (u.userId === userToSave.userId ? { ...userToSave, password: '******' } : u)));
+    if (currentUser?.userId === userToSave.userId) {
+      setCurrentUser(userToSave);
+    }
+
+    if (db && isFirebaseConfigured) {
+      try {
+        // Never write a password into Firestore.
+        const { password: _pw, ...profile } = userToSave;
+        await setDoc(doc(db, 'users', userToSave.userId), profile, { merge: true });
+      } catch (err) {
+        console.warn('Firestore user save error:', err);
+      }
+    }
+  };
+
+  const handleDeleteUser = async (userId: string) => {
+    setUsers((prev) => prev.filter((u) => u.userId !== userId));
+    if (db && isFirebaseConfigured) {
+      try {
+        await deleteDoc(doc(db, 'users', userId));
+      } catch (err) {
+        console.warn('Firestore user delete error:', err);
+      }
+    }
+  };
+
+  if (authLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 text-slate-500 text-sm">
+        Loading…
+      </div>
+    );
+  }
+
+  if (!currentUser) {
+    return <LoginView isFirebaseActive={isFirebaseActive} initialError={authError} />;
+  }
+
+  if (session?.isPlatformAdmin) {
+    return (
+      <Suspense fallback={<ScreenLoading />}>
+        <PlatformConsole email={currentUser.email} onLogout={handleLogout} />
+      </Suspense>
+    );
+  }
+
+  if (!currentTenantId) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 text-slate-700 gap-3 p-6 text-center">
+        <p className="text-sm">Your account is not assigned to a workspace yet. Contact your administrator.</p>
+        <button onClick={handleLogout} className="px-4 py-2 rounded-lg bg-orange-500 text-white text-sm font-bold">
+          Sign out
+        </button>
+      </div>
+    );
+  }
+
+  if (activatingPlan || !entitlementsLoaded) {
+    return <div className="min-h-screen flex items-center justify-center bg-slate-50 text-slate-500 text-sm">{activatingPlan ? 'Activating your plan…' : 'Loading…'}</div>;
+  }
+
+  if (entitlements?.billing?.locked) {
+    return currentUser.role === 'ADMIN' ? (
+      <Suspense fallback={<ScreenLoading />}>
+        <BillingView fullScreen onLogout={handleLogout} email={currentUser.email} />
+      </Suspense>
+    ) : (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 text-slate-700 gap-3 p-6 text-center">
+        <p className="text-sm">Your workspace needs an active plan. Ask your workspace admin to complete billing.</p>
+        <button onClick={handleLogout} className="px-4 py-2 rounded-lg bg-orange-500 text-white text-sm font-bold">
+          Sign out
+        </button>
+      </div>
+    );
+  }
+
+  const isCurrentTabAllowed =
+    currentUser.accessLevel === 'ALL' ||
+    currentUser.role === 'ADMIN' ||
+    (currentUser.allowedModules || []).includes(activeTab);
+
+  return (
+    <BrandProvider tenantId={currentTenantId} tenantName={currentTenant?.name}>
+    <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col md:flex-row font-sans selection:bg-orange-500/20 selection:text-orange-950">
+      <Navbar
+        activeTab={activeTab}
+        setActiveTab={setActiveTab}
+        planLocked={planLocked}
+        unreadCount={unreadCount}
+        handoffCount={handoffCount}
+        onResetSeedData={handleResetSeedData}
+        isFirebaseActive={isFirebaseActive}
+        currentUser={currentUser}
+        onLogout={handleLogout}
+        currentTenant={currentTenant}
+        allTenants={allTenants}
+        onSwitchTenant={(tenantId) => setCurrentTenantId(tenantId)}
+        isCollapsed={isSidebarCollapsed}
+        onToggleCollapse={() => setIsSidebarCollapsed((prev) => !prev)}
+      />
+
+      <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
+        <HeaderBar
+          activeTab={activeTab}
+          setActiveTab={setActiveTab}
+          isCollapsed={isSidebarCollapsed}
+          onToggleCollapse={() => setIsSidebarCollapsed((prev) => !prev)}
+          unreadCount={unreadCount}
+          handoffCount={handoffCount}
+          onResetSeedData={handleResetSeedData}
+          currentUser={currentUser}
+          onLogout={handleLogout}
+        />
+
+        <main className={`flex-1 min-w-0 min-h-0 ${activeTab === 'inbox' ? 'p-0 h-full overflow-hidden flex flex-col' : 'p-3 sm:p-5 overflow-y-auto'}`}>
+        {entitlements?.billing?.status === 'past_due' && (
+          <div className="mb-3 flex items-center justify-between gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-800">
+            <span>
+              Your last payment failed.
+              {entitlements.billing.graceEndsAt ? ` Access continues until ${new Date(entitlements.billing.graceEndsAt).toLocaleDateString()}.` : ''}
+            </span>
+            {currentUser.role === 'ADMIN' && (
+              <button onClick={() => setActiveTab('settings')} className="font-bold underline">
+                Fix payment
+              </button>
+            )}
+          </div>
+        )}
+        {planLocked(activeTab) ? (
+          <UpgradeRequiredView
+            featureLabel={FEATURES.find((f) => f.key === FEATURE_BY_TAB[activeTab])?.label || 'This feature'}
+            planName={entitlements?.planName}
+            isAdmin={currentUser.role === 'ADMIN'}
+            onBack={() => setActiveTab('inbox')}
+          />
+        ) : !isCurrentTabAllowed ? (
+          <LockedModuleView
+            currentUser={currentUser}
+            attemptedTab={activeTab}
+            onNavigateToAllowed={(tab) => setActiveTab(tab)}
+          />
+        ) : (
+          <Suspense fallback={<ScreenLoading />}>
+            {activeTab === 'inbox' && (
+              <UnifiedInbox
+                conversations={conversations}
+                hasMoreConversations={hasMoreConversations}
+                onLoadMoreConversations={loadMoreConversations}
+                onWatchConversations={watchConversations}
+                messages={messages}
+                contacts={contacts}
+                leads={leads}
+                knowledgeDocs={knowledgeDocs}
+                onSendMessage={(convId, text, type) => handleSendMessage(convId, text, type)}
+                onToggleAi={handleToggleAi}
+                onMarkAsRead={handleMarkConversationAsRead}
+                onApproveDraft={handleApproveDraft}
+                onUpdateLeadScore={(leadId, delta) => {
+                  setLeads((prev) =>
+                    prev.map((l) =>
+                      l.leadId === leadId ? { ...l, leadScore: Math.min(100, l.leadScore + delta) } : l
+                    )
+                  );
+                }}
+                onViewLeadInCrm={handleViewLeadInCrm}
+                onProcessInboundEmail={handleProcessInboundEmail}
+                onProcessInboundWhatsApp={handleProcessInboundWhatsApp}
+                onSyncNow={syncWithBackendInbound}
+                onAutoFollowUpChanged={(leadId, autoFollowUp) => {
+                  setLeads((prev) => prev.map((l) => (l.leadId === leadId ? { ...l, autoFollowUp } : l)));
+                  if (isFirebaseConfigured && db) {
+                    updateDoc(doc(db, 'leads', leadId), { autoFollowUp }).catch(() => {});
+                  }
+                }}
+              />
+            )}
+
+            {activeTab === 'campaigns' && (
+              <CampaignManagement
+                conversations={conversations}
+                leads={leads}
+                contacts={contacts}
+                prospects={prospects}
+                outboundCampaigns={campaigns}
+                onAddProspect={handleAddProspect}
+                onSendColdEmail={handleSendColdEmail}
+                onToggleCampaignStatus={handleToggleCampaignStatus}
+                onOpenConversation={(convId) => {
+                  setActiveTab('inbox');
+                }}
+                tenantId={currentTenantId}
+                timezone={currentTenant?.timezone || 'Asia/Kolkata'}
+              />
+            )}
+
+            {activeTab === 'crm' && (
+              <CrmPipeline
+                leads={leads}
+                contacts={contacts}
+                activities={activities}
+                selectedLeadId={selectedLeadIdForCrm}
+                onOpenConversation={(convId, leadId) => {
+                  setActiveTab('inbox');
+                }}
+                onUpdateLeadStatus={(leadId, newStatus) => {
+                  setLeads((prev) => {
+                    const next = prev.map((l) =>
+                      l.leadId === leadId
+                        ? {
+                            ...l,
+                            status: newStatus,
+                            updatedAt: new Date().toISOString(),
+                            lastActivityAt: new Date().toISOString(),
+                            demoStatus: newStatus === 'DEMO_BOOKED' ? 'BOOKED' : l.demoStatus,
+                            demoSource: newStatus === 'DEMO_BOOKED' ? 'MANUAL' : l.demoSource,
+                            demoBookedAt:
+                              newStatus === 'DEMO_BOOKED' ? new Date().toISOString() : l.demoBookedAt,
+                          }
+                        : l
+                    );
+                    try {
+                      localStorage.setItem('umrah360_leads_cache', JSON.stringify(next));
+                    } catch {}
+                    return next;
+                  });
+                  if (isFirebaseConfigured && db) {
+                    const payload = cleanForFirestore({
+                      status: newStatus,
+                      updatedAt: new Date().toISOString(),
+                      lastActivityAt: new Date().toISOString(),
+                      ...(newStatus === 'DEMO_BOOKED'
+                        ? {
+                            demoStatus: 'BOOKED',
+                            demoSource: 'MANUAL',
+                            demoBookedAt: new Date().toISOString(),
+                          }
+                        : {}),
+                    });
+                    setDoc(tDoc('leads', leadId), payload, { merge: true }).catch((err) => {
+                      console.error('[Firestore] Failed updating lead status:', err);
+                    });
+                  }
+                }}
+                onUpdateLead={(updatedLead) => {
+                  const leadToSave: Lead = {
+                    ...updatedLead,
+                    updatedAt: new Date().toISOString(),
+                    lastActivityAt: new Date().toISOString(),
+                  };
+                  setLeads((prev) => {
+                    const next = prev.map((l) => (l.leadId === leadToSave.leadId ? leadToSave : l));
+                    try {
+                      localStorage.setItem('umrah360_leads_cache', JSON.stringify(next));
+                    } catch {}
+                    return next;
+                  });
+                  if (isFirebaseConfigured && db) {
+                    const payload = cleanForFirestore(leadToSave);
+                    setDoc(tDoc('leads', leadToSave.leadId), payload, { merge: true }).catch((err) => {
+                      console.error('[Firestore] Failed updating lead:', err);
+                    });
+                  }
+                }}
+                onAddLead={(newLead, newContact) => {
+                  setLeads((prev) => {
+                    const next = [newLead, ...prev];
+                    try {
+                      localStorage.setItem('umrah360_leads_cache', JSON.stringify(next));
+                    } catch {}
+                    return next;
+                  });
+                  setContacts((prev) => {
+                    const next = [newContact, ...prev];
+                    try {
+                      localStorage.setItem('umrah360_contacts_cache', JSON.stringify(next));
+                    } catch {}
+                    return next;
+                  });
+                  if (isFirebaseConfigured && db) {
+                    setDoc(tDoc('leads', newLead.leadId), cleanForFirestore(newLead), { merge: true }).catch((err) => {
+                      console.error('[Firestore] Failed adding lead:', err);
+                    });
+                    setDoc(tDoc('contacts', newContact.contactId), cleanForFirestore(newContact), { merge: true }).catch((err) => {
+                      console.error('[Firestore] Failed adding contact:', err);
+                    });
+                  }
+                }}
+              />
+            )}
+
+            {activeTab === 'scheduling' && (
+              <DemoSchedulingView leads={leads} />
+            )}
+
+            {activeTab === 'knowledge' && (
+              <KnowledgeBaseView
+                documents={knowledgeDocs}
+                onAddDocument={handleSaveKnowledgeDoc}
+                onUpdateDocument={handleSaveKnowledgeDoc}
+                onDeleteDocument={handleDeleteKnowledgeDoc}
+              />
+            )}
+
+            {activeTab === 'playground' && <AiTestingPlayground knowledgeDocs={knowledgeDocs} />}
+
+            {activeTab === 'scenarios' && currentTenantId === 'umrah360' && (
+              <InteractiveScenarios
+                onNavigateToInbox={() => setActiveTab('inbox')}
+                onNavigateToCrm={() => setActiveTab('crm')}
+                onProcessInboundEmail={handleProcessInboundEmail}
+                onProcessInboundWhatsApp={handleProcessInboundWhatsApp}
+                onNavigateToThread={(threadId) => {
+                  setActiveTab('inbox');
+                }}
+                onNavigateToCrmLead={(leadId) => {
+                  setSelectedLeadIdForCrm(leadId);
+                  setActiveTab('crm');
+                }}
+              />
+            )}
+
+            {activeTab === 'settings' && (
+              <SettingsView
+                settings={settings}
+                onSaveSettings={handleSaveSettings}
+                onResetSeedData={handleResetSeedData}
+                users={users}
+                onSaveUser={handleSaveUser}
+                onDeleteUser={handleDeleteUser}
+                tenantId={currentTenantId}
+                canEditEmail={currentUser.role === 'ADMIN'}
+              />
+            )}
+
+            {activeTab === 'auto-followup' && (
+              <AutoFollowUpDashboard
+                leads={leads}
+                conversations={conversations}
+                messages={messages}
+                onSelectConversation={() => {
+                  setActiveTab('inbox');
+                }}
+                onRefresh={syncWithBackendInbound}
+              />
+            )}
+
+            {activeTab === 'live-mailbox' && (
+              <LiveMailboxCenter
+                onNavigateToThread={() => setActiveTab('inbox')}
+                onNavigateToCrm={() => setActiveTab('crm')}
+                onSyncNow={syncWithBackendInbound}
+              />
+            )}
+          </Suspense>
+        )}
+      </main>
+    </div>
+  </div>
+    </BrandProvider>
+  );
+}

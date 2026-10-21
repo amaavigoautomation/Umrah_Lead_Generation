@@ -1,0 +1,257 @@
+{
+  "entities": {
+    "Tenant": {
+      "title": "Tenant",
+      "description": "Multi-tenant company organization profile and tier quotas",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 256 },
+        "slug": { "type": "string", "maxLength": 128 },
+        "status": { "type": "string", "enum": ["active", "suspended"] },
+        "plan": { "type": "string", "enum": ["starter", "growth", "enterprise"] },
+        "limits": { "type": "object" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" },
+        "contactEmail": { "type": "string", "format": "email", "maxLength": 256 },
+        "timezone": { "type": "string", "maxLength": 128 }
+      },
+      "required": ["id", "name", "slug", "status", "plan", "createdAt"]
+    },
+    "GlobalUser": {
+      "title": "GlobalUser",
+      "description": "Global user identity linking auth uid to a tenant workspace and role",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "maxLength": 128 },
+        "email": { "type": "string", "format": "email", "maxLength": 256 },
+        "tenantId": { "type": "string", "maxLength": 128 },
+        "role": { "type": "string", "enum": ["platformAdmin", "admin", "member"] },
+        "active": { "type": "boolean" },
+        "name": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["uid", "email", "tenantId", "role", "active", "createdAt"]
+    },
+    "WebhookRoute": {
+      "title": "WebhookRoute",
+      "description": "Global routing index resolving unguessable webhook tokens to tenant workspaces",
+      "type": "object",
+      "properties": {
+        "webhookId": { "type": "string", "maxLength": 128 },
+        "tenantId": { "type": "string", "maxLength": 128 },
+        "type": { "type": "string", "enum": ["website", "whatsapp"] },
+        "secretHash": { "type": "string", "maxLength": 256 },
+        "createdAt": { "type": "string" },
+        "rotatedAt": { "type": "string" }
+      },
+      "required": ["webhookId", "tenantId", "type", "secretHash", "createdAt"]
+    },
+    "ChannelRoute": {
+      "title": "ChannelRoute",
+      "description": "Global index routing WhatsApp phone number IDs to tenant workspaces",
+      "type": "object",
+      "properties": {
+        "phoneNumberId": { "type": "string", "maxLength": 128 },
+        "tenantId": { "type": "string", "maxLength": 128 },
+        "businessAccountId": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["phoneNumberId", "tenantId", "createdAt"]
+    },
+    "DomainRoute": {
+      "title": "DomainRoute",
+      "description": "Global index mapping verified outbound email domains to tenant workspaces",
+      "type": "object",
+      "properties": {
+        "domain": { "type": "string", "maxLength": 256 },
+        "tenantId": { "type": "string", "maxLength": 128 },
+        "resendDomainId": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["domain", "tenantId", "createdAt"]
+    },
+    "EmailRoute": {
+      "title": "EmailRoute",
+      "description": "Short-lived routing index mapping outbound Resend email IDs to tenant for webhook event resolution",
+      "type": "object",
+      "properties": {
+        "resendEmailId": { "type": "string", "maxLength": 128 },
+        "tenantId": { "type": "string", "maxLength": 128 },
+        "messageId": { "type": "string", "maxLength": 128 },
+        "expiresAt": { "type": "number" }
+      },
+      "required": ["resendEmailId", "tenantId", "messageId", "expiresAt"]
+    },
+    "Contact": {
+      "title": "Contact",
+      "description": "Tenant-scoped agency contact profile",
+      "type": "object",
+      "properties": {
+        "contactId": { "type": "string", "maxLength": 128 },
+        "firstName": { "type": "string", "maxLength": 128 },
+        "lastName": { "type": "string", "maxLength": 128 },
+        "email": { "type": "string", "format": "email", "maxLength": 256 },
+        "phone": { "type": "string", "maxLength": 64 },
+        "companyName": { "type": "string", "maxLength": 256 },
+        "jobTitle": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["contactId", "firstName", "email", "companyName"]
+    },
+    "Lead": {
+      "title": "Lead",
+      "description": "Tenant-scoped qualified tour operator lead record",
+      "type": "object",
+      "properties": {
+        "leadId": { "type": "string", "maxLength": 128 },
+        "contactId": { "type": "string", "maxLength": 128 },
+        "source": { "type": "string", "enum": ["WEBSITE", "WHATSAPP", "INSTAGRAM", "FACEBOOK", "LINKEDIN", "EMAIL", "APOLLO"] },
+        "leadType": { "type": "string", "enum": ["INBOUND", "OUTBOUND"] },
+        "status": { "type": "string" },
+        "leadScore": { "type": "number" },
+        "intent": { "type": "string", "enum": ["LOW", "MEDIUM", "HIGH"] },
+        "buyingStage": { "type": "string", "enum": ["AWARENESS", "CONSIDERATION", "DECISION", "PURCHASE"] },
+        "serviceInterest": { "type": "string", "maxLength": 256 },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["leadId", "contactId", "source", "status"]
+    },
+    "Conversation": {
+      "title": "Conversation",
+      "description": "Tenant-scoped cross-channel conversation session",
+      "type": "object",
+      "properties": {
+        "conversationId": { "type": "string", "maxLength": 128 },
+        "contactId": { "type": "string", "maxLength": 128 },
+        "leadId": { "type": "string", "maxLength": 128 },
+        "channel": { "type": "string", "enum": ["WEBSITE", "WHATSAPP", "INSTAGRAM", "FACEBOOK", "LINKEDIN", "EMAIL"] },
+        "direction": { "type": "string", "enum": ["INBOUND", "OUTBOUND"] },
+        "status": { "type": "string" },
+        "aiEnabled": { "type": "boolean" },
+        "humanHandoff": { "type": "boolean" },
+        "isRead": { "type": "boolean" },
+        "startedAt": { "type": "string" },
+        "lastMessageAt": { "type": "string" },
+        "lastMessageText": { "type": "string", "maxLength": 4096 }
+      },
+      "required": ["conversationId", "contactId", "channel", "direction"]
+    },
+    "Message": {
+      "title": "Message",
+      "description": "Tenant-scoped message record in a conversation",
+      "type": "object",
+      "properties": {
+        "messageId": { "type": "string", "maxLength": 128 },
+        "conversationId": { "type": "string", "maxLength": 128 },
+        "channel": { "type": "string" },
+        "senderType": { "type": "string", "enum": ["CUSTOMER", "PROSPECT", "AI", "AGENT", "HUMAN"] },
+        "senderName": { "type": "string", "maxLength": 128 },
+        "senderEmail": { "type": "string", "maxLength": 256 },
+        "text": { "type": "string", "maxLength": 8192 },
+        "timestamp": { "type": "string" },
+        "direction": { "type": "string", "enum": ["INBOUND", "OUTBOUND"] }
+      },
+      "required": ["messageId", "conversationId", "senderType", "text"]
+    },
+    "Campaign": {
+      "title": "Campaign",
+      "description": "Tenant-scoped outbound sales campaign record",
+      "type": "object",
+      "properties": {
+        "campaignId": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 256 },
+        "type": { "type": "string", "enum": ["EMAIL", "WHATSAPP", "WHATSAPP_EMAIL"] },
+        "status": { "type": "string", "enum": ["DRAFT", "RUNNING", "PAUSED", "COMPLETED", "FAILED"] },
+        "totalLeads": { "type": "number" },
+        "sentCount": { "type": "number" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["campaignId", "name", "type", "status"]
+    },
+    "EmailTemplate": {
+      "title": "EmailTemplate",
+      "description": "Tenant-scoped outbound email templates",
+      "type": "object",
+      "properties": {
+        "templateId": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 256 },
+        "subject": { "type": "string", "maxLength": 512 },
+        "body": { "type": "string", "maxLength": 65536 },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["templateId", "name", "subject", "body"]
+    },
+    "KnowledgeDocument": {
+      "title": "KnowledgeDocument",
+      "description": "Tenant-scoped verified knowledge base article for AI grounding",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "title": { "type": "string", "maxLength": 256 },
+        "content": { "type": "string", "maxLength": 65536 },
+        "status": { "type": "string", "enum": ["DRAFT", "PUBLISHED"] },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "title", "content", "status"]
+    }
+  },
+  "firestore": {
+    "/tenants/{tenantId}": {
+      "schema": "Tenant",
+      "description": "Global tenant registration and plan configurations"
+    },
+    "/users/{uid}": {
+      "schema": "GlobalUser",
+      "description": "Global user accounts mapping Auth UIDs to tenants and roles"
+    },
+    "/webhook_routes/{webhookId}": {
+      "schema": "WebhookRoute",
+      "description": "Global routing registry for website and whatsapp webhooks"
+    },
+    "/channel_routes/{phoneNumberId}": {
+      "schema": "ChannelRoute",
+      "description": "Global routing registry for incoming WhatsApp phone numbers"
+    },
+    "/domain_routes/{domain}": {
+      "schema": "DomainRoute",
+      "description": "Global routing registry for verified sender email domains"
+    },
+    "/email_routes/{resendEmailId}": {
+      "schema": "EmailRoute",
+      "description": "Global routing registry for tracking outbound Resend delivery webhooks"
+    },
+    "/tenants/{tenantId}/contacts/{contactId}": {
+      "schema": "Contact",
+      "description": "Tenant isolated customer and agency contacts"
+    },
+    "/tenants/{tenantId}/leads/{leadId}": {
+      "schema": "Lead",
+      "description": "Tenant isolated sales leads"
+    },
+    "/tenants/{tenantId}/conversations/{conversationId}": {
+      "schema": "Conversation",
+      "description": "Tenant isolated omnichannel conversations"
+    },
+    "/tenants/{tenantId}/conversations/{conversationId}/messages/{messageId}": {
+      "schema": "Message",
+      "description": "Tenant isolated conversation messages"
+    },
+    "/tenants/{tenantId}/campaigns/{campaignId}": {
+      "schema": "Campaign",
+      "description": "Tenant isolated outbound prospecting campaigns"
+    },
+    "/tenants/{tenantId}/email_templates/{templateId}": {
+      "schema": "EmailTemplate",
+      "description": "Tenant isolated email templates"
+    },
+    "/tenants/{tenantId}/knowledge_documents/{docId}": {
+      "schema": "KnowledgeDocument",
+      "description": "Tenant isolated knowledge base articles"
+    }
+  }
+}

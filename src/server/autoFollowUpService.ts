@@ -155,6 +155,48 @@ const safeId = (s: string) => String(s || '').replace(/[^A-Za-z0-9_-]/g, '_').sl
 const randSuffix = () => Math.random().toString(36).slice(2, 7);
 const ts = (v?: string | null) => new Date(v || 0).getTime();
 
+/**
+ * Normalize message timestamps before using them to determine message order.
+ * Invalid timestamps return NaN, so they cannot be mistaken for a reply after
+ * a scheduled reference message.
+ */
+function messageTimestampMs(value: unknown): number {
+  if (value === null || value === undefined || value === '') return Number.NaN;
+  if (value instanceof Date) return value.getTime();
+  if (typeof value === 'number') return Number.isFinite(value) ? value : Number.NaN;
+
+  if (typeof value === 'object') {
+    const stamp = value as {
+      toMillis?: () => number;
+      toDate?: () => Date;
+      seconds?: number;
+      _seconds?: number;
+      nanoseconds?: number;
+      _nanoseconds?: number;
+    };
+    try {
+      if (typeof stamp.toMillis === 'function') {
+        const milliseconds = stamp.toMillis();
+        return Number.isFinite(milliseconds) ? milliseconds : Number.NaN;
+      }
+      if (typeof stamp.toDate === 'function') {
+        const milliseconds = stamp.toDate().getTime();
+        return Number.isFinite(milliseconds) ? milliseconds : Number.NaN;
+      }
+    } catch {
+      return Number.NaN;
+    }
+
+    const seconds = typeof stamp.seconds === 'number' ? stamp.seconds : stamp._seconds;
+    const nanoseconds = typeof stamp.nanoseconds === 'number' ? stamp.nanoseconds : (stamp._nanoseconds || 0);
+    if (typeof seconds === 'number') return seconds * 1000 + nanoseconds / 1_000_000;
+    return Number.NaN;
+  }
+
+  const milliseconds = new Date(value as string).getTime();
+  return Number.isFinite(milliseconds) ? milliseconds : Number.NaN;
+}
+
 function repoFor(ctx: TenantContext) {
   const r = tenantRepo(ctx);
   return {
@@ -980,11 +1022,30 @@ async function processOneJob(
 
   // 3. Has the lead replied (or have we written again) since the reference message?
   const messages = await loadThreadMessages(ctx, conversation.conversationId);
-  const thread = messages.sort((a, b) => ts(a.timestamp) - ts(b.timestamp));
-  const refIdx = thread.findIndex((m) => m.messageId === job.referenceMessageId);
-  const after = refIdx !== -1
-    ? thread.slice(refIdx + 1)
-    : thread.filter((m) => ts(m.timestamp) > ts(job.referenceMessageTimestamp));
+  const thread = messages.sort((a, b) => {
+    const aTs = messageTimestampMs(a.timestamp);
+    const bTs = messageTimestampMs(b.timestamp);
+    if (!Number.isFinite(aTs)) return Number.isFinite(bTs) ? -1 : 0;
+    if (!Number.isFinite(bTs)) return 1;
+    return aTs - bTs;
+  });
+
+  // The reference timestamp can intentionally be later than the referenced outbound
+  // message (when Auto Follow-Up is enabled, its timer starts at the click). Use the
+  // newest valid boundary and compare timestamps directly instead of relying on slice()
+  // positions, which can misclassify older inbound messages when message ordering is bad.
+  const referenceMessage = thread.find((m) => m.messageId === job.referenceMessageId);
+  const referenceTimes = [
+    messageTimestampMs(job.referenceMessageTimestamp),
+    messageTimestampMs(referenceMessage?.timestamp),
+  ].filter((value) => Number.isFinite(value));
+  const referenceTimestampMs = referenceTimes.length ? Math.max(...referenceTimes) : Number.NaN;
+  const after = Number.isFinite(referenceTimestampMs)
+    ? thread.filter((message) => {
+        const messageTime = messageTimestampMs(message.timestamp);
+        return Number.isFinite(messageTime) && messageTime > referenceTimestampMs;
+      })
+    : [];
 
   if (after.some((m) => m.senderType === 'CUSTOMER' || m.senderType === 'PROSPECT' || m.direction === 'INBOUND')) {
     await clearLeadSchedule(ctx, lead);

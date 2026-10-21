@@ -283,22 +283,28 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           <div>
             <label className="text-slate-600 block mb-1 font-semibold">Approved Sending Mailboxes</label>
             <div className="space-y-2">
-              {formData.sendingAccounts.map((acc) => (
-                <div
-                  key={acc.id}
-                  className="flex items-center justify-between p-2.5 bg-slate-50 rounded-xl border border-slate-200"
-                >
-                  <div>
-                    <span className="font-semibold text-slate-900 block">{acc.name}</span>
-                    <span className="text-slate-500 font-mono text-[11px]">{acc.email}</span>
-                  </div>
-                  {acc.isDefault && (
-                    <span className="px-2 py-0.5 rounded bg-orange-100 text-orange-800 text-[10px] font-bold">
-                      Default
-                    </span>
-                  )}
+              {(formData?.sendingAccounts || []).length === 0 ? (
+                <div className="p-3 bg-slate-50 rounded-xl border border-dashed border-slate-200 text-slate-400 text-center">
+                  No dedicated sending mailbox configured yet.
                 </div>
-              ))}
+              ) : (
+                (formData?.sendingAccounts || []).map((acc) => (
+                  <div
+                    key={acc.id}
+                    className="flex items-center justify-between p-2.5 bg-slate-50 rounded-xl border border-slate-200"
+                  >
+                    <div>
+                      <span className="font-semibold text-slate-900 block">{acc.name}</span>
+                      <span className="text-slate-500 font-mono text-[11px]">{acc.email}</span>
+                    </div>
+                    {acc.isDefault && (
+                      <span className="px-2 py-0.5 rounded bg-orange-100 text-orange-800 text-[10px] font-bold">
+                        Default
+                      </span>
+                    )}
+                  </div>
+                ))
+              )}
             </div>
           </div>
 
@@ -306,7 +312,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             <label className="text-slate-600 block mb-1 font-semibold">Configurable Outbound Email Signature</label>
             <textarea
               rows={4}
-              value={formData.emailSignature}
+              value={formData?.emailSignature || ''}
               onChange={(e) => setFormData({ ...formData, emailSignature: e.target.value })}
               className="w-full bg-white border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 resize-none font-mono focus:outline-none focus:border-orange-500"
             />

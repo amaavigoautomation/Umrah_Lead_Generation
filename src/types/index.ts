@@ -541,7 +541,7 @@ export interface SystemSettings {
   updatedAt: string;
 }
 
-export type UserRole = 'ADMIN' | 'OPERATOR' | 'SPECIALIST' | 'CUSTOM';
+export type UserRole = 'ADMIN' | 'OPERATOR' | 'SPECIALIST' | 'SALES' | 'CUSTOM';
 export type UserAccessLevel = 'ALL' | 'CUSTOM';
 
 export interface AppUser {

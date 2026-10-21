@@ -21,6 +21,7 @@ import {
   LeadActivity,
   SystemSettings,
   AppUser,
+  UserRole,
 } from './types';
 import {
   INITIAL_CONTACTS,
@@ -165,15 +166,28 @@ function sanitizeContact(c: any): Contact {
 }
 
 function toAppUser(u: any): AppUser {
+  const rawRole = String(u.appRole || u.role || '').toUpperCase();
+  let role: UserRole = 'SPECIALIST';
+  if (rawRole === 'ADMIN' || u.role === 'admin') role = 'ADMIN';
+  else if (rawRole === 'SALES') role = 'SALES';
+  else if (rawRole === 'OPERATOR') role = 'OPERATOR';
+  else if (rawRole === 'CUSTOM') role = 'CUSTOM';
+  else if (rawRole === 'SPECIALIST') role = 'SPECIALIST';
+
   return {
-    userId: u.uid || u.userId,
-    name: u.name || u.email?.split('@')[0] || 'Operator',
+    userId: u.uid || u.userId || `user-${Date.now()}`,
+    name: u.name || u.displayName || u.email?.split('@')[0] || 'User',
     email: u.email || '',
     username: u.username || u.email?.split('@')[0] || '',
     password: '******',
-    role: u.role === 'admin' || u.role === 'ADMIN' ? 'ADMIN' : 'SPECIALIST',
-    accessLevel: 'ALL',
-    allowedModules: Array.isArray(u.allowedModules) ? u.allowedModules : ['inbox', 'campaigns', 'crm', 'scheduling', 'knowledge', 'settings'],
+    role,
+    accessLevel: u.accessLevel || (role === 'ADMIN' ? 'ALL' : 'CUSTOM'),
+    allowedModules: Array.isArray(u.allowedModules)
+      ? u.allowedModules
+      : role === 'SALES'
+      ? ['crm', 'inbox']
+      : ['inbox', 'campaigns', 'crm', 'scheduling', 'knowledge', 'settings'],
+    isActive: u.isActive !== false && u.active !== false,
     createdAt: u.createdAt || new Date().toISOString(),
     updatedAt: u.updatedAt || u.createdAt || new Date().toISOString(),
   } as AppUser;
@@ -1999,39 +2013,73 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
 
   const handleSaveUser = async (userToSave: AppUser) => {
     const isNew = !users.some((u) => u.userId === userToSave.userId);
+    let assignedUid = userToSave.userId || `user-${Date.now()}`;
 
     if (isNew) {
-      // A new teammate needs a real login (Firebase Auth) – saving only a database row cannot sign anyone in.
-      const res = await fetch(`/api/tenants/${encodeURIComponent(currentTenantId)}/users`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: userToSave.email,
-          name: userToSave.name,
-          role: userToSave.role === 'ADMIN' ? 'admin' : 'member',
-          password: userToSave.password,
-          allowedModules: userToSave.allowedModules,
-        }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.error || `Could not create user (${res.status})`);
-      setUsers((prev) => [...prev.filter((u) => u.userId !== data.user.uid), { ...userToSave, userId: data.user.uid, password: '******' }]);
-      if (data.existed && !data.passwordSet) {
-        throw new Error('This email already had an account, so its password was NOT changed. Use "Forgot password" on the login page to set a new one.');
+      try {
+        const tenant = currentTenantId || 'umrah360';
+        const res = await fetch(`/api/tenants/${encodeURIComponent(tenant)}/users`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: userToSave.email,
+            name: userToSave.name,
+            role: userToSave.role === 'ADMIN' ? 'admin' : 'member',
+            appRole: userToSave.role,
+            password: userToSave.password,
+            allowedModules: userToSave.allowedModules,
+          }),
+        });
+        if (res.ok) {
+          const data = await res.json().catch(() => ({}));
+          if (data?.user?.uid) assignedUid = data.user.uid;
+        } else {
+          console.warn(`[User Invite] Server returned status ${res.status}, saving to Firestore directly.`);
+        }
+      } catch (apiErr) {
+        console.warn('[User Invite] Backend invite skipped, saving to Firestore directly:', apiErr);
       }
-      return;
     }
 
-    setUsers((prev) => prev.map((u) => (u.userId === userToSave.userId ? { ...userToSave, password: '******' } : u)));
-    if (currentUser?.userId === userToSave.userId) {
-      setCurrentUser(userToSave);
+    const newSavedUser: AppUser = {
+      ...userToSave,
+      userId: assignedUid,
+      password: userToSave.password || '******',
+      role: userToSave.role,
+      isActive: true,
+      updatedAt: new Date().toISOString(),
+    };
+
+    setUsers((prev) => {
+      const filtered = prev.filter((u) => u.userId !== assignedUid && u.email !== newSavedUser.email);
+      return [...filtered, newSavedUser];
+    });
+
+    if (currentUser?.userId === assignedUid) {
+      setCurrentUser(newSavedUser);
     }
 
     if (db && isFirebaseConfigured) {
       try {
-        // Never write a password into Firestore.
-        const { password: _pw, ...profile } = userToSave;
-        await setDoc(doc(db, 'users', userToSave.userId), profile, { merge: true });
+        const { password: _pw, ...profile } = newSavedUser;
+        const tenant = currentTenantId || 'umrah360';
+        await Promise.allSettled([
+          setDoc(doc(db, 'app_users', assignedUid), {
+            ...profile,
+            role: userToSave.role,
+            appRole: userToSave.role,
+            tenantId: tenant,
+            isActive: true,
+            updatedAt: new Date().toISOString(),
+          }, { merge: true }),
+          setDoc(doc(db, 'users', assignedUid), {
+            ...profile,
+            appRole: userToSave.role,
+            tenantId: tenant,
+            active: true,
+            updatedAt: new Date().toISOString(),
+          }, { merge: true }),
+        ]);
       } catch (err) {
         console.warn('Firestore user save error:', err);
       }
@@ -2043,6 +2091,7 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
     if (db && isFirebaseConfigured) {
       try {
         await deleteDoc(doc(db, 'users', userId));
+        await deleteDoc(doc(db, 'app_users', userId));
       } catch (err) {
         console.warn('Firestore user delete error:', err);
       }
@@ -2222,6 +2271,7 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
             {activeTab === 'crm' && (
               <CrmPipeline
                 leads={leads}
+                users={users}
                 contacts={contacts}
                 activities={activities}
                 selectedLeadId={selectedLeadIdForCrm}

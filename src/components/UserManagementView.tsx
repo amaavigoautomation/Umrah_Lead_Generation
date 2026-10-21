@@ -171,6 +171,8 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
                       className={`px-2 py-0.5 rounded text-[10px] font-bold border ${
                         u.role === 'ADMIN'
                           ? 'bg-orange-500/10 text-orange-600 border-orange-200'
+                          : u.role === 'SALES'
+                          ? 'bg-emerald-50 text-emerald-700 border-emerald-300 font-extrabold'
                           : 'bg-slate-100 text-slate-700 border-slate-200'
                       }`}
                     >
@@ -302,12 +304,15 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
                       allowedModules:
                         newRole === 'ADMIN'
                           ? PLATFORM_MODULES.map((m) => m.id)
+                          : newRole === 'SALES'
+                          ? ['crm', 'inbox']
                           : editingUser.allowedModules || ['knowledge', 'playground'],
                     });
                   }}
                   className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-slate-800 focus:outline-none focus:border-orange-500"
                 >
                   <option value="ADMIN">ADMIN (Full Platform Access)</option>
+                  <option value="SALES">SALES (Telecaller & CRM Closer)</option>
                   <option value="SPECIALIST">SPECIALIST (Selected Modules)</option>
                   <option value="OPERATOR">OPERATOR (Selected Modules)</option>
                   <option value="CUSTOM">CUSTOM (Granular Permissions)</option>

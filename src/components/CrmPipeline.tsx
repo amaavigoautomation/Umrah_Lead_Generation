@@ -55,6 +55,7 @@ import {
   LeadStatus,
   LeadType,
   LeadSource,
+  AppUser,
 } from '../types';
 import { WebsiteLeadIntegrationModal } from './WebsiteLeadIntegrationModal';
 
@@ -67,6 +68,7 @@ export interface CrmPipelineProps {
   onUpdateLeadStatus?: (leadId: string, newStatus: LeadStatus) => void;
   onUpdateLead?: (updatedLead: Lead) => void;
   onAddLead?: (newLead: Lead, newContact: Contact) => void;
+  users?: AppUser[];
 }
 
 // TeleCRM Default Telecallers / Agents
@@ -99,8 +101,29 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
   onUpdateLeadStatus,
   onUpdateLead,
   onAddLead,
+  users,
 }) => {
   const { brand } = useBrand();
+
+  // Dynamic Telecallers: merge pre-configured agents with workspace users assigned the 'SALES' role
+  const telecallersList = useMemo(() => {
+    const salesUsers = (users || [])
+      .filter((u) => (u.role === 'SALES' || (u as any).appRole === 'SALES') && u.isActive !== false)
+      .map((u, i) => ({
+        id: u.userId,
+        name: u.name,
+        role: 'Sales Representative',
+        avatarColor: ['bg-emerald-600', 'bg-blue-600', 'bg-purple-600', 'bg-amber-600', 'bg-rose-600'][i % 5],
+      }));
+
+    const combined = [...TELECALLERS];
+    for (const su of salesUsers) {
+      if (!combined.some((c) => c.name.toLowerCase() === su.name.toLowerCase())) {
+        combined.push(su);
+      }
+    }
+    return combined;
+  }, [users]);
 
   // Selected lead for 360° Drawer
   const [activeDrawerLeadId, setActiveDrawerLeadId] = useState<string | null>(initialSelectedLeadId || null);
@@ -841,7 +864,7 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
                 >
                   <option value="ALL">All Telecallers</option>
                   <option value="UNASSIGNED">Unassigned Only</option>
-                  {TELECALLERS.map((c) => (
+                  {telecallersList.map((c) => (
                     <option key={c.id} value={c.name}>
                       {c.name}
                     </option>
@@ -924,7 +947,7 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
                   <option value="" disabled>
                     Assign Telecaller...
                   </option>
-                  {TELECALLERS.map((c) => (
+                  {telecallersList.map((c) => (
                     <option key={c.id} value={c.name}>
                       {c.name}
                     </option>
@@ -1087,7 +1110,7 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
                     const currentStage =
                       TELECRM_STAGES.find((s) => s.key === lead.status) || TELECRM_STAGES[1];
                     const callerName = lead.assignedCaller || lead.ownerId || 'Unassigned';
-                    const callerObj = TELECALLERS.find((c) => c.name === callerName);
+                    const callerObj = telecallersList.find((c) => c.name === callerName);
                     const followupDate = lead.nextFollowUpAt ? parseLeadDate(lead.nextFollowUpAt) : null;
                     const isFollowupOverdue = followupDate ? followupDate.getTime() < Date.now() : false;
                     const followupFormatted = followupDate
@@ -1274,7 +1297,7 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
                               className="text-xs font-semibold text-slate-700 bg-transparent border-0 hover:bg-slate-100 rounded px-1 py-0.5 focus:outline-none cursor-pointer"
                             >
                               <option value="Unassigned">Unassigned</option>
-                              {TELECALLERS.map((c) => (
+                              {telecallersList.map((c) => (
                                 <option key={c.id} value={c.name}>
                                   {c.name}
                                 </option>
@@ -1903,7 +1926,7 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
                       name="caller"
                       className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-medium focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
                     >
-                      {TELECALLERS.map((c) => (
+                      {telecallersList.map((c) => (
                         <option key={c.id} value={c.name}>
                           {c.name}
                         </option>

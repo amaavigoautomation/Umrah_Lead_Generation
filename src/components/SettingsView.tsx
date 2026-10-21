@@ -196,10 +196,11 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const channels: Channel[] = ['WHATSAPP', 'EMAIL', 'INSTAGRAM', 'FACEBOOK', 'LINKEDIN', 'WEBSITE'];
 
   const handleModeChange = (channel: Channel, mode: ChannelMode) => {
+    if (!formData) return;
     setFormData({
       ...formData,
       channelModes: {
-        ...(formData?.channelModes || {}),
+        ...formData.channelModes,
         [channel]: mode,
       },
     });
@@ -210,6 +211,15 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     setIsSaved(true);
     setTimeout(() => setIsSaved(false), 2500);
   };
+
+  if (!formData) {
+    return (
+      <div className="flex items-center justify-center py-16 text-sm text-slate-400">
+        <span className="inline-block w-4 h-4 mr-2 border-2 border-slate-300 border-t-orange-500 rounded-full animate-spin" />
+        Loading settings…
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-5xl mx-auto p-4 space-y-6 font-sans">
@@ -421,22 +431,28 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           <div>
             <label className="text-slate-600 block mb-1 font-semibold">Approved Sending Mailboxes</label>
             <div className="space-y-2">
-              {formData.sendingAccounts.map((acc) => (
-                <div
-                  key={acc.id}
-                  className="flex items-center justify-between p-2.5 bg-slate-50 rounded-xl border border-slate-200"
-                >
-                  <div>
-                    <span className="font-semibold text-slate-900 block">{acc.name}</span>
-                    <span className="text-slate-500 font-mono text-[11px]">{acc.email}</span>
-                  </div>
-                  {acc.isDefault && (
-                    <span className="px-2 py-0.5 rounded bg-orange-100 text-orange-800 text-[10px] font-bold">
-                      Default
-                    </span>
-                  )}
+              {(formData?.sendingAccounts || []).length === 0 ? (
+                <div className="p-3 bg-slate-50 rounded-xl border border-dashed border-slate-200 text-slate-400 text-center">
+                  No dedicated sending mailbox configured yet.
                 </div>
-              ))}
+              ) : (
+                (formData?.sendingAccounts || []).map((acc) => (
+                  <div
+                    key={acc.id}
+                    className="flex items-center justify-between p-2.5 bg-slate-50 rounded-xl border border-slate-200"
+                  >
+                    <div>
+                      <span className="font-semibold text-slate-900 block">{acc.name}</span>
+                      <span className="text-slate-500 font-mono text-[11px]">{acc.email}</span>
+                    </div>
+                    {acc.isDefault && (
+                      <span className="px-2 py-0.5 rounded bg-orange-100 text-orange-800 text-[10px] font-bold">
+                        Default
+                      </span>
+                    )}
+                  </div>
+                ))
+              )}
             </div>
           </div>
 
@@ -444,7 +460,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             <label className="text-slate-600 block mb-1 font-semibold">Configurable Outbound Email Signature</label>
             <textarea
               rows={4}
-              value={formData.emailSignature}
+              value={formData?.emailSignature || ''}
               onChange={(e) => setFormData({ ...formData, emailSignature: e.target.value })}
               className="w-full bg-white border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 resize-none font-mono focus:outline-none focus:border-orange-500"
             />
@@ -468,7 +484,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               type="number"
               min={1}
               max={30}
-              value={formData.debounceSeconds}
+              value={formData?.debounceSeconds ?? 3}
               onChange={(e) =>
                 setFormData({ ...formData, debounceSeconds: parseInt(e.target.value) || 3 })
               }
@@ -484,7 +500,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             <input
               type="text"
               readOnly
-              value={formData.webhookEndpoint}
+              value={formData?.webhookEndpoint || ''}
               className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2 text-slate-600 font-mono"
             />
             <span className="text-[11px] text-emerald-600 mt-1 block flex items-center space-x-1 font-medium">

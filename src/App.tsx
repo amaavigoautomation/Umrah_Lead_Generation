@@ -21,6 +21,7 @@ import {
   LeadActivity,
   SystemSettings,
   AppUser,
+  UserRole,
 } from './types';
 import {
   INITIAL_CONTACTS,
@@ -79,8 +80,8 @@ import { initCalendarAuth } from './services/googleCalendarAuth';
 // Per-workspace brand strings for locally-built message records (read at call time).
 const bn = () => getCurrentBrand();
 const brandEmail = () => bn().salesEmail || `noreply@${brandHost(bn()) || 'workspace.local'}`;
-const brandReSubject = () => (bn().playbook === 'umrah360' ? brandReSubject() : `Re: ${bn().companyName}`);
-const brandGrowthTeam = () => (bn().playbook === 'umrah360' ? brandGrowthTeam() : bn().teamName);
+const brandReSubject = () => (bn().playbook === 'umrah360' ? 'Re: Umrah B2B Query' : `Re: ${bn().companyName}`);
+const brandGrowthTeam = () => (bn().playbook === 'umrah360' ? 'Umrah360 Outbound Growth Team' : bn().teamName);
 
 function sanitizeDoc(obj: any): any {
   if (obj === undefined) return null;
@@ -176,15 +177,28 @@ function sanitizeContact(c: any): Contact {
 }
 
 function toAppUser(u: any): AppUser {
+  const rawRole = String(u.appRole || u.role || '').toUpperCase();
+  let role: UserRole = 'SPECIALIST';
+  if (rawRole === 'ADMIN' || u.role === 'admin') role = 'ADMIN';
+  else if (rawRole === 'SALES') role = 'SALES';
+  else if (rawRole === 'OPERATOR') role = 'OPERATOR';
+  else if (rawRole === 'CUSTOM') role = 'CUSTOM';
+  else if (rawRole === 'SPECIALIST') role = 'SPECIALIST';
+
   return {
-    userId: u.uid || u.userId,
-    name: u.name || u.email?.split('@')[0] || 'Operator',
+    userId: u.uid || u.userId || `user-${Date.now()}`,
+    name: u.name || u.displayName || u.email?.split('@')[0] || 'User',
     email: u.email || '',
     username: u.username || u.email?.split('@')[0] || '',
     password: '******',
-    role: u.role === 'admin' || u.role === 'ADMIN' ? 'ADMIN' : 'SPECIALIST',
-    accessLevel: 'ALL',
-    allowedModules: Array.isArray(u.allowedModules) ? u.allowedModules : ['inbox', 'campaigns', 'crm', 'scheduling', 'knowledge', 'settings'],
+    role,
+    accessLevel: u.accessLevel || (role === 'ADMIN' ? 'ALL' : 'CUSTOM'),
+    allowedModules: Array.isArray(u.allowedModules)
+      ? u.allowedModules
+      : role === 'SALES'
+      ? ['crm', 'inbox']
+      : ['inbox', 'campaigns', 'crm', 'scheduling', 'knowledge', 'settings'],
+    isActive: u.isActive !== false && u.active !== false,
     createdAt: u.createdAt || new Date().toISOString(),
     updatedAt: u.updatedAt || u.createdAt || new Date().toISOString(),
   } as AppUser;
@@ -1918,13 +1932,20 @@ export default function App() {
           email: userToSave.email,
           name: userToSave.name,
           role: userToSave.role === 'ADMIN' ? 'admin' : 'member',
+          appRole: userToSave.role,
           password: userToSave.password,
           allowedModules: userToSave.allowedModules,
         }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error || `Could not create user (${res.status})`);
-      setUsers((prev) => [...prev.filter((u) => u.userId !== data.user.uid), { ...userToSave, userId: data.user.uid, password: '******' }]);
+      const newSavedUser: AppUser = { ...userToSave, userId: data.user.uid, password: '******' };
+      setUsers((prev) => [...prev.filter((u) => u.userId !== data.user.uid), newSavedUser]);
+      if (db && isFirebaseConfigured) {
+        const { password: _pw, ...profile } = newSavedUser;
+        setDoc(doc(db, 'app_users', data.user.uid), { ...profile, role: userToSave.role, appRole: userToSave.role, tenantId: currentTenantId }, { merge: true }).catch(() => {});
+        setDoc(doc(db, 'users', data.user.uid), { ...profile, appRole: userToSave.role, tenantId: currentTenantId }, { merge: true }).catch(() => {});
+      }
       if (data.existed && !data.passwordSet) {
         throw new Error('This email already had an account, so its password was NOT changed. Use "Forgot password" on the login page to set a new one.');
       }
@@ -1940,7 +1961,8 @@ export default function App() {
       try {
         // Never write a password into Firestore.
         const { password: _pw, ...profile } = userToSave;
-        await setDoc(doc(db, 'users', userToSave.userId), profile, { merge: true });
+        await setDoc(doc(db, 'users', userToSave.userId), { ...profile, appRole: userToSave.role, tenantId: currentTenantId }, { merge: true });
+        await setDoc(doc(db, 'app_users', userToSave.userId), { ...profile, role: userToSave.role, appRole: userToSave.role, tenantId: currentTenantId }, { merge: true });
       } catch (err) {
         console.warn('Firestore user save error:', err);
       }
@@ -1952,6 +1974,7 @@ export default function App() {
     if (db && isFirebaseConfigured) {
       try {
         await deleteDoc(doc(db, 'users', userId));
+        await deleteDoc(doc(db, 'app_users', userId));
       } catch (err) {
         console.warn('Firestore user delete error:', err);
       }
@@ -2132,6 +2155,7 @@ export default function App() {
                 leads={leads}
                 contacts={contacts}
                 activities={activities}
+                users={users}
                 selectedLeadId={selectedLeadIdForCrm}
                 onOpenConversation={(convId, leadId) => {
                   setActiveTab('inbox');

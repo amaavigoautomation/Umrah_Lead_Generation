@@ -740,6 +740,7 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
         }
         const rec = await createTenantUser({ email, password, displayName: name || undefined, tenantId: tId, role });
         const nowIso = new Date().toISOString();
+        const appRole = body?.appRole || (role === 'admin' ? 'ADMIN' : 'SPECIALIST');
         await setDoc(
           globalUserDoc(rec.uid),
           {
@@ -748,6 +749,7 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
             name: name || rec.displayName || email.split('@')[0],
             tenantId: tId,
             role,
+            appRole,
             active: true,
             ...(Array.isArray(body?.allowedModules) ? { allowedModules: body.allowedModules.filter((m: any) => typeof m === 'string') } : {}),
             createdAt: nowIso,
@@ -764,7 +766,8 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
             email,
             name: name || rec.displayName || email.split('@')[0],
             tenantId: tId,
-            role,
+            role: appRole,
+            appRole,
             ...(Array.isArray(body?.allowedModules) ? { allowedModules: body.allowedModules.filter((m: any) => typeof m === 'string') } : {}),
             isActive: true,
             createdAt: nowIso,

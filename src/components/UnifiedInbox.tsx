@@ -518,6 +518,25 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
     }
   };
 
+  // UI-only terminal-state detection. Do not alter scheduling or cancellation behaviour.
+  const latestInboundFollowUpMessage = activeMessages
+    .filter((m) => m.direction === 'INBOUND' || m.senderType === 'CUSTOMER' || m.senderType === 'PROSPECT')
+    .reduce<Message | null>((latest, message) => !latest || getMsgTime(message) > getMsgTime(latest) ? message : latest, null);
+  const latestOutboundFollowUpMessage = activeMessages
+    .filter((m) => m.direction === 'OUTBOUND' || m.senderType === 'AI' || m.senderType === 'AGENT' || m.senderType === 'HUMAN')
+    .reduce<Message | null>((latest, message) => !latest || getMsgTime(message) > getMsgTime(latest) ? message : latest, null);
+  const leadRepliedAfterFollowUp = Boolean(
+    latestInboundFollowUpMessage &&
+    latestOutboundFollowUpMessage &&
+    getMsgTime(latestInboundFollowUpMessage) > getMsgTime(latestOutboundFollowUpMessage)
+  );
+  const followUpDisabledReason = activeLead?.autoFollowUp?.disabledReason;
+  const followUpCompleted = followUpDisabledReason === 'completed';
+  const followUpClosedByReply = !activeLead?.autoFollowUp?.enabled && leadRepliedAfterFollowUp &&
+    !followUpCompleted && followUpDisabledReason !== 'manual' && followUpDisabledReason !== 'admin_disabled';
+  const isAutoFollowUpUiActive = Boolean(activeLead?.autoFollowUp?.enabled) &&
+    !leadRepliedAfterFollowUp && !followUpCompleted;
+
   // Toggle Auto Follow-Up on/off for the active lead
   const handleToggleAutoFollowUp = async (enabled: boolean) => {
     if (!activeLead || !activeConversation) return;
@@ -832,10 +851,10 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
                 {/* Auto Follow-Up Toggle Button */}
                 {activeLead && (activeLead.leadType === 'INBOUND' || activeLead.leadType === 'OUTBOUND') && (
                   <button
-                    onClick={() => handleToggleAutoFollowUp(!activeLead?.autoFollowUp?.enabled)}
+                    onClick={() => handleToggleAutoFollowUp(!isAutoFollowUpUiActive)}
                     disabled={isTogglingAutoFollowUp}
                     className={`flex items-center space-x-1.5 px-2.5 py-1 rounded-lg text-xs font-bold border transition ${
-                      activeLead?.autoFollowUp?.enabled
+                      isAutoFollowUpUiActive
                         ? 'bg-emerald-50 border-emerald-300 text-emerald-800 hover:bg-emerald-100'
                         : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
                     }`}
@@ -843,7 +862,7 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
                   >
                     <Clock className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
                     <span>
-                      Auto Follow-Up [{activeLead?.autoFollowUp?.enabled ? ' ON ' : ' OFF '}]
+                      Auto Follow-Up [{isAutoFollowUpUiActive ? ' ON ' : ' OFF '}]
                       {!activeLead?.autoFollowUp?.enabled && activeLead?.autoFollowUp?.disabledReason === 'completed' && (
                         <span className="ml-1 font-semibold text-slate-500">
                           · Completed {activeLead.autoFollowUp.attemptCount || activeLead.autoFollowUp.maxAttempts}/
@@ -907,13 +926,15 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
               <div className="px-3.5 py-1.5 bg-orange-50/80 border-b border-orange-100 text-xs flex items-center justify-between">
                 <div className="flex items-center space-x-2">
                   <span className="flex items-center space-x-1.5">
-                    <span className={`w-2 h-2 rounded-full ${activeLead.autoFollowUp?.enabled ? 'bg-orange-500 animate-pulse' : 'bg-slate-400'}`} />
+                    <span className={`w-2 h-2 rounded-full ${isAutoFollowUpUiActive ? 'bg-orange-500 animate-pulse' : 'bg-slate-400'}`} />
                     <span className="font-semibold text-slate-800">Auto Follow-Up:</span>
                   </span>
                   {activeLead.demoStatus === 'BOOKED' || activeLead.status === 'DEMO_BOOKED' ? (
                     <span className="text-amber-700 font-medium">[ OFF ] — Demo booked</span>
-                  ) : activeLead.autoFollowUp?.enabled ? (
-                    activeLead.autoFollowUp.nextScheduledAt ? (
+                  ) : followUpClosedByReply ? (
+                    <span className="text-slate-600 font-medium">[ OFF ] — CLOSED: Lead replied</span>
+                  ) : isAutoFollowUpUiActive ? (
+                    activeLead.autoFollowUp?.nextScheduledAt ? (
                       new Date(activeLead.autoFollowUp.nextScheduledAt).getTime() <= Date.now() ? (
                         <span className="text-amber-700 font-medium animate-pulse">[ ON ] — Due now (processing follow-up...)</span>
                       ) : (

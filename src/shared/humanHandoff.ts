@@ -50,6 +50,34 @@ export function matchHumanHandoffKeyword(message: string, configuredPhrases: rea
   const matchedPhrase = containsPhrase(message, configuredPhrases);
   return matchedPhrase ? { matched: true, reason: 'CUSTOM_PHRASE', matchedPhrase: matchedPhrase.trim() } : { matched: false };
 }
+/**
+ * Counts recent AI replies that explicitly admit they could not resolve the request.
+ * The inbound pipelines pass prior thread messages here before generating a new reply.
+ */
+export function countUnsuccessfulResolutionAttempts(messages: readonly Record<string, unknown>[]): number {
+  const failureSignals = [
+    "i don't know", "i do not know", "i'm not sure", "i am not sure",
+    "i couldn't find", "i could not find", "i don't have that information",
+    "i do not have that information", "i'm unable to", "i am unable to",
+    "i can't help with that", "i cannot help with that", "unable to answer",
+    "couldn't answer", "could not answer", "please contact our support team",
+    "i don't have enough information", "i do not have enough information",
+  ];
+  const isAssistant = (m: Record<string, unknown>) => {
+    const direction = String(m.direction || '').toUpperCase();
+    const senderType = String(m.senderType || m.sender || m.role || '').toUpperCase();
+    return direction === 'OUTBOUND' || ['AI', 'ASSISTANT', 'BOT'].includes(senderType);
+  };
+  let attempts = 0;
+  for (const message of [...messages].reverse()) {
+    if (!isAssistant(message)) continue;
+    const body = String(message.text || message.body || message.content || '').toLocaleLowerCase();
+    if (!body.trim()) continue;
+    if (failureSignals.some((signal) => body.includes(signal))) attempts += 1;
+    else break; // consecutive unsuccessful AI replies only
+  }
+  return attempts;
+}
 export function detectHumanHandoff(
   message: string,
   rules: HumanHandoffRules = {},

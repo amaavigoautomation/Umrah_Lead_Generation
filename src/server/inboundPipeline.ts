@@ -463,6 +463,22 @@ export function isConversationHumanManaged(conversationId: string): boolean {
   return conversationHumanHandoffMap.get(conversationId) === true || conversationAiStateMap.get(conversationId) === false;
 }
 
+async function isConversationHumanManagedPersisted(conversationId: string): Promise<boolean> {
+  if (isConversationHumanManaged(conversationId)) return true;
+  try {
+    const { getDoc } = await import('./adminFirestore.js');
+    const snap = await getDoc(tenantRepo(getInboundCtx()).conversationDoc(conversationId));
+    if (!snap.exists()) return false;
+    const data = snap.data() as any;
+    const managed = data.humanHandoff === true || data.aiEnabled === false || data.managementMode === 'HUMAN';
+    if (managed) setConversationAiState(conversationId, false, true);
+    return managed;
+  } catch (err) {
+    console.warn('[Human Handoff] Could not read persisted conversation state:', err);
+    return false;
+  }
+}
+
 export function appendOutboundMessageToThread(conversationId: string, message: any): any[] {
   let thread = conversationThreadMessagesMap.get(conversationId);
   if (!thread) {
@@ -1572,7 +1588,7 @@ export async function processLiveInboundEmail(payload: {
     // -> Incoming email is saved and shown in inbox
     // -> MUST NOT trigger Gemini or send an AI reply
     // =========================================================================
-    if (isConversationHumanManaged(conversationId)) {
+    if (await isConversationHumanManagedPersisted(conversationId)) {
       console.log(`[Human Takeover] Conversation ${conversationId} is in HUMAN managed mode (aiEnabled=false / humanHandoff=true). Incoming email saved and shown in inbox, AI reply suppressed.`);
       inFlightMessageIds.delete(incomingMsgId);
       return {
@@ -1697,7 +1713,7 @@ export async function processLiveInboundEmail(payload: {
     // =========================================================================
     let smtpResult: SendMailResult;
 
-    if (shouldSendAutoReply && isConversationHumanManaged(conversationId)) {
+    if (shouldSendAutoReply && await isConversationHumanManagedPersisted(conversationId)) {
       shouldSendAutoReply = false;
       replyDecisionReason = 'Human Handoff became active before dispatch; AI reply blocked.';
     }

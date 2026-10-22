@@ -1,5 +1,5 @@
 import { tenantRepo } from './tenantRepo.js';
-import { matchHumanHandoffKeyword } from '../shared/humanHandoff.js';
+import { detectHumanHandoff } from '../shared/humanHandoff.js';
 import { setConversationAiState } from './inboundPipeline.js';
 import type { TenantContext } from '../types/tenant.js';
 
@@ -975,9 +975,10 @@ export async function processLiveInboundWhatsApp(payload: {
     const settingsSnap = await getDoc(tenantRepo(getWACtx()).settingsDoc('default'));
     const handoffSettings = settingsSnap.exists() ? (settingsSnap.data() as any) : {};
     if (handoffSettings.humanHandoffEnabled !== false) {
-      const match = matchHumanHandoffKeyword(payload.body || '', Array.isArray(handoffSettings.humanHandoffKeywords) ? handoffSettings.humanHandoffKeywords : ['talk to a human', 'speak to someone', 'human support', 'connect me to a person']);
+      const configuredRules = handoffSettings.humanHandoffRules || { explicitRequest: true, frustration: true, aiUnableToResolve: true, sensitiveRequests: false, failureThreshold: 2 };
+      const match = detectHumanHandoff(payload.body || '', { enabled: handoffSettings.humanHandoffEnabled !== false, ...configuredRules, customPhrases: Array.isArray(handoffSettings.humanHandoffKeywords) ? handoffSettings.humanHandoffKeywords : ['speak with the booking team', 'connect me to an Umrah specialist', 'call me regarding my package'] });
       if (match.matched) {
-        keywordHandoffReason = `Keyword trigger: ${match.matchedPhrase}`;
+        keywordHandoffReason = `Human Handoff ${match.reason || 'trigger'}: ${match.matchedPhrase}`;
         setConversationAiState(conversationId, false, true);
         try { const followups = await import('./autoFollowUpService.js'); await followups.cancelPendingFollowUpJob(getWACtx(), conversationId, 'Human Handoff keyword matched', 'system'); } catch (e) { console.warn('[Human Handoff] Could not cancel queued follow-ups:', e); }
       }

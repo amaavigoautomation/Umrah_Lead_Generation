@@ -1640,6 +1640,7 @@ export async function processLiveInboundEmail(payload: {
         if (match.matched) {
           keywordHandoffReason = `Keyword trigger: ${match.matchedPhrase}`;
           setConversationAiState(conversationId, false, true);
+          try { const followups = await import('./autoFollowUpService.js'); await followups.cancelPendingFollowUpJob(getInboundCtx(), conversationId, 'Human Handoff keyword matched', 'system'); } catch (e) { console.warn('[Human Handoff] Could not cancel queued follow-ups:', e); }
         }
       }
     } catch (handoffConfigError) {
@@ -1695,6 +1696,11 @@ export async function processLiveInboundEmail(payload: {
     // RULE 8: DISPATCH SMTP REPLY ONCE
     // =========================================================================
     let smtpResult: SendMailResult;
+
+    if (shouldSendAutoReply && isConversationHumanManaged(conversationId)) {
+      shouldSendAutoReply = false;
+      replyDecisionReason = 'Human Handoff became active before dispatch; AI reply blocked.';
+    }
 
     if (shouldSendAutoReply) {
       smtpResult = await sendLiveEmail({

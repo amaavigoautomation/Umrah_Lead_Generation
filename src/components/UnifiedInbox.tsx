@@ -1394,54 +1394,6 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
             </div>
           )}
 
-          {/* Demo Booking (Single Source of Truth) */}
-          {activeLead && (
-            <div className="p-3.5 bg-white rounded-2xl border border-slate-200 shadow-2xs flex items-center justify-between">
-              <div>
-                <span className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
-                  <Sparkles className="w-3.5 h-3.5 text-orange-500" />
-                  <span>Demo Status</span>
-                </span>
-                <span className="text-[11px] text-slate-500 font-medium block mt-0.5">
-                  {activeLead.demoStatus === 'BOOKED' || activeLead.status === 'DEMO_BOOKED'
-                    ? `Booked (${activeLead.demoSource || 'Manual'})`
-                    : 'Not Booked'}
-                </span>
-              </div>
-              <button
-                onClick={async () => {
-                  const isBooked = activeLead.demoStatus === 'BOOKED' || activeLead.status === 'DEMO_BOOKED';
-                  const nextStatus = isBooked ? 'NOT_BOOKED' : 'BOOKED';
-                  try {
-                    await fetch(`/api/campaigns/lead/${activeLead.leadId}/demo-status`, {
-                      method: 'PATCH',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({
-                        demoStatus: nextStatus,
-                        demoSource: 'MANUAL',
-                      }),
-                    });
-                    // Also fire score delta or update to trigger refresh
-                    onUpdateLeadScore(activeLead.leadId, 0);
-                  } catch (e) {
-                    console.error('Error toggling demo status:', e);
-                  }
-                }}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1 border transition shadow-2xs ${
-                  activeLead.demoStatus === 'BOOKED' || activeLead.status === 'DEMO_BOOKED'
-                    ? 'bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100'
-                    : 'bg-orange-500 text-white border-orange-500 hover:bg-orange-600'
-                }`}
-              >
-                <span>
-                  {activeLead.demoStatus === 'BOOKED' || activeLead.status === 'DEMO_BOOKED'
-                    ? 'Booked ✓'
-                    : 'Book Demo'}
-                </span>
-              </button>
-            </div>
-          )}
-
           {/* Section 23 Conversation Memory (Customer Facts & Extracted Requirements) */}
           <div className="space-y-3">
             <h5 className="text-xs font-bold text-slate-800 flex items-center space-x-1.5">

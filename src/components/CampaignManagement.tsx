@@ -49,8 +49,6 @@ import {
   CampaignRun,
   EmailTemplate,
   TemplateAttachment,
-  DemoStatus,
-  DemoSource,
   Conversation,
   Lead,
   Contact,
@@ -1098,76 +1096,6 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
       console.error('Error deleting campaign:', e);
     } finally {
       setIsDeletingCampaign(false);
-    }
-  };
-
-  // Toggle Demo Status (Automatic or Manual single source of truth)
-  const handleToggleDemoStatus = async (lead: CampaignLead) => {
-    const nextStatus: DemoStatus = lead.demoStatus === 'BOOKED' ? 'NOT_BOOKED' : 'BOOKED';
-    const nowIso = new Date().toISOString();
-
-    // 1. Optimistic local state update
-    setCampaignLeads((prev) =>
-      prev.map((l) =>
-        l.campaignLeadId === lead.campaignLeadId
-          ? {
-              ...l,
-              demoStatus: nextStatus,
-              demoSource: 'MANUAL',
-              demoBookedAt: nextStatus === 'BOOKED' ? nowIso : undefined,
-              updatedAt: nowIso,
-            }
-          : l
-      )
-    );
-
-    // 2. Direct Firestore write
-    if (isFirebaseConfigured && db) {
-      try {
-        await setDoc(
-          doc(db, 'campaign_leads', lead.campaignLeadId),
-          {
-            demoStatus: nextStatus,
-            demoSource: 'MANUAL',
-            demoBookedAt: nextStatus === 'BOOKED' ? nowIso : null,
-            updatedAt: nowIso,
-          },
-          { merge: true }
-        );
-        if (lead.leadId) {
-          await setDoc(
-            doc(db, 'leads', lead.leadId),
-            {
-              demoStatus: nextStatus,
-              demoSource: 'MANUAL',
-              demoBookedAt: nextStatus === 'BOOKED' ? nowIso : null,
-              status: nextStatus === 'BOOKED' ? 'DEMO_BOOKED' : 'ENGAGED',
-              updatedAt: nowIso,
-            },
-            { merge: true }
-          ).catch(() => {});
-        }
-      } catch (err) {
-        console.warn('Direct Firestore demo update notice:', err);
-      }
-    }
-
-    try {
-      const res = await fetch(`/api/campaigns/lead/${lead.campaignLeadId}/demo-status`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          demoStatus: nextStatus,
-          demoSource: 'MANUAL',
-        }),
-      });
-      const data = await res.json();
-      if (data.lead && selectedCampaignId) {
-        loadSelectedCampaignDetails(selectedCampaignId);
-        loadData();
-      }
-    } catch (e) {
-      console.error('Error updating demo status:', e);
     }
   };
 
@@ -2307,7 +2235,6 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                           <th className="py-3 px-4">Send Status</th>
                           <th className="py-3 px-4">Reply Status</th>
                           <th className="py-3 px-4">Engagement</th>
-                          <th className="py-3 px-4">Demo Status</th>
                           <th className="py-3 px-4">Last Sent</th>
                           <th className="py-3 px-4 text-right">Actions</th>
                         </tr>
@@ -2315,13 +2242,12 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                       <tbody className="divide-y divide-slate-100">
                         {filteredLeads.length === 0 ? (
                           <tr>
-                            <td colSpan={10} className="py-10 text-center text-slate-400">
+                            <td colSpan={9} className="py-10 text-center text-slate-400">
                               No leads matching the current filter
                             </td>
                           </tr>
                         ) : (
                           filteredLeads.map((lead, idx) => {
-                            const isDemoBooked = lead.demoStatus === 'BOOKED';
                             return (
                               <tr
                                 key={lead.campaignLeadId}
@@ -2419,29 +2345,6 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                                     }
                                     return <span className="text-[11px] text-slate-300">—</span>;
                                   })()}
-                                </td>
-                                <td className="py-3 px-4">
-                                  <button
-                                    onClick={() => handleToggleDemoStatus(lead)}
-                                    title="Click to toggle Demo Booked status"
-                                    className={`px-2 py-1 rounded-lg text-[11px] font-medium transition inline-flex items-center gap-1.5 border ${
-                                      isDemoBooked
-                                        ? 'bg-orange-50 text-orange-700 border-orange-200 hover:bg-orange-100'
-                                        : 'bg-slate-100 text-slate-600 border-slate-200 hover:text-slate-900 hover:bg-slate-200'
-                                    }`}
-                                  >
-                                    {isDemoBooked ? (
-                                      <>
-                                        <Sparkles className="w-3 h-3 text-orange-500" />
-                                        <span>Booked ({lead.demoSource || 'Manual'})</span>
-                                      </>
-                                    ) : (
-                                      <>
-                                        <span>Not Booked</span>
-                                        <span className="text-[10px] opacity-60">(Click)</span>
-                                      </>
-                                    )}
-                                  </button>
                                 </td>
                                 <td className="py-3 px-4 text-slate-500 text-[11px]">
                                   {lead.lastSentAt

@@ -1177,7 +1177,7 @@ export async function processLiveInboundWhatsApp(payload: {
       error: outboundDispatch.error,
     },
     handoffTriggered: aiResult.handoffTriggered,
-    handoffReason: aiResult.handoffReason,
+    handoffReason: aiResult.handoffReason || keywordHandoffReason || undefined,
     leadScore: aiResult.leadScore,
     intent: 'HIGH',
     buyingStage: aiResult.buyingStage,

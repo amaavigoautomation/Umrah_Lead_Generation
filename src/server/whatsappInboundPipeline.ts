@@ -192,6 +192,19 @@ const waConversationThreadMessagesMap = new Map<string, any[]>();
 const processedWaRecordsMap = new Map<string, ProcessedWhatsAppRecord>();
 const inFlightWaMessageIds = new Set<string>();
 
+async function isConversationHumanManagedPersisted(conversationId: string): Promise<boolean> {
+  try {
+    const { getDoc } = await import('./adminFirestore.js');
+    const snap = await getDoc(tenantRepo(getWACtx()).conversationDoc(conversationId));
+    if (!snap.exists()) return false;
+    const data = snap.data() as any;
+    return data.humanHandoff === true || data.aiEnabled === false || data.managementMode === 'HUMAN';
+  } catch (err) {
+    console.warn('[Human Handoff] Could not read persisted WhatsApp conversation state:', err);
+    return false;
+  }
+}
+
 // Turn tracker per phone number: Only reply ONCE per customer turn until they reply again!
 const waConversationTurnMap = new Map<string, WhatsAppConversationTurnState>();
 
@@ -971,6 +984,11 @@ export async function processLiveInboundWhatsApp(payload: {
     }
   } catch (handoffConfigError) {
     console.warn('[Human Handoff] Could not load tenant keyword rules; continuing with existing handoff state.', handoffConfigError);
+  }
+
+  if (!keywordHandoffReason && await isConversationHumanManagedPersisted(conversationId)) {
+    keywordHandoffReason = 'Human Handoff is already active for this conversation';
+    setConversationAiState(conversationId, false, true);
   }
 
   // =========================================================================

@@ -2581,8 +2581,9 @@ Generate a helpful, grounded response.`;
         res.setHeader('Content-Type', 'application/json');
         res.end(JSON.stringify({ success: true, config: {
           enabled: saved.humanHandoffEnabled ?? true,
+          customPhrasesEnabled: saved.humanHandoffCustomPhrasesEnabled ?? true,
           keywords: Array.isArray(saved.humanHandoffKeywords) ? saved.humanHandoffKeywords : ['speak with the booking team', 'connect me to an Umrah specialist', 'call me regarding my package'],
-          rules: saved.humanHandoffRules || { explicitRequest: true, frustration: true, aiUnableToResolve: true, sensitiveRequests: false, failureThreshold: 2 },
+          rules: saved.humanHandoffRules || { explicitRequest: true, frustration: true, aiUnableToResolve: true, failureThreshold: 2 },
         }}));
         return true;
       }
@@ -2594,11 +2595,12 @@ Generate a helpful, grounded response.`;
       }
       const keywords = Array.isArray(body?.keywords) ? body.keywords.map((v: unknown) => String(v).trim()).filter((v: string) => v.length > 0 && v.length <= 120).slice(0, 100) : [];
       const incomingRules = body?.rules && typeof body.rules === 'object' ? body.rules : {};
-      const rules = { explicitRequest: incomingRules.explicitRequest !== false, frustration: incomingRules.frustration !== false, aiUnableToResolve: incomingRules.aiUnableToResolve !== false, sensitiveRequests: incomingRules.sensitiveRequests === true, failureThreshold: Math.min(5, Math.max(1, Number(incomingRules.failureThreshold) || 2)) };
-      await safeSetDoc(settingsRef, { humanHandoffEnabled: body?.enabled !== false, humanHandoffKeywords: keywords, humanHandoffRules: rules, updatedAt: new Date().toISOString() }, { merge: true });
+      const rules = { explicitRequest: incomingRules.explicitRequest !== false, frustration: incomingRules.frustration !== false, aiUnableToResolve: incomingRules.aiUnableToResolve !== false, failureThreshold: Math.min(5, Math.max(1, Number(incomingRules.failureThreshold) || 2)) };
+      const customPhrasesEnabled = body?.customPhrasesEnabled !== false;
+      await safeSetDoc(settingsRef, { humanHandoffEnabled: true, humanHandoffCustomPhrasesEnabled: customPhrasesEnabled, humanHandoffKeywords: keywords, humanHandoffRules: rules, updatedAt: new Date().toISOString() }, { merge: true });
       res.statusCode = 200;
       res.setHeader('Content-Type', 'application/json');
-      res.end(JSON.stringify({ success: true, config: { enabled: body?.enabled !== false, keywords, rules } }));
+      res.end(JSON.stringify({ success: true, config: { enabled: true, customPhrasesEnabled, keywords, rules } }));
       return true;
     } catch (err: any) {
       res.statusCode = 500;

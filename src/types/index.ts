@@ -347,6 +347,9 @@ export interface Conversation {
   status: 'ACTIVE' | 'RESOLVED' | 'ARCHIVED' | 'REVIEW';
   aiEnabled: boolean;
   humanHandoff: boolean;
+  humanHandoffReason?: string;
+  humanHandoffAt?: string | null;
+  humanHandoffBy?: string | null;
   managementMode?: 'AI' | 'HUMAN';
   conversationSummary?: string;
   subject?: string;
@@ -532,8 +535,8 @@ export interface LeadActivity {
 }
 
 export interface SystemSettings {
-  humanHandoffEnabled: boolean;
-  humanHandoffKeywords: string[];
+  humanHandoffEnabled?: boolean;
+  humanHandoffKeywords?: string[];
   channelModes: Record<Channel, ChannelMode>;
   sendingAccounts: Array<{ id: string; email: string; name: string; isDefault: boolean }>;
   emailSignature: string;

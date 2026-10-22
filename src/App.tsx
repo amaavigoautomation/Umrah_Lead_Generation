@@ -417,7 +417,7 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
         const handoffRes = await fetch('/api/human-handoff/config');
         if (handoffRes.ok) {
           const handoffData = await handoffRes.json();
-          if (handoffData?.config) setSettings((prev) => ({ ...prev, humanHandoffEnabled: handoffData.config.enabled, humanHandoffKeywords: handoffData.config.keywords, humanHandoffRules: handoffData.config.rules }));
+          if (handoffData?.config) setSettings((prev) => ({ ...prev, humanHandoffEnabled: true, humanHandoffCustomPhrasesEnabled: handoffData.config.customPhrasesEnabled ?? true, humanHandoffKeywords: handoffData.config.keywords, humanHandoffRules: handoffData.config.rules }));
         }
       } catch {}
 
@@ -451,8 +451,10 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
           setSettings({
             ...workspaceDefaults,
             ...loadedSettings,
-            humanHandoffEnabled: loadedSettings.humanHandoffEnabled ?? true,
+            humanHandoffEnabled: true,
+            humanHandoffCustomPhrasesEnabled: loadedSettings.humanHandoffCustomPhrasesEnabled ?? workspaceDefaults.humanHandoffCustomPhrasesEnabled ?? true,
             humanHandoffKeywords: loadedSettings.humanHandoffKeywords ?? workspaceDefaults.humanHandoffKeywords ?? [],
+            humanHandoffRules: loadedSettings.humanHandoffRules ?? workspaceDefaults.humanHandoffRules ?? { explicitRequest: true, frustration: true, aiUnableToResolve: true, failureThreshold: 2 },
           });
         } else {
           await setDoc(settingsRef, defaultSettingsFor(currentTenantId, currentTenant?.name)).catch(() => {});
@@ -1925,41 +1927,50 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
     }
   };
 
-  // Persistent System Settings save (Firestore + Backend API pipeline config)
+  // Persist Human Handoff through the tenant-scoped backend; persist remaining settings in the tenant settings document.
   const handleSaveSettings = async (newSettings: SystemSettings) => {
-    setSettings(newSettings);
+    const normalizedSettings: SystemSettings = {
+      ...newSettings,
+      humanHandoffEnabled: true,
+      humanHandoffCustomPhrasesEnabled: newSettings.humanHandoffCustomPhrasesEnabled ?? true,
+      humanHandoffKeywords: newSettings.humanHandoffKeywords || [],
+      humanHandoffRules: {
+        explicitRequest: newSettings.humanHandoffRules?.explicitRequest !== false,
+        frustration: newSettings.humanHandoffRules?.frustration !== false,
+        aiUnableToResolve: newSettings.humanHandoffRules?.aiUnableToResolve !== false,
+        failureThreshold: Math.min(5, Math.max(1, Number(newSettings.humanHandoffRules?.failureThreshold) || 2)),
+      },
+    };
+
+    const handoffRes = await fetch('/api/human-handoff/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        keywords: normalizedSettings.humanHandoffKeywords,
+        customPhrasesEnabled: normalizedSettings.humanHandoffCustomPhrasesEnabled,
+        rules: normalizedSettings.humanHandoffRules,
+      }),
+    });
+    const handoffData = await handoffRes.json().catch(() => ({}));
+    if (!handoffRes.ok || handoffData?.success !== true) {
+      throw new Error(handoffData?.error || 'Human Handoff settings were not saved.');
+    }
+
+    const apiSettingsRes = await fetch('/api/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        emailMode: normalizedSettings.channelModes.EMAIL,
+        emailSignature: normalizedSettings.emailSignature,
+        debounceSeconds: normalizedSettings.debounceSeconds,
+      }),
+    });
+    if (!apiSettingsRes.ok) throw new Error('Channel settings could not be saved.');
+
     if (isFirebaseConfigured && db) {
-      try {
-        await setDoc(doc(db, 'system_settings', 'default'), newSettings, { merge: true });
-      } catch (err) {
-        console.warn('Error persisting settings to Firestore:', err);
-      }
+      await setDoc(tDoc('settings', 'default'), normalizedSettings, { merge: true });
     }
-
-    try {
-      const handoffRes = await fetch('/api/human-handoff/config', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ enabled: newSettings.humanHandoffEnabled !== false, keywords: newSettings.humanHandoffKeywords || [], rules: newSettings.humanHandoffRules }),
-      });
-      if (!handoffRes.ok) console.warn('Human Handoff settings were not saved by the backend');
-    } catch (err) {
-      console.warn('Error syncing Human Handoff settings:', err);
-    }
-
-    try {
-      await fetch('/api/settings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          emailMode: newSettings.channelModes.EMAIL,
-          emailSignature: newSettings.emailSignature,
-          debounceSeconds: newSettings.debounceSeconds,
-        }),
-      });
-    } catch (err) {
-      console.warn('Error syncing settings to backend API:', err);
-    }
+    setSettings(normalizedSettings);
   };
 
   // Switch to CRM lead

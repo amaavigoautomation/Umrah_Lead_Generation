@@ -412,6 +412,15 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
       // Initialize Google Calendar authentication & sync token to backend
       initCalendarAuth();
 
+      // Load tenant-scoped Human Handoff rules from the backend.
+      try {
+        const handoffRes = await fetch('/api/human-handoff/config');
+        if (handoffRes.ok) {
+          const handoffData = await handoffRes.json();
+          if (handoffData?.config) setSettings((prev) => ({ ...prev, humanHandoffEnabled: handoffData.config.enabled, humanHandoffKeywords: handoffData.config.keywords }));
+        }
+      } catch {}
+
       // Sync settings from backend API
       try {
         const apiSetRes = await fetch('/api/settings');
@@ -1919,6 +1928,17 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
       } catch (err) {
         console.warn('Error persisting settings to Firestore:', err);
       }
+    }
+
+    try {
+      const handoffRes = await fetch('/api/human-handoff/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled: newSettings.humanHandoffEnabled !== false, keywords: newSettings.humanHandoffKeywords || [] }),
+      });
+      if (!handoffRes.ok) console.warn('Human Handoff settings were not saved by the backend');
+    } catch (err) {
+      console.warn('Error syncing Human Handoff settings:', err);
     }
 
     try {

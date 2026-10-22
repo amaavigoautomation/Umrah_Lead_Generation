@@ -1,5 +1,5 @@
 import { tenantRepo } from './tenantRepo.js';
-import { detectHumanHandoff } from '../shared/humanHandoff.js';
+import { countUnsuccessfulResolutionAttempts, detectHumanHandoff } from '../shared/humanHandoff.js';
 import { setConversationAiState } from './inboundPipeline.js';
 import type { TenantContext } from '../types/tenant.js';
 
@@ -980,7 +980,8 @@ export async function processLiveInboundWhatsApp(payload: {
       const customPhrases = customPhrasesEnabled
         ? (Array.isArray(handoffSettings.humanHandoffKeywords) ? handoffSettings.humanHandoffKeywords : ['speak with the booking team', 'connect me to an Umrah specialist', 'call me regarding my package'])
         : [];
-      const match = detectHumanHandoff(payload.body || '', { ...configuredRules, customPhrases });
+      const unsuccessfulAttempts = countUnsuccessfulResolutionAttempts(thread as unknown as Record<string, unknown>[]);
+        const match = detectHumanHandoff(payload.body || '', { ...configuredRules, customPhrases }, { unsuccessfulAttempts });
       if (match.matched) {
         keywordHandoffReason = `Human Handoff ${match.reason || 'trigger'}: ${match.matchedPhrase}`;
         setConversationAiState(conversationId, false, true);

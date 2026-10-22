@@ -537,7 +537,8 @@ export interface LeadActivity {
 export interface SystemSettings {
   humanHandoffEnabled?: boolean;
   humanHandoffKeywords?: string[];
-  humanHandoffRules?: { explicitRequest: boolean; frustration: boolean; aiUnableToResolve: boolean; sensitiveRequests: boolean; failureThreshold: number };
+  humanHandoffCustomPhrasesEnabled?: boolean;
+  humanHandoffRules?: { explicitRequest: boolean; frustration: boolean; aiUnableToResolve: boolean; failureThreshold: number };
   channelModes: Record<Channel, ChannelMode>;
   sendingAccounts: Array<{ id: string; email: string; name: string; isDefault: boolean }>;
   emailSignature: string;

@@ -447,7 +447,13 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
         const settingsSnap = await getDoc(settingsRef);
         if (settingsSnap.exists()) {
           const loadedSettings = settingsSnap.data() as SystemSettings;
-          setSettings(loadedSettings);
+          const workspaceDefaults = defaultSettingsFor(currentTenantId, currentTenant?.name);
+          setSettings({
+            ...workspaceDefaults,
+            ...loadedSettings,
+            humanHandoffEnabled: loadedSettings.humanHandoffEnabled ?? true,
+            humanHandoffKeywords: loadedSettings.humanHandoffKeywords ?? workspaceDefaults.humanHandoffKeywords ?? [],
+          });
         } else {
           await setDoc(settingsRef, defaultSettingsFor(currentTenantId, currentTenant?.name)).catch(() => {});
         }

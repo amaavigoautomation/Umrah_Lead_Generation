@@ -76,6 +76,8 @@ export const INITIAL_USERS: AppUser[] = [
 
 // Default initial system settings
 export const DEFAULT_SETTINGS: SystemSettings = {
+  humanHandoffEnabled: true,
+  humanHandoffKeywords: ['talk to a human', 'speak to someone', 'human support', 'connect me to a person'],
   channelModes: {
     WHATSAPP: 'AUTO',
     EMAIL: 'AUTO',

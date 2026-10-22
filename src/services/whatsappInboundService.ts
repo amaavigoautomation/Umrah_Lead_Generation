@@ -176,7 +176,7 @@ export async function processInboundWhatsAppMessage(params: {
 
   const nameParts = (payload.fromName || '').trim().split(' ');
   const firstName = nameParts[0] || 'WhatsApp';
-  const lastName = nameParts.slice(1).join(' ') || 'User';
+  const lastName = (nameParts.length > 1 ? nameParts.slice(1).join(' ') : '') || '';
 
   if (!contact) {
     contact = {

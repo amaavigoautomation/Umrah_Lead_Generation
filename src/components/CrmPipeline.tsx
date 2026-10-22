@@ -1,3 +1,4 @@
+import * as XLSX from 'xlsx';
 import React, { useState, useMemo, useEffect } from 'react';
 import { useBrand } from '../context/BrandContext';
 import {
@@ -58,6 +59,7 @@ import {
   AppUser,
 } from '../types';
 import { WebsiteLeadIntegrationModal } from './WebsiteLeadIntegrationModal';
+import { findDuplicateContact } from '../services/dataService';
 
 export interface CrmPipelineProps {
   leads: Lead[];
@@ -150,6 +152,10 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
   const [addLeadMode, setAddLeadMode] = useState<'SINGLE' | 'BULK'>('SINGLE');
   const [bulkCsvText, setBulkCsvText] = useState<string>('');
   const [bulkUploadSuccessCount, setBulkUploadSuccessCount] = useState<number | null>(null);
+  const [bulkUploadError, setBulkUploadError] = useState<string | null>(null);
+  const [bulkUploadDuplicateCount, setBulkUploadDuplicateCount] = useState(0);
+  const [bulkUploadInvalidCount, setBulkUploadInvalidCount] = useState(0);
+  const [isBulkUploadProcessing, setIsBulkUploadProcessing] = useState(false);
 
   const [isWebsiteModalOpen, setIsWebsiteModalOpen] = useState(false);
   const [callingLead, setCallingLead] = useState<Lead | null>(null);
@@ -402,7 +408,11 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
   const handleDownloadCsvTemplate = () => {
     const sampleCallerA = telecallers[0]?.name || '';
     const sampleCallerB = telecallers[1]?.name || sampleCallerA;
-    const templateCsv = `FirstName,LastName,Phone,Email,City,AssignedTelecaller,Status,Notes\nTariq,Khan,+919810023456,tariq@example.com,Hyderabad,${sampleCallerA},NEW,${isUmrah ? 'Wants 14-day Deluxe Umrah package' : 'Asked for a callback about pricing'}\nAyesha,Siddiqui,+919820011223,ayesha@example.com,Mumbai,${sampleCallerB},FOLLOW_UP,Call back on Friday morning`;
+    const templateCsv = 'FirstName,LastName,Phone,Email,City,AssignedTelecaller,Status,Notes\n' +
+      `Tariq,Khan,+919810023456,tariq@example.com,Hyderabad,${sampleCallerA},NEW,${isUmrah ? 'Wants 14-day Deluxe Umrah package' : 'Asked for a callback about pricing'}\n` +
+      `Ayesha,Siddiqui,+919820011223,ayesha@example.com,Mumbai,${sampleCallerB},FOLLOW_UP,Call back on Friday morning\n` +
+      'Mohammad,,,mohammad@example.com,Delhi,,NEW,Single name lead without phone\n';
+
     const blob = new Blob([templateCsv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -413,79 +423,185 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
     document.body.removeChild(link);
   };
 
-  // Process Bulk CSV Upload
+  // Process Bulk CSV Upload with robust parsing, no dummy fallbacks, and auto-close on success
   const handleProcessBulkUpload = () => {
-    if (!bulkCsvText.trim()) return;
-    const lines = bulkCsvText.split('\n').map((l) => l.trim()).filter(Boolean);
-    if (lines.length < 2) {
-      alert('Please provide valid CSV data with header row and at least one lead row.');
+    if (isBulkUploadProcessing) return;
+    setBulkUploadError(null);
+    setBulkUploadSuccessCount(null);
+    if (!bulkCsvText.trim()) {
+      setBulkUploadError('Choose a CSV or Excel file first.');
       return;
     }
 
-    let count = 0;
-    const nowIso = new Date().toISOString();
+    setIsBulkUploadProcessing(true);
+    try {
+      const workbook = XLSX.read(bulkCsvText, { type: 'string' });
+      const sheetName = workbook.SheetNames[0];
+      if (!sheetName) throw new Error('No worksheet was found in this file.');
+      const rows = XLSX.utils.sheet_to_json<unknown[]>(workbook.Sheets[sheetName], {
+        header: 1,
+        defval: '',
+        raw: false,
+      }) as unknown[][];
+      if (rows.length < 1) throw new Error('The spreadsheet is empty.');
 
-    // Skip header line (index 0)
-    for (let i = 1; i < lines.length; i++) {
-      const parts = lines[i].split(',').map((p) => p.trim().replace(/^"|"$/g, ''));
-      if (parts.length < 3) continue;
-
-      const firstName = parts[0] || (isUmrah ? 'Pilgrim' : 'Lead');
-      const lastName = parts[1] || '';
-      const phone = parts[2] || '+91 98000 00000';
-      const email = parts[3] || `${firstName.toLowerCase()}@example.com`;
-      const city = parts[4] || 'Mumbai';
-      const caller = parts[5] || defaultCaller;
-      const statusRaw = (parts[6] || 'NEW').toUpperCase() as LeadStatus;
-      const notes = parts[7] || 'Imported via Bulk CSV';
-
-      const contactId = `contact-bulk-${Date.now()}-${i}`;
-      const leadId = `lead-bulk-${Date.now()}-${i}`;
-
-      const newContact: Contact = {
-        contactId,
-        firstName,
-        lastName,
-        email,
-        phone,
-        companyName: defaultService,
-        city,
-        createdAt: nowIso,
-        updatedAt: nowIso,
+      const normalizeHeader = (v: unknown) => String(v ?? '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+      const headers = (rows[0] || []).map(normalizeHeader);
+      const aliases: Record<string, string[]> = {
+        firstName: ['firstname', 'givenname', 'first', 'fname'],
+        fullName: ['name', 'fullname', 'contactname', 'leadname', 'customername', 'clientname', 'pilgrimname'],
+        lastName: ['lastname', 'surname', 'familyname', 'lname'],
+        phone: ['phone', 'phonenumber', 'mobile', 'mobilenumber', 'telephone', 'whatsapp', 'whatsappnumber', 'contactno', 'cell', 'tel'],
+        email: ['email', 'emailaddress', 'mail', 'emailid'],
+        company: ['company', 'companyname', 'organization', 'organisation', 'business', 'businessname', 'package', 'service'],
+        city: ['city', 'location', 'area', 'state', 'address'],
+        caller: ['assignedtelecaller', 'assignedcaller', 'owner', 'assignedto', 'telecaller', 'caller', 'agent', 'salesrep'],
+        status: ['status', 'leadstatus', 'stage'],
+        notes: ['notes', 'note', 'remarks', 'description', 'requirement', 'requirements', 'comment', 'comments'],
       };
 
-      const newLead: Lead = {
-        leadId,
-        contactId,
-        source: 'MANUAL',
-        leadType: 'INBOUND',
-        status: ['NEW', 'CONTACTED', 'FOLLOW_UP', 'ENGAGED', 'QUALIFIED', 'DEMO_BOOKED', 'CLOSED_WON', 'CLOSED_LOST'].includes(statusRaw) ? statusRaw : 'NEW',
-        leadScore: 78,
-        intent: 'HIGH',
-        buyingStage: 'AWARENESS',
-        serviceInterest: defaultService,
-        city,
-        requirements: [defaultService],
-        assignedCaller: caller,
-        ownerId: caller,
-        notes,
-        createdAt: nowIso,
-        updatedAt: nowIso,
-        lastActivityAt: nowIso,
-      };
+      let indexes = Object.fromEntries(
+        Object.entries(aliases).map(([key, names]) => [key, headers.findIndex((h) => names.includes(h))])
+      ) as Record<string, number>;
 
-      if (onAddLead) {
-        onAddLead(newLead, newContact);
+      let startRowIndex = 1;
+      if (indexes.firstName < 0 && indexes.fullName < 0) {
+        if (rows.length > 0 && (rows[0] || []).length > 0) {
+          indexes.fullName = 0;
+          const isHeaderLike = ['name', 'first', 'contact', 'lead', 'fullname', 'person', 'customer'].some((h) =>
+            headers[0]?.includes(h)
+          );
+          startRowIndex = isHeaderLike ? 1 : 0;
+        } else {
+          throw new Error('No Name or First Name column found. Use the downloadable template or include a Name / First Name header.');
+        }
       }
-      count++;
-    }
 
-    setBulkUploadSuccessCount(count);
-    setTimeout(() => {
-      setBulkUploadSuccessCount(null);
-      setIsAddLeadModalOpen(false);
-      setBulkCsvText('');
-    }, 1500);
+      const value = (row: unknown[], key: string) => (indexes[key] < 0 ? '' : String(row[indexes[key]] ?? '').trim());
+      const nowIso = new Date().toISOString();
+      const seenContacts = [...contacts];
+      let created = 0;
+      let duplicates = 0;
+      let invalid = 0;
+      const rowErrors: string[] = [];
+
+      rows.slice(startRowIndex).forEach((row, index) => {
+        if (!row || row.every((cell) => String(cell ?? '').trim() === '')) return;
+        const rawFirst = value(row, 'firstName');
+        const rawLast = value(row, 'lastName');
+        const fullName = value(row, 'fullName');
+
+        let firstName = rawFirst;
+        let lastName = rawLast;
+        if (!firstName && fullName) {
+          const splitName = fullName.trim().split(/\s+/);
+          firstName = splitName[0] || '';
+          lastName = rawLast || (splitName.length > 1 ? splitName.slice(1).join(' ') : '');
+        }
+
+        if (!firstName) {
+          invalid++;
+          if (rowErrors.length < 3) rowErrors.push('Row ' + (index + 1 + startRowIndex) + ': name is missing.');
+          return;
+        }
+
+        const phone = value(row, 'phone');
+        const email = value(row, 'email');
+        const companyName = value(row, 'company');
+        const city = value(row, 'city');
+        const caller = value(row, 'caller');
+        const statusRaw = (value(row, 'status') || 'NEW').toUpperCase() as LeadStatus;
+        const notes = value(row, 'notes');
+
+        if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+          invalid++;
+          if (rowErrors.length < 3) rowErrors.push('Row ' + (index + 1 + startRowIndex) + ': email format is invalid.');
+          return;
+        }
+
+        const duplicate = findDuplicateContact({ email, phone }, seenContacts);
+        if (duplicate) {
+          duplicates++;
+          return;
+        }
+
+        const contactId = 'contact-bulk-' + Date.now() + '-' + (index + 1 + startRowIndex) + '-' + created;
+        const leadId = 'lead-bulk-' + Date.now() + '-' + (index + 1 + startRowIndex) + '-' + created;
+
+        const newContact: Contact = {
+          contactId,
+          firstName,
+          lastName: lastName || '',
+          email: email || '',
+          phone: phone || '',
+          companyName: companyName || '',
+          city: city || '',
+          createdAt: nowIso,
+          updatedAt: nowIso,
+        };
+
+        const newLead: Lead = {
+          leadId,
+          contactId,
+          source: 'MANUAL',
+          leadType: 'INBOUND',
+          status: [
+            'NEW',
+            'CONTACTED',
+            'FOLLOW_UP',
+            'ENGAGED',
+            'QUALIFIED',
+            'DEMO_BOOKED',
+            'CLOSED_WON',
+            'CLOSED_LOST',
+          ].includes(statusRaw)
+            ? statusRaw
+            : 'NEW',
+          leadScore: 75,
+          intent: 'HIGH',
+          buyingStage: 'AWARENESS',
+          serviceInterest: '',
+          city: city || '',
+          requirements: [],
+          assignedCaller: caller || '',
+          ownerId: caller || '',
+          notes: notes || '',
+          createdAt: nowIso,
+          updatedAt: nowIso,
+          lastActivityAt: nowIso,
+        };
+
+        if (typeof onAddLead !== 'function') {
+          throw new Error('Lead creation is not connected. Please refresh and try again.');
+        }
+
+        onAddLead(newLead, newContact);
+        seenContacts.push(newContact);
+        created++;
+      });
+
+      setBulkUploadSuccessCount(created);
+      setBulkUploadDuplicateCount(duplicates);
+      setBulkUploadInvalidCount(invalid);
+
+      if (created === 0) {
+        setBulkUploadError(
+          ('No leads were created. ' + duplicates + ' duplicate row(s), ' + invalid + ' invalid row(s). ' + rowErrors.join(' ')).trim()
+        );
+      } else {
+        // Automatically close the Add Lead modal immediately once leads are successfully created
+        setIsAddLeadModalOpen(false);
+        setBulkCsvText('');
+        setBulkUploadError(null);
+        setBulkUploadSuccessCount(null);
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unexpected error while reading the spreadsheet.';
+      setBulkUploadError(message);
+      console.error('[CRM bulk upload] Failed to create leads:', error);
+    } finally {
+      setIsBulkUploadProcessing(false);
+    }
   };
 
   // 1. Pre-computed Search Index across ALL leads for instant, scalable multi-field querying
@@ -1204,10 +1320,10 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
                                 className="font-bold text-slate-900 hover:text-orange-700 cursor-pointer truncate max-w-[180px]"
                                 title={`${contact?.firstName} ${contact?.lastName}`}
                               >
-                                {contact?.firstName} {contact?.lastName || ''}
+                                {[contact?.firstName, contact?.lastName].filter(Boolean).join(' ') || 'Unnamed Lead'}
                               </div>
                               <div className="text-[11px] text-slate-500 truncate max-w-[180px]">
-                                {lead.serviceInterest || contact?.companyName || defaultService}
+                                {contact?.email || lead.serviceInterest || contact?.companyName || "—"}
                               </div>
                               {(lead.city || contact?.city) && (
                                 <div className="flex items-center space-x-1 text-[10px] text-slate-400 mt-0.5">
@@ -1221,27 +1337,32 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
 
                         <td className="py-3 px-3 whitespace-nowrap">
                           <div className="flex flex-col space-y-1">
-                            <span className="font-mono text-xs font-semibold text-slate-800">
-                              {contact?.phone || '+91 98000 00000'}
+                            <span className={contact?.phone ? "font-mono text-xs font-semibold text-slate-800" : "text-xs text-slate-400 font-normal"}>
+                              {contact?.phone || "—"}
                             </span>
                             <div className="flex items-center space-x-1.5">
-                              <button
-                                onClick={() => handleStartCall(lead)}
-                                className="px-2 py-0.8 bg-orange-500 hover:bg-orange-600 text-white rounded-md text-[11px] font-bold flex items-center space-x-1 shadow-2xs transition-all hover:scale-105 active:scale-95"
-                                title="Click to Call via TeleCRM Dialer"
-                              >
-                                <PhoneCall className="w-3 h-3" />
-                                <span>Call</span>
-                              </button>
-
-                              <button
-                                onClick={() => handleOpenWhatsApp(lead)}
-                                className="px-2 py-0.8 bg-green-500 hover:bg-green-600 text-white rounded-md text-[11px] font-bold flex items-center space-x-1 shadow-2xs transition-all hover:scale-105 active:scale-95"
-                                title="Send WhatsApp Message"
-                              >
-                                <MessageCircle className="w-3 h-3" />
-                                <span>WhatsApp</span>
-                              </button>
+                              {contact?.phone ? (
+                                <>
+                                  <button
+                                    onClick={() => handleStartCall(lead)}
+                                    className="px-2 py-0.8 bg-orange-500 hover:bg-orange-600 text-white rounded-md text-[11px] font-bold flex items-center space-x-1 shadow-2xs transition-all hover:scale-105 active:scale-95"
+                                    title="Click to Call via TeleCRM Dialer"
+                                  >
+                                    <PhoneCall className="w-3 h-3" />
+                                    <span>Call</span>
+                                  </button>
+                                  <button
+                                    onClick={() => handleOpenWhatsApp(lead)}
+                                    className="px-2 py-0.8 bg-green-500 hover:bg-green-600 text-white rounded-md text-[11px] font-bold flex items-center space-x-1 shadow-2xs transition-all hover:scale-105 active:scale-95"
+                                    title="Send WhatsApp Message"
+                                  >
+                                    <MessageCircle className="w-3 h-3" />
+                                    <span>WhatsApp</span>
+                                  </button>
+                                </>
+                              ) : (
+                                <span className="text-[10px] text-slate-400 italic">No phone added</span>
+                              )}
 
                               <button
                                 onClick={() => onOpenConversation(undefined, lead.leadId)}
@@ -1839,13 +1960,13 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
                 onSubmit={(e) => {
                   e.preventDefault();
                   const fd = new FormData(e.currentTarget);
-                  const firstName = (fd.get('firstName') as string) || 'New';
-                  const lastName = (fd.get('lastName') as string) || (isUmrah ? 'Pilgrim' : '');
-                  const phone = (fd.get('phone') as string) || '+91 98000 00000';
-                  const email = (fd.get('email') as string) || `${firstName.toLowerCase()}@example.com`;
+                  const firstName = (fd.get('firstName') as string)?.trim() || 'Lead';
+                  const lastName = (fd.get('lastName') as string)?.trim() || '';
+                  const phone = (fd.get('phone') as string)?.trim() || '';
+                  const email = (fd.get('email') as string)?.trim() || '';
                   const pkg = defaultService;
-                  const city = (fd.get('city') as string) || 'Mumbai';
-                  const caller = (fd.get('caller') as string) || defaultCaller;
+                  const city = (fd.get('city') as string)?.trim() || '';
+                  const caller = (fd.get('caller') as string)?.trim() || '';
                   const status = (fd.get('status') as LeadStatus) || 'NEW';
                   const source = (fd.get('source') as LeadSource) || 'MANUAL';
                   const notes = (fd.get('notes') as string) || '';
@@ -1965,6 +2086,7 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
                       name="caller"
                       className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-medium focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
                     >
+                      <option value="">Unassigned</option>
                       {telecallers.map((c) => (
                         <option key={c.id} value={c.name}>
                           {c.name}
@@ -2065,10 +2187,19 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
                         if (!file) return;
                         const reader = new FileReader();
                         reader.onload = (evt) => {
-                          const content = evt.target?.result as string;
-                          if (content) setBulkCsvText(content);
+                          const buffer = evt.target?.result;
+                          if (buffer) {
+                            try {
+                              const workbook = XLSX.read(buffer, { type: 'array' });
+                              const sheet = workbook.Sheets[workbook.SheetNames[0]];
+                              const csv = XLSX.utils.sheet_to_csv(sheet);
+                              setBulkCsvText(csv);
+                            } catch {
+                              if (typeof buffer === 'string') setBulkCsvText(buffer);
+                            }
+                          }
                         };
-                        reader.readAsText(file);
+                        reader.readAsArrayBuffer(file);
                       }}
                     />
                   </label>
@@ -2079,6 +2210,11 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
                   )}
                 </div>
 
+                {bulkUploadError && (
+                  <div className="p-3 bg-rose-50 border border-rose-200 text-rose-800 rounded-lg text-xs font-medium">
+                    {bulkUploadError}
+                  </div>
+                )}
                 {bulkUploadSuccessCount !== null && (
                   <div className="p-3 bg-emerald-100 text-emerald-900 rounded-lg text-xs font-bold text-center flex items-center justify-center space-x-1.5 animate-in fade-in">
                     <CheckCircle className="w-4 h-4 text-emerald-700" />
@@ -2121,15 +2257,15 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
                 </div>
                 <div>
                   <h2 className="text-lg font-extrabold text-slate-900">
-                    {drawerContact.firstName} {drawerContact.lastName || ''}
+                    {[drawerContact.firstName, drawerContact.lastName].filter(Boolean).join(' ') || 'Unnamed Lead'}
                   </h2>
                   <p className="text-xs text-slate-500">
-                    {drawerLead.serviceInterest || drawerContact.companyName || defaultService}
+                    {drawerLead.serviceInterest || drawerContact.companyName || '—'}
                   </p>
                   <div className="flex items-center space-x-2 mt-1">
-                    <span className="text-xs font-mono font-bold text-slate-700">{drawerContact.phone}</span>
+                    <span className="text-xs font-mono font-bold text-slate-700">{drawerContact.phone || 'No phone'}</span>
                     <span className="text-slate-300">•</span>
-                    <span className="text-xs text-slate-600">{drawerContact.email}</span>
+                    <span className="text-xs text-slate-600">{drawerContact.email || 'No email'}</span>
                   </div>
                 </div>
               </div>
@@ -2145,15 +2281,19 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
             <div className="p-3 bg-white border-b border-slate-200 flex items-center justify-between">
               <div className="flex items-center space-x-2">
                 <button
-                  onClick={() => handleStartCall(drawerLead)}
-                  className="px-3 py-1.5 bg-orange-500 hover:bg-orange-600 text-white rounded-lg text-xs font-bold flex items-center space-x-1.5 shadow-2xs"
+                  onClick={() => drawerContact.phone && handleStartCall(drawerLead)}
+                  disabled={!drawerContact.phone}
+                  className="px-3 py-1.5 bg-orange-500 hover:bg-orange-600 disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed text-white rounded-lg text-xs font-bold flex items-center space-x-1.5 shadow-2xs"
+                  title={drawerContact.phone ? 'Call Now' : 'No phone number available'}
                 >
                   <PhoneCall className="w-3.5 h-3.5" />
                   <span>Call Now</span>
                 </button>
                 <button
-                  onClick={() => handleOpenWhatsApp(drawerLead)}
-                  className="px-3 py-1.5 bg-green-500 hover:bg-green-600 text-white rounded-lg text-xs font-bold flex items-center space-x-1.5 shadow-2xs"
+                  onClick={() => drawerContact.phone && handleOpenWhatsApp(drawerLead)}
+                  disabled={!drawerContact.phone}
+                  className="px-3 py-1.5 bg-green-500 hover:bg-green-600 disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed text-white rounded-lg text-xs font-bold flex items-center space-x-1.5 shadow-2xs"
+                  title={drawerContact.phone ? 'WhatsApp' : 'No phone number available'}
                 >
                   <MessageCircle className="w-3.5 h-3.5" />
                   <span>WhatsApp</span>

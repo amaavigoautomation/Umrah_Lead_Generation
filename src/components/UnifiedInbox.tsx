@@ -270,13 +270,13 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
   const foundContact = contacts.find((c) => c.contactId === activeConversation?.contactId);
   const activeContact: Contact = foundContact || {
     contactId: activeConversation?.contactId || 'unknown',
-    firstName: 'Tour',
-    lastName: 'Operator',
+    firstName: 'Contact',
+    lastName: '',
     email: '',
     phone: '',
-    companyName: 'Umrah Travel Agency',
-    jobTitle: 'Tour Operator',
-    tags: ['WEBSITE_DEMO_FORM'],
+    companyName: '',
+    jobTitle: '',
+    tags: [],
     notes: '',
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),

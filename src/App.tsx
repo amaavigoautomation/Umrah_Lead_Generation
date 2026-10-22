@@ -150,17 +150,22 @@ function sanitizeLead(l: any): Lead {
 
 function sanitizeContact(c: any): Contact {
   if (!c) return {} as Contact;
-  const firstName = c.firstName || (c.fullName ? c.fullName.split(' ')[0] : 'Tour') || 'Tour';
-  const lastName = c.lastName || (c.fullName ? c.fullName.split(' ').slice(1).join(' ') : 'Operator') || 'Operator';
+  const rawFirst = String(c.firstName ?? '').trim();
+  const rawLast = String(c.lastName ?? '').trim();
+  const rawFull = String(c.fullName ?? '').trim();
+  const splitFull = rawFull ? rawFull.split(/\s+/) : [];
+  const firstName = rawFirst || splitFull[0] || '';
+  const lastName = rawLast || (splitFull.length > 1 ? splitFull.slice(1).join(' ') : '');
+  const fullName = rawFull || [firstName, lastName].filter(Boolean).join(' ');
   return {
     ...c,
     firstName,
     lastName,
-    fullName: c.fullName || `${firstName} ${lastName}`,
-    companyName: c.companyName || 'Umrah Travel Agency',
-    jobTitle: c.jobTitle || c.designation || 'Tour Operator',
-    email: c.email || '',
-    phone: c.phone || '',
+    fullName,
+    companyName: String(c.companyName ?? '').trim(),
+    jobTitle: String(c.jobTitle ?? c.designation ?? '').trim(),
+    email: String(c.email ?? '').trim(),
+    phone: String(c.phone ?? '').trim(),
     tags: Array.isArray(c.tags) ? c.tags : [],
   };
 }
@@ -839,8 +844,8 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
           lastName: foundContact?.lastName || (lastMsg.senderName ? lastMsg.senderName.split(' ').slice(1).join(' ') : ''),
           email: recipientEmail,
           phone: foundContact?.phone || '',
-          companyName: foundContact?.companyName || 'Umrah Travel Agency',
-          jobTitle: foundContact?.jobTitle || 'Tour Operator',
+          companyName: foundContact?.companyName || '',
+          jobTitle: foundContact?.jobTitle || '',
           createdAt: foundContact?.createdAt || new Date().toISOString(),
           updatedAt: new Date().toISOString(),
           lastActivityAt: new Date().toISOString(),
@@ -1069,12 +1074,12 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
 
     const contact: Contact = {
       contactId: foundContact?.contactId || conv.contactId || `contact-${Date.now()}`,
-      firstName: foundContact?.firstName || ((senderType === 'CUSTOMER' || senderType === 'PROSPECT') ? (lastIncoming?.senderName ? lastIncoming.senderName.split(' ')[0] : 'Customer') : 'Tour'),
-      lastName: foundContact?.lastName || ((senderType === 'CUSTOMER' || senderType === 'PROSPECT') ? (lastIncoming?.senderName ? lastIncoming.senderName.split(' ').slice(1).join(' ') : '') : 'Operator'),
+      firstName: foundContact?.firstName || (lastIncoming?.senderName ? lastIncoming.senderName.split(' ')[0] : 'Customer'),
+      lastName: foundContact?.lastName || (lastIncoming?.senderName ? lastIncoming.senderName.split(' ').slice(1).join(' ') : ''),
       email: recipientEmail,
       phone: foundContact?.phone || '',
-      companyName: foundContact?.companyName || 'Umrah Travel Agency',
-      jobTitle: foundContact?.jobTitle || 'Tour Operator',
+      companyName: foundContact?.companyName || '',
+      jobTitle: foundContact?.jobTitle || '',
       createdAt: foundContact?.createdAt || nowIso,
       updatedAt: nowIso,
       lastActivityAt: nowIso,

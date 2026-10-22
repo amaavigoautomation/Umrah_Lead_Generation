@@ -1252,7 +1252,7 @@ export async function processLiveInboundEmail(payload: {
     payload.from.split('@')[0];
   const nameParts = displayName.split(' ');
   const firstName = matched.contact?.firstName || nameParts[0] || 'Inbound';
-  const lastName = matched.contact?.lastName || nameParts.slice(1).join(' ') || 'Prospect';
+  const lastName = matched.contact?.lastName || (nameParts.length > 1 ? nameParts.slice(1).join(' ') : '') || '';
 
   // AI-to-AI / self-email loop prevention & Outbound check
   const fromLower = senderEmail;

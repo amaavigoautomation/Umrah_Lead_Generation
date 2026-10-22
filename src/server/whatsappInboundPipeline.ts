@@ -800,7 +800,7 @@ export async function processLiveInboundWhatsApp(payload: {
   const displayName = payload.fromName || formatDisplayPhone(senderPhone);
   const nameParts = displayName.split(' ');
   const firstName = nameParts[0] || 'WhatsApp';
-  const lastName = nameParts.slice(1).join(' ') || 'User';
+  const lastName = (nameParts.length > 1 ? nameParts.slice(1).join(' ') : '') || '';
 
   // Check Outbound or Self message
   const isSelf = senderPhone === targetPhone || senderPhone === normalizePhoneNumber(TARGET_WHATSAPP_NUMBER);

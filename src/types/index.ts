@@ -532,6 +532,8 @@ export interface LeadActivity {
 }
 
 export interface SystemSettings {
+  humanHandoffEnabled: boolean;
+  humanHandoffKeywords: string[];
   channelModes: Record<Channel, ChannelMode>;
   sendingAccounts: Array<{ id: string; email: string; name: string; isDefault: boolean }>;
   emailSignature: string;

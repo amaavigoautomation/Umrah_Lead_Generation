@@ -2581,7 +2581,8 @@ Generate a helpful, grounded response.`;
         res.setHeader('Content-Type', 'application/json');
         res.end(JSON.stringify({ success: true, config: {
           enabled: saved.humanHandoffEnabled ?? true,
-          keywords: Array.isArray(saved.humanHandoffKeywords) ? saved.humanHandoffKeywords : ['talk to a human', 'speak to someone', 'human support', 'connect me to a person'],
+          keywords: Array.isArray(saved.humanHandoffKeywords) ? saved.humanHandoffKeywords : ['speak with the booking team', 'connect me to an Umrah specialist', 'call me regarding my package'],
+          rules: saved.humanHandoffRules || { explicitRequest: true, frustration: true, aiUnableToResolve: true, sensitiveRequests: false, failureThreshold: 2 },
         }}));
         return true;
       }
@@ -2592,10 +2593,12 @@ Generate a helpful, grounded response.`;
         return true;
       }
       const keywords = Array.isArray(body?.keywords) ? body.keywords.map((v: unknown) => String(v).trim()).filter((v: string) => v.length > 0 && v.length <= 120).slice(0, 100) : [];
-      await safeSetDoc(settingsRef, { humanHandoffEnabled: body?.enabled !== false, humanHandoffKeywords: keywords, updatedAt: new Date().toISOString() }, { merge: true });
+      const incomingRules = body?.rules && typeof body.rules === 'object' ? body.rules : {};
+      const rules = { explicitRequest: incomingRules.explicitRequest !== false, frustration: incomingRules.frustration !== false, aiUnableToResolve: incomingRules.aiUnableToResolve !== false, sensitiveRequests: incomingRules.sensitiveRequests === true, failureThreshold: Math.min(5, Math.max(1, Number(incomingRules.failureThreshold) || 2)) };
+      await safeSetDoc(settingsRef, { humanHandoffEnabled: body?.enabled !== false, humanHandoffKeywords: keywords, humanHandoffRules: rules, updatedAt: new Date().toISOString() }, { merge: true });
       res.statusCode = 200;
       res.setHeader('Content-Type', 'application/json');
-      res.end(JSON.stringify({ success: true, config: { enabled: body?.enabled !== false, keywords } }));
+      res.end(JSON.stringify({ success: true, config: { enabled: body?.enabled !== false, keywords, rules } }));
       return true;
     } catch (err: any) {
       res.statusCode = 500;

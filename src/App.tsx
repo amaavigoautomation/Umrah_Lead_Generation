@@ -417,7 +417,7 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
         const handoffRes = await fetch('/api/human-handoff/config');
         if (handoffRes.ok) {
           const handoffData = await handoffRes.json();
-          if (handoffData?.config) setSettings((prev) => ({ ...prev, humanHandoffEnabled: handoffData.config.enabled, humanHandoffKeywords: handoffData.config.keywords }));
+          if (handoffData?.config) setSettings((prev) => ({ ...prev, humanHandoffEnabled: handoffData.config.enabled, humanHandoffKeywords: handoffData.config.keywords, humanHandoffRules: handoffData.config.rules }));
         }
       } catch {}
 
@@ -1940,7 +1940,7 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
       const handoffRes = await fetch('/api/human-handoff/config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ enabled: newSettings.humanHandoffEnabled !== false, keywords: newSettings.humanHandoffKeywords || [] }),
+        body: JSON.stringify({ enabled: newSettings.humanHandoffEnabled !== false, keywords: newSettings.humanHandoffKeywords || [], rules: newSettings.humanHandoffRules }),
       });
       if (!handoffRes.ok) console.warn('Human Handoff settings were not saved by the backend');
     } catch (err) {

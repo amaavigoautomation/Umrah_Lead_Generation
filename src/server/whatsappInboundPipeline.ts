@@ -966,6 +966,7 @@ export async function processLiveInboundWhatsApp(payload: {
       if (match.matched) {
         keywordHandoffReason = `Keyword trigger: ${match.matchedPhrase}`;
         setConversationAiState(conversationId, false, true);
+        try { const followups = await import('./autoFollowUpService.js'); await followups.cancelPendingFollowUpJob(getWACtx(), conversationId, 'Human Handoff keyword matched', 'system'); } catch (e) { console.warn('[Human Handoff] Could not cancel queued follow-ups:', e); }
       }
     }
   } catch (handoffConfigError) {
@@ -986,9 +987,11 @@ export async function processLiveInboundWhatsApp(payload: {
       });
 
   const shouldSendAutoReply = pipelineConfig.mode !== 'SIMULATION' && !aiResult.handoffTriggered;
-  const replyDecisionReason = pipelineConfig.mode === 'SIMULATION'
-    ? 'WhatsApp mode is SIMULATION: auto-reply held for agent inspection'
-    : `New inbound customer message to ${targetNumber} - AI reply dispatched`;
+  const replyDecisionReason = aiResult.handoffTriggered
+    ? (aiResult.handoffReason || keywordHandoffReason || 'Human Handoff active; AI reply intentionally suppressed.')
+    : pipelineConfig.mode === 'SIMULATION'
+      ? 'WhatsApp mode is SIMULATION: auto-reply held for human inspection'
+      : `New inbound customer message to ${targetNumber} - AI reply dispatched`;
 
   let aiReplyMessage: any = undefined;
   const replyMsgId = `wa-reply-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
@@ -1058,7 +1061,7 @@ export async function processLiveInboundWhatsApp(payload: {
     providerUsed: 'INTERNAL_CRM_LOG',
   };
 
-  if (shouldSendAutoReply && aiReplyMessage) {
+  if (shouldSendAutoReply && aiReplyMessage && aiResult.handoffTriggered !== true) {
     outboundDispatch = await sendLiveMetaWhatsAppMessage(senderPhone, aiResult.replyText);
     aiReplyMessage.externalMessageId = outboundDispatch.externalMessageId;
     aiReplyMessage.providerUsed = outboundDispatch.providerUsed;
@@ -1105,6 +1108,8 @@ export async function processLiveInboundWhatsApp(payload: {
       status: pipelineConfig.mode === 'REVIEW' ? 'REVIEW' : 'ACTIVE',
       aiEnabled: pipelineConfig.mode === 'AUTO' && !aiResult.handoffTriggered,
       humanHandoff: pipelineConfig.mode !== 'AUTO' || aiResult.handoffTriggered,
+      humanHandoffReason: aiResult.handoffTriggered ? (aiResult.handoffReason || keywordHandoffReason || 'AI handoff trigger') : undefined,
+      humanHandoffAt: aiResult.handoffTriggered ? nowIso : undefined,
       managementMode: (pipelineConfig.mode === 'AUTO' && !aiResult.handoffTriggered) ? 'AI' : 'HUMAN',
       isRead: false,
       unread: true,

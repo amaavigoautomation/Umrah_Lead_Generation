@@ -1610,7 +1610,7 @@ export async function processLiveInboundEmail(payload: {
         timestamp: nowIso,
         crmEntities: {
           contact: { contactId, firstName, lastName, email: payload.from, companyName: payload.companyName || `${firstName}'s Agency`, createdAt: nowIso, updatedAt: nowIso, lastActivityAt: nowIso },
-          lead: { leadId, contactId, source: 'EMAIL', leadType: 'INBOUND', status: 'ENGAGED', leadScore: 80, intent: 'HIGH', buyingStage: 'ENGAGED', serviceInterest: payload.subject, requirements: [], aiSummary: 'Human Takeover active - message saved in inbox', createdAt: nowIso, updatedAt: nowIso, lastActivityAt: nowIso },
+          lead: { leadId, contactId, source: 'EMAIL', leadType: 'INBOUND', status: 'HUMAN_HANDOFF', leadScore: 80, intent: 'HIGH', buyingStage: 'ENGAGED', serviceInterest: payload.subject, requirements: [], aiSummary: 'Human Takeover active - message saved in inbox', createdAt: nowIso, updatedAt: nowIso, lastActivityAt: nowIso },
           conversation: { conversationId, contactId, leadId, channel: 'EMAIL', direction: 'INBOUND', status: 'ACTIVE', aiEnabled: false, humanHandoff: true, humanHandoffReason: keywordHandoffReason || 'Human Takeover active', humanHandoffAt: nowIso, emailThreadId: threadId, conversationSummary: `Email dialogue with ${displayName}`, startedAt: nowIso, lastMessageAt: nowIso, lastMessageText: payload.body.slice(0, 120), unreadCount: 1, createdAt: nowIso, updatedAt: nowIso },
           incomingMessage,
           activity: { activityId: `act-human-${Date.now()}`, leadId, contactId, type: 'NOTE_ADDED', title: 'Inbound Email (Human Managed)', description: `Received message ${incomingMsgId} during Human Takeover. AI reply suppressed.`, timestamp: nowIso },

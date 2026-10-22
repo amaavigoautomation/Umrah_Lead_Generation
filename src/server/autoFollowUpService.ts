@@ -1011,6 +1011,15 @@ async function processOneJob(
     return { jobId: job.id, status: 'cancelled', reason };
   };
 
+  // Human Handoff is thread-scoped and takes precedence over every scheduled AI follow-up.
+  if (conversation.humanHandoff || conversation.aiEnabled === false) {
+    job.status = 'cancelled';
+    job.cancelledAt = new Date().toISOString();
+    job.cancelReason = 'Human Handoff is active for this conversation';
+    await finishJob(ctx, job);
+    return { jobId: job.id, status: 'cancelled', reason: job.cancelReason };
+  }
+
   // 2. Final eligibility checks
   if (lead.leadType !== 'INBOUND' && lead.leadType !== 'OUTBOUND') return cancel('Lead is not inbound or outbound');
   if (!lead.autoFollowUp?.enabled) return cancel('Auto Follow-Up is disabled for lead');

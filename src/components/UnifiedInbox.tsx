@@ -909,6 +909,19 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
               </div>
             </div>
 
+            {activeConversation.humanHandoff && (
+              <div className="px-4 py-3 bg-amber-50 border-b border-amber-200 text-xs" role="status" aria-live="polite">
+                <div className="flex items-start gap-2">
+                  <AlertTriangle className="w-4 h-4 text-amber-700 mt-0.5 shrink-0" />
+                  <div className="min-w-0">
+                    <p className="font-extrabold text-amber-900">Human Handoff active — AI replies and AI follow-ups are paused for this conversation.</p>
+                    <p className="text-amber-800 mt-1">{activeConversation.humanHandoffReason || 'A human takeover was requested.'}{activeConversation.humanHandoffAt ? ` · ${new Date(activeConversation.humanHandoffAt).toLocaleString()}` : ''}</p>
+                    <p className="text-amber-800 mt-1">CRM owner: {activeLead?.ownerId || 'Unassigned'}{!activeLead?.ownerId ? ' · This conversation remains unassigned until an admin assigns it.' : ' · Existing CRM assignment is retained.'}</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Compact Auto Follow-Up Status Bar */}
             {activeLead && (activeLead.leadType === 'INBOUND' || activeLead.leadType === 'OUTBOUND') && (
               <div className="px-3.5 py-1.5 bg-orange-50/80 border-b border-orange-100 text-xs flex items-center justify-between">

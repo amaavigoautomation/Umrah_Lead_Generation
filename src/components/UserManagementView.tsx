@@ -77,9 +77,7 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
         allowedModules:
           editingUser.role === 'ADMIN'
             ? PLATFORM_MODULES.map((m) => m.id)
-            : editingUser.allowedModules && editingUser.allowedModules.length > 0
-            ? editingUser.allowedModules
-            : ['knowledge', 'playground'],
+            : [...new Set(editingUser.allowedModules || [])],
         isActive: editingUser.isActive !== false,
         createdAt: editingUser.createdAt || new Date().toISOString(),
         updatedAt: new Date().toISOString(),
@@ -298,15 +296,14 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
                   value={editingUser.role || 'SPECIALIST'}
                   onChange={(e) => {
                     const newRole = e.target.value as any;
+                    // Keep the user's custom module selection intact while switching roles.
+                    // Admin view displays all modules as checked, but must not overwrite the
+                    // underlying custom selection if the role is changed back.
                     setEditingUser({
                       ...editingUser,
                       role: newRole,
-                      allowedModules:
-                        newRole === 'ADMIN'
-                          ? PLATFORM_MODULES.map((m) => m.id)
-                          : newRole === 'SALES'
-                          ? ['crm', 'inbox']
-                          : editingUser.allowedModules || ['knowledge', 'playground'],
+                      accessLevel: newRole === 'ADMIN' ? 'ALL' : 'CUSTOM',
+                      allowedModules: editingUser.allowedModules || [],
                     });
                   }}
                   className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-slate-800 focus:outline-none focus:border-orange-500"

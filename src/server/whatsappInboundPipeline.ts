@@ -1,4 +1,6 @@
 import { tenantRepo } from './tenantRepo.js';
+import { matchHumanHandoffKeyword } from '../shared/humanHandoff.js';
+import { setConversationAiState } from './inboundPipeline.js';
 import type { TenantContext } from '../types/tenant.js';
 
 const DEFAULT_UMRAH_CTX: TenantContext = {
@@ -953,18 +955,37 @@ export async function processLiveInboundWhatsApp(payload: {
     console.warn('[WhatsApp Pipeline] Campaign lead tracking hook notice:', campaignErr);
   }
 
+  // Load workspace handoff rules before generating any AI content. A matching phrase is a silent handoff.
+  let keywordHandoffReason = '';
+  try {
+    const { getDoc } = await import('./adminFirestore.js');
+    const settingsSnap = await getDoc(tenantRepo(getWACtx()).settingsDoc('default'));
+    const handoffSettings = settingsSnap.exists() ? (settingsSnap.data() as any) : {};
+    if (handoffSettings.humanHandoffEnabled !== false) {
+      const match = matchHumanHandoffKeyword(payload.body || '', Array.isArray(handoffSettings.humanHandoffKeywords) ? handoffSettings.humanHandoffKeywords : ['talk to a human', 'speak to someone', 'human support', 'connect me to a person']);
+      if (match.matched) {
+        keywordHandoffReason = `Keyword trigger: ${match.matchedPhrase}`;
+        setConversationAiState(conversationId, false, true);
+      }
+    }
+  } catch (handoffConfigError) {
+    console.warn('[Human Handoff] Could not load tenant keyword rules; continuing with existing handoff state.', handoffConfigError);
+  }
+
   // =========================================================================
   // RULE 4: GENERATE GROUNDED AI REPLY
   // =========================================================================
-  const aiResult = await generateWhatsAppAutoReplyText({
-    fromPhone: senderPhone,
-    fromName: payload.fromName,
-    body: payload.body,
-    companyName: payload.companyName,
-    threadHistory: [...thread],
-  });
+  const aiResult = keywordHandoffReason
+    ? { replyText: '', handoffTriggered: true, handoffReason: keywordHandoffReason, leadScore: 80, buyingStage: 'ENGAGED' }
+    : await generateWhatsAppAutoReplyText({
+        fromPhone: senderPhone,
+        fromName: payload.fromName,
+        body: payload.body,
+        companyName: payload.companyName,
+        threadHistory: [...thread],
+      });
 
-  const shouldSendAutoReply = pipelineConfig.mode !== 'SIMULATION';
+  const shouldSendAutoReply = pipelineConfig.mode !== 'SIMULATION' && !aiResult.handoffTriggered;
   const replyDecisionReason = pipelineConfig.mode === 'SIMULATION'
     ? 'WhatsApp mode is SIMULATION: auto-reply held for agent inspection'
     : `New inbound customer message to ${targetNumber} - AI reply dispatched`;

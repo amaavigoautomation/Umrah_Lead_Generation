@@ -1414,6 +1414,9 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
               ...c,
               aiEnabled: enabled,
               humanHandoff: !enabled,
+              managementMode: enabled ? 'AI' : 'HUMAN',
+              humanHandoffAt: enabled ? null : new Date().toISOString(),
+              humanHandoffReason: enabled ? undefined : 'Manual human takeover',
             }
           : c
       )
@@ -1427,6 +1430,7 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
           conversationId,
           aiEnabled: enabled,
           humanHandoff: !enabled,
+          reason: enabled ? undefined : 'Manual human takeover',
         }),
       });
     } catch (err) {

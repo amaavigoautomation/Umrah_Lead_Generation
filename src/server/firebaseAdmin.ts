@@ -68,8 +68,16 @@ export function getAdminFirestore(): Firestore {
   // The database name in firebase-applet-config.json belongs to that file's project only. When the
   // environment points this server at another project, default to that project's "(default)" database.
   const activeProjectId = String((app.options as any)?.projectId || '');
+  // Keep the server's Admin SDK on the same database as the browser Firebase config.
+  // VITE_FIRESTORE_DATABASE_ID is consumed by src/firebase/config.ts and is commonly the
+  // environment variable set by Vercel. Prefer the server-only override when provided.
+  const configuredDatabaseId = (
+    process.env.FIRESTORE_DATABASE_ID ||
+    process.env.VITE_FIRESTORE_DATABASE_ID ||
+    ''
+  ).trim();
   const dbId =
-    (process.env.FIRESTORE_DATABASE_ID || '').trim() ||
+    configuredDatabaseId ||
     (activeProjectId && activeProjectId !== rawConfig.projectId ? '(default)' : rawConfig.firestoreDatabaseId);
   let fs: Firestore;
   if (dbId && dbId !== '(default)') {

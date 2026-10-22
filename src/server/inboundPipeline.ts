@@ -1,5 +1,6 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { tenantRepo } from './tenantRepo.js';
+import { matchHumanHandoffKeyword } from '../shared/humanHandoff.js';
 import type { TenantContext } from '../types/tenant.js';
 
 const DEFAULT_UMRAH_CTX: TenantContext = {
@@ -1594,7 +1595,7 @@ export async function processLiveInboundEmail(payload: {
         crmEntities: {
           contact: { contactId, firstName, lastName, email: payload.from, companyName: payload.companyName || `${firstName}'s Agency`, createdAt: nowIso, updatedAt: nowIso, lastActivityAt: nowIso },
           lead: { leadId, contactId, source: 'EMAIL', leadType: 'INBOUND', status: 'ENGAGED', leadScore: 80, intent: 'HIGH', buyingStage: 'ENGAGED', serviceInterest: payload.subject, requirements: [], aiSummary: 'Human Takeover active - message saved in inbox', createdAt: nowIso, updatedAt: nowIso, lastActivityAt: nowIso },
-          conversation: { conversationId, contactId, leadId, channel: 'EMAIL', direction: 'INBOUND', status: 'ACTIVE', aiEnabled: false, humanHandoff: true, emailThreadId: threadId, conversationSummary: `Email dialogue with ${displayName}`, startedAt: nowIso, lastMessageAt: nowIso, lastMessageText: payload.body.slice(0, 120), unreadCount: 1, createdAt: nowIso, updatedAt: nowIso },
+          conversation: { conversationId, contactId, leadId, channel: 'EMAIL', direction: 'INBOUND', status: 'ACTIVE', aiEnabled: false, humanHandoff: true, humanHandoffReason: keywordHandoffReason || 'Human Takeover active', humanHandoffAt: nowIso, emailThreadId: threadId, conversationSummary: `Email dialogue with ${displayName}`, startedAt: nowIso, lastMessageAt: nowIso, lastMessageText: payload.body.slice(0, 120), unreadCount: 1, createdAt: nowIso, updatedAt: nowIso },
           incomingMessage,
           activity: { activityId: `act-human-${Date.now()}`, leadId, contactId, type: 'NOTE_ADDED', title: 'Inbound Email (Human Managed)', description: `Received message ${incomingMsgId} during Human Takeover. AI reply suppressed.`, timestamp: nowIso },
           allThreadMessages: [...thread],
@@ -1627,6 +1628,24 @@ export async function processLiveInboundEmail(payload: {
         : 'Genuinely new inbound customer message received - generating AI reply ONCE.';
     }
 
+    // Deterministic configured keyword trigger. Persisting this in the in-flight guard before AI generation
+    // means this inbound message receives no AI acknowledgement and queued replies are blocked.
+    let keywordHandoffReason = '';
+    try {
+      const { getDoc } = await import('./adminFirestore.js');
+      const settingsSnap = await getDoc(tenantRepo(getInboundCtx()).settingsDoc('default'));
+      const handoffSettings = settingsSnap.exists() ? (settingsSnap.data() as any) : {};
+      if (handoffSettings.humanHandoffEnabled !== false) {
+        const match = matchHumanHandoffKeyword(payload.body || '', Array.isArray(handoffSettings.humanHandoffKeywords) ? handoffSettings.humanHandoffKeywords : ['talk to a human', 'speak to someone', 'human support', 'connect me to a person']);
+        if (match.matched) {
+          keywordHandoffReason = `Keyword trigger: ${match.matchedPhrase}`;
+          setConversationAiState(conversationId, false, true);
+        }
+      }
+    } catch (handoffConfigError) {
+      console.warn('[Human Handoff] Could not load tenant keyword rules; continuing with existing handoff state.', handoffConfigError);
+    }
+
     // Re-check AI state immediately before generating/sending any reply (so already-queued AI jobs cannot send a reply after Human Takeover)
     if (isConversationHumanManaged(conversationId)) {
       console.log(`[Human Takeover] Second state check: conversation ${conversationId} is human managed. Aborting generated AI reply.`);
@@ -1641,7 +1660,7 @@ export async function processLiveInboundEmail(payload: {
         replySubject,
         replyText: '',
         shouldSendAutoReply: false,
-        replyDecisionReason: 'Human Takeover active (second check): AI reply aborted after Human Takeover.',
+        replyDecisionReason: keywordHandoffReason || 'Human Takeover active (second check): AI reply aborted after Human Takeover.',
         smtpDelivery: { success: false, simulated: false, error: 'Human Takeover active - AI reply aborted' },
         handoffTriggered: true,
         leadScore: 80,
@@ -1653,7 +1672,7 @@ export async function processLiveInboundEmail(payload: {
           lead: { leadId, contactId, source: 'EMAIL', leadType: 'INBOUND', status: 'ENGAGED', leadScore: 80, intent: 'HIGH', buyingStage: 'ENGAGED', serviceInterest: payload.subject, requirements: [], aiSummary: 'Human Takeover active - reply aborted', createdAt: nowIso, updatedAt: nowIso, lastActivityAt: nowIso },
           conversation: { conversationId, contactId, leadId, channel: 'EMAIL', direction: 'INBOUND', status: 'ACTIVE', aiEnabled: false, humanHandoff: true, emailThreadId: threadId, conversationSummary: `Email dialogue with ${displayName}`, startedAt: nowIso, lastMessageAt: nowIso, lastMessageText: payload.body.slice(0, 120), unreadCount: 1, createdAt: nowIso, updatedAt: nowIso },
           incomingMessage,
-          activity: { activityId: `act-human-2-${Date.now()}`, leadId, contactId, type: 'NOTE_ADDED', title: 'AI Reply Aborted (Human Takeover)', description: `AI reply aborted for message ${incomingMsgId} due to Human Takeover.`, timestamp: nowIso },
+          activity: { activityId: `act-human-2-${Date.now()}`, leadId, contactId, type: 'NOTE_ADDED', title: 'Human Handoff Triggered', description: keywordHandoffReason || `AI reply aborted for message ${incomingMsgId} due to Human Takeover.` , timestamp: nowIso },
           allThreadMessages: [...thread],
         }
       };

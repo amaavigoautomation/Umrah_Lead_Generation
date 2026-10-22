@@ -52,9 +52,11 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [maskedOpenAiKey, setMaskedOpenAiKey] = useState('');
   const [isSavingOpenAiKey, setIsSavingOpenAiKey] = useState(false);
   const [openAiKeySaveStatus, setOpenAiKeySaveStatus] = useState<string | null>(null);
+  const [handoffKeywordsText, setHandoffKeywordsText] = useState((settings.humanHandoffKeywords || []).join('\n'));
 
   React.useEffect(() => {
     setFormData(settings);
+    setHandoffKeywordsText((settings.humanHandoffKeywords || []).join('\n'));
   }, [settings]);
 
   React.useEffect(() => {
@@ -139,6 +141,18 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       </div>
 
       <ConnectedChannelsPanel tenantId={tenantId} canEdit={canEditEmail} />
+
+      {/* Human Handoff configuration */}
+      <div className="bg-white border border-amber-200 rounded-2xl p-6 shadow-sm space-y-4">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center space-x-2"><Shield className="w-5 h-5 text-amber-600" /><h3 className="font-extrabold text-sm text-slate-900">Human Handoff</h3></div>
+          <label className="flex items-center gap-2 text-xs font-semibold text-slate-700"><input type="checkbox" checked={Boolean(formData.humanHandoffEnabled)} onChange={(e) => setFormData({ ...formData, humanHandoffEnabled: e.target.checked })} disabled={!canEditEmail} /> Enabled</label>
+        </div>
+        <p className="text-xs text-slate-600 leading-relaxed">When an incoming customer message contains one of these phrases, pause AI for that conversation thread. No acknowledgement is sent. AI stays paused until a user explicitly resumes it.</p>
+        <label className="block text-xs font-semibold text-slate-700">Trigger phrases (one per line)</label>
+        <textarea rows={5} value={handoffKeywordsText} disabled={!canEditEmail} onChange={(e) => { setHandoffKeywordsText(e.target.value); setFormData({ ...formData, humanHandoffKeywords: e.target.value.split('\n').map((v) => v.trim()).filter(Boolean) }); }} placeholder={'talk to a human\nspeak to someone\nconnect me to a person'} className="w-full bg-white border border-slate-200 rounded-xl p-3 text-xs text-slate-800 focus:outline-none focus:border-orange-500 disabled:bg-slate-50" />
+        <p className="text-[11px] text-slate-500">Matching is case-insensitive and phrase-based. Use complete phrases to reduce false positives. Only admins can edit these settings.</p>
+      </div>
 
       {/* Production Channel Modes */}
       <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-4">

@@ -77,8 +77,9 @@ export const INITIAL_USERS: AppUser[] = [
 // Default initial system settings
 export const DEFAULT_SETTINGS: SystemSettings = {
   humanHandoffEnabled: true,
+  humanHandoffCustomPhrasesEnabled: true,
   humanHandoffKeywords: ['speak with the booking team', 'connect me to an Umrah specialist', 'call me regarding my package'],
-  humanHandoffRules: { explicitRequest: true, frustration: true, aiUnableToResolve: true, sensitiveRequests: false, failureThreshold: 2 },
+  humanHandoffRules: { explicitRequest: true, frustration: true, aiUnableToResolve: true, failureThreshold: 2 },
   channelModes: {
     WHATSAPP: 'AUTO',
     EMAIL: 'AUTO',

@@ -12,7 +12,6 @@ export interface HumanHandoffRules {
   explicitRequest?: boolean;
   frustration?: boolean;
   aiUnableToResolve?: boolean;
-  sensitiveRequests?: boolean;
   failureThreshold?: number;
   customPhrases?: readonly string[];
 }
@@ -57,6 +56,7 @@ export function detectHumanHandoff(
   context: { unsuccessfulAttempts?: number } = {},
 ): HumanHandoffMatch {
   if (rules.enabled === false) return { matched: false };
+  if (rules.explicitRequest === false && rules.frustration !== true && rules.aiUnableToResolve !== true && !(rules.customPhrases?.length)) return { matched: false };
   const normalized = normalizeHandoffText(message);
   if (!normalized || containsPhrase(normalized, NEGATED_REQUESTS)) return { matched: false };
   if (rules.explicitRequest !== false) {

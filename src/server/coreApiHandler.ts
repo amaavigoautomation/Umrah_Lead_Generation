@@ -2586,7 +2586,7 @@ Generate a helpful, grounded response.`;
         }}));
         return true;
       }
-      if (userRole !== 'admin' && !isPlatformAdmin) {
+      if (String(userRole).toUpperCase() !== 'ADMIN' && !isPlatformAdmin) {
         res.statusCode = 403;
         res.setHeader('Content-Type', 'application/json');
         res.end(JSON.stringify({ success: false, error: 'Only workspace admins can change Human Handoff settings' }));

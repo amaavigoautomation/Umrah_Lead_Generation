@@ -1651,9 +1651,13 @@ export async function processLiveInboundEmail(payload: {
       const { getDoc } = await import('./adminFirestore.js');
       const settingsSnap = await getDoc(tenantRepo(getInboundCtx()).settingsDoc('default'));
       const handoffSettings = settingsSnap.exists() ? (settingsSnap.data() as any) : {};
-      if (handoffSettings.humanHandoffEnabled !== false) {
-        const configuredRules = handoffSettings.humanHandoffRules || { explicitRequest: true, frustration: true, aiUnableToResolve: true, sensitiveRequests: false, failureThreshold: 2 };
-      const match = detectHumanHandoff(payload.body || '', { enabled: handoffSettings.humanHandoffEnabled !== false, ...configuredRules, customPhrases: Array.isArray(handoffSettings.humanHandoffKeywords) ? handoffSettings.humanHandoffKeywords : ['speak with the booking team', 'connect me to an Umrah specialist', 'call me regarding my package'] });
+      {
+        const configuredRules = handoffSettings.humanHandoffRules || { explicitRequest: true, frustration: true, aiUnableToResolve: true, failureThreshold: 2 };
+        const customPhrasesEnabled = handoffSettings.humanHandoffCustomPhrasesEnabled !== false;
+        const customPhrases = customPhrasesEnabled
+          ? (Array.isArray(handoffSettings.humanHandoffKeywords) ? handoffSettings.humanHandoffKeywords : ['speak with the booking team', 'connect me to an Umrah specialist', 'call me regarding my package'])
+          : [];
+        const match = detectHumanHandoff(payload.body || '', { ...configuredRules, customPhrases });
         if (match.matched) {
           keywordHandoffReason = `Human Handoff ${match.reason || 'trigger'}: ${match.matchedPhrase}`;
           setConversationAiState(conversationId, false, true);

@@ -119,7 +119,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     setSaveError(null);
     setIsSaved(false);
     try {
-      await onSaveSettings({ ...formData, humanHandoffEnabled: true, humanHandoffCustomPhrasesEnabled: formData.humanHandoffCustomPhrasesEnabled ?? true, humanHandoffKeywords: handoffKeywordsText.split('\\n').map((v) => v.trim()).filter(Boolean), humanHandoffRules: { explicitRequest: Boolean(handoffRules.explicitRequest), frustration: Boolean(handoffRules.frustration), aiUnableToResolve: Boolean(handoffRules.aiUnableToResolve), failureThreshold: Number(handoffRules.failureThreshold) || 2 } });
+      await onSaveSettings({ ...formData, humanHandoffEnabled: true, humanHandoffCustomPhrasesEnabled: formData.humanHandoffCustomPhrasesEnabled ?? true, humanHandoffKeywords: handoffKeywordsText.split('\n').map((v) => v.trim()).filter(Boolean), humanHandoffRules: { explicitRequest: Boolean(handoffRules.explicitRequest), frustration: Boolean(handoffRules.frustration), aiUnableToResolve: Boolean(handoffRules.aiUnableToResolve), failureThreshold: Number(handoffRules.failureThreshold) || 2 } });
       setIsSaved(true);
       setTimeout(() => setIsSaved(false), 2500);
     } catch (err: any) {

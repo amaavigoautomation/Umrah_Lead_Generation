@@ -412,12 +412,17 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
       // Initialize Google Calendar authentication & sync token to backend
       initCalendarAuth();
 
-      // Load tenant-scoped Human Handoff rules from the backend.
+      // Tenant-scoped backend config is the source of truth for Human Handoff.
+      // Keep it available so stale Firestore settings cannot overwrite saved checkbox states.
+      let backendHandoffConfig: any = null;
       try {
         const handoffRes = await fetch('/api/human-handoff/config');
         if (handoffRes.ok) {
           const handoffData = await handoffRes.json();
-          if (handoffData?.config) setSettings((prev) => ({ ...prev, humanHandoffEnabled: true, humanHandoffCustomPhrasesEnabled: handoffData.config.customPhrasesEnabled ?? true, humanHandoffKeywords: handoffData.config.keywords, humanHandoffRules: handoffData.config.rules }));
+          if (handoffData?.config) {
+            backendHandoffConfig = handoffData.config;
+            setSettings((prev) => ({ ...prev, humanHandoffEnabled: true, humanHandoffCustomPhrasesEnabled: handoffData.config.customPhrasesEnabled ?? true, humanHandoffKeywords: handoffData.config.keywords, humanHandoffRules: handoffData.config.rules }));
+          }
         }
       } catch {}
 
@@ -452,9 +457,9 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
             ...workspaceDefaults,
             ...loadedSettings,
             humanHandoffEnabled: true,
-            humanHandoffCustomPhrasesEnabled: loadedSettings.humanHandoffCustomPhrasesEnabled ?? workspaceDefaults.humanHandoffCustomPhrasesEnabled ?? true,
-            humanHandoffKeywords: loadedSettings.humanHandoffKeywords ?? workspaceDefaults.humanHandoffKeywords ?? [],
-            humanHandoffRules: loadedSettings.humanHandoffRules ?? workspaceDefaults.humanHandoffRules ?? { explicitRequest: true, frustration: true, aiUnableToResolve: true, failureThreshold: 2 },
+            humanHandoffCustomPhrasesEnabled: backendHandoffConfig?.customPhrasesEnabled ?? loadedSettings.humanHandoffCustomPhrasesEnabled ?? workspaceDefaults.humanHandoffCustomPhrasesEnabled ?? true,
+            humanHandoffKeywords: backendHandoffConfig?.keywords ?? loadedSettings.humanHandoffKeywords ?? workspaceDefaults.humanHandoffKeywords ?? [],
+            humanHandoffRules: backendHandoffConfig?.rules ?? loadedSettings.humanHandoffRules ?? workspaceDefaults.humanHandoffRules ?? { explicitRequest: true, frustration: true, aiUnableToResolve: true, failureThreshold: 2 },
           });
         } else {
           await setDoc(settingsRef, defaultSettingsFor(currentTenantId, currentTenant?.name)).catch(() => {});

@@ -84,7 +84,7 @@ export function detectHumanHandoff(
   context: { unsuccessfulAttempts?: number } = {},
 ): HumanHandoffMatch {
   if (rules.enabled === false) return { matched: false };
-  if (rules.explicitRequest === false && rules.frustration !== true && rules.aiUnableToResolve !== true && !(rules.customPhrases?.length)) return { matched: false };
+  if (rules.explicitRequest === false && rules.frustration !== true && !(rules.customPhrases?.length)) return { matched: false };
   const normalized = normalizeHandoffText(message);
   if (!normalized || containsPhrase(normalized, NEGATED_REQUESTS)) return { matched: false };
   if (rules.explicitRequest !== false) {
@@ -94,9 +94,6 @@ export function detectHumanHandoff(
   if (rules.frustration === true) {
     const phrase = containsPhrase(normalized, FRUSTRATION);
     if (phrase) return { matched: true, reason: 'FRUSTRATION', matchedPhrase: phrase };
-  }
-  if (rules.aiUnableToResolve === true && (context.unsuccessfulAttempts || 0) >= Math.max(1, rules.failureThreshold || 2)) {
-    return { matched: true, reason: 'AI_UNRESOLVED', matchedPhrase: 'AI failed to resolve the query after repeated attempts' };
   }
   const custom = matchHumanHandoffKeyword(normalized, rules.customPhrases || []);
   return custom.matched ? custom : { matched: false };

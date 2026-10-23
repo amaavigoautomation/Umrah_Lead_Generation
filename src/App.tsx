@@ -1429,50 +1429,59 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
 
   // Toggle AI / Human Takeover (Section 30 & 31)
   const handleToggleAi = async (conversationId: string, enabled: boolean) => {
-    setConversations((prev) =>
-      prev.map((c) =>
-        c.conversationId === conversationId
-          ? {
-              ...c,
-              aiEnabled: enabled,
-              humanHandoff: !enabled,
-              managementMode: enabled ? 'AI' : 'HUMAN',
-              humanHandoffAt: enabled ? null : new Date().toISOString(),
-              humanHandoffReason: enabled ? undefined : 'Manual human takeover',
-            }
-          : c
-      )
-    );
-
+    const reason = enabled ? undefined : 'Manual human takeover';
     try {
-      await fetch('/api/conversation/ai-state', {
+      const response = await fetch('/api/conversation/ai-state', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           conversationId,
           aiEnabled: enabled,
           humanHandoff: !enabled,
-          reason: enabled ? undefined : 'Manual human takeover',
+          reason,
+          detectionSource: 'MANUAL',
         }),
       });
-    } catch (err) {
-      console.warn('Failed to sync AI state to backend:', err);
-    }
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok || result?.success !== true) {
+        throw new Error(result?.error || `Could not ${enabled ? 'resume AI' : 'take over conversation'}.`);
+      }
 
-    const conv = conversations.find((c) => c.conversationId === conversationId);
-    if (conv?.leadId) {
-      const act: LeadActivity = {
-        activityId: `act-${Date.now()}`,
-        leadId: conv.leadId,
-        contactId: conv.contactId,
-        type: enabled ? 'AI_RESUMED' : 'HUMAN_TAKEOVER',
-        title: enabled ? 'AI Auto-Pilot Resumed' : 'Human Specialist Takeover',
-        description: enabled
-          ? 'Agent resumed automated AI conversation responses.'
-          : 'Human operator took control of conversation; automated AI replies disabled.',
-        timestamp: new Date().toISOString(),
-      };
-      setActivities((prev) => [act, ...prev]);
+      // Update the UI only after the backend confirms persistence.
+      setConversations((prev) =>
+        prev.map((c) =>
+          c.conversationId === conversationId
+            ? {
+                ...c,
+                aiEnabled: enabled,
+                humanHandoff: !enabled,
+                managementMode: enabled ? 'AI' : 'HUMAN',
+                humanHandoffAt: enabled ? null : (result.humanHandoffAt || new Date().toISOString()),
+                humanHandoffReason: enabled ? undefined : (result.humanHandoffReason || reason),
+                humanHandoffDetectionSource: enabled ? undefined : 'MANUAL',
+              }
+            : c
+        )
+      );
+
+      const conv = conversations.find((c) => c.conversationId === conversationId);
+      if (conv?.leadId) {
+        const act: LeadActivity = {
+          activityId: `act-${Date.now()}`,
+          leadId: conv.leadId,
+          contactId: conv.contactId,
+          type: enabled ? 'AI_RESUMED' : 'HUMAN_TAKEOVER',
+          title: enabled ? 'AI Auto-Pilot Resumed' : 'Human Specialist Takeover',
+          description: enabled
+            ? 'Agent explicitly resumed automated AI conversation responses.'
+            : 'Human operator took control of conversation; AI replies and follow-ups were paused.',
+          timestamp: new Date().toISOString(),
+        };
+        setActivities((prev) => [act, ...prev]);
+      }
+    } catch (err) {
+      console.error('Failed to persist conversation AI state:', err);
+      window.alert(err instanceof Error ? err.message : 'Could not update conversation state. Please try again.');
     }
   };
 

@@ -868,8 +868,8 @@ STRICT RULES:
 6. LANGUAGE: match the dominant language the lead used.
 7. DECISION:
    - "send": a safe, relevant follow-up can be written.
-   - "skip": no useful next step right now.
-   - "human_review": a human must step in (promised pricing/visa check, complaint, conflicting details, complex request).
+   - "skip": no useful next step right now. In "reason", explain the exact conversation detail that makes a follow-up unhelpful; never return an empty or generic reason.
+   - "human_review": a human must step in (promised pricing/visa check, complaint, conflicting details, complex request), or you cannot explain a Skip decision.
 8. Respond ONLY with valid JSON:
    {"decision":"send|skip|human_review","reason":"...","objective":"...","language":"...","generatedMessage":"exact text if send","humanReviewReason":"if human_review"}
 9. End generatedMessage with the sign-off: "${brandSignature(brand).replace(/\n/g, '\\n')}".`;
@@ -936,9 +936,26 @@ Decide SEND, SKIP, or HUMAN_REVIEW and produce the JSON.`;
       return { decision: 'human_review', reason: 'Model chose send but returned no text.', humanReviewReason: 'No message generated.' };
     }
 
+    const decision = ['send', 'skip', 'human_review'].includes(parsed.decision)
+      ? parsed.decision as Evaluation['decision']
+      : 'human_review';
+    const decisionReason = typeof parsed.reason === 'string' ? parsed.reason.trim() : '';
+
+    if (decision === 'skip' && !decisionReason) {
+      return {
+        decision: 'human_review',
+        reason: 'The AI returned a Skip decision without explaining why. Please review the conversation before taking action.',
+        objective: parsed.objective,
+        humanReviewReason: 'AI Skip decision did not include a reason.',
+        model: 'gpt-4o-mini',
+      };
+    }
+
     return {
-      decision: ['send', 'skip', 'human_review'].includes(parsed.decision) ? parsed.decision : 'human_review',
-      reason: parsed.reason || 'OpenAI evaluation completed.',
+      decision,
+      reason: decisionReason || (decision === 'human_review'
+        ? 'The AI requested human review but did not provide a detailed reason.'
+        : 'AI evaluation completed without a specific explanation.'),
       objective: parsed.objective,
       generatedMessage: parsed.generatedMessage,
       language: parsed.language || 'English',
@@ -1048,12 +1065,17 @@ async function processOneJob(
     return { jobId: job.id, status: 'cancelled', reason };
   };
 
-  // Human Handoff is thread-scoped and takes precedence over every scheduled AI follow-up.
-  if (conversation.humanHandoff || conversation.aiEnabled === false) {
+  // Only an explicit human-management state pauses follow-ups. Website form conversations
+  // intentionally set aiEnabled=false to suppress duplicate instant replies; that is not a takeover.
+  const isExplicitHumanHandoff = conversation.humanHandoff === true || conversation.managementMode === 'HUMAN';
+  const isLegacyHumanManaged = conversation.channel !== 'WEBSITE' &&
+    conversation.aiEnabled === false && !conversation.managementMode;
+  if (isExplicitHumanHandoff || isLegacyHumanManaged) {
     job.status = 'cancelled';
     job.cancelledAt = new Date().toISOString();
     job.cancelReason = 'Human Handoff is active for this conversation';
     await finishJob(ctx, job);
+    await clearLeadSchedule(ctx, lead!);
     return { jobId: job.id, status: 'cancelled', reason: job.cancelReason };
   }
 

@@ -281,7 +281,19 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   };
-  const activeLead = leads.find((l) => l.leadId === activeConversation?.leadId);
+  const linkedActiveLead = leads.find((l) => l.leadId === activeConversation?.leadId);
+  const websiteFallbackLead = activeConversation?.channel === 'WEBSITE'
+    ? leads
+        .filter((l) => l.contactId === activeConversation.contactId && l.source === 'WEBSITE')
+        .sort((a, b) => Date.parse(b.updatedAt || b.createdAt || '') - Date.parse(a.updatedAt || a.createdAt || ''))[0]
+    : undefined;
+  const matchedActiveLead = linkedActiveLead || websiteFallbackLead;
+  // Older Website conversation documents may not carry leadId/type. Restore the expected inbound type
+  // for a clearly linked Website-sourced lead so its Auto Follow-Up control remains available.
+  const activeLead = matchedActiveLead && activeConversation?.channel === 'WEBSITE' &&
+    matchedActiveLead.source === 'WEBSITE' && matchedActiveLead.leadType !== 'INBOUND' && matchedActiveLead.leadType !== 'OUTBOUND'
+      ? { ...matchedActiveLead, leadType: 'INBOUND' as const }
+      : matchedActiveLead;
 
   // All conversations for this active contact across different platforms (Section 55 Unified Customer View)
   const contactConversations = activeContact
@@ -505,6 +517,7 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
   const isAutoFollowUpUiActive = Boolean(activeLead?.autoFollowUp?.enabled) &&
     !leadRepliedAfterFollowUp && !followUpCompleted;
   const activeLeadHasBookedDemo = activeLead?.demoStatus === 'BOOKED' || activeLead?.status === 'DEMO_BOOKED';
+  const activeConversationIsHumanManaged = activeConversation?.humanHandoff === true || activeConversation?.managementMode === 'HUMAN';
 
   // Toggle Auto Follow-Up on/off for the active lead
   const handleToggleAutoFollowUp = async (enabled: boolean) => {
@@ -900,15 +913,20 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
                       : 'bg-amber-50 border-amber-200 text-amber-900'
                   }`}
                 >
-                  {activeConversation.aiEnabled && !activeConversation.humanHandoff ? (
+                  {activeConversationIsHumanManaged ? (
+                    <>
+                      <UserCheck className="w-3.5 h-3.5 text-amber-600" />
+                      <span>HUMAN MANAGED</span>
+                    </>
+                  ) : activeConversation.aiEnabled ? (
                     <>
                       <Zap className="w-3.5 h-3.5 text-blue-600" />
                       <span>AI AUTO-REPLY ON</span>
                     </>
                   ) : (
                     <>
-                      <UserCheck className="w-3.5 h-3.5 text-amber-600" />
-                      <span>HUMAN MANAGED</span>
+                      <Zap className="w-3.5 h-3.5 text-slate-500" />
+                      <span>AI AUTO-REPLY OFF</span>
                     </>
                   )}
                 </div>

@@ -440,6 +440,13 @@ export const AutoFollowUpDashboard: React.FC<AutoFollowUpDashboardProps> = ({
                     const lead = leads.find((l) => l.leadId === j.leadId);
                     const conversation = conversations.find((c) => c.conversationId === j.conversationId);
                     const leadName = lead?.serviceInterest || lead?.queryMessage?.slice(0, 30) || j.leadId;
+                    const auditDecision = j.audit?.decision || (j.status === 'skipped' ? 'skip' : '');
+                    const savedReason = String(j.audit?.reason || j.cancelReason || '').trim();
+                    const displayedReason = savedReason || (j.status === 'skipped'
+                      ? 'The AI marked this job as skipped but did not save a reason. Please review the conversation and operational logs.'
+                      : j.status === 'cancelled'
+                        ? 'The job was cancelled without a recorded reason.'
+                        : 'No operational reason was recorded for this job.');
 
                     return (
                       <tr key={j.id} className="hover:bg-slate-50/80 transition-colors">
@@ -482,27 +489,31 @@ export const AutoFollowUpDashboard: React.FC<AutoFollowUpDashboardProps> = ({
                         </td>
                         <td className="py-3 px-3">{getStatusBadge(j.status)}</td>
                         <td className="py-3 px-3 max-w-xs">
-                          {j.audit ? (
-                            <div>
-                              <p className="font-medium text-slate-800 line-clamp-1">
-                                Objective: {j.audit.objective || j.audit.reason}
+                          <div>
+                            {auditDecision && (
+                              <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">
+                                Decision: {auditDecision.replace(/_/g, ' ')}
                               </p>
-                              {j.audit.generatedMessage && (
-                                <p className="text-[11px] text-slate-500 line-clamp-2 italic mt-0.5">
-                                  "{j.audit.generatedMessage}"
-                                </p>
-                              )}
-                              {j.audit.humanReviewReason && (
-                                <p className="text-[11px] text-purple-600 font-semibold mt-0.5">
-                                  Flag: {j.audit.humanReviewReason}
-                                </p>
-                              )}
-                            </div>
-                          ) : (
-                            <span className="text-slate-400 italic">
-                              {j.cancelReason ? `Reason: ${j.cancelReason}` : 'Awaiting send-time evaluation'}
-                            </span>
-                          )}
+                            )}
+                            <p title={displayedReason} className="font-semibold text-slate-800 line-clamp-2 mt-0.5">
+                              Reason: {displayedReason}
+                            </p>
+                            {j.audit?.objective && (
+                              <p title={j.audit.objective} className="text-[11px] text-slate-500 line-clamp-2 mt-0.5">
+                                Objective: {j.audit.objective}
+                              </p>
+                            )}
+                            {j.audit?.generatedMessage && (
+                              <p className="text-[11px] text-slate-500 line-clamp-2 italic mt-0.5">
+                                "{j.audit.generatedMessage}"
+                              </p>
+                            )}
+                            {j.audit?.humanReviewReason && (
+                              <p className="text-[11px] text-purple-600 font-semibold mt-0.5">
+                                Flag: {j.audit.humanReviewReason}
+                              </p>
+                            )}
+                          </div>
                         </td>
                         <td className="py-3 px-3 text-right">
                           {onSelectConversation && (

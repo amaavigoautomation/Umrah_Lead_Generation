@@ -2685,7 +2685,12 @@ Generate a helpful, grounded response.`;
         humanHandoff,
         managementMode: humanHandoff ? 'HUMAN' : 'AI',
         updatedAt: now,
-        ...(humanHandoff ? { humanHandoffAt: now, humanHandoffReason: String(body?.reason || 'Manual human takeover').slice(0, 300) } : { humanHandoffAt: null, humanHandoffReason: null, humanHandoffBy: null }),
+        ...(humanHandoff ? {
+          humanHandoffAt: now,
+          humanHandoffReason: String(body?.reason || 'Manual human takeover').slice(0, 300),
+          humanHandoffDetectionSource: String(body?.detectionSource || 'MANUAL').slice(0, 30),
+          humanHandoffBy: userUid,
+        } : { humanHandoffAt: null, humanHandoffReason: null, humanHandoffDetectionSource: null, humanHandoffBy: null }),
       };
       await updateDoc(tenantRepo(activeTenantCtx).conversationDoc(conversationId), patch).catch(async (err: any) => {
         if (err?.code === 'not-found' || /not found/i.test(String(err?.message || ''))) {
@@ -2699,7 +2704,12 @@ Generate a helpful, grounded response.`;
       }
       res.statusCode = 200;
       res.setHeader('Content-Type', 'application/json');
-      res.end(JSON.stringify({ success: true, conversationId, aiEnabled: !humanHandoff, humanHandoff }));
+      res.end(JSON.stringify({
+        success: true, conversationId, aiEnabled: !humanHandoff, humanHandoff,
+        humanHandoffAt: humanHandoff ? now : null,
+        humanHandoffReason: humanHandoff ? patch.humanHandoffReason : null,
+        humanHandoffDetectionSource: humanHandoff ? patch.humanHandoffDetectionSource : null,
+      }));
       return true;
     } catch (err: any) {
       res.statusCode = 500;

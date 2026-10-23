@@ -350,6 +350,7 @@ export interface Conversation {
   humanHandoffReason?: string;
   humanHandoffAt?: string | null;
   humanHandoffBy?: string | null;
+  humanHandoffDetectionSource?: 'AI' | 'RULE' | 'MANUAL' | string | null;
   managementMode?: 'AI' | 'HUMAN';
   conversationSummary?: string;
   subject?: string;

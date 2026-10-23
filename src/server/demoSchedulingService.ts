@@ -85,7 +85,6 @@ import {
   resolveSimpleDate,
 } from '../shared/schedulingGuardrails.js';
 
-export const TARGET_CALENDAR_EMAIL = 'amaavigo@gmail.com';
 export const SCHEDULING_TIMEZONE = 'Asia/Kolkata'; // IST (UTC +05:30)
 export const WORKING_START_HOUR = 10; // 10:00 AM IST
 export const WORKING_END_HOUR = 19; // 7:00 PM IST (last 60-min demo starts at 18:00)

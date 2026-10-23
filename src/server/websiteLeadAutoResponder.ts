@@ -394,7 +394,7 @@ export async function dispatchThankYouEmailForConversation(
       conversationId,
       senderType: 'AI',
       senderName: brand.senderName,
-      senderEmail: smtpCfg.user || 'amaavigo@gmail.com',
+      senderEmail: smtpCfg.user || brand.salesEmail || '',
       recipientEmail: targetEmail,
       channel: 'EMAIL',
       direction: 'OUTBOUND',

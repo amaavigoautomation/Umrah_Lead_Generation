@@ -6,11 +6,8 @@ import {
   Calendar,
   BookOpen,
   Sparkles,
-  PlayCircle,
   Settings,
   Bot,
-  RefreshCw,
-  Mail,
   Radio,
   MessageSquare,
   Lock,
@@ -23,7 +20,6 @@ import {
   ChevronLeft,
   ChevronRight,
 } from 'lucide-react';
-import { WHATSAPP_BUSINESS_NUMBER_FORMATTED } from '../services/whatsappInboundService';
 import { AppUser } from '../types';
 import { Umrah360Logo } from './Umrah360Logo';
 import { useBrand } from '../context/BrandContext';
@@ -35,9 +31,7 @@ export type ActiveTab =
   | 'scheduling'
   | 'knowledge'
   | 'playground'
-  | 'scenarios'
   | 'settings'
-  | 'live-mailbox'
   | 'auto-followup';
 
 export interface NavbarProps {
@@ -45,7 +39,6 @@ export interface NavbarProps {
   setActiveTab: (tab: ActiveTab) => void;
   unreadCount: number;
   handoffCount: number;
-  onResetSeedData: () => void;
   isFirebaseActive: boolean;
   currentUser?: AppUser | null;
   onLogout?: () => void;
@@ -63,7 +56,6 @@ export const Navbar: React.FC<NavbarProps> = ({
   setActiveTab,
   unreadCount,
   handoffCount,
-  onResetSeedData,
   isFirebaseActive,
   currentUser,
   onLogout,
@@ -133,26 +125,10 @@ export const Navbar: React.FC<NavbarProps> = ({
       label: 'AI Testing',
       icon: <Sparkles className="w-4 h-4 shrink-0" />,
     },
-    // The E2E walkthroughs are a scripted Umrah360 product tour, so only that workspace sees them.
-    ...(brand.playbook === 'umrah360'
-      ? [
-          {
-            id: 'scenarios' as ActiveTab,
-            label: 'E2E Walkthroughs',
-            icon: <PlayCircle className="w-4 h-4 shrink-0" />,
-          },
-        ]
-      : []),
     {
       id: 'settings',
       label: 'Settings',
       icon: <Settings className="w-4 h-4 shrink-0" />,
-    },
-    {
-      id: 'live-mailbox',
-      label: 'Live Mailbox',
-      icon: <Mail className="w-4 h-4 shrink-0" />,
-      hasPulse: true,
     },
   ];
 

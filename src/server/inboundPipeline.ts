@@ -483,7 +483,7 @@ export interface PipelineConfig {
 
 const pipelineConfig: PipelineConfig = {
   emailMode: 'AUTO',
-  sendingAccount: process.env.SMTP_USER || process.env.IMAP_USER || 'amaavigo@gmail.com',
+  sendingAccount: process.env.SMTP_USER || process.env.IMAP_USER || '',
   emailSignature: 'Regards,\nUmrah360 Automation Team\nwww.umrah360.in',
 };
 
@@ -991,7 +991,7 @@ export async function generateAutoReplyText(params: {
     buyingStage = 'CONSIDERATION';
   }
 
-  const targetMailbox = isUmrah ? (process.env.SMTP_USER || process.env.IMAP_USER || 'amaavigo@gmail.com') : (brand.salesEmail || '');
+  const targetMailbox = isUmrah ? (process.env.SMTP_USER || process.env.IMAP_USER || brand.salesEmail || '') : (brand.salesEmail || '');
   const senderGreetingName = fromName ? fromName.split(' ')[0] : from.split('@')[0];
 
   // Prepare full knowledgebase grounding text from dynamic published knowledge documents
@@ -1284,7 +1284,7 @@ export async function processLiveInboundEmail(payload: {
 }): Promise<ProcessedInboundEmailResult> {
   const brand = await getTenantBrand(getInboundCtx().tenantId);
   const isUmrahBrand = brand.playbook === 'umrah360';
-  const targetMailbox = payload.ownMailbox || process.env.SMTP_USER || process.env.IMAP_USER || 'amaavigo@gmail.com';
+  const targetMailbox = payload.ownMailbox || process.env.SMTP_USER || process.env.IMAP_USER || '';
   const incomingMsgId = resolveGmailMessageId(payload, targetMailbox);
   const replySubject = payload.subject.toLowerCase().startsWith('re:') ? payload.subject : `Re: ${payload.subject}`;
   const nowIso = new Date().toISOString();
@@ -1321,9 +1321,11 @@ export async function processLiveInboundEmail(payload: {
   // AI-to-AI / self-email loop prevention & Outbound check
   const fromLower = senderEmail;
   const targetMailboxLower = targetMailbox.toLowerCase();
-  const isSelf = fromLower === targetMailboxLower || 
+  // The platform's own sending mailbox (env) is never a customer, even when this email was read from a workspace's own inbox.
+  const platformMailboxLower = (process.env.SMTP_USER || process.env.IMAP_USER || '').toLowerCase().trim();
+  const isSelf = (!!targetMailboxLower && fromLower === targetMailboxLower) ||
+                 (!!platformMailboxLower && fromLower === platformMailboxLower) ||
                  fromLower === 'sales@umrah360.in' || 
-                 fromLower === 'amaavigo@gmail.com' ||
                  fromLower.includes('mailer-daemon') ||
                  fromLower.includes('postmaster') ||
                  fromLower.includes('no-reply');

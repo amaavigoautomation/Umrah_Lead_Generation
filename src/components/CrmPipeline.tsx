@@ -57,7 +57,6 @@ import {
   LeadSource,
   AppUser,
 } from '../types';
-import { WebsiteLeadIntegrationModal } from './WebsiteLeadIntegrationModal';
 
 export interface CrmPipelineProps {
   leads: Lead[];
@@ -151,7 +150,6 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
   const [bulkCsvText, setBulkCsvText] = useState<string>('');
   const [bulkUploadSuccessCount, setBulkUploadSuccessCount] = useState<number | null>(null);
 
-  const [isWebsiteModalOpen, setIsWebsiteModalOpen] = useState(false);
   const [callingLead, setCallingLead] = useState<Lead | null>(null);
   const [whatsAppModalLead, setWhatsAppModalLead] = useState<Lead | null>(null);
   const [customFollowUpLead, setCustomFollowUpLead] = useState<Lead | null>(null);
@@ -407,7 +405,7 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.setAttribute('href', url);
-    link.setAttribute('download', 'TeleCRM_Bulk_Leads_Template.csv');
+    link.setAttribute('download', 'CRM_Bulk_Leads_Template.csv');
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -752,10 +750,7 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
               </div>
               <div>
                 <div className="flex items-center space-x-2">
-                  <h1 className="text-xl font-extrabold text-slate-900 tracking-tight">TeleCRM</h1>
-                  <span className="px-2 py-0.5 text-[11px] font-bold bg-orange-50 text-orange-700 border border-orange-200 rounded-md">
-                    Core Telecalling CRM
-                  </span>
+                  <h1 className="text-xl font-extrabold text-slate-900 tracking-tight">CRM</h1>
                   <span className="px-2 py-0.5 text-[11px] font-bold bg-slate-100 text-slate-700 rounded-md">
                     {processedLeads.length} Leads
                   </span>
@@ -768,15 +763,6 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
 
             {/* Action Buttons */}
             <div className="flex items-center space-x-2 self-stretch md:self-auto flex-wrap gap-y-2">
-              <button
-                onClick={() => setIsWebsiteModalOpen(true)}
-                className="flex items-center space-x-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg border border-slate-300 transition-colors"
-                title="Webhook Form Integration & Simulation"
-              >
-                <Globe className="w-3.5 h-3.5 text-slate-600" />
-                <span>Webhooks & Forms</span>
-              </button>
-
               <button
                 onClick={handleExportCsv}
                 className="flex items-center space-x-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg border border-slate-300 transition-colors"
@@ -1228,7 +1214,7 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
                               <button
                                 onClick={() => handleStartCall(lead)}
                                 className="px-2 py-0.8 bg-orange-500 hover:bg-orange-600 text-white rounded-md text-[11px] font-bold flex items-center space-x-1 shadow-2xs transition-all hover:scale-105 active:scale-95"
-                                title="Click to Call via TeleCRM Dialer"
+                                title="Click to call"
                               >
                                 <PhoneCall className="w-3 h-3" />
                                 <span>Call</span>
@@ -1799,7 +1785,7 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
             <div className="bg-orange-500 text-white p-4 flex items-center justify-between">
               <div className="flex items-center space-x-2">
                 <Plus className="w-5 h-5" />
-                <h3 className="font-bold text-sm">Add Lead to TeleCRM</h3>
+                <h3 className="font-bold text-sm">Add Lead to CRM</h3>
               </div>
               <button
                 onClick={() => setIsAddLeadModalOpen(false)}
@@ -2082,7 +2068,7 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
                 {bulkUploadSuccessCount !== null && (
                   <div className="p-3 bg-emerald-100 text-emerald-900 rounded-lg text-xs font-bold text-center flex items-center justify-center space-x-1.5 animate-in fade-in">
                     <CheckCircle className="w-4 h-4 text-emerald-700" />
-                    <span>Successfully created {bulkUploadSuccessCount} leads in TeleCRM!</span>
+                    <span>Successfully created {bulkUploadSuccessCount} leads in the CRM!</span>
                   </div>
                 )}
 
@@ -2347,14 +2333,6 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
             </div>
           </div>
         </div>
-      )}
-
-      {/* 12. Website Lead Integration Modal */}
-      {isWebsiteModalOpen && (
-        <WebsiteLeadIntegrationModal
-          isOpen={isWebsiteModalOpen}
-          onClose={() => setIsWebsiteModalOpen(false)}
-        />
       )}
     </div>
   );

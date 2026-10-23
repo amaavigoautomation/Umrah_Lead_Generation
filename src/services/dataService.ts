@@ -38,9 +38,7 @@ export const PLATFORM_MODULES: PlatformModule[] = [
   { id: 'crm', name: 'CRM & Leads', description: 'Pipeline stages, lead scores, and agency profiles' },
   { id: 'knowledge', name: 'Knowledge Base', description: 'Ground truth RAG documentation for AI auto-replies' },
   { id: 'playground', name: 'AI Testing', description: 'Interactive prompt playground & response validation' },
-  { id: 'scenarios', name: 'E2E Walkthroughs', description: 'Interactive simulated omnichannel scenarios' },
   { id: 'settings', name: 'Channels & Settings', description: 'Autopilot rules, email signatures, and integrations' },
-  { id: 'live-mailbox', name: 'Live Mailbox & SMTP', description: 'IMAP live polling & SMTP credentials management' },
   { id: 'auto-followup', name: 'Auto Follow-Up', description: 'AI follow-ups for leads who stop replying' },
 ];
 
@@ -54,7 +52,7 @@ export const INITIAL_USERS: AppUser[] = [
     name: 'Full Administrator',
     role: 'ADMIN',
     accessLevel: 'ALL',
-    allowedModules: ['inbox', 'campaigns', 'crm', 'knowledge', 'playground', 'scenarios', 'settings', 'live-mailbox'],
+    allowedModules: ['inbox', 'campaigns', 'crm', 'knowledge', 'playground', 'settings'],
     isActive: true,
     createdAt: '2025-01-01T00:00:00.000Z',
     updatedAt: '2025-01-01T00:00:00.000Z',
@@ -91,7 +89,6 @@ export const DEFAULT_SETTINGS: SystemSettings = {
   sendingAccounts: [
     { id: 'acc-1', email: 'sales@umrah360.in', name: 'Umrah360 Sales', isDefault: true },
     { id: 'acc-2', email: 'hello@umrah360.in', name: 'Umrah360 Concierge', isDefault: false },
-    { id: 'acc-3', email: 'amaavigo@gmail.com', name: 'Umrah360 Automation', isDefault: false },
   ],
   emailSignature: 'Regards,\nUmrah360 Outbound Growth Team\nwww.umrah360.in',
   debounceSeconds: 3,

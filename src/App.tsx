@@ -56,9 +56,7 @@ const CampaignManagement = lazyNamed(() => import('./components/CampaignManageme
 const CrmPipeline = lazyNamed(() => import('./components/CrmPipeline'), 'CrmPipeline');
 const KnowledgeBaseView = lazyNamed(() => import('./components/KnowledgeBaseView'), 'KnowledgeBaseView');
 const AiTestingPlayground = lazyNamed(() => import('./components/AiTestingPlayground'), 'AiTestingPlayground');
-const InteractiveScenarios = lazyNamed(() => import('./components/InteractiveScenarios'), 'InteractiveScenarios');
 const SettingsView = lazyNamed(() => import('./components/SettingsView'), 'SettingsView');
-const LiveMailboxCenter = lazyNamed(() => import('./components/LiveMailboxCenter'), 'LiveMailboxCenter');
 const DemoSchedulingView = lazyNamed(() => import('./components/DemoSchedulingView'), 'DemoSchedulingView');
 const AutoFollowUpDashboard = lazyNamed(() => import('./components/AutoFollowUpDashboard'), 'AutoFollowUpDashboard');
 const PlatformConsole = lazyNamed(() => import('./components/PlatformConsole'), 'PlatformConsole');
@@ -206,9 +204,7 @@ const ALL_TABS: readonly ActiveTab[] = [
   'scheduling',
   'knowledge',
   'playground',
-  'scenarios',
   'settings',
-  'live-mailbox',
   'auto-followup',
 ];
 
@@ -1784,32 +1780,6 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
     }
   };
 
-  // Reset demo seed data
-  const handleResetSeedData = () => {
-    // The built-in sample data is Umrah360-specific: other workspaces reset to empty.
-    if (currentTenantId !== 'umrah360') {
-      setContacts([]);
-      setLeads([]);
-      setConversations([]);
-      setMessages([]);
-      setCampaigns([]);
-      setProspects([]);
-      setActivities([]);
-      setKnowledgeDocs([]);
-      setSettings(defaultSettingsFor(currentTenantId, currentTenant?.name));
-      return;
-    }
-    setContacts(INITIAL_CONTACTS);
-    setLeads(INITIAL_LEADS);
-    setConversations(INITIAL_CONVERSATIONS);
-    setMessages(INITIAL_MESSAGES);
-    setCampaigns([]);
-    setProspects(INITIAL_PROSPECTS);
-    setActivities(INITIAL_ACTIVITIES);
-    setKnowledgeDocs(INITIAL_KNOWLEDGE_DOCUMENTS);
-    setSettings(DEFAULT_SETTINGS);
-  };
-
   // Mark conversation as read (persistent in Firestore)
   const handleMarkConversationAsRead = async (conversationId: string) => {
     const nowIso = new Date().toISOString();
@@ -2217,7 +2187,6 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
         planLocked={planLocked}
         unreadCount={unreadCount}
         handoffCount={handoffCount}
-        onResetSeedData={handleResetSeedData}
         isFirebaseActive={isFirebaseActive}
         currentUser={currentUser}
         onLogout={handleLogout}
@@ -2236,7 +2205,7 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
           onToggleCollapse={() => setIsSidebarCollapsed((prev) => !prev)}
           unreadCount={unreadCount}
           handoffCount={handoffCount}
-          onResetSeedData={handleResetSeedData}
+          tenantId={currentTenantId}
           currentUser={currentUser}
           onLogout={handleLogout}
         />
@@ -2272,6 +2241,7 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
           <Suspense fallback={<ScreenLoading />}>
             {activeTab === 'inbox' && (
               <UnifiedInbox
+                tenantId={currentTenantId}
                 conversations={conversations}
                 hasMoreConversations={hasMoreConversations}
                 onLoadMoreConversations={loadMoreConversations}
@@ -2397,27 +2367,10 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
 
             {activeTab === 'playground' && <AiTestingPlayground knowledgeDocs={knowledgeDocs} />}
 
-            {activeTab === 'scenarios' && currentTenantId === 'umrah360' && (
-              <InteractiveScenarios
-                onNavigateToInbox={() => setActiveTab('inbox')}
-                onNavigateToCrm={() => setActiveTab('crm')}
-                onProcessInboundEmail={handleProcessInboundEmail}
-                onProcessInboundWhatsApp={handleProcessInboundWhatsApp}
-                onNavigateToThread={(threadId) => {
-                  setActiveTab('inbox');
-                }}
-                onNavigateToCrmLead={(leadId) => {
-                  setSelectedLeadIdForCrm(leadId);
-                  setActiveTab('crm');
-                }}
-              />
-            )}
-
             {activeTab === 'settings' && (
               <SettingsView
                 settings={settings}
                 onSaveSettings={handleSaveSettings}
-                onResetSeedData={handleResetSeedData}
                 users={users}
                 onSaveUser={handleSaveUser}
                 onDeleteUser={handleDeleteUser}
@@ -2435,14 +2388,6 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
                   setActiveTab('inbox');
                 }}
                 onRefresh={syncWithBackendInbound}
-              />
-            )}
-
-            {activeTab === 'live-mailbox' && (
-              <LiveMailboxCenter
-                onNavigateToThread={() => setActiveTab('inbox')}
-                onNavigateToCrm={() => setActiveTab('crm')}
-                onSyncNow={syncWithBackendInbound}
               />
             )}
           </Suspense>

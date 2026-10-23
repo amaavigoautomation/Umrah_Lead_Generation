@@ -43,10 +43,10 @@ import {
 } from '../types';
 import { generateOmnichannelResponse } from '../services/aiService';
 import { useBrand } from '../context/BrandContext';
+import { useConnectedChannels } from '../hooks/useConnectedChannels';
 import {
   InboundEmailPayload,
   InboundProcessingResult,
-  INBOUND_MAILBOX,
 } from '../services/emailInboundService';
 import {
   InboundWhatsAppPayload,
@@ -60,6 +60,8 @@ const InboundEmailFlowModal = lazyNamed(() => import('./InboundEmailFlowModal'),
 const InboundWhatsAppFlowModal = lazyNamed(() => import('./InboundWhatsAppFlowModal'), 'InboundWhatsAppFlowModal');
 
 interface UnifiedInboxProps {
+  /** Workspace whose connected mailbox / WhatsApp number are shown above the conversation list. */
+  tenantId?: string;
   conversations: Conversation[];
   /** True when older conversations exist beyond the loaded page. */
   hasMoreConversations?: boolean;
@@ -84,6 +86,7 @@ interface UnifiedInboxProps {
 }
 
 export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
+  tenantId,
   conversations,
   hasMoreConversations,
   onLoadMoreConversations,
@@ -114,6 +117,7 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
   // Lead Profile 360 side panel: slides in/out from the right edge
   const [isProfileOpen, setIsProfileOpen] = useState<boolean>(true);
   const [replyText, setReplyText] = useState<string>('');
+  const connected = useConnectedChannels(tenantId);
   const [isGeneratingAi, setIsGeneratingAi] = useState<boolean>(false);
   const [isUnifiedAllPlatforms, setIsUnifiedAllPlatforms] = useState<boolean>(false);
   const [replyChannelOverride, setReplyChannelOverride] = useState<Channel | ''>('');
@@ -331,6 +335,10 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
 
   // Chat scroll: opening a conversation jumps to the LATEST message (bottom). New messages keep it at the
   // bottom only while you are already near the bottom, so reading older messages is never interrupted.
+  // Reply box: grows with the text up to REPLY_BOX_MAX_HEIGHT, then stops and scrolls inside.
+  const replyBoxRef = useRef<HTMLTextAreaElement>(null);
+  const REPLY_BOX_MIN_HEIGHT = 56;
+  const REPLY_BOX_MAX_HEIGHT = 168;
   const threadScrollRef = useRef<HTMLDivElement>(null);
   const stickToBottomRef = useRef(true);
   const lastThreadKeyRef = useRef('');
@@ -340,6 +348,15 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
     const el = threadScrollRef.current;
     if (el) el.scrollTop = el.scrollHeight;
   };
+  useLayoutEffect(() => {
+    const el = replyBoxRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    const next = Math.min(Math.max(el.scrollHeight, REPLY_BOX_MIN_HEIGHT), REPLY_BOX_MAX_HEIGHT);
+    el.style.height = `${next}px`;
+    el.style.overflowY = el.scrollHeight > REPLY_BOX_MAX_HEIGHT ? 'auto' : 'hidden';
+  }, [replyText, threadKey]);
+
   useLayoutEffect(() => {
     if (lastThreadKeyRef.current !== threadKey) {
       lastThreadKeyRef.current = threadKey;
@@ -565,21 +582,23 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
           {/* Live Inbound Mailbox & WhatsApp Triggers */}
           <div className="space-y-1.5">
             <div className="flex items-center space-x-1.5">
-              <button
-                onClick={() => setShowInboundFlowModal(true)}
-                className="flex-1 flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-orange-50/80 hover:bg-orange-100/90 border border-orange-200 text-orange-950 transition text-left group"
-              >
-                <div className="flex items-center space-x-2 truncate">
-                  <Mail className="w-3.5 h-3.5 text-orange-600 shrink-0" />
-                  <div className="truncate">
-                    <span className="text-[11px] font-bold block truncate text-slate-800">{INBOUND_MAILBOX}</span>
+              {connected.mailbox && (
+                <button
+                  onClick={() => setShowInboundFlowModal(true)}
+                  className="flex-1 flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-orange-50/80 hover:bg-orange-100/90 border border-orange-200 text-orange-950 transition text-left group"
+                >
+                  <div className="flex items-center space-x-2 truncate">
+                    <Mail className="w-3.5 h-3.5 text-orange-600 shrink-0" />
+                    <div className="truncate">
+                      <span className="text-[11px] font-bold block truncate text-slate-800">{connected.mailbox}</span>
+                    </div>
                   </div>
-                </div>
-                <span className="flex items-center space-x-1 text-[10px] text-orange-700 bg-orange-100 px-1.5 py-0.5 rounded font-semibold shrink-0 border border-orange-200">
-                  <span className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse"></span>
-                  <span>Email</span>
-                </span>
-              </button>
+                  <span className="flex items-center space-x-1 text-[10px] text-orange-700 bg-orange-100 px-1.5 py-0.5 rounded font-semibold shrink-0 border border-orange-200">
+                    <span className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse"></span>
+                    <span>Email</span>
+                  </span>
+                </button>
+              )}
 
               {onSyncNow && (
                 <button
@@ -592,21 +611,23 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
               )}
             </div>
 
-            <button
-              onClick={() => setShowInboundWhatsAppModal(true)}
-              className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-emerald-50/80 hover:bg-emerald-100/90 border border-emerald-200 text-emerald-950 transition text-left group"
-            >
-              <div className="flex items-center space-x-2 truncate">
-                <MessageSquare className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                <div className="truncate">
-                  <span className="text-[11px] font-bold block truncate font-mono text-slate-800">{WHATSAPP_BUSINESS_NUMBER_FORMATTED}</span>
+            {connected.whatsapp && (
+              <button
+                onClick={() => setShowInboundWhatsAppModal(true)}
+                className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-emerald-50/80 hover:bg-emerald-100/90 border border-emerald-200 text-emerald-950 transition text-left group"
+              >
+                <div className="flex items-center space-x-2 truncate">
+                  <MessageSquare className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                  <div className="truncate">
+                    <span className="text-[11px] font-bold block truncate font-mono text-slate-800">{connected.whatsapp}</span>
+                  </div>
                 </div>
-              </div>
-              <span className="flex items-center space-x-1 text-[10px] text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded font-semibold shrink-0 border border-emerald-200">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                <span>WhatsApp Flow</span>
-              </span>
-            </button>
+                <span className="flex items-center space-x-1 text-[10px] text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded font-semibold shrink-0 border border-emerald-200">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                  <span>WhatsApp Flow</span>
+                </span>
+              </button>
+            )}
           </div>
 
           <div className="relative">
@@ -1139,43 +1160,7 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
             </div>
 
             {/* Quick Actions & AI Draft generation bar */}
-            <div className="p-2.5 bg-slate-50 border-t border-slate-200/80 flex items-center justify-between text-xs shrink-0">
-              <div className="flex items-center space-x-1.5 overflow-x-auto scrollbar-none">
-                <span className="text-slate-500 font-medium text-[11px] mr-1">Quick Prompts:</span>
-                {isUmrah && (<>
-                <button
-                  onClick={() =>
-                    setReplyText(
-                      `Yes! Umrah360 provides a complete white-label B2B Sub-Agent Portal with custom markups, credit limits, and instant PDF vouchers with their agency logo.`
-                    )
-                  }
-                  className="px-2.5 py-1 rounded-lg bg-white hover:bg-slate-100 text-slate-700 text-[11px] font-semibold border border-slate-200 shadow-2xs transition whitespace-nowrap"
-                >
-                  B2B Agent Specs
-                </button>
-                <button
-                  onClick={() =>
-                    setReplyText(
-                      `Starter: $199/mo (up to 3 users) | Growth: $499/mo (up to 10 users). For 20+ users, an Enterprise custom quote is prepared by our senior solutions team.`
-                    )
-                  }
-                  className="px-2.5 py-1 rounded-lg bg-white hover:bg-slate-100 text-slate-700 text-[11px] font-semibold border border-slate-200 shadow-2xs transition whitespace-nowrap"
-                >
-                  Approved Pricing
-                </button>
-                </>)}
-                <button
-                  onClick={() =>
-                    setReplyText(
-                      `We would be delighted to schedule a 20-minute live demonstration tailored to ${isUmrah ? 'your pilgrimage operations' : 'your business'}. What time works best for you this week?`
-                    )
-                  }
-                  className="px-2.5 py-1 rounded-lg bg-white hover:bg-slate-100 text-slate-700 text-[11px] font-semibold border border-slate-200 shadow-2xs transition whitespace-nowrap"
-                >
-                  Schedule Demo
-                </button>
-              </div>
-
+            <div className="p-2.5 bg-slate-50 border-t border-slate-200/80 flex items-center justify-end text-xs shrink-0">
               <button
                 onClick={handleAiAutoGenerate}
                 disabled={isGeneratingAi}
@@ -1250,6 +1235,7 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
 
               <div className="flex items-end space-x-2">
                 <textarea
+                  ref={replyBoxRef}
                   rows={2}
                   placeholder={`Reply to ${activeContact.firstName} via ${(
                     (isUnifiedAllPlatforms ? replyChannelOverride : null) || activeConversation.channel
@@ -1548,34 +1534,6 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
                 onChange={(e) => setSimulatedText(e.target.value)}
                 className="w-full bg-white border border-slate-200 rounded-lg p-2.5 text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-orange-500 resize-none transition"
               />
-            </div>
-
-            {/* Quick Presets */}
-            <div className="space-y-1.5">
-              <span className="text-[11px] text-slate-500 font-medium">Quick Prompts:</span>
-              <div className="flex flex-wrap gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => setSimulatedText('Can you send the dynamic costing sheet for 4-star packages?')}
-                  className="px-2 py-1 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 text-[10px] border border-slate-200 transition"
-                >
-                  Dynamic Costing Inquiry
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSimulatedText('Do you support white-label PDF vouchers for sub-agents?')}
-                  className="px-2 py-1 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 text-[10px] border border-slate-200 transition"
-                >
-                  B2B Vouchers Inquiry
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSimulatedText('What are your monthly subscription charges and user limits?')}
-                  className="px-2 py-1 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 text-[10px] border border-slate-200 transition"
-                >
-                  Pricing Inquiry
-                </button>
-              </div>
             </div>
 
             <div className="flex items-center justify-end space-x-2 pt-3 border-t border-slate-100">

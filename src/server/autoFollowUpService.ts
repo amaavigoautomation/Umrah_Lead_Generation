@@ -95,9 +95,6 @@ export interface ChannelTimingConfig {
 
 export interface AutoFollowUpGlobalConfig {
   channels: Record<string, ChannelTimingConfig>;
-  mode: 'SIMPLE' | 'SEQUENCE';
-  sequenceSteps: Array<{ value: number; unit: 'minute' | 'hour' | 'day' }>;
-  quietHours: { enabled: boolean; start: string; end: string };
   businessHours: { enabled: boolean; days: number[]; start: string; end: string };
   timezone: string;
 }
@@ -135,13 +132,6 @@ export const DEFAULT_FOLLOWUP_CONFIG: AutoFollowUpGlobalConfig = {
     WEBSITE: { enabled: true, defaultDelayValue: 1, defaultDelayUnit: 'hour', maxFollowUps: 3 },
     LINKEDIN: { enabled: true, defaultDelayValue: 1, defaultDelayUnit: 'day', maxFollowUps: 3 },
   },
-  mode: 'SIMPLE',
-  sequenceSteps: [
-    { value: 1, unit: 'hour' },
-    { value: 1, unit: 'day' },
-    { value: 3, unit: 'day' },
-  ],
-  quietHours: { enabled: true, start: '22:00', end: '08:00' },
   businessHours: { enabled: false, days: [1, 2, 3, 4, 5, 6], start: '09:00', end: '20:00' },
   timezone: 'Asia/Kolkata',
 };
@@ -259,9 +249,12 @@ export async function getAutoFollowUpConfig(ctx: TenantContext): Promise<AutoFol
           ...DEFAULT_FOLLOWUP_CONFIG,
           ...data,
           channels: { ...DEFAULT_FOLLOWUP_CONFIG.channels, ...(data.channels || {}) },
-          quietHours: { ...DEFAULT_FOLLOWUP_CONFIG.quietHours, ...(data.quietHours || {}) },
           businessHours: { ...DEFAULT_FOLLOWUP_CONFIG.businessHours, ...(data.businessHours || {}) },
         };
+        // Older saved configs may still carry the removed Sequence Mode / Quiet Hours settings: ignore them.
+        delete (cfg as any).mode;
+        delete (cfg as any).sequenceSteps;
+        delete (cfg as any).quietHours;
       }
     } catch (e) {
       console.warn('[AutoFollowUp] Could not load config:', e);
@@ -278,11 +271,8 @@ export async function updateAutoFollowUpConfig(
   const current = await getAutoFollowUpConfig(ctx);
   const next: AutoFollowUpGlobalConfig = {
     ...current,
-    ...(updates.mode ? { mode: updates.mode } : {}),
     ...(updates.timezone ? { timezone: String(updates.timezone) } : {}),
-    ...(Array.isArray(updates.sequenceSteps) ? { sequenceSteps: updates.sequenceSteps } : {}),
     channels: { ...current.channels, ...(updates.channels || {}) },
-    quietHours: { ...current.quietHours, ...(updates.quietHours || {}) },
     businessHours: { ...current.businessHours, ...(updates.businessHours || {}) },
   };
 
@@ -321,48 +311,6 @@ export function calculateDelayMs(value: number, unit: 'minute' | 'hour' | 'day')
   if (unit === 'minute') return v * 60_000;
   if (unit === 'day') return v * 86_400_000;
   return v * 3_600_000;
-}
-
-function minutesOfDayInTz(date: Date, timeZone: string): number {
-  try {
-    const parts = new Intl.DateTimeFormat('en-GB', {
-      timeZone,
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: false,
-    }).formatToParts(date);
-    const h = Number(parts.find((p) => p.type === 'hour')?.value ?? 0) % 24;
-    const m = Number(parts.find((p) => p.type === 'minute')?.value ?? 0);
-    return h * 60 + m;
-  } catch {
-    return date.getUTCHours() * 60 + date.getUTCMinutes();
-  }
-}
-
-/** If `target` falls inside quiet hours (in the configured timezone), push it to the end of them. */
-export function applyQuietHoursAdjustment(
-  target: Date,
-  quiet: { enabled: boolean; start: string; end: string },
-  timeZone: string = DEFAULT_FOLLOWUP_CONFIG.timezone
-): Date {
-  if (!quiet?.enabled) return target;
-  try {
-    const [sh, sm] = quiet.start.split(':').map(Number);
-    const [eh, em] = quiet.end.split(':').map(Number);
-    const startM = sh * 60 + (sm || 0);
-    const endM = eh * 60 + (em || 0);
-    const nowM = minutesOfDayInTz(target, timeZone);
-
-    const isQuiet = startM > endM ? nowM >= startM || nowM < endM : nowM >= startM && nowM < endM;
-    if (!isQuiet) return target;
-
-    const deltaMin = (endM - nowM + 1440) % 1440 || 1440;
-    const adjusted = new Date(target.getTime() + deltaMin * 60_000);
-    adjusted.setSeconds(0, 0);
-    return adjusted;
-  } catch {
-    return target;
-  }
 }
 
 // ---------------------------------------------------------------------------
@@ -525,17 +473,10 @@ export async function scheduleAutoFollowUpJob(
   if (lead.autoFollowUp?.channelDelayOverride) {
     delayValue = lead.autoFollowUp.channelDelayOverride.value;
     delayUnit = lead.autoFollowUp.channelDelayOverride.unit;
-  } else if (cfg.mode === 'SEQUENCE') {
-    const step = cfg.sequenceSteps[attemptNumber - 1] || cfg.sequenceSteps[0];
-    if (step) {
-      delayValue = step.value;
-      delayUnit = step.unit;
-    }
   }
 
   const base = ts(referenceMessage.timestamp) || Date.now();
   let when = new Date(base + calculateDelayMs(delayValue, delayUnit));
-  when = applyQuietHoursAdjustment(when, cfg.quietHours, cfg.timezone);
   if (when.getTime() < Date.now()) when = new Date();
 
   const nowIso = new Date().toISOString();

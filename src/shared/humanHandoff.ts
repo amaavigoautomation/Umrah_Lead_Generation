@@ -109,7 +109,8 @@ export function detectHumanHandoff(
   rules: HumanHandoffRules = {},
   context: { unsuccessfulAttempts?: number } = {},
 ): HumanHandoffMatch {
-  if (rules.enabled === false) return { matched: false };
+  // Built-in rules are independently controlled by their own switches. A legacy
+  // top-level `enabled: false` must not silently disable the checked explicit-request rule.
   if (rules.explicitRequest === false && rules.frustration !== true && !(rules.customPhrases?.length)) return { matched: false };
   const normalized = normalizeHandoffText(message);
   if (!normalized) return { matched: false };

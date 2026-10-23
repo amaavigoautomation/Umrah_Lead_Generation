@@ -78,10 +78,6 @@ export const AutoFollowUpDashboard: React.FC<AutoFollowUpDashboardProps> = ({
   const [websiteDelayUnit, setWebsiteDelayUnit] = useState<'minute' | 'hour' | 'day'>('hour');
 
   const [maxFollowUps, setMaxFollowUps] = useState<number>(3);
-  const [quietHoursEnabled, setQuietHoursEnabled] = useState<boolean>(true);
-  const [quietStart, setQuietStart] = useState<string>('22:00');
-  const [quietEnd, setQuietEnd] = useState<string>('08:00');
-  const [sequenceMode, setSequenceMode] = useState<'SIMPLE' | 'SEQUENCE'>('SIMPLE');
 
   const [isSavingConfig, setIsSavingConfig] = useState<boolean>(false);
   const [saveSuccessMsg, setSaveSuccessMsg] = useState<string | null>(null);
@@ -117,14 +113,6 @@ export const AutoFollowUpDashboard: React.FC<AutoFollowUpDashboardProps> = ({
               setWebsiteDelayVal(cfg.channels.WEBSITE.defaultDelayValue || 1);
               setWebsiteDelayUnit(cfg.channels.WEBSITE.defaultDelayUnit || 'hour');
             }
-            if (cfg.quietHours) {
-              setQuietHoursEnabled(cfg.quietHours.enabled ?? true);
-              setQuietStart(cfg.quietHours.start || '22:00');
-              setQuietEnd(cfg.quietHours.end || '08:00');
-            }
-            if (cfg.mode) {
-              setSequenceMode(cfg.mode);
-            }
           }
         }
       }
@@ -154,12 +142,6 @@ export const AutoFollowUpDashboard: React.FC<AutoFollowUpDashboardProps> = ({
             FACEBOOK: { enabled: true, defaultDelayValue: facebookDelayVal, defaultDelayUnit: facebookDelayUnit, maxFollowUps },
             EMAIL: { enabled: true, defaultDelayValue: emailDelayVal, defaultDelayUnit: emailDelayUnit, maxFollowUps },
             WEBSITE: { enabled: true, defaultDelayValue: websiteDelayVal, defaultDelayUnit: websiteDelayUnit, maxFollowUps },
-          },
-          mode: sequenceMode,
-          quietHours: {
-            enabled: quietHoursEnabled,
-            start: quietStart,
-            end: quietEnd,
           },
         }),
       });
@@ -694,62 +676,6 @@ export const AutoFollowUpDashboard: React.FC<AutoFollowUpDashboardProps> = ({
                 className="w-32 text-xs p-2 bg-white border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:border-orange-500"
               />
             </div>
-
-            <div>
-              <label className="block text-xs font-bold text-slate-900 mb-1">
-                Sequence Mode vs Simple Mode
-              </label>
-              <p className="text-xs text-slate-500 mb-2">
-                Simple uses each channel's configured interval. Sequence Mode overrides channel intervals with its own 1hr, 1day, 3day steps.
-              </p>
-              <select
-                value={sequenceMode}
-                onChange={(e) => setSequenceMode(e.target.value as any)}
-                className="w-full text-xs p-2 bg-white border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:border-orange-500"
-              >
-                <option value="SIMPLE">Simple Mode (Configured Channel Interval)</option>
-                <option value="SEQUENCE">Sequence Mode (1hr → 1day → 3days)</option>
-              </select>
-            </div>
-          </div>
-
-          {/* Quiet Hours */}
-          <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/70 mb-8">
-            <div className="flex items-center justify-between mb-3">
-              <div>
-                <h3 className="font-bold text-sm text-slate-900">Quiet Hours Protection</h3>
-                <p className="text-xs text-slate-500">Prevent sending automated messages late at night. Automatically queues until morning.</p>
-              </div>
-              <input
-                type="checkbox"
-                checked={quietHoursEnabled}
-                onChange={(e) => setQuietHoursEnabled(e.target.checked)}
-                className="w-4 h-4 accent-orange-500 rounded"
-              />
-            </div>
-
-            {quietHoursEnabled && (
-              <div className="flex items-center gap-3 mt-3">
-                <div>
-                  <span className="text-xs text-slate-500">Start (e.g. 10:00 PM):</span>
-                  <input
-                    type="time"
-                    value={quietStart}
-                    onChange={(e) => setQuietStart(e.target.value)}
-                    className="ml-2 text-xs p-1.5 bg-white border border-slate-200 rounded-lg focus:outline-none focus:border-orange-500"
-                  />
-                </div>
-                <div>
-                  <span className="text-xs text-slate-500">End (e.g. 8:00 AM):</span>
-                  <input
-                    type="time"
-                    value={quietEnd}
-                    onChange={(e) => setQuietEnd(e.target.value)}
-                    className="ml-2 text-xs p-1.5 bg-white border border-slate-200 rounded-lg focus:outline-none focus:border-orange-500"
-                  />
-                </div>
-              </div>
-            )}
           </div>
 
           <button

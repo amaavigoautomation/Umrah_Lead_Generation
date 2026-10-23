@@ -5,9 +5,7 @@ export type ActiveTab =
   | 'scheduling'
   | 'knowledge'
   | 'playground'
-  | 'scenarios'
   | 'settings'
-  | 'live-mailbox'
   | 'auto-followup';
 
 export type Channel = 'WEBSITE' | 'WHATSAPP' | 'INSTAGRAM' | 'FACEBOOK' | 'LINKEDIN' | 'EMAIL';
@@ -552,7 +550,7 @@ export interface AppUser {
   name: string;
   role: UserRole;
   accessLevel: UserAccessLevel;
-  allowedModules: string[]; // Module IDs: 'inbox', 'campaigns', 'crm', 'knowledge', 'playground', 'scenarios', 'settings', 'live-mailbox'
+  allowedModules: string[]; // Module IDs: 'inbox', 'campaigns', 'crm', 'knowledge', 'playground', 'settings'
   isActive?: boolean;
   createdAt: string;
   updatedAt: string;

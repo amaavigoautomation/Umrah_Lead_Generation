@@ -1,11 +1,10 @@
 import { useBrand } from '../context/BrandContext';
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import {
   PanelLeft,
   PanelLeftClose,
   Radio,
   MessageSquare,
-  RefreshCw,
   LogOut,
   Shield,
   Inbox,
@@ -14,14 +13,12 @@ import {
   Calendar,
   BookOpen,
   Sparkles,
-  PlayCircle,
   Settings,
   Bot,
-  Mail,
 } from 'lucide-react';
-import { WHATSAPP_BUSINESS_NUMBER_FORMATTED } from '../services/whatsappInboundService';
 import { ActiveTab } from './Navbar';
 import { AppUser } from '../types';
+import { useConnectedChannels } from '../hooks/useConnectedChannels';
 
 interface HeaderBarProps {
   activeTab: ActiveTab;
@@ -30,7 +27,8 @@ interface HeaderBarProps {
   onToggleCollapse: () => void;
   unreadCount: number;
   handoffCount: number;
-  onResetSeedData: () => void;
+  /** Workspace whose connected email / WhatsApp number are shown in the header. */
+  tenantId?: string;
   currentUser?: AppUser | null;
   onLogout?: () => void;
 }
@@ -43,9 +41,7 @@ const TAB_TITLES: Record<ActiveTab, { title: string; icon: React.ReactNode }> = 
   scheduling: { title: 'Demo Scheduling Agent', icon: <Calendar className="w-4 h-4 text-orange-600" /> },
   knowledge: { title: 'Knowledge Base (RAG)', icon: <BookOpen className="w-4 h-4 text-orange-600" /> },
   playground: { title: 'AI Testing Playground', icon: <Sparkles className="w-4 h-4 text-orange-600" /> },
-  scenarios: { title: 'E2E Walkthroughs', icon: <PlayCircle className="w-4 h-4 text-orange-600" /> },
   settings: { title: 'Settings & Channels', icon: <Settings className="w-4 h-4 text-orange-600" /> },
-  'live-mailbox': { title: 'Live Mailbox & SMTP', icon: <Mail className="w-4 h-4 text-orange-600" /> },
 };
 
 export const HeaderBar: React.FC<HeaderBarProps> = ({
@@ -55,22 +51,14 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
   onToggleCollapse,
   unreadCount,
   handoffCount,
-  onResetSeedData,
+  tenantId,
   currentUser,
   onLogout,
 }) => {
   const { brand } = useBrand();
   const isUmrahBrand = brand.playbook === 'umrah360';
-  const [activeMailbox, setActiveMailbox] = useState<string>('');
-
-  useEffect(() => {
-    fetch('/api/smtp/status')
-      .then((res) => res.json())
-      .then((data) => {
-        if (data?.user) setActiveMailbox(data.user);
-      })
-      .catch(() => {});
-  }, []);
+  // Only what THIS workspace has actually connected is shown. Nothing is shown when nothing is connected.
+  const { mailbox: connectedMailbox, whatsapp: connectedWhatsApp } = useConnectedChannels(tenantId);
 
   const currentTabMeta = TAB_TITLES[activeTab] || { title: 'Dashboard', icon: null };
 
@@ -106,29 +94,28 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
 
       {/* Right: Live Channel Badges & Actions with Sign Out at Rightmost Corner */}
       <div className="flex items-center space-x-2 sm:space-x-3 text-xs">
-        {/* Live Mailbox Status */}
-        <button
-          onClick={() => setActiveTab('live-mailbox')}
-          className={`hidden sm:flex items-center space-x-1.5 px-2.5 py-1 rounded-lg border text-xs transition ${
-            activeTab === 'live-mailbox'
-              ? 'bg-orange-50 border-orange-200 text-orange-700 font-semibold shadow-2xs'
-              : 'bg-slate-50 border-slate-200/80 text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-          }`}
-          title={`Live Mailbox: ${activeMailbox}`}
-        >
-          <Radio className="w-3.5 h-3.5 text-blue-500 animate-pulse shrink-0" />
-          <span className="font-mono text-[11px] truncate max-w-[140px]">{activeMailbox}</span>
-        </button>
+        {/* Connected mailbox (this workspace only; hidden when none is connected) */}
+        {connectedMailbox && (
+          <div
+            className="hidden sm:flex items-center space-x-1.5 px-2.5 py-1 rounded-lg border bg-slate-50 border-slate-200/80 text-slate-600 text-xs"
+            title={`Connected mailbox: ${connectedMailbox}`}
+          >
+            <Radio className="w-3.5 h-3.5 text-blue-500 animate-pulse shrink-0" />
+            <span className="font-mono text-[11px] truncate max-w-[180px]">{connectedMailbox}</span>
+          </div>
+        )}
 
-        {/* Live WhatsApp Status */}
-        <button
-          onClick={() => setActiveTab('inbox')}
-          className="hidden md:flex items-center space-x-1.5 px-2.5 py-1 rounded-lg border border-slate-200/80 bg-slate-50 text-slate-600 hover:text-slate-900 hover:bg-slate-100 text-xs transition"
-          title={`Live WhatsApp Business: ${WHATSAPP_BUSINESS_NUMBER_FORMATTED}`}
-        >
-          <MessageSquare className="w-3.5 h-3.5 text-emerald-500 animate-pulse shrink-0" />
-          <span className="font-mono text-[11px] truncate">{WHATSAPP_BUSINESS_NUMBER_FORMATTED}</span>
-        </button>
+        {/* Connected WhatsApp number (this workspace only; hidden when none is connected) */}
+        {connectedWhatsApp && (
+          <button
+            onClick={() => setActiveTab('inbox')}
+            className="hidden md:flex items-center space-x-1.5 px-2.5 py-1 rounded-lg border border-slate-200/80 bg-slate-50 text-slate-600 hover:text-slate-900 hover:bg-slate-100 text-xs transition"
+            title={`Connected WhatsApp Business: ${connectedWhatsApp}`}
+          >
+            <MessageSquare className="w-3.5 h-3.5 text-emerald-500 animate-pulse shrink-0" />
+            <span className="font-mono text-[11px] truncate">{connectedWhatsApp}</span>
+          </button>
+        )}
 
         {/* Handoff Alert Badge */}
         {handoffCount > 0 && (
@@ -140,16 +127,6 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
             <span>{handoffCount} Handoff</span>
           </button>
         )}
-
-        {/* Reset Demo Data Button */}
-        <button
-          onClick={onResetSeedData}
-          title="Reset initial demo data (Campaigns, Leads, Knowledge Base)"
-          className="flex items-center space-x-1.5 px-2.5 py-1 rounded-lg bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs font-semibold border border-slate-200/80 shadow-2xs transition"
-        >
-          <RefreshCw className="w-3.5 h-3.5 text-slate-500" />
-          <span className="hidden sm:inline">Reset Demo</span>
-        </button>
 
         {/* Rightmost Corner: Sign Out Button */}
         {currentUser && onLogout && (

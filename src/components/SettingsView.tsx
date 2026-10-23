@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { useBrand } from '../context/BrandContext';
 import {
   Settings,
   Shield,
@@ -11,7 +10,6 @@ import {
   Clock,
   Key,
   Globe,
-  Database,
   RefreshCw,
 } from 'lucide-react';
 import { SystemSettings, Channel, ChannelMode, AppUser } from '../types';
@@ -26,7 +24,6 @@ import { ConnectedChannelsPanel } from './ConnectedChannelsPanel';
 interface SettingsViewProps {
   settings: SystemSettings;
   onSaveSettings: (settings: SystemSettings) => void;
-  onResetSeedData: () => void;
   users?: AppUser[];
   onSaveUser?: (user: AppUser) => Promise<void>;
   onDeleteUser?: (userId: string) => Promise<void>;
@@ -37,14 +34,12 @@ interface SettingsViewProps {
 export const SettingsView: React.FC<SettingsViewProps> = ({
   settings,
   onSaveSettings,
-  onResetSeedData,
   users,
   onSaveUser,
   onDeleteUser,
   tenantId,
   canEditEmail,
 }) => {
-  const { brand } = useBrand();
   const [formData, setFormData] = useState<SystemSettings>(settings);
   const [isSaved, setIsSaved] = useState(false);
   const [openAiKeyInput, setOpenAiKeyInput] = useState('');
@@ -379,30 +374,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           onSaveUser={onSaveUser}
           onDeleteUser={onDeleteUser}
         />
-      )}
-
-      {/* Database Reset & Cloud Details (Umrah360 sample data only) */}
-      {brand.playbook === 'umrah360' && (
-      <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-slate-900">
-        <div>
-          <h4 className="font-bold text-sm text-slate-900 font-display flex items-center space-x-2">
-            <Database className="w-4 h-4 text-orange-500" />
-            <span>Firestore Persistence & Data Reset</span>
-          </h4>
-          <p className="text-xs text-slate-500 mt-0.5">
-            Reset all collections back to the official Umrah360 seed data (Indian Umrah Operators,
-            Rahul Sharma thread, and Published Knowledge Base).
-          </p>
-        </div>
-
-        <button
-          onClick={onResetSeedData}
-          className="flex items-center space-x-1.5 px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold border border-slate-200 transition"
-        >
-          <RefreshCw className="w-3.5 h-3.5" />
-          <span>Reset Initial Demo Data</span>
-        </button>
-      </div>
       )}
     </div>
   );

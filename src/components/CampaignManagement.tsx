@@ -119,7 +119,7 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [templateSearchQuery, setTemplateSearchQuery] = useState('');
   const [leadStatusFilter, setLeadStatusFilter] = useState<
-    'ALL' | 'PENDING' | 'SENT' | 'REPLIED' | 'DEMO_BOOKED' | 'FAILED' | 'OPENED' | 'CLICKED' | 'WAITING' | 'IGNORED' | 'BOUNCED'
+    'ALL' | 'PENDING' | 'SENT' | 'REPLIED' | 'FAILED' | 'OPENED' | 'CLICKED' | 'WAITING' | 'IGNORED' | 'BOUNCED'
   >('ALL');
   // Email engagement numbers (opened is an ESTIMATE; replied and clicked are confirmed). From aggregation queries.
   const [engagement, setEngagement] = useState<{
@@ -633,7 +633,7 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
   // While sending progresses, the listener updates the campaign's counters; refresh the visible rows
   // then (debounced), instead of polling. Only the rows on screen are re-read.
   const progressKey = selectedCampaign
-    ? [selectedCampaign.status, selectedCampaign.sentCount, selectedCampaign.failedCount, selectedCampaign.repliedCount, selectedCampaign.demoBookedCount, selectedCampaign.pendingCount, selectedCampaign.lastRunNumber].join('|')
+    ? [selectedCampaign.status, selectedCampaign.sentCount, selectedCampaign.failedCount, selectedCampaign.repliedCount, selectedCampaign.pendingCount, selectedCampaign.lastRunNumber].join('|')
     : '';
   const campaignLeadsCountRef = useRef(0);
   const refreshSearchResultsRef = useRef<() => void>(() => {});
@@ -1518,7 +1518,6 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
       if (leadStatusFilter === 'SENT' && lead.sendStatus !== 'SENT') return false;
       if (leadStatusFilter === 'FAILED' && lead.sendStatus !== 'FAILED') return false;
       if (leadStatusFilter === 'REPLIED' && lead.replyStatus !== 'REPLIED') return false;
-      if (leadStatusFilter === 'DEMO_BOOKED' && lead.demoStatus !== 'BOOKED') return false;
       if (leadStatusFilter === 'OPENED' && !lead.opened) return false;
       if (leadStatusFilter === 'CLICKED' && !lead.clicked) return false;
       if (leadStatusFilter === 'BOUNCED' && !lead.bounced) return false;
@@ -1674,7 +1673,6 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                   const liveCampTotal = camp.totalLeads || 0;
                   const liveCampSent = camp.sentCount || 0;
                   const liveCampReplied = camp.repliedCount || 0;
-                  const liveCampDemo = camp.demoBookedCount || 0;
                   const percentSent = liveCampTotal > 0 ? Math.round((liveCampSent / liveCampTotal) * 100) : 0;
                   return (
                     <div
@@ -1763,10 +1761,6 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                         <span className="flex items-center gap-1">
                           <MessageSquare className="w-3 h-3 text-sky-500" />
                           <span>{liveCampReplied}</span>
-                        </span>
-                        <span className="flex items-center gap-1 text-orange-600 font-semibold">
-                          <Sparkles className="w-3 h-3" />
-                          <span>{liveCampDemo} Demos</span>
                         </span>
                       </div>
                     </div>
@@ -1971,7 +1965,6 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                   // The leads table holds only one page, so it is never counted here.
                   const liveTotalLeads = selectedCampaign.totalLeads || 0;
                   const liveRepliedCount = selectedCampaign.repliedCount || 0;
-                  const liveDemoCount = selectedCampaign.demoBookedCount || 0;
 
                   // For restart follow-up runs, the target pool is the leads that have not replied.
                   const runTargetCount = isRestartRun ? Math.max(0, liveTotalLeads - liveRepliedCount) : liveTotalLeads;
@@ -1984,7 +1977,7 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                   const percentSent = runTargetCount > 0 ? Math.round((liveSentCount / runTargetCount) * 100) : 0;
 
                   return (
-                    <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
+                    <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
                       <div className="p-4 bg-white border border-slate-200 rounded-xl shadow-2xs">
                         <p className="text-xs text-slate-500 font-medium">Total Leads</p>
                         <p className="text-2xl font-bold text-slate-900 mt-1">{liveTotalLeads}</p>
@@ -2043,22 +2036,6 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                           </span>
                         </div>
                         <p className="text-[11px] text-slate-400 mt-1">Inbound replies received</p>
-                      </div>
-
-                      <div className="p-4 bg-orange-50/60 border border-orange-200 rounded-xl relative overflow-hidden shadow-2xs">
-                        <div className="flex items-center justify-between">
-                          <p className="text-xs font-semibold text-orange-700">Demo Booked</p>
-                          <Sparkles className="w-4 h-4 text-orange-500" />
-                        </div>
-                        <div className="flex items-baseline gap-1.5 mt-1">
-                          <p className="text-2xl font-bold text-orange-600">{liveDemoCount}</p>
-                          <span className="text-xs text-orange-700 font-medium">
-                            {liveSentCount > 0
-                              ? `(${Math.round((liveDemoCount / liveSentCount) * 100)}%)`
-                              : '(0%)'}
-                          </span>
-                        </div>
-                        <p className="text-[11px] text-orange-700 mt-1 font-medium">Automatic + Manual</p>
                       </div>
                     </div>
                   );
@@ -2171,7 +2148,7 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
 
                       {/* Filter Pills */}
                       <div className="flex bg-slate-100 p-1 rounded-lg border border-slate-200 text-xs">
-                        {(['ALL', 'PENDING', 'SENT', 'REPLIED', 'DEMO_BOOKED', 'FAILED'] as const).map(
+                        {(['ALL', 'PENDING', 'SENT', 'REPLIED', 'FAILED'] as const).map(
                           (filter) => (
                             <button
                               key={filter}
@@ -3883,10 +3860,6 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                 <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
                   <span className="text-[10px] uppercase font-bold text-slate-500">Send Status:</span>
                   <p className="font-semibold text-emerald-700 mt-0.5">{inspectingLead.sendStatus}</p>
-                </div>
-                <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
-                  <span className="text-[10px] uppercase font-bold text-slate-500">Demo Status:</span>
-                  <p className="font-semibold text-sky-700 mt-0.5">{inspectingLead.demoStatus || 'NOT_BOOKED'}</p>
                 </div>
               </div>
 

@@ -87,12 +87,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       });
       const data = await res.json();
       if (res.ok && data.success) {
-        setIsOpenAiConfigured(true);
-        setMaskedOpenAiKey(`${openAiKeyInput.trim().slice(0, 7)}...${openAiKeyInput.trim().slice(-4)}`);
+        setIsOpenAiConfigured(Boolean(data.configured));
+        setMaskedOpenAiKey(data.maskedKey || '');
         setOpenAiKeyInput('');
-        setOpenAiKeySaveStatus('OpenAI API Key saved & active!');
+        setOpenAiKeySaveStatus(data.message || 'Deployment AI key status refreshed.');
       } else {
-        setOpenAiKeySaveStatus(data?.error || 'Failed to save API key');
+        setOpenAiKeySaveStatus(data?.error || 'Failed to check AI key configuration');
       }
     } catch (err: any) {
       setOpenAiKeySaveStatus(err?.message || 'Error saving key');

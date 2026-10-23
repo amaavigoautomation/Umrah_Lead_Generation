@@ -2536,7 +2536,7 @@ export async function processNextCampaignSendBatch(
           currentRun.sentCount = (currentRun.sentCount || 0) + 1;
         }
 
-        appendOutboundMessageToThread(conversationId, {
+        const sentThreadMessage = {
           messageId: `msg-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
           gmailMessageId: sentMsgId,
           gmailThreadId,
@@ -2557,7 +2557,17 @@ export async function processNextCampaignSendBatch(
             to: lead.email,
             messageId: sentMsgId,
           },
-        });
+        };
+        appendOutboundMessageToThread(conversationId, sentThreadMessage);
+        // Save the sent email as a real message too. The in-memory thread above is lost between serverless
+        // invocations, so without this the Auto Follow-Up worker would see an empty conversation.
+        if (!isSimulationMode && isFirebaseConfigured && db) {
+          await safeSetDoc(
+            tenantRepo(getCampaignActiveCtx()).messageDoc(sentThreadMessage.messageId),
+            sentThreadMessage,
+            { merge: true }
+          ).catch((e: any) => console.warn('[Campaign] Could not save sent email as a message:', e?.message || e));
+        }
 
         if (isFirebaseConfigured && db) {
           await safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignLeadDoc(lead.campaignLeadId), lead, { merge: true });

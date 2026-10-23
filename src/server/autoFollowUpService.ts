@@ -774,8 +774,17 @@ export async function evaluateAndGenerateAiFollowUp(params: {
   lead: Lead;
   conversation: Conversation;
   messages: Message[];
+  /** Internal: set on the single retry that forbids a Skip decision. */
+  forceSend?: boolean;
 }): Promise<Evaluation> {
-  const { job, lead, conversation, messages } = params;
+  const { job, lead, conversation, messages, forceSend = false } = params;
+  // The lead has never written back in this thread: there is nothing in the conversation that can make a
+  // follow-up "unhelpful", so Skip is not a valid answer (they just have not answered our outreach yet).
+  const leadNeverReplied = !messages.some(
+    (m) =>
+      m.conversationId === conversation.conversationId &&
+      (m.senderType === 'CUSTOMER' || m.senderType === 'PROSPECT' || m.direction === 'INBOUND')
+  );
   const brand = await getTenantBrand(job.tenantId);
   const isUmrah = brand.playbook === 'umrah360';
 
@@ -809,7 +818,7 @@ STRICT RULES:
 6. LANGUAGE: match the dominant language the lead used.
 7. DECISION:
    - "send": a safe, relevant follow-up can be written.
-   - "skip": no useful next step right now. In "reason", explain the exact conversation detail that makes a follow-up unhelpful; never return an empty or generic reason.
+   - "skip": no useful next step right now. In "reason", explain the exact conversation detail that makes a follow-up unhelpful; never return an empty or generic reason. NEVER choose "skip" when the lead has not replied at all yet (see LEAD HAS REPLIED below): an unanswered first message is exactly what a follow-up is for. If the thread above looks empty, rely on "LAST REFERENCE MESSAGE FROM US".
    - "human_review": a human must step in (promised pricing/visa check, complaint, conflicting details, complex request), or you cannot explain a Skip decision.
 8. Respond ONLY with valid JSON:
    {"decision":"send|skip|human_review","reason":"...","objective":"...","language":"...","generatedMessage":"exact text if send","humanReviewReason":"if human_review"}
@@ -824,6 +833,7 @@ STRICT RULES:
 - Buying Stage: ${lead.buyingStage || snap.buyingStage || 'unknown'}
 - Known Requirements: ${JSON.stringify(lead.requirements || snap.requirements || [])}
 - Attempt Number: ${job.attempt}
+- LEAD HAS REPLIED: ${leadNeverReplied ? 'NO (never replied to our outreach; "skip" is not allowed)' : 'yes'}
 
 CHANNEL: ${conversation.channel}
 
@@ -833,7 +843,7 @@ ${threadContext || 'No recent messages recorded.'}
 LAST REFERENCE MESSAGE FROM US:
 "${job.referenceMessageText || ''}"
 
-Decide SEND, SKIP, or HUMAN_REVIEW and produce the JSON.`;
+Decide SEND, SKIP, or HUMAN_REVIEW and produce the JSON.${forceSend ? '\n\nIMPORTANT: The lead has never replied, so "skip" is NOT allowed. Return decision "send" with a short, specific follow-up that builds on the LAST REFERENCE MESSAGE FROM US, or "human_review" with a clear humanReviewReason if you truly cannot write a safe one.' : ''}`;
 
   try {
     const quota = await checkTenantQuota(ctx0(job), 'ai');
@@ -881,6 +891,20 @@ Decide SEND, SKIP, or HUMAN_REVIEW and produce the JSON.`;
       ? parsed.decision as Evaluation['decision']
       : 'human_review';
     const decisionReason = typeof parsed.reason === 'string' ? parsed.reason.trim() : '';
+
+    // A lead that never replied must not be "skipped": ask once more with Skip forbidden.
+    if (decision === 'skip' && leadNeverReplied) {
+      if (!forceSend) {
+        return evaluateAndGenerateAiFollowUp({ ...params, forceSend: true });
+      }
+      return {
+        decision: 'human_review',
+        reason: `The AI still chose Skip although the lead has never replied (its reason: ${decisionReason || 'none given'}). A person should decide.`,
+        objective: parsed.objective,
+        humanReviewReason: 'AI wanted to skip a lead that has not replied yet.',
+        model: 'gpt-4o-mini',
+      };
+    }
 
     if (decision === 'skip' && !decisionReason) {
       return {

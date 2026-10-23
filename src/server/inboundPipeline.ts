@@ -1712,7 +1712,14 @@ export async function processLiveInboundEmail(payload: {
         if (match.matched) {
           keywordHandoffReason = `Human Handoff ${match.reason || 'trigger'}: ${match.matchedPhrase}`;
           setConversationAiState(conversationId, false, true);
-          try { const followups = await import('./autoFollowUpService.js'); await followups.cancelPendingFollowUpJob(getInboundCtx(), conversationId, 'Human Handoff keyword matched', 'system'); } catch (e) { console.warn('[Human Handoff] Could not cancel queued follow-ups:', e); }
+          const handoffAt = new Date().toISOString();
+          await safeSetDoc(tenantRepo(getInboundCtx()).conversationDoc(conversationId), {
+            conversationId, aiEnabled: false, humanHandoff: true, managementMode: 'HUMAN',
+            humanHandoffAt: handoffAt, humanHandoffReason: keywordHandoffReason,
+            humanHandoffDetectionSource: match.reason === 'FRUSTRATION' && String(match.matchedPhrase || '').startsWith('AI classified') ? 'AI' : 'RULE',
+            updatedAt: handoffAt,
+          }, { merge: true });
+          try { const followups = await import('./autoFollowUpService.js'); await followups.cancelPendingFollowUpJob(getInboundCtx(), conversationId, 'Human Handoff triggered', 'system'); } catch (e) { console.warn('[Human Handoff] Could not cancel queued follow-ups:', e); }
         }
       }
     } catch (handoffConfigError) {

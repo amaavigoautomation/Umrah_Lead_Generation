@@ -1065,6 +1065,7 @@ async function createGoogleCalendarDemoBookingInner(
               disabledReason: 'demo_booked',
               activeFollowUpId: null,
               nextScheduledAt: null,
+              channelDelayOverride: null,
             },
             updatedAt: nowIso,
           },

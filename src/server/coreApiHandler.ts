@@ -2627,7 +2627,36 @@ Generate a helpful, grounded response.`;
     }
   }
 
-// HUMAN HANDOFF — tenant-scoped config and explicit thread resume/takeover
+// OpenAI key status and secure configuration for the Settings screen.
+// Never return the secret value to the browser.
+  if (url === '/api/ai/openai-key' && req.method === 'GET') {
+    const envKey = process.env.OPENAI_API_KEY || '';
+    const geminiKey = process.env.GEMINI_API_KEY || '';
+    const key = envKey || geminiKey;
+    res.statusCode = 200;
+    res.end(JSON.stringify({
+      success: true,
+      configured: Boolean(key),
+      provider: envKey ? 'openai' : geminiKey ? 'gemini' : null,
+      maskedKey: key ? `${key.slice(0, 7)}...${key.slice(-4)}` : '',
+      source: key ? 'environment' : null,
+    }));
+    return true;
+  }
+
+  if (url === '/api/ai/openai-key' && req.method === 'POST') {
+    // A Vercel function cannot modify deployment environment variables at runtime.
+    // Do not pretend to save a key that the AI pipelines would not actually use.
+    res.statusCode = 400;
+    res.end(JSON.stringify({
+      success: false,
+      error: 'Configure OPENAI_API_KEY (or GEMINI_API_KEY) in the Vercel project Environment Variables, then redeploy. Keys are read server-side and are never returned by this API.',
+      code: 'USE_SERVER_ENVIRONMENT',
+    }));
+    return true;
+  }
+
+  // HUMAN HANDOFF — tenant-scoped config and explicit thread resume/takeover
   // =========================================================================
   if (url === '/api/human-handoff/config' && (req.method === 'GET' || req.method === 'POST' || req.method === 'PATCH')) {
     try {

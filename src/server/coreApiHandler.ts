@@ -2569,7 +2569,65 @@ Generate a helpful, grounded response.`;
 
 
   // =========================================================================
-  // HUMAN HANDOFF — tenant-scoped config and explicit thread resume/takeover
+    // =========================================================================
+  // SETTINGS — tenant-scoped channel configuration
+  // =========================================================================
+  if (url === '/api/settings' && (req.method === 'GET' || req.method === 'POST' || req.method === 'PATCH')) {
+    try {
+      const settingsRef = tenantRepo(activeTenantCtx).settingsDoc('default');
+      if (req.method === 'GET') {
+        const snap = await getDoc(settingsRef);
+        const saved = snap.exists() ? (snap.data() as any) : {};
+        res.statusCode = 200;
+        res.end(JSON.stringify({
+          success: true,
+          emailMode: saved.emailMode || 'AUTO',
+          emailSignature: saved.emailSignature || '',
+          debounceSeconds: Number(saved.debounceSeconds ?? 30),
+        }));
+        return true;
+      }
+
+      if (String(userRole).toUpperCase() !== 'ADMIN' && !isPlatformAdmin) {
+        res.statusCode = 403;
+        res.end(JSON.stringify({ error: 'Only admins can update channel settings.' }));
+        return true;
+      }
+
+      const updates: Record<string, unknown> = { updatedAt: new Date().toISOString() };
+      if (body?.emailMode !== undefined) {
+        const mode = String(body.emailMode).toUpperCase();
+        if (!['AUTO', 'REVIEW', 'SIMULATION'].includes(mode)) {
+          res.statusCode = 400;
+          res.end(JSON.stringify({ error: 'Invalid emailMode.' }));
+          return true;
+        }
+        updates.emailMode = mode;
+      }
+      if (body?.emailSignature !== undefined) updates.emailSignature = String(body.emailSignature);
+      if (body?.debounceSeconds !== undefined) {
+        const debounceSeconds = Number(body.debounceSeconds);
+        if (!Number.isFinite(debounceSeconds) || debounceSeconds < 0 || debounceSeconds > 3600) {
+          res.statusCode = 400;
+          res.end(JSON.stringify({ error: 'debounceSeconds must be between 0 and 3600.' }));
+          return true;
+        }
+        updates.debounceSeconds = debounceSeconds;
+      }
+
+      await safeSetDoc(settingsRef, updates, { merge: true });
+      res.statusCode = 200;
+      res.end(JSON.stringify({ success: true, settings: updates }));
+      return true;
+    } catch (err: any) {
+      console.error('[Settings API] Failed to read or save tenant settings:', err);
+      res.statusCode = 500;
+      res.end(JSON.stringify({ error: err?.message || 'Failed to save settings.' }));
+      return true;
+    }
+  }
+
+// HUMAN HANDOFF — tenant-scoped config and explicit thread resume/takeover
   // =========================================================================
   if (url === '/api/human-handoff/config' && (req.method === 'GET' || req.method === 'POST' || req.method === 'PATCH')) {
     try {

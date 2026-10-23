@@ -1,6 +1,6 @@
 import { tenantRepo } from './tenantRepo.js';
 import { countUnsuccessfulResolutionAttempts, detectHumanHandoff } from '../shared/humanHandoff.js';
-import { setConversationAiState } from './inboundPipeline.js';
+import { classifyHumanHandoffWithAi, setConversationAiState } from './inboundPipeline.js';
 import type { TenantContext } from '../types/tenant.js';
 
 const DEFAULT_UMRAH_CTX: TenantContext = {
@@ -981,7 +981,11 @@ export async function processLiveInboundWhatsApp(payload: {
         ? (Array.isArray(handoffSettings.humanHandoffKeywords) ? handoffSettings.humanHandoffKeywords : ['speak with the booking team', 'connect me to an Umrah specialist', 'call me regarding my package'])
         : [];
       const unsuccessfulAttempts = countUnsuccessfulResolutionAttempts(thread as unknown as Record<string, unknown>[]);
-        const match = detectHumanHandoff(payload.body || '', { ...configuredRules, customPhrases }, { unsuccessfulAttempts });
+        let match = detectHumanHandoff(payload.body || '', { ...configuredRules, customPhrases }, { unsuccessfulAttempts });
+      if (!match.matched && configuredRules.frustration !== false) {
+        const aiDecision = await classifyHumanHandoffWithAi(payload.body || '', thread as unknown as Record<string, unknown>[]);
+        if (aiDecision.handoffRequired) match = { matched: true, reason: aiDecision.reason === 'CUSTOMER_FRUSTRATION' ? 'FRUSTRATION' : 'EXPLICIT_REQUEST', matchedPhrase: aiDecision.explanation || `AI classified ${aiDecision.reason}` };
+      }
       if (match.matched) {
         keywordHandoffReason = `Human Handoff ${match.reason || 'trigger'}: ${match.matchedPhrase}`;
         setConversationAiState(conversationId, false, true);

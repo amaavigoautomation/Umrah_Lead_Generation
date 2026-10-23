@@ -120,14 +120,14 @@ export function detectHumanHandoff(
   // Do not let a quoted example or a conditional/hypothetical phrase trigger handoff.
   const negation = containsPhrase(normalized, NEGATED_REQUESTS);
   if (negation) return { matched: false };
-  const quotedRequest = /(?:if i say|if i said|imagine i said|for example|the phrase|the words|you said|i said)\\s+.{0,90}\\b(?:talk|speak|connect|transfer)\\b.{0,70}\\b(?:human|person|agent|representative|support|manager|team)\\b/.test(normalized);
+  const quotedRequest = /(?:if i say|if i said|imagine i said|for example|the phrase|the words|you said|i said)\s+.{0,90}\b(?:talk|speak|connect|transfer)\b.{0,70}\b(?:human|person|agent|representative|support|manager|team)\b/.test(normalized);
   if (quotedRequest) return { matched: false };
 
   if (rules.explicitRequest !== false) {
     const phrase = containsPhrase(normalized, EXPLICIT_REQUESTS);
     if (phrase) {
       // Avoid false positives where a customer reports someone else's request.
-      const reportedSpeech = /^(?:my friend|my customer|the customer|someone|he|she|they)\\s+(?:said|asked|wants|wanted|needs|needed)\\b/.test(normalized);
+      const reportedSpeech = /^(?:my friend|my customer|the customer|someone|he|she|they)\s+(?:said|asked|wants|wanted|needs|needed)\b/.test(normalized);
       if (!reportedSpeech) return { matched: true, reason: 'EXPLICIT_REQUEST', matchedPhrase: phrase };
     }
   }

@@ -2645,13 +2645,29 @@ Generate a helpful, grounded response.`;
   }
 
   if (url === '/api/ai/openai-key' && req.method === 'POST') {
-    // A Vercel function cannot modify deployment environment variables at runtime.
-    // Do not pretend to save a key that the AI pipelines would not actually use.
+    // The real key is managed by the deployment environment, not persisted from the browser.
+    // If already configured, report that truthfully and return only a masked value.
+    const envKey = process.env.OPENAI_API_KEY || '';
+    const geminiKey = process.env.GEMINI_API_KEY || '';
+    const key = envKey || geminiKey;
+    if (key) {
+      res.statusCode = 200;
+      res.end(JSON.stringify({
+        success: true,
+        configured: true,
+        provider: envKey ? 'openai' : 'gemini',
+        maskedKey: `${key.slice(0, 7)}...${key.slice(-4)}`,
+        source: 'environment',
+        message: 'AI key is already configured in this deployment environment. No key change was made.',
+      }));
+      return true;
+    }
     res.statusCode = 400;
     res.end(JSON.stringify({
       success: false,
-      error: 'Configure OPENAI_API_KEY (or GEMINI_API_KEY) in the Vercel project Environment Variables, then redeploy. Keys are read server-side and are never returned by this API.',
-      code: 'USE_SERVER_ENVIRONMENT',
+      configured: false,
+      error: 'No OPENAI_API_KEY or GEMINI_API_KEY is available to this deployment. Check that the variable is enabled for Preview and redeploy.',
+      code: 'ENVIRONMENT_KEY_MISSING',
     }));
     return true;
   }

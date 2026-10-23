@@ -504,10 +504,12 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
     !followUpCompleted && followUpDisabledReason !== 'manual' && followUpDisabledReason !== 'admin_disabled';
   const isAutoFollowUpUiActive = Boolean(activeLead?.autoFollowUp?.enabled) &&
     !leadRepliedAfterFollowUp && !followUpCompleted;
+  const activeLeadHasBookedDemo = activeLead?.demoStatus === 'BOOKED' || activeLead?.status === 'DEMO_BOOKED';
 
   // Toggle Auto Follow-Up on/off for the active lead
   const handleToggleAutoFollowUp = async (enabled: boolean) => {
     if (!activeLead || !activeConversation) return;
+    if (enabled && activeLeadHasBookedDemo) return;
     setIsTogglingAutoFollowUp(true);
     try {
       const res = await fetch('/api/auto-followup/toggle', {
@@ -525,6 +527,10 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
       if (res.ok) {
         const data = await res.json();
         if (data.success && data.lead) {
+          activeLead.status = data.lead.status || activeLead.status;
+          activeLead.demoStatus = data.lead.demoStatus || activeLead.demoStatus;
+          activeLead.demoBookedAt = data.lead.demoBookedAt || activeLead.demoBookedAt;
+          activeLead.calendarEventId = data.lead.calendarEventId || activeLead.calendarEventId;
           activeLead.autoFollowUp = data.lead.autoFollowUp;
           if (onAutoFollowUpChanged) onAutoFollowUpChanged(activeLead.leadId, data.lead.autoFollowUp);
           if (onSyncNow) onSyncNow();
@@ -848,13 +854,13 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
                 {activeLead && (activeLead.leadType === 'INBOUND' || activeLead.leadType === 'OUTBOUND') && (
                   <button
                     onClick={() => handleToggleAutoFollowUp(!isAutoFollowUpUiActive)}
-                    disabled={isTogglingAutoFollowUp}
+                    disabled={isTogglingAutoFollowUp || (activeLeadHasBookedDemo && !isAutoFollowUpUiActive)}
                     className={`flex items-center space-x-1.5 px-2.5 py-1 rounded-lg text-xs font-bold border transition ${
                       isAutoFollowUpUiActive
                         ? 'bg-emerald-50 border-emerald-300 text-emerald-800 hover:bg-emerald-100'
                         : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
                     }`}
-                    title="Toggle AI Auto Follow-Up for this lead"
+                    title={activeLeadHasBookedDemo ? 'A demo is booked. Auto Follow-Up cannot be enabled for this lead.' : 'Toggle AI Auto Follow-Up for this lead'}
                   >
                     <Clock className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
                     <span>

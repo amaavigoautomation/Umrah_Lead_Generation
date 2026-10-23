@@ -70,6 +70,8 @@ export interface AutoFollowUpJob {
     buyingStage?: string;
     requirements?: string[];
     calendarEventId?: string | null;
+    demoStatus?: Lead['demoStatus'];
+    demoBookedAt?: string;
     autoFollowUp?: Lead['autoFollowUp'];
   };
   audit?: {
@@ -146,6 +148,11 @@ export const DEFAULT_FOLLOWUP_CONFIG: AutoFollowUpGlobalConfig = {
 
 const INELIGIBLE_STATUSES: LeadStatus[] = ['CLOSED_WON', 'CLOSED_LOST', 'NOT_INTERESTED', 'UNSUBSCRIBED'];
 const AUTO_SEND_CHANNELS = ['EMAIL', 'WEBSITE'];
+
+/** A confirmed demo is a terminal state for automated follow-ups. */
+function isDemoBookedLead(lead: Partial<Lead> | null | undefined): boolean {
+  return lead?.status === 'DEMO_BOOKED' || lead?.demoStatus === 'BOOKED';
+}
 
 // ---------------------------------------------------------------------------
 // Small helpers
@@ -488,7 +495,7 @@ export async function scheduleAutoFollowUpJob(
   if (lead.leadType !== 'INBOUND' && lead.leadType !== 'OUTBOUND') return null;
   if (!lead.autoFollowUp?.enabled) return null;
   if (INELIGIBLE_STATUSES.includes(lead.status)) return null;
-  if (lead.status === 'DEMO_BOOKED' && lead.calendarEventId) return null;
+  if (isDemoBookedLead(lead)) return null;
 
   const channelKey = (conversation.channel || 'EMAIL').toUpperCase();
   const channelCfg = cfg.channels[channelKey] || cfg.channels['EMAIL'];
@@ -558,6 +565,8 @@ export async function scheduleAutoFollowUpJob(
       buyingStage: lead.buyingStage,
       requirements: lead.requirements || [],
       calendarEventId: lead.calendarEventId || null,
+      demoStatus: lead.demoStatus,
+      demoBookedAt: lead.demoBookedAt,
       autoFollowUp: lead.autoFollowUp,
     },
   };
@@ -603,6 +612,30 @@ export async function handleEnableAutoFollowUp(
   }
 ): Promise<{ enabled: boolean; job: AutoFollowUpJob | null }> {
   const { lead, conversation, messages, userName = 'Team Member', delayOverride } = params;
+
+  // The inbox can hold stale lead state after a booking. Check Firestore before enabling follow-ups.
+  if (!isDemoBookedLead(lead) && enabledDb()) {
+    try {
+      const currentLeadSnap = await getDoc(tenantRepo(ctx).leadDoc(lead.leadId));
+      if (currentLeadSnap.exists()) {
+        const persistedLead = currentLeadSnap.data() as Partial<Lead>;
+        if (isDemoBookedLead(persistedLead)) {
+          Object.assign(lead, persistedLead, { leadId: lead.leadId });
+        }
+      }
+    } catch (err) {
+      console.warn('[AutoFollowUp] Could not refresh lead before enabling:', err);
+    }
+  }
+
+  if (isDemoBookedLead(lead)) {
+    // Enforce the booking as authoritative and cancel any jobs left over from stale UI state.
+    lead.status = 'DEMO_BOOKED';
+    lead.demoStatus = 'BOOKED';
+    await handleDemoBookedEvent(ctx, { lead, conversationId: conversation.conversationId, userName });
+    return { enabled: false, job: null };
+  }
+
   const nowIso = new Date().toISOString();
 
   lead.autoFollowUp = {
@@ -617,7 +650,9 @@ export async function handleEnableAutoFollowUp(
     attemptCount: 0,
     maxAttempts: undefined,
     completedAt: null,
-    channelDelayOverride: delayOverride ?? lead.autoFollowUp?.channelDelayOverride ?? null,
+    // A fresh enable uses current global/channel rules unless an override was explicitly supplied.
+    // Do not carry a stale per-lead delay from a previous sequence or demo booking.
+    channelDelayOverride: delayOverride ?? null,
   };
   await saveLeadFollowUpState(ctx, lead);
 
@@ -684,7 +719,7 @@ export async function handleDisableAutoFollowUp(
     activeFollowUpId: null,
     nextScheduledAt: null,
     attemptCount: lead.autoFollowUp?.attemptCount || 0,
-    channelDelayOverride: lead.autoFollowUp?.channelDelayOverride || null,
+    channelDelayOverride: reason === 'demo_booked' ? null : (lead.autoFollowUp?.channelDelayOverride ?? null),
   };
   await saveLeadFollowUpState(ctx, lead);
 
@@ -988,6 +1023,8 @@ async function processOneJob(
       buyingStage: snap.buyingStage as any,
       requirements: snap.requirements || [],
       calendarEventId: snap.calendarEventId || undefined,
+      demoStatus: snap.demoStatus,
+      demoBookedAt: snap.demoBookedAt,
       autoFollowUp: snap.autoFollowUp,
     } as unknown as Lead;
   } else if (!lead.autoFollowUp && snap.autoFollowUp) {
@@ -1023,7 +1060,7 @@ async function processOneJob(
   // 2. Final eligibility checks
   if (lead.leadType !== 'INBOUND' && lead.leadType !== 'OUTBOUND') return cancel('Lead is not inbound or outbound');
   if (!lead.autoFollowUp?.enabled) return cancel('Auto Follow-Up is disabled for lead');
-  if (lead.status === 'DEMO_BOOKED' && lead.calendarEventId) {
+  if (isDemoBookedLead(lead)) {
     await handleDemoBookedEvent(ctx, { lead, conversationId: conversation.conversationId });
     return cancel('Confirmed demo booked on calendar');
   }

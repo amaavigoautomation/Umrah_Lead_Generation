@@ -74,6 +74,9 @@ export const AutoFollowUpDashboard: React.FC<AutoFollowUpDashboardProps> = ({
   const [emailDelayVal, setEmailDelayVal] = useState<number>(2);
   const [emailDelayUnit, setEmailDelayUnit] = useState<'minute' | 'hour' | 'day'>('day');
 
+  const [websiteDelayVal, setWebsiteDelayVal] = useState<number>(1);
+  const [websiteDelayUnit, setWebsiteDelayUnit] = useState<'minute' | 'hour' | 'day'>('hour');
+
   const [maxFollowUps, setMaxFollowUps] = useState<number>(3);
   const [quietHoursEnabled, setQuietHoursEnabled] = useState<boolean>(true);
   const [quietStart, setQuietStart] = useState<string>('22:00');
@@ -109,6 +112,10 @@ export const AutoFollowUpDashboard: React.FC<AutoFollowUpDashboardProps> = ({
             if (cfg.channels?.EMAIL) {
               setEmailDelayVal(cfg.channels.EMAIL.defaultDelayValue || 2);
               setEmailDelayUnit(cfg.channels.EMAIL.defaultDelayUnit || 'day');
+            }
+            if (cfg.channels?.WEBSITE) {
+              setWebsiteDelayVal(cfg.channels.WEBSITE.defaultDelayValue || 1);
+              setWebsiteDelayUnit(cfg.channels.WEBSITE.defaultDelayUnit || 'hour');
             }
             if (cfg.quietHours) {
               setQuietHoursEnabled(cfg.quietHours.enabled ?? true);
@@ -146,6 +153,7 @@ export const AutoFollowUpDashboard: React.FC<AutoFollowUpDashboardProps> = ({
             INSTAGRAM: { enabled: true, defaultDelayValue: instagramDelayVal, defaultDelayUnit: instagramDelayUnit, maxFollowUps },
             FACEBOOK: { enabled: true, defaultDelayValue: facebookDelayVal, defaultDelayUnit: facebookDelayUnit, maxFollowUps },
             EMAIL: { enabled: true, defaultDelayValue: emailDelayVal, defaultDelayUnit: emailDelayUnit, maxFollowUps },
+            WEBSITE: { enabled: true, defaultDelayValue: websiteDelayVal, defaultDelayUnit: websiteDelayUnit, maxFollowUps },
           },
           mode: sequenceMode,
           quietHours: {
@@ -639,6 +647,33 @@ export const AutoFollowUpDashboard: React.FC<AutoFollowUpDashboardProps> = ({
                 </select>
               </div>
             </div>
+
+            {/* Website */}
+            <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/70">
+              <div className="flex items-center gap-2 mb-3">
+                <Globe className="w-5 h-5 text-indigo-600" />
+                <h3 className="font-bold text-sm text-slate-900">Website Timing</h3>
+              </div>
+              <p className="text-xs text-slate-500 mb-3">Default delay for website-form conversations</p>
+              <div className="flex items-center gap-2">
+                <input
+                  type="number"
+                  min="1"
+                  value={websiteDelayVal}
+                  onChange={(e) => setWebsiteDelayVal(parseInt(e.target.value, 10) || 1)}
+                  className="w-20 text-xs p-2 bg-white border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:border-orange-500"
+                />
+                <select
+                  value={websiteDelayUnit}
+                  onChange={(e) => setWebsiteDelayUnit(e.target.value as any)}
+                  className="text-xs p-2 bg-white border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:border-orange-500"
+                >
+                  <option value="minute">Minutes</option>
+                  <option value="hour">Hours</option>
+                  <option value="day">Days</option>
+                </select>
+              </div>
+            </div>
           </div>
 
           <hr className="border-slate-200 mb-6" />
@@ -665,7 +700,7 @@ export const AutoFollowUpDashboard: React.FC<AutoFollowUpDashboardProps> = ({
                 Sequence Mode vs Simple Mode
               </label>
               <p className="text-xs text-slate-500 mb-2">
-                Simple uses uniform delay. Sequence increases delay for each attempt (1hr, 1day, 3days).
+                Simple uses each channel's configured interval. Sequence Mode overrides channel intervals with its own 1hr, 1day, 3day steps.
               </p>
               <select
                 value={sequenceMode}

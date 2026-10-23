@@ -26,18 +26,44 @@ function containsPhrase(text: string, phrases: readonly string[]): string | unde
   });
 }
 const EXPLICIT_REQUESTS = [
-  'talk to a human','speak to a human','talk to a real person','speak to a real person',
-  'connect me to a person','connect me to someone','speak to someone','talk to someone',
-  'human agent','human representative','real representative','live representative',
-  'customer support representative','speak to support','talk to support','speak to sales',
-  'talk to sales','call me back','have someone call me','let me speak to a manager',
-  'speak with a manager','connect me to the team','human support'
+  // Direct requests for a person, agent, representative, or operator.
+  'talk to a human','speak to a human','talk with a human','speak with a human',
+  'talk to a real person','speak to a real person','talk with a real person','speak with a real person',
+  'i want a human','i need a human','i need a real person','let me talk to a person',
+  'let me speak to a person','can i talk to a person','can i speak to a person',
+  'connect me to a person','connect me with a person','connect me to someone','connect me with someone',
+  'speak to someone','talk to someone','speak with someone','talk with someone',
+  'human agent','live agent','real agent','actual person','real person please',
+  'human representative','real representative','live representative','customer service agent',
+  'customer support representative','speak to customer service','talk to customer service',
+  'speak to customer support','talk to customer support','speak to support','talk to support',
+  'contact support','get me support','transfer me to support','transfer me to an agent',
+  'transfer me to a human','connect me to an agent','connect me with an agent',
+  'put me through to an agent','put me through to a person','operator please',
+  'speak to sales','talk to sales','connect me to sales','connect me with sales',
+  'speak to the booking team','talk to the booking team','connect me to the booking team',
+  'speak with the booking team','talk with the booking team','connect me with the booking team',
+  'speak to a booking agent','connect me to a booking agent','umrah specialist please',
+  'connect me to an umrah specialist','speak to an umrah specialist',
+  'let me speak to a manager','i want to speak to a manager','speak with a manager',
+  'get me your manager','i want a supervisor','speak to a supervisor',
+  'call me back','please call me','have someone call me','i need someone to call me',
+  'please have a person contact me','have your team contact me','contact me through a person',
+  'human support','i want human assistance','i need human assistance','agent please',
+  'real person please','stop the bot','stop talking like a bot','i want to talk to your team',
+  'i need to talk to your team','can a person help me','can someone from your team help me'
 ];
 const NEGATED_REQUESTS = [
   'do not connect me to a human','dont connect me to a human','do not transfer me',
   'dont transfer me','i do not want a human','i dont want a human',
   'i do not want to speak to a human','i dont want to speak to a human',
-  'no human needed','no need for a human','do not call me back','dont call me back'
+  'i do not want to talk to a human','i dont want to talk to a human',
+  'i do not need a human','i dont need a human','no human needed','no need for a human',
+  'no need to transfer me','do not call me back','dont call me back',
+  'do not connect me to an agent','dont connect me to an agent',
+  'i do not want an agent','i dont want an agent','i do not need an agent',
+  'i can handle this myself','i will continue with the bot','keep helping me here',
+  'just answer my question','answer me directly instead of transferring me'
 ];
 const FRUSTRATION = [
   'you are not understanding me','you dont understand','you do not understand',
@@ -86,10 +112,21 @@ export function detectHumanHandoff(
   if (rules.enabled === false) return { matched: false };
   if (rules.explicitRequest === false && rules.frustration !== true && !(rules.customPhrases?.length)) return { matched: false };
   const normalized = normalizeHandoffText(message);
-  if (!normalized || containsPhrase(normalized, NEGATED_REQUESTS)) return { matched: false };
+  if (!normalized) return { matched: false };
+
+  // Do not let a quoted example or a conditional/hypothetical phrase trigger handoff.
+  const negation = containsPhrase(normalized, NEGATED_REQUESTS);
+  if (negation) return { matched: false };
+  const quotedRequest = /(?:if i say|if i said|imagine i said|for example|the phrase|the words|you said|i said)\\s+.{0,90}\\b(?:talk|speak|connect|transfer)\\b.{0,70}\\b(?:human|person|agent|representative|support|manager|team)\\b/.test(normalized);
+  if (quotedRequest) return { matched: false };
+
   if (rules.explicitRequest !== false) {
     const phrase = containsPhrase(normalized, EXPLICIT_REQUESTS);
-    if (phrase) return { matched: true, reason: 'EXPLICIT_REQUEST', matchedPhrase: phrase };
+    if (phrase) {
+      // Avoid false positives where a customer reports someone else's request.
+      const reportedSpeech = /^(?:my friend|my customer|the customer|someone|he|she|they)\\s+(?:said|asked|wants|wanted|needs|needed)\\b/.test(normalized);
+      if (!reportedSpeech) return { matched: true, reason: 'EXPLICIT_REQUEST', matchedPhrase: phrase };
+    }
   }
   if (rules.frustration === true) {
     const phrase = containsPhrase(normalized, FRUSTRATION);

@@ -92,7 +92,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         setOpenAiKeyInput('');
         setOpenAiKeySaveStatus('OpenAI API Key saved & active!');
       } else {
-        setOpenAiKeySaveStatus('Failed to save API key');
+        setOpenAiKeySaveStatus(data?.error || 'Failed to save API key');
       }
     } catch (err: any) {
       setOpenAiKeySaveStatus(err?.message || 'Error saving key');
@@ -284,7 +284,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               type="password"
               value={openAiKeyInput}
               onChange={(e) => setOpenAiKeyInput(e.target.value)}
-              placeholder="sk-proj-..."
+              placeholder="Configure key in Vercel Environment Variables"
               className="flex-1 bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 font-mono focus:outline-none focus:border-orange-500"
             />
             <button
@@ -293,7 +293,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               className="px-4 py-2 bg-orange-500 hover:bg-orange-600 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition flex items-center justify-center space-x-1.5 cursor-pointer shadow-xs"
             >
               {isSavingOpenAiKey ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
-              <span>{isSavingOpenAiKey ? 'Saving...' : 'Save OpenAI Key'}</span>
+              <span>{isSavingOpenAiKey ? 'Checking...' : 'Save OpenAI Key'}</span>
             </button>
           </div>
           {openAiKeySaveStatus && (

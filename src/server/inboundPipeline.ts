@@ -46,7 +46,8 @@ export async function classifyHumanHandoffWithAi(
   recentHistory: readonly Record<string, unknown>[] = [],
 ): Promise<HumanHandoffAiDecision> {
   const fallback: HumanHandoffAiDecision = { handoffRequired: false, reason: 'NONE', confidence: 0, explanation: 'Classifier unavailable; deterministic rules remain active.' };
-  const apiKey = process.env.OPENAI_API_KEY;
+  const isGemini = !process.env.OPENAI_API_KEY && Boolean(process.env.GEMINI_API_KEY);
+  const apiKey = process.env.OPENAI_API_KEY || process.env.GEMINI_API_KEY;
   if (!apiKey || !latestMessage.trim()) return fallback;
   const history = recentHistory.slice(-8).map((m) => ({
     role: String(m.direction || '').toUpperCase() === 'OUTBOUND' ||
@@ -54,9 +55,9 @@ export async function classifyHumanHandoffWithAi(
     text: String(m.text || m.body || m.content || '').slice(0, 1000),
   })).filter((m) => m.text.trim());
   try {
-    const client = new OpenAI({ apiKey, timeout: 5000, maxRetries: 0 });
+    const client = new OpenAI({ apiKey, ...(isGemini ? { baseURL: 'https://generativelanguage.googleapis.com/v1beta/openai/' } : {}), timeout: 5000, maxRetries: 0 });
     const result = await client.chat.completions.create({
-      model: process.env.HUMAN_HANDOFF_CLASSIFIER_MODEL || 'gpt-4o-mini',
+      model: process.env.HUMAN_HANDOFF_CLASSIFIER_MODEL || (isGemini ? 'gemini-2.0-flash' : 'gpt-4o-mini'),
       temperature: 0,
       max_tokens: 180,
       response_format: { type: 'json_object' },

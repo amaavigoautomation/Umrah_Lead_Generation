@@ -2143,7 +2143,7 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
   }
 
   if (!currentUser) {
-    const pathname = typeof window !== 'undefined' ? window.location.pathname.replace(/\\/+$/, '') || '/' : '/';
+    const pathname = typeof window !== 'undefined' ? window.location.pathname.replace(/\/+$/, '') || '/' : '/';
     if (pathname === '/login') {
       return <LoginView isFirebaseActive={isFirebaseActive} initialError={authError} />;
     }

@@ -1196,24 +1196,16 @@ export async function processLiveInboundWhatsApp(payload: {
   // Persist CRM entities to Firestore once at arrival time
   if (isFirebaseConfigured && db && crmEntities) {
     try {
-      if (crmEntities.contact) {
-        safeSetDoc(tenantRepo(getWACtx()).contactDoc(crmEntities.contact.contactId), crmEntities.contact, { merge: true }).catch(() => {});
-      }
-      if (crmEntities.lead) {
-        safeSetDoc(tenantRepo(getWACtx()).leadDoc(crmEntities.lead.leadId), crmEntities.lead, { merge: true }).catch(() => {});
-      }
-      if (crmEntities.conversation) {
-        safeSetDoc(tenantRepo(getWACtx()).conversationDoc(crmEntities.conversation.conversationId), crmEntities.conversation, { merge: true }).catch(() => {});
-      }
-      if (crmEntities.incomingMessage) {
-        safeSetDoc(tenantRepo(getWACtx()).messageDoc(crmEntities.incomingMessage.messageId), crmEntities.incomingMessage, { merge: true }).catch(() => {});
-      }
-      if (crmEntities.aiReplyMessage) {
-        safeSetDoc(tenantRepo(getWACtx()).messageDoc(crmEntities.aiReplyMessage.messageId), crmEntities.aiReplyMessage, { merge: true }).catch(() => {});
-      }
-      if (crmEntities.activity) {
-        safeSetDoc(tenantRepo(getWACtx()).leadActivityDoc(crmEntities.activity.activityId), crmEntities.activity, { merge: true }).catch(() => {});
-      }
+      // Awaited: serverless hosts can freeze right after the response, silently dropping un-awaited writes.
+      const repo = tenantRepo(getWACtx());
+      const writes: Promise<unknown>[] = [];
+      if (crmEntities.contact) writes.push(safeSetDoc(repo.contactDoc(crmEntities.contact.contactId), crmEntities.contact, { merge: true }));
+      if (crmEntities.lead) writes.push(safeSetDoc(repo.leadDoc(crmEntities.lead.leadId), crmEntities.lead, { merge: true }));
+      if (crmEntities.conversation) writes.push(safeSetDoc(repo.conversationDoc(crmEntities.conversation.conversationId), crmEntities.conversation, { merge: true }));
+      if (crmEntities.incomingMessage) writes.push(safeSetDoc(repo.messageDoc(crmEntities.incomingMessage.messageId), crmEntities.incomingMessage, { merge: true }));
+      if (crmEntities.aiReplyMessage) writes.push(safeSetDoc(repo.messageDoc(crmEntities.aiReplyMessage.messageId), crmEntities.aiReplyMessage, { merge: true }));
+      if (crmEntities.activity) writes.push(safeSetDoc(repo.leadActivityDoc(crmEntities.activity.activityId), crmEntities.activity, { merge: true }));
+      await Promise.all(writes);
     } catch (fsErr) {
       console.error('[WhatsApp Pipeline] Firestore persistence warning:', fsErr);
     }

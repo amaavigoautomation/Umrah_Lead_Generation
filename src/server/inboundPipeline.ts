@@ -1598,7 +1598,7 @@ export async function processLiveInboundEmail(payload: {
     if (await isConversationHumanManagedPersisted(conversationId)) {
       console.log(`[Human Takeover] Conversation ${conversationId} is in HUMAN managed mode (aiEnabled=false / humanHandoff=true). Incoming email saved and shown in inbox, AI reply suppressed.`);
       inFlightMessageIds.delete(incomingMsgId);
-      return {
+      const handoffResult: ProcessedInboundEmailResult = {
         messageId: incomingMsgId,
         from: payload.from,
         fromName: displayName,
@@ -1624,6 +1624,9 @@ export async function processLiveInboundEmail(payload: {
           allThreadMessages: [...thread],
         }
       };
+      // Save the customer's message (and CRM records) so it appears in the Unified Inbox.
+      await persistInboundCrmEntities(getInboundCtx(), handoffResult.crmEntities);
+      return handoffResult;
     }
 
     // =========================================================================
@@ -1673,7 +1676,7 @@ export async function processLiveInboundEmail(payload: {
     if (isConversationHumanManaged(conversationId)) {
       console.log(`[Human Takeover] Second state check: conversation ${conversationId} is human managed. Aborting generated AI reply.`);
       inFlightMessageIds.delete(incomingMsgId);
-      return {
+      const handoffResult: ProcessedInboundEmailResult = {
         messageId: incomingMsgId,
         from: payload.from,
         fromName: displayName,
@@ -1699,6 +1702,9 @@ export async function processLiveInboundEmail(payload: {
           allThreadMessages: [...thread],
         }
       };
+      // Save the customer's message (and CRM records) so it appears in the Unified Inbox.
+      await persistInboundCrmEntities(getInboundCtx(), handoffResult.crmEntities);
+      return handoffResult;
     }
 
     // =========================================================================
@@ -1942,39 +1948,34 @@ export async function processLiveInboundEmail(payload: {
     }
 
     // Persist CRM entities to Firestore once at arrival time
-    if (isFirebaseConfigured && db && crmEntities) {
-      try {
-        // Await every write: on serverless hosts the function can be frozen right after the
-        // response is sent, which would silently drop un-awaited writes (reply never saved).
-        const writes: Promise<unknown>[] = [];
-        if (crmEntities.contact) {
-          writes.push(safeSetDoc(tenantRepo(getInboundCtx()).contactDoc(crmEntities.contact.contactId), crmEntities.contact, { merge: true }));
-        }
-        if (crmEntities.lead) {
-          writes.push(safeSetDoc(tenantRepo(getInboundCtx()).leadDoc(crmEntities.lead.leadId), crmEntities.lead, { merge: true }));
-        }
-        if (crmEntities.conversation) {
-          writes.push(safeSetDoc(tenantRepo(getInboundCtx()).conversationDoc(crmEntities.conversation.conversationId), crmEntities.conversation, { merge: true }));
-        }
-        if (crmEntities.incomingMessage) {
-          writes.push(safeSetDoc(tenantRepo(getInboundCtx()).messageDoc(crmEntities.incomingMessage.messageId), crmEntities.incomingMessage, { merge: true }));
-        }
-        if (crmEntities.aiReplyMessage) {
-          writes.push(safeSetDoc(tenantRepo(getInboundCtx()).messageDoc(crmEntities.aiReplyMessage.messageId), crmEntities.aiReplyMessage, { merge: true }));
-        }
-        if (crmEntities.activity) {
-          writes.push(safeSetDoc(tenantRepo(getInboundCtx()).leadActivityDoc(crmEntities.activity.activityId), crmEntities.activity));
-        }
-        await Promise.all(writes);
-      } catch (err) {
-        console.warn('[Inbound Pipeline] Notice syncing CRM entities to Firestore:', err);
-      }
-    }
+    await persistInboundCrmEntities(getInboundCtx(), crmEntities);
 
     return record;
   } finally {
     // Release in-flight concurrency lock
     inFlightMessageIds.delete(incomingMsgId);
+  }
+}
+
+/**
+ * Writes the CRM entities of an inbound message to Firestore. Used by every exit path (normal reply and
+ * human-handoff early returns) so the customer's message always shows up in the Unified Inbox.
+ * Every write is awaited: serverless hosts can freeze right after the response is sent.
+ */
+async function persistInboundCrmEntities(ctx: TenantContext, crmEntities: InboundCrmEntities | undefined): Promise<void> {
+  if (!isFirebaseConfigured || !db || !crmEntities) return;
+  try {
+    const repo = tenantRepo(ctx);
+    const writes: Promise<unknown>[] = [];
+    if (crmEntities.contact) writes.push(safeSetDoc(repo.contactDoc(crmEntities.contact.contactId), crmEntities.contact, { merge: true }));
+    if (crmEntities.lead) writes.push(safeSetDoc(repo.leadDoc(crmEntities.lead.leadId), crmEntities.lead, { merge: true }));
+    if (crmEntities.conversation) writes.push(safeSetDoc(repo.conversationDoc(crmEntities.conversation.conversationId), crmEntities.conversation, { merge: true }));
+    if (crmEntities.incomingMessage) writes.push(safeSetDoc(repo.messageDoc(crmEntities.incomingMessage.messageId), crmEntities.incomingMessage, { merge: true }));
+    if (crmEntities.aiReplyMessage) writes.push(safeSetDoc(repo.messageDoc(crmEntities.aiReplyMessage.messageId), crmEntities.aiReplyMessage, { merge: true }));
+    if (crmEntities.activity) writes.push(safeSetDoc(repo.leadActivityDoc(crmEntities.activity.activityId), crmEntities.activity));
+    await Promise.all(writes);
+  } catch (err) {
+    console.warn('[Inbound Pipeline] Notice syncing CRM entities to Firestore:', err);
   }
 }
 

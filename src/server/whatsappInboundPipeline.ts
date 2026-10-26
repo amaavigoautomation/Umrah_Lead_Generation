@@ -1,4 +1,5 @@
 import { tenantRepo } from './tenantRepo.js';
+import { isHumanManagedConversationData } from '../shared/humanHandoff.js';
 import { evaluateHumanHandoff, persistHumanHandoff, describeHandoff } from './humanHandoffService.js';
 import { setConversationAiState } from './inboundPipeline.js';
 import type { TenantContext } from '../types/tenant.js';
@@ -200,7 +201,7 @@ async function isConversationHumanManagedPersisted(conversationId: string): Prom
     const snap = await getDoc(tenantRepo(getWACtx()).conversationDoc(conversationId));
     if (!snap.exists()) return false;
     const data = snap.data() as any;
-    return data.humanHandoff === true || data.aiEnabled === false || data.managementMode === 'HUMAN';
+    return isHumanManagedConversationData(data);
   } catch (err) {
     console.warn('[Human Handoff] Could not read persisted WhatsApp conversation state:', err);
     return false;

@@ -248,3 +248,22 @@ export function detectHumanHandoff(
   // `aiUnableToResolve` / `failureThreshold` are still accepted so saved settings keep loading, but they do not trigger.
   return { matched: false };
 }
+
+/**
+ * Is a conversation document currently handled by a person?
+ *
+ * Only an explicit handover counts (humanHandoff / managementMode HUMAN). `aiEnabled === false` on its own does
+ * NOT: website-form conversations are created with aiEnabled=false on purpose (so the instant-reply AI never sends a
+ * duplicate email), and a customer replying by email to such a conversation is not a human handover.
+ * Only an old Take Over record (aiEnabled=false with no handoff flags at all, on a non-website channel) is still honoured.
+ */
+export function isHumanManagedConversationData(data: Record<string, any> | null | undefined): boolean {
+  if (!data) return false;
+  if (data.humanHandoff === true || data.managementMode === 'HUMAN') return true;
+  return (
+    data.aiEnabled === false &&
+    data.humanHandoff === undefined &&
+    data.managementMode === undefined &&
+    String(data.channel || '').toUpperCase() !== 'WEBSITE'
+  );
+}

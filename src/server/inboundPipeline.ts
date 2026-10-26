@@ -1,4 +1,5 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
+import { isHumanManagedConversationData } from '../shared/humanHandoff.js';
 import { tenantRepo } from './tenantRepo.js';
 import { evaluateHumanHandoff, persistHumanHandoff, describeHandoff } from './humanHandoffService.js';
 
@@ -475,7 +476,7 @@ async function isConversationHumanManagedPersisted(conversationId: string): Prom
     const snap = await getDoc(tenantRepo(getInboundCtx()).conversationDoc(conversationId));
     if (!snap.exists()) return false;
     const data = snap.data() as any;
-    const managed = data.humanHandoff === true || data.aiEnabled === false || data.managementMode === 'HUMAN';
+    const managed = isHumanManagedConversationData(data);
     if (managed) setConversationAiState(conversationId, false, true);
     return managed;
   } catch (err) {
@@ -1616,16 +1617,16 @@ export async function processLiveInboundEmail(payload: {
         buyingStage: 'ENGAGED',
         timestamp: nowIso,
         crmEntities: {
-          contact: { contactId, firstName, lastName, email: payload.from, companyName: payload.companyName || `${firstName}'s Agency`, createdAt: nowIso, updatedAt: nowIso, lastActivityAt: nowIso },
-          lead: { leadId, contactId, source: 'EMAIL', leadType: 'INBOUND', status: 'HUMAN_HANDOFF', leadScore: 80, intent: 'HIGH', buyingStage: 'ENGAGED', serviceInterest: payload.subject, requirements: [], aiSummary: 'Human Takeover active - message saved in inbox', createdAt: nowIso, updatedAt: nowIso, lastActivityAt: nowIso },
-          conversation: { conversationId, contactId, leadId, channel: 'EMAIL', direction: 'INBOUND', status: 'ACTIVE', aiEnabled: false, humanHandoff: true, emailThreadId: threadId, conversationSummary: `Email dialogue with ${displayName}`, startedAt: nowIso, lastMessageAt: nowIso, lastMessageText: payload.body.slice(0, 120), unreadCount: 1, createdAt: nowIso, updatedAt: nowIso },
+          contact: { ...(matched.contact || {}), contactId, firstName: matched.contact?.firstName ?? firstName, lastName: matched.contact?.lastName ?? lastName, email: matched.contact?.email || payload.from, companyName: matched.contact?.companyName || payload.companyName || `${firstName}'s Agency`, createdAt: matched.contact?.createdAt || nowIso, updatedAt: nowIso, lastActivityAt: nowIso },
+          lead: { ...(matched.lead || {}), leadId, contactId, source: matched.lead?.source || 'EMAIL', leadType: matched.lead?.leadType || 'INBOUND', status: matched.lead?.status || 'HUMAN_HANDOFF', leadScore: Math.max(matched.lead?.leadScore || 0, 80), intent: matched.lead?.intent || 'HIGH', buyingStage: matched.lead?.buyingStage || 'ENGAGED', serviceInterest: matched.lead?.serviceInterest || payload.subject, requirements: matched.lead?.requirements || [], aiSummary: matched.lead?.aiSummary || 'Human Takeover active - message saved in inbox', createdAt: matched.lead?.createdAt || nowIso, updatedAt: nowIso, lastActivityAt: nowIso },
+          conversation: { ...(matched.conversation || {}), conversationId, contactId, leadId, channel: matched.conversation?.channel || 'EMAIL', direction: 'INBOUND', status: matched.conversation?.status || 'ACTIVE', aiEnabled: false, humanHandoff: true, managementMode: 'HUMAN', emailThreadId: threadId, conversationSummary: matched.conversation?.conversationSummary || `Email dialogue with ${displayName}`, startedAt: matched.conversation?.startedAt || nowIso, lastMessageAt: nowIso, lastMessageText: payload.body.slice(0, 120), unreadCount: (Number(matched.conversation?.unreadCount) || 0) + 1, createdAt: matched.conversation?.createdAt || nowIso, updatedAt: nowIso },
           incomingMessage,
           activity: { activityId: `act-human-${Date.now()}`, leadId, contactId, type: 'NOTE_ADDED', title: 'Inbound Email (Human Managed)', description: `Received message ${incomingMsgId} during Human Takeover. AI reply suppressed.`, timestamp: nowIso },
           allThreadMessages: [...thread],
         }
       };
       // Save the customer's message (and CRM records) so it appears in the Unified Inbox.
-      await persistInboundCrmEntities(getInboundCtx(), handoffResult.crmEntities);
+      await persistInboundCrmEntities(getInboundCtx(), handoffResult.crmEntities, { keepHandoffDetails: true });
       return handoffResult;
     }
 
@@ -1694,16 +1695,16 @@ export async function processLiveInboundEmail(payload: {
         buyingStage: 'ENGAGED',
         timestamp: nowIso,
         crmEntities: {
-          contact: { contactId, firstName, lastName, email: payload.from, companyName: payload.companyName || `${firstName}'s Agency`, createdAt: nowIso, updatedAt: nowIso, lastActivityAt: nowIso },
-          lead: { leadId, contactId, source: 'EMAIL', leadType: 'INBOUND', status: 'ENGAGED', leadScore: 80, intent: 'HIGH', buyingStage: 'ENGAGED', serviceInterest: payload.subject, requirements: [], aiSummary: 'Human Takeover active - reply aborted', createdAt: nowIso, updatedAt: nowIso, lastActivityAt: nowIso },
-          conversation: { conversationId, contactId, leadId, channel: 'EMAIL', direction: 'INBOUND', status: 'ACTIVE', aiEnabled: false, humanHandoff: true, emailThreadId: threadId, conversationSummary: `Email dialogue with ${displayName}`, startedAt: nowIso, lastMessageAt: nowIso, lastMessageText: payload.body.slice(0, 120), unreadCount: 1, createdAt: nowIso, updatedAt: nowIso },
+          contact: { ...(matched.contact || {}), contactId, firstName: matched.contact?.firstName ?? firstName, lastName: matched.contact?.lastName ?? lastName, email: matched.contact?.email || payload.from, companyName: matched.contact?.companyName || payload.companyName || `${firstName}'s Agency`, createdAt: matched.contact?.createdAt || nowIso, updatedAt: nowIso, lastActivityAt: nowIso },
+          lead: { ...(matched.lead || {}), leadId, contactId, source: matched.lead?.source || 'EMAIL', leadType: matched.lead?.leadType || 'INBOUND', status: matched.lead?.status || 'ENGAGED', leadScore: Math.max(matched.lead?.leadScore || 0, 80), intent: matched.lead?.intent || 'HIGH', buyingStage: matched.lead?.buyingStage || 'ENGAGED', serviceInterest: matched.lead?.serviceInterest || payload.subject, requirements: matched.lead?.requirements || [], aiSummary: matched.lead?.aiSummary || 'Human Takeover active - reply aborted', createdAt: matched.lead?.createdAt || nowIso, updatedAt: nowIso, lastActivityAt: nowIso },
+          conversation: { ...(matched.conversation || {}), conversationId, contactId, leadId, channel: matched.conversation?.channel || 'EMAIL', direction: 'INBOUND', status: matched.conversation?.status || 'ACTIVE', aiEnabled: false, humanHandoff: true, managementMode: 'HUMAN', emailThreadId: threadId, conversationSummary: matched.conversation?.conversationSummary || `Email dialogue with ${displayName}`, startedAt: matched.conversation?.startedAt || nowIso, lastMessageAt: nowIso, lastMessageText: payload.body.slice(0, 120), unreadCount: (Number(matched.conversation?.unreadCount) || 0) + 1, createdAt: matched.conversation?.createdAt || nowIso, updatedAt: nowIso },
           incomingMessage,
           activity: { activityId: `act-human-2-${Date.now()}`, leadId, contactId, type: 'NOTE_ADDED', title: 'Human Handoff Triggered', description: keywordHandoffReason || `AI reply aborted for message ${incomingMsgId} due to Human Takeover.` , timestamp: nowIso },
           allThreadMessages: [...thread],
         }
       };
       // Save the customer's message (and CRM records) so it appears in the Unified Inbox.
-      await persistInboundCrmEntities(getInboundCtx(), handoffResult.crmEntities);
+      await persistInboundCrmEntities(getInboundCtx(), handoffResult.crmEntities, { keepHandoffDetails: true });
       return handoffResult;
     }
 
@@ -1962,14 +1963,21 @@ export async function processLiveInboundEmail(payload: {
  * human-handoff early returns) so the customer's message always shows up in the Unified Inbox.
  * Every write is awaited: serverless hosts can freeze right after the response is sent.
  */
-async function persistInboundCrmEntities(ctx: TenantContext, crmEntities: InboundCrmEntities | undefined): Promise<void> {
+async function persistInboundCrmEntities(ctx: TenantContext, crmEntities: InboundCrmEntities | undefined, opts: { keepHandoffDetails?: boolean } = {}): Promise<void> {
   if (!isFirebaseConfigured || !db || !crmEntities) return;
   try {
     const repo = tenantRepo(ctx);
     const writes: Promise<unknown>[] = [];
     if (crmEntities.contact) writes.push(safeSetDoc(repo.contactDoc(crmEntities.contact.contactId), crmEntities.contact, { merge: true }));
     if (crmEntities.lead) writes.push(safeSetDoc(repo.leadDoc(crmEntities.lead.leadId), crmEntities.lead, { merge: true }));
-    if (crmEntities.conversation) writes.push(safeSetDoc(repo.conversationDoc(crmEntities.conversation.conversationId), crmEntities.conversation, { merge: true }));
+    if (crmEntities.conversation) {
+      const conversation: Record<string, unknown> = { ...(crmEntities.conversation as Record<string, unknown>) };
+      if (opts.keepHandoffDetails) {
+        // persistHumanHandoff just wrote the reason/time/unseen flag; the copy loaded earlier in this request is older.
+        for (const k of ['humanHandoffUnseen', 'humanHandoffAt', 'humanHandoffReason', 'humanHandoffDetectionSource', 'humanHandoffBy']) delete conversation[k];
+      }
+      writes.push(safeSetDoc(repo.conversationDoc(crmEntities.conversation.conversationId), conversation, { merge: true }));
+    }
     if (crmEntities.incomingMessage) writes.push(safeSetDoc(repo.messageDoc(crmEntities.incomingMessage.messageId), crmEntities.incomingMessage, { merge: true }));
     if (crmEntities.aiReplyMessage) writes.push(safeSetDoc(repo.messageDoc(crmEntities.aiReplyMessage.messageId), crmEntities.aiReplyMessage, { merge: true }));
     if (crmEntities.activity) writes.push(safeSetDoc(repo.leadActivityDoc(crmEntities.activity.activityId), crmEntities.activity));

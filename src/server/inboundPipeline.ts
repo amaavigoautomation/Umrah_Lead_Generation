@@ -1263,6 +1263,41 @@ www.umrah360.in`;
  * Handles incoming email: generates AI reply, enforces single-reply turn logic,
  * dispatches over live SMTP when valid, and produces complete CRM synchronization entities.
  */
+/**
+ * Removes the quoted portion of an inbound plain-text email reply for Unified Inbox display.
+ * Only the current inbound message body is normalized; historical messages are not modified.
+ */
+function stripQuotedEmailTrail(text: string): string {
+  if (!text || typeof text !== 'string') return text;
+
+  const lines = text.replace(/\r\n?/g, '\n').split('\n');
+  const quoteStartPatterns = [
+    /^\s*-{2,}\s*Original Message\s*-{2,}\s*$/i,
+    /^\s*-{2,}\s*Forwarded message\s*-{2,}\s*$/i,
+    /^\s*Begin forwarded message:\s*$/i,
+    /^\s*On .{1,240}wrote:\s*$/i,
+    /^\s*From:\s*.+$/i,
+  ];
+
+  // Email clients commonly append a quoted reply after a blank line followed by
+  // "On ... wrote:", "From:", or an explicit original-message separator.
+  // Requiring a recognizable quote marker avoids truncating ordinary prose.
+  let cutAt = -1;
+  for (let i = 1; i < lines.length; i++) {
+    if (quoteStartPatterns.some((pattern) => pattern.test(lines[i]))) {
+      cutAt = i;
+      break;
+    }
+    if (/^\s*>{1,}/.test(lines[i])) {
+      cutAt = i;
+      break;
+    }
+  }
+
+  if (cutAt < 0) return text.trim();
+  return lines.slice(0, cutAt).join('\n').trim();
+}
+
 export async function processLiveInboundEmail(payload: {
   from: string;
   fromName?: string;
@@ -1334,6 +1369,12 @@ export async function processLiveInboundEmail(payload: {
                      payload.senderType === 'AI' ||
                      payload.senderType === 'AGENT' ||
                      isSelf;
+
+  // Clean quoted history only on inbound customer replies. Outbound messages and
+  // previously stored conversation history remain unchanged.
+  if (!isOutbound) {
+    payload.body = stripQuotedEmailTrail(payload.body);
+  }
 
   // Ensure thread exists in memory
   let thread = conversationThreadMessagesMap.get(conversationId);

@@ -7,6 +7,7 @@ import { HeaderBar } from './components/HeaderBar';
 import { UnifiedInbox } from './components/UnifiedInbox';
 import { LoginView } from './components/LoginView';
 import { LegalPage, legalSlugFromPath } from './components/LegalPage';
+import { LandingPage } from './components/LandingPage';
 import { onSession, signOutUser, installAuthFetch, type SessionInfo } from './services/authService';
 import { LockedModuleView } from './components/LockedModuleView';
 import { UpgradeRequiredView } from './components/UpgradeRequiredView';
@@ -2142,7 +2143,11 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
   }
 
   if (!currentUser) {
-    return <LoginView isFirebaseActive={isFirebaseActive} initialError={authError} />;
+    const pathname = typeof window !== 'undefined' ? window.location.pathname.replace(/\\/+$/, '') || '/' : '/';
+    if (pathname === '/login') {
+      return <LoginView isFirebaseActive={isFirebaseActive} initialError={authError} />;
+    }
+    return <LandingPage />;
   }
 
   if (session?.isPlatformAdmin) {

@@ -98,7 +98,7 @@ export const LegalPage: React.FC<{ slug: LegalSlug }> = ({ slug }) => {
         )}
         <footer className="mt-8 text-xs text-slate-500 flex flex-wrap items-center justify-between gap-2">
           <span>Amaavigo Digital Solutions LLP · privacy@amaavigo.com</span>
-          <a href="/" className="text-orange-600 hover:underline">Back to sign in</a>
+          <a href="/login" className="text-orange-600 hover:underline">Back to sign in</a>
         </footer>
       </main>
     </div>

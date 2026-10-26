@@ -169,6 +169,15 @@ export const LoginView: React.FC<LoginViewProps> = ({ isFirebaseActive, initialE
               Forgot password?
             </button>
           </div>
+          <p className="text-center text-[11px] text-slate-500">
+            <a href="/terms" className="hover:text-orange-600 underline">Terms</a>
+            {' · '}
+            <a href="/privacy" className="hover:text-orange-600 underline">Privacy</a>
+            {' · '}
+            <a href="/dpa" className="hover:text-orange-600 underline">DPA</a>
+            {' · '}
+            <a href="/aup" className="hover:text-orange-600 underline">Acceptable Use</a>
+          </p>
         </div>
       </div>
     </div>

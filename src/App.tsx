@@ -6,6 +6,7 @@ import { Navbar, ActiveTab } from './components/Navbar';
 import { HeaderBar } from './components/HeaderBar';
 import { UnifiedInbox } from './components/UnifiedInbox';
 import { LoginView } from './components/LoginView';
+import { LegalPage, legalSlugFromPath } from './components/LegalPage';
 import { onSession, signOutUser, installAuthFetch, type SessionInfo } from './services/authService';
 import { LockedModuleView } from './components/LockedModuleView';
 import { UpgradeRequiredView } from './components/UpgradeRequiredView';
@@ -2127,6 +2128,10 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
       }
     }
   };
+
+  // Public legal pages (/privacy, /terms, /dpa, /aup) render for everyone, signed in or not.
+  const legalSlug = typeof window !== 'undefined' ? legalSlugFromPath(window.location.pathname) : null;
+  if (legalSlug) return <LegalPage slug={legalSlug} />;
 
   if (authLoading) {
     return (

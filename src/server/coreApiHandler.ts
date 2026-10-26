@@ -241,6 +241,8 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
   // =========================================================================
   const isPublicPath =
     url === '/api/health' ||
+    // Published legal pages (Privacy, Terms, DPA, AUP) are public by design.
+    (req.method === 'GET' && /^\/api\/legal\/[a-z]+(\?.*)?$/.test(url)) ||
     url.startsWith('/api/webhooks/') ||
     url === '/api/inbound/whatsapp' ||
     url === '/api/leads/inbound' ||
@@ -506,6 +508,57 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
       })
     );
     return true;
+  }
+
+  // =========================================================================
+  // LEGAL DOCUMENTS (Privacy / Terms / DPA / AUP): public read, platform-admin edit
+  // =========================================================================
+  if (url.startsWith('/api/legal/') || url === '/api/platform/legal' || url.startsWith('/api/platform/legal/')) {
+    const legal = await import('./legalDocsService.js');
+    const path = url.split('?')[0];
+    const send = (status: number, payload: unknown) => {
+      res.statusCode = status;
+      res.end(JSON.stringify(payload));
+      return true;
+    };
+    try {
+      const pub = path.match(/^\/api\/legal\/([a-z]+)$/);
+      if (pub) {
+        if (req.method !== 'GET' || !legal.isLegalSlug(pub[1])) return send(404, { error: 'Document not found' });
+        res.setHeader('Cache-Control', 'public, max-age=0, s-maxage=60, stale-while-revalidate=300');
+        return send(200, await legal.getPublicLegal(pub[1]));
+      }
+
+      // Everything below edits platform-wide documents: platform admins only (the auth gate already ran).
+      if (!isPlatformAdmin) return send(403, { error: 'Platform admin only' });
+      if (!isFirebaseConfigured || !db) return send(503, { error: 'Database is not configured' });
+      const by = userEmail || userUid;
+
+      if (path === '/api/platform/legal' && req.method === 'GET') {
+        return send(200, { documents: await legal.listLegalAdminViews() });
+      }
+      const m = path.match(/^\/api\/platform\/legal\/([a-z]+)\/(draft|discard|publish|versions|restore)$/);
+      if (!m || !legal.isLegalSlug(m[1])) return send(404, { error: 'Not found' });
+      const slug = m[1];
+      const action = m[2];
+      if (action === 'versions' && req.method === 'GET') return send(200, { versions: await legal.listLegalVersions(slug) });
+      if (req.method !== 'POST') return send(405, { error: 'Method not allowed' });
+      if (action === 'draft') return send(200, await legal.saveLegalDraft(slug, body, by));
+      if (action === 'discard') return send(200, await legal.discardLegalDraft(slug));
+      if (action === 'publish') return send(200, await legal.publishLegal(slug, by, body && body.content !== undefined ? body.content : undefined));
+      if (action === 'restore') return send(200, await legal.restoreLegalVersion(slug, Number(body?.version), by));
+      return send(404, { error: 'Not found' });
+    } catch (err: any) {
+      if (err instanceof (await import('./legalDocsService.js')).LegalValidationError) {
+        res.statusCode = 400;
+        res.end(JSON.stringify({ error: err.message }));
+        return true;
+      }
+      console.error('[Legal] request failed:', err);
+      res.statusCode = 500;
+      res.end(JSON.stringify({ error: 'Could not process the legal document request' }));
+      return true;
+    }
   }
 
   // =========================================================================

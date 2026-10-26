@@ -2568,6 +2568,158 @@ Generate a helpful, grounded response.`;
   }
 
   // =========================================================================
+  // SETTINGS — tenant-scoped channel configuration
+  // =========================================================================
+  if (url === '/api/settings' && (req.method === 'GET' || req.method === 'POST' || req.method === 'PATCH')) {
+    try {
+      const settingsRef = tenantRepo(activeTenantCtx).settingsDoc('default');
+      if (req.method === 'GET') {
+        const snap = await getDoc(settingsRef);
+        const saved = snap.exists() ? (snap.data() as any) : {};
+        res.statusCode = 200;
+        res.end(JSON.stringify({
+          success: true,
+          emailMode: saved.emailMode || 'AUTO',
+          emailSignature: saved.emailSignature || '',
+          debounceSeconds: Number(saved.debounceSeconds ?? 30),
+        }));
+        return true;
+      }
+
+      if (String(userRole).toUpperCase() !== 'ADMIN' && !isPlatformAdmin) {
+        res.statusCode = 403;
+        res.end(JSON.stringify({ error: 'Only admins can update channel settings.' }));
+        return true;
+      }
+
+      const updates: Record<string, unknown> = { updatedAt: new Date().toISOString() };
+      if (body?.emailMode !== undefined) {
+        const mode = String(body.emailMode).toUpperCase();
+        if (!['AUTO', 'REVIEW', 'SIMULATION'].includes(mode)) {
+          res.statusCode = 400;
+          res.end(JSON.stringify({ error: 'Invalid emailMode.' }));
+          return true;
+        }
+        updates.emailMode = mode;
+      }
+      if (body?.emailSignature !== undefined) updates.emailSignature = String(body.emailSignature);
+      if (body?.debounceSeconds !== undefined) {
+        const debounceSeconds = Number(body.debounceSeconds);
+        if (!Number.isFinite(debounceSeconds) || debounceSeconds < 0 || debounceSeconds > 3600) {
+          res.statusCode = 400;
+          res.end(JSON.stringify({ error: 'debounceSeconds must be between 0 and 3600.' }));
+          return true;
+        }
+        updates.debounceSeconds = debounceSeconds;
+      }
+
+      await safeSetDoc(settingsRef, updates, { merge: true });
+      res.statusCode = 200;
+      res.end(JSON.stringify({ success: true, settings: updates }));
+      return true;
+    } catch (err: any) {
+      console.error('[Settings API] Failed to read or save tenant settings:', err);
+      res.statusCode = 500;
+      res.end(JSON.stringify({ error: err?.message || 'Failed to save settings.' }));
+      return true;
+    }
+  }
+
+  // =========================================================================
+  // HUMAN HANDOFF — tenant-scoped config and explicit thread resume/takeover
+  // =========================================================================
+  if (url === '/api/human-handoff/config' && (req.method === 'GET' || req.method === 'POST' || req.method === 'PATCH')) {
+    try {
+      const settingsRef = tenantRepo(activeTenantCtx).settingsDoc('default');
+      if (req.method === 'GET') {
+        const snap = await getDoc(settingsRef);
+        const saved = snap.exists() ? (snap.data() as any) : {};
+        res.statusCode = 200;
+        res.setHeader('Content-Type', 'application/json');
+        res.end(JSON.stringify({ success: true, config: {
+          enabled: saved.humanHandoffEnabled ?? true,
+          customPhrasesEnabled: saved.humanHandoffCustomPhrasesEnabled ?? true,
+          keywords: Array.isArray(saved.humanHandoffKeywords) ? saved.humanHandoffKeywords : [],
+          rules: saved.humanHandoffRules || { explicitRequest: true, frustration: true, aiUnableToResolve: true, failureThreshold: 2 },
+        }}));
+        return true;
+      }
+      if (String(userRole).toUpperCase() !== 'ADMIN' && !isPlatformAdmin) {
+        res.statusCode = 403;
+        res.setHeader('Content-Type', 'application/json');
+        res.end(JSON.stringify({ success: false, error: 'Only workspace admins can change Human Handoff settings' }));
+        return true;
+      }
+      const keywords = Array.isArray(body?.keywords) ? body.keywords.map((v: unknown) => String(v).trim()).filter((v: string) => v.length > 0 && v.length <= 120).slice(0, 100) : [];
+      const incomingRules = body?.rules && typeof body.rules === 'object' ? body.rules : {};
+      const rules = { explicitRequest: incomingRules.explicitRequest !== false, frustration: incomingRules.frustration !== false, aiUnableToResolve: incomingRules.aiUnableToResolve !== false, failureThreshold: Math.min(5, Math.max(1, Number(incomingRules.failureThreshold) || 2)) };
+      const customPhrasesEnabled = body?.customPhrasesEnabled !== false;
+      await safeSetDoc(settingsRef, { humanHandoffEnabled: true, humanHandoffCustomPhrasesEnabled: customPhrasesEnabled, humanHandoffKeywords: keywords, humanHandoffRules: rules, updatedAt: new Date().toISOString() }, { merge: true });
+      res.statusCode = 200;
+      res.setHeader('Content-Type', 'application/json');
+      res.end(JSON.stringify({ success: true, config: { enabled: true, customPhrasesEnabled, keywords, rules } }));
+      return true;
+    } catch (err: any) {
+      res.statusCode = 500;
+      res.setHeader('Content-Type', 'application/json');
+      res.end(JSON.stringify({ success: false, error: err?.message || 'Failed to handle Human Handoff settings' }));
+      return true;
+    }
+  }
+
+  if (url === '/api/conversation/ai-state' && req.method === 'POST') {
+    try {
+      const conversationId = typeof body?.conversationId === 'string' ? body.conversationId.trim() : '';
+      if (!conversationId || conversationId.includes('/') || conversationId.length > 200) {
+        res.statusCode = 400;
+        res.setHeader('Content-Type', 'application/json');
+        res.end(JSON.stringify({ success: false, error: 'Valid conversationId is required' }));
+        return true;
+      }
+      const aiEnabled = body?.aiEnabled === true;
+      const humanHandoff = !aiEnabled || body?.humanHandoff === true;
+      const now = new Date().toISOString();
+      const patch: Record<string, unknown> = {
+        aiEnabled: !humanHandoff,
+        humanHandoff,
+        managementMode: humanHandoff ? 'HUMAN' : 'AI',
+        humanHandoffUnseen: false,
+        updatedAt: now,
+        ...(humanHandoff ? {
+          humanHandoffAt: now,
+          humanHandoffReason: String(body?.reason || 'Manual human takeover').slice(0, 300),
+          humanHandoffDetectionSource: String(body?.detectionSource || 'MANUAL').slice(0, 30),
+          humanHandoffBy: userUid,
+        } : { humanHandoffAt: null, humanHandoffReason: null, humanHandoffDetectionSource: null, humanHandoffBy: null }),
+      };
+      await updateDoc(tenantRepo(activeTenantCtx).conversationDoc(conversationId), patch).catch(async (err: any) => {
+        if (err?.code === 'not-found' || /not found/i.test(String(err?.message || ''))) {
+          await safeSetDoc(tenantRepo(activeTenantCtx).conversationDoc(conversationId), { conversationId, ...patch, createdAt: now }, { merge: true });
+        } else throw err;
+      });
+      setConversationAiState(conversationId, !humanHandoff, humanHandoff);
+      if (humanHandoff) {
+        const followups = await import('./autoFollowUpService.js');
+        await followups.cancelPendingFollowUpJob(activeTenantCtx, conversationId, 'Human Handoff is active', userEmail || 'system');
+      }
+      res.statusCode = 200;
+      res.setHeader('Content-Type', 'application/json');
+      res.end(JSON.stringify({
+        success: true, conversationId, aiEnabled: !humanHandoff, humanHandoff,
+        humanHandoffAt: humanHandoff ? now : null,
+        humanHandoffReason: humanHandoff ? patch.humanHandoffReason : null,
+        humanHandoffDetectionSource: humanHandoff ? patch.humanHandoffDetectionSource : null,
+      }));
+      return true;
+    } catch (err: any) {
+      res.statusCode = 500;
+      res.setHeader('Content-Type', 'application/json');
+      res.end(JSON.stringify({ success: false, error: err?.message || 'Failed to update conversation AI state' }));
+      return true;
+    }
+  }
+
+  // =========================================================================
   // AI AUTO FOLLOW-UP (tenant-scoped; every route below requires a signed-in workspace user,
   // except /trigger which also accepts the cron secret)
   // =========================================================================

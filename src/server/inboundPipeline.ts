@@ -1,5 +1,7 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { tenantRepo } from './tenantRepo.js';
+import { evaluateHumanHandoff, persistHumanHandoff, describeHandoff } from './humanHandoffService.js';
+
 import type { TenantContext } from '../types/tenant.js';
 
 const DEFAULT_UMRAH_CTX: TenantContext = {
@@ -31,6 +33,10 @@ export function getImapOwnerTenantId(): string {
   return (process.env.IMAP_OWNER_TENANT_ID || 'umrah360').trim();
 }
 import OpenAI from 'openai';
+// The Human Handoff classifier now lives in humanHandoffService.ts (shared by every channel).
+export { classifyHumanHandoffWithAi } from './humanHandoffService.js';
+export type { HumanHandoffAiDecision } from './humanHandoffService.js';
+
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
@@ -460,6 +466,22 @@ export function setConversationAiState(conversationId: string, aiEnabled: boolea
 
 export function isConversationHumanManaged(conversationId: string): boolean {
   return conversationHumanHandoffMap.get(conversationId) === true || conversationAiStateMap.get(conversationId) === false;
+}
+
+async function isConversationHumanManagedPersisted(conversationId: string): Promise<boolean> {
+  if (isConversationHumanManaged(conversationId)) return true;
+  try {
+    const { getDoc } = await import('./adminFirestore.js');
+    const snap = await getDoc(tenantRepo(getInboundCtx()).conversationDoc(conversationId));
+    if (!snap.exists()) return false;
+    const data = snap.data() as any;
+    const managed = data.humanHandoff === true || data.aiEnabled === false || data.managementMode === 'HUMAN';
+    if (managed) setConversationAiState(conversationId, false, true);
+    return managed;
+  } catch (err) {
+    console.warn('[Human Handoff] Could not read persisted conversation state:', err);
+    return false;
+  }
 }
 
 export function appendOutboundMessageToThread(conversationId: string, message: any): any[] {
@@ -1573,7 +1595,7 @@ export async function processLiveInboundEmail(payload: {
     // -> Incoming email is saved and shown in inbox
     // -> MUST NOT trigger Gemini or send an AI reply
     // =========================================================================
-    if (isConversationHumanManaged(conversationId)) {
+    if (await isConversationHumanManagedPersisted(conversationId)) {
       console.log(`[Human Takeover] Conversation ${conversationId} is in HUMAN managed mode (aiEnabled=false / humanHandoff=true). Incoming email saved and shown in inbox, AI reply suppressed.`);
       inFlightMessageIds.delete(incomingMsgId);
       return {
@@ -1595,7 +1617,7 @@ export async function processLiveInboundEmail(payload: {
         timestamp: nowIso,
         crmEntities: {
           contact: { contactId, firstName, lastName, email: payload.from, companyName: payload.companyName || `${firstName}'s Agency`, createdAt: nowIso, updatedAt: nowIso, lastActivityAt: nowIso },
-          lead: { leadId, contactId, source: 'EMAIL', leadType: 'INBOUND', status: 'ENGAGED', leadScore: 80, intent: 'HIGH', buyingStage: 'ENGAGED', serviceInterest: payload.subject, requirements: [], aiSummary: 'Human Takeover active - message saved in inbox', createdAt: nowIso, updatedAt: nowIso, lastActivityAt: nowIso },
+          lead: { leadId, contactId, source: 'EMAIL', leadType: 'INBOUND', status: 'HUMAN_HANDOFF', leadScore: 80, intent: 'HIGH', buyingStage: 'ENGAGED', serviceInterest: payload.subject, requirements: [], aiSummary: 'Human Takeover active - message saved in inbox', createdAt: nowIso, updatedAt: nowIso, lastActivityAt: nowIso },
           conversation: { conversationId, contactId, leadId, channel: 'EMAIL', direction: 'INBOUND', status: 'ACTIVE', aiEnabled: false, humanHandoff: true, emailThreadId: threadId, conversationSummary: `Email dialogue with ${displayName}`, startedAt: nowIso, lastMessageAt: nowIso, lastMessageText: payload.body.slice(0, 120), unreadCount: 1, createdAt: nowIso, updatedAt: nowIso },
           incomingMessage,
           activity: { activityId: `act-human-${Date.now()}`, leadId, contactId, type: 'NOTE_ADDED', title: 'Inbound Email (Human Managed)', description: `Received message ${incomingMsgId} during Human Takeover. AI reply suppressed.`, timestamp: nowIso },
@@ -1629,6 +1651,24 @@ export async function processLiveInboundEmail(payload: {
         : 'Genuinely new inbound customer message received - generating AI reply ONCE.';
     }
 
+    // Human Handoff trigger (rules first, AI classifier as backstop). Persisting before AI generation means
+    // this inbound message receives no AI acknowledgement and queued replies are blocked.
+    let keywordHandoffReason = '';
+    try {
+      const handoff = await evaluateHumanHandoff(getInboundCtx(), {
+        text: payload.body || '',
+        thread: thread as unknown as Record<string, unknown>[],
+      });
+      if (handoff.matched) {
+        keywordHandoffReason = describeHandoff(handoff);
+        // Silence the AI immediately (in-memory), then persist so every serverless instance agrees.
+        setConversationAiState(conversationId, false, true);
+        await persistHumanHandoff(getInboundCtx(), conversationId, handoff);
+      }
+    } catch (handoffError) {
+      console.warn('[Human Handoff] Evaluation failed; continuing with existing handoff state.', handoffError);
+    }
+
     // Re-check AI state immediately before generating/sending any reply (so already-queued AI jobs cannot send a reply after Human Takeover)
     if (isConversationHumanManaged(conversationId)) {
       console.log(`[Human Takeover] Second state check: conversation ${conversationId} is human managed. Aborting generated AI reply.`);
@@ -1643,7 +1683,7 @@ export async function processLiveInboundEmail(payload: {
         replySubject,
         replyText: '',
         shouldSendAutoReply: false,
-        replyDecisionReason: 'Human Takeover active (second check): AI reply aborted after Human Takeover.',
+        replyDecisionReason: keywordHandoffReason || 'Human Takeover active (second check): AI reply aborted after Human Takeover.',
         smtpDelivery: { success: false, simulated: false, error: 'Human Takeover active - AI reply aborted' },
         handoffTriggered: true,
         leadScore: 80,
@@ -1655,7 +1695,7 @@ export async function processLiveInboundEmail(payload: {
           lead: { leadId, contactId, source: 'EMAIL', leadType: 'INBOUND', status: 'ENGAGED', leadScore: 80, intent: 'HIGH', buyingStage: 'ENGAGED', serviceInterest: payload.subject, requirements: [], aiSummary: 'Human Takeover active - reply aborted', createdAt: nowIso, updatedAt: nowIso, lastActivityAt: nowIso },
           conversation: { conversationId, contactId, leadId, channel: 'EMAIL', direction: 'INBOUND', status: 'ACTIVE', aiEnabled: false, humanHandoff: true, emailThreadId: threadId, conversationSummary: `Email dialogue with ${displayName}`, startedAt: nowIso, lastMessageAt: nowIso, lastMessageText: payload.body.slice(0, 120), unreadCount: 1, createdAt: nowIso, updatedAt: nowIso },
           incomingMessage,
-          activity: { activityId: `act-human-2-${Date.now()}`, leadId, contactId, type: 'NOTE_ADDED', title: 'AI Reply Aborted (Human Takeover)', description: `AI reply aborted for message ${incomingMsgId} due to Human Takeover.`, timestamp: nowIso },
+          activity: { activityId: `act-human-2-${Date.now()}`, leadId, contactId, type: 'NOTE_ADDED', title: 'Human Handoff Triggered', description: keywordHandoffReason || `AI reply aborted for message ${incomingMsgId} due to Human Takeover.` , timestamp: nowIso },
           allThreadMessages: [...thread],
         }
       };
@@ -1678,6 +1718,11 @@ export async function processLiveInboundEmail(payload: {
     // RULE 8: DISPATCH SMTP REPLY ONCE
     // =========================================================================
     let smtpResult: SendMailResult;
+
+    if (shouldSendAutoReply && await isConversationHumanManagedPersisted(conversationId)) {
+      shouldSendAutoReply = false;
+      replyDecisionReason = 'Human Handoff became active before dispatch; AI reply blocked.';
+    }
 
     if (shouldSendAutoReply) {
       smtpResult = await sendLiveEmail({

@@ -345,6 +345,12 @@ export interface Conversation {
   status: 'ACTIVE' | 'RESOLVED' | 'ARCHIVED' | 'REVIEW';
   aiEnabled: boolean;
   humanHandoff: boolean;
+  humanHandoffReason?: string;
+  humanHandoffAt?: string | null;
+  humanHandoffBy?: string | null;
+  /** True from the moment a handoff fires until a team member opens the conversation. */
+  humanHandoffUnseen?: boolean;
+  humanHandoffDetectionSource?: 'AI' | 'RULE' | 'MANUAL' | string | null;
   managementMode?: 'AI' | 'HUMAN';
   conversationSummary?: string;
   subject?: string;
@@ -530,6 +536,10 @@ export interface LeadActivity {
 }
 
 export interface SystemSettings {
+  humanHandoffEnabled?: boolean;
+  humanHandoffKeywords?: string[];
+  humanHandoffCustomPhrasesEnabled?: boolean;
+  humanHandoffRules?: { explicitRequest: boolean; frustration: boolean; aiUnableToResolve: boolean; failureThreshold: number };
   channelModes: Record<Channel, ChannelMode>;
   sendingAccounts: Array<{ id: string; email: string; name: string; isDefault: boolean }>;
   emailSignature: string;

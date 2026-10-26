@@ -74,6 +74,10 @@ export const INITIAL_USERS: AppUser[] = [
 
 // Default initial system settings
 export const DEFAULT_SETTINGS: SystemSettings = {
+  humanHandoffEnabled: true,
+  humanHandoffCustomPhrasesEnabled: true,
+  humanHandoffKeywords: ['speak with the booking team', 'connect me to an Umrah specialist', 'call me regarding my package'],
+  humanHandoffRules: { explicitRequest: true, frustration: true, aiUnableToResolve: true, failureThreshold: 2 },
   channelModes: {
     WHATSAPP: 'AUTO',
     EMAIL: 'AUTO',
@@ -99,6 +103,8 @@ export function defaultSettingsFor(tenantId: string, tenantName?: string): Syste
   const name = (tenantName || tenantId || 'Our Team').trim();
   return {
     ...DEFAULT_SETTINGS,
+    // Umrah-specific trigger phrases belong to the Umrah360 workspace only.
+    humanHandoffKeywords: [],
     sendingAccounts: [],
     emailSignature: `Regards,\n${name} Team`,
     webhookEndpoint: '',

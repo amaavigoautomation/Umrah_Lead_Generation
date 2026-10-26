@@ -1,4 +1,6 @@
 import { tenantRepo } from './tenantRepo.js';
+import { evaluateHumanHandoff, persistHumanHandoff, describeHandoff } from './humanHandoffService.js';
+import { setConversationAiState } from './inboundPipeline.js';
 import type { TenantContext } from '../types/tenant.js';
 
 const DEFAULT_UMRAH_CTX: TenantContext = {
@@ -90,6 +92,8 @@ export interface InboundWhatsAppCrmEntities {
     status: 'ACTIVE' | 'REVIEW';
     aiEnabled: boolean;
     humanHandoff: boolean;
+    humanHandoffReason?: string;
+    humanHandoffAt?: string;
     managementMode?: string;
     isRead?: boolean;
     readAt?: string;
@@ -189,6 +193,19 @@ const waConversationThreadMessagesMap = new Map<string, any[]>();
 // Deduplication map
 const processedWaRecordsMap = new Map<string, ProcessedWhatsAppRecord>();
 const inFlightWaMessageIds = new Set<string>();
+
+async function isConversationHumanManagedPersisted(conversationId: string): Promise<boolean> {
+  try {
+    const { getDoc } = await import('./adminFirestore.js');
+    const snap = await getDoc(tenantRepo(getWACtx()).conversationDoc(conversationId));
+    if (!snap.exists()) return false;
+    const data = snap.data() as any;
+    return data.humanHandoff === true || data.aiEnabled === false || data.managementMode === 'HUMAN';
+  } catch (err) {
+    console.warn('[Human Handoff] Could not read persisted WhatsApp conversation state:', err);
+    return false;
+  }
+}
 
 // Turn tracker per phone number: Only reply ONCE per customer turn until they reply again!
 const waConversationTurnMap = new Map<string, WhatsAppConversationTurnState>();
@@ -953,21 +970,48 @@ export async function processLiveInboundWhatsApp(payload: {
     console.warn('[WhatsApp Pipeline] Campaign lead tracking hook notice:', campaignErr);
   }
 
+  // Human Handoff trigger (rules first, AI classifier as backstop). A match is a silent handoff.
+  let keywordHandoffReason = '';
+  let handoffAlreadyActive = false;
+  try {
+    const handoff = await evaluateHumanHandoff(getWACtx(), {
+      text: payload.body || '',
+      thread: thread as unknown as Record<string, unknown>[],
+    });
+    if (handoff.matched) {
+      keywordHandoffReason = describeHandoff(handoff);
+      setConversationAiState(conversationId, false, true);
+      await persistHumanHandoff(getWACtx(), conversationId, handoff);
+    }
+  } catch (handoffError) {
+    console.warn('[Human Handoff] Evaluation failed; continuing with existing handoff state.', handoffError);
+  }
+
+  if (!keywordHandoffReason && await isConversationHumanManagedPersisted(conversationId)) {
+    keywordHandoffReason = 'Human Handoff is already active for this conversation';
+    handoffAlreadyActive = true;
+    setConversationAiState(conversationId, false, true);
+  }
+
   // =========================================================================
   // RULE 4: GENERATE GROUNDED AI REPLY
   // =========================================================================
-  const aiResult = await generateWhatsAppAutoReplyText({
-    fromPhone: senderPhone,
-    fromName: payload.fromName,
-    body: payload.body,
-    companyName: payload.companyName,
-    threadHistory: [...thread],
-  });
+  const aiResult = keywordHandoffReason
+    ? { replyText: '', handoffTriggered: true, handoffReason: keywordHandoffReason, leadScore: 80, buyingStage: 'ENGAGED' }
+    : await generateWhatsAppAutoReplyText({
+        fromPhone: senderPhone,
+        fromName: payload.fromName,
+        body: payload.body,
+        companyName: payload.companyName,
+        threadHistory: [...thread],
+      });
 
-  const shouldSendAutoReply = pipelineConfig.mode !== 'SIMULATION';
-  const replyDecisionReason = pipelineConfig.mode === 'SIMULATION'
-    ? 'WhatsApp mode is SIMULATION: auto-reply held for agent inspection'
-    : `New inbound customer message to ${targetNumber} - AI reply dispatched`;
+  const shouldSendAutoReply = pipelineConfig.mode !== 'SIMULATION' && !aiResult.handoffTriggered;
+  const replyDecisionReason = aiResult.handoffTriggered
+    ? (aiResult.handoffReason || keywordHandoffReason || 'Human Handoff active; AI reply intentionally suppressed.')
+    : pipelineConfig.mode === 'SIMULATION'
+      ? 'WhatsApp mode is SIMULATION: auto-reply held for human inspection'
+      : `New inbound customer message to ${targetNumber} - AI reply dispatched`;
 
   let aiReplyMessage: any = undefined;
   const replyMsgId = `wa-reply-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
@@ -1037,7 +1081,7 @@ export async function processLiveInboundWhatsApp(payload: {
     providerUsed: 'INTERNAL_CRM_LOG',
   };
 
-  if (shouldSendAutoReply && aiReplyMessage) {
+  if (shouldSendAutoReply && aiReplyMessage && aiResult.handoffTriggered !== true) {
     outboundDispatch = await sendLiveMetaWhatsAppMessage(senderPhone, aiResult.replyText);
     aiReplyMessage.externalMessageId = outboundDispatch.externalMessageId;
     aiReplyMessage.providerUsed = outboundDispatch.providerUsed;
@@ -1084,6 +1128,9 @@ export async function processLiveInboundWhatsApp(payload: {
       status: pipelineConfig.mode === 'REVIEW' ? 'REVIEW' : 'ACTIVE',
       aiEnabled: pipelineConfig.mode === 'AUTO' && !aiResult.handoffTriggered,
       humanHandoff: pipelineConfig.mode !== 'AUTO' || aiResult.handoffTriggered,
+      // Only stamp the reason/time when the handoff is new; follow-up messages keep the original details.
+      humanHandoffReason: aiResult.handoffTriggered && !handoffAlreadyActive ? (aiResult.handoffReason || keywordHandoffReason || 'AI handoff trigger') : undefined,
+      humanHandoffAt: aiResult.handoffTriggered && !handoffAlreadyActive ? nowIso : undefined,
       managementMode: (pipelineConfig.mode === 'AUTO' && !aiResult.handoffTriggered) ? 'AI' : 'HUMAN',
       isRead: false,
       unread: true,
@@ -1133,7 +1180,7 @@ export async function processLiveInboundWhatsApp(payload: {
       error: outboundDispatch.error,
     },
     handoffTriggered: aiResult.handoffTriggered,
-    handoffReason: aiResult.handoffReason,
+    handoffReason: aiResult.handoffReason || keywordHandoffReason || undefined,
     leadScore: aiResult.leadScore,
     intent: 'HIGH',
     buyingStage: aiResult.buyingStage,

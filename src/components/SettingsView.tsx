@@ -23,7 +23,7 @@ import { ConnectedChannelsPanel } from './ConnectedChannelsPanel';
 
 interface SettingsViewProps {
   settings: SystemSettings;
-  onSaveSettings: (settings: SystemSettings) => void;
+  onSaveSettings: (settings: SystemSettings) => void | Promise<void>;
   users?: AppUser[];
   onSaveUser?: (user: AppUser) => Promise<void>;
   onDeleteUser?: (userId: string) => Promise<void>;
@@ -42,14 +42,19 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 }) => {
   const [formData, setFormData] = useState<SystemSettings>(settings);
   const [isSaved, setIsSaved] = useState(false);
+  const [isSavingSettings, setIsSavingSettings] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [openAiKeyInput, setOpenAiKeyInput] = useState('');
   const [isOpenAiConfigured, setIsOpenAiConfigured] = useState(false);
   const [maskedOpenAiKey, setMaskedOpenAiKey] = useState('');
   const [isSavingOpenAiKey, setIsSavingOpenAiKey] = useState(false);
   const [openAiKeySaveStatus, setOpenAiKeySaveStatus] = useState<string | null>(null);
+  const [handoffKeywordsText, setHandoffKeywordsText] = useState((settings.humanHandoffKeywords || []).join('\n'));
+  const handoffRules = formData.humanHandoffRules || { explicitRequest: true, frustration: true, aiUnableToResolve: true, failureThreshold: 2 };
 
   React.useEffect(() => {
     setFormData(settings);
+    setHandoffKeywordsText((settings.humanHandoffKeywords || []).join('\n'));
   }, [settings]);
 
   React.useEffect(() => {
@@ -104,10 +109,19 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     });
   };
 
-  const handleSave = () => {
-    onSaveSettings(formData);
-    setIsSaved(true);
-    setTimeout(() => setIsSaved(false), 2500);
+  const handleSave = async () => {
+    setIsSavingSettings(true);
+    setSaveError(null);
+    setIsSaved(false);
+    try {
+      await onSaveSettings({ ...formData, humanHandoffEnabled: true, humanHandoffCustomPhrasesEnabled: formData.humanHandoffCustomPhrasesEnabled ?? true, humanHandoffKeywords: handoffKeywordsText.split('\n').map((v) => v.trim()).filter(Boolean), humanHandoffRules: { explicitRequest: Boolean(handoffRules.explicitRequest), frustration: Boolean(handoffRules.frustration), aiUnableToResolve: Boolean(handoffRules.aiUnableToResolve), failureThreshold: Number(handoffRules.failureThreshold) || 2 } });
+      setIsSaved(true);
+      setTimeout(() => setIsSaved(false), 2500);
+    } catch (err: any) {
+      setSaveError(err?.message || 'Settings could not be saved. Please try again.');
+    } finally {
+      setIsSavingSettings(false);
+    }
   };
 
   return (
@@ -124,16 +138,34 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           </p>
         </div>
 
-        <button
-          onClick={handleSave}
-          className="flex items-center space-x-1.5 px-4 py-2.5 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-xs font-bold transition shadow-md shadow-orange-500/20"
-        >
-          {isSaved ? <CheckCircle className="w-4 h-4 text-white" /> : <Save className="w-4 h-4" />}
-          <span>{isSaved ? 'Saved!' : 'Save Settings'}</span>
-        </button>
+        <div className="flex flex-col items-end gap-1">
+          <button onClick={handleSave} disabled={isSavingSettings} className="flex items-center space-x-1.5 px-4 py-2.5 rounded-xl bg-orange-500 hover:bg-orange-600 disabled:opacity-60 text-white text-xs font-bold transition shadow-md shadow-orange-500/20">
+            {isSaved ? <CheckCircle className="w-4 h-4 text-white" /> : <Save className="w-4 h-4" />}
+            <span>{isSavingSettings ? 'Saving…' : isSaved ? 'Saved!' : 'Save Settings'}</span>
+          </button>
+          {saveError && <span role="alert" className="text-xs text-red-600">{saveError}</span>}
+        </div>
       </div>
 
       <ConnectedChannelsPanel tenantId={tenantId} canEdit={canEditEmail} />
+
+      {/* Human Handoff configuration */}
+      <div className="bg-white border border-amber-200 rounded-2xl p-6 shadow-sm space-y-4">
+        <div className="flex items-center gap-2"><Shield className="w-5 h-5 text-amber-600" /><h3 className="font-extrabold text-sm text-slate-900">Human Handoff</h3></div>
+        <p className="text-xs text-slate-600 leading-relaxed">Built-in rules run independently. A handoff is silent, pauses AI replies and follow-ups for that conversation, and remains active until a person manually resumes AI.</p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {([['explicitRequest','Explicit request for a human','Detect a clear request to speak to a person, representative, or support team.'],['frustration','Customer frustration','Escalate clear frustration and repeated complaints.'],] as const).map(([key,title,description]) => <div key={key} className="rounded-xl border border-slate-200 p-3 text-xs space-y-2">
+            <label className="flex items-start gap-2"><input type="checkbox" checked={Boolean(handoffRules[key])} disabled={!canEditEmail} onChange={(e) => setFormData({ ...formData, humanHandoffRules: { ...handoffRules, [key]: e.target.checked } })} className="mt-0.5" /><span><strong className="block text-slate-800">{title}</strong>{description && <span className="text-slate-500">{description}</span>}</span></label>
+
+          </div>)}
+        </div>
+        <div className="border-t border-slate-100 pt-4 space-y-3">
+          <label className="flex items-start gap-2 text-xs font-semibold text-slate-800"><input type="checkbox" checked={formData.humanHandoffCustomPhrasesEnabled ?? true} disabled={!canEditEmail} onChange={(e) => setFormData({ ...formData, humanHandoffCustomPhrasesEnabled: e.target.checked })} className="mt-0.5" /><span>Enable custom trigger phrases<span className="block mt-1 font-normal text-slate-500">Turn this off to ignore the phrases below without disabling built-in rules.</span></span></label>
+          <label className="block text-xs font-semibold text-slate-700">Custom trigger phrases (one per line)</label>
+          <textarea rows={4} value={handoffKeywordsText} disabled={!canEditEmail || formData.humanHandoffCustomPhrasesEnabled === false} onChange={(e) => { setHandoffKeywordsText(e.target.value); setFormData({ ...formData, humanHandoffKeywords: e.target.value.split('\n').map((v) => v.trim()).filter(Boolean) }); }} placeholder={'speak with the sales desk\ncall me about pricing'} className="w-full bg-white border border-slate-200 rounded-xl p-3 text-xs text-slate-800 focus:outline-none focus:border-orange-500 disabled:bg-slate-50" />
+          <p className="text-[11px] text-slate-500">Matching is case-insensitive and phrase-based. Only admins can edit these settings.</p>
+        </div>
+      </div>
 
       {/* Production Channel Modes */}
       <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-4">

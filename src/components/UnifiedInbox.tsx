@@ -521,6 +521,7 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
     !followUpCompleted && followUpDisabledReason !== 'manual' && followUpDisabledReason !== 'admin_disabled';
   const isAutoFollowUpUiActive = Boolean(activeLead?.autoFollowUp?.enabled) &&
     !leadRepliedAfterFollowUp && !followUpCompleted;
+  const activeConversationIsHumanManaged = activeConversation?.humanHandoff === true || activeConversation?.managementMode === 'HUMAN';
   const activeLeadHasBookedDemo = activeLead?.demoStatus === 'BOOKED' || activeLead?.status === 'DEMO_BOOKED';
 
   // Toggle Auto Follow-Up on/off for the active lead
@@ -776,6 +777,12 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
                         </span>
                       )}
 
+                      {conv.humanHandoff && conv.humanHandoffUnseen && (
+                        <span className="px-1.5 py-0.5 rounded bg-red-50 text-red-700 border border-red-300 font-bold animate-pulse" title={conv.humanHandoffReason || 'Customer needs a person'}>
+                          Needs a person
+                        </span>
+                      )}
+
                       {conv.managementMode && (
                         <span className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-200 font-mono text-[9px]">
                           {conv.managementMode}
@@ -921,20 +928,38 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
                       : 'bg-amber-50 border-amber-200 text-amber-900'
                   }`}
                 >
-                  {activeConversation.aiEnabled && !activeConversation.humanHandoff ? (
+                  {activeConversationIsHumanManaged ? (
+                    <>
+                      <UserCheck className="w-3.5 h-3.5 text-amber-600" />
+                      <span>HUMAN MANAGED</span>
+                    </>
+                  ) : activeConversation.aiEnabled ? (
                     <>
                       <Zap className="w-3.5 h-3.5 text-blue-600" />
                       <span>AI AUTO-REPLY ON</span>
                     </>
                   ) : (
                     <>
-                      <UserCheck className="w-3.5 h-3.5 text-amber-600" />
-                      <span>HUMAN MANAGED</span>
+                      <Zap className="w-3.5 h-3.5 text-slate-500" />
+                      <span>AI AUTO-REPLY OFF</span>
                     </>
                   )}
                 </div>
               </div>
             </div>
+
+            {activeConversation.humanHandoff && (
+              <div className="px-4 py-3 bg-amber-50 border-b border-amber-200 text-xs" role="status" aria-live="polite">
+                <div className="flex items-start gap-2">
+                  <AlertTriangle className="w-4 h-4 text-amber-700 mt-0.5 shrink-0" />
+                  <div className="min-w-0">
+                    <p className="font-extrabold text-amber-900">Human Handoff active — AI replies and AI follow-ups are paused for this conversation.</p>
+                    <p className="text-amber-800 mt-1">{activeConversation.humanHandoffReason || 'A human takeover was requested.'}{activeConversation.humanHandoffAt ? ` · ${new Date(activeConversation.humanHandoffAt).toLocaleString()}` : ''}</p>
+                    <p className="text-amber-800 mt-1">CRM owner: {activeLead?.ownerId || 'Unassigned'}{!activeLead?.ownerId ? ' · This conversation remains unassigned until an admin assigns it.' : ' · Existing CRM assignment is retained.'}</p>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Compact Auto Follow-Up Status Bar */}
             {activeLead && (activeLead.leadType === 'INBOUND' || activeLead.leadType === 'OUTBOUND') && (

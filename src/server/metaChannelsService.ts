@@ -4,6 +4,7 @@ import { doc, getDoc, setDoc, deleteDoc, createDoc, updateDoc, getDocs, query, w
 import { tenantRepo } from './tenantRepo.js';
 import { encryptSecret, decryptSecret } from './cryptoUtils.js';
 import type { TenantContext } from '../types/tenant.js';
+import { evaluateHumanHandoff, persistHumanHandoff, describeHandoff } from './humanHandoffService.js';
 
 /**
  * Per-workspace WhatsApp (Cloud API via Embedded Signup) and Facebook Messenger (Page login),
@@ -548,6 +549,27 @@ async function processInbound(tenantId: string, event: InboundEvent, eventId: st
     await updateDoc(eventRef, { status: 'processed', processedAt: now, conversationId });
     return;
   }
+  // Load the recent thread once: it feeds the Human Handoff check and the AI prompt below.
+  const historySnap = await getDocs(query(repo.messages(), where('conversationId', '==', conversationId)));
+  const thread = historySnap.docs
+    .map((d) => d.data() as any)
+    .filter((m) => m.messageId !== messageId)
+    .sort((a, b) => new Date(a.timestamp || 0).getTime() - new Date(b.timestamp || 0).getTime());
+
+  // Human Handoff: a customer asking for a person (or clearly frustrated) silences the AI for this conversation.
+  if (event.hasText && Boolean(event.text)) {
+    try {
+      const handoff = await evaluateHumanHandoff(ctx, { text: event.text, thread, settings });
+      if (handoff.matched) {
+        await persistHumanHandoff(ctx, conversationId, handoff);
+        await updateDoc(eventRef, { status: 'handoff', reason: describeHandoff(handoff), processedAt: new Date().toISOString(), conversationId });
+        return;
+      }
+    } catch (handoffError) {
+      console.warn('[Human Handoff] Evaluation failed; continuing with the AI reply.', handoffError);
+    }
+  }
+
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey || !event.hasText) {
     await updateDoc(eventRef, { status: 'processed_no_reply', reason: !apiKey ? 'OPENAI_API_KEY is not configured' : 'No text available for AI reply', processedAt: now, conversationId });
@@ -562,11 +584,7 @@ async function processInbound(tenantId: string, event: InboundEvent, eventId: st
     .map((d) => '## ' + String(d.title || 'Knowledge') + '\n' + String(d.content || '').slice(0, 2500))
     .join('\n\n')
     .slice(0, 12000);
-  const historySnap = await getDocs(query(repo.messages(), where('conversationId', '==', conversationId)));
-  const history = historySnap.docs
-    .map((d) => d.data() as any)
-    .filter((m) => m.messageId !== messageId)
-    .sort((a, b) => new Date(a.timestamp || 0).getTime() - new Date(b.timestamp || 0).getTime())
+  const history = thread
     .slice(-8)
     .map((m) => ({ role: m.direction === 'OUTBOUND' ? ('assistant' as const) : ('user' as const), content: String(m.text || '').slice(0, 1500) }));
   const openai = new OpenAI({ apiKey });

@@ -413,6 +413,20 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
       // Initialize Google Calendar authentication & sync token to backend
       initCalendarAuth();
 
+      // Tenant-scoped backend config is the source of truth for Human Handoff.
+      // Keep it available so stale Firestore settings cannot overwrite saved checkbox states.
+      let backendHandoffConfig: any = null;
+      try {
+        const handoffRes = await fetch('/api/human-handoff/config');
+        if (handoffRes.ok) {
+          const handoffData = await handoffRes.json();
+          if (handoffData?.config) {
+            backendHandoffConfig = handoffData.config;
+            setSettings((prev) => ({ ...prev, humanHandoffEnabled: true, humanHandoffCustomPhrasesEnabled: handoffData.config.customPhrasesEnabled ?? true, humanHandoffKeywords: handoffData.config.keywords, humanHandoffRules: handoffData.config.rules }));
+          }
+        }
+      } catch {}
+
       // Sync settings from backend API
       try {
         const apiSetRes = await fetch('/api/settings');
@@ -439,7 +453,15 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
         const settingsSnap = await getDoc(settingsRef);
         if (settingsSnap.exists()) {
           const loadedSettings = settingsSnap.data() as SystemSettings;
-          setSettings(loadedSettings);
+          const workspaceDefaults = defaultSettingsFor(currentTenantId, currentTenant?.name);
+          setSettings({
+            ...workspaceDefaults,
+            ...loadedSettings,
+            humanHandoffEnabled: true,
+            humanHandoffCustomPhrasesEnabled: backendHandoffConfig?.customPhrasesEnabled ?? loadedSettings.humanHandoffCustomPhrasesEnabled ?? workspaceDefaults.humanHandoffCustomPhrasesEnabled ?? true,
+            humanHandoffKeywords: backendHandoffConfig?.keywords ?? loadedSettings.humanHandoffKeywords ?? workspaceDefaults.humanHandoffKeywords ?? [],
+            humanHandoffRules: backendHandoffConfig?.rules ?? loadedSettings.humanHandoffRules ?? workspaceDefaults.humanHandoffRules ?? { explicitRequest: true, frustration: true, aiUnableToResolve: true, failureThreshold: 2 },
+          });
         } else {
           await setDoc(settingsRef, defaultSettingsFor(currentTenantId, currentTenant?.name)).catch(() => {});
         }
@@ -1408,46 +1430,59 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
 
   // Toggle AI / Human Takeover (Section 30 & 31)
   const handleToggleAi = async (conversationId: string, enabled: boolean) => {
-    setConversations((prev) =>
-      prev.map((c) =>
-        c.conversationId === conversationId
-          ? {
-              ...c,
-              aiEnabled: enabled,
-              humanHandoff: !enabled,
-            }
-          : c
-      )
-    );
-
+    const reason = enabled ? undefined : 'Manual human takeover';
     try {
-      await fetch('/api/conversation/ai-state', {
+      const response = await fetch('/api/conversation/ai-state', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           conversationId,
           aiEnabled: enabled,
           humanHandoff: !enabled,
+          reason,
+          detectionSource: 'MANUAL',
         }),
       });
-    } catch (err) {
-      console.warn('Failed to sync AI state to backend:', err);
-    }
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok || result?.success !== true) {
+        throw new Error(result?.error || `Could not ${enabled ? 'resume AI' : 'take over conversation'}.`);
+      }
 
-    const conv = conversations.find((c) => c.conversationId === conversationId);
-    if (conv?.leadId) {
-      const act: LeadActivity = {
-        activityId: `act-${Date.now()}`,
-        leadId: conv.leadId,
-        contactId: conv.contactId,
-        type: enabled ? 'AI_RESUMED' : 'HUMAN_TAKEOVER',
-        title: enabled ? 'AI Auto-Pilot Resumed' : 'Human Specialist Takeover',
-        description: enabled
-          ? 'Agent resumed automated AI conversation responses.'
-          : 'Human operator took control of conversation; automated AI replies disabled.',
-        timestamp: new Date().toISOString(),
-      };
-      setActivities((prev) => [act, ...prev]);
+      // Update the UI only after the backend confirms persistence.
+      setConversations((prev) =>
+        prev.map((c) =>
+          c.conversationId === conversationId
+            ? {
+                ...c,
+                aiEnabled: enabled,
+                humanHandoff: !enabled,
+                managementMode: enabled ? 'AI' : 'HUMAN',
+                humanHandoffAt: enabled ? null : (result.humanHandoffAt || new Date().toISOString()),
+                humanHandoffReason: enabled ? undefined : (result.humanHandoffReason || reason),
+                humanHandoffDetectionSource: enabled ? undefined : 'MANUAL',
+              }
+            : c
+        )
+      );
+
+      const conv = conversations.find((c) => c.conversationId === conversationId);
+      if (conv?.leadId) {
+        const act: LeadActivity = {
+          activityId: `act-${Date.now()}`,
+          leadId: conv.leadId,
+          contactId: conv.contactId,
+          type: enabled ? 'AI_RESUMED' : 'HUMAN_TAKEOVER',
+          title: enabled ? 'AI Auto-Pilot Resumed' : 'Human Specialist Takeover',
+          description: enabled
+            ? 'Agent explicitly resumed automated AI conversation responses.'
+            : 'Human operator took control of conversation; AI replies and follow-ups were paused.',
+          timestamp: new Date().toISOString(),
+        };
+        setActivities((prev) => [act, ...prev]);
+      }
+    } catch (err) {
+      console.error('Failed to persist conversation AI state:', err);
+      window.alert(err instanceof Error ? err.message : 'Could not update conversation state. Please try again.');
     }
   };
 
@@ -1756,7 +1791,7 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
     setConversations((prev) =>
       prev.map((c) =>
         c.conversationId === conversationId
-          ? { ...c, isRead: true, unread: false, unreadCount: 0, readAt: nowIso }
+          ? { ...c, isRead: true, unread: false, unreadCount: 0, readAt: nowIso, humanHandoffUnseen: false }
           : c
       )
     );
@@ -1881,30 +1916,50 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
     }
   };
 
-  // Persistent System Settings save (Firestore + Backend API pipeline config)
+  // Persist Human Handoff through the tenant-scoped backend; persist remaining settings in the tenant settings document.
   const handleSaveSettings = async (newSettings: SystemSettings) => {
-    setSettings(newSettings);
-    if (isFirebaseConfigured && db) {
-      try {
-        await setDoc(doc(db, 'system_settings', 'default'), newSettings, { merge: true });
-      } catch (err) {
-        console.warn('Error persisting settings to Firestore:', err);
-      }
+    const normalizedSettings: SystemSettings = {
+      ...newSettings,
+      humanHandoffEnabled: true,
+      humanHandoffCustomPhrasesEnabled: newSettings.humanHandoffCustomPhrasesEnabled ?? true,
+      humanHandoffKeywords: newSettings.humanHandoffKeywords || [],
+      humanHandoffRules: {
+        explicitRequest: newSettings.humanHandoffRules?.explicitRequest !== false,
+        frustration: newSettings.humanHandoffRules?.frustration !== false,
+        aiUnableToResolve: newSettings.humanHandoffRules?.aiUnableToResolve !== false,
+        failureThreshold: Math.min(5, Math.max(1, Number(newSettings.humanHandoffRules?.failureThreshold) || 2)),
+      },
+    };
+
+    const handoffRes = await fetch('/api/human-handoff/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        keywords: normalizedSettings.humanHandoffKeywords,
+        customPhrasesEnabled: normalizedSettings.humanHandoffCustomPhrasesEnabled,
+        rules: normalizedSettings.humanHandoffRules,
+      }),
+    });
+    const handoffData = await handoffRes.json().catch(() => ({}));
+    if (!handoffRes.ok || handoffData?.success !== true) {
+      throw new Error(handoffData?.error || 'Human Handoff settings were not saved.');
     }
 
-    try {
-      await fetch('/api/settings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          emailMode: newSettings.channelModes.EMAIL,
-          emailSignature: newSettings.emailSignature,
-          debounceSeconds: newSettings.debounceSeconds,
-        }),
-      });
-    } catch (err) {
-      console.warn('Error syncing settings to backend API:', err);
+    const apiSettingsRes = await fetch('/api/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        emailMode: normalizedSettings.channelModes.EMAIL,
+        emailSignature: normalizedSettings.emailSignature,
+        debounceSeconds: normalizedSettings.debounceSeconds,
+      }),
+    });
+    if (!apiSettingsRes.ok) throw new Error('Channel settings could not be saved.');
+
+    if (isFirebaseConfigured && db) {
+      await setDoc(tDoc('settings', 'default'), normalizedSettings, { merge: true });
     }
+    setSettings(normalizedSettings);
   };
 
   // Switch to CRM lead

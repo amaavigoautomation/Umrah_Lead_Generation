@@ -6,6 +6,7 @@ import { Contact, Lead, Conversation, Message } from '../types/index.js';
 import { sendLiveEmail, getSmtpConfig, getResendConfig, fetchFirestoreSmtpConfig } from './smtpService.js';
 import { handleIncomingCampaignLeadReply } from './campaignService.js';
 import { tenantRepo } from './tenantRepo.js';
+import { mergeWebsiteConversation, mergeWebsiteLead, pickReusableConversation } from './websiteLeadMerge.js';
 import type { TenantContext } from '../types/tenant.js';
 import { getTenantBrand } from './brandService.js';
 import { brandFallbackAgency, brandDemoThankYouSubject, brandSpecialistLine, brandThankYouSignoff, brandDefaultSourceUrl, brandInboundHeading } from '../shared/brand.js';
@@ -853,7 +854,30 @@ export async function processWebsiteLeadSubmission(
   // -----------------------------------------------------------------
   // 10. Create Lead in Firestore
   // -----------------------------------------------------------------
-  const leadId = `lead-web-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+  // One person, one thread: if this email already has an open conversation (e.g. they emailed first),
+  // add the form to it instead of creating a second lead and conversation.
+  let reusableConversation: ReturnType<typeof pickReusableConversation> = null;
+  let reusableLead: Partial<Lead> | null = null;
+  if (isFirebaseConfigured && db && email) {
+    try {
+      const repo = tenantRepo(ctx);
+      const [byEmail, byContact] = await Promise.all([
+        getDocs(query(repo.conversations(), where('customerEmail', '==', email.trim().toLowerCase()), limit(10))),
+        getDocs(query(repo.conversations(), where('contactId', '==', contactId), limit(10))),
+      ]);
+      reusableConversation = pickReusableConversation([...byEmail.docs, ...byContact.docs].map((d: any) => ({ id: d.id, ...d.data() })));
+      if (reusableConversation?.leadId) {
+        const leadSnap = await getDoc(repo.leadDoc(reusableConversation.leadId));
+        if (leadSnap.exists()) reusableLead = leadSnap.data() as Partial<Lead>;
+      }
+      if (reusableConversation) {
+        console.log(`[Website Lead] ${email} already has conversation ${reusableConversation.conversationId}; adding the form to it.`);
+      }
+    } catch (e) {
+      console.warn('[Website Lead] Could not look for an existing conversation; creating a new one.', e);
+    }
+  }
+  const leadId = reusableLead?.leadId || `lead-web-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
 
   const aiSummary = `Inbound Free Demo Request received from ${rawFullName} (${designation} at ${companyName}). Located in ${city ? `${city}, ` : ''}${country}. Interested in "${product}". Team size: ${teamSize}. Multi-branch agency: ${branches}. Customer query: "${message || 'Requested full platform walkthrough'}".`;
 
@@ -867,7 +891,7 @@ export async function processWebsiteLeadSubmission(
     country ? `Country: ${country}` : null,
   ].filter(Boolean) as string[];
 
-  const lead: Lead = {
+  const freshLead: Lead = {
     leadId,
     contactId,
     source: 'WEBSITE',
@@ -899,6 +923,7 @@ export async function processWebsiteLeadSubmission(
     updatedAt: nowIso,
     lastActivityAt: nowIso,
   };
+  const lead: Lead = mergeWebsiteLead(freshLead, reusableLead, nowIso);
 
   // If this website lead is part of an outbound campaign, mark them as REPLIED & DEMO_BOOKED
   try {
@@ -915,7 +940,7 @@ export async function processWebsiteLeadSubmission(
   // -----------------------------------------------------------------
   // 11. Create Conversation & Inbound Message in Firestore
   // -----------------------------------------------------------------
-  const conversationId = `conv-web-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+  const conversationId = reusableConversation?.conversationId || `conv-web-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
   const messageId = `msg-web-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
 
   const inboundLines = [
@@ -968,7 +993,7 @@ export async function processWebsiteLeadSubmission(
     );
   }
 
-  const conversation: Conversation = {
+  const freshConversation: Conversation = {
     conversationId,
     contactId,
     leadId,
@@ -993,6 +1018,9 @@ export async function processWebsiteLeadSubmission(
     createdAt: nowIso,
     updatedAt: nowIso,
   };
+  const conversation: Conversation = reusableConversation
+    ? mergeWebsiteConversation(freshConversation, reusableConversation, nowIso)
+    : freshConversation;
 
   const initialMessage: Message = {
     messageId,

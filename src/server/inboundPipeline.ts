@@ -1273,6 +1273,7 @@ function stripQuotedEmailTrail(text: string): string {
     /^\s*Begin forwarded message:\s*$/i,
     /^\s*On .{1,240}wrote:\s*$/i,
     /^\s*From:\s*.+$/i,
+    /^\s*[_=-]{5,}\s*$/,
   ];
 
   // Email clients commonly append a quoted reply after a blank line followed by

@@ -12,6 +12,7 @@
  *    instead of being marked "sent" without anything leaving the system
  *  - respects the suppression list and the tenant's daily outbound quota
  */
+import { STOP_FOLLOWUPS_WHEN_DEMO_BOOKED } from '../shared/followUpPolicy.js';
 import { getDoc, getDocs, setDoc, query, where, orderBy, limit } from './adminFirestore.js';
 import { getTenantBrand } from './brandService.js';
 import { brandIntro, brandSignature, type TenantBrand } from '../shared/brand.js';
@@ -139,8 +140,12 @@ export const DEFAULT_FOLLOWUP_CONFIG: AutoFollowUpGlobalConfig = {
 const INELIGIBLE_STATUSES: LeadStatus[] = ['CLOSED_WON', 'CLOSED_LOST', 'NOT_INTERESTED', 'UNSUBSCRIBED'];
 const AUTO_SEND_CHANNELS = ['EMAIL', 'WEBSITE'];
 
-/** A confirmed demo is a terminal state for automated follow-ups. */
+/**
+ * True when a confirmed demo should END automated follow-ups. Controlled by STOP_FOLLOWUPS_WHEN_DEMO_BOOKED
+ * (shared/followUpPolicy.ts); while that is false a booked demo does not stop anything.
+ */
 function isDemoBookedLead(lead: Partial<Lead> | null | undefined): boolean {
+  if (!STOP_FOLLOWUPS_WHEN_DEMO_BOOKED) return false;
   return lead?.status === 'DEMO_BOOKED' || lead?.demoStatus === 'BOOKED';
 }
 
@@ -809,7 +814,7 @@ STRICT RULES:
 6. LANGUAGE: match the dominant language the lead used.
 7. DECISION:
    - "send": a safe, relevant follow-up can be written.
-   - "skip": no useful next step right now.
+   - "skip": no useful next step right now. NEVER skip only because a demo or meeting is proposed, agreed or booked: keep following up (confirm attendance, offer to answer questions before the call, ask if they need to reschedule). Use only the date/time that appears in the thread or lead profile; never invent one.
    - "human_review": a human must step in (promised pricing/visa check, complaint, conflicting details, complex request).
 8. Respond ONLY with valid JSON:
    {"decision":"send|skip|human_review","reason":"...","objective":"...","language":"...","generatedMessage":"exact text if send","humanReviewReason":"if human_review"}
@@ -824,6 +829,7 @@ STRICT RULES:
 - Buying Stage: ${lead.buyingStage || snap.buyingStage || 'unknown'}
 - Known Requirements: ${JSON.stringify(lead.requirements || snap.requirements || [])}
 - Attempt Number: ${job.attempt}
+- Demo: ${(lead.demoStatus || snap.demoStatus) ? `${lead.demoStatus || snap.demoStatus}${(lead.demoBookedAt || snap.demoBookedAt) ? ` (booked ${lead.demoBookedAt || snap.demoBookedAt})` : ''}` : 'none recorded in the system (check the thread)'}
 
 CHANNEL: ${conversation.channel}
 

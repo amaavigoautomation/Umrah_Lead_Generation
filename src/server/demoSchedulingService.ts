@@ -1,4 +1,5 @@
 import { tenantRepo } from './tenantRepo.js';
+import { STOP_FOLLOWUPS_WHEN_DEMO_BOOKED } from '../shared/followUpPolicy.js';
 import type { TenantContext } from '../types/tenant.js';
 import { getTenantBrand, getBrandSync } from './brandService.js';
 import { brandTzLabel, brandWorkingDaysLabel, fmtHour, DAY_NAMES } from '../shared/brand.js';
@@ -1057,26 +1058,33 @@ async function createGoogleCalendarDemoBookingInner(
             demoTimezone: tz(),
             calendarEventId,
             googleMeetLink,
-            autoFollowUp: {
-              enabled: false,
-              disabledBy: 'System Demo Booking',
-              disabledAt: nowIso,
-              disabledReason: 'demo_booked',
-              activeFollowUpId: null,
-              nextScheduledAt: null,
-              channelDelayOverride: null,
-            },
+            // Booking only switches follow-ups off when the policy says so (shared/followUpPolicy.ts).
+            ...(STOP_FOLLOWUPS_WHEN_DEMO_BOOKED
+              ? {
+                  autoFollowUp: {
+                    enabled: false,
+                    disabledBy: 'System Demo Booking',
+                    disabledAt: nowIso,
+                    disabledReason: 'demo_booked',
+                    activeFollowUpId: null,
+                    nextScheduledAt: null,
+                    channelDelayOverride: null,
+                  },
+                }
+              : {}),
             updatedAt: nowIso,
           },
           { merge: true }
         );
 
         // Hard stop: cancel any scheduled follow-up jobs for this lead.
-        try {
-          const { cancelFollowUpsForLead } = await import('./autoFollowUpService.js');
-          await cancelFollowUpsForLead(getSchedCtx(), leadId, 'demo_booked');
-        } catch (fuErr) {
-          console.warn('[Demo Booking] Auto follow-up cancel notice:', fuErr);
+        if (STOP_FOLLOWUPS_WHEN_DEMO_BOOKED) {
+          try {
+            const { cancelFollowUpsForLead } = await import('./autoFollowUpService.js');
+            await cancelFollowUpsForLead(getSchedCtx(), leadId, 'demo_booked');
+          } catch (fuErr) {
+            console.warn('[Demo Booking] Auto follow-up cancel notice:', fuErr);
+          }
         }
       }
 

@@ -1260,10 +1260,6 @@ www.umrah360.in`;
 }
 
 /**
- * Handles incoming email: generates AI reply, enforces single-reply turn logic,
- * dispatches over live SMTP when valid, and produces complete CRM synchronization entities.
- */
-/**
  * Removes the quoted portion of an inbound plain-text email reply for Unified Inbox display.
  * Only the current inbound message body is normalized; historical messages are not modified.
  */
@@ -1284,7 +1280,9 @@ function stripQuotedEmailTrail(text: string): string {
   // Requiring a recognizable quote marker avoids truncating ordinary prose.
   let cutAt = -1;
   for (let i = 1; i < lines.length; i++) {
-    if (quoteStartPatterns.some((pattern) => pattern.test(lines[i]))) {
+    const isQuoteMarker = quoteStartPatterns.some((pattern) => pattern.test(lines[i]));
+    const hasBlankSeparator = lines[i - 1].trim() === '';
+    if (isQuoteMarker && (hasBlankSeparator || /^\s*-{2,}\s*(Original Message|Forwarded message)\s*-{2,}\s*$/i.test(lines[i]) || /^\s*Begin forwarded message:\s*$/i.test(lines[i]))) {
       cutAt = i;
       break;
     }
@@ -1298,6 +1296,10 @@ function stripQuotedEmailTrail(text: string): string {
   return lines.slice(0, cutAt).join('\n').trim();
 }
 
+/**
+ * Handles incoming email: generates AI reply, enforces single-reply turn logic,
+ * dispatches over live SMTP when valid, and produces complete CRM synchronization entities.
+ */
 export async function processLiveInboundEmail(payload: {
   from: string;
   fromName?: string;

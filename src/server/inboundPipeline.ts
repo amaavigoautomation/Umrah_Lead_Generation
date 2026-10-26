@@ -1,4 +1,5 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
+import { stripQuotedReply } from '../shared/quotedReply.js';
 import { isHumanManagedConversationData } from '../shared/humanHandoff.js';
 import { tenantRepo } from './tenantRepo.js';
 import { evaluateHumanHandoff, persistHumanHandoff, describeHandoff } from './humanHandoffService.js';
@@ -1241,6 +1242,9 @@ export async function processLiveInboundEmail(payload: {
   /** The mailbox this email was read from (a workspace's own IMAP inbox). Defaults to the platform mailbox. */
   ownMailbox?: string;
 }): Promise<ProcessedInboundEmailResult> {
+  // Keep only what the customer newly wrote. The quoted earlier thread ("On ... wrote:", "> ...") would otherwise be
+  // saved and shown in the inbox, fed to the AI as if it were new, and scanned for handoff phrases.
+  payload = { ...payload, body: stripQuotedReply(payload.body) };
   const brand = await getTenantBrand(getInboundCtx().tenantId);
   const isUmrahBrand = brand.playbook === 'umrah360';
   const targetMailbox = payload.ownMailbox || process.env.SMTP_USER || process.env.IMAP_USER || '';

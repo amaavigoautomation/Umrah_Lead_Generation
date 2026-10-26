@@ -1,4 +1,5 @@
 import React, { useState, Suspense, useRef, useLayoutEffect, useEffect } from 'react';
+import { stripQuotedReply } from '../shared/quotedReply';
 import { STOP_FOLLOWUPS_WHEN_DEMO_BOOKED } from '../shared/followUpPolicy';
 import { lazyNamed } from '../lazyLoad';
 import {
@@ -1108,7 +1109,12 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
                             : 'bg-gradient-to-r from-orange-500 to-amber-500 text-white rounded-tr-none shadow-xs'
                         }`}
                       >
-                        <div className="whitespace-pre-wrap">{msg.text}</div>
+                        <div className="whitespace-pre-wrap">
+                          {/* Older emails were saved with the quoted history; hide it for customer emails. */}
+                          {msg.channel === 'EMAIL' && (msg.direction === 'INBOUND' || msg.senderType === 'CUSTOMER' || msg.senderType === 'PROSPECT')
+                            ? stripQuotedReply(msg.text)
+                            : msg.text}
+                        </div>
 
                         {/* RAG sources indicator */}
                         {msg.knowledgeSources && msg.knowledgeSources.length > 0 && (

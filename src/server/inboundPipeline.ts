@@ -1283,7 +1283,7 @@ function stripQuotedEmailTrail(text: string): string {
   for (let i = 1; i < lines.length; i++) {
     const isQuoteMarker = quoteStartPatterns.some((pattern) => pattern.test(lines[i]));
     const hasBlankSeparator = lines[i - 1].trim() === '';
-    if (isQuoteMarker && (hasBlankSeparator || /^\s*-{2,}\s*(Original Message|Forwarded message)\s*-{2,}\s*$/i.test(lines[i]) || /^\s*Begin forwarded message:\s*$/i.test(lines[i]))) {
+    if (isQuoteMarker && (hasBlankSeparator || /^\s*[_=-]{5,}\s*$/.test(lines[i]) || /^\s*-{2,}\s*(Original Message|Forwarded message)\s*-{2,}\s*$/i.test(lines[i]) || /^\s*Begin forwarded message:\s*$/i.test(lines[i]))) {
       cutAt = i;
       break;
     }

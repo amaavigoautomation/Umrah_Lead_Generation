@@ -1,4 +1,5 @@
 import React, { useState, Suspense, useRef, useLayoutEffect, useEffect } from 'react';
+import { STOP_FOLLOWUPS_WHEN_DEMO_BOOKED } from '../shared/followUpPolicy';
 import { lazyNamed } from '../lazyLoad';
 import {
   Search,
@@ -285,7 +286,10 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   };
-  const activeLead = leads.find((l) => l.leadId === activeConversation?.leadId);
+  // Website/webhook conversations can carry a stale or missing leadId: fall back to the contact's lead.
+  const activeLead =
+    leads.find((l) => l.leadId === activeConversation?.leadId) ||
+    (activeConversation?.contactId ? leads.find((l) => l.contactId === activeConversation.contactId) : undefined);
 
   // All conversations for this active contact across different platforms (Section 55 Unified Customer View)
   const contactConversations = activeContact
@@ -522,7 +526,8 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
   const isAutoFollowUpUiActive = Boolean(activeLead?.autoFollowUp?.enabled) &&
     !leadRepliedAfterFollowUp && !followUpCompleted;
   const activeConversationIsHumanManaged = activeConversation?.humanHandoff === true || activeConversation?.managementMode === 'HUMAN';
-  const activeLeadHasBookedDemo = activeLead?.demoStatus === 'BOOKED' || activeLead?.status === 'DEMO_BOOKED';
+  // A booked demo only blocks Auto Follow-Up when the policy says so (shared/followUpPolicy.ts).
+  const activeLeadHasBookedDemo = STOP_FOLLOWUPS_WHEN_DEMO_BOOKED && (activeLead?.demoStatus === 'BOOKED' || activeLead?.status === 'DEMO_BOOKED');
 
   // Toggle Auto Follow-Up on/off for the active lead
   const handleToggleAutoFollowUp = async (enabled: boolean) => {
@@ -534,7 +539,7 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          lead: activeLead,
+          lead: { ...activeLead, leadType: activeLead.leadType || 'INBOUND' },
           conversation: activeConversation,
           // Only the recent thread is needed to decide whether a follow-up is due
           messages: displayMessages.filter((m) => m.conversationId === activeConversation.conversationId).slice(-30),
@@ -879,7 +884,7 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
                 )}
 
                 {/* Auto Follow-Up Toggle Button */}
-                {activeLead && (activeLead.leadType === 'INBOUND' || activeLead.leadType === 'OUTBOUND') && (
+                {activeLead && (
                   <button
                     onClick={() => handleToggleAutoFollowUp(!isAutoFollowUpUiActive)}
                     disabled={isTogglingAutoFollowUp || (activeLeadHasBookedDemo && !isAutoFollowUpUiActive)}
@@ -962,7 +967,7 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
             )}
 
             {/* Compact Auto Follow-Up Status Bar */}
-            {activeLead && (activeLead.leadType === 'INBOUND' || activeLead.leadType === 'OUTBOUND') && (
+            {activeLead && (
               <div className="px-3.5 py-1.5 bg-orange-50/80 border-b border-orange-100 text-xs flex items-center justify-between">
                 <div className="flex items-center space-x-2">
                   <span className="flex items-center space-x-1.5">

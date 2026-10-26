@@ -445,6 +445,8 @@ export async function scheduleAutoFollowUpJob(
   const { lead, conversation, referenceMessage, attemptNumber = 1, user = 'System' } = params;
   const cfg = await getAutoFollowUpConfig(ctx);
 
+  // Website/webhook leads written without a leadType are inbound by definition.
+  if (!lead.leadType) lead.leadType = 'INBOUND';
   if (lead.leadType !== 'INBOUND' && lead.leadType !== 'OUTBOUND') return null;
   if (!lead.autoFollowUp?.enabled) return null;
   if (INELIGIBLE_STATUSES.includes(lead.status)) return null;
@@ -1010,6 +1012,7 @@ async function processOneJob(
   }
 
   // 2. Final eligibility checks
+  if (!lead.leadType) lead.leadType = 'INBOUND';
   if (lead.leadType !== 'INBOUND' && lead.leadType !== 'OUTBOUND') return cancel('Lead is not inbound or outbound');
   if (!lead.autoFollowUp?.enabled) return cancel('Auto Follow-Up is disabled for lead');
   if (isDemoBookedLead(lead)) {

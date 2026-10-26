@@ -511,13 +511,21 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
   const latestInboundFollowUpMessage = activeMessages
     .filter((m) => m.direction === 'INBOUND' || m.senderType === 'CUSTOMER' || m.senderType === 'PROSPECT')
     .reduce<Message | null>((latest, message) => !latest || getMsgTime(message) > getMsgTime(latest) ? message : latest, null);
+  // Anything we sent counts (AI, a human agent, or any outbound message), matching the server's "last message is ours" rule.
+  // Counting only AI messages made a human's reply invisible here, so the toggle kept showing OFF after Resume AI.
   const latestOutboundFollowUpMessage = activeMessages
-    .filter((m) => m.senderType === 'AI')
+    .filter((m) => m.senderType === 'AI' || m.senderType === 'AGENT' || m.senderType === 'HUMAN' || m.direction === 'OUTBOUND')
     .reduce<Message | null>((latest, message) => !latest || getMsgTime(message) > getMsgTime(latest) ? message : latest, null);
+  // Turning Auto Follow-Up ON after the customer's latest message is a deliberate restart (for example after a
+  // human handover), so that older reply must not keep the toggle showing OFF.
+  const followUpEnabledAtMs = activeLead?.autoFollowUp?.enabled && activeLead.autoFollowUp.enabledAt
+    ? new Date(activeLead.autoFollowUp.enabledAt).getTime()
+    : 0;
   const leadRepliedAfterFollowUp = Boolean(
     latestInboundFollowUpMessage &&
     latestOutboundFollowUpMessage &&
-    getMsgTime(latestInboundFollowUpMessage) > getMsgTime(latestOutboundFollowUpMessage)
+    getMsgTime(latestInboundFollowUpMessage) > getMsgTime(latestOutboundFollowUpMessage) &&
+    !(followUpEnabledAtMs && followUpEnabledAtMs > getMsgTime(latestInboundFollowUpMessage))
   );
   const followUpDisabledReason = activeLead?.autoFollowUp?.disabledReason;
   const followUpCompleted = followUpDisabledReason === 'completed';

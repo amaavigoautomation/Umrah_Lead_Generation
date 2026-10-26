@@ -2275,6 +2275,19 @@ Generate a helpful, grounded response.`;
           externalMessageId: sendResult.messageId,
           senderName: senderName || (await getTenantBrand(resolvedTenantId)).aiAgentName,
         });
+        // If Auto Follow-Up is ON for this lead, start the timer from this message.
+        try {
+          const { handleOutboundMessageEvent } = await import('./autoFollowUpService.js');
+          await handleOutboundMessageEvent(activeTenantCtx, {
+            leadId,
+            conversationId,
+            messageId: sendResult.messageId,
+            text: text || (html ? html.replace(/<[^>]*>?/gm, '') : ''),
+            user: userEmail || 'Team Member',
+          });
+        } catch (fuErr) {
+          console.warn('[Email Send] Auto follow-up scheduling notice:', fuErr);
+        }
       }
       res.statusCode = 200;
       res.end(JSON.stringify({ success: true, messageId: sendResult.messageId }));

@@ -645,6 +645,58 @@ export async function handleEnableAutoFollowUp(
   return { enabled: true, job };
 }
 
+/**
+ * A message went out to the customer (a human reply, or an AI reply sent through /api/email/send).
+ * If Auto Follow-Up is ON for the lead, start (or restart) the follow-up timer from this message.
+ *
+ * Without this, turning Auto Follow-Up ON while the customer's message was the last one in the thread
+ * ("waiting for our next message") never started anything: nothing noticed our later reply.
+ * Never throws; returns the scheduled job, or null when nothing should be scheduled.
+ */
+export async function handleOutboundMessageEvent(
+  ctx: TenantContext,
+  params: { leadId?: string; conversationId?: string; messageId?: string; text?: string; timestamp?: string; user?: string }
+): Promise<AutoFollowUpJob | null> {
+  try {
+    if (!enabledDb() || !params.conversationId) return null;
+    if (!(await hasFeature(ctx.tenantId, 'auto_followup'))) return null;
+
+    // Callers (the inbox send) usually only know the conversation, so the lead comes from it.
+    const convSnap = await getDoc(tenantRepo(ctx).conversationDoc(params.conversationId));
+    if (!convSnap.exists()) return null;
+    const conversation = { conversationId: params.conversationId, ...(convSnap.data() as object) } as Conversation;
+    const leadId = params.leadId || conversation.leadId;
+    if (!leadId) return null;
+    const leadSnap = await getDoc(tenantRepo(ctx).leadDoc(leadId));
+    if (!leadSnap.exists()) return null;
+    const lead = leadSnap.data() as Lead;
+    if (!lead.autoFollowUp?.enabled) return null;
+    if (!lead.leadId) lead.leadId = leadId;
+    if (!lead.leadType) lead.leadType = 'INBOUND';
+
+    // Same rule as the worker: while a person has the conversation, no automatic follow-ups.
+    if (conversation.humanHandoff === true || conversation.managementMode === 'HUMAN') return null;
+
+    const nowIso = params.timestamp || new Date().toISOString();
+    const job = await scheduleAutoFollowUpJob(ctx, {
+      lead,
+      conversation,
+      referenceMessage: { id: params.messageId || `out-${Date.now()}`, text: params.text || '', timestamp: nowIso },
+      attemptNumber: (lead.autoFollowUp.attemptCount || 0) + 1,
+      user: params.user || 'System',
+    });
+    if (job) {
+      lead.autoFollowUp.activeFollowUpId = job.id;
+      lead.autoFollowUp.nextScheduledAt = job.scheduledAt;
+      await saveLeadFollowUpState(ctx, lead);
+    }
+    return job;
+  } catch (err) {
+    console.warn('[AutoFollowUp] Could not start follow-up after an outbound message:', err);
+    return null;
+  }
+}
+
 export async function handleDisableAutoFollowUp(
   ctx: TenantContext,
   params: {

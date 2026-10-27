@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { tenantRepo } from './tenantRepo.js';
 import {
   getGoogleCalendarAccessToken,
@@ -21,8 +22,15 @@ let activeSchedulingCtx: TenantContext = DEFAULT_UMRAH_CTX;
 export function setSchedulingActiveContext(ctx: TenantContext) {
   activeSchedulingCtx = ctx;
 }
+// Per-call tenant scope. Work started with runWithSchedulingCtx() always sees its own workspace, even
+// if another request changes the global active context while it is awaiting. Inbound email / WhatsApp
+// replies (cron and webhooks) never set the global one, so they must run inside this scope.
+const schedulingCtxStore = new AsyncLocalStorage<TenantContext>();
+export function runWithSchedulingCtx<T>(ctx: TenantContext, fn: () => Promise<T>): Promise<T> {
+  return schedulingCtxStore.run(ctx, fn);
+}
 function getSchedCtx(): TenantContext {
-  return activeSchedulingCtx;
+  return schedulingCtxStore.getStore() ?? activeSchedulingCtx;
 }
 
 // ---- Per-company scheduling brand (timezone, working days/hours, names). Cache is warmed by warmSchedBrand(). ----
@@ -84,6 +92,7 @@ import {
   isAffirmative,
   isIsoDate,
   isNegative,
+  leadReplyHead,
   looksLikeSchedulingFollowUp,
   namedWeekdays,
   parseExplicitTime,
@@ -100,20 +109,18 @@ export const DEMO_DURATION_MINUTES = 60;
 // Valid fixed 1-hour slots: 10-11, 11-12, 12-13, 13-14, 14-15, 15-16, 16-17, 17-18, 18-19
 export const VALID_SLOT_START_HOURS = [10, 11, 12, 13, 14, 15, 16, 17, 18];
 
-// Server-side in-memory cache for OAuth access token
-let serverCalendarAccessToken: string | null = null;
-let serverTokenExpiresAt: number = 0;
+// Server-side in-memory cache for OAuth access tokens, one entry per workspace (never shared between them).
+const serverCalendarTokens = new Map<string, { token: string; expiresAt: number }>();
 
 /**
  * Clears the expired or invalid Google Calendar access token on the server and Firestore
  * to prevent continuous 401 background log errors.
  */
 export async function handleExpiredCalendarToken() {
-  serverCalendarAccessToken = null;
-  serverTokenExpiresAt = 0;
+  const tenantId = getSchedCtx().tenantId;
+  serverCalendarTokens.delete(tenantId);
   // Connected through the server flow: a 401 only means the short access token ran out. Drop it so the
   // next call renews it with the refresh token. Do NOT mark the calendar expired/disconnected.
-  const tenantId = getSchedCtx().tenantId;
   invalidateGoogleCalendarAccessToken(tenantId);
   if (await hasGoogleCalendarRefreshToken(tenantId).catch(() => false)) return;
   if (isFirebaseConfigured && db) {
@@ -140,8 +147,7 @@ export async function handleExpiredCalendarToken() {
  */
 export function setServerCalendarAccessToken(token: string, expiresInSeconds: number = 3600) {
   if (!token || !token.trim() || token === 'null' || token === 'undefined') return;
-  serverCalendarAccessToken = token.trim();
-  serverTokenExpiresAt = Date.now() + expiresInSeconds * 1000;
+  serverCalendarTokens.set(getSchedCtx().tenantId, { token: token.trim(), expiresAt: Date.now() + expiresInSeconds * 1000 });
 }
 
 /**
@@ -165,8 +171,9 @@ export async function getLiveCalendarToken(explicitToken?: string): Promise<stri
     return explicitToken.trim();
   }
 
-  if (serverCalendarAccessToken && Date.now() < serverTokenExpiresAt - 30000) {
-    return serverCalendarAccessToken;
+  const cachedToken = serverCalendarTokens.get(getSchedCtx().tenantId);
+  if (cachedToken && Date.now() < cachedToken.expiresAt - 30000) {
+    return cachedToken.token;
   }
 
   // 1. Try Firestore settings/calendar_auth
@@ -178,9 +185,8 @@ export async function getLiveCalendarToken(explicitToken?: string): Promise<stri
 
         // Check if we have an active access token that isn't flagged expired
         if (data?.accessToken && data.accessToken !== 'null' && data?.active !== false && !data?.expired) {
-          serverCalendarAccessToken = data.accessToken;
-          serverTokenExpiresAt = Date.now() + 3600 * 1000;
-          return serverCalendarAccessToken;
+          setServerCalendarAccessToken(data.accessToken);
+          return data.accessToken as string;
         }
 
         // Automatic Refresh Token Exchange if Refresh Token + Client Credentials are saved
@@ -504,7 +510,16 @@ export async function checkRealtimeGoogleCalendarSlot(
 
     if (eventsRes.ok) {
       const eventsData = await eventsRes.json();
-      const items = (eventsData.items || []).filter((e: any) => e.status !== 'cancelled');
+      // Only events that really block the host: not cancelled, not marked "Free", not declined by the
+      // calendar owner, and not informational all-day entries (working location, birthdays).
+      const items = (eventsData.items || []).filter(
+        (e: any) =>
+          e.status !== 'cancelled' &&
+          e.transparency !== 'transparent' &&
+          e.eventType !== 'workingLocation' &&
+          e.eventType !== 'birthday' &&
+          !(Array.isArray(e.attendees) && e.attendees.some((a: any) => a?.self && a?.responseStatus === 'declined'))
+      );
 
       for (const item of items) {
         const itemStart = item.start?.dateTime || (item.start?.date ? createIstIsoString(item.start.date, 0, 0) : startIso);
@@ -2009,15 +2024,23 @@ export async function processSchedulingConversationTurn(params: {
     activeBooking && (isRescheduleIntent || schedState?.mode === 'RESCHEDULE') ? 'RESCHEDULE' : 'NEW';
 
   // 4a. Lead is answering our "Just to confirm..." question.
-  if (schedState?.stage === 'AWAITING_CONFIRMATION' && schedState.proposedSlot && !dateMentioned && !time.hasTime) {
-    if (isAffirmative(fresh)) {
-      return finalizeConfirmedSlot(schedState.proposedSlot, schedState.mode === 'RESCHEDULE' ? 'RESCHEDULE' : 'NEW');
-    }
-    if (isNegative(fresh)) {
-      return askForAvailability(
-        'ASKED_AVAILABILITY',
-        `No problem. What day and time would suit you instead? Our demos run ${daysLabel()} between ${fmtHour(workStartH())} and ${fmtHour(workEndH())} ${TZL()} (1 hour).`
-      );
+  // Judged on the lead's own reply only: not the email subject, not our earlier message pasted back by
+  // the mail client, not the signature. Otherwise a word from those ("different day", "no" in a subject)
+  // turned a plain "Yes, that is correct." into a refusal and the lead was asked for a time again.
+  if (schedState?.stage === 'AWAITING_CONFIRMATION' && schedState.proposedSlot) {
+    const answerSource = params.bodyText != null ? stripQuotedEmailHistoryShared(String(params.bodyText)) || String(params.bodyText) : fresh;
+    const answer = leadReplyHead(answerSource) || answerSource.trim();
+    const firstSentence = (answer.split('\n').find((l) => l.trim()) || '').split(/(?<=[.!?])\s+/)[0] || answer;
+    if (!hasExplicitDateToken(answer) && !parseExplicitTime(answer).hasTime) {
+      if (isAffirmative(firstSentence) || isAffirmative(answer)) {
+        return finalizeConfirmedSlot(schedState.proposedSlot, schedState.mode === 'RESCHEDULE' ? 'RESCHEDULE' : 'NEW');
+      }
+      if (isNegative(answer)) {
+        return askForAvailability(
+          'ASKED_AVAILABILITY',
+          `No problem. What day and time would suit you instead? Our demos run ${daysLabel()} between ${fmtHour(workStartH())} and ${fmtHour(workEndH())} ${TZL()} (1 hour).`
+        );
+      }
     }
   }
 

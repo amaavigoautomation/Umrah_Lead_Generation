@@ -31,6 +31,7 @@ import {
   detectDemoSchedulingIntent,
   hasPendingSchedulingState,
   processSchedulingConversationTurn,
+  runWithSchedulingCtx,
 } from './demoSchedulingService.js';
 import { handleIncomingCampaignLeadReply } from './campaignService.js';
 import { sanitizeAiEmailText } from './emailSanitizer.js';
@@ -478,7 +479,7 @@ export async function generateWhatsAppAutoReplyText(params: {
   // Also route replies to our own scheduling question ("Tuesday 4pm", "yes") back to the scheduling agent.
   if (
     detectDemoSchedulingIntent(body) ||
-    (await hasPendingSchedulingState({ messageText: body, leadPhone: fromPhone }).catch(() => false))
+    (await runWithSchedulingCtx(getWACtx(), () => hasPendingSchedulingState({ messageText: body, leadPhone: fromPhone })).catch(() => false))
   ) {
     try {
       const historyTurns = (threadHistory || []).map((m: any) => ({
@@ -486,17 +487,20 @@ export async function generateWhatsAppAutoReplyText(params: {
         content: m.text || '',
       }));
 
-      const schedulingTurn = await processSchedulingConversationTurn({
-        automated: true,
-        messageText: body,
-        conversationHistory: historyTurns,
-        leadContext: {
-          leadPhone: fromPhone,
-          leadName: fromName || 'Brother / Sister',
-          companyName: companyName || (isUmrah ? 'Umrah Travel Agency' : 'Valued Customer'),
-          channel: 'WHATSAPP',
-        },
-      });
+      const schedulingTurn = await runWithSchedulingCtx(getWACtx(), () =>
+        processSchedulingConversationTurn({
+          automated: true,
+          messageText: body,
+          bodyText: body,
+          conversationHistory: historyTurns,
+          leadContext: {
+            leadPhone: fromPhone,
+            leadName: fromName || 'Brother / Sister',
+            companyName: companyName || (isUmrah ? 'Umrah Travel Agency' : 'Valued Customer'),
+            channel: 'WHATSAPP',
+          },
+        })
+      );
 
       if (schedulingTurn.handled && schedulingTurn.replyText) {
         return {
@@ -507,7 +511,7 @@ export async function generateWhatsAppAutoReplyText(params: {
         };
       }
     } catch (schedErr) {
-      console.warn('[Demo Scheduling WhatsApp Warning]:', schedErr);
+      console.error('[Demo Scheduling WhatsApp Error]: scheduling failed, falling back to the general reply:', schedErr);
     }
   }
 

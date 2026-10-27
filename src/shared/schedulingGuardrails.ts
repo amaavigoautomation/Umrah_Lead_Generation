@@ -244,3 +244,27 @@ function hasMonthName(t: string): boolean {
 export function isIsoDate(s: unknown): s is string {
   return typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s);
 }
+
+/**
+ * The lead's own words in a reply to our "Just to confirm..." question, and nothing else.
+ *
+ * Removes a leading subject line ("Re: ..."), our own earlier message when an email client pasted it
+ * back without ">" or "wrote:" markers (a "Name<email>" header line, "Just to confirm...", the
+ * 'Reply "Yes" to confirm, or tell me a different day and time' footer) and the sign-off. A stray word
+ * from any of those ("different day", a subject containing "no") must never turn a plain "Yes" into a "no".
+ * Returns '' when nothing is left; callers then fall back to the text they already had.
+ */
+export function leadReplyHead(text: string | null | undefined): string {
+  let t = String(text ?? '').replace(/\r\n/g, '\n').trim();
+  if (!t) return '';
+  // Subject line(s) added in front of the body: "Re: ...", "Fwd: ..."
+  t = t.replace(/^(?:[ \t]*(?:re|fwd?|fw)\s*:[^\n]*\n?)+/i, '');
+  // A "Name<email@x.com>" (or "Name <email@x.com>") header line starts a pasted-back earlier message.
+  t = t.replace(/(^|\n)[^\n<>]{0,80}<[^<>\s@]+@[^<>\s]+>[ \t]*(?:\n[\s\S]*)?$/, '');
+  // Our own earlier question, pasted back.
+  t = t.replace(/(^|\n)[ \t]*just to confirm[\s\S]*$/i, '');
+  t = t.replace(/(^|\n)[ \t]*reply\s*["“”']?yes["“”']?\s*to confirm[\s\S]*$/i, '');
+  // Sign-off and everything after it.
+  t = t.replace(/\n\s*(regards|best regards|kind regards|warm regards|thanks|thank you|sincerely|cheers)\b[\s\S]*$/i, '');
+  return t.trim();
+}

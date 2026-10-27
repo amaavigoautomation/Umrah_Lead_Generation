@@ -69,6 +69,7 @@ import {
   detectDemoSchedulingIntent,
   hasPendingSchedulingState,
   processSchedulingConversationTurn,
+  runWithSchedulingCtx,
 } from './demoSchedulingService.js';
 import { getTenantBrand } from './brandService.js';
 import { brandAutomationSignature, brandIntro, brandFallbackAgency } from '../shared/brand.js';
@@ -873,7 +874,7 @@ export async function generateAutoReplyText(params: {
   if (
     detectDemoSchedulingIntent(body) ||
     detectDemoSchedulingIntent(subject) ||
-    (await hasPendingSchedulingState({ messageText: body, leadEmail: from }).catch(() => false))
+    (await runWithSchedulingCtx(getInboundCtx(), () => hasPendingSchedulingState({ messageText: body, leadEmail: from })).catch(() => false))
   ) {
     try {
       const historyTurns = (threadHistory || []).map((m: any) => ({
@@ -881,17 +882,22 @@ export async function generateAutoReplyText(params: {
         content: m.text || '',
       }));
 
-      const schedulingTurn = await processSchedulingConversationTurn({
-        automated: true,
-        messageText: `${subject}\n${body}`,
-        conversationHistory: historyTurns,
-        leadContext: {
-          leadEmail: from,
-          leadName: fromName || from.split('@')[0],
-          companyName: companyName || `${fromName || 'Client'}'s ${isUmrah ? 'Agency' : 'Company'}`,
-          channel: 'EMAIL',
-        },
-      });
+      // Run inside this workspace's scheduling scope: cron and webhook replies never set the global one.
+      const schedulingTurn = await runWithSchedulingCtx(getInboundCtx(), () =>
+        processSchedulingConversationTurn({
+          automated: true,
+          messageText: `${subject}\n${body}`,
+          // The reply body alone (no subject line), used to read a plain "Yes" to our confirmation question.
+          bodyText: body,
+          conversationHistory: historyTurns,
+          leadContext: {
+            leadEmail: from,
+            leadName: fromName || from.split('@')[0],
+            companyName: companyName || `${fromName || 'Client'}'s ${isUmrah ? 'Agency' : 'Company'}`,
+            channel: 'EMAIL',
+          },
+        })
+      );
 
       if (schedulingTurn.handled && schedulingTurn.replyText) {
         return {
@@ -902,7 +908,7 @@ export async function generateAutoReplyText(params: {
         };
       }
     } catch (schedErr) {
-      console.warn('[Demo Scheduling Inbound Email Warning]:', schedErr);
+      console.error('[Demo Scheduling Inbound Email Error]: scheduling failed, falling back to the general reply:', schedErr);
     }
   }
 

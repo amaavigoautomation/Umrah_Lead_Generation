@@ -62,6 +62,7 @@ import { processWebsiteLeadSubmission } from './websiteLeadService.js';
 import {
   getLiveCalendarToken,
   setServerCalendarAccessToken,
+  handleExpiredCalendarToken,
   findNextAvailableSlots,
   createGoogleCalendarDemoBooking,
   rescheduleDemoBooking,
@@ -254,6 +255,8 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
     url === '/api/oauth/microsoft/callback' ||
     // Calendar OAuth also returns through a state-bound, one-time callback.
     url === '/api/oauth/microsoft-calendar/callback' ||
+    // Google Calendar returns through its own state-bound, one-time callback.
+    url.split('?')[0] === '/api/oauth/google-calendar/callback' ||
     // Instagram redirects the browser here; the single-use OAuth state identifies the workspace.
     url === '/api/instagram/oauth/callback';
 
@@ -1119,6 +1122,41 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
     return true;
   }
 
+  // Google Calendar OAuth callback (public; the one-time state resolves the workspace).
+  if (url.split('?')[0] === '/api/oauth/google-calendar/callback' && req.method === 'GET') {
+    const g = await import('./googleCalendarOAuth.js');
+    let location: string;
+    try {
+      const query = new URL(rawUrl, 'http://localhost').searchParams;
+      const result = await g.exchangeGoogleCalendarCallback(query);
+      await g.saveGoogleCalendarConnection(
+        result.tenantId,
+        result.refreshToken,
+        result.email,
+        result.accessToken,
+        result.expiresIn
+      );
+      // Only one calendar at a time: drop a Microsoft connection if there was one.
+      try {
+        const ms = await import('./microsoftCalendarOAuth.js');
+        await ms.deleteMicrosoftCalendarRefreshToken(result.tenantId);
+      } catch {}
+      location = g.googleCalendarRedirectUrl('connected');
+    } catch (err: any) {
+      const readable = typeof err?.status === 'number' && err.status < 500;
+      if (!readable) console.error('[Google Calendar OAuth] callback failed:', err?.stack || err);
+      location = g.googleCalendarRedirectUrl(
+        'error',
+        readable ? err.message : 'Could not connect Google Calendar. Please try again.'
+      );
+    }
+    res.statusCode = 302;
+    res.setHeader('Location', location);
+    res.setHeader('Cache-Control', 'no-store');
+    res.end();
+    return true;
+  }
+
   // Per-company inbound mailbox (IMAP): /api/tenants/:tenantId/inbound[/test|/options|/disconnect|/poll|/microsoft]
   // Admin-only (enforced by the tenant guard above). The password is accepted here and never returned.
   const inboundMatch = url.split('?')[0].match(/^\/api\/tenants\/([^/]+)\/inbound(?:\/(test|options|disconnect|poll|microsoft))?$/);
@@ -1526,6 +1564,47 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
     return true;
   }
 
+  if (url === '/api/calendar/google' && req.method === 'POST') {
+    try {
+      if (userRole !== 'admin' && !isPlatformAdmin) {
+        res.statusCode = 403;
+        res.end(JSON.stringify({ error: 'Only a workspace admin can connect the calendar.' }));
+        return true;
+      }
+      const g = await import('./googleCalendarOAuth.js');
+      const result = await g.startGoogleCalendarOAuth(activeTenantCtx);
+      res.statusCode = 200;
+      res.end(JSON.stringify(result));
+    } catch (err: any) {
+      res.statusCode = err?.status || 500;
+      res.end(JSON.stringify({ error: err?.message || 'Could not start Google Calendar sign-in' }));
+    }
+    return true;
+  }
+
+  if (url === '/api/calendar/disconnect' && req.method === 'POST') {
+    try {
+      if (userRole !== 'admin' && !isPlatformAdmin) {
+        res.statusCode = 403;
+        res.end(JSON.stringify({ error: 'Only a workspace admin can disconnect the calendar.' }));
+        return true;
+      }
+      const g = await import('./googleCalendarOAuth.js');
+      await g.deleteGoogleCalendarConnection(resolvedTenantId);
+      try {
+        const ms = await import('./microsoftCalendarOAuth.js');
+        await ms.deleteMicrosoftCalendarRefreshToken(resolvedTenantId);
+      } catch {}
+      await handleExpiredCalendarToken();
+      res.statusCode = 200;
+      res.end(JSON.stringify({ success: true }));
+    } catch (err: any) {
+      res.statusCode = 500;
+      res.end(JSON.stringify({ error: err?.message || 'Could not disconnect the calendar.' }));
+    }
+    return true;
+  }
+
   if (url === '/api/calendar/auth-token' && req.method === 'POST') {
     const { accessToken, email, expiresIn } = body;
     if (accessToken) {
@@ -1569,6 +1648,11 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
       JSON.stringify({
         configured: Boolean(liveToken),
         connected: verification.connected,
+        provider: 'google',
+        email: (verification as any).email || cb.calendarEmail,
+        // true = connecting uses the server flow (no hourly reconnect); false = old popup fallback
+        googleOAuthAvailable: (await import('./googleCalendarOAuth.js')).isGoogleCalendarOAuthConfigured(),
+        autoRenew: await (await import('./googleCalendarOAuth.js')).hasGoogleCalendarRefreshToken(resolvedTenantId).catch(() => false),
         targetAccount: cb.calendarEmail,
         timezone: cb.timezone,
         workingDays: `${brandWorkingDaysLabel(cb).replace(' to ', ' – ')}${closedNames.length ? ` (${closedNames.join(' & ')} closed)` : ''}`,

@@ -45,6 +45,9 @@ export const DemoSchedulingView: React.FC<DemoSchedulingViewProps> = ({ leads = 
   const [calendarProvider, setCalendarProvider] = useState<'google' | 'microsoft' | null>(null);
   const [connectedEmail, setConnectedEmail] = useState<string>('');
   const [microsoftAvailable, setMicrosoftAvailable] = useState(true);
+  // Server-side Google connection (refresh token): no hourly reconnect. null = not known yet.
+  const [googleAutoRenew, setGoogleAutoRenew] = useState<boolean | null>(null);
+  const [googleOAuthAvailable, setGoogleOAuthAvailable] = useState<boolean | null>(null);
   const [isAuthenticating, setIsAuthenticating] = useState(false);
   const [isMsAuthenticating, setIsMsAuthenticating] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
@@ -114,6 +117,8 @@ export const DemoSchedulingView: React.FC<DemoSchedulingViewProps> = ({ leads = 
         setCalendarProvider(data.provider === 'microsoft' || data.provider === 'google' ? data.provider : connected ? 'google' : null);
         setConnectedEmail(data.email || data.targetAccount || '');
         setMicrosoftAvailable(data.microsoftAvailable !== false);
+        setGoogleAutoRenew(typeof data.autoRenew === 'boolean' ? data.autoRenew : null);
+        setGoogleOAuthAvailable(typeof data.googleOAuthAvailable === 'boolean' ? data.googleOAuthAvailable : null);
         if (!connected) {
           console.warn('[Calendar] status says not connected', { configured: data.configured, connected: data.connected, hadToken: Boolean(token) });
         }
@@ -174,8 +179,15 @@ export const DemoSchedulingView: React.FC<DemoSchedulingViewProps> = ({ leads = 
       setBookingSuccessMsg('Microsoft Calendar connected. Demos will now use Microsoft Teams links. Google Calendar was disconnected.');
       setCalendarProvider('microsoft');
       setCalendarConnected(true);
+    } else if (cal === 'google') {
+      setBookingSuccessMsg('Google Calendar connected. It renews itself automatically, so you will not need to re-sync it.');
+      setCalendarProvider('google');
+      setCalendarConnected(true);
+      setGoogleAutoRenew(true);
+      checkStatus();
+      fetchAvailability();
     } else {
-      setAuthError(params.get('calendar_message') || 'Microsoft Calendar could not be connected.');
+      setAuthError(params.get('calendar_message') || 'The calendar could not be connected.');
     }
     params.delete('calendar');
     params.delete('calendar_message');
@@ -240,6 +252,18 @@ export const DemoSchedulingView: React.FC<DemoSchedulingViewProps> = ({ leads = 
     setIsAuthenticating(true);
     setAuthError(null);
     try {
+      // Preferred: server-side sign-in that saves a refresh token, so the calendar never needs re-syncing.
+      if (googleOAuthAvailable !== false) {
+        const startRes = await fetch('/api/calendar/google', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+        const startData = await startRes.json().catch(() => ({}));
+        if (startRes.ok && startData?.authorizationUrl) {
+          window.location.href = startData.authorizationUrl;
+          return; // page is leaving; keep the "Authorizing…" state
+        }
+        // 503 = not configured on this server: fall back to the popup below. Anything else is a real error.
+        if (startRes.status !== 503) throw new Error(startData?.error || 'Could not start Google Calendar sign-in');
+        setGoogleOAuthAvailable(false);
+      }
       const res = await signInWithGoogleCalendar();
       if (res?.accessToken) {
         setCalendarConnected(true);
@@ -605,6 +629,21 @@ export const DemoSchedulingView: React.FC<DemoSchedulingViewProps> = ({ leads = 
             {microsoftActive && (
               <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-100 rounded-lg px-2 py-1.5">
                 Connecting Google will disconnect Microsoft Calendar.
+              </p>
+            )}
+            {googleActive && googleAutoRenew === true && (
+              <p className="text-[11px] text-emerald-800 bg-emerald-50 border border-emerald-100 rounded-lg px-2 py-1.5">
+                Renews automatically. No need to re-sync.
+              </p>
+            )}
+            {googleActive && googleAutoRenew === false && googleOAuthAvailable !== false && (
+              <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-100 rounded-lg px-2 py-1.5">
+                This connection expires after about an hour. Click Re-sync once to switch to automatic renewal.
+              </p>
+            )}
+            {googleOAuthAvailable === false && (
+              <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-100 rounded-lg px-2 py-1.5">
+                Automatic renewal is not set up on this server (GOOGLE_CALENDAR_CLIENT_ID, GOOGLE_CALENDAR_CLIENT_SECRET, APP_URL), so Google disconnects after about an hour.
               </p>
             )}
             <div className="flex flex-wrap gap-2">

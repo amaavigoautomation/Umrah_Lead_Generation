@@ -1,4 +1,10 @@
 import { tenantRepo } from './tenantRepo.js';
+import {
+  getGoogleCalendarAccessToken,
+  hasGoogleCalendarRefreshToken,
+  invalidateGoogleCalendarAccessToken,
+  GoogleCalendarReauthRequired,
+} from './googleCalendarOAuth.js';
 import { STOP_FOLLOWUPS_WHEN_DEMO_BOOKED } from '../shared/followUpPolicy.js';
 import type { TenantContext } from '../types/tenant.js';
 import { getTenantBrand, getBrandSync } from './brandService.js';
@@ -105,6 +111,11 @@ let serverTokenExpiresAt: number = 0;
 export async function handleExpiredCalendarToken() {
   serverCalendarAccessToken = null;
   serverTokenExpiresAt = 0;
+  // Connected through the server flow: a 401 only means the short access token ran out. Drop it so the
+  // next call renews it with the refresh token. Do NOT mark the calendar expired/disconnected.
+  const tenantId = getSchedCtx().tenantId;
+  invalidateGoogleCalendarAccessToken(tenantId);
+  if (await hasGoogleCalendarRefreshToken(tenantId).catch(() => false)) return;
   if (isFirebaseConfigured && db) {
     try {
       await safeSetDoc(
@@ -139,6 +150,16 @@ export function setServerCalendarAccessToken(token: string, expiresInSeconds: nu
  * Automatically exchanges stored Refresh Token if Access Token is expired.
  */
 export async function getLiveCalendarToken(explicitToken?: string): Promise<string | null> {
+  // Preferred: this workspace connected through the server-side Google flow, so a saved refresh token
+  // renews the access token automatically. A (possibly stale) token sent by the browser is ignored then.
+  try {
+    const managed = await getGoogleCalendarAccessToken(getSchedCtx().tenantId);
+    if (managed) return managed;
+  } catch (e) {
+    if (e instanceof GoogleCalendarReauthRequired) return null; // revoked: user must connect again
+    console.warn('[Calendar] token renewal failed, falling back:', (e as any)?.message || e);
+  }
+
   if (explicitToken && explicitToken.trim() && explicitToken !== 'null' && explicitToken !== 'undefined') {
     setServerCalendarAccessToken(explicitToken.trim());
     return explicitToken.trim();

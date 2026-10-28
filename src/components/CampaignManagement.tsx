@@ -2815,7 +2815,7 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                       ) : (
                         <div>
                           <p className="text-sm font-medium text-slate-700">
-                            Click to select or drag and drop leads spreadsheet
+                            Click to select leads spreadsheet
                           </p>
                           <p className="text-xs text-slate-500 mt-1">
                             Supports CSV, XLS, XLSX. Any column structure supported.

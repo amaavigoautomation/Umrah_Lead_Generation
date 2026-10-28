@@ -19,6 +19,7 @@ import {
   PanelLeftOpen,
   ChevronLeft,
   ChevronRight,
+  ShieldCheck,
 } from 'lucide-react';
 import { AppUser } from '../types';
 import { Umrah360Logo } from './Umrah360Logo';

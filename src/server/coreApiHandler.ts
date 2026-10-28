@@ -253,7 +253,8 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
     // Calendar OAuth also returns through a state-bound, one-time callback.
     url === '/api/oauth/microsoft-calendar/callback' ||
     // Instagram redirects the browser here; the single-use OAuth state identifies the workspace.
-    url === '/api/instagram/oauth/callback';
+    url === '/api/instagram/oauth/callback' ||
+    /^\\/api\\/company-assets\\/public\\/[a-zA-Z0-9_-]+\\/[a-zA-Z0-9_-]+$/.test(url);
 
   let resolvedTenantId = '';
   let userUid = 'anonymous';
@@ -328,6 +329,24 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
       res.end(JSON.stringify({ error: 'Payment required. Choose or fix your plan to continue.', code: 'billing_required', billingStatus: ent.billing.status }));
       return true;
     }
+  }
+
+  const publicAssetMatch = url.match(/^\\/api\\/company-assets\\/public\\/([a-zA-Z0-9_-]+)\\/([a-zA-Z0-9_-]+)$/);
+  if (publicAssetMatch && req.method === 'GET') {
+    const [, tenantId, assetId] = publicAssetMatch;
+    const key = String(new URL(req.url || '/', 'http://localhost').searchParams.get('key') || '');
+    if (!key || key.length < 32) { res.statusCode = 404; res.setHeader('Content-Type', 'text/plain; charset=utf-8'); res.end('Image not found'); return true; }
+    try {
+      const snap = await getDoc(doc(db, 'tenants', tenantId, 'company_assets', assetId));
+      const asset: any = snap.exists() ? snap.data() : null;
+      if (!asset || asset.publicKey !== key || typeof asset.imageData !== 'string' || !/^data:image\\/(jpeg|png|webp|gif);base64,/.test(asset.imageData)) {
+        res.statusCode = 404; res.setHeader('Content-Type', 'text/plain; charset=utf-8'); res.end('Image not found'); return true;
+      }
+      const match = asset.imageData.match(/^data:(image\\/[a-zA-Z0-9.+-]+);base64,(.+)$/);
+      if (!match) { res.statusCode = 404; res.setHeader('Content-Type', 'text/plain; charset=utf-8'); res.end('Image not found'); return true; }
+      res.statusCode = 200; res.setHeader('Content-Type', match[1]); res.setHeader('Cache-Control', 'public, max-age=3600, s-maxage=86400'); res.setHeader('X-Content-Type-Options', 'nosniff'); res.end(Buffer.from(match[2], 'base64'));
+    } catch { res.statusCode = 500; res.setHeader('Content-Type', 'text/plain; charset=utf-8'); res.end('Could not load image'); }
+    return true;
   }
 
   // Billing (workspace admins): /api/billing, /checkout, /portal, /sync

@@ -3691,6 +3691,7 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
         editingTemplate={editingTemplate}
         isSaving={isSavingTemplate}
         error={templateFormError}
+        tenantId={tenantId}
       />
 
       {/* DELETE TEMPLATE CONFIRMATION MODAL */}

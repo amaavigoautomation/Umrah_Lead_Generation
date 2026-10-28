@@ -39,6 +39,7 @@ import {
   CheckCircle2,
 } from 'lucide-react';
 import { EmailTemplate, TemplateAttachment } from '../types/index.js';
+import { CompanyAssetsView, type CompanyAsset } from './CompanyAssetsView';
 
 interface EmailTemplateEditorModalProps {
   isOpen: boolean;
@@ -47,6 +48,7 @@ interface EmailTemplateEditorModalProps {
   editingTemplate: EmailTemplate | null;
   isSaving: boolean;
   error?: string | null;
+  tenantId?: string;
 }
 
 const PRESET_COLORS = [
@@ -74,6 +76,7 @@ export const EmailTemplateEditorModal: React.FC<EmailTemplateEditorModalProps> =
   editingTemplate,
   isSaving,
   error,
+  tenantId = '',
 }) => {
   const { brand } = useBrand();
   const [name, setName] = useState('');
@@ -88,6 +91,8 @@ export const EmailTemplateEditorModal: React.FC<EmailTemplateEditorModalProps> =
   const [linkInputUrl, setLinkInputUrl] = useState('');
   const [isLinkPromptOpen, setIsLinkPromptOpen] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
+  const [showCompanyAssets, setShowCompanyAssets] = useState(false);
+  const htmlTextareaRef = useRef<HTMLTextAreaElement>(null);
 
   const visualEditorRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -234,6 +239,33 @@ export const EmailTemplateEditorModal: React.FC<EmailTemplateEditorModalProps> =
       setPlainTextContent((prev) => `${prev} ${tag}`);
       setHtmlContent((prev) => `${prev} ${tag}`);
     }
+  };
+
+  const handleSelectCompanyAsset = (asset: CompanyAsset) => {
+    const safeName = asset.name.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+    const imageHtml = '<img src="' + asset.url + '" alt="' + safeName + '" width="600" style="display:block;max-width:100%;height:auto;border:0;" />';
+    if (formatMode === 'VISUAL' && visualEditorRef.current) {
+      visualEditorRef.current.focus();
+      document.execCommand('insertHTML', false, imageHtml);
+      handleVisualInput();
+    } else {
+      const textarea = htmlTextareaRef.current;
+      const current = htmlContent || '';
+      const start = textarea ? textarea.selectionStart : current.length;
+      const end = textarea ? textarea.selectionEnd : current.length;
+      const next = current.slice(0, start) + imageHtml + current.slice(end);
+      setHtmlContent(next);
+      setPlainTextContent(stripHtml(next));
+      setFormatMode('HTML');
+      window.setTimeout(() => {
+        if (htmlTextareaRef.current) {
+          htmlTextareaRef.current.focus();
+          const cursor = start + imageHtml.length;
+          htmlTextareaRef.current.setSelectionRange(cursor, cursor);
+        }
+      }, 0);
+    }
+    setShowCompanyAssets(false);
   };
 
   // Attachments Handling
@@ -464,6 +496,7 @@ export const EmailTemplateEditorModal: React.FC<EmailTemplateEditorModalProps> =
                     <Type className="w-3.5 h-3.5" />
                     <span>Visual Styled</span>
                   </button>
+                  <button type="button" onClick={() => setShowCompanyAssets(true)} className="px-3 py-1 rounded-md border border-orange-200 bg-orange-50 text-orange-700 font-semibold transition flex items-center gap-1.5"><ImageIcon className="w-3.5 h-3.5" /><span>Company Assets</span></button>
                   <button
                     type="button"
                     onClick={() => {
@@ -770,6 +803,7 @@ export const EmailTemplateEditorModal: React.FC<EmailTemplateEditorModalProps> =
 
                 {formatMode === 'HTML' && (
                   <textarea
+                    ref={htmlTextareaRef}
                     rows={12}
                     placeholder="<p>Enter clean HTML with styling...</p>"
                     value={htmlContent}
@@ -971,6 +1005,8 @@ export const EmailTemplateEditorModal: React.FC<EmailTemplateEditorModalProps> =
           </div>
 
         </div>
+
+        {showCompanyAssets && <CompanyAssetsView tenantId={tenantId} pickerMode onClose={() => setShowCompanyAssets(false)} onSelectAsset={handleSelectCompanyAsset} />}
 
         {/* MODAL FOOTER ACTIONS */}
         <div className="px-6 py-4 border-t border-slate-100 bg-slate-50 flex items-center justify-between">

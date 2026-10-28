@@ -332,18 +332,41 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
   }
 
   const publicAssetMatch = url.match(/^\/api\/company-assets\/public\/([a-zA-Z0-9_-]+)\/([a-zA-Z0-9_-]+)$/);
+  if (publicAssetMatch && req.method === 'GET') {
+    const [, tenantId, assetId] = publicAssetMatch;
     const key = String(new URL(req.url || '/', 'http://localhost').searchParams.get('key') || '');
-    if (!key || key.length < 32) { res.statusCode = 404; res.setHeader('Content-Type', 'text/plain; charset=utf-8'); res.end('Image not found'); return true; }
+    if (!key || key.length < 32) {
+      res.statusCode = 404;
+      res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+      res.end('Image not found');
+      return true;
+    }
     try {
       const snap = await getDoc(doc(db, 'tenants', tenantId, 'company_assets', assetId));
       const asset: any = snap.exists() ? snap.data() : null;
       if (!asset || asset.publicKey !== key || typeof asset.imageData !== 'string' || !/^data:image\/(jpeg|png|webp|gif);base64,/.test(asset.imageData)) {
-        res.statusCode = 404; res.setHeader('Content-Type', 'text/plain; charset=utf-8'); res.end('Image not found'); return true;
+        res.statusCode = 404;
+        res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+        res.end('Image not found');
+        return true;
       }
       const match = asset.imageData.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/);
-      if (!match) { res.statusCode = 404; res.setHeader('Content-Type', 'text/plain; charset=utf-8'); res.end('Image not found'); return true; }
-      res.statusCode = 200; res.setHeader('Content-Type', match[1]); res.setHeader('Cache-Control', 'public, max-age=3600, s-maxage=86400'); res.setHeader('X-Content-Type-Options', 'nosniff'); res.end(Buffer.from(match[2], 'base64'));
-    } catch { res.statusCode = 500; res.setHeader('Content-Type', 'text/plain; charset=utf-8'); res.end('Could not load image'); }
+      if (!match) {
+        res.statusCode = 404;
+        res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+        res.end('Image not found');
+        return true;
+      }
+      res.statusCode = 200;
+      res.setHeader('Content-Type', match[1]);
+      res.setHeader('Cache-Control', 'public, max-age=3600, s-maxage=86400');
+      res.setHeader('X-Content-Type-Options', 'nosniff');
+      res.end(Buffer.from(match[2], 'base64'));
+    } catch {
+      res.statusCode = 500;
+      res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+      res.end('Could not load image');
+    }
     return true;
   }
 

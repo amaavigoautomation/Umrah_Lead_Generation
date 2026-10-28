@@ -61,6 +61,7 @@ const DemoSchedulingView = lazyNamed(() => import('./components/DemoSchedulingVi
 const AutoFollowUpDashboard = lazyNamed(() => import('./components/AutoFollowUpDashboard'), 'AutoFollowUpDashboard');
 const PlatformConsole = lazyNamed(() => import('./components/PlatformConsole'), 'PlatformConsole');
 const BillingView = lazyNamed(() => import('./components/BillingView'), 'BillingView');
+const CompanyAssetsView = lazyNamed(() => import('./components/CompanyAssetsView'), 'CompanyAssetsView');
 
 function ScreenLoading() {
   return (
@@ -184,7 +185,7 @@ function toAppUser(u: any): AppUser {
       ? u.allowedModules
       : role === 'SALES'
       ? ['crm', 'inbox']
-      : ['inbox', 'campaigns', 'crm', 'scheduling', 'knowledge', 'settings'],
+      : ['inbox', 'campaigns', 'crm', 'scheduling', 'knowledge', 'settings', 'company-assets'],
     isActive: u.isActive !== false && u.active !== false,
     createdAt: u.createdAt || new Date().toISOString(),
     updatedAt: u.updatedAt || u.createdAt || new Date().toISOString(),
@@ -206,6 +207,7 @@ const ALL_TABS: readonly ActiveTab[] = [
   'playground',
   'settings',
   'auto-followup',
+  'company-assets',
 ];
 
 function isActiveTab(value: string | null | undefined): value is ActiveTab {
@@ -2274,6 +2276,8 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
                 }}
               />
             )}
+
+            {activeTab === 'company-assets' && <CompanyAssetsView tenantId={currentTenantId} />}
 
             {activeTab === 'campaigns' && (
               <CampaignManagement

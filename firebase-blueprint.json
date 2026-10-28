@@ -198,6 +198,24 @@
         "createdAt": { "type": "string" }
       },
       "required": ["id", "title", "content", "status"]
+    },
+    "AuditLog": {
+      "title": "AuditLog",
+      "description": "Tenant-scoped immutable audit log record for workspace actions",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "tenantId": { "type": "string", "maxLength": 128 },
+        "timestamp": { "type": "string" },
+        "action": { "type": "string", "maxLength": 128 },
+        "module": { "type": "string", "maxLength": 64 },
+        "severity": { "type": "string", "enum": ["INFO", "WARNING", "CRITICAL", "SECURITY"] },
+        "description": { "type": "string", "maxLength": 4096 },
+        "actor": { "type": "object" },
+        "target": { "type": "object" },
+        "metadata": { "type": "object" }
+      },
+      "required": ["id", "tenantId", "timestamp", "action", "module", "severity", "description"]
     }
   },
   "firestore": {
@@ -256,6 +274,10 @@
     "/tenants/{tenantId}/knowledge_documents/{docId}": {
       "schema": "KnowledgeDocument",
       "description": "Tenant isolated knowledge base articles"
+    },
+    "/tenants/{tenantId}/audit_logs/{auditId}": {
+      "schema": "AuditLog",
+      "description": "Tenant isolated system audit trail and compliance log records"
     }
   }
 }

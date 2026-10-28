@@ -5,8 +5,50 @@ export type ActiveTab =
   | 'scheduling'
   | 'knowledge'
   | 'playground'
+  | 'audit-logs'
   | 'settings'
   | 'auto-followup';
+
+export type AuditModule =
+  | 'CAMPAIGNS'
+  | 'CRM'
+  | 'INBOX'
+  | 'KNOWLEDGE'
+  | 'SETTINGS'
+  | 'AUTH'
+  | 'SCHEDULING'
+  | 'AI_ENGINE'
+  | 'SYSTEM';
+
+export type AuditSeverity = 'INFO' | 'WARNING' | 'CRITICAL' | 'SECURITY';
+
+export interface AuditActor {
+  userId: string;
+  name: string;
+  email: string;
+  role: string;
+  ipAddress?: string;
+  userAgent?: string;
+}
+
+export interface AuditTarget {
+  type: 'Lead' | 'Campaign' | 'Template' | 'User' | 'Setting' | 'KnowledgeDoc' | 'Message' | 'Booking' | 'System';
+  id: string;
+  name: string;
+}
+
+export interface AuditLog {
+  id: string;
+  tenantId: string;
+  timestamp: string;
+  action: string;
+  module: AuditModule;
+  severity: AuditSeverity;
+  description: string;
+  actor: AuditActor;
+  target?: AuditTarget;
+  metadata?: Record<string, any>;
+}
 
 export type Channel = 'WEBSITE' | 'WHATSAPP' | 'INSTAGRAM' | 'FACEBOOK' | 'LINKEDIN' | 'EMAIL';
 

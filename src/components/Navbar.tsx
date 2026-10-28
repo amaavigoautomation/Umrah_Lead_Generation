@@ -126,6 +126,11 @@ export const Navbar: React.FC<NavbarProps> = ({
       icon: <Sparkles className="w-4 h-4 shrink-0" />,
     },
     {
+      id: 'audit-logs',
+      label: 'Audit Logs',
+      icon: <ShieldCheck className="w-4 h-4 shrink-0" />,
+    },
+    {
       id: 'settings',
       label: 'Settings',
       icon: <Settings className="w-4 h-4 shrink-0" />,

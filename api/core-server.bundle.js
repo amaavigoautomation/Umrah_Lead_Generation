@@ -18706,16 +18706,16 @@ var init_canonical_output_text = __esm({
 });
 
 // node_modules/openai/internal/responses/response-accumulator.mjs
-function validateArrayIndex(collection8, index, kind, allowAppend = false) {
-  if (!Array.isArray(collection8) || !Number.isSafeInteger(index) || index < 0 || index > collection8.length || (index === collection8.length ? !allowAppend || index in collection8 : !hasOwn(collection8, index))) {
+function validateArrayIndex(collection7, index, kind, allowAppend = false) {
+  if (!Array.isArray(collection7) || !Number.isSafeInteger(index) || index < 0 || index > collection7.length || (index === collection7.length ? !allowAppend || index in collection7 : !hasOwn(collection7, index))) {
     throw new OpenAIError(`missing ${kind} at index ${index}`);
   }
 }
-function validateArrayAppend(collection8, index, kind) {
-  if (index !== collection8.length) {
+function validateArrayAppend(collection7, index, kind) {
+  if (index !== collection7.length) {
     throw new OpenAIError(`missing ${kind} at index ${index}`);
   }
-  validateArrayIndex(collection8, index, kind, true);
+  validateArrayIndex(collection7, index, kind, true);
 }
 function getOutput(snapshot, outputIndex) {
   validateArrayIndex(snapshot.output, outputIndex, "output");
@@ -102490,11 +102490,11 @@ var require_firestore_admin_client = __commonJS({
        * @param {string} collection
        * @returns {string} Resource name string.
        */
-      collectionGroupPath(project, database, collection8) {
+      collectionGroupPath(project, database, collection7) {
         return this.pathTemplates.collectionGroupPathTemplate.render({
           project,
           database,
-          collection: collection8
+          collection: collection7
         });
       }
       /**
@@ -102569,11 +102569,11 @@ var require_firestore_admin_client = __commonJS({
        * @param {string} field
        * @returns {string} Resource name string.
        */
-      fieldPath(project, database, collection8, field2) {
+      fieldPath(project, database, collection7, field2) {
         return this.pathTemplates.fieldPathTemplate.render({
           project,
           database,
-          collection: collection8,
+          collection: collection7,
           field: field2
         });
       }
@@ -102626,11 +102626,11 @@ var require_firestore_admin_client = __commonJS({
        * @param {string} index
        * @returns {string} Resource name string.
        */
-      indexPath(project, database, collection8, index) {
+      indexPath(project, database, collection7, index) {
         return this.pathTemplates.indexPathTemplate.render({
           project,
           database,
-          collection: collection8,
+          collection: collection7,
           index
         });
       }
@@ -199392,11 +199392,11 @@ var require_pipelines = __commonJS({
       }
       collection(collectionOrOptions) {
         const options2 = (0, pipeline_util_1.isString)(collectionOrOptions) || (0, pipeline_util_1.isCollectionReference)(collectionOrOptions) ? {} : collectionOrOptions;
-        const collection8 = (0, pipeline_util_1.isString)(collectionOrOptions) || (0, pipeline_util_1.isCollectionReference)(collectionOrOptions) ? collectionOrOptions : collectionOrOptions.collection;
-        if ((0, pipeline_util_1.isCollectionReference)(collection8)) {
-          this._validateReference(collection8);
+        const collection7 = (0, pipeline_util_1.isString)(collectionOrOptions) || (0, pipeline_util_1.isCollectionReference)(collectionOrOptions) ? collectionOrOptions : collectionOrOptions.collection;
+        if ((0, pipeline_util_1.isCollectionReference)(collection7)) {
+          this._validateReference(collection7);
         }
-        const normalizedCollection = (0, pipeline_util_1.isString)(collection8) ? this.db.collection(collection8) : collection8;
+        const normalizedCollection = (0, pipeline_util_1.isString)(collection7) ? this.db.collection(collection7) : collection7;
         const internalOptions = {
           ...options2,
           collection: normalizedCollection
@@ -218352,14 +218352,14 @@ var require_lodash2 = __commonJS({
       var Ctor = value && value.constructor, proto = typeof Ctor == "function" && Ctor.prototype || objectProto;
       return value === proto;
     }
-    function includes(collection8, value, fromIndex, guard) {
-      collection8 = isArrayLike(collection8) ? collection8 : values(collection8);
+    function includes(collection7, value, fromIndex, guard) {
+      collection7 = isArrayLike(collection7) ? collection7 : values(collection7);
       fromIndex = fromIndex && !guard ? toInteger2(fromIndex) : 0;
-      var length = collection8.length;
+      var length = collection7.length;
       if (fromIndex < 0) {
         fromIndex = nativeMax(length + fromIndex, 0);
       }
-      return isString2(collection8) ? fromIndex <= length && collection8.indexOf(value, fromIndex) > -1 : !!length && baseIndexOf(collection8, value, fromIndex) > -1;
+      return isString2(collection7) ? fromIndex <= length && collection7.indexOf(value, fromIndex) > -1 : !!length && baseIndexOf(collection7, value, fromIndex) > -1;
     }
     function isArguments(value) {
       return isArrayLikeObject(value) && hasOwnProperty.call(value, "callee") && (!propertyIsEnumerable.call(value, "callee") || objectToString2.call(value) == argsTag);
@@ -248473,9 +248473,9 @@ function documentMap(...docs) {
 function newOverlayedDocumentMap() {
   return newDocumentKeyMap();
 }
-function convertOverlayedDocumentMapToDocumentMap(collection8) {
+function convertOverlayedDocumentMapToDocumentMap(collection7) {
   let documents = EMPTY_DOCUMENT_MAP;
-  collection8.forEach((k, v) => documents = documents.insert(k, v.overlayedDocument));
+  collection7.forEach((k, v) => documents = documents.insert(k, v.overlayedDocument));
   return documents;
 }
 function newOverlayMap() {
@@ -262403,9 +262403,9 @@ var init_common_BKJf2lb8_node = __esm({
         }
         return p;
       }
-      static forEach(collection8, f3) {
+      static forEach(collection7, f3) {
         const promises = [];
-        collection8.forEach((r2, s2) => {
+        collection7.forEach((r2, s2) => {
           promises.push(f3.call(this, r2, s2));
         });
         return this.waitFor(promises);
@@ -265500,9 +265500,9 @@ Total Duration: ${removedDocumentsTs - startTs}ms`;
           }
         });
       }
-      constructor(collection8, options2) {
+      constructor(collection7, options2) {
         super(options2);
-        this.formattedCollectionPath = collection8.startsWith("/") ? collection8 : "/" + collection8;
+        this.formattedCollectionPath = collection7.startsWith("/") ? collection7 : "/" + collection7;
       }
       /**
        * @internal
@@ -268131,9 +268131,9 @@ Total Duration: ${removedDocumentsTs - startTs}ms`;
         });
         return PersistencePromise.waitFor(promises);
       }
-      getOverlaysForCollection(transaction, collection8, sinceBatchId) {
+      getOverlaysForCollection(transaction, collection7, sinceBatchId) {
         const result = newOverlayMap();
-        const collectionPath = encodeResourcePath(collection8);
+        const collectionPath = encodeResourcePath(collection7);
         const range = IDBKeyRange.bound(
           [this.userId, collectionPath, sinceBatchId],
           [this.userId, collectionPath, Number.POSITIVE_INFINITY],
@@ -269892,16 +269892,16 @@ Total Duration: ${removedDocumentsTs - startTs}ms`;
         });
       }
       getDocumentsMatchingQuery(transaction, query3, offset, mutatedDocs, context2) {
-        const collection8 = isPipeline(query3) ? ResourcePath.fromString(getPipelineCollection(query3)) : query3.path;
+        const collection7 = isPipeline(query3) ? ResourcePath.fromString(getPipelineCollection(query3)) : query3.path;
         const startKey = [
-          collection8.popLast().toArray(),
-          collection8.lastSegment(),
+          collection7.popLast().toArray(),
+          collection7.lastSegment(),
           toDbTimestampKey(offset.readTime),
           offset.documentKey.path.isEmpty() ? "" : offset.documentKey.path.lastSegment()
         ];
         const endKey = [
-          collection8.popLast().toArray(),
-          collection8.lastSegment(),
+          collection7.popLast().toArray(),
+          collection7.lastSegment(),
           [Number.MAX_SAFE_INTEGER, Number.MAX_SAFE_INTEGER],
           ""
         ];
@@ -270415,16 +270415,16 @@ Total Duration: ${removedDocumentsTs - startTs}ms`;
         }
         return PersistencePromise.resolve();
       }
-      getOverlaysForCollection(transaction, collection8, sinceBatchId) {
+      getOverlaysForCollection(transaction, collection7, sinceBatchId) {
         const result = newOverlayMap();
-        const immediateChildrenPathLength = collection8.length + 1;
-        const prefix = new DocumentKey(collection8.child(""));
+        const immediateChildrenPathLength = collection7.length + 1;
+        const prefix = new DocumentKey(collection7.child(""));
         const iter = this.overlays.getIteratorFrom(prefix);
         while (iter.hasNext()) {
           const entry = iter.getNext();
           const overlay = entry.value;
           const key = overlay.getKey();
-          if (!collection8.isPrefixOf(key.path)) {
+          if (!collection7.isPrefixOf(key.path)) {
             break;
           }
           if (key.path.length !== immediateChildrenPathLength) {
@@ -326303,6 +326303,56 @@ ${signature || defSig}`;
     res.statusCode = 200;
     res.end(JSON.stringify({ success: true, lead: updated }));
     return true;
+  }
+  if (url === "/api/audit-logs") {
+    const qp = new URL(rawUrl || "/", "http://localhost").searchParams;
+    const targetTenant = qp.get("tenantId") || resolvedTenantId || "umrah360";
+    if (req.method === "GET") {
+      let auditList = [];
+      if (isFirebaseConfigured && db) {
+        try {
+          const colRef = collection(db, "tenants", targetTenant, "audit_logs");
+          const snap = await getDocs(colRef);
+          snap.forEach((d) => {
+            const data = d.data();
+            if (data && data.id) auditList.push(data);
+          });
+          auditList.sort((a, b) => new Date(b.timestamp || 0).getTime() - new Date(a.timestamp || 0).getTime());
+        } catch (e2) {
+          console.warn("[AuditLogs API] Firestore fetch note:", e2);
+        }
+      }
+      res.statusCode = 200;
+      res.end(JSON.stringify({ success: true, logs: auditList }));
+      return true;
+    }
+    if (req.method === "POST") {
+      try {
+        const payload = body || {};
+        const logId = payload.id || `audit-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+        const record = {
+          id: logId,
+          tenantId: targetTenant,
+          timestamp: payload.timestamp || (/* @__PURE__ */ new Date()).toISOString(),
+          action: payload.action || "GENERAL_ACTION",
+          module: payload.module || "SYSTEM",
+          severity: payload.severity || "INFO",
+          description: payload.description || "System event",
+          actor: payload.actor || { name: "System", email: "system@workspace.local", role: "ADMIN" },
+          target: payload.target || null,
+          metadata: payload.metadata || {}
+        };
+        if (isFirebaseConfigured && db) {
+          await safeSetDoc(doc(db, "tenants", targetTenant, "audit_logs", logId), record, { merge: true });
+        }
+        res.statusCode = 200;
+        res.end(JSON.stringify({ success: true, log: record }));
+      } catch (err) {
+        res.statusCode = 500;
+        res.end(JSON.stringify({ error: err?.message || "Failed to post audit log" }));
+      }
+      return true;
+    }
   }
   return false;
 }

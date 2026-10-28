@@ -58,6 +58,7 @@ const CampaignManagement = lazyNamed(() => import('./components/CampaignManageme
 const CrmPipeline = lazyNamed(() => import('./components/CrmPipeline'), 'CrmPipeline');
 const KnowledgeBaseView = lazyNamed(() => import('./components/KnowledgeBaseView'), 'KnowledgeBaseView');
 const AiTestingPlayground = lazyNamed(() => import('./components/AiTestingPlayground'), 'AiTestingPlayground');
+const AuditLogsView = lazyNamed(() => import('./components/AuditLogsView'), 'AuditLogsView');
 const SettingsView = lazyNamed(() => import('./components/SettingsView'), 'SettingsView');
 const DemoSchedulingView = lazyNamed(() => import('./components/DemoSchedulingView'), 'DemoSchedulingView');
 const AutoFollowUpDashboard = lazyNamed(() => import('./components/AutoFollowUpDashboard'), 'AutoFollowUpDashboard');
@@ -211,6 +212,7 @@ const ALL_TABS: readonly ActiveTab[] = [
   'scheduling',
   'knowledge',
   'playground',
+  'audit-logs',
   'settings',
   'auto-followup',
 ];
@@ -2381,6 +2383,10 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
             )}
 
             {activeTab === 'playground' && <AiTestingPlayground knowledgeDocs={knowledgeDocs} />}
+
+            {activeTab === 'audit-logs' && (
+              <AuditLogsView tenantId={currentTenantId} currentUserEmail={currentUser.email} />
+            )}
 
             {activeTab === 'settings' && (
               <SettingsView

@@ -172,8 +172,7 @@ service cloud.firestore {
     }
 
     match /tenants/{tenantId}/audit_logs/{logId=**} {
-      allow read: if isTenantAdmin(tenantId);
-      allow write: if false; // Server-only append
+      allow read, write: if isTenantUser(tenantId);
     }
 
     // Deny unknown tenant subcollections by default. Each client-readable collection

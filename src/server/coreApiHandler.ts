@@ -3395,6 +3395,62 @@ Generate a helpful, grounded response.`;
     return true;
   }
 
+  // Audit Logs Endpoint
+  if (url === '/api/audit-logs') {
+    const qp = new URL(rawUrl || '/', 'http://localhost').searchParams;
+    const targetTenant = qp.get('tenantId') || resolvedTenantId || 'umrah360';
+
+    if (req.method === 'GET') {
+      let auditList: any[] = [];
+      if (isFirebaseConfigured && db) {
+        try {
+          const colRef = collection(db, 'tenants', targetTenant, 'audit_logs');
+          const snap = await getDocs(colRef);
+          snap.forEach((d) => {
+            const data = d.data();
+            if (data && data.id) auditList.push(data);
+          });
+          auditList.sort((a, b) => new Date(b.timestamp || 0).getTime() - new Date(a.timestamp || 0).getTime());
+        } catch (e) {
+          console.warn('[AuditLogs API] Firestore fetch note:', e);
+        }
+      }
+      res.statusCode = 200;
+      res.end(JSON.stringify({ success: true, logs: auditList }));
+      return true;
+    }
+
+    if (req.method === 'POST') {
+      try {
+        const payload = body || {};
+        const logId = payload.id || `audit-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+        const record = {
+          id: logId,
+          tenantId: targetTenant,
+          timestamp: payload.timestamp || new Date().toISOString(),
+          action: payload.action || 'GENERAL_ACTION',
+          module: payload.module || 'SYSTEM',
+          severity: payload.severity || 'INFO',
+          description: payload.description || 'System event',
+          actor: payload.actor || { name: 'System', email: 'system@workspace.local', role: 'ADMIN' },
+          target: payload.target || null,
+          metadata: payload.metadata || {},
+        };
+
+        if (isFirebaseConfigured && db) {
+          await safeSetDoc(doc(db, 'tenants', targetTenant, 'audit_logs', logId), record, { merge: true });
+        }
+
+        res.statusCode = 200;
+        res.end(JSON.stringify({ success: true, log: record }));
+      } catch (err: any) {
+        res.statusCode = 500;
+        res.end(JSON.stringify({ error: err?.message || 'Failed to post audit log' }));
+      }
+      return true;
+    }
+  }
+
   // Not handled by core API routes
   return false;
 }

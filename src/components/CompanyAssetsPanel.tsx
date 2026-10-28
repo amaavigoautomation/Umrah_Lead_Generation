@@ -40,7 +40,6 @@ const CATEGORIES: { label: string; value: AssetCategory | 'ALL' }[] = [
   { label: 'All Media', value: 'ALL' },
   { label: 'Logos & Badges', value: 'LOGO' },
   { label: 'Banners & Headers', value: 'BANNER' },
-  { label: 'Hotels & Packages', value: 'HOTEL_PACKAGE' },
   { label: 'Video Cards', value: 'VIDEO' },
   { label: 'Other Media', value: 'OTHER' },
 ];
@@ -127,8 +126,6 @@ export const CompanyAssetsPanel: React.FC<CompanyAssetsPanelProps> = ({
         setUploadCategory('LOGO');
       } else if (file.name.toLowerCase().includes('banner') || file.name.toLowerCase().includes('header')) {
         setUploadCategory('BANNER');
-      } else if (file.name.toLowerCase().includes('hotel') || file.name.toLowerCase().includes('makkah') || file.name.toLowerCase().includes('madinah')) {
-        setUploadCategory('HOTEL_PACKAGE');
       }
 
       const dims = await getImageDimensions(dataUrl);
@@ -188,15 +185,19 @@ export const CompanyAssetsPanel: React.FC<CompanyAssetsPanelProps> = ({
   };
 
   const handleDelete = async (asset: CompanyAsset) => {
-    if (!window.confirm(`Delete asset "${asset.name}"? Templates currently using this image may show a broken link.`)) {
+    if (!window.confirm(`Delete asset "${asset.name}"?`)) {
       return;
     }
+    // Optimistically remove from state for instant feedback
+    setAssets((prev) => prev.filter((a) => a.id !== asset.id));
+    if (previewAsset?.id === asset.id) setPreviewAsset(null);
+
     try {
       await deleteCompanyAsset(asset.id);
-      setAssets((prev) => prev.filter((a) => a.id !== asset.id));
-      if (previewAsset?.id === asset.id) setPreviewAsset(null);
     } catch (err: any) {
-      alert(err?.message || 'Failed to delete asset');
+      console.error('Failed to delete asset from server:', err);
+      alert(err?.message || 'Failed to delete asset from server');
+      loadAssets();
     }
   };
 
@@ -336,14 +337,7 @@ export const CompanyAssetsPanel: React.FC<CompanyAssetsPanelProps> = ({
             return (
               <div
                 key={asset.id}
-                draggable
-                onDragStart={(e) => {
-                  const snippet = asset.category === 'VIDEO' ? videoCardSnippet : imageHtmlSnippet;
-                  e.dataTransfer.setData('text/html', snippet);
-                  e.dataTransfer.setData('text/plain', fullUrl);
-                  e.dataTransfer.setData('application/x-asset-id', asset.id);
-                }}
-                className="group bg-slate-900/70 border border-slate-800 hover:border-amber-500/50 rounded-xl overflow-hidden flex flex-col transition-all hover:shadow-lg hover:shadow-amber-500/5 cursor-grab active:cursor-grabbing"
+                className="group bg-slate-900/70 border border-slate-800 hover:border-amber-500/50 rounded-xl overflow-hidden flex flex-col transition-all hover:shadow-lg hover:shadow-amber-500/5"
               >
                 {/* Thumbnail Preview Area */}
                 <div
@@ -406,57 +400,25 @@ export const CompanyAssetsPanel: React.FC<CompanyAssetsPanelProps> = ({
                   </div>
 
                   {/* Action buttons */}
-                  <div className="space-y-1.5 pt-1">
-                    {/* Drag helper notice */}
-                    <div className="text-[10px] text-slate-500 italic text-center pb-1">
-                      Drag into template editor
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-1.5">
-                      {/* Copy URL */}
-                      <button
-                        onClick={() => handleCopy(fullUrl, asset.id, 'url')}
-                        className="flex items-center justify-center gap-1.5 py-1.5 px-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px] font-medium rounded-lg transition-colors border border-slate-700/60"
-                        title="Copy direct image URL"
-                      >
-                        {copiedId === asset.id && copiedType === 'url' ? (
-                          <>
-                            <Check className="w-3 h-3 text-emerald-400" />
-                            <span className="text-emerald-400">Copied!</span>
-                          </>
-                        ) : (
-                          <>
-                            <Copy className="w-3 h-3 text-slate-400" />
-                            <span>Copy URL</span>
-                          </>
-                        )}
-                      </button>
-
-                      {/* Copy HTML tag */}
-                      <button
-                        onClick={() =>
-                          handleCopy(
-                            asset.category === 'VIDEO' ? videoCardSnippet : imageHtmlSnippet,
-                            asset.id,
-                            'html'
-                          )
-                        }
-                        className="flex items-center justify-center gap-1.5 py-1.5 px-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px] font-medium rounded-lg transition-colors border border-slate-700/60"
-                        title="Copy ready-to-paste responsive HTML tag"
-                      >
-                        {copiedId === asset.id && copiedType === 'html' ? (
-                          <>
-                            <Check className="w-3 h-3 text-emerald-400" />
-                            <span className="text-emerald-400">Copied!</span>
-                          </>
-                        ) : (
-                          <>
-                            <FileCode className="w-3 h-3 text-amber-400" />
-                            <span>Copy HTML</span>
-                          </>
-                        )}
-                      </button>
-                    </div>
+                  <div className="space-y-2 pt-1">
+                    {/* Copy URL button only */}
+                    <button
+                      onClick={() => handleCopy(fullUrl, asset.id, 'url')}
+                      className="w-full flex items-center justify-center gap-1.5 py-1.5 px-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px] font-medium rounded-lg transition-colors border border-slate-700/60"
+                      title="Copy direct image URL"
+                    >
+                      {copiedId === asset.id && copiedType === 'url' ? (
+                        <>
+                          <Check className="w-3 h-3 text-emerald-400" />
+                          <span className="text-emerald-400 font-semibold">URL Copied!</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="w-3 h-3 text-slate-400" />
+                          <span>Copy URL</span>
+                        </>
+                      )}
+                    </button>
 
                     {/* If inside Template Editor, show 1-click Insert button */}
                     {onInsertIntoTemplate && (
@@ -473,18 +435,16 @@ export const CompanyAssetsPanel: React.FC<CompanyAssetsPanelProps> = ({
                     )}
 
                     {/* Delete button */}
-                    {!isDrawerMode && (
-                      <div className="flex justify-end pt-1">
-                        <button
-                          onClick={() => handleDelete(asset)}
-                          className="text-[11px] text-slate-500 hover:text-rose-400 flex items-center gap-1 transition-colors px-1 py-0.5"
-                          title="Delete asset"
-                        >
-                          <Trash2 className="w-3 h-3" />
-                          Delete
-                        </button>
-                      </div>
-                    )}
+                    <div className="flex justify-end pt-1">
+                      <button
+                        onClick={() => handleDelete(asset)}
+                        className="text-[11px] text-slate-400 hover:text-rose-400 flex items-center gap-1 transition-colors px-1 py-0.5 cursor-pointer"
+                        title="Delete asset"
+                      >
+                        <Trash2 className="w-3 h-3 text-slate-400 hover:text-rose-400" />
+                        <span>Delete</span>
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -556,7 +516,6 @@ export const CompanyAssetsPanel: React.FC<CompanyAssetsPanelProps> = ({
                 >
                   <option value="BANNER">Banner & Header</option>
                   <option value="LOGO">Brand Logo</option>
-                  <option value="HOTEL_PACKAGE">Hotel / Tour Package</option>
                   <option value="BADGE">Verified Badge / Stamp</option>
                   <option value="VIDEO">Video Card (With Play Overlay)</option>
                   <option value="OTHER">Other Media</option>
@@ -691,18 +650,6 @@ export const CompanyAssetsPanel: React.FC<CompanyAssetsPanelProps> = ({
                 >
                   <Copy className="w-3.5 h-3.5" />
                   Copy Link
-                </button>
-                <button
-                  onClick={() => {
-                    const snippet = previewAsset.category === 'VIDEO'
-                      ? generateVideoCardHtmlSnippet(previewAsset)
-                      : generateImageHtmlSnippet(previewAsset);
-                    handleCopy(snippet, previewAsset.id, 'html');
-                  }}
-                  className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-slate-950 text-xs font-semibold rounded-lg flex items-center gap-1.5 transition-colors"
-                >
-                  <FileCode className="w-3.5 h-3.5" />
-                  Copy HTML Snippet
                 </button>
               </div>
             </div>

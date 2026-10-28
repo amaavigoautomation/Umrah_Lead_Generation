@@ -802,20 +802,6 @@ export const EmailTemplateEditorModal: React.FC<EmailTemplateEditorModalProps> =
                     ref={visualEditorRef}
                     contentEditable
                     onInput={handleVisualInput}
-                    onDragOver={(e) => {
-                      e.preventDefault();
-                      e.dataTransfer.dropEffect = 'copy';
-                    }}
-                    onDrop={(e) => {
-                      e.preventDefault();
-                      const html = e.dataTransfer.getData('text/html');
-                      const plain = e.dataTransfer.getData('text/plain');
-                      if (html) {
-                        handleInsertHtmlSnippet(html);
-                      } else if (plain) {
-                        handleInsertHtmlSnippet(`<img src="${plain}" alt="Company Media" style="max-width: 100%; height: auto; border-radius: 8px; display: block; margin: 16px auto;" />`);
-                      }
-                    }}
                     className="w-full min-h-[260px] max-h-[380px] overflow-y-auto px-4 py-3 bg-white rounded-xl text-slate-900 text-sm leading-relaxed focus:outline-none focus:ring-2 focus:ring-orange-500/30 border border-slate-200 shadow-inner font-sans"
                     style={{
                       wordBreak: 'break-word',
@@ -829,20 +815,6 @@ export const EmailTemplateEditorModal: React.FC<EmailTemplateEditorModalProps> =
                     placeholder="<p>Enter clean HTML with styling...</p>"
                     value={htmlContent}
                     onChange={handleHtmlCodeChange}
-                    onDragOver={(e) => {
-                      e.preventDefault();
-                      e.dataTransfer.dropEffect = 'copy';
-                    }}
-                    onDrop={(e) => {
-                      e.preventDefault();
-                      const html = e.dataTransfer.getData('text/html');
-                      const plain = e.dataTransfer.getData('text/plain');
-                      if (html) {
-                        handleInsertHtmlSnippet(html);
-                      } else if (plain) {
-                        handleInsertHtmlSnippet(`<img src="${plain}" alt="Company Media" style="max-width: 100%; height: auto; border-radius: 8px; display: block; margin: 16px auto;" />`);
-                      }
-                    }}
                     className="w-full min-h-[260px] max-h-[380px] px-4 py-3 bg-slate-900 border border-slate-800 rounded-xl text-xs font-mono text-amber-300 leading-relaxed focus:outline-none focus:border-orange-500 shadow-inner"
                   />
                 )}
@@ -1009,7 +981,7 @@ export const EmailTemplateEditorModal: React.FC<EmailTemplateEditorModalProps> =
                     Company Assets (Stored in DB)
                   </span>
                   <span className="text-[11px] text-amber-200/80">
-                    Click <strong>Insert</strong> or <strong>Drag</strong> into editor
+                    Click <strong>Insert Into Email</strong> to add to template
                   </span>
                 </div>
                 <CompanyAssetsPanel

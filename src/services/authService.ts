@@ -16,7 +16,7 @@ export interface SessionInfo {
   isTenantAdmin: boolean;
 }
 
-const DEFAULT_MODULES = ['inbox', 'campaigns', 'crm', 'scheduling', 'knowledge', 'settings'];
+const DEFAULT_MODULES = ['inbox', 'campaigns', 'crm', 'scheduling', 'knowledge', 'settings', 'company-assets'];
 
 export async function signIn(email: string, password: string): Promise<void> {
   await signInWithEmailAndPassword(auth, email.trim(), password);

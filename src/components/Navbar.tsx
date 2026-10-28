@@ -5,6 +5,7 @@ import {
   Users,
   Calendar,
   BookOpen,
+  Images,
   Sparkles,
   Settings,
   Bot,
@@ -32,7 +33,8 @@ export type ActiveTab =
   | 'knowledge'
   | 'playground'
   | 'settings'
-  | 'auto-followup';
+  | 'auto-followup'
+  | 'company-assets';
 
 export interface NavbarProps {
   activeTab: ActiveTab;
@@ -99,6 +101,11 @@ export const Navbar: React.FC<NavbarProps> = ({
       label: 'Auto Follow-Up',
       icon: <Bot className="w-4 h-4 shrink-0" />,
       hasPulse: true,
+    },
+    {
+      id: 'company-assets',
+      label: 'Company Assets',
+      icon: <Images className="w-4 h-4 shrink-0" />,
     },
     {
       id: 'campaigns',

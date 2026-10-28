@@ -130,6 +130,10 @@ service cloud.firestore {
       allow write: if isTenantUser(tenantId);
     }
 
+    match /tenants/{tenantId}/company_assets/{assetId=**} {
+      allow read, write: if isTenantUser(tenantId);
+    }
+
     match /tenants/{tenantId}/email_templates/{templateId=**} {
       allow read, write: if isTenantUser(tenantId);
     }

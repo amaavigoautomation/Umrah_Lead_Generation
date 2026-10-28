@@ -332,8 +332,6 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
   }
 
   const publicAssetMatch = url.match(/^\/api\/company-assets\/public\/([a-zA-Z0-9_-]+)\/([a-zA-Z0-9_-]+)$/);
-  const publicAssetMatch = url.match(/^\/api\/company-assets\/public\/([a-zA-Z0-9_-]+)\/([a-zA-Z0-9_-]+)$/);
-  const publicAssetMatch = url.match(/^\/api\/company-assets\/public\/([a-zA-Z0-9_-]+)\/([a-zA-Z0-9_-]+)$/);
     const key = String(new URL(req.url || '/', 'http://localhost').searchParams.get('key') || '');
     if (!key || key.length < 32) { res.statusCode = 404; res.setHeader('Content-Type', 'text/plain; charset=utf-8'); res.end('Image not found'); return true; }
     try {

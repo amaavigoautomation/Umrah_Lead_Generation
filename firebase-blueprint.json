@@ -249,6 +249,10 @@
       "schema": "EmailTemplate",
       "description": "Tenant isolated email templates"
     },
+    "/tenants/{tenantId}/assets/{assetId}": {
+      "schema": "CompanyAsset",
+      "description": "Tenant isolated company brand assets, images, and video thumbnails"
+    },
     "/tenants/{tenantId}/knowledge_documents/{docId}": {
       "schema": "KnowledgeDocument",
       "description": "Tenant isolated knowledge base articles"

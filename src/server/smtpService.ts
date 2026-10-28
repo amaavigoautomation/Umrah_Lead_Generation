@@ -7,6 +7,7 @@ import { globalEmailRouteDoc } from './tenantRepo.js';
 import { resolveTenantSender } from './tenantEmailService.js';
 import { isFirebaseConfigured } from '../firebase/config.js';
 import { db } from './adminFirestore.js';
+import { resolveAssetRaw } from './assetService.js';
 
 export interface SmtpStatus {
   configured: boolean;
@@ -27,6 +28,8 @@ export interface EmailAttachmentParam {
   contentType?: string;
   encoding?: string;
   dataUrl?: string;
+  contentId?: string;
+  cid?: string;
 }
 
 export interface SendMailParams {
@@ -339,23 +342,131 @@ function getResendClient(apiKey: string): Resend {
 function toResendAttachments(list?: EmailAttachmentParam[]): any[] | undefined {
   if (!list || list.length === 0) return undefined;
   return list.map((att) => {
+    const contentId = att.contentId || att.cid;
     if (att.dataUrl && !att.content) {
       const m = att.dataUrl.match(/^data:([^;]+);base64,(.+)$/);
-      if (m) return { filename: att.filename, contentType: att.contentType || m[1], content: Buffer.from(m[2], 'base64') };
+      if (m) {
+        return {
+          filename: att.filename,
+          contentType: att.contentType || m[1],
+          content: Buffer.from(m[2], 'base64'),
+          ...(contentId ? { contentId } : {}),
+        };
+      }
     }
     if (att.content && typeof att.content === 'string' && att.encoding === 'base64') {
-      return { filename: att.filename, contentType: att.contentType, content: Buffer.from(att.content, 'base64') };
+      return {
+        filename: att.filename,
+        contentType: att.contentType,
+        content: Buffer.from(att.content, 'base64'),
+        ...(contentId ? { contentId } : {}),
+      };
     }
     if (att.content) {
-      return { filename: att.filename, contentType: att.contentType, content: att.content as any };
+      return {
+        filename: att.filename,
+        contentType: att.contentType,
+        content: att.content as any,
+        ...(contentId ? { contentId } : {}),
+      };
     }
     if (att.path) {
       // Resend's `path` must be a public URL; local files are read into memory.
-      if (/^https?:\/\//i.test(att.path)) return { filename: att.filename, contentType: att.contentType, path: att.path };
-      return { filename: att.filename, contentType: att.contentType, content: fs.readFileSync(att.path) };
+      if (/^https?:\/\//i.test(att.path)) {
+        return {
+          filename: att.filename,
+          contentType: att.contentType,
+          path: att.path,
+          ...(contentId ? { contentId } : {}),
+        };
+      }
+      return {
+        filename: att.filename,
+        contentType: att.contentType,
+        content: fs.readFileSync(att.path),
+        ...(contentId ? { contentId } : {}),
+      };
     }
-    return { filename: att.filename, contentType: att.contentType };
+    return {
+      filename: att.filename,
+      contentType: att.contentType,
+      ...(contentId ? { contentId } : {}),
+    };
   });
+}
+
+/**
+ * Automatically detects company assets (/api/assets/:id/view) and base64 data URIs
+ * in email HTML, and converts them into native RFC 2392 inline CID attachments.
+ * This guarantees images display 100% reliably in Outlook, Gmail, Apple Mail, and mobile,
+ * even when the server is in development or behind authentication cookies.
+ */
+export async function inlineEmailAssets(
+  html: string | undefined,
+  existingAttachments: EmailAttachmentParam[] = []
+): Promise<{ html: string | undefined; attachments: EmailAttachmentParam[] }> {
+  if (!html) return { html, attachments: existingAttachments };
+
+  const attachments: EmailAttachmentParam[] = [...existingAttachments];
+  let transformedHtml = html;
+
+  // 1. Process /api/assets/:assetId/view links (relative, absolute, or encoded)
+  const assetRegex = /(?:https?:\/\/[^/"' \s]+)?\/api\/assets\/([a-zA-Z0-9_.-]+)\/view/gi;
+  const assetIds = new Set<string>();
+  let match: RegExpExecArray | null;
+
+  while ((match = assetRegex.exec(html)) !== null) {
+    assetIds.add(match[1]);
+  }
+
+  for (const assetId of assetIds) {
+    try {
+      const raw = await resolveAssetRaw(assetId);
+      if (raw && raw.buffer) {
+        const cid = `cid_${assetId.replace(/[^a-zA-Z0-9_]/g, '_')}`;
+        const alreadyAttached = attachments.some((a) => a.contentId === cid || a.cid === cid);
+        if (!alreadyAttached) {
+          const ext = raw.mimeType.split('/')[1]?.replace('+xml', '') || 'png';
+          attachments.push({
+            filename: `${assetId}.${ext}`,
+            content: raw.buffer,
+            contentType: raw.mimeType,
+            contentId: cid,
+            cid: cid,
+          });
+        }
+        // Replace all URL occurrences with cid:cid_...
+        const urlPattern = new RegExp(`(?:https?:\\/\\/[^/"' \\s]+)?\\/api\\/assets\\/${assetId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\/view`, 'gi');
+        transformedHtml = transformedHtml.replace(urlPattern, `cid:${cid}`);
+      }
+    } catch (err) {
+      console.warn(`[inlineEmailAssets] Could not resolve asset ${assetId}:`, err);
+    }
+  }
+
+  // 2. Process inline base64 data URIs (Outlook desktop blocks data URIs; CID attachments make them display!)
+  let dataUriIndex = 1;
+  transformedHtml = transformedHtml.replace(
+    /src=["'](data:image\/(png|jpeg|jpg|gif|webp);base64,([A-Za-z0-9+/=]+))["']/gi,
+    (fullMatch, _dataUrl, imgType, base64Data) => {
+      try {
+        const cid = `cid_inline_img_${Date.now()}_${dataUriIndex++}`;
+        const buffer = Buffer.from(base64Data, 'base64');
+        attachments.push({
+          filename: `inline_image_${dataUriIndex}.${imgType === 'jpeg' ? 'jpg' : imgType}`,
+          content: buffer,
+          contentType: `image/${imgType}`,
+          contentId: cid,
+          cid: cid,
+        });
+        return `src="cid:${cid}"`;
+      } catch {
+        return fullMatch;
+      }
+    }
+  );
+
+  return { html: transformedHtml, attachments };
 }
 
 /** Resend error names that mean the API key on THIS server is missing or not accepted. */
@@ -448,22 +559,30 @@ export async function sendLiveEmail(params: SendMailParams): Promise<SendMailRes
     return notConfiguredResult('RESEND_API_KEY is missing');
   }
 
+  // Automatically inline company assets and data URIs as native CID attachments so images render in Outlook, Gmail, Apple Mail
+  const { html: inlinedHtml, attachments: inlinedAttachments } = await inlineEmailAssets(params.html, params.attachments);
+  const effectiveParams: SendMailParams = {
+    ...params,
+    html: inlinedHtml,
+    attachments: inlinedAttachments,
+  };
+
   // Workspace-scoped sends: the From address must come from the workspace's own verified domain.
-  if (params.tenantId) {
-    const sender = await resolveTenantSender(params.tenantId);
+  if (effectiveParams.tenantId) {
+    const sender = await resolveTenantSender(effectiveParams.tenantId);
     if (sender.ok === false) {
-      console.warn(`[Email] Blocked send for tenant ${params.tenantId}: ${sender.error}`);
+      console.warn(`[Email] Blocked send for tenant ${effectiveParams.tenantId}: ${sender.error}`);
       return { success: false, error: sender.error, simulated: false, provider: 'resend' };
     }
     if (sender.source === 'tenant') {
-      return sendViaResend(params, { from: sender.from, replyTo: sender.replyTo });
+      return sendViaResend(effectiveParams, { from: sender.from, replyTo: sender.replyTo });
     }
     // source === 'platform' (grandfathered tenant): continue with the platform sender below.
   }
 
   if (!cfg.from) {
-    console.warn(`[Email] Not sending to ${params.to}: RESEND_FROM is missing on this server.`);
+    console.warn(`[Email] Not sending to ${effectiveParams.to}: RESEND_FROM is missing on this server.`);
     return notConfiguredResult('RESEND_FROM is missing');
   }
-  return sendViaResend(params);
+  return sendViaResend(effectiveParams);
 }

@@ -12,3 +12,5 @@ coverage/
 *-firebase-adminsdk-*.json
 gen-lang-client-*.json
 .env
+
+.aistudio/

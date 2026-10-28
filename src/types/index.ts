@@ -37,6 +37,26 @@ export interface TemplateAttachment {
   base64?: string;
 }
 
+export type AssetCategory = 'LOGO' | 'BANNER' | 'HOTEL_PACKAGE' | 'BADGE' | 'VIDEO' | 'OTHER';
+
+export interface CompanyAsset {
+  id: string;
+  tenantId: string;
+  name: string;
+  category: AssetCategory;
+  mimeType: string;
+  size: number;
+  sizeFormatted: string;
+  dimensions?: { width: number; height: number };
+  url: string; // The public view URL: e.g. /api/assets/${id}/view
+  dataUrl?: string; // Base64 data URL for instant client preview
+  videoUrl?: string; // Optional target video link (YouTube, Vimeo, MP4) for video cards
+  videoDuration?: string; // Optional (e.g. "2:15")
+  altText?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface EmailTemplate {
   templateId: string;
   name: string;

@@ -101,6 +101,13 @@ import {
 import { getAdminAuth, createTenantUser, createPasswordSetupLink } from './firebaseAdmin.js';
 import { authenticateRequest } from './authMiddleware.js';
 import {
+  listTenantAssets,
+  saveTenantAsset,
+  deleteTenantAsset,
+  resolveAssetRaw,
+  seedTenantAssetsIfEmpty,
+} from './assetService.js';
+import {
   handleEnableAutoFollowUp,
   handleDisableAutoFollowUp,
   getAutoFollowUpDashboardData,
@@ -242,6 +249,8 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
   // =========================================================================
   const isPublicPath =
     url === '/api/health' ||
+    // Public asset raw/view streaming for email clients
+    (req.method === 'GET' && /^\/api\/assets\/[^/]+\/view$/.test(url)) ||
     // Published legal pages (Privacy, Terms, DPA, AUP) are public by design.
     (req.method === 'GET' && /^\/api\/legal\/[a-z]+(\?.*)?$/.test(url)) ||
     url.startsWith('/api/webhooks/') ||
@@ -2674,6 +2683,73 @@ Generate a helpful, grounded response.`;
       }
       return true;
     }
+  }
+
+  // =========================================================================
+  // COMPANY BRAND & MEDIA ASSETS (Images, Logos, Banners, Video Cards)
+  // =========================================================================
+
+  // Public Raw Asset Stream (used by email clients when loading images in sent campaigns)
+  const assetViewMatch = url.match(/^\/api\/assets\/([a-zA-Z0-9_.-]+)\/view$/);
+  if (assetViewMatch && req.method === 'GET') {
+    const assetId = assetViewMatch[1];
+    const raw = await resolveAssetRaw(assetId);
+    if (!raw) {
+      res.statusCode = 404;
+      res.setHeader('Content-Type', 'text/plain');
+      res.end('Asset not found');
+      return true;
+    }
+    res.statusCode = 200;
+    res.setHeader('Content-Type', raw.mimeType);
+    res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    res.setHeader('Content-Length', raw.buffer.length);
+    res.end(raw.buffer);
+    return true;
+  }
+
+  // List all company assets for active tenant (seeds samples if empty)
+  if (url === '/api/assets' && req.method === 'GET') {
+    try {
+      let assets = await listTenantAssets(activeTenantCtx);
+      if (assets.length === 0) {
+        assets = await seedTenantAssetsIfEmpty(activeTenantCtx);
+      }
+      res.statusCode = 200;
+      res.end(JSON.stringify({ success: true, assets }));
+    } catch (err: any) {
+      res.statusCode = 500;
+      res.end(JSON.stringify({ error: err?.message || 'Failed to list assets' }));
+    }
+    return true;
+  }
+
+  // Upload or create new company asset
+  if (url === '/api/assets' && req.method === 'POST') {
+    try {
+      const asset = await saveTenantAsset(activeTenantCtx, body);
+      res.statusCode = 200;
+      res.end(JSON.stringify({ success: true, asset }));
+    } catch (err: any) {
+      res.statusCode = 400;
+      res.end(JSON.stringify({ error: err?.message || 'Failed to save asset' }));
+    }
+    return true;
+  }
+
+  // Delete company asset
+  const assetDeleteMatch = url.match(/^\/api\/assets\/([a-zA-Z0-9_.-]+)$/);
+  if (assetDeleteMatch && req.method === 'DELETE') {
+    try {
+      const assetId = assetDeleteMatch[1];
+      const ok = await deleteTenantAsset(activeTenantCtx, assetId);
+      res.statusCode = 200;
+      res.end(JSON.stringify({ success: ok }));
+    } catch (err: any) {
+      res.statusCode = 400;
+      res.end(JSON.stringify({ error: err?.message || 'Failed to delete asset' }));
+    }
+    return true;
   }
 
   // Campaigns endpoints

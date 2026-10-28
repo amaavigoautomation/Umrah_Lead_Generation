@@ -119,6 +119,26 @@ export function friendlyAuthError(e: any): string {
 }
 
 let fetchPatched = false;
+let originalFetch: typeof window.fetch = typeof window !== 'undefined' && window.fetch ? window.fetch.bind(window) : (input, init) => fetch(input, init);
+
+/**
+ * Fetch wrapper that attaches the Firebase ID token to /api/ requests.
+ */
+export async function authFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+  const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+  const isApi = url.startsWith('/api/') || (typeof window !== 'undefined' && url.startsWith(`${window.location.origin}/api/`));
+  if (!isApi) return originalFetch(input, init);
+
+  const token = await getIdToken().catch(() => null);
+  if (!token) return originalFetch(input, init);
+
+  const headers = new Headers(init?.headers || (input instanceof Request ? input.headers : undefined));
+  if (!headers.has('Authorization')) {
+    headers.set('Authorization', `Bearer ${token}`);
+  }
+  return originalFetch(input, { ...init, headers });
+}
+
 /**
  * Attach the Firebase ID token to every same-origin /api/ request.
  * Call once at startup. (Authorization carries ONLY the Firebase token; the
@@ -127,17 +147,57 @@ let fetchPatched = false;
 export function installAuthFetch(): void {
   if (fetchPatched || typeof window === 'undefined') return;
   fetchPatched = true;
-  const original = window.fetch.bind(window);
-  window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
-    const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
-    const isApi = url.startsWith('/api/') || url.startsWith(`${window.location.origin}/api/`);
-    if (!isApi) return original(input, init);
 
-    const token = await getIdToken().catch(() => null);
-    if (!token) return original(input, init);
+  try {
+    const original = (window.fetch || globalThis.fetch).bind(window);
+    originalFetch = original;
 
-    const headers = new Headers(init?.headers || (input instanceof Request ? input.headers : undefined));
-    headers.set('Authorization', `Bearer ${token}`);
-    return original(input, { ...init, headers });
-  };
+    const wrappedFetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+      return authFetch(input, init);
+    };
+
+    let installed = false;
+    // 1. Try Object.defineProperty on window (safely overrides getter on Window.prototype)
+    try {
+      Object.defineProperty(window, 'fetch', {
+        value: wrappedFetch,
+        writable: true,
+        configurable: true,
+        enumerable: true,
+      });
+      installed = true;
+    } catch {
+      // defineProperty failed
+    }
+
+    // 2. Direct assignment fallback
+    if (!installed) {
+      try {
+        (window as any).fetch = wrappedFetch;
+        installed = true;
+      } catch {
+        // Direct assignment failed
+      }
+    }
+
+    // 3. Fallback on globalThis
+    if (!installed && typeof globalThis !== 'undefined') {
+      try {
+        Object.defineProperty(globalThis, 'fetch', {
+          value: wrappedFetch,
+          writable: true,
+          configurable: true,
+          enumerable: true,
+        });
+      } catch {
+        try {
+          (globalThis as any).fetch = wrappedFetch;
+        } catch {
+          // ignore
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('[authService] Could not patch global fetch:', err);
+  }
 }

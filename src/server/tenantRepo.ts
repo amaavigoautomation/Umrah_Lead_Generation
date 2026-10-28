@@ -69,6 +69,9 @@ export function tenantRepo(ctx: TenantContext) {
     emailTemplates: () => collection(db, `${tenantDocPath}/email_templates`),
     emailTemplateDoc: (id: string) => doc(db, `${tenantDocPath}/email_templates`, id),
 
+    assets: () => collection(db, `${tenantDocPath}/assets`),
+    assetDoc: (id: string) => doc(db, `${tenantDocPath}/assets`, id),
+
     knowledgeDocuments: () => collection(db, `${tenantDocPath}/knowledge_documents`),
     knowledgeDocumentDoc: (id: string) => doc(db, `${tenantDocPath}/knowledge_documents`, id),
 

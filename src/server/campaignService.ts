@@ -3028,10 +3028,16 @@ export async function updateCampaignLeadStatus(params: {
  * This runs continuously on the server regardless of whether a browser client is open.
  */
 let isAutoProcessingCampaigns = false;
-export async function processActiveRunningCampaignsBatch(batchSize: number = 500): Promise<{
+export async function processActiveRunningCampaignsBatch(
+  batchSize: number = 500,
+  tenantCtx?: TenantContext
+): Promise<{
   activeCount: number;
   processedCampaigns: Array<{ campaignId: string; processedCount: number; remainingPendingCount: number }>;
 }> {
+  if (tenantCtx) {
+    return runWithCampaignCtx(tenantCtx, () => processActiveRunningCampaignsBatch(batchSize));
+  }
   if (isAutoProcessingCampaigns) {
     return { activeCount: 0, processedCampaigns: [] };
   }

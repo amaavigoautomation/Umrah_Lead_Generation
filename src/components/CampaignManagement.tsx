@@ -40,6 +40,7 @@ import {
   Code,
   File,
   Users,
+  Image as ImageIcon,
 } from 'lucide-react';
 import { collection, doc, setDoc, deleteDoc, onSnapshot, getDoc, getDocs, query, where, documentId } from 'firebase/firestore';
 import { db, isFirebaseConfigured } from '../firebase/config.js';
@@ -56,6 +57,7 @@ import {
   OutboundProspect,
 } from '../types/index.js';
 import { EmailTemplateEditorModal } from './EmailTemplateEditorModal.js';
+import { CompanyAssetsPanel } from './CompanyAssetsPanel.js';
 import { INITIAL_CAMPAIGN } from '../services/dataService.js';
 import { zonedLocalToUtcIso, utcToZonedLocal, formatZoned, timeUntil } from '../shared/zonedTime';
 import { markDuplicateEmails, summarizeLeads } from '../shared/leadDedupe';
@@ -95,7 +97,7 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
   const tplCol = () => collection(db, 'tenants', tenantId, 'email_templates');
   const tplDoc = (id: string) => doc(db, 'tenants', tenantId, 'email_templates', id);
   // Navigation sub-tabs
-  const [activeTab, setActiveTab] = useState<'CAMPAIGNS' | 'TEMPLATES'>('CAMPAIGNS');
+  const [activeTab, setActiveTab] = useState<'CAMPAIGNS' | 'TEMPLATES' | 'ASSETS'>('CAMPAIGNS');
 
   // Campaigns state
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
@@ -1593,6 +1595,20 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                 <span>Email Templates ({templates.length})</span>
               </div>
             </button>
+            <button
+              id="tab-assets"
+              onClick={() => setActiveTab('ASSETS')}
+              className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all ${
+                activeTab === 'ASSETS'
+                  ? 'bg-orange-500 text-white shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <div className="flex items-center gap-1.5">
+                <ImageIcon className="w-3.5 h-3.5" />
+                <span>Company Assets</span>
+              </div>
+            </button>
           </div>
 
           <button
@@ -2632,6 +2648,15 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                   })}
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Company Assets Sub-Tab */}
+      {activeTab === 'ASSETS' && (
+        <div className="flex-1 overflow-y-auto p-6 bg-slate-900/10">
+          <div className="max-w-6xl mx-auto">
+            <CompanyAssetsPanel />
           </div>
         </div>
       )}

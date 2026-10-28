@@ -83,6 +83,7 @@ interface UnifiedInboxProps {
   onViewLeadInCrm: (leadId: string) => void;
   onProcessInboundEmail?: (payload: InboundEmailPayload) => Promise<InboundProcessingResult>;
   onProcessInboundWhatsApp?: (payload: InboundWhatsAppPayload) => Promise<InboundWhatsAppProcessingResult>;
+  onSendTemplate?: (conversationId: string, template: { name: string; language: string; params: string[] }) => Promise<boolean> | void;
   onSyncNow?: () => void;
   onAutoFollowUpChanged?: (leadId: string, autoFollowUp: any) => void;
 }

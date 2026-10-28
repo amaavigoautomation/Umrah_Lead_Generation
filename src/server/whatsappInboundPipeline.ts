@@ -172,6 +172,7 @@ export interface ProcessedInboundWhatsAppResult {
   intent: string;
   buyingStage: string;
   timestamp: string;
+  processed?: boolean;
   crmEntities: InboundWhatsAppCrmEntities;
 }
 
@@ -793,17 +794,23 @@ www.umrah360.in`;
  * 9. Lead activity logging
  * 10. Single-source Firestore persistence
  */
-export async function processLiveInboundWhatsApp(payload: {
-  from: string;
-  fromName?: string;
-  to?: string;
-  body: string;
-  messageId?: string;
-  companyName?: string;
-  direction?: 'INBOUND' | 'OUTBOUND';
-  senderType?: 'CUSTOMER' | 'PROSPECT' | 'AI' | 'AGENT';
-  isTestSimulation?: boolean;
-}): Promise<ProcessedInboundWhatsAppResult> {
+export async function processLiveInboundWhatsApp(
+  payload: {
+    from: string;
+    fromName?: string;
+    to?: string;
+    body: string;
+    messageId?: string;
+    companyName?: string;
+    direction?: 'INBOUND' | 'OUTBOUND';
+    senderType?: 'CUSTOMER' | 'PROSPECT' | 'AI' | 'AGENT';
+    isTestSimulation?: boolean;
+  },
+  tenantCtx?: TenantContext
+): Promise<ProcessedInboundWhatsAppResult> {
+  if (tenantCtx) {
+    setWhatsAppActiveContext(tenantCtx);
+  }
   const targetNumber = TARGET_WHATSAPP_NUMBER;
   const targetNumberFormatted = TARGET_WHATSAPP_NUMBER_DISPLAY;
   const brand = await getTenantBrand(getWACtx().tenantId);
@@ -878,6 +885,7 @@ export async function processLiveInboundWhatsApp(payload: {
       intent: 'MEDIUM',
       buyingStage: 'ENGAGED',
       timestamp: nowIso,
+      processed: false,
       crmEntities: {
         contact: { contactId, firstName, lastName, phone: senderPhone, whatsappUserId: senderPhone, companyName: payload.companyName || (isUmrahBrand ? 'Umrah360 Internal' : `${brand.companyName} Internal`), createdAt: nowIso, updatedAt: nowIso, lastActivityAt: nowIso },
         lead: { leadId, contactId, source: 'WHATSAPP', leadType: 'INBOUND', status: 'ENGAGED', leadScore: 50, intent: 'MEDIUM', buyingStage: 'ENGAGED', serviceInterest: 'WhatsApp Inquiry', requirements: [], aiSummary: 'Outbound message recorded', createdAt: nowIso, updatedAt: nowIso, lastActivityAt: nowIso },
@@ -921,6 +929,7 @@ export async function processLiveInboundWhatsApp(payload: {
       intent: 'HIGH',
       buyingStage: 'ENGAGED',
       timestamp: nowIso,
+      processed: false,
       crmEntities: {
         contact: { contactId, firstName, lastName, phone: senderPhone, whatsappUserId: senderPhone, companyName: payload.companyName || `${firstName}'s ${isUmrahBrand ? 'Agency' : 'Company'}`, createdAt: nowIso, updatedAt: nowIso, lastActivityAt: nowIso },
         lead: { leadId, contactId, source: 'WHATSAPP', leadType: 'INBOUND', status: 'ENGAGED', leadScore: 75, intent: 'HIGH', buyingStage: 'ENGAGED', serviceInterest: 'WhatsApp Inquiry', requirements: [], aiSummary: 'Duplicate message filtered', createdAt: nowIso, updatedAt: nowIso, lastActivityAt: nowIso },
@@ -1190,6 +1199,7 @@ export async function processLiveInboundWhatsApp(payload: {
     intent: 'HIGH',
     buyingStage: aiResult.buyingStage,
     timestamp: nowIso,
+    processed: true,
     crmEntities,
   };
 

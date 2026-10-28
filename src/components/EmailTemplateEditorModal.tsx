@@ -39,6 +39,7 @@ import {
   CheckCircle2,
 } from 'lucide-react';
 import { EmailTemplate, TemplateAttachment } from '../types/index.js';
+import { CompanyAssetsPanel } from './CompanyAssetsPanel.js';
 
 interface EmailTemplateEditorModalProps {
   isOpen: boolean;
@@ -87,6 +88,7 @@ export const EmailTemplateEditorModal: React.FC<EmailTemplateEditorModalProps> =
   const [showHighlightPicker, setShowHighlightPicker] = useState(false);
   const [linkInputUrl, setLinkInputUrl] = useState('');
   const [isLinkPromptOpen, setIsLinkPromptOpen] = useState(false);
+  const [rightPanelTab, setRightPanelTab] = useState<'PREVIEW' | 'ASSETS'>('PREVIEW');
   const [localError, setLocalError] = useState<string | null>(null);
 
   const visualEditorRef = useRef<HTMLDivElement>(null);
@@ -236,6 +238,20 @@ export const EmailTemplateEditorModal: React.FC<EmailTemplateEditorModalProps> =
     }
   };
 
+  const handleInsertHtmlSnippet = (snippet: string) => {
+    if (formatMode === 'VISUAL' && visualEditorRef.current) {
+      visualEditorRef.current.focus();
+      document.execCommand('insertHTML', false, snippet);
+      handleVisualInput();
+    } else if (formatMode === 'HTML') {
+      setHtmlContent((prev) => `${prev}\n\n${snippet}\n\n`);
+      setPlainTextContent((prev) => `${prev}\n\n${stripHtml(snippet)}\n\n`);
+    } else {
+      setFormatMode('HTML');
+      setHtmlContent((prev) => `${plainToHtml(prev)}\n\n${snippet}\n\n`);
+    }
+  };
+
   // Attachments Handling
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -352,7 +368,7 @@ export const EmailTemplateEditorModal: React.FC<EmailTemplateEditorModalProps> =
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 overflow-y-auto font-sans">
-      <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-5xl max-h-[96vh] flex flex-col overflow-hidden shadow-2xl animate-in fade-in zoom-in-95 duration-150">
+      <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-6xl xl:max-w-7xl max-h-[96vh] flex flex-col overflow-hidden shadow-2xl animate-in fade-in zoom-in-95 duration-150">
         
         {/* MODAL HEADER */}
         <div className="px-6 py-4 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
@@ -500,7 +516,7 @@ export const EmailTemplateEditorModal: React.FC<EmailTemplateEditorModalProps> =
                 </div>
 
                 {/* Variable Injector */}
-                <div className="flex items-center gap-1">
+                <div className="flex items-center gap-1 flex-wrap">
                   <span className="text-[10px] text-slate-500 uppercase font-semibold mr-1">Variables:</span>
                   {['name', 'firstName', 'company', 'designation', 'email'].map((v) => (
                     <button
@@ -513,6 +529,21 @@ export const EmailTemplateEditorModal: React.FC<EmailTemplateEditorModalProps> =
                       +{v}
                     </button>
                   ))}
+
+                  {/* Company Media Assets Drawer Toggle */}
+                  <button
+                    type="button"
+                    onClick={() => setRightPanelTab(rightPanelTab === 'ASSETS' ? 'PREVIEW' : 'ASSETS')}
+                    className={`ml-2 px-2.5 py-0.5 text-[11px] font-semibold rounded-md flex items-center gap-1.5 transition border ${
+                      rightPanelTab === 'ASSETS'
+                        ? 'bg-amber-500 text-slate-950 border-amber-500 font-bold shadow-xs'
+                        : 'bg-amber-50 text-amber-700 hover:bg-amber-100 border-amber-200'
+                    }`}
+                    title="Browse and insert company photos, logos, banners, and video cards"
+                  >
+                    <ImageIcon className="w-3 h-3 text-amber-600" />
+                    <span>Brand Media</span>
+                  </button>
                 </div>
               </div>
 
@@ -722,6 +753,16 @@ export const EmailTemplateEditorModal: React.FC<EmailTemplateEditorModalProps> =
                     >
                       Clear
                     </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setRightPanelTab('ASSETS')}
+                      className="p-1.5 text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded transition flex items-center gap-1 text-[10px] font-semibold"
+                      title="Insert Company Photo, Banner, Logo or Video Card"
+                    >
+                      <ImageIcon className="w-3.5 h-3.5 text-amber-600" />
+                      <span>Photo / Video</span>
+                    </button>
                   </div>
                 </div>
               )}
@@ -761,6 +802,20 @@ export const EmailTemplateEditorModal: React.FC<EmailTemplateEditorModalProps> =
                     ref={visualEditorRef}
                     contentEditable
                     onInput={handleVisualInput}
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      e.dataTransfer.dropEffect = 'copy';
+                    }}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      const html = e.dataTransfer.getData('text/html');
+                      const plain = e.dataTransfer.getData('text/plain');
+                      if (html) {
+                        handleInsertHtmlSnippet(html);
+                      } else if (plain) {
+                        handleInsertHtmlSnippet(`<img src="${plain}" alt="Company Media" style="max-width: 100%; height: auto; border-radius: 8px; display: block; margin: 16px auto;" />`);
+                      }
+                    }}
                     className="w-full min-h-[260px] max-h-[380px] overflow-y-auto px-4 py-3 bg-white rounded-xl text-slate-900 text-sm leading-relaxed focus:outline-none focus:ring-2 focus:ring-orange-500/30 border border-slate-200 shadow-inner font-sans"
                     style={{
                       wordBreak: 'break-word',
@@ -774,6 +829,20 @@ export const EmailTemplateEditorModal: React.FC<EmailTemplateEditorModalProps> =
                     placeholder="<p>Enter clean HTML with styling...</p>"
                     value={htmlContent}
                     onChange={handleHtmlCodeChange}
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      e.dataTransfer.dropEffect = 'copy';
+                    }}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      const html = e.dataTransfer.getData('text/html');
+                      const plain = e.dataTransfer.getData('text/plain');
+                      if (html) {
+                        handleInsertHtmlSnippet(html);
+                      } else if (plain) {
+                        handleInsertHtmlSnippet(`<img src="${plain}" alt="Company Media" style="max-width: 100%; height: auto; border-radius: 8px; display: block; margin: 16px auto;" />`);
+                      }
+                    }}
                     className="w-full min-h-[260px] max-h-[380px] px-4 py-3 bg-slate-900 border border-slate-800 rounded-xl text-xs font-mono text-amber-300 leading-relaxed focus:outline-none focus:border-orange-500 shadow-inner"
                   />
                 )}
@@ -872,102 +941,149 @@ export const EmailTemplateEditorModal: React.FC<EmailTemplateEditorModalProps> =
 
           </div>
 
-          {/* RIGHT COLUMN: LIVE RENDERED PREVIEW (5 Cols) */}
+          {/* RIGHT COLUMN: LIVE RENDERED PREVIEW OR COMPANY ASSETS (5 Cols) */}
           <div className="lg:col-span-5 flex flex-col space-y-3">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
-                <Eye className="w-4 h-4 text-orange-500" />
-                <span>Live Email Client Preview</span>
-              </span>
-
-              {/* Viewport switch: Desktop vs Mobile */}
-              <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200 text-xs">
+              {/* Tab Switcher: Preview vs Assets */}
+              <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200 text-xs">
                 <button
                   type="button"
-                  onClick={() => setPreviewDevice('DESKTOP')}
-                  className={`p-1.5 rounded-lg transition ${
-                    previewDevice === 'DESKTOP' ? 'bg-white text-orange-600 shadow-2xs font-bold' : 'text-slate-500 hover:text-slate-900'
+                  onClick={() => setRightPanelTab('PREVIEW')}
+                  className={`px-3 py-1.5 rounded-lg font-semibold flex items-center gap-1.5 transition ${
+                    rightPanelTab === 'PREVIEW'
+                      ? 'bg-orange-500 text-white shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
                   }`}
-                  title="Desktop Preview"
                 >
-                  <Monitor className="w-3.5 h-3.5" />
+                  <Eye className="w-3.5 h-3.5" />
+                  <span>Live Preview</span>
                 </button>
                 <button
                   type="button"
-                  onClick={() => setPreviewDevice('MOBILE')}
-                  className={`p-1.5 rounded-lg transition ${
-                    previewDevice === 'MOBILE' ? 'bg-white text-orange-600 shadow-2xs font-bold' : 'text-slate-500 hover:text-slate-900'
+                  onClick={() => setRightPanelTab('ASSETS')}
+                  className={`px-3 py-1.5 rounded-lg font-semibold flex items-center gap-1.5 transition ${
+                    rightPanelTab === 'ASSETS'
+                      ? 'bg-amber-500 text-slate-950 font-bold shadow-xs'
+                      : 'text-amber-800 hover:text-amber-950 bg-amber-50 border border-amber-200/60'
                   }`}
-                  title="Mobile Preview"
+                  title="Company photos, logos, banners, and video cards"
                 >
-                  <Smartphone className="w-3.5 h-3.5" />
+                  <ImageIcon className="w-3.5 h-3.5" />
+                  <span>Company Assets</span>
                 </button>
               </div>
-            </div>
 
-            {/* SIMULATED EMAIL CLIENT CONTAINER */}
-            <div
-              className={`flex-1 bg-white border border-slate-200 rounded-2xl flex flex-col overflow-hidden shadow-sm ${
-                previewDevice === 'MOBILE' ? 'max-w-[340px] mx-auto' : 'w-full'
-              }`}
-            >
-              {/* Email Envelope Header */}
-              <div className="p-3.5 bg-slate-50 border-b border-slate-200 space-y-1.5 text-xs">
-                <div className="flex items-center justify-between text-[11px] text-slate-500">
-                  <span>To: <strong className="text-slate-800">Tariq Farooq</strong> &lt;tariq@albait-tours.com&gt;</span>
-                  <span className="text-[10px] font-mono text-orange-600 font-semibold">{brand.companyName} Outbound</span>
-                </div>
-                <div className="text-[11px] text-slate-500">
-                  <span>From: <span className="text-slate-700 font-medium">{brand.teamName}</span> &lt;{brand.salesEmail || brand.calendarEmail || 'you@yourcompany.com'}&gt;</span>
-                </div>
-                <div className="pt-1 border-t border-slate-200 text-xs font-semibold text-slate-900">
-                  <span className="text-slate-500 font-normal mr-1">Subject:</span>
-                  {renderPreviewWithSampleLead(subject) || 'No Subject'}
-                </div>
-              </div>
-
-              {/* Rendered Email Body */}
-              <div className="flex-1 p-4 bg-white overflow-y-auto text-slate-800 text-xs leading-relaxed font-sans space-y-2">
-                {formatMode === 'PLAIN' ? (
-                  <div className="whitespace-pre-wrap font-mono text-slate-700">
-                    {renderPreviewWithSampleLead(plainTextContent || 'Your email body will appear here.')}
-                  </div>
-                ) : (
-                  <div
-                    className="email-rendered-content prose max-w-none text-xs leading-relaxed text-slate-800"
-                    dangerouslySetInnerHTML={{
-                      __html: renderPreviewWithSampleLead(htmlContent || plainToHtml(plainTextContent) || '<p>Your email body will appear here.</p>'),
-                    }}
-                  />
-                )}
-              </div>
-
-              {/* Rendered Attached Files Bar in Email Footer */}
-              {attachments.length > 0 && (
-                <div className="p-3 bg-slate-50 border-t border-slate-200 space-y-1.5">
-                  <div className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-700">
-                    <Paperclip className="w-3 h-3 text-orange-500" />
-                    <span>Attachments ({attachments.length}):</span>
-                  </div>
-                  <div className="flex flex-wrap gap-1.5">
-                    {attachments.map((att) => (
-                      <div
-                        key={att.id}
-                        className="px-2.5 py-1 bg-white border border-slate-200 rounded-lg text-[10px] text-slate-700 flex items-center gap-1.5 shadow-xs"
-                      >
-                        {getFileIcon(att.name, att.type)}
-                        <span className="max-w-[120px] truncate font-medium">{att.name}</span>
-                        <span className="text-slate-400 font-mono">({formatFileSize(att.size)})</span>
-                      </div>
-                    ))}
-                  </div>
+              {/* Viewport switch: Desktop vs Mobile (Visible in Preview mode) */}
+              {rightPanelTab === 'PREVIEW' && (
+                <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200 text-xs">
+                  <button
+                    type="button"
+                    onClick={() => setPreviewDevice('DESKTOP')}
+                    className={`p-1.5 rounded-lg transition ${
+                      previewDevice === 'DESKTOP' ? 'bg-white text-orange-600 shadow-2xs font-bold' : 'text-slate-500 hover:text-slate-900'
+                    }`}
+                    title="Desktop Preview"
+                  >
+                    <Monitor className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPreviewDevice('MOBILE')}
+                    className={`p-1.5 rounded-lg transition ${
+                      previewDevice === 'MOBILE' ? 'bg-white text-orange-600 shadow-2xs font-bold' : 'text-slate-500 hover:text-slate-900'
+                    }`}
+                    title="Mobile Preview"
+                  >
+                    <Smartphone className="w-3.5 h-3.5" />
+                  </button>
                 </div>
               )}
             </div>
 
-            <div className="text-[10px] text-slate-400 text-center">
-              * Variables like <code className="text-orange-600 font-mono">{"{{name}}"}</code> & <code className="text-orange-600 font-mono">{"{{company}}"}</code> are automatically substituted per lead.
-            </div>
+            {/* TAB CONTENT: COMPANY ASSETS DRAWER OR EMAIL CLIENT PREVIEW */}
+            {rightPanelTab === 'ASSETS' ? (
+              <div className="flex-1 bg-slate-950 border border-slate-800 rounded-2xl p-3 overflow-y-auto max-h-[640px] shadow-sm flex flex-col">
+                <div className="mb-2 p-2 bg-amber-500/10 border border-amber-500/20 rounded-xl text-xs text-amber-300 flex items-center justify-between">
+                  <span className="font-semibold flex items-center gap-1.5">
+                    <ImageIcon className="w-3.5 h-3.5 text-amber-400" />
+                    Company Assets (Stored in DB)
+                  </span>
+                  <span className="text-[11px] text-amber-200/80">
+                    Click <strong>Insert</strong> or <strong>Drag</strong> into editor
+                  </span>
+                </div>
+                <CompanyAssetsPanel
+                  isDrawerMode={true}
+                  onInsertIntoTemplate={(snippet) => handleInsertHtmlSnippet(snippet)}
+                />
+              </div>
+            ) : (
+              <>
+                {/* SIMULATED EMAIL CLIENT CONTAINER */}
+                <div
+                  className={`flex-1 bg-white border border-slate-200 rounded-2xl flex flex-col overflow-hidden shadow-sm ${
+                    previewDevice === 'MOBILE' ? 'max-w-[340px] mx-auto' : 'w-full'
+                  }`}
+                >
+                  {/* Email Envelope Header */}
+                  <div className="p-3.5 bg-slate-50 border-b border-slate-200 space-y-1.5 text-xs">
+                    <div className="flex items-center justify-between text-[11px] text-slate-500">
+                      <span>To: <strong className="text-slate-800">Tariq Farooq</strong> &lt;tariq@albait-tours.com&gt;</span>
+                      <span className="text-[10px] font-mono text-orange-600 font-semibold">{brand.companyName} Outbound</span>
+                    </div>
+                    <div className="text-[11px] text-slate-500">
+                      <span>From: <span className="text-slate-700 font-medium">{brand.teamName}</span> &lt;{brand.salesEmail || brand.calendarEmail || 'you@yourcompany.com'}&gt;</span>
+                    </div>
+                    <div className="pt-1 border-t border-slate-200 text-xs font-semibold text-slate-900">
+                      <span className="text-slate-500 font-normal mr-1">Subject:</span>
+                      {renderPreviewWithSampleLead(subject) || 'No Subject'}
+                    </div>
+                  </div>
+
+                  {/* Rendered Email Body */}
+                  <div className="flex-1 p-4 bg-white overflow-y-auto text-slate-800 text-xs leading-relaxed font-sans space-y-2">
+                    {formatMode === 'PLAIN' ? (
+                      <div className="whitespace-pre-wrap font-mono text-slate-700">
+                        {renderPreviewWithSampleLead(plainTextContent || 'Your email body will appear here.')}
+                      </div>
+                    ) : (
+                      <div
+                        className="email-rendered-content prose max-w-none text-xs leading-relaxed text-slate-800"
+                        dangerouslySetInnerHTML={{
+                          __html: renderPreviewWithSampleLead(htmlContent || plainToHtml(plainTextContent) || '<p>Your email body will appear here.</p>'),
+                        }}
+                      />
+                    )}
+                  </div>
+
+                  {/* Rendered Attached Files Bar in Email Footer */}
+                  {attachments.length > 0 && (
+                    <div className="p-3 bg-slate-50 border-t border-slate-200 space-y-1.5">
+                      <div className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-700">
+                        <Paperclip className="w-3 h-3 text-orange-500" />
+                        <span>Attachments ({attachments.length}):</span>
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {attachments.map((att) => (
+                          <div
+                            key={att.id}
+                            className="px-2.5 py-1 bg-white border border-slate-200 rounded-lg text-[10px] text-slate-700 flex items-center gap-1.5 shadow-xs"
+                          >
+                            {getFileIcon(att.name, att.type)}
+                            <span className="max-w-[120px] truncate font-medium">{att.name}</span>
+                            <span className="text-slate-400 font-mono">({formatFileSize(att.size)})</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="text-[10px] text-slate-400 text-center">
+                  * Variables like <code className="text-orange-600 font-mono">{"{{name}}"}</code> & <code className="text-orange-600 font-mono">{"{{company}}"}</code> are automatically substituted per lead.
+                </div>
+              </>
+            )}
           </div>
 
         </div>

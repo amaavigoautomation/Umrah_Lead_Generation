@@ -38,6 +38,7 @@ import {
   Copy,
   Paperclip,
   Code,
+  Type,
   File,
   Users,
   Image as ImageIcon,

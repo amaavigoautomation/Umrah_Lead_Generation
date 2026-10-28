@@ -94,6 +94,17 @@ export const EmailTemplateEditorModal: React.FC<EmailTemplateEditorModalProps> =
   const visualEditorRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const isHtmlOnly = Boolean(
+    editingTemplate && (
+      editingTemplate.format === 'html' ||
+      (editingTemplate.htmlBody && (
+        editingTemplate.htmlBody.includes('<!DOCTYPE') ||
+        editingTemplate.htmlBody.includes('<html') ||
+        editingTemplate.htmlBody.includes('<table')
+      ))
+    )
+  );
+
   // Initialize or populate form
   useEffect(() => {
     if (editingTemplate) {
@@ -105,16 +116,14 @@ export const EmailTemplateEditorModal: React.FC<EmailTemplateEditorModalProps> =
       setHtmlContent(initialHtml || plainToHtml(initialPlain));
       setPlainTextContent(initialPlain || stripHtml(initialHtml));
 
-      if (editingTemplate.format === 'html') {
+      if (editingTemplate.format === 'html' || (initialHtml && (initialHtml.includes('<!DOCTYPE') || initialHtml.includes('<html') || initialHtml.includes('<table')))) {
         setFormatMode('HTML');
       } else if (editingTemplate.format === 'visual') {
         setFormatMode('VISUAL');
       } else if (editingTemplate.format === 'plain' || editingTemplate.format === 'text') {
         setFormatMode('PLAIN');
       } else {
-        if (initialHtml && (initialHtml.includes('<!DOCTYPE') || initialHtml.includes('<html') || initialHtml.includes('<table') || initialHtml.includes('<div'))) {
-          setFormatMode('HTML');
-        } else if (initialHtml) {
+        if (initialHtml) {
           setFormatMode('VISUAL');
         } else {
           setFormatMode('PLAIN');
@@ -474,54 +483,63 @@ export const EmailTemplateEditorModal: React.FC<EmailTemplateEditorModalProps> =
               {/* Top Mode Bar */}
               <div className="px-3 py-2 bg-slate-50 border-b border-slate-200 flex items-center justify-between flex-wrap gap-2">
                 <div className="flex items-center bg-slate-100 p-1 rounded-lg border border-slate-200 text-xs">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setFormatMode('VISUAL');
-                      if (visualEditorRef.current) visualEditorRef.current.innerHTML = htmlContent;
-                    }}
-                    className={`px-3 py-1 rounded-md font-medium transition flex items-center gap-1.5 ${
-                      formatMode === 'VISUAL'
-                        ? 'bg-orange-500 text-white shadow-xs'
-                        : 'text-slate-600 hover:text-slate-900'
-                    }`}
-                  >
-                    <Type className="w-3.5 h-3.5" />
-                    <span>Visual Styled</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (formatMode === 'VISUAL' && visualEditorRef.current) {
-                        setHtmlContent(visualEditorRef.current.innerHTML);
-                      }
-                      setFormatMode('HTML');
-                    }}
-                    className={`px-3 py-1 rounded-md font-medium transition flex items-center gap-1.5 ${
-                      formatMode === 'HTML'
-                        ? 'bg-orange-500 text-white shadow-xs'
-                        : 'text-slate-600 hover:text-slate-900'
-                    }`}
-                  >
-                    <Code className="w-3.5 h-3.5" />
-                    <span>HTML Code</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (formatMode === 'VISUAL' && visualEditorRef.current) {
-                        setPlainTextContent(stripHtml(visualEditorRef.current.innerHTML));
-                      }
-                      setFormatMode('PLAIN');
-                    }}
-                    className={`px-3 py-1 rounded-md font-medium transition flex items-center gap-1.5 ${
-                      formatMode === 'PLAIN'
-                        ? 'bg-orange-500 text-white shadow-xs'
-                        : 'text-slate-600 hover:text-slate-900'
-                    }`}
-                  >
-                    <span>Plain Text</span>
-                  </button>
+                  {isHtmlOnly ? (
+                    <div className="px-3 py-1 rounded-md font-semibold bg-orange-500 text-white shadow-xs flex items-center gap-1.5 text-xs">
+                      <Code className="w-3.5 h-3.5" />
+                      <span>HTML Code Mode (HTML Template)</span>
+                    </div>
+                  ) : (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setFormatMode('VISUAL');
+                          if (visualEditorRef.current) visualEditorRef.current.innerHTML = htmlContent;
+                        }}
+                        className={`px-3 py-1 rounded-md font-medium transition flex items-center gap-1.5 ${
+                          formatMode === 'VISUAL'
+                            ? 'bg-orange-500 text-white shadow-xs'
+                            : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                      >
+                        <Type className="w-3.5 h-3.5" />
+                        <span>Visual Styled</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (formatMode === 'VISUAL' && visualEditorRef.current) {
+                            setHtmlContent(visualEditorRef.current.innerHTML);
+                          }
+                          setFormatMode('HTML');
+                        }}
+                        className={`px-3 py-1 rounded-md font-medium transition flex items-center gap-1.5 ${
+                          formatMode === 'HTML'
+                            ? 'bg-orange-500 text-white shadow-xs'
+                            : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                      >
+                        <Code className="w-3.5 h-3.5" />
+                        <span>HTML Code</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (formatMode === 'VISUAL' && visualEditorRef.current) {
+                            setPlainTextContent(stripHtml(visualEditorRef.current.innerHTML));
+                          }
+                          setFormatMode('PLAIN');
+                        }}
+                        className={`px-3 py-1 rounded-md font-medium transition flex items-center gap-1.5 ${
+                          formatMode === 'PLAIN'
+                            ? 'bg-orange-500 text-white shadow-xs'
+                            : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                      >
+                        <span>Plain Text</span>
+                      </button>
+                    </>
+                  )}
                 </div>
 
                 {/* Variable Injector */}

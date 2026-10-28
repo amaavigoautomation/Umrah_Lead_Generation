@@ -2537,16 +2537,30 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                               <span className="text-[10px] px-1.5 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded font-medium">
                                 Saved in DB
                               </span>
-                              {tpl.isHtml || tpl.format === 'html' || tpl.htmlBody ? (
-                                <span className="text-[10px] px-1.5 py-0.5 bg-sky-50 text-sky-700 border border-sky-200 rounded font-medium flex items-center gap-1">
-                                  <Code className="w-2.5 h-2.5" />
-                                  <span>HTML Rich Text</span>
-                                </span>
-                              ) : (
-                                <span className="text-[10px] px-1.5 py-0.5 bg-slate-100 text-slate-600 border border-slate-200 rounded font-medium">
-                                  Plain Text
-                                </span>
-                              )}
+                              {(() => {
+                                if (tpl.format === 'html' || (!tpl.format && (tpl.htmlBody?.includes('<!DOCTYPE') || tpl.htmlBody?.includes('<html') || tpl.htmlBody?.includes('<table')))) {
+                                  return (
+                                    <span className="text-[10px] px-1.5 py-0.5 bg-sky-50 text-sky-700 border border-sky-200 rounded font-medium flex items-center gap-1">
+                                      <Code className="w-2.5 h-2.5" />
+                                      <span>HTML Rich Template</span>
+                                    </span>
+                                  );
+                                }
+                                if (tpl.format === 'visual' || (!tpl.format && (tpl.isHtml || tpl.htmlBody))) {
+                                  return (
+                                    <span className="text-[10px] px-1.5 py-0.5 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded font-medium flex items-center gap-1">
+                                      <Type className="w-2.5 h-2.5" />
+                                      <span>Visual Styled Template</span>
+                                    </span>
+                                  );
+                                }
+                                return (
+                                  <span className="text-[10px] px-1.5 py-0.5 bg-slate-100 text-slate-600 border border-slate-200 rounded font-medium flex items-center gap-1">
+                                    <FileText className="w-2.5 h-2.5" />
+                                    <span>Plain Text Template</span>
+                                  </span>
+                                );
+                              })()}
                               {tpl.attachments && tpl.attachments.length > 0 && (
                                 <span className="text-[10px] px-1.5 py-0.5 bg-amber-50 text-amber-700 border border-amber-200 rounded font-medium flex items-center gap-1">
                                   <Paperclip className="w-2.5 h-2.5" />
@@ -3100,11 +3114,27 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                                   <h4 className={`text-xs font-bold leading-tight ${isSelected ? 'text-orange-600' : 'text-slate-900'}`}>
                                     {tpl.name}
                                   </h4>
-                                  {tpl.isHtml || tpl.format === 'html' || tpl.htmlBody ? (
-                                    <span className="text-[9px] px-1 py-0.2 bg-sky-50 text-sky-700 rounded font-medium">
-                                      HTML
-                                    </span>
-                                  ) : null}
+                                  {(() => {
+                                    if (tpl.format === 'html' || (!tpl.format && (tpl.htmlBody?.includes('<!DOCTYPE') || tpl.htmlBody?.includes('<html') || tpl.htmlBody?.includes('<table')))) {
+                                      return (
+                                        <span className="text-[9px] px-1.5 py-0.5 bg-sky-50 text-sky-700 rounded font-medium">
+                                          HTML Rich Template
+                                        </span>
+                                      );
+                                    }
+                                    if (tpl.format === 'visual' || (!tpl.format && (tpl.isHtml || tpl.htmlBody))) {
+                                      return (
+                                        <span className="text-[9px] px-1.5 py-0.5 bg-indigo-50 text-indigo-700 rounded font-medium">
+                                          Visual Styled Template
+                                        </span>
+                                      );
+                                    }
+                                    return (
+                                      <span className="text-[9px] px-1.5 py-0.5 bg-slate-100 text-slate-600 rounded font-medium">
+                                        Plain Text Template
+                                      </span>
+                                    );
+                                  })()}
                                   {tpl.attachments && tpl.attachments.length > 0 && (
                                     <span className="text-[9px] px-1.5 py-0.2 bg-amber-50 text-amber-700 rounded font-medium flex items-center gap-0.5">
                                       <Paperclip className="w-2.5 h-2.5" />

@@ -102,14 +102,23 @@ export const EmailTemplateEditorModal: React.FC<EmailTemplateEditorModalProps> =
       const initialHtml = editingTemplate.htmlBody || (editingTemplate.isHtml ? editingTemplate.body : '');
       const initialPlain = editingTemplate.body || '';
 
-      if (initialHtml) {
-        setHtmlContent(initialHtml);
-        setPlainTextContent(initialPlain || stripHtml(initialHtml));
-        setFormatMode(editingTemplate.format === 'html' || editingTemplate.isHtml ? 'VISUAL' : 'PLAIN');
-      } else {
-        setPlainTextContent(initialPlain);
-        setHtmlContent(plainToHtml(initialPlain));
+      setHtmlContent(initialHtml || plainToHtml(initialPlain));
+      setPlainTextContent(initialPlain || stripHtml(initialHtml));
+
+      if (editingTemplate.format === 'html') {
+        setFormatMode('HTML');
+      } else if (editingTemplate.format === 'visual') {
         setFormatMode('VISUAL');
+      } else if (editingTemplate.format === 'plain' || editingTemplate.format === 'text') {
+        setFormatMode('PLAIN');
+      } else {
+        if (initialHtml && (initialHtml.includes('<!DOCTYPE') || initialHtml.includes('<html') || initialHtml.includes('<table') || initialHtml.includes('<div'))) {
+          setFormatMode('HTML');
+        } else if (initialHtml) {
+          setFormatMode('VISUAL');
+        } else {
+          setFormatMode('PLAIN');
+        }
       }
 
       setAttachments(editingTemplate.attachments || []);
@@ -352,7 +361,7 @@ export const EmailTemplateEditorModal: React.FC<EmailTemplateEditorModalProps> =
       subject: subject.trim(),
       body: finalPlain.trim(),
       htmlBody: finalHtml.trim(),
-      format: formatMode === 'PLAIN' ? 'text' : 'html',
+      format: formatMode === 'HTML' ? 'html' : formatMode === 'VISUAL' ? 'visual' : 'plain',
       isHtml: formatMode !== 'PLAIN' || finalHtml.includes('<') || attachments.length > 0,
       attachments: attachments,
       createdAt: editingTemplate?.createdAt || now,
@@ -380,7 +389,7 @@ export const EmailTemplateEditorModal: React.FC<EmailTemplateEditorModalProps> =
               <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
                 <span>{editingTemplate ? 'Edit Email Template' : 'Create Email Template'}</span>
                 <span className="text-[10px] px-2 py-0.5 rounded-full bg-orange-500/10 text-orange-600 border border-orange-200 font-mono font-medium">
-                  Rich Text • HTML • Attachments
+                  {formatMode === 'HTML' ? 'HTML Rich Template' : formatMode === 'VISUAL' ? 'Visual Styled Template' : 'Plain Text Template'}
                 </span>
               </h3>
               <p className="text-xs text-slate-500">

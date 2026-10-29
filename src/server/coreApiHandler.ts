@@ -3411,9 +3411,16 @@ Generate a helpful, grounded response.`;
             if (data && data.id) auditList.push(data);
           });
           auditList.sort((a, b) => new Date(b.timestamp || 0).getTime() - new Date(a.timestamp || 0).getTime());
-        } catch (e) {
-          console.warn('[AuditLogs API] Firestore fetch note:', e);
+        } catch (e: any) {
+          console.error('[AuditLogs API] Firestore fetch failed:', e);
+          res.statusCode = 500;
+          res.end(JSON.stringify({ success: false, error: e?.message || 'Failed to read audit logs' }));
+          return true;
         }
+      } else {
+        res.statusCode = 503;
+        res.end(JSON.stringify({ success: false, error: 'Firestore is not configured; audit logs are unavailable.' }));
+        return true;
       }
       res.statusCode = 200;
       res.end(JSON.stringify({ success: true, logs: auditList }));
@@ -3437,9 +3444,12 @@ Generate a helpful, grounded response.`;
           metadata: payload.metadata || {},
         };
 
-        if (isFirebaseConfigured && db) {
-          await safeSetDoc(doc(db, 'tenants', targetTenant, 'audit_logs', logId), record, { merge: true });
+        if (!isFirebaseConfigured || !db) {
+          res.statusCode = 503;
+          res.end(JSON.stringify({ success: false, error: 'Firestore is not configured; audit event was not saved.' }));
+          return true;
         }
+        await safeSetDoc(doc(db, 'tenants', targetTenant, 'audit_logs', logId), record, { merge: true });
 
         res.statusCode = 200;
         res.end(JSON.stringify({ success: true, log: record }));

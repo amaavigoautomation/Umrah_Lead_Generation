@@ -238,7 +238,6 @@ export const CompanyAssetsPanel: React.FC<CompanyAssetsPanelProps> = ({
       />
 
       {!isDrawerMode && (
-      {/* Header bar & actions */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-4 rounded-xl border border-slate-200">
         <div>
           <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
@@ -273,8 +272,6 @@ export const CompanyAssetsPanel: React.FC<CompanyAssetsPanelProps> = ({
       )}
 
       {!isDrawerMode && (
-      {/* Filter and Search Bar */}
-      {/* Category filter and search */}
       <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between">
         <div className="relative w-full sm:w-56 shrink-0">
           <Filter className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
@@ -421,7 +418,6 @@ export const CompanyAssetsPanel: React.FC<CompanyAssetsPanelProps> = ({
                   {/* Action buttons */}
                   <div className="space-y-2 pt-1">
                     {!isDrawerMode && (
-                    {/* Copy URL button only */}
                     <button
                       onClick={() => handleCopy(fullUrl, asset.id, 'url')}
                       className="w-full flex items-center justify-center gap-1.5 py-1.5 px-2 bg-slate-100 hover:bg-slate-200 text-slate-600 text-[11px] font-medium rounded-lg transition-colors border border-slate-200"
@@ -458,7 +454,6 @@ export const CompanyAssetsPanel: React.FC<CompanyAssetsPanelProps> = ({
                     )}
 
                     {!isDrawerMode && (
-                    {/* Delete button */}
                     <div className="flex justify-end pt-1">
                       <button
                         onClick={() => openDeleteModal(asset)}

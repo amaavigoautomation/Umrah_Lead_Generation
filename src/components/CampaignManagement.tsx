@@ -2669,7 +2669,7 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
 
       {/* Company Assets Sub-Tab */}
       {activeTab === 'ASSETS' && (
-        <div className="flex-1 overflow-y-auto p-6 bg-slate-900/10">
+        <div className="flex-1 overflow-y-auto p-6 bg-slate-50">
           <div className="max-w-6xl mx-auto">
             <CompanyAssetsPanel />
           </div>

@@ -3,6 +3,7 @@ import { waitUntil } from '@vercel/functions';
 import { stripQuotedEmailHistory } from './quotedText.js';
 import { hasFeature } from './entitlements.js';
 import { tenantRepo } from './tenantRepo.js';
+import { writeTenantAuditEvent } from './auditLogger.js';
 import type { TenantContext } from '../types/tenant.js';
 import crypto from 'crypto';
 import { normalizeEmail, type DuplicateInfo } from '../shared/leadDedupe.js';
@@ -2502,6 +2503,15 @@ export async function processNextCampaignSendBatch(
           });
 
       const now = new Date().toISOString();
+      await writeTenantAuditEvent(getCampaignActiveCtx(), {
+        action: !sendResult.success ? 'CAMPAIGN_EMAIL_SEND_FAILED' : sendResult.simulated ? 'CAMPAIGN_EMAIL_SIMULATED' : 'CAMPAIGN_EMAIL_SENT',
+        module: 'CAMPAIGNS',
+        severity: sendResult.success ? 'INFO' : 'WARNING',
+        description: !sendResult.success ? 'Campaign email failed to send.' : sendResult.simulated ? 'Campaign email was simulated and not delivered.' : 'Campaign email was sent to a campaign lead.',
+        target: { type: 'Campaign Lead', id: lead.campaignLeadId, name: campaign.name },
+        actor: { userId: 'system:campaign-worker', name: 'Campaign Dispatch Worker', email: 'campaign-worker@system.local', role: 'SYSTEM' },
+        metadata: { campaignId, campaignRunId: currentRunId, channel: 'EMAIL', simulated: Boolean(sendResult.simulated) },
+      });
 
       if (sendResult.success) {
         const sentMsgId = sendResult.messageId || `<camp-${Date.now()}@umrah360.in>`;

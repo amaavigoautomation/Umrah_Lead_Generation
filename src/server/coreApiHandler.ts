@@ -3398,7 +3398,14 @@ Generate a helpful, grounded response.`;
   // Audit Logs Endpoint
   if (url === '/api/audit-logs') {
     const qp = new URL(rawUrl || '/', 'http://localhost').searchParams;
-    const targetTenant = qp.get('tenantId') || resolvedTenantId || 'umrah360';
+    const requestedTenant = qp.get('tenantId') || '';
+    const targetTenant = isPlatformAdmin ? (requestedTenant || resolvedTenantId) : resolvedTenantId;
+    if (!targetTenant) {
+      res.statusCode = 400;
+      res.setHeader('Content-Type', 'application/json');
+      res.end(JSON.stringify({ success: false, error: 'A workspace context is required to access audit logs.' }));
+      return true;
+    }
 
     if (req.method === 'GET') {
       let auditList: any[] = [];
@@ -3439,7 +3446,7 @@ Generate a helpful, grounded response.`;
           module: payload.module || 'SYSTEM',
           severity: payload.severity || 'INFO',
           description: payload.description || 'System event',
-          actor: payload.actor || { name: 'System', email: 'system@workspace.local', role: 'ADMIN' },
+          actor: { userId: userUid, name: (userEmail || '').split('@')[0] || 'Workspace User', email: userEmail || 'system@workspace.local', role: String(userRole || 'member').toUpperCase() },
           target: payload.target || null,
           metadata: payload.metadata || {},
         };
@@ -3449,7 +3456,7 @@ Generate a helpful, grounded response.`;
           res.end(JSON.stringify({ success: false, error: 'Firestore is not configured; audit event was not saved.' }));
           return true;
         }
-        await safeSetDoc(doc(db, 'tenants', targetTenant, 'audit_logs', logId), record, { merge: true });
+        await safeSetDoc(tenantRepo({ ...activeTenantCtx, tenantId: targetTenant }).auditLogDoc(logId), record, { merge: true });
 
         res.statusCode = 200;
         res.end(JSON.stringify({ success: true, log: record }));

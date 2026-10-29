@@ -1,4 +1,5 @@
 import { tenantRepo } from './tenantRepo.js';
+import { writeTenantAuditEvent } from './auditLogger.js';
 import { isHumanManagedConversationData } from '../shared/humanHandoff.js';
 import { evaluateHumanHandoff, persistHumanHandoff, describeHandoff } from './humanHandoffService.js';
 import { setConversationAiState } from './inboundPipeline.js';
@@ -1099,6 +1100,22 @@ export async function processLiveInboundWhatsApp(
     outboundDispatch = await sendLiveMetaWhatsAppMessage(senderPhone, aiResult.replyText);
     aiReplyMessage.externalMessageId = outboundDispatch.externalMessageId;
     aiReplyMessage.providerUsed = outboundDispatch.providerUsed;
+    await writeTenantAuditEvent(getWACtx(), {
+      action: outboundDispatch.success ? (outboundDispatch.providerUsed === 'INTERNAL_CRM_LOG' ? 'AI_REPLY_LOGGED' : 'AI_REPLY_SENT') : 'AI_REPLY_SEND_FAILED',
+      module: 'AI_ENGINE', severity: outboundDispatch.success ? 'INFO' : 'WARNING',
+      description: !outboundDispatch.success ? 'AI WhatsApp reply failed to send.' : outboundDispatch.providerUsed === 'INTERNAL_CRM_LOG' ? 'AI WhatsApp reply was recorded internally; no external provider delivered it.' : 'AI sent an automated WhatsApp reply.',
+      target: { type: 'Conversation', id: conversationId },
+      actor: { userId: 'system:ai-whatsapp', name: 'AI WhatsApp Assistant', email: 'ai-whatsapp@system.local', role: 'AI_SYSTEM' },
+      metadata: { channel: 'WHATSAPP', provider: outboundDispatch.providerUsed },
+    });
+  } else if (pipelineConfig.mode === 'REVIEW' && !aiResult.handoffTriggered && aiResult.replyText) {
+    await writeTenantAuditEvent(getWACtx(), {
+      action: 'AI_DRAFT_CREATED', module: 'AI_ENGINE', severity: 'INFO',
+      description: 'AI prepared a WhatsApp reply draft for human review.',
+      target: { type: 'Conversation', id: conversationId },
+      actor: { userId: 'system:ai-whatsapp', name: 'AI WhatsApp Assistant', email: 'ai-whatsapp@system.local', role: 'AI_SYSTEM' },
+      metadata: { channel: 'WHATSAPP', mode: 'REVIEW' },
+    });
   }
 
   // =========================================================================

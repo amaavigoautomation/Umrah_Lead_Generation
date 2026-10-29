@@ -184,6 +184,8 @@ export const AuditLogsView: React.FC<AuditLogsViewProps> = ({
   // Filtered Logs Computation
   const filteredLogs = useMemo(() => {
     return logs.filter((log) => {
+      // Module navigation is not an actionable audit event; hide legacy entries from the operator view.
+      if (String(log.action || '').toUpperCase() === 'MODULE_VIEWED') return false;
       // Search Query
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase().trim();

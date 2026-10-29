@@ -365,7 +365,9 @@ export const CompanyAssetsPanel: React.FC<CompanyAssetsPanelProps> = ({
                   <img
                     src={asset.dataUrl || asset.url}
                     alt={asset.name}
-                    className="w-full h-full object-contain p-2 group-hover:scale-105 transition-transform duration-300"
+                    draggable={false}
+                    onDragStart={(event) => event.preventDefault()}
+                    className="w-full h-full object-contain p-2 group-hover:scale-105 transition-transform duration-300 select-none"
                     loading="lazy"
                   />
 
@@ -420,10 +422,9 @@ export const CompanyAssetsPanel: React.FC<CompanyAssetsPanelProps> = ({
 
                   {/* Action buttons */}
                   <div className="space-y-2 pt-1">
-                    {!isDrawerMode && (
                     <button
                       onClick={() => handleCopy(fullUrl, asset.id, 'url')}
-                      className="w-full flex items-center justify-center gap-1.5 py-1.5 px-2 bg-slate-100 hover:bg-slate-200 text-slate-600 text-[11px] font-medium rounded-lg transition-colors border border-slate-200"
+                      className="w-full flex items-center justify-center gap-1.5 py-1.5 px-2 bg-orange-50 hover:bg-orange-100 text-orange-600 text-[11px] font-semibold rounded-lg transition-colors border border-orange-200"
                       title="Copy direct image URL"
                     >
                       {copiedId === asset.id && copiedType === 'url' ? (
@@ -433,28 +434,11 @@ export const CompanyAssetsPanel: React.FC<CompanyAssetsPanelProps> = ({
                         </>
                       ) : (
                         <>
-                          <Copy className="w-3 h-3 text-slate-500" />
+                          <Copy className="w-3 h-3" />
                           <span>Copy URL</span>
                         </>
                       )}
                     </button>
-
-                    )}
-
-
-                    {/* If inside Template Editor, show 1-click Insert button */}
-                    {onInsertIntoTemplate && (
-                      <button
-                        onClick={() => {
-                          const snippet = asset.category === 'VIDEO' ? videoCardSnippet : imageHtmlSnippet;
-                          onInsertIntoTemplate(snippet);
-                        }}
-                        className="w-full flex items-center justify-center gap-1.5 py-1.5 px-2 bg-orange-50 hover:bg-orange-100 text-orange-600 border border-orange-200 text-[11px] font-semibold rounded-lg transition-colors"
-                      >
-                        <Plus className="w-3.5 h-3.5" />
-                        Insert Into Email
-                      </button>
-                    )}
 
                     {!isDrawerMode && (
                     <div className="flex justify-end pt-1">

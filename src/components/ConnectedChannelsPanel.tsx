@@ -152,52 +152,74 @@ export const ConnectedChannelsPanel: React.FC<Props> = ({ tenantId, canEdit }) =
     });
   };
 
-  // ---- WhatsApp (Meta Embedded Signup pop-up) ----
+  // ---- WhatsApp Business App + Cloud API (Coexistence only) ----
   const connectWhatsApp = () =>
     run('whatsapp', async () => {
       const cfg = status.metaClient;
-      if (!cfg?.appId || !cfg.whatsappConfigId) throw new Error('WhatsApp sign-up is not configured on this server.');
+      if (!cfg?.appId || !cfg.whatsappConfigId) {
+        throw new Error('WhatsApp Coexistence is not configured. Ask the platform administrator to set a current Embedded Signup v4 configuration.');
+      }
       const FB = await loadFacebookSdk(cfg.appId, cfg.graphVersion || 'v23.0');
 
-      const session = await new Promise<{ code: string; wabaId: string; phoneNumberId: string }>((resolve, reject) => {
+      const session = await new Promise<{ code: string; wabaId: string; phoneNumberId?: string; event: string }>((resolve, reject) => {
         let code = '';
         let wabaId = '';
         let phoneNumberId = '';
+        let completionEvent = '';
         let settled = false;
-        const finish = () => {
-          if (settled || !code || !wabaId || !phoneNumberId) return;
-          settled = true;
-          cleanup();
-          resolve({ code, wabaId, phoneNumberId });
-        };
-        const onMessage = (event: MessageEvent) => {
-          if (!/facebook\.com$/.test(new URL(event.origin).hostname)) return;
-          try {
-            const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
-            if (data?.type !== 'WA_EMBEDDED_SIGNUP') return;
-            if (data.event === 'FINISH' || data.event === 'FINISH_ONLY_WABA') {
-              wabaId = String(data.data?.waba_id || '');
-              phoneNumberId = String(data.data?.phone_number_id || '');
-              finish();
-            } else if (data.event === 'CANCEL' && !settled) {
-              settled = true;
-              cleanup();
-              reject(new Error('WhatsApp sign-up was cancelled.'));
-            }
-          } catch {
-            // Ignore unrelated messages.
-          }
-        };
-        const timer = window.setTimeout(() => {
-          if (settled) return;
-          settled = true;
-          cleanup();
-          reject(new Error('WhatsApp sign-up timed out. Please try again.'));
-        }, 5 * 60_000);
+
         const cleanup = () => {
           window.removeEventListener('message', onMessage);
           window.clearTimeout(timer);
         };
+        const fail = (error: Error) => {
+          if (settled) return;
+          settled = true;
+          cleanup();
+          reject(error);
+        };
+        const finish = () => {
+          if (settled || !code || !wabaId || completionEvent !== 'FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING') return;
+          settled = true;
+          cleanup();
+          resolve({
+            code,
+            wabaId,
+            event: completionEvent,
+            ...(phoneNumberId ? { phoneNumberId } : {}),
+          });
+        };
+        const onMessage = (event: MessageEvent) => {
+          let host = '';
+          try {
+            host = new URL(event.origin).hostname.toLowerCase();
+          } catch {
+            return;
+          }
+          if (!(host === 'facebook.com' || host.endsWith('.facebook.com'))) return;
+          try {
+            const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+            if (data?.type !== 'WA_EMBEDDED_SIGNUP') return;
+
+            if (data.event === 'FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING') {
+              completionEvent = data.event;
+              wabaId = String(data.data?.waba_id || '');
+              phoneNumberId = String(data.data?.phone_number_id || '');
+              finish();
+            } else if (['FINISH', 'FINISH_ONLY_WABA', 'FINISH_OBO_MIGRATION', 'FINISH_GRANT_ONLY_API_ACCESS'].includes(String(data.event))) {
+              fail(new Error('Meta did not complete WhatsApp Business App Coexistence. To protect the phone app, Amaavigo will not connect this number through API-only setup. Try again with the existing number in WhatsApp Business; if Meta says it is ineligible, cancel the flow.'));
+            } else if (data.event === 'CANCEL' || data.event === 'ERROR') {
+              const details = String(data.data?.error_message || data.data?.error_user_msg || '');
+              fail(new Error(details || 'WhatsApp Coexistence was cancelled or is unavailable for this number. No API-only connection was saved.'));
+            }
+          } catch {
+            // Ignore unrelated postMessage payloads.
+          }
+        };
+        const timer = window.setTimeout(() => {
+          fail(new Error('WhatsApp Coexistence timed out. If Meta did not offer the existing WhatsApp Business App flow, cancel and try again later.'));
+        }, 5 * 60_000);
+
         window.addEventListener('message', onMessage);
         FB.login(
           (response: any) => {
@@ -205,22 +227,27 @@ export const ConnectedChannelsPanel: React.FC<Props> = ({ tenantId, canEdit }) =
               code = String(response.authResponse.code);
               finish();
             } else if (!settled) {
-              settled = true;
-              cleanup();
-              reject(new Error('WhatsApp sign-up was not completed.'));
+              fail(new Error('WhatsApp Coexistence was not completed. No API-only connection was saved.'));
             }
           },
           {
             config_id: cfg.whatsappConfigId,
             response_type: 'code',
             override_default_response_type: true,
-            extras: { setup: {}, featureType: '', sessionInfoVersion: '3' },
+            // Current Embedded Signup v4: request the WhatsApp Business App onboarding path.
+            extras: { setup: {}, featureType: 'whatsapp_business_app_onboarding' },
           }
         );
       });
 
-      await api('/api/whatsapp/connect', 'POST', session);
-      setMessage('WhatsApp number connected.');
+      const result = await api('/api/whatsapp/connect', 'POST', session);
+      const sync = result?.connection?.coexistenceSync;
+      const syncFailed = sync && (sync.contacts?.status !== 'requested' || sync.history?.status !== 'requested');
+      setMessage(
+        syncFailed
+          ? 'WhatsApp Business is connected in Coexistence and the phone app remains active. Meta could not start all contact/history sync tasks; check the Meta webhook configuration.'
+          : 'WhatsApp Business is connected in Coexistence. The phone app remains active; Meta is starting contact/history sync. Messaging charges are billed to the client’s own Meta messaging account.'
+      );
       await refresh();
     });
 
@@ -332,7 +359,7 @@ export const ConnectedChannelsPanel: React.FC<Props> = ({ tenantId, canEdit }) =
           ) : (
             missingNote(wa) || (
               <p className="text-[11px] leading-relaxed text-slate-500">
-                Connect your WhatsApp Business number through Meta&apos;s sign-up pop-up. You can use a new number or one you already have.
+                Connect an existing WhatsApp Business App number. This is Coexistence-only: keep using the phone app while Amaavigo handles API messaging. If Meta asks to move the number to API-only or marks it ineligible, cancel the flow. Meta messaging charges belong to the client’s own Meta billing account.
               </p>
             )
           )}

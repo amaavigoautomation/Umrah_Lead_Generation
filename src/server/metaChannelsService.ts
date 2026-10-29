@@ -27,6 +27,12 @@ type WhatsAppConnection = {
   displayPhoneNumber: string;
   verifiedName: string;
   qualityRating?: string;
+  isOnBusinessApp?: true;
+  platformType?: 'CLOUD_API';
+  coexistenceSync?: {
+    contacts: { status: 'requested' | 'failed'; requestId?: string };
+    history: { status: 'requested' | 'failed'; requestId?: string };
+  };
   status: 'connected' | 'disconnected';
   connectedAt: string;
   updatedAt: string;
@@ -122,17 +128,23 @@ export async function getWhatsAppStatus(ctx: TenantContext) {
 
 export async function connectWhatsApp(
   ctx: TenantContext,
-  input: { code?: string; wabaId?: string; phoneNumberId?: string }
+  input: { code?: string; wabaId?: string; phoneNumberId?: string; event?: string }
 ): Promise<WhatsAppConnection> {
   requireConfigured('whatsapp');
   const code = String(input.code || '').trim();
   const wabaId = String(input.wabaId || '').trim();
-  const phoneNumberId = String(input.phoneNumberId || '').trim();
-  if (!code || !wabaId || !phoneNumberId) {
-    throw new MetaChannelError(400, 'WhatsApp sign-up did not return a business account and phone number. Please try again.');
+  const requestedPhoneNumberId = String(input.phoneNumberId || '').trim();
+  const completionEvent = String(input.event || '').trim();
+
+  // Fail closed: only the specific WhatsApp Business App onboarding event may connect a number.
+  if (!code || !wabaId || completionEvent !== 'FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING') {
+    throw new MetaChannelError(
+      400,
+      'WhatsApp Coexistence was not completed. Amaavigo only connects existing WhatsApp Business App numbers; API-only onboarding is disabled.'
+    );
   }
 
-  // 1. Exchange the Embedded Signup code for a business token (no redirect_uri for JS SDK codes).
+  // Exchange the Embedded Signup code server-side. Never expose the Meta token to the browser.
   const tokenUrl = new URL(`${GRAPH}/oauth/access_token`);
   tokenUrl.searchParams.set('client_id', env('META_APP_ID'));
   tokenUrl.searchParams.set('client_secret', env('META_APP_SECRET'));
@@ -141,37 +153,70 @@ export async function connectWhatsApp(
   const accessToken = String(tokenBody.access_token || '');
   if (!accessToken) throw new MetaChannelError(400, 'Meta did not return an access token for this WhatsApp account.');
 
-  // 2. Verify the number belongs to that token and read its display details.
-  const infoUrl = new URL(`${GRAPH}/${encodeURIComponent(phoneNumberId)}`);
-  infoUrl.searchParams.set('fields', 'display_phone_number,verified_name,quality_rating');
-  infoUrl.searchParams.set('access_token', accessToken);
-  const info = await graphJson(infoUrl.toString());
+  // Coexistence session info can contain only the WABA ID. Discover number IDs from that WABA.
+  let phoneNumbers: any[] = [];
+  try {
+    const phoneNumbersUrl = new URL(`${GRAPH}/${encodeURIComponent(wabaId)}/phone_numbers`);
+    phoneNumbersUrl.searchParams.set('fields', 'id,display_phone_number,verified_name,quality_rating');
+    phoneNumbersUrl.searchParams.set('access_token', accessToken);
+    const list = await graphJson(phoneNumbersUrl.toString());
+    phoneNumbers = Array.isArray(list?.data) ? list.data : [];
+  } catch {
+    throw new MetaChannelError(
+      422,
+      'Meta could not confirm this number for WhatsApp Coexistence. Check that the current Embedded Signup v4 configuration has the required WhatsApp permissions, then retry. API-only setup is disabled.'
+    );
+  }
 
-  // 3. One number can belong to one workspace only.
+  if (requestedPhoneNumberId) {
+    phoneNumbers = phoneNumbers.filter((item) => String(item?.id || '') === requestedPhoneNumberId);
+  }
+  if (!phoneNumbers.length) {
+    throw new MetaChannelError(422, 'Meta did not return a phone number for this Coexistence session. No connection was saved; please try again.');
+  }
+
+  // Do not call /register. A true Coexistence number must be active on both the Business App and Cloud API.
+  const checkedNumbers = await Promise.all(phoneNumbers.slice(0, 50).map(async (item) => {
+    const id = String(item?.id || '').trim();
+    if (!id) return null;
+    try {
+      const infoUrl = new URL(`${GRAPH}/${encodeURIComponent(id)}`);
+      infoUrl.searchParams.set('fields', 'display_phone_number,verified_name,quality_rating,is_on_biz_app,platform_type');
+      infoUrl.searchParams.set('access_token', accessToken);
+      const info = await graphJson(infoUrl.toString());
+      if (info?.is_on_biz_app !== true || String(info?.platform_type || '').toUpperCase() !== 'CLOUD_API') return null;
+      return { ...item, ...info, id };
+    } catch {
+      return null;
+    }
+  }));
+  const eligibleNumbers = checkedNumbers.filter((item): item is NonNullable<typeof item> => Boolean(item));
+  if (eligibleNumbers.length === 0) {
+    throw new MetaChannelError(
+      422,
+      'This number is not confirmed as eligible for WhatsApp Business App Coexistence. Amaavigo has not connected it or registered it for API-only use. Make sure the client enters the existing WhatsApp Business App number and cancels if Meta requests migration or marks it ineligible.'
+    );
+  }
+  if (!requestedPhoneNumberId && eligibleNumbers.length > 1) {
+    throw new MetaChannelError(
+      422,
+      'Meta returned multiple eligible WhatsApp Business App numbers for this business account, so Amaavigo stopped to avoid connecting the wrong number. Ask the platform administrator to resolve the account setup before retrying.'
+    );
+  }
+
+  const selected = eligibleNumbers[0];
+  const phoneNumberId = String(selected.id);
   const routeRef = doc(db, 'channel_routes', phoneNumberId);
   const routeSnap = await getDoc(routeRef);
   if (routeSnap.exists() && (routeSnap.data() as any).tenantId !== ctx.tenantId) {
     throw new MetaChannelError(409, 'This WhatsApp number is already connected to another workspace.');
   }
 
-  // 4. Deliver this number's webhooks to our app.
+  // Subscribe the Meta app to the client's WABA events. Meta dashboard webhook fields must also be enabled.
   await graphJson(`${GRAPH}/${encodeURIComponent(wabaId)}/subscribed_apps`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${accessToken}` },
   });
-
-  // 5. Register the number for Cloud API use (harmless if it already is).
-  try {
-    const pin = String(crypto.randomInt(100000, 999999));
-    await graphJson(`${GRAPH}/${encodeURIComponent(phoneNumberId)}/register`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ messaging_product: 'whatsapp', pin }),
-    });
-    await putSecret(ctx, 'whatsapp_pin', pin);
-  } catch {
-    // Already registered, or Meta handled registration during signup.
-  }
 
   const existing = await getWhatsAppConnection(ctx);
   if (existing?.phoneNumberId && existing.phoneNumberId !== phoneNumberId) {
@@ -182,17 +227,46 @@ export async function connectWhatsApp(
   const connection: WhatsAppConnection = {
     phoneNumberId,
     wabaId,
-    displayPhoneNumber: String(info.display_phone_number || ''),
-    verifiedName: String(info.verified_name || ''),
-    qualityRating: info.quality_rating ? String(info.quality_rating) : undefined,
+    displayPhoneNumber: String(selected.display_phone_number || ''),
+    verifiedName: String(selected.verified_name || ''),
+    qualityRating: selected.quality_rating ? String(selected.quality_rating) : undefined,
+    isOnBusinessApp: true,
+    platformType: 'CLOUD_API',
     status: 'connected',
     connectedAt: existing?.connectedAt || now,
     updatedAt: now,
   };
+
   await putSecret(ctx, 'whatsapp_access_token', accessToken);
-  await setDoc(tenantRepo(ctx).integrationDoc('whatsapp'), { channel: 'whatsapp', connection: JSON.parse(JSON.stringify(connection)) }, { merge: true });
-  await setDoc(routeRef, { phoneNumberId, tenantId: ctx.tenantId, businessAccountId: wabaId, channel: 'whatsapp', createdAt: now });
-  return connection;
+  await setDoc(tenantRepo(ctx).integrationDoc('whatsapp'), { channel: 'whatsapp', connection }, { merge: true });
+  await setDoc(routeRef, { phoneNumberId, tenantId: ctx.tenantId, businessAccountId: wabaId, channel: 'whatsapp', coexistence: true, createdAt: now });
+
+  // Request the two one-time Coexistence syncs shortly after connecting, inside Meta's onboarding window.
+  // Sync failures do not roll back the connection (for example, the customer may decline history sharing).
+  const requestSync = async (syncType: 'smb_app_state_sync' | 'history') => {
+    try {
+      const result = await graphJson(`${GRAPH}/${encodeURIComponent(phoneNumberId)}/smb_app_data`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messaging_product: 'whatsapp', sync_type: syncType }),
+      });
+      return { status: 'requested' as const, requestId: String(result?.request_id || result?.data?.request_id || '') || undefined };
+    } catch (error: any) {
+      console.warn(`[WhatsApp Coexistence] ${syncType} sync could not be requested:`, error?.message || 'Meta request failed');
+      return { status: 'failed' as const };
+    }
+  };
+  const [contacts, history] = await Promise.all([
+    requestSync('smb_app_state_sync'),
+    requestSync('history'),
+  ]);
+  const coexistenceSync = { contacts, history };
+  const connected: WhatsAppConnection = { ...connection, coexistenceSync };
+  await setDoc(tenantRepo(ctx).integrationDoc('whatsapp'), {
+    channel: 'whatsapp',
+    connection: JSON.parse(JSON.stringify(connected)),
+  }, { merge: true });
+  return connected;
 }
 
 export async function disconnectWhatsApp(ctx: TenantContext): Promise<void> {
@@ -648,6 +722,178 @@ function waText(message: any): { text: string; hasText: boolean } {
   return { text: `[WhatsApp ${type || 'message'} received]`, hasText: false };
 }
 
+function normalizeWhatsAppNumber(value: unknown): string {
+  return String(value || '').replace(/\D/g, '');
+}
+
+function metaWebhookTimestamp(value: unknown): string {
+  const raw = String(value ?? '').trim();
+  if (!raw) return new Date().toISOString();
+  const numeric = Number(raw);
+  if (Number.isFinite(numeric) && numeric > 0) return new Date(numeric < 1e12 ? numeric * 1000 : numeric).toISOString();
+  const parsed = new Date(raw);
+  return Number.isNaN(parsed.getTime()) ? new Date().toISOString() : parsed.toISOString();
+}
+
+/** Save Business App contacts without deleting CRM records when a phone contact is removed. */
+async function persistCoexistenceContact(tenantId: string, phoneNumberId: string, state: any): Promise<boolean> {
+  const contact = state?.contact || {};
+  const phone = normalizeWhatsAppNumber(contact.phone_number || contact.wa_id);
+  if (!phone) return false;
+
+  const ctx: TenantContext = { tenantId, uid: 'meta-coexistence-webhook', email: '', role: 'admin' };
+  const repo = tenantRepo(ctx);
+  const contactId = `wac_${hash24(phoneNumberId + ':' + phone)}`;
+  const existingSnap = await getDoc(repo.contactDoc(contactId));
+  const existing = existingSnap.exists() ? (existingSnap.data() as any) : {};
+  const displayName = String(contact.full_name || [contact.first_name, contact.last_name].filter(Boolean).join(' ') || '').trim();
+  const [firstName, ...lastParts] = displayName.split(/\s+/);
+  const removed = String(state?.action || '').toLowerCase() === 'remove';
+  const now = new Date().toISOString();
+
+  await setDoc(repo.contactDoc(contactId), {
+    ...existing,
+    contactId,
+    firstName: firstName || existing.firstName || 'WhatsApp contact',
+    lastName: lastParts.join(' ') || existing.lastName || '',
+    phone: `+${phone}`,
+    whatsappId: phone,
+    tags: Array.isArray(existing.tags) ? existing.tags : ['WHATSAPP'],
+    whatsappAppContactStatus: removed ? 'removed_from_phone' : 'active',
+    updatedAt: now,
+    lastActivityAt: now,
+    createdAt: existing.createdAt || now,
+  }, { merge: true });
+  return true;
+}
+
+/**
+ * Persist WhatsApp Business App echoes and historical messages directly. These must never pass
+ * through processInbound because replaying history would send fresh AI replies to old messages.
+ */
+async function persistCoexistenceMessage(
+  tenantId: string,
+  phoneNumberId: string,
+  rawMessage: any,
+  direction: 'INBOUND' | 'OUTBOUND',
+  customerPhone?: string,
+  historical = false
+): Promise<boolean> {
+  const message = rawMessage?.message && typeof rawMessage.message === 'object'
+    ? { ...rawMessage, ...rawMessage.message }
+    : rawMessage;
+  const externalMessageId = String(message?.id || message?.message_id || rawMessage?.id || '').trim();
+  const customer = normalizeWhatsAppNumber(customerPhone || (direction === 'OUTBOUND'
+    ? (message?.to || message?.recipient_id || rawMessage?.to)
+    : (message?.from || message?.sender_id || rawMessage?.from)));
+  if (!externalMessageId || !customer) return false;
+
+  const ctx: TenantContext = { tenantId, uid: 'meta-coexistence-webhook', email: '', role: 'admin' };
+  const repo = tenantRepo(ctx);
+  const contactId = `wac_${hash24(phoneNumberId + ':' + customer)}`;
+  const conversationId = `waconv_${hash24(phoneNumberId + ':' + customer)}`;
+  const messageId = `wamsg_${hash24(phoneNumberId + ':' + externalMessageId)}`;
+  if ((await getDoc(repo.messageDoc(messageId))).exists()) return false;
+
+  const now = new Date().toISOString();
+  const timestamp = metaWebhookTimestamp(message?.timestamp || rawMessage?.timestamp);
+  const contactSnap = await getDoc(repo.contactDoc(contactId));
+  const existingContact = contactSnap.exists() ? (contactSnap.data() as any) : {};
+  const contactName = String(message?.contacts?.[0]?.profile?.name || existingContact.firstName || 'WhatsApp contact').trim();
+  await setDoc(repo.contactDoc(contactId), {
+    ...existingContact,
+    contactId,
+    firstName: existingContact.firstName || contactName,
+    lastName: existingContact.lastName || '',
+    phone: `+${customer}`,
+    whatsappId: customer,
+    tags: Array.isArray(existingContact.tags) ? existingContact.tags : ['WHATSAPP'],
+    createdAt: existingContact.createdAt || now,
+    updatedAt: now,
+    lastActivityAt: timestamp,
+  }, { merge: true });
+
+  const conversationSnap = await getDoc(repo.conversationDoc(conversationId));
+  const previous = conversationSnap.exists() ? (conversationSnap.data() as any) : {};
+  const isNewer = !previous.lastMessageAt || new Date(timestamp).getTime() >= new Date(previous.lastMessageAt).getTime();
+  const currentUnread = Number(previous.unreadCount || 0);
+  const unreadCount = currentUnread + (!historical && direction === 'INBOUND' ? 1 : 0);
+  const { text, hasText } = waText(message);
+  await setDoc(repo.messageDoc(messageId), {
+    messageId,
+    externalMessageId,
+    conversationId,
+    channel: 'WHATSAPP',
+    senderType: direction === 'OUTBOUND' ? 'AGENT' : 'CUSTOMER',
+    senderName: direction === 'OUTBOUND' ? 'WhatsApp Business App' : contactName,
+    text,
+    hasText,
+    direction,
+    timestamp,
+    receivedAt: now,
+    createdAt: timestamp,
+    aiProcessed: true,
+    historical,
+    source: historical ? 'WHATSAPP_BUSINESS_APP_HISTORY' : 'WHATSAPP_BUSINESS_APP_ECHO',
+  });
+  await setDoc(repo.conversationDoc(conversationId), {
+    ...previous,
+    conversationId,
+    contactId,
+    channel: 'WHATSAPP',
+    direction: isNewer ? direction : (previous.direction || direction),
+    externalConversationId: customer,
+    status: previous.status || 'ACTIVE',
+    aiEnabled: previous.aiEnabled !== false,
+    humanHandoff: previous.humanHandoff === true,
+    managementMode: previous.managementMode || 'AI',
+    conversationSummary: previous.conversationSummary || 'WhatsApp conversation',
+    startedAt: !previous.startedAt || new Date(timestamp).getTime() < new Date(previous.startedAt).getTime() ? timestamp : previous.startedAt,
+    lastMessageAt: isNewer ? timestamp : previous.lastMessageAt,
+    lastMessageText: isNewer ? text : previous.lastMessageText,
+    unreadCount,
+    isRead: unreadCount === 0 ? true : false,
+    unread: unreadCount > 0,
+    createdAt: previous.createdAt || now,
+    updatedAt: now,
+  }, { merge: true });
+  return true;
+}
+
+async function persistCoexistenceHistory(
+  tenantId: string,
+  phoneNumberId: string,
+  history: any[],
+  displayPhoneNumber: string
+): Promise<number> {
+  let accepted = 0;
+  const businessDigits = normalizeWhatsAppNumber(displayPhoneNumber);
+  for (const chunk of history) {
+    if (Array.isArray(chunk?.errors) && chunk.errors.length) {
+      console.info('[WhatsApp Coexistence] History sync reported an error/decline from the Business App.');
+    }
+    for (const thread of Array.isArray(chunk?.threads) ? chunk.threads : []) {
+      const customer = normalizeWhatsAppNumber(thread?.id || thread?.wa_id);
+      if (!customer) continue;
+      const messages = Array.isArray(thread?.messages) ? thread.messages : [];
+      for (let i = 0; i < messages.length; i += 20) {
+        const batch = messages.slice(i, i + 20);
+        const results = await Promise.all(batch.map(async (message: any) => {
+          const from = normalizeWhatsAppNumber(message?.from);
+          const to = normalizeWhatsAppNumber(message?.to);
+          const isBusinessSender = (Boolean(businessDigits) && from === businessDigits) ||
+            String(message?.from || '') === phoneNumberId;
+          const isCustomerSender = Boolean(businessDigits) && to === businessDigits;
+          const direction: 'INBOUND' | 'OUTBOUND' = isBusinessSender ? 'OUTBOUND' : isCustomerSender ? 'INBOUND' : 'INBOUND';
+          return persistCoexistenceMessage(tenantId, phoneNumberId, message, direction, customer, true);
+        }));
+        accepted += results.filter(Boolean).length;
+      }
+    }
+  }
+  return accepted;
+}
+
 async function dispatch(tenantId: string, event: InboundEvent, externalKey: string, raw: any) {
   const eventId = crypto.createHash('sha256').update(externalKey).digest('hex');
   const eventRef = doc(db, 'meta_inbound_events', eventId);
@@ -704,13 +950,37 @@ export async function handleMetaWebhook(req: any, res: any): Promise<boolean> {
   if (body.object === 'whatsapp_business_account') {
     for (const entry of Array.isArray(body.entry) ? body.entry : []) {
       for (const change of Array.isArray(entry.changes) ? entry.changes : []) {
-        if (change?.field !== 'messages') continue;
-        const value = change.value || {};
+        const field = String(change?.field || '');
+        const value = change?.value || {};
+        if (!['messages', 'history', 'smb_app_state_sync', 'smb_message_echoes'].includes(field)) continue;
         const phoneNumberId = String(value?.metadata?.phone_number_id || '');
         if (!phoneNumberId) continue;
         const routeSnap = await getDoc(doc(db, 'channel_routes', phoneNumberId));
         const tenantId = routeSnap.exists() ? String((routeSnap.data() as any).tenantId || '') : '';
         if (!tenantId) continue;
+
+        if (field === 'smb_app_state_sync') {
+          for (const state of Array.isArray(value.state_sync) ? value.state_sync : []) {
+            if (await persistCoexistenceContact(tenantId, phoneNumberId, state)) accepted++;
+          }
+          continue;
+        }
+        if (field === 'smb_message_echoes') {
+          const echoes = Array.isArray(value.message_echoes) ? value.message_echoes : Array.isArray(value.messages) ? value.messages : [];
+          for (const echo of echoes) {
+            if (await persistCoexistenceMessage(tenantId, phoneNumberId, echo, 'OUTBOUND')) accepted++;
+          }
+          continue;
+        }
+        if (field === 'history') {
+          accepted += await persistCoexistenceHistory(
+            tenantId,
+            phoneNumberId,
+            Array.isArray(value.history) ? value.history : [],
+            String(value?.metadata?.display_phone_number || '')
+          );
+          continue;
+        }
         const names: Record<string, string> = {};
         for (const c of Array.isArray(value.contacts) ? value.contacts : []) {
           if (c?.wa_id) names[String(c.wa_id)] = String(c?.profile?.name || '');

@@ -110,6 +110,7 @@ export const AuditLogsView: React.FC<AuditLogsViewProps> = ({
   // Live Firestore Listener for Real-time Audit Events
   useEffect(() => {
     let unsub: (() => void) | undefined;
+    let fallbackInterval: ReturnType<typeof setInterval> | undefined;
     if (isFirebaseConfigured && db && tenantId) {
       try {
         const colRef = collection(db, 'tenants', tenantId, 'audit_logs');
@@ -120,18 +121,22 @@ export const AuditLogsView: React.FC<AuditLogsViewProps> = ({
           setLogs(list);
           setLoading(false);
           setRefreshing(false);
-        }, () => {
+        }, (error) => {
+          console.error('[AuditLogs] Real-time listener failed:', error);
           loadAuditLogs();
+          if (!fallbackInterval) fallbackInterval = setInterval(loadAuditLogs, 10000);
         });
       } catch (err) {
         loadAuditLogs();
       }
     } else {
       loadAuditLogs();
+      fallbackInterval = setInterval(loadAuditLogs, 10000);
     }
 
     return () => {
       if (unsub) unsub();
+      if (fallbackInterval) clearInterval(fallbackInterval);
     };
   }, [tenantId]);
 

@@ -237,6 +237,7 @@ export const CompanyAssetsPanel: React.FC<CompanyAssetsPanelProps> = ({
         onChange={handleFileSelect}
       />
 
+      {!isDrawerMode && (
       {/* Header bar & actions */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-4 rounded-xl border border-slate-200">
         <div>
@@ -269,6 +270,9 @@ export const CompanyAssetsPanel: React.FC<CompanyAssetsPanelProps> = ({
         </div>
       </div>
 
+      )}
+
+      {!isDrawerMode && (
       {/* Filter and Search Bar */}
       {/* Category filter and search */}
       <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between">
@@ -305,6 +309,8 @@ export const CompanyAssetsPanel: React.FC<CompanyAssetsPanelProps> = ({
         </div>
       </div>
 
+      )}
+
       {/* Asset Grid */}
       {isLoading ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 py-12">
@@ -323,6 +329,7 @@ export const CompanyAssetsPanel: React.FC<CompanyAssetsPanelProps> = ({
               ? `No media items matching "${searchQuery}". Try a different keyword or category.`
               : 'Upload your company logo, package banners, and video cards to reuse seamlessly in email templates.'}
           </p>
+          {!isDrawerMode && (
           <button
             onClick={() => fileInputRef.current?.click()}
             className="inline-flex items-center gap-2 px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white font-semibold text-xs rounded-lg transition-colors cursor-pointer"
@@ -330,12 +337,13 @@ export const CompanyAssetsPanel: React.FC<CompanyAssetsPanelProps> = ({
             <Upload className="w-4 h-4" />
             Upload First Asset
           </button>
+          )}
         </div>
       ) : (
         <div
           className={`grid gap-4 ${
             isDrawerMode
-              ? 'grid-cols-1'
+              ? 'grid-cols-1 sm:grid-cols-2'
               : 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4'
           }`}
         >
@@ -412,6 +420,7 @@ export const CompanyAssetsPanel: React.FC<CompanyAssetsPanelProps> = ({
 
                   {/* Action buttons */}
                   <div className="space-y-2 pt-1">
+                    {!isDrawerMode && (
                     {/* Copy URL button only */}
                     <button
                       onClick={() => handleCopy(fullUrl, asset.id, 'url')}
@@ -431,6 +440,9 @@ export const CompanyAssetsPanel: React.FC<CompanyAssetsPanelProps> = ({
                       )}
                     </button>
 
+                    )}
+
+
                     {/* If inside Template Editor, show 1-click Insert button */}
                     {onInsertIntoTemplate && (
                       <button
@@ -445,6 +457,7 @@ export const CompanyAssetsPanel: React.FC<CompanyAssetsPanelProps> = ({
                       </button>
                     )}
 
+                    {!isDrawerMode && (
                     {/* Delete button */}
                     <div className="flex justify-end pt-1">
                       <button
@@ -456,6 +469,8 @@ export const CompanyAssetsPanel: React.FC<CompanyAssetsPanelProps> = ({
                         <span>Delete</span>
                       </button>
                     </div>
+                    )}
+
                   </div>
                 </div>
               </div>

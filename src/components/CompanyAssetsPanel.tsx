@@ -272,24 +272,8 @@ export const CompanyAssetsPanel: React.FC<CompanyAssetsPanelProps> = ({
       )}
 
       {!isDrawerMode && (
-      <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between">
-        <div className="relative w-full sm:w-56 shrink-0">
-          <Filter className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
-          <select
-            aria-label="Filter assets by category"
-            value={selectedCategory}
-            onChange={(e) => setSelectedCategory(e.target.value as AssetCategory | 'ALL')}
-            className="w-full appearance-none pl-9 pr-3 py-2 bg-white border border-slate-200 focus:border-orange-500 rounded-lg text-xs text-slate-800 outline-none transition-colors cursor-pointer"
-          >
-            {CATEGORIES.map((cat) => (
-              <option key={cat.value} value={cat.value}>
-                {cat.label}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div className="relative w-full sm:max-w-sm sm:flex-1">
+      <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
+        <div className="relative w-full sm:flex-1 sm:min-w-0">
           <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
           <input
             type="text"
@@ -303,6 +287,22 @@ export const CompanyAssetsPanel: React.FC<CompanyAssetsPanelProps> = ({
               <X className="w-3.5 h-3.5" />
             </button>
           )}
+        </div>
+
+        <div className="relative w-full sm:w-56 sm:shrink-0 sm:ml-auto">
+          <Filter className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
+          <select
+            aria-label="Filter assets by category"
+            value={selectedCategory}
+            onChange={(e) => setSelectedCategory(e.target.value as AssetCategory | 'ALL')}
+            className="w-full appearance-none pl-9 pr-3 py-2 bg-white border border-slate-200 focus:border-orange-500 rounded-lg text-xs text-slate-800 outline-none transition-colors cursor-pointer"
+          >
+            {CATEGORIES.map((cat) => (
+              <option key={cat.value} value={cat.value}>
+                {cat.label}
+              </option>
+            ))}
+          </select>
         </div>
       </div>
 

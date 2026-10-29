@@ -322,9 +322,11 @@ export const CompanyAssetsPanel: React.FC<CompanyAssetsPanelProps> = ({
           </div>
           <h3 className="text-base font-semibold text-slate-900">No assets found</h3>
           <p className="text-xs text-slate-500 max-w-md mx-auto mt-1 mb-6">
-            {searchQuery
-              ? `No media items matching "${searchQuery}". Try a different keyword or category.`
-              : 'Upload your company logo, package banners, and video cards to reuse seamlessly in email templates.'}
+            {isDrawerMode
+              ? 'Upload images and video cards in Company Assets to make them available here.'
+              : searchQuery
+                ? `No media items matching "${searchQuery}". Try a different keyword or category.`
+                : 'Upload your company logo, package banners, and video cards to reuse seamlessly in email templates.'}
           </p>
           {!isDrawerMode && (
           <button
@@ -381,6 +383,7 @@ export const CompanyAssetsPanel: React.FC<CompanyAssetsPanelProps> = ({
                     </div>
                   )}
 
+                  {!isDrawerMode && (
                   {/* Category Pill */}
                   <span className="absolute top-2 left-2 bg-white/95 backdrop-blur-xs text-orange-600 border border-slate-200 text-[10px] font-semibold px-2 py-0.5 rounded-full">
                     {asset.category}
@@ -390,6 +393,7 @@ export const CompanyAssetsPanel: React.FC<CompanyAssetsPanelProps> = ({
                   <span className="absolute bottom-2 left-2 bg-white/95 text-slate-500 text-[10px] px-1.5 py-0.5 rounded">
                     {asset.sizeFormatted}
                   </span>
+                  )}
 
                   {/* Hover Quick View Button */}
                   <button

@@ -384,12 +384,14 @@ export const CompanyAssetsPanel: React.FC<CompanyAssetsPanelProps> = ({
                   )}
 
                   {!isDrawerMode && (
-                  <span className="absolute top-2 left-2 bg-white/95 backdrop-blur-xs text-orange-600 border border-slate-200 text-[10px] font-semibold px-2 py-0.5 rounded-full">
-                    {asset.category}
-                  </span>
-                  <span className="absolute bottom-2 left-2 bg-white/95 text-slate-500 text-[10px] px-1.5 py-0.5 rounded">
-                    {asset.sizeFormatted}
-                  </span>
+                    <>
+                      <span className="absolute top-2 left-2 bg-white/95 backdrop-blur-xs text-orange-600 border border-slate-200 text-[10px] font-semibold px-2 py-0.5 rounded-full">
+                        {asset.category}
+                      </span>
+                      <span className="absolute bottom-2 left-2 bg-white/95 text-slate-500 text-[10px] px-1.5 py-0.5 rounded">
+                        {asset.sizeFormatted}
+                      </span>
+                    </>
                   )}
 
                   {/* Hover Quick View Button */}

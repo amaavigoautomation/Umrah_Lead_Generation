@@ -350,7 +350,7 @@ export const CompanyAssetsPanel: React.FC<CompanyAssetsPanelProps> = ({
             return (
               <div
                 key={asset.id}
-                className="group bg-white border border-slate-200 hover:border-orange-300 rounded-xl overflow-hidden flex flex-col transition-all hover:shadow-lg hover:shadow-amber-500/5"
+                className="group bg-white border border-slate-200 hover:border-orange-300 rounded-xl overflow-hidden flex flex-col transition-all hover:shadow-lg hover:shadow-orange-600/5"
               >
                 {/* Thumbnail Preview Area */}
                 <div
@@ -513,7 +513,7 @@ export const CompanyAssetsPanel: React.FC<CompanyAssetsPanelProps> = ({
                   value={uploadName}
                   onChange={(e) => setUploadName(e.target.value)}
                   placeholder="e.g. Umrah360 Header Banner"
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-900 placeholder-slate-500 focus:border-amber-500 outline-none"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-900 placeholder-slate-500 focus:border-orange-500 outline-none"
                 />
               </div>
 
@@ -525,7 +525,7 @@ export const CompanyAssetsPanel: React.FC<CompanyAssetsPanelProps> = ({
                 <select
                   value={uploadCategory}
                   onChange={(e) => setUploadCategory(e.target.value as AssetCategory)}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-900 focus:border-amber-500 outline-none"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-900 focus:border-orange-500 outline-none"
                 >
                   <option value="BANNER">Banner & Header</option>
                   <option value="LOGO">Brand Logo</option>
@@ -537,7 +537,7 @@ export const CompanyAssetsPanel: React.FC<CompanyAssetsPanelProps> = ({
 
               {/* Conditional Video fields */}
               {uploadCategory === 'VIDEO' && (
-                <div className="p-3.5 bg-orange-600/5 border border-amber-500/20 rounded-xl space-y-3">
+                <div className="p-3.5 bg-orange-600/5 border border-orange-200 rounded-xl space-y-3">
                   <div className="flex items-center gap-1.5 text-xs font-semibold text-orange-600">
                     <Film className="w-3.5 h-3.5" />
                     Video Destination Link (Email-Safe Video Card)
@@ -554,7 +554,7 @@ export const CompanyAssetsPanel: React.FC<CompanyAssetsPanelProps> = ({
                       value={uploadVideoUrl}
                       onChange={(e) => setUploadVideoUrl(e.target.value)}
                       placeholder="https://www.youtube.com/watch?v=..."
-                      className="w-full px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-900 placeholder-slate-500 focus:border-amber-500 outline-none"
+                      className="w-full px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-900 placeholder-slate-500 focus:border-orange-500 outline-none"
                     />
                   </div>
                   <div>
@@ -566,7 +566,7 @@ export const CompanyAssetsPanel: React.FC<CompanyAssetsPanelProps> = ({
                       value={uploadVideoDuration}
                       onChange={(e) => setUploadVideoDuration(e.target.value)}
                       placeholder="e.g. 02:45"
-                      className="w-full px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-900 placeholder-slate-500 focus:border-amber-500 outline-none"
+                      className="w-full px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-900 placeholder-slate-500 focus:border-orange-500 outline-none"
                     />
                   </div>
                 </div>
@@ -582,7 +582,7 @@ export const CompanyAssetsPanel: React.FC<CompanyAssetsPanelProps> = ({
                   value={uploadAltText}
                   onChange={(e) => setUploadAltText(e.target.value)}
                   placeholder="Description of the image content"
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-900 placeholder-slate-500 focus:border-amber-500 outline-none"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-900 placeholder-slate-500 focus:border-orange-500 outline-none"
                 />
               </div>
             </div>
@@ -675,7 +675,7 @@ export const CompanyAssetsPanel: React.FC<CompanyAssetsPanelProps> = ({
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-md flex flex-col overflow-hidden shadow-2xl text-slate-900">
             <div className="p-6 space-y-4">
-              <div className="w-10 h-10 rounded-xl bg-rose-50 border border-rose-500/20 flex items-center justify-center text-rose-500">
+              <div className="w-10 h-10 rounded-xl bg-rose-50 border border-rose-200 flex items-center justify-center text-rose-600">
                 <Trash2 className="w-5 h-5" />
               </div>
               <div>

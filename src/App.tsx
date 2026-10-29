@@ -274,6 +274,13 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
   const [knowledgeDocs, setKnowledgeDocs] = useState<KnowledgeDocument[]>(() => isFirebaseConfigured ? [] : INITIAL_KNOWLEDGE_DOCUMENTS);
   const [settings, setSettings] = useState<SystemSettings>(DEFAULT_SETTINGS);
   const [selectedLeadIdForCrm, setSelectedLeadIdForCrm] = useState<string | null>(null);
+
+  // A CRM drawer opened from Unified Inbox is a one-time navigation request; never restore it after leaving CRM.
+  useEffect(() => {
+    if (activeTab !== 'crm' && selectedLeadIdForCrm !== null) {
+      setSelectedLeadIdForCrm(null);
+    }
+  }, [activeTab, selectedLeadIdForCrm]);
   const [isFirebaseActive, setIsFirebaseActive] = useState<boolean>(isFirebaseConfigured);
 
   // Multi-Tenant Context & Workspace State

@@ -104,6 +104,7 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
   activities,
   onOpenConversation,
   selectedLeadId: initialSelectedLeadId,
+  onDismissSelectedLead,
   onUpdateLeadStatus,
   onUpdateLead,
   onAddLead,
@@ -146,6 +147,11 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
 
   // Selected lead for 360° Drawer
   const [activeDrawerLeadId, setActiveDrawerLeadId] = useState<string | null>(initialSelectedLeadId || null);
+
+  // Keep externally requested drawer selection synchronized, including explicit dismissal.
+  useEffect(() => {
+    setActiveDrawerLeadId(initialSelectedLeadId || null);
+  }, [initialSelectedLeadId]);
 
   // Modals
   const [isAddLeadModalOpen, setIsAddLeadModalOpen] = useState(false);

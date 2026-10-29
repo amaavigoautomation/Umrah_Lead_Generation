@@ -9,6 +9,7 @@ import { LoginView } from './components/LoginView';
 import { LegalPage, legalSlugFromPath } from './components/LegalPage';
 import { LandingPage } from './components/LandingPage';
 import { onSession, signOutUser, installAuthFetch, type SessionInfo } from './services/authService';
+import { logAuditEvent } from './services/auditService';
 import { LockedModuleView } from './components/LockedModuleView';
 import { UpgradeRequiredView } from './components/UpgradeRequiredView';
 import { FEATURES, FEATURE_BY_TAB } from './shared/features';
@@ -325,6 +326,23 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
     });
   }, []);
 
+  // Record module navigation so real user activity appears in the audit trail.
+  useEffect(() => {
+    if (!currentUser || !currentTenantId || !activeTab) return;
+    void logAuditEvent(currentTenantId, {
+      action: 'MODULE_VIEWED',
+      module: 'SYSTEM' as any,
+      severity: 'INFO',
+      description: 'Opened the ' + String(activeTab) + ' module.',
+      actor: {
+        userId: currentUser.userId,
+        name: currentUser.name || currentUser.email,
+        email: currentUser.email,
+        role: currentUser.role,
+      },
+      metadata: { activeTab },
+    }).catch((error) => console.error('[AuditLogs] Failed to record module navigation:', error));
+  }, [activeTab, currentUser?.userId, currentTenantId]);
   // Load tenant info for the signed-in user's workspace (platform admins list all)
   useEffect(() => {
     if (!session) return;

@@ -270,37 +270,35 @@ export const CompanyAssetsPanel: React.FC<CompanyAssetsPanelProps> = ({
       </div>
 
       {/* Filter and Search Bar */}
-      <div className="flex flex-col md:flex-row gap-3 items-stretch md:items-center justify-between">
-        <div className="flex items-center gap-2 overflow-x-auto pb-1 max-w-full">
-          {CATEGORIES.map((cat) => (
-            <button
-              key={cat.value}
-              onClick={() => setSelectedCategory(cat.value)}
-              className={`px-3 py-1.5 text-xs font-medium rounded-lg whitespace-nowrap transition-colors border ${
-                selectedCategory === cat.value
-                  ? 'bg-orange-50 text-orange-600 border-orange-200 shadow-xs'
-                  : 'bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-100 hover:text-slate-700'
-              }`}
-            >
-              {cat.label}
-            </button>
-          ))}
+      {/* Category filter and search */}
+      <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between">
+        <div className="relative w-full sm:w-56 shrink-0">
+          <Filter className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
+          <select
+            aria-label="Filter assets by category"
+            value={selectedCategory}
+            onChange={(e) => setSelectedCategory(e.target.value as AssetCategory | 'ALL')}
+            className="w-full appearance-none pl-9 pr-3 py-2 bg-white border border-slate-200 focus:border-orange-500 rounded-lg text-xs text-slate-800 outline-none transition-colors cursor-pointer"
+          >
+            {CATEGORIES.map((cat) => (
+              <option key={cat.value} value={cat.value}>
+                {cat.label}
+              </option>
+            ))}
+          </select>
         </div>
 
-        <div className="relative min-w-[240px]">
+        <div className="relative w-full sm:max-w-sm sm:flex-1">
           <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
           <input
             type="text"
             placeholder="Search assets by name or tag..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-9 pr-3 py-1.5 bg-white border border-slate-200 focus:border-orange-500 rounded-lg text-xs text-slate-900 placeholder-slate-500 outline-none transition-colors"
+            className="w-full pl-9 pr-3 py-2 bg-white border border-slate-200 focus:border-orange-500 rounded-lg text-xs text-slate-900 placeholder-slate-500 outline-none transition-colors"
           />
           {searchQuery && (
-            <button
-              onClick={() => setSearchQuery('')}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-900"
-            >
+            <button onClick={() => setSearchQuery('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-900" aria-label="Clear search">
               <X className="w-3.5 h-3.5" />
             </button>
           )}

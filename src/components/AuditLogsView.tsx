@@ -102,11 +102,6 @@ export const AuditLogsView: React.FC<AuditLogsViewProps> = ({
       } catch (e) {}
     }
 
-    // Fallback to rich sample audit logs if database is clean
-    if (loaded.length === 0) {
-      loaded = generateSampleAuditLogs(tenantId);
-    }
-
     setLogs(loaded);
     setLoading(false);
     setRefreshing(false);
@@ -120,14 +115,11 @@ export const AuditLogsView: React.FC<AuditLogsViewProps> = ({
         const colRef = collection(db, 'tenants', tenantId, 'audit_logs');
         const q = query(colRef, orderBy('timestamp', 'desc'), limit(200));
         unsub = onSnapshot(q, (snap) => {
-          if (!snap.empty) {
-            const list: AuditLog[] = [];
-            snap.forEach((d) => list.push(d.data() as AuditLog));
-            setLogs(list);
-            setLoading(false);
-          } else {
-            loadAuditLogs();
-          }
+          const list: AuditLog[] = [];
+          snap.forEach((d) => list.push(d.data() as AuditLog));
+          setLogs(list);
+          setLoading(false);
+          setRefreshing(false);
         }, () => {
           loadAuditLogs();
         });

@@ -167,7 +167,7 @@ export const WhatsAppTemplatesPanel: React.FC<Props> = ({ canEdit = false }) => 
 
   const approvedCount = templates.filter((template) => String(template.status || '').toUpperCase() === 'APPROVED').length;
   const pendingCount = templates.filter((template) => ['PENDING', 'PENDING_REVIEW', 'IN_APPEAL'].includes(String(template.status || '').toUpperCase())).length;
-  const rejectedCount = templates.filter((template) => ['REJECTED', 'PAUSED', 'DISABLED'].includes(String(template.status || '').toUpperCase())).length;
+  const rejectedCount = templates.filter((template) => ['REJECTED', 'PAUSED', 'DISABLED', 'PENDING_DELETION', 'LIMIT_EXCEEDED'].includes(String(template.status || '').toUpperCase())).length;
 
   return (
     <div className="space-y-5">
@@ -213,6 +213,8 @@ export const WhatsAppTemplatesPanel: React.FC<Props> = ({ canEdit = false }) => 
           <option value="PAUSED">Paused</option>
           <option value="DISABLED">Disabled</option>
           <option value="IN_APPEAL">In appeal</option>
+          <option value="ARCHIVED">Archived</option>
+          <option value="PENDING_DELETION">Pending deletion</option>
         </select>
       </div>
 

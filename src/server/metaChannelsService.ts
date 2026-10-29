@@ -387,7 +387,7 @@ export async function createWhatsAppTemplate(
   const body = String(input?.body || '').trim();
   const footer = String(input?.footer || '').trim();
 
-  if (!/^[a-z0-9_]{1,512}$/.test(name)) {
+  if (!/^[a-z][a-z0-9_]{0,511}$/.test(name)) {
     throw new MetaChannelError(400, 'Template name must use lowercase letters, numbers, and underscores only.');
   }
   if (!/^[a-z]{2}(?:_[A-Z]{2})?$/.test(language)) {

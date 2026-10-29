@@ -2315,6 +2315,7 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
                 }}
                 tenantId={currentTenantId}
                 timezone={currentTenant?.timezone || 'Asia/Kolkata'}
+                canManageWhatsAppTemplates={Boolean(currentUser && (currentUser.role === 'ADMIN' || currentUser.accessLevel === 'ALL'))}
               />
             )}
 

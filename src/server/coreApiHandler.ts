@@ -1518,6 +1518,39 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
     return true;
   }
 
+  // Workspace WhatsApp templates. Meta is the source of truth for current approval status.
+  if (url === '/api/whatsapp/templates/manage' && (req.method === 'GET' || req.method === 'POST')) {
+    if (activeTenantCtx.role === 'member') {
+      res.statusCode = 403;
+      res.end(JSON.stringify({ error: 'Only workspace admins can manage WhatsApp templates.' }));
+      return true;
+    }
+    try {
+      const meta = await import('./metaChannelsService.js');
+      if (req.method === 'GET') {
+        const templates = await meta.listWhatsAppTemplatesForManagement(activeTenantCtx);
+        res.statusCode = 200;
+        res.end(JSON.stringify({ success: true, templates, syncedAt: new Date().toISOString() }));
+      } else {
+        const template = await meta.createWhatsAppTemplate(activeTenantCtx, {
+          name: String(body?.name || ''),
+          language: String(body?.language || ''),
+          category: String(body?.category || ''),
+          header: String(body?.header || ''),
+          body: String(body?.body || ''),
+          footer: String(body?.footer || ''),
+          samples: Array.isArray(body?.samples) ? body.samples.map((sample: unknown) => String(sample)) : [],
+        });
+        res.statusCode = 201;
+        res.end(JSON.stringify({ success: true, template, message: 'Template submitted to Meta for review. It cannot be used for sending until Meta approves it.' }));
+      }
+    } catch (err: any) {
+      res.statusCode = err?.status || 500;
+      res.end(JSON.stringify({ error: err?.message || 'WhatsApp template request failed.' }));
+    }
+    return true;
+  }
+
   if (url === '/api/whatsapp/templates' && req.method === 'GET') {
     try {
       const meta = await import('./metaChannelsService.js');

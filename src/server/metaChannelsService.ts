@@ -291,35 +291,168 @@ export async function disconnectWhatsApp(ctx: TenantContext): Promise<void> {
 }
 
 export type WhatsAppTemplate = {
+  id?: string;
   name: string;
   language: string;
   category?: string;
+  status?: string;
   body: string;
+  header?: string;
+  footer?: string;
+  rejectionReason?: string;
+  qualityScore?: string;
+  components?: any[];
   paramCount: number;
 };
 
-export async function listWhatsAppTemplates(ctx: TenantContext): Promise<WhatsAppTemplate[]> {
+function mapMetaWhatsAppTemplate(template: any): WhatsAppTemplate {
+  const components = Array.isArray(template?.components) ? template.components : [];
+  const bodyComponent = components.find((component: any) => String(component?.type || '').toUpperCase() === 'BODY');
+  const headerComponent = components.find((component: any) => String(component?.type || '').toUpperCase() === 'HEADER');
+  const footerComponent = components.find((component: any) => String(component?.type || '').toUpperCase() === 'FOOTER');
+  const bodyText = String(bodyComponent?.text || '');
+  const params = bodyText.match(/\{\{\d+\}\}/g) || [];
+  return {
+    id: template?.id ? String(template.id) : undefined,
+    name: String(template?.name || ''),
+    language: String(template?.language || ''),
+    category: template?.category ? String(template.category) : undefined,
+    status: String(template?.status || 'UNKNOWN').toUpperCase(),
+    body: bodyText,
+    header: String(headerComponent?.text || ''),
+    footer: String(footerComponent?.text || ''),
+    rejectionReason: String(template?.rejected_reason || template?.reason || ''),
+    qualityScore: template?.quality_score?.score ? String(template.quality_score.score) : undefined,
+    components,
+    paramCount: new Set(params).size,
+  };
+}
+
+/** Fetch every template and its current Meta status. Meta remains the source of truth for approval. */
+export async function listWhatsAppTemplatesForManagement(ctx: TenantContext): Promise<WhatsAppTemplate[]> {
   const connection = await getWhatsAppConnection(ctx);
   if (!connection || connection.status !== 'connected') throw new MetaChannelError(409, 'WhatsApp is not connected.');
   const token = await getSecret(ctx, 'whatsapp_access_token');
-  const url = new URL(`${GRAPH}/${encodeURIComponent(connection.wabaId)}/message_templates`);
-  url.searchParams.set('fields', 'name,language,status,category,components');
-  url.searchParams.set('limit', '100');
-  const body = await graphJson(url.toString(), { headers: { Authorization: `Bearer ${token}` } });
-  return (Array.isArray(body.data) ? body.data : [])
-    .filter((t: any) => t.status === 'APPROVED')
-    .map((t: any) => {
-      const bodyComp = (t.components || []).find((c: any) => c.type === 'BODY');
-      const text = String(bodyComp?.text || '');
-      const params = text.match(/\{\{\d+\}\}/g) || [];
-      return {
-        name: String(t.name),
-        language: String(t.language),
-        category: t.category ? String(t.category) : undefined,
-        body: text,
-        paramCount: new Set(params).size,
-      };
-    });
+  const firstUrl = new URL(`${GRAPH}/${encodeURIComponent(connection.wabaId)}/message_templates`);
+  firstUrl.searchParams.set('fields', 'id,name,language,status,category,components,quality_score,parameter_format');
+  firstUrl.searchParams.set('limit', '100');
+
+  const all: any[] = [];
+  let pageUrl: string | null = firstUrl.toString();
+  let pageCount = 0;
+  while (pageUrl && pageCount < 20) {
+    const response = await graphJson(pageUrl, { headers: { Authorization: `Bearer ${token}` } });
+    if (Array.isArray(response?.data)) all.push(...response.data);
+    const next = String(response?.paging?.next || '');
+    if (!next) break;
+    const parsedNext = new URL(next);
+    if (parsedNext.hostname !== 'graph.facebook.com' || parsedNext.protocol !== 'https:') {
+      throw new MetaChannelError(502, 'Meta returned an unexpected template pagination URL.');
+    }
+    pageUrl = parsedNext.toString();
+    pageCount++;
+  }
+  return all.map(mapMetaWhatsAppTemplate).sort((a, b) => {
+    const aStatus = String(a.status || '');
+    const bStatus = String(b.status || '');
+    if (aStatus !== bStatus) return aStatus.localeCompare(bStatus);
+    return a.name.localeCompare(b.name);
+  });
+}
+
+/** Existing template picker only receives templates Meta currently marks APPROVED. */
+export async function listWhatsAppTemplates(ctx: TenantContext): Promise<WhatsAppTemplate[]> {
+  return (await listWhatsAppTemplatesForManagement(ctx)).filter((template) => template.status === 'APPROVED');
+}
+
+/** Submit a new text-based WhatsApp template to Meta for review. Approval is asynchronous and not assumed. */
+export async function createWhatsAppTemplate(
+  ctx: TenantContext,
+  input: {
+    name?: string;
+    language?: string;
+    category?: string;
+    header?: string;
+    body?: string;
+    footer?: string;
+    samples?: string[];
+  }
+): Promise<WhatsAppTemplate> {
+  const connection = await getWhatsAppConnection(ctx);
+  if (!connection || connection.status !== 'connected') throw new MetaChannelError(409, 'Connect a WhatsApp Business account before creating templates.');
+  const name = String(input?.name || '').trim();
+  const language = String(input?.language || '').trim();
+  const category = String(input?.category || '').trim().toUpperCase();
+  const header = String(input?.header || '').trim();
+  const body = String(input?.body || '').trim();
+  const footer = String(input?.footer || '').trim();
+
+  if (!/^[a-z0-9_]{1,512}$/.test(name)) {
+    throw new MetaChannelError(400, 'Template name must use lowercase letters, numbers, and underscores only.');
+  }
+  if (!/^[a-z]{2}(?:_[A-Z]{2})?$/.test(language)) {
+    throw new MetaChannelError(400, 'Enter a supported Meta language code, such as en_US, en_GB, or hi.');
+  }
+  if (category !== 'MARKETING' && category !== 'UTILITY') {
+    throw new MetaChannelError(400, 'Choose either the Marketing or Utility category.');
+  }
+  if (!body || body.length > 1024) {
+    throw new MetaChannelError(400, 'Message body is required and must be no longer than 1,024 characters.');
+  }
+  if (header.length > 60 || footer.length > 60) {
+    throw new MetaChannelError(400, 'Header and footer text must each be 60 characters or fewer.');
+  }
+  if (header.includes('{{') || header.includes('}}') || footer.includes('{{') || footer.includes('}}')) {
+    throw new MetaChannelError(400, 'Variables are supported in the message body only in this version. Keep the header and footer static.');
+  }
+
+  const matches = Array.from(body.matchAll(/\{\{(\d+)\}\}/g));
+  const unmatchedBody = body.replace(/\{\{\d+\}\}/g, '');
+  if (unmatchedBody.includes('{{') || unmatchedBody.includes('}}')) {
+    throw new MetaChannelError(400, 'A variable is malformed. Use numbered placeholders such as {{1}} and {{2}}.');
+  }
+  if (matches.length && (body.startsWith('{{') || body.endsWith('}}'))) {
+    throw new MetaChannelError(400, 'Do not place a variable at the very beginning or end of the message body.');
+  }
+  const variableIndexes = Array.from(new Set(matches.map((match) => Number(match[1])))).sort((a, b) => a - b);
+  if (variableIndexes.some((index) => !Number.isInteger(index) || index < 1 || index > 20) ||
+      variableIndexes.some((index, position) => index !== position + 1)) {
+    throw new MetaChannelError(400, 'Use consecutive numbered variables starting at {{1}}, with no gaps (up to 20 variables).');
+  }
+
+  const providedSamples = Array.isArray(input.samples) ? input.samples : [];
+  const samples = variableIndexes.map((index) => String(providedSamples[index - 1] || '').trim());
+  if (samples.some((sample) => !sample)) {
+    throw new MetaChannelError(400, 'Provide an example value for every body variable so Meta can review the template.');
+  }
+
+  const components: any[] = [];
+  if (header) components.push({ type: 'HEADER', format: 'TEXT', text: header });
+  components.push({
+    type: 'BODY',
+    text: body,
+    ...(variableIndexes.length ? { example: { body_text: [samples] } } : {}),
+  });
+  if (footer) components.push({ type: 'FOOTER', text: footer });
+
+  const token = await getSecret(ctx, 'whatsapp_access_token');
+  const result = await graphJson(`${GRAPH}/${encodeURIComponent(connection.wabaId)}/message_templates`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, language, category, parameter_format: 'POSITIONAL', components }),
+  });
+  return {
+    id: result?.id ? String(result.id) : undefined,
+    name,
+    language,
+    category,
+    status: String(result?.status || 'PENDING').toUpperCase(),
+    body,
+    header,
+    footer,
+    components,
+    paramCount: variableIndexes.length,
+  };
 }
 
 function friendlyWhatsAppError(err: any): MetaChannelError {
@@ -339,8 +472,16 @@ export async function sendWhatsAppTemplate(
   if (!connection || connection.status !== 'connected') throw new MetaChannelError(409, 'WhatsApp is not connected.');
   const recipient = String(to || '').replace(/[^\d]/g, '');
   if (!recipient || !template?.name || !template?.language) throw new MetaChannelError(400, 'Recipient and template are required.');
+  const approvedTemplates = await listWhatsAppTemplates(ctx);
+  const approvedTemplate = approvedTemplates.find((item) => item.name === template.name && item.language === template.language);
+  if (!approvedTemplate) {
+    throw new MetaChannelError(422, 'This WhatsApp template is not currently approved and available to send. Refresh template status and choose an approved template.');
+  }
   const token = await getSecret(ctx, 'whatsapp_access_token');
   const params = (template.params || []).map((p) => String(p));
+  if (params.length !== approvedTemplate.paramCount) {
+    throw new MetaChannelError(400, 'The selected template requires ' + approvedTemplate.paramCount + ' body parameter(s), but ' + params.length + ' were provided.');
+  }
   const components = params.length
     ? [{ type: 'body', parameters: params.map((text) => ({ type: 'text', text })) }]
     : undefined;
@@ -356,14 +497,8 @@ export async function sendWhatsAppTemplate(
       }),
     });
     // Rebuild readable text for the inbox from the template body.
-    let renderedText = `[Template: ${template.name}]`;
-    try {
-      const all = await listWhatsAppTemplates(ctx);
-      const match = all.find((t) => t.name === template.name && t.language === template.language);
-      if (match) renderedText = match.body.replace(/\{\{(\d+)\}\}/g, (_m, n) => params[Number(n) - 1] ?? '');
-    } catch {
-      // Keep the placeholder text.
-    }
+    let renderedText = '[Template: ' + template.name + ']';
+    renderedText = approvedTemplate.body.replace(/\{\{(\d+)\}\}/g, (_m, n) => params[Number(n) - 1] ?? '');
     return { messageId: String(result?.messages?.[0]?.id || ''), renderedText };
   } catch (err) {
     throw friendlyWhatsAppError(err);

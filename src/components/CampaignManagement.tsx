@@ -59,6 +59,7 @@ import {
 } from '../types/index.js';
 import { EmailTemplateEditorModal } from './EmailTemplateEditorModal.js';
 import { CompanyAssetsPanel } from './CompanyAssetsPanel.js';
+import { WhatsAppTemplatesPanel } from './WhatsAppTemplatesPanel.js';
 import { INITIAL_CAMPAIGN } from '../services/dataService.js';
 import { zonedLocalToUtcIso, utcToZonedLocal, formatZoned, timeUntil } from '../shared/zonedTime';
 import { markDuplicateEmails, summarizeLeads } from '../shared/leadDedupe';
@@ -77,6 +78,8 @@ interface CampaignManagementProps {
   tenantId?: string;
   /** Workspace timezone (IANA), used by the campaign scheduler. Default Asia/Kolkata. */
   timezone?: string;
+  /** Only workspace admins should submit or manage WhatsApp templates. */
+  canManageWhatsAppTemplates?: boolean;
 }
 
 export const CampaignManagement: React.FC<CampaignManagementProps> = ({
@@ -91,6 +94,7 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
   onToggleCampaignStatus,
   tenantId = '',
   timezone = 'Asia/Kolkata',
+  canManageWhatsAppTemplates = false,
 }) => {
   const { brand } = useBrand();
   const isUmrah = brand.playbook === 'umrah360';
@@ -98,7 +102,7 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
   const tplCol = () => collection(db, 'tenants', tenantId, 'email_templates');
   const tplDoc = (id: string) => doc(db, 'tenants', tenantId, 'email_templates', id);
   // Navigation sub-tabs
-  const [activeTab, setActiveTab] = useState<'CAMPAIGNS' | 'TEMPLATES' | 'ASSETS'>('CAMPAIGNS');
+  const [activeTab, setActiveTab] = useState<'CAMPAIGNS' | 'TEMPLATES' | 'WHATSAPP_TEMPLATES' | 'ASSETS'>('CAMPAIGNS');
 
   // Campaigns state
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
@@ -1597,6 +1601,18 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
               </div>
             </button>
             <button
+              id="tab-whatsapp-templates"
+              onClick={() => setActiveTab('WHATSAPP_TEMPLATES')}
+              className={activeTab === 'WHATSAPP_TEMPLATES'
+                ? 'px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all bg-orange-500 text-white shadow-xs'
+                : 'px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all text-slate-600 hover:text-slate-900'}
+            >
+              <div className="flex items-center gap-1.5">
+                <MessageSquare className="w-3.5 h-3.5" />
+                <span>WhatsApp Templates</span>
+              </div>
+            </button>
+            <button
               id="tab-assets"
               onClick={() => setActiveTab('ASSETS')}
               className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all ${
@@ -2663,6 +2679,15 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                   })}
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* WhatsApp Templates Sub-Tab: Meta is the source of truth for templates and approval status. */}
+      {activeTab === 'WHATSAPP_TEMPLATES' && (
+        <div className="flex-1 overflow-y-auto p-6 bg-slate-50">
+          <div className="max-w-6xl mx-auto">
+            <WhatsAppTemplatesPanel canEdit={canManageWhatsAppTemplates} />
           </div>
         </div>
       )}

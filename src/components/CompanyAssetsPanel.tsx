@@ -237,14 +237,14 @@ export const CompanyAssetsPanel: React.FC<CompanyAssetsPanelProps> = ({
         onChange={handleFileSelect}
       />
 
-      {!isDrawerMode && (
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-4 rounded-xl border border-slate-200">
+      {/* Header bar & actions */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-900/60 p-4 rounded-xl border border-slate-800">
         <div>
-          <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-            <ImageIcon className="w-5 h-5 text-orange-600" />
+          <h2 className="text-lg font-bold text-white flex items-center gap-2">
+            <ImageIcon className="w-5 h-5 text-amber-500" />
             Company Brand & Media Assets
           </h2>
-          <p className="text-xs text-slate-500 mt-1">
+          <p className="text-xs text-slate-400 mt-1">
             Store and manage company logos, promotional banners, hotel photos, and video cards.
             Assets are stored in the database and served with high-deliverability URLs for your email campaigns.
           </p>
@@ -254,14 +254,14 @@ export const CompanyAssetsPanel: React.FC<CompanyAssetsPanelProps> = ({
           <button
             onClick={loadAssets}
             disabled={isLoading}
-            className="p-2 text-slate-500 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors border border-slate-200"
+            className="p-2 text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 rounded-lg transition-colors border border-slate-700/60"
             title="Refresh Assets"
           >
             <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
           </button>
           <button
             onClick={() => fileInputRef.current?.click()}
-            className="inline-flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-orange-600 to-orange-700 hover:from-orange-700 hover:to-orange-800 text-white font-semibold text-xs rounded-lg transition-all shadow-md shadow-orange-600/10 cursor-pointer"
+            className="inline-flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 font-semibold text-xs rounded-lg transition-all shadow-md shadow-amber-500/10 cursor-pointer"
           >
             <Upload className="w-4 h-4" />
             Upload Asset
@@ -269,80 +269,75 @@ export const CompanyAssetsPanel: React.FC<CompanyAssetsPanelProps> = ({
         </div>
       </div>
 
-      )}
+      {/* Filter and Search Bar */}
+      <div className="flex flex-col md:flex-row gap-3 items-stretch md:items-center justify-between">
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 max-w-full">
+          {CATEGORIES.map((cat) => (
+            <button
+              key={cat.value}
+              onClick={() => setSelectedCategory(cat.value)}
+              className={`px-3 py-1.5 text-xs font-medium rounded-lg whitespace-nowrap transition-colors border ${
+                selectedCategory === cat.value
+                  ? 'bg-amber-500/15 text-amber-400 border-amber-500/40 shadow-xs'
+                  : 'bg-slate-900/50 text-slate-400 border-slate-800 hover:bg-slate-800 hover:text-slate-200'
+              }`}
+            >
+              {cat.label}
+            </button>
+          ))}
+        </div>
 
-      {!isDrawerMode && (
-      <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
-        <div className="relative w-full sm:flex-1 sm:min-w-0">
+        <div className="relative min-w-[240px]">
           <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
           <input
             type="text"
             placeholder="Search assets by name or tag..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-9 pr-3 py-2 bg-white border border-slate-200 focus:border-orange-500 rounded-lg text-xs text-slate-900 placeholder-slate-500 outline-none transition-colors"
+            className="w-full pl-9 pr-3 py-1.5 bg-slate-900/70 border border-slate-800 focus:border-amber-500/50 rounded-lg text-xs text-white placeholder-slate-500 outline-none transition-colors"
           />
           {searchQuery && (
-            <button onClick={() => setSearchQuery('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-900" aria-label="Clear search">
+            <button
+              onClick={() => setSearchQuery('')}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white"
+            >
               <X className="w-3.5 h-3.5" />
             </button>
           )}
         </div>
-
-        <div className="relative w-full sm:w-56 sm:shrink-0 sm:ml-auto">
-          <Filter className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
-          <select
-            aria-label="Filter assets by category"
-            value={selectedCategory}
-            onChange={(e) => setSelectedCategory(e.target.value as AssetCategory | 'ALL')}
-            className="w-full appearance-none pl-9 pr-3 py-2 bg-white border border-slate-200 focus:border-orange-500 rounded-lg text-xs text-slate-800 outline-none transition-colors cursor-pointer"
-          >
-            {CATEGORIES.map((cat) => (
-              <option key={cat.value} value={cat.value}>
-                {cat.label}
-              </option>
-            ))}
-          </select>
-        </div>
       </div>
-
-      )}
 
       {/* Asset Grid */}
       {isLoading ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 py-12">
           {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="h-56 bg-slate-50 border border-slate-200 rounded-xl animate-pulse" />
+            <div key={i} className="h-56 bg-slate-900/40 border border-slate-800 rounded-xl animate-pulse" />
           ))}
         </div>
       ) : filteredAssets.length === 0 ? (
-        <div className="bg-slate-50 border border-dashed border-slate-200 rounded-2xl p-12 text-center">
-          <div className="w-14 h-14 mx-auto rounded-2xl bg-orange-50 flex items-center justify-center text-orange-600 mb-4">
+        <div className="bg-slate-900/40 border border-dashed border-slate-800 rounded-2xl p-12 text-center">
+          <div className="w-14 h-14 mx-auto rounded-2xl bg-amber-500/10 flex items-center justify-center text-amber-500 mb-4">
             <ImageIcon className="w-7 h-7" />
           </div>
-          <h3 className="text-base font-semibold text-slate-900">No assets found</h3>
-          <p className="text-xs text-slate-500 max-w-md mx-auto mt-1 mb-6">
-            {isDrawerMode
-              ? 'Upload images and video cards in Company Assets to make them available here.'
-              : searchQuery
-                ? `No media items matching "${searchQuery}". Try a different keyword or category.`
-                : 'Upload your company logo, package banners, and video cards to reuse seamlessly in email templates.'}
+          <h3 className="text-base font-semibold text-white">No assets found</h3>
+          <p className="text-xs text-slate-400 max-w-md mx-auto mt-1 mb-6">
+            {searchQuery
+              ? `No media items matching "${searchQuery}". Try a different keyword or category.`
+              : 'Upload your company logo, package banners, and video cards to reuse seamlessly in email templates.'}
           </p>
-          {!isDrawerMode && (
           <button
             onClick={() => fileInputRef.current?.click()}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white font-semibold text-xs rounded-lg transition-colors cursor-pointer"
+            className="inline-flex items-center gap-2 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-slate-950 font-semibold text-xs rounded-lg transition-colors cursor-pointer"
           >
             <Upload className="w-4 h-4" />
             Upload First Asset
           </button>
-          )}
         </div>
       ) : (
         <div
           className={`grid gap-4 ${
             isDrawerMode
-              ? 'grid-cols-1 sm:grid-cols-2'
+              ? 'grid-cols-1'
               : 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4'
           }`}
         >
@@ -355,46 +350,43 @@ export const CompanyAssetsPanel: React.FC<CompanyAssetsPanelProps> = ({
             return (
               <div
                 key={asset.id}
-                className="group bg-white border border-slate-200 hover:border-orange-300 rounded-xl overflow-hidden flex flex-col transition-all hover:shadow-lg hover:shadow-orange-600/5"
+                className="group bg-slate-900/70 border border-slate-800 hover:border-amber-500/50 rounded-xl overflow-hidden flex flex-col transition-all hover:shadow-lg hover:shadow-amber-500/5"
               >
                 {/* Thumbnail Preview Area */}
                 <div
-                  className="relative aspect-video bg-slate-50 flex items-center justify-center overflow-hidden border-b border-slate-200 cursor-pointer"
+                  className="relative aspect-video bg-slate-950 flex items-center justify-center overflow-hidden border-b border-slate-800/80 cursor-pointer"
                   onClick={() => setPreviewAsset(asset)}
                 >
                   <img
                     src={asset.dataUrl || asset.url}
                     alt={asset.name}
-                    draggable={false}
-                    onDragStart={(event) => event.preventDefault()}
-                    className="w-full h-full object-contain p-2 group-hover:scale-105 transition-transform duration-300 select-none"
+                    className="w-full h-full object-contain p-2 group-hover:scale-105 transition-transform duration-300"
                     loading="lazy"
                   />
 
                   {/* Video Play Badge overlay */}
                   {asset.category === 'VIDEO' && (
-                    <div className="absolute inset-0 bg-white/10 flex items-center justify-center">
-                      <div className="w-10 h-10 rounded-full bg-orange-600 text-white flex items-center justify-center shadow-lg transform group-hover:scale-110 transition-transform">
+                    <div className="absolute inset-0 bg-slate-950/40 flex items-center justify-center">
+                      <div className="w-10 h-10 rounded-full bg-amber-500 text-slate-950 flex items-center justify-center shadow-lg transform group-hover:scale-110 transition-transform">
                         <Film className="w-5 h-5 ml-0.5" />
                       </div>
                       {asset.videoDuration && (
-                        <span className="absolute bottom-2 right-2 bg-white/95 text-slate-900 font-mono text-[10px] px-1.5 py-0.5 rounded">
+                        <span className="absolute bottom-2 right-2 bg-slate-950/80 text-white font-mono text-[10px] px-1.5 py-0.5 rounded">
                           {asset.videoDuration}
                         </span>
                       )}
                     </div>
                   )}
 
-                  {!isDrawerMode && (
-                    <>
-                      <span className="absolute top-2 left-2 bg-white/95 backdrop-blur-xs text-orange-600 border border-slate-200 text-[10px] font-semibold px-2 py-0.5 rounded-full">
-                        {asset.category}
-                      </span>
-                      <span className="absolute bottom-2 left-2 bg-white/95 text-slate-500 text-[10px] px-1.5 py-0.5 rounded">
-                        {asset.sizeFormatted}
-                      </span>
-                    </>
-                  )}
+                  {/* Category Pill */}
+                  <span className="absolute top-2 left-2 bg-slate-950/80 backdrop-blur-xs text-amber-400 border border-slate-800 text-[10px] font-semibold px-2 py-0.5 rounded-full">
+                    {asset.category}
+                  </span>
+
+                  {/* Dimensions / Size info */}
+                  <span className="absolute bottom-2 left-2 bg-slate-950/80 text-slate-400 text-[10px] px-1.5 py-0.5 rounded">
+                    {asset.sizeFormatted}
+                  </span>
 
                   {/* Hover Quick View Button */}
                   <button
@@ -402,7 +394,7 @@ export const CompanyAssetsPanel: React.FC<CompanyAssetsPanelProps> = ({
                       e.stopPropagation();
                       setPreviewAsset(asset);
                     }}
-                    className="absolute top-2 right-2 p-1.5 rounded-md bg-white/80 text-slate-600 hover:text-slate-900 opacity-0 group-hover:opacity-100 transition-opacity"
+                    className="absolute top-2 right-2 p-1.5 rounded-md bg-slate-900/80 text-slate-300 hover:text-white opacity-0 group-hover:opacity-100 transition-opacity"
                     title="Preview Full Image"
                   >
                     <Maximize2 className="w-3.5 h-3.5" />
@@ -412,47 +404,60 @@ export const CompanyAssetsPanel: React.FC<CompanyAssetsPanelProps> = ({
                 {/* Details & Actions */}
                 <div className="p-3.5 flex-1 flex flex-col justify-between space-y-3">
                   <div>
-                    <h4 className="text-xs font-semibold text-slate-900 line-clamp-1 group-hover:text-orange-600 transition-colors">
+                    <h4 className="text-xs font-semibold text-white line-clamp-1 group-hover:text-amber-400 transition-colors">
                       {asset.name}
                     </h4>
-                    <p className="text-[11px] text-slate-500 line-clamp-1 mt-0.5">
+                    <p className="text-[11px] text-slate-400 line-clamp-1 mt-0.5">
                       {asset.dimensions ? `${asset.dimensions.width}×${asset.dimensions.height}px` : asset.mimeType}
                     </p>
                   </div>
 
                   {/* Action buttons */}
                   <div className="space-y-2 pt-1">
+                    {/* Copy URL button only */}
                     <button
                       onClick={() => handleCopy(fullUrl, asset.id, 'url')}
-                      className="w-full flex items-center justify-center gap-1.5 py-1.5 px-2 bg-orange-50 hover:bg-orange-100 text-orange-600 text-[11px] font-semibold rounded-lg transition-colors border border-orange-200"
+                      className="w-full flex items-center justify-center gap-1.5 py-1.5 px-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px] font-medium rounded-lg transition-colors border border-slate-700/60"
                       title="Copy direct image URL"
                     >
                       {copiedId === asset.id && copiedType === 'url' ? (
                         <>
-                          <Check className="w-3 h-3 text-emerald-600" />
-                          <span className="text-emerald-600 font-semibold">URL Copied!</span>
+                          <Check className="w-3 h-3 text-emerald-400" />
+                          <span className="text-emerald-400 font-semibold">URL Copied!</span>
                         </>
                       ) : (
                         <>
-                          <Copy className="w-3 h-3" />
+                          <Copy className="w-3 h-3 text-slate-400" />
                           <span>Copy URL</span>
                         </>
                       )}
                     </button>
 
-                    {!isDrawerMode && (
+                    {/* If inside Template Editor, show 1-click Insert button */}
+                    {onInsertIntoTemplate && (
+                      <button
+                        onClick={() => {
+                          const snippet = asset.category === 'VIDEO' ? videoCardSnippet : imageHtmlSnippet;
+                          onInsertIntoTemplate(snippet);
+                        }}
+                        className="w-full flex items-center justify-center gap-1.5 py-1.5 px-2 bg-amber-500/15 hover:bg-amber-500/25 text-amber-400 border border-amber-500/30 text-[11px] font-semibold rounded-lg transition-colors"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        Insert Into Email
+                      </button>
+                    )}
+
+                    {/* Delete button */}
                     <div className="flex justify-end pt-1">
                       <button
                         onClick={() => openDeleteModal(asset)}
-                        className="text-[11px] text-slate-500 hover:text-rose-600 flex items-center gap-1 transition-colors px-1 py-0.5 cursor-pointer"
+                        className="text-[11px] text-slate-400 hover:text-rose-400 flex items-center gap-1 transition-colors px-1 py-0.5 cursor-pointer"
                         title="Delete asset"
                       >
-                        <Trash2 className="w-3 h-3 text-slate-500 hover:text-rose-600" />
+                        <Trash2 className="w-3 h-3 text-slate-400 hover:text-rose-400" />
                         <span>Delete</span>
                       </button>
                     </div>
-                    )}
-
                   </div>
                 </div>
               </div>
@@ -463,11 +468,11 @@ export const CompanyAssetsPanel: React.FC<CompanyAssetsPanelProps> = ({
 
       {/* Upload Asset Modal */}
       {isUploadModalOpen && (
-        <div className="fixed inset-0 z-50 bg-white/95 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white border border-slate-200 rounded-2xl max-w-lg w-full overflow-hidden shadow-2xl flex flex-col">
-            <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between">
-              <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                <Upload className="w-4 h-4 text-orange-600" />
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-lg w-full overflow-hidden shadow-2xl flex flex-col">
+            <div className="px-5 py-4 border-b border-slate-800 flex items-center justify-between">
+              <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                <Upload className="w-4 h-4 text-amber-500" />
                 Upload Brand Asset
               </h3>
               <button
@@ -475,7 +480,7 @@ export const CompanyAssetsPanel: React.FC<CompanyAssetsPanelProps> = ({
                   setIsUploadModalOpen(false);
                   resetUploadForm();
                 }}
-                className="text-slate-500 hover:text-slate-900"
+                className="text-slate-400 hover:text-white"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -483,16 +488,16 @@ export const CompanyAssetsPanel: React.FC<CompanyAssetsPanelProps> = ({
 
             <div className="p-5 space-y-4 max-h-[75vh] overflow-y-auto">
               {uploadError && (
-                <div className="p-3 bg-rose-50 border border-rose-200 rounded-lg text-xs text-rose-600">
+                <div className="p-3 bg-rose-500/10 border border-rose-500/30 rounded-lg text-xs text-rose-400">
                   {uploadError}
                 </div>
               )}
 
               {/* Preview */}
               {uploadDataUrl && (
-                <div className="aspect-video bg-slate-50 rounded-xl overflow-hidden border border-slate-200 flex items-center justify-center relative">
+                <div className="aspect-video bg-slate-950 rounded-xl overflow-hidden border border-slate-800 flex items-center justify-center relative">
                   <img src={uploadDataUrl} alt="Upload preview" className="max-h-full object-contain p-2" />
-                  <div className="absolute bottom-2 right-2 bg-white/90 text-[10px] text-slate-500 px-2 py-0.5 rounded">
+                  <div className="absolute bottom-2 right-2 bg-slate-900/90 text-[10px] text-slate-400 px-2 py-0.5 rounded">
                     {uploadDimensions.width} × {uploadDimensions.height} px
                   </div>
                 </div>
@@ -500,27 +505,27 @@ export const CompanyAssetsPanel: React.FC<CompanyAssetsPanelProps> = ({
 
               {/* Asset Name */}
               <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1">
-                  Asset Title <span className="text-rose-600">*</span>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">
+                  Asset Title <span className="text-rose-400">*</span>
                 </label>
                 <input
                   type="text"
                   value={uploadName}
                   onChange={(e) => setUploadName(e.target.value)}
                   placeholder="e.g. Umrah360 Header Banner"
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-900 placeholder-slate-500 focus:border-orange-500 outline-none"
+                  className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-xs text-white placeholder-slate-500 focus:border-amber-500 outline-none"
                 />
               </div>
 
               {/* Category */}
               <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1">
+                <label className="block text-xs font-semibold text-slate-300 mb-1">
                   Category
                 </label>
                 <select
                   value={uploadCategory}
                   onChange={(e) => setUploadCategory(e.target.value as AssetCategory)}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-900 focus:border-orange-500 outline-none"
+                  className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-xs text-white focus:border-amber-500 outline-none"
                 >
                   <option value="BANNER">Banner & Header</option>
                   <option value="LOGO">Brand Logo</option>
@@ -532,16 +537,16 @@ export const CompanyAssetsPanel: React.FC<CompanyAssetsPanelProps> = ({
 
               {/* Conditional Video fields */}
               {uploadCategory === 'VIDEO' && (
-                <div className="p-3.5 bg-orange-600/5 border border-orange-200 rounded-xl space-y-3">
-                  <div className="flex items-center gap-1.5 text-xs font-semibold text-orange-600">
+                <div className="p-3.5 bg-amber-500/5 border border-amber-500/20 rounded-xl space-y-3">
+                  <div className="flex items-center gap-1.5 text-xs font-semibold text-amber-400">
                     <Film className="w-3.5 h-3.5" />
                     Video Destination Link (Email-Safe Video Card)
                   </div>
-                  <p className="text-[11px] text-slate-500">
+                  <p className="text-[11px] text-slate-400">
                     Email clients do not support inline &lt;video&gt; tags. This asset will render as a video card with a play button linking to your destination video.
                   </p>
                   <div>
-                    <label className="block text-[11px] font-medium text-slate-600 mb-1">
+                    <label className="block text-[11px] font-medium text-slate-300 mb-1">
                       Video URL (YouTube, Vimeo, or hosted video)
                     </label>
                     <input
@@ -549,11 +554,11 @@ export const CompanyAssetsPanel: React.FC<CompanyAssetsPanelProps> = ({
                       value={uploadVideoUrl}
                       onChange={(e) => setUploadVideoUrl(e.target.value)}
                       placeholder="https://www.youtube.com/watch?v=..."
-                      className="w-full px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-900 placeholder-slate-500 focus:border-orange-500 outline-none"
+                      className="w-full px-3 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-xs text-white placeholder-slate-500 focus:border-amber-500 outline-none"
                     />
                   </div>
                   <div>
-                    <label className="block text-[11px] font-medium text-slate-600 mb-1">
+                    <label className="block text-[11px] font-medium text-slate-300 mb-1">
                       Video Duration (optional badge)
                     </label>
                     <input
@@ -561,7 +566,7 @@ export const CompanyAssetsPanel: React.FC<CompanyAssetsPanelProps> = ({
                       value={uploadVideoDuration}
                       onChange={(e) => setUploadVideoDuration(e.target.value)}
                       placeholder="e.g. 02:45"
-                      className="w-full px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-900 placeholder-slate-500 focus:border-orange-500 outline-none"
+                      className="w-full px-3 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-xs text-white placeholder-slate-500 focus:border-amber-500 outline-none"
                     />
                   </div>
                 </div>
@@ -569,7 +574,7 @@ export const CompanyAssetsPanel: React.FC<CompanyAssetsPanelProps> = ({
 
               {/* Alt text */}
               <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1">
+                <label className="block text-xs font-semibold text-slate-300 mb-1">
                   Alt Text (Screen Readers & Fallback)
                 </label>
                 <input
@@ -577,25 +582,25 @@ export const CompanyAssetsPanel: React.FC<CompanyAssetsPanelProps> = ({
                   value={uploadAltText}
                   onChange={(e) => setUploadAltText(e.target.value)}
                   placeholder="Description of the image content"
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-900 placeholder-slate-500 focus:border-orange-500 outline-none"
+                  className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-xs text-white placeholder-slate-500 focus:border-amber-500 outline-none"
                 />
               </div>
             </div>
 
-            <div className="px-5 py-3.5 border-t border-slate-200 bg-slate-50/60 flex items-center justify-end gap-2">
+            <div className="px-5 py-3.5 border-t border-slate-800 bg-slate-950/60 flex items-center justify-end gap-2">
               <button
                 onClick={() => {
                   setIsUploadModalOpen(false);
                   resetUploadForm();
                 }}
-                className="px-3.5 py-1.5 text-xs text-slate-500 hover:text-slate-900"
+                className="px-3.5 py-1.5 text-xs text-slate-400 hover:text-white"
               >
                 Cancel
               </button>
               <button
                 onClick={handleSaveUpload}
                 disabled={isUploading}
-                className="px-4 py-1.5 bg-orange-600 hover:bg-orange-700 disabled:opacity-50 text-white font-semibold text-xs rounded-lg transition-colors flex items-center gap-1.5"
+                className="px-4 py-1.5 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-slate-950 font-semibold text-xs rounded-lg transition-colors flex items-center gap-1.5"
               >
                 {isUploading ? (
                   <>
@@ -616,24 +621,24 @@ export const CompanyAssetsPanel: React.FC<CompanyAssetsPanelProps> = ({
 
       {/* Full Resolution Preview Modal */}
       {previewAsset && (
-        <div className="fixed inset-0 z-50 bg-slate-50/90 backdrop-blur-md flex items-center justify-center p-4">
-          <div className="bg-white border border-slate-200 rounded-2xl max-w-3xl w-full overflow-hidden shadow-2xl flex flex-col">
-            <div className="px-5 py-3.5 border-b border-slate-200 flex items-center justify-between">
+        <div className="fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-3xl w-full overflow-hidden shadow-2xl flex flex-col">
+            <div className="px-5 py-3.5 border-b border-slate-800 flex items-center justify-between">
               <div>
-                <h3 className="text-sm font-bold text-slate-900">{previewAsset.name}</h3>
-                <p className="text-[11px] text-slate-500">
+                <h3 className="text-sm font-bold text-white">{previewAsset.name}</h3>
+                <p className="text-[11px] text-slate-400">
                   {previewAsset.category} • {previewAsset.sizeFormatted} • {previewAsset.dimensions?.width}×{previewAsset.dimensions?.height}px
                 </p>
               </div>
               <button
                 onClick={() => setPreviewAsset(null)}
-                className="text-slate-500 hover:text-slate-900 p-1"
+                className="text-slate-400 hover:text-white p-1"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="p-6 bg-white/95 flex items-center justify-center max-h-[60vh] overflow-hidden">
+            <div className="p-6 bg-slate-950/80 flex items-center justify-center max-h-[60vh] overflow-hidden">
               <img
                 src={previewAsset.dataUrl || previewAsset.url}
                 alt={previewAsset.name}
@@ -641,9 +646,9 @@ export const CompanyAssetsPanel: React.FC<CompanyAssetsPanelProps> = ({
               />
             </div>
 
-            <div className="px-5 py-3.5 border-t border-slate-200 bg-slate-50 flex flex-wrap items-center justify-between gap-3">
-              <div className="text-xs text-slate-500 flex items-center gap-2">
-                <span className="font-mono text-[11px] bg-white px-2 py-1 rounded border border-slate-200">
+            <div className="px-5 py-3.5 border-t border-slate-800 bg-slate-950 flex flex-wrap items-center justify-between gap-3">
+              <div className="text-xs text-slate-400 flex items-center gap-2">
+                <span className="font-mono text-[11px] bg-slate-900 px-2 py-1 rounded border border-slate-800">
                   {previewAsset.url}
                 </span>
               </div>
@@ -654,7 +659,7 @@ export const CompanyAssetsPanel: React.FC<CompanyAssetsPanelProps> = ({
                     const fullUrl = previewAsset.url.startsWith('http') ? previewAsset.url : `${origin}${previewAsset.url}`;
                     handleCopy(fullUrl, previewAsset.id, 'url');
                   }}
-                  className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-medium rounded-lg flex items-center gap-1.5 transition-colors"
+                  className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium rounded-lg flex items-center gap-1.5 transition-colors"
                 >
                   <Copy className="w-3.5 h-3.5" />
                   Copy Link
@@ -668,24 +673,24 @@ export const CompanyAssetsPanel: React.FC<CompanyAssetsPanelProps> = ({
       {/* DELETE ASSET CONFIRMATION MODAL */}
       {isDeleteModalOpen && assetToDelete && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-md flex flex-col overflow-hidden shadow-2xl text-slate-900">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md flex flex-col overflow-hidden shadow-2xl text-white">
             <div className="p-6 space-y-4">
-              <div className="w-10 h-10 rounded-xl bg-rose-50 border border-rose-200 flex items-center justify-center text-rose-600">
+              <div className="w-10 h-10 rounded-xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-500">
                 <Trash2 className="w-5 h-5" />
               </div>
               <div>
-                <h3 className="text-base font-bold text-slate-900">Delete Asset</h3>
-                <p className="text-xs text-slate-500 mt-1">
-                  Are you sure you want to delete <strong className="text-slate-700">"{assetToDelete.name}"</strong>?
+                <h3 className="text-base font-bold text-white">Delete Asset</h3>
+                <p className="text-xs text-slate-400 mt-1">
+                  Are you sure you want to delete <strong className="text-slate-200">"{assetToDelete.name}"</strong>?
                   This will permanently remove the asset from the Firestore database.
                 </p>
               </div>
-              <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-500 font-mono truncate">
+              <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 text-xs text-slate-400 font-mono truncate">
                 Category: {assetToDelete.category}
               </div>
             </div>
 
-            <div className="px-6 py-4 border-t border-slate-200 bg-slate-50/60 flex items-center justify-end gap-3">
+            <div className="px-6 py-4 border-t border-slate-800 bg-slate-950/60 flex items-center justify-end gap-3">
               <button
                 type="button"
                 onClick={() => {
@@ -693,7 +698,7 @@ export const CompanyAssetsPanel: React.FC<CompanyAssetsPanelProps> = ({
                   setAssetToDelete(null);
                 }}
                 disabled={isDeletingAsset}
-                className="px-4 py-2 text-xs text-slate-500 hover:text-slate-900 transition font-medium cursor-pointer"
+                className="px-4 py-2 text-xs text-slate-400 hover:text-white transition font-medium cursor-pointer"
               >
                 Cancel
               </button>
@@ -701,7 +706,7 @@ export const CompanyAssetsPanel: React.FC<CompanyAssetsPanelProps> = ({
                 type="button"
                 onClick={handleConfirmDelete}
                 disabled={isDeletingAsset}
-                className="inline-flex items-center gap-1.5 px-4 py-2 bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-slate-900 rounded-xl text-xs font-semibold shadow-xs transition cursor-pointer"
+                className="inline-flex items-center gap-1.5 px-4 py-2 bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white rounded-xl text-xs font-semibold shadow-xs transition cursor-pointer"
               >
                 {isDeletingAsset ? (
                   <>

@@ -1518,39 +1518,6 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
     return true;
   }
 
-  // Workspace WhatsApp templates. Meta is the source of truth for current approval status.
-  if (url === '/api/whatsapp/templates/manage' && (req.method === 'GET' || req.method === 'POST')) {
-    if (activeTenantCtx.role === 'member') {
-      res.statusCode = 403;
-      res.end(JSON.stringify({ error: 'Only workspace admins can manage WhatsApp templates.' }));
-      return true;
-    }
-    try {
-      const meta = await import('./metaChannelsService.js');
-      if (req.method === 'GET') {
-        const templates = await meta.listWhatsAppTemplatesForManagement(activeTenantCtx);
-        res.statusCode = 200;
-        res.end(JSON.stringify({ success: true, templates, syncedAt: new Date().toISOString() }));
-      } else {
-        const template = await meta.createWhatsAppTemplate(activeTenantCtx, {
-          name: String(body?.name || ''),
-          language: String(body?.language || ''),
-          category: String(body?.category || ''),
-          header: String(body?.header || ''),
-          body: String(body?.body || ''),
-          footer: String(body?.footer || ''),
-          samples: Array.isArray(body?.samples) ? body.samples.map((sample: unknown) => String(sample)) : [],
-        });
-        res.statusCode = 201;
-        res.end(JSON.stringify({ success: true, template, message: 'Template submitted to Meta for review. It cannot be used for sending until Meta approves it.' }));
-      }
-    } catch (err: any) {
-      res.statusCode = err?.status || 500;
-      res.end(JSON.stringify({ error: err?.message || 'WhatsApp template request failed.' }));
-    }
-    return true;
-  }
-
   if (url === '/api/whatsapp/templates' && req.method === 'GET') {
     try {
       const meta = await import('./metaChannelsService.js');
@@ -3431,14 +3398,7 @@ Generate a helpful, grounded response.`;
   // Audit Logs Endpoint
   if (url === '/api/audit-logs') {
     const qp = new URL(rawUrl || '/', 'http://localhost').searchParams;
-    const requestedTenant = qp.get('tenantId') || '';
-    const targetTenant = isPlatformAdmin ? (requestedTenant || resolvedTenantId) : resolvedTenantId;
-    if (!targetTenant) {
-      res.statusCode = 400;
-      res.setHeader('Content-Type', 'application/json');
-      res.end(JSON.stringify({ success: false, error: 'A workspace context is required to access audit logs.' }));
-      return true;
-    }
+    const targetTenant = qp.get('tenantId') || resolvedTenantId || 'umrah360';
 
     if (req.method === 'GET') {
       let auditList: any[] = [];
@@ -3451,16 +3411,9 @@ Generate a helpful, grounded response.`;
             if (data && data.id) auditList.push(data);
           });
           auditList.sort((a, b) => new Date(b.timestamp || 0).getTime() - new Date(a.timestamp || 0).getTime());
-        } catch (e: any) {
-          console.error('[AuditLogs API] Firestore fetch failed:', e);
-          res.statusCode = 500;
-          res.end(JSON.stringify({ success: false, error: e?.message || 'Failed to read audit logs' }));
-          return true;
+        } catch (e) {
+          console.warn('[AuditLogs API] Firestore fetch note:', e);
         }
-      } else {
-        res.statusCode = 503;
-        res.end(JSON.stringify({ success: false, error: 'Firestore is not configured; audit logs are unavailable.' }));
-        return true;
       }
       res.statusCode = 200;
       res.end(JSON.stringify({ success: true, logs: auditList }));
@@ -3479,17 +3432,14 @@ Generate a helpful, grounded response.`;
           module: payload.module || 'SYSTEM',
           severity: payload.severity || 'INFO',
           description: payload.description || 'System event',
-          actor: { userId: userUid, name: (userEmail || '').split('@')[0] || 'Workspace User', email: userEmail || 'system@workspace.local', role: String(userRole || 'member').toUpperCase() },
+          actor: payload.actor || { name: 'System', email: 'system@workspace.local', role: 'ADMIN' },
           target: payload.target || null,
           metadata: payload.metadata || {},
         };
 
-        if (!isFirebaseConfigured || !db) {
-          res.statusCode = 503;
-          res.end(JSON.stringify({ success: false, error: 'Firestore is not configured; audit event was not saved.' }));
-          return true;
+        if (isFirebaseConfigured && db) {
+          await safeSetDoc(doc(db, 'tenants', targetTenant, 'audit_logs', logId), record, { merge: true });
         }
-        await safeSetDoc(tenantRepo({ ...activeTenantCtx, tenantId: targetTenant }).auditLogDoc(logId), record, { merge: true });
 
         res.statusCode = 200;
         res.end(JSON.stringify({ success: true, log: record }));

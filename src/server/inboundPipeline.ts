@@ -2,7 +2,6 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import { stripQuotedReply } from '../shared/quotedReply.js';
 import { isHumanManagedConversationData } from '../shared/humanHandoff.js';
 import { tenantRepo } from './tenantRepo.js';
-import { writeTenantAuditEvent } from './auditLogger.js';
 import { evaluateHumanHandoff, persistHumanHandoff, describeHandoff } from './humanHandoffService.js';
 
 import type { TenantContext } from '../types/tenant.js';
@@ -1757,25 +1756,6 @@ export async function processLiveInboundEmail(payload: {
         simulated: pipelineConfig.emailMode === 'SIMULATION',
         error: replyDecisionReason,
       };
-    }
-
-    if (shouldSendAutoReply) {
-      const auditAction = !smtpResult.success ? 'AI_REPLY_SEND_FAILED' : smtpResult.simulated ? 'AI_REPLY_SIMULATED' : 'AI_REPLY_SENT';
-      await writeTenantAuditEvent(getInboundCtx(), {
-        action: auditAction, module: 'AI_ENGINE', severity: smtpResult.success ? 'INFO' : 'WARNING',
-        description: !smtpResult.success ? 'AI email reply failed to send.' : smtpResult.simulated ? 'AI email reply was simulated and not delivered.' : 'AI sent an automated email reply.',
-        target: { type: 'Conversation', id: conversationId },
-        actor: { userId: 'system:ai-email', name: 'AI Email Assistant', email: 'ai-email@system.local', role: 'AI_SYSTEM' },
-        metadata: { channel: 'EMAIL', simulated: Boolean(smtpResult.simulated) },
-      });
-    } else if (pipelineConfig.mode === 'REVIEW' && !aiResult.handoffTriggered && aiResult.replyText) {
-      await writeTenantAuditEvent(getInboundCtx(), {
-        action: 'AI_DRAFT_CREATED', module: 'AI_ENGINE', severity: 'INFO',
-        description: 'AI prepared an email reply draft for human review.',
-        target: { type: 'Conversation', id: conversationId },
-        actor: { userId: 'system:ai-email', name: 'AI Email Assistant', email: 'ai-email@system.local', role: 'AI_SYSTEM' },
-        metadata: { channel: 'EMAIL', mode: 'REVIEW' },
-      });
     }
 
     // =========================================================================

@@ -12,7 +12,6 @@ import { sendLiveEmail, getSmtpConfig, getResendConfig, fetchFirestoreSmtpConfig
 import { Conversation, Contact, Message } from '../types/index.js';
 import { hasThankYouEmailBeenSent, recordThankYouEmailSent } from './websiteLeadService.js';
 import { tenantRepo } from './tenantRepo.js';
-import { writeTenantAuditEvent } from './auditLogger.js';
 import type { TenantContext } from '../types/tenant.js';
 import { getTenantBrand } from './brandService.js';
 import { brandDemoThankYouSubject, brandSpecialistLine, brandThankYouSignoff } from '../shared/brand.js';
@@ -377,7 +376,6 @@ export async function dispatchThankYouEmailForConversation(
     });
 
     if (!mailResult.success) {
-      await writeTenantAuditEvent(ctx, { action: 'WEBSITE_LEAD_AUTO_REPLY_FAILED', module: 'AI_ENGINE', severity: 'WARNING', description: 'Automated website lead acknowledgement failed to send.', target: { type: 'Conversation', id: conversationId }, actor: { userId: 'system:website-auto-reply', name: 'Website Lead Auto-Responder', email: 'website-auto-reply@system.local', role: 'AI_SYSTEM' }, metadata: { simulated: Boolean(mailResult.simulated) } });
       console.warn(`[Website Auto-Responder Error] SMTP delivery failed to ${targetEmail}:`, mailResult.error);
       await safeSetDoc(
         convRef,
@@ -387,7 +385,6 @@ export async function dispatchThankYouEmailForConversation(
       return { success: false, error: mailResult.error || 'SMTP delivery failed', email: targetEmail };
     }
 
-    await writeTenantAuditEvent(ctx, { action: mailResult.simulated ? 'WEBSITE_LEAD_AUTO_REPLY_SIMULATED' : 'WEBSITE_LEAD_AUTO_REPLY_SENT', module: 'AI_ENGINE', severity: 'INFO', description: mailResult.simulated ? 'Automated website lead acknowledgement was simulated, not delivered.' : 'Automated website lead acknowledgement email was sent.', target: { type: 'Conversation', id: conversationId }, actor: { userId: 'system:website-auto-reply', name: 'Website Lead Auto-Responder', email: 'website-auto-reply@system.local', role: 'AI_SYSTEM' }, metadata: { simulated: Boolean(mailResult.simulated) } });
     const nowIso = new Date().toISOString();
     const autoReplyMsgId = pendingMsgDocId || `msg-thankyou-${conversationId}`;
 

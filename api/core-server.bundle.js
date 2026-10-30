@@ -280523,87 +280523,7 @@ function formatBytes(bytes) {
   return parseFloat((bytes / Math.pow(k, i2)).toFixed(1)) + " " + sizes[i2];
 }
 async function seedTenantAssetsIfEmpty(ctx) {
-  const existing = await listTenantAssets(ctx);
-  if (existing.length > 0) return existing;
-  const isUmrah = ctx.tenantId === "umrah360";
-  const nowIso = (/* @__PURE__ */ new Date()).toISOString();
-  const logoSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 100" width="400" height="100">
-    <rect width="400" height="100" rx="12" fill="#0f172a"/>
-    <circle cx="50" cy="50" r="28" fill="#f59e0b" opacity="0.2"/>
-    <circle cx="50" cy="50" r="18" fill="#f59e0b"/>
-    <path d="M42 50 L48 56 L58 44" stroke="#ffffff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-    <text x="90" y="58" font-family="system-ui, -apple-system, sans-serif" font-weight="700" font-size="28" fill="#ffffff">${isUmrah ? "Umrah360" : "Enterprise CRM"}</text>
-    <text x="90" y="76" font-family="system-ui, -apple-system, sans-serif" font-weight="500" font-size="12" fill="#94a3b8">OFFICIAL VERIFIED BADGE</text>
-  </svg>`;
-  const bannerSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 320" width="800" height="320">
-    <defs>
-      <linearGradient id="skyGrad" x1="0" y1="0" x2="1" y2="1">
-        <stop offset="0%" stop-color="#0f172a"/>
-        <stop offset="50%" stop-color="#1e293b"/>
-        <stop offset="100%" stop-color="#312e81"/>
-      </linearGradient>
-    </defs>
-    <rect width="800" height="320" rx="16" fill="url(#skyGrad)"/>
-    <circle cx="700" cy="80" r="120" fill="#f59e0b" opacity="0.1"/>
-    <circle cx="100" cy="240" r="80" fill="#38bdf8" opacity="0.1"/>
-    <text x="60" y="120" font-family="system-ui, -apple-system, sans-serif" font-weight="800" font-size="36" fill="#ffffff">Premium VIP Allotments & Packages</text>
-    <text x="60" y="165" font-family="system-ui, -apple-system, sans-serif" font-weight="500" font-size="18" fill="#cbd5e1">Exclusive 5-Star Clock Tower & Haram View Suites</text>
-    <rect x="60" y="210" width="220" height="46" rx="8" fill="#f59e0b"/>
-    <text x="170" y="239" font-family="system-ui, -apple-system, sans-serif" font-weight="700" font-size="15" fill="#0f172a" text-anchor="middle">View Group Rates</text>
-  </svg>`;
-  const videoThumbSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450" width="800" height="450">
-    <rect width="800" height="450" rx="14" fill="#090d16"/>
-    <circle cx="400" cy="225" r="54" fill="#f59e0b"/>
-    <polygon points="390,205 425,225 390,245" fill="#0f172a"/>
-    <rect x="40" y="370" width="720" height="44" rx="8" fill="rgba(15,23,42,0.85)"/>
-    <text x="60" y="398" font-family="system-ui, -apple-system, sans-serif" font-weight="600" font-size="16" fill="#ffffff">\u25B6 Virtual Walkthrough & Ground Operations Tour</text>
-    <text x="730" y="398" font-family="system-ui, -apple-system, sans-serif" font-weight="500" font-size="14" fill="#94a3b8" text-anchor="end">02:45</text>
-  </svg>`;
-  const seedItems = [
-    {
-      name: isUmrah ? "Umrah360 Official Brand Logo" : "Company Official Brand Logo",
-      category: "LOGO",
-      mimeType: "image/svg+xml",
-      svg: logoSvg,
-      altText: isUmrah ? "Umrah360 Official Logo" : "Company Logo",
-      dimensions: { width: 400, height: 100 }
-    },
-    {
-      name: isUmrah ? "Makkah Clock Tower VIP Promo Banner" : "Exclusive VIP Offering Banner",
-      category: "BANNER",
-      mimeType: "image/svg+xml",
-      svg: bannerSvg,
-      altText: "VIP Packages & Suites Promo Banner",
-      dimensions: { width: 800, height: 320 }
-    },
-    {
-      name: "Interactive Ground Tour Video Card",
-      category: "VIDEO",
-      mimeType: "image/svg+xml",
-      svg: videoThumbSvg,
-      videoUrl: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
-      videoDuration: "02:45",
-      altText: "Click to watch ground walkthrough video",
-      dimensions: { width: 800, height: 450 }
-    }
-  ];
-  const results = [];
-  for (const item of seedItems) {
-    const base642 = Buffer.from(item.svg).toString("base64");
-    const dataUrl = `data:${item.mimeType};base64,${base642}`;
-    const asset = await saveTenantAsset(ctx, {
-      name: item.name,
-      category: item.category,
-      mimeType: item.mimeType,
-      dataUrl,
-      videoUrl: item.videoUrl,
-      videoDuration: item.videoDuration,
-      altText: item.altText,
-      dimensions: item.dimensions
-    });
-    results.push(asset);
-  }
-  return results;
+  return listTenantAssets(ctx);
 }
 async function listTenantAssets(ctx) {
   const assets = [];
@@ -280614,6 +280534,12 @@ async function listTenantAssets(ctx) {
         snap.forEach((d) => {
           const data = d.data();
           if (data && data.id) {
+            if (SEED_ASSET_NAMES.has(data.name?.trim())) {
+              deleteDoc(tenantRepo(ctx).assetDoc(data.id)).catch(() => {
+              });
+              assetMemoryCache.delete(data.id);
+              return;
+            }
             assets.push(data);
             if (data.dataUrl && !assetMemoryCache.has(data.id)) {
               const base64Part = data.dataUrl.split(",")[1] || "";
@@ -280632,6 +280558,10 @@ async function listTenantAssets(ctx) {
     }
   }
   for (const [id, cached] of assetMemoryCache.entries()) {
+    if (SEED_ASSET_NAMES.has(cached.asset.name?.trim())) {
+      assetMemoryCache.delete(id);
+      continue;
+    }
     if (cached.asset.tenantId === ctx.tenantId && !assets.some((a) => a.id === id)) {
       assets.push(cached.asset);
     }
@@ -280739,7 +280669,7 @@ async function resolveAssetRaw(assetId) {
   }
   return null;
 }
-var assetMemoryCache;
+var assetMemoryCache, SEED_ASSET_NAMES;
 var init_assetService = __esm({
   "src/server/assetService.ts"() {
     init_tenantRepo();
@@ -280747,6 +280677,13 @@ var init_assetService = __esm({
     init_adminFirestore();
     init_firestoreUtils();
     assetMemoryCache = /* @__PURE__ */ new Map();
+    SEED_ASSET_NAMES = /* @__PURE__ */ new Set([
+      "Interactive Ground Tour Video Card",
+      "Makkah Clock Tower VIP Promo Banner",
+      "Umrah360 Official Brand Logo",
+      "Company Official Brand Logo",
+      "Exclusive VIP Offering Banner"
+    ]);
   }
 });
 

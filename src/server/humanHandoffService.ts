@@ -12,7 +12,6 @@ import OpenAI from 'openai';
 import { getDoc, setDoc } from './adminFirestore.js';
 import { sanitizeForFirestore } from './firestoreUtils.js';
 import { tenantRepo } from './tenantRepo.js';
-import { writeTenantAuditEvent } from './auditLogger.js';
 import { getTenantBrand } from './brandService.js';
 import {
   countUnsuccessfulResolutionAttempts,
@@ -224,15 +223,6 @@ export async function persistHumanHandoff(
     persisted = false;
     console.error(`[Human Handoff] FAILED to persist handoff for ${ctx.tenantId}/${conversationId}:`, err);
   }
-  await writeTenantAuditEvent(ctx, {
-    action: persisted ? 'HUMAN_HANDOFF_TRIGGERED' : 'HUMAN_HANDOFF_PERSIST_FAILED',
-    module: 'INBOX',
-    severity: persisted ? 'INFO' : 'CRITICAL',
-    description: persisted ? 'AI escalated a conversation to human handling.' : 'A human handoff was detected but could not be persisted.',
-    target: { type: 'Conversation', id: conversationId },
-    actor: { userId: 'system:human-handoff', name: 'AI Human Handoff', email: 'human-handoff@system.local', role: 'AI_SYSTEM' },
-    metadata: { reason: match.reason || 'HUMAN_REQUEST', detectionSource: match.source || 'RULE' },
-  });
   try {
     const followups = await import('./autoFollowUpService.js');
     await followups.cancelPendingFollowUpJob(ctx, conversationId, 'Human Handoff triggered', 'system');

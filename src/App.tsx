@@ -9,7 +9,6 @@ import { LoginView } from './components/LoginView';
 import { LegalPage, legalSlugFromPath } from './components/LegalPage';
 import { LandingPage } from './components/LandingPage';
 import { onSession, signOutUser, installAuthFetch, type SessionInfo } from './services/authService';
-import { logAuditEvent } from './services/auditService';
 import { LockedModuleView } from './components/LockedModuleView';
 import { UpgradeRequiredView } from './components/UpgradeRequiredView';
 import { FEATURES, FEATURE_BY_TAB } from './shared/features';
@@ -274,13 +273,6 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
   const [knowledgeDocs, setKnowledgeDocs] = useState<KnowledgeDocument[]>(() => isFirebaseConfigured ? [] : INITIAL_KNOWLEDGE_DOCUMENTS);
   const [settings, setSettings] = useState<SystemSettings>(DEFAULT_SETTINGS);
   const [selectedLeadIdForCrm, setSelectedLeadIdForCrm] = useState<string | null>(null);
-
-  // A CRM drawer opened from Unified Inbox is a one-time navigation request; never restore it after leaving CRM.
-  useEffect(() => {
-    if (activeTab !== 'crm' && selectedLeadIdForCrm !== null) {
-      setSelectedLeadIdForCrm(null);
-    }
-  }, [activeTab, selectedLeadIdForCrm]);
   const [isFirebaseActive, setIsFirebaseActive] = useState<boolean>(isFirebaseConfigured);
 
   // Multi-Tenant Context & Workspace State
@@ -333,13 +325,6 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
     });
   }, []);
 
-  const recordAuditAction = useCallback((entry: Parameters<typeof logAuditEvent>[1]) => {
-    if (!currentTenantId || !currentUser) return;
-    void logAuditEvent(currentTenantId, {
-      ...entry,
-      actor: { userId: currentUser.userId, name: currentUser.name || currentUser.email.split('@')[0] || 'User', email: currentUser.email, role: currentUser.role },
-    }).catch((error) => console.error('[AuditLogs] Could not record user action:', error));
-  }, [currentTenantId, currentUser]);
   // Load tenant info for the signed-in user's workspace (platform admins list all)
   useEffect(() => {
     if (!session) return;
@@ -1764,33 +1749,44 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
     };
     setActivities((prev) => [act, ...prev]);
     if (isFirebaseConfigured && db) {
-      setDoc(tDoc('lead_activities', act.activityId), act).catch(() => {});
+      setDoc(doc(db, 'lead_activities', act.activityId), act).catch(() => {});
     }
-    recordAuditAction({ action: 'COLD_OUTREACH_WORKFLOW_STARTED', module: 'CAMPAIGNS', description: 'Created the outbound prospect lead and conversation workflow.', target: { type: 'Prospect', id: prospect.prospectId, name: prospect.companyName } });
   };
 
   // Add Apollo Prospect (Persistent to Firestore)
   const handleAddProspect = async (prospect: OutboundProspect) => {
     setProspects((prev) => [prospect, ...prev]);
-    let saved = !(isFirebaseConfigured && db);
     if (isFirebaseConfigured && db) {
-      try { await setDoc(tDoc('outbound_prospects', prospect.prospectId), prospect); saved = true; }
-      catch (err) { console.warn('Error saving prospect to Firestore:', err); }
+      try {
+        await setDoc(doc(db, 'outbound_prospects', prospect.prospectId), prospect);
+      } catch (err) {
+        console.warn('Error saving prospect to Firestore:', err);
+      }
     }
-    if (saved) recordAuditAction({ action: 'OUTBOUND_PROSPECT_ADDED', module: 'CAMPAIGNS', description: 'An outbound prospect was added.', target: { type: 'Prospect', id: prospect.prospectId, name: prospect.companyName } });
   };
 
   // Toggle Outbound Campaign Running/Paused Status
   const handleToggleCampaignStatus = async (campaignId: string) => {
-    const existing = campaigns.find((c) => c.campaignId === campaignId);
-    const nextStatus: 'RUNNING' | 'PAUSED' = existing?.status === 'RUNNING' ? 'PAUSED' : 'RUNNING';
-    setCampaigns((prev) => prev.map((c) => c.campaignId === campaignId ? { ...c, status: nextStatus, updatedAt: new Date().toISOString() } : c));
-    let saved = !(isFirebaseConfigured && db);
+    let nextStatus: 'RUNNING' | 'PAUSED' = 'RUNNING';
+    setCampaigns((prev) =>
+      prev.map((c) => {
+        if (c.campaignId === campaignId) {
+          nextStatus = c.status === 'RUNNING' ? 'PAUSED' : 'RUNNING';
+          return { ...c, status: nextStatus, updatedAt: new Date().toISOString() };
+        }
+        return c;
+      })
+    );
     if (isFirebaseConfigured && db) {
-      try { await updateDoc(doc(db, 'outbound_campaigns', campaignId), { status: nextStatus, updatedAt: new Date().toISOString() }); saved = true; }
-      catch (err) { console.warn('Error toggling campaign status in Firestore:', err); }
+      try {
+        await updateDoc(doc(db, 'outbound_campaigns', campaignId), {
+          status: nextStatus,
+          updatedAt: new Date().toISOString(),
+        });
+      } catch (err) {
+        console.warn('Error toggling campaign status in Firestore:', err);
+      }
     }
-    if (saved) recordAuditAction({ action: nextStatus === 'RUNNING' ? 'OUTBOUND_CAMPAIGN_STARTED' : 'OUTBOUND_CAMPAIGN_PAUSED', module: 'CAMPAIGNS', description: 'Outbound campaign status changed to ' + nextStatus + '.', target: { type: 'Campaign', id: campaignId } });
   };
 
   // Mark conversation as read (persistent in Firestore)
@@ -2125,18 +2121,14 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
   };
 
   const handleDeleteUser = async (userId: string) => {
+    setUsers((prev) => prev.filter((u) => u.userId !== userId));
     if (db && isFirebaseConfigured) {
       try {
         await deleteDoc(doc(db, 'users', userId));
         await deleteDoc(doc(db, 'app_users', userId));
-        setUsers((prev) => prev.filter((u) => u.userId !== userId));
-        recordAuditAction({ action: 'WORKSPACE_USER_DELETED', module: 'SETTINGS', description: 'A workspace user account was deleted.', target: { type: 'User', id: userId } });
       } catch (err) {
         console.warn('Firestore user delete error:', err);
       }
-    } else {
-      setUsers((prev) => prev.filter((u) => u.userId !== userId));
-      recordAuditAction({ action: 'WORKSPACE_USER_DELETED', module: 'SETTINGS', description: 'A workspace user account was deleted.', target: { type: 'User', id: userId } });
     }
   };
 
@@ -2315,7 +2307,6 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
                 }}
                 tenantId={currentTenantId}
                 timezone={currentTenant?.timezone || 'Asia/Kolkata'}
-                canManageWhatsAppTemplates={Boolean(currentUser && (currentUser.role === 'ADMIN' || currentUser.accessLevel === 'ALL'))}
               />
             )}
 
@@ -2326,7 +2317,6 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
                 contacts={contacts}
                 activities={activities}
                 selectedLeadId={selectedLeadIdForCrm}
-                onDismissSelectedLead={() => setSelectedLeadIdForCrm(null)}
                 teamMembers={users
                   .filter((u) => u.isActive !== false)
                   .map((u) => ({ id: u.userId, name: u.name }))}
@@ -2346,43 +2336,35 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
                         : l
                     )
                   );
-                  const previousLead = leads.find((l) => l.leadId === leadId);
-                  const auditStatusChange = () => recordAuditAction({
-                    action: newStatus === 'DEMO_BOOKED' ? 'CRM_DEMO_BOOKED' : 'CRM_LEAD_STATUS_UPDATED',
-                    module: 'CRM',
-                    description: 'Lead status changed from ' + (previousLead?.status || 'unknown') + ' to ' + newStatus + '.',
-                    target: { type: 'Lead', id: leadId },
-                  });
                   if (isFirebaseConfigured && db) {
-                    void setDoc(tDoc('leads', leadId), sanitizeDoc({ status: newStatus, updatedAt: nowIso, lastActivityAt: nowIso, ...demoFields }), { merge: true })
-                      .then(auditStatusChange)
-                      .catch((err) => console.error('[Firestore] Failed updating lead status:', err));
-                  } else { auditStatusChange(); }
+                    setDoc(
+                      tDoc('leads', leadId),
+                      sanitizeDoc({ status: newStatus, updatedAt: nowIso, lastActivityAt: nowIso, ...demoFields }),
+                      { merge: true }
+                    ).catch((err) => console.error('[Firestore] Failed updating lead status:', err));
+                  }
                 }}
                 onUpdateLead={(updatedLead) => {
                   const nowIso = new Date().toISOString();
-                  const previousLead = leads.find((l) => l.leadId === updatedLead.leadId);
                   const leadToSave = { ...updatedLead, updatedAt: nowIso, lastActivityAt: nowIso };
                   setLeads((prev) => prev.map((l) => (l.leadId === leadToSave.leadId ? leadToSave : l)));
-                  let auditAction = 'CRM_LEAD_UPDATED';
-                  let auditDescription = 'Lead details were updated.';
-                  if (previousLead && previousLead.assignedCaller !== leadToSave.assignedCaller) { auditAction = 'CRM_LEAD_ASSIGNED'; auditDescription = 'Lead assignment changed to ' + (leadToSave.assignedCaller || 'Unassigned') + '.'; }
-                  else if (previousLead && previousLead.nextFollowUpAt !== leadToSave.nextFollowUpAt) { auditAction = 'CRM_CALLBACK_SCHEDULED'; auditDescription = 'A callback was scheduled or changed for the lead.'; }
-                  else if ((leadToSave.callLogs || []).length > (previousLead?.callLogs || []).length) { auditAction = 'CRM_CALL_LOG_RECORDED'; auditDescription = 'A telecalling outcome was recorded for the lead.'; }
-                  else if (previousLead && previousLead.status !== leadToSave.status) { auditAction = 'CRM_LEAD_STATUS_UPDATED'; auditDescription = 'Lead status changed to ' + leadToSave.status + '.'; }
-                  const auditLeadUpdate = () => recordAuditAction({ action: auditAction, module: 'CRM', description: auditDescription, target: { type: 'Lead', id: leadToSave.leadId } });
                   if (isFirebaseConfigured && db) {
-                    void setDoc(tDoc('leads', leadToSave.leadId), sanitizeDoc(leadToSave), { merge: true }).then(auditLeadUpdate).catch((err) => console.error('[Firestore] Failed updating lead:', err));
-                  } else { auditLeadUpdate(); }
+                    setDoc(tDoc('leads', leadToSave.leadId), sanitizeDoc(leadToSave), { merge: true }).catch((err) =>
+                      console.error('[Firestore] Failed updating lead:', err)
+                    );
+                  }
                 }}
                 onAddLead={(newLead, newContact) => {
                   setLeads((prev) => [newLead, ...prev]);
                   setContacts((prev) => [newContact, ...prev]);
-                  const auditNewLead = () => recordAuditAction({ action: 'CRM_LEAD_CREATED', module: 'CRM', description: 'A new lead and linked contact were created.', target: { type: 'Lead', id: newLead.leadId } });
                   if (isFirebaseConfigured && db) {
-                    void Promise.all([setDoc(tDoc('leads', newLead.leadId), sanitizeDoc(newLead), { merge: true }), setDoc(tDoc('contacts', newContact.contactId), sanitizeDoc(newContact), { merge: true })])
-                      .then(auditNewLead).catch((err) => console.error('[Firestore] Failed adding lead/contact:', err));
-                  } else { auditNewLead(); }
+                    setDoc(tDoc('leads', newLead.leadId), sanitizeDoc(newLead), { merge: true }).catch((err) =>
+                      console.error('[Firestore] Failed adding lead:', err)
+                    );
+                    setDoc(tDoc('contacts', newContact.contactId), sanitizeDoc(newContact), { merge: true }).catch((err) =>
+                      console.error('[Firestore] Failed adding contact:', err)
+                    );
+                  }
                 }}
               />
             )}

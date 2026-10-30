@@ -22,7 +22,6 @@ import { db } from './adminFirestore.js';
 import type { Channel, Lead, Conversation, Message, LeadStatus } from '../types/index.js';
 import type { TenantContext } from '../types/tenant.js';
 import { tenantRepo } from './tenantRepo.js';
-import { writeTenantAuditEvent } from './auditLogger.js';
 import { sendLiveEmail, getSmtpConfig } from './smtpService.js';
 import { appendOutboundMessageToThread, getAllThreadMessages } from './inboundPipeline.js';
 import { generateOpenAICompletion, getOpenAIApiKey } from './openaiClient.js';
@@ -303,34 +302,8 @@ export async function logFollowUpActivity(
     id: `log_${Date.now()}_${randSuffix()}`,
   };
   if (enabledDb()) {
-    await setDoc(repoFor(ctx).log(entry.id), clean(entry), { merge: true }).catch((error) => {
-      console.error('[AutoFollowUp] Failed to persist activity log:', error);
-    });
+    await setDoc(repoFor(ctx).log(entry.id), clean(entry), { merge: true }).catch(() => {});
   }
-  const description = entry.type === 'SENT'
-    ? 'AI auto follow-up was sent through ' + (entry.channel || 'EMAIL') + ' (attempt ' + (entry.attempt || 1) + ').'
-    : entry.type === 'FAILED'
-      ? 'AI auto follow-up failed to send.'
-      : entry.type === 'HUMAN_REVIEW'
-        ? 'AI auto follow-up was routed for human review.'
-        : entry.type === 'SKIPPED'
-          ? 'AI auto follow-up was skipped by a safety or scheduling rule.'
-          : entry.type === 'SCHEDULED'
-            ? 'AI auto follow-up was scheduled.'
-            : entry.type === 'CANCELLED'
-              ? 'AI auto follow-up was cancelled.'
-              : entry.type === 'COMPLETED'
-                ? 'AI auto follow-up sequence completed.'
-                : 'AI auto follow-up state changed to ' + entry.type + '.';
-  await writeTenantAuditEvent(ctx, {
-    action: 'AUTO_FOLLOWUP_' + entry.type,
-    module: 'AI_ENGINE',
-    severity: entry.type === 'FAILED' ? 'WARNING' : 'INFO',
-    description,
-    target: { type: 'Lead', id: entry.leadId },
-    actor: { userId: 'system:auto-follow-up', name: entry.user || 'AI Follow-Up Agent', email: 'auto-follow-up@system.local', role: 'AI_SYSTEM' },
-    metadata: { activityType: entry.type, conversationId: entry.conversationId, channel: entry.channel, attempt: entry.attempt, reason: entry.reason },
-  });
   return entry;
 }
 

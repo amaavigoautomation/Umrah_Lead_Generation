@@ -281403,6 +281403,43 @@ var init_humanHandoff = __esm({
   }
 });
 
+// src/server/auditLogger.ts
+async function writeTenantAuditEvent(ctx, entry) {
+  if (!ctx?.tenantId) return;
+  const now = (/* @__PURE__ */ new Date()).toISOString();
+  const id = "audit-" + Date.now() + "-" + Math.random().toString(36).slice(2, 8);
+  const actor = entry.actor || {
+    userId: ctx.uid || "system",
+    name: (ctx.email || "").split("@")[0] || "System Automation",
+    email: ctx.email || "system@workspace.local",
+    role: String(ctx.role || "admin").toUpperCase()
+  };
+  const record = {
+    id,
+    tenantId: ctx.tenantId,
+    timestamp: now,
+    action: entry.action,
+    module: entry.module,
+    severity: entry.severity || "INFO",
+    description: entry.description,
+    actor,
+    target: entry.target || null,
+    metadata: entry.metadata || {}
+  };
+  try {
+    await setDoc(tenantRepo(ctx).auditLogDoc(id), sanitizeForFirestore(record), { merge: true });
+  } catch (error) {
+    console.error("[AuditLogger] Failed to persist tenant audit event:", { tenantId: ctx.tenantId, action: entry.action, error });
+  }
+}
+var init_auditLogger = __esm({
+  "src/server/auditLogger.ts"() {
+    init_adminFirestore();
+    init_firestoreUtils();
+    init_tenantRepo();
+  }
+});
+
 // src/shared/brand.ts
 function defaultBrandFor(tenantId, tenantName, extra) {
   if (tenantId === "umrah360") return { ...UMRAH360_BRAND };
@@ -282190,9 +282227,20 @@ async function logFollowUpActivity(ctx, activity) {
     id: `log_${Date.now()}_${randSuffix()}`
   };
   if (enabledDb()) {
-    await setDoc(repoFor(ctx).log(entry.id), clean(entry), { merge: true }).catch(() => {
+    await setDoc(repoFor(ctx).log(entry.id), clean(entry), { merge: true }).catch((error) => {
+      console.error("[AutoFollowUp] Failed to persist activity log:", error);
     });
   }
+  const description = entry.type === "SENT" ? "AI auto follow-up was sent through " + (entry.channel || "EMAIL") + " (attempt " + (entry.attempt || 1) + ")." : entry.type === "FAILED" ? "AI auto follow-up failed to send." : entry.type === "HUMAN_REVIEW" ? "AI auto follow-up was routed for human review." : entry.type === "SKIPPED" ? "AI auto follow-up was skipped by a safety or scheduling rule." : entry.type === "SCHEDULED" ? "AI auto follow-up was scheduled." : entry.type === "CANCELLED" ? "AI auto follow-up was cancelled." : entry.type === "COMPLETED" ? "AI auto follow-up sequence completed." : "AI auto follow-up state changed to " + entry.type + ".";
+  await writeTenantAuditEvent(ctx, {
+    action: "AUTO_FOLLOWUP_" + entry.type,
+    module: "AI_ENGINE",
+    severity: entry.type === "FAILED" ? "WARNING" : "INFO",
+    description,
+    target: { type: "Lead", id: entry.leadId },
+    actor: { userId: "system:auto-follow-up", name: entry.user || "AI Follow-Up Agent", email: "auto-follow-up@system.local", role: "AI_SYSTEM" },
+    metadata: { activityType: entry.type, conversationId: entry.conversationId, channel: entry.channel, attempt: entry.attempt, reason: entry.reason }
+  });
   return entry;
 }
 function calculateDelayMs(value, unit) {
@@ -283069,6 +283117,7 @@ var init_autoFollowUpService = __esm({
     init_config();
     init_adminFirestore();
     init_tenantRepo();
+    init_auditLogger();
     init_smtpService();
     init_inboundPipeline();
     init_openaiClient();
@@ -283229,6 +283278,15 @@ async function persistHumanHandoff(ctx, conversationId, match, extra = {}) {
     persisted = false;
     console.error(`[Human Handoff] FAILED to persist handoff for ${ctx.tenantId}/${conversationId}:`, err);
   }
+  await writeTenantAuditEvent(ctx, {
+    action: persisted ? "HUMAN_HANDOFF_TRIGGERED" : "HUMAN_HANDOFF_PERSIST_FAILED",
+    module: "INBOX",
+    severity: persisted ? "INFO" : "CRITICAL",
+    description: persisted ? "AI escalated a conversation to human handling." : "A human handoff was detected but could not be persisted.",
+    target: { type: "Conversation", id: conversationId },
+    actor: { userId: "system:human-handoff", name: "AI Human Handoff", email: "human-handoff@system.local", role: "AI_SYSTEM" },
+    metadata: { reason: match.reason || "HUMAN_REQUEST", detectionSource: match.source || "RULE" }
+  });
   try {
     const followups = await Promise.resolve().then(() => (init_autoFollowUpService(), autoFollowUpService_exports));
     await followups.cancelPendingFollowUpJob(ctx, conversationId, "Human Handoff triggered", "system");
@@ -283244,6 +283302,7 @@ var init_humanHandoffService = __esm({
     init_adminFirestore();
     init_firestoreUtils();
     init_tenantRepo();
+    init_auditLogger();
     init_brandService();
     init_humanHandoff();
     DEFAULT_HANDOFF_RULES = {
@@ -290667,6 +290726,15 @@ I noticed your operations at ${lead.companyName}.`;
           ]
         });
         const now = (/* @__PURE__ */ new Date()).toISOString();
+        await writeTenantAuditEvent(getCampaignActiveCtx(), {
+          action: !sendResult.success ? "CAMPAIGN_EMAIL_SEND_FAILED" : sendResult.simulated ? "CAMPAIGN_EMAIL_SIMULATED" : "CAMPAIGN_EMAIL_SENT",
+          module: "CAMPAIGNS",
+          severity: sendResult.success ? "INFO" : "WARNING",
+          description: !sendResult.success ? "Campaign email failed to send." : sendResult.simulated ? "Campaign email was simulated and not delivered." : "Campaign email was sent to a campaign lead.",
+          target: { type: "Campaign Lead", id: lead.campaignLeadId, name: campaign.name },
+          actor: { userId: "system:campaign-worker", name: "Campaign Dispatch Worker", email: "campaign-worker@system.local", role: "SYSTEM" },
+          metadata: { campaignId, campaignRunId: currentRunId, channel: "EMAIL", simulated: Boolean(sendResult.simulated) }
+        });
         if (sendResult.success) {
           const sentMsgId = sendResult.messageId || `<camp-${Date.now()}@umrah360.in>`;
           lead.sendStatus = "SENT";
@@ -291125,6 +291193,7 @@ var init_campaignService = __esm({
     init_quotedText();
     init_entitlements();
     init_tenantRepo();
+    init_auditLogger();
     init_leadDedupe();
     init_openai();
     init_knowledgeData();
@@ -294671,6 +294740,28 @@ async function processLiveInboundEmail(payload) {
         error: replyDecisionReason
       };
     }
+    if (shouldSendAutoReply) {
+      const auditAction = !smtpResult.success ? "AI_REPLY_SEND_FAILED" : smtpResult.simulated ? "AI_REPLY_SIMULATED" : "AI_REPLY_SENT";
+      await writeTenantAuditEvent(getInboundCtx(), {
+        action: auditAction,
+        module: "AI_ENGINE",
+        severity: smtpResult.success ? "INFO" : "WARNING",
+        description: !smtpResult.success ? "AI email reply failed to send." : smtpResult.simulated ? "AI email reply was simulated and not delivered." : "AI sent an automated email reply.",
+        target: { type: "Conversation", id: conversationId },
+        actor: { userId: "system:ai-email", name: "AI Email Assistant", email: "ai-email@system.local", role: "AI_SYSTEM" },
+        metadata: { channel: "EMAIL", simulated: Boolean(smtpResult.simulated) }
+      });
+    } else if (pipelineConfig.mode === "REVIEW" && !aiResult.handoffTriggered && aiResult.replyText) {
+      await writeTenantAuditEvent(getInboundCtx(), {
+        action: "AI_DRAFT_CREATED",
+        module: "AI_ENGINE",
+        severity: "INFO",
+        description: "AI prepared an email reply draft for human review.",
+        target: { type: "Conversation", id: conversationId },
+        actor: { userId: "system:ai-email", name: "AI Email Assistant", email: "ai-email@system.local", role: "AI_SYSTEM" },
+        metadata: { channel: "EMAIL", mode: "REVIEW" }
+      });
+    }
     let aiReplyMessage = void 0;
     const aiMsgId = smtpResult.success && smtpResult.messageId ? smtpResult.messageId : `<reply-${Date.now()}-${Math.random().toString(36).slice(2, 7)}@amaavigo.com>`;
     if (shouldSendAutoReply) {
@@ -294939,6 +295030,7 @@ var init_inboundPipeline = __esm({
     init_quotedReply();
     init_humanHandoff();
     init_tenantRepo();
+    init_auditLogger();
     init_humanHandoffService();
     init_openai();
     init_humanHandoffService();
@@ -300754,6 +300846,7 @@ var metaChannelsService_exports = {};
 __export(metaChannelsService_exports, {
   connectMessenger: () => connectMessenger,
   connectWhatsApp: () => connectWhatsApp,
+  createWhatsAppTemplate: () => createWhatsAppTemplate,
   disconnectMessenger: () => disconnectMessenger,
   disconnectWhatsApp: () => disconnectWhatsApp,
   getMessengerStatus: () => getMessengerStatus,
@@ -300762,6 +300855,7 @@ __export(metaChannelsService_exports, {
   handleMetaWebhook: () => handleMetaWebhook,
   listMessengerPages: () => listMessengerPages,
   listWhatsAppTemplates: () => listWhatsAppTemplates,
+  listWhatsAppTemplatesForManagement: () => listWhatsAppTemplatesForManagement,
   missingMetaSettings: () => missingMetaSettings,
   sendMetaText: () => sendMetaText,
   sendWhatsAppTemplate: () => sendWhatsAppTemplate
@@ -300827,9 +300921,13 @@ async function connectWhatsApp(ctx, input) {
   requireConfigured("whatsapp");
   const code = String(input.code || "").trim();
   const wabaId = String(input.wabaId || "").trim();
-  const phoneNumberId = String(input.phoneNumberId || "").trim();
-  if (!code || !wabaId || !phoneNumberId) {
-    throw new MetaChannelError(400, "WhatsApp sign-up did not return a business account and phone number. Please try again.");
+  const requestedPhoneNumberId = String(input.phoneNumberId || "").trim();
+  const completionEvent = String(input.event || "").trim();
+  if (!code || !wabaId || completionEvent !== "FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING") {
+    throw new MetaChannelError(
+      400,
+      "WhatsApp Coexistence was not completed. Amaavigo only connects existing WhatsApp Business App numbers; API-only onboarding is disabled."
+    );
   }
   const tokenUrl = new URL(`${GRAPH}/oauth/access_token`);
   tokenUrl.searchParams.set("client_id", env("META_APP_ID"));
@@ -300838,10 +300936,54 @@ async function connectWhatsApp(ctx, input) {
   const tokenBody = await graphJson(tokenUrl.toString());
   const accessToken = String(tokenBody.access_token || "");
   if (!accessToken) throw new MetaChannelError(400, "Meta did not return an access token for this WhatsApp account.");
-  const infoUrl = new URL(`${GRAPH}/${encodeURIComponent(phoneNumberId)}`);
-  infoUrl.searchParams.set("fields", "display_phone_number,verified_name,quality_rating");
-  infoUrl.searchParams.set("access_token", accessToken);
-  const info = await graphJson(infoUrl.toString());
+  let phoneNumbers = [];
+  try {
+    const phoneNumbersUrl = new URL(`${GRAPH}/${encodeURIComponent(wabaId)}/phone_numbers`);
+    phoneNumbersUrl.searchParams.set("fields", "id,display_phone_number,verified_name,quality_rating");
+    phoneNumbersUrl.searchParams.set("access_token", accessToken);
+    const list = await graphJson(phoneNumbersUrl.toString());
+    phoneNumbers = Array.isArray(list?.data) ? list.data : [];
+  } catch {
+    throw new MetaChannelError(
+      422,
+      "Meta could not confirm this number for WhatsApp Coexistence. Check that the current Embedded Signup v4 configuration has the required WhatsApp permissions, then retry. API-only setup is disabled."
+    );
+  }
+  if (requestedPhoneNumberId) {
+    phoneNumbers = phoneNumbers.filter((item) => String(item?.id || "") === requestedPhoneNumberId);
+  }
+  if (!phoneNumbers.length) {
+    throw new MetaChannelError(422, "Meta did not return a phone number for this Coexistence session. No connection was saved; please try again.");
+  }
+  const checkedNumbers = await Promise.all(phoneNumbers.slice(0, 50).map(async (item) => {
+    const id = String(item?.id || "").trim();
+    if (!id) return null;
+    try {
+      const infoUrl = new URL(`${GRAPH}/${encodeURIComponent(id)}`);
+      infoUrl.searchParams.set("fields", "display_phone_number,verified_name,quality_rating,is_on_biz_app,platform_type");
+      infoUrl.searchParams.set("access_token", accessToken);
+      const info = await graphJson(infoUrl.toString());
+      if (info?.is_on_biz_app !== true || String(info?.platform_type || "").toUpperCase() !== "CLOUD_API") return null;
+      return { ...item, ...info, id };
+    } catch {
+      return null;
+    }
+  }));
+  const eligibleNumbers = checkedNumbers.filter((item) => Boolean(item));
+  if (eligibleNumbers.length === 0) {
+    throw new MetaChannelError(
+      422,
+      "This number is not confirmed as eligible for WhatsApp Business App Coexistence. Amaavigo has not connected it or registered it for API-only use. Make sure the client enters the existing WhatsApp Business App number and cancels if Meta requests migration or marks it ineligible."
+    );
+  }
+  if (!requestedPhoneNumberId && eligibleNumbers.length > 1) {
+    throw new MetaChannelError(
+      422,
+      "Meta returned multiple eligible WhatsApp Business App numbers for this business account, so Amaavigo stopped to avoid connecting the wrong number. Ask the platform administrator to resolve the account setup before retrying."
+    );
+  }
+  const selected = eligibleNumbers[0];
+  const phoneNumberId = String(selected.id);
   const routeRef = doc(db, "channel_routes", phoneNumberId);
   const routeSnap = await getDoc(routeRef);
   if (routeSnap.exists() && routeSnap.data().tenantId !== ctx.tenantId) {
@@ -300851,16 +300993,6 @@ async function connectWhatsApp(ctx, input) {
     method: "POST",
     headers: { Authorization: `Bearer ${accessToken}` }
   });
-  try {
-    const pin = String(crypto13.randomInt(1e5, 999999));
-    await graphJson(`${GRAPH}/${encodeURIComponent(phoneNumberId)}/register`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ messaging_product: "whatsapp", pin })
-    });
-    await putSecret(ctx, "whatsapp_pin", pin);
-  } catch {
-  }
   const existing = await getWhatsAppConnection(ctx);
   if (existing?.phoneNumberId && existing.phoneNumberId !== phoneNumberId) {
     await deleteDoc(doc(db, "channel_routes", existing.phoneNumberId)).catch(() => {
@@ -300870,17 +301002,42 @@ async function connectWhatsApp(ctx, input) {
   const connection = {
     phoneNumberId,
     wabaId,
-    displayPhoneNumber: String(info.display_phone_number || ""),
-    verifiedName: String(info.verified_name || ""),
-    qualityRating: info.quality_rating ? String(info.quality_rating) : void 0,
+    displayPhoneNumber: String(selected.display_phone_number || ""),
+    verifiedName: String(selected.verified_name || ""),
+    qualityRating: selected.quality_rating ? String(selected.quality_rating) : void 0,
+    isOnBusinessApp: true,
+    platformType: "CLOUD_API",
     status: "connected",
     connectedAt: existing?.connectedAt || now,
     updatedAt: now
   };
   await putSecret(ctx, "whatsapp_access_token", accessToken);
-  await setDoc(tenantRepo(ctx).integrationDoc("whatsapp"), { channel: "whatsapp", connection: JSON.parse(JSON.stringify(connection)) }, { merge: true });
-  await setDoc(routeRef, { phoneNumberId, tenantId: ctx.tenantId, businessAccountId: wabaId, channel: "whatsapp", createdAt: now });
-  return connection;
+  await setDoc(tenantRepo(ctx).integrationDoc("whatsapp"), { channel: "whatsapp", connection }, { merge: true });
+  await setDoc(routeRef, { phoneNumberId, tenantId: ctx.tenantId, businessAccountId: wabaId, channel: "whatsapp", coexistence: true, createdAt: now });
+  const requestSync = async (syncType) => {
+    try {
+      const result = await graphJson(`${GRAPH}/${encodeURIComponent(phoneNumberId)}/smb_app_data`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ messaging_product: "whatsapp", sync_type: syncType })
+      });
+      return { status: "requested", requestId: String(result?.request_id || result?.data?.request_id || "") || void 0 };
+    } catch (error) {
+      console.warn(`[WhatsApp Coexistence] ${syncType} sync could not be requested:`, error?.message || "Meta request failed");
+      return { status: "failed" };
+    }
+  };
+  const [contacts, history] = await Promise.all([
+    requestSync("smb_app_state_sync"),
+    requestSync("history")
+  ]);
+  const coexistenceSync = { contacts, history };
+  const connected = { ...connection, coexistenceSync };
+  await setDoc(tenantRepo(ctx).integrationDoc("whatsapp"), {
+    channel: "whatsapp",
+    connection: JSON.parse(JSON.stringify(connected))
+  }, { merge: true });
+  return connected;
 }
 async function disconnectWhatsApp(ctx) {
   const existing = await getWhatsAppConnection(ctx);
@@ -300904,26 +301061,130 @@ async function disconnectWhatsApp(ctx) {
   await deleteDoc(doc(db, "channel_routes", existing.phoneNumberId)).catch(() => {
   });
 }
-async function listWhatsAppTemplates(ctx) {
+function mapMetaWhatsAppTemplate(template) {
+  const components = Array.isArray(template?.components) ? template.components : [];
+  const bodyComponent = components.find((component) => String(component?.type || "").toUpperCase() === "BODY");
+  const headerComponent = components.find((component) => String(component?.type || "").toUpperCase() === "HEADER");
+  const footerComponent = components.find((component) => String(component?.type || "").toUpperCase() === "FOOTER");
+  const bodyText = String(bodyComponent?.text || "");
+  const params = bodyText.match(/\{\{\d+\}\}/g) || [];
+  return {
+    id: template?.id ? String(template.id) : void 0,
+    name: String(template?.name || ""),
+    language: String(template?.language || ""),
+    category: template?.category ? String(template.category) : void 0,
+    status: String(template?.status || "UNKNOWN").toUpperCase(),
+    body: bodyText,
+    header: String(headerComponent?.text || ""),
+    footer: String(footerComponent?.text || ""),
+    rejectionReason: String(template?.rejected_reason || template?.reason || ""),
+    qualityScore: template?.quality_score?.score ? String(template.quality_score.score) : void 0,
+    components,
+    paramCount: new Set(params).size
+  };
+}
+async function listWhatsAppTemplatesForManagement(ctx) {
   const connection = await getWhatsAppConnection(ctx);
   if (!connection || connection.status !== "connected") throw new MetaChannelError(409, "WhatsApp is not connected.");
   const token = await getSecret(ctx, "whatsapp_access_token");
-  const url = new URL(`${GRAPH}/${encodeURIComponent(connection.wabaId)}/message_templates`);
-  url.searchParams.set("fields", "name,language,status,category,components");
-  url.searchParams.set("limit", "100");
-  const body = await graphJson(url.toString(), { headers: { Authorization: `Bearer ${token}` } });
-  return (Array.isArray(body.data) ? body.data : []).filter((t2) => t2.status === "APPROVED").map((t2) => {
-    const bodyComp = (t2.components || []).find((c) => c.type === "BODY");
-    const text = String(bodyComp?.text || "");
-    const params = text.match(/\{\{\d+\}\}/g) || [];
-    return {
-      name: String(t2.name),
-      language: String(t2.language),
-      category: t2.category ? String(t2.category) : void 0,
-      body: text,
-      paramCount: new Set(params).size
-    };
+  const firstUrl = new URL(`${GRAPH}/${encodeURIComponent(connection.wabaId)}/message_templates`);
+  firstUrl.searchParams.set("fields", "id,name,language,status,category,components,quality_score,parameter_format");
+  firstUrl.searchParams.set("limit", "100");
+  const all = [];
+  let pageUrl = firstUrl.toString();
+  let pageCount = 0;
+  while (pageUrl && pageCount < 20) {
+    const response = await graphJson(pageUrl, { headers: { Authorization: `Bearer ${token}` } });
+    if (Array.isArray(response?.data)) all.push(...response.data);
+    const next2 = String(response?.paging?.next || "");
+    if (!next2) break;
+    const parsedNext = new URL(next2);
+    if (parsedNext.hostname !== "graph.facebook.com" || parsedNext.protocol !== "https:") {
+      throw new MetaChannelError(502, "Meta returned an unexpected template pagination URL.");
+    }
+    pageUrl = parsedNext.toString();
+    pageCount++;
+  }
+  return all.map(mapMetaWhatsAppTemplate).sort((a, b) => {
+    const aStatus = String(a.status || "");
+    const bStatus = String(b.status || "");
+    if (aStatus !== bStatus) return aStatus.localeCompare(bStatus);
+    return a.name.localeCompare(b.name);
   });
+}
+async function listWhatsAppTemplates(ctx) {
+  return (await listWhatsAppTemplatesForManagement(ctx)).filter((template) => template.status === "APPROVED");
+}
+async function createWhatsAppTemplate(ctx, input) {
+  const connection = await getWhatsAppConnection(ctx);
+  if (!connection || connection.status !== "connected") throw new MetaChannelError(409, "Connect a WhatsApp Business account before creating templates.");
+  const name5 = String(input?.name || "").trim();
+  const language = String(input?.language || "").trim();
+  const category = String(input?.category || "").trim().toUpperCase();
+  const header = String(input?.header || "").trim();
+  const body = String(input?.body || "").trim();
+  const footer = String(input?.footer || "").trim();
+  if (!/^[a-z][a-z0-9_]{0,511}$/.test(name5)) {
+    throw new MetaChannelError(400, "Template name must use lowercase letters, numbers, and underscores only.");
+  }
+  if (!/^[a-z]{2}(?:_[A-Z]{2})?$/.test(language)) {
+    throw new MetaChannelError(400, "Enter a supported Meta language code, such as en_US, en_GB, or hi.");
+  }
+  if (category !== "MARKETING" && category !== "UTILITY") {
+    throw new MetaChannelError(400, "Choose either the Marketing or Utility category.");
+  }
+  if (!body || body.length > 1024) {
+    throw new MetaChannelError(400, "Message body is required and must be no longer than 1,024 characters.");
+  }
+  if (header.length > 60 || footer.length > 60) {
+    throw new MetaChannelError(400, "Header and footer text must each be 60 characters or fewer.");
+  }
+  if (header.includes("{{") || header.includes("}}") || footer.includes("{{") || footer.includes("}}")) {
+    throw new MetaChannelError(400, "Variables are supported in the message body only in this version. Keep the header and footer static.");
+  }
+  const matches = Array.from(body.matchAll(/\{\{(\d+)\}\}/g));
+  const unmatchedBody = body.replace(/\{\{\d+\}\}/g, "");
+  if (unmatchedBody.includes("{{") || unmatchedBody.includes("}}")) {
+    throw new MetaChannelError(400, "A variable is malformed. Use numbered placeholders such as {{1}} and {{2}}.");
+  }
+  if (matches.length && (body.startsWith("{{") || body.endsWith("}}"))) {
+    throw new MetaChannelError(400, "Do not place a variable at the very beginning or end of the message body.");
+  }
+  const variableIndexes = Array.from(new Set(matches.map((match) => Number(match[1])))).sort((a, b) => a - b);
+  if (variableIndexes.some((index) => !Number.isInteger(index) || index < 1 || index > 20) || variableIndexes.some((index, position) => index !== position + 1)) {
+    throw new MetaChannelError(400, "Use consecutive numbered variables starting at {{1}}, with no gaps (up to 20 variables).");
+  }
+  const providedSamples = Array.isArray(input.samples) ? input.samples : [];
+  const samples = variableIndexes.map((index) => String(providedSamples[index - 1] || "").trim());
+  if (samples.some((sample) => !sample)) {
+    throw new MetaChannelError(400, "Provide an example value for every body variable so Meta can review the template.");
+  }
+  const components = [];
+  if (header) components.push({ type: "HEADER", format: "TEXT", text: header });
+  components.push({
+    type: "BODY",
+    text: body,
+    ...variableIndexes.length ? { example: { body_text: [samples] } } : {}
+  });
+  if (footer) components.push({ type: "FOOTER", text: footer });
+  const token = await getSecret(ctx, "whatsapp_access_token");
+  const result = await graphJson(`${GRAPH}/${encodeURIComponent(connection.wabaId)}/message_templates`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ name: name5, language, category, parameter_format: "POSITIONAL", components })
+  });
+  return {
+    id: result?.id ? String(result.id) : void 0,
+    name: name5,
+    language,
+    category,
+    status: String(result?.status || "PENDING").toUpperCase(),
+    body,
+    header,
+    footer,
+    components,
+    paramCount: variableIndexes.length
+  };
 }
 function friendlyWhatsAppError(err) {
   const code = Number(err?.metaCode);
@@ -300937,8 +301198,16 @@ async function sendWhatsAppTemplate(ctx, to, template) {
   if (!connection || connection.status !== "connected") throw new MetaChannelError(409, "WhatsApp is not connected.");
   const recipient = String(to || "").replace(/[^\d]/g, "");
   if (!recipient || !template?.name || !template?.language) throw new MetaChannelError(400, "Recipient and template are required.");
+  const approvedTemplates = await listWhatsAppTemplates(ctx);
+  const approvedTemplate = approvedTemplates.find((item) => item.name === template.name && item.language === template.language);
+  if (!approvedTemplate) {
+    throw new MetaChannelError(422, "This WhatsApp template is not currently approved and available to send. Refresh template status and choose an approved template.");
+  }
   const token = await getSecret(ctx, "whatsapp_access_token");
   const params = (template.params || []).map((p) => String(p));
+  if (params.length !== approvedTemplate.paramCount) {
+    throw new MetaChannelError(400, "The selected template requires " + approvedTemplate.paramCount + " body parameter(s), but " + params.length + " were provided.");
+  }
   const components = params.length ? [{ type: "body", parameters: params.map((text) => ({ type: "text", text })) }] : void 0;
   try {
     const result = await graphJson(`${GRAPH}/${encodeURIComponent(connection.phoneNumberId)}/messages`, {
@@ -300951,13 +301220,8 @@ async function sendWhatsAppTemplate(ctx, to, template) {
         template: { name: template.name, language: { code: template.language }, ...components ? { components } : {} }
       })
     });
-    let renderedText = `[Template: ${template.name}]`;
-    try {
-      const all = await listWhatsAppTemplates(ctx);
-      const match = all.find((t2) => t2.name === template.name && t2.language === template.language);
-      if (match) renderedText = match.body.replace(/\{\{(\d+)\}\}/g, (_m, n) => params[Number(n) - 1] ?? "");
-    } catch {
-    }
+    let renderedText = "[Template: " + template.name + "]";
+    renderedText = approvedTemplate.body.replace(/\{\{(\d+)\}\}/g, (_m, n) => params[Number(n) - 1] ?? "");
     return { messageId: String(result?.messages?.[0]?.id || ""), renderedText };
   } catch (err) {
     throw friendlyWhatsAppError(err);
@@ -301280,6 +301544,146 @@ function waText(message2) {
   if (String(text).trim()) return { text: String(text).trim(), hasText: true };
   return { text: `[WhatsApp ${type || "message"} received]`, hasText: false };
 }
+function normalizeWhatsAppNumber(value) {
+  return String(value || "").replace(/\D/g, "");
+}
+function metaWebhookTimestamp(value) {
+  const raw = String(value ?? "").trim();
+  if (!raw) return (/* @__PURE__ */ new Date()).toISOString();
+  const numeric = Number(raw);
+  if (Number.isFinite(numeric) && numeric > 0) return new Date(numeric < 1e12 ? numeric * 1e3 : numeric).toISOString();
+  const parsed = new Date(raw);
+  return Number.isNaN(parsed.getTime()) ? (/* @__PURE__ */ new Date()).toISOString() : parsed.toISOString();
+}
+async function persistCoexistenceContact(tenantId, phoneNumberId, state2) {
+  const contact = state2?.contact || {};
+  const phone = normalizeWhatsAppNumber(contact.phone_number || contact.wa_id);
+  if (!phone) return false;
+  const ctx = { tenantId, uid: "meta-coexistence-webhook", email: "", role: "admin" };
+  const repo = tenantRepo(ctx);
+  const contactId = `wac_${hash24(phoneNumberId + ":" + phone)}`;
+  const existingSnap = await getDoc(repo.contactDoc(contactId));
+  const existing = existingSnap.exists() ? existingSnap.data() : {};
+  const displayName = String(contact.full_name || [contact.first_name, contact.last_name].filter(Boolean).join(" ") || "").trim();
+  const [firstName, ...lastParts] = displayName.split(/\s+/);
+  const removed = String(state2?.action || "").toLowerCase() === "remove";
+  const now = (/* @__PURE__ */ new Date()).toISOString();
+  await setDoc(repo.contactDoc(contactId), {
+    ...existing,
+    contactId,
+    firstName: firstName || existing.firstName || "WhatsApp contact",
+    lastName: lastParts.join(" ") || existing.lastName || "",
+    phone: `+${phone}`,
+    whatsappId: phone,
+    tags: Array.isArray(existing.tags) ? existing.tags : ["WHATSAPP"],
+    whatsappAppContactStatus: removed ? "removed_from_phone" : "active",
+    updatedAt: now,
+    lastActivityAt: now,
+    createdAt: existing.createdAt || now
+  }, { merge: true });
+  return true;
+}
+async function persistCoexistenceMessage(tenantId, phoneNumberId, rawMessage, direction, customerPhone, historical = false) {
+  const message2 = rawMessage?.message && typeof rawMessage.message === "object" ? { ...rawMessage, ...rawMessage.message } : rawMessage;
+  const externalMessageId = String(message2?.id || message2?.message_id || rawMessage?.id || "").trim();
+  const customer = normalizeWhatsAppNumber(customerPhone || (direction === "OUTBOUND" ? message2?.to || message2?.recipient_id || rawMessage?.to : message2?.from || message2?.sender_id || rawMessage?.from));
+  if (!externalMessageId || !customer) return false;
+  const ctx = { tenantId, uid: "meta-coexistence-webhook", email: "", role: "admin" };
+  const repo = tenantRepo(ctx);
+  const contactId = `wac_${hash24(phoneNumberId + ":" + customer)}`;
+  const conversationId = `waconv_${hash24(phoneNumberId + ":" + customer)}`;
+  const messageId = `wamsg_${hash24(phoneNumberId + ":" + externalMessageId)}`;
+  if ((await getDoc(repo.messageDoc(messageId))).exists()) return false;
+  const now = (/* @__PURE__ */ new Date()).toISOString();
+  const timestamp = metaWebhookTimestamp(message2?.timestamp || rawMessage?.timestamp);
+  const contactSnap = await getDoc(repo.contactDoc(contactId));
+  const existingContact = contactSnap.exists() ? contactSnap.data() : {};
+  const contactName = String(message2?.contacts?.[0]?.profile?.name || existingContact.firstName || "WhatsApp contact").trim();
+  await setDoc(repo.contactDoc(contactId), {
+    ...existingContact,
+    contactId,
+    firstName: existingContact.firstName || contactName,
+    lastName: existingContact.lastName || "",
+    phone: `+${customer}`,
+    whatsappId: customer,
+    tags: Array.isArray(existingContact.tags) ? existingContact.tags : ["WHATSAPP"],
+    createdAt: existingContact.createdAt || now,
+    updatedAt: now,
+    lastActivityAt: timestamp
+  }, { merge: true });
+  const conversationSnap = await getDoc(repo.conversationDoc(conversationId));
+  const previous = conversationSnap.exists() ? conversationSnap.data() : {};
+  const isNewer = !previous.lastMessageAt || new Date(timestamp).getTime() >= new Date(previous.lastMessageAt).getTime();
+  const currentUnread = Number(previous.unreadCount || 0);
+  const unreadCount = currentUnread + (!historical && direction === "INBOUND" ? 1 : 0);
+  const { text, hasText } = waText(message2);
+  await setDoc(repo.messageDoc(messageId), {
+    messageId,
+    externalMessageId,
+    conversationId,
+    channel: "WHATSAPP",
+    senderType: direction === "OUTBOUND" ? "AGENT" : "CUSTOMER",
+    senderName: direction === "OUTBOUND" ? "WhatsApp Business App" : contactName,
+    text,
+    hasText,
+    direction,
+    timestamp,
+    receivedAt: now,
+    createdAt: timestamp,
+    aiProcessed: true,
+    historical,
+    source: historical ? "WHATSAPP_BUSINESS_APP_HISTORY" : "WHATSAPP_BUSINESS_APP_ECHO"
+  });
+  await setDoc(repo.conversationDoc(conversationId), {
+    ...previous,
+    conversationId,
+    contactId,
+    channel: "WHATSAPP",
+    direction: isNewer ? direction : previous.direction || direction,
+    externalConversationId: customer,
+    status: previous.status || "ACTIVE",
+    aiEnabled: previous.aiEnabled !== false,
+    humanHandoff: previous.humanHandoff === true,
+    managementMode: previous.managementMode || "AI",
+    conversationSummary: previous.conversationSummary || "WhatsApp conversation",
+    startedAt: !previous.startedAt || new Date(timestamp).getTime() < new Date(previous.startedAt).getTime() ? timestamp : previous.startedAt,
+    lastMessageAt: isNewer ? timestamp : previous.lastMessageAt,
+    lastMessageText: isNewer ? text : previous.lastMessageText,
+    unreadCount,
+    isRead: unreadCount === 0 ? true : false,
+    unread: unreadCount > 0,
+    createdAt: previous.createdAt || now,
+    updatedAt: now
+  }, { merge: true });
+  return true;
+}
+async function persistCoexistenceHistory(tenantId, phoneNumberId, history, displayPhoneNumber) {
+  let accepted = 0;
+  const businessDigits = normalizeWhatsAppNumber(displayPhoneNumber);
+  for (const chunk of history) {
+    if (Array.isArray(chunk?.errors) && chunk.errors.length) {
+      console.info("[WhatsApp Coexistence] History sync reported an error/decline from the Business App.");
+    }
+    for (const thread of Array.isArray(chunk?.threads) ? chunk.threads : []) {
+      const customer = normalizeWhatsAppNumber(thread?.id || thread?.wa_id);
+      if (!customer) continue;
+      const messages = Array.isArray(thread?.messages) ? thread.messages : [];
+      for (let i2 = 0; i2 < messages.length; i2 += 20) {
+        const batch = messages.slice(i2, i2 + 20);
+        const results = await Promise.all(batch.map(async (message2) => {
+          const from = normalizeWhatsAppNumber(message2?.from);
+          const to = normalizeWhatsAppNumber(message2?.to);
+          const isBusinessSender = Boolean(businessDigits) && from === businessDigits || String(message2?.from || "") === phoneNumberId;
+          const isCustomerSender = Boolean(businessDigits) && to === businessDigits;
+          const direction = isBusinessSender ? "OUTBOUND" : isCustomerSender ? "INBOUND" : "INBOUND";
+          return persistCoexistenceMessage(tenantId, phoneNumberId, message2, direction, customer, true);
+        }));
+        accepted += results.filter(Boolean).length;
+      }
+    }
+  }
+  return accepted;
+}
 async function dispatch(tenantId, event, externalKey, raw) {
   const eventId = crypto13.createHash("sha256").update(externalKey).digest("hex");
   const eventRef = doc(db, "meta_inbound_events", eventId);
@@ -301334,13 +301738,36 @@ async function handleMetaWebhook(req, res) {
   if (body.object === "whatsapp_business_account") {
     for (const entry of Array.isArray(body.entry) ? body.entry : []) {
       for (const change of Array.isArray(entry.changes) ? entry.changes : []) {
-        if (change?.field !== "messages") continue;
-        const value = change.value || {};
+        const field2 = String(change?.field || "");
+        const value = change?.value || {};
+        if (!["messages", "history", "smb_app_state_sync", "smb_message_echoes"].includes(field2)) continue;
         const phoneNumberId = String(value?.metadata?.phone_number_id || "");
         if (!phoneNumberId) continue;
         const routeSnap = await getDoc(doc(db, "channel_routes", phoneNumberId));
         const tenantId = routeSnap.exists() ? String(routeSnap.data().tenantId || "") : "";
         if (!tenantId) continue;
+        if (field2 === "smb_app_state_sync") {
+          for (const state2 of Array.isArray(value.state_sync) ? value.state_sync : []) {
+            if (await persistCoexistenceContact(tenantId, phoneNumberId, state2)) accepted++;
+          }
+          continue;
+        }
+        if (field2 === "smb_message_echoes") {
+          const echoes = Array.isArray(value.message_echoes) ? value.message_echoes : Array.isArray(value.messages) ? value.messages : [];
+          for (const echo of echoes) {
+            if (await persistCoexistenceMessage(tenantId, phoneNumberId, echo, "OUTBOUND")) accepted++;
+          }
+          continue;
+        }
+        if (field2 === "history") {
+          accepted += await persistCoexistenceHistory(
+            tenantId,
+            phoneNumberId,
+            Array.isArray(value.history) ? value.history : [],
+            String(value?.metadata?.display_phone_number || "")
+          );
+          continue;
+        }
         const names = {};
         for (const c of Array.isArray(value.contacts) ? value.contacts : []) {
           if (c?.wa_id) names[String(c.wa_id)] = String(c?.profile?.name || "");
@@ -303403,6 +303830,7 @@ async function dispatchThankYouEmailForConversation(conversationId, ctx = DEFAUL
       }
     });
     if (!mailResult.success) {
+      await writeTenantAuditEvent(ctx, { action: "WEBSITE_LEAD_AUTO_REPLY_FAILED", module: "AI_ENGINE", severity: "WARNING", description: "Automated website lead acknowledgement failed to send.", target: { type: "Conversation", id: conversationId }, actor: { userId: "system:website-auto-reply", name: "Website Lead Auto-Responder", email: "website-auto-reply@system.local", role: "AI_SYSTEM" }, metadata: { simulated: Boolean(mailResult.simulated) } });
       console.warn(`[Website Auto-Responder Error] SMTP delivery failed to ${targetEmail}:`, mailResult.error);
       await safeSetDoc(
         convRef,
@@ -303411,6 +303839,7 @@ async function dispatchThankYouEmailForConversation(conversationId, ctx = DEFAUL
       );
       return { success: false, error: mailResult.error || "SMTP delivery failed", email: targetEmail };
     }
+    await writeTenantAuditEvent(ctx, { action: mailResult.simulated ? "WEBSITE_LEAD_AUTO_REPLY_SIMULATED" : "WEBSITE_LEAD_AUTO_REPLY_SENT", module: "AI_ENGINE", severity: "INFO", description: mailResult.simulated ? "Automated website lead acknowledgement was simulated, not delivered." : "Automated website lead acknowledgement email was sent.", target: { type: "Conversation", id: conversationId }, actor: { userId: "system:website-auto-reply", name: "Website Lead Auto-Responder", email: "website-auto-reply@system.local", role: "AI_SYSTEM" }, metadata: { simulated: Boolean(mailResult.simulated) } });
     const nowIso = (/* @__PURE__ */ new Date()).toISOString();
     const autoReplyMsgId = pendingMsgDocId || `msg-thankyou-${conversationId}`;
     const outboundMessage = {
@@ -303485,6 +303914,7 @@ var init_websiteLeadAutoResponder = __esm({
     init_smtpService();
     init_websiteLeadService();
     init_tenantRepo();
+    init_auditLogger();
     init_brandService();
     init_brand();
     DEFAULT_UMRAH_CTX8 = {
@@ -303507,6 +303937,7 @@ init_inboundPipeline();
 
 // src/server/whatsappInboundPipeline.ts
 init_tenantRepo();
+init_auditLogger();
 init_humanHandoff();
 init_humanHandoffService();
 init_inboundPipeline();
@@ -304265,6 +304696,25 @@ async function processLiveInboundWhatsApp(payload, tenantCtx) {
     outboundDispatch = await sendLiveMetaWhatsAppMessage(senderPhone, aiResult.replyText);
     aiReplyMessage.externalMessageId = outboundDispatch.externalMessageId;
     aiReplyMessage.providerUsed = outboundDispatch.providerUsed;
+    await writeTenantAuditEvent(getWACtx(), {
+      action: outboundDispatch.success ? outboundDispatch.providerUsed === "INTERNAL_CRM_LOG" ? "AI_REPLY_LOGGED" : "AI_REPLY_SENT" : "AI_REPLY_SEND_FAILED",
+      module: "AI_ENGINE",
+      severity: outboundDispatch.success ? "INFO" : "WARNING",
+      description: !outboundDispatch.success ? "AI WhatsApp reply failed to send." : outboundDispatch.providerUsed === "INTERNAL_CRM_LOG" ? "AI WhatsApp reply was recorded internally; no external provider delivered it." : "AI sent an automated WhatsApp reply.",
+      target: { type: "Conversation", id: conversationId },
+      actor: { userId: "system:ai-whatsapp", name: "AI WhatsApp Assistant", email: "ai-whatsapp@system.local", role: "AI_SYSTEM" },
+      metadata: { channel: "WHATSAPP", provider: outboundDispatch.providerUsed }
+    });
+  } else if (pipelineConfig2.mode === "REVIEW" && !aiResult.handoffTriggered && aiResult.replyText) {
+    await writeTenantAuditEvent(getWACtx(), {
+      action: "AI_DRAFT_CREATED",
+      module: "AI_ENGINE",
+      severity: "INFO",
+      description: "AI prepared a WhatsApp reply draft for human review.",
+      target: { type: "Conversation", id: conversationId },
+      actor: { userId: "system:ai-whatsapp", name: "AI WhatsApp Assistant", email: "ai-whatsapp@system.local", role: "AI_SYSTEM" },
+      metadata: { channel: "WHATSAPP", mode: "REVIEW" }
+    });
   }
   const crmEntities = {
     contact: {
@@ -324507,6 +324957,37 @@ async function handleCoreApi(req, res) {
     }
     return true;
   }
+  if (url === "/api/whatsapp/templates/manage" && (req.method === "GET" || req.method === "POST")) {
+    if (activeTenantCtx.role === "member") {
+      res.statusCode = 403;
+      res.end(JSON.stringify({ error: "Only workspace admins can manage WhatsApp templates." }));
+      return true;
+    }
+    try {
+      const meta2 = await Promise.resolve().then(() => (init_metaChannelsService(), metaChannelsService_exports));
+      if (req.method === "GET") {
+        const templates = await meta2.listWhatsAppTemplatesForManagement(activeTenantCtx);
+        res.statusCode = 200;
+        res.end(JSON.stringify({ success: true, templates, syncedAt: (/* @__PURE__ */ new Date()).toISOString() }));
+      } else {
+        const template = await meta2.createWhatsAppTemplate(activeTenantCtx, {
+          name: String(body?.name || ""),
+          language: String(body?.language || ""),
+          category: String(body?.category || ""),
+          header: String(body?.header || ""),
+          body: String(body?.body || ""),
+          footer: String(body?.footer || ""),
+          samples: Array.isArray(body?.samples) ? body.samples.map((sample) => String(sample)) : []
+        });
+        res.statusCode = 201;
+        res.end(JSON.stringify({ success: true, template, message: "Template submitted to Meta for review. It cannot be used for sending until Meta approves it." }));
+      }
+    } catch (err) {
+      res.statusCode = err?.status || 500;
+      res.end(JSON.stringify({ error: err?.message || "WhatsApp template request failed." }));
+    }
+    return true;
+  }
   if (url === "/api/whatsapp/templates" && req.method === "GET") {
     try {
       const meta2 = await Promise.resolve().then(() => (init_metaChannelsService(), metaChannelsService_exports));
@@ -326243,7 +326724,14 @@ ${signature || defSig}`;
   }
   if (url === "/api/audit-logs") {
     const qp = new URL(rawUrl || "/", "http://localhost").searchParams;
-    const targetTenant = qp.get("tenantId") || resolvedTenantId || "umrah360";
+    const requestedTenant = qp.get("tenantId") || "";
+    const targetTenant = isPlatformAdmin ? requestedTenant || resolvedTenantId : resolvedTenantId;
+    if (!targetTenant) {
+      res.statusCode = 400;
+      res.setHeader("Content-Type", "application/json");
+      res.end(JSON.stringify({ success: false, error: "A workspace context is required to access audit logs." }));
+      return true;
+    }
     if (req.method === "GET") {
       let auditList = [];
       if (isFirebaseConfigured && db) {
@@ -326256,8 +326744,15 @@ ${signature || defSig}`;
           });
           auditList.sort((a, b) => new Date(b.timestamp || 0).getTime() - new Date(a.timestamp || 0).getTime());
         } catch (e2) {
-          console.warn("[AuditLogs API] Firestore fetch note:", e2);
+          console.error("[AuditLogs API] Firestore fetch failed:", e2);
+          res.statusCode = 500;
+          res.end(JSON.stringify({ success: false, error: e2?.message || "Failed to read audit logs" }));
+          return true;
         }
+      } else {
+        res.statusCode = 503;
+        res.end(JSON.stringify({ success: false, error: "Firestore is not configured; audit logs are unavailable." }));
+        return true;
       }
       res.statusCode = 200;
       res.end(JSON.stringify({ success: true, logs: auditList }));
@@ -326275,13 +326770,16 @@ ${signature || defSig}`;
           module: payload.module || "SYSTEM",
           severity: payload.severity || "INFO",
           description: payload.description || "System event",
-          actor: payload.actor || { name: "System", email: "system@workspace.local", role: "ADMIN" },
+          actor: { userId: userUid, name: (userEmail || "").split("@")[0] || "Workspace User", email: userEmail || "system@workspace.local", role: String(userRole || "member").toUpperCase() },
           target: payload.target || null,
           metadata: payload.metadata || {}
         };
-        if (isFirebaseConfigured && db) {
-          await safeSetDoc(doc(db, "tenants", targetTenant, "audit_logs", logId), record, { merge: true });
+        if (!isFirebaseConfigured || !db) {
+          res.statusCode = 503;
+          res.end(JSON.stringify({ success: false, error: "Firestore is not configured; audit event was not saved." }));
+          return true;
         }
+        await safeSetDoc(tenantRepo({ ...activeTenantCtx, tenantId: targetTenant }).auditLogDoc(logId), record, { merge: true });
         res.statusCode = 200;
         res.end(JSON.stringify({ success: true, log: record }));
       } catch (err) {

@@ -66,6 +66,7 @@ export interface CrmPipelineProps {
   activities: LeadActivity[];
   onOpenConversation: (conversationId?: string, leadId?: string) => void;
   selectedLeadId?: string | null;
+  onDismissSelectedLead?: () => void;
   onUpdateLeadStatus?: (leadId: string, newStatus: LeadStatus) => void;
   onUpdateLead?: (updatedLead: Lead) => void;
   onAddLead?: (newLead: Lead, newContact: Contact) => void;
@@ -103,6 +104,7 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
   activities,
   onOpenConversation,
   selectedLeadId: initialSelectedLeadId,
+  onDismissSelectedLead,
   onUpdateLeadStatus,
   onUpdateLead,
   onAddLead,
@@ -145,6 +147,11 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
 
   // Selected lead for 360° Drawer
   const [activeDrawerLeadId, setActiveDrawerLeadId] = useState<string | null>(initialSelectedLeadId || null);
+
+  // Keep externally requested drawer selection synchronized, including explicit dismissal.
+  useEffect(() => {
+    setActiveDrawerLeadId(initialSelectedLeadId || null);
+  }, [initialSelectedLeadId]);
 
   // Modals
   const [isAddLeadModalOpen, setIsAddLeadModalOpen] = useState(false);
@@ -1815,11 +1822,11 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
             <input
               type="datetime-local"
               id="followup-picker"
-              defaultValue={
-                customFollowUpLead.nextFollowUpAt
-                  ? customFollowUpLead.nextFollowUpAt.slice(0, 16)
-                  : new Date(Date.now() + 24 * 3600 * 1000).toISOString().slice(0, 16)
-              }
+              defaultValue={(() => {
+                const date = customFollowUpLead.nextFollowUpAt ? new Date(customFollowUpLead.nextFollowUpAt) : new Date();
+                const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+                return localDate.toISOString().slice(0, 16);
+              })()}
               className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
             />
 
@@ -2256,7 +2263,7 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
                 </div>
               </div>
               <button
-                onClick={() => setActiveDrawerLeadId(null)}
+                onClick={() => { setActiveDrawerLeadId(null); onDismissSelectedLead?.(); }}
                 className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-200/50 rounded-lg"
               >
                 <X className="w-5 h-5" />

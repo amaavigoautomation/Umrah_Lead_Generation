@@ -39,27 +39,34 @@ export async function logAuditEvent(
     metadata: entry.metadata || {},
   };
 
-  // 1. Direct Firestore write if configured
-  if (isFirebaseConfigured && db) {
-    try {
-      const colRef = collection(db, 'tenants', tenantId, 'audit_logs');
-      await setDoc(doc(colRef, id), auditRecord);
-    } catch (err) {
-      console.warn('[AuditService] Firestore write note:', err);
-    }
-  }
-
-  // 2. Post to backend API
+  let persisted = false;
   try {
-    await fetch('/api/audit-logs', {
+    const response = await fetch('/api/audit-logs', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(auditRecord),
     });
+    if (!response.ok) throw new Error('Audit API returned HTTP ' + response.status);
+    const result = await response.json();
+    if (result && result.success === true) persisted = true;
+    else throw new Error((result && result.error) || 'Audit API did not confirm persistence');
   } catch (err) {
-    console.warn('[AuditService] API sync note:', err);
+    console.error('[AuditService] API write failed:', err);
   }
 
+  if (!persisted && isFirebaseConfigured && db) {
+    try {
+      const colRef = collection(db, 'tenants', tenantId, 'audit_logs');
+      await setDoc(doc(colRef, id), auditRecord);
+      persisted = true;
+    } catch (err) {
+      console.error('[AuditService] Firestore write failed:', err);
+    }
+  }
+
+  if (!persisted) {
+    throw new Error('Audit event could not be saved. Check API and Firestore permissions.');
+  }
   return auditRecord;
 }
 

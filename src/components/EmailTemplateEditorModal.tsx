@@ -1001,16 +1001,7 @@ export const EmailTemplateEditorModal: React.FC<EmailTemplateEditorModalProps> =
 
             {/* TAB CONTENT: COMPANY ASSETS DRAWER OR EMAIL CLIENT PREVIEW */}
             {rightPanelTab === 'ASSETS' ? (
-              <div className="flex-1 bg-slate-950 border border-slate-800 rounded-2xl p-3 overflow-y-auto max-h-[640px] shadow-sm flex flex-col">
-                <div className="mb-2 p-2 bg-amber-500/10 border border-amber-500/20 rounded-xl text-xs text-amber-300 flex items-center justify-between">
-                  <span className="font-semibold flex items-center gap-1.5">
-                    <ImageIcon className="w-3.5 h-3.5 text-amber-400" />
-                    Company Assets (Stored in DB)
-                  </span>
-                  <span className="text-[11px] text-amber-200/80">
-                    Click <strong>Insert Into Email</strong> to add to template
-                  </span>
-                </div>
+              <div className="flex-1 bg-slate-50 border border-slate-200 rounded-2xl p-3 overflow-y-auto max-h-[640px] shadow-sm">
                 <CompanyAssetsPanel
                   isDrawerMode={true}
                   onInsertIntoTemplate={(snippet) => handleInsertHtmlSnippet(snippet)}

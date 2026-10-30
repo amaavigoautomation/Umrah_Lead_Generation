@@ -31,7 +31,7 @@ import {
 import { AuditLog, AuditModule, AuditSeverity } from '../types';
 import { db, isFirebaseConfigured } from '../firebase/config';
 import { collection, onSnapshot, query, orderBy, limit, doc, setDoc } from 'firebase/firestore';
-import { generateSampleAuditLogs, logAuditEvent } from '../services/auditService';
+import { logAuditEvent } from '../services/auditService';
 
 interface AuditLogsViewProps {
   tenantId?: string;
@@ -102,11 +102,6 @@ export const AuditLogsView: React.FC<AuditLogsViewProps> = ({
       } catch (e) {}
     }
 
-    // Fallback to rich sample audit logs if database is clean
-    if (loaded.length === 0) {
-      loaded = generateSampleAuditLogs(tenantId);
-    }
-
     setLogs(loaded);
     setLoading(false);
     setRefreshing(false);
@@ -115,31 +110,33 @@ export const AuditLogsView: React.FC<AuditLogsViewProps> = ({
   // Live Firestore Listener for Real-time Audit Events
   useEffect(() => {
     let unsub: (() => void) | undefined;
+    let fallbackInterval: ReturnType<typeof setInterval> | undefined;
     if (isFirebaseConfigured && db && tenantId) {
       try {
         const colRef = collection(db, 'tenants', tenantId, 'audit_logs');
         const q = query(colRef, orderBy('timestamp', 'desc'), limit(200));
         unsub = onSnapshot(q, (snap) => {
-          if (!snap.empty) {
-            const list: AuditLog[] = [];
-            snap.forEach((d) => list.push(d.data() as AuditLog));
-            setLogs(list);
-            setLoading(false);
-          } else {
-            loadAuditLogs();
-          }
-        }, () => {
+          const list: AuditLog[] = [];
+          snap.forEach((d) => list.push(d.data() as AuditLog));
+          setLogs(list);
+          setLoading(false);
+          setRefreshing(false);
+        }, (error) => {
+          console.error('[AuditLogs] Real-time listener failed:', error);
           loadAuditLogs();
+          if (!fallbackInterval) fallbackInterval = setInterval(loadAuditLogs, 10000);
         });
       } catch (err) {
         loadAuditLogs();
       }
     } else {
       loadAuditLogs();
+      fallbackInterval = setInterval(loadAuditLogs, 10000);
     }
 
     return () => {
       if (unsub) unsub();
+      if (fallbackInterval) clearInterval(fallbackInterval);
     };
   }, [tenantId]);
 
@@ -187,6 +184,8 @@ export const AuditLogsView: React.FC<AuditLogsViewProps> = ({
   // Filtered Logs Computation
   const filteredLogs = useMemo(() => {
     return logs.filter((log) => {
+      // Module navigation is not an actionable audit event; hide legacy entries from the operator view.
+      if (String(log.action || '').toUpperCase() === 'MODULE_VIEWED') return false;
       // Search Query
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase().trim();

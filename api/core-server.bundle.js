@@ -300846,6 +300846,7 @@ var metaChannelsService_exports = {};
 __export(metaChannelsService_exports, {
   connectMessenger: () => connectMessenger,
   connectWhatsApp: () => connectWhatsApp,
+  connectWhatsAppTestNumber: () => connectWhatsAppTestNumber,
   createWhatsAppTemplate: () => createWhatsAppTemplate,
   disconnectMessenger: () => disconnectMessenger,
   disconnectWhatsApp: () => disconnectWhatsApp,
@@ -300864,6 +300865,10 @@ import crypto13 from "crypto";
 function env(name5) {
   return (process.env[name5] || "").trim();
 }
+function reviewTestConnectionEnabled() {
+  const value = env("META_REVIEW_TEST_CONNECTION").replace(/^["']|["']$/g, "").trim().toLowerCase();
+  return ["true", "1", "yes", "on"].includes(value);
+}
 function missingMetaSettings(channel) {
   const missing = [];
   if (!env("META_APP_ID")) missing.push("META_APP_ID");
@@ -300877,7 +300882,9 @@ function getMetaClientConfig() {
   return {
     appId: env("META_APP_ID"),
     whatsappConfigId: env("META_WA_EMBEDDED_SIGNUP_CONFIG_ID"),
-    graphVersion: GRAPH_VERSION
+    graphVersion: GRAPH_VERSION,
+    // TEMPORARY (Meta App Review): lets the UI show the test-number connection form.
+    reviewTestConnection: reviewTestConnectionEnabled()
   };
 }
 function requireConfigured(channel) {
@@ -301038,6 +301045,72 @@ async function connectWhatsApp(ctx, input) {
     connection: JSON.parse(JSON.stringify(connected))
   }, { merge: true });
   return connected;
+}
+async function connectWhatsAppTestNumber(ctx, input) {
+  if (!reviewTestConnectionEnabled()) {
+    throw new MetaChannelError(403, "The App Review test connection is turned off on this server.");
+  }
+  if (ctx.role === "member") throw new MetaChannelError(403, "Only workspace admins can manage channel connections.");
+  if (!env("SECRETS_MASTER_KEY") && !env("TENANT_MASTER_KEY")) {
+    throw new MetaChannelError(503, "This server is missing SECRETS_MASTER_KEY, so the token cannot be stored safely.");
+  }
+  const phoneNumberId = String(input.phoneNumberId || "").trim();
+  const wabaId = String(input.wabaId || "").trim();
+  const accessToken = String(input.accessToken || "").trim();
+  if (!/^\d{5,30}$/.test(phoneNumberId) || !/^\d{5,30}$/.test(wabaId)) {
+    throw new MetaChannelError(400, "Phone number ID and WhatsApp Business Account ID must be numbers. Copy them from WhatsApp > API Setup.");
+  }
+  if (accessToken.length < 20 || /\s/.test(accessToken)) {
+    throw new MetaChannelError(400, "Paste the access token from WhatsApp > API Setup (no spaces).");
+  }
+  const authHeader = { Authorization: `Bearer ${accessToken}` };
+  let phoneNumbers = [];
+  try {
+    const listUrl = new URL(`${GRAPH}/${encodeURIComponent(wabaId)}/phone_numbers`);
+    listUrl.searchParams.set("fields", "id,display_phone_number,verified_name,quality_rating");
+    const list = await graphJson(listUrl.toString(), { headers: authHeader });
+    phoneNumbers = Array.isArray(list?.data) ? list.data : [];
+  } catch (err) {
+    throw new MetaChannelError(422, `Meta did not accept these details: ${err?.message || "check the token and the account ID."}`);
+  }
+  const selected = phoneNumbers.find((item) => String(item?.id || "") === phoneNumberId);
+  if (!selected) {
+    throw new MetaChannelError(422, "That phone number ID is not in this WhatsApp Business Account. Copy both IDs from WhatsApp > API Setup.");
+  }
+  const routeRef = doc(db, "channel_routes", phoneNumberId);
+  const routeSnap = await getDoc(routeRef);
+  if (routeSnap.exists() && routeSnap.data().tenantId !== ctx.tenantId) {
+    throw new MetaChannelError(409, "This WhatsApp number is already connected to another workspace.");
+  }
+  let subscribed = true;
+  try {
+    await graphJson(`${GRAPH}/${encodeURIComponent(wabaId)}/subscribed_apps`, { method: "POST", headers: authHeader });
+  } catch {
+    subscribed = false;
+  }
+  const existing = await getWhatsAppConnection(ctx);
+  if (existing?.phoneNumberId && existing.phoneNumberId !== phoneNumberId) {
+    await deleteDoc(doc(db, "channel_routes", existing.phoneNumberId)).catch(() => {
+    });
+  }
+  const now = (/* @__PURE__ */ new Date()).toISOString();
+  const connection = JSON.parse(JSON.stringify({
+    phoneNumberId,
+    wabaId,
+    displayPhoneNumber: String(selected.display_phone_number || ""),
+    verifiedName: String(selected.verified_name || ""),
+    qualityRating: selected.quality_rating ? String(selected.quality_rating) : void 0,
+    isTestConnection: true,
+    webhookSubscriptionStatus: subscribed ? "subscribed" : "needs_setup",
+    status: "connected",
+    connectedAt: existing?.connectedAt || now,
+    updatedAt: now
+  }));
+  await putSecret(ctx, "whatsapp_access_token", accessToken);
+  await setDoc(tenantRepo(ctx).integrationDoc("whatsapp"), { channel: "whatsapp", connection });
+  await setDoc(routeRef, { phoneNumberId, tenantId: ctx.tenantId, businessAccountId: wabaId, channel: "whatsapp", testConnection: true, createdAt: now });
+  console.warn(`[WhatsApp] App Review TEST connection saved for workspace ${ctx.tenantId} (phone number ${phoneNumberId}). Turn META_REVIEW_TEST_CONNECTION off after review.`);
+  return connection;
 }
 async function disconnectWhatsApp(ctx) {
   const existing = await getWhatsAppConnection(ctx);
@@ -324921,7 +324994,7 @@ async function handleCoreApi(req, res) {
     }
     return true;
   }
-  if ((url === "/api/whatsapp/connect" || url === "/api/whatsapp/disconnect" || url === "/api/messenger/pages" || url === "/api/messenger/connect" || url === "/api/messenger/disconnect" || url === "/api/whatsapp/send-template") && req.method === "POST") {
+  if ((url === "/api/whatsapp/connect" || url === "/api/whatsapp/connect-test" || url === "/api/whatsapp/disconnect" || url === "/api/messenger/pages" || url === "/api/messenger/connect" || url === "/api/messenger/disconnect" || url === "/api/whatsapp/send-template") && req.method === "POST") {
     const adminOnly = url !== "/api/whatsapp/send-template";
     if (adminOnly && activeTenantCtx.role === "member") {
       res.statusCode = 403;
@@ -324933,6 +325006,8 @@ async function handleCoreApi(req, res) {
       let result = { ok: true };
       if (url === "/api/whatsapp/connect") {
         result = { ok: true, connection: await meta2.connectWhatsApp(activeTenantCtx, body || {}) };
+      } else if (url === "/api/whatsapp/connect-test") {
+        result = { ok: true, connection: await meta2.connectWhatsAppTestNumber(activeTenantCtx, body || {}) };
       } else if (url === "/api/whatsapp/disconnect") {
         await meta2.disconnectWhatsApp(activeTenantCtx);
       } else if (url === "/api/messenger/pages") {

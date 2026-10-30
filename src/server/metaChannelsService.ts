@@ -62,6 +62,15 @@ function env(name: string): string {
   return (process.env[name] || '').trim();
 }
 
+/**
+ * TEMPORARY (Meta App Review): is the test-number connection switched on? Forgiving about how the variable was
+ * typed in the hosting dashboard (True, TRUE, 1, yes, on, or with quotes), so a small typo cannot hide the form.
+ */
+function reviewTestConnectionEnabled(): boolean {
+  const value = env('META_REVIEW_TEST_CONNECTION').replace(/^["']|["']$/g, '').trim().toLowerCase();
+  return ['true', '1', 'yes', 'on'].includes(value);
+}
+
 /** Which server settings are still missing for a channel. Used by the UI to explain "Setup pending". */
 export function missingMetaSettings(channel: MetaChannel): string[] {
   const missing: string[] = [];
@@ -80,7 +89,7 @@ export function getMetaClientConfig() {
     whatsappConfigId: env('META_WA_EMBEDDED_SIGNUP_CONFIG_ID'),
     graphVersion: GRAPH_VERSION,
     // TEMPORARY (Meta App Review): lets the UI show the test-number connection form.
-    reviewTestConnection: env('META_REVIEW_TEST_CONNECTION') === 'true',
+    reviewTestConnection: reviewTestConnectionEnabled(),
   };
 }
 
@@ -286,7 +295,7 @@ export async function connectWhatsAppTestNumber(
   ctx: TenantContext,
   input: { phoneNumberId?: string; wabaId?: string; accessToken?: string }
 ): Promise<WhatsAppConnection> {
-  if (env('META_REVIEW_TEST_CONNECTION') !== 'true') {
+  if (!reviewTestConnectionEnabled()) {
     throw new MetaChannelError(403, 'The App Review test connection is turned off on this server.');
   }
   if (ctx.role === 'member') throw new MetaChannelError(403, 'Only workspace admins can manage channel connections.');

@@ -29,6 +29,9 @@ type WhatsAppConnection = {
   qualityRating?: string;
   isOnBusinessApp?: true;
   platformType?: 'CLOUD_API';
+  /** TEMPORARY: set only for the App Review test connection (Meta's own test number). */
+  isTestConnection?: true;
+  webhookSubscriptionStatus?: 'subscribed' | 'needs_setup';
   coexistenceSync?: {
     contacts: { status: 'requested' | 'failed'; requestId?: string };
     history: { status: 'requested' | 'failed'; requestId?: string };
@@ -76,6 +79,8 @@ export function getMetaClientConfig() {
     appId: env('META_APP_ID'),
     whatsappConfigId: env('META_WA_EMBEDDED_SIGNUP_CONFIG_ID'),
     graphVersion: GRAPH_VERSION,
+    // TEMPORARY (Meta App Review): lets the UI show the test-number connection form.
+    reviewTestConnection: env('META_REVIEW_TEST_CONNECTION') === 'true',
   };
 }
 
@@ -267,6 +272,92 @@ export async function connectWhatsApp(
     connection: JSON.parse(JSON.stringify(connected)),
   }, { merge: true });
   return connected;
+}
+
+/**
+ * TEMPORARY, for Meta App Review only. Remove after advanced access is approved.
+ *
+ * Embedded Signup is blocked until the app has advanced access (error #2655111), but the review wants a
+ * video of this app sending a WhatsApp message. This connects Meta's own TEST number (WhatsApp > API Setup)
+ * from its ids + token, so the normal inbox send/receive and template code can run against it.
+ * It is switched off unless META_REVIEW_TEST_CONNECTION=true, and only workspace admins can use it.
+ */
+export async function connectWhatsAppTestNumber(
+  ctx: TenantContext,
+  input: { phoneNumberId?: string; wabaId?: string; accessToken?: string }
+): Promise<WhatsAppConnection> {
+  if (env('META_REVIEW_TEST_CONNECTION') !== 'true') {
+    throw new MetaChannelError(403, 'The App Review test connection is turned off on this server.');
+  }
+  if (ctx.role === 'member') throw new MetaChannelError(403, 'Only workspace admins can manage channel connections.');
+  if (!env('SECRETS_MASTER_KEY') && !env('TENANT_MASTER_KEY')) {
+    throw new MetaChannelError(503, 'This server is missing SECRETS_MASTER_KEY, so the token cannot be stored safely.');
+  }
+
+  const phoneNumberId = String(input.phoneNumberId || '').trim();
+  const wabaId = String(input.wabaId || '').trim();
+  const accessToken = String(input.accessToken || '').trim();
+  if (!/^\d{5,30}$/.test(phoneNumberId) || !/^\d{5,30}$/.test(wabaId)) {
+    throw new MetaChannelError(400, 'Phone number ID and WhatsApp Business Account ID must be numbers. Copy them from WhatsApp > API Setup.');
+  }
+  if (accessToken.length < 20 || /\s/.test(accessToken)) {
+    throw new MetaChannelError(400, 'Paste the access token from WhatsApp > API Setup (no spaces).');
+  }
+  const authHeader = { Authorization: `Bearer ${accessToken}` };
+
+  // Confirm the token works and that this phone number belongs to this WhatsApp Business Account.
+  let phoneNumbers: any[] = [];
+  try {
+    const listUrl = new URL(`${GRAPH}/${encodeURIComponent(wabaId)}/phone_numbers`);
+    listUrl.searchParams.set('fields', 'id,display_phone_number,verified_name,quality_rating');
+    const list = await graphJson(listUrl.toString(), { headers: authHeader });
+    phoneNumbers = Array.isArray(list?.data) ? list.data : [];
+  } catch (err: any) {
+    throw new MetaChannelError(422, `Meta did not accept these details: ${err?.message || 'check the token and the account ID.'}`);
+  }
+  const selected = phoneNumbers.find((item) => String(item?.id || '') === phoneNumberId);
+  if (!selected) {
+    throw new MetaChannelError(422, 'That phone number ID is not in this WhatsApp Business Account. Copy both IDs from WhatsApp > API Setup.');
+  }
+
+  const routeRef = doc(db, 'channel_routes', phoneNumberId);
+  const routeSnap = await getDoc(routeRef);
+  if (routeSnap.exists() && (routeSnap.data() as any).tenantId !== ctx.tenantId) {
+    throw new MetaChannelError(409, 'This WhatsApp number is already connected to another workspace.');
+  }
+
+  // Best effort: subscribe the app to this account's webhook events. Not fatal if Meta refuses.
+  let subscribed = true;
+  try {
+    await graphJson(`${GRAPH}/${encodeURIComponent(wabaId)}/subscribed_apps`, { method: 'POST', headers: authHeader });
+  } catch {
+    subscribed = false;
+  }
+
+  const existing = await getWhatsAppConnection(ctx);
+  if (existing?.phoneNumberId && existing.phoneNumberId !== phoneNumberId) {
+    await deleteDoc(doc(db, 'channel_routes', existing.phoneNumberId)).catch(() => {});
+  }
+
+  const now = new Date().toISOString();
+  const connection: WhatsAppConnection = JSON.parse(JSON.stringify({
+    phoneNumberId,
+    wabaId,
+    displayPhoneNumber: String(selected.display_phone_number || ''),
+    verifiedName: String(selected.verified_name || ''),
+    qualityRating: selected.quality_rating ? String(selected.quality_rating) : undefined,
+    isTestConnection: true,
+    webhookSubscriptionStatus: subscribed ? 'subscribed' : 'needs_setup',
+    status: 'connected',
+    connectedAt: existing?.connectedAt || now,
+    updatedAt: now,
+  }));
+
+  await putSecret(ctx, 'whatsapp_access_token', accessToken);
+  await setDoc(tenantRepo(ctx).integrationDoc('whatsapp'), { channel: 'whatsapp', connection });
+  await setDoc(routeRef, { phoneNumberId, tenantId: ctx.tenantId, businessAccountId: wabaId, channel: 'whatsapp', testConnection: true, createdAt: now });
+  console.warn(`[WhatsApp] App Review TEST connection saved for workspace ${ctx.tenantId} (phone number ${phoneNumberId}). Turn META_REVIEW_TEST_CONNECTION off after review.`);
+  return connection;
 }
 
 export async function disconnectWhatsApp(ctx: TenantContext): Promise<void> {

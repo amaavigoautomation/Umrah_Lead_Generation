@@ -10,6 +10,7 @@ type Connection = {
   verifiedName?: string;
   qualityRating?: string;
   pageName?: string;
+  isTestConnection?: boolean;
 };
 type ChannelState = {
   connected: boolean;
@@ -22,7 +23,7 @@ type ChannelsStatus = {
   instagram: ChannelState;
   whatsapp: ChannelState;
   messenger: ChannelState;
-  metaClient?: { appId: string; whatsappConfigId: string; graphVersion: string };
+  metaClient?: { appId: string; whatsappConfigId: string; graphVersion: string; reviewTestConnection?: boolean };
 };
 
 const EMPTY: ChannelsStatus = {
@@ -73,6 +74,8 @@ export const ConnectedChannelsPanel: React.FC<Props> = ({ tenantId, canEdit }) =
   const [pages, setPages] = useState<{ id: string; name: string }[] | null>(null);
   const [selectedPage, setSelectedPage] = useState('');
   const userTokenRef = useRef('');
+  // TEMPORARY (Meta App Review): Meta's test number, connected by pasting its ids + token.
+  const [testForm, setTestForm] = useState({ phoneNumberId: '', wabaId: '', accessToken: '' });
 
   const api = async (path: string, method: 'GET' | 'POST' = 'GET', body?: unknown) => {
     const user = auth.currentUser;
@@ -251,6 +254,15 @@ export const ConnectedChannelsPanel: React.FC<Props> = ({ tenantId, canEdit }) =
       await refresh();
     });
 
+  // TEMPORARY (Meta App Review): only visible when the server sets META_REVIEW_TEST_CONNECTION=true.
+  const connectWhatsAppTest = () =>
+    run('whatsapp', async () => {
+      await api('/api/whatsapp/connect-test', 'POST', testForm);
+      setTestForm({ phoneNumberId: '', wabaId: '', accessToken: '' });
+      setMessage('Meta test number connected. The inbox can now send and receive through it.');
+      await refresh();
+    });
+
   const disconnectWhatsApp = () => {
     if (!window.confirm('Disconnect WhatsApp from this workspace? Existing inbox history will be retained.')) return;
     return run('whatsapp', async () => {
@@ -355,6 +367,10 @@ export const ConnectedChannelsPanel: React.FC<Props> = ({ tenantId, canEdit }) =
               <p className="font-bold text-emerald-900">{wa.connection?.displayPhoneNumber || 'WhatsApp number'}</p>
               {wa.connection?.verifiedName && <p className="text-emerald-700 mt-0.5">{wa.connection.verifiedName}</p>}
               {wa.connection?.qualityRating && <p className="text-emerald-700 mt-0.5">Quality: {wa.connection.qualityRating}</p>}
+              {wa.connection?.isTestConnection && <p className="mt-1 font-semibold text-amber-700">Meta test number (App Review only)</p>}
+              {wa.connection?.isTestConnection && wa.connection?.webhookSubscriptionStatus === 'needs_setup' && (
+                <p className="mt-1 font-semibold text-amber-700">Webhook subscription not confirmed. Sending works, but replies may not arrive until the Meta webhook is set up.</p>
+              )}
             </div>
           ) : (
             missingNote(wa) || (
@@ -377,6 +393,23 @@ export const ConnectedChannelsPanel: React.FC<Props> = ({ tenantId, canEdit }) =
               </>
             )}
           </div>
+          {/* TEMPORARY (Meta App Review): Meta's test number, shown only when the server flag is on. */}
+          {status.metaClient?.reviewTestConnection && !wa.connected && (
+            <details className="rounded-lg border border-amber-200 bg-amber-50/60 p-2.5">
+              <summary className="cursor-pointer text-[11px] font-bold text-amber-800">App Review test number (temporary)</summary>
+              <div className="mt-2 space-y-2">
+                <p className="text-[11px] leading-relaxed text-amber-800">
+                  Copy these from Meta&apos;s WhatsApp &gt; API Setup page. The token expires, so generate a fresh one before each recording.
+                </p>
+                <input value={testForm.phoneNumberId} onChange={(e) => setTestForm({ ...testForm, phoneNumberId: e.target.value })} placeholder="Phone number ID" inputMode="numeric" className="w-full rounded-lg border border-slate-200 bg-white px-2 py-2 text-xs" />
+                <input value={testForm.wabaId} onChange={(e) => setTestForm({ ...testForm, wabaId: e.target.value })} placeholder="WhatsApp Business Account ID" inputMode="numeric" className="w-full rounded-lg border border-slate-200 bg-white px-2 py-2 text-xs" />
+                <input value={testForm.accessToken} onChange={(e) => setTestForm({ ...testForm, accessToken: e.target.value })} placeholder="Access token" type="password" autoComplete="off" className="w-full rounded-lg border border-slate-200 bg-white px-2 py-2 text-xs" />
+                <button onClick={connectWhatsAppTest} disabled={busy === 'whatsapp' || !canEdit || !testForm.phoneNumberId || !testForm.wabaId || !testForm.accessToken} className={`rounded-xl bg-amber-600 px-3 py-2 text-xs font-bold text-white hover:bg-amber-700 ${disabledBase}`}>
+                  {busy === 'whatsapp' ? 'Connecting…' : 'Connect test number'}
+                </button>
+              </div>
+            </details>
+          )}
         </div>
 
         {/* Instagram */}

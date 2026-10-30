@@ -1478,7 +1478,7 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
 
   // ----- WhatsApp / Messenger per-workspace connections (one shared Meta app) -----
   if (
-    (url === '/api/whatsapp/connect' || url === '/api/whatsapp/disconnect' || url === '/api/messenger/pages' ||
+    (url === '/api/whatsapp/connect' || url === '/api/whatsapp/connect-test' || url === '/api/whatsapp/disconnect' || url === '/api/messenger/pages' ||
       url === '/api/messenger/connect' || url === '/api/messenger/disconnect' || url === '/api/whatsapp/send-template') &&
     req.method === 'POST'
   ) {
@@ -1493,6 +1493,9 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
       let result: any = { ok: true };
       if (url === '/api/whatsapp/connect') {
         result = { ok: true, connection: await meta.connectWhatsApp(activeTenantCtx, body || {}) };
+      } else if (url === '/api/whatsapp/connect-test') {
+        // TEMPORARY (Meta App Review): off unless META_REVIEW_TEST_CONNECTION=true on the server.
+        result = { ok: true, connection: await meta.connectWhatsAppTestNumber(activeTenantCtx, body || {}) };
       } else if (url === '/api/whatsapp/disconnect') {
         await meta.disconnectWhatsApp(activeTenantCtx);
       } else if (url === '/api/messenger/pages') {

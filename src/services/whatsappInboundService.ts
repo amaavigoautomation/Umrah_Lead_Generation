@@ -11,6 +11,7 @@ import { findDuplicateContact } from './dataService';
 import { retrieveRelevantKnowledge } from './ragService';
 import { checkHumanHandoffConditions } from './aiService';
 import { getCurrentBrand } from '../context/BrandContext';
+import { normalizeChannelMode } from '../shared/channelModes';
 
 export const WHATSAPP_BUSINESS_NUMBER = '+919820252434';
 export const WHATSAPP_BUSINESS_NUMBER_FORMATTED = '+91 98202 52434';
@@ -126,6 +127,7 @@ export async function processInboundWhatsAppMessage(params: {
   settings: SystemSettings;
 }): Promise<InboundWhatsAppProcessingResult> {
   const { payload, contacts, leads, conversations, messages, knowledgeDocs, settings } = params;
+  const channelMode = normalizeChannelMode(settings.channelModes?.WHATSAPP);
   const now = new Date().toISOString();
   const steps: InboundWhatsAppStepTrace[] = [];
 
@@ -325,6 +327,7 @@ export async function processInboundWhatsAppMessage(params: {
     text: payload.body,
     timestamp: now,
     aiReplied: false,
+    aiProcessed: true,
   };
 
   recordStep(
@@ -338,7 +341,7 @@ export async function processInboundWhatsAppMessage(params: {
   // ----------------------------------------------------
   // Step 6: RAG Knowledge Retrieval & Guardrail Check
   // ----------------------------------------------------
-  const retrievedDocs = retrieveRelevantKnowledge(payload.body, knowledgeDocs, 3);
+  const retrievedDocs = channelMode === 'OFF' ? [] : retrieveRelevantKnowledge(payload.body, knowledgeDocs, 3);
   const docTitles = retrievedDocs.map((d) => d.title);
 
   let handoffTriggered = false;
@@ -405,6 +408,57 @@ export async function processInboundWhatsAppMessage(params: {
     }
   } catch (apiErr) {
     console.warn('[WhatsApp Inbound Client] Backend call notice; using local generation:', apiErr);
+  }
+
+  // REVIEW and OFF must never fall through to the canned-response fallback below.
+  // The backend owns AI generation/draft creation; this client path only reflects its result.
+  if (channelMode !== 'AUTO') {
+    incomingMessage.aiReplied = false;
+    incomingMessage.aiProcessed = true;
+    const draftText = String((conversation as any).draftReply?.text || replyText || '').trim();
+    if (channelMode === 'REVIEW' && draftText && !(conversation as any).draftReply) {
+      (conversation as any).draftReply = {
+        draftId: `draft-wa-${incomingMsgId}`,
+        text: draftText,
+        generatedAt: new Date().toISOString(),
+        status: 'PENDING',
+      };
+      conversation.status = 'REVIEW';
+    }
+
+    const activities: LeadActivity[] = [{
+      activityId: `act-wa-inbound-${Date.now()}`,
+      leadId: lead.leadId,
+      contactId: contact.contactId,
+      type: 'CUSTOMER_REPLIED',
+      title: `Inbound WhatsApp from ${contact.firstName}`,
+      description: `Received message via ${WHATSAPP_BUSINESS_NUMBER_FORMATTED}. ${channelMode === 'OFF' ? 'AI is OFF; no reply or draft was created.' : draftText ? 'AI draft is awaiting human review.' : 'No draft was generated.'}`,
+      timestamp: now,
+    }];
+    recordStep(
+      7,
+      channelMode === 'OFF' ? 'AI Replies Disabled' : 'AI Draft Held for Human Review',
+      channelMode === 'OFF'
+        ? 'WhatsApp mode is OFF. No AI response or draft was generated.'
+        : 'WhatsApp mode is REVIEW. No message was dispatched; any draft is available for human verification.',
+      'completed',
+      { channelMode, draftCreated: Boolean(draftText && channelMode === 'REVIEW') }
+    );
+    recordStep(8, 'CRM Synchronization & Activity Timeline', 'Inbound customer message remains available in Unified Inbox and CRM.', 'completed', { activitiesLogged: activities.length });
+    return {
+      success: true,
+      targetNumber: WHATSAPP_BUSINESS_NUMBER,
+      contact,
+      lead,
+      conversation,
+      incomingMessage,
+      aiReplyMessage: undefined,
+      activities,
+      steps,
+      humanHandoffTriggered: handoffTriggered,
+      handoffReason,
+      knowledgeSources: docTitles,
+    };
   }
 
   // If backend didn't produce reply, generate locally

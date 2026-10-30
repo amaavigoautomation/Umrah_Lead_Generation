@@ -5,6 +5,7 @@ import { tenantRepo } from './tenantRepo.js';
 import { encryptSecret, decryptSecret } from './cryptoUtils.js';
 import type { TenantContext } from '../types/tenant.js';
 import { evaluateHumanHandoff, persistHumanHandoff, describeHandoff } from './humanHandoffService.js';
+import { getTenantChannelMode } from './channelModeService.js';
 
 /**
  * Per-workspace WhatsApp (Cloud API via Embedded Signup) and Facebook Messenger (Page login),
@@ -274,14 +275,6 @@ export async function connectWhatsApp(
   return connected;
 }
 
-/**
- * TEMPORARY, for Meta App Review only. Remove after advanced access is approved.
- *
- * Embedded Signup is blocked until the app has advanced access (error #2655111), but the review wants a
- * video of this app sending a WhatsApp message. This connects Meta's own TEST number (WhatsApp > API Setup)
- * from its ids + token, so the normal inbox send/receive and template code can run against it.
- * It is switched off unless META_REVIEW_TEST_CONNECTION=true, and only workspace admins can use it.
- */
 export async function connectWhatsAppTestNumber(
   ctx: TenantContext,
   input: { phoneNumberId?: string; wabaId?: string; accessToken?: string }
@@ -839,14 +832,19 @@ async function processInbound(tenantId: string, event: InboundEvent, eventId: st
   await setDoc(repo.messageDoc(messageId), {
     messageId, externalMessageId: event.externalMessageId, conversationId, channel: event.channel,
     senderType: 'CUSTOMER', senderName: displayName, text: event.text, direction: 'INBOUND',
-    timestamp: event.timestamp, receivedAt: now, createdAt: now, aiReplied: false, aiProcessed: false,
+    timestamp: event.timestamp, receivedAt: now, createdAt: now, aiReplied: false, aiProcessed: true,
   });
 
-  const settingsSnap = await getDoc(repo.settingsDoc('default'));
-  const settings = settingsSnap.exists() ? (settingsSnap.data() as any) : {};
-  const mode = settings?.channelModes?.[event.channel] || 'AUTO';
-  if (!conversation.aiEnabled || conversation.humanHandoff || conversation.managementMode === 'HUMAN' || mode === 'SIMULATION') {
-    await updateDoc(eventRef, { status: 'processed', processedAt: now, conversationId });
+  const mode = await getTenantChannelMode(ctx, event.channel, 'AUTO');
+  if (!conversation.aiEnabled || conversation.humanHandoff || conversation.managementMode === 'HUMAN' || mode === 'OFF') {
+    // Prevent the browser-side fallback engine from bypassing OFF or a human takeover.
+    await updateDoc(repo.messageDoc(messageId), { aiProcessed: true });
+    await updateDoc(eventRef, {
+      status: mode === 'OFF' ? 'disabled' : 'processed',
+      ...(mode === 'OFF' ? { reason: 'Channel mode OFF: AI replies and drafts are disabled.' } : {}),
+      processedAt: now,
+      conversationId,
+    });
     return;
   }
   // Load the recent thread once: it feeds the Human Handoff check and the AI prompt below.
@@ -908,6 +906,7 @@ async function processInbound(tenantId: string, event: InboundEvent, eventId: st
 
   if (mode === 'REVIEW') {
     await updateDoc(repo.conversationDoc(conversationId), {
+      status: 'REVIEW',
       draftReply: { draftId: `${prefix}draft_${hash24(event.externalMessageId)}`, text: replyText, generatedAt: now, status: 'PENDING' },
       updatedAt: now,
     });

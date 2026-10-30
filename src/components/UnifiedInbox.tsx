@@ -41,8 +41,10 @@ import {
   Contact,
   Lead,
   Channel,
+  ChannelMode,
   KnowledgeDocument,
 } from '../types';
+import { normalizeChannelMode } from '../shared/channelModes';
 import { generateOmnichannelResponse } from '../services/aiService';
 import { useBrand } from '../context/BrandContext';
 import { useConnectedChannels } from '../hooks/useConnectedChannels';
@@ -64,6 +66,7 @@ const InboundWhatsAppFlowModal = lazyNamed(() => import('./InboundWhatsAppFlowMo
 interface UnifiedInboxProps {
   /** Workspace whose connected mailbox / WhatsApp number are shown above the conversation list. */
   tenantId?: string;
+  channelModes?: Partial<Record<Channel, ChannelMode>>;
   conversations: Conversation[];
   /** True when older conversations exist beyond the loaded page. */
   hasMoreConversations?: boolean;
@@ -90,6 +93,7 @@ interface UnifiedInboxProps {
 
 export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
   tenantId,
+  channelModes = {},
   conversations,
   hasMoreConversations,
   onLoadMoreConversations,
@@ -232,6 +236,10 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
 
   // Retry sending an email message over SMTP
   const handleRetrySendEmail = async (msg: Message) => {
+    if (msg.aiGenerated && normalizeChannelMode(channelModes[msg.channel]) === 'OFF') {
+      window.alert('This channel is OFF. Previously generated AI replies cannot be retried.');
+      return;
+    }
     const toEmail = activeContact.email || msg.emailMeta?.to || msg.senderEmail;
     if (!toEmail) return;
     setRetryingMessageId(msg.messageId);
@@ -244,6 +252,7 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
           to: toEmail,
           subject: msg.emailMeta?.subject || `Re: ${brand.companyName} Inquiry`,
           text: msg.text,
+          ...(msg.aiGenerated ? { aiGeneratedReply: true, channel: msg.channel } : {}),
           inReplyTo: msg.emailMeta?.inReplyTo,
           conversationId: msg.conversationId,
           senderName: msg.senderName || `${brand.aiAgentName} Automation`,
@@ -483,6 +492,10 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
   // Handle AI Auto-generate button
   const handleAiAutoGenerate = async () => {
     if (!activeConversation || !activeContact) return;
+    if (normalizeChannelMode(channelModes[activeConversation.channel]) === 'OFF') {
+      window.alert('AI drafting is disabled because this channel is OFF.');
+      return;
+    }
     setIsGeneratingAi(true);
 
     try {
@@ -1177,7 +1190,8 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
             <div className="p-2.5 bg-slate-50 border-t border-slate-200/80 flex items-center justify-end text-xs shrink-0">
               <button
                 onClick={handleAiAutoGenerate}
-                disabled={isGeneratingAi}
+                disabled={isGeneratingAi || normalizeChannelMode(channelModes[activeConversation.channel]) === 'OFF'}
+                title={normalizeChannelMode(channelModes[activeConversation.channel]) === 'OFF' ? 'AI drafting is disabled for this channel.' : 'Generate an AI draft from the conversation.'}
                 className="flex items-center space-x-1.5 px-3.5 py-1.5 rounded-lg bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 text-white font-semibold text-xs transition disabled:opacity-50 shadow-xs whitespace-nowrap"
               >
                 <Sparkles className="w-3.5 h-3.5" />
@@ -1207,13 +1221,29 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
                   >
                     Edit in Composer
                   </button>
-                  <button
-                    onClick={() => onApproveDraft?.(activeConversation.conversationId)}
-                    className="px-3.5 py-1.5 rounded-lg bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 text-white text-xs font-bold flex items-center space-x-1.5 transition shadow-xs"
-                  >
-                    <Send className="w-3.5 h-3.5" />
-                    <span>Approve &amp; Send Live Email</span>
-                  </button>
+                  {normalizeChannelMode(channelModes[activeConversation.channel]) === 'OFF' ? (
+                    <span className="text-[11px] font-semibold text-slate-500">
+                      Channel is OFF. This saved draft cannot be sent.
+                    </span>
+                  ) : (
+                    <button
+                      onClick={() => onApproveDraft?.(activeConversation.conversationId)}
+                      className="px-3.5 py-1.5 rounded-lg bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 text-white text-xs font-bold flex items-center space-x-1.5 transition shadow-xs"
+                    >
+                      <Send className="w-3.5 h-3.5" />
+                      <span>
+                        {activeConversation.channel === 'EMAIL' || activeConversation.channel === 'WEBSITE'
+                          ? 'Approve & Send Email'
+                          : activeConversation.channel === 'WHATSAPP'
+                          ? 'Approve & Send WhatsApp'
+                          : activeConversation.channel === 'INSTAGRAM'
+                          ? 'Approve & Send Instagram'
+                          : activeConversation.channel === 'FACEBOOK'
+                          ? 'Approve & Send Messenger'
+                          : 'Approve & Send'}
+                      </span>
+                    </button>
+                  )}
                 </div>
               </div>
             )}

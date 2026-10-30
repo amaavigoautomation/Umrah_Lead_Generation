@@ -61,6 +61,7 @@ export function mergeWebsiteConversation(fresh: Conversation, existing: Partial<
     customerEmail: fresh.customerEmail,
     // thank-you bookkeeping comes from this submission (it decides whether a thank-you still has to go out)
     thankYouEmailSent: Boolean(existing.thankYouEmailSent) || fresh.thankYouEmailSent,
+    thankYouEmailSuppressed: Boolean(fresh.thankYouEmailSuppressed),
     thankYouSmtpMessageId: existing.thankYouSmtpMessageId || fresh.thankYouSmtpMessageId,
     lastMessageAt: nowIso,
     lastMessageText: fresh.lastMessageText,

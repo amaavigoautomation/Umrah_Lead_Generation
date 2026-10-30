@@ -3,6 +3,8 @@ import { writeTenantAuditEvent } from './auditLogger.js';
 import { isHumanManagedConversationData } from '../shared/humanHandoff.js';
 import { evaluateHumanHandoff, persistHumanHandoff, describeHandoff } from './humanHandoffService.js';
 import { setConversationAiState } from './inboundPipeline.js';
+import { normalizeChannelMode } from '../shared/channelModes.js';
+import { getTenantChannelMode } from './channelModeService.js';
 import type { TenantContext } from '../types/tenant.js';
 
 const DEFAULT_UMRAH_CTX: TenantContext = {
@@ -216,7 +218,7 @@ const waConversationTurnMap = new Map<string, WhatsAppConversationTurnState>();
 
 // Pipeline Configuration
 export interface WhatsAppPipelineConfig {
-  mode: 'AUTO' | 'REVIEW' | 'SIMULATION';
+  mode: 'AUTO' | 'REVIEW' | 'OFF';
   targetBusinessNumber: string;
   autoReplyDebounceSeconds: number;
 }
@@ -232,7 +234,9 @@ export function getWhatsAppPipelineConfig(): WhatsAppPipelineConfig {
 }
 
 export function updateWhatsAppPipelineConfig(newConfig: Partial<WhatsAppPipelineConfig>): WhatsAppPipelineConfig {
-  Object.assign(pipelineConfig, newConfig);
+  const { mode, ...otherConfig } = newConfig;
+  Object.assign(pipelineConfig, otherConfig);
+  if (mode !== undefined) pipelineConfig.mode = normalizeChannelMode(mode);
   return { ...pipelineConfig };
 }
 
@@ -812,6 +816,7 @@ export async function processLiveInboundWhatsApp(
   if (tenantCtx) {
     setWhatsAppActiveContext(tenantCtx);
   }
+  const channelMode = await getTenantChannelMode(getWACtx(), 'WHATSAPP', normalizeChannelMode(pipelineConfig.mode));
   const targetNumber = TARGET_WHATSAPP_NUMBER;
   const targetNumberFormatted = TARGET_WHATSAPP_NUMBER_DISPLAY;
   const brand = await getTenantBrand(getWACtx().tenantId);
@@ -970,6 +975,7 @@ export async function processLiveInboundWhatsApp(
     receivedAt: nowIso,
     createdAt: nowIso,
     aiReplied: false,
+    aiProcessed: true,
   };
 
   thread.push(incomingMessage);
@@ -1013,20 +1019,25 @@ export async function processLiveInboundWhatsApp(
   // =========================================================================
   const aiResult = keywordHandoffReason
     ? { replyText: '', handoffTriggered: true, handoffReason: keywordHandoffReason, leadScore: 80, buyingStage: 'ENGAGED' }
-    : await generateWhatsAppAutoReplyText({
-        fromPhone: senderPhone,
-        fromName: payload.fromName,
-        body: payload.body,
-        companyName: payload.companyName,
-        threadHistory: [...thread],
-      });
+    : channelMode === 'OFF'
+      ? { replyText: '', handoffTriggered: false, leadScore: 50, buyingStage: 'ENGAGED' }
+      : await generateWhatsAppAutoReplyText({
+          fromPhone: senderPhone,
+          fromName: payload.fromName,
+          body: payload.body,
+          companyName: payload.companyName,
+          threadHistory: [...thread],
+        });
 
-  const shouldSendAutoReply = pipelineConfig.mode !== 'SIMULATION' && !aiResult.handoffTriggered;
+  const shouldSendAutoReply = channelMode === 'AUTO' && !aiResult.handoffTriggered;
+  const shouldCreateDraft = channelMode === 'REVIEW' && !aiResult.handoffTriggered && Boolean(aiResult.replyText);
   const replyDecisionReason = aiResult.handoffTriggered
     ? (aiResult.handoffReason || keywordHandoffReason || 'Human Handoff active; AI reply intentionally suppressed.')
-    : pipelineConfig.mode === 'SIMULATION'
-      ? 'WhatsApp mode is SIMULATION: auto-reply held for human inspection'
-      : `New inbound customer message to ${targetNumber} - AI reply dispatched`;
+    : channelMode === 'OFF'
+      ? 'WhatsApp channel mode is OFF: AI generation, drafts, and automatic replies are disabled.'
+      : channelMode === 'REVIEW'
+        ? 'WhatsApp mode is REVIEW: AI draft created for human approval.'
+        : `New inbound customer message to ${targetNumber} - AI reply dispatched`;
 
   let aiReplyMessage: any = undefined;
   const replyMsgId = `wa-reply-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
@@ -1091,8 +1102,8 @@ export async function processLiveInboundWhatsApp(
     error?: string;
     providerUsed: 'META_CLOUD_API' | 'TWILIO' | 'INTERNAL_CRM_LOG';
   } = {
-    success: true,
-    externalMessageId: replyMsgId,
+    success: false,
+    error: shouldSendAutoReply ? undefined : replyDecisionReason,
     providerUsed: 'INTERNAL_CRM_LOG',
   };
 
@@ -1108,7 +1119,7 @@ export async function processLiveInboundWhatsApp(
       actor: { userId: 'system:ai-whatsapp', name: 'AI WhatsApp Assistant', email: 'ai-whatsapp@system.local', role: 'AI_SYSTEM' },
       metadata: { channel: 'WHATSAPP', provider: outboundDispatch.providerUsed },
     });
-  } else if (pipelineConfig.mode === 'REVIEW' && !aiResult.handoffTriggered && aiResult.replyText) {
+  } else if (shouldCreateDraft) {
     await writeTenantAuditEvent(getWACtx(), {
       action: 'AI_DRAFT_CREATED', module: 'AI_ENGINE', severity: 'INFO',
       description: 'AI prepared a WhatsApp reply draft for human review.',
@@ -1156,13 +1167,13 @@ export async function processLiveInboundWhatsApp(
       leadId,
       channel: 'WHATSAPP',
       direction: 'INBOUND',
-      status: pipelineConfig.mode === 'REVIEW' ? 'REVIEW' : 'ACTIVE',
-      aiEnabled: pipelineConfig.mode === 'AUTO' && !aiResult.handoffTriggered,
-      humanHandoff: pipelineConfig.mode !== 'AUTO' || aiResult.handoffTriggered,
+      status: shouldCreateDraft ? 'REVIEW' : 'ACTIVE',
+      aiEnabled: !aiResult.handoffTriggered,
+      humanHandoff: Boolean(aiResult.handoffTriggered),
       // Only stamp the reason/time when the handoff is new; follow-up messages keep the original details.
       humanHandoffReason: aiResult.handoffTriggered && !handoffAlreadyActive ? (aiResult.handoffReason || keywordHandoffReason || 'AI handoff trigger') : undefined,
       humanHandoffAt: aiResult.handoffTriggered && !handoffAlreadyActive ? nowIso : undefined,
-      managementMode: (pipelineConfig.mode === 'AUTO' && !aiResult.handoffTriggered) ? 'AI' : 'HUMAN',
+      managementMode: aiResult.handoffTriggered ? 'HUMAN' : 'AI',
       isRead: false,
       unread: true,
       unreadCount: 1,
@@ -1170,7 +1181,7 @@ export async function processLiveInboundWhatsApp(
       startedAt: nowIso,
       lastMessageAt: nowIso,
       lastMessageText: (shouldSendAutoReply && aiReplyMessage) ? aiResult.replyText.slice(0, 100) : payload.body.slice(0, 100),
-      draftReply: pipelineConfig.mode === 'REVIEW' ? {
+      draftReply: shouldCreateDraft ? {
         draftId: `draft-wa-${Date.now()}`,
         text: aiResult.replyText,
         generatedAt: nowIso,

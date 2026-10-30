@@ -39,6 +39,7 @@ import {
 } from './services/dataService';
 import { INITIAL_KNOWLEDGE_DOCUMENTS } from './services/knowledgeData';
 import { generateOmnichannelResponse } from './services/aiService';
+import { normalizeChannelMode, normalizeChannelModes } from './shared/channelModes';
 import {
   processInboundEmail,
   InboundEmailPayload,
@@ -451,13 +452,13 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
         const apiSetRes = await fetch('/api/settings');
         if (apiSetRes.ok) {
           const apiSet = await apiSetRes.json();
-          if (apiSet?.emailMode) {
+          if (apiSet?.channelModes || apiSet?.emailMode) {
             setSettings((prev) => ({
               ...prev,
-              channelModes: {
+              channelModes: normalizeChannelModes(apiSet.channelModes, {
                 ...prev.channelModes,
-                EMAIL: apiSet.emailMode,
-              },
+                EMAIL: apiSet.emailMode ?? prev.channelModes.EMAIL,
+              }),
               emailSignature: apiSet.emailSignature || prev.emailSignature,
               debounceSeconds: apiSet.debounceSeconds ?? prev.debounceSeconds,
             }));
@@ -476,6 +477,10 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
           setSettings({
             ...workspaceDefaults,
             ...loadedSettings,
+            channelModes: normalizeChannelModes(loadedSettings.channelModes, {
+              ...workspaceDefaults.channelModes,
+              EMAIL: loadedSettings.emailMode ?? workspaceDefaults.channelModes.EMAIL,
+            }),
             humanHandoffEnabled: true,
             humanHandoffCustomPhrasesEnabled: backendHandoffConfig?.customPhrasesEnabled ?? loadedSettings.humanHandoffCustomPhrasesEnabled ?? workspaceDefaults.humanHandoffCustomPhrasesEnabled ?? true,
             humanHandoffKeywords: backendHandoffConfig?.keywords ?? loadedSettings.humanHandoffKeywords ?? workspaceDefaults.humanHandoffKeywords ?? [],
@@ -835,6 +840,8 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
     if (conversations.length === 0 || messages.length === 0) return;
 
     for (const conv of conversations) {
+      const channelMode = normalizeChannelMode(settings.channelModes?.[conv.channel]);
+      if (channelMode === 'OFF') continue;
       if (!conv.aiEnabled || conv.humanHandoff) continue;
 
       // CRITICAL: Website Demo Leads must NEVER be auto-replied by generic inbox AI.
@@ -858,7 +865,8 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
         lastMsg &&
         lastMsg.direction === 'INBOUND' &&
         (lastMsg.senderType === 'CUSTOMER' || lastMsg.senderType === 'PROSPECT') &&
-        !lastMsg.aiReplied
+        !lastMsg.aiReplied &&
+        !lastMsg.aiProcessed
       ) {
         const turnKey = `${conv.conversationId}-${lastMsg.messageId}`;
         if (autoRepliedTurnsRef.current.has(turnKey)) continue;
@@ -903,6 +911,37 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
             return;
           }
           const replyNowIso = new Date().toISOString();
+          if (channelMode === 'REVIEW') {
+            const draftText = String(aiResult.responseText || '').trim();
+            const reviewedMessage: Message = { ...lastMsg, aiProcessed: true };
+            if (draftText) {
+              const draftReply = {
+                draftId: `draft-${conv.channel.toLowerCase()}-${lastMsg.messageId}`,
+                text: draftText,
+                ...(conv.channel === 'EMAIL' ? {
+                  subject: lastMsg.emailMeta?.subject
+                    ? (lastMsg.emailMeta.subject.toLowerCase().startsWith('re:') ? lastMsg.emailMeta.subject : `Re: ${lastMsg.emailMeta.subject}`)
+                    : brandReSubject(),
+                } : {}),
+                generatedAt: replyNowIso,
+                status: 'PENDING' as const,
+              };
+              setConversations((prev) => prev.map((c) => c.conversationId === conv.conversationId
+                ? { ...c, status: 'REVIEW', draftReply, updatedAt: replyNowIso }
+                : c));
+              if (isFirebaseConfigured && db) {
+                await setDoc(tDoc('conversations', conv.conversationId), sanitizeDoc({
+                  status: 'REVIEW', draftReply, updatedAt: replyNowIso,
+                }), { merge: true });
+              }
+            }
+            setMessages((prev) => prev.map((m) => m.messageId === lastMsg.messageId ? reviewedMessage : m));
+            if (isFirebaseConfigured && db) {
+              await setDoc(tDoc('messages', lastMsg.messageId), sanitizeDoc(reviewedMessage), { merge: true });
+            }
+            return;
+          }
+          if (channelMode !== 'AUTO') return;
           const inReplyTo = lastMsg.gmailMessageId || lastMsg.emailMeta?.messageId || lastMsg.messageId;
           const aiMsg: Message = {
             messageId: `msg-ai-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
@@ -949,6 +988,7 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                   to: recipientEmail,
+                  ...(opts?.aiDraftApproval ? { aiDraftApproval: true, channel: conv.channel, conversationId, draftId: opts.draftId } : {}),
                   subject: aiMsg.emailMeta?.subject || `Re: ${lastMsg.emailMeta?.subject || `${bn().companyName} Platform`}`,
                   text: aiResult.responseText,
                   inReplyTo: inReplyTo || lastMsg.messageId,
@@ -978,10 +1018,10 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
 
           if (isFirebaseConfigured && db) {
             try {
-              await setDoc(doc(db, 'messages', lastMsg.messageId), sanitizeDoc(updatedLastMsg), { merge: true });
-              await setDoc(doc(db, 'messages', aiMsg.messageId), sanitizeDoc(aiMsg));
+              await setDoc(tDoc('messages', lastMsg.messageId), sanitizeDoc(updatedLastMsg), { merge: true });
+              await setDoc(tDoc('messages', aiMsg.messageId), sanitizeDoc(aiMsg));
               await setDoc(
-                doc(db, 'conversations', conv.conversationId),
+                tDoc('conversations', conv.conversationId),
                 sanitizeDoc({
                   lastMessageAt: replyNowIso,
                   lastMessageText: aiMsg.text.slice(0, 120),
@@ -1016,7 +1056,7 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
         });
       }
     }
-  }, [conversations, messages, contacts, leads, knowledgeDocs, settings.emailSignature]);
+  }, [conversations, messages, contacts, leads, knowledgeDocs, settings.emailSignature, settings.channelModes, tDoc]);
 
   // Handle message sending (Manual or Inbound / Outbound reply)
   const handleSendTemplate = async (
@@ -1054,10 +1094,10 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
     conversationId: string,
     text: string,
     senderType: 'AGENT' | 'AI' | 'CUSTOMER' | 'PROSPECT' = 'AGENT',
-    opts?: { skipSend?: boolean }
-  ) => {
+    opts?: { skipSend?: boolean; aiDraftApproval?: boolean; draftId?: string }
+  ): Promise<boolean> => {
     const conv = conversations.find((c) => c.conversationId === conversationId);
-    if (!conv) return;
+    if (!conv) return false;
     const isSocialChannel = conv.channel === 'INSTAGRAM' || conv.channel === 'WHATSAPP' || conv.channel === 'FACEBOOK';
 
     const threadMsgs = messages.filter((m) => m.conversationId === conversationId);
@@ -1075,22 +1115,26 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
         '';
       if (!recipientId) {
         window.alert(`This ${channelName} conversation does not have a valid recipient ID.`);
-        return;
+        return false;
       }
       try {
         const sendResponse = await fetch('/api/channels/send', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ channel: conv.channel, recipientId, text }),
+          body: JSON.stringify({
+            channel: conv.channel, recipientId, text,
+            ...(senderType === 'AI' && !opts?.aiDraftApproval ? { aiGeneratedReply: true } : {}),
+            ...(opts?.aiDraftApproval ? { aiDraftApproval: true, conversationId, draftId: opts.draftId } : {}),
+          }),
         });
         const sendData = await sendResponse.json().catch(() => ({}));
         if (!sendResponse.ok || !sendData.success) {
           window.alert(sendData.error || `${channelName} message could not be sent.`);
-          return;
+          return false;
         }
       } catch (error: any) {
         window.alert(error?.message || `${channelName} message could not be sent.`);
-        return;
+        return false;
       }
     }
     const inReplyTo = lastIncoming?.gmailMessageId || lastIncoming?.emailMeta?.messageId;
@@ -1149,18 +1193,18 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
         if (!sendRes.ok || !sendData.success) {
           // Surface the real reason (e.g. "no verified sending domain") instead of failing silently.
           window.alert(sendData.error || `Email could not be sent (HTTP ${sendRes.status}).`);
-          return;
+          return false;
         }
         if (sendData.messageId) {
           sentGmailMessageId = sendData.messageId;
         }
       } catch (err: any) {
         window.alert(err?.message || 'Email could not be sent (network error).');
-        return;
+        return false;
       }
     } else if ((conv.channel === 'EMAIL' || conv.channel === 'WEBSITE') && senderType === 'AGENT' && !recipientEmail) {
       window.alert('This conversation has no customer email address to reply to.');
-      return;
+      return false;
     }
 
     const direction = (senderType === 'AGENT' || senderType === 'AI') ? 'OUTBOUND' : 'INBOUND';
@@ -1249,10 +1293,14 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
       )
     );
 
+    // Channel mode is enforced here as well as in the server webhook/poller paths.
+    const channelMode = normalizeChannelMode(settings.channelModes?.[conv.channel]);
+
     // IDEMPOTENCY CHECK:
     // AI must trigger ONLY when a genuinely NEW inbound CUSTOMER message is received.
     // Check: gmailMessageId + direction=INBOUND + senderType=CUSTOMER + aiReplied=true
     if (
+      channelMode !== 'OFF' &&
       direction === 'INBOUND' &&
       (senderType === 'CUSTOMER' || senderType === 'PROSPECT') &&
       conv.aiEnabled &&
@@ -1276,6 +1324,39 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
         }
 
         const replyNowIso = new Date().toISOString();
+        if (channelMode === 'REVIEW') {
+          const draftText = String(aiResult.responseText || '').trim();
+          newMsg.aiProcessed = true;
+          const updatedInbound = { ...newMsg, aiProcessed: true };
+          setMessages((prev) => prev.map((m) => m.messageId === newMsg.messageId ? updatedInbound : m));
+          if (draftText) {
+            const draftReply = {
+              draftId: `draft-${conv.channel.toLowerCase()}-${newMsg.messageId}`,
+              text: draftText,
+              ...(conv.channel === 'EMAIL' ? {
+                subject: lastIncoming?.emailMeta?.subject
+                  ? (lastIncoming.emailMeta.subject.toLowerCase().startsWith('re:') ? lastIncoming.emailMeta.subject : `Re: ${lastIncoming.emailMeta.subject}`)
+                  : brandReSubject(),
+              } : {}),
+              generatedAt: replyNowIso,
+              status: 'PENDING' as const,
+            };
+            setConversations((prev) => prev.map((c) => c.conversationId === conversationId
+              ? { ...c, status: 'REVIEW', draftReply, updatedAt: replyNowIso }
+              : c));
+            if (isFirebaseConfigured && db) {
+              await setDoc(tDoc('conversations', conversationId), sanitizeDoc({
+                status: 'REVIEW', draftReply, updatedAt: replyNowIso,
+              }), { merge: true });
+            }
+          }
+          if (isFirebaseConfigured && db) {
+            await setDoc(tDoc('messages', newMsg.messageId), sanitizeDoc(updatedInbound), { merge: true });
+          }
+          return;
+        }
+        if (channelMode !== 'AUTO') return;
+
         const aiMsg: Message = {
           messageId: `msg-ai-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
           gmailMessageId: `<ai-reply-${Date.now()}@umrah360.in>`,
@@ -1321,6 +1402,8 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
                 to: contact.email,
                 subject: aiMsg.emailMeta?.subject || `Re: ${lastIncoming?.emailMeta?.subject || `${bn().companyName} Platform`}`,
                 text: aiResult.responseText,
+                aiGeneratedReply: true,
+                channel: conv.channel,
                 inReplyTo: inReplyTo || newMsg.messageId,
                 references: inReplyTo ? [inReplyTo] : undefined,
                 conversationId: conv.conversationId,
@@ -1348,10 +1431,10 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
 
         if (isFirebaseConfigured && db) {
           try {
-            await setDoc(doc(db, 'messages', newMsg.messageId), sanitizeDoc(newMsg), { merge: true });
-            await setDoc(doc(db, 'messages', aiMsg.messageId), sanitizeDoc(aiMsg));
+            await setDoc(tDoc('messages', newMsg.messageId), sanitizeDoc(newMsg), { merge: true });
+            await setDoc(tDoc('messages', aiMsg.messageId), sanitizeDoc(aiMsg));
             await setDoc(
-              doc(db, 'conversations', conversationId),
+              tDoc('conversations', conversationId),
               sanitizeDoc({
                 lastMessageAt: replyNowIso,
                 lastMessageText: aiMsg.text.slice(0, 120),
@@ -1445,6 +1528,7 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
         }
       }, 1000);
     }
+    return true;
   };
 
   // Toggle AI / Human Takeover (Section 30 & 31)
@@ -1819,12 +1903,43 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
     }
   };
 
-  // Approve AI-drafted reply (REVIEW mode) and send via real SMTP
+  // Approve a saved AI draft only after a human explicitly verifies it.
   const handleApproveDraft = async (conversationId: string) => {
     const conv = conversations.find((c) => c.conversationId === conversationId);
     if (!conv || !conv.draftReply) return;
+    if (normalizeChannelMode(settings.channelModes?.[conv.channel]) === 'OFF') {
+      window.alert('This channel is OFF. AI drafts cannot be dispatched until the channel is enabled again.');
+      return;
+    }
 
     const draft = conv.draftReply;
+
+    // Social channels use their existing connected-channel dispatcher.
+    // The server independently verifies that this exact pending draft is still allowed.
+    if (conv.channel === 'WHATSAPP' || conv.channel === 'INSTAGRAM' || conv.channel === 'FACEBOOK') {
+      const sent = await handleSendMessage(conversationId, draft.text, 'AGENT', {
+        aiDraftApproval: true,
+        draftId: draft.draftId,
+      });
+      if (!sent) return;
+
+      const nowIso = new Date().toISOString();
+      setConversations((prev) => prev.map((c) => c.conversationId === conversationId
+        ? { ...c, status: 'ACTIVE', draftReply: undefined, lastMessageAt: nowIso, lastMessageText: draft.text.slice(0, 120), updatedAt: nowIso }
+        : c));
+      if (isFirebaseConfigured && db) {
+        await setDoc(tDoc('conversations', conversationId), {
+          status: 'ACTIVE', draftReply: null, lastMessageAt: nowIso,
+          lastMessageText: draft.text.slice(0, 120), updatedAt: nowIso,
+        }, { merge: true });
+      }
+      return;
+    }
+
+    if (conv.channel !== 'EMAIL' && conv.channel !== 'WEBSITE') {
+      window.alert(`Draft dispatch is not configured for the ${conv.channel} channel yet.`);
+      return;
+    }
     const contact = contacts.find((c) => c.contactId === conv.contactId);
     const toEmail = contact?.email || conv.customerEmail;
     if (!toEmail) {
@@ -1846,6 +1961,9 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
           to: toEmail,
           subject,
           text: draft.text,
+          aiDraftApproval: true,
+          channel: conv.channel,
+          draftId: draft.draftId,
           conversationId,
           gmailThreadId: conv.gmailThreadId || conv.emailThreadId,
         }),
@@ -1865,7 +1983,7 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
         gmailMessageId: aiMsgId,
         gmailThreadId: conv.gmailThreadId || conv.emailThreadId || `thread-${conversationId}`,
         conversationId,
-        channel: 'EMAIL',
+        channel: conv.channel === 'WEBSITE' ? 'EMAIL' : conv.channel,
         direction: 'OUTBOUND',
         senderType: 'AI',
         senderName: `${bn().aiAgentName} Automation (Approved)`,
@@ -1898,6 +2016,12 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
                 lastMessageAt: nowIso,
                 lastMessageText: draft.text.slice(0, 120),
                 draftReply: undefined,
+                ...(conv.channel === 'WEBSITE' ? {
+                  thankYouEmailSent: true,
+                  thankYouEmailSuppressed: true,
+                  thankYouEmailDeliveredAt: nowIso,
+                  thankYouSmtpMessageId: aiMsgId,
+                } : {}),
                 updatedAt: nowIso,
               }
             : c
@@ -1913,6 +2037,12 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
             lastMessageAt: nowIso,
             lastMessageText: draft.text.slice(0, 120),
             draftReply: null,
+            ...(conv.channel === 'WEBSITE' ? {
+              thankYouEmailSent: true,
+              thankYouEmailSuppressed: true,
+              thankYouEmailDeliveredAt: nowIso,
+              thankYouSmtpMessageId: aiMsgId,
+            } : {}),
             updatedAt: nowIso,
           },
           { merge: true }
@@ -1928,6 +2058,7 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
   const handleSaveSettings = async (newSettings: SystemSettings) => {
     const normalizedSettings: SystemSettings = {
       ...newSettings,
+      channelModes: normalizeChannelModes(newSettings.channelModes, DEFAULT_SETTINGS.channelModes),
       humanHandoffEnabled: true,
       humanHandoffCustomPhrasesEnabled: newSettings.humanHandoffCustomPhrasesEnabled ?? true,
       humanHandoffKeywords: newSettings.humanHandoffKeywords || [],
@@ -1957,6 +2088,7 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        channelModes: normalizedSettings.channelModes,
         emailMode: normalizedSettings.channelModes.EMAIL,
         emailSignature: normalizedSettings.emailSignature,
         debounceSeconds: normalizedSettings.debounceSeconds,
@@ -2267,6 +2399,7 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
             {activeTab === 'inbox' && (
               <UnifiedInbox
                 tenantId={currentTenantId}
+                channelModes={settings.channelModes}
                 conversations={conversations}
                 hasMoreConversations={hasMoreConversations}
                 onLoadMoreConversations={loadMoreConversations}

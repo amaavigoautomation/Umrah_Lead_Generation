@@ -12,6 +12,7 @@ import { retrieveRelevantKnowledge, RetrievedChunk } from './ragService';
 import { getCurrentBrand } from '../context/BrandContext';
 import { brandSignature } from '../shared/brand';
 import { looksLikeSchedulingFollowUp } from '../shared/schedulingGuardrails';
+import { authFetch } from './authService';
 
 export interface AiResponseResult {
   responseText: string;
@@ -162,7 +163,7 @@ export async function generateOmnichannelResponse(params: {
       looksLikeSchedulingFollowUp(freshMessage));
   if (isDemoIntent) {
     try {
-      const schedRes = await fetch('/api/calendar/schedule-turn', {
+      const schedRes = await authFetch('/api/calendar/schedule-turn', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -222,7 +223,7 @@ export async function generateOmnichannelResponse(params: {
 
   // Try calling the server-side API first
   try {
-    const apiResponse = await fetch('/api/ai/respond', {
+    const apiResponse = await authFetch('/api/ai/respond', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

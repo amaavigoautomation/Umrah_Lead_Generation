@@ -196,7 +196,7 @@ function HtmlSourceEditor({
         </div>
       </div>
       <div className="relative flex-1 min-w-0 overflow-hidden">
-        <pre aria-hidden="true" className="absolute top-0 m-0 pointer-events-none text-[12px] leading-[20.4px] font-mono whitespace-pre" style={{ padding: '16px', transform: 'translate(' + (-scroll.left) + 'px,' + (-scroll.top) + 'px)', tabSize: 2 }} dangerouslySetInnerHTML={{ __html: highlightHtmlSource(value) + '\n' }} />
+        <pre aria-hidden="true" className="absolute top-0 left-0 m-0 pointer-events-none text-[12px] leading-[20.4px] font-mono whitespace-pre" style={{ padding: '16px', transform: 'translate(' + (-scroll.left) + 'px,' + (-scroll.top) + 'px)', tabSize: 2 }} dangerouslySetInnerHTML={{ __html: highlightHtmlSource(value) + '\n' }} />
         <textarea
           ref={editorRef}
           value={value}

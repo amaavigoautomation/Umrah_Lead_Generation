@@ -127,7 +127,10 @@ function formatEmailHtml(source: string): string {
       continue;
     }
     const text = token.replace(/\s+/g, ' ');
-    if (!text.trim()) continue;
+    if (!text.trim()) {
+      if (line && !line.endsWith(' ')) line += ' ';
+      continue;
+    }
     line += line ? text : text.trimStart();
   }
   flush();

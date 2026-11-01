@@ -166,12 +166,12 @@ export const EmailDesignStudio: React.FC<{ tenantId: string }> = ({ tenantId }) 
   const addBlock = (type: EmailDesignBlockType) => {
     const id = createEmailDesignBlockId(type);
     const defaultBlocks: Partial<Record<EmailDesignBlockType, Partial<EmailDesignBlock>>> = {
-      heading: { text: 'A clear heading', fontSize: 24, padding: 18 },
-      hero: { eyebrow: 'A SHORT INTRODUCTION', text: 'A compelling headline goes here', secondaryText: 'Add one short supporting sentence to explain the value.', fontSize: 28, color: '#FFFFFF', backgroundColor: '#183B66', padding: 28, align: 'left' },
+      heading: { text: 'A clear heading', fontSize: editing?.theme.headingFontSize || 24, padding: 18 },
+      hero: { eyebrow: 'A SHORT INTRODUCTION', text: 'A compelling headline goes here', secondaryText: 'Add one short supporting sentence to explain the value.', fontSize: editing?.theme.headingFontSize || 28, color: '#FFFFFF', backgroundColor: editing?.theme.primaryColor || '#183B66', padding: 28, align: 'left' },
       logo: { width: 160, padding: 22, color: '#183B66', backgroundColor: '#FFFFFF', align: 'left' },
-      text: { text: 'Add supporting information here.', fontSize: 14, padding: 14 },
+      text: { text: 'Add supporting information here.', padding: 14 },
       image: { url: '', altText: 'Company image', width: 540, padding: 12 },
-      button: { text: 'Learn more', url: '', align: 'left', padding: 18 },
+      button: { text: 'Learn more', url: '', align: 'left', padding: 18, backgroundColor: editing?.theme.primaryColor || '#183B66', color: '#FFFFFF' },
       divider: { color: '#E6EAF0', padding: 14 },
       spacer: { padding: 28 },
       social: { links: [], padding: 12, align: 'left' },

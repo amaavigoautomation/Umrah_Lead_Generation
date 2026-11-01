@@ -19,6 +19,8 @@ export interface EmailDesignTemplate {
   id:string; name:string; description:string; category:string; source:EmailDesignSource; version:number;
   theme:EmailDesignTheme; blocks:EmailDesignBlock[]; customHtml?:string; brandProfile?:EmailBrandProfile;
   createdAt?:string; updatedAt?:string;
+  /** Campaign email metadata; unused by conversation reply designs. */
+  campaignTemplateId?:string; campaignSubject?:string; campaignPreheader?:string; campaignBody?:string; campaignAttachments?:any[];
 }
 export const DEFAULT_EMAIL_DESIGN_ID = 'modern-professional';
 export const DEFAULT_EMAIL_DESIGN_THEME:EmailDesignTheme = {

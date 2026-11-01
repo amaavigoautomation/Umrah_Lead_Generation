@@ -19,6 +19,8 @@ type PreviewMode = 'desktop' | 'mobile';
 
 const CATEGORY_FILTERS = ['All', ...Array.from(new Set(PREDEFINED_EMAIL_DESIGNS.map((item) => item.category)))];
 const BLOCK_OPTIONS: Array<{ type: EmailDesignBlockType; label: string; description: string; icon: React.ReactNode }> = [
+  { type: 'logo', label: 'Brand header', description: 'Logo, brand name and header styling', icon: <LayoutTemplate className="h-4 w-4" /> },
+  { type: 'hero', label: 'Hero banner', description: 'A styled headline and supporting introduction', icon: <Sparkles className="h-4 w-4" /> },
   { type: 'heading', label: 'Heading', description: 'A clear section heading', icon: <Heading1 className="h-4 w-4" /> },
   { type: 'text', label: 'Text', description: 'Supporting text or a short label', icon: <Type className="h-4 w-4" /> },
   { type: 'image', label: 'Image', description: 'Insert a brand image or banner', icon: <ImagePlus className="h-4 w-4" /> },
@@ -165,6 +167,8 @@ export const EmailDesignStudio: React.FC<{ tenantId: string }> = ({ tenantId }) 
     const id = createEmailDesignBlockId(type);
     const defaultBlocks: Partial<Record<EmailDesignBlockType, Partial<EmailDesignBlock>>> = {
       heading: { text: 'A clear heading', fontSize: 24, padding: 18 },
+      hero: { eyebrow: 'A SHORT INTRODUCTION', text: 'A compelling headline goes here', secondaryText: 'Add one short supporting sentence to explain the value.', fontSize: 28, color: '#FFFFFF', backgroundColor: '#183B66', padding: 28, align: 'left' },
+      logo: { width: 160, padding: 22, color: '#183B66', backgroundColor: '#FFFFFF', align: 'left' },
       text: { text: 'Add supporting information here.', fontSize: 14, padding: 14 },
       image: { url: '', altText: 'Company image', width: 540, padding: 12 },
       button: { text: 'Learn more', url: '', align: 'left', padding: 18 },
@@ -418,7 +422,7 @@ export const EmailDesignStudio: React.FC<{ tenantId: string }> = ({ tenantId }) 
                   {editing.blocks.map((item, index) => (
                     <div key={item.id} draggable onDragStart={(event) => event.dataTransfer.setData('text/plain', String(index))} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); moveBlockTo(Number(event.dataTransfer.getData('text/plain')), index); }} className={'rounded-lg border flex items-center gap-1 p-1.5 ' + (selectedBlockId === item.id ? 'bg-orange-50 border-orange-300' : 'border-transparent hover:bg-slate-50')}>
                       <button onClick={() => setSelectedBlockId(item.id)} className="min-w-0 flex-1 text-left px-1.5 py-1">
-                        <span className="block text-xs font-semibold text-slate-700 capitalize">{item.type === 'content' ? 'Message content (locked)' : item.type}</span>
+                        <span className="block text-xs font-semibold text-slate-700 capitalize">{item.type === 'content' ? 'Message content (locked)' : item.type === 'logo' ? 'Brand header' : item.type === 'hero' ? 'Hero banner' : item.type}</span>
                         <span className="block text-[10px] text-slate-400 truncate">{item.type === 'content' ? 'Original email text is inserted here' : (item.text || item.altText || 'Design block')}</span>
                       </button>
                       <button onClick={() => moveBlock(item.id, -1)} disabled={index === 0} className="p-1 text-slate-400 hover:text-slate-800 disabled:opacity-20" title="Move up"><ArrowUp className="w-3 h-3" /></button>
@@ -445,6 +449,21 @@ export const EmailDesignStudio: React.FC<{ tenantId: string }> = ({ tenantId }) 
                     <option>Arial, Helvetica, sans-serif</option><option>Helvetica, Arial, sans-serif</option><option>Georgia, Times New Roman, serif</option><option>Tahoma, Arial, sans-serif</option><option>Verdana, Geneva, sans-serif</option><option>Trebuchet MS, Arial, sans-serif</option>
                   </select>
                 </label>
+                <div className="rounded-xl border border-slate-200 p-3 space-y-3">
+                  <h4 className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Typography scale</h4>
+                  <label className="block text-xs font-semibold text-slate-600">Default heading size
+                    <input type="range" min="18" max="42" value={editing.theme.headingFontSize} onChange={(event) => updateTheme({ headingFontSize: Number(event.target.value) })} className="mt-2 w-full" />
+                    <span className="text-[10px] font-normal text-slate-400">{editing.theme.headingFontSize}px</span>
+                  </label>
+                  <label className="block text-xs font-semibold text-slate-600">Message text size
+                    <input type="range" min="12" max="20" value={editing.theme.bodyFontSize} onChange={(event) => updateTheme({ bodyFontSize: Number(event.target.value) })} className="mt-2 w-full" />
+                    <span className="text-[10px] font-normal text-slate-400">{editing.theme.bodyFontSize}px</span>
+                  </label>
+                  <label className="block text-xs font-semibold text-slate-600">Message line spacing
+                    <input type="range" min="14" max="20" value={Math.round(editing.theme.bodyLineHeight * 10)} onChange={(event) => updateTheme({ bodyLineHeight: Number(event.target.value) / 10 })} className="mt-2 w-full" />
+                    <span className="text-[10px] font-normal text-slate-400">{editing.theme.bodyLineHeight.toFixed(1)}</span>
+                  </label>
+                </div>
                 <label className="block text-xs font-semibold text-slate-600">Content width
                   <input type="range" min="480" max="680" step="10" value={editing.theme.contentWidth} onChange={(event) => updateTheme({ contentWidth: Number(event.target.value) })} className="mt-2 w-full" />
                   <span className="text-[10px] font-normal text-slate-400">{editing.theme.contentWidth}px</span>
@@ -476,9 +495,17 @@ export const EmailDesignStudio: React.FC<{ tenantId: string }> = ({ tenantId }) 
                   <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-100 text-xs leading-relaxed text-emerald-900">This is the reserved message area. Amaavigo inserts the original AI-generated, follow-up or manually composed email text here. It cannot be removed or rewritten by the template.</div>
                 ) : (
                   <>
-                    {['heading','text','button'].includes(selectedBlock.type) && <label className="block text-xs font-semibold text-slate-600">Text
+                    {['heading','text','button','hero'].includes(selectedBlock.type) && <label className="block text-xs font-semibold text-slate-600">{selectedBlock.type === 'hero' ? 'Hero headline' : 'Text'}
                       <textarea rows={3} value={selectedBlock.text || ''} onChange={(event) => updateBlock(selectedBlock.id, { text: event.target.value })} className="mt-1 w-full rounded-lg border border-slate-200 p-2 text-xs font-normal" />
                     </label>}
+                    {selectedBlock.type === 'hero' && <>
+                      <label className="block text-xs font-semibold text-slate-600">Eyebrow / small label
+                        <input value={selectedBlock.eyebrow || ''} onChange={(event) => updateBlock(selectedBlock.id, { eyebrow: event.target.value })} className="mt-1 w-full rounded-lg border border-slate-200 p-2 text-xs font-normal" placeholder="PRODUCT UPDATE" />
+                      </label>
+                      <label className="block text-xs font-semibold text-slate-600">Supporting text
+                        <textarea rows={3} value={selectedBlock.secondaryText || ''} onChange={(event) => updateBlock(selectedBlock.id, { secondaryText: event.target.value })} className="mt-1 w-full rounded-lg border border-slate-200 p-2 text-xs font-normal" />
+                      </label>
+                    </>}
                     {['logo','image'].includes(selectedBlock.type) && <>
                       <label className="block text-xs font-semibold text-slate-600">Image URL
                         <input value={selectedBlock.url || ''} onChange={(event) => updateBlock(selectedBlock.id, { url: event.target.value })} className="mt-1 w-full rounded-lg border border-slate-200 p-2 text-xs font-normal" placeholder="/api/assets/..." />
@@ -504,8 +531,9 @@ export const EmailDesignStudio: React.FC<{ tenantId: string }> = ({ tenantId }) 
                         <button onClick={() => updateBlock(selectedBlock.id, { links: [...(selectedBlock.links || []), { label: 'LinkedIn', url: '' }] })} className="w-full rounded-lg border border-dashed border-slate-300 py-2 text-xs font-semibold text-slate-600 hover:border-orange-300 hover:text-orange-700"><Plus className="inline w-3 h-3 mr-1"/>Add social link</button>
                       </div>
                     )}
-                    {selectedBlock.type === 'heading' && <label className="block text-xs font-semibold text-slate-600">Font size
-                      <input type="range" min="14" max="42" value={selectedBlock.fontSize || 24} onChange={(event) => updateBlock(selectedBlock.id, { fontSize: Number(event.target.value) })} className="mt-2 w-full" />
+                    {['heading','hero','text'].includes(selectedBlock.type) && <label className="block text-xs font-semibold text-slate-600">Font size
+                      <input type="range" min="10" max="42" value={selectedBlock.fontSize || (selectedBlock.type === 'text' ? editing.theme.bodyFontSize : editing.theme.headingFontSize)} onChange={(event) => updateBlock(selectedBlock.id, { fontSize: Number(event.target.value) })} className="mt-2 w-full" />
+                      <span className="text-[10px] font-normal text-slate-400">{selectedBlock.fontSize || (selectedBlock.type === 'text' ? editing.theme.bodyFontSize : editing.theme.headingFontSize)}px</span>
                     </label>}
                     <label className="block text-xs font-semibold text-slate-600">Alignment
                       <select value={selectedBlock.align || 'left'} onChange={(event) => updateBlock(selectedBlock.id, { align: event.target.value as any })} className="mt-1 w-full p-2 rounded-lg border border-slate-200 text-xs bg-white">
@@ -513,6 +541,7 @@ export const EmailDesignStudio: React.FC<{ tenantId: string }> = ({ tenantId }) 
                       </select>
                     </label>
                     <ColorField label="Text / rule colour" value={selectedBlock.color || editing.theme.textColor} onChange={(value) => updateBlock(selectedBlock.id, { color: value })} />
+                    {['logo','hero','footer','button'].includes(selectedBlock.type) && <ColorField label={selectedBlock.type === 'footer' ? 'Footer background' : selectedBlock.type === 'logo' ? 'Header background' : selectedBlock.type === 'hero' ? 'Hero background' : 'Button background'} value={selectedBlock.backgroundColor || editing.theme.cardBackground} onChange={(value) => updateBlock(selectedBlock.id, { backgroundColor: value })} />}
                     <label className="block text-xs font-semibold text-slate-600">Spacing
                       <input type="range" min="0" max="60" value={selectedBlock.padding ?? 16} onChange={(event) => updateBlock(selectedBlock.id, { padding: Number(event.target.value) })} className="mt-2 w-full" />
                       <span className="text-[10px] font-normal text-slate-400">{selectedBlock.padding ?? 16}px</span>

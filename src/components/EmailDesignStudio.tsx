@@ -12,6 +12,7 @@ import {
 import { useBrand } from '../context/BrandContext';
 import { CompanyAssetsPanel } from './CompanyAssetsPanel';
 import type { CompanyAsset, EmailTemplate } from '../types';
+import { getUnsupportedEmailTemplateVariables } from '../shared/emailTemplateValidation';
 import {
   createBlankEmailDesignTemplate, createEmailDesignBlockId, createEmailDesignHtmlSource, PREDEFINED_EMAIL_DESIGNS,
   SAMPLE_EMAIL_CONTENT, renderEmailDesignHtml, validateEmailDesignHtml, type EmailBrandProfile, type EmailDesignBlock,
@@ -36,6 +37,18 @@ const BLOCK_OPTIONS: Array<{ type: EmailDesignBlockType; label: string; descript
   { type: 'social', label: 'Social links', description: 'Add social destinations', icon: <Link2 className="h-4 w-4" /> },
   { type: 'footer', label: 'Company footer', description: 'Company details and contact links', icon: <Mail className="h-4 w-4" /> },
 ];
+
+function previewCampaignValue(value: string): string {
+  return String(value || '')
+    .replace(/\{\{\s*name\s*\}\}/gi, 'Tariq Farooq')
+    .replace(/\{\{\s*firstName\s*\}\}/gi, 'Tariq')
+    .replace(/\{\{\s*lastName\s*\}\}/gi, 'Farooq')
+    .replace(/\{\{\s*company\s*\}\}/gi, 'Al-Bait Pilgrimage Tours')
+    .replace(/\{\{\s*companyName\s*\}\}/gi, 'Al-Bait Pilgrimage Tours')
+    .replace(/\{\{\s*designation\s*\}\}/gi, 'Managing Director')
+    .replace(/\{\{\s*jobTitle\s*\}\}/gi, 'Managing Director')
+    .replace(/\{\{\s*email\s*\}\}/gi, 'tariq@albait-tours.com');
+}
 
 function cloneTemplate(template: EmailDesignTemplate): EmailDesignTemplate {
   return JSON.parse(JSON.stringify(template)) as EmailDesignTemplate;
@@ -640,6 +653,22 @@ export const EmailDesignStudio: React.FC<EmailDesignStudioProps> = ({ tenantId, 
       setNotice({ tone: 'error', text: 'Add an email subject before saving this campaign template.' });
       return null;
     }
+    if (isCampaignMode && editing.customHtml === undefined && !String(editing.campaignBody || '').trim()) {
+      setNotice({ tone: 'error', text: 'Add the campaign message before saving this Visual Builder template.' });
+      return null;
+    }
+    if (isCampaignMode) {
+      const htmlForValidation = editing.customHtml || renderEmailDesignHtml(editing, String(editing.campaignBody || ''), brandData);
+      const unsupported = getUnsupportedEmailTemplateVariables({
+        subject: [editing.campaignSubject, editing.campaignPreheader].join(' '),
+        body: String(editing.campaignBody || ''),
+        htmlBody: htmlForValidation.replace(/\{\{\s*content\s*\}\}/gi, ''),
+      });
+      if (unsupported.length) {
+        setNotice({ tone: 'error', text: 'Unsupported personalization field(s): ' + unsupported.map((field) => '{{' + field + '}}').join(', ') + '. Use the supported fields shown in the message editor.' });
+        return null;
+      }
+    }
     if (editing.customHtml !== undefined && !isCampaignMode) {
       const validation = validateEmailDesignHtml(editing.customHtml);
       if (!validation.valid) {
@@ -980,7 +1009,7 @@ export const EmailDesignStudio: React.FC<EmailDesignStudioProps> = ({ tenantId, 
               <div><h2 className="text-xs font-bold text-slate-700">Live email preview</h2><p className="text-[10px] text-slate-400">Sample recipient message is inserted where {'{{content}}'} appears.</p></div>
               <span className="text-[10px] text-slate-400 uppercase tracking-wider">{previewMode} view</span>
             </div>
-            <EmailPreview template={editing} brand={brandData} mode={previewMode} content={isCampaignMode ? editing.campaignBody : undefined} />
+            <EmailPreview template={editing} brand={brandData} mode={previewMode} content={isCampaignMode ? previewCampaignValue(editing.campaignBody || '') : undefined} />
           </main>
           )}
         </div>

@@ -221,8 +221,14 @@ export function validateEmailDesignHtml(input:unknown):EmailDesignHtmlValidation
  else if(html.length>60000)error='Email HTML must be 60,000 characters or fewer.';
  else if(contentSlotCount!==1)error='Your HTML must contain exactly one {{content}} placeholder. Found '+contentSlotCount+'.';
  else {
-  const sanitized=sanitizeCustomEmailHtml(html),sanitizedCount=(sanitized.match(/\{\{content\}\}/g)||[]).length;
-  if(sanitizedCount!==1)error='The message placeholder must be inside a supported HTML element so it is preserved when the email is sent.';
+  const slotIndex=html.indexOf('{{content}}');
+  const lastOpen=html.lastIndexOf('<',slotIndex),lastClose=html.lastIndexOf('>',slotIndex);
+  const styleOpen=html.toLowerCase().lastIndexOf('<style',slotIndex),styleClose=html.toLowerCase().lastIndexOf('</style',slotIndex);
+  if(lastOpen>lastClose||styleOpen>styleClose)error='Place {{content}} in the email body as text, not inside an HTML tag, attribute or CSS block.';
+  else {
+   const sanitized=sanitizeCustomEmailHtml(html),sanitizedCount=(sanitized.match(/\{\{content\}\}/g)||[]).length;
+   if(sanitizedCount!==1)error='The message placeholder must be inside a supported HTML element so it is preserved when the email is sent.';
+  }
  }
  if(!/<table\b/i.test(html))warnings.push('A table-based layout is recommended for consistent rendering in email clients.');
  if(/<(script|iframe|form|video|audio|object|embed)\b/i.test(html))warnings.push('Unsupported active or embedded elements will be removed before sending.');

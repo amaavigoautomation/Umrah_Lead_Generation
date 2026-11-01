@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { WhatsAppMarketingTemplateForm } from './WhatsAppMarketingTemplateForm';
 import {
   AlertCircle,
   CheckCircle2,
@@ -25,6 +26,7 @@ type TemplateItem = {
   rejectionReason?: string;
   qualityScore?: string;
   paramCount: number;
+  components?: any[];
 };
 
 type Props = { canEdit?: boolean };
@@ -39,6 +41,17 @@ function statusMeta(status?: string) {
   if (s === 'REJECTED') return { label: 'Rejected', cls: 'border-rose-200 bg-rose-50 text-rose-700', icon: <AlertCircle className="h-3.5 w-3.5" /> };
   if (s === 'PAUSED' || s === 'DISABLED' || s === 'PENDING_DELETION') return { label: s === 'PAUSED' ? 'Paused' : s === 'PENDING_DELETION' ? 'Pending deletion' : 'Disabled', cls: 'border-slate-200 bg-slate-100 text-slate-600', icon: <AlertCircle className="h-3.5 w-3.5" /> };
   return { label: s.replace(/_/g, ' '), cls: 'border-slate-200 bg-slate-50 text-slate-600', icon: <FileText className="h-3.5 w-3.5" /> };
+}
+
+function templateFormatLabel(template: TemplateItem): string {
+  const components = Array.isArray(template.components) ? template.components : [];
+  if (components.some((component) => String(component?.type || '').toUpperCase() === 'CAROUSEL')) return 'Carousel';
+  if (components.some((component) => String(component?.type || '').toUpperCase() === 'LIMITED_TIME_OFFER')) return 'Limited-time offer';
+  const buttons = components.find((component) => String(component?.type || '').toUpperCase() === 'BUTTONS')?.buttons || [];
+  if (buttons.some((button: any) => String(button?.type || '').toUpperCase() === 'COPY_CODE')) return 'Coupon code';
+  const header = components.find((component) => String(component?.type || '').toUpperCase() === 'HEADER');
+  if (header?.format && String(header.format).toUpperCase() !== 'TEXT') return String(header.format).toUpperCase() + ' header';
+  return 'Standard';
 }
 
 function getVariables(text: string): number[] {
@@ -240,6 +253,7 @@ export const WhatsAppTemplatesPanel: React.FC<Props> = ({ canEdit = false }) => 
                     <div className="flex flex-wrap items-center gap-2">
                       <h3 className="break-all text-sm font-bold text-slate-900">{template.name}</h3>
                       <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-semibold text-slate-600">{template.category || 'UNCATEGORIZED'}</span>
+                      <span className="rounded-full border border-blue-100 bg-blue-50 px-2 py-0.5 text-[10px] font-semibold text-blue-700">{templateFormatLabel(template)}</span>
                       <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-semibold text-slate-600">{template.language}</span>
                       <span className={'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold ' + status.cls}>{status.icon}{status.label}</span>
                     </div>
@@ -251,6 +265,7 @@ export const WhatsAppTemplatesPanel: React.FC<Props> = ({ canEdit = false }) => 
                 </div>
                 <div className="mt-3 rounded-xl border border-slate-100 bg-slate-50 p-3">
                   {template.header && <p className="mb-1 text-xs font-semibold text-slate-700">{template.header}</p>}
+                  {!template.header && (template.components || []).some((component) => String(component?.type || '').toUpperCase() === 'HEADER' && String(component?.format || '').toUpperCase() !== 'TEXT') && <p className="mb-1 text-xs font-semibold text-slate-700">Media header · {templateFormatLabel(template)}</p>}
                   <p className="whitespace-pre-wrap text-sm leading-relaxed text-slate-800">{template.body || '(No text body)'}</p>
                   {template.footer && <p className="mt-2 text-[11px] text-slate-500">{template.footer}</p>}
                 </div>
@@ -261,7 +276,20 @@ export const WhatsAppTemplatesPanel: React.FC<Props> = ({ canEdit = false }) => 
         </div>
       )}
 
-      {isCreateOpen && (
+      {isCreateOpen && category === 'MARKETING' && (
+        <WhatsAppMarketingTemplateForm
+          onBack={() => setCategory('UTILITY')}
+          onCancel={() => setIsCreateOpen(false)}
+          onSubmitted={(message) => {
+            setNotice(message);
+            setIsCreateOpen(false);
+            resetForm();
+            void loadTemplates(true);
+          }}
+        />
+      )}
+
+      {isCreateOpen && category === 'UTILITY' && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/50 p-4" role="dialog" aria-modal="true" aria-label="Create WhatsApp template">
           <form onSubmit={handleSubmit} className="flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
             <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">

@@ -1542,6 +1542,51 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
     return true;
   }
 
+  // Media uploads for Marketing template samples. The Meta access token remains server-side.
+  if (url === '/api/whatsapp/templates/media-session' && req.method === 'POST') {
+    if (activeTenantCtx.role === 'member') {
+      res.statusCode = 403;
+      res.end(JSON.stringify({ error: 'Only workspace admins can upload template media.' }));
+      return true;
+    }
+    try {
+      const meta = await import('./metaChannelsService.js');
+      const session = await meta.createWhatsAppTemplateMediaSession(activeTenantCtx, {
+        fileName: String(body?.fileName || ''),
+        mimeType: String(body?.mimeType || ''),
+        fileLength: Number(body?.fileLength || 0),
+      });
+      res.statusCode = 201;
+      res.end(JSON.stringify({ success: true, ...session }));
+    } catch (err: any) {
+      res.statusCode = err?.status || 500;
+      res.end(JSON.stringify({ error: err?.message || 'Could not start template media upload.' }));
+    }
+    return true;
+  }
+
+  if (url === '/api/whatsapp/templates/media-chunk' && req.method === 'POST') {
+    if (activeTenantCtx.role === 'member') {
+      res.statusCode = 403;
+      res.end(JSON.stringify({ error: 'Only workspace admins can upload template media.' }));
+      return true;
+    }
+    try {
+      const meta = await import('./metaChannelsService.js');
+      const result = await meta.uploadWhatsAppTemplateMediaChunk(activeTenantCtx, {
+        uploadKey: String(body?.uploadKey || ''),
+        offset: Number(body?.offset || 0),
+        base64: String(body?.base64 || ''),
+      });
+      res.statusCode = 200;
+      res.end(JSON.stringify({ success: true, ...result }));
+    } catch (err: any) {
+      res.statusCode = err?.status || 500;
+      res.end(JSON.stringify({ error: err?.message || 'Template media upload failed.' }));
+    }
+    return true;
+  }
+
   // Workspace WhatsApp templates. Meta is the source of truth for current approval status.
   if (url === '/api/whatsapp/templates/manage' && (req.method === 'GET' || req.method === 'POST')) {
     if (activeTenantCtx.role === 'member') {
@@ -1560,10 +1605,21 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
           name: String(body?.name || ''),
           language: String(body?.language || ''),
           category: String(body?.category || ''),
-          header: String(body?.header || ''),
+          templateType: String(body?.templateType || 'STANDARD'),
+          headerFormat: String(body?.headerFormat || 'TEXT'),
+          headerText: String(body?.headerText ?? body?.header ?? ''),
+          headerMediaHandle: String(body?.headerMediaHandle || ''),
           body: String(body?.body || ''),
           footer: String(body?.footer || ''),
           samples: Array.isArray(body?.samples) ? body.samples.map((sample: unknown) => String(sample)) : [],
+          buttons: Array.isArray(body?.buttons) ? body.buttons : [],
+          couponCodeExample: String(body?.couponCodeExample || ''),
+          offerText: String(body?.offerText || ''),
+          offerHasExpiration: body?.offerHasExpiration !== false,
+          offerUrl: String(body?.offerUrl || ''),
+          offerUrlText: String(body?.offerUrlText || ''),
+          carouselButtonText: String(body?.carouselButtonText || ''),
+          carouselCards: Array.isArray(body?.carouselCards) ? body.carouselCards : [],
         });
         res.statusCode = 201;
         res.end(JSON.stringify({ success: true, template, message: 'Template submitted to Meta for review. It cannot be used for sending until Meta approves it.' }));

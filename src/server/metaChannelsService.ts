@@ -458,47 +458,137 @@ export async function listWhatsAppTemplates(ctx: TenantContext): Promise<WhatsAp
   return (await listWhatsAppTemplatesForManagement(ctx)).filter((template) => template.status === 'APPROVED');
 }
 
-/** Submit a new text-based WhatsApp template to Meta for review. Approval is asynchronous and not assumed. */
-export async function createWhatsAppTemplate(
+
+type WhatsAppTemplateButtonInput = { type?: string; text?: string; url?: string; phoneNumber?: string };
+type WhatsAppCarouselCardInput = { mediaFormat?: string; mediaHandle?: string; body?: string; url?: string };
+type WhatsAppTemplateCreateInput = {
+  name?: string; language?: string; category?: string; templateType?: string;
+  headerFormat?: string; headerText?: string; headerMediaHandle?: string;
+  body?: string; footer?: string; samples?: string[]; buttons?: WhatsAppTemplateButtonInput[];
+  couponCodeExample?: string; offerText?: string; offerHasExpiration?: boolean;
+  offerUrl?: string; offerUrlText?: string; carouselButtonText?: string;
+  carouselCards?: WhatsAppCarouselCardInput[];
+};
+
+const TEMPLATE_MEDIA_CHUNK_BYTES = 1024 * 1024;
+const TEMPLATE_MEDIA_MAX_BYTES: Record<string, number> = {
+  'image/jpeg': 5 * 1024 * 1024,
+  'image/png': 5 * 1024 * 1024,
+  'video/mp4': 16 * 1024 * 1024,
+  'application/pdf': 25 * 1024 * 1024,
+};
+
+/** Start a Meta resumable upload for a template sample. The platform token never leaves the server. */
+export async function createWhatsAppTemplateMediaSession(
   ctx: TenantContext,
-  input: {
-    name?: string;
-    language?: string;
-    category?: string;
-    header?: string;
-    body?: string;
-    footer?: string;
-    samples?: string[];
-  }
-): Promise<WhatsAppTemplate> {
+  input: { fileName?: string; mimeType?: string; fileLength?: number }
+): Promise<{ uploadKey: string; fileName: string; mimeType: string; fileLength: number }> {
   const connection = await getWhatsAppConnection(ctx);
-  if (!connection || connection.status !== 'connected') throw new MetaChannelError(409, 'Connect a WhatsApp Business account before creating templates.');
-  const name = String(input?.name || '').trim();
-  const language = String(input?.language || '').trim();
-  const category = String(input?.category || '').trim().toUpperCase();
-  const header = String(input?.header || '').trim();
-  const body = String(input?.body || '').trim();
-  const footer = String(input?.footer || '').trim();
+  if (!connection || connection.status !== 'connected') {
+    throw new MetaChannelError(409, 'Connect a WhatsApp Business account before uploading template media.');
+  }
+  const appId = env('META_APP_ID');
+  if (!appId) throw new MetaChannelError(503, 'META_APP_ID is not configured on the server.');
 
-  if (!/^[a-z][a-z0-9_]{0,511}$/.test(name)) {
-    throw new MetaChannelError(400, 'Template name must use lowercase letters, numbers, and underscores only.');
-  }
-  if (!/^[a-z]{2}(?:_[A-Z]{2})?$/.test(language)) {
-    throw new MetaChannelError(400, 'Enter a supported Meta language code, such as en_US, en_GB, or hi.');
-  }
-  if (category !== 'MARKETING' && category !== 'UTILITY') {
-    throw new MetaChannelError(400, 'Choose either the Marketing or Utility category.');
-  }
-  if (!body || body.length > 1024) {
-    throw new MetaChannelError(400, 'Message body is required and must be no longer than 1,024 characters.');
-  }
-  if (header.length > 60 || footer.length > 60) {
-    throw new MetaChannelError(400, 'Header and footer text must each be 60 characters or fewer.');
-  }
-  if (header.includes('{{') || header.includes('}}') || footer.includes('{{') || footer.includes('}}')) {
-    throw new MetaChannelError(400, 'Variables are supported in the message body only in this version. Keep the header and footer static.');
+  const fileName = String(input?.fileName || '').trim().replace(/[^\w.-]/g, '_').slice(0, 120);
+  const mimeType = String(input?.mimeType || '').trim().toLowerCase();
+  const fileLength = Number(input?.fileLength);
+  const maxBytes = TEMPLATE_MEDIA_MAX_BYTES[mimeType];
+  if (!fileName || !maxBytes || !Number.isSafeInteger(fileLength) || fileLength < 1 || fileLength > maxBytes) {
+    throw new MetaChannelError(400, 'Unsupported template media. Use JPG/PNG (up to 5 MB), MP4 (up to 16 MB), or PDF (up to 25 MB).');
   }
 
+  const token = await getSecret(ctx, 'whatsapp_access_token');
+  const uploadUrl = new URL(GRAPH + '/' + encodeURIComponent(appId) + '/uploads');
+  uploadUrl.searchParams.set('file_name', fileName);
+  uploadUrl.searchParams.set('file_length', String(fileLength));
+  uploadUrl.searchParams.set('file_type', mimeType);
+  const created = await graphJson(uploadUrl.toString(), {
+    method: 'POST',
+    headers: { Authorization: 'Bearer ' + token },
+  });
+  const metaUploadId = String(created?.id || '');
+  if (!/^upload:[A-Za-z0-9:_-]+$/.test(metaUploadId)) {
+    throw new MetaChannelError(502, 'Meta did not return a valid media upload session.');
+  }
+
+  const uploadKey = crypto.randomBytes(20).toString('hex');
+  const now = new Date().toISOString();
+  await setDoc(doc(db, 'meta_template_upload_sessions', uploadKey), {
+    tenantId: ctx.tenantId,
+    metaUploadId,
+    fileName,
+    mimeType,
+    fileLength,
+    bytesUploaded: 0,
+    createdAt: now,
+    expiresAt: new Date(Date.now() + 20 * 60 * 1000).toISOString(),
+  });
+  return { uploadKey, fileName, mimeType, fileLength };
+}
+
+/** Upload one sequential chunk to Meta and return its final media handle when complete. */
+export async function uploadWhatsAppTemplateMediaChunk(
+  ctx: TenantContext,
+  input: { uploadKey?: string; offset?: number; base64?: string }
+): Promise<{ uploadedBytes: number; totalBytes: number; fileHandle?: string }> {
+  const uploadKey = String(input?.uploadKey || '').trim();
+  if (!/^[a-f0-9]{40}$/.test(uploadKey)) throw new MetaChannelError(400, 'Invalid media upload session.');
+  const sessionRef = doc(db, 'meta_template_upload_sessions', uploadKey);
+  const sessionSnap = await getDoc(sessionRef);
+  if (!sessionSnap.exists()) throw new MetaChannelError(404, 'Media upload session has expired. Select the file again.');
+  const session = sessionSnap.data() as any;
+  if (String(session.tenantId || '') !== ctx.tenantId) throw new MetaChannelError(403, 'This media upload belongs to another workspace.');
+  if (!session.expiresAt || new Date(session.expiresAt).getTime() < Date.now()) {
+    await deleteDoc(sessionRef).catch(() => {});
+    throw new MetaChannelError(410, 'Media upload session expired. Select the file again.');
+  }
+
+  const offset = Number(input?.offset);
+  if (!Number.isSafeInteger(offset) || offset !== Number(session.bytesUploaded || 0)) {
+    throw new MetaChannelError(409, 'Media upload chunk is out of sequence. Restart the upload.');
+  }
+  const encoded = String(input?.base64 || '');
+  if (!encoded || encoded.length > Math.ceil(TEMPLATE_MEDIA_CHUNK_BYTES * 4 / 3) + 8 || !/^[A-Za-z0-9+/]+={0,2}$/.test(encoded)) {
+    throw new MetaChannelError(400, 'Invalid media upload chunk.');
+  }
+  const bytes = Buffer.from(encoded, 'base64');
+  const totalBytes = Number(session.fileLength || 0);
+  if (!bytes.length || bytes.length > TEMPLATE_MEDIA_CHUNK_BYTES || offset + bytes.length > totalBytes) {
+    throw new MetaChannelError(400, 'Media upload chunk has an invalid size.');
+  }
+
+  const token = await getSecret(ctx, 'whatsapp_access_token');
+  const response = await fetch(GRAPH + '/' + String(session.metaUploadId), {
+    method: 'POST',
+    headers: {
+      Authorization: 'OAuth ' + token,
+      'file_offset': String(offset),
+      'Content-Type': 'application/octet-stream',
+    },
+    body: bytes,
+  });
+  const result: any = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const message = String(result?.error?.message || ('Meta media upload failed (HTTP ' + response.status + ').'));
+    throw new MetaChannelError(response.status >= 500 ? 502 : 400, message);
+  }
+
+  const uploadedBytes = offset + bytes.length;
+  const fileHandle = String(result?.h || '');
+  if (uploadedBytes === totalBytes) {
+    if (!fileHandle) throw new MetaChannelError(502, 'Meta did not return a media handle after the upload completed.');
+    await deleteDoc(sessionRef);
+    return { uploadedBytes, totalBytes, fileHandle };
+  }
+  await updateDoc(sessionRef, { bytesUploaded: uploadedBytes });
+  return { uploadedBytes, totalBytes };
+}
+
+function validateTemplateBody(body: string, suppliedSamples: string[], maxLength: number): { indexes: number[]; samples: string[] } {
+  if (!body || body.length > maxLength) {
+    throw new MetaChannelError(400, 'Message body is required and must be no longer than ' + maxLength.toLocaleString() + ' characters.');
+  }
   const matches = Array.from(body.matchAll(/\{\{(\d+)\}\}/g));
   const unmatchedBody = body.replace(/\{\{\d+\}\}/g, '');
   if (unmatchedBody.includes('{{') || unmatchedBody.includes('}}')) {
@@ -507,44 +597,171 @@ export async function createWhatsAppTemplate(
   if (matches.length && (body.startsWith('{{') || body.endsWith('}}'))) {
     throw new MetaChannelError(400, 'Do not place a variable at the very beginning or end of the message body.');
   }
-  const variableIndexes = Array.from(new Set(matches.map((match) => Number(match[1])))).sort((a, b) => a - b);
-  if (variableIndexes.some((index) => !Number.isInteger(index) || index < 1 || index > 20) ||
-      variableIndexes.some((index, position) => index !== position + 1)) {
+  const indexes = Array.from(new Set(matches.map((match) => Number(match[1])))).sort((a, b) => a - b);
+  if (indexes.some((index, position) => !Number.isInteger(index) || index < 1 || index > 20 || index !== position + 1)) {
     throw new MetaChannelError(400, 'Use consecutive numbered variables starting at {{1}}, with no gaps (up to 20 variables).');
   }
-
-  const providedSamples = Array.isArray(input.samples) ? input.samples : [];
-  const samples = variableIndexes.map((index) => String(providedSamples[index - 1] || '').trim());
+  const samples = indexes.map((index) => String(suppliedSamples[index - 1] || '').trim());
   if (samples.some((sample) => !sample)) {
     throw new MetaChannelError(400, 'Provide an example value for every body variable so Meta can review the template.');
   }
+  return { indexes, samples };
+}
+
+function validateTemplateUrl(value: unknown, label: string): string {
+  const raw = String(value || '').trim();
+  try {
+    const parsed = new URL(raw);
+    if (parsed.protocol !== 'https:') throw new Error('https required');
+  } catch {
+    throw new MetaChannelError(400, label + ' must be a valid HTTPS URL.');
+  }
+  return raw;
+}
+
+function buildMarketingButtons(buttons: WhatsAppTemplateButtonInput[]): any[] {
+  if (buttons.length > 3) throw new MetaChannelError(400, 'Add no more than 3 buttons to a standard marketing template.');
+  const built = buttons.map((button) => {
+    const type = String(button?.type || '').toUpperCase();
+    const text = String(button?.text || '').trim();
+    if (!text || text.length > 25) throw new MetaChannelError(400, 'Button labels are required and must be 25 characters or fewer.');
+    if (type === 'QUICK_REPLY') return { type, text };
+    if (type === 'URL') return { type, text, url: validateTemplateUrl(button.url, 'Button URL') };
+    if (type === 'PHONE_NUMBER') {
+      const phoneNumber = String(button.phoneNumber || '').trim();
+      if (!/^\+[1-9]\d{7,14}$/.test(phoneNumber)) throw new MetaChannelError(400, 'Phone buttons must use international format, e.g. +919876543210.');
+      return { type, text, phone_number: phoneNumber };
+    }
+    throw new MetaChannelError(400, 'Supported marketing buttons are Website URL, Call phone number, and Quick reply.');
+  });
+  const ctaCount = built.filter((button) => button.type !== 'QUICK_REPLY').length;
+  if (ctaCount > 2) throw new MetaChannelError(400, 'A template can have no more than 2 call-to-action buttons.');
+  return built;
+}
+
+/** Create Utility and all supported Marketing template formats through the connected client's WABA. */
+export async function createWhatsAppTemplate(
+  ctx: TenantContext,
+  input: WhatsAppTemplateCreateInput
+): Promise<WhatsAppTemplate> {
+  const connection = await getWhatsAppConnection(ctx);
+  if (!connection || connection.status !== 'connected') throw new MetaChannelError(409, 'Connect a WhatsApp Business account before creating templates.');
+  const name = String(input?.name || '').trim();
+  const language = String(input?.language || '').trim();
+  const category = String(input?.category || '').trim().toUpperCase();
+  const templateType = String(input?.templateType || 'STANDARD').trim().toUpperCase();
+  const body = String(input?.body || '').trim();
+  const footer = String(input?.footer || '').trim();
+
+  if (!/^[a-z][a-z0-9_]{0,511}$/.test(name)) throw new MetaChannelError(400, 'Template name must use lowercase letters, numbers, and underscores only.');
+  if (!/^[a-z]{2}(?:_[A-Z]{2})?$/.test(language)) throw new MetaChannelError(400, 'Enter a supported Meta language code, such as en_US, en_GB, or hi.');
+  if (category !== 'MARKETING' && category !== 'UTILITY') throw new MetaChannelError(400, 'Choose either the Marketing or Utility category.');
+  if (category === 'UTILITY' && templateType !== 'STANDARD') throw new MetaChannelError(400, 'Utility templates currently support the existing standard text format only.');
+
+  const maxBodyLength = templateType === 'LIMITED_TIME_OFFER' ? 600 : 1024;
+  const validatedBody = validateTemplateBody(body, Array.isArray(input.samples) ? input.samples : [], maxBodyLength);
+  if (footer.length > 60) throw new MetaChannelError(400, 'Footer text must be 60 characters or fewer.');
+  if (footer.includes('{{') || footer.includes('}}')) throw new MetaChannelError(400, 'Variables are supported in the message body only. Keep the footer static.');
 
   const components: any[] = [];
-  if (header) components.push({ type: 'HEADER', format: 'TEXT', text: header });
-  components.push({
-    type: 'BODY',
-    text: body,
-    ...(variableIndexes.length ? { example: { body_text: [samples] } } : {}),
-  });
-  if (footer) components.push({ type: 'FOOTER', text: footer });
+  const addHeader = (allowedFormats: string[], optionalMedia = false) => {
+    const format = String(input.headerFormat || 'TEXT').trim().toUpperCase();
+    if (!allowedFormats.includes(format)) throw new MetaChannelError(400, 'This template format does not support a ' + format.toLowerCase() + ' header.');
+    if (format === 'TEXT') {
+      const headerText = String(input.headerText || '').trim();
+      if (headerText.length > 60 || headerText.includes('{{') || headerText.includes('}}')) {
+        throw new MetaChannelError(400, 'Text headers must be 60 characters or fewer and cannot contain variables.');
+      }
+      if (headerText) components.push({ type: 'HEADER', format: 'TEXT', text: headerText });
+      return;
+    }
+    const handle = String(input.headerMediaHandle || '').trim();
+    if (!handle) {
+      if (optionalMedia) return;
+      throw new MetaChannelError(400, 'Upload the header media before submitting this template.');
+    }
+    components.push({ type: 'HEADER', format, example: { header_handle: [handle] } });
+  };
+
+  if (category === 'UTILITY') {
+    const header = String(input.headerText || '').trim();
+    if (header.length > 60 || header.includes('{{') || header.includes('}}')) throw new MetaChannelError(400, 'Text headers must be 60 characters or fewer and cannot contain variables.');
+    if (header) components.push({ type: 'HEADER', format: 'TEXT', text: header });
+    components.push({ type: 'BODY', text: body, ...(validatedBody.indexes.length ? { example: { body_text: [validatedBody.samples] } } : {}) });
+    if (footer) components.push({ type: 'FOOTER', text: footer });
+  } else if (templateType === 'STANDARD') {
+    addHeader(['TEXT', 'IMAGE', 'VIDEO', 'DOCUMENT']);
+    components.push({ type: 'BODY', text: body, ...(validatedBody.indexes.length ? { example: { body_text: [validatedBody.samples] } } : {}) });
+    if (footer) components.push({ type: 'FOOTER', text: footer });
+    const buttons = buildMarketingButtons(Array.isArray(input.buttons) ? input.buttons : []);
+    if (buttons.length) components.push({ type: 'BUTTONS', buttons });
+  } else if (templateType === 'COUPON') {
+    addHeader(['TEXT', 'IMAGE', 'VIDEO', 'DOCUMENT']);
+    components.push({ type: 'BODY', text: body, ...(validatedBody.indexes.length ? { example: { body_text: [validatedBody.samples] } } : {}) });
+    if (footer) components.push({ type: 'FOOTER', text: footer });
+    const code = String(input.couponCodeExample || '').trim();
+    if (!/^[A-Za-z0-9_-]{1,20}$/.test(code)) throw new MetaChannelError(400, 'Add an example coupon code (up to 20 letters, numbers, underscores, or hyphens).');
+    components.push({ type: 'BUTTONS', buttons: [{ type: 'COPY_CODE', example: code }] });
+  } else if (templateType === 'LIMITED_TIME_OFFER') {
+    addHeader(['IMAGE', 'VIDEO'], true);
+    const offerText = String(input.offerText || '').trim();
+    if (!offerText || offerText.length > 16) throw new MetaChannelError(400, 'Limited-time offer title is required and must be 16 characters or fewer.');
+    if (footer) throw new MetaChannelError(400, 'Limited-time offer templates do not support a footer. Add any extra information to the body.');
+    const code = String(input.couponCodeExample || '').trim();
+    if (!/^[A-Za-z0-9_-]{1,15}$/.test(code)) throw new MetaChannelError(400, 'Add an example offer code (up to 15 characters).');
+    const offerUrl = validateTemplateUrl(input.offerUrl, 'Offer URL');
+    const offerUrlText = String(input.offerUrlText || 'View offer').trim();
+    if (!offerUrlText || offerUrlText.length > 25) throw new MetaChannelError(400, 'Offer button text is required and must be 25 characters or fewer.');
+    components.push({ type: 'LIMITED_TIME_OFFER', limited_time_offer: { text: offerText, has_expiration: input.offerHasExpiration !== false } });
+    components.push({ type: 'BODY', text: body, ...(validatedBody.indexes.length ? { example: { body_text: [validatedBody.samples] } } : {}) });
+    components.push({ type: 'BUTTONS', buttons: [{ type: 'COPY_CODE', example: code }, { type: 'URL', text: offerUrlText, url: offerUrl }] });
+  } else if (templateType === 'CAROUSEL') {
+    if (footer) throw new MetaChannelError(400, 'Carousel templates use one message body above the cards and do not support a footer.');
+    const cards = Array.isArray(input.carouselCards) ? input.carouselCards : [];
+    if (cards.length < 2 || cards.length > 10) throw new MetaChannelError(400, 'A carousel must contain between 2 and 10 cards.');
+    const mediaFormats = cards.map((card) => String(card.mediaFormat || '').toUpperCase());
+    const commonFormat = mediaFormats[0];
+    if (!['IMAGE', 'VIDEO'].includes(commonFormat) || mediaFormats.some((format) => format !== commonFormat)) {
+      throw new MetaChannelError(400, 'All carousel cards must use the same media type: image or video.');
+    }
+    const hasCardBody = cards.some((card) => String(card.body || '').trim());
+    if (hasCardBody && cards.some((card) => !String(card.body || '').trim())) {
+      throw new MetaChannelError(400, 'Either add text to every carousel card or leave card text empty on all cards.');
+    }
+    const buttonText = String(input.carouselButtonText || 'View details').trim();
+    if (!buttonText || buttonText.length > 25) throw new MetaChannelError(400, 'Carousel button text is required and must be 25 characters or fewer.');
+    const cardComponents = cards.map((card) => {
+      const mediaHandle = String(card.mediaHandle || '').trim();
+      if (!mediaHandle) throw new MetaChannelError(400, 'Upload media for every carousel card before submitting.');
+      const cardBody = String(card.body || '').trim();
+      if (cardBody.length > 160) throw new MetaChannelError(400, 'Carousel card text must be 160 characters or fewer.');
+      const url = validateTemplateUrl(card.url, 'Carousel card URL');
+      return { components: [
+        { type: 'HEADER', format: commonFormat, example: { header_handle: [mediaHandle] } },
+        ...(hasCardBody ? [{ type: 'BODY', text: cardBody }] : []),
+        { type: 'BUTTONS', buttons: [{ type: 'URL', text: buttonText, url }] },
+      ] };
+    });
+    components.push({ type: 'BODY', text: body, ...(validatedBody.indexes.length ? { example: { body_text: [validatedBody.samples] } } : {}) });
+    components.push({ type: 'CAROUSEL', cards: cardComponents });
+  } else {
+    throw new MetaChannelError(400, 'Choose a supported Marketing template format.');
+  }
 
   const token = await getSecret(ctx, 'whatsapp_access_token');
-  const result = await graphJson(`${GRAPH}/${encodeURIComponent(connection.wabaId)}/message_templates`, {
+  const result = await graphJson(GRAPH + '/' + encodeURIComponent(connection.wabaId) + '/message_templates', {
     method: 'POST',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
     body: JSON.stringify({ name, language, category, parameter_format: 'POSITIONAL', components }),
   });
   return {
     id: result?.id ? String(result.id) : undefined,
-    name,
-    language,
-    category,
+    name, language, category,
     status: String(result?.status || 'PENDING').toUpperCase(),
-    body,
-    header,
+    body, components,
+    header: String(input.headerText || ''),
     footer,
-    components,
-    paramCount: variableIndexes.length,
+    paramCount: validatedBody.indexes.length,
   };
 }
 

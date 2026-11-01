@@ -391,6 +391,15 @@ export const EmailDesignStudio: React.FC<EmailDesignStudioProps> = ({ tenantId, 
 
   const startFromScratch = () => {
     const template = createBlankEmailDesignTemplate();
+    if (isCampaignMode) {
+      template.name = 'New campaign email';
+      template.description = 'A reusable campaign email template.';
+      template.campaignSubject = '';
+      template.campaignPreheader = '';
+      template.campaignBody = 'Hello {{firstName}},\n\nWrite your campaign message here. Add personalization fields where they belong.';
+      template.campaignAttachments = [];
+      template.campaignTemplateId = '';
+    }
     setEditing(template);
     setSelectedBlockId(template.blocks[0]?.id || '');
     setEditorPanel('blocks');
@@ -552,14 +561,63 @@ export const EmailDesignStudio: React.FC<EmailDesignStudioProps> = ({ tenantId, 
     if (!editing) return null;
     const name = editing.name.trim();
     if (!name) {
-      setNotice({ tone: 'error', text: 'Give your email design a name before saving.' });
+      setNotice({ tone: 'error', text: isCampaignMode ? 'Give your campaign email a name before saving.' : 'Give your email design a name before saving.' });
       return null;
     }
-    if (editing.customHtml !== undefined) {
+    if (isCampaignMode && !String(editing.campaignSubject || '').trim()) {
+      setNotice({ tone: 'error', text: 'Add an email subject before saving this campaign template.' });
+      return null;
+    }
+    if (editing.customHtml !== undefined && !isCampaignMode) {
       const validation = validateEmailDesignHtml(editing.customHtml);
       if (!validation.valid) {
         setNotice({ tone: 'error', text: validation.error || 'Please fix the HTML before saving.' });
         return null;
+      }
+    }
+    if (isCampaignMode) {
+      setBusy(true);
+      setNotice(null);
+      try {
+        const escapeText = (value: string) => value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+        let htmlBody = renderEmailDesignHtml(editing, String(editing.campaignBody || ''), brandData);
+        const preheader = String(editing.campaignPreheader || '').trim();
+        if (preheader) {
+          const hidden = '<div style="display:none!important;visibility:hidden;opacity:0;color:transparent;height:0;width:0;max-height:0;max-width:0;overflow:hidden;mso-hide:all">' + escapeText(preheader) + '</div>';
+          htmlBody = /<body\b[^>]*>/i.test(htmlBody) ? htmlBody.replace(/<body\b[^>]*>/i, (match) => match + hidden) : hidden + htmlBody;
+        }
+        const plainBody = String(editing.campaignBody || '').trim() || htmlBody.replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, '').replace(/<[^>]+>/g, ' ').replace(/&nbsp;/gi, ' ').replace(/&amp;/gi, '&').replace(/\s+/g, ' ').trim();
+        const templateId = String(editing.campaignTemplateId || (editing.source === 'PREDEFINED' ? '' : editing.id) || '');
+        const designSnapshot = { ...editing, id: '', source: 'CUSTOM' as const, campaignTemplateId: templateId };
+        const payload = {
+          templateId,
+          name,
+          subject: String(editing.campaignSubject || '').trim(),
+          preheader,
+          body: plainBody,
+          htmlBody,
+          format: 'html' as const,
+          isHtml: true,
+          attachments: Array.isArray(editing.campaignAttachments) ? editing.campaignAttachments : [],
+          designSnapshot,
+        };
+        const response = await fetch('/api/templates', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok || !data.success || !data.template) throw new Error(data.error || 'Could not save the campaign email template.');
+        const saved = campaignEmailToDesign(data.template as EmailTemplate);
+        setTemplates((current) => [...current.filter((item) => item.id !== saved.id), saved]);
+        setEditing(saved);
+        setNotice({ tone: 'success', text: makeDefault ? 'Campaign email saved. Campaign templates are selected when creating a campaign.' : 'Campaign email template saved and is available in Campaigns.' });
+        return saved;
+      } catch (error: any) {
+        setNotice({ tone: 'error', text: error?.message || 'Could not save the campaign email template.' });
+        return null;
+      } finally {
+        setBusy(false);
       }
     }
     setBusy(true);
@@ -842,7 +900,7 @@ export const EmailDesignStudio: React.FC<EmailDesignStudioProps> = ({ tenantId, 
               <div><h2 className="text-xs font-bold text-slate-700">Live email preview</h2><p className="text-[10px] text-slate-400">Sample recipient message is inserted where {'{{content}}'} appears.</p></div>
               <span className="text-[10px] text-slate-400 uppercase tracking-wider">{previewMode} view</span>
             </div>
-            <EmailPreview template={editing} brand={brandData} mode={previewMode} />
+            <EmailPreview template={editing} brand={brandData} mode={previewMode} content={isCampaignMode ? editing.campaignBody : undefined} />
           </main>
           )}
         </div>
@@ -962,7 +1020,7 @@ export const EmailDesignStudio: React.FC<EmailDesignStudioProps> = ({ tenantId, 
               <div><h2 className="text-xs font-bold text-slate-700">Live email preview</h2><p className="text-[10px] text-slate-400">The sample text represents the message generated or written by the user.</p></div>
               <span className="text-[10px] text-slate-400 uppercase tracking-wider">{previewMode} view</span>
             </div>
-            <EmailPreview template={editing} brand={brandData} mode={previewMode} />
+            <EmailPreview template={editing} brand={brandData} mode={previewMode} content={isCampaignMode ? editing.campaignBody : undefined} />
           </main>
           <aside className="bg-white border-l border-slate-200 p-4 overflow-y-auto max-h-[360px] xl:max-h-none">
             {selectedBlock ? (

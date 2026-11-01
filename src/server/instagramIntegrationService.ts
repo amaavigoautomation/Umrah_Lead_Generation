@@ -405,7 +405,7 @@ async function processInstagramMessageEvent(tenantId: string, accountId: string,
   // Human Handoff: a customer asking for a person (or clearly frustrated) silences the AI for this conversation.
   if (Boolean(messageText)) {
     try {
-      const handoff = await evaluateHumanHandoff(ctx, { text: messageText, thread, settings });
+      const handoff = await evaluateHumanHandoff(ctx, { text: messageText, thread });
       if (handoff.matched) {
         await persistHumanHandoff(ctx, conversationId, handoff);
         await updateDoc(eventRef, { status: 'handoff', reason: describeHandoff(handoff), processedAt: new Date().toISOString(), conversationId });

@@ -934,6 +934,10 @@ export const EmailDesignStudio: React.FC<{ tenantId: string }> = ({ tenantId }) 
                         <textarea rows={3} value={selectedBlock.secondaryText || ''} onChange={(event) => updateBlock(selectedBlock.id, { secondaryText: event.target.value })} className="mt-1 w-full rounded-lg border border-slate-200 p-2 text-xs font-normal" />
                       </label>
                     </>}
+                    {selectedBlock.type === 'logo' && <label className="block text-xs font-semibold text-slate-600">Brand name
+                      <input value={selectedBlock.text || ''} onChange={(event) => updateBlock(selectedBlock.id, { text: event.target.value })} className="mt-1 w-full rounded-lg border border-slate-200 p-2 text-xs font-normal" placeholder={String(brandData.companyName || 'Your company name')} maxLength={120} />
+                      <span className="mt-1 block text-[10px] font-normal text-slate-400">Shown as text when no logo image is selected. Leave blank to use your workspace company name.</span>
+                    </label>}
                     {['logo','image'].includes(selectedBlock.type) && <>
                       <label className="block text-xs font-semibold text-slate-600">Image URL
                         <input value={selectedBlock.url || ''} onChange={(event) => updateBlock(selectedBlock.id, { url: event.target.value })} className="mt-1 w-full rounded-lg border border-slate-200 p-2 text-xs font-normal" placeholder="/api/assets/..." />

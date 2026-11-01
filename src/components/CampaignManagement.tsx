@@ -2559,6 +2559,7 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                 </p>
                 <button
                   onClick={() => {
+                    if (onOpenTemplateStudio) { onOpenTemplateStudio('campaign'); return; }
                     setEditingTemplate(null);
                     setTemplateFormName('');
                     setTemplateFormSubject('');

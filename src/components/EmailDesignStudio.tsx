@@ -7,7 +7,7 @@ import {
   ArrowLeft, ArrowUp, ArrowDown, Check, Code2, Copy, Eye, FileImage, Heading1, ImagePlus,
   LayoutTemplate, Mail, Monitor, Palette, Plus, Save, Search, Smartphone, Sparkles, Trash2,
   Type, X, MousePointerClick, Minus, Link2, Loader2, Star, FolderOpen, AlignLeft,
-  Maximize2, Minimize2, WrapText,
+  Maximize2, Minimize2, WrapText, Paperclip,
 } from 'lucide-react';
 import { useBrand } from '../context/BrandContext';
 import { CompanyAssetsPanel } from './CompanyAssetsPanel';
@@ -321,6 +321,7 @@ export const EmailDesignStudio: React.FC<EmailDesignStudioProps> = ({ tenantId, 
   const [previewMode, setPreviewMode] = useState<PreviewMode>('desktop');
   const [editorMode, setEditorMode] = useState<EditorMode>('visual');
   const htmlEditorRef = useRef<EditorView | null>(null);
+  const campaignAttachmentInputRef = useRef<HTMLInputElement | null>(null);
   const [htmlFind, setHtmlFind] = useState('');
   const [htmlWordWrap, setHtmlWordWrap] = useState(true);
   const [htmlExpanded, setHtmlExpanded] = useState(false);
@@ -409,6 +410,41 @@ export const EmailDesignStudio: React.FC<EmailDesignStudioProps> = ({ tenantId, 
 
   const updateTemplate = (patch: Partial<EmailDesignTemplate>) => {
     setEditing((current) => current ? { ...current, ...patch } : current);
+  };
+
+  const addCampaignAttachments = (files: FileList | null) => {
+    if (!files || !files.length) return;
+    Array.from(files).forEach((file) => {
+      if (file.size > 15 * 1024 * 1024) {
+        setNotice({ tone: 'error', text: 'File "' + file.name + '" exceeds the 15 MB per-file limit.' });
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = () => {
+        const dataUrl = String(reader.result || '');
+        const attachment = {
+          id: 'att-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6),
+          name: file.name,
+          filename: file.name,
+          size: file.size,
+          type: file.type || 'application/octet-stream',
+          contentType: file.type || 'application/octet-stream',
+          dataUrl,
+          base64: dataUrl.split(',')[1] || '',
+        };
+        setEditing((current) => current ? {
+          ...current,
+          campaignAttachments: [...(current.campaignAttachments || []), attachment],
+        } : current);
+      };
+      reader.onerror = () => setNotice({ tone: 'error', text: 'Could not read attachment "' + file.name + '".' });
+      reader.readAsDataURL(file);
+    });
+    if (campaignAttachmentInputRef.current) campaignAttachmentInputRef.current.value = '';
+  };
+
+  const removeCampaignAttachment = (id: string) => {
+    updateTemplate({ campaignAttachments: (editing?.campaignAttachments || []).filter((item: any) => item.id !== id) });
   };
 
   const formatCurrentHtml = () => {
@@ -903,6 +939,7 @@ export const EmailDesignStudio: React.FC<EmailDesignStudioProps> = ({ tenantId, 
               <div><h2 className="text-xs font-bold text-slate-700">Live email preview</h2><p className="text-[10px] text-slate-400">Sample recipient message is inserted where {'{{content}}'} appears.</p></div>
               <span className="text-[10px] text-slate-400 uppercase tracking-wider">{previewMode} view</span>
             </div>
+            {isCampaignMode && <div className="mb-3 space-y-3 rounded-xl border border-slate-200 bg-white p-3"><div className="grid grid-cols-1 md:grid-cols-2 gap-2"><label className="text-[11px] font-semibold text-slate-600">Campaign subject *<input value={editing.campaignSubject || ''} onChange={(event) => updateTemplate({ campaignSubject: event.target.value })} maxLength={180} placeholder="Write your email subject" className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-xs font-normal" /></label><label className="text-[11px] font-semibold text-slate-600">Preheader<input value={editing.campaignPreheader || ''} onChange={(event) => updateTemplate({ campaignPreheader: event.target.value })} maxLength={180} placeholder="Optional preview text" className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-xs font-normal" /></label></div><div className="flex flex-wrap items-center justify-between gap-2"><span className="text-[11px] font-semibold text-slate-600"><Paperclip className="mr-1 inline h-3.5 w-3.5" />Attachments ({(editing.campaignAttachments || []).length})</span><button type="button" onClick={() => campaignAttachmentInputRef.current?.click()} className="rounded-lg border border-slate-200 px-3 py-1.5 text-[11px] font-semibold text-slate-700 hover:border-orange-300">Add files</button><input ref={campaignAttachmentInputRef} type="file" multiple className="hidden" accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.png,.jpg,.jpeg,.webp,.zip" onChange={(event) => addCampaignAttachments(event.target.files)} /></div>{(editing.campaignAttachments || []).length > 0 && <div className="flex flex-wrap gap-2">{(editing.campaignAttachments || []).map((attachment: any) => <span key={attachment.id} className="inline-flex max-w-full items-center gap-1 rounded-md bg-slate-100 px-2 py-1 text-[10px] text-slate-700"><span className="max-w-[220px] truncate">{attachment.filename || attachment.name}</span><button type="button" onClick={() => removeCampaignAttachment(attachment.id)} className="text-slate-400 hover:text-rose-600" aria-label="Remove attachment">×</button></span>)}</div>}</div>}
             <EmailPreview template={editing} brand={brandData} mode={previewMode} content={isCampaignMode ? editing.campaignBody : undefined} />
           </main>
           )}
@@ -1026,7 +1063,7 @@ export const EmailDesignStudio: React.FC<EmailDesignStudioProps> = ({ tenantId, 
             <EmailPreview template={editing} brand={brandData} mode={previewMode} content={isCampaignMode ? editing.campaignBody : undefined} />
           </main>
           <aside className="bg-white border-l border-slate-200 p-4 overflow-y-auto max-h-[360px] xl:max-h-none">
-            {isCampaignMode && <div className="mb-4 space-y-3 border-b border-slate-100 pb-4"><h3 className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Campaign settings</h3><label className="block text-xs font-semibold text-slate-600">Email subject *<input value={editing.campaignSubject || ''} onChange={(event) => updateTemplate({ campaignSubject: event.target.value })} maxLength={180} placeholder="Write your subject line" className="mt-1 w-full rounded-lg border border-slate-200 p-2 text-xs font-normal" /></label><label className="block text-xs font-semibold text-slate-600">Preheader (optional)<input value={editing.campaignPreheader || ''} onChange={(event) => updateTemplate({ campaignPreheader: event.target.value })} maxLength={180} placeholder="Preview text shown beside the subject" className="mt-1 w-full rounded-lg border border-slate-200 p-2 text-xs font-normal" /></label><p className="text-[10px] text-slate-400">The subject and preheader support the same personalization fields as the message.</p></div>}
+            {isCampaignMode && <div className="mb-4 space-y-3 border-b border-slate-100 pb-4"><h3 className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Campaign settings</h3><label className="block text-xs font-semibold text-slate-600">Email subject *<input value={editing.campaignSubject || ''} onChange={(event) => updateTemplate({ campaignSubject: event.target.value })} maxLength={180} placeholder="Write your subject line" className="mt-1 w-full rounded-lg border border-slate-200 p-2 text-xs font-normal" /></label><label className="block text-xs font-semibold text-slate-600">Preheader (optional)<input value={editing.campaignPreheader || ''} onChange={(event) => updateTemplate({ campaignPreheader: event.target.value })} maxLength={180} placeholder="Preview text shown beside the subject" className="mt-1 w-full rounded-lg border border-slate-200 p-2 text-xs font-normal" /></label><p className="text-[10px] text-slate-400">The subject and preheader support the same personalization fields as the message.</p><div className="space-y-2"><div className="flex items-center justify-between"><span className="text-[11px] font-semibold text-slate-600"><Paperclip className="mr-1 inline h-3.5 w-3.5" />Attachments ({(editing.campaignAttachments || []).length})</span><button type="button" onClick={() => campaignAttachmentInputRef.current?.click()} className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-[10px] font-semibold text-slate-700 hover:border-orange-300">Add files</button><input ref={campaignAttachmentInputRef} type="file" multiple className="hidden" accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.png,.jpg,.jpeg,.webp,.zip" onChange={(event) => addCampaignAttachments(event.target.files)} /></div>{(editing.campaignAttachments || []).map((attachment: any) => <div key={attachment.id} className="flex items-center justify-between gap-2 rounded-md bg-slate-50 px-2 py-1.5 text-[10px]"><span className="min-w-0 truncate">{attachment.filename || attachment.name}</span><button type="button" onClick={() => removeCampaignAttachment(attachment.id)} className="shrink-0 text-slate-400 hover:text-rose-600">Remove</button></div>)}</div></div>}
             {selectedBlock ? (
               <div className="space-y-3">
                 <div className="flex items-center justify-between"><div><h3 className="text-sm font-bold text-slate-900 capitalize">{selectedBlock.type === 'content' ? 'Message content area' : selectedBlock.type + ' settings'}</h3><p className="text-[10px] text-slate-400">Selected block</p></div>{selectedBlock.type === 'content' && <span className="text-[9px] px-2 py-1 bg-emerald-50 text-emerald-700 rounded-full font-bold">Required</span>}</div>

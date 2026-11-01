@@ -57,7 +57,7 @@ import { collection, doc, setDoc, getDoc, getDocs, updateDoc, deleteDoc, query, 
 
 // thsi is a test Screens loaded on demand (own JS files). Login, navigation and the inbox stay in the main bundle.
 const CampaignManagement = lazyNamed(() => import('./components/CampaignManagement'), 'CampaignManagement');
-const EmailDesignStudio = lazyNamed(() => import('./components/EmailDesignStudio'), 'EmailDesignStudio');
+const TemplateStudio = lazyNamed(() => import('./components/TemplateStudio'), 'TemplateStudio');
 const CrmPipeline = lazyNamed(() => import('./components/CrmPipeline'), 'CrmPipeline');
 const KnowledgeBaseView = lazyNamed(() => import('./components/KnowledgeBaseView'), 'KnowledgeBaseView');
 const AiTestingPlayground = lazyNamed(() => import('./components/AiTestingPlayground'), 'AiTestingPlayground');
@@ -261,6 +261,8 @@ export default function App() {
     setActiveTabState(tab);
     writeTabToLocation(tab);
   }, []);
+  const [templateStudioView, setTemplateStudioView] = useState<'conversation' | 'campaign' | 'whatsapp'>('conversation');
+  const [templateStudioTemplateId, setTemplateStudioTemplateId] = useState<string | undefined>(undefined);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(false);  
 const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ? [] : INITIAL_CONTACTS);
   const [leads, setLeads] = useState<Lead[]>(() => isFirebaseConfigured ? [] : INITIAL_LEADS);
@@ -2459,6 +2461,11 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
                 tenantId={currentTenantId}
                 timezone={currentTenant?.timezone || 'Asia/Kolkata'}
                 canManageWhatsAppTemplates={Boolean(currentUser && (currentUser.role === 'ADMIN' || currentUser.accessLevel === 'ALL'))}
+                onOpenTemplateStudio={(view, templateId) => {
+                  setTemplateStudioView(view);
+                  setTemplateStudioTemplateId(templateId);
+                  setActiveTab('email-design-studio');
+                }}
               />
             )}
 
@@ -2543,7 +2550,7 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
               />
             )}
 
-            {activeTab === 'email-design-studio' && <EmailDesignStudio tenantId={currentTenantId} />}
+            {activeTab === 'email-design-studio' && <TemplateStudio tenantId={currentTenantId} canManageWhatsAppTemplates={Boolean(currentUser && (currentUser.role === 'ADMIN' || currentUser.accessLevel === 'ALL'))} initialView={templateStudioView} initialTemplateId={templateStudioTemplateId} />}
 
             {activeTab === 'playground' && <AiTestingPlayground knowledgeDocs={knowledgeDocs} />}
 

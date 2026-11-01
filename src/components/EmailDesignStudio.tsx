@@ -325,6 +325,7 @@ export const EmailDesignStudio: React.FC<EmailDesignStudioProps> = ({ tenantId, 
   const [htmlFind, setHtmlFind] = useState('');
   const [htmlWordWrap, setHtmlWordWrap] = useState(true);
   const [htmlExpanded, setHtmlExpanded] = useState(false);
+  const initialTemplateOpenedRef = useRef('');
   const [showAssets, setShowAssets] = useState(false);
   const [aiStep, setAiStep] = useState<'website' | 'verify' | null>(null);
   const [websiteUrl, setWebsiteUrl] = useState('');
@@ -374,10 +375,13 @@ export const EmailDesignStudio: React.FC<EmailDesignStudioProps> = ({ tenantId, 
   const selectedBlock = editing?.blocks.find((item) => item.id === selectedBlockId) || null;
 
   useEffect(() => {
-    if (!isCampaignMode || !initialTemplateId || loading || editing) return;
+    if (!isCampaignMode || !initialTemplateId || loading || editing || initialTemplateOpenedRef.current === initialTemplateId) return;
     const match = templates.find((item) => item.campaignTemplateId === initialTemplateId || item.id === initialTemplateId);
-    if (match) startEditing(match);
-  }, [initialTemplateId, isCampaignMode, loading, templates]);
+    if (match) {
+      initialTemplateOpenedRef.current = initialTemplateId;
+      startEditing(match);
+    }
+  }, [initialTemplateId, isCampaignMode, loading, templates, editing]);
 
   const startEditing = (template: EmailDesignTemplate) => {
     const copy = cloneTemplate(template);

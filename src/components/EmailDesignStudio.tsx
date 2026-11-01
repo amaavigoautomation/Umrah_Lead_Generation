@@ -895,7 +895,7 @@ export const EmailDesignStudio: React.FC<EmailDesignStudioProps> = ({ tenantId, 
           </button>
           {!isCampaignMode && <button disabled={busy || !htmlValidation.valid} title={!htmlValidation.valid ? 'Add exactly one {{content}} placeholder before saving' : 'Save and set default'} onClick={() => void saveTemplate(true)} className="px-4 py-2 rounded-lg bg-orange-600 hover:bg-orange-700 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm disabled:opacity-40 disabled:cursor-not-allowed">
             <Star className="w-3.5 h-3.5" /> Save & set default
-          </button>
+          </button>}
         </div>
         {notice && <div className={'px-5 py-2 text-xs border-b ' + (notice.tone === 'error' ? 'bg-rose-50 border-rose-100 text-rose-700' : notice.tone === 'success' ? 'bg-emerald-50 border-emerald-100 text-emerald-700' : 'bg-blue-50 border-blue-100 text-blue-700')}>{notice.text}</div>}
         <div className={htmlExpanded ? "flex-1 min-h-0 grid grid-cols-1" : "flex-1 min-h-0 grid grid-cols-1 xl:grid-cols-[minmax(0,1.05fr)_minmax(420px,0.95fr)]"}>

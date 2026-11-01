@@ -73,8 +73,13 @@ function meta(html: string, name: string): string {
   return '';
 }
 function attr(tag: string, name: string): string {
-  const pattern = new RegExp('\\b' + name + '\\s*=\\s*["\\']([^"\\']*)["\\']', 'i');
-  return (tag.match(pattern) || [])[1] || '';
+  const attributes = tag.matchAll(/([a-zA-Z_:][a-zA-Z0-9_:.-]*)\s*=\s*(?:"([^"]*)"|'([^']*)')/g);
+  for (const attribute of attributes) {
+    if (attribute[1].toLowerCase() === name.toLowerCase()) {
+      return attribute[2] ?? attribute[3] ?? '';
+    }
+  }
+  return '';
 }
 function extractProfile(websiteUrl: string, html: string, pageUrl: URL): EmailBrandProfile {
   const companyName = meta(html, 'og:site_name') || textFromHtml(((html.match(/<title\b[^>]*>([\s\S]*?)<\/title>/i) || [])[1]) || '', 120) || pageUrl.hostname.replace(/^www\./, '').split('.')[0].replace(/[-_]/g, ' ');

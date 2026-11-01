@@ -322,6 +322,7 @@ export const EmailDesignStudio: React.FC<EmailDesignStudioProps> = ({ tenantId, 
   const [editorMode, setEditorMode] = useState<EditorMode>('visual');
   const htmlEditorRef = useRef<EditorView | null>(null);
   const campaignAttachmentInputRef = useRef<HTMLInputElement | null>(null);
+  const [pendingAttachmentReads, setPendingAttachmentReads] = useState(0);
   const [htmlFind, setHtmlFind] = useState('');
   const [htmlWordWrap, setHtmlWordWrap] = useState(true);
   const [htmlExpanded, setHtmlExpanded] = useState(false);
@@ -423,8 +424,10 @@ export const EmailDesignStudio: React.FC<EmailDesignStudioProps> = ({ tenantId, 
         setNotice({ tone: 'error', text: 'File "' + file.name + '" exceeds the 15 MB per-file limit.' });
         return;
       }
+      setPendingAttachmentReads((count) => count + 1);
       const reader = new FileReader();
       reader.onload = () => {
+        setPendingAttachmentReads((count) => Math.max(0, count - 1));
         const dataUrl = String(reader.result || '');
         const attachment = {
           id: 'att-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6),
@@ -441,7 +444,10 @@ export const EmailDesignStudio: React.FC<EmailDesignStudioProps> = ({ tenantId, 
           campaignAttachments: [...(current.campaignAttachments || []), attachment],
         } : current);
       };
-      reader.onerror = () => setNotice({ tone: 'error', text: 'Could not read attachment "' + file.name + '".' });
+      reader.onerror = () => {
+        setPendingAttachmentReads((count) => Math.max(0, count - 1));
+        setNotice({ tone: 'error', text: 'Could not read attachment "' + file.name + '".' });
+      };
       reader.readAsDataURL(file);
     });
     if (campaignAttachmentInputRef.current) campaignAttachmentInputRef.current.value = '';
@@ -605,6 +611,10 @@ export const EmailDesignStudio: React.FC<EmailDesignStudioProps> = ({ tenantId, 
       setNotice({ tone: 'error', text: isCampaignMode ? 'Give your campaign email a name before saving.' : 'Give your email design a name before saving.' });
       return null;
     }
+    if (isCampaignMode && pendingAttachmentReads > 0) {
+      setNotice({ tone: 'info', text: 'Please wait for the selected attachments to finish uploading into the template.' });
+      return null;
+    }
     if (isCampaignMode && !String(editing.campaignSubject || '').trim()) {
       setNotice({ tone: 'error', text: 'Add an email subject before saving this campaign template.' });
       return null;
@@ -630,6 +640,10 @@ export const EmailDesignStudio: React.FC<EmailDesignStudioProps> = ({ tenantId, 
         const plainBody = String(editing.campaignBody || '').trim() || htmlBody.replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, '').replace(/<[^>]+>/g, ' ').replace(/&nbsp;/gi, ' ').replace(/&amp;/gi, '&').replace(/\s+/g, ' ').trim();
         const templateId = String(editing.campaignTemplateId || (editing.source === 'PREDEFINED' ? '' : editing.id) || '');
         const designSnapshot = { ...editing, id: '', source: 'CUSTOM' as const, campaignTemplateId: templateId };
+        delete designSnapshot.campaignAttachments;
+        delete designSnapshot.campaignBody;
+        delete designSnapshot.campaignSubject;
+        delete designSnapshot.campaignPreheader;
         const payload = {
           templateId,
           name,
@@ -890,7 +904,7 @@ export const EmailDesignStudio: React.FC<EmailDesignStudioProps> = ({ tenantId, 
           <button type="button" onClick={() => setHtmlExpanded((value) => !value)} className="px-3 py-2 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-xs font-semibold text-slate-700 flex items-center gap-1.5" title={htmlExpanded ? "Restore split view" : "Expand code editor"}>
             {htmlExpanded ? <><Minimize2 className="w-3.5 h-3.5" /> Restore view</> : <><Maximize2 className="w-3.5 h-3.5" /> Expand editor</>}
           </button>
-          <button disabled={busy || !htmlValidation.valid} title={!htmlValidation.valid ? (isCampaignMode ? 'Add campaign email HTML before saving' : 'Add exactly one {{content}} placeholder before saving') : 'Save template'} onClick={() => void saveTemplate(false)} className="px-3.5 py-2 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed">
+          <button disabled={busy || pendingAttachmentReads > 0 || !htmlValidation.valid} title={pendingAttachmentReads > 0 ? 'Wait for attachment reads to finish' : !htmlValidation.valid ? (isCampaignMode ? 'Add campaign email HTML before saving' : 'Add exactly one {{content}} placeholder before saving') : 'Save template'} onClick={() => void saveTemplate(false)} className="px-3.5 py-2 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed">
             <Save className="w-3.5 h-3.5" /> {isCampaignMode ? 'Save campaign template' : 'Save design'}
           </button>
           {!isCampaignMode && <button disabled={busy || !htmlValidation.valid} title={!htmlValidation.valid ? 'Add exactly one {{content}} placeholder before saving' : 'Save and set default'} onClick={() => void saveTemplate(true)} className="px-4 py-2 rounded-lg bg-orange-600 hover:bg-orange-700 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm disabled:opacity-40 disabled:cursor-not-allowed">
@@ -900,6 +914,7 @@ export const EmailDesignStudio: React.FC<EmailDesignStudioProps> = ({ tenantId, 
         {notice && <div className={'px-5 py-2 text-xs border-b ' + (notice.tone === 'error' ? 'bg-rose-50 border-rose-100 text-rose-700' : notice.tone === 'success' ? 'bg-emerald-50 border-emerald-100 text-emerald-700' : 'bg-blue-50 border-blue-100 text-blue-700')}>{notice.text}</div>}
         <div className={htmlExpanded ? "flex-1 min-h-0 grid grid-cols-1" : "flex-1 min-h-0 grid grid-cols-1 xl:grid-cols-[minmax(0,1.05fr)_minmax(420px,0.95fr)]"}>
           <section className={(htmlExpanded ? "h-full min-h-0" : "min-h-[580px] xl:min-h-0") + " bg-white border-r border-slate-200 flex flex-col overflow-hidden"}>
+            {isCampaignMode && <div className="mb-3 space-y-3 rounded-xl border border-slate-200 bg-white p-3"><div className="grid grid-cols-1 md:grid-cols-2 gap-2"><label className="text-[11px] font-semibold text-slate-600">Campaign subject *<input value={editing.campaignSubject || ''} onChange={(event) => updateTemplate({ campaignSubject: event.target.value })} maxLength={180} placeholder="Write your email subject" className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-xs font-normal" /></label><label className="text-[11px] font-semibold text-slate-600">Preheader<input value={editing.campaignPreheader || ''} onChange={(event) => updateTemplate({ campaignPreheader: event.target.value })} maxLength={180} placeholder="Optional preview text" className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-xs font-normal" /></label></div><div className="flex flex-wrap items-center justify-between gap-2"><span className="text-[11px] font-semibold text-slate-600"><Paperclip className="mr-1 inline h-3.5 w-3.5" />Attachments ({(editing.campaignAttachments || []).length})</span><button type="button" onClick={() => campaignAttachmentInputRef.current?.click()} className="rounded-lg border border-slate-200 px-3 py-1.5 text-[11px] font-semibold text-slate-700 hover:border-orange-300">Add files</button><input ref={campaignAttachmentInputRef} type="file" multiple className="hidden" accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.png,.jpg,.jpeg,.webp,.zip" onChange={(event) => addCampaignAttachments(event.target.files)} /></div>{(editing.campaignAttachments || []).length > 0 && <div className="flex flex-wrap gap-2">{(editing.campaignAttachments || []).map((attachment: any) => <span key={attachment.id} className="inline-flex max-w-full items-center gap-1 rounded-md bg-slate-100 px-2 py-1 text-[10px] text-slate-700"><span className="max-w-[220px] truncate">{attachment.filename || attachment.name}</span><button type="button" onClick={() => removeCampaignAttachment(attachment.id)} className="text-slate-400 hover:text-rose-600" aria-label="Remove attachment">×</button></span>)}</div>}</div>}
             <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between gap-2">
               <div>
                 <h2 className="text-xs font-bold text-slate-800">HTML source</h2>
@@ -944,7 +959,6 @@ export const EmailDesignStudio: React.FC<EmailDesignStudioProps> = ({ tenantId, 
               <div><h2 className="text-xs font-bold text-slate-700">Live email preview</h2><p className="text-[10px] text-slate-400">Sample recipient message is inserted where {'{{content}}'} appears.</p></div>
               <span className="text-[10px] text-slate-400 uppercase tracking-wider">{previewMode} view</span>
             </div>
-            {isCampaignMode && <div className="mb-3 space-y-3 rounded-xl border border-slate-200 bg-white p-3"><div className="grid grid-cols-1 md:grid-cols-2 gap-2"><label className="text-[11px] font-semibold text-slate-600">Campaign subject *<input value={editing.campaignSubject || ''} onChange={(event) => updateTemplate({ campaignSubject: event.target.value })} maxLength={180} placeholder="Write your email subject" className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-xs font-normal" /></label><label className="text-[11px] font-semibold text-slate-600">Preheader<input value={editing.campaignPreheader || ''} onChange={(event) => updateTemplate({ campaignPreheader: event.target.value })} maxLength={180} placeholder="Optional preview text" className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-xs font-normal" /></label></div><div className="flex flex-wrap items-center justify-between gap-2"><span className="text-[11px] font-semibold text-slate-600"><Paperclip className="mr-1 inline h-3.5 w-3.5" />Attachments ({(editing.campaignAttachments || []).length})</span><button type="button" onClick={() => campaignAttachmentInputRef.current?.click()} className="rounded-lg border border-slate-200 px-3 py-1.5 text-[11px] font-semibold text-slate-700 hover:border-orange-300">Add files</button><input ref={campaignAttachmentInputRef} type="file" multiple className="hidden" accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.png,.jpg,.jpeg,.webp,.zip" onChange={(event) => addCampaignAttachments(event.target.files)} /></div>{(editing.campaignAttachments || []).length > 0 && <div className="flex flex-wrap gap-2">{(editing.campaignAttachments || []).map((attachment: any) => <span key={attachment.id} className="inline-flex max-w-full items-center gap-1 rounded-md bg-slate-100 px-2 py-1 text-[10px] text-slate-700"><span className="max-w-[220px] truncate">{attachment.filename || attachment.name}</span><button type="button" onClick={() => removeCampaignAttachment(attachment.id)} className="text-slate-400 hover:text-rose-600" aria-label="Remove attachment">×</button></span>)}</div>}</div>}
             <EmailPreview template={editing} brand={brandData} mode={previewMode} content={isCampaignMode ? editing.campaignBody : undefined} />
           </main>
           )}
@@ -977,7 +991,7 @@ export const EmailDesignStudio: React.FC<EmailDesignStudioProps> = ({ tenantId, 
               <Code2 className="w-3.5 h-3.5" /> Full HTML
             </button>
           </div>
-          <button disabled={busy} onClick={() => saveTemplate(false)} className="px-3.5 py-2 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold flex items-center gap-1.5 disabled:opacity-50">
+          <button disabled={busy || (isCampaignMode && pendingAttachmentReads > 0)} onClick={() => saveTemplate(false)} className="px-3.5 py-2 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold flex items-center gap-1.5 disabled:opacity-50">
             <Save className="w-3.5 h-3.5" /> {isCampaignMode ? 'Save campaign template' : 'Save design'}
           </button>
           {!isCampaignMode && <button disabled={busy} onClick={() => saveTemplate(true)} className="px-4 py-2 rounded-lg bg-orange-600 hover:bg-orange-700 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm disabled:opacity-50">

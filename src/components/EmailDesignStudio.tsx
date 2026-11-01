@@ -23,7 +23,7 @@ type EditorPanel = 'blocks' | 'styles';
 type PreviewMode = 'desktop' | 'mobile';
 type EditorMode = 'visual' | 'html';
 
-const CATEGORY_FILTERS = ['All', ...Array.from(new Set(PREDEFINED_EMAIL_DESIGNS.map((item) => item.category)))];
+const CATEGORY_FILTERS = ['All', 'Shared designs', ...Array.from(new Set(PREDEFINED_EMAIL_DESIGNS.map((item) => item.category)))];
 const BLOCK_OPTIONS: Array<{ type: EmailDesignBlockType; label: string; description: string; icon: React.ReactNode }> = [
   { type: 'logo', label: 'Brand header', description: 'Logo, brand name and header styling', icon: <LayoutTemplate className="h-4 w-4" /> },
   { type: 'hero', label: 'Hero banner', description: 'A styled headline and supporting introduction', icon: <Sparkles className="h-4 w-4" /> },
@@ -344,7 +344,28 @@ export const EmailDesignStudio: React.FC<EmailDesignStudioProps> = ({ tenantId, 
         const data = await response.json().catch(() => ({}));
         if (!response.ok || !data.success) throw new Error(data.error || 'Could not load campaign email templates.');
         const campaignTemplates = (Array.isArray(data.templates) ? data.templates : []).map((item: EmailTemplate) => campaignEmailToDesign(item));
-        setTemplates(campaignTemplates);
+        let sharedDesignStarters: EmailDesignTemplate[] = [];
+        try {
+          const designsResponse = await fetch('/api/email-design');
+          const designsData = await designsResponse.json().catch(() => ({}));
+          if (designsResponse.ok && designsData.success && Array.isArray(designsData.templates)) {
+            sharedDesignStarters = designsData.templates.map((item: EmailDesignTemplate) => ({
+              ...cloneTemplate(item),
+              id: 'conversation-design-' + item.id,
+              source: 'PREDEFINED' as const,
+              category: 'Shared designs',
+              description: 'Shared from Conversation & AI. Customize this branded layout for a campaign.',
+              campaignTemplateId: '',
+              campaignSubject: '',
+              campaignPreheader: '',
+              campaignBody: 'Hello {{firstName}},\n\nWrite your campaign message here. Add personalization fields where they belong.',
+              campaignAttachments: [],
+            }));
+          }
+        } catch {
+          // Campaign templates remain available when the optional shared-design request fails.
+        }
+        setTemplates([...campaignTemplates, ...sharedDesignStarters]);
         setDefaultTemplateId('');
       } else {
         const response = await fetch('/api/email-design');

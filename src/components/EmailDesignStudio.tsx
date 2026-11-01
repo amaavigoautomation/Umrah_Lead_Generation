@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowLeft, ArrowUp, ArrowDown, Check, Code2, Copy, Eye, FileImage, Heading1, ImagePlus,
   LayoutTemplate, Mail, Monitor, Palette, Plus, Save, Search, Smartphone, Sparkles, Trash2,
@@ -8,14 +8,15 @@ import { useBrand } from '../context/BrandContext';
 import { CompanyAssetsPanel } from './CompanyAssetsPanel';
 import type { CompanyAsset } from '../types';
 import {
-  createBlankEmailDesignTemplate, createEmailDesignBlockId, PREDEFINED_EMAIL_DESIGNS,
-  SAMPLE_EMAIL_CONTENT, renderEmailDesignHtml, type EmailBrandProfile, type EmailDesignBlock,
+  createBlankEmailDesignTemplate, createEmailDesignBlockId, createEmailDesignHtmlSource, PREDEFINED_EMAIL_DESIGNS,
+  SAMPLE_EMAIL_CONTENT, renderEmailDesignHtml, validateEmailDesignHtml, type EmailBrandProfile, type EmailDesignBlock,
   type EmailDesignBlockType, type EmailDesignTemplate, type EmailDesignTheme,
 } from '../shared/emailDesign';
 
 type StudioTab = 'gallery' | 'my-designs';
 type EditorPanel = 'blocks' | 'styles';
 type PreviewMode = 'desktop' | 'mobile';
+type EditorMode = 'visual' | 'html';
 
 const CATEGORY_FILTERS = ['All', ...Array.from(new Set(PREDEFINED_EMAIL_DESIGNS.map((item) => item.category)))];
 const BLOCK_OPTIONS: Array<{ type: EmailDesignBlockType; label: string; description: string; icon: React.ReactNode }> = [
@@ -30,6 +31,19 @@ const BLOCK_OPTIONS: Array<{ type: EmailDesignBlockType; label: string; descript
   { type: 'social', label: 'Social links', description: 'Add social destinations', icon: <Link2 className="h-4 w-4" /> },
   { type: 'footer', label: 'Company footer', description: 'Company details and contact links', icon: <Mail className="h-4 w-4" /> },
 ];
+
+const HTML_INSERT_OPTIONS = [
+  { label: 'Message content', value: '{{content}}', description: 'Required. Inserts the AI or manually written email message.' },
+  { label: 'Company name', value: '{{companyName}}', description: 'Your workspace company name.' },
+  { label: 'Company tagline', value: '{{tagline}}', description: 'Your workspace tagline.' },
+  { label: 'Website URL', value: '{{websiteUrl}}', description: 'Your workspace website URL.' },
+];
+const HTML_CTA_SNIPPET = String.raw`<table role="presentation" cellspacing="0" cellpadding="0" border="0">
+  <tr><td bgcolor="#183B66" style="background:#183B66;border-radius:6px">
+    <a href="{{websiteUrl}}" target="_blank" style="display:inline-block;padding:13px 22px;color:#FFFFFF;font-family:Arial,sans-serif;font-size:14px;font-weight:700;text-decoration:none">Explore more</a>
+  </td></tr>
+</table>`;
+
 
 function cloneTemplate(template: EmailDesignTemplate): EmailDesignTemplate {
   return JSON.parse(JSON.stringify(template)) as EmailDesignTemplate;
@@ -91,7 +105,8 @@ export const EmailDesignStudio: React.FC<{ tenantId: string }> = ({ tenantId }) 
   const [selectedBlockId, setSelectedBlockId] = useState<string>('');
   const [editorPanel, setEditorPanel] = useState<EditorPanel>('blocks');
   const [previewMode, setPreviewMode] = useState<PreviewMode>('desktop');
-  const [codeMode, setCodeMode] = useState(false);
+  const [editorMode, setEditorMode] = useState<EditorMode>('visual');
+  const htmlEditorRef = useRef<HTMLTextAreaElement | null>(null);
   const [showAssets, setShowAssets] = useState(false);
   const [aiStep, setAiStep] = useState<'website' | 'verify' | null>(null);
   const [websiteUrl, setWebsiteUrl] = useState('');
@@ -136,7 +151,7 @@ export const EmailDesignStudio: React.FC<{ tenantId: string }> = ({ tenantId }) 
     setSelectedBlockId(copy.blocks.find((item) => item.type !== 'content')?.id || copy.blocks[0]?.id || '');
     setEditorPanel('blocks');
     setPreviewMode('desktop');
-    setCodeMode(false);
+    setEditorMode(copy.customHtml ? 'html' : 'visual');
   };
 
   const startFromScratch = () => {
@@ -144,12 +159,67 @@ export const EmailDesignStudio: React.FC<{ tenantId: string }> = ({ tenantId }) 
     setEditing(template);
     setSelectedBlockId(template.blocks[0]?.id || '');
     setEditorPanel('blocks');
-    setCodeMode(false);
+    setEditorMode('visual');
   };
 
   const updateTemplate = (patch: Partial<EmailDesignTemplate>) => {
     setEditing((current) => current ? { ...current, ...patch } : current);
   };
+  const insertHtmlAtCursor = (snippet: string) => {
+    const current = editing?.customHtml || '';
+    const textarea = htmlEditorRef.current;
+    const start = textarea?.selectionStart ?? current.length;
+    const end = textarea?.selectionEnd ?? current.length;
+    const next = current.slice(0, start) + snippet + current.slice(end);
+    updateTemplate({ customHtml: next });
+    window.requestAnimationFrame(() => {
+      const editor = htmlEditorRef.current;
+      if (!editor) return;
+      const caret = start + snippet.length;
+      editor.focus();
+      editor.setSelectionRange(caret, caret);
+    });
+  };
+
+  const switchToHtmlMode = () => {
+    if (!editing) return;
+    if (editing.customHtml !== undefined) {
+      setEditorMode('html');
+      return;
+    }
+    const source = createEmailDesignHtmlSource(editing, brandData);
+    setEditing((current) => current ? { ...current, customHtml: source } : current);
+    setEditorMode('html');
+    setNotice({ tone: 'info', text: 'Your visual layout has been converted into editable email-safe HTML. The dynamic message placeholder is preserved.' });
+  };
+
+  const switchToVisualMode = async () => {
+    if (!editing) return;
+    if (editing.customHtml === undefined) {
+      setEditorMode('visual');
+      return;
+    }
+    const confirmed = window.confirm(
+      'Full HTML cannot be converted back into visual blocks without losing custom layout and CSS. Save this HTML design and create a separate Visual Builder copy from its original block layout? Your HTML design will remain saved in My Designs.'
+    );
+    if (!confirmed) return;
+    const savedHtmlDesign = await saveTemplate(false);
+    if (!savedHtmlDesign) return;
+    const visualCopy = cloneTemplate(savedHtmlDesign);
+    visualCopy.id = '';
+    visualCopy.name = (savedHtmlDesign.name + ' (Visual Copy)').slice(0, 100);
+    visualCopy.source = 'CUSTOM';
+    visualCopy.version = 1;
+    visualCopy.customHtml = undefined;
+    visualCopy.createdAt = undefined;
+    visualCopy.updatedAt = undefined;
+    setEditing(visualCopy);
+    setSelectedBlockId(visualCopy.blocks.find((item) => item.type !== 'content')?.id || visualCopy.blocks[0]?.id || '');
+    setEditorMode('visual');
+    setEditorPanel('blocks');
+    setNotice({ tone: 'success', text: 'Your HTML design has been saved separately. You are now editing a new Visual Builder copy.' });
+  };
+
 
   const updateTheme = (patch: Partial<EmailDesignTheme>) => {
     setEditing((current) => current ? { ...current, customHtml: undefined, theme: { ...current.theme, ...patch } } : current);
@@ -181,7 +251,6 @@ export const EmailDesignStudio: React.FC<{ tenantId: string }> = ({ tenantId }) 
     const item: EmailDesignBlock = { id, type, enabled: true, ...defaults };
     setEditing((current) => current ? { ...current, customHtml: undefined, blocks: [...current.blocks, item] } : current);
     setSelectedBlockId(id);
-    setCodeMode(false);
   };
 
   const removeBlock = (id: string) => {
@@ -214,12 +283,19 @@ export const EmailDesignStudio: React.FC<{ tenantId: string }> = ({ tenantId }) 
     });
   };
 
-  const saveTemplate = async (makeDefault = false) => {
-    if (!editing) return;
+  const saveTemplate = async (makeDefault = false): Promise<EmailDesignTemplate | null> => {
+    if (!editing) return null;
     const name = editing.name.trim();
     if (!name) {
       setNotice({ tone: 'error', text: 'Give your email design a name before saving.' });
-      return;
+      return null;
+    }
+    if (editing.customHtml !== undefined) {
+      const validation = validateEmailDesignHtml(editing.customHtml);
+      if (!validation.valid) {
+        setNotice({ tone: 'error', text: validation.error || 'Please fix the HTML before saving.' });
+        return null;
+      }
     }
     setBusy(true);
     setNotice(null);
@@ -246,8 +322,10 @@ export const EmailDesignStudio: React.FC<{ tenantId: string }> = ({ tenantId }) 
         setDefaultTemplateId(saved.id);
       }
       setNotice({ tone: 'success', text: makeDefault ? 'Design saved and selected as the default for AI replies, follow-ups and manual inbox emails.' : 'Your email design has been saved.' });
+      return saved;
     } catch (error: any) {
       setNotice({ tone: 'error', text: error?.message || 'Could not save this design.' });
+      return null;
     } finally {
       setBusy(false);
     }
@@ -373,6 +451,98 @@ export const EmailDesignStudio: React.FC<{ tenantId: string }> = ({ tenantId }) 
   const filteredPredefined = tab === 'gallery';
   const profileColors = brandProfile?.colors || [];
 
+  if (editing && editorMode === 'html') {
+    const htmlValidation = validateEmailDesignHtml(editing.customHtml ?? '');
+    return (
+      <div className="h-full min-h-[760px] flex flex-col bg-slate-50 -m-4 lg:-m-6">
+        <div className="bg-white border-b border-slate-200 px-4 lg:px-6 py-3 flex flex-wrap items-center gap-3 shrink-0">
+          <button onClick={() => { setEditing(null); setNotice(null); }} className="p-2 rounded-lg hover:bg-slate-100 text-slate-600" title="Back to Email Design Studio">
+            <ArrowLeft className="w-4 h-4" />
+          </button>
+          <div className="min-w-[170px] flex-1">
+            <input value={editing.name} onChange={(event) => updateTemplate({ name: event.target.value })} className="w-full text-sm font-bold text-slate-900 outline-none border-b border-transparent focus:border-orange-400 py-1" placeholder="Name your email design" />
+            <p className="text-[10px] text-slate-400">Full HTML email design · Your message is inserted at the required content placeholder</p>
+          </div>
+          <div className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-slate-100 p-1">
+            <button onClick={() => void switchToVisualMode()} className="px-3 py-2 rounded-lg text-xs font-semibold text-slate-500 hover:text-slate-800 flex items-center gap-1.5">
+              <LayoutTemplate className="w-3.5 h-3.5" /> Visual Builder
+            </button>
+            <button className="px-3 py-2 rounded-lg text-xs font-semibold bg-slate-900 text-white shadow-sm flex items-center gap-1.5">
+              <Code2 className="w-3.5 h-3.5" /> Full HTML
+            </button>
+          </div>
+          <div className="flex items-center gap-1 bg-slate-100 rounded-lg p-1">
+            <button onClick={() => setPreviewMode('desktop')} className={'p-2 rounded-md ' + (previewMode === 'desktop' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500')} title="Desktop preview"><Monitor className="w-4 h-4" /></button>
+            <button onClick={() => setPreviewMode('mobile')} className={'p-2 rounded-md ' + (previewMode === 'mobile' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500')} title="Mobile preview"><Smartphone className="w-4 h-4" /></button>
+          </div>
+          <button disabled={busy} onClick={() => void saveTemplate(false)} className="px-3.5 py-2 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold flex items-center gap-1.5 disabled:opacity-50">
+            <Save className="w-3.5 h-3.5" /> Save design
+          </button>
+          <button disabled={busy} onClick={() => void saveTemplate(true)} className="px-4 py-2 rounded-lg bg-orange-600 hover:bg-orange-700 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm disabled:opacity-50">
+            <Star className="w-3.5 h-3.5" /> Save & set default
+          </button>
+        </div>
+        {notice && <div className={'px-5 py-2 text-xs border-b ' + (notice.tone === 'error' ? 'bg-rose-50 border-rose-100 text-rose-700' : notice.tone === 'success' ? 'bg-emerald-50 border-emerald-100 text-emerald-700' : 'bg-blue-50 border-blue-100 text-blue-700')}>{notice.text}</div>}
+        <div className="flex-1 min-h-0 grid grid-cols-1 xl:grid-cols-[minmax(0,1.05fr)_minmax(420px,0.95fr)]">
+          <section className="min-h-[580px] xl:min-h-0 bg-white border-r border-slate-200 flex flex-col overflow-hidden">
+            <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between gap-2">
+              <div>
+                <h2 className="text-xs font-bold text-slate-800">HTML source</h2>
+                <p className="text-[10px] text-slate-400">Email-safe HTML · inline CSS and responsive media queries</p>
+              </div>
+              <span className={'text-[10px] font-bold px-2.5 py-1 rounded-full ' + (htmlValidation.valid ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700')}>
+                {htmlValidation.valid ? 'Message slot ready' : 'Needs attention'}
+              </span>
+            </div>
+            <div className="px-4 py-3 border-b border-slate-100 bg-slate-50">
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="text-[10px] font-bold uppercase tracking-wide text-slate-500 mr-1">Insert</span>
+                {HTML_INSERT_OPTIONS.map((option) => (
+                  <button key={option.value} type="button" onClick={() => insertHtmlAtCursor(option.value)} title={option.description} className="px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white hover:border-orange-300 hover:text-orange-700 text-[10px] font-semibold text-slate-700">
+                    {option.label}
+                  </button>
+                ))}
+                <button type="button" onClick={() => insertHtmlAtCursor(HTML_CTA_SNIPPET)} className="px-2.5 py-1.5 rounded-lg border border-orange-200 bg-orange-50 hover:bg-orange-100 text-[10px] font-semibold text-orange-700">
+                  Insert CTA button
+                </button>
+              </div>
+            </div>
+            <div className="flex-1 min-h-0 p-3">
+              <textarea
+                ref={htmlEditorRef}
+                value={editing.customHtml ?? ''}
+                onChange={(event) => updateTemplate({ customHtml: event.target.value })}
+                spellCheck={false}
+                autoCapitalize="off"
+                autoCorrect="off"
+                wrap="off"
+                aria-label="Full HTML email source"
+                placeholder={'<!doctype html>\\n<html>\\n<head>\\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\\n</head>\\n<body>\\n  <!-- Header, layout and footer -->\\n  <table role=\"presentation\" width=\"100%\">\\n    <tr><td>{{content}}</td></tr>\\n  </table>\\n</body>\\n</html>'}
+                className="w-full h-full min-h-[500px] resize-none rounded-xl border border-slate-200 bg-slate-950 p-4 text-[11px] leading-[1.65] text-emerald-100 font-mono outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-100"
+              />
+            </div>
+            <div className="px-4 py-3 border-t border-slate-200 bg-white space-y-1.5">
+              {htmlValidation.valid ? (
+                <p className="text-[11px] text-emerald-700 flex items-center gap-1.5"><Check className="w-3.5 h-3.5" /> Exactly one {'{{content}}'} placeholder is present and survives email sanitization.</p>
+              ) : (
+                <p className="text-[11px] text-rose-700 flex items-center gap-1.5"><X className="w-3.5 h-3.5" /> {htmlValidation.error}</p>
+              )}
+              {htmlValidation.warnings.map((warning) => <p key={warning} className="text-[10px] text-amber-700">• {warning}</p>)}
+              <p className="text-[10px] text-slate-400">Scripts, forms, iframes and unsafe CSS are removed. Use tables for layout; safe inline styles and screen media queries are retained.</p>
+            </div>
+          </section>
+          <main className="min-h-[580px] xl:min-h-0 flex flex-col p-3 lg:p-5">
+            <div className="flex items-center justify-between mb-3 gap-2">
+              <div><h2 className="text-xs font-bold text-slate-700">Live email preview</h2><p className="text-[10px] text-slate-400">Sample recipient message is inserted where {'{{content}}'} appears.</p></div>
+              <span className="text-[10px] text-slate-400 uppercase tracking-wider">{previewMode} view</span>
+            </div>
+            <EmailPreview template={editing} brand={brandData} mode={previewMode} />
+          </main>
+        </div>
+      </div>
+    );
+  }
+
   if (editing) {
     const selectedIndex = editing.blocks.findIndex((item) => item.id === selectedBlockId);
     return (
@@ -389,9 +559,14 @@ export const EmailDesignStudio: React.FC<{ tenantId: string }> = ({ tenantId }) 
             <button onClick={() => setPreviewMode('desktop')} className={'p-2 rounded-md ' + (previewMode === 'desktop' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500')} title="Desktop preview"><Monitor className="w-4 h-4" /></button>
             <button onClick={() => setPreviewMode('mobile')} className={'p-2 rounded-md ' + (previewMode === 'mobile' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500')} title="Mobile preview"><Smartphone className="w-4 h-4" /></button>
           </div>
-          <button onClick={() => setCodeMode((value) => !value)} className={'px-3 py-2 rounded-lg border text-xs font-semibold flex items-center gap-1.5 ' + (codeMode ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-600 border-slate-200')}>
-            <Code2 className="w-3.5 h-3.5" /> HTML mode
-          </button>
+          <div className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-slate-100 p-1">
+            <button onClick={() => { if (editorMode === 'html') void switchToVisualMode(); else setEditorMode('visual'); }} className={'px-3 py-2 rounded-lg text-xs font-semibold flex items-center gap-1.5 ' + (editorMode === 'visual' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800')}>
+              <LayoutTemplate className="w-3.5 h-3.5" /> Visual Builder
+            </button>
+            <button onClick={switchToHtmlMode} className={'px-3 py-2 rounded-lg text-xs font-semibold flex items-center gap-1.5 ' + (editorMode === 'html' ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-500 hover:text-slate-800')}>
+              <Code2 className="w-3.5 h-3.5" /> Full HTML
+            </button>
+          </div>
           <button disabled={busy} onClick={() => saveTemplate(false)} className="px-3.5 py-2 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold flex items-center gap-1.5 disabled:opacity-50">
             <Save className="w-3.5 h-3.5" /> Save design
           </button>
@@ -483,12 +658,7 @@ export const EmailDesignStudio: React.FC<{ tenantId: string }> = ({ tenantId }) 
             <EmailPreview template={editing} brand={brandData} mode={previewMode} />
           </main>
           <aside className="bg-white border-l border-slate-200 p-4 overflow-y-auto max-h-[360px] xl:max-h-none">
-            {codeMode ? (
-              <div className="space-y-3">
-                <div><h3 className="text-sm font-bold text-slate-900">Custom HTML</h3><p className="text-[11px] text-slate-500 mt-1">Advanced mode. Use the message content placeholder where the email should appear. Only safe email tags and inline styles are retained when saved.</p></div>
-                <textarea value={editing.customHtml || '<table role="presentation" width="100%"><tr><td style="padding:28px">{{content}}</td></tr></table>'} onChange={(event) => updateTemplate({ customHtml: event.target.value })} rows={24} className="w-full rounded-lg border border-slate-200 p-3 text-[11px] font-mono leading-relaxed focus:border-orange-400 outline-none" spellCheck={false} />
-              </div>
-            ) : selectedBlock ? (
+            {selectedBlock ? (
               <div className="space-y-3">
                 <div className="flex items-center justify-between"><div><h3 className="text-sm font-bold text-slate-900 capitalize">{selectedBlock.type === 'content' ? 'Message content area' : selectedBlock.type + ' settings'}</h3><p className="text-[10px] text-slate-400">Selected block</p></div>{selectedBlock.type === 'content' && <span className="text-[9px] px-2 py-1 bg-emerald-50 text-emerald-700 rounded-full font-bold">Required</span>}</div>
                 {selectedBlock.type === 'content' ? (

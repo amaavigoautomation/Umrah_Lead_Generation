@@ -96,8 +96,12 @@ function extractProfile(websiteUrl: string, html: string, pageUrl: URL): EmailBr
     if (icon) logoUrl = attr(icon, 'href');
   }
   try { logoUrl = logoUrl ? new URL(logoUrl, pageUrl).toString() : ''; } catch { logoUrl = ''; }
-  const values = html.match(/#[0-9a-fA-F]{6}\b/g) || [], counts = new Map<string, number>();
-  values.forEach((value) => counts.set(value.toUpperCase(), (counts.get(value.toUpperCase()) || 0) + 1));
+  const values: string[] = Array.from(html.matchAll(/#[0-9a-fA-F]{6}\\b/g), (match) => match[0]);
+  const counts = new Map<string, number>();
+  for (const value of values) {
+    const normalized = value.toUpperCase();
+    counts.set(normalized, (counts.get(normalized) || 0) + 1);
+  }
   const colors = [...counts.entries()].sort((a,b) => b[1]-a[1]).map((x) => x[0])
     .filter((x) => !['#FFFFFF','#000000','#FDFDFD','#FEFEFE'].includes(x)).slice(0,5);
   const socialLinks: Record<string,string> = {};

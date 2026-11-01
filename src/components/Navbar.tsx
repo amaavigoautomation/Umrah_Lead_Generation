@@ -121,7 +121,7 @@ export const Navbar: React.FC<NavbarProps> = ({
     },
     {
       id: 'email-design-studio',
-      label: 'Email Design Studio',
+      label: 'Template Studio',
       icon: <Mail className="w-4 h-4 shrink-0" />,
     },
     {

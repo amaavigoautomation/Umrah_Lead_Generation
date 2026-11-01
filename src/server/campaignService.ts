@@ -825,6 +825,8 @@ export async function saveTemplate(template: Partial<EmailTemplate>): Promise<Em
     format: template.format || (isHtml ? 'html' : 'text') || existing?.format || 'text',
     isHtml,
     attachments: template.attachments || existing?.attachments || [],
+    preheader: template.preheader !== undefined ? String(template.preheader || '').trim() : existing?.preheader,
+    designSnapshot: template.designSnapshot !== undefined ? template.designSnapshot : existing?.designSnapshot,
     createdAt: existing?.createdAt || template.createdAt || now,
     updatedAt: now,
   };

@@ -374,15 +374,6 @@ export const EmailDesignStudio: React.FC<EmailDesignStudioProps> = ({ tenantId, 
 
   const selectedBlock = editing?.blocks.find((item) => item.id === selectedBlockId) || null;
 
-  useEffect(() => {
-    if (!isCampaignMode || !initialTemplateId || loading || editing || initialTemplateOpenedRef.current === initialTemplateId) return;
-    const match = templates.find((item) => item.campaignTemplateId === initialTemplateId || item.id === initialTemplateId);
-    if (match) {
-      initialTemplateOpenedRef.current = initialTemplateId;
-      startEditing(match);
-    }
-  }, [initialTemplateId, isCampaignMode, loading, templates, editing]);
-
   const startEditing = (template: EmailDesignTemplate) => {
     const copy = cloneTemplate(template);
     if (copy.customHtml !== undefined) copy.customHtml = formatEmailHtml(copy.customHtml);
@@ -393,6 +384,15 @@ export const EmailDesignStudio: React.FC<EmailDesignStudioProps> = ({ tenantId, 
     setEditorMode(copy.customHtml ? 'html' : 'visual');
     setHtmlExpanded(false);
   };
+
+  useEffect(() => {
+    if (!isCampaignMode || !initialTemplateId || loading || editing || initialTemplateOpenedRef.current === initialTemplateId) return;
+    const match = templates.find((item) => item.campaignTemplateId === initialTemplateId || item.id === initialTemplateId);
+    if (match) {
+      initialTemplateOpenedRef.current = initialTemplateId;
+      startEditing(match);
+    }
+  }, [initialTemplateId, isCampaignMode, loading, templates, editing]);
 
   const startFromScratch = () => {
     const template = createBlankEmailDesignTemplate();

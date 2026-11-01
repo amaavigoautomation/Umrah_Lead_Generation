@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 import { useBrand } from '../context/BrandContext';
 import { CompanyAssetsPanel } from './CompanyAssetsPanel';
-import type { CompanyAsset } from '../types';
+import type { CompanyAsset, EmailTemplate } from '../types';
 import {
   createBlankEmailDesignTemplate, createEmailDesignBlockId, createEmailDesignHtmlSource, PREDEFINED_EMAIL_DESIGNS,
   SAMPLE_EMAIL_CONTENT, renderEmailDesignHtml, validateEmailDesignHtml, type EmailBrandProfile, type EmailDesignBlock,
@@ -41,19 +41,46 @@ function cloneTemplate(template: EmailDesignTemplate): EmailDesignTemplate {
   return JSON.parse(JSON.stringify(template)) as EmailDesignTemplate;
 }
 
+const CAMPAIGN_PREDEFINED_IDS = new Set(['tpl-b2b-portal', 'tpl-visa-allotments', 'tpl-enterprise-suite']);
+
+function campaignEmailToDesign(template: EmailTemplate): EmailDesignTemplate {
+  const snapshot = template.designSnapshot && Array.isArray(template.designSnapshot.blocks)
+    ? cloneTemplate(template.designSnapshot as unknown as EmailDesignTemplate)
+    : createBlankEmailDesignTemplate();
+  const isPredefined = CAMPAIGN_PREDEFINED_IDS.has(template.templateId);
+  return {
+    ...snapshot,
+    id: template.templateId,
+    name: template.name || snapshot.name,
+    description: snapshot.description || 'Campaign email template',
+    category: snapshot.category || 'Campaign',
+    source: isPredefined ? 'PREDEFINED' : 'CUSTOM',
+    campaignTemplateId: template.templateId,
+    campaignSubject: template.subject || '',
+    campaignPreheader: template.preheader || '',
+    campaignBody: template.body || '',
+    campaignAttachments: Array.isArray(template.attachments) ? template.attachments : [],
+    createdAt: template.createdAt || snapshot.createdAt,
+    updatedAt: template.updatedAt || snapshot.updatedAt,
+    ...(!template.designSnapshot && template.htmlBody ? { customHtml: template.htmlBody } : {}),
+  };
+}
+
 function EmailPreview({
   template,
   brand,
   mode = 'desktop',
   compact = false,
+  content,
 }: {
   template: EmailDesignTemplate;
   brand: Record<string, any>;
   mode?: PreviewMode;
   compact?: boolean;
+  content?: string;
 }) {
   const origin = typeof window !== 'undefined' ? window.location.origin : '';
-  const srcDoc = renderEmailDesignHtml(template, SAMPLE_EMAIL_CONTENT, brand, origin);
+  const srcDoc = renderEmailDesignHtml(template, content || template.campaignBody || SAMPLE_EMAIL_CONTENT, brand, origin);
   return (
     <div className={compact ? 'h-[154px] overflow-hidden rounded-lg bg-slate-100 border border-slate-200 relative' : 'flex-1 min-h-0 overflow-auto rounded-xl bg-slate-100 border border-slate-200 p-4'}>
       <div className={compact ? 'absolute top-0 left-0 origin-top-left pointer-events-none' : 'mx-auto'} style={compact ? { width: 600, transform: 'scale(0.37)' } : mode === 'mobile' ? { width: 390, maxWidth: '100%' } : { width: '100%', maxWidth: 760 }}>
@@ -270,7 +297,14 @@ function HtmlSourceEditor({
 }
 
 
-export const EmailDesignStudio: React.FC<{ tenantId: string }> = ({ tenantId }) => {
+type EmailDesignStudioProps = {
+  tenantId: string;
+  purpose?: 'conversation' | 'campaign';
+  initialTemplateId?: string;
+};
+
+export const EmailDesignStudio: React.FC<EmailDesignStudioProps> = ({ tenantId, purpose = 'conversation', initialTemplateId }) => {
+  const isCampaignMode = purpose === 'campaign';
   const { brand } = useBrand();
   const brandData = brand as unknown as Record<string, any>;
   const [templates, setTemplates] = useState<EmailDesignTemplate[]>(PREDEFINED_EMAIL_DESIGNS);
@@ -302,19 +336,28 @@ export const EmailDesignStudio: React.FC<{ tenantId: string }> = ({ tenantId }) 
   const loadTemplates = async () => {
     setLoading(true);
     try {
-      const response = await fetch('/api/email-design');
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok || !data.success) throw new Error(data.error || 'Could not load email designs.');
-      setTemplates(Array.isArray(data.templates) ? data.templates : PREDEFINED_EMAIL_DESIGNS);
-      setDefaultTemplateId(data.defaultTemplateId || 'modern-professional');
+      if (isCampaignMode) {
+        const response = await fetch('/api/templates');
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok || !data.success) throw new Error(data.error || 'Could not load campaign email templates.');
+        const campaignTemplates = (Array.isArray(data.templates) ? data.templates : []).map((item: EmailTemplate) => campaignEmailToDesign(item));
+        setTemplates(campaignTemplates);
+        setDefaultTemplateId('');
+      } else {
+        const response = await fetch('/api/email-design');
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok || !data.success) throw new Error(data.error || 'Could not load email designs.');
+        setTemplates(Array.isArray(data.templates) ? data.templates : PREDEFINED_EMAIL_DESIGNS);
+        setDefaultTemplateId(data.defaultTemplateId || 'modern-professional');
+      }
     } catch (error: any) {
-      setNotice({ tone: 'error', text: error?.message || 'Could not load email designs.' });
+      setNotice({ tone: 'error', text: error?.message || (isCampaignMode ? 'Could not load campaign email templates.' : 'Could not load email designs.') });
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => { loadTemplates(); }, [tenantId]);
+  useEffect(() => { loadTemplates(); }, [tenantId, isCampaignMode]);
 
   const customTemplates = useMemo(() => templates.filter((item) => item.source !== 'PREDEFINED'), [templates]);
   const predefinedTemplates = useMemo(() => templates.filter((item) => item.source === 'PREDEFINED'), [templates]);
@@ -328,6 +371,12 @@ export const EmailDesignStudio: React.FC<{ tenantId: string }> = ({ tenantId }) 
   }, [tab, predefinedTemplates, customTemplates, category, search]);
 
   const selectedBlock = editing?.blocks.find((item) => item.id === selectedBlockId) || null;
+
+  useEffect(() => {
+    if (!isCampaignMode || !initialTemplateId || loading || editing) return;
+    const match = templates.find((item) => item.campaignTemplateId === initialTemplateId || item.id === initialTemplateId);
+    if (match) startEditing(match);
+  }, [initialTemplateId, isCampaignMode, loading, templates]);
 
   const startEditing = (template: EmailDesignTemplate) => {
     const copy = cloneTemplate(template);

@@ -677,12 +677,12 @@ export const EmailDesignStudio: React.FC<EmailDesignStudioProps> = ({ tenantId, 
     if (!window.confirm('Delete "' + template.name + '"? Sent emails are not affected.')) return;
     setBusy(true);
     try {
-      const response = await fetch('/api/email-design/' + encodeURIComponent(template.id), { method: 'DELETE' });
+      const response = await fetch((isCampaignMode ? '/api/templates/' : '/api/email-design/') + encodeURIComponent(template.id), { method: 'DELETE' });
       const data = await response.json().catch(() => ({}));
       if (!response.ok || !data.success) throw new Error(data.error || 'Could not delete this design.');
       setTemplates((current) => current.filter((item) => item.id !== template.id));
-      if (defaultTemplateId === template.id) setDefaultTemplateId('modern-professional');
-      setNotice({ tone: 'success', text: 'Design deleted. Previously sent emails are unchanged.' });
+      if (!isCampaignMode && defaultTemplateId === template.id) setDefaultTemplateId('modern-professional');
+      setNotice({ tone: 'success', text: isCampaignMode ? 'Campaign email template deleted. Existing campaigns and sent emails are unchanged.' : 'Design deleted. Previously sent emails are unchanged.' });
     } catch (error: any) {
       setNotice({ tone: 'error', text: error?.message || 'Could not delete this design.' });
     } finally {
@@ -693,6 +693,7 @@ export const EmailDesignStudio: React.FC<EmailDesignStudioProps> = ({ tenantId, 
   const duplicateTemplate = (template: EmailDesignTemplate) => {
     const copy = cloneTemplate(template);
     copy.id = '';
+    if (isCampaignMode) copy.campaignTemplateId = '';
     copy.name = template.name + ' Copy';
     copy.source = 'CUSTOM';
     copy.version = 1;
@@ -1117,29 +1118,29 @@ export const EmailDesignStudio: React.FC<EmailDesignStudioProps> = ({ tenantId, 
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <div className="flex items-center gap-2 text-orange-600 mb-1"><Mail className="w-5 h-5" /><span className="text-[11px] uppercase tracking-[0.18em] font-bold">Amaavigo Workspace</span></div>
-          <h1 className="text-2xl font-extrabold tracking-tight text-slate-900">Email Design Studio</h1>
-          <p className="mt-1 max-w-2xl text-sm text-slate-500">Create a consistent, branded email experience for AI replies, AI auto follow-ups and manual Unified Inbox emails.</p>
+          <h1 className="text-2xl font-extrabold tracking-tight text-slate-900">{isCampaignMode ? 'Campaign Email Templates' : 'Conversation Email Designs'}</h1>
+          <p className="mt-1 max-w-2xl text-sm text-slate-500">{isCampaignMode ? 'Create complete campaign emails with subject lines, preheaders, recipient personalization and reusable branded layouts.' : 'Create a consistent, branded email experience for AI replies, AI auto follow-ups and manual Unified Inbox emails.'}</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <button onClick={startFromScratch} className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-slate-200 bg-white hover:border-orange-300 text-slate-700 text-xs font-bold shadow-sm"><Plus className="w-4 h-4" />Create from scratch</button>
+          <button onClick={startFromScratch} className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-slate-200 bg-white hover:border-orange-300 text-slate-700 text-xs font-bold shadow-sm"><Plus className="w-4 h-4" />{isCampaignMode ? 'Create campaign email' : 'Create from scratch'}</button>
           <button onClick={openAiBuilder} className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold shadow-sm"><Sparkles className="w-4 h-4" />Generate with AI</button>
         </div>
       </div>
 
-      <div className="rounded-2xl border border-orange-100 bg-gradient-to-r from-orange-50 via-white to-amber-50 p-4 lg:p-5 flex flex-col md:flex-row md:items-center gap-3">
+      {!isCampaignMode && <div className="rounded-2xl border border-orange-100 bg-gradient-to-r from-orange-50 via-white to-amber-50 p-4 lg:p-5 flex flex-col md:flex-row md:items-center gap-3">
         <div className="h-11 w-11 rounded-xl bg-white border border-orange-100 flex items-center justify-center text-orange-600"><Star className="w-5 h-5" /></div>
         <div className="flex-1"><p className="text-xs font-bold text-slate-900">Default email design</p><p className="text-sm text-slate-600">{templates.find((item) => item.id === defaultTemplateId)?.name || 'Modern Professional'}</p><p className="text-[11px] text-slate-500 mt-0.5">This design is used for all AI-generated replies, AI auto follow-ups and manual replies from Unified Inbox. Outbound campaign templates remain separate.</p></div>
         <span className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-emerald-50 border border-emerald-100 text-emerald-700 text-[11px] font-bold"><Check className="w-3.5 h-3.5" />Active default</span>
-      </div>
+      </div>}
 
       {notice && <div className={'px-4 py-3 rounded-xl border text-xs ' + (notice.tone === 'error' ? 'bg-rose-50 border-rose-100 text-rose-700' : notice.tone === 'success' ? 'bg-emerald-50 border-emerald-100 text-emerald-700' : 'bg-blue-50 border-blue-100 text-blue-700')}>{notice.text}</div>}
 
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="flex items-center gap-1 p-1 bg-slate-100 rounded-xl w-fit">
-          <button onClick={() => { setTab('gallery'); setSearch(''); }} className={'px-4 py-2 rounded-lg text-xs font-bold ' + (tab === 'gallery' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800')}><LayoutTemplate className="inline w-3.5 h-3.5 mr-1.5" />Predefined templates</button>
-          <button onClick={() => { setTab('my-designs'); setSearch(''); }} className={'px-4 py-2 rounded-lg text-xs font-bold ' + (tab === 'my-designs' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800')}>My designs <span className="ml-1 px-1.5 py-0.5 rounded bg-slate-200 text-[10px]">{customTemplates.length}</span></button>
+          <button onClick={() => { setTab('gallery'); setSearch(''); }} className={'px-4 py-2 rounded-lg text-xs font-bold ' + (tab === 'gallery' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800')}><LayoutTemplate className="inline w-3.5 h-3.5 mr-1.5" />{isCampaignMode ? 'Starter templates' : 'Predefined templates'}</button>
+          <button onClick={() => { setTab('my-designs'); setSearch(''); }} className={'px-4 py-2 rounded-lg text-xs font-bold ' + (tab === 'my-designs' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800')}>{isCampaignMode ? 'My campaign templates' : 'My designs'} <span className="ml-1 px-1.5 py-0.5 rounded bg-slate-200 text-[10px]">{customTemplates.length}</span></button>
         </div>
-        <div className="relative w-full sm:w-72"><Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search email designs..." className="w-full rounded-xl border border-slate-200 bg-white pl-9 pr-3 py-2 text-xs outline-none focus:border-orange-400" /></div>
+        <div className="relative w-full sm:w-72"><Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder={isCampaignMode ? 'Search campaign email templates...' : 'Search email designs...'} className="w-full rounded-xl border border-slate-200 bg-white pl-9 pr-3 py-2 text-xs outline-none focus:border-orange-400" /></div>
       </div>
 
       {tab === 'gallery' && <div className="flex flex-wrap gap-2">
@@ -1147,18 +1148,18 @@ export const EmailDesignStudio: React.FC<EmailDesignStudioProps> = ({ tenantId, 
       </div>}
 
       {loading ? <div className="py-20 flex items-center justify-center text-sm text-slate-400"><Loader2 className="w-4 h-4 animate-spin mr-2" />Loading designs...</div> : visibleTemplates.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-slate-300 bg-white py-16 text-center"><LayoutTemplate className="w-8 h-8 mx-auto text-slate-300" /><h3 className="mt-3 text-sm font-bold text-slate-800">{filteredPredefined ? 'No templates match your search' : 'Your saved designs will appear here'}</h3><p className="mt-1 text-xs text-slate-500">{filteredPredefined ? 'Try another search or category.' : 'Start with a predefined design, a blank canvas or AI generation.'}</p><button onClick={startFromScratch} className="mt-4 text-xs font-bold text-orange-600">Create your first design</button></div>
+        <div className="rounded-2xl border border-dashed border-slate-300 bg-white py-16 text-center"><LayoutTemplate className="w-8 h-8 mx-auto text-slate-300" /><h3 className="mt-3 text-sm font-bold text-slate-800">{filteredPredefined ? 'No templates match your search' : (isCampaignMode ? 'Your campaign email templates will appear here' : 'Your saved designs will appear here')}</h3><p className="mt-1 text-xs text-slate-500">{filteredPredefined ? 'Try another search or category.' : 'Start with a starter design or a blank canvas. Add a subject and campaign message, then save.'}</p><button onClick={startFromScratch} className="mt-4 text-xs font-bold text-orange-600">Create your first design</button></div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-5">
           {visibleTemplates.map((template) => {
             const isDefault = template.id === defaultTemplateId;
             return <article key={template.id} className="rounded-2xl border border-slate-200 bg-white p-3.5 shadow-sm hover:shadow-md hover:border-slate-300 transition">
-              <EmailPreview template={template} brand={brandData} compact />
+              <EmailPreview template={template} brand={brandData} compact content={isCampaignMode ? template.campaignBody : undefined} />
               <div className="px-1 pt-3">
                 <div className="flex items-start justify-between gap-2"><div className="min-w-0"><div className="flex items-center gap-2"><h3 className="text-sm font-bold text-slate-900 truncate">{template.name}</h3>{isDefault && <span className="shrink-0 text-[9px] px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 font-bold">DEFAULT</span>}</div><p className="mt-1 text-[11px] text-slate-500 line-clamp-2 min-h-[32px]">{template.description}</p></div><span className="shrink-0 text-[9px] uppercase tracking-wide text-slate-400">{template.category}</span></div>
                 <div className="mt-3 flex items-center gap-2">
-                  <button onClick={() => startEditing({ ...cloneTemplate(template), id: template.source === 'PREDEFINED' ? '' : template.id, source: template.source === 'PREDEFINED' ? 'CUSTOM' : template.source })} className="flex-1 px-3 py-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[11px] font-bold"><Eye className="inline w-3.5 h-3.5 mr-1.5" />Customize</button>
-                  <button disabled={busy || isDefault} onClick={() => setDefault(template.id)} className="px-3 py-2 rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-600 text-[11px] font-semibold disabled:opacity-40">{isDefault ? 'Selected' : 'Set default'}</button>
+                  <button onClick={() => { const copy = cloneTemplate(template); if (template.source === 'PREDEFINED') { copy.id = ''; if (isCampaignMode) copy.campaignTemplateId = ''; copy.source = 'CUSTOM'; } startEditing(copy); }} className="flex-1 px-3 py-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[11px] font-bold"><Eye className="inline w-3.5 h-3.5 mr-1.5" />Customize</button>
+                  {!isCampaignMode && <button disabled={busy || isDefault} onClick={() => setDefault(template.id)} className="px-3 py-2 rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-600 text-[11px] font-semibold disabled:opacity-40">{isDefault ? 'Selected' : 'Set default'}</button>}
                   {tab === 'my-designs' && <>
                     <button onClick={() => duplicateTemplate(template)} title="Duplicate" className="p-2 rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-500"><Copy className="w-3.5 h-3.5" /></button>
                     <button onClick={() => deleteTemplate(template)} title="Delete" className="p-2 rounded-lg border border-slate-200 hover:bg-rose-50 hover:text-rose-600 text-slate-500"><Trash2 className="w-3.5 h-3.5" /></button>
@@ -1172,7 +1173,7 @@ export const EmailDesignStudio: React.FC<EmailDesignStudioProps> = ({ tenantId, 
 
       <div className="rounded-xl border border-slate-200 bg-white p-4 flex flex-col md:flex-row md:items-center gap-3">
         <div className="h-9 w-9 rounded-lg bg-slate-100 flex items-center justify-center text-slate-600"><FileImage className="w-4 h-4" /></div>
-        <div className="flex-1"><p className="text-xs font-bold text-slate-800">Company Assets are shared with Outbound Campaigns</p><p className="text-[11px] text-slate-500">Use your existing logos, banners and images in email designs. Campaign template creation and campaign sending remain unchanged.</p></div>
+        <div className="flex-1"><p className="text-xs font-bold text-slate-800">Company Assets are shared across email templates</p><p className="text-[11px] text-slate-500">Reuse approved logos, banners and images in conversation designs and campaign emails.</p></div>
         <button onClick={() => { setEditing(createBlankEmailDesignTemplate()); setSelectedBlockId(''); setShowAssets(true); }} className="px-3 py-2 rounded-lg border border-slate-200 hover:bg-slate-50 text-xs font-semibold text-slate-700">Browse assets</button>
       </div>
 

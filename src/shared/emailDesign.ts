@@ -182,7 +182,7 @@ export function normalizeEmailDesignTemplate(input:any,sourceOverride?:EmailDesi
   return {id:String(item?.id||'block-'+i).replace(/[^a-zA-Z0-9_-]/g,'').slice(0,64)||'block-'+i,type,
    text:String(item?.text??'').slice(0,5000),url:isSafeEmailUrl(item?.url,true),altText:String(item?.altText??'').slice(0,240),
    align:['left','center','right'].includes(item?.align)?item.align:'left',width:num(item?.width,560,80,680),
-   fontSize:num(item?.fontSize,type==='heading'||type==='hero'?theme.headingFontSize:15,10,48),color:safeHexColor(item?.color,theme.textColor),
+   fontSize:item?.fontSize===undefined||item?.fontSize===null?undefined:num(item.fontSize,type==='heading'||type==='hero'?theme.headingFontSize:theme.bodyFontSize,10,48),color:safeHexColor(item?.color,theme.textColor),
    backgroundColor:item?.backgroundColor?safeHexColor(item.backgroundColor,theme.cardBackground):'',padding:num(item?.padding,16,0,64),
    eyebrow:String(item?.eyebrow??'').slice(0,180),secondaryText:String(item?.secondaryText??'').slice(0,700),
    enabled:item?.enabled!==false||type==='content',

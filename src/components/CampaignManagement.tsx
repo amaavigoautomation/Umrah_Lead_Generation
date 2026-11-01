@@ -2848,7 +2848,7 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
 
                   <button
                     type="button"
-                    onClick={() => setLeadInputMethod('PASTE')
+                    onClick={() => setLeadInputMethod('PASTE')}
                     className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-semibold transition flex items-center justify-center gap-1.5 ${
                       leadInputMethod === 'PASTE'
                         ? 'bg-orange-500 text-white shadow-xs'

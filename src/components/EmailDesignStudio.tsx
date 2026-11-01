@@ -788,7 +788,6 @@ export const EmailDesignStudio: React.FC<{ tenantId: string }> = ({ tenantId }) 
             </div>
           </section>
 {!htmlExpanded && (
-{!htmlExpanded && (
           <main className="min-h-[580px] xl:min-h-0 flex flex-col p-3 lg:p-5">
             <div className="flex items-center justify-between mb-3 gap-2">
               <div><h2 className="text-xs font-bold text-slate-700">Live email preview</h2><p className="text-[10px] text-slate-400">Sample recipient message is inserted where {'{{content}}'} appears.</p></div>

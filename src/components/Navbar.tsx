@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
   Inbox,
   Send,
+  Mail,
   Users,
   Calendar,
   BookOpen,
@@ -29,6 +30,7 @@ import { useBrand } from '../context/BrandContext';
 export type ActiveTab =
   | 'inbox'
   | 'campaigns'
+  | 'email-design-studio'
   | 'crm'
   | 'scheduling'
   | 'knowledge'
@@ -90,6 +92,7 @@ export const Navbar: React.FC<NavbarProps> = ({
     if (tabId === 'database') return true;
     if (!currentUser) return true;
     if (currentUser.accessLevel === 'ALL' || currentUser.role === 'ADMIN') return true;
+    if (tabId === 'email-design-studio' && (currentUser.allowedModules || []).includes('settings')) return true;
     return (currentUser.allowedModules || []).includes(tabId);
   };
 
@@ -115,6 +118,11 @@ export const Navbar: React.FC<NavbarProps> = ({
       id: 'campaigns',
       label: 'Campaigns',
       icon: <Send className="w-4 h-4 shrink-0" />,
+    },
+    {
+      id: 'email-design-studio',
+      label: 'Email Design Studio',
+      icon: <Mail className="w-4 h-4 shrink-0" />,
     },
     {
       id: 'crm',

@@ -1240,6 +1240,7 @@ async function processOneJob(
     to: recipient,
     subject,
     text: evalResult.generatedMessage,
+    applyWorkspaceDesign: true,
     ...(inReplyTo ? { inReplyTo, references: [inReplyTo] } : {}),
   });
 

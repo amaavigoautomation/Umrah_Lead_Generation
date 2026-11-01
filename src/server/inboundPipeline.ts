@@ -1763,6 +1763,7 @@ export async function processLiveInboundEmail(payload: {
         to: payload.from,
         subject: replySubject,
         text: aiResult.replyText,
+        applyWorkspaceDesign: true,
         inReplyTo: incomingMsgId,
         references: [incomingMsgId, ...(payload.inReplyTo ? [payload.inReplyTo] : [])],
       });

@@ -121,6 +121,14 @@ import {
   seedTenantAssetsIfEmpty,
 } from './assetService.js';
 import {
+  analyzeCompanyWebsite,
+  generateAiEmailDesign,
+  listEmailDesignData,
+  saveEmailDesignTemplate,
+  setDefaultEmailDesign,
+  deleteEmailDesignTemplate,
+} from './emailDesignService.js';
+import {
   handleEnableAutoFollowUp,
   handleDisableAutoFollowUp,
   getAutoFollowUpDashboardData,
@@ -2493,6 +2501,7 @@ Generate a helpful, grounded response.`;
       html,
       text,
       inReplyTo,
+      applyWorkspaceDesign: body?.applyWorkspaceDesign === true || body?.aiGeneratedReply === true || body?.aiDraftApproval === true,
     });
 
     if (sendResult.success) {
@@ -2884,6 +2893,94 @@ Generate a helpful, grounded response.`;
     } catch (err: any) {
       res.statusCode = 400;
       res.end(JSON.stringify({ error: err?.message || 'Failed to delete asset' }));
+    }
+    return true;
+  }
+
+  // Email Design Studio APIs. All data is scoped to the authenticated workspace.
+  if (url === '/api/email-design' && req.method === 'GET') {
+    try {
+      res.statusCode = 200;
+      res.end(JSON.stringify({ success: true, ...(await listEmailDesignData(activeTenantCtx)) }));
+    } catch (err: any) {
+      res.statusCode = 500;
+      res.end(JSON.stringify({ success: false, error: err?.message || 'Could not load email designs.' }));
+    }
+    return true;
+  }
+
+  if (url === '/api/email-design' && req.method === 'POST') {
+    try {
+      const template = await saveEmailDesignTemplate(activeTenantCtx, body?.template || body || {});
+      res.statusCode = 200;
+      res.end(JSON.stringify({ success: true, template }));
+    } catch (err: any) {
+      res.statusCode = 400;
+      res.end(JSON.stringify({ success: false, error: err?.message || 'Could not save email design.' }));
+    }
+    return true;
+  }
+
+  if (url === '/api/email-design/default' && req.method === 'POST') {
+    try {
+      const defaultTemplateId = await setDefaultEmailDesign(activeTenantCtx, String(body?.templateId || ''));
+      res.statusCode = 200;
+      res.end(JSON.stringify({ success: true, defaultTemplateId }));
+    } catch (err: any) {
+      res.statusCode = 400;
+      res.end(JSON.stringify({ success: false, error: err?.message || 'Could not set the default email design.' }));
+    }
+    return true;
+  }
+
+  if (url === '/api/email-design/analyze' && req.method === 'POST') {
+    try {
+      const websiteUrl = String(body?.websiteUrl || '').trim().slice(0, 2048);
+      if (!websiteUrl) {
+        res.statusCode = 400;
+        res.end(JSON.stringify({ success: false, error: 'Company website URL is required.' }));
+        return true;
+      }
+      const brandProfile = await analyzeCompanyWebsite(websiteUrl);
+      res.statusCode = 200;
+      res.end(JSON.stringify({ success: true, brandProfile }));
+    } catch (err: any) {
+      res.statusCode = 400;
+      res.end(JSON.stringify({ success: false, error: err?.message || 'Could not analyse this website.' }));
+    }
+    return true;
+  }
+
+  if (url === '/api/email-design/generate' && req.method === 'POST') {
+    try {
+      if (!body?.brandProfile || typeof body.brandProfile !== 'object') {
+        res.statusCode = 400;
+        res.end(JSON.stringify({ success: false, error: 'Verify your company profile before generating a design.' }));
+        return true;
+      }
+      const template = await generateAiEmailDesign({
+        brandProfile: body.brandProfile,
+        style: String(body?.style || 'Modern corporate'),
+        instructions: String(body?.instructions || ''),
+      });
+      res.statusCode = 200;
+      res.end(JSON.stringify({ success: true, template }));
+    } catch (err: any) {
+      res.statusCode = 502;
+      res.end(JSON.stringify({ success: false, error: err?.message || 'AI could not generate the email design.' }));
+    }
+    return true;
+  }
+
+  const emailDesignDeleteMatch = url.match(/^\/api\/email-design\/([a-zA-Z0-9_-]+)$/);
+  if (emailDesignDeleteMatch && req.method === 'DELETE') {
+    try {
+      await deleteEmailDesignTemplate(activeTenantCtx, emailDesignDeleteMatch[1]);
+      res.statusCode = 200;
+      res.end(JSON.stringify({ success: true }));
+    } catch (err: any) {
+      res.statusCode = 400;
+      res.end(JSON.stringify({ success: false, error: err?.message || 'Could not delete email design.' }));
     }
     return true;
   }

@@ -57,6 +57,7 @@ import { collection, doc, setDoc, getDoc, getDocs, updateDoc, deleteDoc, query, 
 
 // thsi is a test Screens loaded on demand (own JS files). Login, navigation and the inbox stay in the main bundle.
 const CampaignManagement = lazyNamed(() => import('./components/CampaignManagement'), 'CampaignManagement');
+const EmailDesignStudio = lazyNamed(() => import('./components/EmailDesignStudio'), 'EmailDesignStudio');
 const CrmPipeline = lazyNamed(() => import('./components/CrmPipeline'), 'CrmPipeline');
 const KnowledgeBaseView = lazyNamed(() => import('./components/KnowledgeBaseView'), 'KnowledgeBaseView');
 const AiTestingPlayground = lazyNamed(() => import('./components/AiTestingPlayground'), 'AiTestingPlayground');
@@ -195,7 +196,7 @@ function toAppUser(u: any): AppUser {
       ? u.allowedModules
       : role === 'SALES'
       ? ['crm', 'inbox']
-      : ['inbox', 'campaigns', 'crm', 'scheduling', 'knowledge', 'settings'],
+      : ['inbox', 'campaigns', 'email-design-studio', 'crm', 'scheduling', 'knowledge', 'settings'],
     isActive: u.isActive !== false && u.active !== false,
     createdAt: u.createdAt || new Date().toISOString(),
     updatedAt: u.updatedAt || u.createdAt || new Date().toISOString(),
@@ -211,6 +212,7 @@ function toAppUser(u: any): AppUser {
 const ALL_TABS: readonly ActiveTab[] = [
   'inbox',
   'campaigns',
+  'email-design-studio',
   'crm',
   'scheduling',
   'knowledge',
@@ -993,6 +995,7 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
                   ...(opts?.aiDraftApproval ? { aiDraftApproval: true, channel: conv.channel, conversationId, draftId: opts.draftId } : {}),
                   subject: aiMsg.emailMeta?.subject || `Re: ${lastMsg.emailMeta?.subject || `${bn().companyName} Platform`}`,
                   text: aiResult.responseText,
+                  applyWorkspaceDesign: true,
                   inReplyTo: inReplyTo || lastMsg.messageId,
                   references: inReplyTo ? [inReplyTo] : undefined,
                   conversationId: conv.conversationId,
@@ -1185,6 +1188,7 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
             to: recipientEmail,
             subject,
             text,
+            applyWorkspaceDesign: true,
             inReplyTo,
             references: inReplyTo ? [inReplyTo] : undefined,
             conversationId,
@@ -1404,6 +1408,7 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
                 to: contact.email,
                 subject: aiMsg.emailMeta?.subject || `Re: ${lastIncoming?.emailMeta?.subject || `${bn().companyName} Platform`}`,
                 text: aiResult.responseText,
+                  applyWorkspaceDesign: true,
                 aiGeneratedReply: true,
                 channel: conv.channel,
                 inReplyTo: inReplyTo || newMsg.messageId,
@@ -1963,6 +1968,7 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
           to: toEmail,
           subject,
           text: draft.text,
+          applyWorkspaceDesign: true,
           aiDraftApproval: true,
           channel: conv.channel,
           draftId: draft.draftId,
@@ -2336,6 +2342,7 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
     currentUser.accessLevel === 'ALL' ||
     currentUser.role === 'ADMIN' ||
     (currentUser.allowedModules || []).includes(activeTab) ||
+    (activeTab === 'email-design-studio' && (currentUser.allowedModules || []).includes('settings')) ||
     activeTab === 'database';
 
   return (
@@ -2535,6 +2542,8 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
                 onDeleteDocument={handleDeleteKnowledgeDoc}
               />
             )}
+
+            {activeTab === 'email-design-studio' && <EmailDesignStudio tenantId={currentTenantId} />}
 
             {activeTab === 'playground' && <AiTestingPlayground knowledgeDocs={knowledgeDocs} />}
 

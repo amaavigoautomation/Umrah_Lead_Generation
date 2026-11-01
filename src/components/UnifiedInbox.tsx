@@ -254,6 +254,7 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
           subject: msg.emailMeta?.subject || `Re: ${brand.companyName} Inquiry`,
           text: msg.text,
           ...(msg.aiGenerated ? { aiGeneratedReply: true, channel: msg.channel } : {}),
+          applyWorkspaceDesign: true,
           inReplyTo: msg.emailMeta?.inReplyTo,
           conversationId: msg.conversationId,
           senderName: msg.senderName || `${brand.aiAgentName} Automation`,

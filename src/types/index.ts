@@ -1,6 +1,7 @@
 export type ActiveTab =
   | 'inbox'
   | 'campaigns'
+  | 'email-design-studio'
   | 'crm'
   | 'scheduling'
   | 'knowledge'

@@ -44,6 +44,8 @@ export interface SendMailParams {
   headers?: Record<string, string>;
   /** Used to map Resend delivery events (bounce/complaint) back to a workspace. */
   tenantId?: string;
+  /** Apply the workspace Email Design Studio template to this non-campaign email. */
+  applyWorkspaceDesign?: boolean;
   /** Resend tags (letters, digits, _ and - only). Echoed back on every webhook event for this email. */
   tags?: Array<{ name: string; value: string }>;
 }
@@ -559,8 +561,18 @@ export async function sendLiveEmail(params: SendMailParams): Promise<SendMailRes
     return notConfiguredResult('RESEND_API_KEY is missing');
   }
 
-  // Automatically inline company assets and data URIs as native CID attachments so images render in Outlook, Gmail, Apple Mail
-  const { html: inlinedHtml, attachments: inlinedAttachments } = await inlineEmailAssets(params.html, params.attachments);
+  // The Email Design Studio is opt-in at the send boundary so outbound campaign templates remain independent.
+  let htmlToSend = params.html;
+  if (params.applyWorkspaceDesign && params.tenantId) {
+    try {
+      const { renderTenantEmailDesign } = await import('./emailDesignService.js');
+      htmlToSend = await renderTenantEmailDesign(params.tenantId, params.text);
+    } catch (designError) {
+      console.warn('[Email Design] Could not render workspace design; preserving the original email body:', designError);
+    }
+  }
+  // Automatically inline company assets and data URIs as native CID attachments so images render in Outlook, Gmail, Apple Mail.
+  const { html: inlinedHtml, attachments: inlinedAttachments } = await inlineEmailAssets(htmlToSend, params.attachments);
   const effectiveParams: SendMailParams = {
     ...params,
     html: inlinedHtml,

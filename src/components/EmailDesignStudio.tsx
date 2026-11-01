@@ -796,7 +796,6 @@ export const EmailDesignStudio: React.FC<{ tenantId: string }> = ({ tenantId }) 
             <EmailPreview template={editing} brand={brandData} mode={previewMode} />
           </main>
           )}
-          )}
         </div>
       </div>
     );

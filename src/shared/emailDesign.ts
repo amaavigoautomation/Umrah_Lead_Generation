@@ -199,7 +199,7 @@ export function sanitizeCustomEmailHtml(input:unknown):string {
    if(name==='style'){const safe=safeStyle(value);if(safe)attrs.push('style="'+escapeEmailHtml(safe)+'"');}
    else if(['class','id'].includes(name)&&/^[a-zA-Z0-9 _-]{0,160}$/.test(value))attrs.push(name+'="'+escapeEmailHtml(value)+'"');
    else if(['align','valign','width','height','cellpadding','cellspacing','border','colspan','rowspan','role','alt','title','bgcolor'].includes(name)&&/^[a-z0-9 #.,%_-]{0,160}$/i.test(value))attrs.push(name+'="'+escapeEmailHtml(value)+'"');
-   else if(name==='href'&&tag==='a'){const safe=isSafeEmailUrl(value,false);if(safe)attrs.push('href="'+escapeEmailHtml(safe)+'"');}
+   else if(name==='href'&&tag==='a'){const safe=value==='{{websiteUrl}}'?'{{websiteUrl}}':isSafeEmailUrl(value,false);if(safe)attrs.push('href="'+escapeEmailHtml(safe)+'"');}
    else if(name==='src'&&tag==='img'){const safe=isSafeEmailUrl(value,true);if(safe)attrs.push('src="'+escapeEmailHtml(safe)+'"');}
   }
   if(tag==='a')attrs.push('target="_blank" rel="noopener noreferrer"');

@@ -80,6 +80,7 @@ interface CampaignManagementProps {
   timezone?: string;
   /** Only workspace admins should submit or manage WhatsApp templates. */
   canManageWhatsAppTemplates?: boolean;
+  onOpenTemplateStudio?: (view: 'campaign' | 'whatsapp', templateId?: string) => void;
 }
 
 export const CampaignManagement: React.FC<CampaignManagementProps> = ({
@@ -95,6 +96,7 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
   tenantId = '',
   timezone = 'Asia/Kolkata',
   canManageWhatsAppTemplates = false,
+  onOpenTemplateStudio,
 }) => {
   const { brand } = useBrand();
   const isUmrah = brand.playbook === 'umrah360';
@@ -1521,6 +1523,10 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
   };
 
   const openEditTemplate = (tpl: EmailTemplate) => {
+    if (onOpenTemplateStudio) {
+      onOpenTemplateStudio('campaign', tpl.templateId);
+      return;
+    }
     setEditingTemplate(tpl);
     setTemplateFormName(tpl.name);
     setTemplateFormSubject(tpl.subject);
@@ -1640,7 +1646,7 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
             </button>
             <button
               id="tab-whatsapp-templates"
-              onClick={() => setActiveTab('WHATSAPP_TEMPLATES')}
+              onClick={() => onOpenTemplateStudio ? onOpenTemplateStudio('whatsapp') : setActiveTab('WHATSAPP_TEMPLATES')}
               className={activeTab === 'WHATSAPP_TEMPLATES'
                 ? 'px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all bg-orange-500 text-white shadow-xs'
                 : 'px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all text-slate-600 hover:text-slate-900'}
@@ -1694,6 +1700,7 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
             <button
               id="create-template-btn"
               onClick={() => {
+                if (onOpenTemplateStudio) { onOpenTemplateStudio('campaign'); return; }
                 setEditingTemplate(null);
                 setTemplateFormName('');
                 setTemplateFormSubject('');
@@ -2500,6 +2507,7 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => {
+                    if (onOpenTemplateStudio) { onOpenTemplateStudio('campaign'); return; }
                     setEditingTemplate(null);
                     setTemplateFormName('');
                     setTemplateFormSubject('');

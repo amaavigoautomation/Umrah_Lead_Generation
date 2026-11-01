@@ -25,10 +25,17 @@ export const TemplateStudio: React.FC<Props> = ({
   initialTemplateId,
 }) => {
   const [section, setSection] = useState<TemplateStudioSection>(initialView);
+  const [pendingTemplateId, setPendingTemplateId] = useState<string | undefined>(initialTemplateId);
 
   useEffect(() => {
     setSection(initialView);
-  }, [initialView]);
+    setPendingTemplateId(initialTemplateId);
+  }, [initialView, initialTemplateId]);
+
+  const changeSection = (next: TemplateStudioSection) => {
+    if (section === 'campaign' && next !== 'campaign') setPendingTemplateId(undefined);
+    setSection(next);
+  };
 
   return (
     <div className="space-y-4">
@@ -49,7 +56,7 @@ export const TemplateStudio: React.FC<Props> = ({
                 type="button"
                 role="tab"
                 aria-selected={active}
-                onClick={() => setSection(item.id)}
+                onClick={() => changeSection(item.id)}
                 className={'flex items-start gap-3 rounded-xl border px-3.5 py-3 text-left transition ' + (active ? 'border-orange-300 bg-orange-50 ring-1 ring-orange-100' : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50')}
               >
                 <span className={'mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ' + (active ? 'bg-orange-100 text-orange-700' : 'bg-slate-100 text-slate-600')}>{item.icon}</span>
@@ -64,7 +71,7 @@ export const TemplateStudio: React.FC<Props> = ({
       </div>
 
       {section === 'conversation' && <EmailDesignStudio tenantId={tenantId} purpose="conversation" />}
-      {section === 'campaign' && <EmailDesignStudio tenantId={tenantId} purpose="campaign" initialTemplateId={initialTemplateId} />}
+      {section === 'campaign' && <EmailDesignStudio tenantId={tenantId} purpose="campaign" initialTemplateId={pendingTemplateId} />}
       {section === 'whatsapp' && <WhatsAppTemplatesPanel canEdit={canManageWhatsAppTemplates} />}
     </div>
   );

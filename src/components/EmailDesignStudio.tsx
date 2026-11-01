@@ -820,7 +820,9 @@ export const EmailDesignStudio: React.FC<EmailDesignStudioProps> = ({ tenantId, 
   const profileColors = brandProfile?.colors || [];
 
   if (editing && editorMode === 'html') {
-    const htmlValidation = validateEmailDesignHtml(editing.customHtml ?? '');
+    const htmlValidation = isCampaignMode
+      ? { valid: Boolean(String(editing.customHtml || '').trim()), error: 'Add your campaign email HTML before saving.', warnings: [] as string[] }
+      : validateEmailDesignHtml(editing.customHtml ?? '');
     return (
       <div className={htmlExpanded ? "fixed inset-0 z-[100] h-screen w-screen flex flex-col bg-slate-50" : "h-full min-h-[760px] flex flex-col bg-slate-50 -m-4 lg:-m-6"}>
         <div className="bg-white border-b border-slate-200 px-4 lg:px-6 py-3 flex flex-wrap items-center gap-3 shrink-0">
@@ -829,7 +831,7 @@ export const EmailDesignStudio: React.FC<EmailDesignStudioProps> = ({ tenantId, 
           </button>
           <div className="min-w-[170px] flex-1">
             <input value={editing.name} onChange={(event) => updateTemplate({ name: event.target.value })} className="w-full text-sm font-bold text-slate-900 outline-none border-b border-transparent focus:border-orange-400 py-1" placeholder="Name your email design" />
-            <p className="text-[10px] text-slate-400">Full HTML email design · Your message is inserted at the required content placeholder</p>
+            <p className="text-[10px] text-slate-400">{isCampaignMode ? 'Campaign email · Full HTML controls the complete message layout and content' : 'Full HTML email design · Your message is inserted at the required content placeholder'}</p>
           </div>
           <div className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-slate-100 p-1">
             <button onClick={() => void switchToVisualMode()} className="px-3 py-2 rounded-lg text-xs font-semibold text-slate-500 hover:text-slate-800 flex items-center gap-1.5">
@@ -846,10 +848,10 @@ export const EmailDesignStudio: React.FC<EmailDesignStudioProps> = ({ tenantId, 
           <button type="button" onClick={() => setHtmlExpanded((value) => !value)} className="px-3 py-2 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-xs font-semibold text-slate-700 flex items-center gap-1.5" title={htmlExpanded ? "Restore split view" : "Expand code editor"}>
             {htmlExpanded ? <><Minimize2 className="w-3.5 h-3.5" /> Restore view</> : <><Maximize2 className="w-3.5 h-3.5" /> Expand editor</>}
           </button>
-          <button disabled={busy || !htmlValidation.valid} title={!htmlValidation.valid ? 'Add exactly one {{content}} placeholder before saving' : 'Save design'} onClick={() => void saveTemplate(false)} className="px-3.5 py-2 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed">
-            <Save className="w-3.5 h-3.5" /> Save design
+          <button disabled={busy || !htmlValidation.valid} title={!htmlValidation.valid ? (isCampaignMode ? 'Add campaign email HTML before saving' : 'Add exactly one {{content}} placeholder before saving') : 'Save template'} onClick={() => void saveTemplate(false)} className="px-3.5 py-2 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed">
+            <Save className="w-3.5 h-3.5" /> {isCampaignMode ? 'Save campaign template' : 'Save design'}
           </button>
-          <button disabled={busy || !htmlValidation.valid} title={!htmlValidation.valid ? 'Add exactly one {{content}} placeholder before saving' : 'Save and set default'} onClick={() => void saveTemplate(true)} className="px-4 py-2 rounded-lg bg-orange-600 hover:bg-orange-700 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm disabled:opacity-40 disabled:cursor-not-allowed">
+          {!isCampaignMode && <button disabled={busy || !htmlValidation.valid} title={!htmlValidation.valid ? 'Add exactly one {{content}} placeholder before saving' : 'Save and set default'} onClick={() => void saveTemplate(true)} className="px-4 py-2 rounded-lg bg-orange-600 hover:bg-orange-700 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm disabled:opacity-40 disabled:cursor-not-allowed">
             <Star className="w-3.5 h-3.5" /> Save & set default
           </button>
         </div>
@@ -862,7 +864,7 @@ export const EmailDesignStudio: React.FC<EmailDesignStudioProps> = ({ tenantId, 
                 <p className="text-[10px] text-slate-400">CodeMirror 6 · HTML syntax · clear contrast and line numbers</p>
               </div>
               <span className={'text-[10px] font-bold px-2.5 py-1 rounded-full ' + (htmlValidation.valid ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700')}>
-                {htmlValidation.valid ? 'Message slot ready' : 'Needs attention'}
+                {htmlValidation.valid ? (isCampaignMode ? 'HTML ready' : 'Message slot ready') : 'Needs attention'}
               </span>
             </div>
             <div className="px-4 py-3 border-b border-slate-100 bg-slate-50 flex flex-wrap items-center gap-2">
@@ -886,12 +888,12 @@ export const EmailDesignStudio: React.FC<EmailDesignStudioProps> = ({ tenantId, 
             </div>
             <div className="px-4 py-3 border-t border-slate-200 bg-white space-y-1.5">
               {htmlValidation.valid ? (
-                <p className="text-[11px] text-emerald-700 flex items-center gap-1.5"><Check className="w-3.5 h-3.5" /> Exactly one {'{{content}}'} placeholder is present and survives email sanitization.</p>
+                <p className="text-[11px] text-emerald-700 flex items-center gap-1.5"><Check className="w-3.5 h-3.5" /> {isCampaignMode ? 'Campaign email HTML is ready to save.' : <>Exactly one {'{{content}}'} placeholder is present and survives email sanitization.</>}</p>
               ) : (
                 <p className="text-[11px] text-rose-700 flex items-center gap-1.5"><X className="w-3.5 h-3.5" /> {htmlValidation.error}</p>
               )}
               {htmlValidation.warnings.map((warning) => <p key={warning} className="text-[10px] text-amber-700">• {warning}</p>)}
-              <p className="text-[10px] text-slate-400">Use <code className="font-mono">{'{{content}}'}</code> exactly once where the message should appear. Format HTML is manual; typing never reformats your source.</p>
+              <p className="text-[10px] text-slate-400">{isCampaignMode ? 'Write the complete campaign email in HTML. Personalization fields such as {{firstName}} are resolved when the campaign sends.' : <>Use <code className="font-mono">{'{{content}}'}</code> exactly once where the message should appear.</>} Format HTML is manual; typing never reformats your source.</p>
             </div>
           </section>
 {!htmlExpanded && (
@@ -918,7 +920,7 @@ export const EmailDesignStudio: React.FC<EmailDesignStudioProps> = ({ tenantId, 
           </button>
           <div className="min-w-[180px] flex-1">
             <input value={editing.name} onChange={(event) => updateTemplate({ name: event.target.value })} className="w-full text-sm font-bold text-slate-900 outline-none border-b border-transparent focus:border-orange-400 py-1" placeholder="Name your email design" />
-            <p className="text-[10px] text-slate-400">{editing.source === 'AI' ? 'AI-generated design' : 'Custom email design'} · Message content is inserted automatically at the reserved content block</p>
+            <p className="text-[10px] text-slate-400">{isCampaignMode ? 'Campaign email template · Subject, preheader and message content are saved with this design' : (editing.source === 'AI' ? 'AI-generated design' : 'Custom email design') + ' · Message content is inserted automatically at the reserved content block'}</p>
           </div>
           <div className="flex items-center gap-1 bg-slate-100 rounded-lg p-1">
             <button onClick={() => setPreviewMode('desktop')} className={'p-2 rounded-md ' + (previewMode === 'desktop' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500')} title="Desktop preview"><Monitor className="w-4 h-4" /></button>
@@ -933,11 +935,11 @@ export const EmailDesignStudio: React.FC<EmailDesignStudioProps> = ({ tenantId, 
             </button>
           </div>
           <button disabled={busy} onClick={() => saveTemplate(false)} className="px-3.5 py-2 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold flex items-center gap-1.5 disabled:opacity-50">
-            <Save className="w-3.5 h-3.5" /> Save design
+            <Save className="w-3.5 h-3.5" /> {isCampaignMode ? 'Save campaign template' : 'Save design'}
           </button>
-          <button disabled={busy} onClick={() => saveTemplate(true)} className="px-4 py-2 rounded-lg bg-orange-600 hover:bg-orange-700 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm disabled:opacity-50">
+          {!isCampaignMode && <button disabled={busy} onClick={() => saveTemplate(true)} className="px-4 py-2 rounded-lg bg-orange-600 hover:bg-orange-700 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm disabled:opacity-50">
             <Star className="w-3.5 h-3.5" /> Save & set default
-          </button>
+          </button>}
         </div>
         {notice && <div className={'px-5 py-2 text-xs border-b ' + (notice.tone === 'error' ? 'bg-rose-50 border-rose-100 text-rose-700' : notice.tone === 'success' ? 'bg-emerald-50 border-emerald-100 text-emerald-700' : 'bg-blue-50 border-blue-100 text-blue-700')}>{notice.text}</div>}
         <div className="flex-1 min-h-0 grid grid-cols-1 xl:grid-cols-[250px_minmax(420px,1fr)_300px]">
@@ -962,8 +964,8 @@ export const EmailDesignStudio: React.FC<EmailDesignStudioProps> = ({ tenantId, 
                   {editing.blocks.map((item, index) => (
                     <div key={item.id} draggable onDragStart={(event) => event.dataTransfer.setData('text/plain', String(index))} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); moveBlockTo(Number(event.dataTransfer.getData('text/plain')), index); }} className={'rounded-lg border flex items-center gap-1 p-1.5 ' + (selectedBlockId === item.id ? 'bg-orange-50 border-orange-300' : 'border-transparent hover:bg-slate-50')}>
                       <button onClick={() => setSelectedBlockId(item.id)} className="min-w-0 flex-1 text-left px-1.5 py-1">
-                        <span className="block text-xs font-semibold text-slate-700 capitalize">{item.type === 'content' ? 'Message content (locked)' : item.type === 'logo' ? 'Brand header' : item.type === 'hero' ? 'Hero banner' : item.type}</span>
-                        <span className="block text-[10px] text-slate-400 truncate">{item.type === 'content' ? 'Original email text is inserted here' : (item.text || item.altText || 'Design block')}</span>
+                        <span className="block text-xs font-semibold text-slate-700 capitalize">{item.type === 'content' ? (isCampaignMode ? 'Campaign message (editable)' : 'Message content (locked)') : item.type === 'logo' ? 'Brand header' : item.type === 'hero' ? 'Hero banner' : item.type}</span>
+                        <span className="block text-[10px] text-slate-400 truncate">{item.type === 'content' ? (isCampaignMode ? (editing.campaignBody || 'Write the campaign message in the settings panel') : 'Original email text is inserted here') : (item.text || item.altText || 'Design block')}</span>
                       </button>
                       <button onClick={() => moveBlock(item.id, -1)} disabled={index === 0} className="p-1 text-slate-400 hover:text-slate-800 disabled:opacity-20" title="Move up"><ArrowUp className="w-3 h-3" /></button>
                       <button onClick={() => moveBlock(item.id, 1)} disabled={index === editing.blocks.length - 1} className="p-1 text-slate-400 hover:text-slate-800 disabled:opacity-20" title="Move down"><ArrowDown className="w-3 h-3" /></button>
@@ -1023,11 +1025,12 @@ export const EmailDesignStudio: React.FC<EmailDesignStudioProps> = ({ tenantId, 
             <EmailPreview template={editing} brand={brandData} mode={previewMode} content={isCampaignMode ? editing.campaignBody : undefined} />
           </main>
           <aside className="bg-white border-l border-slate-200 p-4 overflow-y-auto max-h-[360px] xl:max-h-none">
+            {isCampaignMode && <div className="mb-4 space-y-3 border-b border-slate-100 pb-4"><h3 className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Campaign settings</h3><label className="block text-xs font-semibold text-slate-600">Email subject *<input value={editing.campaignSubject || ''} onChange={(event) => updateTemplate({ campaignSubject: event.target.value })} maxLength={180} placeholder="Write your subject line" className="mt-1 w-full rounded-lg border border-slate-200 p-2 text-xs font-normal" /></label><label className="block text-xs font-semibold text-slate-600">Preheader (optional)<input value={editing.campaignPreheader || ''} onChange={(event) => updateTemplate({ campaignPreheader: event.target.value })} maxLength={180} placeholder="Preview text shown beside the subject" className="mt-1 w-full rounded-lg border border-slate-200 p-2 text-xs font-normal" /></label><p className="text-[10px] text-slate-400">The subject and preheader support the same personalization fields as the message.</p></div>}
             {selectedBlock ? (
               <div className="space-y-3">
                 <div className="flex items-center justify-between"><div><h3 className="text-sm font-bold text-slate-900 capitalize">{selectedBlock.type === 'content' ? 'Message content area' : selectedBlock.type + ' settings'}</h3><p className="text-[10px] text-slate-400">Selected block</p></div>{selectedBlock.type === 'content' && <span className="text-[9px] px-2 py-1 bg-emerald-50 text-emerald-700 rounded-full font-bold">Required</span>}</div>
                 {selectedBlock.type === 'content' ? (
-                  <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-100 text-xs leading-relaxed text-emerald-900">This is the reserved message area. Amaavigo inserts the original AI-generated, follow-up or manually composed email text here. It cannot be removed or rewritten by the template.</div>
+                  isCampaignMode ? <div className="space-y-3"><label className="block text-xs font-semibold text-slate-600">Campaign message *<textarea rows={12} value={editing.campaignBody || ''} onChange={(event) => updateTemplate({ campaignBody: event.target.value })} className="mt-1 w-full rounded-lg border border-slate-200 p-3 text-xs font-normal leading-relaxed" placeholder="Write your complete campaign message here. Add personalization fields where they belong." /></label><p className="text-[10px] text-slate-500">This content is rendered inside your selected email design. Personalization is resolved separately for each recipient.</p><div className="flex flex-wrap gap-1.5">{['name','firstName','lastName','company','companyName','designation','jobTitle','email'].map((field) => <button key={field} type="button" onClick={() => updateTemplate({ campaignBody: String(editing.campaignBody || '') + `{{${field}}}` })} className="rounded-md border border-slate-200 bg-white px-2 py-1 text-[10px] font-mono text-slate-600 hover:border-orange-300 hover:text-orange-700">{`{{${field}}}`}</button>)}</div></div> : <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-100 text-xs leading-relaxed text-emerald-900">This is the reserved message area. Amaavigo inserts the original AI-generated, follow-up or manually composed email text here. It cannot be removed or rewritten by the template.</div>
                 ) : (
                   <>
                     {['heading','text','button','hero'].includes(selectedBlock.type) && <label className="block text-xs font-semibold text-slate-600">{selectedBlock.type === 'hero' ? 'Hero headline' : 'Text'}
@@ -1095,7 +1098,7 @@ export const EmailDesignStudio: React.FC<EmailDesignStudioProps> = ({ tenantId, 
               <label className="block text-xs font-semibold text-slate-600">Description
                 <textarea rows={3} value={editing.description} onChange={(event) => updateTemplate({ description: event.target.value })} className="mt-1 w-full rounded-lg border border-slate-200 p-2 text-xs font-normal" />
               </label>
-              <p className="mt-3 text-[10px] text-slate-400">Template version {editing.version || 1}. The selected design applies only to AI replies, AI auto follow-ups and manual emails sent from Unified Inbox.</p>
+              <p className="mt-3 text-[10px] text-slate-400">{isCampaignMode ? 'Reusable campaign email design. Its subject, preheader, content and attachments are stored together.' : `Template version ${editing.version || 1}. The selected design applies only to AI replies, AI auto follow-ups and manual emails sent from Unified Inbox.`}</p>
             </div>
           </aside>
         </div>

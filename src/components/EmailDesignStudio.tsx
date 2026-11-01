@@ -32,19 +32,6 @@ const BLOCK_OPTIONS: Array<{ type: EmailDesignBlockType; label: string; descript
   { type: 'footer', label: 'Company footer', description: 'Company details and contact links', icon: <Mail className="h-4 w-4" /> },
 ];
 
-const HTML_INSERT_OPTIONS = [
-  { label: 'Message content', value: '{{content}}', description: 'Required. Inserts the AI or manually written email message.' },
-  { label: 'Company name', value: '{{companyName}}', description: 'Your workspace company name.' },
-  { label: 'Company tagline', value: '{{tagline}}', description: 'Your workspace tagline.' },
-  { label: 'Website URL', value: '{{websiteUrl}}', description: 'Your workspace website URL.' },
-];
-const HTML_CTA_SNIPPET = String.raw`<table role="presentation" cellspacing="0" cellpadding="0" border="0">
-  <tr><td bgcolor="#183B66" style="background:#183B66;border-radius:6px">
-    <a href="{{websiteUrl}}" target="_blank" style="display:inline-block;padding:13px 22px;color:#FFFFFF;font-family:Arial,sans-serif;font-size:14px;font-weight:700;text-decoration:none">Explore more</a>
-  </td></tr>
-</table>`;
-
-
 function cloneTemplate(template: EmailDesignTemplate): EmailDesignTemplate {
   return JSON.parse(JSON.stringify(template)) as EmailDesignTemplate;
 }
@@ -245,6 +232,7 @@ export const EmailDesignStudio: React.FC<{ tenantId: string }> = ({ tenantId }) 
   const [previewMode, setPreviewMode] = useState<PreviewMode>('desktop');
   const [editorMode, setEditorMode] = useState<EditorMode>('visual');
   const htmlEditorRef = useRef<HTMLTextAreaElement | null>(null);
+  const [htmlFind, setHtmlFind] = useState('');
   const [showAssets, setShowAssets] = useState(false);
   const [aiStep, setAiStep] = useState<'website' | 'verify' | null>(null);
   const [websiteUrl, setWebsiteUrl] = useState('');
@@ -286,6 +274,7 @@ export const EmailDesignStudio: React.FC<{ tenantId: string }> = ({ tenantId }) 
 
   const startEditing = (template: EmailDesignTemplate) => {
     const copy = cloneTemplate(template);
+    if (copy.customHtml !== undefined) copy.customHtml = formatEmailHtml(copy.customHtml);
     setEditing(copy);
     setSelectedBlockId(copy.blocks.find((item) => item.type !== 'content')?.id || copy.blocks[0]?.id || '');
     setEditorPanel('blocks');
@@ -320,13 +309,55 @@ export const EmailDesignStudio: React.FC<{ tenantId: string }> = ({ tenantId }) 
     });
   };
 
+
+  const formatCurrentHtml = () => {
+    if (!editing || editing.customHtml === undefined) return;
+    updateTemplate({ customHtml: formatEmailHtml(editing.customHtml) });
+    setNotice({ tone: 'success', text: 'HTML formatted. Your code has not been changed while typing.' });
+  };
+
+  const copyCurrentHtml = async () => {
+    if (!editing || editing.customHtml === undefined) return;
+    try {
+      await navigator.clipboard.writeText(editing.customHtml);
+      setNotice({ tone: 'success', text: 'Formatted HTML copied to your clipboard.' });
+    } catch {
+      const editor = htmlEditorRef.current;
+      if (editor) {
+        editor.focus();
+        editor.select();
+        setNotice({ tone: 'info', text: 'Select the highlighted source and press Ctrl+C to copy it.' });
+      } else {
+        setNotice({ tone: 'error', text: 'Clipboard access is unavailable in this browser.' });
+      }
+    }
+  };
+
+  const findNextHtmlMatch = () => {
+    const editor = htmlEditorRef.current;
+    const query = htmlFind.trim();
+    if (!editor || !query) return;
+    const source = editing?.customHtml || '';
+    const start = editor.selectionEnd;
+    const found = source.toLowerCase().indexOf(query.toLowerCase(), start);
+    const index = found >= 0 ? found : source.toLowerCase().indexOf(query.toLowerCase());
+    if (index < 0) {
+      setNotice({ tone: 'error', text: 'No matching text was found in the HTML source.' });
+      return;
+    }
+    editor.focus();
+    editor.setSelectionRange(index, index + query.length);
+    const linesBefore = source.slice(0, index).split('\n').length;
+    editor.scrollTop = Math.max(0, (linesBefore - 3) * 20.4);
+  };
+
   const switchToHtmlMode = () => {
     if (!editing) return;
     if (editing.customHtml !== undefined) {
       setEditorMode('html');
       return;
     }
-    const source = createEmailDesignHtmlSource(editing, brandData);
+    const source = formatEmailHtml(createEmailDesignHtmlSource(editing, brandData));
     setEditing((current) => current ? { ...current, customHtml: source } : current);
     setEditorMode('html');
     setNotice({ tone: 'info', text: 'Your visual layout has been converted into editable email-safe HTML. The dynamic message placeholder is preserved.' });

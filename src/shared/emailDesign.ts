@@ -183,7 +183,7 @@ export function normalizeEmailDesignTemplate(input:any,sourceOverride?:EmailDesi
    text:String(item?.text??'').slice(0,5000),url:isSafeEmailUrl(item?.url,true),altText:String(item?.altText??'').slice(0,240),
    align:['left','center','right'].includes(item?.align)?item.align:'left',width:num(item?.width,560,80,680),
    fontSize:num(item?.fontSize,type==='heading'||type==='hero'?theme.headingFontSize:15,10,48),color:safeHexColor(item?.color,theme.textColor),
-   backgroundColor:safeHexColor(item?.backgroundColor,theme.cardBackground),padding:num(item?.padding,16,0,64),
+   backgroundColor:item?.backgroundColor?safeHexColor(item.backgroundColor,theme.cardBackground):'',padding:num(item?.padding,16,0,64),
    eyebrow:String(item?.eyebrow??'').slice(0,180),secondaryText:String(item?.secondaryText??'').slice(0,700),
    enabled:item?.enabled!==false||type==='content',
    links:Array.isArray(item?.links)?item.links.slice(0,6).map((x:any)=>({label:String(x?.label||'').slice(0,40),url:isSafeEmailUrl(x?.url,false)})).filter((x:any)=>x.label&&x.url):undefined};

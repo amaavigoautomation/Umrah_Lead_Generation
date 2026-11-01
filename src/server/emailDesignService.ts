@@ -5,7 +5,7 @@ import { isFirebaseConfigured } from '../firebase/config.js';
 import { tenantRepo } from './tenantRepo.js';
 import { getTenantBrand } from './brandService.js';
 import { generateOpenAICompletion } from './openaiClient.js';
-import { DEFAULT_EMAIL_DESIGN_ID, PREDEFINED_EMAIL_DESIGNS, normalizeEmailDesignTemplate, renderEmailDesignHtml, isSafeEmailUrl, type EmailBrandProfile, type EmailDesignTemplate } from '../shared/emailDesign.js';
+import { DEFAULT_EMAIL_DESIGN_ID, PREDEFINED_EMAIL_DESIGNS, normalizeEmailDesignTemplate, renderEmailDesignHtml, isSafeEmailUrl, validateEmailDesignHtml, type EmailBrandProfile, type EmailDesignTemplate } from '../shared/emailDesign.js';
 import type { TenantContext } from '../types/tenant.js';
 const memoryTemplates = new Map<string, Map<string, EmailDesignTemplate>>();
 const memoryDefaults = new Map<string, string>();
@@ -185,6 +185,10 @@ export async function listEmailDesignData(ctx:TenantContext):Promise<{templates:
   return {templates,defaultTemplateId};
 }
 export async function saveEmailDesignTemplate(ctx:TenantContext,input:any):Promise<EmailDesignTemplate> {
+  if (input && Object.prototype.hasOwnProperty.call(input, 'customHtml')) {
+    const validation = validateEmailDesignHtml(input.customHtml);
+    if (!validation.valid) throw new Error(validation.error || 'The custom email HTML is invalid.');
+  }
   const source=input?.source==='AI'?'AI':'CUSTOM',suppliedId=String(input?.id||'');
   const builtins=new Set(PREDEFINED_EMAIL_DESIGNS.map((x)=>x.id));
   const id=!builtins.has(suppliedId)&&/^[a-zA-Z0-9_-]{6,100}$/.test(suppliedId)?suppliedId:'design-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,9);

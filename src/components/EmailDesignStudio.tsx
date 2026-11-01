@@ -388,9 +388,11 @@ export const EmailDesignStudio: React.FC<{ tenantId: string }> = ({ tenantId }) 
   };
 
   const buildWorkspaceBrandProfile = (rawUrl: string): EmailBrandProfile => {
-    const normalizedUrl = /^https?:\/\//i.test(rawUrl.trim()) ? rawUrl.trim() : 'https://' + rawUrl.trim();
+    const trimmedUrl = rawUrl.trim();
+    const normalizedUrl = !trimmedUrl ? String(brandData.websiteUrl || '') : /^https?:\/\//i.test(trimmedUrl) ? trimmedUrl : 'https://' + trimmedUrl;
     let guessedName = 'Your Company';
     try {
+      if (!normalizedUrl) throw new Error('No website URL was provided.');
       const host = new URL(normalizedUrl).hostname.replace(/^www\./i, '');
       const firstLabel = host.split('.')[0].replace(/[-_]+/g, ' ').trim();
       guessedName = firstLabel.replace(/\b[a-z]/g, (letter) => letter.toUpperCase()) || guessedName;

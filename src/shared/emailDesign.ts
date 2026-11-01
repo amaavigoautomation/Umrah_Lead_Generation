@@ -213,6 +213,7 @@ function renderBlock(item:EmailDesignBlock,t:EmailDesignTemplate,body:string,bra
  const wrap=(content:string,style='')=>'<tr><td align="'+align+'"'+(background?' bgcolor="'+background+'"':'')+' style="padding:'+pad+'px 28px;'+(background?'background:'+background+';':'')+style+'">'+content+'</td></tr>';
  const label=String(item.text||'').replace(/\{\{companyName\}\}/g,escapeEmailHtml(brand.companyName||'Our Team')).replace(/\{\{tagline\}\}/g,escapeEmailHtml(brand.tagline||''));
  const secondary=String(item.secondaryText||'').replace(/\{\{companyName\}\}/g,escapeEmailHtml(brand.companyName||'Our Team')).replace(/\{\{tagline\}\}/g,escapeEmailHtml(brand.tagline||''));
+ const eyebrowText=String(item.eyebrow||'').replace(/\{\{companyName\}\}/g,escapeEmailHtml(brand.companyName||'Our Team')).replace(/\{\{tagline\}\}/g,escapeEmailHtml(brand.tagline||''));
  switch(item.type){
   case 'logo':{
    const logo=isSafeEmailUrl(item.url,true)||isSafeEmailUrl(brand.logoUrl,true),company=escapeEmailHtml(brand.companyName||'Our Team');
@@ -220,7 +221,7 @@ function renderBlock(item:EmailDesignBlock,t:EmailDesignTemplate,body:string,bra
   }
   case 'hero':{
    const bg=safeHexColor(item.backgroundColor,th.primaryColor),heroColor=safeHexColor(item.color,'#FFFFFF');
-   const eyebrow=item.eyebrow?'<p style="margin:0 0 12px 0;color:'+heroColor+';font-family:'+th.fontFamily+';font-size:10px;line-height:1.4;font-weight:700;letter-spacing:1.7px">'+escapeEmailHtml(item.eyebrow)+'</p>':'';
+   const eyebrow=eyebrowText?'<p style="margin:0 0 12px 0;color:'+heroColor+';font-family:'+th.fontFamily+';font-size:10px;line-height:1.4;font-weight:700;letter-spacing:1.7px">'+escapeEmailHtml(eyebrowText)+'</p>':'';
    const sub=secondary?'<p style="margin:14px 0 0 0;color:'+heroColor+';font-family:'+th.fontFamily+';font-size:'+Math.max(13,th.bodyFontSize)+'px;line-height:'+th.bodyLineHeight+'">'+escapeEmailHtml(secondary).replace(/\n/g,'<br/>')+'</p>':'';
    return '<tr><td bgcolor="'+bg+'" style="background:'+bg+';padding:'+pad+'px 30px"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0"><tr><td align="'+align+'">'+eyebrow+'<h1 style="margin:0;color:'+heroColor+';font-family:'+th.fontFamily+';font-size:'+num(item.fontSize,th.headingFontSize,18,42)+'px;line-height:1.18;font-weight:700;letter-spacing:-.5px">'+escapeEmailHtml(label||'A message for you')+'</h1>'+sub+'</td></tr></table></td></tr>';
   }

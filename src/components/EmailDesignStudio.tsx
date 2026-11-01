@@ -690,10 +690,10 @@ export const EmailDesignStudio: React.FC<{ tenantId: string }> = ({ tenantId }) 
             <button onClick={() => setPreviewMode('desktop')} className={'p-2 rounded-md ' + (previewMode === 'desktop' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500')} title="Desktop preview"><Monitor className="w-4 h-4" /></button>
             <button onClick={() => setPreviewMode('mobile')} className={'p-2 rounded-md ' + (previewMode === 'mobile' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500')} title="Mobile preview"><Smartphone className="w-4 h-4" /></button>
           </div>
-          <button disabled={busy} onClick={() => void saveTemplate(false)} className="px-3.5 py-2 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold flex items-center gap-1.5 disabled:opacity-50">
+          <button disabled={busy || !htmlValidation.valid} title={!htmlValidation.valid ? 'Add exactly one {{content}} placeholder before saving' : 'Save design'} onClick={() => void saveTemplate(false)} className="px-3.5 py-2 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed">
             <Save className="w-3.5 h-3.5" /> Save design
           </button>
-          <button disabled={busy} onClick={() => void saveTemplate(true)} className="px-4 py-2 rounded-lg bg-orange-600 hover:bg-orange-700 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm disabled:opacity-50">
+          <button disabled={busy || !htmlValidation.valid} title={!htmlValidation.valid ? 'Add exactly one {{content}} placeholder before saving' : 'Save and set default'} onClick={() => void saveTemplate(true)} className="px-4 py-2 rounded-lg bg-orange-600 hover:bg-orange-700 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm disabled:opacity-40 disabled:cursor-not-allowed">
             <Star className="w-3.5 h-3.5" /> Save & set default
           </button>
         </div>
@@ -703,38 +703,27 @@ export const EmailDesignStudio: React.FC<{ tenantId: string }> = ({ tenantId }) 
             <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between gap-2">
               <div>
                 <h2 className="text-xs font-bold text-slate-800">HTML source</h2>
-                <p className="text-[10px] text-slate-400">Email-safe HTML · inline CSS and responsive media queries</p>
+                <p className="text-[10px] text-slate-400">Syntax-highlighted HTML · inline CSS and responsive media queries</p>
               </div>
               <span className={'text-[10px] font-bold px-2.5 py-1 rounded-full ' + (htmlValidation.valid ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700')}>
                 {htmlValidation.valid ? 'Message slot ready' : 'Needs attention'}
               </span>
             </div>
-            <div className="px-4 py-3 border-b border-slate-100 bg-slate-50">
-              <div className="flex flex-wrap items-center gap-1.5">
-                <span className="text-[10px] font-bold uppercase tracking-wide text-slate-500 mr-1">Insert</span>
-                {HTML_INSERT_OPTIONS.map((option) => (
-                  <button key={option.value} type="button" onClick={() => insertHtmlAtCursor(option.value)} title={option.description} className="px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white hover:border-orange-300 hover:text-orange-700 text-[10px] font-semibold text-slate-700">
-                    {option.label}
-                  </button>
-                ))}
-                <button type="button" onClick={() => insertHtmlAtCursor(HTML_CTA_SNIPPET)} className="px-2.5 py-1.5 rounded-lg border border-orange-200 bg-orange-50 hover:bg-orange-100 text-[10px] font-semibold text-orange-700">
-                  Insert CTA button
-                </button>
+            <div className="px-4 py-3 border-b border-slate-100 bg-slate-50 flex flex-wrap items-center gap-2">
+              <button type="button" onClick={formatCurrentHtml} className="px-3 py-2 rounded-lg border border-slate-200 bg-white hover:border-orange-300 hover:text-orange-700 text-[11px] font-semibold flex items-center gap-1.5">
+                <Sparkles className="w-3.5 h-3.5" /> Format HTML
+              </button>
+              <button type="button" onClick={() => void copyCurrentHtml()} className="px-3 py-2 rounded-lg border border-slate-200 bg-white hover:border-orange-300 hover:text-orange-700 text-[11px] font-semibold flex items-center gap-1.5">
+                <Copy className="w-3.5 h-3.5" /> Copy HTML
+              </button>
+              <div className="ml-auto flex items-center gap-1.5 min-w-[190px]">
+                <Search className="w-3.5 h-3.5 text-slate-400" />
+                <input value={htmlFind} onChange={(event) => setHtmlFind(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') findNextHtmlMatch(); }} placeholder="Find in HTML..." className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-[11px] outline-none focus:border-orange-400" />
+                <button type="button" onClick={findNextHtmlMatch} className="px-2.5 py-2 rounded-lg bg-white border border-slate-200 text-[11px] font-semibold hover:border-orange-300">Find</button>
               </div>
             </div>
-            <div className="flex-1 min-h-0 p-3">
-              <textarea
-                ref={htmlEditorRef}
-                value={editing.customHtml ?? ''}
-                onChange={(event) => updateTemplate({ customHtml: event.target.value })}
-                spellCheck={false}
-                autoCapitalize="off"
-                autoCorrect="off"
-                wrap="off"
-                aria-label="Full HTML email source"
-                placeholder={'<!doctype html>\n<html>\n<head>\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n</head>\n<body>\n  <!-- Header, layout and footer -->\n  <table role=\"presentation\" width=\"100%\">\n    <tr><td>{{content}}</td></tr>\n  </table>\n</body>\n</html>'}
-                className="w-full h-full min-h-[500px] resize-none rounded-xl border border-slate-200 bg-slate-950 p-4 text-[11px] leading-[1.65] text-emerald-100 font-mono outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-100"
-              />
+            <div className="flex-1 min-h-0 p-3 flex flex-col">
+              <HtmlSourceEditor editorRef={htmlEditorRef} value={editing.customHtml ?? ''} onChange={(value) => updateTemplate({ customHtml: value })} />
             </div>
             <div className="px-4 py-3 border-t border-slate-200 bg-white space-y-1.5">
               {htmlValidation.valid ? (
@@ -743,7 +732,7 @@ export const EmailDesignStudio: React.FC<{ tenantId: string }> = ({ tenantId }) 
                 <p className="text-[11px] text-rose-700 flex items-center gap-1.5"><X className="w-3.5 h-3.5" /> {htmlValidation.error}</p>
               )}
               {htmlValidation.warnings.map((warning) => <p key={warning} className="text-[10px] text-amber-700">• {warning}</p>)}
-              <p className="text-[10px] text-slate-400">Scripts, forms, iframes and unsafe CSS are removed. Use tables for layout; safe inline styles and screen media queries are retained.</p>
+              <p className="text-[10px] text-slate-400">Use <code className="font-mono">{'{{content}}'}</code> exactly once where the message should appear. Format HTML is manual; typing never reformats your source.</p>
             </div>
           </section>
           <main className="min-h-[580px] xl:min-h-0 flex flex-col p-3 lg:p-5">

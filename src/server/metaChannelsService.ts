@@ -101,15 +101,36 @@ function requireConfigured(channel: MetaChannel) {
   }
 }
 
+function metaGraphError(status: number, body: any, fallback: string): MetaChannelError {
+  const metaError = body?.error || {};
+  const code = Number(metaError.code || 0);
+  const subcode = Number(metaError.error_subcode || 0);
+  const rawMessage = String(metaError.message || fallback);
+  const invalidSession = code === 190 || code === 102 ||
+    /session is invalid because the user logged out|invalid access token|session has expired/i.test(rawMessage);
+
+  const error = invalidSession
+    ? new MetaChannelError(
+        401,
+        'Meta invalidated this WhatsApp authorization because the Facebook user session was logged out or access was revoked. Reconnect WhatsApp from Settings → Connected Channels and complete the WhatsApp Business App Coexistence flow, then retry the upload. If this is the temporary App Review test connection, replace its token with a fresh token from WhatsApp > API Setup. Meta cannot restore a logged-out session token by retrying it.'
+      )
+    : new MetaChannelError(status >= 500 ? 502 : 400, rawMessage);
+  (error as any).metaCode = code || undefined;
+  (error as any).metaSubcode = subcode || undefined;
+  (error as any).metaTraceId = String(metaError.fbtrace_id || '');
+  return error;
+}
+
+function isInvalidMetaSession(error: unknown): boolean {
+  const candidate = error as any;
+  return candidate?.status === 401 || Number(candidate?.metaCode) === 190 || Number(candidate?.metaCode) === 102;
+}
+
 async function graphJson(url: string, init?: RequestInit): Promise<any> {
   const response = await fetch(url, init);
   const body: any = await response.json().catch(() => ({}));
   if (!response.ok) {
-    const code = body?.error?.code;
-    const err = new MetaChannelError(response.status >= 500 ? 502 : 400, body?.error?.message || `Meta request failed (HTTP ${response.status}).`);
-    (err as any).metaCode = code;
-    (err as any).metaSubcode = body?.error?.error_subcode;
-    throw err;
+    throw metaGraphError(response.status, body, 'Meta request failed (HTTP ' + response.status + ').');
   }
   return body;
 }
@@ -123,6 +144,24 @@ async function getWhatsAppConnection(ctx: TenantContext): Promise<WhatsAppConnec
   if (!snap.exists()) return null;
   const data = snap.data() as any;
   return data?.channel === 'whatsapp' ? (data.connection as WhatsAppConnection) || null : null;
+}
+
+async function markWhatsAppReauthorizationRequired(ctx: TenantContext): Promise<void> {
+  try {
+    const connection = await getWhatsAppConnection(ctx);
+    if (!connection) return;
+    await setDoc(tenantRepo(ctx).integrationDoc('whatsapp'), {
+      channel: 'whatsapp',
+      connection: {
+        ...connection,
+        status: 'disconnected',
+        authorizationStatus: 'reauthorization_required',
+        updatedAt: new Date().toISOString(),
+      },
+    }, { merge: true });
+  } catch {
+    // Preserve the original Meta authentication error for the caller.
+  }
 }
 
 async function getSecret(ctx: TenantContext, name: string): Promise<string> {
@@ -503,10 +542,16 @@ export async function createWhatsAppTemplateMediaSession(
   uploadUrl.searchParams.set('file_name', fileName);
   uploadUrl.searchParams.set('file_length', String(fileLength));
   uploadUrl.searchParams.set('file_type', mimeType);
-  const created = await graphJson(uploadUrl.toString(), {
-    method: 'POST',
-    headers: { Authorization: 'Bearer ' + token },
-  });
+  let created: any;
+  try {
+    created = await graphJson(uploadUrl.toString(), {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + token },
+    });
+  } catch (error) {
+    if (isInvalidMetaSession(error)) await markWhatsAppReauthorizationRequired(ctx);
+    throw error;
+  }
   const metaUploadId = String(created?.id || '').trim();
   // Upload IDs are opaque and may include an optional signed query suffix.
   if (!metaUploadId.startsWith('upload:') || metaUploadId.length > 4096 || /[\u0000-\u0020#]/.test(metaUploadId)) {
@@ -576,8 +621,12 @@ export async function uploadWhatsAppTemplateMediaChunk(
   });
   const result: any = await response.json().catch(() => ({}));
   if (!response.ok) {
-    const message = String(result?.error?.message || ('Meta media upload failed (HTTP ' + response.status + ').'));
-    throw new MetaChannelError(response.status >= 500 ? 502 : 400, message);
+    const error = metaGraphError(response.status, result, 'Meta media upload failed (HTTP ' + response.status + ').');
+    if (isInvalidMetaSession(error)) {
+      await deleteDoc(sessionRef).catch(() => {});
+      await markWhatsAppReauthorizationRequired(ctx);
+    }
+    throw error;
   }
 
   const uploadedBytes = offset + bytes.length;

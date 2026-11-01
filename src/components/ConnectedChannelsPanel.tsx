@@ -11,6 +11,7 @@ type Connection = {
   qualityRating?: string;
   pageName?: string;
   isTestConnection?: boolean;
+  authorizationStatus?: string;
 };
 type ChannelState = {
   connected: boolean;
@@ -235,6 +236,7 @@ export const ConnectedChannelsPanel: React.FC<Props> = ({ tenantId, canEdit }) =
           },
           {
             config_id: cfg.whatsappConfigId,
+            auth_type: 'rerequest',
             response_type: 'code',
             override_default_response_type: true,
             // Current Embedded Signup v4: request the WhatsApp Business App onboarding path.
@@ -362,6 +364,12 @@ export const ConnectedChannelsPanel: React.FC<Props> = ({ tenantId, canEdit }) =
             </div>
             <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${badge(wa).cls}`}>{badge(wa).text}</span>
           </div>
+          {wa.connection?.authorizationStatus === 'reauthorization_required' && (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-900">
+              <p className="font-bold">WhatsApp needs to be reconnected</p>
+              <p className="mt-1 leading-relaxed">Meta invalidated the saved access token after the Facebook session was logged out or access was revoked. Use Reconnect WhatsApp and complete the existing WhatsApp Business App Coexistence flow. Existing inbox history and the phone app are retained.</p>
+            </div>
+          )}
           {wa.connected ? (
             <div className="rounded-lg border border-emerald-100 bg-emerald-50/60 p-2.5 text-xs">
               <p className="font-bold text-emerald-900">{wa.connection?.displayPhoneNumber || 'WhatsApp number'}</p>
@@ -383,7 +391,7 @@ export const ConnectedChannelsPanel: React.FC<Props> = ({ tenantId, canEdit }) =
             {!wa.connected ? (
               <button onClick={connectWhatsApp} disabled={busy === 'whatsapp' || !canEdit || wa.available === false} className={`inline-flex items-center gap-2 rounded-xl bg-orange-500 px-3 py-2 text-xs font-bold text-white hover:bg-orange-600 ${disabledBase}`}>
                 {busy === 'whatsapp' ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <MessageCircle className="w-3.5 h-3.5" />}
-                {busy === 'whatsapp' ? 'Connecting…' : 'Connect WhatsApp'}
+                {busy === 'whatsapp' ? 'Connecting…' : wa.connection?.authorizationStatus === 'reauthorization_required' ? 'Reconnect WhatsApp' : 'Connect WhatsApp'}
                 <ExternalLink className="w-3 h-3" />
               </button>
             ) : (
@@ -516,6 +524,7 @@ export const ConnectedChannelsPanel: React.FC<Props> = ({ tenantId, canEdit }) =
           <p>Verify token: the value of <span className="font-mono">META_WEBHOOK_VERIFY_TOKEN</span> (WhatsApp/Messenger) or <span className="font-mono">META_INSTAGRAM_WEBHOOK_VERIFY_TOKEN</span> (Instagram).</p>
           <p>Webhook fields: <span className="font-mono">messages</span> on the WhatsApp Business Account and Page objects.</p>
           <p>Also add this site&apos;s domain to the Meta app&apos;s allowed domains for Facebook Login.</p>
+          <p>For the WhatsApp Embedded Signup configuration, choose <span className="font-semibold">System-user access token</span> (not a short-lived user token). Use the current configuration when reconnecting a customer account.</p>
         </div>
       </details>
 

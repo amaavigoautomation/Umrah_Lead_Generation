@@ -35,6 +35,7 @@ export type ActiveTab =
   | 'playground'
   | 'settings'
   | 'auto-followup'
+  | 'audit-logs'
   | 'database';
 
 export interface NavbarProps {

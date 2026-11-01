@@ -293,22 +293,6 @@ export const EmailDesignStudio: React.FC<{ tenantId: string }> = ({ tenantId }) 
   const updateTemplate = (patch: Partial<EmailDesignTemplate>) => {
     setEditing((current) => current ? { ...current, ...patch } : current);
   };
-  const insertHtmlAtCursor = (snippet: string) => {
-    const current = editing?.customHtml || '';
-    const textarea = htmlEditorRef.current;
-    const start = textarea?.selectionStart ?? current.length;
-    const end = textarea?.selectionEnd ?? current.length;
-    const next = current.slice(0, start) + snippet + current.slice(end);
-    updateTemplate({ customHtml: next });
-    window.requestAnimationFrame(() => {
-      const editor = htmlEditorRef.current;
-      if (!editor) return;
-      const caret = start + snippet.length;
-      editor.focus();
-      editor.setSelectionRange(caret, caret);
-    });
-  };
-
 
   const formatCurrentHtml = () => {
     if (!editing || editing.customHtml === undefined) return;

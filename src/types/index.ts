@@ -276,7 +276,7 @@ export type ProspectStatus =
 
 export type KnowledgeStatus = 'DRAFT' | 'REVIEW' | 'APPROVED' | 'PUBLISHED';
 
-export type ChannelMode = 'SIMULATION' | 'REVIEW' | 'AUTO';
+export type ChannelMode = 'OFF' | 'REVIEW' | 'AUTO';
 
 export interface Contact {
   contactId: string;
@@ -417,6 +417,7 @@ export interface Conversation {
   conversationSummary?: string;
   subject?: string;
   thankYouEmailSent?: boolean;
+  thankYouEmailSuppressed?: boolean;
   thankYouEmailDeliveredAt?: string;
   thankYouSmtpMessageId?: string;
   /** Why the thank-you email was not sent (shown in the thread; cleared once it goes out). */

@@ -16,6 +16,7 @@ import { db } from '../firebase/config';
 import { doc, setDoc } from 'firebase/firestore';
 
 import { INBOUND_MAILBOX } from '../shared/brandLabels';
+import { normalizeChannelMode } from '../shared/channelModes';
 export { INBOUND_MAILBOX };
 
 export interface InboundEmailPayload {
@@ -123,6 +124,7 @@ export async function processInboundEmail(params: {
   settings: SystemSettings;
 }): Promise<InboundProcessingResult> {
   const { payload, contacts, leads, conversations, messages, knowledgeDocs, settings } = params;
+  const channelMode = normalizeChannelMode(settings.channelModes?.EMAIL);
   const now = new Date().toISOString();
   const steps: InboundStepTrace[] = [];
 
@@ -509,7 +511,8 @@ export async function processInboundEmail(params: {
     senderName: payload.fromName || contact.firstName,
     senderEmail: payload.from,
     text: payload.body,
-    aiReplied: true,
+    aiReplied: false,
+    aiProcessed: true,
     timestamp: now,
     emailMeta: {
       subject: payload.subject,
@@ -528,6 +531,46 @@ export async function processInboundEmail(params: {
     'completed',
     { messageId: incomingMessageId }
   );
+
+  if (channelMode === 'OFF') {
+    const activities: LeadActivity[] = [{
+      activityId: `act-inbound-off-${Date.now()}`,
+      leadId: lead.leadId,
+      contactId: contact.contactId,
+      type: 'PROSPECT_REPLIED',
+      title: `Inbound Email to ${INBOUND_MAILBOX}`,
+      description: `Subject: "${payload.subject}" from ${contact.firstName} (${payload.from}). Channel mode OFF: no AI reply or draft was created.`,
+      timestamp: now,
+    }];
+    recordStep(6, 'AI Replies Disabled', 'Email mode is OFF. AI generation, drafts, and automatic replies are disabled.', 'completed');
+    recordStep(7, 'AI Reply Skipped', 'The customer message remains in Unified Inbox for a human response.', 'completed');
+    recordStep(8, 'CRM & Memory Sync', 'Inbound message and CRM records synchronized without an AI response.', 'completed', { leadScore: lead.leadScore });
+    try {
+      if (db) {
+        await setDoc(doc(db, 'contacts', contact.contactId), contact);
+        await setDoc(doc(db, 'leads', lead.leadId), lead);
+        await setDoc(doc(db, 'conversations', conversation.conversationId), conversation);
+        await setDoc(doc(db, 'messages', incomingMessage.messageId), incomingMessage);
+        for (const act of activities) await setDoc(doc(db, 'lead_activities', act.activityId), act);
+      }
+    } catch (err) {
+      console.warn('Firestore persistence warning for OFF-mode inbound email:', err);
+    }
+    return {
+      success: true,
+      targetMailbox: INBOUND_MAILBOX,
+      contact,
+      lead,
+      conversation,
+      incomingMessage,
+      aiReplyMessage: undefined,
+      activities,
+      emailThread,
+      steps,
+      humanHandoffTriggered: Boolean(conversation.humanHandoff),
+      knowledgeSources: [],
+    };
+  }
 
   // ----------------------------------------------------
   // Step 6: RAG Semantic Knowledge Retrieval & Handoff Guardrails
@@ -599,8 +642,10 @@ export async function processInboundEmail(params: {
 
     recordStep(
       7,
-      'Grounded AI Auto-Reply Dispatched',
-      `Auto-reply dispatched from ${INBOUND_MAILBOX} in the same email thread with 96% confidence.`,
+      channelMode === 'REVIEW' ? 'AI Reply Draft Created' : 'Grounded AI Auto-Reply Dispatched',
+      channelMode === 'REVIEW'
+        ? 'An AI reply draft was prepared for human verification; no email was sent.'
+        : `Auto-reply dispatched from ${INBOUND_MAILBOX} in the same email thread with 96% confidence.`,
       'completed',
       {
         from: INBOUND_MAILBOX,
@@ -626,7 +671,7 @@ export async function processInboundEmail(params: {
   let smtpDeliveryError: string | undefined = undefined;
 
   // Dispatch real email to customer over live SMTP
-  if (payload.from && replyText) {
+  if (channelMode === 'AUTO' && payload.from && replyText) {
     try {
       const sendRes = await fetch('/api/email/send', {
         method: 'POST',
@@ -635,6 +680,8 @@ export async function processInboundEmail(params: {
           to: payload.from,
           subject: replySubject,
           text: replyText,
+          aiGeneratedReply: true,
+          channel: 'EMAIL',
           inReplyTo: incomingMessageId,
           references: [incomingMessageId],
           conversationId: conversation.conversationId,
@@ -656,7 +703,7 @@ export async function processInboundEmail(params: {
     }
   }
 
-  const aiReplyMessage: Message = {
+  const aiReplyMessage: Message | undefined = channelMode === 'AUTO' && replyText ? {
     messageId: `msg-ai-${Date.now()}@amaavigo.com`,
     gmailMessageId: liveSentMessageId,
     conversationId: conversation.conversationId,
@@ -683,13 +730,29 @@ export async function processInboundEmail(params: {
     },
     smtpStatus: outboundSmtpStatus as any,
     smtpError: smtpDeliveryError,
-  };
+  } : undefined;
 
-  incomingMessage.repliedAt = aiReplyTimestamp;
-  incomingMessage.repliedByMessageId = aiReplyMessage.messageId;
+  if (aiReplyMessage) {
+    incomingMessage.aiReplied = true;
+    incomingMessage.repliedAt = aiReplyTimestamp;
+    incomingMessage.repliedByMessageId = aiReplyMessage.messageId;
+    conversation.lastMessageAt = aiReplyMessage.timestamp;
+    conversation.lastMessageText = aiReplyMessage.text.slice(0, 120);
+  }
 
-  conversation.lastMessageAt = aiReplyMessage.timestamp;
-  conversation.lastMessageText = aiReplyMessage.text.slice(0, 120);
+  if (channelMode === 'REVIEW' && replyText && !handoffCheck.shouldHandoff) {
+    conversation = {
+      ...conversation,
+      status: 'REVIEW',
+      draftReply: {
+        draftId: `draft-email-${incomingMessageId}`,
+        text: replyText,
+        subject: replySubject,
+        generatedAt: aiReplyTimestamp,
+        status: 'PENDING',
+      },
+    };
+  }
 
   // ----------------------------------------------------
   // Step 8: CRM Timeline Activities Logged & Firestore Persistence
@@ -708,13 +771,15 @@ export async function processInboundEmail(params: {
       activityId: `act-reply-${Date.now() + 1}`,
       leadId: lead.leadId,
       contactId: contact.contactId,
-      type: handoffCheck.shouldHandoff ? 'HUMAN_TAKEOVER' : 'AI_REPLIED',
+      type: handoffCheck.shouldHandoff ? 'HUMAN_TAKEOVER' : channelMode === 'REVIEW' ? 'NOTE_ADDED' : 'AI_REPLIED',
       title: handoffCheck.shouldHandoff
         ? 'Human Handoff Alert: Enterprise 20+ Seats'
-        : `AI Auto-Reply Sent via ${INBOUND_MAILBOX}`,
+        : channelMode === 'REVIEW' ? 'AI Reply Draft Created' : `AI Auto-Reply Sent via ${INBOUND_MAILBOX}`,
       description: handoffCheck.shouldHandoff
         ? 'AI Auto-Pilot switched off; senior specialist assigned for custom quote.'
-        : `AI delivered grounded response using Knowledge Base (${knowledgeSources.join(', ') || `${getCurrentBrand().companyName} Architecture`}).`,
+        : channelMode === 'REVIEW'
+          ? 'AI prepared a draft for human verification; no email was dispatched.'
+          : `AI delivered grounded response using Knowledge Base (${knowledgeSources.join(', ') || `${getCurrentBrand().companyName} Architecture`}).`,
       timestamp: new Date(Date.now() + 500).toISOString(),
     },
   ];
@@ -734,7 +799,7 @@ export async function processInboundEmail(params: {
       await setDoc(doc(db, 'leads', lead.leadId), lead);
       await setDoc(doc(db, 'conversations', conversation.conversationId), conversation);
       await setDoc(doc(db, 'messages', incomingMessage.messageId), incomingMessage);
-      await setDoc(doc(db, 'messages', aiReplyMessage.messageId), aiReplyMessage);
+      if (aiReplyMessage) await setDoc(doc(db, 'messages', aiReplyMessage.messageId), aiReplyMessage);
       for (const act of activities) {
         await setDoc(doc(db, 'lead_activities', act.activityId), act);
       }

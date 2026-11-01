@@ -59,6 +59,9 @@ import {
   processActiveRunningCampaignsBatch,
 } from './campaignService.js';
 import { processWebsiteLeadSubmission } from './websiteLeadService.js';
+import { CHANNELS, isSupportedChannelMode, normalizeChannelMode, normalizeChannelModes } from '../shared/channelModes.js';
+import { getTenantChannelMode } from './channelModeService.js';
+import type { Channel } from '../types/index.js';
 import {
   getLiveCalendarToken,
   setServerCalendarAccessToken,
@@ -1572,6 +1575,46 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
       const channel = url === '/api/instagram/send' ? 'INSTAGRAM' : String(body?.channel || '').toUpperCase();
       const recipientId = String(body?.recipientId || '');
       const text = String(body?.text || '');
+      if (body?.aiGeneratedReply === true) {
+        const mode = await getTenantChannelMode(activeTenantCtx, channel as Channel);
+        if (mode !== 'AUTO') {
+          res.statusCode = 409;
+          res.end(JSON.stringify({
+            success: false,
+            error: mode === 'OFF'
+              ? 'This channel is OFF. AI-generated replies cannot be dispatched.'
+              : 'This channel is in REVIEW mode. AI-generated replies must be approved by a human before dispatch.',
+          }));
+          return true;
+        }
+      }
+      if (body?.aiDraftApproval === true) {
+        const convId = String(body?.conversationId || '').trim();
+        const draftId = String(body?.draftId || '').trim();
+        if (!convId || !draftId || !['INSTAGRAM', 'WHATSAPP', 'FACEBOOK'].includes(channel)) {
+          res.statusCode = 400;
+          res.end(JSON.stringify({ success: false, error: 'A valid social channel, conversationId, and draftId are required.' }));
+          return true;
+        }
+        const convSnap = await getDoc(tenantRepo(activeTenantCtx).conversationDoc(convId));
+        if (!convSnap.exists()) {
+          res.statusCode = 404;
+          res.end(JSON.stringify({ success: false, error: 'Conversation not found in this workspace.' }));
+          return true;
+        }
+        const conversation = convSnap.data() as any;
+        const savedDraft = conversation.draftReply;
+        if (String(conversation.channel || '').toUpperCase() !== channel || !savedDraft || savedDraft.status !== 'PENDING' || savedDraft.draftId !== draftId || String(savedDraft.text || '') !== text) {
+          res.statusCode = 409;
+          res.end(JSON.stringify({ success: false, error: 'This AI draft is no longer pending or has changed. Refresh the conversation before sending.' }));
+          return true;
+        }
+        if (await getTenantChannelMode(activeTenantCtx, channel as Channel) === 'OFF') {
+          res.statusCode = 409;
+          res.end(JSON.stringify({ success: false, error: 'This channel is OFF. AI drafts cannot be dispatched.' }));
+          return true;
+        }
+      }
       let result: any;
       if (channel === 'INSTAGRAM') {
         const ig = await import('./instagramIntegrationService.js');
@@ -2380,6 +2423,53 @@ Generate a helpful, grounded response.`;
 
   if ((url === '/api/smtp/send' || url === '/api/email/send') && req.method === 'POST') {
     const { to, subject, html, text, inReplyTo, conversationId, leadId, senderName } = body;
+    if (body?.aiGeneratedReply === true) {
+      const channel = String(body?.channel || 'EMAIL').toUpperCase() as Channel;
+      const mode = await getTenantChannelMode(activeTenantCtx, channel);
+      if (mode !== 'AUTO') {
+        res.statusCode = 409;
+        res.end(JSON.stringify({
+          success: false,
+          error: mode === 'OFF'
+            ? 'This channel is OFF. AI-generated replies cannot be dispatched.'
+            : 'This channel is in REVIEW mode. AI-generated replies must be approved by a human before dispatch.',
+        }));
+        return true;
+      }
+    }
+    if (body?.aiDraftApproval === true) {
+      const convId = String(conversationId || '').trim();
+      const draftId = String(body?.draftId || '').trim();
+      if (!convId || !draftId) {
+        res.statusCode = 400;
+        res.end(JSON.stringify({ success: false, error: 'conversationId and draftId are required to approve an AI draft.' }));
+        return true;
+      }
+      const convSnap = await getDoc(tenantRepo(activeTenantCtx).conversationDoc(convId));
+      if (!convSnap.exists()) {
+        res.statusCode = 404;
+        res.end(JSON.stringify({ success: false, error: 'Conversation not found in this workspace.' }));
+        return true;
+      }
+      const conversation = convSnap.data() as any;
+      const channel = String(body?.channel || conversation.channel || 'EMAIL').toUpperCase() as Channel;
+      if (conversation.channel !== channel || (channel !== 'EMAIL' && channel !== 'WEBSITE')) {
+        res.statusCode = 400;
+        res.end(JSON.stringify({ success: false, error: 'Draft channel does not match this email conversation.' }));
+        return true;
+      }
+      if (await getTenantChannelMode(activeTenantCtx, channel) === 'OFF') {
+        res.statusCode = 409;
+        res.end(JSON.stringify({ success: false, error: 'This channel is OFF. AI drafts cannot be dispatched.' }));
+        return true;
+      }
+      const savedDraft = conversation.draftReply;
+      if (!savedDraft || savedDraft.status !== 'PENDING' || savedDraft.draftId !== draftId || String(savedDraft.text || '') !== String(text || '')) {
+        res.statusCode = 409;
+        res.end(JSON.stringify({ success: false, error: 'This AI draft is no longer pending or has changed. Refresh the conversation before sending.' }));
+        return true;
+      }
+    }
     if (!to || !subject || (!html && !text)) {
       res.statusCode = 400;
       res.end(JSON.stringify({ success: false, error: 'Missing to, subject, or message body' }));
@@ -2839,9 +2929,12 @@ Generate a helpful, grounded response.`;
         const snap = await getDoc(settingsRef);
         const saved = snap.exists() ? (snap.data() as any) : {};
         res.statusCode = 200;
+        const channelModes = normalizeChannelModes(saved.channelModes, { EMAIL: saved.emailMode ?? 'AUTO', LINKEDIN: 'REVIEW' });
         res.end(JSON.stringify({
           success: true,
-          emailMode: saved.emailMode || 'AUTO',
+          channelModes,
+          // Keep emailMode in the response for older clients.
+          emailMode: channelModes.EMAIL,
           emailSignature: saved.emailSignature || '',
           debounceSeconds: Number(saved.debounceSeconds ?? 30),
         }));
@@ -2855,14 +2948,40 @@ Generate a helpful, grounded response.`;
       }
 
       const updates: Record<string, unknown> = { updatedAt: new Date().toISOString() };
-      if (body?.emailMode !== undefined) {
-        const mode = String(body.emailMode).toUpperCase();
-        if (!['AUTO', 'REVIEW', 'SIMULATION'].includes(mode)) {
-          res.statusCode = 400;
-          res.end(JSON.stringify({ error: 'Invalid emailMode.' }));
-          return true;
+      if (body?.channelModes !== undefined || body?.emailMode !== undefined) {
+        const existingSnap = await getDoc(settingsRef);
+        const existing = existingSnap.exists() ? (existingSnap.data() as any) : {};
+        const channelModes = normalizeChannelModes(existing.channelModes, { EMAIL: existing.emailMode ?? 'AUTO', LINKEDIN: 'REVIEW' });
+
+        if (body?.channelModes !== undefined) {
+          if (!body.channelModes || typeof body.channelModes !== 'object' || Array.isArray(body.channelModes)) {
+            res.statusCode = 400;
+            res.end(JSON.stringify({ error: 'channelModes must be an object keyed by channel.' }));
+            return true;
+          }
+          for (const [rawChannel, rawMode] of Object.entries(body.channelModes)) {
+            const channel = rawChannel.toUpperCase() as (typeof CHANNELS)[number];
+            if (!CHANNELS.includes(channel) || !isSupportedChannelMode(rawMode)) {
+              res.statusCode = 400;
+              res.end(JSON.stringify({ error: `Invalid channel mode for ${rawChannel}.` }));
+              return true;
+            }
+            channelModes[channel] = normalizeChannelMode(rawMode, channelModes[channel]);
+          }
         }
-        updates.emailMode = mode;
+
+        if (body?.emailMode !== undefined) {
+          if (!isSupportedChannelMode(body.emailMode)) {
+            res.statusCode = 400;
+            res.end(JSON.stringify({ error: 'Invalid emailMode.' }));
+            return true;
+          }
+          channelModes.EMAIL = normalizeChannelMode(body.emailMode, channelModes.EMAIL);
+        }
+
+        updates.channelModes = channelModes;
+        // Keep this legacy field synchronized for older server/client code.
+        updates.emailMode = channelModes.EMAIL;
       }
       if (body?.emailSignature !== undefined) updates.emailSignature = String(body.emailSignature);
       if (body?.debounceSeconds !== undefined) {

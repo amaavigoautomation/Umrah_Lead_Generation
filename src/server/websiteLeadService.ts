@@ -6,6 +6,7 @@ import { Contact, Lead, Conversation, Message } from '../types/index.js';
 import { sendLiveEmail, getSmtpConfig, getResendConfig, fetchFirestoreSmtpConfig } from './smtpService.js';
 import { handleIncomingCampaignLeadReply } from './campaignService.js';
 import { tenantRepo } from './tenantRepo.js';
+import { getTenantChannelMode } from './channelModeService.js';
 import { mergeWebsiteConversation, mergeWebsiteLead, pickReusableConversation } from './websiteLeadMerge.js';
 import type { TenantContext } from '../types/tenant.js';
 import { getTenantBrand } from './brandService.js';
@@ -426,6 +427,7 @@ export async function processWebsiteLeadSubmission(
   ctx: TenantContext = DEFAULT_UMRAH_CTX
 ): Promise<ProcessedLeadResult> {
   const brand = await getTenantBrand(ctx.tenantId);
+  const channelMode = await getTenantChannelMode(ctx, 'WEBSITE', 'AUTO');
   const flatFields = flattenAllFields(rawInput || {});
 
   const findValue = (patterns: RegExp[]): string => {
@@ -979,6 +981,7 @@ export async function processWebsiteLeadSubmission(
   }
 
   const shouldSendThankYou = Boolean(
+    channelMode !== 'OFF' &&
     cleanEmail &&
     cleanEmail.includes('@') &&
     !cleanEmail.endsWith('@umrah360.in') &&
@@ -1008,6 +1011,8 @@ export async function processWebsiteLeadSubmission(
     // Only true when it really went out (or went out earlier). Left false on failure so the
     // background auto-responder retries instead of the lead silently never getting a thank-you.
     thankYouEmailSent: alreadySent,
+    // A held/off acknowledgement must not be auto-sent later if the channel is switched to AUTO.
+    thankYouEmailSuppressed: channelMode !== 'AUTO',
     thankYouSmtpMessageId: alreadySent ? 'ALREADY_SENT_PREVIOUSLY' : undefined,
     startedAt: nowIso,
     lastMessageAt: nowIso,
@@ -1053,7 +1058,7 @@ export async function processWebsiteLeadSubmission(
       // thank-you on deployments that only set RESEND_API_KEY.
       const emailReady = Boolean(getResendConfig().apiKey);
 
-      if (emailReady) {
+      if (emailReady || channelMode === 'REVIEW') {
         const emailSubject = brandDemoThankYouSubject(brand, companyName);
         const emailBody = [
           `Hello ${firstName},`,
@@ -1076,8 +1081,19 @@ export async function processWebsiteLeadSubmission(
           ...brandThankYouSignoff(brand),
         ].join('\n');
 
-        console.log(`[Website Lead] Dispatching single Thank You email to ${cleanEmail} for ${companyName}...`);
-        const mailResult = await sendLiveEmail({
+        if (channelMode === 'REVIEW') {
+          conversation.status = 'REVIEW';
+          conversation.draftReply = {
+            draftId: `draft-website-${conversationId}`,
+            text: emailBody,
+            subject: emailSubject,
+            generatedAt: new Date().toISOString(),
+            status: 'PENDING',
+          };
+          console.log(`[Website Lead] Holding thank-you acknowledgement as a REVIEW draft for ${cleanEmail}.`);
+        } else {
+          console.log(`[Website Lead] Dispatching single Thank You email to ${cleanEmail} for ${companyName}...`);
+          const mailResult = await sendLiveEmail({
           tenantId: ctx.tenantId,
           to: cleanEmail,
           subject: emailSubject,
@@ -1131,6 +1147,7 @@ export async function processWebsiteLeadSubmission(
           console.warn(`[Website Lead Warning] Thank-you email to ${cleanEmail} failed:`, mailResult.error);
           conversation.thankYouError = String(mailResult.error || 'The email provider rejected the message').slice(0, 300);
           conversation.thankYouAttemptedAt = new Date().toISOString();
+          }
         }
       } else {
         console.warn(`[Website Lead Notice] RESEND_API_KEY is not set; skipping thank-you email.`);
@@ -1174,6 +1191,10 @@ export async function processWebsiteLeadSubmission(
     success: true,
     message: duplicateThankYouSuppressed
       ? `Lead for ${companyName} (${rawFullName}) saved in CRM. Thank-you email was already sent previously to ${cleanEmail} and preserved without duplicates.`
+      : channelMode === 'OFF'
+      ? `Lead for ${companyName} (${rawFullName}) saved in CRM. Website AI responses are OFF; no reply or draft was created.`
+      : channelMode === 'REVIEW'
+      ? `Lead for ${companyName} (${rawFullName}) saved in CRM. The thank-you acknowledgement is waiting for human review in Unified Inbox.`
       : `Lead for ${companyName} (${rawFullName}) successfully pushed to CRM and thank-you confirmation delivered!`,
     contact,
     lead,

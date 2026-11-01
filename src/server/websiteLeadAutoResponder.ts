@@ -12,6 +12,7 @@ import { sendLiveEmail, getSmtpConfig, getResendConfig, fetchFirestoreSmtpConfig
 import { Conversation, Contact, Message } from '../types/index.js';
 import { hasThankYouEmailBeenSent, recordThankYouEmailSent } from './websiteLeadService.js';
 import { tenantRepo } from './tenantRepo.js';
+import { getTenantChannelMode } from './channelModeService.js';
 import { writeTenantAuditEvent } from './auditLogger.js';
 import type { TenantContext } from '../types/tenant.js';
 import { getTenantBrand } from './brandService.js';
@@ -57,6 +58,11 @@ export async function checkAndDispatchPendingWebsiteLeadEmails(
     return { processedCount: 0, dispatchedCount: 0 };
   }
 
+  // Website form acknowledgements follow the same operational mode as Website AI replies.
+  if (await getTenantChannelMode(ctx, 'WEBSITE', 'AUTO') !== 'AUTO') {
+    return { processedCount: 0, dispatchedCount: 0 };
+  }
+
   tenantRunningChecks.add(ctx.tenantId);
   let processedCount = 0;
   let dispatchedCount = 0;
@@ -88,7 +94,7 @@ export async function checkAndDispatchPendingWebsiteLeadEmails(
 
       if (!isWebsiteLead) continue;
 
-      if (conv.thankYouEmailSent) {
+      if (conv.thankYouEmailSent || conv.thankYouEmailSuppressed) {
         continue;
       }
 
@@ -154,6 +160,16 @@ export async function dispatchThankYouEmailForConversation(
     return { success: false, error: 'Database is not initialized.' };
   }
 
+  const channelMode = await getTenantChannelMode(ctx, 'WEBSITE', 'AUTO');
+  if (channelMode !== 'AUTO') {
+    return {
+      success: false,
+      error: channelMode === 'OFF'
+        ? 'Website channel is OFF. No AI response or draft may be dispatched.'
+        : 'Website channel is in REVIEW mode. The acknowledgement must be approved in Unified Inbox.',
+    };
+  }
+
   const inFlight = getInFlightSet(ctx.tenantId);
   let flightEmail = '';
   if (inFlight.has(conversationId)) {
@@ -175,6 +191,10 @@ export async function dispatchThankYouEmailForConversation(
       return { success: false, error: `Conversation ${conversationId} not found in tenant ${ctx.tenantId}.` };
     }
     const conv = convSnap.data() as Conversation;
+
+    if (conv.thankYouEmailSuppressed) {
+      return { success: false, error: 'This website acknowledgement was held while the Website channel was not in AUTO mode.' };
+    }
 
     // Fast-exit if already flagged as sent
     if (conv.thankYouEmailSent && conv.thankYouSmtpMessageId) {

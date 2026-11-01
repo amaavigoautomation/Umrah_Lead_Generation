@@ -4,6 +4,8 @@ import { isHumanManagedConversationData } from '../shared/humanHandoff.js';
 import { tenantRepo } from './tenantRepo.js';
 import { writeTenantAuditEvent } from './auditLogger.js';
 import { evaluateHumanHandoff, persistHumanHandoff, describeHandoff } from './humanHandoffService.js';
+import { normalizeChannelMode } from '../shared/channelModes.js';
+import { getTenantChannelMode } from './channelModeService.js';
 
 import type { TenantContext } from '../types/tenant.js';
 
@@ -438,7 +440,7 @@ export function resolveGmailMessageId(payload: {
 }
 
 export interface PipelineConfig {
-  emailMode: 'AUTO' | 'REVIEW' | 'SIMULATION';
+  emailMode: 'AUTO' | 'REVIEW' | 'OFF';
   sendingAccount: string;
   emailSignature: string;
 }
@@ -454,7 +456,9 @@ export function getPipelineConfig(): PipelineConfig {
 }
 
 export function updatePipelineConfig(newConfig: Partial<PipelineConfig>): PipelineConfig {
-  Object.assign(pipelineConfig, newConfig);
+  const { emailMode, ...otherConfig } = newConfig;
+  Object.assign(pipelineConfig, otherConfig);
+  if (emailMode !== undefined) pipelineConfig.emailMode = normalizeChannelMode(emailMode);
   console.log('[InboundPipeline] Updated runtime pipeline config:', pipelineConfig);
   return { ...pipelineConfig };
 }
@@ -1252,6 +1256,7 @@ export async function processLiveInboundEmail(payload: {
   // Keep only what the customer newly wrote. The quoted earlier thread ("On ... wrote:", "> ...") would otherwise be
   // saved and shown in the inbox, fed to the AI as if it were new, and scanned for handoff phrases.
   payload = { ...payload, body: stripQuotedReply(payload.body) };
+  const channelMode = await getTenantChannelMode(getInboundCtx(), 'EMAIL', normalizeChannelMode(pipelineConfig.emailMode));
   const brand = await getTenantBrand(getInboundCtx().tenantId);
   const isUmrahBrand = brand.playbook === 'umrah360';
   const targetMailbox = payload.ownMailbox || process.env.SMTP_USER || process.env.IMAP_USER || '';
@@ -1542,6 +1547,8 @@ export async function processLiveInboundEmail(payload: {
       receivedAt: nowIso,
       createdAt: nowIso,
       aiReplied: false,
+      // The server pipeline owns this inbound turn; the browser fallback must not race it.
+      aiProcessed: true,
       emailMeta: {
         subject: payload.subject,
         from: payload.from,
@@ -1653,10 +1660,10 @@ export async function processLiveInboundEmail(payload: {
     let shouldSendAutoReply = false;
     let replyDecisionReason = '';
 
-    if (pipelineConfig.emailMode === 'SIMULATION') {
+    if (channelMode === 'OFF') {
       shouldSendAutoReply = false;
-      replyDecisionReason = 'Email channel mode is SIMULATION: auto-reply disabled; messages route to human agent.';
-    } else if (pipelineConfig.emailMode === 'REVIEW') {
+      replyDecisionReason = 'Email channel mode is OFF: AI generation, drafts, and automatic replies are disabled.';
+    } else if (channelMode === 'REVIEW') {
       shouldSendAutoReply = false;
       replyDecisionReason = 'Email channel mode is REVIEW: AI response drafted for human approval prior to dispatch.';
     } else {
@@ -1723,14 +1730,22 @@ export async function processLiveInboundEmail(payload: {
     // RULE 7: GENERATE AI REPLY ONCE
     // Only generate if we are sending or drafting a review
     // =========================================================================
-    const aiResult = await generateAutoReplyText({
-      from: payload.from,
-      fromName: payload.fromName,
-      subject: payload.subject,
-      body: payload.body,
-      companyName: payload.companyName,
-      threadHistory: completeThreadContext, // Full multi-turn conversation context
-    });
+    const aiResult = channelMode === 'OFF'
+      ? {
+          replyText: '',
+          handoffTriggered: Boolean(keywordHandoffReason),
+          handoffReason: keywordHandoffReason || undefined,
+          leadScore: matched.lead?.leadScore ?? 50,
+          buyingStage: matched.lead?.buyingStage || 'ENGAGED',
+        }
+      : await generateAutoReplyText({
+          from: payload.from,
+          fromName: payload.fromName,
+          subject: payload.subject,
+          body: payload.body,
+          companyName: payload.companyName,
+          threadHistory: completeThreadContext, // Full multi-turn conversation context
+        });
 
     // =========================================================================
     // RULE 8: DISPATCH SMTP REPLY ONCE
@@ -1754,7 +1769,7 @@ export async function processLiveInboundEmail(payload: {
     } else {
       smtpResult = {
         success: false,
-        simulated: pipelineConfig.emailMode === 'SIMULATION',
+        simulated: false,
         error: replyDecisionReason,
       };
     }
@@ -1768,7 +1783,7 @@ export async function processLiveInboundEmail(payload: {
         actor: { userId: 'system:ai-email', name: 'AI Email Assistant', email: 'ai-email@system.local', role: 'AI_SYSTEM' },
         metadata: { channel: 'EMAIL', simulated: Boolean(smtpResult.simulated) },
       });
-    } else if (pipelineConfig.mode === 'REVIEW' && !aiResult.handoffTriggered && aiResult.replyText) {
+    } else if (channelMode === 'REVIEW' && !aiResult.handoffTriggered && aiResult.replyText) {
       await writeTenantAuditEvent(getInboundCtx(), {
         action: 'AI_DRAFT_CREATED', module: 'AI_ENGINE', severity: 'INFO',
         description: 'AI prepared an email reply draft for human review.',
@@ -1909,10 +1924,10 @@ export async function processLiveInboundEmail(payload: {
         campaignId: effectiveCampaignId,
         channel: matched.conversation?.channel || 'EMAIL',
         direction: 'INBOUND',
-        status: pipelineConfig.emailMode === 'REVIEW' ? 'REVIEW' : 'ACTIVE',
-        aiEnabled: matched.conversation?.aiEnabled !== undefined ? matched.conversation.aiEnabled : (pipelineConfig.emailMode === 'AUTO' && !aiResult.handoffTriggered),
-        humanHandoff: matched.conversation?.humanHandoff !== undefined ? matched.conversation.humanHandoff : (pipelineConfig.emailMode !== 'AUTO' || aiResult.handoffTriggered),
-        managementMode: (pipelineConfig.emailMode === 'AUTO' && !aiResult.handoffTriggered) ? 'AI' : 'HUMAN',
+        status: channelMode === 'REVIEW' && aiResult.replyText && !aiResult.handoffTriggered ? 'REVIEW' : 'ACTIVE',
+        aiEnabled: matched.conversation?.aiEnabled !== undefined ? matched.conversation.aiEnabled : true,
+        humanHandoff: matched.conversation?.humanHandoff !== undefined ? matched.conversation.humanHandoff : Boolean(aiResult.handoffTriggered),
+        managementMode: matched.conversation?.managementMode || (aiResult.handoffTriggered ? 'HUMAN' : 'AI'),
         emailThreadId: threadId,
         gmailThreadId: threadId,
         isRead: false,
@@ -1923,7 +1938,7 @@ export async function processLiveInboundEmail(payload: {
         startedAt: matched.conversation?.startedAt || nowIso,
         lastMessageAt: nowIso,
         lastMessageText: (shouldSendAutoReply && smtpResult.success) ? aiResult.replyText.slice(0, 120) : payload.body.slice(0, 120),
-        draftReply: pipelineConfig.emailMode === 'REVIEW' ? {
+        draftReply: channelMode === 'REVIEW' && !aiResult.handoffTriggered && aiResult.replyText ? {
           draftId: `draft-${Date.now()}`,
           text: aiResult.replyText,
           subject: replySubject,

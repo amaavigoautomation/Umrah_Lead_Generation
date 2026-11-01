@@ -6,6 +6,7 @@ import { tenantRepo } from './tenantRepo.js';
 import { encryptSecret, decryptSecret } from './cryptoUtils.js';
 import type { TenantContext } from '../types/tenant.js';
 import { evaluateHumanHandoff, persistHumanHandoff, describeHandoff } from './humanHandoffService.js';
+import { getTenantChannelMode } from './channelModeService.js';
 
 const GRAPH_VERSION = process.env.META_GRAPH_API_VERSION || 'v23.0';
 const OAUTH_STATE_TTL_MS = 10 * 60 * 1000;
@@ -375,18 +376,23 @@ async function processInstagramMessageEvent(tenantId: string, accountId: string,
   await setDoc(repo.messageDoc(messageId), {
     messageId, externalMessageId, conversationId, channel: 'INSTAGRAM', senderType: 'CUSTOMER',
     senderName: 'Instagram user', instagramUserId: senderId, text: incomingText, direction: 'INBOUND',
-    timestamp, receivedAt: now, createdAt: now, aiReplied: false, aiProcessed: false,
+    timestamp, receivedAt: now, createdAt: now, aiReplied: false, aiProcessed: true,
   });
   // Synthetic test message from Settings: stop after saving it (no AI call, nothing sent to Instagram).
   if (event?.__test === true) {
     await updateDoc(eventRef, { status: 'test_processed', processedAt: now, conversationId });
     return;
   }
-  const settingsSnap = await getDoc(repo.settingsDoc('default'));
-  const settings = settingsSnap.exists() ? settingsSnap.data() as any : {};
-  const mode = settings?.channelModes?.INSTAGRAM || 'AUTO';
-  if (!conversation.aiEnabled || conversation.humanHandoff || conversation.managementMode === 'HUMAN' || mode === 'SIMULATION') {
-    await updateDoc(eventRef, { status: 'processed', processedAt: now, conversationId });
+  const mode = await getTenantChannelMode(ctx, 'INSTAGRAM', 'AUTO');
+  if (!conversation.aiEnabled || conversation.humanHandoff || conversation.managementMode === 'HUMAN' || mode === 'OFF') {
+    // Prevent the browser-side fallback engine from bypassing OFF or a human takeover.
+    await updateDoc(repo.messageDoc(messageId), { aiProcessed: true });
+    await updateDoc(eventRef, {
+      status: mode === 'OFF' ? 'disabled' : 'processed',
+      ...(mode === 'OFF' ? { reason: 'Channel mode OFF: AI replies and drafts are disabled.' } : {}),
+      processedAt: now,
+      conversationId,
+    });
     return;
   }
   // Load the recent thread once: it feeds the Human Handoff check and the AI prompt below.
@@ -443,6 +449,7 @@ async function processInstagramMessageEvent(tenantId: string, accountId: string,
   }
   if (mode === 'REVIEW') {
     await updateDoc(repo.conversationDoc(conversationId), {
+      status: 'REVIEW',
       draftReply: { draftId: 'igdraft_' + stableHash(externalMessageId), text: replyText, generatedAt: now, status: 'PENDING' },
       updatedAt: now,
     });

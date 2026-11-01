@@ -20,6 +20,7 @@ import { WebsiteWebhookPanel } from './WebsiteWebhookPanel';
 import { BrandSettingsPanel } from './BrandSettingsPanel';
 import { BillingView } from './BillingView';
 import { ConnectedChannelsPanel } from './ConnectedChannelsPanel';
+import { normalizeChannelMode } from '../shared/channelModes';
 
 interface SettingsViewProps {
   settings: SystemSettings;
@@ -133,7 +134,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             <h2 className="text-xl font-extrabold text-slate-900">System Settings & Channel Configurations</h2>
           </div>
           <p className="text-xs text-slate-500 mt-1 font-medium">
-            Configure operational modes (AUTO, REVIEW, SIMULATION), verified email identities,
+            Configure operational modes (AUTO, REVIEW, OFF), verified email identities,
             and debounce intervals.
           </p>
         </div>
@@ -178,13 +179,13 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           validate with RAG, and send replies.
           <br />• <span className="text-slate-900 font-bold">REVIEW:</span> Generate AI drafts
           requiring human verification prior to dispatch.
-          <br />• <span className="text-slate-500 font-bold">SIMULATION:</span> Analyze incoming
-          prompts for insights without drafting responses.
+          <br />• <span className="text-slate-500 font-bold">OFF:</span> Do not generate, send, or
+          create AI reply drafts. Incoming messages remain available in Unified Inbox.
         </p>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 pt-2">
           {channels.map((ch) => {
-            const currentMode = formData.channelModes[ch] || 'AUTO';
+            const currentMode = normalizeChannelMode(formData.channelModes?.[ch]);
 
             return (
               <div
@@ -209,7 +210,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 </div>
 
                 <div className="grid grid-cols-3 gap-1 text-[11px]">
-                  {(['AUTO', 'REVIEW', 'SIMULATION'] as ChannelMode[]).map((m) => (
+                  {(['AUTO', 'REVIEW', 'OFF'] as ChannelMode[]).map((m) => (
                     <button
                       key={m}
                       onClick={() => handleModeChange(ch, m)}

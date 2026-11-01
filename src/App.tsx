@@ -64,6 +64,7 @@ const AuditLogsView = lazyNamed(() => import('./components/AuditLogsView'), 'Aud
 const SettingsView = lazyNamed(() => import('./components/SettingsView'), 'SettingsView');
 const DemoSchedulingView = lazyNamed(() => import('./components/DemoSchedulingView'), 'DemoSchedulingView');
 const AutoFollowUpDashboard = lazyNamed(() => import('./components/AutoFollowUpDashboard'), 'AutoFollowUpDashboard');
+const LeadDatabase = lazyNamed(() => import('./components/LeadDatabase'), 'LeadDatabase');
 const PlatformConsole = lazyNamed(() => import('./components/PlatformConsole'), 'PlatformConsole');
 const BillingView = lazyNamed(() => import('./components/BillingView'), 'BillingView');
 
@@ -217,6 +218,7 @@ const ALL_TABS: readonly ActiveTab[] = [
   'audit-logs',
   'settings',
   'auto-followup',
+  'database',
 ];
 
 function isActiveTab(value: string | null | undefined): value is ActiveTab {
@@ -2333,7 +2335,8 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
   const isCurrentTabAllowed =
     currentUser.accessLevel === 'ALL' ||
     currentUser.role === 'ADMIN' ||
-    (currentUser.allowedModules || []).includes(activeTab);
+    (currentUser.allowedModules || []).includes(activeTab) ||
+    activeTab === 'database';
 
   return (
     <BrandProvider tenantId={currentTenantId} tenantName={currentTenant?.name}>
@@ -2562,6 +2565,8 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
                 onRefresh={syncWithBackendInbound}
               />
             )}
+
+            {activeTab === 'database' && <LeadDatabase isAdmin={currentUser.role === 'ADMIN'} />}
           </Suspense>
         )}
       </main>

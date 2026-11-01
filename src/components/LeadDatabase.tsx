@@ -51,7 +51,7 @@ type ImportRecord = {
   createdAt?: string;
 };
 
-type Props = { isAdmin?: boolean };
+type Props = { isAdmin?: boolean; tenantId?: string };
 
 const PAGE_SIZE = 50;
 
@@ -143,7 +143,7 @@ function formatDate(value?: string): string {
   return Number.isNaN(date.getTime()) ? '—' : date.toLocaleDateString();
 }
 
-export const LeadDatabase: React.FC<Props> = ({ isAdmin = false }) => {
+export const LeadDatabase: React.FC<Props> = ({ isAdmin = false, tenantId = '' }) => {
   const [activeSection, setActiveSection] = useState<'databases' | 'all-leads'>('databases');
   const [databases, setDatabases] = useState<DatabaseSummary[]>([]);
   const [selectedDatabase, setSelectedDatabase] = useState<DatabaseSummary | null>(null);
@@ -168,11 +168,7 @@ export const LeadDatabase: React.FC<Props> = ({ isAdmin = false }) => {
   const loadDatabases = useCallback(async () => {
     const data = await apiRequest<{ databases: DatabaseSummary[] }>('/api/lead-databases');
     setDatabases(data.databases || []);
-    if (selectedDatabase) {
-      const refreshed = (data.databases || []).find((item) => item.databaseId === selectedDatabase.databaseId);
-      if (refreshed) setSelectedDatabase(refreshed);
-    }
-  }, [selectedDatabase]);
+  }, []);
 
   const loadEntries = useCallback(async (databaseId: string | null, cursor?: string, append = false) => {
     if (append) setIsLoadingMore(true);
@@ -196,8 +192,13 @@ export const LeadDatabase: React.FC<Props> = ({ isAdmin = false }) => {
   }, []);
 
   useEffect(() => {
+    setSelectedDatabase(null);
+    setDatabases([]);
+    setLeads([]);
+    setImports([]);
+    setSearch('');
     loadDatabases().catch((err) => setError(err?.message || 'Could not load databases.'));
-  }, []);
+  }, [tenantId, loadDatabases]);
 
   useEffect(() => {
     if (activeSection === 'all-leads') {
@@ -212,7 +213,7 @@ export const LeadDatabase: React.FC<Props> = ({ isAdmin = false }) => {
       setLeads([]);
       setImports([]);
     }
-  }, [activeSection, selectedDatabase?.databaseId, loadEntries]);
+  }, [tenantId, activeSection, selectedDatabase?.databaseId, loadEntries]);
 
   const handleCreateDatabase = async (event: React.FormEvent) => {
     event.preventDefault();

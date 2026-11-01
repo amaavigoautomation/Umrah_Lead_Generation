@@ -121,6 +121,20 @@ service cloud.firestore {
       allow read, write: if isTenantUser(tenantId);
     }
 
+    // Lead database records are accessed through authenticated tenant APIs; clients may read but not write directly.
+    match /tenants/{tenantId}/lead_databases/{databaseId=**} {
+      allow read: if isTenantUser(tenantId);
+      allow write: if false;
+    }
+    match /tenants/{tenantId}/lead_database_entries/{entryId=**} {
+      allow read: if isTenantUser(tenantId);
+      allow write: if false;
+    }
+    match /tenants/{tenantId}/lead_database_imports/{importId=**} {
+      allow read: if isTenantUser(tenantId);
+      allow write: if false;
+    }
+
     match /tenants/{tenantId}/campaign_runs/{runId=**} {
       allow read, write: if isTenantUser(tenantId);
     }

@@ -8,6 +8,7 @@ import {
   Sparkles,
   Settings,
   Bot,
+  Database,
   Radio,
   MessageSquare,
   Lock,
@@ -33,7 +34,8 @@ export type ActiveTab =
   | 'knowledge'
   | 'playground'
   | 'settings'
-  | 'auto-followup';
+  | 'auto-followup'
+  | 'database';
 
 export interface NavbarProps {
   activeTab: ActiveTab;
@@ -83,6 +85,8 @@ export const Navbar: React.FC<NavbarProps> = ({
 
   const isModuleAccessible = (tabId: ActiveTab): boolean => {
     if (planLocked?.(tabId)) return false;
+    // Database is shared by authenticated workspace users; deletion is admin-only on the server.
+    if (tabId === 'database') return true;
     if (!currentUser) return true;
     if (currentUser.accessLevel === 'ALL' || currentUser.role === 'ADMIN') return true;
     return (currentUser.allowedModules || []).includes(tabId);
@@ -100,6 +104,11 @@ export const Navbar: React.FC<NavbarProps> = ({
       label: 'Auto Follow-Up',
       icon: <Bot className="w-4 h-4 shrink-0" />,
       hasPulse: true,
+    },
+    {
+      id: 'database',
+      label: 'Database',
+      icon: <Database className="w-4 h-4 shrink-0" />,
     },
     {
       id: 'campaigns',

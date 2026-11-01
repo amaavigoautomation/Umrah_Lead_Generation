@@ -60,6 +60,14 @@ export function tenantRepo(ctx: TenantContext) {
     campaignLeads: () => collection(db, `${tenantDocPath}/campaign_leads`),
     campaignLeadDoc: (id: string) => doc(db, `${tenantDocPath}/campaign_leads`, id),
 
+    // Reusable lead databases are kept separate from CRM leads and campaign snapshots.
+    leadDatabases: () => collection(db, `${tenantDocPath}/lead_databases`),
+    leadDatabaseDoc: (id: string) => doc(db, `${tenantDocPath}/lead_databases`, id),
+    leadDatabaseEntries: () => collection(db, `${tenantDocPath}/lead_database_entries`),
+    leadDatabaseEntryDoc: (id: string) => doc(db, `${tenantDocPath}/lead_database_entries`, id),
+    leadDatabaseImports: () => collection(db, `${tenantDocPath}/lead_database_imports`),
+    leadDatabaseImportDoc: (id: string) => doc(db, `${tenantDocPath}/lead_database_imports`, id),
+
     campaignRuns: () => collection(db, `${tenantDocPath}/campaign_runs`),
     campaignRunDoc: (id: string) => doc(db, `${tenantDocPath}/campaign_runs`, id),
 

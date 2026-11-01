@@ -193,6 +193,20 @@
           "order": "ASCENDING"
         }
       ]
+    },
+    {
+      "collectionGroup": "lead_database_entries",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "databaseId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "identityKey",
+          "order": "ASCENDING"
+        }
+      ]
     }
   ],
   "fieldOverrides": []

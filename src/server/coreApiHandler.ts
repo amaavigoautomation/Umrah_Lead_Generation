@@ -59,6 +59,16 @@ import {
   processActiveRunningCampaignsBatch,
 } from './campaignService.js';
 import { processWebsiteLeadSubmission } from './websiteLeadService.js';
+import {
+  createLeadDatabase,
+  deleteLeadDatabase,
+  getCampaignDatabaseSnapshot,
+  importLeadDatabaseRows,
+  listLeadDatabaseEntries,
+  listLeadDatabaseImports,
+  listLeadDatabases,
+  updateLeadDatabase,
+} from './leadDatabaseService.js';
 import { CHANNELS, isSupportedChannelMode, normalizeChannelMode, normalizeChannelModes } from '../shared/channelModes.js';
 import { getTenantChannelMode } from './channelModeService.js';
 import type { Channel } from '../types/index.js';
@@ -2878,6 +2888,127 @@ Generate a helpful, grounded response.`;
     return true;
   }
 
+  // Workspace lead databases. These collections are server-written and always tenant-scoped.
+  if (url === '/api/lead-databases' && req.method === 'GET') {
+    try {
+      const databases = await listLeadDatabases(activeTenantCtx);
+      res.statusCode = 200;
+      res.end(JSON.stringify({ success: true, databases }));
+    } catch (err: any) {
+      res.statusCode = 500;
+      res.end(JSON.stringify({ error: err?.message || 'Could not load databases.' }));
+    }
+    return true;
+  }
+
+  if (url === '/api/lead-databases' && req.method === 'POST') {
+    try {
+      const result = await createLeadDatabase(activeTenantCtx, {
+        name: String(body?.name || ''),
+        description: String(body?.description || ''),
+        sourceFileName: String(body?.sourceFileName || ''),
+        rows: Array.isArray(body?.rows) ? body.rows : [],
+      });
+      res.statusCode = 201;
+      res.end(JSON.stringify({ success: true, ...result }));
+    } catch (err: any) {
+      res.statusCode = 400;
+      res.end(JSON.stringify({ error: err?.message || 'Could not create database.' }));
+    }
+    return true;
+  }
+
+  if (url === '/api/lead-databases/leads' && req.method === 'GET') {
+    try {
+      const params = new URL(rawUrl || '/', 'http://localhost').searchParams;
+      const page = await listLeadDatabaseEntries(activeTenantCtx, {
+        pageSize: Number(params.get('limit')) || 50,
+        cursor: params.get('cursor') || '',
+      });
+      res.statusCode = 200;
+      res.end(JSON.stringify({ success: true, ...page }));
+    } catch (err: any) {
+      res.statusCode = 500;
+      res.end(JSON.stringify({ error: err?.message || 'Could not load all leads.' }));
+    }
+    return true;
+  }
+
+  const databaseLeadsMatch = url.match(/^\/api\/lead-databases\/([a-zA-Z0-9_-]+)\/leads$/);
+  if (databaseLeadsMatch && req.method === 'GET') {
+    try {
+      const params = new URL(rawUrl || '/', 'http://localhost').searchParams;
+      const page = await listLeadDatabaseEntries(activeTenantCtx, {
+        databaseId: databaseLeadsMatch[1],
+        pageSize: Number(params.get('limit')) || 50,
+        cursor: params.get('cursor') || '',
+      });
+      res.statusCode = 200;
+      res.end(JSON.stringify({ success: true, ...page }));
+    } catch (err: any) {
+      res.statusCode = 500;
+      res.end(JSON.stringify({ error: err?.message || 'Could not load database leads.' }));
+    }
+    return true;
+  }
+
+  const databaseImportsMatch = url.match(/^\/api\/lead-databases\/([a-zA-Z0-9_-]+)\/imports$/);
+  if (databaseImportsMatch && req.method === 'GET') {
+    try {
+      const imports = await listLeadDatabaseImports(activeTenantCtx, databaseImportsMatch[1]);
+      res.statusCode = 200;
+      res.end(JSON.stringify({ success: true, imports }));
+    } catch (err: any) {
+      res.statusCode = 500;
+      res.end(JSON.stringify({ error: err?.message || 'Could not load import history.' }));
+    }
+    return true;
+  }
+
+  const databaseImportMatch = url.match(/^\/api\/lead-databases\/([a-zA-Z0-9_-]+)\/import$/);
+  if (databaseImportMatch && req.method === 'POST') {
+    try {
+      const result = await importLeadDatabaseRows(activeTenantCtx, databaseImportMatch[1], {
+        sourceFileName: String(body?.sourceFileName || 'Uploaded leads'),
+        rows: Array.isArray(body?.rows) ? body.rows : [],
+      });
+      res.statusCode = 200;
+      res.end(JSON.stringify({ success: true, ...result }));
+    } catch (err: any) {
+      res.statusCode = 400;
+      res.end(JSON.stringify({ error: err?.message || 'Could not import leads.' }));
+    }
+    return true;
+  }
+
+  const databaseMatch = url.match(/^\/api\/lead-databases\/([a-zA-Z0-9_-]+)$/);
+  if (databaseMatch && req.method === 'PATCH') {
+    try {
+      const database = await updateLeadDatabase(activeTenantCtx, databaseMatch[1], {
+        name: body?.name === undefined ? undefined : String(body.name),
+        description: body?.description === undefined ? undefined : String(body.description),
+      });
+      res.statusCode = 200;
+      res.end(JSON.stringify({ success: true, database }));
+    } catch (err: any) {
+      res.statusCode = 400;
+      res.end(JSON.stringify({ error: err?.message || 'Could not update database.' }));
+    }
+    return true;
+  }
+
+  if (databaseMatch && req.method === 'DELETE') {
+    try {
+      await deleteLeadDatabase(activeTenantCtx, databaseMatch[1]);
+      res.statusCode = 200;
+      res.end(JSON.stringify({ success: true, deletedDatabaseId: databaseMatch[1] }));
+    } catch (err: any) {
+      res.statusCode = 400;
+      res.end(JSON.stringify({ error: err?.message || 'Could not delete database.' }));
+    }
+    return true;
+  }
+
   // Campaigns endpoints
   if (url === '/api/campaigns' && req.method === 'GET') {
     await initCampaignStore(true);
@@ -2888,8 +3019,24 @@ Generate a helpful, grounded response.`;
 
   if (url === '/api/campaigns' && req.method === 'POST') {
     try {
-      // Scoped to this request's workspace for the whole call, including the background first batch.
-      const created = await runWithCampaignCtx(activeTenantCtx, () => createCampaign(body));
+      // A saved database is read server-side and copied into campaign_leads before dispatch.
+      // The campaign never reads from the live database after creation.
+      const created = await runWithCampaignCtx(activeTenantCtx, async () => {
+        if (body?.sourceDatabaseId) {
+          const snapshot = await getCampaignDatabaseSnapshot(activeTenantCtx, String(body.sourceDatabaseId));
+          if (!snapshot.leads.length) {
+            throw new Error('The selected database has no valid email recipients. Add leads with valid email addresses first.');
+          }
+          return createCampaign({
+            ...body,
+            leads: snapshot.leads,
+            sourceDatabaseId: snapshot.database.databaseId,
+            sourceDatabaseName: snapshot.database.name,
+            sourceFileName: `Database: ${snapshot.database.name}`,
+          });
+        }
+        return createCampaign(body);
+      });
       res.statusCode = 201;
       res.end(
         JSON.stringify({

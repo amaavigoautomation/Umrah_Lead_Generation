@@ -7,7 +7,8 @@ export type ActiveTab =
   | 'playground'
   | 'audit-logs'
   | 'settings'
-  | 'auto-followup';
+  | 'auto-followup'
+  | 'database';
 
 export type AuditModule =
   | 'CAMPAIGNS'

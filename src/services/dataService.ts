@@ -40,6 +40,7 @@ export const PLATFORM_MODULES: PlatformModule[] = [
   { id: 'playground', name: 'AI Testing', description: 'Interactive prompt playground & response validation' },
   { id: 'settings', name: 'Channels & Settings', description: 'Autopilot rules, email signatures, and integrations' },
   { id: 'auto-followup', name: 'Auto Follow-Up', description: 'AI follow-ups for leads who stop replying' },
+  { id: 'database', name: 'Database', description: 'Reusable workspace lead databases' },
 ];
 
 // Initial pre-configured users stored in Firestore DB

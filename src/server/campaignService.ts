@@ -1470,6 +1470,8 @@ export async function createCampaign(params: {
   templateSubject?: string;
   templateBody?: string;
   sourceFileName?: string;
+  sourceDatabaseId?: string;
+  sourceDatabaseName?: string;
   leads: Array<{
     name?: string;
     firstName?: string;
@@ -1479,6 +1481,8 @@ export async function createCampaign(params: {
     phone?: string;
     designation?: string;
     rowNumber?: number;
+    customFields?: Record<string, string>;
+    databaseEntryId?: string;
   }>;
   startImmediately?: boolean;
   /** Start automatically at this moment (UTC ISO) instead of now. Wins over startImmediately. */
@@ -1563,7 +1567,14 @@ export async function createCampaign(params: {
       : {}),
     templateId: finalTemplateId,
     templateName: finalTemplateName,
-    sourceFileName: params.sourceFileName || 'Uploaded Leads',
+    sourceFileName: params.sourceDatabaseId
+      ? `Database: ${params.sourceDatabaseName || params.sourceDatabaseId}`
+      : params.sourceFileName || 'Uploaded Leads',
+    ...(params.sourceDatabaseId ? {
+      sourceDatabaseId: params.sourceDatabaseId,
+      sourceDatabaseName: params.sourceDatabaseName || '',
+      sourceDatabaseSnapshotAt: now,
+    } : {}),
     totalLeads: params.leads.length,
     sentCount: 0,
     pendingCount: params.leads.length,
@@ -1631,7 +1642,14 @@ export async function createCampaign(params: {
         ? { phoneLast10: String(l.phone).replace(/[^\d]/g, '').slice(-10) }
         : {}),
       designation: l.designation || 'Director / Owner',
-      sourceFile: params.sourceFileName || 'Uploaded Leads',
+      ...(params.sourceDatabaseId ? {
+        sourceDatabaseId: params.sourceDatabaseId,
+        sourceDatabaseEntryId: l.databaseEntryId,
+        customFields: l.customFields || {},
+      } : {}),
+      sourceFile: params.sourceDatabaseId
+        ? `Database: ${params.sourceDatabaseName || params.sourceDatabaseId}`
+        : params.sourceFileName || 'Uploaded Leads',
       rowNumber: rowNum,
       sendStatus: 'PENDING',
       replyStatus: 'NOT_REPLIED',

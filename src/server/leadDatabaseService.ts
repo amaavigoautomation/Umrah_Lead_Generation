@@ -121,7 +121,7 @@ function normalizeRows(
       if (safeKey && safeValue) customFields[safeKey] = safeValue;
     }
 
-    const entryId = `lde_${Date.now().toString(36)}_${crypto.randomBytes(5).toString('hex')}`;
+    const entryId = `lde_${shortHash(`${databaseId}:${identity}`).slice(0, 32)}`;
     valid.push({
       entryId,
       databaseId,
@@ -280,7 +280,18 @@ export async function importLeadDatabaseRows(
         added += 1;
         if (batch[index].normalizedEmail) emailEligibleAdded += 1;
       } else {
-        writeErrors.push(String(result.reason?.message || 'Could not save row'));
+        const error: any = result.reason;
+        const code = error?.code;
+        const alreadyExists = code === 6 || code === 'already-exists' || /ALREADY_EXISTS/i.test(String(error?.message || ''));
+        if (alreadyExists) {
+          duplicates.push({
+            rowNumber: batch[index].sourceRowNumber,
+            identity: batch[index].email || batch[index].phone || batch[index].name,
+            reason: 'Already exists in this database',
+          });
+        } else {
+          writeErrors.push(String(error?.message || 'Could not save row'));
+        }
       }
     });
   }

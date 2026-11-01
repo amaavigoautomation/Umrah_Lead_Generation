@@ -299,7 +299,26 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
 
   // File Upload & Column Mapping State
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [leadInputMethod, setLeadInputMethod] = useState<'UPLOAD' | 'PASTE' | 'SAMPLE' | 'CRM'>('UPLOAD');
+  const [leadInputMethod, setLeadInputMethod] = useState<'UPLOAD' | 'PASTE' | 'SAMPLE' | 'CRM' | 'DATABASE'>('UPLOAD');
+  const [savedLeadDatabases, setSavedLeadDatabases] = useState<Array<{ databaseId: string; name: string; totalLeads: number; emailEligibleCount: number }>>([]);
+  const [selectedLeadDatabaseId, setSelectedLeadDatabaseId] = useState('');
+  const [isLoadingLeadDatabases, setIsLoadingLeadDatabases] = useState(false);
+  const selectedLeadDatabase = savedLeadDatabases.find((item) => item.databaseId === selectedLeadDatabaseId);
+
+  useEffect(() => {
+    if (!isCreateModalOpen) return;
+    let active = true;
+    setIsLoadingLeadDatabases(true);
+    fetch('/api/lead-databases')
+      .then(async (res) => {
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data?.error || 'Could not load saved databases.');
+        if (active) setSavedLeadDatabases(data.databases || []);
+      })
+      .catch((err) => { if (active) setCreateCampaignError(err?.message || 'Could not load saved databases.'); })
+      .finally(() => { if (active) setIsLoadingLeadDatabases(false); });
+    return () => { active = false; };
+  }, [isCreateModalOpen]);
   const [deliveryMode, setDeliveryMode] = useState<'LIVE_SMTP' | 'SIMULATION'>('LIVE_SMTP');
   const [pastedLeadsText, setPastedLeadsText] = useState('');
   const [createCampaignError, setCreateCampaignError] = useState<string | null>(null);
@@ -1256,8 +1275,22 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
       setCreateCampaignError('Please enter a campaign name.');
       return;
     }
+    const isDatabaseSource = leadInputMethod === 'DATABASE';
     const validLeads = parsedPreviewLeads.filter((l) => l.isValid);
-    if (validLeads.length === 0) {
+    if (isDatabaseSource) {
+      if (!selectedLeadDatabaseId || !selectedLeadDatabase) {
+        setCreateCampaignError('Select a saved database first.');
+        return;
+      }
+      if (newCampaignType !== 'EMAIL') {
+        setCreateCampaignError('Saved database campaigns currently support the existing email campaign engine only.');
+        return;
+      }
+      if ((selectedLeadDatabase.emailEligibleCount || 0) < 1) {
+        setCreateCampaignError('This database has no valid email recipients. Add leads with valid email addresses before creating an email campaign.');
+        return;
+      }
+    } else if (validLeads.length === 0) {
       setCreateCampaignError('Please add at least one lead (Upload a spreadsheet, paste emails, or click "⚡ Sample Leads").');
       return;
     }
@@ -1301,8 +1334,11 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
           templateName: matchedTemplate?.name,
           templateSubject: matchedTemplate?.subject,
           templateBody: matchedTemplate?.body,
-          sourceFileName: uploadedFileName || 'Leads List',
-          leads: validLeads,
+          sourceFileName: isDatabaseSource
+            ? `Database: ${selectedLeadDatabase?.name || selectedLeadDatabaseId}`
+            : uploadedFileName || 'Leads List',
+          ...(isDatabaseSource ? { sourceDatabaseId: selectedLeadDatabaseId, sourceDatabaseName: selectedLeadDatabase?.name } : {}),
+          leads: isDatabaseSource ? [] : validLeads,
           startImmediately: launchMode === 'NOW',
           ...(scheduledStartAt ? { scheduledStartAt, scheduledTimezone: timezone } : {}),
         }),
@@ -1336,6 +1372,8 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
       setNewCampaignName('');
       setUploadedFileName('');
       setPastedLeadsText('');
+      setLeadInputMethod('UPLOAD');
+      setSelectedLeadDatabaseId('');
       setRawHeaders([]);
       setRawRows([]);
       setParsedPreviewLeads([]);
@@ -2779,7 +2817,7 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                   <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
                     leadSummary.unique > 0 ? 'bg-orange-50 text-orange-700 border border-orange-200' : 'bg-slate-100 text-slate-500'
                   }`}>
-                    {leadSummary.unique} Lead{leadSummary.unique === 1 ? '' : 's'} Ready
+                    {leadInputMethod === 'DATABASE' ? (selectedLeadDatabase?.emailEligibleCount || 0) : leadSummary.unique} Lead{(leadInputMethod === 'DATABASE' ? (selectedLeadDatabase?.emailEligibleCount || 0) : leadSummary.unique) === 1 ? '' : 's'} Ready
                   </span>
                 </div>
 
@@ -2799,7 +2837,18 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
 
                   <button
                     type="button"
-                    onClick={() => setLeadInputMethod('PASTE')}
+                    onClick={() => setLeadInputMethod('DATABASE')}
+                    className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-semibold transition flex items-center justify-center gap-1.5 ${
+                      leadInputMethod === 'DATABASE' ? 'bg-orange-500 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    <Database className="w-3.5 h-3.5" />
+                    <span>Database</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setLeadInputMethod('PASTE')
                     className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-semibold transition flex items-center justify-center gap-1.5 ${
                       leadInputMethod === 'PASTE'
                         ? 'bg-orange-500 text-white shadow-xs'
@@ -2828,6 +2877,35 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                   </button>
                   )}
                 </div>
+
+                {leadInputMethod === 'DATABASE' && (
+                  <div className="p-4 rounded-xl border border-orange-200 bg-orange-50/40 space-y-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1.5">Select Saved Database *</label>
+                      <select
+                        value={selectedLeadDatabaseId}
+                        onChange={(event) => setSelectedLeadDatabaseId(event.target.value)}
+                        disabled={isLoadingLeadDatabases || savedLeadDatabases.length === 0}
+                        className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-orange-500 disabled:opacity-60"
+                      >
+                        <option value="">{isLoadingLeadDatabases ? 'Loading databases…' : savedLeadDatabases.length ? 'Choose a database' : 'No saved databases yet'}</option>
+                        {savedLeadDatabases.map((database) => (
+                          <option key={database.databaseId} value={database.databaseId}>
+                            {database.name} ({database.totalLeads} leads · {database.emailEligibleCount} email-ready)
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    {selectedLeadDatabase && (
+                      <div className="rounded-lg bg-white border border-orange-100 p-3 text-xs space-y-1">
+                        <div className="flex justify-between"><span className="text-slate-500">Total saved leads</span><strong>{selectedLeadDatabase.totalLeads}</strong></div>
+                        <div className="flex justify-between"><span className="text-slate-500">Valid email recipients</span><strong>{selectedLeadDatabase.emailEligibleCount}</strong></div>
+                        <p className="text-[11px] text-slate-500 pt-1">The campaign gets its own snapshot at creation. Later database changes will not alter this campaign. Records without valid email addresses are excluded from email campaigns.</p>
+                      </div>
+                    )}
+                    {newCampaignType !== 'EMAIL' && <p className="text-[11px] text-amber-700">Database selection is currently supported for email campaigns only.</p>}
+                  </div>
+                )}
 
                 {/* TAB 1: FILE UPLOAD */}
                 {leadInputMethod === 'UPLOAD' && (
@@ -3304,7 +3382,8 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                     <button
                       type="button"
                       onClick={handlePreviewAiEmails}
-                      disabled={aiPreviewLoading || parsedPreviewLeads.length === 0}
+                      disabled={aiPreviewLoading || parsedPreviewLeads.length === 0 || leadInputMethod === 'DATABASE'}
+                      title={leadInputMethod === 'DATABASE' ? 'AI personalization will be generated during campaign dispatch for the saved database snapshot.' : undefined}
                       className="px-3.5 py-2 bg-orange-500 hover:bg-orange-600 disabled:opacity-50 text-white rounded-lg text-xs font-semibold transition flex items-center gap-1.5 shrink-0 shadow-xs"
                     >
                       {aiPreviewLoading ? (

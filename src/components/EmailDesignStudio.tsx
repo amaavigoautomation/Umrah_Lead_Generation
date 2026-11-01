@@ -1,8 +1,13 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { basicSetup, EditorView } from 'codemirror';
+import { Compartment } from '@codemirror/state';
+import { html } from '@codemirror/lang-html';
+import { oneDark } from '@codemirror/theme-one-dark';
 import {
   ArrowLeft, ArrowUp, ArrowDown, Check, Code2, Copy, Eye, FileImage, Heading1, ImagePlus,
   LayoutTemplate, Mail, Monitor, Palette, Plus, Save, Search, Smartphone, Sparkles, Trash2,
   Type, X, MousePointerClick, Minus, Link2, Loader2, Star, FolderOpen, AlignLeft,
+  Maximize2, Minimize2, WrapText,
 } from 'lucide-react';
 import { useBrand } from '../context/BrandContext';
 import { CompanyAssetsPanel } from './CompanyAssetsPanel';
@@ -136,83 +141,130 @@ function formatEmailHtml(source: string): string {
   flush();
   return output.join('\n').replace(/\n{3,}/g, '\n\n') + '\n';
 }
-function escapeHtmlForEditor(value: string): string {
-  return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-}
-function highlightHtmlSource(source: string): string {
-  const tokens = source.match(/<!--[\s\S]*?-->|<\/?[a-zA-Z][\w:-]*|\/?>|\s+[a-zA-Z_:][\w:.-]*(?=\s*=)|"(?:[^"]*)"|'(?:[^']*)'|[^<]+|</g) || [];
-  return tokens.map((token) => {
-    const escaped = escapeHtmlForEditor(token);
-    if (token.startsWith('<!--')) return '<span style="color:#86a987">' + escaped + '</span>';
-    if (/^<\/?[a-zA-Z]/.test(token)) return '<span style="color:#7dd3fc">' + escaped + '</span>';
-    if (/^\s+[a-zA-Z_:][\w:.-]*$/.test(token)) return '<span style="color:#c4b5fd">' + escaped + '</span>';
-    if (/^["']/.test(token)) return '<span style="color:#fbbf24">' + escaped + '</span>';
-    if (/^\/?>$/.test(token) || token === '<') return '<span style="color:#94a3b8">' + escaped + '</span>';
-    return escaped;
-  }).join('');
-}
 function HtmlSourceEditor({
   value,
   onChange,
   editorRef,
+  wordWrap,
 }: {
   value: string;
   onChange: (value: string) => void;
-  editorRef: React.RefObject<HTMLTextAreaElement | null>;
+  editorRef: React.RefObject<EditorView | null>;
+  wordWrap: boolean;
 }) {
-  const [scroll, setScroll] = useState({ top: 0, left: 0 });
-  const lineCount = Math.max(1, value.split('\n').length);
-  const onEditorKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    const editor = event.currentTarget;
-    if (event.key === 'Tab') {
-      event.preventDefault();
-      const start = editor.selectionStart, end = editor.selectionEnd;
-      const next = value.slice(0, start) + '  ' + value.slice(end);
-      onChange(next);
-      window.requestAnimationFrame(() => {
-        editor.focus();
-        editor.setSelectionRange(start + 2, start + 2);
-      });
-    } else if (event.key === 'Enter') {
-      const start = editor.selectionStart;
-      const previous = value.slice(0, start);
-      const currentLine = previous.slice(previous.lastIndexOf('\n') + 1);
-      const indentation = (currentLine.match(/^\s*/) || [''])[0];
-      const extra = /<([a-z][\w:-]*)\b[^>]*>\s*$/i.test(currentLine) && !/<(?:br|hr|img|meta|link|input)\b[^>]*\/?>\s*$/i.test(currentLine) ? '  ' : '';
-      event.preventDefault();
-      const insertion = '\n' + indentation + extra;
-      onChange(value.slice(0, start) + insertion + value.slice(editor.selectionEnd));
-      window.requestAnimationFrame(() => {
-        editor.focus();
-        editor.setSelectionRange(start + insertion.length, start + insertion.length);
-      });
+  const mountRef = useRef<HTMLDivElement | null>(null);
+  const onChangeRef = useRef(onChange);
+  const wrapCompartment = useMemo(() => new Compartment(), []);
+
+  useEffect(() => {
+    onChangeRef.current = onChange;
+  }, [onChange]);
+
+  useEffect(() => {
+    const parent = mountRef.current;
+    if (!parent) return;
+
+    const editorTheme = EditorView.theme({
+      '&': {
+        height: '100%',
+        width: '100%',
+        color: '#E6EDF7',
+        backgroundColor: '#0B1220',
+        fontSize: '13px',
+      },
+      '.cm-scroller': {
+        overflow: 'auto',
+        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace',
+        lineHeight: '1.65',
+        scrollbarGutter: 'stable',
+      },
+      '.cm-content': {
+        padding: '16px 0',
+        caretColor: '#FFFFFF',
+      },
+      '.cm-line': {
+        padding: '0 18px',
+      },
+      '.cm-gutters': {
+        backgroundColor: '#101827',
+        color: '#8291A8',
+        borderRight: '1px solid #263449',
+      },
+      '.cm-lineNumbers .cm-gutterElement': {
+        minWidth: '42px',
+        padding: '0 12px 0 8px',
+      },
+      '.cm-activeLineGutter': {
+        backgroundColor: '#1C2A3E',
+        color: '#F8FAFC',
+      },
+      '.cm-activeLine': {
+        backgroundColor: '#142338',
+      },
+      '.cm-cursor, .cm-dropCursor': {
+        borderLeftColor: '#F8FAFC',
+      },
+      '.cm-selectionBackground': {
+        backgroundColor: '#244A72 !important',
+      },
+      '&.cm-focused .cm-selectionBackground': {
+        backgroundColor: '#315B85 !important',
+      },
+      '.cm-matchingBracket': {
+        backgroundColor: '#27445D',
+        outline: '1px solid #5B91B8',
+      },
+      '.cm-tooltip': {
+        border: '1px solid #334155',
+        backgroundColor: '#172033',
+        color: '#E6EDF7',
+      },
+      '.cm-tooltip-autocomplete ul li[aria-selected]': {
+        backgroundColor: '#28415F',
+      },
+    }, { dark: true });
+
+    const view = new EditorView({
+      doc: value,
+      parent,
+      extensions: [
+        basicSetup,
+        html(),
+        oneDark,
+        editorTheme,
+        wrapCompartment.of(wordWrap ? EditorView.lineWrapping : []),
+        EditorView.updateListener.of((update) => {
+          if (update.docChanged) onChangeRef.current(update.state.doc.toString());
+        }),
+      ],
+    });
+
+    editorRef.current = view;
+    return () => {
+      if (editorRef.current === view) editorRef.current = null;
+      view.destroy();
+    };
+    // The editor instance is intentionally created once per mounted workspace.
+  }, [editorRef, wrapCompartment]);
+
+  useEffect(() => {
+    const view = editorRef.current;
+    if (!view) return;
+    const current = view.state.doc.toString();
+    if (value !== current) {
+      view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: value } });
     }
-  };
+  }, [value, editorRef]);
+
+  useEffect(() => {
+    editorRef.current?.dispatch({
+      effects: wrapCompartment.reconfigure(wordWrap ? EditorView.lineWrapping : []),
+    });
+  }, [wordWrap, editorRef, wrapCompartment]);
+
   return (
-    <div className="flex-1 min-h-0 flex overflow-hidden rounded-xl border border-slate-200 bg-slate-950 focus-within:border-orange-400 focus-within:ring-2 focus-within:ring-orange-100">
-      <div className="w-12 flex-none overflow-hidden border-r border-slate-800 bg-slate-900 py-4 text-right text-[11px] font-mono text-slate-500 select-none" aria-hidden="true">
-        <div style={{ transform: 'translateY(' + (-scroll.top) + 'px)', lineHeight: '20.4px' }}>
-          {Array.from({ length: lineCount }, (_, index) => <div key={index} className="px-3">{index + 1}</div>)}
-        </div>
-      </div>
-      <div className="relative flex-1 min-w-0 overflow-hidden">
-        <pre aria-hidden="true" className="absolute top-0 left-0 m-0 pointer-events-none text-[12px] leading-[20.4px] font-mono whitespace-pre" style={{ padding: '16px', transform: 'translate(' + (-scroll.left) + 'px,' + (-scroll.top) + 'px)', tabSize: 2 }} dangerouslySetInnerHTML={{ __html: highlightHtmlSource(value) + '\n' }} />
-        <textarea
-          ref={editorRef}
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
-          onScroll={(event) => setScroll({ top: event.currentTarget.scrollTop, left: event.currentTarget.scrollLeft })}
-          onKeyDown={onEditorKeyDown}
-          spellCheck={false}
-          autoCapitalize="off"
-          autoCorrect="off"
-          wrap="off"
-          aria-label="Full HTML email source"
-          placeholder={'<!doctype html>\n<html>\n<head>\n  <meta name="viewport" content="width=device-width, initial-scale=1">\n</head>\n<body>\n  <table role="presentation" width="100%">\n    <tr><td>{{content}}</td></tr>\n  </table>\n</body>\n</html>'}
-          className="absolute inset-0 w-full h-full resize-none overflow-auto bg-transparent p-4 text-[12px] leading-[20.4px] font-mono text-transparent caret-emerald-300 selection:bg-sky-500/40 selection:text-white outline-none whitespace-pre"
-          style={{ tabSize: 2 }}
-        />
-      </div>
+    <div className="flex-1 min-h-0 min-w-0 overflow-hidden rounded-xl border border-slate-700 bg-[#0B1220] shadow-inner focus-within:border-orange-400 focus-within:ring-2 focus-within:ring-orange-100">
+      <div ref={mountRef} className="h-full min-h-0 min-w-0 w-full" aria-label="Full HTML email source" />
     </div>
   );
 }
@@ -234,8 +286,10 @@ export const EmailDesignStudio: React.FC<{ tenantId: string }> = ({ tenantId }) 
   const [editorPanel, setEditorPanel] = useState<EditorPanel>('blocks');
   const [previewMode, setPreviewMode] = useState<PreviewMode>('desktop');
   const [editorMode, setEditorMode] = useState<EditorMode>('visual');
-  const htmlEditorRef = useRef<HTMLTextAreaElement | null>(null);
+  const htmlEditorRef = useRef<EditorView | null>(null);
   const [htmlFind, setHtmlFind] = useState('');
+  const [htmlWordWrap, setHtmlWordWrap] = useState(true);
+  const [htmlExpanded, setHtmlExpanded] = useState(false);
   const [showAssets, setShowAssets] = useState(false);
   const [aiStep, setAiStep] = useState<'website' | 'verify' | null>(null);
   const [websiteUrl, setWebsiteUrl] = useState('');
@@ -283,6 +337,7 @@ export const EmailDesignStudio: React.FC<{ tenantId: string }> = ({ tenantId }) 
     setEditorPanel('blocks');
     setPreviewMode('desktop');
     setEditorMode(copy.customHtml ? 'html' : 'visual');
+    setHtmlExpanded(false);
   };
 
   const startFromScratch = () => {
@@ -291,6 +346,7 @@ export const EmailDesignStudio: React.FC<{ tenantId: string }> = ({ tenantId }) 
     setSelectedBlockId(template.blocks[0]?.id || '');
     setEditorPanel('blocks');
     setEditorMode('visual');
+    setHtmlExpanded(false);
   };
 
   const updateTemplate = (patch: Partial<EmailDesignTemplate>) => {
@@ -311,9 +367,9 @@ export const EmailDesignStudio: React.FC<{ tenantId: string }> = ({ tenantId }) 
     } catch {
       const editor = htmlEditorRef.current;
       if (editor) {
+        editor.dispatch({ selection: { anchor: 0, head: editor.state.doc.length } });
         editor.focus();
-        editor.select();
-        setNotice({ tone: 'info', text: 'Select the highlighted source and press Ctrl+C to copy it.' });
+        setNotice({ tone: 'info', text: 'The HTML source is selected. Press Ctrl+C to copy it.' });
       } else {
         setNotice({ tone: 'error', text: 'Clipboard access is unavailable in this browser.' });
       }
@@ -324,18 +380,19 @@ export const EmailDesignStudio: React.FC<{ tenantId: string }> = ({ tenantId }) 
     const editor = htmlEditorRef.current;
     const query = htmlFind.trim();
     if (!editor || !query) return;
-    const source = editing?.customHtml || '';
-    const start = editor.selectionEnd;
-    const found = source.toLowerCase().indexOf(query.toLowerCase(), start);
+    const source = editor.state.doc.toString();
+    const cursor = editor.state.selection.main.head;
+    const found = source.toLowerCase().indexOf(query.toLowerCase(), cursor);
     const index = found >= 0 ? found : source.toLowerCase().indexOf(query.toLowerCase());
     if (index < 0) {
       setNotice({ tone: 'error', text: 'No matching text was found in the HTML source.' });
       return;
     }
+    editor.dispatch({
+      selection: { anchor: index, head: index + query.length },
+      scrollIntoView: true,
+    });
     editor.focus();
-    editor.setSelectionRange(index, index + query.length);
-    const linesBefore = source.slice(0, index).split('\n').length;
-    editor.scrollTop = Math.max(0, (linesBefore - 3) * 20.4);
   };
 
   const switchToHtmlMode = () => {
@@ -347,6 +404,7 @@ export const EmailDesignStudio: React.FC<{ tenantId: string }> = ({ tenantId }) 
     const source = formatEmailHtml(createEmailDesignHtmlSource(editing, brandData));
     setEditing((current) => current ? { ...current, customHtml: source } : current);
     setEditorMode('html');
+    setHtmlExpanded(false);
     setNotice({ tone: 'info', text: 'Your visual layout has been converted into editable email-safe HTML. The dynamic message placeholder is preserved.' });
   };
 
@@ -374,6 +432,7 @@ export const EmailDesignStudio: React.FC<{ tenantId: string }> = ({ tenantId }) 
     setSelectedBlockId(visualCopy.blocks.find((item) => item.type !== 'content')?.id || visualCopy.blocks[0]?.id || '');
     setEditorMode('visual');
     setEditorPanel('blocks');
+    setHtmlExpanded(false);
     setNotice({ tone: 'success', text: 'Your HTML design has been saved separately. You are now editing a new Visual Builder copy.' });
   };
 
@@ -722,6 +781,7 @@ export const EmailDesignStudio: React.FC<{ tenantId: string }> = ({ tenantId }) 
               <p className="text-[10px] text-slate-400">Use <code className="font-mono">{'{{content}}'}</code> exactly once where the message should appear. Format HTML is manual; typing never reformats your source.</p>
             </div>
           </section>
+{!htmlExpanded && (
           <main className="min-h-[580px] xl:min-h-0 flex flex-col p-3 lg:p-5">
             <div className="flex items-center justify-between mb-3 gap-2">
               <div><h2 className="text-xs font-bold text-slate-700">Live email preview</h2><p className="text-[10px] text-slate-400">Sample recipient message is inserted where {'{{content}}'} appears.</p></div>
@@ -729,6 +789,7 @@ export const EmailDesignStudio: React.FC<{ tenantId: string }> = ({ tenantId }) 
             </div>
             <EmailPreview template={editing} brand={brandData} mode={previewMode} />
           </main>
+          )}
         </div>
       </div>
     );

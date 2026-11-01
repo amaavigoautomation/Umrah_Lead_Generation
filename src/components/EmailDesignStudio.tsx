@@ -114,6 +114,7 @@ export const EmailDesignStudio: React.FC<{ tenantId: string }> = ({ tenantId }) 
   const [aiStyle, setAiStyle] = useState('Modern corporate');
   const [aiInstructions, setAiInstructions] = useState('');
   const [aiError, setAiError] = useState('');
+  const [aiWarning, setAiWarning] = useState('');
 
   const loadTemplates = async () => {
     setLoading(true);
@@ -382,23 +383,66 @@ export const EmailDesignStudio: React.FC<{ tenantId: string }> = ({ tenantId }) 
     setWebsiteUrl(brand.websiteUrl || '');
     setBrandProfile(null);
     setAiError('');
+    setAiWarning('');
     setAiStep('website');
+  };
+
+  const buildWorkspaceBrandProfile = (rawUrl: string): EmailBrandProfile => {
+    const normalizedUrl = /^https?:\/\//i.test(rawUrl.trim()) ? rawUrl.trim() : 'https://' + rawUrl.trim();
+    let guessedName = 'Your Company';
+    try {
+      const host = new URL(normalizedUrl).hostname.replace(/^www\./i, '');
+      const firstLabel = host.split('.')[0].replace(/[-_]+/g, ' ').trim();
+      guessedName = firstLabel.replace(/\b[a-z]/g, (letter) => letter.toUpperCase()) || guessedName;
+    } catch {
+      // The user can correct the URL and company name in the verification step.
+    }
+    return {
+      websiteUrl: normalizedUrl,
+      companyName: String(brandData.companyName || guessedName),
+      tagline: String(brandData.tagline || ''),
+      description: String(brandData.industryDescription || ''),
+      logoUrl: String(brandData.logoUrl || ''),
+      contactEmail: String(brandData.salesEmail || brandData.email || ''),
+      contactPhone: String(brandData.supportPhone || brandData.phone || ''),
+      colors: [],
+      socialLinks: {},
+    };
+  };
+
+  const continueWithWorkspaceBrand = (rawUrl = websiteUrl || brandData.websiteUrl || '') => {
+    const profile = buildWorkspaceBrandProfile(rawUrl);
+    setWebsiteUrl(profile.websiteUrl);
+    setBrandProfile(profile);
+    setAiError('');
+    setAiWarning('Website analysis was skipped. We prefilled your saved workspace details; review the company information, add your logo and brand colours, then generate the design.');
+    setAiStep('verify');
   };
 
   const analyzeWebsite = async () => {
     setBusy(true);
     setAiError('');
+    setAiWarning('');
+    const normalizedUrl = /^https?:\/\//i.test(websiteUrl.trim()) ? websiteUrl.trim() : 'https://' + websiteUrl.trim();
     try {
-      const normalizedUrl = /^https?:\/\//i.test(websiteUrl.trim()) ? websiteUrl.trim() : 'https://' + websiteUrl.trim();
       const response = await fetch('/api/email-design/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ websiteUrl: normalizedUrl }),
       });
       const data = await response.json().catch(() => ({}));
-      if (!response.ok || !data.success) throw new Error(data.error || 'Could not analyse this website.');
+      if (!response.ok || !data.success) {
+        const message = String(data.error || 'Could not analyse this website.');
+        if (/\b403\b|forbidden|blocked.*automated|access denied/i.test(message)) {
+          continueWithWorkspaceBrand(normalizedUrl);
+          setAiWarning('The website blocks automated access (HTTP 403). We have filled in your saved workspace details instead. Review them below—AI design generation will still work.');
+          return;
+        }
+        throw new Error(message);
+      }
       setBrandProfile(data.brandProfile);
       setWebsiteUrl(normalizedUrl);
+      setAiWarning('');
       setAiStep('verify');
     } catch (error: any) {
       setAiError(error?.message || 'Could not analyse this website.');
@@ -809,11 +853,13 @@ export const EmailDesignStudio: React.FC<{ tenantId: string }> = ({ tenantId }) 
           <div className="p-5 border-b border-slate-200 flex items-center justify-between"><div><div className="flex items-center gap-2 text-orange-600"><Sparkles className="w-4 h-4" /><span className="text-[10px] uppercase font-bold tracking-widest">AI design generator</span></div><h2 className="mt-1 text-lg font-extrabold text-slate-900">{aiStep === 'website' ? 'Start with your company website' : 'Verify your brand details'}</h2><p className="text-xs text-slate-500 mt-1">{aiStep === 'website' ? 'We will analyse your public website to identify your visual identity.' : 'Review the extracted information before asking AI to create the template.'}</p></div><button onClick={() => setAiStep(null)} className="p-2 hover:bg-slate-100 rounded-lg"><X className="w-4 h-4" /></button></div>
           <div className="p-5 space-y-4 max-h-[68vh] overflow-y-auto">
             {aiError && <div className="rounded-lg bg-rose-50 border border-rose-100 text-rose-700 text-xs px-3 py-2">{aiError}</div>}
+            {aiWarning && <div className="rounded-lg bg-amber-50 border border-amber-200 text-amber-900 text-xs px-3 py-2 leading-relaxed">{aiWarning}</div>}
             {aiStep === 'website' ? <>
               <label className="block text-xs font-bold text-slate-700">Company website URL
                 <input type="url" value={websiteUrl} onChange={(event) => setWebsiteUrl(event.target.value)} placeholder="https://www.yourcompany.com" className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-3 text-sm font-normal outline-none focus:border-orange-400" />
               </label>
               <div className="rounded-xl bg-blue-50 border border-blue-100 p-3 text-xs text-blue-800 leading-relaxed"><strong>What we analyse:</strong> company identity, public logo and images, visible brand colours, page title and description, contact details and social links. You will review and correct the details before design generation.</div>
+              <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 p-3"><div><p className="text-xs font-semibold text-slate-800">Website blocks automated access?</p><p className="text-[11px] text-slate-500 mt-0.5">Continue using your saved company profile and fill in any missing details.</p></div><button type="button" onClick={() => continueWithWorkspaceBrand()} className="shrink-0 px-3 py-2 rounded-lg border border-slate-200 bg-white text-xs font-semibold text-slate-700 hover:border-orange-300 hover:text-orange-700">Enter details manually</button></div>
             </> : brandProfile && <>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <label className="block text-xs font-semibold text-slate-600">Company name<input value={brandProfile.companyName} onChange={(event) => updateProfile({ companyName: event.target.value })} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-xs font-normal" /></label>
@@ -823,7 +869,7 @@ export const EmailDesignStudio: React.FC<{ tenantId: string }> = ({ tenantId }) 
               </div>
               <label className="block text-xs font-semibold text-slate-600">Company description<textarea rows={3} value={brandProfile.description} onChange={(event) => updateProfile({ description: event.target.value })} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-xs font-normal" /></label>
               <label className="block text-xs font-semibold text-slate-600">Logo URL<input value={brandProfile.logoUrl} onChange={(event) => updateProfile({ logoUrl: event.target.value })} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-xs font-normal" /></label>
-              <div><p className="text-xs font-semibold text-slate-600 mb-2">Extracted brand colours</p><div className="flex flex-wrap items-center gap-2">{profileColors.map((color, index) => <label key={color + index} className="flex items-center gap-1.5 border border-slate-200 rounded-lg px-2 py-1.5"><input type="color" value={color} onChange={(event) => updateProfile({ colors: profileColors.map((value, i) => i === index ? event.target.value : value) })} className="w-6 h-6" /><span className="text-[10px] font-mono text-slate-500">{color}</span></label>)}{profileColors.length === 0 && <span className="text-[11px] text-slate-400">No prominent colours detected. AI will use a neutral professional palette.</span>}</div></div>
+              <div><p className="text-xs font-semibold text-slate-600 mb-2">Extracted brand colours</p><div className="flex flex-wrap items-center gap-2">{profileColors.map((color, index) => <label key={color + index} className="flex items-center gap-1.5 border border-slate-200 rounded-lg px-2 py-1.5"><input type="color" value={color} onChange={(event) => updateProfile({ colors: profileColors.map((value, i) => i === index ? event.target.value : value) })} className="w-6 h-6" /><span className="text-[10px] font-mono text-slate-500">{color}</span></label>)}{profileColors.length === 0 && <span className="text-[11px] text-slate-400">No colours detected yet. Add your brand colours or let AI start with a neutral palette.</span>}</div><button type="button" onClick={() => updateProfile({ colors: [...profileColors, '#183B66'].slice(0, 6) })} disabled={profileColors.length >= 6} className="mt-2 text-[11px] font-semibold text-orange-700 disabled:opacity-40">+ Add brand colour</button></div>
               <div className="border-t border-slate-100 pt-4 space-y-3">
                 <label className="block text-xs font-semibold text-slate-600">Design direction
                   <select value={aiStyle} onChange={(event) => setAiStyle(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-xs bg-white">
@@ -835,7 +881,7 @@ export const EmailDesignStudio: React.FC<{ tenantId: string }> = ({ tenantId }) 
             </>}
           </div>
           <div className="px-5 py-4 border-t border-slate-200 bg-slate-50 flex items-center justify-between gap-2">
-            {aiStep === 'verify' ? <button disabled={busy} onClick={() => setAiStep('website')} className="px-3 py-2 text-xs font-semibold text-slate-600">Change website</button> : <span className="text-[10px] text-slate-400">Public website information only</span>}
+            {aiStep === 'verify' ? <button disabled={busy} onClick={() => { setAiWarning(''); setAiStep('website'); }} className="px-3 py-2 text-xs font-semibold text-slate-600">Change website</button> : <span className="text-[10px] text-slate-400">Website analysis is optional</span>}
             {aiStep === 'website' ? <button disabled={busy || !websiteUrl.trim()} onClick={analyzeWebsite} className="px-4 py-2.5 rounded-lg bg-slate-900 text-white text-xs font-bold disabled:opacity-50">{busy ? <><Loader2 className="inline w-3.5 h-3.5 mr-1 animate-spin" />Analysing website...</> : 'Analyse website'}</button> : <button disabled={busy || !brandProfile?.companyName.trim()} onClick={generateWithAi} className="px-4 py-2.5 rounded-lg bg-orange-600 hover:bg-orange-700 text-white text-xs font-bold disabled:opacity-50">{busy ? <><Loader2 className="inline w-3.5 h-3.5 mr-1 animate-spin" />Creating your design...</> : <><Sparkles className="inline w-3.5 h-3.5 mr-1" />Generate email design</>}</button>}
           </div>
         </div>

@@ -110,6 +110,10 @@ export interface EmailTemplate {
   format?: 'text' | 'html';
   isHtml?: boolean;
   attachments?: TemplateAttachment[];
+  /** Optional inbox display text shown before the main campaign content. */
+  preheader?: string;
+  /** Reusable Visual Builder / Full HTML design snapshot used by Template Studio. */
+  designSnapshot?: Record<string, any>;
   createdAt: string;
   updatedAt: string;
 }

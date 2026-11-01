@@ -524,6 +524,7 @@ export const EmailDesignStudio: React.FC<EmailDesignStudioProps> = ({ tenantId, 
     visualCopy.source = 'CUSTOM';
     visualCopy.version = 1;
     visualCopy.customHtml = undefined;
+    if (isCampaignMode) visualCopy.campaignTemplateId = '';
     visualCopy.createdAt = undefined;
     visualCopy.updatedAt = undefined;
     setEditing(visualCopy);

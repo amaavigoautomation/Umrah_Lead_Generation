@@ -475,7 +475,7 @@ const TEMPLATE_MEDIA_MAX_BYTES: Record<string, number> = {
   'image/jpeg': 5 * 1024 * 1024,
   'image/png': 5 * 1024 * 1024,
   'video/mp4': 16 * 1024 * 1024,
-  'application/pdf': 25 * 1024 * 1024,
+  'application/pdf': 100 * 1024 * 1024,
 };
 
 /** Start a Meta resumable upload for a template sample. The platform token never leaves the server. */
@@ -495,7 +495,7 @@ export async function createWhatsAppTemplateMediaSession(
   const fileLength = Number(input?.fileLength);
   const maxBytes = TEMPLATE_MEDIA_MAX_BYTES[mimeType];
   if (!fileName || !maxBytes || !Number.isSafeInteger(fileLength) || fileLength < 1 || fileLength > maxBytes) {
-    throw new MetaChannelError(400, 'Unsupported template media. Use JPG/PNG (up to 5 MB), MP4 (up to 16 MB), or PDF (up to 25 MB).');
+    throw new MetaChannelError(400, 'Unsupported template media. Use JPG/PNG (up to 5 MB), MP4 (up to 16 MB), or PDF (up to 100 MB).');
   }
 
   const token = await getSecret(ctx, 'whatsapp_access_token');
@@ -507,8 +507,9 @@ export async function createWhatsAppTemplateMediaSession(
     method: 'POST',
     headers: { Authorization: 'Bearer ' + token },
   });
-  const metaUploadId = String(created?.id || '');
-  if (!/^upload:[A-Za-z0-9:_-]+$/.test(metaUploadId)) {
+  const metaUploadId = String(created?.id || '').trim();
+  // Upload IDs are opaque and may include an optional signed query suffix.
+  if (!metaUploadId.startsWith('upload:') || metaUploadId.length > 4096 || /[\u0000-\u0020#]/.test(metaUploadId)) {
     throw new MetaChannelError(502, 'Meta did not return a valid media upload session.');
   }
 
@@ -559,7 +560,12 @@ export async function uploadWhatsAppTemplateMediaChunk(
   }
 
   const token = await getSecret(ctx, 'whatsapp_access_token');
-  const response = await fetch(GRAPH + '/' + String(session.metaUploadId), {
+  const storedUploadId = String(session.metaUploadId || '');
+  const queryIndex = storedUploadId.indexOf('?');
+  const uploadPathId = queryIndex >= 0 ? storedUploadId.slice(0, queryIndex) : storedUploadId;
+  const uploadQuery = queryIndex >= 0 ? storedUploadId.slice(queryIndex) : '';
+  const uploadSessionPath = encodeURIComponent(uploadPathId).replace(/%3A/gi, ':');
+  const response = await fetch(GRAPH + '/' + uploadSessionPath + uploadQuery, {
     method: 'POST',
     headers: {
       Authorization: 'OAuth ' + token,

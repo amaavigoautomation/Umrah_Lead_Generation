@@ -38,6 +38,7 @@ type CarouselCardDraft = {
   id: number;
   fileName: string;
   mediaHandle: string;
+  previewUrl: string;
   body: string;
   url: string;
   uploading: boolean;
@@ -53,7 +54,7 @@ function findVariables(value: string): number[] {
 }
 
 function fileMime(file: File): string {
-  if (file.type) return file.type.toLowerCase();
+  if (file.type) return file.type.toLowerCase() === 'image/jpg' ? 'image/jpeg' : file.type.toLowerCase();
   const extension = file.name.split('.').pop()?.toLowerCase();
   if (extension === 'jpg' || extension === 'jpeg') return 'image/jpeg';
   if (extension === 'png') return 'image/png';
@@ -70,7 +71,7 @@ function formatBytes(bytes: number): string {
 function fileLimit(mimeType: string): number {
   if (mimeType === 'image/jpeg' || mimeType === 'image/png') return 5 * 1024 * 1024;
   if (mimeType === 'video/mp4') return 16 * 1024 * 1024;
-  if (mimeType === 'application/pdf') return 25 * 1024 * 1024;
+  if (mimeType === 'application/pdf') return 100 * 1024 * 1024;
   return 0;
 }
 
@@ -87,7 +88,7 @@ async function uploadMetaMedia(file: File, onProgress: (progress: number) => voi
   const maxSize = fileLimit(mimeType);
   if (!maxSize) throw new Error('Use JPG, PNG, MP4, or PDF files only.');
   if (file.size < 1 || file.size > maxSize) {
-    throw new Error('File is too large. Maximum sizes: image 5 MB, video 16 MB, PDF 25 MB.');
+    throw new Error('File is too large. Maximum sizes: image 5 MB, video 16 MB, PDF 100 MB.');
   }
 
   const sessionResponse = await fetch('/api/whatsapp/templates/media-session', {
@@ -113,7 +114,7 @@ async function uploadMetaMedia(file: File, onProgress: (progress: number) => voi
     onProgress(Math.round((Number(result.uploadedBytes || 0) / file.size) * 100));
     if (result.fileHandle) fileHandle = String(result.fileHandle);
   }
-  if (!fileHandle) throw new Error('The media upload finished without a Meta file handle. Please try again.');
+  if (!fileHandle) throw new Error('Meta accepted the file bytes but did not return a template media handle. Please select the file again.');
   return fileHandle;
 }
 
@@ -121,6 +122,7 @@ const newCard = (id: number): CarouselCardDraft => ({
   id,
   fileName: '',
   mediaHandle: '',
+  previewUrl: '',
   body: '',
   url: '',
   uploading: false,
@@ -148,6 +150,8 @@ export const WhatsAppMarketingTemplateForm: React.FC<Props> = ({ onCancel, onBac
   const [headerText, setHeaderText] = useState('');
   const [headerFileName, setHeaderFileName] = useState('');
   const [headerFileHandle, setHeaderFileHandle] = useState('');
+  const [headerPreviewUrl, setHeaderPreviewUrl] = useState('');
+  const [headerMediaMime, setHeaderMediaMime] = useState('');
   const [headerUploading, setHeaderUploading] = useState(false);
   const [headerProgress, setHeaderProgress] = useState(0);
 
@@ -166,6 +170,17 @@ export const WhatsAppMarketingTemplateForm: React.FC<Props> = ({ onCancel, onBac
 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!headerPreviewUrl) return;
+    return () => URL.revokeObjectURL(headerPreviewUrl);
+  }, [headerPreviewUrl]);
+
+  const cardPreviewKey = cards.map((card) => card.previewUrl).filter(Boolean).join('|');
+  useEffect(() => {
+    const urls = cards.map((card) => card.previewUrl).filter(Boolean);
+    return () => urls.forEach((url) => URL.revokeObjectURL(url));
+  }, [cardPreviewKey]);
 
   useEffect(() => {
     setSamples((previous) => {
@@ -198,6 +213,8 @@ export const WhatsAppMarketingTemplateForm: React.FC<Props> = ({ onCancel, onBac
     setError(null);
     setHeaderFileName(file.name);
     setHeaderFileHandle('');
+    setHeaderPreviewUrl(URL.createObjectURL(file));
+    setHeaderMediaMime(fileMime(file));
     setHeaderUploading(true);
     setHeaderProgress(0);
     try {
@@ -206,6 +223,8 @@ export const WhatsAppMarketingTemplateForm: React.FC<Props> = ({ onCancel, onBac
     } catch (e: any) {
       setError(e?.message || 'Header media upload failed.');
       setHeaderFileName('');
+      setHeaderFileHandle('');
+      setHeaderPreviewUrl('');
     } finally {
       setHeaderUploading(false);
     }
@@ -220,12 +239,12 @@ export const WhatsAppMarketingTemplateForm: React.FC<Props> = ({ onCancel, onBac
     }
     setError(null);
     setUploadingCardId(cardId);
-    updateCard(cardId, { fileName: file.name, mediaHandle: '', uploading: true, progress: 0 });
+    updateCard(cardId, { fileName: file.name, mediaHandle: '', previewUrl: URL.createObjectURL(file), uploading: true, progress: 0 });
     try {
       const handle = await uploadMetaMedia(file, (progress) => updateCard(cardId, { progress }));
       updateCard(cardId, { mediaHandle: handle, uploading: false, progress: 100 });
     } catch (e: any) {
-      updateCard(cardId, { fileName: '', mediaHandle: '', uploading: false, progress: 0 });
+      updateCard(cardId, { fileName: '', mediaHandle: '', previewUrl: '', uploading: false, progress: 0 });
       setError(e?.message || 'Carousel media upload failed.');
     } finally {
       setUploadingCardId(null);
@@ -357,6 +376,29 @@ export const WhatsAppMarketingTemplateForm: React.FC<Props> = ({ onCancel, onBac
 
             <div className="grid grid-cols-2 gap-3">
               <div>
+                <label className={labelClass}>Template category *</label>
+                <select
+                  className={inputClass}
+                  value="MARKETING"
+                  onChange={(event) => { if (event.target.value === 'UTILITY') onBack(); }}
+                >
+                  <option value="UTILITY">Utility</option>
+                  <option value="MARKETING">Marketing</option>
+                </select>
+              </div>
+              <div>
+                <label className={labelClass}>Marketing format *</label>
+                <select className={inputClass} value={templateFormat} onChange={(event) => { const next = event.target.value as TemplateFormat; setTemplateFormat(next); if (next === 'LIMITED_TIME_OFFER' && headerFormat !== 'IMAGE' && headerFormat !== 'VIDEO') { setHeaderFormat('IMAGE'); setHeaderFileName(''); setHeaderFileHandle(''); } setError(null); }}>
+                  <option value="STANDARD">Standard promotion</option>
+                  <option value="CAROUSEL">Media carousel</option>
+                  <option value="COUPON">Coupon code</option>
+                  <option value="LIMITED_TIME_OFFER">Limited-time offer</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
                 <label className={labelClass}>Language *</label>
                 <select className={inputClass} value={language} onChange={(event) => setLanguage(event.target.value)}>
                   <option value="en_US">English (US)</option><option value="en_GB">English (UK)</option><option value="hi">Hindi</option><option value="ar">Arabic</option><option value="ur">Urdu</option><option value="fr">French</option><option value="es">Spanish</option>
@@ -392,11 +434,11 @@ export const WhatsAppMarketingTemplateForm: React.FC<Props> = ({ onCancel, onBac
                   <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-3">
                     <label className="flex cursor-pointer items-center gap-2 text-sm font-semibold text-slate-700">
                       <Upload className="h-4 w-4 text-orange-500" /> {headerFileName ? 'Change media' : 'Choose ' + headerFormat.toLowerCase() + ' file'}
-                      <input className="hidden" type="file" accept={mediaAccept} onChange={(event) => void handleHeaderFile(event.target.files?.[0])} disabled={headerUploading} />
+                      <input className="hidden" type="file" accept={mediaAccept} onChange={(event) => { const selected = event.target.files?.[0]; event.currentTarget.value = ''; void handleHeaderFile(selected); }} disabled={headerUploading} />
                     </label>
-                    {headerFileName && <div className="mt-2 flex items-center justify-between gap-2 text-xs text-slate-600"><span className="truncate">{headerFileName}</span>{headerFileHandle ? <span className="inline-flex items-center gap-1 text-emerald-700"><CheckCircle2 className="h-3.5 w-3.5" /> Uploaded</span> : <span>{headerProgress}%</span>}</div>}
+                    {headerFileName && <div className="mt-2 flex items-center justify-between gap-2 text-xs text-slate-600"><span className="truncate">{headerFileName}</span>{headerFileHandle ? <span className="inline-flex items-center gap-1 text-emerald-700"><CheckCircle2 className="h-3.5 w-3.5" /> Uploaded to Meta</span> : headerUploading ? <span>{headerProgress}%</span> : <span className="text-rose-600">Upload incomplete</span>}</div>}
                     {headerUploading && <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-200"><div className="h-full rounded-full bg-orange-500 transition-all" style={{ width: headerProgress + '%' }} /></div>}
-                    <p className="mt-2 text-[11px] text-slate-500">JPG/PNG up to 5 MB · MP4 up to 16 MB · PDF up to 25 MB.</p>
+                    <p className="mt-2 text-[11px] text-slate-500">JPG/PNG up to 5 MB · MP4 up to 16 MB · PDF up to 100 MB.</p>
                   </div>
                 )}
               </div>
@@ -405,7 +447,7 @@ export const WhatsAppMarketingTemplateForm: React.FC<Props> = ({ onCancel, onBac
             {templateFormat === 'CAROUSEL' && (
               <div className="space-y-3 rounded-xl border border-slate-200 p-3">
                 <div className="grid grid-cols-2 gap-3">
-                  <div><label className={labelClass}>Card media *</label><select className={inputClass} value={carouselMediaFormat} onChange={(event) => { setCarouselMediaFormat(event.target.value as 'IMAGE' | 'VIDEO'); setCards((current) => current.map((card) => ({ ...card, fileName: '', mediaHandle: '', uploading: false, progress: 0 }))); }}><option value="IMAGE">Images</option><option value="VIDEO">Videos</option></select></div>
+                  <div><label className={labelClass}>Card media *</label><select className={inputClass} value={carouselMediaFormat} onChange={(event) => { setCarouselMediaFormat(event.target.value as 'IMAGE' | 'VIDEO'); setCards((current) => current.map((card) => ({ ...card, fileName: '', mediaHandle: '', previewUrl: '', uploading: false, progress: 0 }))); }}><option value="IMAGE">Images</option><option value="VIDEO">Videos</option></select></div>
                   <div><label className={labelClass}>Card button label *</label><input className={inputClass} value={carouselButtonText} onChange={(event) => setCarouselButtonText(event.target.value)} maxLength={25} placeholder="View details" /></div>
                 </div>
                 <div className="flex items-center justify-between">
@@ -415,9 +457,11 @@ export const WhatsAppMarketingTemplateForm: React.FC<Props> = ({ onCancel, onBac
                 {cards.map((card, index) => (
                   <div key={card.id} className="space-y-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
                     <div className="flex items-center justify-between"><span className="text-xs font-bold text-slate-700">Card {index + 1}</span><button type="button" onClick={() => setCards((current) => current.length <= 2 ? current : current.filter((item) => item.id !== card.id))} disabled={cards.length <= 2} className="rounded p-1 text-slate-400 hover:bg-rose-50 hover:text-rose-600 disabled:opacity-30" title="Remove card"><Trash2 className="h-4 w-4" /></button></div>
-                    <label className="flex cursor-pointer items-center gap-2 text-xs font-semibold text-slate-700"><ImagePlus className="h-4 w-4 text-orange-500" /> {card.fileName || 'Upload card ' + carouselMediaFormat.toLowerCase()}<input className="hidden" type="file" accept={cardAccept} onChange={(event) => void handleCardFile(card.id, event.target.files?.[0])} disabled={uploadingCardId !== null} /></label>
+                    <label className="flex cursor-pointer items-center gap-2 text-xs font-semibold text-slate-700"><ImagePlus className="h-4 w-4 text-orange-500" /> {card.fileName || 'Upload card ' + carouselMediaFormat.toLowerCase()}<input className="hidden" type="file" accept={cardAccept} onChange={(event) => { const selected = event.target.files?.[0]; event.currentTarget.value = ''; void handleCardFile(card.id, selected); }} disabled={uploadingCardId !== null} /></label>
                     {card.uploading && <div className="h-1.5 overflow-hidden rounded-full bg-slate-200"><div className="h-full rounded-full bg-orange-500" style={{ width: card.progress + '%' }} /></div>}
-                    {card.mediaHandle && <p className="text-[11px] text-emerald-700">Media uploaded to Meta</p>}
+                    {card.previewUrl && carouselMediaFormat === 'IMAGE' && <img src={card.previewUrl} alt={'Carousel card ' + (index + 1)} className="max-h-36 w-full rounded-md object-cover" />}
+                    {card.previewUrl && carouselMediaFormat === 'VIDEO' && <video src={card.previewUrl} controls className="max-h-36 w-full rounded-md bg-slate-900" />}
+                    {card.mediaHandle && <p className="text-[11px] font-semibold text-emerald-700">Media uploaded to Meta and attached</p>}
                     <input className={inputClass} value={card.body} onChange={(event) => updateCard(card.id, { body: event.target.value })} maxLength={160} placeholder="Optional card description (max 160 characters)" />
                     <input className={inputClass} type="url" value={card.url} onChange={(event) => updateCard(card.id, { url: event.target.value })} placeholder="https://example.com/package" />
                   </div>
@@ -487,7 +531,13 @@ export const WhatsAppMarketingTemplateForm: React.FC<Props> = ({ onCancel, onBac
               <div className="ml-auto max-w-[360px] space-y-3 rounded-2xl rounded-tr-sm bg-emerald-50 p-3 shadow-sm">
                 {templateFormat === 'LIMITED_TIME_OFFER' && <div className="rounded-lg bg-amber-100 px-3 py-2 text-center text-xs font-bold text-amber-900">{offerText}{offerHasExpiration ? ' · Countdown shown when sent' : ''}</div>}
                 {headerText && headerFormat === 'TEXT' && templateFormat !== 'CAROUSEL' && <p className="text-sm font-bold text-slate-900">{headerText}</p>}
-                {headerFileName && <div className="rounded-lg border border-emerald-200 bg-white/80 p-3 text-xs text-slate-600">{headerFormat === 'IMAGE' ? <ImagePlus className="mb-1 h-5 w-5" /> : headerFormat === 'VIDEO' ? <Film className="mb-1 h-5 w-5" /> : <FileText className="mb-1 h-5 w-5" />}{headerFileName}</div>}
+                {headerFileName && <div className="overflow-hidden rounded-lg border border-emerald-200 bg-white/80 p-2 text-xs text-slate-600">
+                  {headerPreviewUrl && headerMediaMime.startsWith('image/') && <img src={headerPreviewUrl} alt="Selected template header" className="mb-2 max-h-44 w-full rounded-md object-cover" />}
+                  {headerPreviewUrl && headerMediaMime === 'video/mp4' && <video src={headerPreviewUrl} controls className="mb-2 max-h-44 w-full rounded-md bg-slate-900" />}
+                  {headerFormat === 'IMAGE' ? <ImagePlus className="mb-1 h-5 w-5" /> : headerFormat === 'VIDEO' ? <Film className="mb-1 h-5 w-5" /> : <FileText className="mb-1 h-5 w-5" />}
+                  <span>{headerFileName}</span>
+                  <span className="ml-2 font-semibold text-emerald-700">{headerFileHandle ? 'Attached' : headerUploading ? 'Uploading…' : 'Selected'}</span>
+                </div>}
                 <p className="whitespace-pre-wrap text-sm leading-relaxed text-slate-800">{previewBody}</p>
                 {templateFormat === 'CAROUSEL' && <div className="space-y-2">{cards.map((card, index) => <div key={card.id} className="rounded-lg border border-emerald-200 bg-white p-2"><p className="text-[11px] font-semibold text-slate-500">Card {index + 1} · {card.fileName || 'Media not selected'}</p>{card.body && <p className="mt-1 text-xs text-slate-800">{card.body}</p>}<p className="mt-1 text-[11px] font-semibold text-blue-700">{carouselButtonText}</p></div>)}</div>}
                 {templateFormat === 'COUPON' && <div className="rounded-lg border border-emerald-200 bg-white px-3 py-2 text-center text-xs font-bold text-slate-800">Copy code: {couponCodeExample}</div>}

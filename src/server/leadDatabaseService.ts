@@ -225,12 +225,20 @@ export async function importLeadDatabaseRows(
 
   const sourceFileName = cleanString(input.sourceFileName || 'Uploaded leads', 240);
   const normalized = normalizeRows(databaseId, input.rows, sourceFileName);
-  const seenInFile = new Map<string, number>();
+  // Email is the primary identity. Phone is the fallback only when the incoming row has no email.
+  // Track both values so an email-less row also matches an older record that did have an email.
+  const seenEmails = new Map<string, number>();
+  const seenPhones = new Map<string, number>();
+  const seenFallback = new Map<string, number>();
   const duplicates: Array<Record<string, unknown>> = [];
   const unique: NormalizedEntry[] = [];
 
   for (const entry of normalized.valid) {
-    const previous = seenInFile.get(entry.identityKey);
+    const previous = entry.normalizedEmail
+      ? seenEmails.get(entry.normalizedEmail)
+      : entry.normalizedPhone
+        ? seenPhones.get(entry.normalizedPhone)
+        : seenFallback.get(entry.identityKey);
     if (previous !== undefined) {
       duplicates.push({
         rowNumber: entry.sourceRowNumber,
@@ -240,24 +248,56 @@ export async function importLeadDatabaseRows(
       });
       continue;
     }
-    seenInFile.set(entry.identityKey, entry.sourceRowNumber);
+    if (entry.normalizedEmail) seenEmails.set(entry.normalizedEmail, entry.sourceRowNumber);
+    if (entry.normalizedPhone && !seenPhones.has(entry.normalizedPhone)) {
+      seenPhones.set(entry.normalizedPhone, entry.sourceRowNumber);
+    }
+    if (!entry.normalizedEmail && !entry.normalizedPhone) {
+      seenFallback.set(entry.identityKey, entry.sourceRowNumber);
+    }
     unique.push(entry);
   }
 
-  const existingKeys = new Set<string>();
-  const identityKeys = Array.from(new Set(unique.map((entry) => entry.identityKey)));
-  for (const batch of chunks(identityKeys, 30)) {
+  const existingEmails = new Set<string>();
+  const existingPhones = new Set<string>();
+  const emails = Array.from(new Set(unique.map((entry) => entry.normalizedEmail).filter(Boolean)));
+  const phones = Array.from(new Set(unique.filter((entry) => !entry.normalizedEmail).map((entry) => entry.normalizedPhone).filter(Boolean)));
+  for (const batch of chunks(emails, 30)) {
+    const existing = await getDocs(query(
+      repo.leadDatabaseEntries(),
+      where('databaseId', '==', databaseId),
+      where('normalizedEmail', 'in', batch),
+    ));
+    existing.forEach((doc) => existingEmails.add(String((doc.data() as any).normalizedEmail || '')));
+  }
+  for (const batch of chunks(phones, 30)) {
+    const existing = await getDocs(query(
+      repo.leadDatabaseEntries(),
+      where('databaseId', '==', databaseId),
+      where('normalizedPhone', 'in', batch),
+    ));
+    existing.forEach((doc) => existingPhones.add(String((doc.data() as any).normalizedPhone || '')));
+  }
+
+  const existingFallbackKeys = new Set<string>();
+  const fallbackKeys = Array.from(new Set(unique.filter((entry) => !entry.normalizedEmail && !entry.normalizedPhone).map((entry) => entry.identityKey)));
+  for (const batch of chunks(fallbackKeys, 30)) {
     const existing = await getDocs(query(
       repo.leadDatabaseEntries(),
       where('databaseId', '==', databaseId),
       where('identityKey', 'in', batch),
     ));
-    existing.forEach((doc) => existingKeys.add(String((doc.data() as any).identityKey || '')));
+    existing.forEach((doc) => existingFallbackKeys.add(String((doc.data() as any).identityKey || '')));
   }
 
   const toWrite: NormalizedEntry[] = [];
   for (const entry of unique) {
-    if (existingKeys.has(entry.identityKey)) {
+    const exists = entry.normalizedEmail
+      ? existingEmails.has(entry.normalizedEmail)
+      : entry.normalizedPhone
+        ? existingPhones.has(entry.normalizedPhone)
+        : existingFallbackKeys.has(entry.identityKey);
+    if (exists) {
       duplicates.push({
         rowNumber: entry.sourceRowNumber,
         identity: entry.email || entry.phone || entry.name,

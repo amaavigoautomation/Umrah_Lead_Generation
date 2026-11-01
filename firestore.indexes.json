@@ -203,6 +203,34 @@
           "order": "ASCENDING"
         },
         {
+          "fieldPath": "normalizedEmail",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "lead_database_entries",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "databaseId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "normalizedPhone",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "lead_database_entries",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "databaseId",
+          "order": "ASCENDING"
+        },
+        {
           "fieldPath": "identityKey",
           "order": "ASCENDING"
         }

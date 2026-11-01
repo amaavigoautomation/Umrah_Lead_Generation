@@ -143,7 +143,7 @@ export function escapeEmailHtml(value:unknown):string {
 }
 function num(v:unknown,d:number,min:number,max:number):number {const n=Number(v);return Number.isFinite(n)?Math.round(Math.max(min,Math.min(max,n))):d;}
 function safeStyle(style:string):string {
- const allowed=['color','background-color','font-family','font-size','font-weight','font-style','line-height','text-align','text-decoration','text-transform','letter-spacing','word-break','white-space',
+ const allowed=['color','background','background-color','font-family','font-size','font-weight','font-style','line-height','text-align','text-decoration','text-transform','letter-spacing','word-break','white-space',
   'padding','padding-top','padding-right','padding-bottom','padding-left','margin','margin-top','margin-right','margin-bottom','margin-left',
   'width','max-width','min-width','height','max-height','border','border-top','border-right','border-bottom','border-left','border-radius',
   'border-collapse','vertical-align','display','-webkit-text-size-adjust','-ms-text-size-adjust','mso-table-lspace','mso-table-rspace'];
@@ -197,6 +197,7 @@ export function sanitizeCustomEmailHtml(input:unknown):string {
   while((m=pattern.exec(rawAttrs))!==null){
    const name=m[1].toLowerCase(),value=m[2].replace(/^["']|["']$/g,'');
    if(name==='style'){const safe=safeStyle(value);if(safe)attrs.push('style="'+escapeEmailHtml(safe)+'"');}
+   else if(['class','id'].includes(name)&&/^[a-zA-Z0-9 _-]{0,160}$/.test(value))attrs.push(name+'="'+escapeEmailHtml(value)+'"');
    else if(['align','valign','width','height','cellpadding','cellspacing','border','colspan','rowspan','role','alt','title','bgcolor'].includes(name)&&/^[a-z0-9 #.,%_-]{0,160}$/i.test(value))attrs.push(name+'="'+escapeEmailHtml(value)+'"');
    else if(name==='href'&&tag==='a'){const safe=isSafeEmailUrl(value,false);if(safe)attrs.push('href="'+escapeEmailHtml(safe)+'"');}
    else if(name==='src'&&tag==='img'){const safe=isSafeEmailUrl(value,true);if(safe)attrs.push('src="'+escapeEmailHtml(safe)+'"');}

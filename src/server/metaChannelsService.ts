@@ -866,7 +866,7 @@ async function processInbound(tenantId: string, event: InboundEvent, eventId: st
   // Human Handoff: a customer asking for a person (or clearly frustrated) silences the AI for this conversation.
   if (event.hasText && Boolean(event.text)) {
     try {
-      const handoff = await evaluateHumanHandoff(ctx, { text: event.text, thread, settings });
+      const handoff = await evaluateHumanHandoff(ctx, { text: event.text, thread });
       if (handoff.matched) {
         await persistHumanHandoff(ctx, conversationId, handoff);
         await updateDoc(eventRef, { status: 'handoff', reason: describeHandoff(handoff), processedAt: new Date().toISOString(), conversationId });

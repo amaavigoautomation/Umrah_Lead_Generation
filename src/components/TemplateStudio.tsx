@@ -70,9 +70,15 @@ export const TemplateStudio: React.FC<Props> = ({
         </div>
       </div>
 
-      {section === 'conversation' && <EmailDesignStudio tenantId={tenantId} purpose="conversation" />}
-      {section === 'campaign' && <EmailDesignStudio tenantId={tenantId} purpose="campaign" initialTemplateId={pendingTemplateId} />}
-      {section === 'whatsapp' && <WhatsAppTemplatesPanel canEdit={canManageWhatsAppTemplates} />}
+      <div className={section === 'conversation' ? 'block' : 'hidden'} aria-hidden={section !== 'conversation'}>
+        <EmailDesignStudio tenantId={tenantId} purpose="conversation" />
+      </div>
+      <div className={section === 'campaign' ? 'block' : 'hidden'} aria-hidden={section !== 'campaign'}>
+        <EmailDesignStudio tenantId={tenantId} purpose="campaign" initialTemplateId={pendingTemplateId} />
+      </div>
+      <div className={section === 'whatsapp' ? 'block' : 'hidden'} aria-hidden={section !== 'whatsapp'}>
+        <WhatsAppTemplatesPanel canEdit={canManageWhatsAppTemplates} />
+      </div>
     </div>
   );
 };

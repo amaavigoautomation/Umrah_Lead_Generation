@@ -1,13 +1,14 @@
-export type EmailDesignBlockType = 'logo' | 'heading' | 'text' | 'content' | 'image' | 'button' | 'divider' | 'spacer' | 'footer' | 'social';
+export type EmailDesignBlockType = 'logo' | 'hero' | 'heading' | 'text' | 'content' | 'image' | 'button' | 'divider' | 'spacer' | 'footer' | 'social';
 export type EmailDesignSource = 'PREDEFINED' | 'CUSTOM' | 'AI';
 export interface EmailDesignTheme {
   pageBackground:string; cardBackground:string; primaryColor:string; accentColor:string;
   textColor:string; mutedColor:string; fontFamily:string; contentWidth:number; cardRadius:number;
+  headingFontSize:number; bodyFontSize:number; bodyLineHeight:number;
 }
 export interface EmailDesignBlock {
   id:string; type:EmailDesignBlockType; text?:string; url?:string; altText?:string;
   align?:'left'|'center'|'right'; width?:number; fontSize?:number; color?:string;
-  backgroundColor?:string; padding?:number; enabled?:boolean;
+  backgroundColor?:string; padding?:number; enabled?:boolean; eyebrow?:string; secondaryText?:string;
   links?:Array<{label:string;url:string}>;
 }
 export interface EmailBrandProfile {
@@ -23,6 +24,7 @@ export const DEFAULT_EMAIL_DESIGN_ID = 'modern-professional';
 export const DEFAULT_EMAIL_DESIGN_THEME:EmailDesignTheme = {
   pageBackground:'#F3F5F8', cardBackground:'#FFFFFF', primaryColor:'#183B66', accentColor:'#E68A35',
   textColor:'#263445', mutedColor:'#718096', fontFamily:'Arial, Helvetica, sans-serif', contentWidth:600, cardRadius:12,
+  headingFontSize:28, bodyFontSize:15, bodyLineHeight:1.72,
 };
 let blockCounter=0;
 export function createEmailDesignBlockId(prefix='block'):string {
@@ -34,55 +36,95 @@ const p=(id:string,name:string,description:string,category:string,theme:Partial<
   id,name,description,category,source:'PREDEFINED',version:1,theme:{...DEFAULT_EMAIL_DESIGN_THEME,...theme},blocks,
 });
 export const PREDEFINED_EMAIL_DESIGNS:EmailDesignTemplate[] = [
- p('modern-professional','Modern Professional','A polished, versatile business email with a confident brand header, generous whitespace and a clear reading hierarchy.','Business',
-  {primaryColor:'#183B66',accentColor:'#E68A35'},[
-   b('logo','logo',{align:'left',width:168,padding:28}),b('rule-top','divider',{color:'#E7ECF2',padding:0}),
-   b('heading','heading',{text:'A note from {{companyName}}',fontSize:22,color:'#183B66',padding:24}),
-   b('content','content',{padding:8}),b('rule-bottom','divider',{color:'#E7ECF2',padding:10}),b('footer','footer',{padding:24}),
+ p('modern-professional','Modern Professional','Confident business email with a branded header, editorial hero, clear message area and refined footer.','Business',
+  {primaryColor:'#173B63',accentColor:'#D97842',pageBackground:'#F2F5F9',cardBackground:'#FFFFFF',textColor:'#25364A',mutedColor:'#718096',headingFontSize:29,bodyFontSize:15,bodyLineHeight:1.75,cardRadius:14},[
+   b('brand-header','logo',{align:'left',width:170,padding:24,backgroundColor:'#FFFFFF',color:'#173B63'}),
+   b('hero','hero',{eyebrow:'A NOTE FROM {{companyName}}',text:'A better way to move business forward',secondaryText:'Clear updates, thoughtful ideas and the next step for your team.',fontSize:29,align:'left',padding:30,backgroundColor:'#EAF1F8',color:'#173B63'}),
+   b('content','content',{padding:10}),b('primary-cta','button',{text:'Explore the next step',align:'left',padding:12,backgroundColor:'#173B63',color:'#FFFFFF'}),
+   b('footer','footer',{padding:24,backgroundColor:'#F2F5F9',color:'#718096'}),
   ]),
- p('executive-minimal','Executive Minimal','Understated, editorial correspondence for executive conversations and high-trust B2B relationships.','Minimal',
-  {primaryColor:'#202A35',accentColor:'#A88B5B',pageBackground:'#F7F7F5',contentWidth:620,cardRadius:4,fontFamily:'Georgia, Times New Roman, serif'},[
-   b('logo','logo',{align:'left',width:150,padding:34}),b('heading','heading',{text:'A personal note',fontSize:24,color:'#202A35',padding:24}),
-   b('content','content',{padding:8}),b('rule','divider',{color:'#E7E3DC',padding:18}),b('footer','footer',{padding:26}),
+ p('executive-minimal','Executive Minimal','Understated, letter-style design for founder, leadership and high-trust B2B communication.','Executive',
+  {primaryColor:'#202B36',accentColor:'#B18B59',pageBackground:'#F7F6F2',cardBackground:'#FFFEFB',textColor:'#303A42',mutedColor:'#7B817B',fontFamily:'Georgia, Times New Roman, serif',contentWidth:620,cardRadius:3,headingFontSize:30,bodyFontSize:16,bodyLineHeight:1.8},[
+   b('brand-header','logo',{align:'left',width:145,padding:30,backgroundColor:'#FFFEFB',color:'#202B36'}),b('top-rule','divider',{color:'#DCD6CA',padding:2}),
+   b('hero','hero',{eyebrow:'PERSONAL CORRESPONDENCE',text:'A thoughtful note',secondaryText:'A considered perspective for our next conversation.',fontSize:30,align:'left',padding:24,backgroundColor:'#F3F0E9',color:'#202B36'}),
+   b('content','content',{padding:12}),b('footer','footer',{padding:26,backgroundColor:'#F3F0E9',color:'#77756F'}),
   ]),
- p('premium-concierge','Premium Concierge','A refined luxury and hospitality layout with deep navy, warm metallic accents and elegant spacing.','Luxury & Hospitality',
-  {pageBackground:'#101A2A',cardBackground:'#17263B',primaryColor:'#D9B77A',accentColor:'#E6C98D',textColor:'#F3F0E9',mutedColor:'#B9C3D0',fontFamily:'Georgia, Times New Roman, serif',contentWidth:620,cardRadius:3},[
-   b('logo','logo',{align:'center',width:180,padding:34}),b('rule','divider',{color:'#7B6745',padding:4}),
-   b('heading','heading',{text:'A thoughtful note for you',fontSize:25,color:'#E6C98D',align:'center',padding:30}),
-   b('content','content',{padding:12}),b('footer','footer',{align:'center',padding:32}),
+ p('premium-concierge','Premium Concierge','Sophisticated hospitality and luxury layout with deep ink tones, warm metallic accents and generous spacing.','Luxury & Hospitality',
+  {pageBackground:'#101927',cardBackground:'#18263A',primaryColor:'#C7A56B',accentColor:'#E4C58D',textColor:'#F3F0E8',mutedColor:'#B7C0CA',fontFamily:'Georgia, Times New Roman, serif',contentWidth:620,cardRadius:3,headingFontSize:30,bodyFontSize:15,bodyLineHeight:1.8},[
+   b('brand-header','logo',{align:'center',width:180,padding:30,backgroundColor:'#18263A',color:'#E4C58D'}),
+   b('hero','hero',{eyebrow:'A PERSONALIZED EXPERIENCE',text:'Consider every detail taken care of',secondaryText:'Exceptional service begins with a thoughtful welcome.',fontSize:30,align:'center',padding:34,backgroundColor:'#24364D',color:'#F2DFC0'}),
+   b('content','content',{padding:12}),b('primary-cta','button',{text:'Discover your experience',align:'center',padding:18,backgroundColor:'#C7A56B',color:'#172336'}),
+   b('footer','footer',{align:'center',padding:28,backgroundColor:'#101927',color:'#B7C0CA'}),
   ]),
- p('saas-modern','SaaS Product Update','A crisp product-led design with a clear header and focused message area.','Technology',
-  {primaryColor:'#273A8A',accentColor:'#5B7CFA',pageBackground:'#F4F6FC',textColor:'#273044',cardRadius:16},[
-   b('logo','logo',{align:'left',width:154,padding:24}),b('label','text',{text:'CUSTOMER COMMUNICATION',fontSize:10,color:'#5B7CFA',padding:8}),
-   b('heading','heading',{text:'Keeping your team moving forward',fontSize:23,color:'#273A8A',padding:14}),
-   b('content','content',{padding:8}),b('footer','footer',{padding:22}),
+ p('saas-modern','SaaS Product Update','Product-led design with a clear feature announcement, readable copy and high-contrast action.','Technology',
+  {primaryColor:'#3446A5',accentColor:'#667BFA',pageBackground:'#F3F5FC',cardBackground:'#FFFFFF',textColor:'#29334B',mutedColor:'#737D98',cardRadius:16,headingFontSize:28,bodyFontSize:15,bodyLineHeight:1.7},[
+   b('brand-header','logo',{align:'left',width:154,padding:22,backgroundColor:'#FFFFFF',color:'#3446A5'}),
+   b('hero','hero',{eyebrow:'PRODUCT UPDATE',text:'More clarity. Less busywork.',secondaryText:'A better way for your team to stay focused and keep work moving.',fontSize:29,align:'left',padding:28,backgroundColor:'#EEF1FF',color:'#263987'}),
+   b('content','content',{padding:12}),b('primary-cta','button',{text:'See what is new',align:'left',padding:14,backgroundColor:'#5266DA',color:'#FFFFFF'}),
+   b('footer','footer',{padding:22,backgroundColor:'#F3F5FC',color:'#737D98'}),
   ]),
- p('warm-customer-care','Warm Customer Care','Friendly, reassuring and accessible, with soft colours and a human support tone.','Customer Support',
-  {primaryColor:'#285C51',accentColor:'#D98B68',pageBackground:'#F5F7F3',textColor:'#34443F',mutedColor:'#71827B',cardRadius:18},[
-   b('logo','logo',{align:'left',width:150,padding:26}),b('heading','heading',{text:'We are here to help',fontSize:23,color:'#285C51',padding:20}),
-   b('content','content',{padding:8}),b('rule','divider',{color:'#E4EBE4',padding:18}),b('footer','footer',{padding:22}),
+ p('warm-customer-care','Warm Customer Care','Approachable, reassuring customer email with gentle colour, friendly typography and clear support details.','Customer Support',
+  {primaryColor:'#28665D',accentColor:'#D58E70',pageBackground:'#F3F7F4',cardBackground:'#FFFFFF',textColor:'#344741',mutedColor:'#74857D',cardRadius:18,headingFontSize:27,bodyFontSize:15,bodyLineHeight:1.78},[
+   b('brand-header','logo',{align:'left',width:150,padding:24,backgroundColor:'#FFFFFF',color:'#28665D'}),
+   b('hero','hero',{eyebrow:'WE ARE HERE FOR YOU',text:'How can we make things easier?',secondaryText:'A friendly update from a team that is always happy to help.',fontSize:27,align:'left',padding:26,backgroundColor:'#E7F1EC',color:'#20584F'}),
+   b('content','content',{padding:12}),b('primary-cta','button',{text:'Talk to our team',align:'left',padding:12,backgroundColor:'#28665D',color:'#FFFFFF'}),
+   b('footer','footer',{padding:24,backgroundColor:'#F3F7F4',color:'#74857D'}),
   ]),
- p('creative-studio','Creative Studio','A distinctive, contemporary style for agencies, studios and creative businesses.','Creative',
-  {primaryColor:'#32265F',accentColor:'#E76F51',pageBackground:'#F3F0FA',textColor:'#332F40',mutedColor:'#777184',contentWidth:640,cardRadius:20},[
-   b('logo','logo',{align:'left',width:160,padding:28}),b('accent','divider',{color:'#E76F51',padding:2}),
-   b('heading','heading',{text:'Ideas, thoughtfully delivered.',fontSize:27,color:'#32265F',padding:22}),
-   b('content','content',{padding:8}),b('footer','footer',{padding:26}),
+ p('creative-studio','Creative Studio','Expressive design for agencies and creative teams, balancing colour, oversized type and whitespace.','Creative',
+  {primaryColor:'#34245E',accentColor:'#F07859',pageBackground:'#F4F0FA',cardBackground:'#FFFFFF',textColor:'#332D43',mutedColor:'#777187',contentWidth:640,cardRadius:18,headingFontSize:32,bodyFontSize:15,bodyLineHeight:1.72},[
+   b('brand-header','logo',{align:'left',width:160,padding:25,backgroundColor:'#FFFFFF',color:'#34245E'}),
+   b('hero','hero',{eyebrow:'IDEAS IN MOTION',text:'Make your next big idea happen.',secondaryText:'A fresh perspective, a little momentum and a creative partner for what comes next.',fontSize:32,align:'left',padding:32,backgroundColor:'#34245E',color:'#FFFFFF'}),
+   b('content','content',{padding:12}),b('primary-cta','button',{text:'Let us create together',align:'left',padding:14,backgroundColor:'#F07859',color:'#FFFFFF'}),
+   b('footer','footer',{padding:24,backgroundColor:'#EEE9F5',color:'#777187'}),
   ]),
- p('classic-editorial','Classic Editorial','A timeless letter-style format with restrained typography and clear reading hierarchy.','Professional Services',
-  {primaryColor:'#314454',accentColor:'#B88A58',pageBackground:'#F7F5F0',cardBackground:'#FFFEFB',textColor:'#303A40',mutedColor:'#7B817F',fontFamily:'Georgia, Times New Roman, serif',contentWidth:620,cardRadius:2},[
-   b('logo','logo',{align:'center',width:160,padding:32}),b('rule','divider',{color:'#DDD6C9',padding:8}),
-   b('heading','heading',{text:'Correspondence',fontSize:22,color:'#314454',align:'center',padding:20}),
-   b('content','content',{padding:10}),b('footer','footer',{align:'center',padding:26}),
+ p('classic-editorial','Classic Editorial','Publication-inspired design with restrained typography and a calm reading experience.','Newsletter',
+  {primaryColor:'#334C5D',accentColor:'#B68B5B',pageBackground:'#F5F2EB',cardBackground:'#FFFEFA',textColor:'#303A40',mutedColor:'#7C817E',fontFamily:'Georgia, Times New Roman, serif',contentWidth:620,cardRadius:2,headingFontSize:30,bodyFontSize:16,bodyLineHeight:1.85},[
+   b('brand-header','logo',{align:'center',width:160,padding:28,backgroundColor:'#FFFEFA',color:'#334C5D'}),b('top-rule','divider',{color:'#D9D1C4',padding:2}),
+   b('hero','hero',{eyebrow:'THE MONTHLY EDITION',text:'Ideas worth your time.',secondaryText:'A considered selection of updates, insights and perspectives.',fontSize:30,align:'center',padding:26,backgroundColor:'#F1EDE4',color:'#334C5D'}),
+   b('content','content',{padding:14}),b('bottom-rule','divider',{color:'#D9D1C4',padding:8}),b('footer','footer',{align:'center',padding:24,backgroundColor:'#F1EDE4',color:'#7C817E'}),
   ]),
- p('bold-business','Bold Business','A confident high-contrast design for important client communications.','Business',
-  {primaryColor:'#111827',accentColor:'#F2A900',pageBackground:'#EEF1F5',textColor:'#273244',mutedColor:'#697586',cardRadius:8},[
-   b('logo','logo',{align:'left',width:160,padding:26}),b('heading','heading',{text:'Moving business forward',fontSize:25,color:'#111827',padding:18}),
-   b('accent','divider',{color:'#F2A900',padding:3}),b('content','content',{padding:14}),b('footer','footer',{padding:24}),
+ p('bold-business','Bold Business','High-contrast campaign design for important announcements, strong offers and decisive calls to action.','Business',
+  {primaryColor:'#161B27',accentColor:'#F2B544',pageBackground:'#EEF0F3',cardBackground:'#FFFFFF',textColor:'#273244',mutedColor:'#6D7787',cardRadius:8,headingFontSize:31,bodyFontSize:15,bodyLineHeight:1.7},[
+   b('brand-header','logo',{align:'left',width:160,padding:24,backgroundColor:'#161B27',color:'#FFFFFF'}),
+   b('hero','hero',{eyebrow:'BUILT FOR WHAT IS NEXT',text:'Big goals deserve bold action.',secondaryText:'Make the next move with a partner focused on measurable progress.',fontSize:31,align:'left',padding:30,backgroundColor:'#F2B544',color:'#161B27'}),
+   b('content','content',{padding:12}),b('primary-cta','button',{text:'Take the next step',align:'left',padding:14,backgroundColor:'#161B27',color:'#FFFFFF'}),
+   b('footer','footer',{padding:22,backgroundColor:'#EEF0F3',color:'#6D7787'}),
   ]),
- p('clean-healthcare','Clean & Reassuring','A calm, accessible layout for healthcare, wellness and service-led communications.','Healthcare & Wellness',
-  {primaryColor:'#176B70',accentColor:'#55A6A0',pageBackground:'#F0F7F7',textColor:'#2D4548',mutedColor:'#70878A',cardRadius:14},[
-   b('logo','logo',{align:'left',width:150,padding:26}),b('heading','heading',{text:'A clear update for you',fontSize:22,color:'#176B70',padding:18}),
-   b('content','content',{padding:8}),b('footer','footer',{padding:24}),
+ p('clean-healthcare','Clean & Reassuring','Accessible, calm design for healthcare, wellness and service-led customer communication.','Healthcare & Wellness',
+  {primaryColor:'#176B70',accentColor:'#58AAA1',pageBackground:'#F0F7F7',cardBackground:'#FFFFFF',textColor:'#2D4548',mutedColor:'#70878A',cardRadius:14,headingFontSize:27,bodyFontSize:15,bodyLineHeight:1.8},[
+   b('brand-header','logo',{align:'left',width:150,padding:24,backgroundColor:'#FFFFFF',color:'#176B70'}),
+   b('hero','hero',{eyebrow:'A CLEAR UPDATE FOR YOU',text:'Your wellbeing comes first.',secondaryText:'Helpful information, clear next steps and support when you need it.',fontSize:27,align:'left',padding:28,backgroundColor:'#E4F2F0',color:'#176B70'}),
+   b('content','content',{padding:12}),b('primary-cta','button',{text:'View your information',align:'left',padding:12,backgroundColor:'#176B70',color:'#FFFFFF'}),
+   b('footer','footer',{padding:24,backgroundColor:'#F0F7F7',color:'#70878A'}),
+  ]),
+ p('webinar-invitation','Webinar Invitation','Event invitation that puts the topic, event details and registration action front and centre.','Events',
+  {primaryColor:'#4C3A91',accentColor:'#F1A65B',pageBackground:'#F4F2FA',cardBackground:'#FFFFFF',textColor:'#302B43',mutedColor:'#7B7691',cardRadius:14,headingFontSize:30,bodyFontSize:15,bodyLineHeight:1.75},[
+   b('brand-header','logo',{align:'left',width:150,padding:22,backgroundColor:'#FFFFFF',color:'#4C3A91'}),
+   b('hero','hero',{eyebrow:'YOU ARE INVITED · LIVE SESSION',text:'A smarter approach starts with one conversation.',secondaryText:'Join us for practical insights, real examples and an open Q&A with our team.',fontSize:29,align:'center',padding:32,backgroundColor:'#35266D',color:'#FFFFFF'}),
+   b('event-details','text',{text:'LIVE WEBINAR  ·  45 MINUTES  ·  ONLINE',fontSize:12,color:'#4C3A91',align:'center',padding:16}),
+   b('content','content',{padding:10}),b('primary-cta','button',{text:'Reserve your place',align:'center',padding:16,backgroundColor:'#E89A4B',color:'#2B2345'}),
+   b('footer','footer',{align:'center',padding:24,backgroundColor:'#F4F2FA',color:'#7B7691'}),
+  ]),
+ p('ecommerce-promotion','Seasonal Promotion','Retail-ready campaign with a warm offer panel, confident headline and prominent shopping action.','E-commerce',
+  {primaryColor:'#A33B32',accentColor:'#F0B35D',pageBackground:'#FBF4EF',cardBackground:'#FFFFFF',textColor:'#382F2C',mutedColor:'#8A7770',cardRadius:10,headingFontSize:31,bodyFontSize:15,bodyLineHeight:1.7},[
+   b('brand-header','logo',{align:'center',width:155,padding:22,backgroundColor:'#FFFFFF',color:'#A33B32'}),
+   b('hero','hero',{eyebrow:'A LITTLE SOMETHING FOR YOU',text:'Good things are worth celebrating.',secondaryText:'Explore a limited-time collection selected with you in mind.',fontSize:30,align:'center',padding:30,backgroundColor:'#F6E4D9',color:'#8F332D'}),
+   b('content','content',{padding:12}),b('primary-cta','button',{text:'Shop the collection',align:'center',padding:16,backgroundColor:'#A33B32',color:'#FFFFFF'}),
+   b('footer','footer',{align:'center',padding:22,backgroundColor:'#FBF4EF',color:'#8A7770'}),
+  ]),
+ p('event-announcement','Event Announcement','Dramatic event announcement with a dark feature panel, event context and clear RSVP action.','Events',
+  {primaryColor:'#172E43',accentColor:'#D6A96A',pageBackground:'#F1F4F6',cardBackground:'#FFFFFF',textColor:'#2C3D4B',mutedColor:'#73808A',cardRadius:8,headingFontSize:30,bodyFontSize:15,bodyLineHeight:1.75},[
+   b('brand-header','logo',{align:'left',width:155,padding:22,backgroundColor:'#FFFFFF',color:'#172E43'}),
+   b('hero','hero',{eyebrow:'SAVE THE DATE',text:'An evening of ideas and connection.',secondaryText:'Bring your questions, meet the community and leave with fresh perspective.',fontSize:30,align:'left',padding:32,backgroundColor:'#172E43',color:'#FFFFFF'}),
+   b('content','content',{padding:12}),b('primary-cta','button',{text:'RSVP now',align:'left',padding:14,backgroundColor:'#D6A96A',color:'#172E43'}),
+   b('footer','footer',{padding:22,backgroundColor:'#F1F4F6',color:'#73808A'}),
+  ]),
+ p('customer-reengagement','A Note to Reconnect','Warm re-engagement design to restart a conversation without feeling overly promotional.','Engagement',
+  {primaryColor:'#68456E',accentColor:'#D48B79',pageBackground:'#F7F2F6',cardBackground:'#FFFFFF',textColor:'#403342',mutedColor:'#887D8A',cardRadius:16,headingFontSize:28,bodyFontSize:15,bodyLineHeight:1.8},[
+   b('brand-header','logo',{align:'left',width:150,padding:24,backgroundColor:'#FFFFFF',color:'#68456E'}),
+   b('hero','hero',{eyebrow:'IT HAS BEEN A WHILE',text:'Shall we pick up where we left off?',secondaryText:'We would love to hear what has changed and see how we can help today.',fontSize:28,align:'left',padding:28,backgroundColor:'#F0E4EF',color:'#68456E'}),
+   b('content','content',{padding:12}),b('primary-cta','button',{text:'Continue the conversation',align:'left',padding:14,backgroundColor:'#68456E',color:'#FFFFFF'}),
+   b('footer','footer',{padding:24,backgroundColor:'#F7F2F6',color:'#887D8A'}),
   ]),
 ];
 export const SAMPLE_EMAIL_CONTENT='Hello Alex,\n\nThank you for getting in touch. I would be happy to walk you through the details and help you identify the best next step for your team.\n\nPlease let me know a convenient time to connect.\n\nRegards,\nCustomer Success Team';
@@ -131,15 +173,18 @@ export function normalizeEmailDesignTemplate(input:any,sourceOverride?:EmailDesi
   primaryColor:safeHexColor(rt.primaryColor,'#183B66'),accentColor:safeHexColor(rt.accentColor,'#E68A35'),
   textColor:safeHexColor(rt.textColor,'#263445'),mutedColor:safeHexColor(rt.mutedColor,'#718096'),
   fontFamily:fonts.includes(rt.fontFamily)?rt.fontFamily:fonts[0],contentWidth:num(rt.contentWidth,600,480,680),cardRadius:num(rt.cardRadius,12,0,24),
+  headingFontSize:num(rt.headingFontSize,28,18,42),bodyFontSize:num(rt.bodyFontSize,15,12,20),
+  bodyLineHeight:Number.isFinite(Number(rt.bodyLineHeight))?Math.max(1.4,Math.min(2,Number(rt.bodyLineHeight))):1.72,
  };
- const types=new Set<EmailDesignBlockType>(['logo','heading','text','content','image','button','divider','spacer','footer','social']);
+ const types=new Set<EmailDesignBlockType>(['logo','hero','heading','text','content','image','button','divider','spacer','footer','social']);
  const blocks:EmailDesignBlock[]=(Array.isArray(raw.blocks)?raw.blocks:[]).slice(0,40).map((item:any,i:number)=>{
   const type=types.has(item?.type)?item.type as EmailDesignBlockType:'text';
   return {id:String(item?.id||'block-'+i).replace(/[^a-zA-Z0-9_-]/g,'').slice(0,64)||'block-'+i,type,
    text:String(item?.text??'').slice(0,5000),url:isSafeEmailUrl(item?.url,true),altText:String(item?.altText??'').slice(0,240),
    align:['left','center','right'].includes(item?.align)?item.align:'left',width:num(item?.width,560,80,680),
-   fontSize:num(item?.fontSize,type==='heading'?24:15,10,48),color:safeHexColor(item?.color,theme.textColor),
+   fontSize:num(item?.fontSize,type==='heading'||type==='hero'?theme.headingFontSize:15,10,48),color:safeHexColor(item?.color,theme.textColor),
    backgroundColor:safeHexColor(item?.backgroundColor,theme.cardBackground),padding:num(item?.padding,16,0,64),
+   eyebrow:String(item?.eyebrow??'').slice(0,180),secondaryText:String(item?.secondaryText??'').slice(0,700),
    enabled:item?.enabled!==false||type==='content',
    links:Array.isArray(item?.links)?item.links.slice(0,6).map((x:any)=>({label:String(x?.label||'').slice(0,40),url:isSafeEmailUrl(x?.url,false)})).filter((x:any)=>x.label&&x.url):undefined};
  });
@@ -158,38 +203,46 @@ export function normalizeEmailDesignTemplate(input:any,sourceOverride?:EmailDesi
   theme,blocks,...(customHtml?{customHtml}:{}),...(brandProfile?{brandProfile}:{}),
   ...(raw.createdAt?{createdAt:String(raw.createdAt).slice(0,40)}:{}),...(raw.updatedAt?{updatedAt:String(raw.updatedAt).slice(0,40)}:{})};
 }
-function textHtml(text:string):string {
- return text.split(/\r?\n\r?\n/).map(p=>'<p style="margin:0 0 17px 0;line-height:1.72">'+p.split(/\r?\n/).map(escapeEmailHtml).join('<br/>')+'</p>').join('');
+function textHtml(text:string,lineHeight=1.72):string {
+ return text.split(/\r?\n\r?\n/).map(p=>'<p style="margin:0 0 17px 0;line-height:'+lineHeight+'">'+p.split(/\r?\n/).map(escapeEmailHtml).join('<br/>')+'</p>').join('');
 }
 function renderBlock(item:EmailDesignBlock,t:EmailDesignTemplate,body:string,brand:Record<string,any>):string {
  if(item.enabled===false&&item.type!=='content')return '';
  const th=t.theme,align=item.align||'left',color=safeHexColor(item.color,th.textColor),pad=num(item.padding,16,0,64);
- const wrap=(content:string,style='')=>'<tr><td align="'+align+'" style="padding:'+pad+'px 28px;'+style+'">'+content+'</td></tr>';
+ const background=item.backgroundColor?safeHexColor(item.backgroundColor,th.cardBackground):'';
+ const wrap=(content:string,style='')=>'<tr><td align="'+align+'"'+(background?' bgcolor="'+background+'"':'')+' style="padding:'+pad+'px 28px;'+(background?'background:'+background+';':'')+style+'">'+content+'</td></tr>';
  const label=String(item.text||'').replace(/\{\{companyName\}\}/g,escapeEmailHtml(brand.companyName||'Our Team')).replace(/\{\{tagline\}\}/g,escapeEmailHtml(brand.tagline||''));
+ const secondary=String(item.secondaryText||'').replace(/\{\{companyName\}\}/g,escapeEmailHtml(brand.companyName||'Our Team')).replace(/\{\{tagline\}\}/g,escapeEmailHtml(brand.tagline||''));
  switch(item.type){
   case 'logo':{
    const logo=isSafeEmailUrl(item.url,true)||isSafeEmailUrl(brand.logoUrl,true),company=escapeEmailHtml(brand.companyName||'Our Team');
-   return wrap(logo?'<img src="'+escapeEmailHtml(logo)+'" alt="'+escapeEmailHtml(item.altText||company)+'" width="'+num(item.width,180,80,320)+'" style="display:inline-block;max-width:100%;height:auto;border:0"/>':'<span style="font-size:22px;font-weight:700;color:'+th.primaryColor+'">'+company+'</span>','padding-top:24px;padding-bottom:20px;');
+   return wrap(logo?'<img src="'+escapeEmailHtml(logo)+'" alt="'+escapeEmailHtml(item.altText||company)+'" width="'+num(item.width,180,80,320)+'" style="display:inline-block;max-width:100%;height:auto;border:0"/>':'<span style="font-size:22px;font-weight:700;letter-spacing:-.3px;color:'+color+'">'+company+'</span>','padding-top:20px;padding-bottom:20px;');
   }
-  case 'heading':return wrap('<h1 style="margin:0;color:'+color+';font-family:'+th.fontFamily+';font-size:'+num(item.fontSize,24,10,48)+'px;line-height:1.28;font-weight:700">'+escapeEmailHtml(label||'A message for you')+'</h1>');
-  case 'text':return wrap('<div style="font-family:'+th.fontFamily+';font-size:'+num(item.fontSize,14,10,48)+'px;line-height:1.65;color:'+color+'">'+escapeEmailHtml(label).replace(/\n/g,'<br/>')+'</div>');
-  case 'content':return '<tr><td align="left" style="padding:'+pad+'px 36px 24px 36px;font-family:'+th.fontFamily+';font-size:15px;color:'+th.textColor+';line-height:1.72">'+body+'</td></tr>';
+  case 'hero':{
+   const bg=safeHexColor(item.backgroundColor,th.primaryColor),heroColor=safeHexColor(item.color,'#FFFFFF');
+   const eyebrow=item.eyebrow?'<p style="margin:0 0 12px 0;color:'+heroColor+';font-family:'+th.fontFamily+';font-size:10px;line-height:1.4;font-weight:700;letter-spacing:1.7px">'+escapeEmailHtml(item.eyebrow)+'</p>':'';
+   const sub=secondary?'<p style="margin:14px 0 0 0;color:'+heroColor+';font-family:'+th.fontFamily+';font-size:'+Math.max(13,th.bodyFontSize)+'px;line-height:'+th.bodyLineHeight+'">'+escapeEmailHtml(secondary).replace(/\n/g,'<br/>')+'</p>':'';
+   return '<tr><td bgcolor="'+bg+'" style="background:'+bg+';padding:'+pad+'px 30px"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0"><tr><td align="'+align+'">'+eyebrow+'<h1 style="margin:0;color:'+heroColor+';font-family:'+th.fontFamily+';font-size:'+num(item.fontSize,th.headingFontSize,18,42)+'px;line-height:1.18;font-weight:700;letter-spacing:-.5px">'+escapeEmailHtml(label||'A message for you')+'</h1>'+sub+'</td></tr></table></td></tr>';
+  }
+  case 'heading':return wrap('<h1 style="margin:0;color:'+color+';font-family:'+th.fontFamily+';font-size:'+num(item.fontSize,th.headingFontSize,10,48)+'px;line-height:1.22;font-weight:700">'+escapeEmailHtml(label||'A message for you')+'</h1>');
+  case 'text':return wrap('<div style="font-family:'+th.fontFamily+';font-size:'+num(item.fontSize,th.bodyFontSize,10,48)+'px;line-height:'+th.bodyLineHeight+';color:'+color+'">'+escapeEmailHtml(label).replace(/\n/g,'<br/>')+'</div>');
+  case 'content':return '<tr><td align="left" style="padding:'+pad+'px 36px 24px 36px;font-family:'+th.fontFamily+';font-size:'+th.bodyFontSize+'px;color:'+th.textColor+';line-height:'+th.bodyLineHeight+'">'+body+'</td></tr>';
   case 'image':{const src=isSafeEmailUrl(item.url,true);if(!src)return '';const width=Math.min(th.contentWidth,num(item.width,th.contentWidth-56,80,680));return wrap('<img src="'+escapeEmailHtml(src)+'" alt="'+escapeEmailHtml(item.altText||'')+'" width="'+width+'" style="display:block;width:100%;max-width:'+width+'px;height:auto;border:0;border-radius:8px;margin:0 auto"/>','padding-top:10px;padding-bottom:10px;');}
-  case 'button':{const href=isSafeEmailUrl(item.url,false);if(!href)return '';return wrap('<table role="presentation" cellspacing="0" cellpadding="0" border="0" align="'+align+'"><tr><td bgcolor="'+th.primaryColor+'" style="border-radius:7px;background:'+th.primaryColor+'"><a href="'+escapeEmailHtml(href)+'" target="_blank" style="display:inline-block;padding:13px 22px;color:#FFFFFF;text-decoration:none;font-family:'+th.fontFamily+';font-size:14px;font-weight:700">'+escapeEmailHtml(label||'Learn more')+'</a></td></tr></table>');}
+  case 'button':{const href=isSafeEmailUrl(item.url,false)||isSafeEmailUrl(brand.websiteUrl,false),buttonBg=safeHexColor(item.backgroundColor,th.primaryColor),buttonColor=safeHexColor(item.color,'#FFFFFF');const content=href?'<a href="'+escapeEmailHtml(href)+'" target="_blank" style="display:inline-block;padding:14px 24px;color:'+buttonColor+';text-decoration:none;font-family:'+th.fontFamily+';font-size:14px;font-weight:700;letter-spacing:.1px">'+escapeEmailHtml(label||'Learn more')+'</a>':'<span style="display:inline-block;padding:14px 24px;color:'+buttonColor+';font-family:'+th.fontFamily+';font-size:14px;font-weight:700">'+escapeEmailHtml(label||'Learn more')+'</span>';return wrap('<table role="presentation" cellspacing="0" cellpadding="0" border="0" align="'+align+'"><tr><td bgcolor="'+buttonBg+'" style="border-radius:7px;background:'+buttonBg+'">'+content+'</td></tr></table>');}
   case 'divider':return wrap('<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0"><tr><td height="1" style="height:1px;background:'+safeHexColor(item.color,'#E6EAF0')+';font-size:0;line-height:0">&nbsp;</td></tr></table>','padding-top:8px;padding-bottom:8px;');
   case 'spacer':return '<tr><td height="'+num(item.padding,24,4,80)+'" style="height:'+num(item.padding,24,4,80)+'px;font-size:0;line-height:0">&nbsp;</td></tr>';
   case 'footer':{
    const company=escapeEmailHtml(brand.companyName||'Our Team'),website=isSafeEmailUrl(brand.websiteUrl,false);
    const email=/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(brand.salesEmail||brand.contactEmail||''))?String(brand.salesEmail||brand.contactEmail):'';
-   const phone=String(brand.supportPhone||brand.contactPhone||'').slice(0,80);
-   return '<tr><td align="'+align+'" style="padding:'+pad+'px 28px 28px 28px;background:'+th.pageBackground+';font-family:'+th.fontFamily+';color:'+th.mutedColor+';font-size:12px;line-height:1.7"><strong style="color:'+th.textColor+';font-size:13px">'+company+'</strong>'+(brand.tagline?'<br/>'+escapeEmailHtml(brand.tagline):'')+(email?'<br/><a href="mailto:'+escapeEmailHtml(email)+'" style="color:'+th.primaryColor+';text-decoration:none">'+escapeEmailHtml(email)+'</a>':'')+(phone?'<br/>'+escapeEmailHtml(phone):'')+(website?'<br/><a href="'+escapeEmailHtml(website)+'" style="color:'+th.primaryColor+';text-decoration:none">'+escapeEmailHtml(website.replace(/^https?:\/\//,'').replace(/\/$/,''))+'</a>':'')+'<br/><span style="font-size:10px;color:'+th.mutedColor+'">You are receiving this message because you have an existing conversation with '+company+'.</span></td></tr>';
+   const phone=String(brand.supportPhone||brand.contactPhone||'').slice(0,80),footerBg=safeHexColor(item.backgroundColor,th.pageBackground),footerColor=safeHexColor(item.color,th.mutedColor);
+   return '<tr><td align="'+align+'" bgcolor="'+footerBg+'" style="padding:'+pad+'px 28px 28px 28px;background:'+footerBg+';font-family:'+th.fontFamily+';color:'+footerColor+';font-size:12px;line-height:1.7"><strong style="color:'+th.textColor+';font-size:13px">'+company+'</strong>'+(brand.tagline?'<br/>'+escapeEmailHtml(brand.tagline):'')+(email?'<br/><a href="mailto:'+escapeEmailHtml(email)+'" style="color:'+th.primaryColor+';text-decoration:none">'+escapeEmailHtml(email)+'</a>':'')+(phone?'<br/>'+escapeEmailHtml(phone):'')+(website?'<br/><a href="'+escapeEmailHtml(website)+'" style="color:'+th.primaryColor+';text-decoration:none">'+escapeEmailHtml(website.replace(/^https?:\/\//,'').replace(/\/$/,''))+'</a>':'')+'<br/><span style="font-size:10px;color:'+footerColor+'">You are receiving this message because you have an existing conversation with '+company+'.</span></td></tr>';
   }
   case 'social':{const links=(item.links||[]).filter(x=>x.label&&isSafeEmailUrl(x.url,false));return links.length?wrap(links.map(x=>'<a href="'+escapeEmailHtml(x.url)+'" style="display:inline-block;margin:0 8px;color:'+th.primaryColor+';font-size:12px;text-decoration:underline">'+escapeEmailHtml(x.label)+'</a>').join('')):'';}
   default:return '';
  }
 }
 export function renderEmailDesignHtml(input:EmailDesignTemplate,messageText:string,brandInput:Record<string,any>={},baseUrl=''):string {
- const t=normalizeEmailDesignTemplate(input),brand={...brandInput,...(t.brandProfile||{})},body=textHtml(String(messageText||''));
+ const t=normalizeEmailDesignTemplate(input),brand={...brandInput,...(t.brandProfile||{})},body=textHtml(String(messageText||''),t.theme.bodyLineHeight);
  if(t.customHtml){
   const custom=sanitizeCustomEmailHtml(t.customHtml).replace(/\{\{content\}\}/g,body)
    .replace(/\{\{companyName\}\}/g,escapeEmailHtml(brand.companyName||'Our Team'))

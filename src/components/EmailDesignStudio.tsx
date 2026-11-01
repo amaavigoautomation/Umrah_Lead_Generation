@@ -90,6 +90,144 @@ function ColorField({ label, value, onChange }: { label: string; value: string; 
   );
 }
 
+function formatEmailHtml(source: string): string {
+  const input = String(source || '').replace(/\r\n?/g, '\n').trim();
+  if (!input) return '';
+  const tokens = input.match(/<!--[\s\S]*?-->|<style\b[^>]*>[\s\S]*?<\/style\s*>|<!doctype[^>]*>|<\/?[a-z][^>]*>|[^<]+|</gi) || [];
+  const blockTags = new Set(['html','head','body','table','thead','tbody','tfoot','tr','td','th','div','p','h1','h2','h3','h4','ul','ol','li','blockquote','center','section','article','header','footer']);
+  const voidTags = new Set(['area','base','br','col','embed','hr','img','input','link','meta','param','source','track','wbr']);
+  const output: string[] = [];
+  let indent = 0;
+  let line = '';
+  const pad = () => '  '.repeat(Math.max(0, indent));
+  const flush = () => {
+    if (line.trim()) output.push(pad() + line.trim());
+    line = '';
+  };
+  for (const token of tokens) {
+    if (/^<style\b/i.test(token)) {
+      flush();
+      const match = token.match(/^<style\b([^>]*)>([\s\S]*?)<\/style\s*>$/i);
+      if (match) {
+        output.push(pad() + '<style' + match[1].trimEnd() + '>');
+        const css = match[2].trim();
+        if (css) {
+          const cssLines = css.replace(/\s*{\s*/g, ' {\n  ').replace(/;\s*/g, ';\n  ').replace(/\s*}\s*/g, '\n}').split('\n');
+          for (const cssLine of cssLines) if (cssLine.trim()) output.push(pad() + '  ' + cssLine.trim());
+        }
+        output.push(pad() + '</style>');
+      } else output.push(pad() + token);
+      continue;
+    }
+    if (/^<!--/.test(token) || /^<!doctype/i.test(token)) {
+      flush();
+      output.push(pad() + token.trim());
+      continue;
+    }
+    const tagMatch = token.match(/^<\s*(\/)?\s*([a-z][a-z0-9:-]*)\b/i);
+    if (tagMatch) {
+      const closing = Boolean(tagMatch[1]);
+      const tag = tagMatch[2].toLowerCase();
+      const selfClosing = /\/\s*>$/.test(token) || voidTags.has(tag);
+      if (blockTags.has(tag)) {
+        flush();
+        if (closing) indent = Math.max(0, indent - 1);
+        output.push(pad() + token.trim());
+        if (!closing && !selfClosing) indent++;
+      } else {
+        line += token;
+      }
+      continue;
+    }
+    const text = token.replace(/\s+/g, ' ');
+    if (!text.trim()) continue;
+    line += line ? text : text.trimStart();
+  }
+  flush();
+  return output.join('\n').replace(/\n{3,}/g, '\n\n') + '\n';
+}
+function escapeHtmlForEditor(value: string): string {
+  return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+function highlightHtmlSource(source: string): string {
+  const tokens = source.match(/<!--[\s\S]*?-->|<\/?[a-zA-Z][\w:-]*|\/?>|\s+[a-zA-Z_:][\w:.-]*(?=\s*=)|"(?:[^"]*)"|'(?:[^']*)'|[^<]+|</g) || [];
+  return tokens.map((token) => {
+    const escaped = escapeHtmlForEditor(token);
+    if (token.startsWith('<!--')) return '<span style="color:#86a987">' + escaped + '</span>';
+    if (/^<\/?[a-zA-Z]/.test(token)) return '<span style="color:#7dd3fc">' + escaped + '</span>';
+    if (/^\s+[a-zA-Z_:][\w:.-]*$/.test(token)) return '<span style="color:#c4b5fd">' + escaped + '</span>';
+    if (/^["']/.test(token)) return '<span style="color:#fbbf24">' + escaped + '</span>';
+    if (/^\/?>$/.test(token) || token === '<') return '<span style="color:#94a3b8">' + escaped + '</span>';
+    return escaped;
+  }).join('');
+}
+function HtmlSourceEditor({
+  value,
+  onChange,
+  editorRef,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  editorRef: React.RefObject<HTMLTextAreaElement | null>;
+}) {
+  const [scroll, setScroll] = useState({ top: 0, left: 0 });
+  const lineCount = Math.max(1, value.split('\n').length);
+  const onEditorKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    const editor = event.currentTarget;
+    if (event.key === 'Tab') {
+      event.preventDefault();
+      const start = editor.selectionStart, end = editor.selectionEnd;
+      const next = value.slice(0, start) + '  ' + value.slice(end);
+      onChange(next);
+      window.requestAnimationFrame(() => {
+        editor.focus();
+        editor.setSelectionRange(start + 2, start + 2);
+      });
+    } else if (event.key === 'Enter') {
+      const start = editor.selectionStart;
+      const previous = value.slice(0, start);
+      const currentLine = previous.slice(previous.lastIndexOf('\n') + 1);
+      const indentation = (currentLine.match(/^\s*/) || [''])[0];
+      const extra = /<([a-z][\w:-]*)\b[^>]*>\s*$/i.test(currentLine) && !/<(?:br|hr|img|meta|link|input)\b[^>]*\/?>\s*$/i.test(currentLine) ? '  ' : '';
+      event.preventDefault();
+      const insertion = '\n' + indentation + extra;
+      onChange(value.slice(0, start) + insertion + value.slice(editor.selectionEnd));
+      window.requestAnimationFrame(() => {
+        editor.focus();
+        editor.setSelectionRange(start + insertion.length, start + insertion.length);
+      });
+    }
+  };
+  return (
+    <div className="flex-1 min-h-0 flex overflow-hidden rounded-xl border border-slate-200 bg-slate-950 focus-within:border-orange-400 focus-within:ring-2 focus-within:ring-orange-100">
+      <div className="w-12 flex-none overflow-hidden border-r border-slate-800 bg-slate-900 py-4 text-right text-[11px] font-mono text-slate-500 select-none" aria-hidden="true">
+        <div style={{ transform: 'translateY(' + (-scroll.top) + 'px)', lineHeight: '20.4px' }}>
+          {Array.from({ length: lineCount }, (_, index) => <div key={index} className="px-3">{index + 1}</div>)}
+        </div>
+      </div>
+      <div className="relative flex-1 min-w-0 overflow-hidden">
+        <pre aria-hidden="true" className="absolute top-0 m-0 pointer-events-none text-[12px] leading-[20.4px] font-mono whitespace-pre" style={{ padding: '16px', transform: 'translate(' + (-scroll.left) + 'px,' + (-scroll.top) + 'px)', tabSize: 2 }} dangerouslySetInnerHTML={{ __html: highlightHtmlSource(value) + '\n' }} />
+        <textarea
+          ref={editorRef}
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          onScroll={(event) => setScroll({ top: event.currentTarget.scrollTop, left: event.currentTarget.scrollLeft })}
+          onKeyDown={onEditorKeyDown}
+          spellCheck={false}
+          autoCapitalize="off"
+          autoCorrect="off"
+          wrap="off"
+          aria-label="Full HTML email source"
+          placeholder={'<!doctype html>\n<html>\n<head>\n  <meta name="viewport" content="width=device-width, initial-scale=1">\n</head>\n<body>\n  <table role="presentation" width="100%">\n    <tr><td>{{content}}</td></tr>\n  </table>\n</body>\n</html>'}
+          className="absolute inset-0 w-full h-full resize-none overflow-auto bg-transparent p-4 text-[12px] leading-[20.4px] font-mono text-transparent caret-emerald-300 selection:bg-sky-500/40 selection:text-white outline-none whitespace-pre"
+          style={{ tabSize: 2 }}
+        />
+      </div>
+    </div>
+  );
+}
+
+
 export const EmailDesignStudio: React.FC<{ tenantId: string }> = ({ tenantId }) => {
   const { brand } = useBrand();
   const brandData = brand as unknown as Record<string, any>;

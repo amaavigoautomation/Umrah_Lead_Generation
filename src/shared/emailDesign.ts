@@ -143,28 +143,90 @@ export function escapeEmailHtml(value:unknown):string {
 }
 function num(v:unknown,d:number,min:number,max:number):number {const n=Number(v);return Number.isFinite(n)?Math.round(Math.max(min,Math.min(max,n))):d;}
 function safeStyle(style:string):string {
- const allowed=['color','background-color','font-family','font-size','font-weight','font-style','line-height','text-align','text-decoration','padding','padding-top','padding-right','padding-bottom','padding-left','margin','width','max-width','height','border','border-radius','border-collapse','vertical-align','display','letter-spacing'];
- return style.split(';').map((part)=>{const i=part.indexOf(':');if(i<1)return '';const key=part.slice(0,i).trim().toLowerCase();const value=part.slice(i+1).trim();if(!allowed.includes(key)||!value||/url\s*\(|expression|javascript:|@import|position\s*:/i.test(value))return '';return key+':'+value.slice(0,180);}).filter(Boolean).join(';');
+ const allowed=['color','background-color','font-family','font-size','font-weight','font-style','line-height','text-align','text-decoration','text-transform','letter-spacing','word-break','white-space',
+  'padding','padding-top','padding-right','padding-bottom','padding-left','margin','margin-top','margin-right','margin-bottom','margin-left',
+  'width','max-width','min-width','height','max-height','border','border-top','border-right','border-bottom','border-left','border-radius',
+  'border-collapse','vertical-align','display','-webkit-text-size-adjust','-ms-text-size-adjust','mso-table-lspace','mso-table-rspace'];
+ return style.split(';').map((part)=>{
+  const i=part.indexOf(':');if(i<1)return '';
+  const key=part.slice(0,i).trim().toLowerCase(),value=part.slice(i+1).trim();
+  if(!allowed.includes(key)||!value||/url\s*\(|expression|javascript:|@import|position\s*:/i.test(value))return '';
+  if(key==='display'&&!/^(inline|inline-block|block|none|table|table-row|table-cell)$/i.test(value))return '';
+  return key+':'+value.slice(0,180);
+ }).filter(Boolean).join(';');
+}
+function sanitizeEmailStylesheet(input:string):string {
+ const css=String(input||'').slice(0,12000).replace(/\/\*[\s\S]*?\*\//g,'').replace(/@import[^;]+;?/gi,'');
+ function rules(source:string,depth=0):string {
+  if(depth>3)return '';
+  let output='',cursor=0,ruleCount=0;
+  while(cursor<source.length&&ruleCount<120){
+   const open=source.indexOf('{',cursor);if(open<0)break;
+   const selector=source.slice(cursor,open).trim();
+   let level=1,close=open+1;
+   while(close<source.length&&level>0){if(source[close]==='{')level++;else if(source[close]==='}')level--;close++;}
+   if(level!==0)break;
+   const body=source.slice(open+1,close-1).trim();cursor=close;ruleCount++;
+   if(!selector||selector.length>220||/url\s*\(|expression|javascript:|@import|@font-face|@keyframes/i.test(selector+body))continue;
+   if(/^@media\b/i.test(selector)){
+    if(!/^@media\s+(?:only\s+)?screen\s+and\s+\((?:max|min)-width\s*:\s*\d+(?:\.\d+)?(?:px|em|rem)\)$/i.test(selector))continue;
+    const nested=rules(body,depth+1);if(nested)output+=selector+'{'+nested+'}';
+    continue;
+   }
+   if(selector.startsWith('@')||!/^[a-zA-Z0-9_.*#:\[\]="'\-\s,>+~]+$/.test(selector))continue;
+   const safe=safeStyle(body);if(safe)output+=selector+'{'+safe+'}';
+  }
+  return output;
+ }
+ return rules(css);
 }
 export function sanitizeCustomEmailHtml(input:unknown):string {
- let html=String(input??'').slice(0,60000).replace(/<!--[\s\S]*?-->/g,'')
- .replace(/<(script|style|iframe|object|embed|form|input|button|video|audio|svg|math|link|meta|base)\b[^>]*>[\s\S]*?<\/\1\s*>/gi,'')
- .replace(/<(script|style|iframe|object|embed|form|input|button|video|audio|svg|math|link|meta|base)\b[^>]*\/?>/gi,'');
- const tags=new Set(['table','tbody','thead','tfoot','tr','td','th','div','span','p','br','strong','b','em','i','u','h1','h2','h3','h4','a','img','hr','ul','ol','li','blockquote']);
- return html.replace(/<\/?([a-zA-Z][a-zA-Z0-9]*)\b([^>]*)>/g,(full,rawTag:string,rawAttrs:string)=>{
+ let html=String(input??'').slice(0,60000).replace(/<!doctype[^>]*>/gi,'').replace(/<!--[\s\S]*?-->/g,'');
+ const styles:string[]=[];
+ html=html.replace(/<style\b[^>]*>([\s\S]*?)<\/style\s*>/gi,(_full,css:string)=>{
+  const safe=sanitizeEmailStylesheet(css);if(safe)styles.push('<style type="text/css">'+safe+'</style>');
+  return '';
+ });
+ html=html
+  .replace(/<(script|iframe|object|embed|form|input|button|video|audio|svg|math|link|meta|base)\b[^>]*>[\s\S]*?<\/\1\s*>/gi,'')
+  .replace(/<(script|iframe|object|embed|form|input|button|video|audio|svg|math|link|meta|base)\b[^>]*\/?>/gi,'');
+ const tags=new Set(['table','caption','colgroup','col','tbody','thead','tfoot','tr','td','th','div','span','p','br','strong','b','em','i','u','h1','h2','h3','h4','a','img','hr','ul','ol','li','blockquote','center','small','sup','sub','pre','address','font']);
+ const safeHtml=html.replace(/<\/?([a-zA-Z][a-zA-Z0-9]*)\b([^>]*)>/g,(full,rawTag:string,rawAttrs:string)=>{
   const tag=rawTag.toLowerCase();if(!tags.has(tag))return '';if(/^<\//.test(full))return '</'+tag+'>';
   const attrs:string[]=[];const pattern=/([a-zA-Z_:][a-zA-Z0-9_:.-]*)\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/g;let m:RegExpExecArray|null;
   while((m=pattern.exec(rawAttrs))!==null){
    const name=m[1].toLowerCase(),value=m[2].replace(/^["']|["']$/g,'');
    if(name==='style'){const safe=safeStyle(value);if(safe)attrs.push('style="'+escapeEmailHtml(safe)+'"');}
-   else if(['align','valign','width','height','cellpadding','cellspacing','border','colspan','rowspan','role','alt','title'].includes(name)&&/^[a-z0-9 #.,%_-]{0,160}$/i.test(value))attrs.push(name+'="'+escapeEmailHtml(value)+'"');
+   else if(['align','valign','width','height','cellpadding','cellspacing','border','colspan','rowspan','role','alt','title','bgcolor'].includes(name)&&/^[a-z0-9 #.,%_-]{0,160}$/i.test(value))attrs.push(name+'="'+escapeEmailHtml(value)+'"');
    else if(name==='href'&&tag==='a'){const safe=isSafeEmailUrl(value,false);if(safe)attrs.push('href="'+escapeEmailHtml(safe)+'"');}
    else if(name==='src'&&tag==='img'){const safe=isSafeEmailUrl(value,true);if(safe)attrs.push('src="'+escapeEmailHtml(safe)+'"');}
   }
   if(tag==='a')attrs.push('target="_blank" rel="noopener noreferrer"');
   if(tag==='img')attrs.push('border="0"');
-  return '<'+tag+(attrs.length?' '+attrs.join(' '):'')+(['br','hr','img'].includes(tag)?' /':'')+'>';
+  return '<'+tag+(attrs.length?' '+attrs.join(' '):'')+(['br','hr','img','col'].includes(tag)?' /':'')+'>';
  });
+ return styles.join('\n')+(styles.length?'\n':'')+safeHtml;
+}
+export interface EmailDesignHtmlValidation {
+ valid:boolean;
+ contentSlotCount:number;
+ error?:string;
+ warnings:string[];
+}
+export function validateEmailDesignHtml(input:unknown):EmailDesignHtmlValidation {
+ const html=String(input??''),contentSlotCount=(html.match(/\{\{content\}\}/g)||[]).length,warnings:string[]=[];
+ let error:string|undefined;
+ if(!html.trim())error='Add your email HTML before saving.';
+ else if(html.length>60000)error='Email HTML must be 60,000 characters or fewer.';
+ else if(contentSlotCount!==1)error='Your HTML must contain exactly one {{content}} placeholder. Found '+contentSlotCount+'.';
+ else {
+  const sanitized=sanitizeCustomEmailHtml(html),sanitizedCount=(sanitized.match(/\{\{content\}\}/g)||[]).length;
+  if(sanitizedCount!==1)error='The message placeholder must be inside a supported HTML element so it is preserved when the email is sent.';
+ }
+ if(!/<table\b/i.test(html))warnings.push('A table-based layout is recommended for consistent rendering in email clients.');
+ if(/<(script|iframe|form|video|audio|object|embed)\b/i.test(html))warnings.push('Unsupported active or embedded elements will be removed before sending.');
+ if(/display\s*:\s*(?:flex|grid)|position\s*:/i.test(html))warnings.push('Some modern web CSS is not supported in email clients; use tables and inline styles instead.');
+ return {valid:!error,contentSlotCount,...(error?{error}:{}),warnings};
 }
 export function normalizeEmailDesignTemplate(input:any,sourceOverride?:EmailDesignSource):EmailDesignTemplate {
  const raw=input&&typeof input==='object'?input:{},rt=raw.theme&&typeof raw.theme==='object'?raw.theme:{};
@@ -249,10 +311,17 @@ export function renderEmailDesignHtml(input:EmailDesignTemplate,messageText:stri
    .replace(/\{\{companyName\}\}/g,escapeEmailHtml(brand.companyName||'Our Team'))
    .replace(/\{\{tagline\}\}/g,escapeEmailHtml(brand.tagline||''))
    .replace(/\{\{websiteUrl\}\}/g,escapeEmailHtml(isSafeEmailUrl(brand.websiteUrl,false)));
-  return '<!doctype html><html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/></head><body style="margin:0;padding:0;background:'+t.theme.pageBackground+'"><div style="max-width:'+t.theme.contentWidth+'px;margin:0 auto">'+custom+'</div></body></html>';
+  const styles=(custom.match(/<style\b[^>]*>[\s\S]*?<\/style>/gi)||[]).join(''),fragment=custom.replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi,'');
+  return '<!doctype html><html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>'+styles+'</head><body style="margin:0;padding:0;background:'+t.theme.pageBackground+'">'+fragment+'</body></html>';
  }
  const blocks=t.blocks.map(x=>renderBlock(x,t,body,brand)).join(''),base=isSafeEmailUrl(baseUrl,false);
  return '<!doctype html><html lang="en"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><meta name="x-apple-disable-message-reformatting"/><title>'+escapeEmailHtml(t.name)+'</title></head><body style="margin:0;padding:0;background:'+t.theme.pageBackground+';-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" bgcolor="'+t.theme.pageBackground+'" style="width:100%;background:'+t.theme.pageBackground+'"><tr><td align="center" style="padding:28px 12px"><table role="presentation" width="'+t.theme.contentWidth+'" cellspacing="0" cellpadding="0" border="0" bgcolor="'+t.theme.cardBackground+'" style="width:100%;max-width:'+t.theme.contentWidth+'px;background:'+t.theme.cardBackground+';border-radius:'+t.theme.cardRadius+'px;border-collapse:separate;overflow:hidden"><tr><td style="font-family:'+t.theme.fontFamily+';color:'+t.theme.textColor+'"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">'+blocks+'</table></td></tr></table><table role="presentation" width="'+t.theme.contentWidth+'" cellspacing="0" cellpadding="0" border="0" style="width:100%;max-width:'+t.theme.contentWidth+'px"><tr><td align="center" style="padding:12px 10px;color:'+t.theme.mutedColor+';font-family:Arial,Helvetica,sans-serif;font-size:10px;line-height:1.5">'+(base?'<a href="'+escapeEmailHtml(base)+'" style="color:'+t.theme.mutedColor+';text-decoration:none">'+escapeEmailHtml(base.replace(/^https?:\/\//,'').replace(/\/$/,''))+'</a>':'')+'</td></tr></table></td></tr></table></body></html>';
+}
+export function createEmailDesignHtmlSource(input:EmailDesignTemplate,brand:Record<string,any>={}):string {
+ const template={...input,customHtml:undefined};
+ const rendered=renderEmailDesignHtml(template,'__AMAAVIGO_EMAIL_MESSAGE_SLOT__',brand);
+ const placeholder=new RegExp('<p style="margin:0 0 17px 0;line-height:[0-9.]+">__AMAAVIGO_EMAIL_MESSAGE_SLOT__<\\/p>');
+ return rendered.replace(placeholder,'{{content}}');
 }
 export function createBlankEmailDesignTemplate():EmailDesignTemplate {
  return {id:'',name:'My custom email design',description:'A custom email design created from scratch.',category:'Custom',source:'CUSTOM',version:1,theme:{...DEFAULT_EMAIL_DESIGN_THEME},

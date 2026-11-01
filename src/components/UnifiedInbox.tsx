@@ -124,6 +124,7 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
   // Lead Profile 360 side panel: slides in/out from the right edge
   const [isProfileOpen, setIsProfileOpen] = useState<boolean>(true);
   const [replyText, setReplyText] = useState<string>('');
+  const [editingDraftConversationId, setEditingDraftConversationId] = useState<string | null>(null);
   const connected = useConnectedChannels(tenantId);
   const [isGeneratingAi, setIsGeneratingAi] = useState<boolean>(false);
   const [isUnifiedAllPlatforms, setIsUnifiedAllPlatforms] = useState<boolean>(false);
@@ -283,6 +284,11 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
   // Active conversation and linked objects
   const activeConversation =
     conversations.find((c) => c.conversationId === selectedConversationId) || conversations[0];
+
+  // Hide the review card after its draft is moved into the composer. Reset when the conversation or draft changes.
+  React.useEffect(() => {
+    setEditingDraftConversationId(null);
+  }, [activeConversation?.conversationId, activeConversation?.draftReply?.text]);
   const foundContact = contacts.find((c) => c.contactId === activeConversation?.contactId);
   const activeContact: Contact = foundContact || {
     contactId: activeConversation?.contactId || 'unknown',
@@ -1200,7 +1206,9 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
             </div>
 
             {/* AI Draft Reply Awaiting Verification Card (REVIEW Mode) */}
-            {activeConversation.draftReply && activeConversation.draftReply.status === 'PENDING' && (
+            {activeConversation.draftReply &&
+              activeConversation.draftReply.status === 'PENDING' &&
+              editingDraftConversationId !== activeConversation.conversationId && (
               <div className="p-3.5 bg-orange-50/70 border-t border-b border-orange-200 flex flex-col space-y-2">
                 <div className="flex items-center justify-between text-xs">
                   <span className="flex items-center space-x-1.5 font-bold text-orange-800">
@@ -1216,7 +1224,10 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
                 </div>
                 <div className="flex items-center justify-end space-x-2 pt-1">
                   <button
-                    onClick={() => setReplyText(activeConversation.draftReply!.text)}
+                    onClick={() => {
+                      setReplyText(activeConversation.draftReply!.text);
+                      setEditingDraftConversationId(activeConversation.conversationId);
+                    }}
                     className="px-3 py-1 rounded-lg bg-white hover:bg-slate-100 text-slate-700 text-xs font-semibold border border-slate-200 transition"
                   >
                     Edit in Composer

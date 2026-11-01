@@ -1632,7 +1632,7 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
             </button>
             <button
               id="tab-templates"
-              onClick={() => setActiveTab('TEMPLATES')}
+              onClick={() => onOpenTemplateStudio ? onOpenTemplateStudio('campaign') : setActiveTab('TEMPLATES')}
               className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all ${
                 activeTab === 'TEMPLATES'
                   ? 'bg-orange-500 text-white shadow-xs'

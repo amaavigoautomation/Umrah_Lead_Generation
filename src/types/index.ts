@@ -124,6 +124,9 @@ export interface CampaignLead {
   companyName: string;
   email: string;
   phone?: string;
+  sourceDatabaseId?: string;
+  sourceDatabaseEntryId?: string;
+  customFields?: Record<string, string>;
   /** Last 10 digits of `phone`, for equality lookups of inbound replies. */
   phoneLast10?: string;
   designation?: string;
@@ -215,6 +218,10 @@ export interface Campaign {
   templateId?: string;
   templateName?: string;
   sourceFileName?: string;
+  /** Provenance for campaigns created from a saved lead database snapshot. */
+  sourceDatabaseId?: string;
+  sourceDatabaseName?: string;
+  sourceDatabaseSnapshotAt?: string;
   totalLeads: number;
   sentCount: number;
   pendingCount: number;

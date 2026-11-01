@@ -2566,7 +2566,7 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
               />
             )}
 
-            {activeTab === 'database' && <LeadDatabase isAdmin={currentUser.role === 'ADMIN'} />}
+            {activeTab === 'database' && <LeadDatabase isAdmin={currentUser.role === 'ADMIN'} tenantId={currentTenantId} />}
           </Suspense>
         )}
       </main>

@@ -966,7 +966,41 @@ export const EmailDesignStudio: React.FC<EmailDesignStudioProps> = ({ tenantId, 
         {notice && <div className={'px-5 py-2 text-xs border-b ' + (notice.tone === 'error' ? 'bg-rose-50 border-rose-100 text-rose-700' : notice.tone === 'success' ? 'bg-emerald-50 border-emerald-100 text-emerald-700' : 'bg-blue-50 border-blue-100 text-blue-700')}>{notice.text}</div>}
         <div className={htmlExpanded ? "flex-1 min-h-0 grid grid-cols-1" : "flex-1 min-h-0 grid grid-cols-1 xl:grid-cols-[minmax(0,1.05fr)_minmax(420px,0.95fr)]"}>
           <section className={(htmlExpanded ? "h-full min-h-0" : "min-h-[580px] xl:min-h-0") + " bg-white border-r border-slate-200 flex flex-col overflow-hidden"}>
-            {isCampaignMode && <div className="mb-3 space-y-3 rounded-xl border border-slate-200 bg-white p-3"><div className="grid grid-cols-1 md:grid-cols-2 gap-2"><label className="text-[11px] font-semibold text-slate-600">Campaign subject *<input value={editing.campaignSubject || ''} onChange={(event) => updateTemplate({ campaignSubject: event.target.value })} maxLength={180} placeholder="Write your email subject" className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-xs font-normal" /></label><label className="text-[11px] font-semibold text-slate-600">Preheader<input value={editing.campaignPreheader || ''} onChange={(event) => updateTemplate({ campaignPreheader: event.target.value })} maxLength={180} placeholder="Optional preview text" className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-xs font-normal" /></label></div><div className="flex flex-wrap items-center justify-between gap-2"><span className="text-[11px] font-semibold text-slate-600"><Paperclip className="mr-1 inline h-3.5 w-3.5" />Attachments ({(editing.campaignAttachments || []).length})</span><button type="button" onClick={() => campaignAttachmentInputRef.current?.click()} className="rounded-lg border border-slate-200 px-3 py-1.5 text-[11px] font-semibold text-slate-700 hover:border-orange-300">Add files</button><input ref={campaignAttachmentInputRef} type="file" multiple className="hidden" accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.png,.jpg,.jpeg,.webp,.zip" onChange={(event) => addCampaignAttachments(event.target.files)} /></div>{(editing.campaignAttachments || []).length > 0 && <div className="flex flex-wrap gap-2">{(editing.campaignAttachments || []).map((attachment: any) => <span key={attachment.id} className="inline-flex max-w-full items-center gap-1 rounded-md bg-slate-100 px-2 py-1 text-[10px] text-slate-700"><span className="max-w-[220px] truncate">{attachment.filename || attachment.name}</span><button type="button" onClick={() => removeCampaignAttachment(attachment.id)} className="text-slate-400 hover:text-rose-600" aria-label="Remove attachment">×</button></span>)}<label className="block text-[11px] font-semibold text-slate-600">Message content (optional when included directly in HTML)<textarea rows={4} value={editing.campaignBody || ''} onChange={(event) => updateTemplate({ campaignBody: event.target.value })} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-xs font-normal leading-relaxed" placeholder="Write your campaign message. Add {{content}} to your HTML where this message should appear." /></label><div className="flex flex-wrap gap-1.5">{['name','firstName','lastName','company','companyName','designation','jobTitle','email'].map((field) => <button key={field} type="button" onClick={() => updateTemplate({ campaignBody: String(editing.campaignBody || '') + \`{{\${field}}}\` })} className="rounded-md border border-slate-200 bg-white px-2 py-1 text-[10px] font-mono text-slate-600 hover:border-orange-300 hover:text-orange-700">{\`{{\${field}}}\`}</button>)}</div></div>}</div>}
+            {isCampaignMode && (
+              <div className="mb-3 space-y-3 rounded-xl border border-slate-200 bg-white p-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                  <label className="text-[11px] font-semibold text-slate-600">Campaign subject *
+                    <input value={editing.campaignSubject || ''} onChange={(event) => updateTemplate({ campaignSubject: event.target.value })} maxLength={180} placeholder="Write your email subject" className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-xs font-normal" />
+                  </label>
+                  <label className="text-[11px] font-semibold text-slate-600">Preheader
+                    <input value={editing.campaignPreheader || ''} onChange={(event) => updateTemplate({ campaignPreheader: event.target.value })} maxLength={180} placeholder="Optional preview text" className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-xs font-normal" />
+                  </label>
+                </div>
+                <p className="text-[10px] text-slate-400">The subject and preheader support the same personalization fields as the message.</p>
+                <label className="block text-[11px] font-semibold text-slate-600">Message content
+                  <textarea rows={4} value={editing.campaignBody || ''} onChange={(event) => updateTemplate({ campaignBody: event.target.value })} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-xs font-normal leading-relaxed" placeholder="Write the message separately and add {{content}} to your HTML where it should appear. Leave this empty if the complete message is written directly in your HTML." />
+                </label>
+                <div className="flex flex-wrap gap-1.5">
+                  {['name','firstName','lastName','company','companyName','designation','jobTitle','email'].map((field) => (
+                    <button key={field} type="button" onClick={() => updateTemplate({ campaignBody: String(editing.campaignBody || '') + \`{{\${field}}}\` })} className="rounded-md border border-slate-200 bg-white px-2 py-1 text-[10px] font-mono text-slate-600 hover:border-orange-300 hover:text-orange-700">{\`{{\${field}}}\`}</button>
+                  ))}
+                </div>
+                <div className="space-y-2 border-t border-slate-100 pt-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="text-[11px] font-semibold text-slate-600"><Paperclip className="mr-1 inline h-3.5 w-3.5" />Attachments ({(editing.campaignAttachments || []).length})</span>
+                    <button type="button" onClick={() => campaignAttachmentInputRef.current?.click()} disabled={pendingAttachmentReads > 0} className="rounded-lg border border-slate-200 px-3 py-1.5 text-[11px] font-semibold text-slate-700 hover:border-orange-300 disabled:opacity-50">Add files</button>
+                    <input ref={campaignAttachmentInputRef} type="file" multiple className="hidden" accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.png,.jpg,.jpeg,.webp,.zip" onChange={(event) => addCampaignAttachments(event.target.files)} />
+                  </div>
+                  {(editing.campaignAttachments || []).map((attachment: any) => (
+                    <div key={attachment.id} className="flex items-center justify-between gap-2 rounded-md bg-slate-50 px-2 py-1.5 text-[10px]">
+                      <span className="min-w-0 truncate">{attachment.filename || attachment.name}</span>
+                      <button type="button" onClick={() => removeCampaignAttachment(attachment.id)} className="shrink-0 text-slate-400 hover:text-rose-600">Remove</button>
+                    </div>
+                  ))}
+                  {pendingAttachmentReads > 0 && <p className="text-[10px] text-amber-700">Reading {pendingAttachmentReads} attachment(s)… Save will become available when this finishes.</p>}
+                </div>
+              </div>
+            )}
             <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between gap-2">
               <div>
                 <h2 className="text-xs font-bold text-slate-800">HTML source</h2>

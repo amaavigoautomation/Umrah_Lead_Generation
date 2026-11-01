@@ -26,14 +26,17 @@ export const TemplateStudio: React.FC<Props> = ({
 }) => {
   const [section, setSection] = useState<TemplateStudioSection>(initialView);
   const [pendingTemplateId, setPendingTemplateId] = useState<string | undefined>(initialTemplateId);
+  const [visitedSections, setVisitedSections] = useState<Set<TemplateStudioSection>>(() => new Set([initialView]));
 
   useEffect(() => {
     setSection(initialView);
     setPendingTemplateId(initialTemplateId);
+    setVisitedSections((current) => new Set([...current, initialView]));
   }, [initialView, initialTemplateId]);
 
   const changeSection = (next: TemplateStudioSection) => {
     if (section === 'campaign' && next !== 'campaign') setPendingTemplateId(undefined);
+    setVisitedSections((current) => new Set([...current, next]));
     setSection(next);
   };
 
@@ -70,15 +73,15 @@ export const TemplateStudio: React.FC<Props> = ({
         </div>
       </div>
 
-      <div className={section === 'conversation' ? 'block' : 'hidden'} aria-hidden={section !== 'conversation'}>
+      {visitedSections.has('conversation') && <div className={section === 'conversation' ? 'block' : 'hidden'} aria-hidden={section !== 'conversation'}>
         <EmailDesignStudio tenantId={tenantId} purpose="conversation" />
-      </div>
-      <div className={section === 'campaign' ? 'block' : 'hidden'} aria-hidden={section !== 'campaign'}>
+      </div>}
+      {visitedSections.has('campaign') && <div className={section === 'campaign' ? 'block' : 'hidden'} aria-hidden={section !== 'campaign'}>
         <EmailDesignStudio tenantId={tenantId} purpose="campaign" initialTemplateId={pendingTemplateId} />
-      </div>
-      <div className={section === 'whatsapp' ? 'block' : 'hidden'} aria-hidden={section !== 'whatsapp'}>
+      </div>}
+      {visitedSections.has('whatsapp') && <div className={section === 'whatsapp' ? 'block' : 'hidden'} aria-hidden={section !== 'whatsapp'}>
         <WhatsAppTemplatesPanel canEdit={canManageWhatsAppTemplates} />
-      </div>
+      </div>}
     </div>
   );
 };

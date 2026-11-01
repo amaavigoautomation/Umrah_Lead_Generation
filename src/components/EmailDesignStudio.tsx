@@ -715,7 +715,7 @@ export const EmailDesignStudio: React.FC<{ tenantId: string }> = ({ tenantId }) 
   if (editing && editorMode === 'html') {
     const htmlValidation = validateEmailDesignHtml(editing.customHtml ?? '');
     return (
-      <div className="h-full min-h-[760px] flex flex-col bg-slate-50 -m-4 lg:-m-6">
+      <div className={htmlExpanded ? "fixed inset-0 z-[100] h-screen w-screen flex flex-col bg-slate-50" : "h-full min-h-[760px] flex flex-col bg-slate-50 -m-4 lg:-m-6"}>
         <div className="bg-white border-b border-slate-200 px-4 lg:px-6 py-3 flex flex-wrap items-center gap-3 shrink-0">
           <button onClick={() => { setEditing(null); setNotice(null); }} className="p-2 rounded-lg hover:bg-slate-100 text-slate-600" title="Back to Email Design Studio">
             <ArrowLeft className="w-4 h-4" />
@@ -732,10 +732,13 @@ export const EmailDesignStudio: React.FC<{ tenantId: string }> = ({ tenantId }) 
               <Code2 className="w-3.5 h-3.5" /> Full HTML
             </button>
           </div>
-          <div className="flex items-center gap-1 bg-slate-100 rounded-lg p-1">
+          {!htmlExpanded && <div className="flex items-center gap-1 bg-slate-100 rounded-lg p-1">
             <button onClick={() => setPreviewMode('desktop')} className={'p-2 rounded-md ' + (previewMode === 'desktop' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500')} title="Desktop preview"><Monitor className="w-4 h-4" /></button>
             <button onClick={() => setPreviewMode('mobile')} className={'p-2 rounded-md ' + (previewMode === 'mobile' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500')} title="Mobile preview"><Smartphone className="w-4 h-4" /></button>
-          </div>
+          </div>}
+          <button type="button" onClick={() => setHtmlExpanded((value) => !value)} className="px-3 py-2 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-xs font-semibold text-slate-700 flex items-center gap-1.5" title={htmlExpanded ? "Restore split view" : "Expand code editor"}>
+            {htmlExpanded ? <><Minimize2 className="w-3.5 h-3.5" /> Restore view</> : <><Maximize2 className="w-3.5 h-3.5" /> Expand editor</>}
+          </button>
           <button disabled={busy || !htmlValidation.valid} title={!htmlValidation.valid ? 'Add exactly one {{content}} placeholder before saving' : 'Save design'} onClick={() => void saveTemplate(false)} className="px-3.5 py-2 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed">
             <Save className="w-3.5 h-3.5" /> Save design
           </button>
@@ -744,12 +747,12 @@ export const EmailDesignStudio: React.FC<{ tenantId: string }> = ({ tenantId }) 
           </button>
         </div>
         {notice && <div className={'px-5 py-2 text-xs border-b ' + (notice.tone === 'error' ? 'bg-rose-50 border-rose-100 text-rose-700' : notice.tone === 'success' ? 'bg-emerald-50 border-emerald-100 text-emerald-700' : 'bg-blue-50 border-blue-100 text-blue-700')}>{notice.text}</div>}
-        <div className="flex-1 min-h-0 grid grid-cols-1 xl:grid-cols-[minmax(0,1.05fr)_minmax(420px,0.95fr)]">
-          <section className="min-h-[580px] xl:min-h-0 bg-white border-r border-slate-200 flex flex-col overflow-hidden">
+        <div className={htmlExpanded ? "flex-1 min-h-0 grid grid-cols-1" : "flex-1 min-h-0 grid grid-cols-1 xl:grid-cols-[minmax(0,1.05fr)_minmax(420px,0.95fr)]"}>
+          <section className={(htmlExpanded ? "h-full min-h-0" : "min-h-[580px] xl:min-h-0") + " bg-white border-r border-slate-200 flex flex-col overflow-hidden"}>
             <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between gap-2">
               <div>
                 <h2 className="text-xs font-bold text-slate-800">HTML source</h2>
-                <p className="text-[10px] text-slate-400">Syntax-highlighted HTML · inline CSS and responsive media queries</p>
+                <p className="text-[10px] text-slate-400">CodeMirror 6 · HTML syntax · clear contrast and line numbers</p>
               </div>
               <span className={'text-[10px] font-bold px-2.5 py-1 rounded-full ' + (htmlValidation.valid ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700')}>
                 {htmlValidation.valid ? 'Message slot ready' : 'Needs attention'}
@@ -762,6 +765,9 @@ export const EmailDesignStudio: React.FC<{ tenantId: string }> = ({ tenantId }) 
               <button type="button" onClick={() => void copyCurrentHtml()} className="px-3 py-2 rounded-lg border border-slate-200 bg-white hover:border-orange-300 hover:text-orange-700 text-[11px] font-semibold flex items-center gap-1.5">
                 <Copy className="w-3.5 h-3.5" /> Copy HTML
               </button>
+              <button type="button" onClick={() => setHtmlWordWrap((value) => !value)} aria-pressed={htmlWordWrap} className={"px-3 py-2 rounded-lg border text-[11px] font-semibold flex items-center gap-1.5 " + (htmlWordWrap ? "border-sky-200 bg-sky-50 text-sky-800" : "border-slate-200 bg-white text-slate-600")} title="Toggle long-line wrapping">
+                <WrapText className="w-3.5 h-3.5" /> Wrap {htmlWordWrap ? "On" : "Off"}
+              </button>
               <div className="ml-auto flex items-center gap-1.5 min-w-[190px]">
                 <Search className="w-3.5 h-3.5 text-slate-400" />
                 <input value={htmlFind} onChange={(event) => setHtmlFind(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') findNextHtmlMatch(); }} placeholder="Find in HTML..." className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-[11px] outline-none focus:border-orange-400" />
@@ -769,7 +775,7 @@ export const EmailDesignStudio: React.FC<{ tenantId: string }> = ({ tenantId }) 
               </div>
             </div>
             <div className="flex-1 min-h-0 p-3 flex flex-col">
-              <HtmlSourceEditor editorRef={htmlEditorRef} value={editing.customHtml ?? ''} onChange={(value) => updateTemplate({ customHtml: value })} />
+              <HtmlSourceEditor editorRef={htmlEditorRef} value={editing.customHtml ?? ''} onChange={(value) => updateTemplate({ customHtml: value })} wordWrap={htmlWordWrap} />
             </div>
             <div className="px-4 py-3 border-t border-slate-200 bg-white space-y-1.5">
               {htmlValidation.valid ? (
@@ -782,6 +788,7 @@ export const EmailDesignStudio: React.FC<{ tenantId: string }> = ({ tenantId }) 
             </div>
           </section>
 {!htmlExpanded && (
+{!htmlExpanded && (
           <main className="min-h-[580px] xl:min-h-0 flex flex-col p-3 lg:p-5">
             <div className="flex items-center justify-between mb-3 gap-2">
               <div><h2 className="text-xs font-bold text-slate-700">Live email preview</h2><p className="text-[10px] text-slate-400">Sample recipient message is inserted where {'{{content}}'} appears.</p></div>
@@ -789,6 +796,7 @@ export const EmailDesignStudio: React.FC<{ tenantId: string }> = ({ tenantId }) 
             </div>
             <EmailPreview template={editing} brand={brandData} mode={previewMode} />
           </main>
+          )}
           )}
         </div>
       </div>

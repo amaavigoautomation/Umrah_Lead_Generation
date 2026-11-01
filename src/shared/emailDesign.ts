@@ -285,7 +285,8 @@ function renderBlock(item:EmailDesignBlock,t:EmailDesignTemplate,body:string,bra
  const eyebrowText=String(item.eyebrow||'').replace(/\{\{companyName\}\}/g,escapeEmailHtml(brand.companyName||'Our Team')).replace(/\{\{tagline\}\}/g,escapeEmailHtml(brand.tagline||''));
  switch(item.type){
   case 'logo':{
-   const logo=isSafeEmailUrl(item.url,true)||isSafeEmailUrl(brand.logoUrl,true),company=escapeEmailHtml(brand.companyName||'Our Team');
+   const logo=isSafeEmailUrl(item.url,true)||isSafeEmailUrl(brand.logoUrl,true);
+   const company=escapeEmailHtml(String(item.text||'').trim()||brand.companyName||'Our Team');
    return wrap(logo?'<img src="'+escapeEmailHtml(logo)+'" alt="'+escapeEmailHtml(item.altText||company)+'" width="'+num(item.width,180,80,320)+'" style="display:inline-block;max-width:100%;height:auto;border:0"/>':'<span style="font-size:22px;font-weight:700;letter-spacing:-.3px;color:'+color+'">'+company+'</span>','padding-top:20px;padding-bottom:20px;');
   }
   case 'hero':{

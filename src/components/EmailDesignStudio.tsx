@@ -517,7 +517,7 @@ export const EmailDesignStudio: React.FC<{ tenantId: string }> = ({ tenantId }) 
                 autoCorrect="off"
                 wrap="off"
                 aria-label="Full HTML email source"
-                placeholder={'<!doctype html>\\n<html>\\n<head>\\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\\n</head>\\n<body>\\n  <!-- Header, layout and footer -->\\n  <table role=\"presentation\" width=\"100%\">\\n    <tr><td>{{content}}</td></tr>\\n  </table>\\n</body>\\n</html>'}
+                placeholder={'<!doctype html>\n<html>\n<head>\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n</head>\n<body>\n  <!-- Header, layout and footer -->\n  <table role=\"presentation\" width=\"100%\">\n    <tr><td>{{content}}</td></tr>\n  </table>\n</body>\n</html>'}
                 className="w-full h-full min-h-[500px] resize-none rounded-xl border border-slate-200 bg-slate-950 p-4 text-[11px] leading-[1.65] text-emerald-100 font-mono outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-100"
               />
             </div>

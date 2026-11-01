@@ -6,6 +6,7 @@ import { encryptSecret, decryptSecret } from './cryptoUtils.js';
 import type { TenantContext } from '../types/tenant.js';
 import { evaluateHumanHandoff, persistHumanHandoff, describeHandoff } from './humanHandoffService.js';
 import { getTenantChannelMode } from './channelModeService.js';
+import { getApplicableAiFeedback, buildAiFeedbackPromptSection, buildAiFeedbackSystemGuard } from './aiFeedbackService.js';
 
 /**
  * Per-workspace WhatsApp (Cloud API via Embedded Signup) and Facebook Messenger (Page login),
@@ -1163,6 +1164,8 @@ async function processInbound(tenantId: string, event: InboundEvent, eventId: st
     .map((d) => '## ' + String(d.title || 'Knowledge') + '\n' + String(d.content || '').slice(0, 2500))
     .join('\n\n')
     .slice(0, 12000);
+  const applicableAiFeedback = await getApplicableAiFeedback(ctx, event.channel, event.text);
+  const aiFeedbackPromptSection = buildAiFeedbackPromptSection(applicableAiFeedback);
   const history = thread
     .slice(-8)
     .map((m) => ({ role: m.direction === 'OUTBOUND' ? ('assistant' as const) : ('user' as const), content: String(m.text || '').slice(0, 1500) }));
@@ -1173,10 +1176,10 @@ async function processInbound(tenantId: string, event: InboundEvent, eventId: st
     messages: [
       {
         role: 'system',
-        content: `You are this workspace customer-support and lead-qualification assistant. Reply naturally and briefly to the ${label} message. Use only the workspace knowledge below for factual claims. If knowledge does not answer the question, ask a concise clarifying question instead of inventing facts. Do not claim a booking or action has completed unless confirmed.\n\nWorkspace knowledge:\n` + (knowledge || 'No published workspace knowledge is available. Ask a clarifying question and do not invent product details.'),
+        content: buildAiFeedbackSystemGuard() + ' You are this workspace customer-support and lead-qualification assistant. Reply naturally and briefly to the ' + label + ' message. Use only the workspace knowledge below for factual claims. If knowledge does not answer the question, ask a concise clarifying question instead of inventing facts. Do not claim a booking or action has completed unless confirmed.\n\nWorkspace knowledge:\n' + (knowledge || 'No published workspace knowledge is available. Ask a clarifying question and do not invent product details.'),
       },
       ...history,
-      { role: 'user', content: event.text.slice(0, 3000) },
+      { role: 'user', content: (aiFeedbackPromptSection ? aiFeedbackPromptSection + '\n\n' : '') + 'CUSTOMER MESSAGE:\n' + event.text.slice(0, 3000) },
     ],
   });
   const replyText = completion.choices[0]?.message?.content?.trim();

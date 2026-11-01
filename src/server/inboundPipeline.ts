@@ -2,6 +2,7 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import { stripQuotedReply } from '../shared/quotedReply.js';
 import { isHumanManagedConversationData } from '../shared/humanHandoff.js';
 import { tenantRepo } from './tenantRepo.js';
+import { getApplicableAiFeedback, buildAiFeedbackPromptSection, buildAiFeedbackSystemGuard } from './aiFeedbackService.js';
 import { writeTenantAuditEvent } from './auditLogger.js';
 import { evaluateHumanHandoff, persistHumanHandoff, describeHandoff } from './humanHandoffService.js';
 import { normalizeChannelMode } from '../shared/channelModes.js';
@@ -972,6 +973,9 @@ export async function generateAutoReplyText(params: {
     (doc) => `=== [${doc.category}] ${doc.title} ===\n${doc.content}`
   ).join('\n\n');
 
+  const applicableAiFeedback = await getApplicableAiFeedback(getInboundCtx(), 'EMAIL', subject + '\n' + body);
+  const aiFeedbackPromptSection = buildAiFeedbackPromptSection(applicableAiFeedback);
+
   // Attempt OpenAI generation if OPENAI_API_KEY (or fallback key) is available
   const openAiApiKey = process.env.OPENAI_API_KEY || process.env.GEMINI_API_KEY;
   if (openAiApiKey) {
@@ -1038,14 +1042,17 @@ CRITICAL INSTRUCTIONS:
 5. Conclude with:
 ${brandAutomationSignature(brand)}${targetMailbox ? `\n${targetMailbox}` : ''}`;
 
-      const prompt = isUmrah ? umrahPrompt : genericPrompt;
+      const prompt = [isUmrah ? umrahPrompt : genericPrompt, aiFeedbackPromptSection].filter(Boolean).join('\n\n');
 
       const candidateModels = ['gpt-4o-mini', 'gpt-4o', 'gpt-3.5-turbo'];
       for (const modelName of candidateModels) {
         try {
           const completion = await openai.chat.completions.create({
             model: modelName,
-            messages: [{ role: 'user', content: prompt }],
+            messages: [
+              { role: 'system', content: buildAiFeedbackSystemGuard() },
+              { role: 'user', content: prompt },
+            ],
             temperature: 0.3,
           });
 

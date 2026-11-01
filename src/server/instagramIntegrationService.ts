@@ -7,6 +7,7 @@ import { encryptSecret, decryptSecret } from './cryptoUtils.js';
 import type { TenantContext } from '../types/tenant.js';
 import { evaluateHumanHandoff, persistHumanHandoff, describeHandoff } from './humanHandoffService.js';
 import { getTenantChannelMode } from './channelModeService.js';
+import { getApplicableAiFeedback, buildAiFeedbackPromptSection, buildAiFeedbackSystemGuard } from './aiFeedbackService.js';
 
 const GRAPH_VERSION = process.env.META_GRAPH_API_VERSION || 'v23.0';
 const OAUTH_STATE_TTL_MS = 10 * 60 * 1000;
@@ -429,6 +430,8 @@ async function processInstagramMessageEvent(tenantId: string, accountId: string,
     .map((d) => '## ' + String(d.title || 'Knowledge') + '\n' + String(d.content || '').slice(0, 2500))
     .join('\n\n')
     .slice(0, 12000);
+  const applicableAiFeedback = await getApplicableAiFeedback(ctx, 'INSTAGRAM', messageText);
+  const aiFeedbackPromptSection = buildAiFeedbackPromptSection(applicableAiFeedback);
   const history = thread
     .slice(-8)
     .map((m) => ({ role: m.direction === 'OUTBOUND' ? 'assistant' as const : 'user' as const, content: String(m.text || '').slice(0, 1500) }));
@@ -437,9 +440,9 @@ async function processInstagramMessageEvent(tenantId: string, accountId: string,
     model: process.env.INSTAGRAM_AI_MODEL || 'gpt-4o-mini',
     temperature: 0.3,
     messages: [
-      { role: 'system', content: 'You are this workspace customer-support and lead-qualification assistant. Reply naturally and briefly to the Instagram DM. Use only the workspace knowledge below for factual claims. If knowledge does not answer the question, ask a concise clarifying question instead of inventing facts. Do not claim a booking or action has completed unless confirmed.\n\nWorkspace knowledge:\n' + (knowledge || 'No published workspace knowledge is available. Ask a clarifying question and do not invent product details.') },
+      { role: 'system', content: buildAiFeedbackSystemGuard() + ' You are this workspace customer-support and lead-qualification assistant. Reply naturally and briefly to the Instagram DM. Use only the workspace knowledge below for factual claims. If knowledge does not answer the question, ask a concise clarifying question instead of inventing facts. Do not claim a booking or action has completed unless confirmed.\n\nWorkspace knowledge:\n' + (knowledge || 'No published workspace knowledge is available. Ask a clarifying question and do not invent product details.') },
       ...history,
-      { role: 'user', content: messageText.slice(0, 3000) },
+      { role: 'user', content: (aiFeedbackPromptSection ? aiFeedbackPromptSection + '\n\n' : '') + 'CUSTOMER MESSAGE:\n' + messageText.slice(0, 3000) },
     ],
   });
   const replyText = completion.choices[0]?.message?.content?.trim();

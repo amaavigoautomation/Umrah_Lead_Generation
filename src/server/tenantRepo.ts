@@ -123,6 +123,10 @@ export function tenantRepo(ctx: TenantContext) {
     secretsCol: () => collection(db, `${tenantDocPath}/secrets`),
     secretDoc: (name: string) => doc(db, `${tenantDocPath}/secrets`, name),
 
+    // AI Testing feedback is server-managed and tenant-scoped.
+    aiTestFeedback: () => collection(db, `${tenantDocPath}/ai_test_feedback`),
+    aiTestFeedbackDoc: (id: string) => doc(db, `${tenantDocPath}/ai_test_feedback`, id),
+
     // Generic scoped accessor
     collection: (colName: string) => collection(db, `${tenantDocPath}/${colName}`),
     doc: (colName: string, docId: string) => doc(db, `${tenantDocPath}/${colName}`, docId),

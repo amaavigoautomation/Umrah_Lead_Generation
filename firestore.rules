@@ -85,6 +85,10 @@ service cloud.firestore {
       allow read, write: if false; // Worker leases are server-only
     }
 
+    match /tenants/{tenantId}/ai_test_feedback/{feedbackId=**} {
+      allow read, write: if false; // Managed through authenticated tenant APIs; feedback stays server-side.
+    }
+
     // Tenant Settings & Integrations: Read by tenant members, write only by tenant admins
     match /tenants/{tenantId}/settings/{settingId=**} {
       allow read: if isTenantUser(tenantId);

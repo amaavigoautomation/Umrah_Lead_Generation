@@ -5,6 +5,7 @@ import { evaluateHumanHandoff, persistHumanHandoff, describeHandoff } from './hu
 import { setConversationAiState } from './inboundPipeline.js';
 import { normalizeChannelMode } from '../shared/channelModes.js';
 import { getTenantChannelMode } from './channelModeService.js';
+import { getApplicableAiFeedback, buildAiFeedbackPromptSection, buildAiFeedbackSystemGuard } from './aiFeedbackService.js';
 import type { TenantContext } from '../types/tenant.js';
 
 const DEFAULT_UMRAH_CTX: TenantContext = {
@@ -570,6 +571,9 @@ export async function generateWhatsAppAutoReplyText(params: {
       }).join('\n')
     : `[Msg 1 - Customer (${fromName || fromPhone})]: ${body}`;
 
+  const applicableAiFeedback = await getApplicableAiFeedback(getWACtx(), 'WHATSAPP', body);
+  const aiFeedbackPromptSection = buildAiFeedbackPromptSection(applicableAiFeedback);
+
   // Attempt OpenAI generation if OPENAI_API_KEY (or fallback key) is available
   const openAiApiKey = process.env.OPENAI_API_KEY || process.env.GEMINI_API_KEY;
   if (openAiApiKey) {
@@ -621,14 +625,17 @@ INSTRUCTIONS FOR WHATSAPP RESPONSE:
 3. Ground every answer strictly in the knowledge base. NEVER invent features, prices or guarantees. If the answer is not in the knowledge base, say you will connect them with a specialist from ${brand.companyName} and ask for the details needed.
 4. Sign off politely as:
 "${waSignoff}"`;
-      const prompt = isUmrah ? umrahPrompt : genericPrompt;
+      const prompt = [isUmrah ? umrahPrompt : genericPrompt, aiFeedbackPromptSection].filter(Boolean).join('\n\n');
 
       const candidateModels = ['gpt-4o-mini', 'gpt-4o', 'gpt-3.5-turbo'];
       for (const modelName of candidateModels) {
         try {
           const completion = await openai.chat.completions.create({
             model: modelName,
-            messages: [{ role: 'user', content: prompt }],
+            messages: [
+              { role: 'system', content: buildAiFeedbackSystemGuard() },
+              { role: 'user', content: prompt },
+            ],
             temperature: 0.3,
           });
 

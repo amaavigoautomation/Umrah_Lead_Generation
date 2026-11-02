@@ -86,6 +86,7 @@ import {
   orderBy,
   createDoc,
   deleteDoc,
+  setDoc,
 } from './adminFirestore.js';
 import crypto from 'crypto';
 import { safeSetDoc } from './firestoreUtils.js';
@@ -1100,8 +1101,9 @@ async function createGoogleCalendarDemoBookingInner(
         await safeSetDoc(tenantRepo(getSchedCtx()).bookingDoc(bookingId), booking, { merge: true });
       }
 
-      // 4. Update CRM Lead record
-      if (leadId) {
+      // A reschedule's coordinating method updates CRM only after the old event is released.
+      // Avoid side effects while the replacement calendar event is still provisional.
+      if (leadId && !params.replacingBookingId) {
         await safeSetDoc(
           tenantRepo(getSchedCtx()).leadDoc(leadId),
           {
@@ -1146,7 +1148,7 @@ async function createGoogleCalendarDemoBookingInner(
       }
 
       // 5. Update Campaign analytics if lead originated from outbound campaign
-      if (campaignId && leadId) {
+      if (campaignId && leadId && !params.replacingBookingId) {
         await updateCampaignLeadStatus({
           leadId,
           demoStatus: 'BOOKED',
@@ -1233,25 +1235,27 @@ export async function cancelDemoBooking(
     }
 
     const nowIso = new Date().toISOString();
-    await safeSetDoc(
+    // safeSetDoc intentionally swallows write errors; cancellation must only report success
+    // when the booking and its CRM lead status were actually persisted.
+    await setDoc(
       bookingRef,
       {
         status: 'CANCELLED',
         cancellationReason: reason,
         cancelledAt: nowIso,
         updatedAt: nowIso,
-      },
+      } as any,
       { merge: true }
     );
 
     if (booking.leadId) {
-      await safeSetDoc(
+      await setDoc(
         tenantRepo(getSchedCtx()).leadDoc(booking.leadId),
         {
           demoStatus: 'NOT_BOOKED',
           status: 'QUALIFIED',
           updatedAt: nowIso,
-        },
+        } as any,
         { merge: true }
       );
     }
@@ -1356,11 +1360,13 @@ export async function rescheduleDemoBooking(
 
     // Update the tenant booking and CRM lead before releasing the previous calendar event.
     try {
-      await safeSetDoc(bookingRef, updatedBooking, { merge: true });
+      await setDoc(bookingRef, updatedBooking as any, { merge: true });
       if (booking.leadId) {
-        await safeSetDoc(
+        await setDoc(
           tenantRepo(getSchedCtx()).leadDoc(booking.leadId),
           {
+            status: 'DEMO_BOOKED',
+            demoStatus: 'BOOKED',
             demoDate: newDateString,
             demoStartTime: newStartTime,
             demoEndTime: newEndTime,
@@ -1368,18 +1374,20 @@ export async function rescheduleDemoBooking(
             calendarEventId: newCalendarEventId,
             googleMeetLink: newGoogleMeetLink,
             updatedAt: nowIso,
-          },
+          } as any,
           { merge: true }
         );
       }
     } catch (persistError: any) {
-      await safeSetDoc(bookingRef, booking, { merge: true }).catch((rollbackError) =>
+      await setDoc(bookingRef, booking as any, { merge: true }).catch((rollbackError) =>
         console.error('[Reschedule Rollback] Could not restore original booking:', rollbackError)
       );
       if (booking.leadId) {
-        await safeSetDoc(
+        await setDoc(
           tenantRepo(getSchedCtx()).leadDoc(booking.leadId),
           {
+            status: 'DEMO_BOOKED',
+            demoStatus: 'BOOKED',
             demoDate: booking.date,
             demoStartTime: booking.startTime,
             demoEndTime: booking.endTime,
@@ -1387,7 +1395,7 @@ export async function rescheduleDemoBooking(
             calendarEventId: booking.calendarEventId || '',
             googleMeetLink: booking.googleMeetLink || '',
             updatedAt: new Date().toISOString(),
-          },
+          } as any,
           { merge: true }
         ).catch((rollbackError) => console.error('[Reschedule Rollback] Could not restore original lead details:', rollbackError));
       }
@@ -1404,13 +1412,15 @@ export async function rescheduleDemoBooking(
     if (booking.calendarEventId && !booking.calendarEventId.startsWith('mock-') && booking.calendarEventId !== newCalendarEventId) {
       const removed = await deleteGoogleCalendarDemoEvent(booking.calendarEventId, token);
       if (!removed.success) {
-        await safeSetDoc(bookingRef, booking, { merge: true }).catch((rollbackError) =>
+        await setDoc(bookingRef, booking as any, { merge: true }).catch((rollbackError) =>
           console.error('[Reschedule Rollback] Could not restore original booking:', rollbackError)
         );
         if (booking.leadId) {
-          await safeSetDoc(
+          await setDoc(
             tenantRepo(getSchedCtx()).leadDoc(booking.leadId),
             {
+              status: 'DEMO_BOOKED',
+              demoStatus: 'BOOKED',
               demoDate: booking.date,
               demoStartTime: booking.startTime,
               demoEndTime: booking.endTime,
@@ -1418,7 +1428,7 @@ export async function rescheduleDemoBooking(
               calendarEventId: booking.calendarEventId || '',
               googleMeetLink: booking.googleMeetLink || '',
               updatedAt: new Date().toISOString(),
-            },
+            } as any,
             { merge: true }
           ).catch((rollbackError) => console.error('[Reschedule Rollback] Could not restore original lead details:', rollbackError));
         }

@@ -239,7 +239,7 @@ function topicTokens(value: string): Set<string> {
     subscription: 'pricing', subscriptions: 'pricing', rate: 'pricing', rates: 'pricing',
     user: 'usercount', users: 'usercount', seat: 'usercount', seats: 'usercount', member: 'usercount', members: 'usercount', staff: 'usercount', employee: 'usercount', employees: 'usercount',
   };
-  const tokens = new Set(words.filter((word) => word.length > 2 && !STOP_WORDS.has(word)).map((word) => synonyms[word] || word));
+  const tokens = new Set<string>(words.filter((word: string) => word.length > 2 && !STOP_WORDS.has(word)).map((word: string) => synonyms[word] || word));
   const text = String(value || '').toLowerCase();
   if (/pric|cost|fee|plan|subscription|quote|discount|rate|billing/.test(text)) tokens.add('__topic_pricing');
   if (/demo|meeting|walkthrough|schedule|calendar|slot/.test(text)) tokens.add('__topic_demo');

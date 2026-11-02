@@ -938,7 +938,7 @@ Decide SEND, SKIP, or HUMAN_REVIEW and produce the JSON.`;
       jsonMode: true,
       models: ['gpt-4o-mini', 'gpt-4o', 'gpt-3.5-turbo'],
       temperature: 0.3,
-      tenantId: ctx0(job).tenantId,
+      tenantId: ctx0(job),
     });
     if (!raw) {
       return { decision: 'human_review', reason: 'OpenAI output was empty.', humanReviewReason: 'Empty response from model.' };

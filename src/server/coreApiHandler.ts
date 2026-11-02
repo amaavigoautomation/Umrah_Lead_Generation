@@ -93,7 +93,7 @@ import {
   getCampaignActiveCtx,
 } from './campaignService.js';
 import { getTenantBrand } from './brandService.js';
-import { brandSignature, brandIntro, brandTzLabel, brandWorkingDaysLabel, fmtHour } from '../shared/brand.js';
+import { brandSignature, brandIntro, brandTzLabel, brandWorkingDaysLabel, brandWorkingWindowLabel, workingHoursForDay, fmtHour } from '../shared/brand.js';
 import { setSchedulingActiveContext } from './demoSchedulingService.js';
 import { setInboundActiveContext } from './inboundPipeline.js';
 import { getEntitlements, hasFeature, featureForUrl, listPlans, savePlan, getEffectiveLimits, invalidateEntitlements } from './entitlements.js';
@@ -1393,7 +1393,7 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
             targetEmail: b.calendarEmail,
             timezone: b.timezone,
             workingDays: brandWorkingDaysLabel(b).replace(' to ', ' - '),
-            workingHours: `${fmtHour(b.workingHoursStart)} - ${fmtHour(b.workingHoursEnd)} ${brandTzLabel(b)}`,
+            workingHours: brandWorkingWindowLabel(b),
           };
         })(),
         timestamp: new Date().toISOString(),
@@ -1818,9 +1818,17 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
     const liveToken = await getLiveCalendarToken(requestBearerToken || undefined);
     const verification = liveToken ? await verifyGoogleCalendarConnection(liveToken) : { connected: false };
     const cb = await getTenantBrand(resolvedTenantId);
-    const slotHrs: number[] = [];
-    for (let h = cb.workingHoursStart; h < cb.workingHoursEnd; h++) slotHrs.push(h);
-    const closedNames = [6, 0, 1, 2, 3, 4, 5].filter((d) => !cb.workingDays.includes(d)).map((d) => ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][d]);
+    const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const closedNames = [6, 0, 1, 2, 3, 4, 5].filter((d) => !cb.workingDays.includes(d)).map((d) => dayNames[d]);
+    const fixedSlots = cb.workingDays.flatMap((day) => {
+      const window = workingHoursForDay(cb, day);
+      return Array.from({ length: Math.max(0, window.end - window.start) }, (_, index) => {
+        const hour = window.start + index;
+        const endHour = hour + 1;
+        const format = (value: number) => value === 24 ? '12:00 AM' : fmtHour(value);
+        return `${dayNames[day]}: ${format(hour)} – ${format(endHour)} ${brandTzLabel(cb)}`;
+      });
+    });
     res.statusCode = 200;
     res.end(
       JSON.stringify({
@@ -1834,9 +1842,10 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
         targetAccount: cb.calendarEmail,
         timezone: cb.timezone,
         workingDays: `${brandWorkingDaysLabel(cb).replace(' to ', ' – ')}${closedNames.length ? ` (${closedNames.join(' & ')} closed)` : ''}`,
-        workingHours: `${fmtHour(cb.workingHoursStart)} – ${fmtHour(cb.workingHoursEnd)} ${brandTzLabel(cb)}`,
+        workingHours: brandWorkingWindowLabel(cb),
+        workingSchedule: cb.workingHoursByDay,
         durationMinutes: 60,
-        fixedSlots: slotHrs.map((h) => `${h}:00 – ${h + 1}:00 ${brandTzLabel(cb)}`),
+        fixedSlots,
         timestamp: new Date().toISOString(),
       })
     );
@@ -1863,7 +1872,8 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
         success: true,
         targetAccount: ab.calendarEmail,
         timezone: ab.timezone,
-        workingHours: `${fmtHour(ab.workingHoursStart)} – ${fmtHour(ab.workingHoursEnd)} ${brandTzLabel(ab)} (${brandWorkingDaysLabel(ab)})`,
+        workingHours: brandWorkingWindowLabel(ab),
+        workingSchedule: ab.workingHoursByDay,
         slots,
         totalAvailable: slots.length,
       })

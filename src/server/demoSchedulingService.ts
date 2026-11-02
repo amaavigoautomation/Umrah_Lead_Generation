@@ -72,6 +72,7 @@ const hostEmailList = (smtpUser?: string, smtpFrom?: string) =>
     .map((e) => e.toLowerCase().trim())
     .filter((e) => e.length > 0);
 import OpenAI from 'openai';
+import { recordAiCompletionUsage } from './usageService.js';
 import { isFirebaseConfigured } from '../firebase/config.js';
 import { db } from './adminFirestore.js';
 import {
@@ -2205,6 +2206,7 @@ Output JSON only: {"isDemoIntent": boolean, "requestedDate": string|null, "reque
             response_format: { type: 'json_object' },
             temperature: 0,
           });
+          await recordAiCompletionUsage(getSchedCtx().tenantId, completion, modelName, 'openai');
           const content = completion.choices[0]?.message?.content;
           if (content) {
             Object.assign(ai, JSON.parse(content.trim()));

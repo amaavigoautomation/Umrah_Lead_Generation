@@ -391,7 +391,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         </div>
       </div>
 
-      {tenantId && canEditEmail && <BillingView />}
+      {tenantId && canEditEmail && <BillingView tenantId={tenantId} />}
 
       {tenantId && <EmailSettingsPanel tenantId={tenantId} canEdit={Boolean(canEditEmail)} />}
 

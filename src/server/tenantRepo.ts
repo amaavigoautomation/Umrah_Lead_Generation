@@ -106,6 +106,8 @@ export function tenantRepo(ctx: TenantContext) {
 
     usageCol: () => collection(db, `${tenantDocPath}/usage`),
     usageDoc: (month: string) => doc(db, `${tenantDocPath}/usage`, month),
+    dailyUsageCol: () => collection(db, `${tenantDocPath}/usage_daily`),
+    dailyUsageDoc: (day: string) => doc(db, `${tenantDocPath}/usage_daily`, day),
 
     auditLogs: () => collection(db, `${tenantDocPath}/audit_logs`),
     auditLogDoc: (id: string) => doc(db, `${tenantDocPath}/audit_logs`, id),

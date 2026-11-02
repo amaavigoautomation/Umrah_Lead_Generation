@@ -2,6 +2,7 @@ import OpenAI from 'openai';
 import { isFirebaseConfigured } from '../firebase/config.js';
 import { db } from './adminFirestore.js';
 import { doc, getDoc, setDoc } from './adminFirestore.js';
+import { recordAiCompletionUsage } from './usageService.js';
 
 let memoryOpenAIApiKey = process.env.OPENAI_API_KEY || '';
 
@@ -68,6 +69,8 @@ export interface OpenAIRequestOptions {
   jsonMode?: boolean;
   models?: string[];
   maxTokens?: number;
+  /** Tenant whose workspace initiated the AI operation. When present, provider usage is recorded. */
+  tenantId?: string;
 }
 
 /**
@@ -100,6 +103,7 @@ export async function generateOpenAICompletion(options: OpenAIRequestOptions): P
         ...(options.jsonMode ? { response_format: { type: 'json_object' } } : {}),
       });
 
+      if (options.tenantId) await recordAiCompletionUsage(options.tenantId, completion, model, 'openai');
       const responseText = completion.choices?.[0]?.message?.content?.trim() || '';
       if (responseText) {
         return responseText;

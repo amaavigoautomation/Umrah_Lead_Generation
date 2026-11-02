@@ -6,6 +6,7 @@ import { setConversationAiState } from './inboundPipeline.js';
 import { normalizeChannelMode } from '../shared/channelModes.js';
 import { getTenantChannelMode } from './channelModeService.js';
 import { getApplicableAiFeedback, buildAiFeedbackPromptSection, buildAiFeedbackSystemGuard } from './aiFeedbackService.js';
+import { recordAiCompletionUsage } from './usageService.js';
 import type { TenantContext } from '../types/tenant.js';
 
 const DEFAULT_UMRAH_CTX: TenantContext = {
@@ -639,6 +640,7 @@ INSTRUCTIONS FOR WHATSAPP RESPONSE:
             temperature: 0.3,
           });
 
+          await recordAiCompletionUsage(getWACtx().tenantId, completion, modelName, 'openai');
           const rawText = completion.choices[0]?.message?.content?.trim() || '';
           if (rawText.length > 30) {
             const replyText = sanitizeAiEmailText(rawText, senderGreetingName);

@@ -8,6 +8,7 @@ import type { TenantContext } from '../types/tenant.js';
 import crypto from 'crypto';
 import { normalizeEmail, type DuplicateInfo } from '../shared/leadDedupe.js';
 import OpenAI from 'openai';
+import { recordAiCompletionUsage } from './usageService.js';
 import { INITIAL_KNOWLEDGE_DOCUMENTS } from '../services/knowledgeData.js';
 import {
   collection,
@@ -246,6 +247,7 @@ Output strictly as a JSON object with keys: subject, body, researchData {company
           response_format: { type: 'json_object' },
           temperature: 0.3,
         });
+        await recordAiCompletionUsage(getCampaignActiveCtx().tenantId, completion, modelName, 'openai');
         const content = completion.choices[0]?.message?.content;
         if (content) {
           text = content;
@@ -2513,6 +2515,7 @@ export async function processNextCampaignSendBatch(
             subject: subject,
             text: body,
             html: htmlContent,
+            usageCategory: 'cold',
             attachments: activeAttachments.length > 0 ? activeAttachments : undefined,
             // Echoed back by Resend on open/click/bounce events, so the webhook finds the lead with no lookup.
             tags: [

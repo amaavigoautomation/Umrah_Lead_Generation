@@ -3,6 +3,7 @@ import { stripQuotedReply } from '../shared/quotedReply.js';
 import { isHumanManagedConversationData } from '../shared/humanHandoff.js';
 import { tenantRepo } from './tenantRepo.js';
 import { getApplicableAiFeedback, buildAiFeedbackPromptSection, buildAiFeedbackSystemGuard } from './aiFeedbackService.js';
+import { recordAiCompletionUsage } from './usageService.js';
 import { writeTenantAuditEvent } from './auditLogger.js';
 import { evaluateHumanHandoff, persistHumanHandoff, describeHandoff } from './humanHandoffService.js';
 import { normalizeChannelMode } from '../shared/channelModes.js';
@@ -1056,6 +1057,7 @@ ${brandAutomationSignature(brand)}${targetMailbox ? `\n${targetMailbox}` : ''}`;
             temperature: 0.3,
           });
 
+          await recordAiCompletionUsage(getInboundCtx().tenantId, completion, modelName, 'openai');
           const rawText = completion.choices[0]?.message?.content?.trim() || '';
           if (rawText.length > 30) {
             const replyText = sanitizeAiEmailText(rawText, senderGreetingName);

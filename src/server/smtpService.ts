@@ -8,6 +8,7 @@ import { resolveTenantSender } from './tenantEmailService.js';
 import { isFirebaseConfigured } from '../firebase/config.js';
 import { db } from './adminFirestore.js';
 import { resolveAssetRaw } from './assetService.js';
+import { recordTenantUsage } from './usageService.js';
 
 export interface SmtpStatus {
   configured: boolean;
@@ -44,6 +45,8 @@ export interface SendMailParams {
   headers?: Record<string, string>;
   /** Used to map Resend delivery events (bounce/complaint) back to a workspace. */
   tenantId?: string;
+  /** Controls monthly reporting classification; campaign outreach is cold, other sends are solicited. */
+  usageCategory?: 'cold' | 'solicited';
   /** Apply the workspace Email Design Studio template to this non-campaign email. */
   applyWorkspaceDesign?: boolean;
   /** Resend tags (letters, digits, _ and - only). Echoed back on every webhook event for this email. */
@@ -535,6 +538,12 @@ async function sendViaResend(params: SendMailParams, override?: { from: string; 
         },
         { merge: true }
       ).catch(() => {});
+    }
+
+    if (tenantId) {
+      await recordTenantUsage(tenantId, params.usageCategory === 'cold'
+        ? { coldEmailCount: 1 }
+        : { solicitedEmailCount: 1 });
     }
 
     console.log(`[Resend] Sent email to ${params.to}, id: ${data.id}`);

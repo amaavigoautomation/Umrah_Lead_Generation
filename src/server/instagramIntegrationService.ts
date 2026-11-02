@@ -8,6 +8,7 @@ import type { TenantContext } from '../types/tenant.js';
 import { evaluateHumanHandoff, persistHumanHandoff, describeHandoff } from './humanHandoffService.js';
 import { getTenantChannelMode } from './channelModeService.js';
 import { getApplicableAiFeedback, buildAiFeedbackPromptSection, buildAiFeedbackSystemGuard } from './aiFeedbackService.js';
+import { recordAiCompletionUsage } from './usageService.js';
 
 const GRAPH_VERSION = process.env.META_GRAPH_API_VERSION || 'v23.0';
 const OAUTH_STATE_TTL_MS = 10 * 60 * 1000;
@@ -445,6 +446,7 @@ async function processInstagramMessageEvent(tenantId: string, accountId: string,
       { role: 'user', content: (aiFeedbackPromptSection ? aiFeedbackPromptSection + '\n\n' : '') + 'CUSTOMER MESSAGE:\n' + messageText.slice(0, 3000) },
     ],
   });
+  await recordAiCompletionUsage(ctx.tenantId, completion, process.env.INSTAGRAM_AI_MODEL || 'gpt-4o-mini', 'openai');
   const replyText = completion.choices[0]?.message?.content?.trim();
   if (!replyText) {
     await updateDoc(eventRef, { status: 'processed_no_reply', reason: 'AI returned an empty response', processedAt: now, conversationId });

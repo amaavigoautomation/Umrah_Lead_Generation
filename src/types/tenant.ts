@@ -100,8 +100,11 @@ export interface TenantMonthlyUsage {
   month: string; // "YYYY-MM"
   aiInputTokens: number;
   aiOutputTokens: number;
+  aiCachedInputTokens?: number;
   aiTotalTokens: number;
   aiRequestCount: number;
+  aiCostUsd?: number;
+  aiUnpricedRequestCount?: number;
   solicitedEmailCount: number;
   coldEmailCount: number;
   whatsappMessageCount: number;

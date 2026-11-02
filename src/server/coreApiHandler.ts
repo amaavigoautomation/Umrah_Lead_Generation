@@ -146,7 +146,7 @@ import {
   runAutoFollowUpWorkerCycle,
 } from './autoFollowUpService.js';
 import { encryptSecret, decryptSecret } from './cryptoUtils.js';
-import { getTenantCurrentUsage, recordTenantUsage, checkTenantQuota } from './usageService.js';
+import { getTenantCurrentUsage, getTenantCurrentDailyEmailCount, recordTenantUsage, recordAiCompletionUsage, checkTenantQuota } from './usageService.js';
 import {
   routeWebsiteLeadWebhook,
   routeWhatsAppWebhook,
@@ -614,7 +614,7 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
       if (!targetId) denied = 'Platform admin only';
       else if (targetId !== resolvedTenantId) denied = 'Forbidden';
       else if (req.method !== 'GET' && userRole !== 'admin') denied = 'Workspace admin only';
-      else if (/\/(secrets|routes|inbound(\/.*)?|email(\/.*)?|webhook(\/.*)?)$/.test(url.split('?')[0]) && userRole !== 'admin') denied = 'Workspace admin only';
+      else if (/\/(secrets|routes|inbound(\/.*)?|email(\/.*)?|webhook(\/.*)?|usage)$/.test(url.split('?')[0]) && userRole !== 'admin') denied = 'Workspace admin only';
     }
     if (denied) {
       res.statusCode = 403;
@@ -627,7 +627,12 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
     if (isFirebaseConfigured && db) {
       try {
         const snap = await getDocs(globalTenantsCol());
-        const tenants = snap.docs.map((d) => d.data() as Tenant);
+        const tenants = await Promise.all(snap.docs.map(async (d) => {
+          const tenant = d.data() as Tenant;
+          const tenantId = tenant.id || d.id;
+          const currentMonthUsage = await getTenantCurrentUsage(tenantId);
+          return { ...tenant, id: tenantId, currentMonthUsage };
+        }));
         res.statusCode = 200;
         res.end(JSON.stringify({ tenants }));
         return true;
@@ -933,6 +938,7 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
   if (usageMatch && req.method === 'GET') {
     const tId = usageMatch[1];
     const usage = await getTenantCurrentUsage(tId);
+    const dailyEmailCount = await getTenantCurrentDailyEmailCount(tId);
     let limits = {
       monthlyAiTokens: 5_000_000,
       dailyOutboundSends: 10_000,
@@ -943,7 +949,7 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
       const snap = await getDoc(globalTenantDoc(tId));
       if (snap.exists()) {
         const t = snap.data() as Tenant;
-        if (t.limits) limits = t.limits;
+        limits = (await getEffectiveLimits(tId).catch(() => null)) || t.limits || limits;
       }
     }
 
@@ -952,9 +958,10 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
       JSON.stringify({
         usage,
         limits,
+        dailyUsage: { emailSentCount: dailyEmailCount },
         percentages: {
           aiTokens: Math.min(100, Math.round(((usage.aiTotalTokens || 0) / limits.monthlyAiTokens) * 100)),
-          dailySends: Math.min(100, Math.round(((usage.coldEmailCount || 0) / limits.dailyOutboundSends) * 100)),
+          dailySends: Math.min(100, Math.round((dailyEmailCount / limits.dailyOutboundSends) * 100)),
         },
       })
     );
@@ -2127,6 +2134,7 @@ Generate a helpful, accurate, grounded response adhering to all rules.`;
               temperature: 0.3,
             });
 
+            await recordAiCompletionUsage(activeTenantCtx.tenantId, completion, modelName, process.env.OPENAI_API_KEY ? 'openai' : 'gemini');
             const content = completion.choices[0]?.message?.content?.trim() || '';
             if (content.length > 20) {
               generatedText = content;
@@ -2454,6 +2462,7 @@ ${signature || defSig}`;
               ],
               temperature: 0.3,
             });
+            await recordAiCompletionUsage(activeTenantCtx.tenantId, completion, modelName, isGemini ? 'gemini' : 'openai');
             const content = completion.choices[0]?.message?.content?.trim() || '';
             if (content.length > 10) {
               generatedText = content;
@@ -3128,6 +3137,7 @@ ${signature || defSig}`;
         brandProfile: body.brandProfile,
         style: String(body?.style || 'Modern corporate'),
         instructions: String(body?.instructions || ''),
+        tenantId: activeTenantCtx.tenantId,
       });
       res.statusCode = 200;
       res.end(JSON.stringify({ success: true, template }));

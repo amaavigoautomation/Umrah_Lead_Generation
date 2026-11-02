@@ -26,7 +26,7 @@ import { writeTenantAuditEvent } from './auditLogger.js';
 import { sendLiveEmail, getSmtpConfig } from './smtpService.js';
 import { appendOutboundMessageToThread, getAllThreadMessages } from './inboundPipeline.js';
 import { generateOpenAICompletion, getOpenAIApiKey } from './openaiClient.js';
-import { isEmailSuppressed, checkTenantQuota, recordTenantUsage } from './usageService.js';
+import { isEmailSuppressed, checkTenantQuota } from './usageService.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -938,6 +938,7 @@ Decide SEND, SKIP, or HUMAN_REVIEW and produce the JSON.`;
       jsonMode: true,
       models: ['gpt-4o-mini', 'gpt-4o', 'gpt-3.5-turbo'],
       temperature: 0.3,
+      tenantId: ctx0(job).tenantId,
     });
     if (!raw) {
       return { decision: 'human_review', reason: 'OpenAI output was empty.', humanReviewReason: 'Empty response from model.' };
@@ -1267,8 +1268,6 @@ async function processOneJob(
   job.status = 'sent';
   job.processedAt = nowIso;
   await finishJob(ctx, job);
-  await recordTenantUsage(ctx.tenantId, { solicitedEmailCount: 1 }).catch(() => {});
-
   if (lead.autoFollowUp) lead.autoFollowUp.attemptCount = job.attempt;
 
   const messageId = `msg-followup-${Date.now()}-${randSuffix()}`;

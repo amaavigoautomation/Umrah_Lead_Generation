@@ -21,6 +21,7 @@ import {
   type HumanHandoffRules,
 } from '../shared/humanHandoff.js';
 import type { TenantContext } from '../types/tenant.js';
+import { recordAiCompletionUsage } from './usageService.js';
 
 export type HumanHandoffAiDecision = {
   handoffRequired: boolean;
@@ -60,7 +61,7 @@ export function describeHandoff(match: HumanHandoffMatch): string {
 export async function classifyHumanHandoffWithAi(
   latestMessage: string,
   recentHistory: readonly Record<string, unknown>[] = [],
-  opts: { businessName?: string; industry?: string } = {},
+  opts: { businessName?: string; industry?: string; tenantId?: string } = {},
 ): Promise<HumanHandoffAiDecision> {
   const fallback: HumanHandoffAiDecision = {
     handoffRequired: false,
@@ -93,8 +94,9 @@ export async function classifyHumanHandoffWithAi(
       timeout: 6000,
       maxRetries: 0,
     });
+    const modelName = process.env.HUMAN_HANDOFF_CLASSIFIER_MODEL || (isGemini ? 'gemini-2.0-flash' : 'gpt-4o-mini');
     const result = await client.chat.completions.create({
-      model: process.env.HUMAN_HANDOFF_CLASSIFIER_MODEL || (isGemini ? 'gemini-2.0-flash' : 'gpt-4o-mini'),
+      model: modelName,
       temperature: 0,
       max_tokens: 180,
       response_format: { type: 'json_object' },
@@ -116,6 +118,7 @@ export async function classifyHumanHandoffWithAi(
         },
       ],
     });
+    if (opts.tenantId) await recordAiCompletionUsage(opts.tenantId, result, modelName, isGemini ? 'gemini' : 'openai');
     const raw = result.choices[0]?.message?.content;
     if (!raw) return fallback;
     const parsed = JSON.parse(raw);
@@ -173,7 +176,7 @@ export async function evaluateHumanHandoff(
       businessName = brand?.companyName || undefined;
       industry = brand?.industryDescription || undefined;
     } catch {}
-    const decision = await classifyHumanHandoffWithAi(text, input.thread, { businessName, industry });
+    const decision = await classifyHumanHandoffWithAi(text, input.thread, { businessName, industry, tenantId: ctx.tenantId });
     if (decision.handoffRequired) {
       const reason = decision.reason === 'CUSTOMER_FRUSTRATION' ? 'FRUSTRATION' : 'EXPLICIT_REQUEST';
       const allowed = reason === 'FRUSTRATION' ? rules.frustration !== false : rules.explicitRequest !== false;

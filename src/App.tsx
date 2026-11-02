@@ -2328,7 +2328,7 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
   if (entitlements?.billing?.locked) {
     return currentUser.role === 'ADMIN' ? (
       <Suspense fallback={<ScreenLoading />}>
-        <BillingView fullScreen onLogout={handleLogout} email={currentUser.email} />
+        <BillingView fullScreen onLogout={handleLogout} email={currentUser.email} tenantId={currentTenantId} />
       </Suspense>
     ) : (
       <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 text-slate-700 gap-3 p-6 text-center">

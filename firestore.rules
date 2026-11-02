@@ -81,6 +81,10 @@ service cloud.firestore {
       allow write: if false; // Server Admin SDK only (atomic usage increments)
     }
 
+    match /tenants/{tenantId}/usage_daily/{usageId=**} {
+      allow read, write: if false; // Daily quota counters are server-only.
+    }
+
     match /tenants/{tenantId}/jobs/{jobId=**} {
       allow read, write: if false; // Worker leases are server-only
     }

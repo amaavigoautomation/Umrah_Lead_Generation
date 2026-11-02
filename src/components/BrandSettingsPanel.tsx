@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Palette, Loader2, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { useBrand } from '../context/BrandContext';
 import type { TenantBrand } from '../shared/brand';
-import { DAY_NAMES, brandWorkingWindowLabel } from '../shared/brand';
+import { DAY_NAMES, brandWorkingWindowLabel, fmtHour, workingHoursForDay } from '../shared/brand';
 
 const inputCls =
   'w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-orange-500';
@@ -40,7 +40,26 @@ export const BrandSettingsPanel: React.FC<{ tenantId: string; canEdit: boolean }
   const toggleDay = (n: number) =>
     set('workingDays', draft.workingDays.includes(n) ? draft.workingDays.filter((d) => d !== n) : [...draft.workingDays, n].sort());
 
+  const updateDayHours = (day: number, field: 'start' | 'end', value: number) => {
+    const current = workingHoursForDay(draft, day);
+    set('workingHoursByDay', {
+      ...draft.workingHoursByDay,
+      [day]: { ...current, [field]: value },
+    });
+  };
+
   const save = async () => {
+    if (draft.workingDays.length === 0) {
+      setError('Enable at least one day for demo bookings.');
+      return;
+    }
+    for (const day of draft.workingDays) {
+      const hours = workingHoursForDay(draft, day);
+      if (hours.start < 0 || hours.start > 23 || hours.end < 1 || hours.end > 24 || hours.start >= hours.end) {
+        setError(`Please choose a valid start and end time for ${DAY_NAMES[day]}.`);
+        return;
+      }
+    }
     setBusy(true);
     setError(null);
     setSaved(false);
@@ -89,30 +108,62 @@ export const BrandSettingsPanel: React.FC<{ tenantId: string; canEdit: boolean }
       </Field>
 
       <div className="border-t border-slate-100 pt-4 space-y-3">
-        <h4 className="text-sm font-bold text-slate-800">Demo scheduling hours</h4>
+        <h4 className="text-sm font-bold text-slate-800">Demo booking availability</h4>
+        <p className="text-xs text-slate-500">
+          Set availability separately for each day. A demo lasts 60 minutes and available slots start on the hour.
+          The end time is exclusive, so a 10 AM–6 PM window offers the final slot at 5 PM.
+        </p>
         <div className="grid sm:grid-cols-3 gap-4">
           {text('timezone', 'Timezone (IANA)', 'Asia/Kolkata')}
           {text('timezoneLabel', 'Timezone label shown to customers', 'IST')}
           {text('calendarEmail', 'Calendar email for demo invites', 'you@company.com')}
-          <Field label="Start hour (0-23)">
-            <input type="number" min={0} max={23} className={inputCls} disabled={!canEdit} value={draft.workingHoursStart} onChange={(e) => set('workingHoursStart', Number(e.target.value))} />
-          </Field>
-          <Field label="End hour (1-24)">
-            <input type="number" min={1} max={24} className={inputCls} disabled={!canEdit} value={draft.workingHoursEnd} onChange={(e) => set('workingHoursEnd', Number(e.target.value))} />
-          </Field>
         </div>
-        <div className="flex flex-wrap gap-2">
-          {DAY_NAMES.map((d, i) => (
-            <button
-              key={d}
-              type="button"
-              disabled={!canEdit}
-              onClick={() => toggleDay(i)}
-              className={`px-3 py-1 rounded-full text-xs font-semibold border ${draft.workingDays.includes(i) ? 'bg-orange-600 text-white border-orange-600' : 'bg-white text-slate-600 border-slate-200'}`}
-            >
-              {d.slice(0, 3)}
-            </button>
-          ))}
+        <div className="space-y-2">
+          {DAY_NAMES.map((day, dayIndex) => {
+            const enabled = draft.workingDays.includes(dayIndex);
+            const hours = workingHoursForDay(draft, dayIndex);
+            return (
+              <div key={day} className="grid grid-cols-1 sm:grid-cols-[minmax(130px,1fr)_1fr_1fr] gap-3 items-center rounded-lg border border-slate-100 p-3">
+                <label className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+                  <input
+                    type="checkbox"
+                    disabled={!canEdit}
+                    checked={enabled}
+                    onChange={() => toggleDay(dayIndex)}
+                    className="h-4 w-4 accent-orange-600"
+                  />
+                  {day}
+                  {!enabled && <span className="text-xs font-normal text-slate-400">Closed</span>}
+                </label>
+                <label className="block">
+                  <span className="mb-1 block text-[11px] font-semibold text-slate-500">Start time</span>
+                  <select
+                    className={inputCls}
+                    disabled={!canEdit || !enabled}
+                    value={hours.start}
+                    onChange={(e) => updateDayHours(dayIndex, 'start', Number(e.target.value))}
+                  >
+                    {Array.from({ length: 24 }, (_, hour) => (
+                      <option key={hour} value={hour}>{fmtHour(hour)}</option>
+                    ))}
+                  </select>
+                </label>
+                <label className="block">
+                  <span className="mb-1 block text-[11px] font-semibold text-slate-500">End time</span>
+                  <select
+                    className={inputCls}
+                    disabled={!canEdit || !enabled}
+                    value={hours.end}
+                    onChange={(e) => updateDayHours(dayIndex, 'end', Number(e.target.value))}
+                  >
+                    {Array.from({ length: 24 }, (_, index) => index + 1).map((hour) => (
+                      <option key={hour} value={hour}>{hour === 24 ? '12:00 AM (midnight)' : fmtHour(hour)}</option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+            );
+          })}
         </div>
         <p className="text-xs text-slate-500">Customers will see: {brandWorkingWindowLabel(draft)}</p>
       </div>

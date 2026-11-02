@@ -261,8 +261,6 @@ export default function App() {
     setActiveTabState(tab);
     writeTabToLocation(tab);
   }, []);
-  const [templateStudioView, setTemplateStudioView] = useState<'conversation' | 'campaign' | 'whatsapp'>('conversation');
-  const [templateStudioTemplateId, setTemplateStudioTemplateId] = useState<string | undefined>(undefined);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(false);  
 const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ? [] : INITIAL_CONTACTS);
   const [leads, setLeads] = useState<Lead[]>(() => isFirebaseConfigured ? [] : INITIAL_LEADS);
@@ -2510,12 +2508,6 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
                 }}
                 tenantId={currentTenantId}
                 timezone={currentTenant?.timezone || 'Asia/Kolkata'}
-                canManageWhatsAppTemplates={Boolean(currentUser && (currentUser.role === 'ADMIN' || currentUser.accessLevel === 'ALL'))}
-                onOpenTemplateStudio={(view, templateId) => {
-                  setTemplateStudioView(view);
-                  setTemplateStudioTemplateId(templateId);
-                  setActiveTab('email-design-studio');
-                }}
               />
             )}
 
@@ -2600,7 +2592,7 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
               />
             )}
 
-            {activeTab === 'email-design-studio' && <TemplateStudio tenantId={currentTenantId} canManageWhatsAppTemplates={Boolean(currentUser && (currentUser.role === 'ADMIN' || currentUser.accessLevel === 'ALL'))} initialView={templateStudioView} initialTemplateId={templateStudioTemplateId} />}
+            {activeTab === 'email-design-studio' && <TemplateStudio tenantId={currentTenantId} canManageWhatsAppTemplates={Boolean(currentUser && (currentUser.role === 'ADMIN' || currentUser.accessLevel === 'ALL'))} />}
 
             {activeTab === 'playground' && <AiTestingPlayground knowledgeDocs={knowledgeDocs} />}
 

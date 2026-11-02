@@ -43,7 +43,7 @@ import {
   Users,
   Image as ImageIcon,
 } from 'lucide-react';
-import { collection, doc, setDoc, deleteDoc, onSnapshot, getDoc, getDocs, query, where, documentId } from 'firebase/firestore';
+import { collection, doc, setDoc, onSnapshot, getDoc, getDocs, query, where, documentId } from 'firebase/firestore';
 import { db, isFirebaseConfigured } from '../firebase/config.js';
 import {
   Campaign,
@@ -57,9 +57,6 @@ import {
   OutboundCampaign,
   OutboundProspect,
 } from '../types/index.js';
-import { EmailTemplateEditorModal } from './EmailTemplateEditorModal.js';
-import { CompanyAssetsPanel } from './CompanyAssetsPanel.js';
-import { WhatsAppTemplatesPanel } from './WhatsAppTemplatesPanel.js';
 import { INITIAL_CAMPAIGN } from '../services/dataService.js';
 import { zonedLocalToUtcIso, utcToZonedLocal, formatZoned, timeUntil } from '../shared/zonedTime';
 import { markDuplicateEmails, summarizeLeads } from '../shared/leadDedupe';
@@ -78,9 +75,6 @@ interface CampaignManagementProps {
   tenantId?: string;
   /** Workspace timezone (IANA), used by the campaign scheduler. Default Asia/Kolkata. */
   timezone?: string;
-  /** Only workspace admins should submit or manage WhatsApp templates. */
-  canManageWhatsAppTemplates?: boolean;
-  onOpenTemplateStudio?: (view: 'campaign' | 'whatsapp', templateId?: string) => void;
 }
 
 export const CampaignManagement: React.FC<CampaignManagementProps> = ({
@@ -95,17 +89,12 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
   onToggleCampaignStatus,
   tenantId = '',
   timezone = 'Asia/Kolkata',
-  canManageWhatsAppTemplates = false,
-  onOpenTemplateStudio,
 }) => {
   const { brand } = useBrand();
   const isUmrah = brand.playbook === 'umrah360';
   // Email templates live under the workspace, never in a shared root collection.
   const tplCol = () => collection(db, 'tenants', tenantId, 'email_templates');
   const tplDoc = (id: string) => doc(db, 'tenants', tenantId, 'email_templates', id);
-  // Navigation sub-tabs
-  const [activeTab, setActiveTab] = useState<'CAMPAIGNS' | 'TEMPLATES' | 'WHATSAPP_TEMPLATES' | 'ASSETS'>('CAMPAIGNS');
-
   // Campaigns state
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const campaignsRef = useRef<Campaign[]>([]);
@@ -126,7 +115,6 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
 
   // Filters & Search
   const [searchQuery, setSearchQuery] = useState('');
-  const [templateSearchQuery, setTemplateSearchQuery] = useState('');
   const [leadStatusFilter, setLeadStatusFilter] = useState<
     'ALL' | 'PENDING' | 'SENT' | 'REPLIED' | 'FAILED' | 'OPENED' | 'CLICKED' | 'WAITING' | 'IGNORED' | 'BOUNCED'
   >('ALL');
@@ -139,8 +127,6 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
 
   // Modals
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
-  const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
-  const [editingTemplate, setEditingTemplate] = useState<EmailTemplate | null>(null);
   const [isRestartConfirmOpen, setIsRestartConfirmOpen] = useState(false);
   const [restartPreview, setRestartPreview] = useState<{ repliedLeads: CampaignLead[]; unrepliedLeads: CampaignLead[] } | null>(null);
   const [restartTemplateResolution, setRestartTemplateResolution] = useState<{
@@ -159,12 +145,6 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
     message: string;
     subtext?: string;
   } | null>(null);
-  const [isSavingTemplate, setIsSavingTemplate] = useState(false);
-  const [templateFormError, setTemplateFormError] = useState<string | null>(null);
-  const [templateSaveFeedback, setTemplateSaveFeedback] = useState<string | null>(null);
-  const [templateToDelete, setTemplateToDelete] = useState<EmailTemplate | null>(null);
-  const [isDeleteTemplateModalOpen, setIsDeleteTemplateModalOpen] = useState(false);
-  const [isDeletingTemplate, setIsDeletingTemplate] = useState(false);
 
   // Create Campaign Wizard State
   const [newCampaignName, setNewCampaignName] = useState('');
@@ -457,11 +437,6 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
     setUploadError(null);
     setCreateCampaignError(null);
   };
-
-  // Template Form State
-  const [templateFormName, setTemplateFormName] = useState('');
-  const [templateFormSubject, setTemplateFormSubject] = useState('');
-  const [templateFormBody, setTemplateFormBody] = useState('');
 
   // Campaign Selection Handler - Instant, stable selection that is never overwritten by background polls
   const handleSelectCampaign = (camp: Campaign) => {
@@ -1397,144 +1372,6 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
     setLoading(false);
   };
 
-  // Save / Update Template with direct Firestore & API synchronization
-  const handleSaveTemplate = async (payload: EmailTemplate) => {
-    setIsSavingTemplate(true);
-    setTemplateFormError(null);
-
-    const templateId = payload.templateId || `tpl-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-    const fullPayload: EmailTemplate = {
-      ...payload,
-      templateId,
-    };
-
-    try {
-      // 1. PRIMARY: Store directly into Firestore Database
-      if (isFirebaseConfigured && db && tenantId) {
-        try {
-          await setDoc(tplDoc(templateId), fullPayload, { merge: true });
-          console.log('[DB Storage] Successfully saved template with attachments directly to Firestore DB:', templateId);
-        } catch (fsErr) {
-          console.error('[DB Storage] Direct Firestore write note:', fsErr);
-        }
-      }
-
-      // 2. Server API call (updates in-memory store and verifies persistence)
-      const res = await fetch('/api/templates', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(fullPayload),
-      });
-      const data = await res.json();
-      const savedTpl: EmailTemplate = (data && data.success && data.template) ? data.template : fullPayload;
-
-      // 3. Update local templates state with the new/updated template
-      setTemplates((prev) => {
-        const filtered = prev.filter((t) => t.templateId !== savedTpl.templateId);
-        return [savedTpl, ...filtered];
-      });
-
-      // 4. CRITICAL: Automatically pre-select this newly saved template immediately for the next campaign!
-      setSelectedTemplateId(savedTpl.templateId);
-      selectedTemplateIdRef.current = savedTpl.templateId;
-      setSelectedTemplateFromDb(savedTpl);
-
-      setIsTemplateModalOpen(false);
-      setEditingTemplate(null);
-      setTemplateFormName('');
-      setTemplateFormSubject('');
-      setTemplateFormBody('');
-      setTemplateSaveFeedback(
-        editingTemplate
-          ? `Template "${savedTpl.name}" updated successfully in database!`
-          : `New template "${savedTpl.name}" saved to database and selected for your next campaign!`
-      );
-      setTimeout(() => setTemplateSaveFeedback(null), 5000);
-    } catch (e: any) {
-      console.error('Error saving template:', e);
-      setTemplateFormError(`Failed to save template: ${e?.message || 'Unknown error'}`);
-      throw e;
-    } finally {
-      setIsSavingTemplate(false);
-    }
-  };
-
-  const promptDeleteTemplate = (tpl: EmailTemplate) => {
-    setTemplateToDelete(tpl);
-    setIsDeleteTemplateModalOpen(true);
-  };
-
-  const handleConfirmDeleteTemplate = async () => {
-    if (!templateToDelete) return;
-    const targetId = templateToDelete.templateId;
-    setIsDeletingTemplate(true);
-
-    try {
-      // 1. Direct Firestore deletion
-      if (isFirebaseConfigured && db && tenantId) {
-        try {
-          await deleteDoc(tplDoc(targetId));
-        } catch (fsErr) {
-          console.warn('Firestore delete template note:', fsErr);
-        }
-      }
-
-      // 2. Delete via API
-      await fetch(`/api/templates/${targetId}`, { method: 'DELETE' });
-
-      // 3. Local state update
-      setTemplates((prev) => prev.filter((t) => t.templateId !== targetId));
-      if (selectedTemplateId === targetId || selectedTemplateIdRef.current === targetId) {
-        setSelectedTemplateId('');
-        selectedTemplateIdRef.current = '';
-        setSelectedTemplateFromDb(null);
-      }
-      if (editingTemplate?.templateId === targetId) {
-        setIsTemplateModalOpen(false);
-        setEditingTemplate(null);
-      }
-
-      setIsDeleteTemplateModalOpen(false);
-      setTemplateToDelete(null);
-      setTemplateSaveFeedback('Email template deleted from database.');
-      setTimeout(() => setTemplateSaveFeedback(null), 3500);
-    } catch (e: any) {
-      console.error('Error deleting template:', e);
-      alert(`Failed to delete template: ${e?.message || e}`);
-    } finally {
-      setIsDeletingTemplate(false);
-    }
-  };
-
-  const handleDeleteTemplate = (templateId: string) => {
-    const tpl = templates.find((t) => t.templateId === templateId);
-    if (tpl) {
-      promptDeleteTemplate(tpl);
-    } else {
-      promptDeleteTemplate({
-        templateId,
-        name: 'Email Template',
-        subject: '',
-        body: '',
-        createdAt: '',
-        updatedAt: '',
-      });
-    }
-  };
-
-  const openEditTemplate = (tpl: EmailTemplate) => {
-    if (onOpenTemplateStudio) {
-      onOpenTemplateStudio('campaign', tpl.templateId);
-      return;
-    }
-    setEditingTemplate(tpl);
-    setTemplateFormName(tpl.name);
-    setTemplateFormSubject(tpl.subject);
-    setTemplateFormBody(tpl.body);
-    setTemplateFormError(null);
-    setIsTemplateModalOpen(true);
-  };
-
   function stripHtml(html: string): string {
     if (!html) return '';
     try {
@@ -1545,17 +1382,6 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
       return html.replace(/<[^>]*>?/gm, '');
     }
   }
-
-  // Helper to preview variable replacement with mock agency data
-  const renderTemplatePreview = (text: string) => {
-    return text
-      .replace(/\{\{name\}\}/gi, 'Mr. Tariq Farooq')
-      .replace(/\{\{firstName\}\}/gi, 'Tariq')
-      .replace(/\{\{lastName\}\}/gi, 'Farooq')
-      .replace(/\{\{company\}\}/gi, 'Al-Bait Pilgrimage Tours')
-      .replace(/\{\{designation\}\}/gi, 'Managing Director')
-      .replace(/\{\{email\}\}/gi, 'tariq@albait-tours.com');
-  };
 
   // Filtered Leads
   const filteredLeads = useMemo(() => {
@@ -1613,112 +1439,34 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
           </div>
         </div>
 
-        {/* Tab Switcher & Primary Action */}
-        <div className="flex items-center gap-3">
-          <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200">
-            <button
-              id="tab-campaigns"
-              onClick={() => setActiveTab('CAMPAIGNS')}
-              className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all ${
-                activeTab === 'CAMPAIGNS'
-                  ? 'bg-orange-500 text-white shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              <div className="flex items-center gap-1.5">
-                <Layers className="w-3.5 h-3.5" />
-                <span>Campaigns ({campaigns.length})</span>
-              </div>
-            </button>
-            <button
-              id="tab-templates"
-              onClick={() => onOpenTemplateStudio ? onOpenTemplateStudio('campaign') : setActiveTab('TEMPLATES')}
-              className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all ${
-                activeTab === 'TEMPLATES'
-                  ? 'bg-orange-500 text-white shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              <div className="flex items-center gap-1.5">
-                <FileText className="w-3.5 h-3.5" />
-                <span>Email Templates ({templates.length})</span>
-              </div>
-            </button>
-            <button
-              id="tab-whatsapp-templates"
-              onClick={() => onOpenTemplateStudio ? onOpenTemplateStudio('whatsapp') : setActiveTab('WHATSAPP_TEMPLATES')}
-              className={activeTab === 'WHATSAPP_TEMPLATES'
-                ? 'px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all bg-orange-500 text-white shadow-xs'
-                : 'px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all text-slate-600 hover:text-slate-900'}
-            >
-              <div className="flex items-center gap-1.5">
-                <MessageSquare className="w-3.5 h-3.5" />
-                <span>WhatsApp Templates</span>
-              </div>
-            </button>
-            <button
-              id="tab-assets"
-              onClick={() => setActiveTab('ASSETS')}
-              className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all ${
-                activeTab === 'ASSETS'
-                  ? 'bg-orange-500 text-white shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              <div className="flex items-center gap-1.5">
-                <ImageIcon className="w-3.5 h-3.5" />
-                <span>Company Assets</span>
-              </div>
-            </button>
-          </div>
-
-          <button
-            id="refresh-campaigns-btn"
-            onClick={() => {
-              // Manual refresh: templates + the selected campaign's visible leads. Campaign stats are live.
-              templatesLoadedRef.current = false;
-              loadData();
-              if (selectedCampaignIdRef.current) loadSelectedCampaignDetails(selectedCampaignIdRef.current);
-            }}
-            title="Refresh campaign stats"
-            className="p-2 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg border border-slate-200 transition"
-          >
-            <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin text-orange-500' : ''}`} />
-          </button>
-
-          {activeTab === 'CAMPAIGNS' && (
-            <button
-              id="create-campaign-btn"
-              onClick={() => openCreateCampaignModal()}
-              className="flex items-center gap-2 px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg text-sm font-semibold transition shadow-xs"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Create Campaign</span>
-            </button>
-          )}
-          {activeTab === 'TEMPLATES' && (
-            <button
-              id="create-template-btn"
-              onClick={() => {
-                if (onOpenTemplateStudio) { onOpenTemplateStudio('campaign'); return; }
-                setEditingTemplate(null);
-                setTemplateFormName('');
-                setTemplateFormSubject('');
-                setTemplateFormBody('');
-                setIsTemplateModalOpen(true);
-              }}
-              className="flex items-center gap-2 px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg text-sm font-semibold transition shadow-xs"
-            >
-              <Plus className="w-4 h-4" />
-              <span>New Template</span>
-            </button>
-          )}
-        </div>
+        {/* Campaign Actions */}
+      <div className="flex items-center gap-2">
+        <button
+          id="refresh-campaigns-btn"
+          onClick={() => {
+            // Refresh campaigns and the campaign-template list used by the creation wizard.
+            templatesLoadedRef.current = false;
+            loadData();
+            if (selectedCampaignIdRef.current) loadSelectedCampaignDetails(selectedCampaignIdRef.current);
+          }}
+          title="Refresh campaign data"
+          className="p-2 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg border border-slate-200 transition"
+        >
+          <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin text-orange-500' : ''}`} />
+        </button>
+        <button
+          id="create-campaign-btn"
+          onClick={() => openCreateCampaignModal()}
+          className="flex items-center gap-2 px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg text-sm font-semibold transition shadow-xs"
+        >
+          <Plus className="w-4 h-4" />
+          <span>Create Campaign</span>
+        </button>
+      </div>
       </header>
 
       {/* Main Body */}
-      {activeTab === 'CAMPAIGNS' && (
-        <div className="flex-1 flex overflow-hidden">
+      <div className="flex-1 flex overflow-hidden">
           {/* Left Sidebar: Campaigns List */}
           <aside className="w-80 border-r border-slate-200 bg-white flex flex-col shrink-0">
             <div className="p-3 border-b border-slate-200 flex items-center justify-between">
@@ -2450,303 +2198,9 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
             )}
           </main>
         </div>
-      )}
 
 
 
-      {/* Email Templates Sub-Tab */}
-      {activeTab === 'TEMPLATES' && (
-        <div className="flex-1 overflow-y-auto p-6 bg-slate-50">
-          <div className="max-w-6xl mx-auto space-y-6">
-            {/* Feedback notification */}
-            {templateSaveFeedback && (
-              <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-xl text-xs text-emerald-300 flex items-center justify-between shadow-lg animate-in fade-in slide-in-from-top-2 duration-200">
-                <div className="flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                  <span className="font-medium">{templateSaveFeedback}</span>
-                </div>
-                <div className="flex items-center gap-3">
-                  <button
-                    onClick={() => {
-                      setActiveTab('CAMPAIGNS');
-                      openCreateCampaignModal(selectedTemplateIdRef.current);
-                    }}
-                    className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-semibold flex items-center gap-1 shadow transition"
-                  >
-                    <span>Use in Campaign</span>
-                    <ChevronRight className="w-3.5 h-3.5" />
-                  </button>
-                  <button
-                    onClick={() => setTemplateSaveFeedback(null)}
-                    className="text-emerald-400 hover:text-emerald-200 p-1"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* Header & Actions */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-slate-200 shadow-2xs">
-              <div>
-                <div className="flex items-center gap-3">
-                  <h2 className="text-lg font-bold text-slate-900">Outbound Email Templates</h2>
-                  <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-orange-50 text-orange-700 border border-orange-200">
-                    {templates.length} {templates.length === 1 ? 'Template' : 'Templates'}
-                  </span>
-                  <span className="hidden sm:inline-flex items-center gap-1 text-[11px] text-slate-500">
-                    <Database className="w-3 h-3 text-emerald-500" />
-                    <span>Database Synced</span>
-                  </span>
-                </div>
-                <p className="text-xs text-slate-500 mt-1">
-                  Dynamic templates stored in Firestore database. Supports variable replacement like <code className="text-orange-600 bg-orange-50 px-1 py-0.5 rounded font-mono">{`{{name}}`}</code>, <code className="text-orange-600 bg-orange-50 px-1 py-0.5 rounded font-mono">{`{{company}}`}</code>, and <code className="text-orange-600 bg-orange-50 px-1 py-0.5 rounded font-mono">{`{{designation}}`}</code>.
-                </p>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => {
-                    if (onOpenTemplateStudio) { onOpenTemplateStudio('campaign'); return; }
-                    setEditingTemplate(null);
-                    setTemplateFormName('');
-                    setTemplateFormSubject('');
-                    setTemplateFormBody('');
-                    setTemplateFormError(null);
-                    setIsTemplateModalOpen(true);
-                  }}
-                  className="flex items-center gap-1.5 px-3.5 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-xs font-semibold transition shadow-xs"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>Create Template</span>
-                </button>
-              </div>
-            </div>
-
-            {/* Search Filter Bar */}
-            <div className="flex items-center gap-3 bg-white p-2.5 rounded-xl border border-slate-200 shadow-2xs">
-              <Search className="w-4 h-4 text-slate-400 ml-1.5" />
-              <input
-                type="text"
-                placeholder="Search templates by name or subject..."
-                value={templateSearchQuery}
-                onChange={(e) => setTemplateSearchQuery(e.target.value)}
-                className="bg-transparent border-none text-xs text-slate-800 placeholder-slate-400 focus:outline-none flex-1"
-              />
-              {templateSearchQuery && (
-                <button
-                  onClick={() => setTemplateSearchQuery('')}
-                  className="text-slate-400 hover:text-slate-600 text-xs px-2 font-medium"
-                >
-                  Clear
-                </button>
-              )}
-            </div>
-
-            {/* Templates List */}
-            {templates.filter((tpl) => {
-              if (!templateSearchQuery.trim()) return true;
-              const q = templateSearchQuery.toLowerCase();
-              return tpl.name.toLowerCase().includes(q) || tpl.subject.toLowerCase().includes(q);
-            }).length === 0 ? (
-              <div className="p-12 text-center bg-white rounded-2xl border border-slate-200 shadow-2xs space-y-3">
-                <Mail className="w-10 h-10 text-slate-400 mx-auto" />
-                <p className="text-sm font-semibold text-slate-800">
-                  {templateSearchQuery ? 'No templates match your search query.' : 'No email templates found in database.'}
-                </p>
-                <p className="text-xs text-slate-500 max-w-sm mx-auto">
-                  Create your first email template with dynamic placeholders to use in outbound campaigns.
-                </p>
-                <button
-                  onClick={() => {
-                    if (onOpenTemplateStudio) { onOpenTemplateStudio('campaign'); return; }
-                    setEditingTemplate(null);
-                    setTemplateFormName('');
-                    setTemplateFormSubject('');
-                    setTemplateFormBody('');
-                    setTemplateFormError(null);
-                    setIsTemplateModalOpen(true);
-                  }}
-                  className="mt-2 inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-orange-500 hover:bg-orange-600 text-white rounded-lg text-xs font-semibold shadow-xs"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  <span>Create First Template</span>
-                </button>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                {templates
-                  .filter((tpl) => {
-                    if (!templateSearchQuery.trim()) return true;
-                    const q = templateSearchQuery.toLowerCase();
-                    return tpl.name.toLowerCase().includes(q) || tpl.subject.toLowerCase().includes(q);
-                  })
-                  .map((tpl) => {
-                    // Extract placeholder tags present in this template
-                    const tags = Array.from(
-                      new Set(
-                        `${tpl.subject} ${tpl.body}`.match(/\{\{[a-zA-Z0-9_]+\}\}/g) || []
-                      )
-                    );
-
-                    return (
-                      <div
-                        key={tpl.templateId}
-                        className="p-5 bg-white border border-slate-200 hover:border-orange-300 rounded-2xl flex flex-col justify-between transition-all duration-150 shadow-2xs"
-                      >
-                        <div className="space-y-3">
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <h3 className="font-bold text-slate-900 text-sm">{tpl.name}</h3>
-                              <span className="text-[10px] px-1.5 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded font-medium">
-                                Saved in DB
-                              </span>
-                              {(() => {
-                                if (tpl.format === 'html' || (!tpl.format && (tpl.htmlBody?.includes('<!DOCTYPE') || tpl.htmlBody?.includes('<html') || tpl.htmlBody?.includes('<table')))) {
-                                  return (
-                                    <span className="text-[10px] px-1.5 py-0.5 bg-sky-50 text-sky-700 border border-sky-200 rounded font-medium flex items-center gap-1">
-                                      <Code className="w-2.5 h-2.5" />
-                                      <span>HTML Rich Template</span>
-                                    </span>
-                                  );
-                                }
-                                if (tpl.format === 'visual' || (!tpl.format && (tpl.isHtml || tpl.htmlBody))) {
-                                  return (
-                                    <span className="text-[10px] px-1.5 py-0.5 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded font-medium flex items-center gap-1">
-                                      <Type className="w-2.5 h-2.5" />
-                                      <span>Visual Styled Template</span>
-                                    </span>
-                                  );
-                                }
-                                return (
-                                  <span className="text-[10px] px-1.5 py-0.5 bg-slate-100 text-slate-600 border border-slate-200 rounded font-medium flex items-center gap-1">
-                                    <FileText className="w-2.5 h-2.5" />
-                                    <span>Plain Text Template</span>
-                                  </span>
-                                );
-                              })()}
-                              {tpl.attachments && tpl.attachments.length > 0 && (
-                                <span className="text-[10px] px-1.5 py-0.5 bg-amber-50 text-amber-700 border border-amber-200 rounded font-medium flex items-center gap-1">
-                                  <Paperclip className="w-2.5 h-2.5" />
-                                  <span>{tpl.attachments.length} {tpl.attachments.length === 1 ? 'Attachment' : 'Attachments'}</span>
-                                </span>
-                              )}
-                            </div>
-                            <div className="flex items-center gap-1.5">
-                              <button
-                                onClick={() => openEditTemplate(tpl)}
-                                className="p-1.5 text-slate-400 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition"
-                                title="Edit Email Template"
-                              >
-                                <Edit3 className="w-4 h-4" />
-                              </button>
-                              <button
-                                onClick={() => promptDeleteTemplate(tpl)}
-                                className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition"
-                                title="Delete Email Template from Database"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
-                            </div>
-                          </div>
-
-                          <div className="text-xs font-mono text-orange-700 bg-orange-50/60 p-2.5 rounded-xl border border-orange-100 break-words">
-                            <span className="text-slate-500 font-sans text-[11px] mr-1">Subject:</span>
-                            {tpl.subject}
-                          </div>
-
-                          <div className="text-xs text-slate-600 line-clamp-4 whitespace-pre-wrap leading-relaxed bg-slate-50 p-3 rounded-xl border border-slate-100 font-sans">
-                            {tpl.body || stripHtml(tpl.htmlBody || '')}
-                          </div>
-
-                          {/* Attachments chip bar */}
-                          {tpl.attachments && tpl.attachments.length > 0 && (
-                            <div className="p-2 bg-slate-50 border border-slate-200 rounded-xl space-y-1">
-                              <div className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider flex items-center gap-1">
-                                <Paperclip className="w-3 h-3 text-orange-500" />
-                                <span>Attached Files ({tpl.attachments.length}):</span>
-                              </div>
-                              <div className="flex flex-wrap gap-1.5">
-                                {tpl.attachments.map((att: any, attIdx: number) => (
-                                  <div
-                                    key={att.id || attIdx}
-                                    className="px-2 py-0.5 bg-white border border-slate-200 rounded-md text-[10px] text-slate-700 flex items-center gap-1 font-mono shadow-2xs"
-                                    title={att.name || att.filename}
-                                  >
-                                    <File className="w-2.5 h-2.5 text-sky-500" />
-                                    <span className="max-w-[130px] truncate">{att.name || att.filename}</span>
-                                    {att.size && (
-                                      <span className="text-slate-400 text-[9px]">
-                                        ({att.size < 1024 * 1024 ? `${(att.size / 1024).toFixed(0)}KB` : `${(att.size / (1024 * 1024)).toFixed(1)}MB`})
-                                      </span>
-                                    )}
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-
-                          {tags.length > 0 && (
-                            <div className="flex flex-wrap items-center gap-1 pt-1">
-                              <span className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold mr-1">
-                                Variables:
-                              </span>
-                              {tags.map((tag) => (
-                                <span
-                                  key={tag}
-                                  className="text-[10px] font-mono px-1.5 py-0.5 bg-slate-100 text-slate-600 rounded border border-slate-200"
-                                >
-                                  {tag}
-                                </span>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-
-                        <div className="mt-4 pt-3.5 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500">
-                          <span className="truncate max-w-[140px] font-mono" title={tpl.templateId}>
-                            ID: {tpl.templateId}
-                          </span>
-                          <div className="flex items-center gap-3">
-                            <span>{new Date(tpl.updatedAt || tpl.createdAt).toLocaleDateString()}</span>
-                            <button
-                              onClick={() => {
-                                setActiveTab('CAMPAIGNS');
-                                openCreateCampaignModal(tpl.templateId);
-                              }}
-                              className="inline-flex items-center gap-1 text-orange-600 hover:text-orange-700 font-semibold"
-                            >
-                              <span>Use in Campaign</span>
-                              <ChevronRight className="w-3 h-3" />
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* WhatsApp Templates Sub-Tab: Meta is the source of truth for templates and approval status. */}
-      {activeTab === 'WHATSAPP_TEMPLATES' && (
-        <div className="flex-1 overflow-y-auto p-6 bg-slate-50">
-          <div className="max-w-6xl mx-auto">
-            <WhatsAppTemplatesPanel canEdit={canManageWhatsAppTemplates} />
-          </div>
-        </div>
-      )}
-
-      {/* Company Assets Sub-Tab */}
-      {activeTab === 'ASSETS' && (
-        <div className="flex-1 overflow-y-auto p-6 bg-slate-50">
-          <div className="max-w-6xl mx-auto">
-            <CompanyAssetsPanel />
-          </div>
-        </div>
-      )}
 
       {/* CREATE CAMPAIGN MODAL (WIZARD) */}
       {isCreateModalOpen && (
@@ -3841,74 +3295,6 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                   <>
                     <Trash2 className="w-3.5 h-3.5" />
                     <span>Delete Campaign</span>
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* CREATE / EDIT TEMPLATE MODAL */}
-      <EmailTemplateEditorModal
-        isOpen={isTemplateModalOpen}
-        onClose={() => {
-          setIsTemplateModalOpen(false);
-          setEditingTemplate(null);
-        }}
-        onSave={handleSaveTemplate}
-        editingTemplate={editingTemplate}
-        isSaving={isSavingTemplate}
-        error={templateFormError}
-      />
-
-      {/* DELETE TEMPLATE CONFIRMATION MODAL */}
-      {isDeleteTemplateModalOpen && templateToDelete && (
-        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-md flex flex-col overflow-hidden shadow-2xl text-slate-900">
-            <div className="p-6 space-y-4">
-              <div className="w-10 h-10 rounded-xl bg-rose-50 border border-rose-200 flex items-center justify-center text-rose-600">
-                <Trash2 className="w-5 h-5" />
-              </div>
-              <div>
-                <h3 className="text-base font-bold text-slate-900">Delete Email Template</h3>
-                <p className="text-xs text-slate-500 mt-1">
-                  Are you sure you want to delete <strong className="text-slate-800">"{templateToDelete.name}"</strong>?
-                  This will permanently remove the template from the Firestore database.
-                </p>
-              </div>
-              <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-600 font-mono truncate">
-                Subject: {templateToDelete.subject}
-              </div>
-            </div>
-
-            <div className="px-6 py-4 border-t border-slate-200 bg-slate-50 flex items-center justify-end gap-3">
-              <button
-                type="button"
-                onClick={() => {
-                  setIsDeleteTemplateModalOpen(false);
-                  setTemplateToDelete(null);
-                }}
-                disabled={isDeletingTemplate}
-                className="px-4 py-2 text-xs text-slate-600 hover:text-slate-900 transition font-medium"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleConfirmDeleteTemplate}
-                disabled={isDeletingTemplate}
-                className="inline-flex items-center gap-1.5 px-4 py-2 bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white rounded-xl text-xs font-semibold shadow-xs transition"
-              >
-                {isDeletingTemplate ? (
-                  <>
-                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                    <span>Deleting...</span>
-                  </>
-                ) : (
-                  <>
-                    <Trash2 className="w-3.5 h-3.5" />
-                    <span>Delete Permanently</span>
                   </>
                 )}
               </button>

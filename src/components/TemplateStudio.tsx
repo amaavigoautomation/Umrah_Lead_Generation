@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { LayoutTemplate, Mail, MessageCircle } from 'lucide-react';
+import { Image as ImageIcon, LayoutTemplate, Mail, MessageCircle } from 'lucide-react';
 import { EmailDesignStudio } from './EmailDesignStudio';
 import { WhatsAppTemplatesPanel } from './WhatsAppTemplatesPanel';
+import { CompanyAssetsPanel } from './CompanyAssetsPanel';
 
-export type TemplateStudioSection = 'conversation' | 'campaign' | 'whatsapp';
+export type TemplateStudioSection = 'conversation' | 'campaign' | 'whatsapp' | 'assets';
 
 type Props = {
   tenantId: string;
@@ -15,7 +16,8 @@ type Props = {
 const SECTIONS: Array<{ id: TemplateStudioSection; label: string; description: string; icon: React.ReactNode }> = [
   { id: 'conversation', label: 'Conversation & AI', description: 'Branded designs for inbox emails and AI replies.', icon: <Mail className="h-4 w-4" /> },
   { id: 'campaign', label: 'Campaign Emails', description: 'Complete personalized emails for outbound campaigns.', icon: <LayoutTemplate className="h-4 w-4" /> },
-  { id: 'whatsapp', label: 'WhatsApp', description: 'Utility and marketing templates submitted to Meta.', icon: <MessageCircle className="h-4 w-4" /> },
+  { id: 'whatsapp', label: 'WhatsApp Templates', description: 'Utility and marketing templates submitted to Meta.', icon: <MessageCircle className="h-4 w-4" /> },
+  { id: 'assets', label: 'Company Assets', description: 'Reusable company logos, images, banners and video cards.', icon: <ImageIcon className="h-4 w-4" /> },
 ];
 
 export const TemplateStudio: React.FC<Props> = ({
@@ -50,7 +52,7 @@ export const TemplateStudio: React.FC<Props> = ({
             <p className="mt-1 text-xs text-slate-500">Create and manage branded communication templates from one workspace.</p>
           </div>
         </div>
-        <div className="mt-4 grid grid-cols-1 gap-2 md:grid-cols-3" role="tablist" aria-label="Template channels">
+        <div className="mt-4 grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-4" role="tablist" aria-label="Template workspace sections">
           {SECTIONS.map((item) => {
             const active = section === item.id;
             return (
@@ -81,6 +83,9 @@ export const TemplateStudio: React.FC<Props> = ({
       </div>}
       {visitedSections.has('whatsapp') && <div className={section === 'whatsapp' ? 'block' : 'hidden'} aria-hidden={section !== 'whatsapp'}>
         <WhatsAppTemplatesPanel canEdit={canManageWhatsAppTemplates} />
+      </div>}
+      {visitedSections.has('assets') && <div className={section === 'assets' ? 'block' : 'hidden'} aria-hidden={section !== 'assets'}>
+        <CompanyAssetsPanel />
       </div>}
     </div>
   );

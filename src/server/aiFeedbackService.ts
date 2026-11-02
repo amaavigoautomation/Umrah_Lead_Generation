@@ -233,7 +233,7 @@ export async function deleteAiTestFeedback(feedbackId: string, ctx: TenantContex
 }
 
 function topicTokens(value: string): Set<string> {
-  const words = String(value || '').toLowerCase().match(/[a-z0-9]+/g) || [];
+  const words: string[] = Array.from(String(value || '').toLowerCase().match(/[a-z0-9]+/g) || []);
   const synonyms: Record<string, string> = {
     price: 'pricing', cost: 'pricing', fee: 'pricing', fees: 'pricing', quote: 'pricing', quotes: 'pricing',
     subscription: 'pricing', subscriptions: 'pricing', rate: 'pricing', rates: 'pricing',

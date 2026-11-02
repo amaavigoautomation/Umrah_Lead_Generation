@@ -49,6 +49,10 @@ export const BrandSettingsPanel: React.FC<{ tenantId: string; canEdit: boolean }
   };
 
   const save = async () => {
+    if (!Number.isInteger(draft.demoDurationMinutes) || draft.demoDurationMinutes < 5 || draft.demoDurationMinutes > 240) {
+      setError('Demo duration must be a whole number between 5 and 240 minutes.');
+      return;
+    }
     if (draft.workingDays.length === 0) {
       setError('Enable at least one day for demo bookings.');
       return;
@@ -110,10 +114,15 @@ export const BrandSettingsPanel: React.FC<{ tenantId: string; canEdit: boolean }
       <div className="border-t border-slate-100 pt-4 space-y-3">
         <h4 className="text-sm font-bold text-slate-800">Demo booking availability</h4>
         <p className="text-xs text-slate-500">
-          Set availability separately for each day. A demo lasts 60 minutes and available slots start on the hour.
-          The end time is exclusive, so a 10 AM–6 PM window offers the final slot at 5 PM.
+          Choose the session length first. Start times then repeat at that interval, and a full session must fit inside each day's working window.
         </p>
-        <div className="grid sm:grid-cols-3 gap-4">
+        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <Field label="Demo duration (minutes)" hint="Examples: 20, 30, 45 or 60. Slots repeat at this interval.">
+            <input type="number" min={5} max={240} step={1} className={inputCls} disabled={!canEdit}
+              value={draft.demoDurationMinutes}
+              onChange={(e) => set('demoDurationMinutes', Number(e.target.value))}
+            />
+          </Field>
           {text('timezone', 'Timezone (IANA)', 'Asia/Kolkata')}
           {text('timezoneLabel', 'Timezone label shown to customers', 'IST')}
           {text('calendarEmail', 'Calendar email for demo invites', 'you@company.com')}
@@ -165,7 +174,9 @@ export const BrandSettingsPanel: React.FC<{ tenantId: string; canEdit: boolean }
             );
           })}
         </div>
-        <p className="text-xs text-slate-500">Customers will see: {brandWorkingWindowLabel(draft)}</p>
+        <p className="text-xs text-slate-500">
+          Customers will see: {brandWorkingWindowLabel(draft)}. Each demo is {draft.demoDurationMinutes} minutes; start times repeat every {draft.demoDurationMinutes} minutes.
+        </p>
       </div>
 
       {error && (

@@ -1820,14 +1820,22 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
     const cb = await getTenantBrand(resolvedTenantId);
     const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
     const closedNames = [6, 0, 1, 2, 3, 4, 5].filter((d) => !cb.workingDays.includes(d)).map((d) => dayNames[d]);
+    const durationMinutes = cb.demoDurationMinutes || 60;
+    const formatMinuteOfDay = (total: number) => {
+      const normalized = ((total % 1440) + 1440) % 1440;
+      const hour = Math.floor(normalized / 60);
+      const minute = normalized % 60;
+      return fmtHour(hour).replace(':00', `:${String(minute).padStart(2, '0')}`);
+    };
     const fixedSlots = cb.workingDays.flatMap((day) => {
       const window = workingHoursForDay(cb, day);
-      return Array.from({ length: Math.max(0, window.end - window.start) }, (_, index) => {
-        const hour = window.start + index;
-        const endHour = hour + 1;
-        const format = (value: number) => value === 24 ? '12:00 AM' : fmtHour(value);
-        return `${dayNames[day]}: ${format(hour)} – ${format(endHour)} ${brandTzLabel(cb)}`;
-      });
+      const start = window.start * 60;
+      const end = window.end * 60;
+      const slots: string[] = [];
+      for (let minute = start; minute + durationMinutes <= end; minute += durationMinutes) {
+        slots.push(`${dayNames[day]}: ${formatMinuteOfDay(minute)} – ${formatMinuteOfDay(minute + durationMinutes)} ${brandTzLabel(cb)}`);
+      }
+      return slots;
     });
     res.statusCode = 200;
     res.end(
@@ -1844,7 +1852,7 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
         workingDays: `${brandWorkingDaysLabel(cb).replace(' to ', ' – ')}${closedNames.length ? ` (${closedNames.join(' & ')} closed)` : ''}`,
         workingHours: brandWorkingWindowLabel(cb),
         workingSchedule: cb.workingHoursByDay,
-        durationMinutes: 60,
+        durationMinutes,
         fixedSlots,
         timestamp: new Date().toISOString(),
       })
@@ -1874,6 +1882,7 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
         timezone: ab.timezone,
         workingHours: brandWorkingWindowLabel(ab),
         workingSchedule: ab.workingHoursByDay,
+        durationMinutes: ab.demoDurationMinutes || 60,
         slots,
         totalAvailable: slots.length,
       })

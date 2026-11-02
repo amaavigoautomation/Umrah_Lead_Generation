@@ -14,6 +14,7 @@ const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', '
 export interface OfferedSlot {
   date: string; // YYYY-MM-DD
   startHour: number; // 0-23
+  startMinute?: number; // 0-59; missing on legacy state means :00
   label: string;
 }
 
@@ -49,76 +50,84 @@ export function hasExplicitDateToken(text: string): boolean {
 }
 
 export interface TimeParse {
-  /** A real clock time was written (4pm, 16:00, at 4, 4 o'clock, noon). */
+  /** A real clock time was written (4pm, 16:20, at 4, 4 o'clock, noon). */
   hasTime: boolean;
   /** Possible 24h start hours for what was written ("at 4" -> [4, 16]). */
   hourCandidates: number[];
-  /** A time was given with non-zero minutes (4:30) - demos start on the hour. */
+  /** Exact possible times, including minutes, in 24-hour local time. */
+  timeCandidates: Array<{ hour: number; minute: number }>;
+  /** A time was given with non-zero minutes (4:30). */
   hasNonZeroMinutes: boolean;
 }
 
 /** Strict clock-time parsing. A bare number on its own is NEVER a time. */
 export function parseExplicitTime(text: string): TimeParse {
   let t = text.toLowerCase().replace(/\s+/g, ' ');
-  const hours = new Set<number>();
+  const times = new Map<string, { hour: number; minute: number }>();
   let hasNonZeroMinutes = false;
-  const both = (h: number) => {
-    if (h >= 0 && h <= 23) hours.add(h);
-    if (h >= 1 && h <= 11) hours.add(h + 12);
+  const add = (hour: number, minute = 0) => {
+    if (hour < 0 || hour > 23 || minute < 0 || minute > 59) return;
+    times.set(String(hour) + ':' + String(minute), { hour, minute });
   };
-  const withSuffix = (h: number, suffix: string) => {
+  const both = (hour: number, minute = 0) => {
+    add(hour, minute);
+    if (hour >= 1 && hour <= 11) add(hour + 12, minute);
+  };
+  const withSuffix = (hour: number, suffix: string, minute = 0) => {
     const pm = suffix.startsWith('p');
-    if (h < 1 || h > 12) return;
-    hours.add(pm ? (h === 12 ? 12 : h + 12) : h === 12 ? 0 : h);
+    if (hour < 1 || hour > 12 || minute < 0 || minute > 59) return;
+    add(pm ? (hour === 12 ? 12 : hour + 12) : hour === 12 ? 0 : hour, minute);
   };
 
   let m: RegExpExecArray | null;
-
-  // Ranges with a suffix: "4-5pm", "4 to 5 pm" -> start hour 4pm
   const rangeRe = /\b(\d{1,2})(?::(\d{2}))?\s*(?:-|–|to)\s*(\d{1,2})(?::\d{2})?\s*(a\.?\s?m\.?|p\.?\s?m\.?)/g;
   while ((m = rangeRe.exec(t))) {
-    withSuffix(parseInt(m[1], 10), m[4].replace(/[.\s]/g, ''));
-    if (m[2] && m[2] !== '00') hasNonZeroMinutes = true;
+    const minute = parseInt(m[2] || '0', 10);
+    withSuffix(parseInt(m[1], 10), m[4].replace(/[.\s]/g, ''), minute);
+    if (minute !== 0) hasNonZeroMinutes = true;
   }
-  // The end of a range is not a start time.
   t = t.replace(rangeRe, ' ');
 
-  // "4pm", "4:30 pm", "4 p.m."
   const ampmRe = /\b(\d{1,2})(?:[:.](\d{2}))?\s*(a\.?\s?m\.?|p\.?\s?m\.?)(?![a-z])/g;
   while ((m = ampmRe.exec(t))) {
-    withSuffix(parseInt(m[1], 10), m[3].replace(/[.\s]/g, ''));
-    if (m[2] && m[2] !== '00') hasNonZeroMinutes = true;
+    const minute = parseInt(m[2] || '0', 10);
+    withSuffix(parseInt(m[1], 10), m[3].replace(/[.\s]/g, ''), minute);
+    if (minute !== 0) hasNonZeroMinutes = true;
   }
 
-  // "16:00", "4:00" (24h or ambiguous)
   const colonRe = /\b(\d{1,2}):(\d{2})\b(?!\s*(?:a\.?\s?m|p\.?\s?m))/g;
   while ((m = colonRe.exec(t))) {
-    const h = parseInt(m[1], 10);
-    if (h > 23 || parseInt(m[2], 10) > 59) continue;
-    if (m[2] !== '00') hasNonZeroMinutes = true;
-    if (h >= 13) hours.add(h);
-    else both(h);
+    const hour = parseInt(m[1], 10);
+    const minute = parseInt(m[2], 10);
+    if (hour > 23 || minute > 59) continue;
+    if (minute !== 0) hasNonZeroMinutes = true;
+    if (hour >= 13) add(hour, minute);
+    else both(hour, minute);
   }
 
-  // "1600 hrs", "16 hrs"
   const hrsRe = /\b(\d{1,2})(\d{2})?\s*hrs?\b/g;
   while ((m = hrsRe.exec(t))) {
-    const h = parseInt(m[1], 10);
-    if (h <= 23) hours.add(h);
-    if (m[2] && m[2] !== '00') hasNonZeroMinutes = true;
+    const hour = parseInt(m[1], 10);
+    const minute = m[2] ? parseInt(m[2], 10) : 0;
+    if (hour <= 23 && minute <= 59) add(hour, minute);
+    if (minute !== 0) hasNonZeroMinutes = true;
   }
 
-  // "at 4", "around 4", "by 4" (not "at 4 people", "at 5%")
   const atRe = /\b(?:at|around|by|after|before)\s+(\d{1,2})\b(?!\s*(?:%|people|persons|users|agents|members|pax|seats|staff|employees|branches|offices|days?|weeks?|months?|years?|mins?|minutes?|hours?|[:./-]\d))/g;
   while ((m = atRe.exec(t))) both(parseInt(m[1], 10));
 
-  // "4 o'clock"
   const oclockRe = /\b(\d{1,2})\s*o'?\s?clock\b/g;
   while ((m = oclockRe.exec(t))) both(parseInt(m[1], 10));
 
-  if (/\bnoon\b|\bmidday\b/.test(t)) hours.add(12);
+  if (/\bnoon\b|\bmidday\b/.test(t)) add(12, 0);
 
-  return { hasTime: hours.size > 0, hourCandidates: Array.from(hours).sort((a, b) => a - b), hasNonZeroMinutes };
+  const timeCandidates = Array.from(times.values()).sort((a, b) => a.hour - b.hour || a.minute - b.minute);
+  return {
+    hasTime: timeCandidates.length > 0,
+    hourCandidates: Array.from(new Set(timeCandidates.map((candidate) => candidate.hour))).sort((a, b) => a - b),
+    timeCandidates,
+    hasNonZeroMinutes,
+  };
 }
 
 /** "morning" / "afternoon" / "evening" without a clock time. */
@@ -209,7 +218,9 @@ export function pickOfferedSlot(text: string, offered: OfferedSlot[], dayOfWeekF
     .map((s, i) => ({ s, i }))
     .filter(({ s }) => {
       const dayOk = days.length === 0 || days.includes(dayOfWeekFor(s.date));
-      const timeOk = !time.hasTime || time.hourCandidates.includes(s.startHour);
+      const timeOk = !time.hasTime || time.timeCandidates.some((candidate) =>
+        candidate.hour === s.startHour && candidate.minute === (s.startMinute || 0)
+      );
       return dayOk && timeOk;
     });
   return matches.length === 1 ? matches[0].i : null;

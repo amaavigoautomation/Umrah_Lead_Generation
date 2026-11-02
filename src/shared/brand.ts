@@ -38,6 +38,8 @@ export interface TenantBrand {
   timezone: string;
   /** Label shown to customers next to times, e.g. "IST". */
   timezoneLabel: string;
+  /** Length of one demo session and spacing between generated slot start times. */
+  demoDurationMinutes: number;
   /** Days 0=Sun..6=Sat on which demos can be booked. */
   workingDays: number[];
   /** Working hours, 24h, local to `timezone`. */
@@ -64,6 +66,7 @@ export const UMRAH360_BRAND: TenantBrand = {
   logoUrl: '',
   timezone: 'Asia/Kolkata',
   timezoneLabel: 'IST',
+  demoDurationMinutes: 60,
   workingDays: [1, 2, 3, 4, 5],
   workingHoursStart: 10,
   workingHoursEnd: 19,
@@ -96,6 +99,7 @@ export function defaultBrandFor(tenantId: string, tenantName?: string, extra?: {
     logoUrl: '',
     timezone: extra?.timezone || 'UTC',
     timezoneLabel: '',
+    demoDurationMinutes: 60,
     workingDays: [1, 2, 3, 4, 5],
     workingHoursStart: 10,
     workingHoursEnd: 19,
@@ -121,6 +125,8 @@ export function mergeBrand(base: TenantBrand, stored: Partial<TenantBrand> | nul
   (['companyName', 'tagline', 'defaultProduct', 'industryDescription', 'websiteUrl', 'salesEmail', 'supportPhone',
     'teamName', 'senderName', 'aiAgentName', 'logoUrl', 'timezone', 'timezoneLabel', 'calendarEmail'] as (keyof TenantBrand)[]).forEach(str);
   if (stored.playbook === 'umrah360' || stored.playbook === 'generic') out.playbook = stored.playbook;
+  const duration = (stored as any).demoDurationMinutes;
+  if (Number.isInteger(duration) && duration >= 5 && duration <= 240) out.demoDurationMinutes = duration;
   if (Array.isArray(stored.workingDays)) {
     out.workingDays = Array.from(
       new Set(stored.workingDays.filter((n) => Number.isInteger(n) && n >= 0 && n <= 6))

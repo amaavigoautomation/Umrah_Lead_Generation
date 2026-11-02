@@ -41,18 +41,39 @@ const TZL = () => brandTzLabel(sb());
 const tzDisplay = () => (sb().timezoneLabel ? `${tz()} (${sb().timezoneLabel})` : tz());
 const workStartH = () => sb().workingHoursStart;
 const workEndH = () => sb().workingHoursEnd;
-const slotHours = (dayOfWeek?: number) => {
+const demoDurationMinutes = () => sb().demoDurationMinutes || DEMO_DURATION_MINUTES;
+const slotStartMinutes = (dayOfWeek?: number) => {
   const days = dayOfWeek === undefined ? sb().workingDays : [dayOfWeek];
+  const duration = demoDurationMinutes();
   const out = new Set<number>();
   for (const day of days) {
     if (!sb().workingDays.includes(day)) continue;
     const window = workingHoursForDay(sb(), day);
-    for (let hour = window.start; hour < window.end; hour++) out.add(hour);
+    const start = window.start * 60;
+    const end = window.end * 60;
+    for (let minute = start; minute + duration <= end; minute += duration) out.add(minute);
   }
   return Array.from(out).sort((a, b) => a - b);
 };
+const isConfiguredSlotStart = (hour: number, minute = 0, dayOfWeek?: number) =>
+  slotStartMinutes(dayOfWeek).includes(hour * 60 + minute);
+const slotEndTotalMinutes = (hour: number, minute = 0) => hour * 60 + minute + demoDurationMinutes();
+const slotEndIso = (date: string, hour: number, minute = 0) => {
+  const total = slotEndTotalMinutes(hour, minute);
+  return createIstIsoString(date, Math.floor(total / 60), total % 60);
+};
+const formatClockTime = (hour: number, minute = 0) => {
+  const h = ((hour % 24) + 24) % 24;
+  const period = h >= 12 ? 'PM' : 'AM';
+  const hour12 = h % 12 || 12;
+  return `${hour12}:${String(minute).padStart(2, '0')} ${period}`;
+};
+const formatClockTime24 = (totalMinutes: number) => {
+  const normalized = ((totalMinutes % 1440) + 1440) % 1440;
+  return `${String(Math.floor(normalized / 60)).padStart(2, '0')}:${String(normalized % 60).padStart(2, '0')}`;
+};
 const workingScheduleLabel = () => brandWorkingWindowLabel(sb());
-const hrShort = (h: number) => `${((h + 11) % 12) + 1} ${h % 24 >= 12 ? 'PM' : 'AM'}`;
+const hrShort = (h: number) => formatClockTime(h, 0).replace(':00', '');
 const daysLabel = () => brandWorkingDaysLabel(sb());
 const closedDaysLabel = () => {
   const closed = [0, 1, 2, 3, 4, 5, 6].filter((d) => !sb().workingDays.includes(d)).sort((a, b) => ((a + 1) % 7) - ((b + 1) % 7));
@@ -110,12 +131,11 @@ import {
 } from '../shared/schedulingGuardrails.js';
 
 export const SCHEDULING_TIMEZONE = 'Asia/Kolkata'; // IST (UTC +05:30)
-export const WORKING_START_HOUR = 10; // 10:00 AM IST
-export const WORKING_END_HOUR = 19; // 7:00 PM IST (last 60-min demo starts at 18:00)
-export const DEMO_DURATION_MINUTES = 60;
-
-// Valid fixed 1-hour slots: 10-11, 11-12, 12-13, 13-14, 14-15, 15-16, 16-17, 17-18, 18-19
-export const VALID_SLOT_START_HOURS = [10, 11, 12, 13, 14, 15, 16, 17, 18];
+// Legacy constants retained for integrations that import them. Tenant demo settings are authoritative.
+export const WORKING_START_HOUR = 10;
+export const WORKING_END_HOUR = 19;
+export const DEMO_DURATION_MINUTES = 60; // Backward-compatible default for tenants without a saved duration.
+export const VALID_SLOT_START_HOURS = [10, 11, 12, 13, 14, 15, 16, 17, 18]; // Legacy hourly start times only.
 
 // Server-side in-memory cache for OAuth access tokens, one entry per workspace (never shared between them).
 const serverCalendarTokens = new Map<string, { token: string; expiresAt: number }>();
@@ -396,7 +416,7 @@ export function isWorkingDay(dayOfWeek: number): boolean {
  * Formats an IST slot into a friendly human-readable label.
  * e.g. "Wednesday, Oct 1: 3:00 PM – 4:00 PM IST"
  */
-export function formatSlotLabel(dateString: string, startHour: number): string {
+export function formatSlotLabel(dateString: string, startHour: number, startMinute = 0): string {
   const dateObj = new Date(createIstIsoString(dateString, 12, 0));
   const dayName = new Intl.DateTimeFormat('en-US', {
     timeZone: tz(),
@@ -404,17 +424,12 @@ export function formatSlotLabel(dateString: string, startHour: number): string {
     month: 'short',
     day: 'numeric',
   }).format(dateObj);
-
-  const formatHour = (h: number) => {
-    const period = h % 24 >= 12 ? 'PM' : 'AM';
-    const hour12 = h % 12 === 0 ? 12 : h % 12;
-    return `${hour12}:00 ${period}`;
-  };
-
-  return `${dayName}: ${formatHour(startHour)} – ${formatHour(startHour + 1)} ${TZL()}`;
+  const endTotal = slotEndTotalMinutes(startHour, startMinute);
+  return `${dayName}: ${formatClockTime(startHour, startMinute)} – ${formatClockTime(Math.floor(endTotal / 60), endTotal % 60)} ${TZL()}`;
 }
 
 // -----------------------------------------------------------------------------
+// Realtime Google Calendar Integration// -----------------------------------------------------------------------------
 // Realtime Google Calendar Integration (Single Source of Truth)
 // NOTE: Available slots are NEVER stored in any database.
 // They are computed dynamically on-the-fly directly from Google Calendar.
@@ -618,20 +633,24 @@ export async function checkFirestoreBookingsConflict(
 }
 
 /**
- * Finds next available 1-hour slots within this tenant's configured per-day windows.
- * NO AVAILABLE SLOTS ARE SAVED TO ANY DATABASE; slots are computed from the weekly schedule and live calendar.
+ * Finds next available slots using this tenant's duration interval and per-day working windows.
+ * A slot is only offered when the complete session fits within the configured day.
+ * NO AVAILABLE SLOTS ARE SAVED TO ANY DATABASE; slots are computed from live Google Calendar availability.
  */
 export async function findNextAvailableSlots(
   options: {
     targetDaysCount?: number;
     maxSlotsToReturn?: number;
-    preferredDate?: string; // YYYY-MM-DD
+    preferredDate?: string;
     /** Start scanning from this date (YYYY-MM-DD) instead of today. Past dates fall back to today. */
     startFromDate?: string;
     preferredPeriod?: 'MORNING' | 'AFTERNOON' | 'EVENING' | 'ANY';
     accessToken?: string;
   } = {}
-): Promise<Array<{ date: string; startHour: number; label: string; startIso: string; endIso: string }>> {
+): Promise<Array<{
+  date: string; startHour: number; startMinute: number; startTime: string; endTime: string;
+  durationMinutes: number; label: string; startIso: string; endIso: string;
+}>> {
   await warmSchedBrand();
   const {
     targetDaysCount = 10,
@@ -640,86 +659,75 @@ export async function findNextAvailableSlots(
     preferredPeriod = 'ANY',
     accessToken,
   } = options;
-
   const nowIst = getNowInIst();
-  const availableSlots: Array<{ date: string; startHour: number; label: string; startIso: string; endIso: string }> = [];
+  const duration = demoDurationMinutes();
+  const availableSlots: Array<{
+    date: string; startHour: number; startMinute: number; startTime: string; endTime: string;
+    durationMinutes: number; label: string; startIso: string; endIso: string;
+  }> = [];
 
-  // Start scanning from TODAY (0) to guarantee the EARLIEST upcoming available slots,
-  // or from the requested day when the caller asks for options around a specific date.
   let currentOffset = 0;
-  if (options.startFromDate && /^\d{4}-\d{2}-\d{2}$/.test(options.startFromDate) && options.startFromDate > nowIst.dateString) {
+  const firstDate = options.startFromDate || preferredDate;
+  if (firstDate && /^\d{4}-\d{2}-\d{2}$/.test(firstDate) && firstDate > nowIst.dateString) {
     const diffDays = Math.round(
-      (Date.parse(`${options.startFromDate}T12:00:00Z`) - Date.parse(`${nowIst.dateString}T12:00:00Z`)) / 86_400_000
+      (Date.parse(`${firstDate}T12:00:00Z`) - Date.parse(`${nowIst.dateString}T12:00:00Z`)) / 86_400_000
     );
     currentOffset = Math.min(Math.max(diffDays, 0), 60);
   }
-  // Search far enough ahead even when a tenant only opens on one or two weekdays.
   const maxOffset = currentOffset + Math.max(14, targetDaysCount * 7);
-
-  const filterHoursByPeriod = (hours: number[]) => {
-    if (preferredPeriod === 'MORNING') return hours.filter((h) => h < 12);
-    if (preferredPeriod === 'AFTERNOON') return hours.filter((h) => h >= 12 && h < 17);
-    if (preferredPeriod === 'EVENING') return hours.filter((h) => h >= 17);
-    return hours;
-  };
+  const filterByPeriod = (starts: number[]) => starts.filter((totalMinutes) => {
+    const hour = Math.floor(totalMinutes / 60);
+    if (preferredPeriod === 'MORNING') return hour < 12;
+    if (preferredPeriod === 'AFTERNOON') return hour >= 12 && hour < 17;
+    if (preferredPeriod === 'EVENING') return hour >= 17;
+    return true;
+  });
 
   let daysChecked = 0;
-
   while (daysChecked < targetDaysCount && availableSlots.length < maxSlotsToReturn && currentOffset < maxOffset) {
     const checkDate = new Date();
     checkDate.setDate(checkDate.getDate() + currentOffset);
-
-    const formatter = new Intl.DateTimeFormat('en-CA', {
-      timeZone: tz(),
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-    });
-    const dateStr = formatter.format(checkDate);
-
+    const dateStr = new Intl.DateTimeFormat('en-CA', {
+      timeZone: tz(), year: 'numeric', month: '2-digit', day: '2-digit',
+    }).format(checkDate);
     const dayOfWeek = dayOfWeekFor(dateStr);
-
     currentOffset++;
+    if (!isWorkingDay(dayOfWeek)) continue;
 
-    // Skip Saturday (6) and Sunday (0)
-    if (!isWorkingDay(dayOfWeek)) {
-      continue;
-    }
-
-    const allowedHours = filterHoursByPeriod(slotHours(dayOfWeek));
-    if (allowedHours.length === 0) continue;
+    const starts = filterByPeriod(slotStartMinutes(dayOfWeek));
+    if (starts.length === 0) continue;
     daysChecked++;
 
-    for (const h of allowedHours) {
+    for (const totalStart of starts) {
       if (availableSlots.length >= maxSlotsToReturn) break;
+      const startHour = Math.floor(totalStart / 60);
+      const startMinute = totalStart % 60;
+      const startIso = createIstIsoString(dateStr, startHour, startMinute);
+      if (dateStr === nowIst.dateString && Date.parse(startIso) <= Date.now() + MIN_LEAD_TIME_MS) continue;
 
-      // Skip past hours if checking today
-      if (dateStr === nowIst.dateString) {
-        if (h <= nowIst.hour || (h === nowIst.hour + 1 && nowIst.minute > 30)) {
-          continue;
-        }
-      }
-
-      const startIso = createIstIsoString(dateStr, h, 0);
-      const endIso = createIstIsoString(dateStr, h + 1, 0);
-
+      const endTotal = totalStart + duration;
+      const endIso = createIstIsoString(dateStr, Math.floor(endTotal / 60), endTotal % 60);
       const check = await checkRealtimeGoogleCalendarSlot(startIso, endIso, accessToken);
       if (check.available) {
         availableSlots.push({
           date: dateStr,
-          startHour: h,
-          label: formatSlotLabel(dateStr, h),
+          startHour,
+          startMinute,
+          startTime: formatClockTime24(totalStart),
+          endTime: formatClockTime24(endTotal),
+          durationMinutes: duration,
+          label: formatSlotLabel(dateStr, startHour, startMinute),
           startIso,
           endIso,
         });
       }
     }
   }
-
   return availableSlots;
 }
 
 // -----------------------------------------------------------------------------
+// Booking Creation with Google Calendar & Google Meet// -----------------------------------------------------------------------------
 // Booking Creation with Google Calendar & Google Meet
 // -----------------------------------------------------------------------------
 
@@ -866,10 +874,38 @@ export async function createGoogleCalendarDemoBooking(params: CreateBookingParam
  * invites the lead's email (sends calendar invitation ONCE via sendUpdates=all),
  * stores the confirmed booking record in Firestore, and updates the CRM Lead.
  */
+/** Validate exact duration, timezone date, weekday, and tenant-configured start-time grid. */
+function validateConfiguredDemoSlot(startIso: string, endIso: string, dateString: string): string | null {
+  const startMs = Date.parse(startIso);
+  const endMs = Date.parse(endIso);
+  if (!Number.isFinite(startMs) || !Number.isFinite(endMs)) return 'The selected demo time is invalid.';
+  if (endMs - startMs !== demoDurationMinutes() * 60_000) {
+    return `Each demo must be exactly ${demoDurationMinutes()} minutes. Please select one of the available slots.`;
+  }
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: tz(), year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+  }).formatToParts(new Date(startMs));
+  const values: Record<string, string> = {};
+  parts.forEach((part) => { values[part.type] = part.value; });
+  const localDate = `${values.year}-${values.month}-${values.day}`;
+  const hour = Number(values.hour);
+  const minute = Number(values.minute);
+  if (localDate !== dateString) return 'The selected date and time do not match the tenant timezone.';
+  const day = dayOfWeekFor(localDate);
+  if (!isWorkingDay(day)) return 'Demo bookings are not available on that weekday.';
+  if (!isConfiguredSlotStart(hour, minute, day)) {
+    return `Available demo start times repeat every ${demoDurationMinutes()} minutes within ${workingScheduleLabel()}.`;
+  }
+  return null;
+}
+
 async function createGoogleCalendarDemoBookingInner(
   params: CreateBookingParams
 ): Promise<CreateBookingResult> {
   await warmSchedBrand();
+  const slotValidationError = validateConfiguredDemoSlot(params.startIso, params.endIso, params.dateString);
+  if (slotValidationError) return { success: false, error: slotValidationError };
   const {
     leadId,
     contactId,
@@ -1748,9 +1784,10 @@ interface SchedulingState {
   offeredSlots?: OfferedSlot[];
   proposedSlot?: OfferedSlot;
   mode?: 'NEW' | 'RESCHEDULE';
-  /** Half of a slot the lead already gave us ("Thursday" -> we asked for the time). */
+  /** Partial date/time retained while the lead answers a follow-up. */
   partialDate?: string | null;
   partialHour?: number | null;
+  partialMinute?: number | null;
   updatedAt?: string;
   expiresAt?: number;
 }
@@ -1804,6 +1841,7 @@ async function saveSchedulingState(key: string | null, state: SchedulingState): 
       mode: state.mode || 'NEW',
       partialDate: state.partialDate ?? null,
       partialHour: state.partialHour ?? null,
+      partialMinute: state.partialMinute ?? null,
       updatedAt: new Date().toISOString(),
       expiresAt: Date.now() + ttl,
     });
@@ -2097,10 +2135,8 @@ export async function processSchedulingConversationTurn(params: {
       });
 
       if (addRes.success && addRes.booking) {
-        const slotLabel = formatSlotLabel(
-          addRes.booking.date,
-          parseInt((addRes.booking.startTime || '15:00').split(':')[0], 10)
-        );
+        const [bookedHour, bookedMinute] = (addRes.booking.startTime || '15:00').split(':').map((value) => parseInt(value, 10));
+        const slotLabel = formatSlotLabel(addRes.booking.date, bookedHour, bookedMinute || 0);
         const meetLink = addRes.booking.googleMeetLink || activeBooking.googleMeetLink;
 
         const uniqueAttendeesList = Array.from(
@@ -2142,7 +2178,7 @@ export async function processSchedulingConversationTurn(params: {
   // ===========================================================================
   // Remembered with the next question when only one half of a slot is known (declared first: the helper
   // functions at the end of this function read it).
-  const carry: { date?: string; hour?: number } = {};
+  const carry: { date?: string; hour?: number; minute?: number } = {};
   const time = parseExplicitTime(fresh);
   const dateMentioned = hasExplicitDateToken(fresh);
   const offered: OfferedSlot[] = Array.isArray(schedState?.offeredSlots) ? schedState!.offeredSlots! : [];
@@ -2183,7 +2219,7 @@ export async function processSchedulingConversationTurn(params: {
         }
         return askForAvailability(
           'ASKED_AVAILABILITY',
-          `No problem. What day and time would suit you instead? Our demo availability is ${workingScheduleLabel()} (1 hour per demo).`
+          `No problem. What day and time would suit you instead? Our demo availability is ${workingScheduleLabel()} (${demoDurationMinutes()} minutes per demo).`
         );
       }
     }
@@ -2194,6 +2230,7 @@ export async function processSchedulingConversationTurn(params: {
     isDemoIntent?: boolean;
     requestedDate?: string | null;
     requestedHour?: number | null;
+    requestedMinute?: number | null;
     wantsEarliest?: boolean;
   } = {};
   const apiKey = process.env.OPENAI_API_KEY || process.env.GEMINI_API_KEY;
@@ -2212,10 +2249,10 @@ LEAD'S NEWEST MESSAGE (the ONLY source for date and time):
 
 Strict rules:
 - requestedDate: only if the newest message itself names a specific day (today, tomorrow, a weekday, or a calendar date). Resolve it to YYYY-MM-DD on or after today. Otherwise null.
-- requestedHour: only if the newest message itself states a clock time ("4pm", "16:00", "at 4"). Give the 24h start hour 0-23 exactly as asked, even if outside business hours. Otherwise null.
+- requestedHour and requestedMinute: only if the newest message itself states a clock time ("4pm", "16:20", "at 4:45"). Give the 24h start hour and minute exactly as asked, even if outside business hours. Use minute 0 when no minutes are stated. Otherwise both null.
 - Never guess, never default, never use a time we suggested earlier, and never treat counts, prices, phone numbers or years as times.
 - wantsEarliest: true only if they ask for the earliest / soonest / next available time without naming one.
-Output JSON only: {"isDemoIntent": boolean, "requestedDate": string|null, "requestedHour": number|null, "wantsEarliest": boolean}`;
+Output JSON only: {"isDemoIntent": boolean, "requestedDate": string|null, "requestedHour": number|null, "requestedMinute": number|null, "wantsEarliest": boolean}`;
 
       for (const modelName of ['gpt-4o-mini', 'gpt-4o']) {
         try {
@@ -2254,29 +2291,36 @@ Output JSON only: {"isDemoIntent": boolean, "requestedDate": string|null, "reque
   const knownDate = isIsoDate(schedState?.partialDate) ? schedState!.partialDate! : schedState?.proposedSlot?.date;
   const knownHour =
     typeof schedState?.partialHour === 'number' ? schedState.partialHour : schedState?.proposedSlot?.startHour;
-  if (!requestedDate && !dateMentioned && time.hasTime && isIsoDate(knownDate)) {
-    requestedDate = knownDate;
-  }
+  const knownMinute =
+    typeof schedState?.partialMinute === 'number' ? schedState.partialMinute : (schedState?.proposedSlot?.startMinute || 0);
+  if (!requestedDate && !dateMentioned && time.hasTime && isIsoDate(knownDate)) requestedDate = knownDate;
 
   let requestedHour: number | null = null;
+  let requestedMinute: number | null = null;
   let hourOutOfRange = false;
   if (time.hasTime) {
-    const inHours = time.hourCandidates.filter((h) => slotHours().includes(h));
+    const inGrid = time.timeCandidates.filter((candidate) => isConfiguredSlotStart(candidate.hour, candidate.minute));
     const aiHour = typeof ai.requestedHour === 'number' ? ai.requestedHour : null;
-    if (aiHour !== null && time.hourCandidates.includes(aiHour)) {
-      requestedHour = aiHour;
-      hourOutOfRange = !slotHours().includes(aiHour);
-    } else if (inHours.length === 1) {
-      requestedHour = inHours[0];
-    } else if (inHours.length === 0) {
-      requestedHour = time.hourCandidates[0];
+    const aiMinute = typeof ai.requestedMinute === 'number' ? ai.requestedMinute : 0;
+    const aiMatch = aiHour === null ? undefined : time.timeCandidates.find((candidate) =>
+      candidate.hour === aiHour && candidate.minute === aiMinute
+    );
+    if (aiMatch && isConfiguredSlotStart(aiMatch.hour, aiMatch.minute)) {
+      requestedHour = aiMatch.hour;
+      requestedMinute = aiMatch.minute;
+    } else if (inGrid.length === 1) {
+      requestedHour = inGrid[0].hour;
+      requestedMinute = inGrid[0].minute;
+    } else if (inGrid.length === 0) {
+      requestedHour = time.timeCandidates[0]?.hour ?? time.hourCandidates[0] ?? null;
+      requestedMinute = time.timeCandidates[0]?.minute ?? 0;
       hourOutOfRange = true;
     }
-    // Several in-hours readings and no confirmed AI reading: leave it null and ask.
   }
   if (requestedHour === null && !time.hasTime && dateMentioned && typeof knownHour === 'number') {
     requestedHour = knownHour;
-    hourOutOfRange = !slotHours().includes(requestedHour);
+    requestedMinute = knownMinute;
+    hourOutOfRange = !isConfiguredSlotStart(requestedHour, requestedMinute);
   }
 
   const wantsEarliest =
@@ -2299,12 +2343,14 @@ Output JSON only: {"isDemoIntent": boolean, "requestedDate": string|null, "reque
   // 4d. Already has an upcoming demo and did not ask to move it: never book a second one.
   if (activeBooking && mode !== 'RESCHEDULE') {
     await clearSchedulingState(stateKey);
-    const label = requestedDate && requestedHour !== null && !hourOutOfRange ? formatSlotLabel(requestedDate, requestedHour) : undefined;
+    const label = requestedDate && requestedHour !== null && !hourOutOfRange
+      ? formatSlotLabel(requestedDate, requestedHour, requestedMinute ?? 0)
+      : undefined;
     return { handled: true, action: 'ALREADY_BOOKED', replyText: alreadyBookedReplyText(activeBooking, label) };
   }
 
   // 4e. Lead picked one of the slots we offered -> confirm it.
-  if (pickedIdx !== null && !(requestedDate && requestedHour !== null && !matchesOffered(requestedDate, requestedHour))) {
+  if (pickedIdx !== null && !(requestedDate && requestedHour !== null && !matchesOffered(requestedDate, requestedHour, requestedMinute ?? 0))) {
     return proposeSlot(offered[pickedIdx], mode);
   }
 
@@ -2327,8 +2373,8 @@ Output JSON only: {"isDemoIntent": boolean, "requestedDate": string|null, "reque
     return askForAvailability(
       'ASKED_AVAILABILITY',
       mode === 'RESCHEDULE'
-        ? `Sure, I can move your ${brandName()} demo (currently ${activeBooking!.date} at ${activeBooking!.startTime} ${TZL()}). What day and time would suit you instead? Our demos run ${workingScheduleLabel()} (1 hour).`
-        : `I'd be glad to arrange a live walkthrough of ${brandName()} for ${companyName}! What day and time would suit you? Our demos run ${workingScheduleLabel()} and take about an hour.`
+        ? `Sure, I can move your ${brandName()} demo (currently ${activeBooking!.date} at ${activeBooking!.startTime} ${TZL()}). What day and time would suit you instead? Our demos run ${workingScheduleLabel()} (${demoDurationMinutes()} minutes).`
+        : `I'd be glad to arrange a live walkthrough of ${brandName()} for ${companyName}! What day and time would suit you? Our demos run ${workingScheduleLabel()} and take ${demoDurationMinutes()} minutes.`
     );
   }
 
@@ -2355,33 +2401,32 @@ Output JSON only: {"isDemoIntent": boolean, "requestedDate": string|null, "reque
   if (!requestedDate && requestedHour !== null) {
     if (hourOutOfRange) return offerOptions('HOURS_NOT_ALLOWED', hoursNotAllowedText(), { period });
     carry.hour = requestedHour;
+    carry.minute = requestedMinute ?? 0;
     return askForAvailability(
       'ASKED_AVAILABILITY',
-      `Which day would you like the demo at ${hrShort(requestedHour)}? Our available days and hours are: ${workingScheduleLabel()}.`
+      `Which day would you like the demo at ${formatClockTime(requestedHour, requestedMinute ?? 0)}? Our available days and hours are: ${workingScheduleLabel()}.`
     );
   }
 
   // 4i. Day AND time given: validate, check the calendar, then ask for confirmation.
   const dateProblem = await validateDate(requestedDate!);
   if (dateProblem) return dateProblem;
-  if (time.hasNonZeroMinutes) {
-    return offerOptions(
-      'HOURS_NOT_ALLOWED',
-      `Our demo slots start on the hour. Current availability: ${workingScheduleLabel()}.`,
-      { startFromDate: requestedDate!, period }
-    );
-  }
-  return proposeSlot({ date: requestedDate!, startHour: requestedHour!, label: formatSlotLabel(requestedDate!, requestedHour!) }, mode);
+  return proposeSlot({
+    date: requestedDate!,
+    startHour: requestedHour!,
+    startMinute: requestedMinute ?? 0,
+    label: formatSlotLabel(requestedDate!, requestedHour!, requestedMinute ?? 0),
+  }, mode);
 
   // ---------------------------------------------------------------------------
   // Helpers (closures over this turn's lead context)
   // ---------------------------------------------------------------------------
-  function matchesOffered(date: string, hour: number): boolean {
-    return offered.some((s) => s.date === date && s.startHour === hour);
+  function matchesOffered(date: string, hour: number, minute = 0): boolean {
+    return offered.some((s) => s.date === date && s.startHour === hour && (s.startMinute || 0) === minute);
   }
 
   function hoursNotAllowedText(): string {
-    return `Our demo availability is ${workingScheduleLabel()}. Each demo is one hour and slots start on the hour.`;
+    return `Our demo availability is ${workingScheduleLabel()}. Each demo is ${demoDurationMinutes()} minutes, with start times repeating every ${demoDurationMinutes()} minutes.`;
   }
 
   function formatDayLabel(date: string): string {
@@ -2412,7 +2457,7 @@ Output JSON only: {"isDemoIntent": boolean, "requestedDate": string|null, "reque
   }
 
   async function askForAvailability(action: SchedulingTurnResult['action'], replyText: string): Promise<SchedulingTurnResult> {
-    await saveSchedulingState(stateKey, { stage: 'AWAITING_AVAILABILITY', offeredSlots: [], mode, partialDate: carry.date, partialHour: carry.hour });
+    await saveSchedulingState(stateKey, { stage: 'AWAITING_AVAILABILITY', offeredSlots: [], mode, partialDate: carry.date, partialHour: carry.hour, partialMinute: carry.minute });
     return { handled: true, action, replyText };
   }
 
@@ -2432,8 +2477,8 @@ Output JSON only: {"isDemoIntent": boolean, "requestedDate": string|null, "reque
     if (slots.length === 0 && opts.period && opts.period !== 'ANY') {
       slots = await findNextAvailableSlots({ maxSlotsToReturn: 3, startFromDate: opts.startFromDate, accessToken });
     }
-    const offeredSlots: OfferedSlot[] = slots.map((s) => ({ date: s.date, startHour: s.startHour, label: s.label }));
-    await saveSchedulingState(stateKey, { stage: 'AWAITING_AVAILABILITY', offeredSlots, mode, partialDate: carry.date, partialHour: carry.hour });
+    const offeredSlots: OfferedSlot[] = slots.map((s) => ({ date: s.date, startHour: s.startHour, startMinute: s.startMinute, label: s.label }));
+    await saveSchedulingState(stateKey, { stage: 'AWAITING_AVAILABILITY', offeredSlots, mode, partialDate: carry.date, partialHour: carry.hour, partialMinute: carry.minute });
     if (offeredSlots.length === 0) {
       return {
         handled: true,
@@ -2456,7 +2501,7 @@ Output JSON only: {"isDemoIntent": boolean, "requestedDate": string|null, "reque
     if (problem) return problem;
     await saveSchedulingState(stateKey, {
       stage: 'AWAITING_CONFIRMATION',
-      proposedSlot: { date: slot.date, startHour: slot.startHour, label: formatSlotLabel(slot.date, slot.startHour) },
+      proposedSlot: { date: slot.date, startHour: slot.startHour, startMinute: slot.startMinute || 0, label: formatSlotLabel(slot.date, slot.startHour, slot.startMinute || 0) },
       offeredSlots: [],
       mode: slotMode,
     });
@@ -2464,14 +2509,15 @@ Output JSON only: {"isDemoIntent": boolean, "requestedDate": string|null, "reque
     return {
       handled: true,
       action: 'AWAITING_CONFIRMATION',
-      replyText: `Just to confirm, shall I ${verb} ${formatSlotLabel(slot.date, slot.startHour)}?\n\nReply "Yes" to confirm, or tell me a different day and time.`,
+      replyText: `Just to confirm, shall I ${verb} ${formatSlotLabel(slot.date, slot.startHour, slot.startMinute || 0)}?\n\nReply "Yes" to confirm, or tell me a different day and time.`,
     };
   }
 
   /** Re-checks a slot right before proposing or booking it. Returns a reply when it can't be used. */
   async function slotProblem(slot: OfferedSlot): Promise<SchedulingTurnResult | null> {
-    const label = formatSlotLabel(slot.date, slot.startHour);
-    if (!slotHours(dayOfWeekFor(slot.date)).includes(slot.startHour)) {
+    const startMinute = slot.startMinute || 0;
+    const label = formatSlotLabel(slot.date, slot.startHour, startMinute);
+    if (!slotStartMinutes(dayOfWeekFor(slot.date)).includes(slot.startHour * 60 + startMinute)) {
       return offerOptions('HOURS_NOT_ALLOWED', hoursNotAllowedText(), { startFromDate: slot.date });
     }
     if (!isWorkingDay(dayOfWeekFor(slot.date))) {
@@ -2481,7 +2527,7 @@ Output JSON only: {"isDemoIntent": boolean, "requestedDate": string|null, "reque
     if (Date.parse(startIso) <= Date.now() + MIN_LEAD_TIME_MS) {
       return offerOptions('SLOT_UNAVAILABLE', `${label} is too soon or has already passed.`, {}, { listLead: 'Here are the next free slots:' });
     }
-    const endIso = createIstIsoString(slot.date, slot.startHour + 1, 0);
+    const endIso = slotEndIso(slot.date, slot.startHour, startMinute);
     const availability = await checkRealtimeGoogleCalendarSlot(startIso, endIso, accessToken);
     if (!availability.available) {
       return offerOptions('SLOT_UNAVAILABLE', `${label} is already taken on our calendar.`, {
@@ -2497,12 +2543,15 @@ Output JSON only: {"isDemoIntent": boolean, "requestedDate": string|null, "reque
     if (problem) return problem;
 
     const startH = slot.startHour;
+    const startMinute = slot.startMinute || 0;
     const targetDateStr = slot.date;
-    const startIso = createIstIsoString(targetDateStr, startH, 0);
-    const endIso = createIstIsoString(targetDateStr, startH + 1, 0);
-    const startTimeStr = `${String(startH).padStart(2, '0')}:00`;
-    const endTimeStr = `${String(startH + 1).padStart(2, '0')}:00`;
-    const slotLabel = formatSlotLabel(targetDateStr, startH);
+    const startTotal = startH * 60 + startMinute;
+    const endTotal = startTotal + demoDurationMinutes();
+    const startIso = createIstIsoString(targetDateStr, startH, startMinute);
+    const endIso = createIstIsoString(targetDateStr, Math.floor(endTotal / 60), endTotal % 60);
+    const startTimeStr = formatClockTime24(startTotal);
+    const endTimeStr = formatClockTime24(endTotal);
+    const slotLabel = formatSlotLabel(targetDateStr, startH, startMinute);
 
     if (slotMode === 'RESCHEDULE' && activeBooking) {
       const resched = await rescheduleDemoBooking(

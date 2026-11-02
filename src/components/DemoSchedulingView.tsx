@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useBrand } from '../context/BrandContext';
-import { brandTzLabel, brandWorkingDaysLabel, fmtHour } from '../shared/brand';
+import { brandTzLabel, brandWorkingDaysLabel, brandWorkingWindowLabel } from '../shared/brand';
 import {
   Calendar as CalendarIcon,
   Video,
@@ -40,7 +40,7 @@ export const DemoSchedulingView: React.FC<DemoSchedulingViewProps> = ({ leads = 
   const { brand } = useBrand();
   const tzl = brandTzLabel(brand);
   const dayRange = brandWorkingDaysLabel(brand).replace(' to ', '–').replace(/Monday/g, 'Mon').replace(/Tuesday/g, 'Tue').replace(/Wednesday/g, 'Wed').replace(/Thursday/g, 'Thu').replace(/Friday/g, 'Fri').replace(/Saturday/g, 'Sat').replace(/Sunday/g, 'Sun');
-  const hoursLabel = `${fmtHour(brand.workingHoursStart)} – ${fmtHour(brand.workingHoursEnd)} ${tzl}`;
+  const hoursLabel = brandWorkingWindowLabel(brand);
   const [calendarConnected, setCalendarConnected] = useState(() => hasCalendarToken());
   const [calendarProvider, setCalendarProvider] = useState<'google' | 'microsoft' | null>(null);
   const [connectedEmail, setConnectedEmail] = useState<string>('');
@@ -53,7 +53,7 @@ export const DemoSchedulingView: React.FC<DemoSchedulingViewProps> = ({ leads = 
   const [authError, setAuthError] = useState<string | null>(null);
 
   const [availableSlots, setAvailableSlots] = useState<
-    Array<{ date: string; startHour: number; label: string; startIso: string; endIso: string }>
+    Array<{ date: string; startHour: number; startMinute: number; startTime: string; endTime: string; durationMinutes: number; label: string; startIso: string; endIso: string }>
   >([]);
   const [isLoadingSlots, setIsLoadingSlots] = useState(false);
 
@@ -70,6 +70,10 @@ export const DemoSchedulingView: React.FC<DemoSchedulingViewProps> = ({ leads = 
   const [selectedSlot, setSelectedSlot] = useState<{
     date: string;
     startHour: number;
+    startMinute: number;
+    startTime: string;
+    endTime: string;
+    durationMinutes: number;
     label: string;
     startIso: string;
     endIso: string;
@@ -329,8 +333,8 @@ export const DemoSchedulingView: React.FC<DemoSchedulingViewProps> = ({ leads = 
           startIso: testSlot.startIso,
           endIso: testSlot.endIso,
           dateString: testSlot.date,
-          startTime: `${String(testSlot.startHour).padStart(2, '0')}:00`,
-          endTime: `${String(testSlot.startHour + 1).padStart(2, '0')}:00`,
+          startTime: testSlot.startTime,
+          endTime: testSlot.endTime,
           accessToken: token || undefined,
         }),
       });
@@ -362,9 +366,8 @@ export const DemoSchedulingView: React.FC<DemoSchedulingViewProps> = ({ leads = 
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
       if (token) headers['X-Google-Access-Token'] = token;
 
-      const startH = selectedSlot.startHour;
-      const startTime = `${String(startH).padStart(2, '0')}:00`;
-      const endTime = `${String(startH + 1).padStart(2, '0')}:00`;
+      const startTime = selectedSlot.startTime;
+      const endTime = selectedSlot.endTime;
 
       const res = await fetch('/api/calendar/book', {
         method: 'POST',
@@ -427,9 +430,8 @@ export const DemoSchedulingView: React.FC<DemoSchedulingViewProps> = ({ leads = 
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
       if (token) headers['X-Google-Access-Token'] = token;
 
-      const startH = slot.startHour;
-      const startTime = `${String(startH).padStart(2, '0')}:00`;
-      const endTime = `${String(startH + 1).padStart(2, '0')}:00`;
+      const startTime = slot.startTime;
+      const endTime = slot.endTime;
 
       const res = await fetch('/api/calendar/reschedule', {
         method: 'POST',
@@ -570,7 +572,7 @@ export const DemoSchedulingView: React.FC<DemoSchedulingViewProps> = ({ leads = 
             <p className="text-xs sm:text-sm text-slate-600 max-w-2xl font-medium leading-relaxed">
               All demo requests across <strong className="text-slate-900 font-bold">Website, Email, WhatsApp, and Campaigns</strong> use one connected calendar.
               Google → <strong>Google Meet</strong>. Microsoft 365 → <strong>Microsoft Teams</strong>. Only one can be connected at a time
-              ({dayRange}, {hoursLabel}
+              ({dayRange}, {hoursLabel} · {brand.demoDurationMinutes} min per demo
               {connectedEmail ? <> · {connectedEmail}</> : CALENDAR_TARGET_ACCOUNT ? <> · {CALENDAR_TARGET_ACCOUNT}</> : null}).
             </p>
           </div>
@@ -812,7 +814,7 @@ export const DemoSchedulingView: React.FC<DemoSchedulingViewProps> = ({ leads = 
               <div className="space-y-2 max-h-[380px] overflow-y-auto pr-1">
                 {availableSlots.map((slot, i) => (
                   <div
-                    key={`${slot.date}-${slot.startHour}-${i}`}
+                    key={`${slot.date}-${slot.startHour}-${slot.startMinute}-${i}`}
                     onClick={() => {
                       if (rescheduleBookingId) {
                         handleRescheduleBooking(rescheduleBookingId, slot);
@@ -828,7 +830,7 @@ export const DemoSchedulingView: React.FC<DemoSchedulingViewProps> = ({ leads = 
                   >
                     <div className="space-y-0.5">
                       <div className="font-bold text-slate-900">{slot.label}</div>
-                      <div className="text-[11px] text-slate-500 font-medium">Duration: 60 min • {videoLabel}</div>
+                      <div className="text-[11px] text-slate-500 font-medium">Duration: {slot.durationMinutes || brand.demoDurationMinutes} min • {videoLabel}</div>
                     </div>
                     <span className="px-2 py-0.5 bg-orange-100 text-orange-800 border border-orange-200/80 rounded text-[10px] font-bold">
                       {rescheduleBookingId ? 'Reschedule' : 'Select'}

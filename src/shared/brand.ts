@@ -43,6 +43,8 @@ export interface TenantBrand {
   /** Working hours, 24h, local to `timezone`. */
   workingHoursStart: number;
   workingHoursEnd: number;
+  /** Day-specific availability windows; end is exclusive and may be 24 (midnight). */
+  workingHoursByDay: Record<number, { start: number; end: number }>;
   /** Calendar account used for demo invites ("" = platform default). */
   calendarEmail: string;
 }
@@ -65,6 +67,13 @@ export const UMRAH360_BRAND: TenantBrand = {
   workingDays: [1, 2, 3, 4, 5],
   workingHoursStart: 10,
   workingHoursEnd: 19,
+  workingHoursByDay: {
+    1: { start: 10, end: 19 },
+    2: { start: 10, end: 19 },
+    3: { start: 10, end: 19 },
+    4: { start: 10, end: 19 },
+    5: { start: 10, end: 19 },
+  },
   calendarEmail: 'amaavigo@gmail.com',
 };
 
@@ -90,6 +99,13 @@ export function defaultBrandFor(tenantId: string, tenantName?: string, extra?: {
     workingDays: [1, 2, 3, 4, 5],
     workingHoursStart: 10,
     workingHoursEnd: 19,
+    workingHoursByDay: {
+      1: { start: 10, end: 19 },
+      2: { start: 10, end: 19 },
+      3: { start: 10, end: 19 },
+      4: { start: 10, end: 19 },
+      5: { start: 10, end: 19 },
+    },
     calendarEmail: '',
   };
 }
@@ -106,8 +122,9 @@ export function mergeBrand(base: TenantBrand, stored: Partial<TenantBrand> | nul
     'teamName', 'senderName', 'aiAgentName', 'logoUrl', 'timezone', 'timezoneLabel', 'calendarEmail'] as (keyof TenantBrand)[]).forEach(str);
   if (stored.playbook === 'umrah360' || stored.playbook === 'generic') out.playbook = stored.playbook;
   if (Array.isArray(stored.workingDays)) {
-    const d = stored.workingDays.filter((n) => Number.isInteger(n) && n >= 0 && n <= 6);
-    if (d.length) out.workingDays = Array.from(new Set(d)).sort();
+    out.workingDays = Array.from(
+      new Set(stored.workingDays.filter((n) => Number.isInteger(n) && n >= 0 && n <= 6))
+    ).sort();
   }
   const h = (v: any) => (Number.isInteger(v) && v >= 0 && v <= 24 ? (v as number) : undefined);
   const hs = h(stored.workingHoursStart);
@@ -116,6 +133,25 @@ export function mergeBrand(base: TenantBrand, stored: Partial<TenantBrand> | nul
     out.workingHoursStart = hs;
     out.workingHoursEnd = he;
   }
+
+  // Preserve an existing per-day schedule when unrelated brand fields are saved. Legacy
+  // brand records without this map inherit their old shared working-hours window.
+  const hasDaySchedule = Object.prototype.hasOwnProperty.call(stored, 'workingHoursByDay');
+  const hasLegacyHoursPatch = stored.workingHoursStart !== undefined || stored.workingHoursEnd !== undefined;
+  const sourceDaySchedule = hasDaySchedule
+    ? (stored as any).workingHoursByDay
+    : hasLegacyHoursPatch ? undefined : base.workingHoursByDay;
+  const normalizedDaySchedule: Record<number, { start: number; end: number }> = {};
+  for (let day = 0; day <= 6; day++) {
+    const raw = sourceDaySchedule && typeof sourceDaySchedule === 'object' ? sourceDaySchedule[day] : undefined;
+    const start = h(raw?.start);
+    const end = h(raw?.end);
+    normalizedDaySchedule[day] =
+      start !== undefined && end !== undefined && start < end
+        ? { start, end }
+        : { start: out.workingHoursStart, end: out.workingHoursEnd };
+  }
+  out.workingHoursByDay = normalizedDaySchedule;
   // Empty required strings fall back to the base value.
   if (!out.companyName) out.companyName = base.companyName;
   if (!out.teamName) out.teamName = `${out.companyName} Team`;
@@ -159,9 +195,34 @@ export const fmtHour = (h: number): string => {
   return `${hh}:00 ${h % 24 >= 12 ? 'PM' : 'AM'}`;
 };
 
-/** e.g. "Monday to Friday between 10:00 AM and 7:00 PM IST" */
-export const brandWorkingWindowLabel = (b: TenantBrand): string =>
-  `${brandWorkingDaysLabel(b)} between ${fmtHour(b.workingHoursStart)} and ${fmtHour(b.workingHoursEnd)} ${brandTzLabel(b)}`.trim();
+/** Read the configured hours for one weekday, falling back to the legacy shared window. */
+export function workingHoursForDay(b: TenantBrand, dayOfWeek: number): { start: number; end: number } {
+  const configured = b.workingHoursByDay?.[dayOfWeek];
+  if (
+    configured &&
+    Number.isInteger(configured.start) &&
+    Number.isInteger(configured.end) &&
+    configured.start >= 0 &&
+    configured.end <= 24 &&
+    configured.start < configured.end
+  ) {
+    return configured;
+  }
+  return { start: b.workingHoursStart, end: b.workingHoursEnd };
+}
+
+/** Customer-facing summary of the weekly schedule, including different hours on different days. */
+export const brandWorkingWindowLabel = (b: TenantBrand): string => {
+  const days = [...b.workingDays].sort((a, c) => a - c);
+  if (!days.length) return 'No demo days configured';
+  const windows = days.map((day) => workingHoursForDay(b, day));
+  const first = windows[0];
+  const sameWindow = windows.every((window) => window.start === first.start && window.end === first.end);
+  if (sameWindow) {
+    return `${brandWorkingDaysLabel(b)} between ${fmtHour(first.start)} and ${fmtHour(first.end)} ${brandTzLabel(b)}`.trim();
+  }
+  return `${days.map((day) => `${DAY_NAMES[day]} ${fmtHour(workingHoursForDay(b, day).start)}–${fmtHour(workingHoursForDay(b, day).end)}`).join('; ')} ${brandTzLabel(b)}`.trim();
+};
 
 // ---- website-lead thank-you email (shared by both senders) ----
 

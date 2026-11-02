@@ -982,7 +982,7 @@ export const EmailDesignStudio: React.FC<EmailDesignStudioProps> = ({ tenantId, 
                 </label>
                 <div className="flex flex-wrap gap-1.5">
                   {['name','firstName','lastName','company','companyName','designation','jobTitle','email'].map((field) => (
-                    <button key={field} type="button" onClick={() => updateTemplate({ campaignBody: String(editing.campaignBody || '') + \`{{\${field}}}\` })} className="rounded-md border border-slate-200 bg-white px-2 py-1 text-[10px] font-mono text-slate-600 hover:border-orange-300 hover:text-orange-700">{\`{{\${field}}}\`}</button>
+                    <button key={field} type="button" onClick={() => updateTemplate({ campaignBody: String(editing.campaignBody || '') + '{{' + field + '}}' })} className="rounded-md border border-slate-200 bg-white px-2 py-1 text-[10px] font-mono text-slate-600 hover:border-orange-300 hover:text-orange-700">{'{{' + field + '}}'}</button>
                   ))}
                 </div>
                 <div className="space-y-2 border-t border-slate-100 pt-3">

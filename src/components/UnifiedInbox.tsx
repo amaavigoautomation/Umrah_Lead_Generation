@@ -78,10 +78,11 @@ interface UnifiedInboxProps {
   contacts: Contact[];
   leads: Lead[];
   knowledgeDocs: KnowledgeDocument[];
-  onSendMessage: (conversationId: string, text: string, senderType: 'AGENT' | 'AI' | 'CUSTOMER' | 'PROSPECT') => void;
+  onSendMessage: (conversationId: string, text: string, senderType: 'AGENT' | 'AI' | 'CUSTOMER' | 'PROSPECT') => Promise<boolean> | boolean | void;
   onToggleAi: (conversationId: string, enabled: boolean) => void;
   onMarkAsRead?: (conversationId: string) => void;
   onApproveDraft?: (conversationId: string) => void;
+  onEditDraft?: (conversationId: string, draftId: string) => Promise<boolean> | boolean;
   onUpdateLeadScore: (leadId: string, delta: number) => void;
   onViewLeadInCrm: (leadId: string) => void;
   onProcessInboundEmail?: (payload: InboundEmailPayload) => Promise<InboundProcessingResult>;
@@ -106,6 +107,7 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
   onToggleAi,
   onMarkAsRead,
   onApproveDraft,
+  onEditDraft,
   onUpdateLeadScore,
   onViewLeadInCrm,
   onProcessInboundEmail,
@@ -124,7 +126,6 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
   // Lead Profile 360 side panel: slides in/out from the right edge
   const [isProfileOpen, setIsProfileOpen] = useState<boolean>(true);
   const [replyText, setReplyText] = useState<string>('');
-  const [editingDraftConversationId, setEditingDraftConversationId] = useState<string | null>(null);
   const connected = useConnectedChannels(tenantId);
   const [isGeneratingAi, setIsGeneratingAi] = useState<boolean>(false);
   const [isUnifiedAllPlatforms, setIsUnifiedAllPlatforms] = useState<boolean>(false);
@@ -286,10 +287,6 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
   const activeConversation =
     conversations.find((c) => c.conversationId === selectedConversationId) || conversations[0];
 
-  // Hide the review card after its draft is moved into the composer. Reset when the conversation or draft changes.
-  React.useEffect(() => {
-    setEditingDraftConversationId(null);
-  }, [activeConversation?.conversationId, activeConversation?.draftReply?.text]);
   const foundContact = contacts.find((c) => c.contactId === activeConversation?.contactId);
   const activeContact: Contact = foundContact || {
     contactId: activeConversation?.contactId || 'unknown',
@@ -473,8 +470,8 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
     return timeB - timeA;
   });
 
-  // Handle manual send
-  const handleSendReply = () => {
+  // Handle manual send. Keep the composer content when dispatch fails so an edited AI draft can be retried.
+  const handleSendReply = async () => {
     if (!replyText.trim() || !activeConversation) return;
     let targetConvId = activeConversation.conversationId;
 
@@ -483,8 +480,8 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
       if (matched) targetConvId = matched.conversationId;
     }
 
-    onSendMessage(targetConvId, replyText, 'AGENT');
-    setReplyText('');
+    const sent = await onSendMessage(targetConvId, replyText, 'AGENT');
+    if (sent !== false) setReplyText('');
   };
 
   // Handle simulating customer message on specific platform
@@ -1208,8 +1205,7 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
 
             {/* AI Draft Reply Awaiting Verification Card (REVIEW Mode) */}
             {activeConversation.draftReply &&
-              activeConversation.draftReply.status === 'PENDING' &&
-              editingDraftConversationId !== activeConversation.conversationId && (
+              activeConversation.draftReply.status === 'PENDING' && (
               <div className="p-3.5 bg-orange-50/70 border-t border-b border-orange-200 flex flex-col space-y-2">
                 <div className="flex items-center justify-between text-xs">
                   <span className="flex items-center space-x-1.5 font-bold text-orange-800">
@@ -1225,9 +1221,15 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
                 </div>
                 <div className="flex items-center justify-end space-x-2 pt-1">
                   <button
-                    onClick={() => {
-                      setReplyText(activeConversation.draftReply!.text);
-                      setEditingDraftConversationId(activeConversation.conversationId);
+                    onClick={async () => {
+                      const draft = activeConversation.draftReply;
+                      if (!draft || draft.status !== 'PENDING') return;
+                      const movedToComposer = onEditDraft
+                        ? await onEditDraft(activeConversation.conversationId, draft.draftId)
+                        : true;
+                      if (!movedToComposer) return;
+                      setReplyText(draft.text);
+                      replyBoxRef.current?.focus();
                     }}
                     className="px-3 py-1 rounded-lg bg-white hover:bg-slate-100 text-slate-700 text-xs font-semibold border border-slate-200 transition"
                   >

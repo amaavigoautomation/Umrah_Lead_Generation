@@ -1105,6 +1105,7 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
   ): Promise<boolean> => {
     const conv = conversations.find((c) => c.conversationId === conversationId);
     if (!conv) return false;
+    const editedDraft = senderType === 'AGENT' && conv.draftReply?.status === 'EDITING' ? conv.draftReply : undefined;
     const isSocialChannel = conv.channel === 'INSTAGRAM' || conv.channel === 'WHATSAPP' || conv.channel === 'FACEBOOK';
 
     const threadMsgs = messages.filter((m) => m.conversationId === conversationId);
@@ -1195,6 +1196,9 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
             references: inReplyTo ? [inReplyTo] : undefined,
             conversationId,
             gmailThreadId,
+            ...(editedDraft && isFirebaseConfigured && db
+              ? { editedAiDraft: true, draftId: editedDraft.draftId }
+              : {}),
           }),
         });
         const sendData = await sendRes.json().catch(() => ({}));
@@ -1263,6 +1267,7 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
           sanitizeDoc({
             lastMessageAt: newMsg.timestamp,
             lastMessageText: newMsg.text.slice(0, 120),
+            ...(editedDraft && isSocialChannel ? { status: 'ACTIVE', draftReply: null } : {}),
             updatedAt: newMsg.timestamp,
           }),
           { merge: true }
@@ -1295,6 +1300,9 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
               ...c,
               lastMessageAt: newMsg.timestamp,
               lastMessageText: newMsg.text,
+              ...(editedDraft && c.draftReply?.draftId === editedDraft.draftId && c.draftReply.status === 'EDITING'
+                ? { status: 'ACTIVE', draftReply: undefined }
+                : {}),
               updatedAt: newMsg.timestamp,
             }
           : c
@@ -1912,6 +1920,47 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
     }
   };
 
+  // Persist the transition before copying the draft into the composer. This keeps the review card dismissed
+  // across module navigation and gives the send path a stable draft identity to clear.
+  const handleEditDraft = async (conversationId: string, draftId: string): Promise<boolean> => {
+    const conv = conversations.find((c) => c.conversationId === conversationId);
+    const currentDraft = conv?.draftReply;
+    if (!currentDraft || currentDraft.draftId !== draftId) return false;
+    if (currentDraft.status === 'EDITING') return true;
+    if (currentDraft.status !== 'PENDING') return false;
+
+    const updatedAt = new Date().toISOString();
+    let editingDraft = { ...currentDraft, status: 'EDITING' as const };
+    if (isFirebaseConfigured && db) {
+      try {
+        const conversationRef = tDoc('conversations', conversationId);
+        const snapshot = await getDoc(conversationRef);
+        const storedDraft = snapshot.exists() ? (snapshot.data() as any)?.draftReply : null;
+        if (!storedDraft || storedDraft.draftId !== draftId || !['PENDING', 'EDITING'].includes(storedDraft.status)) {
+          window.alert('This AI draft has changed or is no longer available. Refresh the conversation before editing it.');
+          return false;
+        }
+        editingDraft = { ...storedDraft, status: 'EDITING' as const };
+        await setDoc(conversationRef, {
+          status: 'ACTIVE',
+          draftReply: editingDraft,
+          updatedAt,
+        }, { merge: true });
+      } catch (error: any) {
+        console.error('Could not persist AI draft editing state:', error);
+        window.alert(error?.message || 'Could not move this AI draft into the composer. Please try again.');
+        return false;
+      }
+    }
+
+    setConversations((prev) => prev.map((item) =>
+      item.conversationId === conversationId && item.draftReply?.draftId === draftId
+        ? { ...item, status: 'ACTIVE', draftReply: editingDraft, updatedAt }
+        : item
+    ));
+    return true;
+  };
+
   // Approve a saved AI draft only after a human explicitly verifies it.
   const handleApproveDraft = async (conversationId: string) => {
     const conv = conversations.find((c) => c.conversationId === conversationId);
@@ -2425,6 +2474,7 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
                 onToggleAi={handleToggleAi}
                 onMarkAsRead={handleMarkConversationAsRead}
                 onApproveDraft={handleApproveDraft}
+                onEditDraft={handleEditDraft}
                 onUpdateLeadScore={(leadId, delta) => {
                   setLeads((prev) =>
                     prev.map((l) =>

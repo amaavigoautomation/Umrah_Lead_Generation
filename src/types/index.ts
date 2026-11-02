@@ -452,7 +452,7 @@ export interface Conversation {
     text: string;
     subject?: string;
     generatedAt: string;
-    status: 'PENDING' | 'APPROVED' | 'DISCARDED';
+    status: 'PENDING' | 'EDITING' | 'APPROVED' | 'DISCARDED';
   };
   createdAt: string;
   updatedAt: string;

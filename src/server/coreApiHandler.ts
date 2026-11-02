@@ -2673,6 +2673,32 @@ ${signature || defSig}`;
         return true;
       }
     }
+    let editedDraftContext: { conversationId: string; draftId: string } | null = null;
+    if (body?.editedAiDraft === true) {
+      const editedConversationId = String(conversationId || '').trim();
+      const editedDraftId = String(body?.draftId || '').trim();
+      if (!editedConversationId || !editedDraftId || !isFirebaseConfigured || !db) {
+        res.statusCode = 400;
+        res.end(JSON.stringify({ success: false, error: 'A valid conversation and edited draft are required.' }));
+        return true;
+      }
+      const editedConversationSnap = await getDoc(tenantRepo(activeTenantCtx).conversationDoc(editedConversationId));
+      if (!editedConversationSnap.exists()) {
+        res.statusCode = 404;
+        res.end(JSON.stringify({ success: false, error: 'Conversation not found in this workspace.' }));
+        return true;
+      }
+      const editedConversation = editedConversationSnap.data() as any;
+      const storedDraft = editedConversation.draftReply;
+      if (!['EMAIL', 'WEBSITE'].includes(String(editedConversation.channel || '').toUpperCase()) ||
+          !storedDraft || storedDraft.status !== 'EDITING' || storedDraft.draftId !== editedDraftId) {
+        res.statusCode = 409;
+        res.end(JSON.stringify({ success: false, error: 'This edited AI draft is no longer active. Refresh the conversation before sending.' }));
+        return true;
+      }
+      editedDraftContext = { conversationId: editedConversationId, draftId: editedDraftId };
+    }
+
     if (!to || !subject || (!html && !text)) {
       res.statusCode = 400;
       res.end(JSON.stringify({ success: false, error: 'Missing to, subject, or message body' }));
@@ -2710,6 +2736,30 @@ ${signature || defSig}`;
           });
         } catch (fuErr) {
           console.warn('[Email Send] Auto follow-up scheduling notice:', fuErr);
+        }
+      }
+      if (editedDraftContext && isFirebaseConfigured && db) {
+        try {
+          const conversationRef = tenantRepo(activeTenantCtx).conversationDoc(editedDraftContext.conversationId);
+          const latestConversation = await getDoc(conversationRef);
+          const latestDraft = latestConversation.exists() ? (latestConversation.data() as any)?.draftReply : null;
+          // Never clear a newer draft that may have arrived while this email was being sent.
+          if (latestDraft?.draftId === editedDraftContext.draftId && latestDraft.status === 'EDITING') {
+            const sentAt = new Date().toISOString();
+            await setDoc(conversationRef, {
+              status: 'ACTIVE',
+              draftReply: null,
+              lastMessageAt: sentAt,
+              lastMessageText: String(text || (html ? html.replace(/<[^>]*>?/gm, '') : '')).slice(0, 120),
+              updatedAt: sentAt,
+            }, { merge: true });
+          } else {
+            console.warn('[Email Send] Edited draft changed before cleanup; leaving the newer draft untouched.');
+          }
+        } catch (draftCleanupError: any) {
+          // Sending already succeeded. Keep EDITING (which hides the review card) if cleanup fails,
+          // so a delivered message is not accidentally presented as an approval request again.
+          console.error('[Email Send] Could not clear the sent edited draft:', draftCleanupError?.message || draftCleanupError);
         }
       }
       res.statusCode = 200;

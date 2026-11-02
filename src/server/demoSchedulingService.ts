@@ -1169,9 +1169,6 @@ async function createGoogleCalendarDemoBookingInner(
   };
 }
 
-/**
- * Cancels a demo booking, removes the event from Google Calendar, and frees up the slot.
- */
 /** Remove a Google Calendar event and notify attendees. A missing event is already released. */
 async function deleteGoogleCalendarDemoEvent(
   eventId: string,
@@ -1386,7 +1383,7 @@ export async function rescheduleDemoBooking(
             demoDate: booking.date,
             demoStartTime: booking.startTime,
             demoEndTime: booking.endTime,
-            demoTimezone: booking.demoTimezone || tz(),
+            demoTimezone: booking.timezone || tz(),
             calendarEventId: booking.calendarEventId || '',
             googleMeetLink: booking.googleMeetLink || '',
             updatedAt: new Date().toISOString(),
@@ -1417,7 +1414,7 @@ export async function rescheduleDemoBooking(
               demoDate: booking.date,
               demoStartTime: booking.startTime,
               demoEndTime: booking.endTime,
-              demoTimezone: booking.demoTimezone || tz(),
+              demoTimezone: booking.timezone || tz(),
               calendarEventId: booking.calendarEventId || '',
               googleMeetLink: booking.googleMeetLink || '',
               updatedAt: new Date().toISOString(),
@@ -2013,7 +2010,7 @@ export async function processSchedulingConversationTurn(params: {
       return {
         handled: true,
         action: 'CANCELLED',
-        replyText: `You do not have any active demo scheduled currently. If you'd like to book one at any time between ${daysLabel().replace(' to ', ' and ')} (${hrShort(workStartH())} to ${hrShort(workEndH())} ${TZL()}), simply let me know!`,
+        replyText: `You do not have any active demo scheduled currently. You can book one during our available hours: ${workingScheduleLabel()}.`,
       };
     }
   }
@@ -2327,7 +2324,7 @@ Output JSON only: {"isDemoIntent": boolean, "requestedDate": string|null, "reque
       { startFromDate: requestedDate, period },
       {
         listLead: 'These are the nearest free slots:',
-        outro: `Reply with the option number, or tell me a time between ${fmtHour(workStartH())} and ${fmtHour(workEndH())} ${TZL()}.`,
+        outro: `Reply with the option number, or tell me another time during our available hours: ${workingScheduleLabel()}.`,
       }
     );
   }
@@ -2338,7 +2335,7 @@ Output JSON only: {"isDemoIntent": boolean, "requestedDate": string|null, "reque
     carry.hour = requestedHour;
     return askForAvailability(
       'ASKED_AVAILABILITY',
-      `Which day would you like the demo at ${hrShort(requestedHour)}? Our demos run ${daysLabel()}.`
+      `Which day would you like the demo at ${hrShort(requestedHour)}? Our available days and hours are: ${workingScheduleLabel()}.`
     );
   }
 

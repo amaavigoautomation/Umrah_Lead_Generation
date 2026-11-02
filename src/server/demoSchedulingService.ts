@@ -9,7 +9,7 @@ import {
 import { STOP_FOLLOWUPS_WHEN_DEMO_BOOKED } from '../shared/followUpPolicy.js';
 import type { TenantContext } from '../types/tenant.js';
 import { getTenantBrand, getBrandSync } from './brandService.js';
-import { brandTzLabel, brandWorkingDaysLabel, fmtHour, DAY_NAMES } from '../shared/brand.js';
+import { brandTzLabel, brandWorkingDaysLabel, brandWorkingWindowLabel, workingHoursForDay, fmtHour, DAY_NAMES } from '../shared/brand.js';
 
 const DEFAULT_UMRAH_CTX: TenantContext = {
   tenantId: 'umrah360',
@@ -41,11 +41,17 @@ const TZL = () => brandTzLabel(sb());
 const tzDisplay = () => (sb().timezoneLabel ? `${tz()} (${sb().timezoneLabel})` : tz());
 const workStartH = () => sb().workingHoursStart;
 const workEndH = () => sb().workingHoursEnd;
-const slotHours = () => {
-  const out: number[] = [];
-  for (let h = workStartH(); h < workEndH(); h++) out.push(h);
-  return out;
+const slotHours = (dayOfWeek?: number) => {
+  const days = dayOfWeek === undefined ? sb().workingDays : [dayOfWeek];
+  const out = new Set<number>();
+  for (const day of days) {
+    if (!sb().workingDays.includes(day)) continue;
+    const window = workingHoursForDay(sb(), day);
+    for (let hour = window.start; hour < window.end; hour++) out.add(hour);
+  }
+  return Array.from(out).sort((a, b) => a - b);
 };
+const workingScheduleLabel = () => brandWorkingWindowLabel(sb());
 const hrShort = (h: number) => `${((h + 11) % 12) + 1} ${h % 24 >= 12 ? 'PM' : 'AM'}`;
 const daysLabel = () => brandWorkingDaysLabel(sb());
 const closedDaysLabel = () => {
@@ -367,11 +373,18 @@ export function getNowInIst(): IstDateComponents {
  */
 export function createIstIsoString(dateString: string, hour: number, minute: number = 0): string {
   const pad = (n: number) => String(n).padStart(2, '0');
-  return `${dateString}T${pad(hour)}:${pad(minute)}:00${tzOffsetFor(dateString, hour, minute)}`;
+  // A configured window may end at midnight (24:00). Normalize that to 00:00
+  // on the following date because Google Calendar expects valid RFC3339 times.
+  const [year, month, day] = dateString.split('-').map((part) => Number(part));
+  const normalizedDate = new Date(Date.UTC(year, month - 1, day + Math.floor(hour / 24), 12, 0, 0))
+    .toISOString()
+    .slice(0, 10);
+  const normalizedHour = ((hour % 24) + 24) % 24;
+  return `${normalizedDate}T${pad(normalizedHour)}:${pad(minute)}:00${tzOffsetFor(normalizedDate, normalizedHour, minute)}`;
 }
 
 /**
- * Checks whether a given day of week is a valid working day (Monday - Friday).
+ * Checks whether a given weekday is enabled in this tenant's weekly demo schedule.
  */
 export function isWorkingDay(dayOfWeek: number): boolean {
   return sb().workingDays.includes(dayOfWeek);
@@ -391,7 +404,7 @@ export function formatSlotLabel(dateString: string, startHour: number): string {
   }).format(dateObj);
 
   const formatHour = (h: number) => {
-    const period = h >= 12 ? 'PM' : 'AM';
+    const period = h % 24 >= 12 ? 'PM' : 'AM';
     const hour12 = h % 12 === 0 ? 12 : h % 12;
     return `${hour12}:00 ${period}`;
   };
@@ -603,9 +616,8 @@ export async function checkFirestoreBookingsConflict(
 }
 
 /**
- * Finds next available fixed 1-hour slots in Google Calendar across upcoming business days.
- * NO AVAILABLE SLOTS ARE SAVED TO ANY DATABASE.
- * Only returns slots strictly within Monday-Friday, 10 AM - 7 PM IST.
+ * Finds next available 1-hour slots within this tenant's configured per-day windows.
+ * NO AVAILABLE SLOTS ARE SAVED TO ANY DATABASE; slots are computed from the weekly schedule and live calendar.
  */
 export async function findNextAvailableSlots(
   options: {
@@ -639,20 +651,15 @@ export async function findNextAvailableSlots(
     );
     currentOffset = Math.min(Math.max(diffDays, 0), 60);
   }
-  const maxOffset = currentOffset + 14;
+  // Search far enough ahead even when a tenant only opens on one or two weekdays.
+  const maxOffset = currentOffset + Math.max(14, targetDaysCount * 7);
 
-  // Define hour ranges based on preferred period
-  const VALID_HOURS = slotHours();
-  let allowedHours = VALID_HOURS;
-  if (preferredPeriod === 'MORNING') {
-    allowedHours = VALID_HOURS.filter((h) => h < 12); // 10, 11
-  } else if (preferredPeriod === 'AFTERNOON') {
-    allowedHours = VALID_HOURS.filter((h) => h >= 12 && h < 17); // 12, 13, 14, 15, 16
-  } else if (preferredPeriod === 'EVENING') {
-    allowedHours = VALID_HOURS.filter((h) => h >= 17); // 17, 18
-  }
-
-  if (allowedHours.length === 0) allowedHours = VALID_HOURS;
+  const filterHoursByPeriod = (hours: number[]) => {
+    if (preferredPeriod === 'MORNING') return hours.filter((h) => h < 12);
+    if (preferredPeriod === 'AFTERNOON') return hours.filter((h) => h >= 12 && h < 17);
+    if (preferredPeriod === 'EVENING') return hours.filter((h) => h >= 17);
+    return hours;
+  };
 
   let daysChecked = 0;
 
@@ -677,6 +684,8 @@ export async function findNextAvailableSlots(
       continue;
     }
 
+    const allowedHours = filterHoursByPeriod(slotHours(dayOfWeek));
+    if (allowedHours.length === 0) continue;
     daysChecked++;
 
     for (const h of allowedHours) {
@@ -1019,9 +1028,20 @@ async function createGoogleCalendarDemoBookingInner(
       }
 
       if (!googleMeetLink) {
+        // Do not leave an orphaned calendar event (or a sent invitation) when Meet generation fails.
+        if (calendarEventId && !calendarEventId.startsWith('mock-')) {
+          try {
+            await fetch(
+              `https://www.googleapis.com/calendar/v3/calendars/primary/events/${encodeURIComponent(calendarEventId)}?sendUpdates=all`,
+              { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } }
+            );
+          } catch (cleanupErr) {
+            console.warn('[Calendar Cleanup Notice] Could not remove event without Meet link:', cleanupErr);
+          }
+        }
         return {
           success: false,
-          error: 'Google Calendar created the event but could not generate a Google Meet video conference link.',
+          error: 'Google Calendar created the event but could not generate a Google Meet video conference link. The incomplete event was removed where possible.',
         };
       }
     } catch (apiErr: any) {
@@ -1151,6 +1171,34 @@ async function createGoogleCalendarDemoBookingInner(
 /**
  * Cancels a demo booking, removes the event from Google Calendar, and frees up the slot.
  */
+/** Remove a Google Calendar event and notify attendees. A missing event is already released. */
+async function deleteGoogleCalendarDemoEvent(
+  eventId: string,
+  token: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const response = await fetch(
+      `https://www.googleapis.com/calendar/v3/calendars/primary/events/${encodeURIComponent(eventId)}?sendUpdates=all`,
+      { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } }
+    );
+    if (response.ok || response.status === 404 || response.status === 410) {
+      return { success: true };
+    }
+    if (response.status === 401) await handleExpiredCalendarToken();
+    const details = await response.text().catch(() => '');
+    return {
+      success: false,
+      error: `Google Calendar could not release the event (HTTP ${response.status})${details ? `: ${details}` : ''}.`,
+    };
+  } catch (error: any) {
+    return { success: false, error: error?.message || 'Could not contact Google Calendar to release the event.' };
+  }
+}
+
+/**
+ * Cancels a demo booking and frees its Google Calendar event.
+ * The booking is only marked cancelled after Google confirms deletion (or reports it missing).
+ */
 export async function cancelDemoBooking(
   bookingId: string,
   reason: string = 'Customer requested cancellation'
@@ -1169,27 +1217,23 @@ export async function cancelDemoBooking(
 
     const booking = snap.data() as Booking;
 
-    // 1. Remove from Google Calendar and notify attendees
     if (booking.calendarEventId && !booking.calendarEventId.startsWith('mock-')) {
       const token = await getLiveCalendarToken();
-      if (token) {
-        try {
-          await fetch(
-            `https://www.googleapis.com/calendar/v3/calendars/primary/events/${encodeURIComponent(
-              booking.calendarEventId
-            )}?sendUpdates=all`,
-            {
-              method: 'DELETE',
-              headers: { Authorization: `Bearer ${token}` },
-            }
-          );
-        } catch (e) {
-          console.warn('[Calendar Delete Notice]:', e);
-        }
+      if (!token) {
+        return {
+          success: false,
+          error: 'Google Calendar is not connected. The existing booking was left active; reconnect the calendar before cancelling it.',
+        };
+      }
+      const removed = await deleteGoogleCalendarDemoEvent(booking.calendarEventId, token);
+      if (!removed.success) {
+        return {
+          success: false,
+          error: `${removed.error || 'The calendar event could not be deleted'} The existing booking remains active.`,
+        };
       }
     }
 
-    // 2. Update Firestore booking status
     const nowIso = new Date().toISOString();
     await safeSetDoc(
       bookingRef,
@@ -1202,7 +1246,6 @@ export async function cancelDemoBooking(
       { merge: true }
     );
 
-    // 3. Update Lead status
     if (booking.leadId) {
       await safeSetDoc(
         tenantRepo(getSchedCtx()).leadDoc(booking.leadId),
@@ -1222,11 +1265,11 @@ export async function cancelDemoBooking(
 }
 
 /**
- * Reschedules a demo booking to a new time slot:
- * 1. Checks real-time Google Calendar availability for the requested new slot.
- * 2. Empties/clears the initial booked slot by deleting the old event on Google Calendar (sendUpdates=all).
- * 3. Books the new slot on Google Calendar with a fresh Google Meet link and sends the new calendar invitation.
- * 4. Updates the booking record and lead state in Firestore.
+ * Reschedules a booking without sacrificing the existing event:
+ * 1. Re-check the requested new slot.
+ * 2. Create the new Google Calendar event and obtain its Meet link/invitation.
+ * 3. Persist the replacement details, then delete the old event and notify its attendees.
+ * If creation or deletion fails, the original booking is restored and the replacement event is cleaned up.
  */
 export async function rescheduleDemoBooking(
   bookingId: string,
@@ -1238,16 +1281,6 @@ export async function rescheduleDemoBooking(
   accessToken?: string
 ): Promise<{ success: boolean; booking?: Booking; error?: string; conflict?: boolean }> {
   await warmSchedBrand();
-  // 1. Verify availability for requested new slot before modifying existing booking
-  const freshCheck = await checkRealtimeGoogleCalendarSlot(newStartIso, newEndIso, accessToken);
-  if (!freshCheck.available) {
-    return {
-      success: false,
-      conflict: true,
-      error: 'The requested new slot is already booked on our calendar. Please choose another time.',
-    };
-  }
-
   if (!isFirebaseConfigured || !db) {
     return { success: false, error: 'Database not initialized' };
   }
@@ -1255,59 +1288,58 @@ export async function rescheduleDemoBooking(
   try {
     const bookingRef = tenantRepo(getSchedCtx()).bookingDoc(bookingId);
     const snap = await getDoc(bookingRef);
-    if (!snap.exists()) {
-      return { success: false, error: 'Booking not found' };
-    }
+    if (!snap.exists()) return { success: false, error: 'Booking not found' };
 
     const booking = snap.data() as Booking;
-    const token = await getLiveCalendarToken(accessToken);
-
-    // 2. FIRST: Make the initial booked slot EMPTY on Google Calendar by removing the original event
-    if (booking.calendarEventId && !booking.calendarEventId.startsWith('mock-') && token) {
-      try {
-        await fetch(
-          `https://www.googleapis.com/calendar/v3/calendars/primary/events/${encodeURIComponent(
-            booking.calendarEventId
-          )}?sendUpdates=all`,
-          {
-            method: 'DELETE',
-            headers: { Authorization: `Bearer ${token}` },
-          }
-        );
-        console.log(`[Reschedule] Initial booked slot (${booking.startDateTimeIso}) emptied on Google Calendar.`);
-      } catch (delErr) {
-        console.warn('[Reschedule Notice] Error deleting original event to empty initial slot:', delErr);
-      }
+    if (booking.startDateTimeIso === newStartIso && booking.endDateTimeIso === newEndIso) {
+      return { success: true, booking };
     }
 
-    // 3. SECOND: Book the new slot on Google Calendar and dispatch new calendar invite
-    let newCalendarEventId = `mock-cal-${Date.now()}`;
-    let newGoogleMeetLink = booking.googleMeetLink;
+    const freshCheck = await checkRealtimeGoogleCalendarSlot(newStartIso, newEndIso, accessToken);
+    if (!freshCheck.available) {
+      return {
+        success: false,
+        conflict: true,
+        error: 'The requested new slot is already booked on our calendar. Please choose another time.',
+      };
+    }
 
-    if (token) {
-      const createRes = await createGoogleCalendarDemoBookingInner({
-        replacingBookingId: booking.bookingId,
-        leadId: booking.leadId,
-        contactId: booking.contactId,
-        campaignId: booking.campaignId,
-        conversationId: booking.conversationId,
-        channel: booking.channel,
-        leadName: booking.leadName,
-        leadEmail: booking.leadEmail,
-        leadPhone: booking.leadPhone,
-        companyName: booking.companyName,
-        startIso: newStartIso,
-        endIso: newEndIso,
-        dateString: newDateString,
-        startTime: newStartTime,
-        endTime: newEndTime,
-        accessToken: token,
-      });
+    const token = await getLiveCalendarToken(accessToken);
+    if (!token) {
+      return {
+        success: false,
+        error: 'Google Calendar is not connected. Your original demo remains booked; reconnect the calendar before rescheduling.',
+      };
+    }
 
-      if (createRes.success && createRes.booking) {
-        newCalendarEventId = createRes.calendarEventId || newCalendarEventId;
-        newGoogleMeetLink = createRes.googleMeetLink || newGoogleMeetLink;
-      }
+    // Create the new calendar event FIRST. The previous booking is untouched if this fails.
+    const createRes = await createGoogleCalendarDemoBookingInner({
+      replacingBookingId: booking.bookingId,
+      leadId: booking.leadId,
+      contactId: booking.contactId,
+      campaignId: booking.campaignId,
+      conversationId: booking.conversationId,
+      channel: booking.channel,
+      leadName: booking.leadName,
+      leadEmail: booking.leadEmail,
+      leadPhone: booking.leadPhone,
+      companyName: booking.companyName,
+      startIso: newStartIso,
+      endIso: newEndIso,
+      dateString: newDateString,
+      startTime: newStartTime,
+      endTime: newEndTime,
+      accessToken: token,
+    });
+
+    const newCalendarEventId = createRes.calendarEventId || createRes.booking?.calendarEventId || '';
+    const newGoogleMeetLink = createRes.googleMeetLink || createRes.booking?.googleMeetLink || '';
+    if (!createRes.success || !createRes.booking || !newCalendarEventId || newCalendarEventId.startsWith('mock-') || !newGoogleMeetLink) {
+      return {
+        success: false,
+        conflict: createRes.conflict,
+        error: createRes.error || 'The new calendar event and Google Meet link could not be created. Your original booking remains unchanged.',
+      };
     }
 
     const nowIso = new Date().toISOString();
@@ -1324,22 +1356,81 @@ export async function rescheduleDemoBooking(
       updatedAt: nowIso,
     };
 
-    await safeSetDoc(bookingRef, updatedBooking, { merge: true });
-
-    if (booking.leadId) {
-      await safeSetDoc(
-        tenantRepo(getSchedCtx()).leadDoc(booking.leadId),
-        {
-          demoDate: newDateString,
-          demoStartTime: newStartTime,
-          demoEndTime: newEndTime,
-          demoTimezone: tz(),
-          calendarEventId: newCalendarEventId,
-          googleMeetLink: newGoogleMeetLink,
-          updatedAt: nowIso,
-        },
-        { merge: true }
+    // Update the tenant booking and CRM lead before releasing the previous calendar event.
+    try {
+      await safeSetDoc(bookingRef, updatedBooking, { merge: true });
+      if (booking.leadId) {
+        await safeSetDoc(
+          tenantRepo(getSchedCtx()).leadDoc(booking.leadId),
+          {
+            demoDate: newDateString,
+            demoStartTime: newStartTime,
+            demoEndTime: newEndTime,
+            demoTimezone: tz(),
+            calendarEventId: newCalendarEventId,
+            googleMeetLink: newGoogleMeetLink,
+            updatedAt: nowIso,
+          },
+          { merge: true }
+        );
+      }
+    } catch (persistError: any) {
+      await safeSetDoc(bookingRef, booking, { merge: true }).catch((rollbackError) =>
+        console.error('[Reschedule Rollback] Could not restore original booking:', rollbackError)
       );
+      if (booking.leadId) {
+        await safeSetDoc(
+          tenantRepo(getSchedCtx()).leadDoc(booking.leadId),
+          {
+            demoDate: booking.date,
+            demoStartTime: booking.startTime,
+            demoEndTime: booking.endTime,
+            demoTimezone: booking.demoTimezone || tz(),
+            calendarEventId: booking.calendarEventId || '',
+            googleMeetLink: booking.googleMeetLink || '',
+            updatedAt: new Date().toISOString(),
+          },
+          { merge: true }
+        ).catch((rollbackError) => console.error('[Reschedule Rollback] Could not restore original lead details:', rollbackError));
+      }
+      const cleanup = await deleteGoogleCalendarDemoEvent(newCalendarEventId, token);
+      if (!cleanup.success) console.error('[Reschedule Cleanup] Could not remove replacement event:', cleanup.error);
+      return {
+        success: false,
+        error: `The replacement calendar event was created, but its booking details could not be saved. Your original booking was kept. ${persistError?.message || ''}`.trim(),
+      };
+    }
+
+    // Only now release the old event. If Google refuses, restore the original booking and remove
+    // the replacement event so the lead never ends up with two active invitations.
+    if (booking.calendarEventId && !booking.calendarEventId.startsWith('mock-') && booking.calendarEventId !== newCalendarEventId) {
+      const removed = await deleteGoogleCalendarDemoEvent(booking.calendarEventId, token);
+      if (!removed.success) {
+        await safeSetDoc(bookingRef, booking, { merge: true }).catch((rollbackError) =>
+          console.error('[Reschedule Rollback] Could not restore original booking:', rollbackError)
+        );
+        if (booking.leadId) {
+          await safeSetDoc(
+            tenantRepo(getSchedCtx()).leadDoc(booking.leadId),
+            {
+              demoDate: booking.date,
+              demoStartTime: booking.startTime,
+              demoEndTime: booking.endTime,
+              demoTimezone: booking.demoTimezone || tz(),
+              calendarEventId: booking.calendarEventId || '',
+              googleMeetLink: booking.googleMeetLink || '',
+              updatedAt: new Date().toISOString(),
+            },
+            { merge: true }
+          ).catch((rollbackError) => console.error('[Reschedule Rollback] Could not restore original lead details:', rollbackError));
+        }
+        const cleanup = await deleteGoogleCalendarDemoEvent(newCalendarEventId, token);
+        if (!cleanup.success) console.error('[Reschedule Cleanup] Could not remove replacement event:', cleanup.error);
+        return {
+          success: false,
+          error: `${removed.error || 'The original calendar event could not be released.'} The original booking remains active.`,
+        };
+      }
     }
 
     return { success: true, booking: updatedBooking };
@@ -1609,6 +1700,8 @@ export interface SchedulingTurnResult {
     | 'ALREADY_BOOKED'
     | 'RESCHEDULED'
     | 'CANCELLED'
+    | 'CANCELLATION_FAILED'
+    | 'RESCHEDULE_FAILED'
     | 'WEEKEND_NOT_ALLOWED'
     | 'HOURS_NOT_ALLOWED'
     | 'ATTENDEE_ADDED'
@@ -1666,7 +1759,13 @@ async function loadSchedulingState(key: string | null): Promise<SchedulingState 
     const snap = await getDoc(tenantRepo(getSchedCtx()).doc('scheduling_state', key));
     if (!snap.exists()) return null;
     const data = snap.data() as SchedulingState;
-    if (!data?.stage || (typeof data.expiresAt === 'number' && data.expiresAt < Date.now())) return null;
+    if (!data?.stage) return null;
+    if (typeof data.expiresAt === 'number' && data.expiresAt < Date.now()) {
+      // This expires only the pending conversation state. It must never cancel or mutate
+      // an already-confirmed booking; the original demo remains active unless explicitly cancelled.
+      await clearSchedulingState(key);
+      return null;
+    }
     return data;
   } catch (e) {
     console.warn('[Demo Scheduling] Could not read scheduling state:', (e as any)?.message || e);
@@ -1896,7 +1995,14 @@ export async function processSchedulingConversationTurn(params: {
   if (/cancel\s+(the\s+)?(demo|meeting|booking|appointment|call)/i.test(lowerText)) {
     await clearSchedulingState(stateKey);
     if (activeBooking) {
-      await cancelDemoBooking(activeBooking.bookingId, 'Lead requested cancellation in conversation');
+      const cancellation = await cancelDemoBooking(activeBooking.bookingId, 'Lead requested cancellation in conversation');
+      if (!cancellation.success) {
+        return {
+          handled: true,
+          action: 'CANCELLATION_FAILED',
+          replyText: `I couldn't complete the cancellation: ${cancellation.error || 'Google Calendar did not confirm the deletion.'} Your existing demo on ${activeBooking.date} at ${activeBooking.startTime} ${TZL()} remains booked. Please reconnect the calendar or contact the team for help.`,
+        };
+      }
       return {
         handled: true,
         action: 'CANCELLED',
@@ -2001,7 +2107,7 @@ export async function processSchedulingConversationTurn(params: {
       return {
         handled: true,
         action: 'ASKED_AVAILABILITY',
-        replyText: `I'd be glad to invite ${freshEmailsInMsg.join(', ')} to the demo! Let's select a date and time for your walkthrough first. What day and time between ${fmtHour(workStartH())} and ${fmtHour(workEndH())} ${TZL()} (${daysLabel()}) works best for you? Once booked, I'll send the calendar invitation to both you and ${freshEmailsInMsg.join(', ')}.`,
+        replyText: `I'd be glad to invite ${freshEmailsInMsg.join(', ')} to the demo! Let's select a date and time for your walkthrough first. What day and time between ${workingScheduleLabel()} works best for you? Once booked, I'll send the calendar invitation to both you and ${freshEmailsInMsg.join(', ')}.`,
       };
     }
   }
@@ -2036,9 +2142,28 @@ export async function processSchedulingConversationTurn(params: {
         return finalizeConfirmedSlot(schedState.proposedSlot, schedState.mode === 'RESCHEDULE' ? 'RESCHEDULE' : 'NEW');
       }
       if (isNegative(answer)) {
+        if (schedState.mode === 'RESCHEDULE' && activeBooking) {
+          const cancellation = await cancelDemoBooking(
+            activeBooking.bookingId,
+            'Lead declined the proposed reschedule and requested no replacement slot'
+          );
+          await clearSchedulingState(stateKey);
+          if (!cancellation.success) {
+            return {
+              handled: true,
+              action: 'CANCELLATION_FAILED',
+              replyText: `I couldn't cancel your existing demo: ${cancellation.error || 'Google Calendar did not confirm the deletion.'} Your original booking on ${activeBooking.date} at ${activeBooking.startTime} ${TZL()} remains active.`,
+            };
+          }
+          return {
+            handled: true,
+            action: 'CANCELLED',
+            replyText: `No problem. I've cancelled your existing demo scheduled for ${activeBooking.date} at ${activeBooking.startTime} ${TZL()} and freed that calendar slot. You can request a new demo whenever you're ready.`,
+          };
+        }
         return askForAvailability(
           'ASKED_AVAILABILITY',
-          `No problem. What day and time would suit you instead? Our demos run ${daysLabel()} between ${fmtHour(workStartH())} and ${fmtHour(workEndH())} ${TZL()} (1 hour).`
+          `No problem. What day and time would suit you instead? Our demo availability is ${workingScheduleLabel()} (1 hour per demo).`
         );
       }
     }
@@ -2181,8 +2306,8 @@ Output JSON only: {"isDemoIntent": boolean, "requestedDate": string|null, "reque
     return askForAvailability(
       'ASKED_AVAILABILITY',
       mode === 'RESCHEDULE'
-        ? `Sure, I can move your ${brandName()} demo (currently ${activeBooking!.date} at ${activeBooking!.startTime} ${TZL()}). What day and time would suit you instead? Our demos run ${daysLabel()} between ${fmtHour(workStartH())} and ${fmtHour(workEndH())} ${TZL()} (1 hour).`
-        : `I'd be glad to arrange a live walkthrough of ${brandName()} for ${companyName}! What day and time would suit you? Our demos run ${daysLabel()} between ${fmtHour(workStartH())} and ${fmtHour(workEndH())} ${TZL()} and take about an hour.`
+        ? `Sure, I can move your ${brandName()} demo (currently ${activeBooking!.date} at ${activeBooking!.startTime} ${TZL()}). What day and time would suit you instead? Our demos run ${workingScheduleLabel()} (1 hour).`
+        : `I'd be glad to arrange a live walkthrough of ${brandName()} for ${companyName}! What day and time would suit you? Our demos run ${workingScheduleLabel()} and take about an hour.`
     );
   }
 
@@ -2221,7 +2346,7 @@ Output JSON only: {"isDemoIntent": boolean, "requestedDate": string|null, "reque
   if (time.hasNonZeroMinutes) {
     return offerOptions(
       'HOURS_NOT_ALLOWED',
-      `Our demos start on the hour (${hrShort(workStartH())} to ${hrShort(workEndH() - 1)} ${TZL()}).`,
+      `Our demo slots start on the hour. Current availability: ${workingScheduleLabel()}.`,
       { startFromDate: requestedDate!, period }
     );
   }
@@ -2235,7 +2360,7 @@ Output JSON only: {"isDemoIntent": boolean, "requestedDate": string|null, "reque
   }
 
   function hoursNotAllowedText(): string {
-    return `Our demo hours are ${fmtHour(workStartH())} to ${fmtHour(workEndH())} ${TZL()} (${daysLabel()}), and each demo is an hour, so the latest start is ${fmtHour(workEndH() - 1)}.`;
+    return `Our demo availability is ${workingScheduleLabel()}. Each demo is one hour and slots start on the hour.`;
   }
 
   function formatDayLabel(date: string): string {
@@ -2292,7 +2417,7 @@ Output JSON only: {"isDemoIntent": boolean, "requestedDate": string|null, "reque
       return {
         handled: true,
         action,
-        replyText: `${intro} I don't see free slots on our calendar for that, so what other day and time would suit you? Our demos run ${daysLabel()} between ${fmtHour(workStartH())} and ${fmtHour(workEndH())} ${TZL()}.`.trim(),
+        replyText: `${intro} I don't see free slots on our calendar for that, so what other day and time would suit you? Our demos run ${workingScheduleLabel()}.`.trim(),
       };
     }
     const list = offeredSlots.map((s, i) => `${i + 1}. ${s.label}`).join('\n');
@@ -2325,7 +2450,7 @@ Output JSON only: {"isDemoIntent": boolean, "requestedDate": string|null, "reque
   /** Re-checks a slot right before proposing or booking it. Returns a reply when it can't be used. */
   async function slotProblem(slot: OfferedSlot): Promise<SchedulingTurnResult | null> {
     const label = formatSlotLabel(slot.date, slot.startHour);
-    if (!slotHours().includes(slot.startHour)) {
+    if (!slotHours(dayOfWeekFor(slot.date)).includes(slot.startHour)) {
       return offerOptions('HOURS_NOT_ALLOWED', hoursNotAllowedText(), { startFromDate: slot.date });
     }
     if (!isWorkingDay(dayOfWeekFor(slot.date))) {
@@ -2377,9 +2502,11 @@ Output JSON only: {"isDemoIntent": boolean, "requestedDate": string|null, "reque
           replyText: `You're all set! Your ${brandName()} demo has been rescheduled to ${slotLabel}.\n\n• Google Meet Link: ${resched.booking.googleMeetLink}\n• Company: ${companyName}\n• Attendee: ${leadName} (${leadEmail || 'Email invite updated'})\n• Timezone: ${tzDisplay()}\n\nWe have sent the updated calendar invitation to your email. We look forward to demonstrating how ${sb().playbook === 'umrah360' ? 'Umrah360 automates your pilgrimage operations' : `${brandName()} can help your business`}!`,
         };
       }
-      return offerOptions('SLOT_UNAVAILABLE', `I couldn't move the demo to ${slotLabel}.`, {
-        startFromDate: targetDateStr,
-      });
+      return {
+        handled: true,
+        action: resched.conflict ? 'SLOT_UNAVAILABLE' : 'RESCHEDULE_FAILED',
+        replyText: `I couldn't move the demo to ${slotLabel}. Your original booking remains active and unchanged. ${resched.error || 'Please try another available slot or contact the team.'}`,
+      };
     }
 
     // Already has an upcoming demo and did not ask to reschedule: never book a second one.

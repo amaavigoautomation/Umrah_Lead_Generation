@@ -1217,26 +1217,20 @@ export async function cancelDemoBooking(
 
     const booking = snap.data() as Booking;
 
-    if (booking.calendarEventId && !booking.calendarEventId.startsWith('mock-')) {
-      const token = await getLiveCalendarToken();
-      if (!token) {
-        return {
-          success: false,
-          error: 'Google Calendar is not connected. The existing booking was left active; reconnect the calendar before cancelling it.',
-        };
-      }
-      const removed = await deleteGoogleCalendarDemoEvent(booking.calendarEventId, token);
-      if (!removed.success) {
-        return {
-          success: false,
-          error: `${removed.error || 'The calendar event could not be deleted'} The existing booking remains active.`,
-        };
-      }
+    const hasLiveCalendarEvent = Boolean(
+      booking.calendarEventId && !booking.calendarEventId.startsWith('mock-')
+    );
+    const token = hasLiveCalendarEvent ? await getLiveCalendarToken() : null;
+    if (hasLiveCalendarEvent && !token) {
+      return {
+        success: false,
+        error: 'Google Calendar is not connected. The existing booking was left active; reconnect the calendar before cancelling it.',
+      };
     }
 
     const nowIso = new Date().toISOString();
-    // safeSetDoc intentionally swallows write errors; cancellation must only report success
-    // when the booking and its CRM lead status were actually persisted.
+    // Persist the cancellation first. If Google refuses to delete the event, restore the
+    // original booking so CRM state never claims the slot is free while the event is still there.
     await setDoc(
       bookingRef,
       {
@@ -1248,14 +1242,29 @@ export async function cancelDemoBooking(
       { merge: true }
     );
 
+    if (hasLiveCalendarEvent && token) {
+      const removed = await deleteGoogleCalendarDemoEvent(booking.calendarEventId!, token);
+      if (!removed.success) {
+        await setDoc(bookingRef, booking as any, { merge: true }).catch((rollbackError) =>
+          console.error('[Cancellation Rollback] Could not restore original booking:', rollbackError)
+        );
+        return {
+          success: false,
+          error: `${removed.error || 'The calendar event could not be deleted'} The cancellation was not completed; the original booking was restored where possible.`,
+        };
+      }
+    }
+
+    // The booking + calendar are now cancelled. CRM lead sync is best-effort and must not
+    // turn a completed cancellation into a false failure message.
     if (booking.leadId) {
-      await setDoc(
+      await safeSetDoc(
         tenantRepo(getSchedCtx()).leadDoc(booking.leadId),
         {
           demoStatus: 'NOT_BOOKED',
           status: 'QUALIFIED',
           updatedAt: nowIso,
-        } as any,
+        },
         { merge: true }
       );
     }
@@ -1360,24 +1369,9 @@ export async function rescheduleDemoBooking(
 
     // Update the tenant booking and CRM lead before releasing the previous calendar event.
     try {
+      // Keep the authoritative booking write separate from CRM sync. If the old event
+      // cannot be released, this document can be rolled back without leaving CRM mutated.
       await setDoc(bookingRef, updatedBooking as any, { merge: true });
-      if (booking.leadId) {
-        await setDoc(
-          tenantRepo(getSchedCtx()).leadDoc(booking.leadId),
-          {
-            status: 'DEMO_BOOKED',
-            demoStatus: 'BOOKED',
-            demoDate: newDateString,
-            demoStartTime: newStartTime,
-            demoEndTime: newEndTime,
-            demoTimezone: tz(),
-            calendarEventId: newCalendarEventId,
-            googleMeetLink: newGoogleMeetLink,
-            updatedAt: nowIso,
-          } as any,
-          { merge: true }
-        );
-      }
     } catch (persistError: any) {
       await setDoc(bookingRef, booking as any, { merge: true }).catch((rollbackError) =>
         console.error('[Reschedule Rollback] Could not restore original booking:', rollbackError)
@@ -1439,6 +1433,24 @@ export async function rescheduleDemoBooking(
           error: `${removed.error || 'The original calendar event could not be released.'} The original booking remains active.`,
         };
       }
+    }
+
+    if (booking.leadId) {
+      await safeSetDoc(
+        tenantRepo(getSchedCtx()).leadDoc(booking.leadId),
+        {
+          status: 'DEMO_BOOKED',
+          demoStatus: 'BOOKED',
+          demoDate: newDateString,
+          demoStartTime: newStartTime,
+          demoEndTime: newEndTime,
+          demoTimezone: tz(),
+          calendarEventId: newCalendarEventId,
+          googleMeetLink: newGoogleMeetLink,
+          updatedAt: new Date().toISOString(),
+        },
+        { merge: true }
+      );
     }
 
     return { success: true, booking: updatedBooking };

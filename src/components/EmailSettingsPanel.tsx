@@ -273,7 +273,10 @@ export const EmailSettingsPanel: React.FC<{ tenantId: string; canEdit: boolean }
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {(view?.records || []).map((r, i) => (
+                {[
+                  ...(view?.records || []),
+                  ...(view?.trackingEnabled !== false ? (view?.trackingRecords || []) : []),
+                ].map((r, i) => (
                   <tr key={i}>
                     <td className="px-3 py-2 font-medium text-slate-700 whitespace-nowrap">
                       {r.type}
@@ -398,37 +401,10 @@ export const EmailSettingsPanel: React.FC<{ tenantId: string; canEdit: boolean }
           </button>
         </div>
         {view?.trackingEnabled !== false && (view?.trackingRecords || []).length > 0 && (
-          <div className="space-y-2">
-            <p className="text-xs text-slate-500">
-              Optional: add these records so tracked links use your own domain (looks more trustworthy to inboxes). Sending works without them.
-            </p>
-            <div className="overflow-x-auto border border-slate-200 rounded-lg">
-              <table className="w-full text-sm">
-                <tbody className="divide-y divide-slate-100">
-                  {(view?.trackingRecords || []).map((r, i) => (
-                    <tr key={i}>
-                      <td className="px-3 py-2 font-medium text-slate-700 whitespace-nowrap">{r.type}</td>
-                      <td className="px-3 py-2">
-                        <div className="flex items-center gap-2">
-                          <code className="text-xs text-slate-700 break-all">{r.name}</code>
-                          <CopyBtn text={r.name} />
-                        </div>
-                      </td>
-                      <td className="px-3 py-2">
-                        <div className="flex items-center gap-2">
-                          <code className="text-xs text-slate-700 break-all">{r.value}</code>
-                          <CopyBtn text={r.value} />
-                        </div>
-                      </td>
-                      <td className="px-3 py-2 whitespace-nowrap">
-                        <span className={r.status === 'verified' ? 'text-emerald-600 font-medium' : 'text-slate-500'}>{r.status || 'pending'}</span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
+          <p className="text-xs text-slate-500">
+            Custom tracking DNS records are included in the DNS records list above. Add them alongside the SPF/DKIM records;
+            Resend will use your custom tracking subdomain after it is verified. Email sending does not depend on this verification.
+          </p>
         )}
       </section>
     </div>

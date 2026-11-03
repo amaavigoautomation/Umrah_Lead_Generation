@@ -45,6 +45,13 @@ export type SenderResolution =
   | { ok: false; error: string };
 
 const DOMAIN_RE = /^(?!-)([a-z0-9-]{1,63}\.)+[a-z]{2,}$/;
+const DEFAULT_TRACKING_SUBDOMAIN = 'links';
+
+// Umrah360 keeps its existing platform sending setup unchanged. Other workspaces
+// receive a custom Resend tracking subdomain when their email settings are loaded.
+function shouldConfigureCustomTrackingDomain(tenantId: string): boolean {
+  return String(tenantId || '').trim().toLowerCase() !== 'umrah360';
+}
 const LOCAL_RE = /^[a-z0-9._+-]{1,64}$/;
 
 function getApiKey(): string {
@@ -151,10 +158,25 @@ export const isTrackingEnabled = (s: TenantEmailSettings) => s.trackingEnabled !
  * Turns Resend's open + click tracking on/off for the domain, so workspaces never have to open Resend.
  * Best effort: a failure here is logged and never blocks adding/verifying the domain.
  */
-async function applyResendTracking(domainId: string, on: boolean, current?: { open_tracking?: boolean; click_tracking?: boolean }): Promise<boolean> {
-  if (current && current.open_tracking === on && current.click_tracking === on) return false;
+async function applyResendTracking(
+  domainId: string,
+  on: boolean,
+  current?: { open_tracking?: boolean; click_tracking?: boolean; tracking_subdomain?: string },
+  ensureCustomTrackingDomain = true
+): Promise<boolean> {
+  const existingSubdomain = String(current?.tracking_subdomain || '').trim();
+  const needsTrackingDomain = on && ensureCustomTrackingDomain && !existingSubdomain;
+  const needsTrackingToggle = !current || current.open_tracking !== on || current.click_tracking !== on;
+  if (!needsTrackingToggle && !needsTrackingDomain) return false;
   try {
-    const res = await resendClient().domains.update({ id: domainId, openTracking: on, clickTracking: on });
+    const res = await resendClient().domains.update({
+      id: domainId,
+      openTracking: on,
+      clickTracking: on,
+      ...(on && ensureCustomTrackingDomain
+        ? { trackingSubdomain: existingSubdomain || DEFAULT_TRACKING_SUBDOMAIN }
+        : {}),
+    } as any);
     if (res.error) {
       console.warn(`[Tenant Email] could not ${on ? 'enable' : 'disable'} tracking for ${domainId}: ${res.error.message}`);
       return false;
@@ -167,11 +189,16 @@ async function applyResendTracking(domainId: string, on: boolean, current?: { op
 }
 
 /** Reads the domain from Resend, switching tracking to the workspace's setting first if it differs. */
-async function loadDomainSyncingTracking(s: TenantEmailSettings, domainId: string) {
+async function loadDomainSyncingTracking(s: TenantEmailSettings, domainId: string, tenantId: string) {
   const resend = resendClient();
   let got = await resend.domains.get(domainId);
   if (!got.error && got.data) {
-    const changed = await applyResendTracking(domainId, isTrackingEnabled(s), got.data as any);
+    const changed = await applyResendTracking(
+      domainId,
+      isTrackingEnabled(s),
+      got.data as any,
+      shouldConfigureCustomTrackingDomain(tenantId)
+    );
     if (changed) {
       const again = await resend.domains.get(domainId);
       if (!again.error && again.data) got = again;
@@ -186,8 +213,15 @@ export async function setTenantTracking(tenantId: string, enabled: boolean) {
   const on = enabled !== false;
   let patch: Partial<TenantEmailSettings> = { trackingEnabled: on };
   if (s.resendDomainId) {
-    await applyResendTracking(s.resendDomainId, on);
-    const got = await resendClient().domains.get(s.resendDomainId).catch(() => null);
+    const resend = resendClient();
+    const current = await resend.domains.get(s.resendDomainId).catch(() => null);
+    await applyResendTracking(
+      s.resendDomainId,
+      on,
+      current && !current.error && current.data ? (current.data as any) : undefined,
+      shouldConfigureCustomTrackingDomain(tenantId)
+    );
+    const got = await resend.domains.get(s.resendDomainId).catch(() => null);
     if (got && !got.error && got.data) {
       patch = { ...patch, trackingRecords: mapTrackingRecords(got.data.records as any[]), trackingStatus: trackingStatusOf(got.data.records as any[]) };
     }
@@ -198,7 +232,35 @@ export async function setTenantTracking(tenantId: string, enabled: boolean) {
 
 /** Public view for the UI: never exposes anything secret. */
 export async function getEmailSettingsView(tenantId: string) {
-  const s = await getTenantEmailSettings(tenantId, { fresh: true });
+  let s = await getTenantEmailSettings(tenantId, { fresh: true });
+
+  // Backfill the custom tracking CNAME for existing workspaces on first visit.
+  // Existing custom subdomains are preserved by applyResendTracking; Umrah360 is excluded.
+  const hasTrackingRecord = (s.trackingRecords || []).some((record) => record.record === 'Tracking');
+  if (
+    shouldConfigureCustomTrackingDomain(tenantId) &&
+    isTrackingEnabled(s) &&
+    s.resendDomainId &&
+    !hasTrackingRecord
+  ) {
+    try {
+      const got = await loadDomainSyncingTracking(s, s.resendDomainId, tenantId);
+      if (!got.error && got.data) {
+        const status = sendingStatus(got.data.status as TenantDomainStatus, got.data.records as any[]);
+        s = await saveSettings(tenantId, {
+          status,
+          records: mapRecords(got.data.records as any[]),
+          trackingRecords: mapTrackingRecords(got.data.records as any[]),
+          trackingStatus: trackingStatusOf(got.data.records as any[]),
+          ...(status === 'verified' && s.status !== 'verified' ? { verifiedAt: new Date().toISOString() } : {}),
+        });
+      }
+    } catch (err: any) {
+      // Settings should remain accessible even if Resend is temporarily unavailable.
+      console.warn(`[Tenant Email] could not sync tracking DNS for ${tenantId}:`, err?.message || err);
+    }
+  }
+
   const grandfathered = platformSenderTenants().includes(tenantId);
   const canSend = s.status === 'verified' && Boolean(s.domain && s.fromLocalPart);
   return {
@@ -234,7 +296,7 @@ export async function addTenantDomain(tenantId: string, rawDomain: string) {
 
   const trackingOn = isTrackingEnabled(existing);
   if (id) {
-    const got = await loadDomainSyncingTracking(existing, id);
+    const got = await loadDomainSyncingTracking(existing, id, tenantId);
     if (got.error || !got.data) throw new HttpError(502, `Resend: ${got.error?.message || 'could not load domain'}`);
     status = got.data.status as TenantDomainStatus;
     records = got.data.records as any[];
@@ -245,6 +307,9 @@ export async function addTenantDomain(tenantId: string, rawDomain: string) {
       capabilities: { sending: 'enabled' },
       openTracking: trackingOn,
       clickTracking: trackingOn,
+      ...(trackingOn && shouldConfigureCustomTrackingDomain(tenantId)
+        ? { trackingSubdomain: DEFAULT_TRACKING_SUBDOMAIN }
+        : {}),
     } as any);
     if (created.error || !created.data) {
       const code = Number((created.error as any)?.statusCode);
@@ -276,7 +341,7 @@ export async function addTenantDomain(tenantId: string, rawDomain: string) {
 export async function refreshTenantDomain(tenantId: string) {
   const s = await getTenantEmailSettings(tenantId, { fresh: true });
   if (!s.resendDomainId) throw new HttpError(400, 'Add a domain first');
-  const got = await loadDomainSyncingTracking(s, s.resendDomainId);
+  const got = await loadDomainSyncingTracking(s, s.resendDomainId, tenantId);
   if (got.error || !got.data) {
     const code = Number((got.error as any)?.statusCode);
     if (code === 404) throw new HttpError(404, 'This domain no longer exists in Resend. Remove it here and add it again.');
@@ -299,7 +364,7 @@ export async function verifyTenantDomain(tenantId: string) {
   // Ask Resend to re-check DNS, then read back the result.
   const ver = await resend.domains.verify(s.resendDomainId);
   if (ver.error) throw new HttpError(502, `Resend: ${ver.error.message}`);
-  const got = await loadDomainSyncingTracking(s, s.resendDomainId);
+  const got = await loadDomainSyncingTracking(s, s.resendDomainId, tenantId);
   if (got.error || !got.data) throw new HttpError(502, `Resend: ${got.error?.message || 'could not load domain'}`);
   const status = sendingStatus(got.data.status as TenantDomainStatus, got.data.records as any[]);
   return saveSettings(tenantId, {

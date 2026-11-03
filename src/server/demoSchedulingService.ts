@@ -1989,7 +1989,9 @@ export function detectDemoSchedulingIntent(text: string): boolean {
     /have\s+(a\s+)?(meeting|call|demo)/i,
     /arrange\s+(a\s+)?(demo|meeting|call)/i,
     /set\s+up\s+(a\s+)?(demo|meeting|call)/i,
-    /can\s+we\s+(meet|talk|have\s+a\s+call|schedule)/i,
+    /can\s+we\s+(meet|talk|connect|have\s+a\s+call|schedule)/i,
+    /\b(let's|lets|can we|could we|shall we)\s+connect\b/i,
+    /\b(connect|meet|talk|call)\s+(today|tomorrow|tonight)\b/i,
     /when\s+can\s+we\s+(meet|see\s+demo)/i,
     /reschedule\s+(the\s+)?(demo|meeting|call)/i,
     /cancel\s+(the\s+)?(demo|meeting|call)/i,
@@ -2001,7 +2003,7 @@ export function detectDemoSchedulingIntent(text: string): boolean {
 
   // A day + a time only counts when it is also about meeting / a demo
   if (
-    /(monday|tuesday|wednesday|thursday|friday|tomorrow|next\s+week)/i.test(t) &&
+    /(monday|tuesday|wednesday|thursday|friday|today|tomorrow|tonight|next\s+week)/i.test(t) &&
     /(\d{1,2}\s*(am|pm)|morning|afternoon|evening|\d{1,2}:\d{2})/i.test(t) &&
     /(demo|meeting|call|walkthrough|slot|schedule|available|availability|connect|talk|meet)/i.test(t)
   ) {
@@ -2225,8 +2227,18 @@ export async function processSchedulingConversationTurn(params: {
   const time = parseExplicitTime(fresh);
   const dateMentioned = hasExplicitDateToken(fresh);
   const offered: OfferedSlot[] = Array.isArray(schedState?.offeredSlots) ? schedState!.offeredSlots! : [];
+  // A lead may phrase a reschedule naturally ("Can we connect today at 5 PM?") without
+  // using the word "reschedule". If they already have a booking and now provide a new
+  // meeting date/time, treat it as a proposed move rather than creating a second meeting.
+  const proposesNewTimeForExistingBooking = Boolean(
+    activeBooking &&
+    (dateMentioned || time.hasTime) &&
+    /\b(connect|meet|meeting|talk|call|demo|slot|schedule|available)\b/i.test(fresh)
+  );
   const mode: 'NEW' | 'RESCHEDULE' =
-    activeBooking && (isRescheduleIntent || schedState?.mode === 'RESCHEDULE') ? 'RESCHEDULE' : 'NEW';
+    activeBooking && (isRescheduleIntent || schedState?.mode === 'RESCHEDULE' || proposesNewTimeForExistingBooking)
+      ? 'RESCHEDULE'
+      : 'NEW';
 
   // 4a. Lead is answering our "Just to confirm..." question.
   // Judged on the lead's own reply only: not the email subject, not our earlier message pasted back by

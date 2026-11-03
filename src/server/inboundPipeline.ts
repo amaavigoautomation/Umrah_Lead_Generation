@@ -916,7 +916,13 @@ export async function generateAutoReplyText(params: {
         };
       }
     } catch (schedErr) {
-      console.error('[Demo Scheduling Inbound Email Error]: scheduling failed, falling back to the general reply:', schedErr);
+      console.error('[Demo Scheduling Inbound Email Error]: scheduling failed; refusing to send an unverified scheduling confirmation:', schedErr);
+      return {
+        replyText: 'Thanks for your message. I could not verify the calendar update automatically, so I cannot confirm a new meeting time or send a replacement invitation yet. Please keep your existing calendar invitation for now; our team will check the booking and follow up.',
+        handoffTriggered: false,
+        leadScore: 88,
+        buyingStage: 'DECISION',
+      };
     }
   }
 

@@ -10,6 +10,8 @@ export interface EmailDesignBlock {
   align?:'left'|'center'|'right'; width?:number; fontSize?:number; color?:string;
   backgroundColor?:string; padding?:number; enabled?:boolean; eyebrow?:string; secondaryText?:string;
   links?:Array<{label:string;url:string}>;
+  /** Sanitized inline formatting produced by the visual text editor. */
+  richText?:Partial<Record<'text'|'secondaryText'|'eyebrow',string>>;
 }
 export interface EmailDesignColumn {
  id:string; width:number; padding?:number; backgroundColor?:string; backgroundImageUrl?:string;
@@ -155,6 +157,27 @@ export function escapeEmailHtml(value:unknown):string {
  return String(value??'').replace(/[&<>"']/g,(c)=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]||c));
 }
 function num(v:unknown,d:number,min:number,max:number):number {const n=Number(v);return Number.isFinite(n)?Math.round(Math.max(min,Math.min(max,n))):d;}
+function sanitizeInlineEmailHtml(input:unknown):string {
+ let html=String(input??'').slice(0,8000)
+  .replace(/<(div|p)(?:\s[^>]*)?>/gi,'')
+  .replace(/<\/(div|p)\s*>/gi,'<br/>')
+  .replace(/<br\s*\/?\s*>/gi,'<br/>')
+  .replace(/<(?!\/?(?:b|strong|i|em|u|s|strike|br|span|a)\b)[^>]*>/gi,'');
+ html=html.replace(/<(b|strong|i|em|u|s|strike|br)\b[^>]*>/gi,(_m,tag:string)=>'<'+tag.toLowerCase()+'>');
+ html=html.replace(/<(span|a)\b([^>]*)>/gi,(_m,tag:string,attrs:string)=>{
+  if(tag.toLowerCase()==='span'){
+   const style=attrs.match(/style\s*=\s*(?:"([^"]*)"|'([^']*)')/i);
+   const safe=style?safeStyle(style[1]||style[2]||''):'';
+   const inline=safe.split(';').filter((part)=>/^(color|font-size|font-weight|font-style|text-decoration):/i.test(part)).join(';');
+   return inline?'<span style="'+escapeEmailHtml(inline)+'">':'<span>';
+  }
+  const href=attrs.match(/href\s*=\s*(?:"([^"]*)"|'([^']*)')/i);
+  const url=href?isSafeEmailUrl(href[1]||href[2]||'',false):'';
+  return url?'<a href="'+escapeEmailHtml(url)+'" target="_blank" rel="noopener noreferrer">':'<a>';
+ });
+ html=html.replace(/<\/(?:span|a)\s*>/gi,(m)=>m.toLowerCase());
+ return html;
+}
 function safeStyle(style:string):string {
  const allowed=['color','background','background-color','font-family','font-size','font-weight','font-style','line-height','text-align','text-decoration','text-transform','letter-spacing','word-break','white-space',
   'padding','padding-top','padding-right','padding-bottom','padding-left','margin','margin-top','margin-right','margin-bottom','margin-left',
@@ -268,7 +291,8 @@ export function normalizeEmailDesignTemplate(input:any,sourceOverride?:EmailDesi
    backgroundColor:item?.backgroundColor?safeHexColor(item.backgroundColor,theme.cardBackground):'',padding:num(item?.padding,16,0,64),
    eyebrow:String(item?.eyebrow??'').slice(0,180),secondaryText:String(item?.secondaryText??'').slice(0,700),
    enabled:item?.enabled!==false||type==='content',
-   links:Array.isArray(item?.links)?item.links.slice(0,6).map((x:any)=>({label:String(x?.label||'').slice(0,40),url:isSafeEmailUrl(x?.url,false)})).filter((x:any)=>x.label&&x.url):undefined};
+   links:Array.isArray(item?.links)?item.links.slice(0,6).map((x:any)=>({label:String(x?.label||'').slice(0,40),url:isSafeEmailUrl(x?.url,false)})).filter((x:any)=>x.label&&x.url):undefined,
+   richText:item?.richText&&typeof item.richText==='object'?(['text','secondaryText','eyebrow'] as const).reduce((result,field)=>{const value=sanitizeInlineEmailHtml(item.richText[field]);if(value)result[field]=value;return result;},{} as Partial<Record<'text'|'secondaryText'|'eyebrow',string>>):undefined};
  };
  const blocks:EmailDesignBlock[]=(Array.isArray(raw.blocks)?raw.blocks:[]).slice(0,40).map(normalizeBlock);
  if(!blocks.some(x=>x.type==='content'))blocks.push({id:'content-area',type:'content',padding:16,enabled:true});
@@ -326,7 +350,12 @@ function renderBlock(item:EmailDesignBlock,t:EmailDesignTemplate,body:string,bra
  if(item.enabled===false&&item.type!=='content')return '';
  const th=t.theme,align=item.align||'left',color=safeHexColor(item.color,th.textColor),pad=num(item.padding,16,0,64);
  const background=item.backgroundColor?safeHexColor(item.backgroundColor,th.cardBackground):'';
- const wrap=(content:string,style='')=>'<tr><td align="'+align+'"'+(background?' bgcolor="'+background+'"':'')+' style="padding:'+pad+'px 28px;'+(background?'background:'+background+';':'')+style+'">'+content+'</td></tr>';
+ const blockId=escapeEmailHtml(item.id),blockType=escapeEmailHtml(item.type);
+ const wrap=(content:string,style='')=>'<tr data-email-block-id="'+blockId+'" data-email-block-type="'+blockType+'"><td align="'+align+'"'+(background?' bgcolor="'+background+'"':'')+' style="padding:'+pad+'px 28px;'+(background?'background:'+background+';':'')+style+'">'+content+'</td></tr>';
+ const renderField=(field:'text'|'secondaryText'|'eyebrow',value:string)=>{
+  const rendered=item.richText?.[field]?sanitizeInlineEmailHtml(item.richText[field]):escapeEmailHtml(value).replace(/\n/g,'<br/>');
+  return rendered.replace(/\{\{companyName\}\}/g,escapeEmailHtml(brand.companyName||'Our Team')).replace(/\{\{tagline\}\}/g,escapeEmailHtml(brand.tagline||''));
+ };
  const label=String(item.text||'').replace(/\{\{companyName\}\}/g,escapeEmailHtml(brand.companyName||'Our Team')).replace(/\{\{tagline\}\}/g,escapeEmailHtml(brand.tagline||''));
  const secondary=String(item.secondaryText||'').replace(/\{\{companyName\}\}/g,escapeEmailHtml(brand.companyName||'Our Team')).replace(/\{\{tagline\}\}/g,escapeEmailHtml(brand.tagline||''));
  const eyebrowText=String(item.eyebrow||'').replace(/\{\{companyName\}\}/g,escapeEmailHtml(brand.companyName||'Our Team')).replace(/\{\{tagline\}\}/g,escapeEmailHtml(brand.tagline||''));
@@ -334,19 +363,19 @@ function renderBlock(item:EmailDesignBlock,t:EmailDesignTemplate,body:string,bra
   case 'logo':{
    const logo=isSafeEmailUrl(item.url,true)||isSafeEmailUrl(brand.logoUrl,true);
    const company=escapeEmailHtml(String(item.text||'').trim()||brand.companyName||'Our Team');
-   return wrap(logo?'<img src="'+escapeEmailHtml(logo)+'" alt="'+escapeEmailHtml(item.altText||company)+'" width="'+num(item.width,180,80,320)+'" style="display:inline-block;max-width:100%;height:auto;border:0"/>':'<span style="font-size:22px;font-weight:700;letter-spacing:-.3px;color:'+color+'">'+company+'</span>','padding-top:20px;padding-bottom:20px;');
+   return wrap(logo?'<img data-email-image-id="'+blockId+'" src="'+escapeEmailHtml(logo)+'" alt="'+escapeEmailHtml(item.altText||company)+'" width="'+num(item.width,180,80,320)+'" style="display:inline-block;max-width:100%;height:auto;border:0"/>':'<span data-email-field="text" data-email-block-id="'+blockId+'" style="font-size:22px;font-weight:700;letter-spacing:-.3px;color:'+color+'">'+(item.richText?.text?renderField('text',String(item.text||'')):company)+'</span>','padding-top:20px;padding-bottom:20px;');
   }
   case 'hero':{
    const bg=safeHexColor(item.backgroundColor,th.primaryColor),heroColor=safeHexColor(item.color,'#FFFFFF');
-   const eyebrow=eyebrowText?'<p style="margin:0 0 12px 0;color:'+heroColor+';font-family:'+th.fontFamily+';font-size:10px;line-height:1.4;font-weight:700;letter-spacing:1.7px">'+escapeEmailHtml(eyebrowText)+'</p>':'';
-   const sub=secondary?'<p style="margin:14px 0 0 0;color:'+heroColor+';font-family:'+th.fontFamily+';font-size:'+Math.max(13,th.bodyFontSize)+'px;line-height:'+th.bodyLineHeight+'">'+escapeEmailHtml(secondary).replace(/\n/g,'<br/>')+'</p>':'';
-   return '<tr><td bgcolor="'+bg+'" style="background:'+bg+';padding:'+pad+'px 30px"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0"><tr><td align="'+align+'">'+eyebrow+'<h1 style="margin:0;color:'+heroColor+';font-family:'+th.fontFamily+';font-size:'+num(item.fontSize,th.headingFontSize,18,42)+'px;line-height:1.18;font-weight:700;letter-spacing:-.5px">'+escapeEmailHtml(label||'A message for you')+'</h1>'+sub+'</td></tr></table></td></tr>';
+   const eyebrow=eyebrowText?'<p data-email-field="eyebrow" data-email-block-id="'+blockId+'" style="margin:0 0 12px 0;color:'+heroColor+';font-family:'+th.fontFamily+';font-size:10px;line-height:1.4;font-weight:700;letter-spacing:1.7px">'+renderField('eyebrow',String(item.eyebrow||''))+'</p>':'';
+   const sub=secondary?'<p data-email-field="secondaryText" data-email-block-id="'+blockId+'" style="margin:14px 0 0 0;color:'+heroColor+';font-family:'+th.fontFamily+';font-size:'+Math.max(13,th.bodyFontSize)+'px;line-height:'+th.bodyLineHeight+'">'+renderField('secondaryText',String(item.secondaryText||''))+'</p>':'';
+   return '<tr data-email-block-id="'+blockId+'" data-email-block-type="hero"><td bgcolor="'+bg+'" style="background:'+bg+';padding:'+pad+'px 30px"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0"><tr><td align="'+align+'">'+eyebrow+'<h1 data-email-field="text" data-email-block-id="'+blockId+'" style="margin:0;color:'+heroColor+';font-family:'+th.fontFamily+';font-size:'+num(item.fontSize,th.headingFontSize,18,42)+'px;line-height:1.18;font-weight:700;letter-spacing:-.5px">'+renderField('text',String(item.text||'A message for you'))+'</h1>'+sub+'</td></tr></table></td></tr>';
   }
-  case 'heading':return wrap('<h1 style="margin:0;color:'+color+';font-family:'+th.fontFamily+';font-size:'+num(item.fontSize,th.headingFontSize,10,48)+'px;line-height:1.22;font-weight:700">'+escapeEmailHtml(label||'A message for you')+'</h1>');
-  case 'text':return wrap('<div style="font-family:'+th.fontFamily+';font-size:'+num(item.fontSize,th.bodyFontSize,10,48)+'px;line-height:'+th.bodyLineHeight+';color:'+color+'">'+escapeEmailHtml(label).replace(/\n/g,'<br/>')+'</div>');
+  case 'heading':return wrap('<h1 data-email-field="text" data-email-block-id="'+blockId+'" style="margin:0;color:'+color+';font-family:'+th.fontFamily+';font-size:'+num(item.fontSize,th.headingFontSize,10,48)+'px;line-height:1.22;font-weight:700">'+renderField('text',String(item.text||'A message for you'))+'</h1>');
+  case 'text':return wrap('<div data-email-field="text" data-email-block-id="'+blockId+'" style="font-family:'+th.fontFamily+';font-size:'+num(item.fontSize,th.bodyFontSize,10,48)+'px;line-height:'+th.bodyLineHeight+';color:'+color+'">'+renderField('text',String(item.text||''))+'</div>');
   case 'content':return '<tr><td align="left" style="padding:'+pad+'px 36px 24px 36px;font-family:'+th.fontFamily+';font-size:'+th.bodyFontSize+'px;color:'+th.textColor+';line-height:'+th.bodyLineHeight+'">'+body+'</td></tr>';
-  case 'image':{const src=isSafeEmailUrl(item.url,true);if(!src)return '';const width=Math.min(th.contentWidth,num(item.width,th.contentWidth-56,80,680));return wrap('<img src="'+escapeEmailHtml(src)+'" alt="'+escapeEmailHtml(item.altText||'')+'" width="'+width+'" style="display:block;width:100%;max-width:'+width+'px;height:auto;border:0;border-radius:8px;margin:0 auto"/>','padding-top:10px;padding-bottom:10px;');}
-  case 'button':{const href=isSafeEmailUrl(item.url,false)||isSafeEmailUrl(brand.websiteUrl,false),buttonBg=safeHexColor(item.backgroundColor,th.primaryColor),buttonColor=safeHexColor(item.color,'#FFFFFF');const content=href?'<a href="'+escapeEmailHtml(href)+'" target="_blank" style="display:inline-block;padding:14px 24px;color:'+buttonColor+';text-decoration:none;font-family:'+th.fontFamily+';font-size:14px;font-weight:700;letter-spacing:.1px">'+escapeEmailHtml(label||'Learn more')+'</a>':'<span style="display:inline-block;padding:14px 24px;color:'+buttonColor+';font-family:'+th.fontFamily+';font-size:14px;font-weight:700">'+escapeEmailHtml(label||'Learn more')+'</span>';return wrap('<table role="presentation" cellspacing="0" cellpadding="0" border="0" align="'+align+'"><tr><td bgcolor="'+buttonBg+'" style="border-radius:7px;background:'+buttonBg+'">'+content+'</td></tr></table>');}
+  case 'image':{const src=isSafeEmailUrl(item.url,true);if(!src)return '';const width=Math.min(th.contentWidth,num(item.width,th.contentWidth-56,80,680));return wrap('<img data-email-image-id="'+blockId+'" src="'+escapeEmailHtml(src)+'" alt="'+escapeEmailHtml(item.altText||'')+'" width="'+width+'" style="display:block;width:100%;max-width:'+width+'px;height:auto;border:0;border-radius:8px;margin:0 auto"/>','padding-top:10px;padding-bottom:10px;');}
+  case 'button':{const href=isSafeEmailUrl(item.url,false)||isSafeEmailUrl(brand.websiteUrl,false),buttonBg=safeHexColor(item.backgroundColor,th.primaryColor),buttonColor=safeHexColor(item.color,'#FFFFFF');const content=href?'<a data-email-field="text" data-email-block-id="'+blockId+'" href="'+escapeEmailHtml(href)+'" target="_blank" style="display:inline-block;padding:14px 24px;color:'+buttonColor+';text-decoration:none;font-family:'+th.fontFamily+';font-size:14px;font-weight:700;letter-spacing:.1px">'+renderField('text',String(item.text||'Learn more'))+'</a>':'<span data-email-field="text" data-email-block-id="'+blockId+'" style="display:inline-block;padding:14px 24px;color:'+buttonColor+';font-family:'+th.fontFamily+';font-size:14px;font-weight:700">'+renderField('text',String(item.text||'Learn more'))+'</span>';return wrap('<table role="presentation" cellspacing="0" cellpadding="0" border="0" align="'+align+'"><tr><td bgcolor="'+buttonBg+'" style="border-radius:7px;background:'+buttonBg+'">'+content+'</td></tr></table>');}
   case 'divider':return wrap('<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0"><tr><td height="1" style="height:1px;background:'+safeHexColor(item.color,'#E6EAF0')+';font-size:0;line-height:0">&nbsp;</td></tr></table>','padding-top:8px;padding-bottom:8px;');
   case 'spacer':return '<tr><td height="'+num(item.padding,24,4,80)+'" style="height:'+num(item.padding,24,4,80)+'px;font-size:0;line-height:0">&nbsp;</td></tr>';
   case 'footer':{

@@ -155,6 +155,14 @@ export const DemoSchedulingView: React.FC<DemoSchedulingViewProps> = ({ leads = 
   const [simMessage, setSimMessage] = useState('I want to schedule a demo for Thursday at 3 PM');
   const [isSimulating, setIsSimulating] = useState(false);
   const [simResponse, setSimResponse] = useState<any | null>(null);
+  // Manual Meeting Intelligence proof-of-concept. This does not auto-join booked demos.
+  const [meetingBotTestUrl, setMeetingBotTestUrl] = useState('');
+  const [meetingBotTestSeconds, setMeetingBotTestSeconds] = useState(15);
+  const [meetingBotTestConsent, setMeetingBotTestConsent] = useState(false);
+  const [isMeetingBotTestRunning, setIsMeetingBotTestRunning] = useState(false);
+  const [meetingBotTestError, setMeetingBotTestError] = useState<string | null>(null);
+  const [meetingBotTestResult, setMeetingBotTestResult] = useState<any | null>(null);
+
 
   // Reschedule Modal State
   const [rescheduleBookingId, setRescheduleBookingId] = useState<string | null>(null);
@@ -626,8 +634,144 @@ export const DemoSchedulingView: React.FC<DemoSchedulingViewProps> = ({ leads = 
     }
   };
 
+
+  // Short, consented Google Meet audio-capture test on Vercel serverless Chromium.
+  const handleMeetingBotTrial = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!meetingBotTestUrl.trim() || !meetingBotTestConsent) return;
+    setIsMeetingBotTestRunning(true);
+    setMeetingBotTestError(null);
+    setMeetingBotTestResult(null);
+    try {
+      const response = await fetch('/api/meeting-intelligence/test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          meetingUrl: meetingBotTestUrl.trim(),
+          recordingSeconds: meetingBotTestSeconds,
+          consentConfirmed: meetingBotTestConsent,
+        }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setMeetingBotTestResult(data);
+        throw new Error(data?.error || 'Meeting bot test failed.');
+      }
+      setMeetingBotTestResult(data);
+    } catch (error: any) {
+      setMeetingBotTestError(error?.message || 'Meeting bot test failed.');
+    } finally {
+      setIsMeetingBotTestRunning(false);
+    }
+  };
+
   return (
     <div className="space-y-5">
+      {canEditSettings && (
+        <section className="bg-white border border-indigo-200 rounded-xl p-4 sm:p-5 space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <Video className="w-5 h-5 text-indigo-600" />
+                <h2 className="text-base font-bold text-slate-900">Meeting Intelligence — Trial 1</h2>
+                <span className="px-2 py-0.5 rounded-md bg-indigo-50 border border-indigo-200 text-indigo-700 text-[10px] font-extrabold uppercase">Experimental</span>
+              </div>
+              <p className="text-xs text-slate-600 max-w-3xl">
+                Manually test whether serverless Chromium can join a Google Meet and capture incoming participant audio through WebRTC.
+                This is a short test only; it does not automatically join booked demos.
+              </p>
+            </div>
+            <span className="shrink-0 text-[10px] font-bold uppercase tracking-wide rounded-lg border border-amber-200 bg-amber-50 text-amber-800 px-2.5 py-1">
+              Vercel runtime test
+            </span>
+          </div>
+
+          <form onSubmit={handleMeetingBotTrial} className="space-y-3">
+            <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_180px] gap-3">
+              <label className="block">
+                <span className="block text-xs font-semibold text-slate-700 mb-1">Google Meet URL</span>
+                <input type="url" required value={meetingBotTestUrl}
+                  onChange={(e) => setMeetingBotTestUrl(e.target.value)}
+                  placeholder="https://meet.google.com/abc-defg-hij"
+                  disabled={isMeetingBotTestRunning}
+                  className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-900 focus:outline-none focus:border-indigo-500 disabled:bg-slate-100" />
+              </label>
+              <label className="block">
+                <span className="block text-xs font-semibold text-slate-700 mb-1">Audio sample length</span>
+                <select value={meetingBotTestSeconds}
+                  onChange={(e) => setMeetingBotTestSeconds(Number(e.target.value))}
+                  disabled={isMeetingBotTestRunning}
+                  className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-900 disabled:bg-slate-100">
+                  <option value={10}>10 seconds</option>
+                  <option value={15}>15 seconds</option>
+                  <option value={20}>20 seconds</option>
+                </select>
+              </label>
+            </div>
+
+            <label className="flex items-start gap-2.5 rounded-lg border border-slate-200 bg-slate-50 p-3 cursor-pointer">
+              <input type="checkbox" required checked={meetingBotTestConsent}
+                onChange={(e) => setMeetingBotTestConsent(e.target.checked)}
+                disabled={isMeetingBotTestRunning} className="mt-0.5 h-4 w-4 accent-indigo-600" />
+              <span className="text-xs text-slate-700 leading-relaxed">
+                I have informed everyone in this meeting that the clearly identified test bot will join and capture meeting audio, and they have agreed.
+              </span>
+            </label>
+
+            <div className="flex flex-wrap items-center gap-3">
+              <button type="submit"
+                disabled={isMeetingBotTestRunning || !meetingBotTestConsent || !meetingBotTestUrl.trim()}
+                className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-sm font-bold px-4 py-2.5">
+                <Video className="w-4 h-4" />
+                {isMeetingBotTestRunning ? 'Launching bot and testing audio…' : 'Join Meet & capture sample'}
+              </button>
+              <span className="text-[11px] text-slate-500">Bot display name: Amaavigo Meeting Intelligence Trial Bot</span>
+            </div>
+          </form>
+
+          {isMeetingBotTestRunning && (
+            <div className="rounded-lg border border-indigo-100 bg-indigo-50/60 px-3 py-2.5 text-xs text-indigo-800">
+              Chromium is starting, joining the meeting and waiting for the host to admit it. Keep a participant speaking during the audio sample.
+            </div>
+          )}
+
+          {meetingBotTestError && (
+            <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-xs text-red-700">
+              <strong>Test failed:</strong> {meetingBotTestError}
+              {meetingBotTestResult?.code && <div className="mt-1 font-mono text-[10px]">Code: {meetingBotTestResult.code}</div>}
+              {Array.isArray(meetingBotTestResult?.diagnostics) && meetingBotTestResult.diagnostics.length > 0 && (
+                <ul className="mt-2 list-disc pl-4 space-y-1">
+                  {meetingBotTestResult.diagnostics.map((item: string, index: number) => <li key={index}>{item}</li>)}
+                </ul>
+              )}
+            </div>
+          )}
+
+          {meetingBotTestResult?.success && (
+            <div className="rounded-lg border border-emerald-200 bg-emerald-50/70 p-3 space-y-2">
+              <div className="flex items-center gap-2 text-sm font-bold text-emerald-800">
+                <CheckCircle2 className="w-4 h-4" /> Audio sample captured
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                <div><span className="block text-slate-500">Meet status</span><strong className="text-slate-900">Joined</strong></div>
+                <div><span className="block text-slate-500">Remote audio tracks</span><strong className="text-slate-900">{meetingBotTestResult.audioTrackCount}</strong></div>
+                <div><span className="block text-slate-500">Sample length</span><strong className="text-slate-900">{Math.round(meetingBotTestResult.recordingMs / 1000)} sec</strong></div>
+                <div><span className="block text-slate-500">Audio size</span><strong className="text-slate-900">{Math.max(1, Math.round(meetingBotTestResult.recordingBytes / 1024))} KB</strong></div>
+              </div>
+              {meetingBotTestResult.audioDataUrl && (
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-semibold text-slate-700">Captured meeting audio</label>
+                  <audio controls preload="none" src={meetingBotTestResult.audioDataUrl} className="w-full" />
+                  <p className="text-[11px] text-slate-600">Play this sample to confirm that participant speech—not just an empty recording—was captured. The test recording is not saved to Firestore.</p>
+                </div>
+              )}
+            </div>
+          )}
+          <p className="text-[11px] text-slate-500">
+            Privacy: run this only with participant consent. The bot joins with its trial name, keeps its microphone and camera off, and the temporary audio is returned for this test rather than persisted.
+          </p>
+        </section>
+      )}
       <section className="bg-white border border-slate-200 rounded-xl p-4 sm:p-5 space-y-4">
         <div className="flex items-center gap-2">
           <Clock className="w-5 h-5 text-orange-600" />

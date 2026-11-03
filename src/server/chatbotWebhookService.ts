@@ -168,7 +168,7 @@ function takeRateLimit(webhookId: string, ip: string): boolean {
 function normalizeHistory(raw: unknown): Array<{ role: 'user' | 'assistant'; content: string }> {
   if (!Array.isArray(raw)) return [];
   return raw.slice(-10).map((item: any) => ({
-    role: item?.role === 'assistant' ? 'assistant' : 'user',
+    role: (item?.role === 'assistant' ? 'assistant' : 'user') as 'user' | 'assistant',
     content: String(item?.content ?? item?.text ?? '').trim().slice(0, 2000),
   })).filter((item) => item.content.length > 0);
 }

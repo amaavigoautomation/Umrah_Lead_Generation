@@ -4,7 +4,11 @@
  */
 export type AiResponseSegmentType = 'text' | 'strong' | 'em' | 'strike' | 'code';
 export interface AiResponseSegment { type: AiResponseSegmentType; text: string; }
-export type AiResponseBlock = { type: 'paragraph' | 'heading'; text: string } | { type: 'ul' | 'ol'; items: string[] };
+export type AiResponseBlock =
+  | { type: 'paragraph'; text: string }
+  | { type: 'heading'; text: string }
+  | { type: 'ul'; items: string[] }
+  | { type: 'ol'; items: string[] };
 
 export const AI_RESPONSE_FORMATTING_INSTRUCTIONS = [
   'Use restrained, professional Markdown formatting to make the answer easy to scan.',

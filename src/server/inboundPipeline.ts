@@ -50,6 +50,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { sendLiveEmail, SendMailResult, getSmtpConfig } from './smtpService.js';
 import { pollUnreadEmails, FetchedInboundEmail } from './imapService.js';
+import type { InboundEmailIgnoreRules } from '../shared/inboundEmailRules.js';
 import { getPublishedKnowledgeDocs, initKnowledgeStore } from './knowledgeService.js';
 import {
   initPersistentIdempotencyStore,
@@ -2100,7 +2101,15 @@ async function pollImapForOwner(force: boolean): Promise<{
   lastImapPollTimestamp = now;
 
   try {
-    const imapResult = await pollUnreadEmails(true);
+    let ignoreRules: Partial<InboundEmailIgnoreRules> | undefined;
+    try {
+      const inboundSettingsService = await import('./tenantInboundService.js');
+      const ownerSettings = await inboundSettingsService.getInboundSettings(getInboundCtx().tenantId, { fresh: true });
+      ignoreRules = ownerSettings.ignoreRules;
+    } catch {
+      // Defaults in the shared rule evaluator still protect the mailbox if settings cannot be read.
+    }
+    const imapResult = await pollUnreadEmails(true, ignoreRules);
 
     if (!imapResult.success) {
       return {

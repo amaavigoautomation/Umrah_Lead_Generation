@@ -1,5 +1,6 @@
 import { ImapFlow } from 'imapflow';
 import { simpleParser, ParsedMail } from 'mailparser';
+import { getInboundIgnoreReason, getInboundHeaderIgnoreReason, type InboundEmailIgnoreRules } from '../shared/inboundEmailRules.js';
 import {
   initPersistentIdempotencyStore,
   isMessageAlreadyProcessed,
@@ -270,7 +271,7 @@ export function isBotOrNewsletter(fromAddress: string, subject: string): boolean
  * Checks unseen messages and recent inbox items that have not yet been ingested into CRM.
  * When markAsSeen=true, marks the emails as seen so other mail clients know it was handled.
  */
-export async function pollUnreadEmails(markAsSeen: boolean = true): Promise<ImapPollResult> {
+export async function pollUnreadEmails(markAsSeen: boolean = true, ignoreRules?: Partial<InboundEmailIgnoreRules>): Promise<ImapPollResult> {
   const config = getImapConfig();
   const now = new Date().toISOString();
 
@@ -379,11 +380,21 @@ export async function pollUnreadEmails(markAsSeen: boolean = true): Promise<Imap
         const fromAddress = message.envelope?.from?.[0]?.address || '';
         const subject = message.envelope?.subject || '';
 
-        // 2. Skip newsletters and system bots
-        if (isBotOrNewsletter(fromAddress, subject)) {
+        // 2. Apply this workspace's sender / domain / subject ignore rules before downloading the body.
+        const ignoreReason = getInboundIgnoreReason(fromAddress, subject, ignoreRules);
+        if (ignoreReason) {
           processedEmailIdentifiers.add(normId);
           processedEmailIdentifiers.add(msgId);
           processedEmailIdentifiers.add(uidStr);
+          await recordProcessedInboundEmail({
+            messageId: msgId,
+            fromEmail: fromAddress,
+            subject,
+            aiReplied: false,
+            status: 'SKIPPED',
+            reason: ignoreReason,
+            timestamp: message.internalDate ? new Date(message.internalDate).toISOString() : now,
+          }).catch(() => {});
           continue;
         }
 
@@ -452,10 +463,31 @@ export async function pollUnreadEmails(markAsSeen: boolean = true): Promise<Imap
             (typeof parsed.from?.text === 'string' ? parsed.from.text : 'unknown@sender.com');
           const fromName = parsed.from?.value?.[0]?.name || parsed.from?.text || fromAddress;
 
-          // Strict anti-loop: ignore if it is our own automated reply
+          // Re-check the decoded sender and subject, then inspect automation / bulk headers.
           const xAutomatedBy = parsed.headers.get('x-automated-by');
           const xMailer = parsed.headers.get('x-mailer');
           const autoSubmitted = parsed.headers.get('auto-submitted');
+          const parsedIgnoreReason = getInboundIgnoreReason(fromAddress, parsed.subject || '', ignoreRules);
+          const headerIgnoreReason = getInboundHeaderIgnoreReason(fromAddress, parsed.headers, xMailer, ignoreRules);
+          const ignoreReasonAfterParse = parsedIgnoreReason || headerIgnoreReason;
+          if (ignoreReasonAfterParse) {
+            const skippedId = parsed.messageId || `seq-${seq}`;
+            processedEmailIdentifiers.add(normalizeIdentifier(skippedId));
+            processedEmailIdentifiers.add(skippedId);
+            processedEmailIdentifiers.add(String(seq));
+            await recordProcessedInboundEmail({
+              messageId: skippedId,
+              fromEmail: fromAddress,
+              subject: parsed.subject || '',
+              aiReplied: false,
+              status: 'SKIPPED',
+              reason: ignoreReasonAfterParse,
+              timestamp: parsed.date ? parsed.date.toISOString() : now,
+            }).catch(() => {});
+            continue;
+          }
+
+          // Strict anti-loop: ignore if it is our own automated reply
 
           if (
             xAutomatedBy ||

@@ -19,6 +19,7 @@ interface InboundView {
   lastSuccessAt?: string;
   connectedAt?: string;
   hasPassword: boolean;
+  sharedMailbox?: boolean;
 }
 
 async function api<T = any>(url: string, init?: RequestInit): Promise<T> {
@@ -185,6 +186,7 @@ export const InboundMailboxPanel: React.FC<{ tenantId: string; canEdit: boolean 
   const [ignoreRules, setIgnoreRules] = useState<InboundEmailIgnoreRules>(DEFAULT_INBOUND_EMAIL_IGNORE_RULES);
 
   const connected = Boolean(view && view.status !== 'not_configured');
+  const canConfigureIgnoreRules = Boolean(view && (connected || view.sharedMailbox));
   const isOAuth = view?.authType === 'oauth';
 
   const apply = (v: InboundView) => {
@@ -270,7 +272,7 @@ export const InboundMailboxPanel: React.FC<{ tenantId: string; canEdit: boolean 
     );
   }
 
-  const showForm = !connected || editing;
+  const showForm = (!connected && !view?.sharedMailbox) || editing;
   const help = PROVIDERS.find((p) => p.id === provider)?.help;
   const microsoftAvailable = view?.microsoftAvailable !== false;
   const keepSavedPassword = Boolean(
@@ -353,7 +355,52 @@ export const InboundMailboxPanel: React.FC<{ tenantId: string; canEdit: boolean 
             </span>
           </label>
 
-          <section className="border-t border-slate-100 pt-4 space-y-4">
+
+
+          <p className="text-xs text-slate-500">
+            We only read new mail. Nothing is marked as read, moved or deleted, and mail already in the inbox when you connected is never processed.
+          </p>
+
+          <div className="flex flex-wrap gap-2">
+            <button className={btnGhost} disabled={!canEdit || busy === 'poll'} onClick={() => run('poll', 'poll', {}, 'Checked for new mail.')}>
+              {busy === 'poll' ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />} Check now
+            </button>
+            <button className={btnGhost} disabled={!canEdit || busy === 'test'} onClick={() => run('test', 'test', {}, 'Connection works.')}>
+              {busy === 'test' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plug className="w-4 h-4" />} Test connection
+            </button>
+            <button
+              className={btnGhost}
+              disabled={!canEdit || busy === 'options'}
+              onClick={() => run('options', 'options', { enabled: view.status === 'paused' }, view.status === 'paused' ? 'Resumed.' : 'Paused.')}
+            >
+              {view.status === 'paused' ? 'Resume' : 'Pause'}
+            </button>
+            <button className={btnGhost} disabled={!canEdit} onClick={() => setEditing(true)}>
+              {isOAuth ? 'Change mailbox' : 'Change mailbox / password'}
+            </button>
+            <button
+              className={`${btnGhost} text-red-700`}
+              disabled={!canEdit || busy === 'disconnect'}
+              onClick={() => {
+                if (window.confirm('Disconnect this mailbox? Its saved sign-in is deleted and replies will stop arriving.')) {
+                  run('disconnect', 'disconnect', {}, 'Mailbox disconnected.');
+                }
+              }}
+            >
+              {busy === 'disconnect' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Unplug className="w-4 h-4" />} Disconnect
+            </button>
+          </div>
+        </section>
+      )}
+
+      {view?.sharedMailbox && !connected && !editing && (
+        <div className="text-sm bg-slate-50 border border-slate-200 text-slate-700 rounded-lg px-3 py-2">
+          This workspace is using the platform-managed inbound mailbox. The ignore rules below apply to that mailbox too.
+        </div>
+      )}
+
+      {canConfigureIgnoreRules && view && !editing && (
+                  <section className="bg-white border border-slate-200/90 rounded-2xl p-6 shadow-sm space-y-4">
             <div>
               <h4 className="text-sm font-semibold text-slate-900">Email ignore rules</h4>
               <p className="text-xs text-slate-500 mt-1">
@@ -427,41 +474,6 @@ export const InboundMailboxPanel: React.FC<{ tenantId: string; canEdit: boolean 
               Allow rules only bypass ignore filters. The existing “Also handle brand-new enquiries” setting still determines whether unrelated new senders can start a conversation.
             </p>
           </section>
-
-          <p className="text-xs text-slate-500">
-            We only read new mail. Nothing is marked as read, moved or deleted, and mail already in the inbox when you connected is never processed.
-          </p>
-
-          <div className="flex flex-wrap gap-2">
-            <button className={btnGhost} disabled={!canEdit || busy === 'poll'} onClick={() => run('poll', 'poll', {}, 'Checked for new mail.')}>
-              {busy === 'poll' ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />} Check now
-            </button>
-            <button className={btnGhost} disabled={!canEdit || busy === 'test'} onClick={() => run('test', 'test', {}, 'Connection works.')}>
-              {busy === 'test' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plug className="w-4 h-4" />} Test connection
-            </button>
-            <button
-              className={btnGhost}
-              disabled={!canEdit || busy === 'options'}
-              onClick={() => run('options', 'options', { enabled: view.status === 'paused' }, view.status === 'paused' ? 'Resumed.' : 'Paused.')}
-            >
-              {view.status === 'paused' ? 'Resume' : 'Pause'}
-            </button>
-            <button className={btnGhost} disabled={!canEdit} onClick={() => setEditing(true)}>
-              {isOAuth ? 'Change mailbox' : 'Change mailbox / password'}
-            </button>
-            <button
-              className={`${btnGhost} text-red-700`}
-              disabled={!canEdit || busy === 'disconnect'}
-              onClick={() => {
-                if (window.confirm('Disconnect this mailbox? Its saved sign-in is deleted and replies will stop arriving.')) {
-                  run('disconnect', 'disconnect', {}, 'Mailbox disconnected.');
-                }
-              }}
-            >
-              {busy === 'disconnect' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Unplug className="w-4 h-4" />} Disconnect
-            </button>
-          </div>
-        </section>
       )}
 
       {showForm && (

@@ -6,7 +6,7 @@ import { db, doc, collection, getDoc, getDocs, setDoc, createDoc, deleteDoc } fr
 import { isFirebaseConfigured } from '../firebase/config.js';
 import { tenantRepo } from './tenantRepo.js';
 import { encryptSecret, decryptSecret } from './cryptoUtils.js';
-import { describeImapError } from './imapService.js';
+import { describeImapError, getImapConfig } from './imapService.js';
 import {
   DEFAULT_INBOUND_EMAIL_IGNORE_RULES,
   normalizeInboundEmailIgnoreRules,
@@ -381,6 +381,9 @@ export async function getInboundView(tenantId: string) {
     lastSuccessAt: s.lastSuccessAt,
     connectedAt: s.connectedAt,
     hasPassword,
+    sharedMailbox:
+      tenantId === (process.env.IMAP_OWNER_TENANT_ID || 'umrah360').trim() &&
+      Boolean(getImapConfig().configured),
   };
 }
 
@@ -577,7 +580,11 @@ export async function setInboundOptions(
 ) {
   requireDb();
   const s = await getInboundSettings(tenantId, { fresh: true });
-  if (!s.host || !s.user) throw new InboundError(400, 'Connect a mailbox first');
+  const hasTenantMailbox = Boolean(s.host && s.user);
+  if (!hasTenantMailbox && !opts.ignoreRules) throw new InboundError(400, 'Connect a mailbox first');
+  if (!hasTenantMailbox && (typeof opts.enabled === 'boolean' || typeof opts.processNewInquiries === 'boolean')) {
+    throw new InboundError(400, 'Connect a workspace mailbox before changing mailbox options');
+  }
   const patch: Partial<TenantInboundSettings> = {};
   if (typeof opts.processNewInquiries === 'boolean') patch.processNewInquiries = opts.processNewInquiries;
   if (opts.ignoreRules && typeof opts.ignoreRules === 'object') {

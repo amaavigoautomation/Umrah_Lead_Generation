@@ -819,21 +819,71 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
 
     if (req.method === 'GET') {
       try {
-        const snap = await getDocs(fsQuery(globalUsersCol(), fsWhere('tenantId', '==', tId)));
-        const users = snap.docs.map((d) => {
-          const u: any = d.data();
-          return {
-            uid: d.id,
-            email: u.email,
-            name: u.name || u.displayName || '',
+        if (!isFirebaseConfigured || !db) {
+          res.statusCode = 503;
+          res.end(JSON.stringify({ error: 'User database is not configured.' }));
+          return true;
+        }
+
+        // Older accounts may have a profile only in app_users, while Auth-backed
+        // accounts are also stored in users. Read both using Admin SDK and enforce
+        // the requested tenant here; never expose another workspace's members.
+        const [authUsersSnap, appUsersSnap] = await Promise.all([
+          getDocs(fsQuery(globalUsersCol(), fsWhere('tenantId', '==', tId))),
+          getDocs(fsQuery(collection(db, 'app_users'), fsWhere('tenantId', '==', tId))),
+        ]);
+        const byIdentity = new Map<string, any>();
+        const mergeSnapshot = (snap: any) => {
+          for (const d of snap.docs) {
+            const profile: any = d.data() || {};
+            if (String(profile.tenantId || '') !== tId) continue;
+            const uid = String(profile.uid || profile.userId || d.id);
+            const email = String(profile.email || '').trim().toLowerCase();
+            const key = email || uid;
+            const previous = byIdentity.get(key) || {};
+            byIdentity.set(key, {
+              ...previous,
+              ...profile,
+              uid,
+              userId: uid,
+              email: email || previous.email || '',
+              name: profile.name || profile.displayName || previous.name || previous.displayName || '',
+              appRole: profile.appRole || previous.appRole || (String(profile.role || '').toUpperCase() === profile.role ? profile.role : ''),
+              allowedModules: Array.isArray(profile.allowedModules) ? profile.allowedModules : previous.allowedModules,
+              accessLevel: profile.accessLevel || previous.accessLevel,
+              active: profile.active !== undefined ? profile.active : previous.active,
+              isActive: profile.isActive !== undefined ? profile.isActive : previous.isActive,
+              createdAt: profile.createdAt || previous.createdAt,
+              updatedAt: profile.updatedAt || previous.updatedAt,
+            });
+          }
+        };
+        mergeSnapshot(authUsersSnap);
+        mergeSnapshot(appUsersSnap);
+
+        const users = Array.from(byIdentity.values())
+          .map((u: any) => ({
+            uid: u.uid,
+            userId: u.uid,
+            email: u.email || '',
+            name: u.name || u.displayName || u.email?.split('@')[0] || 'User',
+            username: u.username || u.email?.split('@')[0] || '',
+            // The UI uses appRole for module access, while role is the Firebase Auth role.
             role: u.role || 'member',
-            active: u.active !== false,
+            appRole: u.appRole || (String(u.role || '').toUpperCase() === u.role ? u.role : undefined),
+            accessLevel: u.accessLevel,
+            allowedModules: Array.isArray(u.allowedModules) ? u.allowedModules : undefined,
+            active: u.active !== false && u.isActive !== false,
+            isActive: u.isActive !== false && u.active !== false,
             createdAt: u.createdAt,
-          };
-        });
+            updatedAt: u.updatedAt,
+          }))
+          .sort((a: any, b: any) => String(a.name || '').localeCompare(String(b.name || '')));
+
         res.statusCode = 200;
         res.end(JSON.stringify({ users }));
       } catch (err: any) {
+        console.error('[Workspace Users] Failed to list members:', err?.message || err);
         res.statusCode = 500;
         res.end(JSON.stringify({ error: err?.message || 'Failed to list users' }));
       }

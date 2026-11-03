@@ -323,6 +323,8 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
 
   // Users & Authentication State (Firebase Auth is the single source of truth)
   const [users, setUsers] = useState<AppUser[]>([]);
+  const [usersLoading, setUsersLoading] = useState(false);
+  const [usersError, setUsersError] = useState<string | null>(null);
   const [currentUser, setCurrentUser] = useState<AppUser | null>(null);
   const [session, setSession] = useState<SessionInfo | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
@@ -339,6 +341,44 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
       setAuthLoading(false);
     });
   }, []);
+
+  // Load the complete team through the authenticated backend. Workspace admins cannot
+  // query the global users collection directly under Firestore client security rules.
+  useEffect(() => {
+    if (!session || session.isPlatformAdmin || !currentTenantId) {
+      setUsers([]);
+      setUsersLoading(false);
+      setUsersError(null);
+      return;
+    }
+
+    let active = true;
+    const loadWorkspaceUsers = async () => {
+      setUsersLoading(true);
+      setUsersError(null);
+      try {
+        const response = await fetch(`/api/tenants/${encodeURIComponent(currentTenantId)}/users`);
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(payload?.error || 'Could not load workspace members.');
+        }
+        const nextUsers = Array.isArray(payload?.users)
+          ? payload.users.map((user: any) => toAppUser(user))
+          : [];
+        if (active) setUsers(nextUsers);
+      } catch (error: any) {
+        if (active) {
+          setUsers([]);
+          setUsersError(error?.message || 'Could not load workspace members.');
+        }
+      } finally {
+        if (active) setUsersLoading(false);
+      }
+    };
+
+    void loadWorkspaceUsers();
+    return () => { active = false; };
+  }, [session, currentTenantId, currentUser?.userId]);
 
   const recordAuditAction = useCallback((entry: Parameters<typeof logAuditEvent>[1]) => {
     if (!currentTenantId || !currentUser) return;
@@ -430,7 +470,6 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
     let unsubLeads: (() => void) | undefined;
     let unsubContacts: (() => void) | undefined;
     let unsubKb: (() => void) | undefined;
-    let unsubUsers: (() => void) | undefined;
     let unsubOutboundCamps: (() => void) | undefined;
 
     if (!currentUser || !currentTenantId) return;
@@ -592,12 +631,6 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
         // outbound_prospects is no longer streamed: no screen renders prospects, so watching the whole
         // collection only cost reads.
 
-        // Team list: only this workspace's users. The signed-in user's identity and role always come
-        // from the verified session, never from a database row.
-        unsubUsers = onSnapshot(query(collection(db, 'users'), where('tenantId', '==', currentTenantId)), (snap) => {
-          setUsers(snap.docs.map((d) => toAppUser(d.data())));
-        }, () => {});
-
         setIsFirebaseActive(true);
       } catch (err) {
         console.warn('Firestore sync fallback to in-memory state:', err);
@@ -610,7 +643,6 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
       if (unsubLeads) unsubLeads();
       if (unsubContacts) unsubContacts();
       if (unsubKb) unsubKb();
-      if (unsubUsers) unsubUsers();
       if (unsubOutboundCamps) unsubOutboundCamps();
     };
   }, [currentUser?.userId, currentTenantId]);
@@ -2607,6 +2639,8 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
                 settings={settings}
                 onSaveSettings={handleSaveSettings}
                 users={users}
+                usersLoading={usersLoading}
+                usersError={usersError}
                 onSaveUser={handleSaveUser}
                 onDeleteUser={handleDeleteUser}
                 tenantId={currentTenantId}

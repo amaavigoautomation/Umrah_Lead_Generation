@@ -18,12 +18,16 @@ import { PLATFORM_MODULES } from '../services/dataService';
 
 interface UserManagementViewProps {
   users: AppUser[];
+  usersLoading?: boolean;
+  usersError?: string | null;
   onSaveUser: (user: AppUser) => Promise<void>;
   onDeleteUser: (userId: string) => Promise<void>;
 }
 
 export const UserManagementView: React.FC<UserManagementViewProps> = ({
   users,
+  usersLoading = false,
+  usersError = null,
   onSaveUser,
   onDeleteUser,
 }) => {
@@ -139,6 +143,17 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
         </button>
       </div>
 
+      {usersLoading && (
+        <div className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-800">
+          Loading workspace members…
+        </div>
+      )}
+      {usersError && (
+        <div role="alert" className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
+          Could not load workspace members: {usersError}
+        </div>
+      )}
+
       {/* Users Table */}
       <div className="overflow-x-auto rounded-xl border border-slate-200">
         <table className="w-full text-left text-xs text-slate-800">
@@ -152,6 +167,9 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 bg-white">
+            {!usersLoading && !usersError && users.length === 0 && (
+              <tr><td colSpan={5} className="p-5 text-center text-xs text-slate-500">No members found in this workspace.</td></tr>
+            )}
             {users.map((u) => {
               const hasAllAccess = u.role === 'ADMIN' || u.accessLevel === 'ALL' || u.allowedModules.length >= PLATFORM_MODULES.length;
 

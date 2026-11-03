@@ -27,6 +27,8 @@ interface SettingsViewProps {
   settings: SystemSettings;
   onSaveSettings: (settings: SystemSettings) => void | Promise<void>;
   users?: AppUser[];
+  usersLoading?: boolean;
+  usersError?: string | null;
   onSaveUser?: (user: AppUser) => Promise<void>;
   onDeleteUser?: (userId: string) => Promise<void>;
   tenantId?: string;
@@ -37,6 +39,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   settings,
   onSaveSettings,
   users,
+  usersLoading,
+  usersError,
   onSaveUser,
   onDeleteUser,
   tenantId,
@@ -402,10 +406,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       {tenantId && canEditEmail && <WebsiteWebhookPanel tenantId={tenantId} canEdit />}
       {tenantId && canEditEmail && <ChatbotIntegrationPanel tenantId={tenantId} canEdit />}
 
-      {/* User Management & Access Control (Firestore app_users) */}
-      {users && onSaveUser && onDeleteUser && (
+      {/* Workspace user management is admin-only. */}
+      {tenantId && canEditEmail && users && onSaveUser && onDeleteUser && (
         <UserManagementView
           users={users}
+          usersLoading={usersLoading}
+          usersError={usersError}
           onSaveUser={onSaveUser}
           onDeleteUser={onDeleteUser}
         />

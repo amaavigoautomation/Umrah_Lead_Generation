@@ -2272,6 +2272,29 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
     setCurrentTenantId('');
   };
 
+  const handleScheduleAiAutoFollowUp = async (leadId: string, scheduledAt: string) => {
+    const response = await fetch('/api/auto-followup/schedule-once', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ leadId, scheduledAt }),
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || !payload?.success) throw new Error(payload?.error || 'Could not schedule AI Auto Follow-Up.');
+    const scheduledLead = payload.lead || {};
+    setLeads((prev) => prev.map((lead) => lead.leadId === leadId ? {
+      ...lead,
+      nextFollowUpAt: scheduledLead.nextFollowUpAt || scheduledAt,
+      aiAutoFollowUp: scheduledLead.aiAutoFollowUp || { jobId: payload.job?.id, status: 'scheduled', scheduledAt },
+    } : lead));
+    recordAuditAction({
+      action: 'AI_AUTO_FOLLOWUP_ONE_TIME_SCHEDULED',
+      module: 'CRM',
+      description: 'A one-time AI follow-up message was scheduled for ' + new Date(scheduledAt).toLocaleString('en-IN') + '.',
+      target: { type: 'Lead', id: leadId },
+      metadata: { jobId: payload.job?.id, scheduledAt },
+    });
+  };
+
   const handleSaveUser = async (userToSave: AppUser) => {
     const isNew = !users.some((u) => u.userId === userToSave.userId);
     let assignedUid = userToSave.userId || `user-${Date.now()}`;
@@ -2585,6 +2608,7 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
                       .catch((err) => console.error('[Firestore] Failed updating lead status:', err));
                   } else { auditStatusChange(); }
                 }}
+                onScheduleAiFollowUp={handleScheduleAiAutoFollowUp}
                 onUpdateLead={(updatedLead) => {
                   const nowIso = new Date().toISOString();
                   const previousLead = leads.find((l) => l.leadId === updatedLead.leadId);

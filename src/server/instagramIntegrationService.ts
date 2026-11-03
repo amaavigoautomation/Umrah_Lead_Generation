@@ -381,6 +381,14 @@ async function processInstagramMessageEvent(tenantId: string, accountId: string,
     senderName: 'Instagram user', instagramUserId: senderId, text: incomingText, direction: 'INBOUND',
     timestamp, receivedAt: now, createdAt: now, aiReplied: false, aiProcessed: true,
   });
+  if (event?.__test !== true) {
+    try {
+      const { handleLeadReplyEvent } = await import('./autoFollowUpService.js');
+      await handleLeadReplyEvent(ctx, { conversationId });
+    } catch (followUpError) {
+      console.warn('[Instagram] AI follow-up cancellation notice:', followUpError);
+    }
+  }
   // Synthetic test message from Settings: stop after saving it (no AI call, nothing sent to Instagram).
   if (event?.__test === true) {
     await updateDoc(eventRef, { status: 'test_processed', processedAt: now, conversationId });

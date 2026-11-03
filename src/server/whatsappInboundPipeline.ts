@@ -1260,6 +1260,14 @@ export async function processLiveInboundWhatsApp(
       if (crmEntities.aiReplyMessage) writes.push(safeSetDoc(repo.messageDoc(crmEntities.aiReplyMessage.messageId), crmEntities.aiReplyMessage, { merge: true }));
       if (crmEntities.activity) writes.push(safeSetDoc(repo.leadActivityDoc(crmEntities.activity.activityId), crmEntities.activity, { merge: true }));
       await Promise.all(writes);
+      if (crmEntities.incomingMessage?.direction === 'INBOUND' && crmEntities.conversation?.conversationId) {
+        try {
+          const { handleLeadReplyEvent } = await import('./autoFollowUpService.js');
+          await handleLeadReplyEvent(getWACtx(), { leadId: crmEntities.lead?.leadId, conversationId: crmEntities.conversation.conversationId });
+        } catch (followUpError) {
+          console.warn('[WhatsApp Pipeline] AI follow-up cancellation notice:', followUpError);
+        }
+      }
     } catch (fsErr) {
       console.error('[WhatsApp Pipeline] Firestore persistence warning:', fsErr);
     }

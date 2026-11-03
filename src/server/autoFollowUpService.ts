@@ -60,6 +60,10 @@ export interface AutoFollowUpJob {
   cancelledAt?: string | null;
   cancelReason?: string | null;
   idempotencyKey: string;
+  /** CRM-scheduled single message; it must never chain into another follow-up. */
+  oneTime?: boolean;
+  scheduledBy?: string;
+  recipientId?: string;
   /** Snapshot taken when the job was scheduled, so the worker can run without scanning collections. */
   recipientEmail?: string;
   subject?: string;
@@ -139,7 +143,7 @@ export const DEFAULT_FOLLOWUP_CONFIG: AutoFollowUpGlobalConfig = {
 };
 
 const INELIGIBLE_STATUSES: LeadStatus[] = ['CLOSED_WON', 'CLOSED_LOST', 'NOT_INTERESTED', 'UNSUBSCRIBED'];
-const AUTO_SEND_CHANNELS = ['EMAIL', 'WEBSITE'];
+const AUTO_SEND_CHANNELS = ['EMAIL', 'WEBSITE', 'WHATSAPP', 'FACEBOOK', 'INSTAGRAM'];
 
 /**
  * True when a confirmed demo should END automated follow-ups. Controlled by STOP_FOLLOWUPS_WHEN_DEMO_BOOKED
@@ -419,6 +423,33 @@ async function saveLeadFollowUpState(ctx: TenantContext, lead: Lead): Promise<vo
   ).catch(() => {});
 }
 
+async function updateOneTimeFollowUpState(
+  ctx: TenantContext,
+  job: AutoFollowUpJob,
+  status: 'scheduled' | 'sent' | 'cancelled' | 'human_review' | 'failed' | 'skipped',
+  details: { cancelReason?: string; processedAt?: string; allowReplace?: boolean } = {}
+): Promise<void> {
+  if (!job.oneTime || !enabledDb()) return;
+  const leadRef = tenantRepo(ctx).leadDoc(job.leadId);
+  const current = await getDoc(leadRef).catch(() => null);
+  const currentJobId = current?.exists() ? String((current.data() as any)?.aiAutoFollowUp?.jobId || '') : '';
+  if (currentJobId && currentJobId !== job.id && !details.allowReplace) return;
+  const now = new Date().toISOString();
+  await setDoc(leadRef, clean({
+    leadId: job.leadId,
+    nextFollowUpAt: status === 'scheduled' ? job.scheduledAt : null,
+    aiAutoFollowUp: {
+      jobId: job.id,
+      status,
+      scheduledAt: job.scheduledAt,
+      scheduledBy: job.scheduledBy || 'Team Member',
+      ...(status === 'scheduled' ? {} : { processedAt: details.processedAt || now }),
+      ...(details.cancelReason ? { cancelReason: details.cancelReason } : {}),
+    },
+    updatedAt: now,
+  }), { merge: true });
+}
+
 /**
  * All follow-up attempts are used up: switch Auto Follow-Up OFF for this lead, so the screen stops showing
  * it as ON. Turning it ON again later starts a fresh sequence.
@@ -443,20 +474,138 @@ export async function cancelPendingFollowUpJob(
   ctx: TenantContext,
   conversationId: string,
   cancelReason: string,
-  _cancelledBy: string = 'system'
+  _cancelledBy: string = 'system',
+  options: { excludeOneTime?: boolean } = {}
 ): Promise<number> {
   const jobs = await loadJobsByField(ctx, 'conversationId', conversationId);
   let count = 0;
   for (const job of jobs) {
+    if (options.excludeOneTime && job.oneTime) continue;
     if (job.status === 'scheduled' || job.status === 'processing') {
       job.status = 'cancelled';
       job.cancelledAt = new Date().toISOString();
       job.cancelReason = cancelReason;
       await saveJob(ctx, job);
+      await updateOneTimeFollowUpState(ctx, job, 'cancelled', { cancelReason });
       count++;
     }
   }
   return count;
+}
+
+/**
+ * Schedule one contextual AI message from CRM. Replaces only a previous one-time
+ * CRM job for this lead; the existing multi-step sequence stays separate.
+ */
+export async function scheduleOneTimeAiFollowUp(
+  ctx: TenantContext,
+  params: { leadId: string; scheduledAt: string; user?: string }
+): Promise<{ job: AutoFollowUpJob; lead: Lead }> {
+  if (!enabledDb()) throw new Error('The user database is not configured.');
+  if (!(await hasFeature(ctx.tenantId, 'auto_followup'))) throw new Error('AI Auto Follow-Up is not included in this workspace plan.');
+  const leadId = String(params.leadId || '').trim();
+  const dueMs = Date.parse(String(params.scheduledAt || ''));
+  if (!leadId || leadId.includes('/') || leadId.length > 200) throw new Error('A valid lead is required.');
+  if (!Number.isFinite(dueMs) || dueMs <= Date.now() + 30_000) throw new Error('Choose a follow-up time at least 30 seconds in the future.');
+
+  const repo = tenantRepo(ctx);
+  const leadSnap = await getDoc(repo.leadDoc(leadId));
+  if (!leadSnap.exists()) throw new Error('Lead not found in this workspace.');
+  const lead = { ...(leadSnap.data() as Lead), leadId } as Lead;
+  if (INELIGIBLE_STATUSES.includes(lead.status)) throw new Error('This lead is closed or opted out and cannot receive an AI follow-up.');
+  if (isDemoBookedLead(lead)) throw new Error('This lead already has a confirmed demo.');
+
+  const [byLead, byContact] = await Promise.all([
+    getDocs(query(repo.conversations(), where('leadId', '==', leadId), limit(50))),
+    lead.contactId ? getDocs(query(repo.conversations(), where('contactId', '==', lead.contactId), limit(50))) : Promise.resolve(null),
+  ]);
+  const found = new Map<string, Conversation>();
+  for (const snap of [byLead, byContact]) {
+    if (!snap) continue;
+    for (const d of snap.docs) {
+      const row = d.data() as Conversation;
+      found.set(d.id, { ...row, conversationId: row.conversationId || d.id });
+    }
+  }
+  const conversation = Array.from(found.values())
+    .filter((item) => !item.leadId || item.leadId === leadId)
+    .filter((item) => item.status !== 'ARCHIVED' && item.status !== 'RESOLVED')
+    .sort((a, b) => Date.parse(String(b.lastMessageAt || b.updatedAt || 0)) - Date.parse(String(a.lastMessageAt || a.updatedAt || 0)))[0];
+  if (!conversation) throw new Error('No active conversation is linked to this lead. Open the lead in Unified Inbox before scheduling an AI message.');
+  if (conversation.humanHandoff === true || conversation.managementMode === 'HUMAN') throw new Error('This conversation is under Human Handoff. Resume AI before scheduling an automatic message.');
+
+  const channel = String(conversation.channel || 'EMAIL').toUpperCase() as Channel;
+  if (!AUTO_SEND_CHANNELS.includes(channel)) throw new Error('Automatic AI follow-up delivery is not available for ' + channel + ' yet.');
+  const contactSnap = lead.contactId ? await getDoc(repo.contactDoc(lead.contactId)) : null;
+  const contact: any = contactSnap?.exists() ? contactSnap.data() : {};
+  const recipientId = String(conversation.externalConversationId ||
+    (channel === 'WHATSAPP' ? contact.whatsappId || contact.whatsappUserId || contact.phone || '' : '') ||
+    (channel === 'INSTAGRAM' ? contact.instagramUserId || '' : '') ||
+    (channel === 'FACEBOOK' ? contact.facebookUserId || '' : '')).trim();
+  const recipientEmail = String(conversation.customerEmail || contact.email || '').trim();
+  if ((channel === 'EMAIL' || channel === 'WEBSITE') && (!recipientEmail || !recipientEmail.includes('@'))) {
+    throw new Error('This conversation does not have a valid recipient email address.');
+  }
+  if (['WHATSAPP', 'FACEBOOK', 'INSTAGRAM'].includes(channel) && !recipientId) {
+    throw new Error('The conversation is missing its channel recipient ID. Open the original conversation and try again.');
+  }
+
+  const previousJobs = await loadJobsByField(ctx, 'leadId', leadId);
+  for (const previous of previousJobs) {
+    if (previous.oneTime && (previous.status === 'scheduled' || previous.status === 'processing')) {
+      previous.status = 'cancelled';
+      previous.cancelledAt = new Date().toISOString();
+      previous.cancelReason = 'replaced_by_new_schedule';
+      await saveJob(ctx, previous);
+    }
+  }
+
+  const now = new Date().toISOString();
+  const jobId = 'fj_once_' + safeId(leadId) + '_' + Date.now().toString(36);
+  const job: AutoFollowUpJob = {
+    id: jobId,
+    tenantId: ctx.tenantId,
+    leadId,
+    conversationId: conversation.conversationId,
+    channel,
+    sequenceId: 'once_' + safeId(leadId) + '_' + Date.now().toString(36),
+    attempt: 1,
+    oneTime: true,
+    scheduledBy: params.user || ctx.email || 'Team Member',
+    recipientId: recipientId || undefined,
+    referenceMessageId: 'schedule_' + jobId,
+    referenceMessageText: '',
+    referenceMessageTimestamp: now,
+    scheduledAt: new Date(dueMs).toISOString(),
+    status: 'scheduled',
+    createdAt: now,
+    idempotencyKey: ctx.tenantId + '_' + jobId,
+    recipientEmail: recipientEmail || undefined,
+    subject: conversation.subject || undefined,
+    threadId: conversation.gmailThreadId || conversation.emailThreadId || undefined,
+    leadSnapshot: {
+      status: lead.status, leadType: lead.leadType, source: lead.source,
+      serviceInterest: lead.serviceInterest, buyingStage: lead.buyingStage,
+      requirements: lead.requirements || [], calendarEventId: lead.calendarEventId || null,
+      demoStatus: lead.demoStatus, demoBookedAt: lead.demoBookedAt, autoFollowUp: lead.autoFollowUp,
+    },
+  };
+  await saveJob(ctx, job);
+  await updateOneTimeFollowUpState(ctx, job, 'scheduled', { allowReplace: true });
+  markWorkerDirty(ctx.tenantId);
+  await logFollowUpActivity(ctx, {
+    leadId, conversationId: conversation.conversationId, channel, attempt: 1,
+    type: 'SCHEDULED', title: 'One-time AI Auto Follow-Up scheduled',
+    description: 'AI message scheduled for ' + new Date(dueMs).toLocaleString('en-IN') + '.',
+    user: job.scheduledBy, timestamp: now,
+    metadata: { jobId, oneTime: true, scheduledAt: job.scheduledAt },
+  });
+  return {
+    job,
+    lead: { ...lead, nextFollowUpAt: job.scheduledAt, aiAutoFollowUp: {
+      jobId, status: 'scheduled', scheduledAt: job.scheduledAt, scheduledBy: job.scheduledBy,
+    } },
+  };
 }
 
 export async function scheduleAutoFollowUpJob(
@@ -500,7 +649,7 @@ export async function scheduleAutoFollowUpJob(
     return null;
   }
 
-  await cancelPendingFollowUpJob(ctx, conversation.conversationId, 'rescheduled_by_new_outbound_interaction', user);
+  await cancelPendingFollowUpJob(ctx, conversation.conversationId, 'rescheduled_by_new_outbound_interaction', user, { excludeOneTime: true });
 
   let delayValue = channelCfg.defaultDelayValue;
   let delayUnit = channelCfg.defaultDelayUnit;
@@ -751,15 +900,17 @@ export async function handleDisableAutoFollowUp(
   await saveLeadFollowUpState(ctx, lead);
 
   if (conversationId) {
-    await cancelPendingFollowUpJob(ctx, conversationId, reason, userName);
+    await cancelPendingFollowUpJob(ctx, conversationId, reason, userName, { excludeOneTime: reason !== 'demo_booked' });
   } else {
     const jobs = await loadJobsByField(ctx, 'leadId', lead.leadId);
     for (const job of jobs) {
+      if (job.oneTime && reason !== 'demo_booked') continue;
       if (job.status === 'scheduled' || job.status === 'processing') {
         job.status = 'cancelled';
         job.cancelledAt = nowIso;
         job.cancelReason = reason;
         await saveJob(ctx, job);
+        await updateOneTimeFollowUpState(ctx, job, 'cancelled', { cancelReason: reason });
       }
     }
   }
@@ -786,23 +937,42 @@ export async function handleLeadReplyEvent(
   params: { leadId?: string; conversationId: string }
 ): Promise<number> {
   if (!enabledDb()) return 0;
-  const count = await cancelPendingFollowUpJob(ctx, params.conversationId, 'lead_replied', 'Lead');
+  const repo = tenantRepo(ctx);
+  const convSnap = await getDoc(repo.conversationDoc(params.conversationId)).catch(() => null);
+  const conversation = convSnap?.exists() ? convSnap.data() as Conversation : null;
+  const resolvedLeadId = params.leadId || conversation?.leadId || '';
+  let relatedLeadIds = resolvedLeadId ? [resolvedLeadId] : [];
+  if (!resolvedLeadId && conversation?.contactId) {
+    const leadSnap = await getDocs(query(repo.leads(), where('contactId', '==', conversation.contactId), limit(20))).catch(() => null);
+    relatedLeadIds = (leadSnap?.docs || []).map((d) => d.id);
+  }
+  let count = await cancelPendingFollowUpJob(ctx, params.conversationId, 'lead_replied', 'Lead');
+  for (const leadId of relatedLeadIds) {
+    const jobs = await loadJobsByField(ctx, 'leadId', leadId);
+    for (const job of jobs) {
+      if (!job.oneTime || job.conversationId === params.conversationId || (job.status !== 'scheduled' && job.status !== 'processing')) continue;
+      job.status = 'cancelled';
+      job.cancelledAt = new Date().toISOString();
+      job.cancelReason = 'lead_replied';
+      await saveJob(ctx, job);
+      await updateOneTimeFollowUpState(ctx, job, 'cancelled', { cancelReason: 'lead_replied' });
+      count++;
+    }
+  }
   if (count > 0) {
+    const now = new Date().toISOString();
     await logFollowUpActivity(ctx, {
-      leadId: params.leadId || '',
+      leadId: relatedLeadIds[0] || '',
       conversationId: params.conversationId,
-      type: 'CANCELLED',
-      title: 'Follow-up cancelled',
+      type: 'CANCELLED', title: 'Follow-up cancelled',
       description: 'Pending follow-up cancelled because the lead responded.',
-      user: 'Lead',
-      timestamp: new Date().toISOString(),
+      user: 'Lead', timestamp: now,
     });
-    if (params.leadId) {
-      await setDoc(
-        tenantRepo(ctx).leadDoc(params.leadId),
-        { autoFollowUp: { activeFollowUpId: null, nextScheduledAt: null }, updatedAt: new Date().toISOString() },
-        { merge: true }
-      ).catch(() => {});
+    for (const leadId of relatedLeadIds) {
+      await setDoc(repo.leadDoc(leadId), {
+        autoFollowUp: { activeFollowUpId: null, nextScheduledAt: null },
+        updatedAt: now,
+      }, { merge: true }).catch(() => {});
     }
   }
   return count;
@@ -1074,6 +1244,7 @@ async function processOneJob(
     job.cancelledAt = new Date().toISOString();
     job.cancelReason = reason;
     await finishJob(ctx, job);
+    await updateOneTimeFollowUpState(ctx, job, 'cancelled', { cancelReason: reason });
     return { jobId: job.id, status: 'cancelled', reason };
   };
 
@@ -1088,13 +1259,14 @@ async function processOneJob(
     job.cancelReason = 'Human Handoff is active for this conversation';
     await finishJob(ctx, job);
     await clearLeadSchedule(ctx, lead!);
+    await updateOneTimeFollowUpState(ctx, job, 'cancelled', { cancelReason: job.cancelReason });
     return { jobId: job.id, status: 'cancelled', reason: job.cancelReason };
   }
 
   // 2. Final eligibility checks
   if (!lead.leadType) lead.leadType = 'INBOUND';
   if (lead.leadType !== 'INBOUND' && lead.leadType !== 'OUTBOUND') return cancel('Lead is not inbound or outbound');
-  if (!lead.autoFollowUp?.enabled) return cancel('Auto Follow-Up is disabled for lead');
+  if (!job.oneTime && !lead.autoFollowUp?.enabled) return cancel('Auto Follow-Up is disabled for lead');
   if (isDemoBookedLead(lead)) {
     await handleDemoBookedEvent(ctx, { lead, conversationId: conversation.conversationId });
     return cancel('Confirmed demo booked on calendar');
@@ -1133,6 +1305,7 @@ async function processOneJob(
     return cancel('Lead replied after reference message');
   }
   const newerOurs = after.find((m) => m.senderType === 'AGENT' || m.senderType === 'AI' || m.senderType === 'HUMAN' || m.direction === 'OUTBOUND');
+  if (newerOurs && job.oneTime) return cancel('A newer team or AI message was sent after this follow-up was scheduled');
   if (newerOurs) {
     job.status = 'cancelled';
     job.cancelledAt = new Date().toISOString();
@@ -1160,6 +1333,7 @@ async function processOneJob(
     job.audit = { decision: 'human_review', reason, humanReviewReason: reason, timestamp: job.processedAt };
     await finishJob(ctx, job);
     await clearLeadSchedule(ctx, lead!);
+    await updateOneTimeFollowUpState(ctx, job, 'human_review', { processedAt: job.processedAt });
     await logFollowUpActivity(ctx, {
       leadId: lead!.leadId,
       conversationId: conversation!.conversationId,
@@ -1179,12 +1353,12 @@ async function processOneJob(
   }
 
   const recipient = (conversation.customerEmail || job.recipientEmail || '').trim();
-  if (!recipient || !recipient.includes('@')) {
-    return humanReview('No recipient email address on this conversation.');
-  }
-  if (await isEmailSuppressed(ctx.tenantId, recipient)) {
-    await clearLeadSchedule(ctx, lead);
-    return cancel('Recipient is on the suppression list');
+  if (channel === 'EMAIL' || channel === 'WEBSITE') {
+    if (!recipient || !recipient.includes('@')) return humanReview('No recipient email address on this conversation.');
+    if (await isEmailSuppressed(ctx.tenantId, recipient)) {
+      await clearLeadSchedule(ctx, lead);
+      return cancel('Recipient is on the suppression list');
+    }
   }
 
   // 5. AI decision
@@ -1205,6 +1379,7 @@ async function processOneJob(
     job.processedAt = new Date().toISOString();
     await finishJob(ctx, job);
     await clearLeadSchedule(ctx, lead);
+    await updateOneTimeFollowUpState(ctx, job, 'skipped', { processedAt: job.processedAt });
     await logFollowUpActivity(ctx, {
       leadId: lead.leadId,
       conversationId: conversation.conversationId,
@@ -1222,6 +1397,23 @@ async function processOneJob(
     return humanReview(evalResult.humanReviewReason || evalResult.reason);
   }
 
+  // Re-check the current job and thread after AI generation, before any channel dispatch.
+  const latestJobSnap = await getDoc(repoFor(ctx).job(job.id)).catch(() => null);
+  if (latestJobSnap?.exists() && (latestJobSnap.data() as AutoFollowUpJob).status === 'cancelled') {
+    job.status = 'cancelled';
+    job.cancelReason = (latestJobSnap.data() as AutoFollowUpJob).cancelReason || 'Cancelled before dispatch';
+    await updateOneTimeFollowUpState(ctx, job, 'cancelled', { cancelReason: job.cancelReason });
+    return { jobId: job.id, status: 'cancelled', reason: job.cancelReason };
+  }
+  const latestThread = await loadThreadMessages(ctx, conversation.conversationId);
+  const latestReference = latestThread.find((m) => m.messageId === job.referenceMessageId);
+  const latestReferenceMs = Math.max(messageTimestampMs(job.referenceMessageTimestamp), messageTimestampMs(latestReference?.timestamp));
+  if (latestThread.some((m) => {
+    const messageTime = messageTimestampMs(m.timestamp);
+    return Number.isFinite(latestReferenceMs) && Number.isFinite(messageTime) && messageTime > latestReferenceMs &&
+      (m.senderType === 'CUSTOMER' || m.senderType === 'PROSPECT' || m.direction === 'INBOUND');
+  })) return cancel('Lead replied before the scheduled follow-up was sent');
+
   // 6. Outbound quota, then send
   const sendQuota = await checkTenantQuota(ctx.tenantId, 'outboundDaily');
   if (!sendQuota.allowed) {
@@ -1229,6 +1421,7 @@ async function processOneJob(
     job.status = 'scheduled';
     job.scheduledAt = new Date(Date.now() + 60 * 60_000).toISOString();
     await finishJob(ctx, job);
+    await updateOneTimeFollowUpState(ctx, job, 'scheduled');
     return { jobId: job.id, status: 'scheduled', reason: sendQuota.reason };
   }
 
@@ -1236,14 +1429,38 @@ async function processOneJob(
   const lastMsg = thread[thread.length - 1];
   const inReplyTo = lastMsg?.gmailMessageId && !String(lastMsg.gmailMessageId).startsWith('<out-') ? lastMsg.gmailMessageId : undefined;
 
-  const sendRes = await sendLiveEmail({
-    tenantId: ctx.tenantId,
-    to: recipient,
-    subject,
-    text: evalResult.generatedMessage,
-    applyWorkspaceDesign: true,
-    ...(inReplyTo ? { inReplyTo, references: [inReplyTo] } : {}),
-  });
+  let sendRes: { success: boolean; messageId?: string; error?: string; simulated?: boolean };
+  try {
+    if (channel === 'EMAIL' || channel === 'WEBSITE') {
+      const result = await sendLiveEmail({
+        tenantId: ctx.tenantId, to: recipient, subject, text: evalResult.generatedMessage,
+        applyWorkspaceDesign: true,
+        ...(inReplyTo ? { inReplyTo, references: [inReplyTo] } : {}),
+      });
+      sendRes = { success: Boolean(result.success), messageId: result.messageId, error: result.error, simulated: result.simulated };
+    } else {
+      const contactSnap = conversation.contactId ? await getDoc(tenantRepo(ctx).contactDoc(conversation.contactId)) : null;
+      const contact: any = contactSnap?.exists() ? contactSnap.data() : {};
+      const recipientId = String(job.recipientId || conversation.externalConversationId ||
+        (channel === 'WHATSAPP' ? contact.whatsappId || contact.whatsappUserId || contact.phone || '' : '') ||
+        (channel === 'INSTAGRAM' ? contact.instagramUserId || '' : '') ||
+        (channel === 'FACEBOOK' ? contact.facebookUserId || '' : '')).trim();
+      if (!recipientId) return humanReview('No recipient ID is available for ' + channel + '.');
+      let externalMessageId = '';
+      if (channel === 'WHATSAPP' || channel === 'FACEBOOK') {
+        const meta = await import('./metaChannelsService.js');
+        const sent = await meta.sendMetaText(ctx, channel === 'WHATSAPP' ? 'whatsapp' : 'messenger', recipientId, evalResult.generatedMessage);
+        externalMessageId = sent.messageId;
+      } else if (channel === 'INSTAGRAM') {
+        const instagram = await import('./instagramIntegrationService.js');
+        const sent = await instagram.sendInstagramMessage(ctx, recipientId, evalResult.generatedMessage);
+        externalMessageId = String(sent?.message_id || sent?.id || '');
+      }
+      sendRes = { success: true, messageId: externalMessageId };
+    }
+  } catch (sendError: any) {
+    return humanReview(sendError?.message || 'The channel could not dispatch the follow-up automatically.');
+  }
 
   const nowIso = new Date().toISOString();
   if (!sendRes.success) {
@@ -1271,18 +1488,19 @@ async function processOneJob(
   if (lead.autoFollowUp) lead.autoFollowUp.attemptCount = job.attempt;
 
   const messageId = `msg-followup-${Date.now()}-${randSuffix()}`;
-  const gmailMessageId = sendRes.messageId || `<followup-${Date.now()}@${ctx.tenantId}>`;
+  const emailChannel = channel === 'EMAIL' || channel === 'WEBSITE';
+  const gmailMessageId = emailChannel ? (sendRes.messageId || `<followup-${Date.now()}@${ctx.tenantId}>`) : undefined;
   const fromAddr = (getSmtpConfig() as any)?.user || (getSmtpConfig() as any)?.from || '';
   const followUpMessage: Message = {
     messageId,
-    gmailMessageId,
-    gmailThreadId: conversation.gmailThreadId || conversation.emailThreadId || job.threadId || `thread-${conversation.conversationId}`,
+    ...(gmailMessageId ? { gmailMessageId, gmailThreadId: conversation.gmailThreadId || conversation.emailThreadId || job.threadId || `thread-${conversation.conversationId}` } : {}),
     conversationId: conversation.conversationId,
-    channel: 'EMAIL',
+    channel: conversation.channel,
     direction: 'OUTBOUND',
     senderType: 'AI',
-    senderName: 'AI Follow-Up',
-    senderEmail: fromAddr || undefined,
+    senderName: 'AI Auto Follow-Up',
+    ...(emailChannel ? { senderEmail: fromAddr || undefined } : {}),
+    ...(sendRes.messageId && !emailChannel ? { externalMessageId: sendRes.messageId } : {}),
     text: evalResult.generatedMessage,
     timestamp: nowIso,
     sentAt: nowIso,
@@ -1291,8 +1509,10 @@ async function processOneJob(
     aiProcessed: true,
     aiGenerated: true,
     confidence: 0.9,
-    emailMeta: { subject, from: fromAddr, to: recipient, messageId: gmailMessageId },
-    smtpStatus: sendRes.simulated ? 'SIMULATED' : 'DELIVERED',
+    ...(emailChannel ? {
+      emailMeta: { subject, from: fromAddr, to: recipient, messageId: gmailMessageId },
+      smtpStatus: sendRes.simulated ? 'SIMULATED' : 'DELIVERED',
+    } : {}),
   } as unknown as Message;
 
   if (enabledDb()) {
@@ -1315,6 +1535,11 @@ async function processOneJob(
     description: evalResult.generatedMessage,
     timestamp: nowIso,
   });
+
+  if (job.oneTime) {
+    await updateOneTimeFollowUpState(ctx, job, 'sent', { processedAt: nowIso });
+    return { jobId: job.id, status: 'sent', message: evalResult.generatedMessage };
+  }
 
   // 7. Chain the next attempt
   const channelCfg = cfg.channels[channel] || cfg.channels['EMAIL'];
@@ -1387,6 +1612,7 @@ export async function processDueFollowUpJobs(
       job.processedAt = new Date().toISOString();
       job.cancelReason = err?.message || 'Unexpected error';
       await finishJob(ctx, job);
+      await updateOneTimeFollowUpState(ctx, job, 'failed', { processedAt: job.processedAt, cancelReason: job.cancelReason });
       results.push({ jobId: job.id, status: 'failed', reason: job.cancelReason });
     }
   }

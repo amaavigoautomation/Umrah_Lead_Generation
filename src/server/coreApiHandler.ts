@@ -3813,6 +3813,31 @@ ${signature || defSig}`;
     return true;
   }
 
+  if (url === '/api/auto-followup/schedule-once' && req.method === 'POST') {
+    const leadId = String(body?.leadId || '').trim();
+    const scheduledAt = String(body?.scheduledAt || '').trim();
+    if (!leadId || leadId.includes('/') || leadId.length > 200) {
+      res.statusCode = 400;
+      res.setHeader('Content-Type', 'application/json');
+      res.end(JSON.stringify({ success: false, error: 'A valid lead is required.' }));
+      return true;
+    }
+    try {
+      const followups = await import('./autoFollowUpService.js');
+      const result = await followups.scheduleOneTimeAiFollowUp(activeTenantCtx, {
+        leadId, scheduledAt, user: userEmail || 'Team Member',
+      });
+      res.statusCode = 200;
+      res.setHeader('Content-Type', 'application/json');
+      res.end(JSON.stringify({ success: true, job: result.job, lead: result.lead }));
+    } catch (err: any) {
+      res.statusCode = 400;
+      res.setHeader('Content-Type', 'application/json');
+      res.end(JSON.stringify({ success: false, error: err?.message || 'Could not schedule AI follow-up.' }));
+    }
+    return true;
+  }
+
   if (url === '/api/auto-followup/dashboard' && req.method === 'GET') {
     try {
       const data = await getAutoFollowUpDashboardData(activeTenantCtx);

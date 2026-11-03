@@ -386,7 +386,16 @@ export interface Lead {
   teamSize?: string;
   /** Every field the website form sent, as received (for tracing a wrong-looking value). */
   rawFormFields?: Record<string, string>;
-  /** TeleCRM: when the next call-back is due (ISO). */
+  /** One-time AI message follow-up scheduled from the CRM. */
+  aiAutoFollowUp?: {
+    jobId: string;
+    status: 'scheduled' | 'sent' | 'cancelled' | 'human_review' | 'failed' | 'skipped';
+    scheduledAt: string;
+    scheduledBy?: string;
+    processedAt?: string;
+    cancelReason?: string;
+  };
+  /** Legacy callback timestamp, mirrored while a one-time AI message is scheduled. */
   nextFollowUpAt?: string;
   /** TeleCRM: telecaller this lead is assigned to. */
   assignedCaller?: string;

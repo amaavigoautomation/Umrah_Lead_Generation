@@ -69,6 +69,7 @@ export interface CrmPipelineProps {
   onDismissSelectedLead?: () => void;
   onUpdateLeadStatus?: (leadId: string, newStatus: LeadStatus) => void;
   onUpdateLead?: (updatedLead: Lead) => void;
+  onScheduleAiFollowUp?: (leadId: string, scheduledAt: string) => Promise<void>;
   onAddLead?: (newLead: Lead, newContact: Contact) => void;
   /** Workspace team members that leads can be assigned to (used for non-Umrah360 workspaces). */
   teamMembers?: { id: string; name: string; role?: string }[];
@@ -107,6 +108,7 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
   onDismissSelectedLead,
   onUpdateLeadStatus,
   onUpdateLead,
+  onScheduleAiFollowUp,
   onAddLead,
   teamMembers,
   users,
@@ -166,6 +168,8 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
   const [callingLead, setCallingLead] = useState<Lead | null>(null);
   const [whatsAppModalLead, setWhatsAppModalLead] = useState<Lead | null>(null);
   const [customFollowUpLead, setCustomFollowUpLead] = useState<Lead | null>(null);
+  const [followUpSavingLeadId, setFollowUpSavingLeadId] = useState<string | null>(null);
+  const [followUpNotice, setFollowUpNotice] = useState<string | null>(null);
   const [quickNoteLead, setQuickNoteLead] = useState<Lead | null>(null);
 
   // Checkbox multi-select
@@ -300,19 +304,19 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
     }
   };
 
-  const handleSetFollowUp = (leadId: string, followUpIso: string) => {
-    const target = leads.find((l) => l.leadId === leadId);
-    if (!target) return;
-    const updated: Lead = {
-      ...target,
-      nextFollowUpAt: followUpIso,
-      status: target.status === 'NEW' ? 'FOLLOW_UP' : target.status,
-      updatedAt: new Date().toISOString(),
-    };
-    if (onUpdateLead) {
-      onUpdateLead(updated);
+  const handleSetFollowUp = async (leadId: string, followUpIso: string) => {
+    if (!onScheduleAiFollowUp || followUpSavingLeadId) return;
+    setFollowUpSavingLeadId(leadId);
+    setFollowUpNotice(null);
+    try {
+      await onScheduleAiFollowUp(leadId, followUpIso);
+      setCustomFollowUpLead(null);
+      setFollowUpNotice('AI Auto Follow-Up scheduled successfully.');
+    } catch (error: any) {
+      setFollowUpNotice(error?.message || 'Could not schedule AI Auto Follow-Up.');
+    } finally {
+      setFollowUpSavingLeadId(null);
     }
-    setCustomFollowUpLead(null);
   };
 
   const setQuickFollowUpPreset = (leadId: string, hoursAhead: number) => {
@@ -1189,7 +1193,7 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
                     }}
                   >
                     <div className="flex items-center space-x-1">
-                      <span>Next Follow-up</span>
+                      <span>AI Auto Follow-Up</span>
                       <Clock className="w-3 h-3 text-slate-400" />
                       {sortField === 'followup' && (
                         <span className="text-orange-600 font-extrabold">{sortAsc ? '↑' : '↓'}</span>
@@ -1255,7 +1259,7 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
                       TELECRM_STAGES.find((s) => s.key === lead.status) || TELECRM_STAGES[1];
                     const callerName = lead.assignedCaller || lead.ownerId || 'Unassigned';
                     const callerObj = telecallers.find((c) => c.name === callerName);
-                    const followupDate = lead.nextFollowUpAt ? parseLeadDate(lead.nextFollowUpAt) : null;
+                    const followupDate = lead.aiAutoFollowUp?.status === 'scheduled' ? parseLeadDate(lead.aiAutoFollowUp.scheduledAt) : null;
                     const isFollowupOverdue = followupDate ? followupDate.getTime() < Date.now() : false;
                     const followupFormatted = followupDate
                       ? followupDate.toLocaleDateString('en-IN', {
@@ -1409,14 +1413,14 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
                               <button
                                 onClick={() => setQuickFollowUpPreset(lead.leadId, 2)}
                                 className="px-1.5 py-0.5 bg-slate-100 hover:bg-slate-200 text-slate-600 text-[10px] font-semibold rounded border border-slate-200"
-                                title="Follow up in 2 hours"
+                                title="Schedule an AI message in 2 hours"
                               >
                                 +2h
                               </button>
                               <button
                                 onClick={() => setQuickFollowUpPreset(lead.leadId, 24)}
                                 className="px-1.5 py-0.5 bg-slate-100 hover:bg-slate-200 text-slate-600 text-[10px] font-semibold rounded border border-slate-200"
-                                title="Follow up tomorrow"
+                                title="Schedule an AI message in 1 day"
                               >
                                 +1d
                               </button>
@@ -1425,7 +1429,7 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
                                 className="px-2 py-0.5 bg-amber-50 hover:bg-amber-100 text-amber-800 text-[10px] font-bold rounded border border-amber-200 flex items-center space-x-1"
                               >
                                 <Plus className="w-2.5 h-2.5" />
-                                <span>Set Callback</span>
+                                <span>Set Time</span>
                               </button>
                             </div>
                           )}
@@ -1798,14 +1802,18 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
         </div>
       )}
 
-      {/* 8. Custom Follow-up Callback Modal */}
+      {followUpNotice && (
+        <div className="fixed bottom-4 right-4 z-[70] rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs font-semibold text-slate-700 shadow-lg">{followUpNotice}</div>
+      )}
+
+      {/* 8. Custom AI Auto Follow-Up Modal */}
       {customFollowUpLead && (
         <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl max-w-sm w-full p-5 shadow-2xl border border-slate-200 space-y-4 animate-in zoom-in-95">
             <div className="flex items-center justify-between">
               <h3 className="font-bold text-sm text-slate-900 flex items-center space-x-1.5">
                 <CalendarClock className="w-4 h-4 text-orange-600" />
-                <span>Schedule Telecalling Callback</span>
+                <span>Schedule AI Auto Follow-Up</span>
               </h3>
               <button
                 onClick={() => setCustomFollowUpLead(null)}
@@ -1815,8 +1823,8 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
               </button>
             </div>
             <p className="text-xs text-slate-500">
-              Set the exact date & time when the assigned telecaller should call{' '}
-              <strong>{contactsMap.get(customFollowUpLead.contactId)?.firstName}</strong> back.
+              Set when the AI should send one contextual follow-up message to{' '}
+              <strong>{contactsMap.get(customFollowUpLead.contactId)?.firstName}</strong>. It will be cancelled automatically if they reply first.
             </p>
 
             <input
@@ -1840,15 +1848,14 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
               </button>
               <button
                 type="button"
+                disabled={followUpSavingLeadId === customFollowUpLead.leadId}
                 onClick={() => {
                   const input = document.getElementById('followup-picker') as HTMLInputElement;
-                  if (input?.value) {
-                    handleSetFollowUp(customFollowUpLead.leadId, new Date(input.value).toISOString());
-                  }
+                  if (input?.value) void handleSetFollowUp(customFollowUpLead.leadId, new Date(input.value).toISOString());
                 }}
-                className="px-4 py-1.5 bg-orange-500 hover:bg-orange-600 text-white text-xs font-bold rounded-lg shadow-sm transition-all"
+                className="px-4 py-1.5 bg-orange-500 hover:bg-orange-600 text-white text-xs font-bold rounded-lg shadow-sm transition-all disabled:opacity-50"
               >
-                Save Callback
+                {followUpSavingLeadId === customFollowUpLead.leadId ? 'Scheduling…' : 'Schedule AI Message'}
               </button>
             </div>
           </div>

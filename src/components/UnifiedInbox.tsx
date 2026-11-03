@@ -927,7 +927,7 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
                   >
                     <Clock className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
                     <span>
-                      Auto Follow-Up [{isAutoFollowUpUiActive ? ' ON ' : ' OFF '}]
+                      AI Auto Follow-Up Sequence [{isAutoFollowUpUiActive ? ' ON ' : ' OFF '}]
                       {!activeLead?.autoFollowUp?.enabled && activeLead?.autoFollowUp?.disabledReason === 'completed' && (
                         <span className="ml-1 font-semibold text-slate-500">
                           · Completed {activeLead.autoFollowUp.attemptCount || activeLead.autoFollowUp.maxAttempts}/
@@ -1002,7 +1002,7 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
                 <div className="flex items-center space-x-2">
                   <span className="flex items-center space-x-1.5">
                     <span className={`w-2 h-2 rounded-full ${isAutoFollowUpUiActive ? 'bg-orange-500 animate-pulse' : 'bg-slate-400'}`} />
-                    <span className="font-semibold text-slate-800">Auto Follow-Up:</span>
+                    <span className="font-semibold text-slate-800">AI Auto Follow-Up Sequence:</span>
                   </span>
                   {activeLead.demoStatus === 'BOOKED' || activeLead.status === 'DEMO_BOOKED' ? (
                     <span className="text-amber-700 font-medium">[ OFF ] — Demo booked</span>
@@ -1033,6 +1033,27 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
                   )}
                 </div>
                 <span className="text-[10px] text-slate-500 font-mono">Human Control Layer</span>
+              </div>
+            )}
+
+            {activeLead?.aiAutoFollowUp && (
+              <div className="px-3.5 py-1.5 bg-emerald-50/80 border-b border-emerald-100 text-xs flex items-center justify-between">
+                <span className="font-semibold text-slate-800">AI Auto Follow-Up:</span>
+                {activeLead.aiAutoFollowUp.status === 'scheduled' ? (
+                  <span className="text-emerald-700 font-medium">
+                    AI message scheduled for {new Date(activeLead.aiAutoFollowUp.scheduledAt).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })}. It will be cancelled if the lead replies first.
+                  </span>
+                ) : activeLead.aiAutoFollowUp.status === 'cancelled' && activeLead.aiAutoFollowUp.cancelReason === 'lead_replied' ? (
+                  <span className="text-slate-600 font-medium">[ CANCELLED ] — Lead replied before the scheduled time.</span>
+                ) : activeLead.aiAutoFollowUp.status === 'sent' ? (
+                  <span className="text-slate-600 font-medium">[ SENT ] — One-time AI follow-up delivered.</span>
+                ) : activeLead.aiAutoFollowUp.status === 'human_review' ? (
+                  <span className="text-amber-700 font-medium">[ NEEDS REVIEW ] — This channel requires manual sending.</span>
+                ) : activeLead.aiAutoFollowUp.status === 'failed' ? (
+                  <span className="text-rose-700 font-medium">[ FAILED ] — The AI follow-up could not be sent.</span>
+                ) : (
+                  <span className="text-slate-500 font-medium">[ SKIPPED ] — The AI did not send a follow-up.</span>
+                )}
               </div>
             )}
 

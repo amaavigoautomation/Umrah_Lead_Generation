@@ -1119,6 +1119,12 @@ async function processInbound(tenantId: string, event: InboundEvent, eventId: st
     senderType: 'CUSTOMER', senderName: displayName, text: event.text, direction: 'INBOUND',
     timestamp: event.timestamp, receivedAt: now, createdAt: now, aiReplied: false, aiProcessed: true,
   });
+  try {
+    const { handleLeadReplyEvent } = await import('./autoFollowUpService.js');
+    await handleLeadReplyEvent(ctx, { conversationId });
+  } catch (followUpError) {
+    console.warn('[Meta Channels] AI follow-up cancellation notice:', followUpError);
+  }
 
   const mode = await getTenantChannelMode(ctx, event.channel, 'AUTO');
   if (!conversation.aiEnabled || conversation.humanHandoff || conversation.managementMode === 'HUMAN' || mode === 'OFF') {

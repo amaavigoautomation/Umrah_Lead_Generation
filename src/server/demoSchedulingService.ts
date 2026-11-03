@@ -2335,10 +2335,21 @@ Output JSON only: {"isDemoIntent": boolean, "requestedDate": string|null, "reque
   // 4c. Deterministic checks decide; the AI output is only accepted when the lead's text backs it up.
   let requestedDate: string | null = null;
   if (dateMentioned) {
+    // Relative dates and weekdays are deterministic in the tenant's timezone.
+    // Do not let an LLM's date calculation override "today", "tomorrow", or a weekday.
     const simple = resolveSimpleDate(fresh, nowIst, addDaysToDate);
-    requestedDate = isIsoDate(ai.requestedDate) ? ai.requestedDate : simple;
+    const aiDate = isIsoDate(ai.requestedDate) ? ai.requestedDate : null;
+    requestedDate = simple || aiDate;
+    if (simple && aiDate && simple !== aiDate) {
+      console.warn('[Demo Scheduling Date Resolution] AI date differed from tenant-local calendar; deterministic date used.', {
+        text: fresh.slice(0, 240), aiDate, deterministicDate: simple,
+        tenantDate: nowIst.dateString, timezone: tz(),
+      });
+    }
     const named = namedWeekdays(fresh);
-    if (requestedDate && named.length === 1 && dayOfWeekFor(requestedDate) !== named[0]) requestedDate = simple;
+    if (requestedDate && named.length === 1 && dayOfWeekFor(requestedDate) !== named[0]) {
+      requestedDate = simple;
+    }
   }
 
   // The lead gave the day earlier and now only the time (or the other way round): combine them.

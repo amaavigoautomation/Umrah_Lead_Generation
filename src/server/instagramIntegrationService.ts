@@ -9,7 +9,7 @@ import { evaluateHumanHandoff, persistHumanHandoff, describeHandoff } from './hu
 import { getTenantChannelMode } from './channelModeService.js';
 import { getApplicableAiFeedback, buildAiFeedbackPromptSection, buildAiFeedbackSystemGuard } from './aiFeedbackService.js';
 import { recordAiCompletionUsage } from './usageService.js';
-import { AI_RESPONSE_FORMATTING_INSTRUCTIONS, aiResponseMarkdownToPlainText } from '../shared/aiResponseFormatting.js';
+import { AI_RESPONSE_FORMATTING_INSTRUCTIONS, formatAiResponseForChannel } from '../shared/aiResponseFormatting.js';
 
 const GRAPH_VERSION = process.env.META_GRAPH_API_VERSION || 'v23.0';
 const OAUTH_STATE_TTL_MS = 10 * 60 * 1000;
@@ -583,7 +583,7 @@ export async function sendInstagramMessage(ctx: TenantContext, recipientId: stri
   const response = await fetch(url, {
     method: 'POST',
     headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ recipient: { id: recipientId }, message: { text: aiResponseMarkdownToPlainText(text) } }),
+    body: JSON.stringify({ recipient: { id: recipientId }, message: { text: formatAiResponseForChannel(text, 'INSTAGRAM') } }),
   });
   const result: any = await response.json().catch(() => ({}));
   if (!response.ok) {

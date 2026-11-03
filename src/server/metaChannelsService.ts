@@ -8,7 +8,7 @@ import { evaluateHumanHandoff, persistHumanHandoff, describeHandoff } from './hu
 import { getTenantChannelMode } from './channelModeService.js';
 import { getApplicableAiFeedback, buildAiFeedbackPromptSection, buildAiFeedbackSystemGuard } from './aiFeedbackService.js';
 import { recordAiCompletionUsage } from './usageService.js';
-import { AI_RESPONSE_FORMATTING_INSTRUCTIONS, aiResponseMarkdownToPlainText, aiResponseMarkdownToWhatsApp } from '../shared/aiResponseFormatting.js';
+import { AI_RESPONSE_FORMATTING_INSTRUCTIONS, formatAiResponseForChannel } from '../shared/aiResponseFormatting.js';
 
 /**
  * Per-workspace WhatsApp (Cloud API via Embedded Signup) and Facebook Messenger (Page login),
@@ -991,7 +991,7 @@ export async function sendMetaText(
   text: string
 ): Promise<{ messageId: string }> {
   const rawBody = String(text || '').trim();
-  const body = channel === 'whatsapp' ? aiResponseMarkdownToWhatsApp(rawBody) : aiResponseMarkdownToPlainText(rawBody);
+  const body = formatAiResponseForChannel(rawBody, channel === 'whatsapp' ? 'WHATSAPP' : 'FACEBOOK');
   const to = String(recipientId || '').trim();
   if (!to || !body) throw new MetaChannelError(400, 'Recipient and message text are required.');
 

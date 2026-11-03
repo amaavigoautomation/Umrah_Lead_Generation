@@ -17,10 +17,11 @@ export const AI_RESPONSE_FORMATTING_INSTRUCTIONS = [
   'For three or more related items, use a concise - bullet list; use a numbered list only for sequential steps.',
   'Use short paragraphs and, only for longer replies, simple ## headings.',
   'Do not add decorative separators, unnecessary emojis, tables, or excessive formatting.',
+  'Generate one channel-neutral Markdown source. The application converts it to each channel’s native display format; never write platform-specific markup or HTML.',
   'Never change, infer or invent facts while formatting. Do not output HTML or fenced code blocks.'
 ].join(' ');
 
-const INLINE_PATTERN = /(\*\*[^*\n]+?\*\*|__[^_\n]+?__|~~[^~\n]+?~~|`[^`\n]+`|(?<!\*)\*[^*\n]+?\*(?!\*)|(?<!_)_[^_\n]+?_(?!_))/g;
+const INLINE_PATTERN = /(\*\*[^*\n]+?\*\*|__[^_\n]+?__|~~[^~\n]+?~~|`[^`\n]+`|(?<!\*)\*[^*\n]+?\*(?!\*)|(?<!_)_[^_\n]+?_(?!_)|(?<!~)~[^~\n]+?~(?!~))/g;
 
 export function parseAiResponseInline(input: string): AiResponseSegment[] {
   const text = String(input || ''), segments: AiResponseSegment[] = [];
@@ -32,6 +33,7 @@ export function parseAiResponseInline(input: string): AiResponseSegment[] {
     const token = match[0];
     if (token.startsWith('**') || token.startsWith('__')) segments.push({ type: 'strong', text: token.slice(2, -2) });
     else if (token.startsWith('~~')) segments.push({ type: 'strike', text: token.slice(2, -2) });
+    else if (token.startsWith('~')) segments.push({ type: 'strike', text: token.slice(1, -1) });
     else if (token.startsWith('`')) segments.push({ type: 'code', text: token.slice(1, -1) });
     else if (token.startsWith('*')) segments.push({ type: 'strong', text: token.slice(1, -1) });
     else segments.push({ type: 'em', text: token.slice(1, -1) });
@@ -105,7 +107,32 @@ export function aiResponseMarkdownToWhatsApp(input: string): string {
     .replace(/\*\*([^*\n]+)\*\*/g, '*$1*')
     .replace(/__([^_\n]+)__/g, '*$1*')
     .replace(/~~([^~\n]+)~~/g, '~$1~')
-    .replace(/^\s*#{1,3}\s+/gm, '')
+    .replace(/^\s*#{1,3}\s+(.+?)\s*$/gm, '*$1*')
     .replace(/^\s*[-*]\s+/gm, '• ')
     .trim();
+}
+
+
+/** Plain-text SMS representation: preserve labels, paragraphs and lists without rich-text markers. */
+export function aiResponseMarkdownToSms(input: string): string {
+  return aiResponseMarkdownToPlainText(input)
+    .replace(/^\s*•\s?/gm, '- ')
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+/**
+ * Shared channel adapter. Rich channels retain the Markdown source for their renderer;
+ * channels without rich-text support receive a safe plain-text representation.
+ */
+export function formatAiResponseForChannel(input: string, channel: string): string {
+  const target = String(channel || '').trim().toUpperCase();
+  if (target === 'WHATSAPP') return aiResponseMarkdownToWhatsApp(input);
+  if (target === 'SMS') return aiResponseMarkdownToSms(input);
+  if (target === 'INSTAGRAM' || target === 'FACEBOOK' || target === 'LINKEDIN' || target === 'MESSENGER') {
+    return aiResponseMarkdownToPlainText(input);
+  }
+  // EMAIL, WEBSITE and CHATBOT keep the canonical Markdown source for a rich renderer.
+  return String(input || '').trim();
 }

@@ -287,6 +287,8 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
   // Active conversation and linked objects
   const activeConversation =
     conversations.find((c) => c.conversationId === selectedConversationId) || conversations[0];
+  const effectiveReplyChannel: Channel =
+    (isUnifiedAllPlatforms && replyChannelOverride ? replyChannelOverride : activeConversation?.channel) || 'WEBSITE';
 
   const foundContact = contacts.find((c) => c.contactId === activeConversation?.contactId);
   const activeContact: Contact = foundContact || {
@@ -1128,8 +1130,8 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
                             : 'bg-gradient-to-r from-orange-500 to-amber-500 text-white rounded-tr-none shadow-xs'
                         }`}
                       >
-                        {isAi ? (
-                          <FormattedMessage text={msg.text} className="space-y-2 whitespace-pre-wrap" />
+                        {isAi || !isIncoming ? (
+                          <FormattedMessage text={msg.text} channel={msg.channel} className="space-y-2 whitespace-pre-wrap" />
                         ) : (
                           <div className="whitespace-pre-wrap">
                             {/* Older emails were saved with the quoted history; hide it for customer emails. */}
@@ -1222,7 +1224,7 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
                   </span>
                 </div>
                 <div className="p-2.5 rounded-xl bg-white border border-orange-200 text-xs text-slate-800 leading-relaxed shadow-2xs">
-                  <FormattedMessage text={activeConversation.draftReply.text} />
+                  <FormattedMessage text={activeConversation.draftReply.text} channel={activeConversation.channel} />
                 </div>
                 <div className="flex items-center justify-end space-x-2 pt-1">
                   <button
@@ -1300,9 +1302,7 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
                 <textarea
                   ref={replyBoxRef}
                   rows={2}
-                  placeholder={`Reply to ${activeContact.firstName} via ${(
-                    (isUnifiedAllPlatforms ? replyChannelOverride : null) || activeConversation.channel
-                  ).toLowerCase()}...`}
+                  placeholder={`Reply to ${activeContact.firstName} via ${effectiveReplyChannel.toLowerCase()}...`}
                   value={replyText}
                   onChange={(e) => setReplyText(e.target.value)}
                   onKeyDown={(e) => {
@@ -1322,6 +1322,24 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
                   <span>Send</span>
                 </button>
               </div>
+              {replyText.trim() && (
+                <div className="mt-3 overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
+                  <div className="flex items-center justify-between gap-2 border-b border-slate-200 px-3 py-2">
+                    <span className="text-[11px] font-bold text-slate-700">Recipient preview</span>
+                    <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                      {effectiveReplyChannel === 'WEBSITE' ? 'Website chat' : effectiveReplyChannel.toLowerCase()}
+                    </span>
+                  </div>
+                  <div className="p-3">
+                    <div className="max-w-xl rounded-2xl border border-slate-200 bg-white px-3.5 py-3 text-xs text-slate-800 shadow-2xs">
+                      <FormattedMessage text={replyText} channel={effectiveReplyChannel} className="space-y-2 whitespace-pre-wrap" />
+                    </div>
+                    <p className="mt-2 text-[10px] text-slate-500">
+                      Live preview only. Your editable message and formatting are preserved until you send.
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
           </>
         ) : (

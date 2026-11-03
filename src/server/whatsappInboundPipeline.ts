@@ -7,7 +7,7 @@ import { normalizeChannelMode } from '../shared/channelModes.js';
 import { getTenantChannelMode } from './channelModeService.js';
 import { getApplicableAiFeedback, buildAiFeedbackPromptSection, buildAiFeedbackSystemGuard } from './aiFeedbackService.js';
 import { recordAiCompletionUsage } from './usageService.js';
-import { AI_RESPONSE_FORMATTING_INSTRUCTIONS, aiResponseMarkdownToWhatsApp } from '../shared/aiResponseFormatting.js';
+import { AI_RESPONSE_FORMATTING_INSTRUCTIONS, formatAiResponseForChannel } from '../shared/aiResponseFormatting.js';
 import type { TenantContext } from '../types/tenant.js';
 
 const DEFAULT_UMRAH_CTX: TenantContext = {
@@ -356,7 +356,7 @@ export async function sendLiveMetaWhatsAppMessage(
   const twilioSid = process.env.TWILIO_ACCOUNT_SID;
   const twilioAuth = process.env.TWILIO_AUTH_TOKEN;
   const cleanPhone = recipientPhone.replace(/[^0-9]/g, '');
-  const formattedMessageText = aiResponseMarkdownToWhatsApp(messageText);
+  const formattedMessageText = formatAiResponseForChannel(messageText, 'WHATSAPP');
 
   if (metaToken && phoneId) {
     try {

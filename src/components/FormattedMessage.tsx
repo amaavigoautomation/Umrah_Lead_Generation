@@ -1,5 +1,11 @@
 import React from 'react';
-import { parseAiResponseInline, parseAiResponseMarkdown } from '../shared/aiResponseFormatting';
+import {
+  formatAiResponseForChannel,
+  parseAiResponseInline,
+  parseAiResponseMarkdown,
+} from '../shared/aiResponseFormatting';
+
+const PLAIN_TEXT_CHANNELS = new Set(['SMS', 'INSTAGRAM', 'FACEBOOK', 'LINKEDIN', 'MESSENGER']);
 
 const InlineText: React.FC<{ text: string }> = ({ text }) => (
   <>
@@ -13,13 +19,30 @@ const InlineText: React.FC<{ text: string }> = ({ text }) => (
     })}
   </>
 );
-export const FormattedMessage: React.FC<{ text: string; className?: string }> = ({ text, className }) => (
-  <div className={className || 'space-y-2'}>
-    {parseAiResponseMarkdown(text).map((block, index) => {
-      if (block.type === 'heading') return <h4 key={'heading-' + index} className="font-semibold leading-snug"><InlineText text={block.text} /></h4>;
-      if (block.type === 'ul') return <ul key={'ul-' + index} className="list-disc space-y-1 pl-5">{block.items.map((item, i) => <li key={i}><InlineText text={item} /></li>)}</ul>;
-      if (block.type === 'ol') return <ol key={'ol-' + index} className="list-decimal space-y-1 pl-5">{block.items.map((item, i) => <li key={i}><InlineText text={item} /></li>)}</ol>;
-      return <p key={'paragraph-' + index} className="whitespace-pre-wrap leading-relaxed"><InlineText text={block.text} /></p>;
-    })}
-  </div>
-);
+
+export const FormattedMessage: React.FC<{ text: string; className?: string; channel?: string }> = ({
+  text,
+  className,
+  channel = 'WEBSITE',
+}) => {
+  const normalizedChannel = String(channel || 'WEBSITE').toUpperCase();
+  const displayText = formatAiResponseForChannel(text, normalizedChannel);
+  if (PLAIN_TEXT_CHANNELS.has(normalizedChannel)) {
+    return (
+      <div className={[className, 'whitespace-pre-wrap', 'leading-relaxed'].filter(Boolean).join(' ')}>
+        {displayText}
+      </div>
+    );
+  }
+
+  return (
+    <div className={className || 'space-y-2'}>
+      {parseAiResponseMarkdown(displayText).map((block, index) => {
+        if (block.type === 'heading') return <h4 key={'heading-' + index} className="font-semibold leading-snug"><InlineText text={block.text} /></h4>;
+        if (block.type === 'ul') return <ul key={'ul-' + index} className="list-disc space-y-1 pl-5">{block.items.map((item, i) => <li key={i}><InlineText text={item} /></li>)}</ul>;
+        if (block.type === 'ol') return <ol key={'ol-' + index} className="list-decimal space-y-1 pl-5">{block.items.map((item, i) => <li key={i}><InlineText text={item} /></li>)}</ol>;
+        return <p key={'paragraph-' + index} className="whitespace-pre-wrap leading-relaxed"><InlineText text={block.text} /></p>;
+      })}
+    </div>
+  );
+};

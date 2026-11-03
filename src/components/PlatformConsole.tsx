@@ -23,6 +23,26 @@ import { PlansManager, type Catalog } from './PlansManager';
 type Plan = 'starter' | 'growth' | 'enterprise';
 type Status = 'active' | 'suspended';
 
+interface UsagePeriod {
+  from: string;
+  to: string;
+  timezone: string;
+  emailSentCount: number;
+  coldEmailCount: number;
+  solicitedEmailCount: number;
+  aiInputTokens: number;
+  aiOutputTokens: number;
+  aiTotalTokens: number;
+  aiRequestCount: number;
+  aiCostUsd: number;
+  aiUnpricedRequestCount: number;
+  days?: Array<{
+    day: string; emailSentCount: number; coldEmailCount: number; solicitedEmailCount: number;
+    aiInputTokens: number; aiOutputTokens: number; aiTotalTokens: number; aiRequestCount: number;
+    aiCostUsd: number; aiUnpricedRequestCount: number;
+  }>;
+}
+
 interface Tenant {
   id: string;
   name: string;
@@ -38,6 +58,7 @@ interface Tenant {
   createdAt?: string;
   limits?: { monthlyAiTokens: number; dailyOutboundSends: number; hourlyOutboundSends: number; seats: number };
   currentMonthUsage?: { aiTotalTokens?: number; aiCostUsd?: number; aiUnpricedRequestCount?: number; coldEmailCount?: number; solicitedEmailCount?: number };
+  periodUsage?: UsagePeriod;
 }
 
 interface TenantUser {
@@ -52,6 +73,7 @@ interface Usage {
   usage: { aiInputTokens?: number; aiOutputTokens?: number; aiTotalTokens?: number; aiCostUsd?: number; aiUnpricedRequestCount?: number; coldEmailCount?: number; solicitedEmailCount?: number; whatsappMessageCount?: number };
   limits: { monthlyAiTokens: number; dailyOutboundSends: number; seats: number };
   dailyUsage?: { emailSentCount?: number };
+  periodUsage?: UsagePeriod;
   percentages: { aiTokens: number; dailySends?: number };
 }
 
@@ -71,6 +93,7 @@ const PLAN_STYLE: Record<Plan, string> = {
 };
 const TIMEZONES = ['Asia/Kolkata', 'Asia/Riyadh', 'Asia/Dubai', 'Europe/London', 'America/New_York'];
 
+const currentUtcDateKey = () => new Date().toISOString().slice(0, 10);
 const fmt = (n?: number) => (n ?? 0).toLocaleString('en-US');
 const fmtDate = (iso?: string) =>
   iso ? new Date(iso).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
@@ -97,6 +120,9 @@ export const PlatformConsole: React.FC<Props> = ({ email, onLogout }) => {
   const [showCreate, setShowCreate] = useState(false);
   const [view, setView] = useState<'workspaces' | 'plans' | 'legal'>('workspaces');
   const [catalog, setCatalog] = useState<Catalog>({ plans: [], features: [], limits: [] });
+  const [dateFrom, setDateFrom] = useState(currentUtcDateKey);
+  const [dateTo, setDateTo] = useState(currentUtcDateKey);
+  const [appliedDateRange, setAppliedDateRange] = useState(() => ({ from: currentUtcDateKey(), to: currentUtcDateKey() }));
   const loadCatalog = useCallback(async () => {
     try {
       setCatalog(await api<Catalog>('/api/plans'));
@@ -113,18 +139,28 @@ export const PlatformConsole: React.FC<Props> = ({ email, onLogout }) => {
     setLoading(true);
     setError(null);
     try {
-      const data = await api<{ tenants: Tenant[] }>('/api/tenants');
+      const params = new URLSearchParams({ from: appliedDateRange.from, to: appliedDateRange.to });
+      const data = await api<{ tenants: Tenant[] }>(`/api/tenants?${params.toString()}`);
       setTenants(data.tenants || []);
     } catch (e: any) {
       setError(e.message);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [appliedDateRange]);
 
   useEffect(() => {
     load();
   }, [load]);
+
+  const applyUsageDateFilter = () => {
+    if (!dateFrom || !dateTo || dateFrom > dateTo) {
+      setError('Choose a valid date range. The end date must be on or after the start date.');
+      return;
+    }
+    setError(null);
+    setAppliedDateRange({ from: dateFrom, to: dateTo });
+  };
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -136,8 +172,8 @@ export const PlatformConsole: React.FC<Props> = ({ email, onLogout }) => {
   const active = tenants.filter((t) => t.status !== 'suspended').length;
   const selected = tenants.find((t) => t.id === selectedId) || null;
   const usageTotals = tenants.reduce((sum, t) => {
-    const u = t.currentMonthUsage || {};
-    sum.emails += Number(u.coldEmailCount || 0) + Number(u.solicitedEmailCount || 0);
+    const u = t.periodUsage || {};
+    sum.emails += Number(u.emailSentCount || 0);
     sum.tokens += Number(u.aiTotalTokens || 0);
     sum.costUsd += Number(u.aiCostUsd || 0);
     return sum;
@@ -197,6 +233,27 @@ export const PlatformConsole: React.FC<Props> = ({ email, onLogout }) => {
 
       {view === 'workspaces' && (
       <main className="max-w-6xl mx-auto px-4 sm:px-6 py-6 space-y-5">
+        {/* Usage date filter */}
+        <section className="bg-white border border-slate-200 rounded-xl p-4 space-y-3">
+          <div>
+            <h2 className="text-sm font-bold text-slate-900">Usage date filter</h2>
+            <p className="text-xs text-slate-500">The selected UTC dates apply to platform totals and each workspace row.</p>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] gap-3 items-end">
+            <label className="block text-xs font-semibold text-slate-600">
+              From
+              <input type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} className={`${inputCls} mt-1`} />
+            </label>
+            <label className="block text-xs font-semibold text-slate-600">
+              To
+              <input type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} className={`${inputCls} mt-1`} />
+            </label>
+            <button type="button" onClick={applyUsageDateFilter} disabled={!dateFrom || !dateTo || dateFrom > dateTo} className="px-4 py-2 rounded-lg bg-slate-900 text-white text-sm font-semibold disabled:opacity-40">
+              Apply filter
+            </button>
+          </div>
+        </section>
+
         {/* Stats */}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
           {[
@@ -210,7 +267,7 @@ export const PlatformConsole: React.FC<Props> = ({ email, onLogout }) => {
             <div key={s.label} className="bg-white border border-slate-200 rounded-xl px-4 py-3 min-w-0">
               <div className="text-xs font-medium text-slate-500">{s.label}</div>
               <div className="text-xl font-bold text-slate-900 mt-0.5 truncate">{s.value}</div>
-              {['Emails sent', 'AI tokens', 'Estimated AI cost'].includes(s.label) && <div className="text-[10px] text-slate-400 mt-1">Current month</div>}
+              {['Emails sent', 'AI tokens', 'Estimated AI cost'].includes(s.label) && <div className="text-[10px] text-slate-400 mt-1">{appliedDateRange.from === appliedDateRange.to ? appliedDateRange.from : `${appliedDateRange.from} – ${appliedDateRange.to}`} UTC</div>}
             </div>
           ))}
         </div>
@@ -267,8 +324,8 @@ export const PlatformConsole: React.FC<Props> = ({ email, onLogout }) => {
                   <th className="px-4 py-3">Workspace</th>
                   <th className="px-4 py-3">Plan</th>
                   <th className="px-4 py-3">Status</th>
-                  <th className="px-4 py-3 hidden lg:table-cell">Emails sent</th>
-                  <th className="px-4 py-3 hidden lg:table-cell">AI tokens</th>
+                  <th className="px-4 py-3 hidden lg:table-cell">Emails sent (range)</th>
+                  <th className="px-4 py-3 hidden lg:table-cell">AI tokens (range)</th>
                   <th className="px-4 py-3 hidden lg:table-cell">AI cost</th>
                   <th className="px-4 py-3 hidden md:table-cell">Contact</th>
                   <th className="px-4 py-3 hidden md:table-cell">Created</th>
@@ -301,9 +358,9 @@ export const PlatformConsole: React.FC<Props> = ({ email, onLogout }) => {
                         {t.status === 'suspended' ? 'Suspended' : 'Active'}
                       </span>
                     </td>
-                    <td className="px-4 py-3 hidden lg:table-cell text-slate-700">{((t.currentMonthUsage?.coldEmailCount || 0) + (t.currentMonthUsage?.solicitedEmailCount || 0)).toLocaleString('en-US')}</td>
-                    <td className="px-4 py-3 hidden lg:table-cell text-slate-700">{(t.currentMonthUsage?.aiTotalTokens || 0).toLocaleString('en-US')}</td>
-                    <td className="px-4 py-3 hidden lg:table-cell text-slate-700">{new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 4 }).format(t.currentMonthUsage?.aiCostUsd || 0)}</td>
+                    <td className="px-4 py-3 hidden lg:table-cell text-slate-700">{(t.periodUsage?.emailSentCount || 0).toLocaleString('en-US')}</td>
+                    <td className="px-4 py-3 hidden lg:table-cell text-slate-700">{(t.periodUsage?.aiTotalTokens || 0).toLocaleString('en-US')}</td>
+                    <td className="px-4 py-3 hidden lg:table-cell text-slate-700">{new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 4 }).format(t.periodUsage?.aiCostUsd || 0)}</td>
                     <td className="px-4 py-3 hidden md:table-cell text-slate-600">{t.contactEmail || '—'}</td>
                     <td className="px-4 py-3 hidden md:table-cell text-slate-600">{fmtDate(t.createdAt)}</td>
                   </tr>
@@ -332,6 +389,8 @@ export const PlatformConsole: React.FC<Props> = ({ email, onLogout }) => {
           key={selected.id}
           tenant={selected}
           catalog={catalog}
+          dateFrom={appliedDateRange.from}
+          dateTo={appliedDateRange.to}
           onClose={() => setSelectedId(null)}
           onChanged={(patch) => patchLocal(selected.id, patch)}
         />
@@ -471,12 +530,14 @@ const CreateWorkspaceModal: React.FC<{ catalog: Catalog; onClose: () => void; on
 /* Workspace detail panel                                              */
 /* ------------------------------------------------------------------ */
 
-const WorkspacePanel: React.FC<{ tenant: Tenant; catalog: Catalog; onClose: () => void; onChanged: (patch: Partial<Tenant>) => void }> = ({
+const WorkspacePanel: React.FC<{ tenant: Tenant; catalog: Catalog; dateFrom: string; dateTo: string; onClose: () => void; onChanged: (patch: Partial<Tenant>) => void }> = ({
   catalog,
   tenant,
+  dateFrom,
+  dateTo,
   onClose,
   onChanged,
-}) => {
+}) => {}
   const [usage, setUsage] = useState<Usage | null>(null);
   const [users, setUsers] = useState<TenantUser[]>([]);
   const [planId, setPlanId] = useState<string>(tenant.planId || '');
@@ -494,13 +555,14 @@ const WorkspacePanel: React.FC<{ tenant: Tenant; catalog: Catalog; onClose: () =
   const suspended = tenant.status === 'suspended';
 
   const loadDetail = useCallback(async () => {
+    const params = new URLSearchParams({ from: dateFrom, to: dateTo });
     const [u, us] = await Promise.allSettled([
-      api<Usage>(`/api/tenants/${tenant.id}/usage`),
+      api<Usage>(`/api/tenants/${tenant.id}/usage?${params.toString()}`),
       api<{ users: TenantUser[] }>(`/api/tenants/${tenant.id}/users`),
     ]);
     if (u.status === 'fulfilled') setUsage(u.value);
     if (us.status === 'fulfilled') setUsers(us.value.users || []);
-  }, [tenant.id]);
+  }, [tenant.id, dateFrom, dateTo]);
 
   useEffect(() => {
     loadDetail();
@@ -562,6 +624,7 @@ const WorkspacePanel: React.FC<{ tenant: Tenant; catalog: Catalog; onClose: () =
   const emailsThisMonth = (usage?.usage?.coldEmailCount || 0) + (usage?.usage?.solicitedEmailCount || 0);
   const dailyEmails = usage?.dailyUsage?.emailSentCount || 0;
   const aiCostUsd = usage?.usage?.aiCostUsd || 0;
+  const selectedPeriod = usage?.periodUsage;
 
   return (
     <div className="fixed inset-0 z-40 flex justify-end bg-slate-900/30" onClick={onClose}>
@@ -631,6 +694,58 @@ const WorkspacePanel: React.FC<{ tenant: Tenant; catalog: Catalog; onClose: () =
               </div>
             </div>
             {(usage?.usage?.aiUnpricedRequestCount || 0) > 0 && <p className="text-[11px] text-amber-700">Cost excludes {fmt(usage?.usage?.aiUnpricedRequestCount)} AI request(s) with no configured model rate.</p>}
+          </section>
+
+          <section className="space-y-3">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">
+              Usage by date · {dateFrom} to {dateTo} UTC
+            </h3>
+            {selectedPeriod && (
+              <>
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div className="rounded-lg bg-slate-50 border border-slate-200 px-3 py-2">
+                    <div className="text-xs text-slate-500">Emails sent</div>
+                    <div className="font-semibold text-slate-900">{fmt(selectedPeriod.emailSentCount)}</div>
+                  </div>
+                  <div className="rounded-lg bg-slate-50 border border-slate-200 px-3 py-2">
+                    <div className="text-xs text-slate-500">AI tokens</div>
+                    <div className="font-semibold text-slate-900">{fmt(selectedPeriod.aiTotalTokens)}</div>
+                  </div>
+                  <div className="rounded-lg bg-slate-50 border border-slate-200 px-3 py-2">
+                    <div className="text-xs text-slate-500">AI cost</div>
+                    <div className="font-semibold text-slate-900">{new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 4 }).format(selectedPeriod.aiCostUsd)}</div>
+                  </div>
+                  <div className="rounded-lg bg-slate-50 border border-slate-200 px-3 py-2">
+                    <div className="text-xs text-slate-500">Input / output</div>
+                    <div className="font-semibold text-slate-900">{fmt(selectedPeriod.aiInputTokens)} / {fmt(selectedPeriod.aiOutputTokens)}</div>
+                  </div>
+                </div>
+                <div className="overflow-x-auto rounded-lg border border-slate-200">
+                  <table className="w-full min-w-[470px] text-xs">
+                    <thead className="bg-slate-50 text-slate-500">
+                      <tr>
+                        <th className="px-3 py-2 text-left">Date</th>
+                        <th className="px-3 py-2 text-right">Emails</th>
+                        <th className="px-3 py-2 text-right">AI tokens</th>
+                        <th className="px-3 py-2 text-right">AI cost</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {(selectedPeriod.days || []).map((day) => (
+                        <tr key={day.day}>
+                          <td className="px-3 py-2 text-slate-700">{day.day}</td>
+                          <td className="px-3 py-2 text-right text-slate-900">{fmt(day.emailSentCount)}</td>
+                          <td className="px-3 py-2 text-right text-slate-900">{fmt(day.aiTotalTokens)}</td>
+                          <td className="px-3 py-2 text-right text-slate-700">{new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 4 }).format(day.aiCostUsd)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
+            {(selectedPeriod?.aiUnpricedRequestCount || 0) > 0 && <p className="text-[11px] text-amber-700">Some AI requests in this range have no configured model price.</p>}
+            <p className="text-[11px] text-slate-400">Future dates show zero until emails are accepted or AI calls consume tokens. Daily AI history starts with this usage-tracking release.</p>
           </section>
 
           {/* Plan & billing */}

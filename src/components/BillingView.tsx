@@ -24,7 +24,20 @@ interface TenantUsageState {
   limits: { monthlyAiTokens: number; dailyOutboundSends: number };
   dailyUsage?: { emailSentCount?: number };
   percentages?: { aiTokens?: number; dailySends?: number };
+  periodUsage?: {
+    from: string; to: string; timezone: string;
+    emailSentCount: number; coldEmailCount: number; solicitedEmailCount: number;
+    aiInputTokens: number; aiOutputTokens: number; aiTotalTokens: number; aiRequestCount: number;
+    aiCostUsd: number; aiUnpricedRequestCount: number;
+    days: Array<{
+      day: string; emailSentCount: number; coldEmailCount: number; solicitedEmailCount: number;
+      aiInputTokens: number; aiOutputTokens: number; aiTotalTokens: number; aiRequestCount: number;
+      aiCostUsd: number; aiUnpricedRequestCount: number;
+    }>;
+  };
 }
+
+const currentUtcDateKey = () => new Date().toISOString().slice(0, 10);
 
 async function api<T = any>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, { ...init, headers: { 'Content-Type': 'application/json', ...(init?.headers || {}) } });
@@ -46,6 +59,9 @@ export const BillingView: React.FC<{ fullScreen?: boolean; onLogout?: () => void
   const [state, setState] = useState<BillingState | null>(null);
   const [usageState, setUsageState] = useState<TenantUsageState | null>(null);
   const [usageError, setUsageError] = useState<string | null>(null);
+  const [dateFrom, setDateFrom] = useState(currentUtcDateKey);
+  const [dateTo, setDateTo] = useState(currentUtcDateKey);
+  const [appliedDateRange, setAppliedDateRange] = useState(() => ({ from: currentUtcDateKey(), to: currentUtcDateKey() }));
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
 
@@ -60,12 +76,13 @@ export const BillingView: React.FC<{ fullScreen?: boolean; onLogout?: () => void
   const loadUsage = useCallback(async () => {
     if (!tenantId) return;
     try {
-      setUsageState(await api<TenantUsageState>(`/api/tenants/${encodeURIComponent(tenantId)}/usage`));
+      const params = new URLSearchParams({ from: appliedDateRange.from, to: appliedDateRange.to });
+      setUsageState(await api<TenantUsageState>(`/api/tenants/${encodeURIComponent(tenantId)}/usage?${params.toString()}`));
       setUsageError(null);
     } catch (e: any) {
       setUsageError(e.message || 'Could not load workspace usage.');
     }
-  }, [tenantId]);
+  }, [tenantId, appliedDateRange]);
 
   useEffect(() => {
     load();
@@ -122,6 +139,7 @@ export const BillingView: React.FC<{ fullScreen?: boolean; onLogout?: () => void
       )}
 
       {tenantId && (
+        <div className="space-y-4">
         <section className="rounded-xl border border-slate-200 bg-white p-4 space-y-3">
           <div className="flex items-center justify-between gap-2">
             <h4 className="text-sm font-bold text-slate-900">Usage this month</h4>
@@ -150,8 +168,82 @@ export const BillingView: React.FC<{ fullScreen?: boolean; onLogout?: () => void
           {(usageState?.usage?.aiUnpricedRequestCount || 0) > 0 && (
             <p className="text-[11px] text-amber-700">Cost is incomplete for {usageState?.usage?.aiUnpricedRequestCount} AI request(s) because their model pricing is not configured. Their tokens are still included.</p>
           )}
-          <p className="text-[11px] text-slate-400">AI cost is an estimate based on recorded provider tokens and configured public rates; it is not a provider invoice.</p>
+          <p className="text-[11px] text-slate-400">AI cost is an estimate based on recorded provider tokens and configured model rates; it is not a provider invoice.</p>
         </section>
+
+        <section className="rounded-xl border border-slate-200 bg-white p-4 space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h4 className="text-sm font-bold text-slate-900">Usage by date</h4>
+              <p className="text-[11px] text-slate-500">Filter sent emails and AI consumption by UTC date.</p>
+            </div>
+            <span className="text-[11px] text-slate-400">Maximum 93 days</span>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] gap-2 items-end">
+            <label className="text-xs font-medium text-slate-600">
+              From
+              <input type="date" value={dateFrom} max="9999-12-31" onChange={(event) => setDateFrom(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800" />
+            </label>
+            <label className="text-xs font-medium text-slate-600">
+              To
+              <input type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800" />
+            </label>
+            <button
+              type="button"
+              disabled={!dateFrom || !dateTo || dateFrom > dateTo}
+              onClick={() => setAppliedDateRange({ from: dateFrom, to: dateTo })}
+              className="px-4 py-2 rounded-lg bg-slate-900 text-white text-sm font-semibold disabled:opacity-40"
+            >
+              Apply filter
+            </button>
+          </div>
+          {usageError && <p className="text-xs text-red-600">{usageError}</p>}
+          {usageState?.periodUsage && (
+            <>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <div className="rounded-lg bg-slate-50 border border-slate-200 p-3">
+                  <div className="text-xs text-slate-500">Emails sent</div>
+                  <div className="text-lg font-bold text-slate-900">{usageState.periodUsage.emailSentCount.toLocaleString('en-US')}</div>
+                </div>
+                <div className="rounded-lg bg-slate-50 border border-slate-200 p-3">
+                  <div className="text-xs text-slate-500">AI tokens consumed</div>
+                  <div className="text-lg font-bold text-slate-900">{usageState.periodUsage.aiTotalTokens.toLocaleString('en-US')}</div>
+                </div>
+                <div className="rounded-lg bg-slate-50 border border-slate-200 p-3">
+                  <div className="text-xs text-slate-500">Estimated AI cost</div>
+                  <div className="text-lg font-bold text-slate-900">{formatUsd(usageState.periodUsage.aiCostUsd)}</div>
+                </div>
+              </div>
+              <div className="overflow-x-auto rounded-lg border border-slate-200">
+                <table className="w-full text-xs min-w-[560px]">
+                  <thead className="bg-slate-50 text-slate-500">
+                    <tr>
+                      <th className="px-3 py-2 text-left font-semibold">Date (UTC)</th>
+                      <th className="px-3 py-2 text-right font-semibold">Emails sent</th>
+                      <th className="px-3 py-2 text-right font-semibold">AI tokens</th>
+                      <th className="px-3 py-2 text-right font-semibold">Input / output</th>
+                      <th className="px-3 py-2 text-right font-semibold">AI cost</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {usageState.periodUsage.days.map((day) => (
+                      <tr key={day.day}>
+                        <td className="px-3 py-2 text-slate-700">{day.day}</td>
+                        <td className="px-3 py-2 text-right font-medium text-slate-900">{day.emailSentCount.toLocaleString('en-US')}</td>
+                        <td className="px-3 py-2 text-right font-medium text-slate-900">{day.aiTotalTokens.toLocaleString('en-US')}</td>
+                        <td className="px-3 py-2 text-right text-slate-500">{day.aiInputTokens.toLocaleString('en-US')} / {day.aiOutputTokens.toLocaleString('en-US')}</td>
+                        <td className="px-3 py-2 text-right text-slate-700">{formatUsd(day.aiCostUsd)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
+          {(usageState.periodUsage.aiUnpricedRequestCount || 0) > 0 && <p className="text-[11px] text-amber-700">Cost is incomplete for {usageState.periodUsage.aiUnpricedRequestCount} AI request(s) in this date range because their model pricing is not configured; their tokens are included.</p>}
+          <p className="text-[11px] text-slate-400">Only emails accepted by the sending provider are counted; scheduled or future emails are not counted until sent. Daily AI breakdown starts with this usage-tracking release, so earlier AI activity may only be available in monthly totals.</p>
+        </section>
+        </div>
       )}
       {error && <div className="text-sm bg-red-50 border border-red-100 text-red-700 rounded-lg px-3 py-2">{error}</div>}
       {state && !state.stripeConfigured && (

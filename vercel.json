@@ -5,10 +5,8 @@
   "outputDirectory": "dist",
   "functions": {
     "api/**/*.ts": {
+      "maxDuration": 300,
       "includeFiles": "src/{server,firebase}/**"
-    },
-    "api/[...path].ts": {
-      "maxDuration": 300
     }
   },
   "crons": [

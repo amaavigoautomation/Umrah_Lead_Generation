@@ -7,12 +7,11 @@ import {
   ArrowLeft, ArrowUp, ArrowDown, Check, Code2, Copy, Eye, FileImage, Heading1, ImagePlus,
   LayoutTemplate, Mail, Monitor, Palette, Plus, Save, Search, Smartphone, Sparkles, Trash2,
   Type, X, MousePointerClick, Minus, Link2, Loader2, Star, FolderOpen, AlignLeft,
-  Maximize2, Minimize2, WrapText, Paperclip, Undo2, Redo2,
+  Maximize2, Minimize2, WrapText, Paperclip,
 } from 'lucide-react';
 import { useBrand } from '../context/BrandContext';
 import { CompanyAssetsPanel } from './CompanyAssetsPanel';
 import type { CompanyAsset, EmailTemplate } from '../types';
-import { fileToDataUrl, getImageDimensions, uploadCompanyAsset } from '../services/assetClientService';
 import { getUnsupportedEmailTemplateVariables } from '../shared/emailTemplateValidation';
 import {
   createBlankEmailDesignTemplate, createEmailDesignBlockId, createEmailDesignHtmlSource, PREDEFINED_EMAIL_DESIGNS,
@@ -117,228 +116,19 @@ function EmailPreview({
   mode = 'desktop',
   compact = false,
   content,
-  interactive = false,
-  selectedBlockId = '',
-  onSelectBlock,
-  onTextChange,
-  onPasteImage,
-  onImageResize,
-  onUndo,
-  onRedo,
 }: {
   template: EmailDesignTemplate;
   brand: Record<string, any>;
   mode?: PreviewMode;
   compact?: boolean;
   content?: string;
-  interactive?: boolean;
-  selectedBlockId?: string;
-  onSelectBlock?: (id: string) => void;
-  onTextChange?: (change: { blockId: string; field: 'text'|'secondaryText'|'eyebrow'; html: string; text: string }) => void;
-  onPasteImage?: (file: File) => void;
-  onImageResize?: (id: string, width: number) => void;
-  onUndo?: () => void;
-  onRedo?: () => void;
 }) {
   const origin = typeof window !== 'undefined' ? window.location.origin : '';
   const srcDoc = renderEmailDesignHtml(template, content || template.campaignBody || SAMPLE_EMAIL_CONTENT, brand, origin);
-  const iframeRef = useRef<HTMLIFrameElement | null>(null);
-  const callbacksRef = useRef({ onSelectBlock, onTextChange, onPasteImage, onImageResize, onUndo, onRedo });
-  useEffect(() => {
-    callbacksRef.current = { onSelectBlock, onTextChange, onPasteImage, onImageResize, onUndo, onRedo };
-  }, [onSelectBlock, onTextChange, onPasteImage, onImageResize, onUndo, onRedo]);
-
-  const attachCanvasEvents = () => {
-    const frame = iframeRef.current;
-    const doc = frame?.contentDocument;
-    if (!interactive || !doc || (doc as any).__amgEditorBound) return;
-    (doc as any).__amgEditorBound = true;
-    const style = doc.createElement('style');
-    style.setAttribute('data-amg-editor-style', 'true');
-    style.textContent = [
-      '[data-email-field]{cursor:text;outline:1px dashed transparent;outline-offset:3px;transition:outline-color .12s}',
-      '[data-email-field]:hover{outline-color:#f59e0b}',
-      '[data-email-image-id]{cursor:nwse-resize;outline:1px dashed transparent;outline-offset:3px}',
-      '[data-email-image-id]:hover{outline-color:#f59e0b}',
-      '[data-email-block-id].amg-selected-block{outline:2px solid #f97316!important;outline-offset:2px}',
-      '[data-email-field][contenteditable="true"]{outline:2px solid #f97316!important;outline-offset:3px;cursor:text}',
-      '[data-email-image-id]{touch-action:none}',
-    ].join('');
-    (doc.head || doc.documentElement).appendChild(style);
-
-    const findTarget = (target: EventTarget | null): Element | null => {
-      const node = target as Element | null;
-      return node?.closest ? node.closest('[data-email-field], [data-email-image-id], [data-email-block-id]') : null;
-    };
-    const selectTarget = (target: Element | null) => {
-      if (!target) return;
-      const id = target.getAttribute('data-email-block-id') || target.closest('[data-email-block-id]')?.getAttribute('data-email-block-id') || '';
-      if (id) callbacksRef.current.onSelectBlock?.(id);
-      doc.querySelectorAll('.amg-selected-block').forEach((node) => node.classList.remove('amg-selected-block'));
-      if (id) doc.querySelectorAll('[data-email-block-id="'+id.replace(/["\\]/g,'')+'"]').forEach((node) => node.classList.add('amg-selected-block'));
-    };
-    const handleClick = (event: MouseEvent) => {
-      const target = findTarget(event.target);
-      if (!target) return;
-      selectTarget(target);
-      if ((event.target as Element)?.closest?.('a')) event.preventDefault();
-    };
-    const handleDoubleClick = (event: MouseEvent) => {
-      const field = (event.target as Element | null)?.closest?.('[data-email-field]') as HTMLElement | null;
-      if (!field) return;
-      event.preventDefault();
-      selectTarget(field);
-      field.setAttribute('contenteditable', 'true');
-      field.setAttribute('spellcheck', 'true');
-      field.focus();
-    };
-    const handleFocusOut = (event: FocusEvent) => {
-      const field = event.target as HTMLElement | null;
-      if (!field?.matches?.('[data-email-field][contenteditable="true"]')) return;
-      field.setAttribute('contenteditable', 'false');
-      const blockId = field.getAttribute('data-email-block-id') || '';
-      const fieldName = field.getAttribute('data-email-field') as 'text'|'secondaryText'|'eyebrow';
-      if (blockId && ['text','secondaryText','eyebrow'].includes(fieldName)) {
-        const plainText = String((field as any).innerText || field.textContent || '').replace(/\u00a0/g, ' ').trim();
-        callbacksRef.current.onTextChange?.({ blockId, field: fieldName, html: field.innerHTML, text: plainText });
-      }
-    };
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== 'z') return;
-      const target = event.target as HTMLElement | null;
-      if (target?.closest?.('[contenteditable="true"]')) return;
-      event.preventDefault();
-      if (event.shiftKey) callbacksRef.current.onRedo?.();
-      else callbacksRef.current.onUndo?.();
-    };
-    const handlePaste = (event: ClipboardEvent) => {
-      const items = Array.from(event.clipboardData?.items || []);
-      const imageItem = items.find((item) => item.kind === 'file' && /^image\//i.test(item.type));
-      const file = imageItem?.getAsFile();
-      if (file) {
-        event.preventDefault();
-        callbacksRef.current.onPasteImage?.(file);
-      }
-    };
-    const handleDragOver = (event: DragEvent) => {
-      if (Array.from(event.dataTransfer?.files || []).some((file) => file.type.startsWith('image/'))) {
-        event.preventDefault();
-        if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy';
-      }
-    };
-    const handleDrop = (event: DragEvent) => {
-      const file = Array.from(event.dataTransfer?.files || []).find((item) => item.type.startsWith('image/'));
-      if (!file) return;
-      event.preventDefault();
-      callbacksRef.current.onPasteImage?.(file);
-    };
-    const handlePointerDown = (event: PointerEvent) => {
-      const image = (event.target as Element | null)?.closest?.('[data-email-image-id]') as HTMLImageElement | null;
-      if (!image) return;
-      selectTarget(image);
-      const rect = image.getBoundingClientRect();
-      const nearResizeCorner = rect.right - event.clientX <= 20 && rect.bottom - event.clientY <= 20;
-      if (!nearResizeCorner || event.button !== 0) return;
-      event.preventDefault();
-      const startX = event.clientX;
-      const startWidth = rect.width;
-      const id = image.getAttribute('data-email-image-id') || '';
-      const view = doc.defaultView;
-      if (!view) return;
-      const move = (moveEvent: PointerEvent) => {
-        const width = Math.max(60, Math.min(680, Math.round(startWidth + moveEvent.clientX - startX)));
-        image.style.width = width + 'px';
-        image.style.maxWidth = '100%';
-        image.setAttribute('width', String(width));
-      };
-      const up = () => {
-        const width = Math.max(60, Math.min(680, Math.round(image.getBoundingClientRect().width)));
-        view.removeEventListener('pointermove', move);
-        view.removeEventListener('pointerup', up);
-        if (id && width) callbacksRef.current.onImageResize?.(id, width);
-      };
-      view.addEventListener('pointermove', move);
-      view.addEventListener('pointerup', up, { once: true });
-    };
-    doc.addEventListener('click', handleClick);
-    doc.addEventListener('dblclick', handleDoubleClick);
-    doc.addEventListener('keydown', handleKeyDown);
-    doc.addEventListener('focusout', handleFocusOut, true);
-    doc.addEventListener('paste', handlePaste);
-    doc.addEventListener('dragover', handleDragOver);
-    doc.addEventListener('drop', handleDrop);
-    doc.addEventListener('pointerdown', handlePointerDown);
-    (doc as any).__amgEditorCleanup = () => {
-      doc.removeEventListener('click', handleClick);
-      doc.removeEventListener('dblclick', handleDoubleClick);
-      doc.removeEventListener('keydown', handleKeyDown);
-      doc.removeEventListener('focusout', handleFocusOut, true);
-      doc.removeEventListener('paste', handlePaste);
-      doc.removeEventListener('dragover', handleDragOver);
-      doc.removeEventListener('drop', handleDrop);
-      doc.removeEventListener('pointerdown', handlePointerDown);
-    };
-  };
-
-  useEffect(() => {
-    if (!interactive) return;
-    const frame = iframeRef.current;
-    if (!frame) return;
-    frame.addEventListener('load', attachCanvasEvents);
-    if (frame.contentDocument?.readyState === 'complete') attachCanvasEvents();
-    return () => {
-      frame.removeEventListener('load', attachCanvasEvents);
-      const doc = frame.contentDocument;
-      if (doc && (doc as any).__amgEditorCleanup) (doc as any).__amgEditorCleanup();
-      if (doc) delete (doc as any).__amgEditorBound;
-    };
-  }, [interactive, srcDoc]);
-
-  useEffect(() => {
-    if (!interactive) return;
-    const doc = iframeRef.current?.contentDocument;
-    if (!doc) return;
-    doc.querySelectorAll('.amg-selected-block').forEach((node) => node.classList.remove('amg-selected-block'));
-    if (selectedBlockId) {
-      const safeId = selectedBlockId.replace(/["\\]/g, '');
-      doc.querySelectorAll('[data-email-block-id="'+safeId+'"]').forEach((node) => node.classList.add('amg-selected-block'));
-    }
-  }, [interactive, selectedBlockId, srcDoc]);
-
-  const formatSelection = (command: string, value?: string) => {
-    const doc = iframeRef.current?.contentDocument;
-    if (!doc) return;
-    doc.execCommand('styleWithCSS', false, 'true');
-    doc.execCommand(command, false, value);
-  };
-
   return (
     <div className={compact ? 'h-[154px] overflow-hidden rounded-lg bg-slate-100 border border-slate-200 relative' : 'flex-1 min-h-0 overflow-auto rounded-xl bg-slate-100 border border-slate-200 p-4'}>
-      {interactive && !compact && (
-        <div className="sticky top-0 z-10 mb-3 flex flex-wrap items-center gap-1 rounded-lg border border-slate-200 bg-white/95 p-2 shadow-sm backdrop-blur">
-          <span className="mr-2 text-[10px] font-medium text-slate-400">Double-click text to edit</span>
-          {[
-            { label: 'B', command: 'bold', title: 'Bold' },
-            { label: 'I', command: 'italic', title: 'Italic' },
-            { label: 'U', command: 'underline', title: 'Underline' },
-          ].map((item) => (
-            <button key={item.command} type="button" title={item.title}
-              onMouseDown={(event) => event.preventDefault()}
-              onClick={() => formatSelection(item.command)}
-              className="h-7 min-w-7 rounded border border-slate-200 px-2 text-xs font-bold text-slate-700 hover:bg-orange-50 hover:border-orange-300">{item.label}</button>
-          ))}
-          <select aria-label="Selected text size" defaultValue="" onChange={(event) => { if (event.target.value) formatSelection('fontSize', event.target.value); event.target.value = ''; }} className="ml-1 h-7 rounded border border-slate-200 bg-white px-1.5 text-[10px] text-slate-600">
-            <option value="">Size</option><option value="2">Small</option><option value="3">Normal</option><option value="4">Large</option><option value="5">XL</option><option value="6">XXL</option>
-          </select>
-          <label className="ml-1 flex items-center gap-1 text-[10px] text-slate-500">Text colour
-            <input type="color" defaultValue="#183B66" onChange={(event) => formatSelection('foreColor', event.target.value)} className="h-6 w-7 cursor-pointer border-0 bg-transparent p-0"/>
-          </label>
-          <span className="ml-auto text-[10px] text-slate-400">Ctrl+V image · Drop image · Drag image corner to resize</span>
-        </div>
-      )}
       <div className={compact ? 'absolute top-0 left-0 origin-top-left pointer-events-none' : 'mx-auto'} style={compact ? { width: 600, transform: 'scale(0.37)' } : mode === 'mobile' ? { width: 390, maxWidth: '100%' } : { width: '100%', maxWidth: 760 }}>
         <iframe
-          ref={iframeRef}
           title={template.name + ' email preview'}
           srcDoc={srcDoc}
           sandbox="allow-same-origin"
@@ -575,9 +365,6 @@ export const EmailDesignStudio: React.FC<EmailDesignStudioProps> = ({ tenantId, 
   const [selectedRowId, setSelectedRowId] = useState<string>('');
   const [selectedColumnId, setSelectedColumnId] = useState<string>('');
   const [assetTarget, setAssetTarget] = useState<'element' | 'section' | 'column'>('element');
-  const [isUploadingInlineImage, setIsUploadingInlineImage] = useState(false);
-  const [historyState, setHistoryState] = useState({ canUndo: false, canRedo: false });
-  const editorHistoryRef = useRef<{ undo: string[]; redo: string[]; lastSnapshot: string }>({ undo: [], redo: [], lastSnapshot: '' });
   const [editorPanel, setEditorPanel] = useState<EditorPanel>('blocks');
   const [previewMode, setPreviewMode] = useState<PreviewMode>('desktop');
   const [editorMode, setEditorMode] = useState<EditorMode>('visual');
@@ -663,67 +450,10 @@ export const EmailDesignStudio: React.FC<EmailDesignStudioProps> = ({ tenantId, 
   const selectedColumn = activeSections.flatMap((section) => section.rows.flatMap((row) => row.columns)).find((column) => column.id === selectedColumnId) || null;
   const selectedRow = activeSections.flatMap((section) => section.rows).find((row) => row.id === selectedRowId) || null;
   const selectedColumnMaxWidth = selectedRow ? Math.max(10, 100 - Math.max(0, selectedRow.columns.length - 1) * 5) : 100;
-  const resetEditorHistory = (template: EmailDesignTemplate) => {
-    editorHistoryRef.current = { undo: [], redo: [], lastSnapshot: JSON.stringify(template) };
-    setHistoryState({ canUndo: false, canRedo: false });
-  };
-
-  useEffect(() => {
-    if (!editing) return;
-    const snapshot = JSON.stringify(editing);
-    const history = editorHistoryRef.current;
-    if (!history.lastSnapshot) {
-      history.lastSnapshot = snapshot;
-      return;
-    }
-    if (history.lastSnapshot !== snapshot) {
-      history.undo.push(history.lastSnapshot);
-      if (history.undo.length > 40) history.undo.shift();
-      history.redo = [];
-      history.lastSnapshot = snapshot;
-      setHistoryState({ canUndo: history.undo.length > 0, canRedo: false });
-    }
-  }, [editing]);
-
-  const undoEdit = () => {
-    const history = editorHistoryRef.current;
-    if (!editing || !history.undo.length) return;
-    history.redo.push(JSON.stringify(editing));
-    const snapshot = history.undo.pop() as string;
-    history.lastSnapshot = snapshot;
-    setHistoryState({ canUndo: history.undo.length > 0, canRedo: history.redo.length > 0 });
-    setEditing(JSON.parse(snapshot) as EmailDesignTemplate);
-  };
-
-  const redoEdit = () => {
-    const history = editorHistoryRef.current;
-    if (!editing || !history.redo.length) return;
-    history.undo.push(JSON.stringify(editing));
-    const snapshot = history.redo.pop() as string;
-    history.lastSnapshot = snapshot;
-    setHistoryState({ canUndo: history.undo.length > 0, canRedo: history.redo.length > 0 });
-    setEditing(JSON.parse(snapshot) as EmailDesignTemplate);
-  };
-
-  useEffect(() => {
-    if (!editing || editorMode !== 'visual') return;
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== 'z') return;
-      const target = event.target as HTMLElement | null;
-      if (target && /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)) return;
-      event.preventDefault();
-      if (event.shiftKey) redoEdit();
-      else undoEdit();
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [editing, editorMode]);
-
 
   const startEditing = (template: EmailDesignTemplate) => {
     const copy = cloneTemplate(template);
     copy.sections = ensureEmailDesignSections(copy);
-    resetEditorHistory(copy);
     if (copy.customHtml !== undefined) copy.customHtml = formatEmailHtml(copy.customHtml);
     const firstSection = copy.sections[0];
     const firstRow = firstSection?.rows[0];
@@ -760,7 +490,6 @@ export const EmailDesignStudio: React.FC<EmailDesignStudioProps> = ({ tenantId, 
       template.campaignTemplateId = '';
     }
     template.sections = ensureEmailDesignSections(template);
-    resetEditorHistory(template);
     const firstSection = template.sections[0];
     const firstRow = firstSection?.rows[0];
     const firstColumn = firstRow?.columns[0];
@@ -892,7 +621,6 @@ export const EmailDesignStudio: React.FC<EmailDesignStudioProps> = ({ tenantId, 
     visualCopy.version = 1;
     visualCopy.customHtml = undefined;
     visualCopy.sections = ensureEmailDesignSections(visualCopy);
-    resetEditorHistory(visualCopy);
     if (isCampaignMode) visualCopy.campaignTemplateId = '';
     visualCopy.createdAt = undefined;
     visualCopy.updatedAt = undefined;
@@ -916,18 +644,6 @@ export const EmailDesignStudio: React.FC<EmailDesignStudioProps> = ({ tenantId, 
   };
 
   const updateBlock = (id: string, patch: Partial<EmailDesignBlock>) => {
-    const mergePatch = (item: EmailDesignBlock): EmailDesignBlock => {
-      const next = { ...item, ...patch };
-      if (patch.richText === undefined) {
-        const richText = { ...(item.richText || {}) };
-        if (patch.text !== undefined) delete richText.text;
-        if (patch.secondaryText !== undefined) delete richText.secondaryText;
-        if (patch.eyebrow !== undefined) delete richText.eyebrow;
-        if (Object.keys(richText).length) next.richText = richText;
-        else delete next.richText;
-      }
-      return next;
-    };
     setEditing((current) => {
       if (!current) return current;
       const sections = current.sections?.length ? current.sections : ensureEmailDesignSections(current);
@@ -940,11 +656,11 @@ export const EmailDesignStudio: React.FC<EmailDesignStudioProps> = ({ tenantId, 
             ...row,
             columns: row.columns.map((column) => ({
               ...column,
-              elements: column.elements.map((item) => item.id === id ? mergePatch(item) : item),
+              elements: column.elements.map((item) => item.id === id ? { ...item, ...patch } : item),
             })),
           })),
         })),
-        blocks: current.blocks.map((item) => item.id === id ? mergePatch(item) : item),
+        blocks: current.blocks.map((item) => item.id === id ? { ...item, ...patch } : item),
       };
     });
   };
@@ -1556,69 +1272,6 @@ export const EmailDesignStudio: React.FC<EmailDesignStudioProps> = ({ tenantId, 
     setShowAssets(false);
   };
 
-  const selectCanvasBlock = (id: string) => {
-    setSelectedBlockId(id);
-    setEditorPanel('blocks');
-    for (const section of activeSections) {
-      for (const row of section.rows) {
-        for (const column of row.columns) {
-          if (column.elements.some((item) => item.id === id)) {
-            setSelectedSectionId(section.id);
-            setSelectedRowId(row.id);
-            setSelectedColumnId(column.id);
-            return;
-          }
-        }
-      }
-    }
-  };
-
-  const saveInlineText = (change: { blockId: string; field: 'text'|'secondaryText'|'eyebrow'; html: string; text: string }) => {
-    const block = findEmailDesignElement(activeSections, change.blockId);
-    if (!block) return;
-    updateBlock(change.blockId, {
-      [change.field]: change.text,
-      richText: { ...(block.richText || {}), [change.field]: change.html },
-    });
-  };
-
-  const handlePastedImage = async (file: File) => {
-    if (!editing || isUploadingInlineImage) return;
-    if (!/^image\/(?:png|jpe?g|gif|webp)$/i.test(file.type)) {
-      setNotice({ tone: 'error', text: 'Paste a PNG, JPG, GIF or WebP image.' });
-      return;
-    }
-    if (file.size > 5 * 1024 * 1024) {
-      setNotice({ tone: 'error', text: 'This image is larger than 5 MB. Please resize it before pasting.' });
-      return;
-    }
-    setIsUploadingInlineImage(true);
-    setNotice({ tone: 'info', text: 'Uploading pasted image to Company Assets…' });
-    try {
-      const dataUrl = await fileToDataUrl(file);
-      const dimensions = await getImageDimensions(dataUrl);
-      const asset = await uploadCompanyAsset({
-        name: file.name || 'Pasted image ' + new Date().toISOString().slice(0, 10),
-        category: 'OTHER',
-        mimeType: file.type,
-        dataUrl,
-        size: file.size,
-        dimensions,
-        altText: file.name || 'Pasted email image',
-      });
-      insertAsset(asset);
-      setNotice({ tone: 'success', text: 'Image added to your email and saved in Company Assets.' });
-    } catch (error: any) {
-      setNotice({ tone: 'error', text: error?.message || 'Could not upload the pasted image.' });
-    } finally {
-      setIsUploadingInlineImage(false);
-    }
-  };
-
-  const resizeCanvasImage = (id: string, width: number) => {
-    updateBlock(id, { width });
-  };
-
   const filteredPredefined = tab === 'gallery';
   const profileColors = brandProfile?.colors || [];
 
@@ -1740,24 +1393,7 @@ export const EmailDesignStudio: React.FC<EmailDesignStudioProps> = ({ tenantId, 
               <div><h2 className="text-xs font-bold text-slate-700">Live email preview</h2><p className="text-[10px] text-slate-400">Sample recipient message is inserted where {'{{content}}'} appears.</p></div>
               <span className="text-[10px] text-slate-400 uppercase tracking-wider">{previewMode} view</span>
             </div>
-            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-              <p className="text-[10px] text-slate-500">Double-click any text to edit it inline. Click an image to select it, then drag its bottom-right corner to resize. Paste or drop images directly into this canvas.</p>
-              {isUploadingInlineImage && <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-orange-600"><Loader2 className="h-3 w-3 animate-spin"/>Uploading image…</span>}
-            </div>
-            <EmailPreview
-              template={editing}
-              brand={brandData}
-              mode={previewMode}
-              content={isCampaignMode ? previewCampaignValue(editing.campaignBody || '') : undefined}
-              interactive={editorMode === 'visual'}
-              selectedBlockId={selectedBlockId}
-              onSelectBlock={selectCanvasBlock}
-              onTextChange={saveInlineText}
-              onPasteImage={handlePastedImage}
-              onImageResize={resizeCanvasImage}
-              onUndo={undoEdit}
-              onRedo={redoEdit}
-            />
+            <EmailPreview template={editing} brand={brandData} mode={previewMode} content={isCampaignMode ? previewCampaignValue(editing.campaignBody || '') : undefined} />
           </main>
           )}
         </div>
@@ -1776,10 +1412,6 @@ export const EmailDesignStudio: React.FC<EmailDesignStudioProps> = ({ tenantId, 
           <div className="min-w-[180px] flex-1">
             <input value={editing.name} onChange={(event) => updateTemplate({ name: event.target.value })} className="w-full text-sm font-bold text-slate-900 outline-none border-b border-transparent focus:border-orange-400 py-1" placeholder="Name your email design" />
             <p className="text-[10px] text-slate-400">{isCampaignMode ? 'Campaign email template · Subject, preheader and message content are saved with this design' : (editing.source === 'AI' ? 'AI-generated design' : 'Custom email design') + ' · Message content is inserted automatically at the reserved content block'}</p>
-          </div>
-          <div className="flex items-center gap-1 rounded-lg border border-slate-200 bg-white p-1">
-            <button type="button" onClick={undoEdit} disabled={!historyState.canUndo} title="Undo (Ctrl+Z)" className="rounded-md p-2 text-slate-600 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-30"><Undo2 className="h-4 w-4"/></button>
-            <button type="button" onClick={redoEdit} disabled={!historyState.canRedo} title="Redo (Ctrl+Shift+Z)" className="rounded-md p-2 text-slate-600 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-30"><Redo2 className="h-4 w-4"/></button>
           </div>
           <div className="flex items-center gap-1 bg-slate-100 rounded-lg p-1">
             <button onClick={() => setPreviewMode('desktop')} className={'p-2 rounded-md ' + (previewMode === 'desktop' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500')} title="Desktop preview"><Monitor className="w-4 h-4" /></button>

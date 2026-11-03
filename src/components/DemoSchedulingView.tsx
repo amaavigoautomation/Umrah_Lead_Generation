@@ -34,10 +34,42 @@ import {
 
 interface DemoSchedulingViewProps {
   leads?: Lead[];
+  tenantId: string;
+  canEditSettings: boolean;
 }
 
-export const DemoSchedulingView: React.FC<DemoSchedulingViewProps> = ({ leads = [] }) => {
-  const { brand } = useBrand();
+export const DemoSchedulingView: React.FC<DemoSchedulingViewProps> = ({ leads = [], tenantId, canEditSettings }) => {
+  const { brand, setBrand } = useBrand();
+  const [durationDraft, setDurationDraft] = useState<number>(brand.demoDurationMinutes || 60);
+  const [isSavingDuration, setIsSavingDuration] = useState(false);
+  const [durationSaveMessage, setDurationSaveMessage] = useState<string | null>(null);
+  useEffect(() => setDurationDraft(brand.demoDurationMinutes || 60), [brand.demoDurationMinutes]);
+
+  const saveDemoDuration = async () => {
+    if (!Number.isInteger(durationDraft) || durationDraft < 5 || durationDraft > 240) {
+      setDurationSaveMessage('Choose a whole number between 5 and 240 minutes.');
+      return;
+    }
+    setIsSavingDuration(true);
+    setDurationSaveMessage(null);
+    try {
+      const res = await fetch(`/api/tenants/${encodeURIComponent(tenantId)}/brand`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ brand: { ...brand, demoDurationMinutes: durationDraft } }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || `Request failed (${res.status})`);
+      setBrand(data.brand);
+      setDurationDraft(data.brand.demoDurationMinutes || durationDraft);
+      setDurationSaveMessage('Demo duration saved. Available slots will use this interval.');
+      fetchAvailability();
+    } catch (err: any) {
+      setDurationSaveMessage(err?.message || 'Could not save demo duration.');
+    } finally {
+      setIsSavingDuration(false);
+    }
+  };
   const tzl = brandTzLabel(brand);
   const dayRange = brandWorkingDaysLabel(brand).replace(' to ', '–').replace(/Monday/g, 'Mon').replace(/Tuesday/g, 'Tue').replace(/Wednesday/g, 'Wed').replace(/Thursday/g, 'Thu').replace(/Friday/g, 'Fri').replace(/Saturday/g, 'Sat').replace(/Sunday/g, 'Sun');
   const hoursLabel = brandWorkingWindowLabel(brand);
@@ -551,7 +583,34 @@ export const DemoSchedulingView: React.FC<DemoSchedulingViewProps> = ({ leads = 
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
+      <section className="bg-white border border-slate-200 rounded-xl p-4 sm:p-5 space-y-3">
+        <div className="flex items-center gap-2">
+          <Clock className="w-5 h-5 text-orange-600" />
+          <h2 className="text-base font-bold text-slate-900">Demo duration</h2>
+        </div>
+        <p className="text-xs text-slate-500">
+          Set this before booking. Available start times repeat at this interval, and the full session must fit within the configured working hours.
+        </p>
+        <div className="flex flex-col sm:flex-row sm:items-end gap-3">
+          <label className="block w-full sm:max-w-xs">
+            <span className="block text-xs font-semibold text-slate-600 mb-1">Duration (minutes)</span>
+            <input type="number" min={5} max={240} step={1} value={durationDraft}
+              disabled={!canEditSettings || isSavingDuration}
+              onChange={(e) => setDurationDraft(Number(e.target.value))}
+              className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-orange-500 disabled:bg-slate-100" />
+            <span className="block text-[11px] text-slate-400 mt-1">Examples: 20, 30, 45 or 60 minutes.</span>
+          </label>
+          {canEditSettings && <button type="button" onClick={saveDemoDuration}
+            disabled={isSavingDuration || durationDraft === (brand.demoDurationMinutes || 60)}
+            className="px-4 py-2 rounded-lg bg-orange-500 hover:bg-orange-600 text-white text-xs font-bold disabled:opacity-50">
+            {isSavingDuration ? 'Saving…' : 'Save duration'}
+          </button>}
+        </div>
+        {!canEditSettings && <p className="text-xs text-slate-500">Only an administrator can change demo duration.</p>}
+        {durationSaveMessage && <p className={`text-xs ${durationSaveMessage.startsWith('Demo duration saved') ? 'text-emerald-700' : 'text-red-600'}`}>{durationSaveMessage}</p>}
+      </section>
+      <div className="space-y-6">
       {/* Top Banner / Calendar Integration Status */}
       <div className="bg-gradient-to-r from-orange-50/80 via-white to-amber-50/40 border border-slate-200/90 rounded-2xl p-5 sm:p-6 shadow-2xs space-y-4">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -1402,6 +1461,8 @@ export const DemoSchedulingView: React.FC<DemoSchedulingViewProps> = ({ leads = 
             </div>
           </div>
         </div>
+      </div>
+    </div>
       </div>
     </div>
   );

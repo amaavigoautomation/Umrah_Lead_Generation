@@ -117,13 +117,7 @@ export const BrandSettingsPanel: React.FC<{ tenantId: string; canEdit: boolean }
           Choose the session length first. Start times then repeat at that interval, and a full session must fit inside each day's working window.
         </p>
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <Field label="Demo duration (minutes)" hint="Examples: 20, 30, 45 or 60. Slots repeat at this interval.">
-            <input type="number" min={5} max={240} step={1} className={inputCls} disabled={!canEdit}
-              value={draft.demoDurationMinutes}
-              onChange={(e) => set('demoDurationMinutes', Number(e.target.value))}
-            />
-          </Field>
-          {text('timezone', 'Timezone (IANA)', 'Asia/Kolkata')}
+{text('timezone', 'Timezone (IANA)', 'Asia/Kolkata')}
           {text('timezoneLabel', 'Timezone label shown to customers', 'IST')}
           {text('calendarEmail', 'Calendar email for demo invites', 'you@company.com')}
         </div>

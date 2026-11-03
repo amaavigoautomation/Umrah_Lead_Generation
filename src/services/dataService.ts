@@ -35,6 +35,7 @@ export interface PlatformModule {
 export const PLATFORM_MODULES: PlatformModule[] = [
   { id: 'inbox', name: 'Unified Inbox', description: 'Omnichannel communication (Email, WhatsApp, CRM)' },
   { id: 'campaigns', name: 'Campaigns', description: 'Cold outreach campaigns & batch dispatching' },
+  { id: 'campaign-reports', name: 'AI Campaign Reporting', description: 'Performance reports, comparisons, AI recommendations and branded PDF exports' },
   { id: 'crm', name: 'CRM & Leads', description: 'Pipeline stages, lead scores, and agency profiles' },
   { id: 'knowledge', name: 'Knowledge Base', description: 'Ground truth RAG documentation for AI auto-replies' },
   { id: 'playground', name: 'AI Testing', description: 'Interactive prompt playground & response validation' },

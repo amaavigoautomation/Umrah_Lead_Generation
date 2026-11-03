@@ -57,6 +57,7 @@ import { collection, doc, setDoc, getDoc, getDocs, updateDoc, deleteDoc, query, 
 
 // thsi is a test Screens loaded on demand (own JS files). Login, navigation and the inbox stay in the main bundle.
 const CampaignManagement = lazyNamed(() => import('./components/CampaignManagement'), 'CampaignManagement');
+const CampaignReports = lazyNamed(() => import('./components/CampaignReports'), 'CampaignReports');
 const TemplateStudio = lazyNamed(() => import('./components/TemplateStudio'), 'TemplateStudio');
 const CrmPipeline = lazyNamed(() => import('./components/CrmPipeline'), 'CrmPipeline');
 const KnowledgeBaseView = lazyNamed(() => import('./components/KnowledgeBaseView'), 'KnowledgeBaseView');
@@ -196,7 +197,7 @@ function toAppUser(u: any): AppUser {
       ? u.allowedModules
       : role === 'SALES'
       ? ['crm', 'inbox']
-      : ['inbox', 'campaigns', 'email-design-studio', 'crm', 'scheduling', 'knowledge', 'settings'],
+      : ['inbox', 'campaigns', 'campaign-reports', 'email-design-studio', 'crm', 'scheduling', 'knowledge', 'settings'],
     isActive: u.isActive !== false && u.active !== false,
     createdAt: u.createdAt || new Date().toISOString(),
     updatedAt: u.updatedAt || u.createdAt || new Date().toISOString(),
@@ -221,6 +222,7 @@ const ALL_TABS: readonly ActiveTab[] = [
   'settings',
   'auto-followup',
   'database',
+  'campaign-reports',
 ];
 
 function isActiveTab(value: string | null | undefined): value is ActiveTab {
@@ -2625,6 +2627,7 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
             )}
 
             {activeTab === 'database' && <LeadDatabase isAdmin={currentUser.role === 'ADMIN'} tenantId={currentTenantId} />}
+            {activeTab === 'campaign-reports' && <CampaignReports tenantId={currentTenantId} />}
           </Suspense>
         )}
       </main>

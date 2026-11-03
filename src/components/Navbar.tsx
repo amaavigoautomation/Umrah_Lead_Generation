@@ -22,6 +22,7 @@ import {
   ChevronLeft,
   ChevronRight,
   ShieldCheck,
+  FileBarChart,
 } from 'lucide-react';
 import { AppUser } from '../types';
 import { Umrah360Logo } from './Umrah360Logo';
@@ -38,7 +39,8 @@ export type ActiveTab =
   | 'settings'
   | 'auto-followup'
   | 'audit-logs'
-  | 'database';
+  | 'database'
+  | 'campaign-reports';
 
 export interface NavbarProps {
   activeTab: ActiveTab;
@@ -118,6 +120,11 @@ export const Navbar: React.FC<NavbarProps> = ({
       id: 'campaigns',
       label: 'Campaigns',
       icon: <Send className="w-4 h-4 shrink-0" />,
+    },
+    {
+      id: 'campaign-reports',
+      label: 'AI Campaign Reporting',
+      icon: <FileBarChart className="w-4 h-4 shrink-0" />,
     },
     {
       id: 'email-design-studio',

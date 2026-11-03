@@ -3466,6 +3466,63 @@ ${signature || defSig}`;
     return true;
   }
 
+  // Campaign reporting endpoints. Every report is scoped to the verified tenant.
+  if (url === '/api/campaign-reports' && req.method === 'GET') {
+    try {
+      const reporting = await import('./campaignReportService.js');
+      const reports = await reporting.listCampaignReports(activeTenantCtx);
+      res.statusCode = 200;
+      res.end(JSON.stringify({ success: true, reports }));
+    } catch (err: any) {
+      res.statusCode = 500;
+      res.end(JSON.stringify({ error: err?.message || 'Could not load campaign report history.' }));
+    }
+    return true;
+  }
+
+  if (url === '/api/campaign-reports/generate' && req.method === 'POST') {
+    try {
+      const reporting = await import('./campaignReportService.js');
+      const report = await runWithCampaignCtx(activeTenantCtx, async () => {
+        await initCampaignStore(true);
+        return reporting.generateCampaignReport(activeTenantCtx, body?.campaignIds, userEmail);
+      });
+      res.statusCode = 201;
+      res.end(JSON.stringify({ success: true, report }));
+    } catch (err: any) {
+      res.statusCode = 400;
+      res.end(JSON.stringify({ error: err?.message || 'Could not generate campaign report.' }));
+    }
+    return true;
+  }
+
+  const campaignReportParts = url.split('/').filter(Boolean);
+  const campaignReportId = campaignReportParts.length === 3 && campaignReportParts[0] === 'api' && campaignReportParts[1] === 'campaign-reports'
+    ? decodeURIComponent(campaignReportParts[2]) : '';
+  if (campaignReportId && (req.method === 'GET' || req.method === 'DELETE')) {
+    try {
+      const reporting = await import('./campaignReportService.js');
+      if (req.method === 'GET') {
+        const report = await reporting.getCampaignReport(activeTenantCtx, campaignReportId);
+        if (!report) {
+          res.statusCode = 404;
+          res.end(JSON.stringify({ error: 'Saved report not found.' }));
+        } else {
+          res.statusCode = 200;
+          res.end(JSON.stringify({ success: true, report }));
+        }
+      } else {
+        await reporting.deleteCampaignReport(activeTenantCtx, campaignReportId);
+        res.statusCode = 200;
+        res.end(JSON.stringify({ success: true }));
+      }
+    } catch (err: any) {
+      res.statusCode = 500;
+      res.end(JSON.stringify({ error: err?.message || 'Campaign report request failed.' }));
+    }
+    return true;
+  }
+
   // =========================================================================
   // SETTINGS — tenant-scoped channel configuration
   // =========================================================================

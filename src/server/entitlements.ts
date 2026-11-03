@@ -268,6 +268,7 @@ export async function getEffectiveLimits(tenantId: string): Promise<Record<strin
 export function featureForUrl(url: string): string | null {
   if (/^\/api\/auto-followup\/(toggle|dashboard|config|trigger-now)$/.test(url)) return 'auto_followup';
   if (/^\/api\/campaigns\/(cron|process-active)$/.test(url)) return null; // cron entry points are gated per workspace in the worker
+  if (url === '/api/campaign-reports' || url.startsWith('/api/campaign-reports/')) return 'campaign_reports';
   if (url === '/api/campaigns' || url.startsWith('/api/campaigns/') || url === '/api/campaign-templates' || url === '/api/templates') return 'campaigns';
   if (/^\/api\/calendar\/(availability|book|bookings|cancel|reschedule|schedule-turn)$/.test(url)) return 'scheduling';
   if (url === '/api/knowledge' || url.startsWith('/api/knowledge/')) return 'knowledge_base';

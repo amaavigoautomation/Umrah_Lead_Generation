@@ -9,7 +9,8 @@ export type ActiveTab =
   | 'audit-logs'
   | 'settings'
   | 'auto-followup'
-  | 'database';
+  | 'database'
+  | 'campaign-reports';
 
 export type AuditModule =
   | 'CAMPAIGNS'

@@ -17,6 +17,7 @@ export interface FeatureDef {
 
 export const FEATURES: FeatureDef[] = [
   { key: 'campaigns', label: 'Outbound campaigns', description: 'Cold outreach campaigns and batch sending', tab: 'campaigns', defaultEnabled: true },
+  { key: 'campaign_reports', label: 'AI Campaign Reporting', description: 'Campaign performance reports, comparisons, AI recommendations and branded PDF exports', tab: 'campaign-reports', defaultEnabled: true },
   { key: 'scheduling', label: 'Demo scheduling', description: 'Calendar availability and demo booking', tab: 'scheduling', defaultEnabled: true },
   { key: 'knowledge_base', label: 'Knowledge base', description: 'Documents the AI answers from', tab: 'knowledge', defaultEnabled: true },
   { key: 'auto_followup', label: 'AI Auto Follow-Up', description: 'Automatic follow-ups for leads that go quiet', tab: 'auto-followup', defaultEnabled: true },

@@ -17,6 +17,7 @@ import {
   Bot,
   Database,
   ShieldCheck,
+  FileBarChart,
 } from 'lucide-react';
 import { ActiveTab } from './Navbar';
 import { AppUser } from '../types';
@@ -40,6 +41,7 @@ const TAB_TITLES: Record<ActiveTab, { title: string; icon: React.ReactNode }> = 
   'auto-followup': { title: 'Auto Follow-Up Agent', icon: <Bot className="w-4 h-4 text-orange-600" /> },
   database: { title: 'Lead Database', icon: <Database className="w-4 h-4 text-orange-600" /> },
   campaigns: { title: 'Outbound Campaigns', icon: <Send className="w-4 h-4 text-orange-600" /> },
+  'campaign-reports': { title: 'AI Campaign Reporting', icon: <FileBarChart className="w-4 h-4 text-orange-600" /> },
   crm: { title: 'CRM & Lead Pipeline', icon: <Users className="w-4 h-4 text-orange-600" /> },
   scheduling: { title: 'Demo Scheduling Agent', icon: <Calendar className="w-4 h-4 text-orange-600" /> },
   knowledge: { title: 'Knowledge Base (RAG)', icon: <BookOpen className="w-4 h-4 text-orange-600" /> },

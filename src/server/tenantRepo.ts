@@ -78,6 +78,10 @@ export function tenantRepo(ctx: TenantContext) {
     campaignEngagementEvents: () => collection(db, `${tenantDocPath}/campaign_engagement_events`),
     campaignEngagementEventDoc: (id: string) => doc(db, `${tenantDocPath}/campaign_engagement_events`, id),
 
+    // Immutable, tenant-scoped snapshots for generated campaign reports.
+    campaignReports: () => collection(db, `${tenantDocPath}/campaign_reports`),
+    campaignReportDoc: (id: string) => doc(db, `${tenantDocPath}/campaign_reports`, id),
+
     emailTemplates: () => collection(db, `${tenantDocPath}/email_templates`),
     emailTemplateDoc: (id: string) => doc(db, `${tenantDocPath}/email_templates`, id),
 

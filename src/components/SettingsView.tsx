@@ -17,6 +17,7 @@ import { UserManagementView } from './UserManagementView';
 import { EmailSettingsPanel } from './EmailSettingsPanel';
 import { InboundMailboxPanel } from './InboundMailboxPanel';
 import { WebsiteWebhookPanel } from './WebsiteWebhookPanel';
+import { ChatbotIntegrationPanel } from './ChatbotIntegrationPanel';
 import { BrandSettingsPanel } from './BrandSettingsPanel';
 import { BillingView } from './BillingView';
 import { ConnectedChannelsPanel } from './ConnectedChannelsPanel';
@@ -399,6 +400,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
       {tenantId && <BrandSettingsPanel tenantId={tenantId} canEdit={canEditEmail} />}
       {tenantId && canEditEmail && <WebsiteWebhookPanel tenantId={tenantId} canEdit />}
+      {tenantId && canEditEmail && <ChatbotIntegrationPanel tenantId={tenantId} canEdit />}
 
       {/* User Management & Access Control (Firestore app_users) */}
       {users && onSaveUser && onDeleteUser && (

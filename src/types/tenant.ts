@@ -67,7 +67,7 @@ export interface TenantContext {
 export interface WebhookRoute {
   webhookId: string;
   tenantId: string;
-  type: 'website' | 'whatsapp';
+  type: 'website' | 'whatsapp' | 'chatbot';
   secretHash: string;
   createdAt: string;
   rotatedAt?: string;

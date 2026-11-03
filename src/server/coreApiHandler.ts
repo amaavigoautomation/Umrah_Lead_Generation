@@ -469,6 +469,11 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
   // =========================================================================
   // MULTI-TENANT INBOUND WEBHOOK ROUTING (Phase P3)
   // =========================================================================
+  if (url.startsWith('/api/webhooks/chatbot/')) {
+    const webhookId = url.split('?')[0].split('/').pop() || '';
+    const chatbot = await import('./chatbotWebhookService.js');
+    return await chatbot.routeChatbotWebhook(req, res, webhookId);
+  }
   if (url.startsWith('/api/webhooks/website/')) {
     const webhookId = url.replace('/api/webhooks/website/', '').split(/[/?]/)[0];
     if (!webhookId) {
@@ -1073,6 +1078,39 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
     } catch (err: any) {
       res.statusCode = err?.status || 500;
       res.end(JSON.stringify({ error: err?.message || 'Email settings request failed' }));
+      return true;
+    }
+  }
+
+  // Tenant-managed chatbot endpoint and response preferences.
+  const chatbotIntegrationMatch = url.split('?')[0].match(/^\/api\/tenants\/([^/]+)\/webhook\/chatbot(?:\/(rotate))?$/);
+  if (chatbotIntegrationMatch) {
+    const tId = chatbotIntegrationMatch[1];
+    const action = chatbotIntegrationMatch[2];
+    try {
+      const svc = await import('./chatbotWebhookService.js');
+      res.setHeader('Content-Type', 'application/json');
+      if (!action && req.method === 'GET') {
+        res.statusCode = 200;
+        res.end(JSON.stringify(await svc.getChatbotIntegrationView(tId)));
+        return true;
+      }
+      if (!action && req.method === 'POST') {
+        res.statusCode = 200;
+        res.end(JSON.stringify(await svc.saveChatbotResponsePreferences(tId, body?.preferences)));
+        return true;
+      }
+      if (action === 'rotate' && req.method === 'POST') {
+        res.statusCode = 200;
+        res.end(JSON.stringify(await svc.rotateChatbotWebhookCredentials(tId)));
+        return true;
+      }
+      res.statusCode = 405;
+      res.end(JSON.stringify({ error: 'Method not allowed.' }));
+      return true;
+    } catch (err: any) {
+      res.statusCode = err?.status || 500;
+      res.end(JSON.stringify({ error: err?.message || 'Chatbot integration settings request failed.' }));
       return true;
     }
   }

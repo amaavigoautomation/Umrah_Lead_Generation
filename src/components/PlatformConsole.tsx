@@ -537,7 +537,7 @@ const WorkspacePanel: React.FC<{ tenant: Tenant; catalog: Catalog; dateFrom: str
   dateTo,
   onClose,
   onChanged,
-}) => {}
+}) => {
   const [usage, setUsage] = useState<Usage | null>(null);
   const [users, setUsers] = useState<TenantUser[]>([]);
   const [planId, setPlanId] = useState<string>(tenant.planId || '');

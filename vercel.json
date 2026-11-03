@@ -9,10 +9,7 @@
     },
     "api/meeting-intelligence/test.ts": {
       "maxDuration": 300,
-      "includeFiles": [
-        "src/{server,firebase}/**",
-        "node_modules/@sparticuz/chromium/bin/**"
-      ]
+      "includeFiles": "node_modules/@sparticuz/chromium/bin/**"
     }
   },
   "crons": [

@@ -155,6 +155,7 @@ export interface CampaignLead {
   delivered?: boolean;
   deliveryStatus?: 'PENDING' | 'DELIVERED' | 'BOUNCED' | 'COMPLAINED' | 'DELAYED';
   deliveryDelayed?: boolean;
+  /** Whether open/click tracking was enabled when this campaign email was sent. */
   trackingEnabledAtSend?: boolean;
   /** True if a reply arrived without a Resend-tracked open; a later open event clears it. */
   repliedWithoutTrackedOpen?: boolean;

@@ -1201,25 +1201,27 @@ export async function getCampaignEngagementStats(campaignId: string) {
   const base = () => query(leadsCol(), where('campaignId', '==', campaignId));
   const cutoff = ignoredCutoffIso();
   const eq = (field: string, value: any) => query(base(), where(field, '==', value));
+  const trackedBase = () => query(base(), where('trackingEnabledAtSend', '==', true));
+  const trackedEq = (field: string, value: any) => query(trackedBase(), where(field, '==', value));
   const [sent, tracked, deliveryTracked, delivered, bounced, complained, uniqueOpened, clicked,
     replied, repliedWithoutTrackedOpen, ignored, waiting, delayed, sums] = await Promise.all([
     countDocs(eq('sendStatus', 'SENT')),
-    countDocs(query(base(), where('sendStatus', '==', 'SENT'), where('engaged', 'in', [true, false]))),
+    countDocs(query(base(), where('sendStatus', '==', 'SENT'), where('trackingEnabledAtSend', '==', true))),
     countDocs(query(base(), where('deliveryStatus', 'in', ['DELIVERED', 'BOUNCED', 'COMPLAINED']))),
     countDocs(eq('delivered', true)),
     countDocs(eq('bounced', true)),
     countDocs(eq('complained', true)),
-    countDocs(eq('opened', true)),
-    countDocs(eq('clicked', true)),
+    countDocs(trackedEq('opened', true)),
+    countDocs(trackedEq('clicked', true)),
     countDocs(eq('replyStatus', 'REPLIED')),
-    countDocs(eq('repliedWithoutTrackedOpen', true)),
-    countDocs(query(base(), where('deliveryStatus', '==', 'DELIVERED'), where('engaged', '==', false), where('lastSentAt', '<=', cutoff))),
-    countDocs(query(base(), where('deliveryStatus', '==', 'DELIVERED'), where('engaged', '==', false), where('lastSentAt', '>', cutoff))),
+    countDocs(trackedEq('repliedWithoutTrackedOpen', true)),
+    countDocs(query(base(), where('deliveryStatus', '==', 'DELIVERED'), where('trackingEnabledAtSend', '==', true), where('engaged', '==', false), where('lastSentAt', '<=', cutoff))),
+    countDocs(query(base(), where('deliveryStatus', '==', 'DELIVERED'), where('trackingEnabledAtSend', '==', true), where('engaged', '==', false), where('lastSentAt', '>', cutoff))),
     countDocs(eq('deliveryDelayed', true)),
-    sumDocs(base(), ['realOpenCount', 'botOpenCount']).catch(() => ({ realOpenCount: 0, botOpenCount: 0 })),
+    sumDocs(trackedBase(), ['realOpenCount', 'botOpenCount']).catch(() => ({ realOpenCount: 0, botOpenCount: 0 })),
   ]);
   const clickSums = clicked > 0
-    ? await sumDocs(eq('clicked', true), ['clickCount']).catch(() => ({ clickCount: 0 }))
+    ? await sumDocs(trackedEq('clicked', true), ['clickCount']).catch(() => ({ clickCount: 0 }))
     : { clickCount: 0 };
   return {
     sent, tracked, deliveryTracked, delivered,
@@ -1278,7 +1280,8 @@ export async function getCampaignLeadsPage(
       query(
         leadsCol(),
         where('campaignId', '==', campaignId),
-        where('sendStatus', '==', 'SENT'),
+        where('deliveryStatus', '==', 'DELIVERED'),
+        where('trackingEnabledAtSend', '==', true),
         where('engaged', '==', false),
         where('lastSentAt', filter === 'IGNORED' ? '<=' : '>', cutoff),
         orderBy('lastSentAt'),
@@ -2974,7 +2977,7 @@ export async function handleIncomingCampaignLeadReply(params: {
           const latestSnap = await tx.get(campaignLeadRef);
           if (!latestSnap.exists) return;
           const latestLead = latestSnap.data() as CampaignLead;
-          const repliedWithoutTrackedOpen = latestLead.opened !== true;
+          const repliedWithoutTrackedOpen = latestLead.trackingEnabledAtSend === true && latestLead.opened !== true;
           tx.update(campaignLeadRef, {
             replyStatus: 'REPLIED', engaged: true,
             repliedAt: latestLead.repliedAt || now,

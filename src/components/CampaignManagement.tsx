@@ -2121,6 +2121,7 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                                     if (lead.replyStatus === 'REPLIED') {
                                       return <span className="text-[11px] font-semibold text-sky-700">● Replied</span>;
                                     }
+                                    if (lead.complained) return <span className="text-[11px] font-semibold text-rose-700" title="Recipient marked this email as spam">⚠ Spam complaint</span>;
                                     if (lead.bounced) return <span className="text-[11px] font-semibold text-rose-600">✕ Bounced</span>;
                                     if (lead.clicked) {
                                       return (
@@ -2139,7 +2140,7 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                                         </span>
                                       );
                                     }
-                                    if (lead.sendStatus === 'SENT' && lead.engaged === false) {
+                                    if (lead.sendStatus === 'SENT' && lead.deliveryStatus === 'DELIVERED' && lead.trackingEnabledAtSend === true && lead.engaged === false) {
                                       const days = engagement?.ignoredAfterDays ?? 5;
                                       const old = lead.lastSentAt && Date.now() - new Date(lead.lastSentAt).getTime() > days * 86_400_000;
                                       return old ? (

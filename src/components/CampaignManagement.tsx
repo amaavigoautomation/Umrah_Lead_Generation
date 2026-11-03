@@ -121,8 +121,10 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
   // Email engagement numbers (opened is an ESTIMATE; replied and clicked are confirmed). From aggregation queries.
   const [engagement, setEngagement] = useState<{
     trackingEnabled?: boolean;
-    tracked: number; delivered: number; uniqueOpened: number; totalOpens: number; botOpens: number;
-    clicked: number; totalClicks: number; replied: number; waiting: number; ignored: number; bounced: number; ignoredAfterDays: number;
+    sent: number; tracked: number; deliveryTracked: number; delivered: number; deliveryUnknown: number;
+    uniqueOpened: number; totalOpens: number; botOpens: number; clicked: number; totalClicks: number;
+    replied: number; repliedWithoutTrackedOpen: number; waiting: number; ignored: number;
+    bounced: number; complained: number; delayed: number; ignoredAfterDays: number;
   } | null>(null);
 
   // Modals
@@ -1870,7 +1872,7 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                 {/* Email engagement: opened is estimated; clicked and replied are confirmed */}
                 {engagement && engagement.trackingEnabled === false && (
                   <div className="px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-[11px] text-slate-500">
-                    Open and click tracking is off for this workspace (Settings → Email). Replies are still counted.
+                    Open and click tracking is off for this workspace (Settings → Email). Resend delivery status and inbound replies are tracked separately.
                   </div>
                 )}
                 {engagement && engagement.trackingEnabled !== false && engagement.tracked > 0 && (() => {
@@ -1885,7 +1887,7 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                         <div className="p-3 rounded-lg border border-slate-200 bg-slate-50">
                           <p className="text-[11px] text-slate-500 font-medium">Delivered</p>
                           <p className="text-xl font-bold text-slate-800">{engagement.delivered}</p>
-                          <p className="text-[10px] text-slate-400">{engagement.bounced} bounced</p>
+                          <p className="text-[10px] text-slate-400">{engagement.bounced} bounced · {engagement.complained} spam complaints · {engagement.deliveryUnknown} unconfirmed</p>
                         </div>
                         <div
                           className="p-3 rounded-lg border border-dashed border-slate-300 bg-white"
@@ -1903,7 +1905,7 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                         <div className="p-3 rounded-lg border border-sky-200 bg-sky-50/50">
                           <p className="text-[11px] text-sky-700 font-medium">Replied</p>
                           <p className="text-xl font-bold text-sky-700">{engagement.replied}</p>
-                          <p className="text-[10px] text-sky-700/70">{pct(engagement.replied)}</p>
+                          <p className="text-[10px] text-sky-700/70">{pct(engagement.replied)} · {engagement.repliedWithoutTrackedOpen} without tracked open</p>
                         </div>
                         <div className="p-3 rounded-lg border border-slate-200 bg-slate-50" title={`No open, click or reply ${engagement.ignoredAfterDays}+ days after sending`}>
                           <p className="text-[11px] text-slate-500 font-medium">Ignored</p>
@@ -1912,7 +1914,7 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                         </div>
                       </div>
                       <p className="text-[10px] text-slate-400">
-                        Opened is an estimate and its rate hides {engagement.botOpens} bot-like opens (scanners, mail apps pre-loading the email). Clicked and replied are confirmed.
+                        Opened is an estimate and excludes {engagement.botOpens} scanner opens. Clicks are Resend events; replies are matched by our inbound email processor. A reply without a tracked open does not create an open event.
                         Emails sent before tracking was turned on are not included.
                       </p>
                     </div>

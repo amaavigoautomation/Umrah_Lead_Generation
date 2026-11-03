@@ -19,6 +19,7 @@ import {
   deleteDoc,
   createDoc,
   updateDoc,
+  runTransaction,
   query,
   where,
   limit,
@@ -967,7 +968,9 @@ function demoHealSmtpLoginFailures(leads: CampaignLead[]): number {
     healed++;
     if (isFirebaseConfigured && db) {
       demoPendingWrites.push(
-        safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignLeadDoc(lead.campaignLeadId), lead, { merge: true })
+        safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignLeadDoc(lead.campaignLeadId), {
+          sendStatus: 'SENT', lastError: '', lastSentAt: lead.lastSentAt, sendCount: lead.sendCount, updatedAt: now,
+        } as any, { merge: true })
       );
     }
   }
@@ -1188,35 +1191,42 @@ const ignoredCutoffIso = () => new Date(Date.now() - IGNORED_AFTER_DAYS * 86_400
  */
 export async function getCampaignEngagementStats(campaignId: string) {
   if (!isFirebaseConfigured || !db) {
-    return { tracked: 0, delivered: 0, uniqueOpened: 0, totalOpens: 0, botOpens: 0, clicked: 0, totalClicks: 0, replied: 0, waiting: 0, ignored: 0, bounced: 0, ignoredAfterDays: IGNORED_AFTER_DAYS };
+    return {
+      sent: 0, tracked: 0, deliveryTracked: 0, delivered: 0, deliveryUnknown: 0,
+      uniqueOpened: 0, totalOpens: 0, botOpens: 0, clicked: 0, totalClicks: 0,
+      replied: 0, repliedWithoutTrackedOpen: 0, waiting: 0, ignored: 0,
+      bounced: 0, complained: 0, delayed: 0, ignoredAfterDays: IGNORED_AFTER_DAYS,
+    };
   }
   const base = () => query(leadsCol(), where('campaignId', '==', campaignId));
   const cutoff = ignoredCutoffIso();
-  const eq = (f: string, v: any) => query(base(), where(f, '==', v));
-  const [tracked, bounced, uniqueOpened, clicked, replied, ignored, waiting, sums] = await Promise.all([
+  const eq = (field: string, value: any) => query(base(), where(field, '==', value));
+  const [sent, tracked, deliveryTracked, delivered, bounced, complained, uniqueOpened, clicked,
+    replied, repliedWithoutTrackedOpen, ignored, waiting, delayed, sums] = await Promise.all([
+    countDocs(eq('sendStatus', 'SENT')),
     countDocs(query(base(), where('sendStatus', '==', 'SENT'), where('engaged', 'in', [true, false]))),
+    countDocs(query(base(), where('deliveryStatus', 'in', ['DELIVERED', 'BOUNCED', 'COMPLAINED']))),
+    countDocs(eq('delivered', true)),
     countDocs(eq('bounced', true)),
+    countDocs(eq('complained', true)),
     countDocs(eq('opened', true)),
     countDocs(eq('clicked', true)),
     countDocs(eq('replyStatus', 'REPLIED')),
-    countDocs(query(base(), where('sendStatus', '==', 'SENT'), where('engaged', '==', false), where('lastSentAt', '<=', cutoff))),
-    countDocs(query(base(), where('sendStatus', '==', 'SENT'), where('engaged', '==', false), where('lastSentAt', '>', cutoff))),
+    countDocs(eq('repliedWithoutTrackedOpen', true)),
+    countDocs(query(base(), where('deliveryStatus', '==', 'DELIVERED'), where('engaged', '==', false), where('lastSentAt', '<=', cutoff))),
+    countDocs(query(base(), where('deliveryStatus', '==', 'DELIVERED'), where('engaged', '==', false), where('lastSentAt', '>', cutoff))),
+    countDocs(eq('deliveryDelayed', true)),
     sumDocs(base(), ['realOpenCount', 'botOpenCount']).catch(() => ({ realOpenCount: 0, botOpenCount: 0 })),
   ]);
-  const clickSums = clicked > 0 ? await sumDocs(eq('clicked', true), ['clickCount']).catch(() => ({ clickCount: 0 })) : { clickCount: 0 };
+  const clickSums = clicked > 0
+    ? await sumDocs(eq('clicked', true), ['clickCount']).catch(() => ({ clickCount: 0 }))
+    : { clickCount: 0 };
   return {
-    tracked, // emails sent with tracking on
-    delivered: Math.max(0, tracked - bounced),
-    uniqueOpened,
-    totalOpens: sums.realOpenCount,
-    botOpens: sums.botOpenCount,
-    clicked,
-    totalClicks: clickSums.clickCount,
-    replied,
-    waiting,
-    ignored,
-    bounced,
-    ignoredAfterDays: IGNORED_AFTER_DAYS,
+    sent, tracked, deliveryTracked, delivered,
+    deliveryUnknown: Math.max(0, sent - delivered - bounced),
+    uniqueOpened, totalOpens: sums.realOpenCount, botOpens: sums.botOpenCount,
+    clicked, totalClicks: clickSums.clickCount, replied, repliedWithoutTrackedOpen,
+    waiting, ignored, bounced, complained, delayed, ignoredAfterDays: IGNORED_AFTER_DAYS,
   };
 }
 
@@ -1660,6 +1670,8 @@ export async function createCampaign(params: {
       demoStatus: 'NOT_BOOKED',
       demoIntent: false,
       sendCount: 0,
+      engaged: false, opened: false, clicked: false, bounced: false, complained: false,
+      delivered: false, deliveryStatus: 'PENDING', deliveryDelayed: false, repliedWithoutTrackedOpen: false,
       generatedSubject: initialSubject,
       generatedBody: initialBody,
       createdAt: now,
@@ -1884,7 +1896,9 @@ export async function startCampaign(
         fl.lastError = undefined;
         fl.updatedAt = now;
         if (isFirebaseConfigured && db) {
-          await safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignLeadDoc(fl.campaignLeadId), fl, { merge: true });
+          await safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignLeadDoc(fl.campaignLeadId), {
+            sendStatus: 'PENDING', lastError: null, updatedAt: now,
+          } as any, { merge: true });
         }
       }
     }
@@ -2146,7 +2160,9 @@ export async function restartCampaign(
     targetLeadsCount++;
     campaignLeadsMap.set(l.campaignLeadId, l);
     if (isFirebaseConfigured && db) {
-      leadSavePromises.push(safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignLeadDoc(l.campaignLeadId), l, { merge: true }));
+      leadSavePromises.push(safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignLeadDoc(l.campaignLeadId), {
+        sendStatus: 'PENDING', lastError: null, campaignRunId: newRunId, updatedAt: now,
+      } as any, { merge: true }));
     }
   });
 
@@ -2159,7 +2175,9 @@ export async function restartCampaign(
     l.updatedAt = now;
     campaignLeadsMap.set(l.campaignLeadId, l);
     if (isFirebaseConfigured && db) {
-      leadSavePromises.push(safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignLeadDoc(l.campaignLeadId), l, { merge: true }));
+      leadSavePromises.push(safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignLeadDoc(l.campaignLeadId), {
+        ...(l.sendStatus === 'SENT' ? { sendStatus: 'SENT' } : {}), updatedAt: now,
+      } as any, { merge: true }));
     }
   });
 
@@ -2593,7 +2611,17 @@ export async function processNextCampaignSendBatch(
         });
 
         if (isFirebaseConfigured && db) {
-          await safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignLeadDoc(lead.campaignLeadId), lead, { merge: true });
+          const emailSettings = await getTenantEmailSettings(getCampaignActiveCtx().tenantId).catch(() => ({} as any));
+          await safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignLeadDoc(lead.campaignLeadId), {
+            sendStatus: 'SENT', sendCount: lead.sendCount, lastSentAt: lead.lastSentAt,
+            gmailMessageId: lead.gmailMessageId, gmailThreadId: lead.gmailThreadId, conversationId: lead.conversationId,
+            lastError: null, trackingEnabledAtSend: emailSettings.trackingEnabled !== false,
+            generatedSubject: lead.generatedSubject, generatedBody: lead.generatedBody,
+            researchData: lead.researchData, selectedPainPoint: lead.selectedPainPoint,
+            selectedCapabilities: lead.selectedCapabilities, personalizationEvidence: lead.personalizationEvidence,
+            qualityCheckStatus: lead.qualityCheckStatus, generationStatus: lead.generationStatus,
+            updatedAt: now,
+          } as any, { merge: true });
           await safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignSendHistoryDoc(historyRecord.historyId), historyRecord);
           if (currentRun) {
             await safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignRunDoc(currentRun.runId), currentRun, { merge: true });
@@ -2620,7 +2648,7 @@ export async function processNextCampaignSendBatch(
         lead.updatedAt = now;
 
         if (isFirebaseConfigured && db) {
-          await safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignLeadDoc(lead.campaignLeadId), lead, { merge: true });
+          await safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignLeadDoc(lead.campaignLeadId), { sendStatus: lead.sendStatus, lastError: lead.lastError || null, updatedAt: lead.updatedAt } as any, { merge: true });
         }
 
         if (sendResult.isDailyLimitExceeded) {
@@ -2639,7 +2667,7 @@ export async function processNextCampaignSendBatch(
       lead.updatedAt = new Date().toISOString();
 
       if (isFirebaseConfigured && db) {
-        await safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignLeadDoc(lead.campaignLeadId), lead, { merge: true });
+        await safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignLeadDoc(lead.campaignLeadId), { sendStatus: lead.sendStatus, lastError: lead.lastError || null, updatedAt: lead.updatedAt } as any, { merge: true });
       }
     } finally {
       await finishLeadClaim(runHistoryKey, lead.sendStatus === 'SENT');
@@ -2806,7 +2834,10 @@ export async function updateLeadDemoStatus(params: {
 
   if (isFirebaseConfigured && db) {
     try {
-      await safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignLeadDoc(targetLead.campaignLeadId), targetLead, { merge: true });
+      await safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignLeadDoc(targetLead.campaignLeadId), {
+        demoStatus: params.demoStatus, demoSource: params.demoSource,
+        demoBookedAt: targetLead.demoBookedAt || null, updatedAt: now,
+      } as any, { merge: true });
       await safeSetDoc(tenantRepo(getCampaignActiveCtx()).leadDoc(targetLead.leadId), {
         demoStatus: params.demoStatus,
         demoSource: params.demoSource,
@@ -2938,7 +2969,24 @@ export async function handleIncomingCampaignLeadReply(params: {
 
     if (isFirebaseConfigured && db) {
       try {
-        await safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignLeadDoc(matchedLead.campaignLeadId), matchedLead, { merge: true });
+        const campaignLeadRef = tenantRepo(getCampaignActiveCtx()).campaignLeadDoc(matchedLead.campaignLeadId);
+        await runTransaction(async (tx: any) => {
+          const latestSnap = await tx.get(campaignLeadRef);
+          if (!latestSnap.exists) return;
+          const latestLead = latestSnap.data() as CampaignLead;
+          const repliedWithoutTrackedOpen = latestLead.opened !== true;
+          tx.update(campaignLeadRef, {
+            replyStatus: 'REPLIED', engaged: true,
+            repliedAt: latestLead.repliedAt || now,
+            repliedWithoutTrackedOpen,
+            ...(params.gmailMessageId ? { gmailMessageId: params.gmailMessageId } : {}),
+            ...(params.gmailThreadId ? { gmailThreadId: params.gmailThreadId } : {}),
+            updatedAt: now,
+          });
+          matchedLead.repliedWithoutTrackedOpen = repliedWithoutTrackedOpen;
+          matchedLead.repliedAt = latestLead.repliedAt || now;
+          matchedLead.opened = latestLead.opened;
+        });
         const contactId = `contact-${matchedLead.email.replace(/[^a-z0-9]/gi, '_')}`;
         await safeSetDoc(tenantRepo(getCampaignActiveCtx()).contactDoc(contactId), {
           contactId,
@@ -3025,8 +3073,10 @@ export async function updateCampaignLeadStatus(params: {
     if (params.replyStatus === 'REPLIED') {
       targetLead.engaged = true;
       targetLead.repliedAt = targetLead.repliedAt || now;
+      targetLead.repliedWithoutTrackedOpen = targetLead.opened !== true;
     } else {
       targetLead.repliedAt = undefined;
+      targetLead.repliedWithoutTrackedOpen = false;
     }
   }
 
@@ -3044,7 +3094,19 @@ export async function updateCampaignLeadStatus(params: {
 
   if (isFirebaseConfigured && db) {
     try {
-      await safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignLeadDoc(targetLead.campaignLeadId), targetLead, { merge: true });
+      const patch: Record<string, any> = { updatedAt: now };
+      if (params.sendStatus) {
+        patch.sendStatus = params.sendStatus;
+        patch.lastError = params.sendStatus === 'FAILED' ? (params.lastError || 'Delivery failure') : null;
+        if (params.sendStatus === 'SENT') { patch.lastSentAt = targetLead.lastSentAt; patch.sendCount = targetLead.sendCount; }
+      }
+      if (params.replyStatus) {
+        patch.replyStatus = params.replyStatus; patch.repliedAt = targetLead.repliedAt || null;
+        patch.engaged = targetLead.engaged; patch.repliedWithoutTrackedOpen = targetLead.repliedWithoutTrackedOpen;
+      }
+      if (params.demoStatus) { patch.demoStatus = params.demoStatus; patch.demoBookedAt = targetLead.demoBookedAt || null; }
+      if (params.demoSource) patch.demoSource = params.demoSource;
+      await safeSetDoc(tenantRepo(getCampaignActiveCtx()).campaignLeadDoc(targetLead.campaignLeadId), patch, { merge: true });
     } catch (e) {
       console.warn('Firestore update warning for lead status:', e);
     }

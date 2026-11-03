@@ -146,17 +146,28 @@ export interface CampaignLead {
   lastSentAt?: string;
   repliedAt?: string;
   sendCount: number;
-  /** Engagement tracking (written by the Resend webhook; opens are ESTIMATES, replies/clicks are confirmed). */
-  engaged?: boolean; // false after a send; true once a real open, click or reply happens
+  /** Engagement tracking (written by verified Resend events; opens are estimates). */
+  engaged?: boolean;
   opened?: boolean;
   clicked?: boolean;
   bounced?: boolean;
+  complained?: boolean;
+  delivered?: boolean;
+  deliveryStatus?: 'PENDING' | 'DELIVERED' | 'BOUNCED' | 'COMPLAINED' | 'DELAYED';
+  deliveryDelayed?: boolean;
+  trackingEnabledAtSend?: boolean;
+  /** True if a reply arrived without a Resend-tracked open; a later open event clears it. */
+  repliedWithoutTrackedOpen?: boolean;
   realOpenCount?: number;
   botOpenCount?: number;
   clickCount?: number;
   botClickCount?: number;
   lastOpenedAt?: string;
   lastClickedAt?: string;
+  deliveredAt?: string;
+  bouncedAt?: string;
+  complainedAt?: string;
+  lastClickedUrl?: string;
   lastError?: string;
   gmailMessageId?: string;
   gmailThreadId?: string;

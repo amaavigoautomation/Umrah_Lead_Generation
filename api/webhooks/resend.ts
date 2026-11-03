@@ -22,7 +22,7 @@ export default async function handler(req: IncomingMessage & { body?: any }, res
   // Browser / Vercel / Resend URL checks use GET. Real events are POST.
   if (req.method === 'GET' || req.method === 'HEAD') {
     res.statusCode = 200;
-    return res.end(JSON.stringify({ ok: true, webhook: 'resend', hint: 'Resend should POST email.opened / email.clicked here' }));
+    return res.end(JSON.stringify({ ok: true, webhook: 'resend', hint: 'Resend should POST delivery, open, click, bounce and complaint events here' }));
   }
   if (req.method !== 'POST') {
     res.statusCode = 405;
@@ -30,10 +30,12 @@ export default async function handler(req: IncomingMessage & { body?: any }, res
   }
   try {
     const raw = await readRaw(req);
+    req.rawBody = raw;
     try {
       req.body = JSON.parse(raw.toString('utf8') || '{}');
     } catch {
-      req.body = {};
+      res.statusCode = 400;
+      return res.end(JSON.stringify({ error: 'Invalid JSON webhook payload.' }));
     }
     // Dedicated function URL is /api/webhooks/resend; the bundled router matches the public path.
     req.url = '/api/webhooks/email/resend';

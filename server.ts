@@ -67,6 +67,25 @@ app.all('/api/webhooks/meta', express.raw({ type: '*/*', limit: '2mb' }), async 
   }
 });
 
+// Resend webhook uses Svix signatures over the exact raw body. Register before JSON parsing.
+app.all(['/api/webhooks/resend', '/api/webhooks/email/resend'], express.raw({ type: '*/*', limit: '2mb' }), async (req: any, res) => {
+  if (req.method === 'GET' || req.method === 'HEAD') { res.status(200).json({ ok: true, webhook: 'resend' }); return; }
+  if (req.method === 'OPTIONS') { res.status(204).end(); return; }
+  if (req.method !== 'POST') { res.status(405).json({ error: 'POST only' }); return; }
+  try {
+    const raw: Buffer = Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0);
+    req.rawBody = raw;
+    try { req.body = JSON.parse(raw.toString('utf8') || '{}'); }
+    catch { res.status(400).json({ error: 'Invalid JSON webhook payload.' }); return; }
+    req.url = '/api/webhooks/email/resend';
+    const handled = await handleCoreApi(req, res);
+    if (!handled && !res.writableEnded) res.status(200).json({ received: true });
+  } catch (err: any) {
+    console.error('[Resend webhook error]:', err);
+    if (!res.headersSent) res.status(500).json({ error: 'Resend webhook processing failed.' });
+  }
+});
+
 // Body parsers
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));

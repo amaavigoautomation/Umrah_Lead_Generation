@@ -85,6 +85,11 @@ export async function createDoc(ref: DocumentReference, data: any): Promise<void
   await ref.create(data);
 }
 
+/** Runs an atomic Admin Firestore transaction (used for webhook idempotency claims). */
+export async function runTransaction<T>(fn: (transaction: any) => Promise<T>): Promise<T> {
+  return fs().runTransaction(fn);
+}
+
 export async function updateDoc(ref: DocumentReference, data: any): Promise<void> {
   await ref.update(data);
 }

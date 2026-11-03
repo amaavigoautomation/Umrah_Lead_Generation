@@ -74,6 +74,10 @@ export function tenantRepo(ctx: TenantContext) {
     campaignSendHistory: () => collection(db, `${tenantDocPath}/campaign_send_history`),
     campaignSendHistoryDoc: (id: string) => doc(db, `${tenantDocPath}/campaign_send_history`, id),
 
+    // Server-managed, idempotent Resend event ledger used by campaign analytics.
+    campaignEngagementEvents: () => collection(db, `${tenantDocPath}/campaign_engagement_events`),
+    campaignEngagementEventDoc: (id: string) => doc(db, `${tenantDocPath}/campaign_engagement_events`, id),
+
     emailTemplates: () => collection(db, `${tenantDocPath}/email_templates`),
     emailTemplateDoc: (id: string) => doc(db, `${tenantDocPath}/email_templates`, id),
 

@@ -1,4 +1,5 @@
-import { getDoc, updateDoc, increment } from './adminFirestore.js';
+import { createHash, createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
+import { getDoc, updateDoc, increment, runTransaction } from './adminFirestore.js';
 import { tenantRepo } from './tenantRepo.js';
 import { isFirebaseConfigured } from '../firebase/config.js';
 import { db } from './adminFirestore.js';
@@ -201,132 +202,285 @@ function readTags(raw: any): Record<string, string> {
   return out;
 }
 
-// Security scanners that fetch the tracking pixel / links before a human does.
-// NOTE: do not add generic words like "proxy" or "prefetch" here. Real inboxes load images through proxies
-// (Gmail's "GoogleImageProxy"), so those words would count every Gmail open as a bot.
 const SCANNER_AGENT = /(bot\b|scanner|barracuda|proofpoint|mimecast|safelinks|defender|symantec|trendmicro|ironport)/i;
-// A real mail client proxy: always a human open, even if the agent string also contains a scanner-ish word.
 const REAL_CLIENT_PROXY_AGENT = /(googleimageproxy|ggpht\.com)/i;
-const OPEN_BOT_WINDOW_MS = 5_000;
-const CLICK_BOT_WINDOW_MS = 5_000;
-
 function isScannerAgent(agent: string): boolean {
   if (REAL_CLIENT_PROXY_AGENT.test(agent)) return false;
   return SCANNER_AGENT.test(agent);
 }
+function requestHeader(req: any, name: string): string {
+  const value = req?.headers?.[name.toLowerCase()];
+  return Array.isArray(value) ? String(value[0] || '') : String(value || '');
+}
 
-async function resolveEngagementTarget(event: any): Promise<{ tenantId: string; leadId: string } | null> {
+/** Verify Resend's Svix HMAC signature against the exact raw body and reject stale signed requests. */
+export function verifyResendWebhookRequest(
+  req: any,
+  secret = process.env.RESEND_WEBHOOK_SECRET || ''
+): { ok: true; eventId: string } | { ok: false; error: string; status: number } {
+  if (!secret.trim()) return { ok: false, error: 'RESEND_WEBHOOK_SECRET is not configured on this server.', status: 503 };
+  const eventId = requestHeader(req, 'svix-id');
+  const timestamp = requestHeader(req, 'svix-timestamp');
+  const signatureHeader = requestHeader(req, 'svix-signature');
+  const rawBody = req?.rawBody;
+  if (!eventId || !timestamp || !signatureHeader || !(Buffer.isBuffer(rawBody) || typeof rawBody === 'string')) {
+    return { ok: false, error: 'Missing Resend signature headers or raw request body.', status: 400 };
+  }
+  const timestampSeconds = Number(timestamp);
+  if (!Number.isFinite(timestampSeconds) || Math.abs(Date.now() - timestampSeconds * 1000) > 5 * 60 * 1000) {
+    return { ok: false, error: 'Resend webhook timestamp is outside the allowed five-minute window.', status: 400 };
+  }
+  const encodedSecret = secret.trim().replace(/^whsec_/, '');
+  let signingKey: Buffer;
+  try { signingKey = Buffer.from(encodedSecret, 'base64'); }
+  catch { return { ok: false, error: 'RESEND_WEBHOOK_SECRET is not a valid Resend signing secret.', status: 503 }; }
+  if (!signingKey.length) return { ok: false, error: 'RESEND_WEBHOOK_SECRET is not a valid Resend signing secret.', status: 503 };
+  const bodyText = Buffer.isBuffer(rawBody) ? rawBody.toString('utf8') : rawBody;
+  const signedContent = eventId + '.' + timestamp + '.' + bodyText;
+  const expected = createHmac('sha256', signingKey).update(signedContent).digest();
+  const valid = signatureHeader.split(/\s+/).some((candidate) => {
+    const [version, encodedSignature] = candidate.split(',');
+    if (version !== 'v1' || !encodedSignature) return false;
+    try {
+      const provided = Buffer.from(encodedSignature, 'base64');
+      return provided.length === expected.length && timingSafeEqual(provided, expected);
+    } catch { return false; }
+  });
+  return valid ? { ok: true, eventId } : { ok: false, error: 'Invalid Resend webhook signature.', status: 400 };
+}
+
+async function resolveEngagementTarget(event: any): Promise<{ tenantId: string; leadId: string; campaignId?: string } | null> {
   const tags = readTags(event?.data?.tags);
-  if (tags.tenant && tags.lead) return { tenantId: tags.tenant, leadId: tags.lead };
-
+  if (tags.tenant && tags.lead) return { tenantId: tags.tenant, leadId: tags.lead, campaignId: tags.campaign || undefined };
   const emailId = String(event?.data?.email_id || event?.data?.emailId || '').trim();
   if (!emailId || !isFirebaseConfigured || !db) return null;
   try {
     const snap = await getDoc(globalEmailRouteDoc(emailId));
     if (!snap.exists()) return null;
-    const row = snap.data() as { tenantId?: string; campaignLeadId?: string; leadId?: string };
+    const row = snap.data() as { tenantId?: string; campaignLeadId?: string; leadId?: string; campaignId?: string };
     const tenantId = String(row.tenantId || '').trim();
     const leadId = String(row.campaignLeadId || row.leadId || '').trim();
     if (!tenantId || !leadId) return null;
-    return { tenantId, leadId };
-  } catch {
-    return null;
-  }
+    return { tenantId, leadId, campaignId: row.campaignId || undefined };
+  } catch { return null; }
 }
 
-async function trackEmailEngagement(event: any): Promise<boolean> {
+const resendEventDocumentId = (eventId: string) => createHash('sha256').update(eventId).digest('hex');
+const WEBHOOK_PROCESSING_LEASE_MS = 2 * 60 * 1000;
+type ResendEventClaim = { state: 'CLAIMED'; token: string } | { state: 'PROCESSED' | 'IN_PROGRESS' };
+
+async function claimResendEvent(tenantId: string, eventId: string, event: any, target: { leadId: string; campaignId?: string }): Promise<ResendEventClaim> {
+  const ctx: TenantContext = { tenantId, uid: 'resend-webhook', email: 'webhook@system', role: 'admin' };
+  const eventRef = tenantRepo(ctx).campaignEngagementEventDoc(resendEventDocumentId(eventId));
+  const now = new Date().toISOString();
+  const nowMs = Date.now();
+  const token = randomUUID();
+  return runTransaction(async (tx: any) => {
+    const snap = await tx.get(eventRef);
+    if (snap.exists) {
+      const existing = snap.data() || {};
+      if (existing.status === 'PROCESSED') return { state: 'PROCESSED' as const };
+      const lockedAt = Date.parse(String(existing.lockedAt || ''));
+      if (existing.status === 'PROCESSING' && Number.isFinite(lockedAt) && nowMs - lockedAt < WEBHOOK_PROCESSING_LEASE_MS) {
+        return { state: 'IN_PROGRESS' as const };
+      }
+      tx.set(eventRef, {
+        status: 'PROCESSING', lockedAt: now, lockToken: token,
+        attempts: Number(existing.attempts || 0) + 1, updatedAt: now, lastError: null,
+      }, { merge: true });
+      return { state: 'CLAIMED' as const, token };
+    }
+    tx.create(eventRef, {
+      eventId, eventType: String(event?.type || ''), emailId: String(event?.data?.email_id || ''),
+      tenantId, campaignId: target.campaignId || '', campaignLeadId: target.leadId,
+      eventAt: String(event?.created_at || now), status: 'PROCESSING',
+      attempts: 1, lockedAt: now, lockToken: token, createdAt: now, updatedAt: now,
+    });
+    return { state: 'CLAIMED' as const, token };
+  });
+}
+
+async function trackEmailEngagement(
+  event: any,
+  eventId: string,
+  target: { tenantId: string; leadId: string; campaignId?: string }
+): Promise<{ tracked: boolean; duplicate?: boolean; bot?: boolean }> {
   const type = String(event?.type || '');
-  if (!['email.opened', 'email.clicked', 'email.bounced', 'email.complained'].includes(type)) return false;
-  const target = await resolveEngagementTarget(event);
-  if (!target) {
-    console.warn(`[Resend Webhook] ${type} ignored: no tenant/lead tags and no email_routes match for ${event?.data?.email_id || 'unknown'}`);
-    return false;
-  }
-  const { tenantId, leadId } = target;
+  const ctx: TenantContext = { tenantId: target.tenantId, uid: 'resend-webhook', email: 'webhook@system', role: 'admin' };
+  const repo = tenantRepo(ctx);
+  const leadRef = repo.campaignLeadDoc(target.leadId);
+  const eventRef = repo.campaignEngagementEventDoc(resendEventDocumentId(eventId));
+  const claim = await claimResendEvent(target.tenantId, eventId, event, target);
+  if (claim.state === 'PROCESSED') return { tracked: true, duplicate: true };
+  if (claim.state === 'IN_PROGRESS') throw new Error('This Resend event is already being processed; retry shortly.');
 
   const nowIso = new Date().toISOString();
-  const eventMs = Date.parse(event?.created_at || '') || Date.now();
-  const sentMs = Date.parse(event?.data?.created_at || '');
-  const sinceSentMs = Number.isFinite(sentMs) ? eventMs - sentMs : Number.POSITIVE_INFINITY;
+  const eventAt = typeof event?.created_at === 'string' && Number.isFinite(Date.parse(event.created_at))
+    ? new Date(event.created_at).toISOString() : nowIso;
   const agent = String(event?.data?.click?.userAgent || event?.data?.open?.userAgent || event?.data?.user_agent || '');
+  const bot = (type === 'email.opened' || type === 'email.clicked') && isScannerAgent(agent);
 
-  let patch: Record<string, any>;
-  if (type === 'email.opened') {
-    const bot = sinceSentMs < OPEN_BOT_WINDOW_MS || isScannerAgent(agent);
-    console.log(`[Resend Webhook] ${type} lead=${leadId} sinceSentMs=${Number.isFinite(sinceSentMs) ? sinceSentMs : 'unknown'} agent="${agent.slice(0, 80)}" -> ${bot ? 'bot' : 'real'}`);
-    patch = bot
-      ? { botOpenCount: increment(1), updatedAt: nowIso }
-      : { realOpenCount: increment(1), opened: true, engaged: true, lastOpenedAt: nowIso, updatedAt: nowIso };
-  } else if (type === 'email.clicked') {
-    const bot = sinceSentMs < CLICK_BOT_WINDOW_MS || isScannerAgent(agent);
-    console.log(`[Resend Webhook] ${type} lead=${leadId} sinceSentMs=${Number.isFinite(sinceSentMs) ? sinceSentMs : 'unknown'} agent="${agent.slice(0, 80)}" -> ${bot ? 'bot' : 'real'}`);
-    patch = bot
-      ? { botClickCount: increment(1), updatedAt: nowIso }
-      : { clickCount: increment(1), clicked: true, engaged: true, lastClickedAt: nowIso, updatedAt: nowIso };
-  } else {
-    patch = { bounced: true, updatedAt: nowIso };
-  }
-
-  const ctx: TenantContext = { tenantId, uid: 'resend-webhook', email: 'webhook@system', role: 'admin' };
   try {
-    await updateDoc(tenantRepo(ctx).campaignLeadDoc(leadId), patch);
-    return true;
-  } catch (err: any) {
-    if (err?.code !== 5 && !/NOT_FOUND/i.test(String(err?.message || ''))) {
-      console.warn('[Resend Webhook] engagement update failed:', err?.message || err);
-    }
-    return false;
+    const processed = await runTransaction(async (tx: any) => {
+      const [leadSnap, eventSnap] = await Promise.all([tx.get(leadRef), tx.get(eventRef)]);
+      if (!eventSnap.exists) throw new Error('Resend event ledger entry is missing.');
+      const eventRow = eventSnap.data() || {};
+      if (eventRow.status === 'PROCESSED') return 'DUPLICATE';
+      if (eventRow.lockToken !== claim.token) return 'LEASE_LOST';
+      if (!leadSnap.exists) throw new Error('Campaign lead not found for the verified Resend event.');
+      const lead = leadSnap.data() as any;
+      if (target.campaignId && lead.campaignId && target.campaignId !== lead.campaignId) {
+        throw new Error('Resend campaign tag does not match the tenant campaign lead record.');
+      }
+
+      let patch: Record<string, any>;
+      if (type === 'email.delivered') {
+        const terminal = ['BOUNCED', 'COMPLAINED'].includes(String(lead.deliveryStatus || ''));
+        patch = {
+          delivered: lead.deliveryStatus === 'BOUNCED' ? false : true,
+          deliveryStatus: terminal ? lead.deliveryStatus : 'DELIVERED',
+          deliveredAt: lead.deliveredAt || eventAt,
+          deliveryDelayed: false, updatedAt: nowIso,
+        };
+      } else if (type === 'email.delivery_delayed') {
+        const terminal = ['DELIVERED', 'BOUNCED', 'COMPLAINED'].includes(String(lead.deliveryStatus || ''));
+        patch = terminal ? { deliveryDelayed: false, updatedAt: nowIso } : { deliveryStatus: 'DELAYED', deliveryDelayed: true, updatedAt: nowIso };
+      } else if (type === 'email.opened') {
+        patch = bot
+          ? { botOpenCount: increment(1), updatedAt: nowIso }
+          : {
+              realOpenCount: increment(1), opened: true, engaged: true, lastOpenedAt: eventAt,
+              ...(lead.replyStatus === 'REPLIED' ? { repliedWithoutTrackedOpen: false } : {}),
+              updatedAt: nowIso,
+            };
+      } else if (type === 'email.clicked') {
+        const clickedUrl = String(event?.data?.click?.link || event?.data?.click?.url || '');
+        patch = bot
+          ? { botClickCount: increment(1), updatedAt: nowIso }
+          : {
+              clickCount: increment(1), clicked: true, engaged: true,
+              ...(clickedUrl ? { lastClickedUrl: clickedUrl.slice(0, 1500) } : {}),
+              lastClickedAt: eventAt, updatedAt: nowIso,
+            };
+      } else if (type === 'email.bounced') {
+        patch = { bounced: true, delivered: false, deliveryStatus: 'BOUNCED', bouncedAt: eventAt, deliveryDelayed: false, updatedAt: nowIso };
+      } else if (type === 'email.complained') {
+        patch = {
+          delivered: true, complained: true, deliveryStatus: 'COMPLAINED',
+          deliveredAt: lead.deliveredAt || eventAt, complainedAt: eventAt,
+          deliveryDelayed: false, updatedAt: nowIso,
+        };
+      } else {
+        throw new Error('Unsupported Resend event type: ' + type);
+      }
+
+      tx.update(leadRef, patch);
+      tx.update(eventRef, {
+        status: 'PROCESSED', isBot: bot, processedAt: nowIso, lockedAt: null, lockToken: null, updatedAt: nowIso,
+        ...(type === 'email.clicked' && event?.data?.click?.link ? { clickedUrl: String(event.data.click.link).slice(0, 1500) } : {}),
+      });
+      return 'PROCESSED';
+    });
+
+    if (processed === 'DUPLICATE') return { tracked: true, duplicate: true };
+    if (processed === 'LEASE_LOST') throw new Error('Resend event processing lease changed; retry the event.');
+    return { tracked: true, bot };
+  } catch (error: any) {
+    await runTransaction(async (tx: any) => {
+      const snap = await tx.get(eventRef);
+      if (snap.exists && snap.data()?.lockToken === claim.token && snap.data()?.status === 'PROCESSING') {
+        tx.update(eventRef, {
+          status: 'FAILED', lastError: String(error?.message || error).slice(0, 1000),
+          lockedAt: null, lockToken: null, updatedAt: new Date().toISOString(),
+        });
+      }
+    }).catch(() => {});
+    throw error;
   }
 }
 
-export async function routeResendWebhook(req: any, res: any): Promise<boolean> {
-  const event = req.body || {};
-  if (!event.type && event.data?.type) event.type = event.data.type;
-  const type = event.type;
-
-  if (type === 'email.opened' || type === 'email.clicked') {
-    const tracked = await trackEmailEngagement(event);
-    res.statusCode = 200;
-    res.setHeader('Content-Type', 'application/json');
-    res.end(JSON.stringify({ received: true, event: type, tracked }));
-    return true;
-  }
-  if (type === 'email.bounced' || type === 'email.complained') {
-    await trackEmailEngagement(event).catch(() => false);
-  }
-  const recipient = event.data?.to?.[0] || event.data?.email;
-  const resendEmailId = event.data?.email_id;
-
-  let resolvedTenantId = DEFAULT_TENANT_ID;
-
-  if (recipient && recipient.includes('@') && isFirebaseConfigured && db) {
+async function resolveResendTenant(event: any): Promise<string> {
+  const recipient = event?.data?.to?.[0] || event?.data?.email;
+  const resendEmailId = event?.data?.email_id;
+  let tenantId = DEFAULT_TENANT_ID;
+  if (recipient && String(recipient).includes('@') && isFirebaseConfigured && db) {
     try {
-      const domain = recipient.split('@')[1]?.toLowerCase().trim();
+      const domain = String(recipient).split('@')[1]?.toLowerCase().trim();
       if (domain) {
         const domainSnap = await getDoc(globalDomainRouteDoc(domain));
-        if (domainSnap.exists()) {
-          const dRoute = domainSnap.data() as DomainRoute;
-          if (dRoute.tenantId) resolvedTenantId = dRoute.tenantId;
-        }
+        if (domainSnap.exists() && domainSnap.data()?.tenantId) tenantId = domainSnap.data().tenantId;
       }
-
-      if (resendEmailId && resolvedTenantId === DEFAULT_TENANT_ID) {
+      if (resendEmailId && tenantId === DEFAULT_TENANT_ID) {
         const emailRouteSnap = await getDoc(globalEmailRouteDoc(resendEmailId));
-        if (emailRouteSnap.exists()) {
-          resolvedTenantId = emailRouteSnap.data()?.tenantId || DEFAULT_TENANT_ID;
-        }
+        if (emailRouteSnap.exists()) tenantId = emailRouteSnap.data()?.tenantId || DEFAULT_TENANT_ID;
       }
     } catch {}
   }
+  return tenantId;
+}
 
-  if (type === 'email.bounced' && recipient) {
-    await addEmailSuppression(resolvedTenantId, recipient, 'bounce');
-  } else if (type === 'email.complained' && recipient) {
-    await addEmailSuppression(resolvedTenantId, recipient, 'complaint');
+export async function routeResendWebhook(req: any, res: any): Promise<boolean> {
+  if (req.method === 'GET' || req.method === 'HEAD') {
+    res.statusCode = 200;
+    res.setHeader('Content-Type', 'application/json');
+    res.end(JSON.stringify({ ok: true, webhook: 'resend', hint: 'POST events must include a valid Svix signature.' }));
+    return true;
+  }
+  if (req.method !== 'POST') {
+    res.statusCode = 405;
+    res.setHeader('Content-Type', 'application/json');
+    res.end(JSON.stringify({ error: 'POST only' }));
+    return true;
+  }
+  const verified = verifyResendWebhookRequest(req);
+  if (!verified.ok) {
+    console.warn('[Resend Webhook] rejected request: ' + verified.error);
+    res.statusCode = verified.status;
+    res.setHeader('Content-Type', 'application/json');
+    res.end(JSON.stringify({ error: verified.error }));
+    return true;
+  }
+
+  const event = req.body || {};
+  if (!event.type && event.data?.type) event.type = event.data.type;
+  const type = String(event.type || '');
+  const relevant = new Set(['email.delivered', 'email.delivery_delayed', 'email.opened', 'email.clicked', 'email.bounced', 'email.complained']);
+  if (!relevant.has(type)) {
+    res.statusCode = 200;
+    res.setHeader('Content-Type', 'application/json');
+    res.end(JSON.stringify({ received: true, ignored: true, event: type || 'unknown' }));
+    return true;
+  }
+
+  let result: { tracked: boolean; duplicate?: boolean; bot?: boolean } = { tracked: false };
+  const target = await resolveEngagementTarget(event);
+  if (target) {
+    try { result = await trackEmailEngagement(event, verified.eventId, target); }
+    catch (err: any) {
+      console.error('[Resend Webhook] ' + type + ' processing failed:', err?.message || err);
+      res.statusCode = 500;
+      res.setHeader('Content-Type', 'application/json');
+      res.end(JSON.stringify({ received: false, error: 'Campaign engagement event could not be persisted. Resend should retry.' }));
+      return true;
+    }
+  } else {
+    console.warn('[Resend Webhook] ' + type + ' has no campaign lead route for ' + (event?.data?.email_id || 'unknown') + '.');
+  }
+
+  if (type === 'email.bounced' || type === 'email.complained') {
+    const recipient = event.data?.to?.[0] || event.data?.email;
+    if (recipient) {
+      const tenantId = target?.tenantId || await resolveResendTenant(event);
+      await addEmailSuppression(tenantId, recipient, type === 'email.bounced' ? 'bounce' : 'complaint');
+    }
   }
 
   res.statusCode = 200;
   res.setHeader('Content-Type', 'application/json');
-  res.end(JSON.stringify({ received: true, tenantId: resolvedTenantId, event: type }));
+  res.end(JSON.stringify({
+    received: true, event: type, tracked: result.tracked,
+    ...(result.duplicate ? { duplicate: true } : {}),
+    ...(result.bot ? { classifiedAsScanner: true } : {}),
+  }));
   return true;
 }

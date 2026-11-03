@@ -233,7 +233,7 @@ async function muteLocalMedia(page: Page) {
   });
 }
 
-export default async function handler(req: ApiRequest, res: ServerResponse) {
+export async function handleMeetingIntelligenceTrial(req: ApiRequest, res: ServerResponse): Promise<void> {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');

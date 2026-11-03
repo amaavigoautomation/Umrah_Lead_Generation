@@ -1,4 +1,5 @@
 import type { IncomingMessage, ServerResponse } from 'http';
+import { handleMeetingIntelligenceTrial } from '../src/server/meetingIntelligenceTrial.js';
 
 /**
  * Vercel Serverless Catch-All Function for /api/*
@@ -30,6 +31,12 @@ export default async function handler(req: IncomingMessage & { body?: any }, res
         }
       }
     } catch {}
+  }
+
+  // Reuse the existing Vercel catch-all function for the meeting test route.
+  if (req.url === '/api/meeting-intelligence' || req.url?.startsWith('/api/meeting-intelligence?')) {
+    await handleMeetingIntelligenceTrial(req, res);
+    return;
   }
 
   if (req.url === '/api/health' || req.url?.startsWith('/api/health?')) {

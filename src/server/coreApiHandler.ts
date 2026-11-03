@@ -114,6 +114,7 @@ import {
 } from './tenantRepo.js';
 import { getAdminAuth, createTenantUser, createPasswordSetupLink } from './firebaseAdmin.js';
 import { authenticateRequest } from './authMiddleware.js';
+export { authenticateRequest as authenticateApiRequest };
 import {
   listAiTestFeedback,
   createAiTestFeedback,

@@ -1,5 +1,4 @@
 import type { IncomingMessage, ServerResponse } from 'http';
-import { handleMeetingIntelligenceTrial } from '../src/server/meetingIntelligenceTrial.js';
 
 /**
  * Vercel Serverless Catch-All Function for /api/*
@@ -33,10 +32,35 @@ export default async function handler(req: IncomingMessage & { body?: any }, res
     } catch {}
   }
 
-  // Reuse the existing Vercel catch-all function for the meeting test route.
+  // Isolate the meeting-bot dependencies to this one endpoint. Import auth from
+  // the already-built server bundle so normal API routes do not load raw Firebase
+  // auth dependencies through the catch-all's CommonJS wrapper.
   if (req.url === '/api/meeting-intelligence' || req.url?.startsWith('/api/meeting-intelligence?')) {
-    await handleMeetingIntelligenceTrial(req, res);
-    return;
+    try {
+      const serverMod = await import('./core-server.bundle.js');
+      const auth = await serverMod.authenticateApiRequest?.(req as any);
+      if (!auth?.ok || !auth?.ctx) {
+        res.statusCode = auth?.status || 401;
+        res.setHeader('Content-Type', 'application/json');
+        return res.end(JSON.stringify({
+          success: false,
+          error: auth?.error || 'Authentication required.',
+          code: auth?.code || 'AUTH_REQUIRED',
+        }));
+      }
+      const { handleMeetingIntelligenceTrial } = await import('../src/server/meetingIntelligenceTrial.js');
+      await handleMeetingIntelligenceTrial(req, res, auth.ctx);
+      return;
+    } catch (error: any) {
+      console.error('[Meeting Intelligence trial route] failed to load:', error?.message || error);
+      res.statusCode = 500;
+      res.setHeader('Content-Type', 'application/json');
+      return res.end(JSON.stringify({
+        success: false,
+        error: 'Meeting bot endpoint failed to load.',
+        details: error?.message || 'Unknown import error',
+      }));
+    }
   }
 
   if (req.url === '/api/health' || req.url?.startsWith('/api/health?')) {

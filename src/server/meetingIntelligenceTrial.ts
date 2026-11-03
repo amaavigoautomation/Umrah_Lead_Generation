@@ -1,7 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'http';
 import chromium from '@sparticuz/chromium';
 import puppeteer, { type Browser, type Page } from 'puppeteer-core';
-import { authenticateRequest } from '../../src/server/authMiddleware.js';
 
 type ApiRequest = IncomingMessage & { body?: any };
 type AudioCaptureResult = {
@@ -233,7 +232,11 @@ async function muteLocalMedia(page: Page) {
   });
 }
 
-export async function handleMeetingIntelligenceTrial(req: ApiRequest, res: ServerResponse): Promise<void> {
+export async function handleMeetingIntelligenceTrial(
+  req: ApiRequest,
+  res: ServerResponse,
+  authContext: { isPlatformAdmin: boolean; role: string }
+): Promise<void> {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
@@ -247,15 +250,7 @@ export async function handleMeetingIntelligenceTrial(req: ApiRequest, res: Serve
   }
 
   try {
-    const auth = await authenticateRequest(req as any);
-    if (!auth.ok || !auth.ctx) {
-      return sendJson(res, auth.status || 401, {
-        success: false,
-        error: auth.error || 'Authentication required.',
-        code: auth.code || 'AUTH_REQUIRED',
-      });
-    }
-    if (!auth.ctx.isPlatformAdmin && auth.ctx.role !== 'admin') {
+    if (!authContext.isPlatformAdmin && authContext.role !== 'admin') {
       return sendJson(res, 403, { success: false, error: 'Workspace administrator access is required for this trial.' });
     }
 

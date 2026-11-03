@@ -40,60 +40,228 @@ function escapeHtml(value: unknown): string {
   }[char] || char));
 }
 
-function buildPdfHtml(report: CampaignReport): string {
+function buildPdfDocument(report: CampaignReport): string {
+  const PAGE_WIDTH = 595;
+  const PAGE_HEIGHT = 842;
+  const LEFT = 42;
+  const RIGHT = 553;
+  const CONTENT_WIDTH = RIGHT - LEFT;
   const brand = report.brand || { companyName: 'Workspace', teamName: '', logoUrl: '', websiteUrl: '', salesEmail: '' };
-  const cards = report.campaigns.map((campaign) => {
+  const pages: string[][] = [];
+  let commands: string[] = [];
+  let y = 0;
+
+  const safe = (value: unknown) => String(value ?? '')
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^\x20-\x7E]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  const escapePdf = (value: unknown) => safe(value)
+    .replace(/\\/g, '\\\\')
+    .replace(/\(/g, '\\(')
+    .replace(/\)/g, '\\)');
+
+  function text(value: unknown, x: number, top: number, size = 10, color = '0.12 0.17 0.24', bold = false) {
+    const baseline = PAGE_HEIGHT - top - size;
+    commands.push(color + ' rg BT /' + (bold ? 'F2' : 'F1') + ' ' + size +
+      ' Tf 1 0 0 1 ' + x + ' ' + baseline + ' Tm (' + escapePdf(value) + ') Tj ET');
+  }
+
+  function rect(x: number, top: number, width: number, height: number, fill: string, stroke?: string) {
+    const bottom = PAGE_HEIGHT - top - height;
+    if (stroke) {
+      commands.push(fill + ' rg ' + stroke + ' RG 0.7 w ' + x + ' ' + bottom + ' ' + width + ' ' + height + ' re B');
+    } else {
+      commands.push(fill + ' rg ' + x + ' ' + bottom + ' ' + width + ' ' + height + ' re f');
+    }
+  }
+
+  function rule(top: number, color = '0.88 0.90 0.93') {
+    const py = PAGE_HEIGHT - top;
+    commands.push(color + ' RG 0.7 w ' + LEFT + ' ' + py + ' m ' + RIGHT + ' ' + py + ' l S');
+  }
+
+  function newPage() {
+    commands = [];
+    pages.push(commands);
+    rect(0, 0, PAGE_WIDTH, 7, '0.93 0.39 0.09');
+    text(brand.companyName || 'Workspace', LEFT, 22, 15, '0.10 0.16 0.23', true);
+    text('CAMPAIGN INTELLIGENCE', 390, 25, 8, '0.93 0.39 0.09', true);
+    rule(52, '0.88 0.90 0.93');
+    y = 72;
+  }
+
+  function ensureRoom(height: number) {
+    if (y + height > 785) newPage();
+  }
+
+  function wrap(value: unknown, maxChars: number): string[] {
+    const input = String(value ?? '').replace(/\r/g, '');
+    const result: string[] = [];
+    for (const rawLine of input.split('\n')) {
+      const words = safe(rawLine).split(' ').filter(Boolean);
+      if (!words.length) {
+        result.push('');
+        continue;
+      }
+      let line = '';
+      for (const word of words) {
+        if (line && (line.length + word.length + 1) > maxChars) {
+          result.push(line);
+          line = word;
+        } else {
+          line = line ? line + ' ' + word : word;
+        }
+      }
+      if (line) result.push(line);
+    }
+    return result;
+  }
+
+  function paragraph(value: unknown, options: { size?: number; color?: string; maxChars?: number; lineHeight?: number } = {}) {
+    const size = options.size || 9;
+    const lineHeight = options.lineHeight || size * 1.55;
+    const lines = wrap(value, options.maxChars || 98);
+    ensureRoom(lines.length * lineHeight + 4);
+    for (const line of lines) {
+      text(line, LEFT, y, size, options.color || '0.28 0.34 0.42');
+      y += lineHeight;
+    }
+    y += 4;
+  }
+
+  function section(title: string) {
+    ensureRoom(34);
+    y += 7;
+    text(title.toUpperCase(), LEFT, y, 9, '0.93 0.39 0.09', true);
+    y += 17;
+    rule(y, '0.91 0.92 0.94');
+    y += 9;
+  }
+
+  function card(label: string, value: number, note: string, x: number, top: number, width: number) {
+    rect(x, top, width, 46, '0.97 0.98 0.99', '0.88 0.90 0.93');
+    text(label, x + 10, top + 7, 7, '0.39 0.45 0.53', true);
+    text(number(value), x + 10, top + 17, 15, '0.10 0.16 0.23', true);
+    text(note, x + 10, top + 34, 6.5, '0.43 0.49 0.57');
+  }
+
+  function listSection(title: string, items: string[]) {
+    section(title);
+    if (!items || !items.length) {
+      paragraph('No items recorded.', { color: '0.48 0.53 0.60' });
+      return;
+    }
+    for (const item of items) {
+      const lines = wrap(item, 94);
+      ensureRoom(lines.length * 13 + 6);
+      text('-', LEFT + 2, y, 9, '0.93 0.39 0.09', true);
+      for (const line of lines) {
+        text(line, LEFT + 13, y, 8.5, '0.25 0.31 0.39');
+        y += 12;
+      }
+      y += 3;
+    }
+  }
+
+  newPage();
+  text(report.reportType === 'COMPARISON' ? 'Campaign comparison report' : 'Individual campaign report', LEFT, y, 8, '0.93 0.39 0.09', true);
+  y += 15;
+  for (const line of wrap(report.title, 70)) {
+    ensureRoom(28);
+    text(line, LEFT, y, 21, '0.10 0.16 0.23', true);
+    y += 25;
+  }
+  paragraph('Prepared for ' + (brand.companyName || 'Workspace') + ' by ' + (report.generatedBy || 'Workspace user') +
+    ' | Generated ' + dateLabel(report.generatedAt), { size: 8, color: '0.43 0.49 0.57', maxChars: 100 });
+  if (report.analysis && report.analysis.executiveSummary) {
+    section('Executive summary');
+    paragraph(report.analysis.executiveSummary, { size: 9, maxChars: 100 });
+  }
+
+  for (const campaign of report.campaigns || []) {
+    ensureRoom(55);
+    section('Campaign: ' + campaign.name);
     const m = campaign.metrics;
-    const metric = (label: string, value: number, note: string) =>
-      '<div class="metric"><div class="muted">' + escapeHtml(label) + '</div><div class="value">' +
-      number(value) + '</div><div class="small muted">' + escapeHtml(note) + '</div></div>';
-    return '<section class="campaign"><h2>' + escapeHtml(campaign.name) + '</h2><div class="muted small">' +
-      escapeHtml(campaign.status) + ' · ' + number(m.totalLeads) + ' leads · ' + number(m.sent) + ' sent</div>' +
-      '<div class="grid">' +
-      metric('Delivered', m.delivered, pct(campaign.rates.deliveryRate) + ' of sent') +
-      metric('Unique leads opened', m.uniqueOpened, pct(campaign.rates.uniqueOpenRate) + ' of delivered/sent') +
-      metric('Total opens', m.totalOpens, number(campaign.activity.repeatOpens) + ' repeat events') +
-      metric('Unique leads clicked', m.uniqueClicked, pct(campaign.rates.uniqueClickRate) + ' of delivered/sent') +
-      metric('Total clicks', m.totalClicks, number(campaign.activity.repeatClicks) + ' repeat events') +
-      metric('Replies', m.replied, pct(campaign.rates.replyRate) + ' of sent') +
-      metric('Ignored', m.ignored, number(m.waiting) + ' still waiting') +
-      metric('Bounced / complaints', m.bounced, number(m.complaints) + ' spam complaints') +
-      '</div><div class="small muted">Open events are estimates. Scanner opens excluded: ' + number(m.scannerOpens) +
-      '. Tracking-eligible leads: ' + number(campaign.tracking.trackedLeads) + '.</div></section>';
-  }).join('');
-  const list = (items: string[]) => items && items.length
-    ? '<ul>' + items.map((item) => '<li>' + escapeHtml(item) + '</li>').join('') + '</ul>'
-    : '<p class="muted">No items recorded.</p>';
-  const logo = brand.logoUrl
-    ? '<img class="logo" src="' + escapeHtml(brand.logoUrl) + '" alt="' + escapeHtml(brand.companyName) + '">'
-    : '<div class="wordmark">' + escapeHtml(brand.companyName || 'Workspace') + '</div>';
-  return '<!doctype html><html><head><meta charset="utf-8"><title>' + escapeHtml(report.title) + '</title><style>' +
-    '@page{size:A4;margin:16mm}*{box-sizing:border-box}body{font-family:Arial,sans-serif;color:#172033;margin:0;font-size:11px}' +
-    '.top{display:flex;align-items:center;justify-content:space-between;border-bottom:3px solid #ef741a;padding-bottom:16px;margin-bottom:22px}' +
-    '.logo{max-height:42px;max-width:180px;object-fit:contain}.wordmark{font-size:22px;font-weight:800;color:#172033}' +
-    '.eyebrow{color:#ef741a;text-transform:uppercase;letter-spacing:1.5px;font-size:9px;font-weight:bold}' +
-    'h1{font-size:25px;margin:7px 0 4px}h2{font-size:15px;margin:0 0 5px}h3{font-size:13px;margin:16px 0 6px}' +
-    '.muted{color:#64748b}.small{font-size:9px}.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:14px 0}' +
-    '.metric{border:1px solid #dbe2ea;border-radius:8px;padding:10px}.value{font-weight:bold;font-size:19px;margin:5px 0;color:#172033}' +
-    '.campaign{margin-top:18px;padding-top:12px;border-top:1px solid #e2e8f0;page-break-inside:avoid}' +
-    '.panel{background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:12px;margin:12px 0}' +
-    'li{margin:5px 0;line-height:1.45}.footer{margin-top:24px;border-top:1px solid #e2e8f0;padding-top:8px;font-size:9px;color:#64748b}' +
-    '@media print{button{display:none}}' +
-    '</style></head><body><header class="top">' + logo +
-    '<div style="text-align:right"><div class="eyebrow">Campaign Intelligence</div><div class="muted small">Generated ' +
-    escapeHtml(dateLabel(report.generatedAt)) + '</div></div></header><div class="eyebrow">' +
-    (report.reportType === 'COMPARISON' ? 'Campaign comparison' : 'Individual campaign report') +
-    '</div><h1>' + escapeHtml(report.title) + '</h1><div class="muted">Prepared for ' +
-    escapeHtml(brand.companyName) + ' · ' + escapeHtml(report.generatedBy || 'Workspace user') + '</div>' +
-    cards.join('') +
-    '<section class="panel"><h2>Executive summary</h2><p>' + escapeHtml(report.analysis?.executiveSummary || '') +
-    '</p></section><h3>Key findings</h3>' + list(report.analysis?.highlights || []) +
-    '<h3>Risks and limitations</h3>' + list(report.analysis?.risks || []) +
-    '<h3>AI recommendations</h3>' + list(report.analysis?.recommendations || []) +
-    '<div class="footer">' + escapeHtml(brand.companyName) + (brand.websiteUrl ? ' · ' + escapeHtml(brand.websiteUrl) : '') +
-    (brand.salesEmail ? ' · ' + escapeHtml(brand.salesEmail) : '') +
-    '<br>Unique leads and total events are separate metrics. Opens are estimates and may be affected by mail-client privacy features. Historical snapshots reflect data at generation time.</div>' +
-    '<script>window.onload=function(){setTimeout(function(){window.print()},350)};</script></body></html>';
+    paragraph('Status: ' + campaign.status + ' | ' + number(m.totalLeads) + ' total leads | ' +
+      number(m.sent) + ' sent | ' + number(m.delivered) + ' delivered', { size: 8, color: '0.43 0.49 0.57' });
+    const gap = 10;
+    const width = (CONTENT_WIDTH - gap) / 2;
+    const rows = [
+      [['Total leads', m.totalLeads, 'Audience size'], ['Emails sent', m.sent, 'Dispatch attempts']],
+      [['Delivered', m.delivered, pct(campaign.rates.deliveryRate) + ' of sent'], ['Unique leads opened', m.uniqueOpened, pct(campaign.rates.uniqueOpenRate) + ' estimated']],
+      [['Total open events', m.totalOpens, number(campaign.activity.repeatOpens) + ' repeat opens'], ['Unique leads clicked', m.uniqueClicked, pct(campaign.rates.uniqueClickRate) + ' of sent']],
+      [['Total click events', m.totalClicks, number(campaign.activity.repeatClicks) + ' repeat clicks'], ['Replies', m.replied, pct(campaign.rates.replyRate) + ' of sent']],
+      [['Ignored', m.ignored, 'Five-day qualification rule'], ['Waiting', m.waiting, 'Still inside waiting window']],
+      [['Bounced', m.bounced, 'Undeliverable emails'], ['Spam complaints', m.complaints, 'Recipient complaints']],
+      [['Pending', m.pending, 'Not yet dispatched'], ['Failed', m.failed, 'Send errors']],
+    ];
+    for (const row of rows) {
+      ensureRoom(54);
+      card(row[0][0], row[0][1], row[0][2], LEFT, y, width);
+      card(row[1][0], row[1][1], row[1][2], LEFT + width + gap, y, width);
+      y += 54;
+    }
+    section('Activity interpretation');
+    paragraph('Unique opens: ' + number(m.uniqueOpened) + ' leads | Total opens: ' + number(m.totalOpens) +
+      ' events | Repeat opens beyond first: ' + number(campaign.activity.repeatOpens) + '.', { maxChars: 100 });
+    paragraph('Unique clicks: ' + number(m.uniqueClicked) + ' leads | Total clicks: ' + number(m.totalClicks) +
+      ' events | Repeat clicks beyond first: ' + number(campaign.activity.repeatClicks) + '.', { maxChars: 100 });
+    paragraph('Average opens per unique opener: ' + number(campaign.activity.averageOpensPerUniqueLead) +
+      ' | Average clicks per unique clicker: ' + number(campaign.activity.averageClicksPerUniqueLead) + '.', { maxChars: 100 });
+    paragraph('Scanner opens excluded: ' + number(m.scannerOpens) + ' | Tracking-eligible leads: ' +
+      number(campaign.tracking.trackedLeads) + ' | Ignored rule: ' + number(campaign.tracking.ignoredAfterDays) + ' days.',
+      { size: 8, color: '0.43 0.49 0.57', maxChars: 100 });
+  }
+
+  listSection('Key findings', report.analysis && report.analysis.highlights ? report.analysis.highlights : []);
+  listSection('Risks and limitations', report.analysis && report.analysis.risks ? report.analysis.risks : []);
+  listSection('AI recommendations', report.analysis && report.analysis.recommendations ? report.analysis.recommendations : []);
+
+  for (let index = 0; index < pages.length; index += 1) {
+    const target = pages[index];
+    commands = target;
+    rule(810, '0.88 0.90 0.93');
+    text((brand.companyName || 'Workspace') + ' | Unique leads and total events are separate metrics. Opens are estimates.',
+      LEFT, 817, 6.2, '0.48 0.53 0.60');
+    text('Page ' + (index + 1) + ' of ' + pages.length, 490, 817, 6.2, '0.48 0.53 0.60');
+  }
+
+  const pageObjectIds = pages.map((_, index) => 3 + index * 2);
+  const fontRegularId = 3 + pages.length * 2;
+  const fontBoldId = fontRegularId + 1;
+  const objects: string[] = [];
+  objects[1] = '<< /Type /Catalog /Pages 2 0 R >>';
+  objects[2] = '<< /Type /Pages /Kids [' + pageObjectIds.map((id) => id + ' 0 R').join(' ') +
+    '] /Count ' + pages.length + ' >>';
+
+  pages.forEach((page, index) => {
+    const pageId = pageObjectIds[index];
+    const contentId = pageId + 1;
+    const stream = page.join('\n') + '\n';
+    objects[pageId] = '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ' + PAGE_WIDTH + ' ' + PAGE_HEIGHT +
+      '] /Resources << /Font << /F1 ' + fontRegularId + ' 0 R /F2 ' + fontBoldId +
+      ' 0 R >> >> /Contents ' + contentId + ' 0 R >>';
+    objects[contentId] = '<< /Length ' + stream.length + ' >>\nstream\n' + stream + 'endstream';
+  });
+  objects[fontRegularId] = '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>';
+  objects[fontBoldId] = '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>';
+
+  let pdf = '%PDF-1.4\n';
+  const offsets: number[] = [0];
+  for (let id = 1; id < objects.length; id += 1) {
+    offsets[id] = pdf.length;
+    pdf += id + ' 0 obj\n' + objects[id] + '\nendobj\n';
+  }
+  const xrefOffset = pdf.length;
+  pdf += 'xref\n0 ' + objects.length + '\n0000000000 65535 f \n';
+  for (let id = 1; id < objects.length; id += 1) {
+    pdf += String(offsets[id]).padStart(10, '0') + ' 00000 n \n';
+  }
+  pdf += 'trailer\n<< /Size ' + objects.length + ' /Root 1 0 R >>\nstartxref\n' + xrefOffset + '\n%%EOF';
+  return pdf;
 }
 
 export const CampaignReports: React.FC<{ tenantId: string }> = ({ tenantId }) => {
@@ -199,15 +367,28 @@ export const CampaignReports: React.FC<{ tenantId: string }> = ({ tenantId }) =>
 
   const exportPdf = () => {
     if (!report) return;
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) {
-      setError('Your browser blocked the PDF print window. Allow pop-ups for this site and try again.');
-      return;
+    try {
+      const pdf = buildPdfDocument(report);
+      const blob = new Blob([pdf], { type: 'application/pdf' });
+      const downloadUrl = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      const safeName = (report.title || 'campaign-report')
+        .normalize('NFKD')
+        .replace(/[^a-zA-Z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+        .toLowerCase() || 'campaign-report';
+      anchor.href = downloadUrl;
+      anchor.download = safeName + '.pdf';
+      anchor.style.display = 'none';
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      window.setTimeout(() => URL.revokeObjectURL(downloadUrl), 60_000);
+      setError('');
+      setNotice('Your branded PDF download has started.');
+    } catch (err: any) {
+      setError(err?.message || 'Could not create the PDF. Please try again.');
     }
-    printWindow.document.open();
-    printWindow.document.write(buildPdfHtml(report));
-    printWindow.document.close();
-    setError('');
   };
 
   const displayBrand = brand.companyName || 'Your workspace';
@@ -321,7 +502,7 @@ const ReportView: React.FC<{ report: CampaignReport; onExport: () => void }> = (
           </div>
           <p className="text-[10px] text-slate-400 mt-1">Snapshot generated {dateLabel(report.generatedAt)} · {report.generatedBy}</p>
         </div>
-        <button onClick={onExport} className="inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-slate-900 text-white text-xs font-semibold hover:bg-slate-800"><FileDown className="w-4 h-4"/> Export branded PDF</button>
+        <button onClick={onExport} className="inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-slate-900 text-white text-xs font-semibold hover:bg-slate-800"><FileDown className="w-4 h-4"/> Download branded PDF</button>
       </div>
 
       {report.reportType === 'INDIVIDUAL' && metrics && (

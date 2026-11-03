@@ -16,7 +16,7 @@ import { getUnsupportedEmailTemplateVariables } from '../shared/emailTemplateVal
 import {
   createBlankEmailDesignTemplate, createEmailDesignBlockId, createEmailDesignHtmlSource, PREDEFINED_EMAIL_DESIGNS,
   SAMPLE_EMAIL_CONTENT, renderEmailDesignHtml, validateEmailDesignHtml, type EmailBrandProfile, type EmailDesignBlock,
-  type EmailDesignBlockType, type EmailDesignTemplate, type EmailDesignTheme,
+  type EmailDesignBlockType, type EmailDesignTemplate, type EmailDesignTheme, type EmailDesignSection, type EmailDesignRow, type EmailDesignColumn,
 } from '../shared/emailDesign';
 
 type StudioTab = 'gallery' | 'my-designs';
@@ -52,6 +52,37 @@ function previewCampaignValue(value: string): string {
 
 function cloneTemplate(template: EmailDesignTemplate): EmailDesignTemplate {
   return JSON.parse(JSON.stringify(template)) as EmailDesignTemplate;
+}
+
+function ensureEmailDesignSections(template: EmailDesignTemplate): EmailDesignSection[] {
+  if (Array.isArray(template.sections) && template.sections.length) {
+    return JSON.parse(JSON.stringify(template.sections)) as EmailDesignSection[];
+  }
+  const elements = JSON.parse(JSON.stringify(template.blocks || [])) as EmailDesignBlock[];
+  return [{
+    id: createEmailDesignBlockId('section'),
+    name: 'Main section',
+    padding: 0,
+    backgroundColor: '',
+    rows: [{
+      id: createEmailDesignBlockId('row'),
+      gap: 12,
+      mobileStack: true,
+      columns: [{ id: createEmailDesignBlockId('column'), width: 100, padding: 0, elements }],
+    }],
+  }];
+}
+
+function findEmailDesignElement(sections: EmailDesignSection[], id: string): EmailDesignBlock | null {
+  for (const section of sections) {
+    for (const row of section.rows) {
+      for (const column of row.columns) {
+        const match = column.elements.find((element) => element.id === id);
+        if (match) return match;
+      }
+    }
+  }
+  return null;
 }
 
 const CAMPAIGN_PREDEFINED_IDS = new Set(['tpl-b2b-portal', 'tpl-visa-allotments', 'tpl-enterprise-suite']);
@@ -330,6 +361,10 @@ export const EmailDesignStudio: React.FC<EmailDesignStudioProps> = ({ tenantId, 
   const [notice, setNotice] = useState<{ tone: 'success' | 'error' | 'info'; text: string } | null>(null);
   const [editing, setEditing] = useState<EmailDesignTemplate | null>(null);
   const [selectedBlockId, setSelectedBlockId] = useState<string>('');
+  const [selectedSectionId, setSelectedSectionId] = useState<string>('');
+  const [selectedRowId, setSelectedRowId] = useState<string>('');
+  const [selectedColumnId, setSelectedColumnId] = useState<string>('');
+  const [assetTarget, setAssetTarget] = useState<'element' | 'section' | 'column'>('element');
   const [editorPanel, setEditorPanel] = useState<EditorPanel>('blocks');
   const [previewMode, setPreviewMode] = useState<PreviewMode>('desktop');
   const [editorMode, setEditorMode] = useState<EditorMode>('visual');
@@ -407,13 +442,27 @@ export const EmailDesignStudio: React.FC<EmailDesignStudioProps> = ({ tenantId, 
     });
   }, [tab, predefinedTemplates, customTemplates, category, search]);
 
-  const selectedBlock = editing?.blocks.find((item) => item.id === selectedBlockId) || null;
+  const activeSections = editing
+    ? (editing.sections?.length ? editing.sections : ensureEmailDesignSections(editing))
+    : [];
+  const selectedBlock = editing ? findEmailDesignElement(activeSections, selectedBlockId) : null;
+  const selectedSection = activeSections.find((item) => item.id === selectedSectionId) || null;
+  const selectedColumn = activeSections.flatMap((section) => section.rows.flatMap((row) => row.columns)).find((column) => column.id === selectedColumnId) || null;
+  const selectedRow = activeSections.flatMap((section) => section.rows).find((row) => row.id === selectedRowId) || null;
+  const selectedColumnMaxWidth = selectedRow ? Math.max(10, 100 - Math.max(0, selectedRow.columns.length - 1) * 5) : 100;
 
   const startEditing = (template: EmailDesignTemplate) => {
     const copy = cloneTemplate(template);
+    copy.sections = ensureEmailDesignSections(copy);
     if (copy.customHtml !== undefined) copy.customHtml = formatEmailHtml(copy.customHtml);
+    const firstSection = copy.sections[0];
+    const firstRow = firstSection?.rows[0];
+    const firstColumn = firstRow?.columns[0];
     setEditing(copy);
-    setSelectedBlockId(copy.blocks.find((item) => item.type !== 'content')?.id || copy.blocks[0]?.id || '');
+    setSelectedSectionId(firstSection?.id || '');
+    setSelectedRowId(firstRow?.id || '');
+    setSelectedColumnId(firstColumn?.id || '');
+    setSelectedBlockId(firstColumn?.elements.find((item) => item.type !== 'content')?.id || firstColumn?.elements[0]?.id || '');
     setEditorPanel('blocks');
     setPreviewMode('desktop');
     setEditorMode(copy.customHtml ? 'html' : 'visual');
@@ -440,8 +489,15 @@ export const EmailDesignStudio: React.FC<EmailDesignStudioProps> = ({ tenantId, 
       template.campaignAttachments = [];
       template.campaignTemplateId = '';
     }
+    template.sections = ensureEmailDesignSections(template);
+    const firstSection = template.sections[0];
+    const firstRow = firstSection?.rows[0];
+    const firstColumn = firstRow?.columns[0];
     setEditing(template);
-    setSelectedBlockId(template.blocks[0]?.id || '');
+    setSelectedSectionId(firstSection?.id || '');
+    setSelectedRowId(firstRow?.id || '');
+    setSelectedColumnId(firstColumn?.id || '');
+    setSelectedBlockId(firstColumn?.elements[0]?.id || '');
     setEditorPanel('blocks');
     setEditorMode('visual');
     setHtmlExpanded(false);
@@ -564,11 +620,18 @@ export const EmailDesignStudio: React.FC<EmailDesignStudioProps> = ({ tenantId, 
     visualCopy.source = 'CUSTOM';
     visualCopy.version = 1;
     visualCopy.customHtml = undefined;
+    visualCopy.sections = ensureEmailDesignSections(visualCopy);
     if (isCampaignMode) visualCopy.campaignTemplateId = '';
     visualCopy.createdAt = undefined;
     visualCopy.updatedAt = undefined;
+    const firstSection = visualCopy.sections[0];
+    const firstRow = firstSection?.rows[0];
+    const firstColumn = firstRow?.columns[0];
     setEditing(visualCopy);
-    setSelectedBlockId(visualCopy.blocks.find((item) => item.type !== 'content')?.id || visualCopy.blocks[0]?.id || '');
+    setSelectedSectionId(firstSection?.id || '');
+    setSelectedRowId(firstRow?.id || '');
+    setSelectedColumnId(firstColumn?.id || '');
+    setSelectedBlockId(firstColumn?.elements.find((item) => item.type !== 'content')?.id || firstColumn?.elements[0]?.id || '');
     setEditorMode('visual');
     setEditorPanel('blocks');
     setHtmlExpanded(false);
@@ -581,61 +644,314 @@ export const EmailDesignStudio: React.FC<EmailDesignStudioProps> = ({ tenantId, 
   };
 
   const updateBlock = (id: string, patch: Partial<EmailDesignBlock>) => {
+    setEditing((current) => {
+      if (!current) return current;
+      const sections = current.sections?.length ? current.sections : ensureEmailDesignSections(current);
+      return {
+        ...current,
+        customHtml: undefined,
+        sections: sections.map((section) => ({
+          ...section,
+          rows: section.rows.map((row) => ({
+            ...row,
+            columns: row.columns.map((column) => ({
+              ...column,
+              elements: column.elements.map((item) => item.id === id ? { ...item, ...patch } : item),
+            })),
+          })),
+        })),
+        blocks: current.blocks.map((item) => item.id === id ? { ...item, ...patch } : item),
+      };
+    });
+  };
+
+  const updateSection = (id: string, patch: Partial<EmailDesignSection>) => {
     setEditing((current) => current ? {
       ...current,
       customHtml: undefined,
-      blocks: current.blocks.map((item) => item.id === id ? { ...item, ...patch } : item),
+      sections: (current.sections || []).map((section) => section.id === id ? { ...section, ...patch } : section),
     } : current);
+  };
+
+  const updateColumn = (id: string, patch: Partial<EmailDesignColumn>) => {
+    setEditing((current) => current ? {
+      ...current,
+      customHtml: undefined,
+      sections: (current.sections || []).map((section) => ({
+        ...section,
+        rows: section.rows.map((row) => ({
+          ...row,
+          columns: row.columns.map((column) => column.id === id ? { ...column, ...patch } : column),
+        })),
+      })),
+    } : current);
+  };
+
+  const updateColumnWidth = (id: string, requestedWidth: number) => {
+    setEditing((current) => {
+      if (!current) return current;
+      return {
+        ...current,
+        customHtml: undefined,
+        sections: (current.sections || []).map((section) => ({
+          ...section,
+          rows: section.rows.map((row) => {
+            if (!row.columns.some((column) => column.id === id)) return row;
+            const others = row.columns.filter((column) => column.id !== id);
+            const maxWidth = others.length ? Math.max(10, 100 - others.length * 5) : 100;
+            const width = others.length ? Math.max(10, Math.min(maxWidth, requestedWidth)) : 100;
+            const otherTotal = others.reduce((sum, column) => sum + Math.max(1, column.width || 1), 0);
+            let remaining = 100 - width;
+            const columns = row.columns.map((column, index) => {
+              if (column.id === id) return { ...column, width };
+              const isLastOther = index === row.columns.length - 1 || row.columns.slice(index + 1).every((item) => item.id === id);
+              const share = isLastOther ? remaining : Math.max(5, Math.round((100 - width) * Math.max(1, column.width || 1) / otherTotal));
+              remaining = Math.max(0, remaining - share);
+              return { ...column, width: share };
+            });
+            return { ...row, columns };
+          }),
+        })),
+      };
+    });
+  };
+
+  const updateRow = (id: string, patch: Partial<EmailDesignRow>) => {
+    setEditing((current) => current ? {
+      ...current,
+      customHtml: undefined,
+      sections: (current.sections || []).map((section) => ({
+        ...section,
+        rows: section.rows.map((row) => row.id === id ? { ...row, ...patch } : row),
+      })),
+    } : current);
+  };
+
+  const addSection = () => {
+    const section: EmailDesignSection = {
+      id: createEmailDesignBlockId('section'),
+      name: 'New section',
+      padding: 20,
+      backgroundColor: '',
+      rows: [{
+        id: createEmailDesignBlockId('row'),
+        gap: 12,
+        mobileStack: true,
+        columns: [{ id: createEmailDesignBlockId('column'), width: 100, padding: 0, elements: [] }],
+      }],
+    };
+    setEditing((current) => current ? {
+      ...current,
+      customHtml: undefined,
+      sections: [...(current.sections?.length ? current.sections : ensureEmailDesignSections(current)), section],
+    } : current);
+    setSelectedSectionId(section.id);
+    setSelectedRowId('');
+    setSelectedColumnId('');
+    setSelectedBlockId('');
+  };
+
+  const addRow = (columnCount: number, sectionId = selectedSectionId) => {
+    const row: EmailDesignRow = {
+      id: createEmailDesignBlockId('row'),
+      gap: 12,
+      mobileStack: true,
+      columns: Array.from({ length: Math.max(1, Math.min(3, columnCount)) }, (_, index) => ({
+        id: createEmailDesignBlockId('column'),
+        width: columnCount === 1 ? 100 : Math.floor(100 / columnCount) + (index === columnCount - 1 ? 100 % columnCount : 0),
+        padding: 0,
+        elements: [],
+      })),
+    };
+    const nextSections = (editing?.sections?.length ? editing.sections : editing ? ensureEmailDesignSections(editing) : []);
+    const targetSectionId = nextSections.some((section) => section.id === sectionId) ? sectionId : nextSections[0]?.id || '';
+    setEditing((current) => current ? {
+      ...current,
+      customHtml: undefined,
+      sections: (current.sections?.length ? current.sections : ensureEmailDesignSections(current)).map((section) =>
+        section.id === targetSectionId ? { ...section, rows: [...section.rows, row] } : section
+      ),
+    } : current);
+    setSelectedSectionId(targetSectionId);
+    setSelectedRowId(row.id);
+    setSelectedColumnId(row.columns[0]?.id || '');
+    setSelectedBlockId('');
   };
 
   const addBlock = (type: EmailDesignBlockType) => {
     const id = createEmailDesignBlockId(type);
-    const defaultBlocks: Partial<Record<EmailDesignBlockType, Partial<EmailDesignBlock>>> = {
+    const defaults: Partial<Record<EmailDesignBlockType, Partial<EmailDesignBlock>>> = {
       heading: { text: 'A clear heading', fontSize: editing?.theme.headingFontSize || 24, padding: 18 },
       hero: { eyebrow: 'A SHORT INTRODUCTION', text: 'A compelling headline goes here', secondaryText: 'Add one short supporting sentence to explain the value.', fontSize: editing?.theme.headingFontSize || 28, color: '#FFFFFF', backgroundColor: editing?.theme.primaryColor || '#183B66', padding: 28, align: 'left' },
       logo: { width: 160, padding: 22, color: '#183B66', backgroundColor: '#FFFFFF', align: 'left' },
       text: { text: 'Add supporting information here.', padding: 14 },
-      image: { url: '', altText: 'Company image', width: 540, padding: 12 },
+      image: { url: '', altText: 'Company image', width: 520, padding: 12 },
       button: { text: 'Learn more', url: '', align: 'left', padding: 18, backgroundColor: editing?.theme.primaryColor || '#183B66', color: '#FFFFFF' },
       divider: { color: '#E6EAF0', padding: 14 },
       spacer: { padding: 28 },
       social: { links: [], padding: 12, align: 'left' },
       footer: { padding: 24 },
     };
-    const defaults = defaultBlocks[type] || {};
-    const item: EmailDesignBlock = { id, type, enabled: true, ...defaults };
-    setEditing((current) => current ? { ...current, customHtml: undefined, blocks: [...current.blocks, item] } : current);
+    const item: EmailDesignBlock = { id, type, enabled: true, ...(defaults[type] || {}) };
+    setEditing((current) => {
+      if (!current) return current;
+      const sections = current.sections?.length ? current.sections : ensureEmailDesignSections(current);
+      const targetColumnId = selectedColumnId
+        || sections.flatMap((section) => section.rows).find((row) => row.id === selectedRowId)?.columns[0]?.id
+        || sections.find((section) => section.id === selectedSectionId)?.rows[0]?.columns[0]?.id
+        || sections[0]?.rows[0]?.columns[0]?.id;
+      let inserted = false;
+      const nextSections = sections.map((section) => ({
+        ...section,
+        rows: section.rows.map((row) => ({
+          ...row,
+          columns: row.columns.map((column) => {
+            if (!inserted && column.id === targetColumnId) {
+              inserted = true;
+              const elements = [...column.elements];
+              const selectedIndex = elements.findIndex((element) => element.id === selectedBlockId);
+              elements.splice(selectedIndex >= 0 ? selectedIndex + 1 : elements.length, 0, item);
+              return { ...column, elements };
+            }
+            return column;
+          }),
+        })),
+      }));
+      return inserted ? {
+        ...current,
+        customHtml: undefined,
+        sections: nextSections,
+        blocks: [...current.blocks.filter((block) => block.id !== item.id), item],
+      } : current;
+    });
+    const targetColumn = selectedColumnId
+      || activeSections.flatMap((section) => section.rows).find((row) => row.id === selectedRowId)?.columns[0]?.id
+      || activeSections.find((section) => section.id === selectedSectionId)?.rows[0]?.columns[0]?.id
+      || activeSections[0]?.rows[0]?.columns[0]?.id
+      || '';
+    if (targetColumn) setSelectedColumnId(targetColumn);
     setSelectedBlockId(id);
   };
 
   const removeBlock = (id: string) => {
-    if (editing?.blocks.find((item) => item.id === id)?.type === 'content') return;
-    const next = editing?.blocks.filter((item) => item.id !== id) || [];
-    setEditing((current) => current ? { ...current, customHtml: undefined, blocks: next } : current);
-    setSelectedBlockId(next.find((item) => item.type !== 'content')?.id || next[0]?.id || '');
+    if (findEmailDesignElement(activeSections, id)?.type === 'content') return;
+    setEditing((current) => current ? {
+      ...current,
+      customHtml: undefined,
+      sections: (current.sections || []).map((section) => ({
+        ...section,
+        rows: section.rows.map((row) => ({
+          ...row,
+          columns: row.columns.map((column) => ({
+            ...column,
+            elements: column.elements.filter((item) => item.id !== id),
+          })),
+        })),
+      })),
+      blocks: current.blocks.filter((item) => item.id !== id),
+    } : current);
+    setSelectedBlockId('');
   };
 
   const moveBlock = (id: string, offset: number) => {
     setEditing((current) => {
       if (!current) return current;
-      const index = current.blocks.findIndex((item) => item.id === id);
-      const target = index + offset;
-      if (index < 0 || target < 0 || target >= current.blocks.length) return current;
-      const next = [...current.blocks];
-      const [item] = next.splice(index, 1);
-      next.splice(target, 0, item);
-      return { ...current, customHtml: undefined, blocks: next };
+      let moved = false;
+      const sections = current.sections || [];
+      const nextSections = sections.map((section) => ({
+        ...section,
+        rows: section.rows.map((row) => ({
+          ...row,
+          columns: row.columns.map((column) => {
+            if (moved) return column;
+            const index = column.elements.findIndex((item) => item.id === id);
+            const target = index + offset;
+            if (index < 0 || target < 0 || target >= column.elements.length) return column;
+            const elements = [...column.elements];
+            const [element] = elements.splice(index, 1);
+            elements.splice(target, 0, element);
+            moved = true;
+            return { ...column, elements };
+          }),
+        })),
+      }));
+      return moved ? { ...current, customHtml: undefined, sections: nextSections } : current;
     });
   };
 
-  const moveBlockTo = (from: number, to: number) => {
+  const moveElementToColumn = (elementId: string, targetColumnId: string, targetIndex?: number) => {
     setEditing((current) => {
-      if (!current || from === to || from < 0 || to < 0 || from >= current.blocks.length || to >= current.blocks.length) return current;
-      const next = [...current.blocks];
-      const [item] = next.splice(from, 1);
-      next.splice(to, 0, item);
-      return { ...current, customHtml: undefined, blocks: next };
+      if (!current) return current;
+      const sections = current.sections || [];
+      let moving: EmailDesignBlock | undefined;
+      let sourceColumnId = '';
+      let sourceIndex = -1;
+      const without = sections.map((section) => ({
+        ...section,
+        rows: section.rows.map((row) => ({
+          ...row,
+          columns: row.columns.map((column) => {
+            if (!moving) {
+              const index = column.elements.findIndex((item) => item.id === elementId);
+              if (index >= 0) {
+                const elements = [...column.elements];
+                [moving] = elements.splice(index, 1);
+                sourceColumnId = column.id;
+                sourceIndex = index;
+                return { ...column, elements };
+              }
+            }
+            return column;
+          }),
+        })),
+      }));
+      if (!moving) return current;
+      let inserted = false;
+      const next = without.map((section) => ({
+        ...section,
+        rows: section.rows.map((row) => ({
+          ...row,
+          columns: row.columns.map((column) => {
+            if (!inserted && column.id === targetColumnId) {
+              const elements = [...column.elements];
+              let insertionIndex = targetIndex === undefined ? elements.length : Math.max(0, Math.min(elements.length, targetIndex));
+              if (sourceColumnId === targetColumnId && sourceIndex >= 0 && sourceIndex < insertionIndex) insertionIndex--;
+              elements.splice(insertionIndex, 0, moving as EmailDesignBlock);
+              inserted = true;
+              return { ...column, elements };
+            }
+            return column;
+          }),
+        })),
+      }));
+      return inserted ? { ...current, customHtml: undefined, sections: next } : current;
     });
+    const destination = activeSections.flatMap((section) => section.rows.map((row) => ({ section, row }))).find(({ row }) => row.columns.some((column) => column.id === targetColumnId));
+    if (destination) {
+      setSelectedSectionId(destination.section.id);
+      setSelectedRowId(destination.row.id);
+    }
+    setSelectedBlockId(elementId);
+    setSelectedColumnId(targetColumnId);
+  };
+
+  const removeSection = (sectionId: string) => {
+    const section = activeSections.find((item) => item.id === sectionId);
+    if (section?.rows.some((row) => row.columns.some((column) => column.elements.some((item) => item.type === 'content')))) {
+      setNotice({ tone: 'info', text: 'Move the required message content element before removing this section.' });
+      return;
+    }
+    const remaining = activeSections.filter((item) => item.id !== sectionId);
+    if (!remaining.length) {
+      setNotice({ tone: 'info', text: 'At least one section is required.' });
+      return;
+    }
+    setEditing((current) => current ? { ...current, customHtml: undefined, sections: remaining } : current);
+    const fallback = remaining[0];
+    setSelectedSectionId(fallback.id);
+    setSelectedRowId(fallback.rows[0]?.id || '');
+    setSelectedColumnId(fallback.rows[0]?.columns[0]?.id || '');
+    setSelectedBlockId('');
   };
 
   const saveTemplate = async (makeDefault = false): Promise<EmailDesignTemplate | null> => {
@@ -912,15 +1228,47 @@ export const EmailDesignStudio: React.FC<EmailDesignStudioProps> = ({ tenantId, 
 
   const insertAsset = (asset: CompanyAsset) => {
     if (!editing) return;
-    const current = editing.blocks.find((item) => item.id === selectedBlockId);
-    if (current && (current.type === 'logo' || current.type === 'image')) {
-      updateBlock(current.id, { url: asset.url, altText: asset.name });
+    if (assetTarget === 'section' && selectedSectionId) {
+      updateSection(selectedSectionId, { backgroundImageUrl: asset.url });
+    } else if (assetTarget === 'column' && selectedColumnId) {
+      updateColumn(selectedColumnId, { backgroundImageUrl: asset.url });
     } else {
-      const id = createEmailDesignBlockId('image');
-      const image: EmailDesignBlock = { id, type: 'image', url: asset.url, altText: asset.name, width: 540, padding: 12, enabled: true };
-      setEditing((value) => value ? { ...value, customHtml: undefined, blocks: [...value.blocks, image] } : value);
-      setSelectedBlockId(id);
+      const current = findEmailDesignElement(activeSections, selectedBlockId);
+      if (current && (current.type === 'logo' || current.type === 'image')) {
+        updateBlock(current.id, { url: asset.url, altText: asset.name });
+      } else {
+        const id = createEmailDesignBlockId('image');
+        const image: EmailDesignBlock = { id, type: 'image', url: asset.url, altText: asset.name, width: 520, padding: 12, enabled: true };
+        setEditing((value) => {
+          if (!value) return value;
+          const sections = value.sections?.length ? value.sections : ensureEmailDesignSections(value);
+          const targetId = selectedColumnId
+            || sections.flatMap((section) => section.rows).find((row) => row.id === selectedRowId)?.columns[0]?.id
+            || sections.find((section) => section.id === selectedSectionId)?.rows[0]?.columns[0]?.id
+            || sections[0]?.rows[0]?.columns[0]?.id;
+          let inserted = false;
+          const next = sections.map((section) => ({
+            ...section,
+            rows: section.rows.map((row) => ({
+              ...row,
+              columns: row.columns.map((column) => {
+                if (!inserted && column.id === targetId) {
+                  inserted = true;
+                  const elements = [...column.elements];
+                  const selectedIndex = elements.findIndex((element) => element.id === selectedBlockId);
+                  elements.splice(selectedIndex >= 0 ? selectedIndex + 1 : elements.length, 0, image);
+                  return { ...column, elements };
+                }
+                return column;
+              }),
+            })),
+          }));
+          return inserted ? { ...value, customHtml: undefined, sections: next, blocks: [...value.blocks, image] } : value;
+        });
+        setSelectedBlockId(id);
+      }
     }
+    setAssetTarget('element');
     setShowAssets(false);
   };
 
@@ -1093,7 +1441,7 @@ export const EmailDesignStudio: React.FC<EmailDesignStudioProps> = ({ tenantId, 
             </div>
             {editorPanel === 'blocks' ? (
               <>
-                <div className="flex items-center justify-between mb-2"><h3 className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Add a block</h3><button onClick={() => setShowAssets(true)} className="text-[10px] font-semibold text-orange-600 hover:text-orange-700"><FolderOpen className="inline w-3 h-3 mr-1" />Assets</button></div>
+                <div className="flex items-center justify-between mb-2"><h3 className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Add a block</h3><button onClick={() => {setAssetTarget('element');setShowAssets(true);}} className="text-[10px] font-semibold text-orange-600 hover:text-orange-700"><FolderOpen className="inline w-3 h-3 mr-1" />Assets</button></div>
                 <div className="grid grid-cols-2 gap-1.5 mb-5">
                   {BLOCK_OPTIONS.map((option) => (
                     <button key={option.type} onClick={() => addBlock(option.type)} className="text-left p-2.5 border border-slate-200 rounded-lg hover:border-orange-300 hover:bg-orange-50/40 transition group">
@@ -1102,17 +1450,51 @@ export const EmailDesignStudio: React.FC<EmailDesignStudioProps> = ({ tenantId, 
                     </button>
                   ))}
                 </div>
-                <div className="flex items-center justify-between mb-2"><h3 className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Email structure</h3><span className="text-[10px] text-slate-400">{editing.blocks.length} blocks</span></div>
-                <div className="space-y-1">
-                  {editing.blocks.map((item, index) => (
-                    <div key={item.id} draggable onDragStart={(event) => event.dataTransfer.setData('text/plain', String(index))} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); moveBlockTo(Number(event.dataTransfer.getData('text/plain')), index); }} className={'rounded-lg border flex items-center gap-1 p-1.5 ' + (selectedBlockId === item.id ? 'bg-orange-50 border-orange-300' : 'border-transparent hover:bg-slate-50')}>
-                      <button onClick={() => setSelectedBlockId(item.id)} className="min-w-0 flex-1 text-left px-1.5 py-1">
-                        <span className="block text-xs font-semibold text-slate-700 capitalize">{item.type === 'content' ? (isCampaignMode ? 'Campaign message (editable)' : 'Message content (locked)') : item.type === 'logo' ? 'Brand header' : item.type === 'hero' ? 'Hero banner' : item.type}</span>
-                        <span className="block text-[10px] text-slate-400 truncate">{item.type === 'content' ? (isCampaignMode ? (editing.campaignBody || 'Write the campaign message in the settings panel') : 'Original email text is inserted here') : (item.text || item.altText || 'Design block')}</span>
-                      </button>
-                      <button onClick={() => moveBlock(item.id, -1)} disabled={index === 0} className="p-1 text-slate-400 hover:text-slate-800 disabled:opacity-20" title="Move up"><ArrowUp className="w-3 h-3" /></button>
-                      <button onClick={() => moveBlock(item.id, 1)} disabled={index === editing.blocks.length - 1} className="p-1 text-slate-400 hover:text-slate-800 disabled:opacity-20" title="Move down"><ArrowDown className="w-3 h-3" /></button>
-                      {item.type !== 'content' && <button onClick={() => removeBlock(item.id)} className="p-1 text-slate-300 hover:text-rose-600" title="Remove block"><Trash2 className="w-3 h-3" /></button>}
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Email layout</h3>
+                  <button onClick={addSection} className="text-[10px] font-bold text-orange-600 hover:text-orange-700"><Plus className="inline w-3 h-3 mr-1" />Section</button>
+                </div>
+                <p className="mb-3 text-[10px] leading-relaxed text-slate-400">Build each section from rows and columns. Add several elements inside any column, then drag them to another column to change the layout.</p>
+                <div className="space-y-3">
+                  {activeSections.map((section, sectionIndex) => (
+                    <div key={section.id} className="rounded-xl border border-slate-200 bg-white p-2.5">
+                      <div className="flex items-center gap-1.5">
+                        <button onClick={() => {setSelectedSectionId(section.id);setSelectedRowId('');setSelectedColumnId('');setSelectedBlockId('');}} className={'min-w-0 flex-1 text-left rounded-md px-2 py-1.5 text-[11px] font-bold '+(selectedSectionId===section.id&&!selectedBlockId?'bg-orange-50 text-orange-700':'text-slate-700 hover:bg-slate-50')}>
+                          <span className="block truncate">Section {sectionIndex+1}: {section.name}</span>
+                          <span className="block text-[9px] font-normal text-slate-400">{section.rows.length} row(s)</span>
+                        </button>
+                        <button onClick={()=>removeSection(section.id)} title="Remove section" className="p-1.5 text-slate-300 hover:text-rose-600"><Trash2 className="w-3 h-3"/></button>
+                      </div>
+                      <div className="mt-2 flex flex-wrap gap-1">
+                        <button onClick={()=>addRow(1,section.id)} className="rounded-md border border-slate-200 px-2 py-1 text-[9px] font-semibold text-slate-600 hover:border-orange-300">+ 1 column</button>
+                        <button onClick={()=>addRow(2,section.id)} className="rounded-md border border-slate-200 px-2 py-1 text-[9px] font-semibold text-slate-600 hover:border-orange-300">+ 2 columns</button>
+                        <button onClick={()=>addRow(3,section.id)} className="rounded-md border border-slate-200 px-2 py-1 text-[9px] font-semibold text-slate-600 hover:border-orange-300">+ 3 columns</button>
+                      </div>
+                      <div className="mt-2 space-y-2">
+                        {section.rows.map((row,rowIndex)=>(
+                          <div key={row.id} className={'rounded-lg p-2 '+(selectedRowId===row.id&&!selectedColumnId&&!selectedBlockId?'bg-orange-50/70 ring-1 ring-orange-200':'bg-slate-50')}>
+                            <div className="mb-1.5 flex items-center justify-between"><span className="text-[9px] font-bold uppercase tracking-wide text-slate-400">Row {rowIndex+1} · {row.columns.length} column(s)</span><button onClick={()=>{setSelectedSectionId(section.id);setSelectedRowId(row.id);setSelectedColumnId('');setSelectedBlockId('');}} className={'text-[9px] '+(selectedRowId===row.id&&!selectedColumnId&&!selectedBlockId?'font-bold text-orange-700':'text-slate-500 hover:text-orange-600')}>Select row</button></div>
+                            <div className={'grid gap-1.5 '+(row.columns.length===1?'grid-cols-1':row.columns.length===2?'grid-cols-2':'grid-cols-3')}>
+                              {row.columns.map((column,columnIndex)=>(
+                                <div key={column.id} onDragOver={(event)=>event.preventDefault()} onDrop={(event)=>{event.preventDefault();const id=event.dataTransfer.getData('application/x-amaavigo-element')||event.dataTransfer.getData('text/plain');if(id)moveElementToColumn(id,column.id);}} className={'min-w-0 rounded-lg border p-1.5 '+(selectedColumnId===column.id&&!selectedBlockId?'border-orange-300 bg-orange-50/40':'border-slate-200 bg-white')}>
+                                  <button onClick={()=>{setSelectedSectionId(section.id);setSelectedRowId(row.id);setSelectedColumnId(column.id);setSelectedBlockId('');}} className="w-full rounded-md px-1 py-1 text-left text-[9px] font-bold text-slate-600 hover:bg-slate-50">Column {columnIndex+1} · {Math.round((column.width / Math.max(1,row.columns.reduce((sum,item)=>sum+item.width,0))) * 100)}%</button>
+                                  <div className="mt-1 space-y-1">
+                                    {column.elements.map((item,index)=>(
+                                      <div key={item.id} draggable onDragStart={(event)=>{event.dataTransfer.effectAllowed='move';event.dataTransfer.setData('application/x-amaavigo-element',item.id);event.dataTransfer.setData('text/plain',item.id);}} onDragOver={(event)=>event.preventDefault()} onDrop={(event)=>{event.preventDefault();event.stopPropagation();const id=event.dataTransfer.getData('application/x-amaavigo-element')||event.dataTransfer.getData('text/plain');if(id&&id!==item.id)moveElementToColumn(id,column.id,index);}} className={'flex min-w-0 items-center gap-1 rounded-md border px-1 py-1 '+(selectedBlockId===item.id?'border-orange-300 bg-orange-50':'border-transparent bg-slate-50 hover:border-slate-200')}>
+                                        <button onClick={()=>{setSelectedSectionId(section.id);setSelectedRowId(row.id);setSelectedColumnId(column.id);setSelectedBlockId(item.id);}} className="min-w-0 flex-1 truncate text-left text-[10px] font-semibold capitalize text-slate-700">{item.type==='content'?(isCampaignMode?'Campaign message':'Message content'):item.type==='logo'?'Brand header':item.type==='hero'?'Hero banner':item.type}</button>
+                                        <button onClick={()=>moveBlock(item.id,-1)} disabled={index===0} title="Move up" className="p-0.5 text-slate-400 hover:text-slate-800 disabled:opacity-20"><ArrowUp className="h-2.5 w-2.5"/></button>
+                                        <button onClick={()=>moveBlock(item.id,1)} disabled={index===column.elements.length-1} title="Move down" className="p-0.5 text-slate-400 hover:text-slate-800 disabled:opacity-20"><ArrowDown className="h-2.5 w-2.5"/></button>
+                                        {item.type!=='content'&&<button onClick={()=>removeBlock(item.id)} title="Remove element" className="p-0.5 text-slate-300 hover:text-rose-600"><Trash2 className="h-2.5 w-2.5"/></button>}
+                                      </div>
+                                    ))}
+                                    <p className="px-1 py-0.5 text-[8px] text-slate-400">{column.elements.length? 'Drop another element here':'Empty column — add a block above or drop it here'}</p>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -1196,10 +1578,14 @@ export const EmailDesignStudio: React.FC<EmailDesignStudioProps> = ({ tenantId, 
                       <label className="block text-xs font-semibold text-slate-600">Image URL
                         <input value={selectedBlock.url || ''} onChange={(event) => updateBlock(selectedBlock.id, { url: event.target.value })} className="mt-1 w-full rounded-lg border border-slate-200 p-2 text-xs font-normal" placeholder="/api/assets/..." />
                       </label>
-                      <button onClick={() => setShowAssets(true)} className="w-full py-2 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-semibold border border-emerald-200"><FolderOpen className="inline w-3.5 h-3.5 mr-1" />Choose from Company Assets</button>
+                      <button onClick={() => {setAssetTarget('element');setShowAssets(true);}} className="w-full py-2 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-semibold border border-emerald-200"><FolderOpen className="inline w-3.5 h-3.5 mr-1" />Choose from Company Assets</button>
                       <label className="block text-xs font-semibold text-slate-600">Alternative text
                         <input value={selectedBlock.altText || ''} onChange={(event) => updateBlock(selectedBlock.id, { altText: event.target.value })} className="mt-1 w-full rounded-lg border border-slate-200 p-2 text-xs font-normal" />
                       </label>
+                      {selectedBlock.type === 'image' && <label className="block text-xs font-semibold text-slate-600">Image width
+                        <input type="range" min="80" max="680" step="10" value={selectedBlock.width || 520} onChange={(event) => updateBlock(selectedBlock.id, { width: Number(event.target.value) })} className="mt-2 w-full" />
+                        <span className="text-[10px] font-normal text-slate-400">{selectedBlock.width || 520}px maximum · image stays responsive</span>
+                      </label>}
                     </>}
                     {selectedBlock.type === 'button' && <label className="block text-xs font-semibold text-slate-600">Button destination
                       <input type="url" value={selectedBlock.url || ''} onChange={(event) => updateBlock(selectedBlock.id, { url: event.target.value })} className="mt-1 w-full rounded-lg border border-slate-200 p-2 text-xs font-normal" placeholder="https://..." />
@@ -1236,7 +1622,65 @@ export const EmailDesignStudio: React.FC<EmailDesignStudioProps> = ({ tenantId, 
                   </>
                 )}
               </div>
-            ) : <p className="text-xs text-slate-400">Select a block to edit its properties.</p>}
+            ) : selectedColumn ? (
+              <div className="space-y-3">
+                <div><h3 className="text-sm font-bold text-slate-900">Column settings</h3><p className="text-[10px] text-slate-400">Background and width for the selected column.</p></div>
+                <label className="block text-xs font-semibold text-slate-600">Column width
+                  <input type="range" min="10" max={selectedColumnMaxWidth} value={selectedRow?.columns.length === 1 ? 100 : (selectedColumn.width || 50)} disabled={selectedRow?.columns.length === 1} onChange={(event)=>updateColumnWidth(selectedColumn.id,Number(event.target.value))} className="mt-2 w-full disabled:opacity-40"/>
+                  <span className="text-[10px] font-normal text-slate-400">{selectedColumn.width || 100}% of this row</span>
+                </label>
+                <label className="block text-xs font-semibold text-slate-600">Inner spacing
+                  <input type="range" min="0" max="48" value={selectedColumn.padding || 0} onChange={(event)=>updateColumn(selectedColumn.id,{padding:Number(event.target.value)})} className="mt-2 w-full"/>
+                  <span className="text-[10px] font-normal text-slate-400">{selectedColumn.padding || 0}px</span>
+                </label>
+                <ColorField label="Column background" value={selectedColumn.backgroundColor || editing.theme.cardBackground} onChange={(value)=>updateColumn(selectedColumn.id,{backgroundColor:value})}/>
+                <label className="block text-xs font-semibold text-slate-600">Background image URL
+                  <input value={selectedColumn.backgroundImageUrl || ''} onChange={(event)=>updateColumn(selectedColumn.id,{backgroundImageUrl:event.target.value})} placeholder="https://..." className="mt-1 w-full rounded-lg border border-slate-200 p-2 text-xs font-normal"/>
+                </label>
+                <button onClick={()=>{setAssetTarget('column');setShowAssets(true);}} className="w-full py-2 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-semibold border border-emerald-200"><FolderOpen className="inline w-3.5 h-3.5 mr-1"/>Choose column background</button>
+                <label className="block text-xs font-semibold text-slate-600">Image fit
+                  <select value={selectedColumn.backgroundImageSize || 'cover'} onChange={(event)=>updateColumn(selectedColumn.id,{backgroundImageSize:event.target.value as 'cover'|'contain'})} className="mt-1 w-full rounded-lg border border-slate-200 p-2 text-xs bg-white"><option value="cover">Cover</option><option value="contain">Contain</option></select>
+                </label>
+                <label className="block text-xs font-semibold text-slate-600">Image position
+                  <select value={selectedColumn.backgroundImagePosition || 'center'} onChange={(event)=>updateColumn(selectedColumn.id,{backgroundImagePosition:event.target.value as EmailDesignColumn['backgroundImagePosition']})} className="mt-1 w-full rounded-lg border border-slate-200 p-2 text-xs bg-white">{['center','top','bottom','left','right'].map((position)=><option key={position} value={position}>{position}</option>)}</select>
+                </label>
+              </div>
+            ) : selectedRow ? (
+              <div className="space-y-3">
+                <div><h3 className="text-sm font-bold text-slate-900">Row settings</h3><p className="text-[10px] text-slate-400">Control spacing between columns and mobile stacking.</p></div>
+                <label className="block text-xs font-semibold text-slate-600">Column gap
+                  <input type="range" min="0" max="48" value={selectedRow.gap || 0} onChange={(event)=>updateRow(selectedRow.id,{gap:Number(event.target.value)})} className="mt-2 w-full"/>
+                  <span className="text-[10px] font-normal text-slate-400">{selectedRow.gap || 0}px</span>
+                </label>
+                <label className="flex items-center justify-between gap-3 py-2 text-xs font-medium text-slate-600">
+                  <span>Stack columns on mobile</span>
+                  <input type="checkbox" checked={selectedRow.mobileStack !== false} onChange={(event)=>updateRow(selectedRow.id,{mobileStack:event.target.checked})}/>
+                </label>
+                <p className="text-[10px] leading-relaxed text-slate-400">When disabled, the row keeps its desktop column layout on small screens. Some email apps may still apply their own layout rules.</p>
+              </div>
+            ) : selectedSection ? (
+              <div className="space-y-3">
+                <div><h3 className="text-sm font-bold text-slate-900">Section settings</h3><p className="text-[10px] text-slate-400">A section can contain multiple rows and columns.</p></div>
+                <label className="block text-xs font-semibold text-slate-600">Section name
+                  <input value={selectedSection.name} onChange={(event)=>updateSection(selectedSection.id,{name:event.target.value})} className="mt-1 w-full rounded-lg border border-slate-200 p-2 text-xs font-normal"/>
+                </label>
+                <ColorField label="Section background" value={selectedSection.backgroundColor || editing.theme.cardBackground} onChange={(value)=>updateSection(selectedSection.id,{backgroundColor:value})}/>
+                <label className="block text-xs font-semibold text-slate-600">Background image URL
+                  <input value={selectedSection.backgroundImageUrl || ''} onChange={(event)=>updateSection(selectedSection.id,{backgroundImageUrl:event.target.value})} placeholder="https://..." className="mt-1 w-full rounded-lg border border-slate-200 p-2 text-xs font-normal"/>
+                </label>
+                <button onClick={()=>{setAssetTarget('section');setShowAssets(true);}} className="w-full py-2 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-semibold border border-emerald-200"><FolderOpen className="inline w-3.5 h-3.5 mr-1"/>Choose section background</button>
+                <label className="block text-xs font-semibold text-slate-600">Background fit
+                  <select value={selectedSection.backgroundImageSize || 'cover'} onChange={(event)=>updateSection(selectedSection.id,{backgroundImageSize:event.target.value as 'cover'|'contain'})} className="mt-1 w-full rounded-lg border border-slate-200 p-2 text-xs bg-white"><option value="cover">Cover</option><option value="contain">Contain</option></select>
+                </label>
+                <label className="block text-xs font-semibold text-slate-600">Image position
+                  <select value={selectedSection.backgroundImagePosition || 'center'} onChange={(event)=>updateSection(selectedSection.id,{backgroundImagePosition:event.target.value as EmailDesignSection['backgroundImagePosition']})} className="mt-1 w-full rounded-lg border border-slate-200 p-2 text-xs bg-white">{['center','top','bottom','left','right'].map((position)=><option key={position} value={position}>{position}</option>)}</select>
+                </label>
+                <label className="block text-xs font-semibold text-slate-600">Section spacing
+                  <input type="range" min="0" max="64" value={selectedSection.padding || 0} onChange={(event)=>updateSection(selectedSection.id,{padding:Number(event.target.value)})} className="mt-2 w-full"/>
+                  <span className="text-[10px] font-normal text-slate-400">{selectedSection.padding || 0}px</span>
+                </label>
+              </div>
+            ) : <p className="text-xs text-slate-400">Select a section, column or element to edit its properties.</p>}
             <div className="mt-6 pt-4 border-t border-slate-100">
               <h4 className="text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-2">Design details</h4>
               <label className="block text-xs font-semibold text-slate-600">Description
@@ -1317,7 +1761,20 @@ export const EmailDesignStudio: React.FC<EmailDesignStudioProps> = ({ tenantId, 
       <div className="rounded-xl border border-slate-200 bg-white p-4 flex flex-col md:flex-row md:items-center gap-3">
         <div className="h-9 w-9 rounded-lg bg-slate-100 flex items-center justify-center text-slate-600"><FileImage className="w-4 h-4" /></div>
         <div className="flex-1"><p className="text-xs font-bold text-slate-800">Company Assets are shared across email templates</p><p className="text-[11px] text-slate-500">Reuse approved logos, banners and images in conversation designs and campaign emails.</p></div>
-        <button onClick={() => { setEditing(createBlankEmailDesignTemplate()); setSelectedBlockId(''); setShowAssets(true); }} className="px-3 py-2 rounded-lg border border-slate-200 hover:bg-slate-50 text-xs font-semibold text-slate-700">Browse assets</button>
+        <button onClick={() => {
+          const template = createBlankEmailDesignTemplate();
+          template.sections = ensureEmailDesignSections(template);
+          const firstSection = template.sections[0];
+          const firstRow = firstSection?.rows[0];
+          const firstColumn = firstRow?.columns[0];
+          setEditing(template);
+          setSelectedSectionId(firstSection?.id || '');
+          setSelectedRowId(firstRow?.id || '');
+          setSelectedColumnId(firstColumn?.id || '');
+          setSelectedBlockId('');
+          setAssetTarget('element');
+          setShowAssets(true);
+        }} className="px-3 py-2 rounded-lg border border-slate-200 hover:bg-slate-50 text-xs font-semibold text-slate-700">Browse assets</button>
       </div>
 
       {aiStep && <div className="fixed inset-0 z-[90] bg-slate-950/50 flex items-center justify-center p-3 lg:p-8">

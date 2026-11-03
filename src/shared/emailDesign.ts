@@ -11,13 +11,24 @@ export interface EmailDesignBlock {
   backgroundColor?:string; padding?:number; enabled?:boolean; eyebrow?:string; secondaryText?:string;
   links?:Array<{label:string;url:string}>;
 }
+export interface EmailDesignColumn {
+ id:string; width:number; padding?:number; backgroundColor?:string; backgroundImageUrl?:string;
+ backgroundImagePosition?:'center'|'top'|'bottom'|'left'|'right'; backgroundImageSize?:'cover'|'contain';
+ elements:EmailDesignBlock[];
+}
+export interface EmailDesignRow { id:string; gap:number; mobileStack:boolean; columns:EmailDesignColumn[]; }
+export interface EmailDesignSection {
+ id:string; name:string; padding:number; backgroundColor?:string; backgroundImageUrl?:string;
+ backgroundImagePosition?:'center'|'top'|'bottom'|'left'|'right'; backgroundImageSize?:'cover'|'contain';
+ rows:EmailDesignRow[];
+}
 export interface EmailBrandProfile {
   websiteUrl:string; companyName:string; tagline:string; description:string; logoUrl:string;
   contactEmail:string; contactPhone:string; colors:string[]; socialLinks:Record<string,string>;
 }
 export interface EmailDesignTemplate {
   id:string; name:string; description:string; category:string; source:EmailDesignSource; version:number;
-  theme:EmailDesignTheme; blocks:EmailDesignBlock[]; customHtml?:string; brandProfile?:EmailBrandProfile;
+  theme:EmailDesignTheme; blocks:EmailDesignBlock[]; sections?:EmailDesignSection[]; customHtml?:string; brandProfile?:EmailBrandProfile;
   createdAt?:string; updatedAt?:string;
   /** Campaign email metadata; unused by conversation reply designs. */
   campaignTemplateId?:string; campaignSubject?:string; campaignPreheader?:string; campaignBody?:string; campaignAttachments?:any[];
@@ -248,18 +259,52 @@ export function normalizeEmailDesignTemplate(input:any,sourceOverride?:EmailDesi
   bodyLineHeight:Number.isFinite(Number(rt.bodyLineHeight))?Math.max(1.4,Math.min(2,Number(rt.bodyLineHeight))):1.72,
  };
  const types=new Set<EmailDesignBlockType>(['logo','hero','heading','text','content','image','button','divider','spacer','footer','social']);
- const blocks:EmailDesignBlock[]=(Array.isArray(raw.blocks)?raw.blocks:[]).slice(0,40).map((item:any,i:number)=>{
+ const normalizeBlock=(item:any,i:number):EmailDesignBlock=>{
   const type=types.has(item?.type)?item.type as EmailDesignBlockType:'text';
   return {id:String(item?.id||'block-'+i).replace(/[^a-zA-Z0-9_-]/g,'').slice(0,64)||'block-'+i,type,
    text:String(item?.text??'').slice(0,5000),url:isSafeEmailUrl(item?.url,true),altText:String(item?.altText??'').slice(0,240),
-   align:['left','center','right'].includes(item?.align)?item.align:'left',width:num(item?.width,560,80,680),
+   align:['left','center','right'].includes(item?.align)?item.align:'left',width:num(item?.width,560,40,680),
    fontSize:item?.fontSize===undefined||item?.fontSize===null?undefined:num(item.fontSize,type==='heading'||type==='hero'?theme.headingFontSize:theme.bodyFontSize,10,48),color:safeHexColor(item?.color,theme.textColor),
    backgroundColor:item?.backgroundColor?safeHexColor(item.backgroundColor,theme.cardBackground):'',padding:num(item?.padding,16,0,64),
    eyebrow:String(item?.eyebrow??'').slice(0,180),secondaryText:String(item?.secondaryText??'').slice(0,700),
    enabled:item?.enabled!==false||type==='content',
    links:Array.isArray(item?.links)?item.links.slice(0,6).map((x:any)=>({label:String(x?.label||'').slice(0,40),url:isSafeEmailUrl(x?.url,false)})).filter((x:any)=>x.label&&x.url):undefined};
- });
+ };
+ const blocks:EmailDesignBlock[]=(Array.isArray(raw.blocks)?raw.blocks:[]).slice(0,40).map(normalizeBlock);
  if(!blocks.some(x=>x.type==='content'))blocks.push({id:'content-area',type:'content',padding:16,enabled:true});
+ let sectionElementCount=0;
+ const rawSections=Array.isArray(raw.sections)?raw.sections.slice(0,24):null;
+ const sections:EmailDesignSection[]=rawSections?rawSections.map((section:any,si:number)=>({
+  id:String(section?.id||'section-'+si).replace(/[^a-zA-Z0-9_-]/g,'').slice(0,64)||'section-'+si,
+  name:String(section?.name||'Section '+(si+1)).trim().slice(0,80)||'Section '+(si+1),
+  padding:num(section?.padding,0,0,64),
+  backgroundColor:section?.backgroundColor?safeHexColor(section.backgroundColor,theme.cardBackground):'',
+  backgroundImageUrl:isSafeEmailUrl(section?.backgroundImageUrl,true),
+  backgroundImagePosition:['center','top','bottom','left','right'].includes(section?.backgroundImagePosition)?section.backgroundImagePosition:'center',
+  backgroundImageSize:section?.backgroundImageSize==='contain'?'contain':'cover',
+  rows:(Array.isArray(section?.rows)?section.rows:[]).slice(0,12).map((row:any,ri:number)=>({
+   id:String(row?.id||'row-'+si+'-'+ri).replace(/[^a-zA-Z0-9_-]/g,'').slice(0,64)||'row-'+si+'-'+ri,
+   gap:num(row?.gap,12,0,48),mobileStack:row?.mobileStack!==false,
+   columns:(Array.isArray(row?.columns)?row.columns:[]).slice(0,3).map((column:any,ci:number)=>({
+    id:String(column?.id||'column-'+si+'-'+ri+'-'+ci).replace(/[^a-zA-Z0-9_-]/g,'').slice(0,64)||'column-'+si+'-'+ri+'-'+ci,
+    width:num(column?.width,100,5,100),padding:num(column?.padding,0,0,48),
+    backgroundColor:column?.backgroundColor?safeHexColor(column.backgroundColor,theme.cardBackground):'',
+    backgroundImageUrl:isSafeEmailUrl(column?.backgroundImageUrl,true),
+    backgroundImagePosition:['center','top','bottom','left','right'].includes(column?.backgroundImagePosition)?column.backgroundImagePosition:'center',
+    backgroundImageSize:column?.backgroundImageSize==='contain'?'contain':'cover',
+    elements:(Array.isArray(column?.elements)?column.elements:[]).slice(0,40).map((item:any,ei:number)=>{sectionElementCount++;return normalizeBlock(item,sectionElementCount+ei);})
+   }))
+  })).filter((row:any)=>row.columns.length>0)
+ })).filter((section:any)=>section.rows.length>0):[{
+  id:'section-legacy',name:'Email content',padding:0,backgroundColor:'',backgroundImageUrl:'',backgroundImagePosition:'center' as const,backgroundImageSize:'cover' as const,
+  rows:[{id:'row-legacy',gap:0,mobileStack:true,columns:[{id:'column-legacy',width:100,padding:0,backgroundColor:'',backgroundImageUrl:'',backgroundImagePosition:'center' as const,backgroundImageSize:'cover' as const,elements:blocks}]}]
+ }];
+ if(!sections.length)sections.push({id:'section-empty',name:'Email content',padding:0,rows:[{id:'row-empty',gap:12,mobileStack:true,columns:[{id:'column-empty',width:100,padding:0,elements:blocks}]}]});
+ const nestedElements=sections.flatMap((section)=>section.rows.flatMap((row)=>row.columns.flatMap((column)=>column.elements)));
+ if(!nestedElements.some((item)=>item.type==='content')){
+  const firstColumn=sections[0]?.rows[0]?.columns[0];
+  if(firstColumn)firstColumn.elements.push({id:'content-area',type:'content',padding:16,enabled:true});
+ }
  const source=sourceOverride||(['PREDEFINED','CUSTOM','AI'].includes(raw.source)?raw.source:'CUSTOM');
  const brand=raw.brandProfile&&typeof raw.brandProfile==='object'?raw.brandProfile:undefined;
  const brandProfile:EmailBrandProfile|undefined=brand?{
@@ -271,7 +316,7 @@ export function normalizeEmailDesignTemplate(input:any,sourceOverride?:EmailDesi
  if(customHtml&&!customHtml.includes('{{content}}'))customHtml+='<div style="padding:20px">{{content}}</div>';
  return {id:String(raw.id||'').replace(/[^a-zA-Z0-9_-]/g,'').slice(0,100),name:String(raw.name||'Untitled email design').trim().slice(0,100)||'Untitled email design',
   description:String(raw.description||'').trim().slice(0,280),category:String(raw.category||'Business').slice(0,60),source,version:num(raw.version,1,1,10000),
-  theme,blocks,...(customHtml?{customHtml}:{}),...(brandProfile?{brandProfile}:{}),
+  theme,blocks,sections,...(customHtml?{customHtml}:{}),...(brandProfile?{brandProfile}:{}),
   ...(raw.createdAt?{createdAt:String(raw.createdAt).slice(0,40)}:{}),...(raw.updatedAt?{updatedAt:String(raw.updatedAt).slice(0,40)}:{})};
 }
 function textHtml(text:string,lineHeight=1.72):string {
@@ -314,6 +359,33 @@ function renderBlock(item:EmailDesignBlock,t:EmailDesignTemplate,body:string,bra
   default:return '';
  }
 }
+function renderEmailDesignSections(sections:EmailDesignSection[],t:EmailDesignTemplate,body:string,brand:Record<string,any>):string {
+ const background=(color:string|undefined,image:string|undefined,position:string|undefined,size:string|undefined,fallback:string)=>{
+  const safeColor=color?safeHexColor(color,fallback):fallback,safeImage=isSafeEmailUrl(image,true);
+  return {
+   attributes:' bgcolor="'+safeColor+'"'+(safeImage?' background="'+escapeEmailHtml(safeImage)+'"':''),
+   style:'background-color:'+safeColor+';'+(safeImage?'background-image:url(&quot;'+escapeEmailHtml(safeImage)+'&quot;);background-position:'+(position||'center')+';background-size:'+(size||'cover')+';background-repeat:no-repeat;':''),
+  };
+ };
+ return sections.map((section)=>{
+  const rows=section.rows.map((row)=>{
+   const total=row.columns.reduce((sum,column)=>sum+Math.max(5,Number(column.width)||100),0)||100;
+   const columns=row.columns.map((column)=>{
+    const width=Math.max(5,Number(column.width)||100)/total*100;
+    const bg=background(column.backgroundColor,column.backgroundImageUrl,column.backgroundImagePosition,column.backgroundImageSize,t.theme.cardBackground);
+    const elements=column.elements.map((element)=>renderBlock(element,t,body,brand)).join('');
+    const pad=Math.max(0,Math.min(48,Number(column.padding)||0));
+    const stackClass=row.mobileStack!==false?' class="amg-email-column"':'';
+    const gap=Math.round(Math.max(0,Math.min(48,Number(row.gap)||0))/2);
+    return '<td'+stackClass+' width="'+width.toFixed(2)+'%" valign="top"'+bg.attributes+' style="width:'+width.toFixed(2)+'%;vertical-align:top;padding:'+pad+'px '+gap+'px;'+bg.style+'"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="width:100%;border-collapse:collapse">'+elements+'</table></td>';
+   }).join('');
+   return '<tr>'+columns+'</tr>';
+  }).join('');
+  const bg=background(section.backgroundColor,section.backgroundImageUrl,section.backgroundImagePosition,section.backgroundImageSize,t.theme.cardBackground);
+  const pad=Math.max(0,Math.min(64,Number(section.padding)||0));
+  return '<tr><td'+bg.attributes+' style="padding:'+pad+'px;'+bg.style+'"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="width:100%;border-collapse:collapse">'+rows+'</table></td></tr>';
+ }).join('');
+}
 export function renderEmailDesignHtml(input:EmailDesignTemplate,messageText:string,brandInput:Record<string,any>={},baseUrl=''):string {
  const t=normalizeEmailDesignTemplate(input),brand={...brandInput,...(t.brandProfile||{})},body=textHtml(String(messageText||''),t.theme.bodyLineHeight);
  if(t.customHtml){
@@ -324,8 +396,8 @@ export function renderEmailDesignHtml(input:EmailDesignTemplate,messageText:stri
   const styles=(custom.match(/<style\b[^>]*>[\s\S]*?<\/style>/gi)||[]).join(''),fragment=custom.replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi,'');
   return '<!doctype html><html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>'+styles+'</head><body style="margin:0;padding:0;background:'+t.theme.pageBackground+'">'+fragment+'</body></html>';
  }
- const blocks=t.blocks.map(x=>renderBlock(x,t,body,brand)).join(''),base=isSafeEmailUrl(baseUrl,false);
- return '<!doctype html><html lang="en"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><meta name="x-apple-disable-message-reformatting"/><title>'+escapeEmailHtml(t.name)+'</title></head><body style="margin:0;padding:0;background:'+t.theme.pageBackground+';-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" bgcolor="'+t.theme.pageBackground+'" style="width:100%;background:'+t.theme.pageBackground+'"><tr><td align="center" style="padding:28px 12px"><table role="presentation" width="'+t.theme.contentWidth+'" cellspacing="0" cellpadding="0" border="0" bgcolor="'+t.theme.cardBackground+'" style="width:100%;max-width:'+t.theme.contentWidth+'px;background:'+t.theme.cardBackground+';border-radius:'+t.theme.cardRadius+'px;border-collapse:separate;overflow:hidden"><tr><td style="font-family:'+t.theme.fontFamily+';color:'+t.theme.textColor+'"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">'+blocks+'</table></td></tr></table><table role="presentation" width="'+t.theme.contentWidth+'" cellspacing="0" cellpadding="0" border="0" style="width:100%;max-width:'+t.theme.contentWidth+'px"><tr><td align="center" style="padding:12px 10px;color:'+t.theme.mutedColor+';font-family:Arial,Helvetica,sans-serif;font-size:10px;line-height:1.5">'+(base?'<a href="'+escapeEmailHtml(base)+'" style="color:'+t.theme.mutedColor+';text-decoration:none">'+escapeEmailHtml(base.replace(/^https?:\/\//,'').replace(/\/$/,''))+'</a>':'')+'</td></tr></table></td></tr></table></body></html>';
+ const blocks=renderEmailDesignSections(t.sections||[],t,body,brand),base=isSafeEmailUrl(baseUrl,false);
+ return '<!doctype html><html lang="en"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><meta name="x-apple-disable-message-reformatting"/><style type="text/css">@media only screen and (max-width:600px){.amg-email-column{display:block!important;width:100%!important;max-width:100%!important;box-sizing:border-box!important}}</style><title>'+escapeEmailHtml(t.name)+'</title></head><body style="margin:0;padding:0;background:'+t.theme.pageBackground+';-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" bgcolor="'+t.theme.pageBackground+'" style="width:100%;background:'+t.theme.pageBackground+'"><tr><td align="center" style="padding:28px 12px"><table role="presentation" width="'+t.theme.contentWidth+'" cellspacing="0" cellpadding="0" border="0" bgcolor="'+t.theme.cardBackground+'" style="width:100%;max-width:'+t.theme.contentWidth+'px;background:'+t.theme.cardBackground+';border-radius:'+t.theme.cardRadius+'px;border-collapse:separate;overflow:hidden"><tr><td style="font-family:'+t.theme.fontFamily+';color:'+t.theme.textColor+'"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">'+blocks+'</table></td></tr></table><table role="presentation" width="'+t.theme.contentWidth+'" cellspacing="0" cellpadding="0" border="0" style="width:100%;max-width:'+t.theme.contentWidth+'px"><tr><td align="center" style="padding:12px 10px;color:'+t.theme.mutedColor+';font-family:Arial,Helvetica,sans-serif;font-size:10px;line-height:1.5">'+(base?'<a href="'+escapeEmailHtml(base)+'" style="color:'+t.theme.mutedColor+';text-decoration:none">'+escapeEmailHtml(base.replace(/^https?:\/\//,'').replace(/\/$/,''))+'</a>':'')+'</td></tr></table></td></tr></table></body></html>';
 }
 export function createEmailDesignHtmlSource(input:EmailDesignTemplate,brand:Record<string,any>={}):string {
  const template={...input,customHtml:undefined};

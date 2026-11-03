@@ -7,7 +7,7 @@
     "api/**/*.ts": {
       "includeFiles": "src/{server,firebase}/**"
     },
-    "api/meeting-intelligence/test.ts": {
+    "api/meeting-intelligence.ts": {
       "maxDuration": 300,
       "includeFiles": "node_modules/@sparticuz/chromium/bin/**"
     }

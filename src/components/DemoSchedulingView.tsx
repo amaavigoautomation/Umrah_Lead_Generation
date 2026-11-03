@@ -643,7 +643,7 @@ export const DemoSchedulingView: React.FC<DemoSchedulingViewProps> = ({ leads = 
     setMeetingBotTestError(null);
     setMeetingBotTestResult(null);
     try {
-      const response = await fetch('/api/meeting-intelligence/test', {
+      const response = await fetch('/api/meeting-intelligence', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

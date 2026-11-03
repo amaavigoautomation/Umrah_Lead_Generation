@@ -48,7 +48,27 @@ export class ChatbotWebhookError extends Error {
 }
 
 const SETTINGS_DOC = 'chatbot_integration';
-const SUPPORTED_LANGUAGES = ['auto', 'English', 'Hindi', 'Urdu', 'Arabic', 'Marathi', 'Gujarati', 'Bengali', 'Tamil', 'Telugu', 'Kannada', 'Malayalam'];
+const SUPPORTED_LANGUAGES = [
+  'auto',
+  // India's 22 scheduled languages plus widely used regional languages.
+  'Assamese', 'Bengali', 'Bodo', 'Dogri', 'Gujarati', 'Hindi', 'Kannada',
+  'Kashmiri', 'Konkani', 'Maithili', 'Malayalam', 'Manipuri (Meitei)',
+  'Marathi', 'Nepali', 'Odia', 'Punjabi', 'Sanskrit', 'Santali', 'Sindhi',
+  'Tamil', 'Telugu', 'Urdu',
+  'Bhojpuri', 'Chhattisgarhi', 'Haryanvi', 'Khasi', 'Garo', 'Mizo',
+  'Tulu', 'Rajasthani', 'Bhili', 'Gondi', 'Kokborok',
+  // Other international languages.
+  'English', 'Arabic', 'Chinese (Simplified)', 'Chinese (Traditional)',
+  'French', 'German', 'Spanish', 'Spanish (Latin America)',
+  'Portuguese', 'Portuguese (Brazil)', 'Portuguese (Portugal)',
+  'Russian', 'Japanese', 'Korean', 'Italian', 'Dutch', 'Turkish',
+  'Persian (Farsi)', 'Hebrew', 'Indonesian', 'Malay', 'Thai', 'Vietnamese',
+  'Swahili', 'Polish', 'Ukrainian', 'Greek', 'Romanian', 'Swedish',
+  'Danish', 'Norwegian', 'Filipino (Tagalog)', 'Burmese', 'Khmer',
+  'Sinhala', 'Czech', 'Hungarian', 'Finnish', 'Croatian', 'Serbian',
+  'Slovak', 'Bulgarian', 'Lithuanian', 'Latvian', 'Estonian', 'Icelandic',
+  'Afrikaans', 'Amharic', 'Yoruba', 'Igbo', 'Hausa'
+];
 const knowledgeLoadedAt = new Map<string, number>();
 const requestWindows = new Map<string, { count: number; resetAt: number }>();
 

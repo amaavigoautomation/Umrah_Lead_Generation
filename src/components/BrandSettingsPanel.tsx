@@ -2,7 +2,6 @@ import React, { useEffect, useState } from 'react';
 import { Palette, Loader2, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { useBrand } from '../context/BrandContext';
 import type { TenantBrand } from '../shared/brand';
-import { DAY_NAMES, brandWorkingWindowLabel, fmtHour, workingHoursForDay } from '../shared/brand';
 
 const inputCls =
   'w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-orange-500';
@@ -37,33 +36,7 @@ export const BrandSettingsPanel: React.FC<{ tenantId: string; canEdit: boolean }
     </Field>
   );
 
-  const toggleDay = (n: number) =>
-    set('workingDays', draft.workingDays.includes(n) ? draft.workingDays.filter((d) => d !== n) : [...draft.workingDays, n].sort());
-
-  const updateDayHours = (day: number, field: 'start' | 'end', value: number) => {
-    const current = workingHoursForDay(draft, day);
-    set('workingHoursByDay', {
-      ...draft.workingHoursByDay,
-      [day]: { ...current, [field]: value },
-    });
-  };
-
   const save = async () => {
-    if (!Number.isInteger(draft.demoDurationMinutes) || draft.demoDurationMinutes < 5 || draft.demoDurationMinutes > 240) {
-      setError('Demo duration must be a whole number between 5 and 240 minutes.');
-      return;
-    }
-    if (draft.workingDays.length === 0) {
-      setError('Enable at least one day for demo bookings.');
-      return;
-    }
-    for (const day of draft.workingDays) {
-      const hours = workingHoursForDay(draft, day);
-      if (hours.start < 0 || hours.start > 23 || hours.end < 1 || hours.end > 24 || hours.start >= hours.end) {
-        setError(`Please choose a valid start and end time for ${DAY_NAMES[day]}.`);
-        return;
-      }
-    }
     setBusy(true);
     setError(null);
     setSaved(false);
@@ -110,68 +83,6 @@ export const BrandSettingsPanel: React.FC<{ tenantId: string; canEdit: boolean }
       <Field label="Who are your customers?" hint={'Helps the AI write relevant replies, e.g. "independent tour operators"'}>
         <input className={inputCls} disabled={!canEdit} value={draft.industryDescription} onChange={(e) => set('industryDescription', e.target.value)} />
       </Field>
-
-      <div className="border-t border-slate-100 pt-4 space-y-3">
-        <h4 className="text-sm font-bold text-slate-800">Demo booking availability</h4>
-        <p className="text-xs text-slate-500">
-          Choose the session length first. Start times then repeat at that interval, and a full session must fit inside each day's working window.
-        </p>
-        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-{text('timezone', 'Timezone (IANA)', 'Asia/Kolkata')}
-          {text('timezoneLabel', 'Timezone label shown to customers', 'IST')}
-          {text('calendarEmail', 'Calendar email for demo invites', 'you@company.com')}
-        </div>
-        <div className="space-y-2">
-          {DAY_NAMES.map((day, dayIndex) => {
-            const enabled = draft.workingDays.includes(dayIndex);
-            const hours = workingHoursForDay(draft, dayIndex);
-            return (
-              <div key={day} className="grid grid-cols-1 sm:grid-cols-[minmax(130px,1fr)_1fr_1fr] gap-3 items-center rounded-lg border border-slate-100 p-3">
-                <label className="flex items-center gap-2 text-sm font-semibold text-slate-700">
-                  <input
-                    type="checkbox"
-                    disabled={!canEdit}
-                    checked={enabled}
-                    onChange={() => toggleDay(dayIndex)}
-                    className="h-4 w-4 accent-orange-600"
-                  />
-                  {day}
-                  {!enabled && <span className="text-xs font-normal text-slate-400">Closed</span>}
-                </label>
-                <label className="block">
-                  <span className="mb-1 block text-[11px] font-semibold text-slate-500">Start time</span>
-                  <select
-                    className={inputCls}
-                    disabled={!canEdit || !enabled}
-                    value={hours.start}
-                    onChange={(e) => updateDayHours(dayIndex, 'start', Number(e.target.value))}
-                  >
-                    {Array.from({ length: 24 }, (_, hour) => (
-                      <option key={hour} value={hour}>{fmtHour(hour)}</option>
-                    ))}
-                  </select>
-                </label>
-                <label className="block">
-                  <span className="mb-1 block text-[11px] font-semibold text-slate-500">End time</span>
-                  <select
-                    className={inputCls}
-                    disabled={!canEdit || !enabled}
-                    value={hours.end}
-                    onChange={(e) => updateDayHours(dayIndex, 'end', Number(e.target.value))}
-                  >
-                    {Array.from({ length: 24 }, (_, index) => index + 1).map((hour) => (
-                      <option key={hour} value={hour}>{hour === 24 ? '12:00 AM (midnight)' : fmtHour(hour)}</option>
-                    ))}
-                  </select>
-                </label>
-              </div>
-            );
-          })}
-        </div>
-        <p className="text-xs text-slate-500">
-          Customers will see: {brandWorkingWindowLabel(draft)}. Each demo is {draft.demoDurationMinutes} minutes; start times repeat every {draft.demoDurationMinutes} minutes.
-        </p>
-      </div>
 
       {error && (
         <div className="flex items-center gap-2 text-sm text-red-600">

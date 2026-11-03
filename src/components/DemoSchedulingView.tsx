@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useBrand } from '../context/BrandContext';
-import { brandTzLabel, brandWorkingDaysLabel, brandWorkingWindowLabel } from '../shared/brand';
+import type { TenantBrand } from '../shared/brand';
+import { DAY_NAMES, brandTzLabel, brandWorkingDaysLabel, brandWorkingWindowLabel, fmtHour, workingHoursForDay } from '../shared/brand';
 import {
   Calendar as CalendarIcon,
   Video,
@@ -40,34 +41,62 @@ interface DemoSchedulingViewProps {
 
 export const DemoSchedulingView: React.FC<DemoSchedulingViewProps> = ({ leads = [], tenantId, canEditSettings }) => {
   const { brand, setBrand } = useBrand();
-  const [durationDraft, setDurationDraft] = useState<number>(brand.demoDurationMinutes || 60);
-  const [isSavingDuration, setIsSavingDuration] = useState(false);
-  const [durationSaveMessage, setDurationSaveMessage] = useState<string | null>(null);
-  useEffect(() => setDurationDraft(brand.demoDurationMinutes || 60), [brand.demoDurationMinutes]);
+  const [availabilityDraft, setAvailabilityDraft] = useState<TenantBrand>(brand);
+  const [isSavingAvailability, setIsSavingAvailability] = useState(false);
+  const [availabilitySaveMessage, setAvailabilitySaveMessage] = useState<string | null>(null);
+  useEffect(() => setAvailabilityDraft(brand), [brand]);
 
-  const saveDemoDuration = async () => {
-    if (!Number.isInteger(durationDraft) || durationDraft < 5 || durationDraft > 240) {
-      setDurationSaveMessage('Choose a whole number between 5 and 240 minutes.');
+  const updateAvailabilityText = (field: 'timezone' | 'timezoneLabel' | 'calendarEmail', value: string) => {
+    setAvailabilityDraft((current) => ({ ...current, [field]: value }));
+  };
+  const toggleAvailabilityDay = (dayIndex: number) => {
+    setAvailabilityDraft((current) => ({
+      ...current,
+      workingDays: current.workingDays.includes(dayIndex)
+        ? current.workingDays.filter((day) => day !== dayIndex)
+        : [...current.workingDays, dayIndex].sort((a, b) => a - b),
+    }));
+  };
+  const updateAvailabilityHours = (dayIndex: number, field: 'start' | 'end', value: number) => {
+    setAvailabilityDraft((current) => {
+      const hours = workingHoursForDay(current, dayIndex);
+      return { ...current, workingHoursByDay: { ...current.workingHoursByDay, [dayIndex]: { ...hours, [field]: value } } };
+    });
+  };
+  const saveDemoAvailability = async () => {
+    if (!Number.isInteger(availabilityDraft.demoDurationMinutes) || availabilityDraft.demoDurationMinutes < 5 || availabilityDraft.demoDurationMinutes > 240) {
+      setAvailabilitySaveMessage('Demo duration must be a whole number between 5 and 240 minutes.');
       return;
     }
-    setIsSavingDuration(true);
-    setDurationSaveMessage(null);
+    if (availabilityDraft.workingDays.length === 0) {
+      setAvailabilitySaveMessage('Enable at least one day for demo bookings.');
+      return;
+    }
+    for (const day of availabilityDraft.workingDays) {
+      const hours = workingHoursForDay(availabilityDraft, day);
+      if (hours.start < 0 || hours.start > 23 || hours.end < 1 || hours.end > 24 || hours.start >= hours.end) {
+        setAvailabilitySaveMessage(`Please choose a valid start and end time for ${DAY_NAMES[day]}.`);
+        return;
+      }
+    }
+    setIsSavingAvailability(true);
+    setAvailabilitySaveMessage(null);
     try {
       const res = await fetch(`/api/tenants/${encodeURIComponent(tenantId)}/brand`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ brand: { ...brand, demoDurationMinutes: durationDraft } }),
+        body: JSON.stringify({ brand: availabilityDraft }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error || `Request failed (${res.status})`);
       setBrand(data.brand);
-      setDurationDraft(data.brand.demoDurationMinutes || durationDraft);
-      setDurationSaveMessage('Demo duration saved. Available slots will use this interval.');
+      setAvailabilityDraft(data.brand);
+      setAvailabilitySaveMessage('Demo booking availability saved.');
       fetchAvailability();
     } catch (err: any) {
-      setDurationSaveMessage(err?.message || 'Could not save demo duration.');
+      setAvailabilitySaveMessage(err?.message || 'Could not save demo booking availability.');
     } finally {
-      setIsSavingDuration(false);
+      setIsSavingAvailability(false);
     }
   };
   const tzl = brandTzLabel(brand);
@@ -584,31 +613,90 @@ export const DemoSchedulingView: React.FC<DemoSchedulingViewProps> = ({ leads = 
 
   return (
     <div className="space-y-5">
-      <section className="bg-white border border-slate-200 rounded-xl p-4 sm:p-5 space-y-3">
+      <section className="bg-white border border-slate-200 rounded-xl p-4 sm:p-5 space-y-4">
         <div className="flex items-center gap-2">
           <Clock className="w-5 h-5 text-orange-600" />
-          <h2 className="text-base font-bold text-slate-900">Demo duration</h2>
+          <h2 className="text-base font-bold text-slate-900">Demo booking availability</h2>
         </div>
         <p className="text-xs text-slate-500">
-          Set this before booking. Available start times repeat at this interval, and the full session must fit within the configured working hours.
+          Choose the session length first. Start times repeat at that interval, and the full session must fit inside each day's working window.
         </p>
-        <div className="flex flex-col sm:flex-row sm:items-end gap-3">
-          <label className="block w-full sm:max-w-xs">
-            <span className="block text-xs font-semibold text-slate-600 mb-1">Duration (minutes)</span>
-            <input type="number" min={5} max={240} step={1} value={durationDraft}
-              disabled={!canEditSettings || isSavingDuration}
-              onChange={(e) => setDurationDraft(Number(e.target.value))}
+        <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-3">
+          <label className="block">
+            <span className="block text-xs font-semibold text-slate-600 mb-1">Demo duration (minutes)</span>
+            <input type="number" min={5} max={240} step={1}
+              disabled={!canEditSettings || isSavingAvailability}
+              value={availabilityDraft.demoDurationMinutes}
+              onChange={(e) => setAvailabilityDraft((current) => ({ ...current, demoDurationMinutes: Number(e.target.value) }))}
               className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-orange-500 disabled:bg-slate-100" />
             <span className="block text-[11px] text-slate-400 mt-1">Examples: 20, 30, 45 or 60 minutes.</span>
           </label>
-          {canEditSettings && <button type="button" onClick={saveDemoDuration}
-            disabled={isSavingDuration || durationDraft === (brand.demoDurationMinutes || 60)}
-            className="px-4 py-2 rounded-lg bg-orange-500 hover:bg-orange-600 text-white text-xs font-bold disabled:opacity-50">
-            {isSavingDuration ? 'Saving…' : 'Save duration'}
-          </button>}
+          {([
+            ['timezone', 'Timezone (IANA)', 'Asia/Kolkata'],
+            ['timezoneLabel', 'Timezone label shown to customers', 'IST'],
+            ['calendarEmail', 'Calendar email for demo invites', 'you@company.com'],
+          ] as const).map(([field, label, placeholder]) => (
+            <label key={field} className="block">
+              <span className="block text-xs font-semibold text-slate-600 mb-1">{label}</span>
+              <input type="text" disabled={!canEditSettings || isSavingAvailability}
+                value={availabilityDraft[field]} placeholder={placeholder}
+                onChange={(e) => updateAvailabilityText(field, e.target.value)}
+                className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-orange-500 disabled:bg-slate-100" />
+            </label>
+          ))}
         </div>
-        {!canEditSettings && <p className="text-xs text-slate-500">Only an administrator can change demo duration.</p>}
-        {durationSaveMessage && <p className={`text-xs ${durationSaveMessage.startsWith('Demo duration saved') ? 'text-emerald-700' : 'text-red-600'}`}>{durationSaveMessage}</p>}
+        <div className="space-y-2">
+          {DAY_NAMES.map((day, dayIndex) => {
+            const enabled = availabilityDraft.workingDays.includes(dayIndex);
+            const hours = workingHoursForDay(availabilityDraft, dayIndex);
+            return (
+              <div key={day} className="grid grid-cols-1 sm:grid-cols-[minmax(130px,1fr)_1fr_1fr] gap-3 items-center rounded-lg border border-slate-100 p-3">
+                <label className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+                  <input type="checkbox" disabled={!canEditSettings || isSavingAvailability}
+                    checked={enabled} onChange={() => toggleAvailabilityDay(dayIndex)}
+                    className="h-4 w-4 accent-orange-600" />
+                  {day}
+                  {!enabled && <span className="text-xs font-normal text-slate-400">Closed</span>}
+                </label>
+                <label className="block">
+                  <span className="mb-1 block text-[11px] font-semibold text-slate-500">Start time</span>
+                  <select
+                    className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 disabled:bg-slate-100"
+                    disabled={!canEditSettings || isSavingAvailability || !enabled}
+                    value={hours.start} onChange={(e) => updateAvailabilityHours(dayIndex, 'start', Number(e.target.value))}>
+                    {Array.from({ length: 24 }, (_, hour) => <option key={hour} value={hour}>{fmtHour(hour)}</option>)}
+                  </select>
+                </label>
+                <label className="block">
+                  <span className="mb-1 block text-[11px] font-semibold text-slate-500">End time</span>
+                  <select
+                    className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 disabled:bg-slate-100"
+                    disabled={!canEditSettings || isSavingAvailability || !enabled}
+                    value={hours.end} onChange={(e) => updateAvailabilityHours(dayIndex, 'end', Number(e.target.value))}>
+                    {Array.from({ length: 24 }, (_, index) => index + 1).map((hour) =>
+                      <option key={hour} value={hour}>{hour === 24 ? '12:00 AM (midnight)' : fmtHour(hour)}</option>
+                    )}
+                  </select>
+                </label>
+              </div>
+            );
+          })}
+        </div>
+        <p className="text-xs text-slate-500">
+          Customers will see: {brandWorkingWindowLabel(availabilityDraft)}. Each demo is {availabilityDraft.demoDurationMinutes} minutes; start times repeat every {availabilityDraft.demoDurationMinutes} minutes.
+        </p>
+        {!canEditSettings && <p className="text-xs text-slate-500">Only an administrator can change demo booking availability.</p>}
+        {availabilitySaveMessage && (
+          <p className={`text-xs ${availabilitySaveMessage === 'Demo booking availability saved.' ? 'text-emerald-700' : 'text-red-600'}`}>
+            {availabilitySaveMessage}
+          </p>
+        )}
+        {canEditSettings && (
+          <button type="button" onClick={saveDemoAvailability} disabled={isSavingAvailability}
+            className="inline-flex items-center gap-2 bg-orange-600 hover:bg-orange-700 disabled:opacity-50 text-white text-sm font-semibold rounded-lg px-4 py-2">
+            {isSavingAvailability ? 'Saving…' : 'Save demo availability'}
+          </button>
+        )}
       </section>
       <div className="space-y-6">
       {/* Top Banner / Calendar Integration Status */}

@@ -8,6 +8,7 @@ import { writeTenantAuditEvent } from './auditLogger.js';
 import { evaluateHumanHandoff, persistHumanHandoff, describeHandoff } from './humanHandoffService.js';
 import { normalizeChannelMode } from '../shared/channelModes.js';
 import { getTenantChannelMode } from './channelModeService.js';
+import { AI_RESPONSE_FORMATTING_INSTRUCTIONS } from '../shared/aiResponseFormatting.js';
 
 import type { TenantContext } from '../types/tenant.js';
 
@@ -1013,7 +1014,7 @@ CRITICAL INSTRUCTIONS FOR AI ANALYSIS & REPLY:
    - If travel agency asking about B2B/SaaS plans: Mention Lite ($15/user/month billed annually) and Growth.
    - If 20+ users: Explicitly mention Enterprise volume licensing and senior specialist follow-up.
 3. Keep the response polite, helpful, crisp, and professional.
-4. FORMATTING & GREETING RULES (MANDATORY): Never use Markdown symbols in email replies. Do NOT use **, ##, ###, *, backticks, or similar formatting symbols. Write emails as natural, professional plain text. Use formal greetings ONLY (e.g., "Dear [Name]," or "Hello [Name],"). NEVER use Muslim/religious greetings such as "Assalamu Alaikum", "Walaikum Assalam", "Salam", etc.
+4. FORMATTING & GREETING RULES (MANDATORY): ${AI_RESPONSE_FORMATTING_INSTRUCTIONS} Use formal greetings ONLY (e.g., "Dear [Name]," or "Hello [Name],"). NEVER use Muslim/religious greetings such as "Assalamu Alaikum", "Walaikum Assalam", "Salam", etc.
 5. Conclude with:
 Regards,
 Umrah360 Automation Team
@@ -1039,7 +1040,7 @@ CRITICAL INSTRUCTIONS:
 1. THREAD CONTINUITY: ${isFollowUpTurn ? 'This is a follow-up. Continue naturally from the earlier messages, do not repeat introductions, and answer the specific follow-up questions.' : 'This is a brand new inquiry. Briefly welcome the customer and answer their question.'} Greet with a formal professional greeting: "Dear ${senderGreetingName},"
 2. ACCURACY: Ground every answer strictly in the knowledge base above. NEVER invent features, prices, dates or guarantees. If the knowledge base does not contain the answer, say you will connect them with a specialist from ${brand.companyName} and ask for any details needed.
 3. Keep the response polite, helpful, crisp, and professional.
-4. FORMATTING (MANDATORY): Never use Markdown symbols (**, ##, ###, *, backticks). Write natural plain text.
+4. FORMATTING (MANDATORY): ${AI_RESPONSE_FORMATTING_INSTRUCTIONS}
 5. Conclude with:
 ${brandAutomationSignature(brand)}${targetMailbox ? `\n${targetMailbox}` : ''}`;
 

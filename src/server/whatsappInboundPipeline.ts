@@ -7,6 +7,7 @@ import { normalizeChannelMode } from '../shared/channelModes.js';
 import { getTenantChannelMode } from './channelModeService.js';
 import { getApplicableAiFeedback, buildAiFeedbackPromptSection, buildAiFeedbackSystemGuard } from './aiFeedbackService.js';
 import { recordAiCompletionUsage } from './usageService.js';
+import { AI_RESPONSE_FORMATTING_INSTRUCTIONS, aiResponseMarkdownToWhatsApp } from '../shared/aiResponseFormatting.js';
 import type { TenantContext } from '../types/tenant.js';
 
 const DEFAULT_UMRAH_CTX: TenantContext = {
@@ -355,6 +356,7 @@ export async function sendLiveMetaWhatsAppMessage(
   const twilioSid = process.env.TWILIO_ACCOUNT_SID;
   const twilioAuth = process.env.TWILIO_AUTH_TOKEN;
   const cleanPhone = recipientPhone.replace(/[^0-9]/g, '');
+  const formattedMessageText = aiResponseMarkdownToWhatsApp(messageText);
 
   if (metaToken && phoneId) {
     try {
@@ -372,7 +374,7 @@ export async function sendLiveMetaWhatsAppMessage(
           type: 'text',
           text: {
             preview_url: false,
-            body: messageText,
+            body: formattedMessageText,
           },
         }),
       });
@@ -413,7 +415,7 @@ export async function sendLiveMetaWhatsAppMessage(
       const formData = new URLSearchParams();
       formData.append('From', twilioFrom);
       formData.append('To', twilioTo);
-      formData.append('Body', messageText);
+      formData.append('Body', formattedMessageText);
 
       const twilioUrl = `https://api.twilio.com/2010-04-01/Accounts/${twilioSid}/Messages.json`;
       const creds = Buffer.from(`${twilioSid}:${twilioAuth}`).toString('base64');
@@ -596,7 +598,7 @@ Message: "${body}"
 
 INSTRUCTIONS FOR WHATSAPP RESPONSE:
 1. Greet warmly with formal greeting: "Dear ${senderGreetingName}," or "Hello ${senderGreetingName},"
-2. Tone: Professional, warm, crisp, and direct. Format specifically for WhatsApp (use clean short paragraphs, bullet points with emojis like 🕋 ✈️ 🏨 📋, bold key terms with single asterisks *like this*). NEVER use double asterisks (**).
+2. Tone: Professional, warm, crisp, and direct. Use clean short paragraphs. ${AI_RESPONSE_FORMATTING_INSTRUCTIONS}
 3. If asking about B2B Sub-Agent Portal: Explain agent credit wallets, custom markup tiers, white-label PDF vouchers with agency logos, and offline Makkah hotel allotment management.
 4. If asking about Dynamic Costing / Rail / Visas: Explain real-time Haramain train costing, automated Saudi eVisa status tracking, and multi-currency SAR/USD exchange rate hedging.
 5. If asking about 20+ users / enterprise: Acknowledge their team size warmly, state that 20+ seat deployments receive customized volume rates and a dedicated account manager, and offer to schedule a live Zoom walkthrough.
@@ -622,7 +624,7 @@ Message: "${body}"
 
 INSTRUCTIONS FOR WHATSAPP RESPONSE:
 1. Greet warmly with a formal greeting: "Dear ${senderGreetingName}," or "Hello ${senderGreetingName},"
-2. Tone: professional, warm, crisp and direct. Use short paragraphs suited to WhatsApp. Do not use Markdown headings.
+2. Tone: professional, warm, crisp and direct. Use short paragraphs suited to WhatsApp. ${AI_RESPONSE_FORMATTING_INSTRUCTIONS}
 3. Ground every answer strictly in the knowledge base. NEVER invent features, prices or guarantees. If the answer is not in the knowledge base, say you will connect them with a specialist from ${brand.companyName} and ask for the details needed.
 4. Sign off politely as:
 "${waSignoff}"`;

@@ -46,6 +46,7 @@ import {
 } from '../types';
 import { normalizeChannelMode } from '../shared/channelModes';
 import { generateOmnichannelResponse } from '../services/aiService';
+import { FormattedMessage } from './FormattedMessage';
 import { useBrand } from '../context/BrandContext';
 import { useConnectedChannels } from '../hooks/useConnectedChannels';
 import {
@@ -1127,12 +1128,16 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
                             : 'bg-gradient-to-r from-orange-500 to-amber-500 text-white rounded-tr-none shadow-xs'
                         }`}
                       >
-                        <div className="whitespace-pre-wrap">
-                          {/* Older emails were saved with the quoted history; hide it for customer emails. */}
-                          {msg.channel === 'EMAIL' && (msg.direction === 'INBOUND' || msg.senderType === 'CUSTOMER' || msg.senderType === 'PROSPECT')
-                            ? stripQuotedReply(msg.text)
-                            : msg.text}
-                        </div>
+                        {isAi ? (
+                          <FormattedMessage text={msg.text} className="space-y-2 whitespace-pre-wrap" />
+                        ) : (
+                          <div className="whitespace-pre-wrap">
+                            {/* Older emails were saved with the quoted history; hide it for customer emails. */}
+                            {msg.channel === 'EMAIL' && (msg.direction === 'INBOUND' || msg.senderType === 'CUSTOMER' || msg.senderType === 'PROSPECT')
+                              ? stripQuotedReply(msg.text)
+                              : msg.text}
+                          </div>
+                        )}
 
                         {/* RAG sources indicator */}
                         {msg.knowledgeSources && msg.knowledgeSources.length > 0 && (
@@ -1216,8 +1221,8 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
                     REVIEW MODE
                   </span>
                 </div>
-                <div className="p-2.5 rounded-xl bg-white border border-orange-200 text-xs text-slate-800 whitespace-pre-wrap leading-relaxed shadow-2xs">
-                  {activeConversation.draftReply.text}
+                <div className="p-2.5 rounded-xl bg-white border border-orange-200 text-xs text-slate-800 leading-relaxed shadow-2xs">
+                  <FormattedMessage text={activeConversation.draftReply.text} />
                 </div>
                 <div className="flex items-center justify-end space-x-2 pt-1">
                   <button

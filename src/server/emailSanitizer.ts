@@ -1,16 +1,15 @@
 /**
- * Sanitizes AI-generated email text:
- * 1. Strips all double asterisks (**) used for Markdown bolding.
- * 2. Enforces formal professional greetings (e.g. "Dear [Name]," or "Hello [Name],") and strips Muslim/religious greetings
- *    such as "Assalamu Alaikum", "Walaikum Assalam", "As-salamu alaykum", "Wa alaykum as-salam", "Salam", etc.
+ * Sanitizes AI-generated email text while preserving supported lightweight
+ * Markdown emphasis markers for the email template renderer.
+ * Also enforces formal greetings and removes prohibited religious greetings.
  */
 export function sanitizeAiEmailText(text: string, recipientName?: string): string {
   if (!text) return text;
 
-  // Step 1: Strip double asterisks
-  let cleaned = text.replaceAll('**', '');
+  // Preserve Markdown markers; the email template renderer converts them to safe HTML.
+  let cleaned = text;
 
-  // Step 2: Ensure formal greetings and remove Muslim greetings
+  // Ensure formal greetings and remove Muslim greetings
   const greetingName = recipientName ? recipientName.trim() : '';
   const formalGreeting = greetingName ? `Dear ${greetingName},` : 'Dear Customer,';
 

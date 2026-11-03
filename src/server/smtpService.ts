@@ -9,6 +9,7 @@ import { isFirebaseConfigured } from '../firebase/config.js';
 import { db } from './adminFirestore.js';
 import { resolveAssetRaw } from './assetService.js';
 import { recordTenantUsage } from './usageService.js';
+import { aiResponseMarkdownToPlainText } from '../shared/aiResponseFormatting.js';
 
 export interface SmtpStatus {
   configured: boolean;
@@ -584,6 +585,7 @@ export async function sendLiveEmail(params: SendMailParams): Promise<SendMailRes
   const { html: inlinedHtml, attachments: inlinedAttachments } = await inlineEmailAssets(htmlToSend, params.attachments);
   const effectiveParams: SendMailParams = {
     ...params,
+    text: params.applyWorkspaceDesign ? aiResponseMarkdownToPlainText(params.text) : params.text,
     html: inlinedHtml,
     attachments: inlinedAttachments,
   };

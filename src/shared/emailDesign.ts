@@ -1,3 +1,4 @@
+import { renderAiResponseMarkdownHtml } from './aiResponseFormatting.js';
 export type EmailDesignBlockType = 'logo' | 'hero' | 'heading' | 'text' | 'content' | 'image' | 'button' | 'divider' | 'spacer' | 'footer' | 'social';
 export type EmailDesignSource = 'PREDEFINED' | 'CUSTOM' | 'AI';
 export interface EmailDesignTheme {
@@ -344,7 +345,7 @@ export function normalizeEmailDesignTemplate(input:any,sourceOverride?:EmailDesi
   ...(raw.createdAt?{createdAt:String(raw.createdAt).slice(0,40)}:{}),...(raw.updatedAt?{updatedAt:String(raw.updatedAt).slice(0,40)}:{})};
 }
 function textHtml(text:string,lineHeight=1.72):string {
- return text.split(/\r?\n\r?\n/).map(p=>'<p style="margin:0 0 17px 0;line-height:'+lineHeight+'">'+p.split(/\r?\n/).map(escapeEmailHtml).join('<br/>')+'</p>').join('');
+ return renderAiResponseMarkdownHtml(text,lineHeight);
 }
 function renderBlock(item:EmailDesignBlock,t:EmailDesignTemplate,body:string,brand:Record<string,any>):string {
  if(item.enabled===false&&item.type!=='content')return '';

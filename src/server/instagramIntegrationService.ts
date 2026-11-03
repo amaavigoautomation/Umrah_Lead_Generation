@@ -9,6 +9,7 @@ import { evaluateHumanHandoff, persistHumanHandoff, describeHandoff } from './hu
 import { getTenantChannelMode } from './channelModeService.js';
 import { getApplicableAiFeedback, buildAiFeedbackPromptSection, buildAiFeedbackSystemGuard } from './aiFeedbackService.js';
 import { recordAiCompletionUsage } from './usageService.js';
+import { AI_RESPONSE_FORMATTING_INSTRUCTIONS, aiResponseMarkdownToPlainText } from '../shared/aiResponseFormatting.js';
 
 const GRAPH_VERSION = process.env.META_GRAPH_API_VERSION || 'v23.0';
 const OAUTH_STATE_TTL_MS = 10 * 60 * 1000;
@@ -441,7 +442,7 @@ async function processInstagramMessageEvent(tenantId: string, accountId: string,
     model: process.env.INSTAGRAM_AI_MODEL || 'gpt-4o-mini',
     temperature: 0.3,
     messages: [
-      { role: 'system', content: buildAiFeedbackSystemGuard() + ' You are this workspace customer-support and lead-qualification assistant. Reply naturally and briefly to the Instagram DM. Use only the workspace knowledge below for factual claims. If knowledge does not answer the question, ask a concise clarifying question instead of inventing facts. Do not claim a booking or action has completed unless confirmed.\n\nWorkspace knowledge:\n' + (knowledge || 'No published workspace knowledge is available. Ask a clarifying question and do not invent product details.') },
+      { role: 'system', content: buildAiFeedbackSystemGuard() + ' You are this workspace customer-support and lead-qualification assistant. Reply naturally and briefly to the Instagram DM. Use only the workspace knowledge below for factual claims. If knowledge does not answer the question, ask a concise clarifying question instead of inventing facts. Do not claim a booking or action has completed unless confirmed.\n\nResponse formatting: ' + AI_RESPONSE_FORMATTING_INSTRUCTIONS + '\n\nWorkspace knowledge:\n' + (knowledge || 'No published workspace knowledge is available. Ask a clarifying question and do not invent product details.') },
       ...history,
       { role: 'user', content: (aiFeedbackPromptSection ? aiFeedbackPromptSection + '\n\n' : '') + 'CUSTOMER MESSAGE:\n' + messageText.slice(0, 3000) },
     ],
@@ -582,7 +583,7 @@ export async function sendInstagramMessage(ctx: TenantContext, recipientId: stri
   const response = await fetch(url, {
     method: 'POST',
     headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ recipient: { id: recipientId }, message: { text: text.trim() } }),
+    body: JSON.stringify({ recipient: { id: recipientId }, message: { text: aiResponseMarkdownToPlainText(text) } }),
   });
   const result: any = await response.json().catch(() => ({}));
   if (!response.ok) {

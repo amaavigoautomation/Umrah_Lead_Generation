@@ -276,8 +276,23 @@ export const DemoSchedulingView: React.FC<DemoSchedulingViewProps> = ({ leads = 
     checkStatus();
     fetchAvailability();
     fetchBookings();
+
+    // Booking changes may be made by the AI from email/WhatsApp while this page is open.
+    // Refresh the table periodically and whenever the operator returns to this tab.
+    const refreshCalendarData = () => {
+      if (document.visibilityState !== 'visible') return;
+      fetchBookings();
+      fetchAvailability();
+    };
+    const refreshTimer = window.setInterval(refreshCalendarData, 30000);
+    window.addEventListener('focus', refreshCalendarData);
+    document.addEventListener('visibilitychange', refreshCalendarData);
+
     return () => {
       if (unsub) unsub();
+      window.clearInterval(refreshTimer);
+      window.removeEventListener('focus', refreshCalendarData);
+      document.removeEventListener('visibilitychange', refreshCalendarData);
     };
   }, []);
 

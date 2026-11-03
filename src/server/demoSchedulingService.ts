@@ -746,6 +746,8 @@ export interface CreateBookingParams {
   dateString: string; // YYYY-MM-DD
   startTime: string; // HH:mm
   endTime: string; // HH:mm
+  /** Existing guests to carry over when replacing a booking. */
+  attendees?: string[];
   accessToken?: string;
   /** Internal (reschedule only): the booking being moved. Skips the duplicate check and the new record. */
   replacingBookingId?: string;
@@ -972,10 +974,11 @@ async function createGoogleCalendarDemoBookingInner(
   // and send the calendar invitation ONCE to leadEmail
   if (token) {
     try {
-      const attendees: Array<{ email: string }> = [];
-      if (leadEmail && leadEmail.includes('@') && leadEmail.toLowerCase() !== hostCalendarEmail().toLowerCase()) {
-        attendees.push({ email: leadEmail });
-      }
+      const hostEmail = hostCalendarEmail().toLowerCase().trim();
+      const inviteEmails = Array.from(new Set([leadEmail, ...(params.attendees || [])]
+        .map((email) => String(email || '').toLowerCase().trim())
+        .filter((email) => email.includes('@') && email !== hostEmail)));
+      const attendees: Array<{ email: string }> = inviteEmails.map((email) => ({ email }));
 
       const eventPayload = {
         summary,
@@ -991,7 +994,7 @@ async function createGoogleCalendarDemoBookingInner(
         attendees,
         conferenceData: {
           createRequest: {
-            requestId: `meet-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+            requestId: `reschedule-meet-${crypto.randomUUID()}`,
             conferenceSolutionKey: {
               type: 'hangoutsMeet',
             },
@@ -1124,7 +1127,10 @@ async function createGoogleCalendarDemoBookingInner(
     status: 'BOOKED',
     summary,
     description,
-    attendees: [...(hostCalendarEmail() ? [hostCalendarEmail()] : []), ...(leadEmail ? [leadEmail] : [])],
+    calendarProvider: 'google',
+    attendees: Array.from(new Set([hostCalendarEmail(), leadEmail, ...(params.attendees || [])]
+      .map((email) => String(email || '').toLowerCase().trim())
+      .filter(Boolean))),
     createdAt: nowIso,
     updatedAt: nowIso,
   };
@@ -1326,7 +1332,7 @@ export async function rescheduleDemoBooking(
   newStartTime: string,
   newEndTime: string,
   accessToken?: string
-): Promise<{ success: boolean; booking?: Booking; error?: string; conflict?: boolean }> {
+): Promise<{ success: boolean; booking?: Booking; error?: string; conflict?: boolean; calendarInviteSent?: boolean }> {
   await warmSchedBrand();
   if (!isFirebaseConfigured || !db) {
     return { success: false, error: 'Database not initialized' };
@@ -1338,6 +1344,17 @@ export async function rescheduleDemoBooking(
     if (!snap.exists()) return { success: false, error: 'Booking not found' };
 
     const booking = snap.data() as Booking;
+    if (booking.status === 'CANCELLED' || booking.status === 'COMPLETED') {
+      return { success: false, error: `This booking is already ${booking.status.toLowerCase()} and cannot be rescheduled.` };
+    }
+    const oldMeetLink = String(booking.googleMeetLink || '').trim();
+    const oldEventId = String(booking.calendarEventId || '').trim();
+    if (/meet\.google\.com/i.test(oldMeetLink) && (!oldEventId || oldEventId.startsWith('mock-'))) {
+      return {
+        success: false,
+        error: 'The existing Google Meet link has no valid Calendar event ID saved, so its old invitation cannot be safely cancelled. Please contact the team to correct the booking record before rescheduling.',
+      };
+    }
     if (booking.startDateTimeIso === newStartIso && booking.endDateTimeIso === newEndIso) {
       return { success: true, booking };
     }
@@ -1371,6 +1388,7 @@ export async function rescheduleDemoBooking(
       leadEmail: booking.leadEmail,
       leadPhone: booking.leadPhone,
       companyName: booking.companyName,
+      attendees: booking.attendees || [],
       startIso: newStartIso,
       endIso: newEndIso,
       dateString: newDateString,
@@ -1386,6 +1404,20 @@ export async function rescheduleDemoBooking(
         success: false,
         conflict: createRes.conflict,
         error: createRes.error || 'The new calendar event and Google Meet link could not be created. Your original booking remains unchanged.',
+      };
+    }
+    if (newCalendarEventId === oldEventId) {
+      return {
+        success: false,
+        error: 'Google Calendar did not create a separate replacement event. Your original booking and invitation were left unchanged.',
+      };
+    }
+    if (oldMeetLink && newGoogleMeetLink.trim() === oldMeetLink) {
+      const cleanup = await deleteGoogleCalendarDemoEvent(newCalendarEventId, token);
+      if (!cleanup.success) console.error('[Reschedule Cleanup] Could not remove replacement event with reused Meet link:', cleanup.error);
+      return {
+        success: false,
+        error: 'Google Calendar returned the existing Meet link instead of a new one. The original booking was left unchanged; please try again.',
       };
     }
 
@@ -1489,7 +1521,18 @@ export async function rescheduleDemoBooking(
       );
     }
 
-    return { success: true, booking: updatedBooking };
+    console.info('[Demo Reschedule] Calendar replacement completed', {
+      bookingId,
+      oldCalendarEventId: oldEventId,
+      newCalendarEventId,
+      oldMeetLinkChanged: oldMeetLink !== newGoogleMeetLink.trim(),
+      inviteSent: Boolean(createRes.calendarInviteSent),
+    });
+    return {
+      success: true,
+      booking: updatedBooking,
+      calendarInviteSent: Boolean(createRes.calendarInviteSent),
+    };
   } catch (err: any) {
     return { success: false, error: err?.message || 'Failed to reschedule booking' };
   }
@@ -2523,7 +2566,7 @@ Output JSON only: {"isDemoIntent": boolean, "requestedDate": string|null, "reque
     if (!isWorkingDay(dayOfWeekFor(slot.date))) {
       return offerOptions('WEEKEND_NOT_ALLOWED', `Our demo team works ${daysLabel()}.`, { startFromDate: slot.date });
     }
-    const startIso = createIstIsoString(slot.date, slot.startHour, 0);
+    const startIso = createIstIsoString(slot.date, slot.startHour, startMinute);
     if (Date.parse(startIso) <= Date.now() + MIN_LEAD_TIME_MS) {
       return offerOptions('SLOT_UNAVAILABLE', `${label} is too soon or has already passed.`, {}, { listLead: 'Here are the next free slots:' });
     }
@@ -2569,7 +2612,7 @@ Output JSON only: {"isDemoIntent": boolean, "requestedDate": string|null, "reque
           handled: true,
           action: 'RESCHEDULED',
           booking: resched.booking,
-          replyText: `You're all set! Your ${brandName()} demo has been rescheduled to ${slotLabel}.\n\n• Google Meet Link: ${resched.booking.googleMeetLink}\n• Company: ${companyName}\n• Attendee: ${leadName} (${leadEmail || 'Email invite updated'})\n• Timezone: ${tzDisplay()}\n\nWe have sent the updated calendar invitation to your email. We look forward to demonstrating how ${sb().playbook === 'umrah360' ? 'Umrah360 automates your pilgrimage operations' : `${brandName()} can help your business`}!`,
+          replyText: `You're all set! Your ${brandName()} demo has been rescheduled to ${slotLabel}.\n\n• New Google Meet Link: ${resched.booking.googleMeetLink}\n• Company: ${companyName}\n• Attendee: ${leadName} (${leadEmail || 'Email invite updated'})\n• Timezone: ${tzDisplay()}\n\n${resched.calendarInviteSent ? 'A new calendar invitation has been sent. The previous invitation was cancelled.' : 'The booking time was updated, but Google did not confirm sending the new calendar invitation; please check the calendar connection.'} We look forward to demonstrating how ${sb().playbook === 'umrah360' ? 'Umrah360 automates your pilgrimage operations' : `${brandName()} can help your business`}!`,
         };
       }
       return {

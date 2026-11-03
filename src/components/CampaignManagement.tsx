@@ -1883,39 +1883,34 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                         <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Email engagement</span>
                         <span className="text-[10px] text-slate-400">Updates every minute</span>
                       </div>
-                      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-                        <div className="p-3 rounded-lg border border-slate-200 bg-slate-50">
-                          <p className="text-[11px] text-slate-500 font-medium">Delivered</p>
-                          <p className="text-xl font-bold text-slate-800">{engagement.delivered}</p>
-                          <p className="text-[10px] text-slate-400">{engagement.bounced} bounced · {engagement.complained} spam complaints · {engagement.deliveryUnknown} unconfirmed</p>
-                        </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                         <div
                           className="p-3 rounded-lg border border-dashed border-slate-300 bg-white"
-                          title="Estimated. Mail apps can pre-load images (counts as an open) and some block them (open is missed). Replies and clicks are confirmed."
+                          title="Unique leads with at least one tracked open. Open counts can be estimates because some mail apps pre-load or block tracking images."
                         >
                           <p className="text-[11px] text-slate-500 font-medium">Opened <span className="text-[9px] font-semibold text-amber-600">EST.</span></p>
                           <p className="text-xl font-bold text-slate-700">{engagement.uniqueOpened}</p>
-                          <p className="text-[10px] text-slate-400">~{pct(engagement.uniqueOpened)} · {engagement.totalOpens} total opens</p>
+                          <p className="text-[10px] text-slate-400">~{pct(engagement.uniqueOpened)} · unique leads</p>
                         </div>
-                        <div className="p-3 rounded-lg border border-emerald-200 bg-emerald-50/50">
+                        <div
+                          className="p-3 rounded-lg border border-emerald-200 bg-emerald-50/50"
+                          title="Unique leads with at least one tracked link click."
+                        >
                           <p className="text-[11px] text-emerald-700 font-medium">Clicked</p>
                           <p className="text-xl font-bold text-emerald-700">{engagement.clicked}</p>
-                          <p className="text-[10px] text-emerald-700/70">{pct(engagement.clicked)} · {engagement.totalClicks} clicks</p>
+                          <p className="text-[10px] text-emerald-700/70">{pct(engagement.clicked)} · unique leads</p>
                         </div>
-                        <div className="p-3 rounded-lg border border-sky-200 bg-sky-50/50">
-                          <p className="text-[11px] text-sky-700 font-medium">Replied</p>
-                          <p className="text-xl font-bold text-sky-700">{engagement.replied}</p>
-                          <p className="text-[10px] text-sky-700/70">{pct(engagement.replied)} · {engagement.repliedWithoutTrackedOpen} without tracked open</p>
-                        </div>
-                        <div className="p-3 rounded-lg border border-slate-200 bg-slate-50" title={`No open, click or reply ${engagement.ignoredAfterDays}+ days after sending`}>
+                        <div
+                          className="p-3 rounded-lg border border-slate-200 bg-slate-50"
+                          title={`Unique delivered leads with no tracked open, click or reply ${engagement.ignoredAfterDays}+ days after sending`}
+                        >
                           <p className="text-[11px] text-slate-500 font-medium">Ignored</p>
                           <p className="text-xl font-bold text-slate-700">{engagement.ignored}</p>
-                          <p className="text-[10px] text-slate-400">{engagement.waiting} still waiting ({engagement.ignoredAfterDays}d window)</p>
+                          <p className="text-[10px] text-slate-400">{engagement.waiting} unique leads still waiting ({engagement.ignoredAfterDays}d window)</p>
                         </div>
                       </div>
                       <p className="text-[10px] text-slate-400">
-                        Opened is an estimate and excludes {engagement.botOpens} scanner opens. Clicks are Resend events; replies are matched by our inbound email processor. A reply without a tracked open does not create an open event.
-                        Emails sent before tracking was turned on are not included.
+                        Counts show unique leads, not event totals: repeated opens or clicks increase the individual lead's activity count but only count once here. Scanner opens are excluded. Emails sent before tracking was turned on are not included.
                       </p>
                     </div>
                   );
@@ -2040,6 +2035,8 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                           <th className="py-3 px-4">Send Status</th>
                           <th className="py-3 px-4">Reply Status</th>
                           <th className="py-3 px-4">Engagement</th>
+                          <th className="py-3 px-4 whitespace-nowrap">Opened</th>
+                          <th className="py-3 px-4 whitespace-nowrap">Clicked</th>
                           <th className="py-3 px-4">Last Sent</th>
                           <th className="py-3 px-4 text-right">Actions</th>
                         </tr>
@@ -2047,7 +2044,7 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                       <tbody className="divide-y divide-slate-100">
                         {filteredLeads.length === 0 ? (
                           <tr>
-                            <td colSpan={9} className="py-10 text-center text-slate-400">
+                            <td colSpan={11} className="py-10 text-center text-slate-400">
                               No leads matching the current filter
                             </td>
                           </tr>
@@ -2151,6 +2148,22 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                                     }
                                     return <span className="text-[11px] text-slate-300">—</span>;
                                   })()}
+                                </td>
+                                <td className="py-3 px-4 whitespace-nowrap">
+                                  <span
+                                    className={`inline-flex min-w-10 justify-center px-2 py-1 rounded-md text-[11px] font-semibold tabular-nums ${(lead.realOpenCount || (lead.opened ? 1 : 0)) > 0 ? 'bg-slate-100 text-slate-700' : 'text-slate-400'}`}
+                                    title={`${lead.realOpenCount || (lead.opened ? 1 : 0)} tracked open(s); scanner opens excluded`}
+                                  >
+                                    {lead.realOpenCount || (lead.opened ? 1 : 0)}x
+                                  </span>
+                                </td>
+                                <td className="py-3 px-4 whitespace-nowrap">
+                                  <span
+                                    className={`inline-flex min-w-10 justify-center px-2 py-1 rounded-md text-[11px] font-semibold tabular-nums ${(lead.clickCount || (lead.clicked ? 1 : 0)) > 0 ? 'bg-emerald-50 text-emerald-700' : 'text-slate-400'}`}
+                                    title={`${lead.clickCount || (lead.clicked ? 1 : 0)} tracked click(s)`}
+                                  >
+                                    {lead.clickCount || (lead.clicked ? 1 : 0)}x
+                                  </span>
                                 </td>
                                 <td className="py-3 px-4 text-slate-500 text-[11px]">
                                   {lead.lastSentAt

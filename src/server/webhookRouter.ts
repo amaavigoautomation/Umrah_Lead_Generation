@@ -311,8 +311,11 @@ async function trackEmailEngagement(
   const leadRef = repo.campaignLeadDoc(target.leadId);
   const eventRef = repo.campaignEngagementEventDoc(resendEventDocumentId(eventId));
   const claim = await claimResendEvent(target.tenantId, eventId, event, target);
-  if (claim.state === 'PROCESSED') return { tracked: true, duplicate: true };
-  if (claim.state === 'IN_PROGRESS') throw new Error('This Resend event is already being processed; retry shortly.');
+  if (!('token' in claim)) {
+    if (claim.state === 'PROCESSED') return { tracked: true, duplicate: true };
+    throw new Error('This Resend event is already being processed; retry shortly.');
+  }
+  const claimToken = claim.token;
 
   const nowIso = new Date().toISOString();
   const eventAt = typeof event?.created_at === 'string' && Number.isFinite(Date.parse(event.created_at))
@@ -326,7 +329,7 @@ async function trackEmailEngagement(
       if (!eventSnap.exists) throw new Error('Resend event ledger entry is missing.');
       const eventRow = eventSnap.data() || {};
       if (eventRow.status === 'PROCESSED') return 'DUPLICATE';
-      if (eventRow.lockToken !== claim.token) return 'LEASE_LOST';
+      if (eventRow.lockToken !== claimToken) return 'LEASE_LOST';
       if (!leadSnap.exists) throw new Error('Campaign lead not found for the verified Resend event.');
       const lead = leadSnap.data() as any;
       if (target.campaignId && lead.campaignId && target.campaignId !== lead.campaignId) {
@@ -388,7 +391,7 @@ async function trackEmailEngagement(
   } catch (error: any) {
     await runTransaction(async (tx: any) => {
       const snap = await tx.get(eventRef);
-      if (snap.exists && snap.data()?.lockToken === claim.token && snap.data()?.status === 'PROCESSING') {
+      if (snap.exists && snap.data()?.lockToken === claimToken && snap.data()?.status === 'PROCESSING') {
         tx.update(eventRef, {
           status: 'FAILED', lastError: String(error?.message || error).slice(0, 1000),
           lockedAt: null, lockToken: null, updatedAt: new Date().toISOString(),
@@ -433,7 +436,7 @@ export async function routeResendWebhook(req: any, res: any): Promise<boolean> {
     return true;
   }
   const verified = verifyResendWebhookRequest(req);
-  if (!verified.ok) {
+  if ('error' in verified) {
     console.warn('[Resend Webhook] rejected request: ' + verified.error);
     res.statusCode = verified.status;
     res.setHeader('Content-Type', 'application/json');

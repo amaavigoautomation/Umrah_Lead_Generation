@@ -240,7 +240,7 @@ export const BillingView: React.FC<{ fullScreen?: boolean; onLogout?: () => void
               </div>
             </>
           )}
-          {(usageState.periodUsage.aiUnpricedRequestCount || 0) > 0 && <p className="text-[11px] text-amber-700">Cost is incomplete for {usageState.periodUsage.aiUnpricedRequestCount} AI request(s) in this date range because their model pricing is not configured; their tokens are included.</p>}
+          {(usageState?.periodUsage?.aiUnpricedRequestCount || 0) > 0 && <p className="text-[11px] text-amber-700">Cost is incomplete for {usageState.periodUsage.aiUnpricedRequestCount} AI request(s) in this date range because their model pricing is not configured; their tokens are included.</p>}
           <p className="text-[11px] text-slate-400">Only emails accepted by the sending provider are counted; scheduled or future emails are not counted until sent. Daily AI breakdown starts with this usage-tracking release, so earlier AI activity may only be available in monthly totals.</p>
         </section>
         </div>

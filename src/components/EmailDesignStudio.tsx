@@ -1584,7 +1584,7 @@ export const EmailDesignStudio: React.FC<EmailDesignStudioProps> = ({ tenantId, 
 
   const handlePastedImage = async (file: File) => {
     if (!editing || isUploadingInlineImage) return;
-    if (!/^image\\/(?:png|jpe?g|gif|webp)$/i.test(file.type)) {
+    if (!/^image\/(?:png|jpe?g|gif|webp)$/i.test(file.type)) {
       setNotice({ tone: 'error', text: 'Paste a PNG, JPG, GIF or WebP image.' });
       return;
     }

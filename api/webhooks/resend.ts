@@ -12,7 +12,7 @@ async function readRaw(req: IncomingMessage): Promise<Buffer> {
   return Buffer.concat(chunks);
 }
 
-export default async function handler(req: IncomingMessage & { body?: any }, res: ServerResponse) {
+export default async function handler(req: IncomingMessage & { body?: any; rawBody?: Buffer }, res: ServerResponse) {
   res.setHeader('Content-Type', 'application/json');
   res.setHeader('Allow', 'GET, HEAD, POST, OPTIONS');
   if (req.method === 'OPTIONS') {

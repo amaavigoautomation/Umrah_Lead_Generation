@@ -7,6 +7,11 @@ import { isFirebaseConfigured } from '../firebase/config.js';
 import { tenantRepo } from './tenantRepo.js';
 import { encryptSecret, decryptSecret } from './cryptoUtils.js';
 import { describeImapError } from './imapService.js';
+import {
+  DEFAULT_INBOUND_EMAIL_IGNORE_RULES,
+  normalizeInboundEmailIgnoreRules,
+  type InboundEmailIgnoreRules,
+} from '../shared/inboundEmailRules.js';
 import type { TenantContext } from '../types/tenant.js';
 import {
   MICROSOFT_IMAP_HOST,
@@ -68,6 +73,8 @@ export interface TenantInboundSettings {
   user?: string;
   /** Also process brand-new emails from people we have no conversation with. Off by default. */
   processNewInquiries?: boolean;
+  /** Workspace-specific sender, domain, subject and automated-email ignore rules. */
+  ignoreRules?: InboundEmailIgnoreRules;
   status?: InboundStatus;
   lastError?: string;
   lastErrorAt?: string;
@@ -366,6 +373,7 @@ export async function getInboundView(tenantId: string) {
     port: s.port,
     user: s.user,
     processNewInquiries: Boolean(s.processNewInquiries),
+    ignoreRules: normalizeInboundEmailIgnoreRules(s.ignoreRules),
     status: (s.status || 'not_configured') as InboundStatus,
     lastError: s.lastError,
     lastErrorAt: s.lastErrorAt,
@@ -518,6 +526,7 @@ export async function connectInbound(tenantId: string, input: ConnectInput) {
     secure: creds.secure,
     user,
     processNewInquiries: input.processNewInquiries ?? existing.processNewInquiries ?? false,
+    ignoreRules: normalizeInboundEmailIgnoreRules(existing.ignoreRules || DEFAULT_INBOUND_EMAIL_IGNORE_RULES),
     status: 'connected',
     lastError: undefined,
     lastErrorAt: undefined,
@@ -562,12 +571,44 @@ export async function testStoredInbound(tenantId: string) {
   return getInboundView(tenantId);
 }
 
-export async function setInboundOptions(tenantId: string, opts: { enabled?: boolean; processNewInquiries?: boolean }) {
+export async function setInboundOptions(
+  tenantId: string,
+  opts: { enabled?: boolean; processNewInquiries?: boolean; ignoreRules?: Partial<InboundEmailIgnoreRules> }
+) {
   requireDb();
   const s = await getInboundSettings(tenantId, { fresh: true });
   if (!s.host || !s.user) throw new InboundError(400, 'Connect a mailbox first');
   const patch: Partial<TenantInboundSettings> = {};
   if (typeof opts.processNewInquiries === 'boolean') patch.processNewInquiries = opts.processNewInquiries;
+  if (opts.ignoreRules && typeof opts.ignoreRules === 'object') {
+    const current = normalizeInboundEmailIgnoreRules(s.ignoreRules);
+    const next = { ...current, ...opts.ignoreRules };
+    const validateList = (value: unknown, label: string, kind: 'email' | 'domain' | 'keyword') => {
+      if (!Array.isArray(value)) throw new InboundError(400, `${label} must be a list`);
+      if (value.length > 100) throw new InboundError(400, `${label} can contain at most 100 entries`);
+      const cleaned = [...new Set(value.map((item) => String(item || '').trim().toLowerCase()).filter(Boolean))];
+      for (const item of cleaned) {
+        if (item.length > (kind === 'keyword' ? 120 : 254)) throw new InboundError(400, `${label} contains an entry that is too long`);
+        if (kind === 'email' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(item)) {
+          throw new InboundError(400, `Enter valid email addresses in ${label}`);
+        }
+        if (kind === 'domain' && !/^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$/i.test(item.replace(/^@/, ''))) {
+          throw new InboundError(400, `Enter domain names (not email addresses) in ${label}`);
+        }
+        if (kind === 'keyword' && item.length < 2) throw new InboundError(400, `Keywords in ${label} must be at least 2 characters`);
+      }
+      return cleaned;
+    };
+    next.ignoredSenders = validateList(next.ignoredSenders, 'Ignored senders', 'email');
+    next.ignoredDomains = validateList(next.ignoredDomains, 'Ignored domains', 'domain').map((v) => v.replace(/^@/, ''));
+    next.ignoredSubjectKeywords = validateList(next.ignoredSubjectKeywords, 'Ignored subject keywords', 'keyword');
+    next.allowedSenders = validateList(next.allowedSenders, 'Allowed senders', 'email');
+    next.allowedDomains = validateList(next.allowedDomains, 'Allowed domains', 'domain').map((v) => v.replace(/^@/, ''));
+    for (const key of ['ignoreNewsletters', 'ignoreAutomatedEmails', 'ignoreGoogleNotifications'] as const) {
+      if (typeof next[key] !== 'boolean') throw new InboundError(400, `Invalid value for ${key}`);
+    }
+    patch.ignoreRules = normalizeInboundEmailIgnoreRules(next);
+  }
   if (typeof opts.enabled === 'boolean') {
     patch.enabled = opts.enabled;
     if (!opts.enabled) patch.status = 'paused';
@@ -587,7 +628,12 @@ export async function disconnectInbound(tenantId: string) {
   await deleteDoc(tenantRepo(sysCtx(tenantId)).secretDoc(INBOUND_SECRET_NAME)).catch(() => {});
   await deleteMicrosoftRefreshToken(tenantId);
   await releaseMailbox(tenantId, s.host, s.user).catch(() => {});
-  await writeSettings(tenantId, { enabled: false, status: 'not_configured' }, true);
+  // Ignore rules are workspace preferences, not mailbox credentials; keep them when a mailbox is disconnected.
+  await writeSettings(tenantId, {
+    enabled: false,
+    status: 'not_configured',
+    ignoreRules: normalizeInboundEmailIgnoreRules(s.ignoreRules),
+  }, true);
   return getInboundView(tenantId);
 }
 
@@ -633,6 +679,7 @@ export async function connectMicrosoftInbound(r: MicrosoftCallbackResult) {
     secure: true,
     user,
     processNewInquiries: r.processNewInquiries ?? existing.processNewInquiries ?? false,
+    ignoreRules: normalizeInboundEmailIgnoreRules(existing.ignoreRules || DEFAULT_INBOUND_EMAIL_IGNORE_RULES),
     status: 'connected',
     lastError: undefined,
     lastErrorAt: undefined,

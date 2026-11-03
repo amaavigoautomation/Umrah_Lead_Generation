@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Inbox, CheckCircle2, AlertTriangle, PauseCircle, Loader2, RefreshCw, Plug, Unplug, Eye, EyeOff, LogIn } from 'lucide-react';
+import { Inbox, CheckCircle2, AlertTriangle, PauseCircle, Loader2, RefreshCw, Plug, Unplug, Eye, EyeOff, LogIn, Plus, X } from 'lucide-react';
+import { DEFAULT_INBOUND_EMAIL_IGNORE_RULES, normalizeInboundEmailIgnoreRules, type InboundEmailIgnoreRules } from '../shared/inboundEmailRules';
 
 interface InboundView {
   enabled: boolean;
@@ -10,6 +11,7 @@ interface InboundView {
   port?: number;
   user?: string;
   processNewInquiries: boolean;
+  ignoreRules?: InboundEmailIgnoreRules;
   status: 'not_configured' | 'connected' | 'error' | 'auth_failed' | 'paused';
   lastError?: string;
   lastErrorAt?: string;
@@ -100,6 +102,70 @@ function providerFromView(v: InboundView): ProviderId {
   return 'gmail';
 }
 
+type RuleListEditorProps = {
+  label: string;
+  description: string;
+  values: string[];
+  placeholder: string;
+  kind: 'email' | 'domain' | 'keyword';
+  disabled?: boolean;
+  onChange: (values: string[]) => void;
+};
+
+const RuleListEditor: React.FC<RuleListEditorProps> = ({
+  label, description, values, placeholder, kind, disabled, onChange,
+}) => {
+  const [draft, setDraft] = useState('');
+  const add = () => {
+    const value = draft.trim().toLowerCase().replace(/^@/, '');
+    if (!value) return;
+    const emailOk = /^[^ @]+@[^ @]+[.][^ @]+$/.test(value);
+    const domainOk = /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?[.])+[a-z]{2,}$/i.test(value);
+    if ((kind === 'email' && !emailOk) || (kind === 'domain' && !domainOk) || (kind === 'keyword' && value.length < 2)) return;
+    if (!values.includes(value) && values.length < 100) onChange([...values, value]);
+    setDraft('');
+  };
+  return (
+    <div className="space-y-2">
+      <div>
+        <div className="text-sm font-medium text-slate-800">{label}</div>
+        <p className="text-xs text-slate-500">{description}</p>
+      </div>
+      <div className="flex gap-2">
+        <input
+          className={inputCls}
+          value={draft}
+          disabled={disabled}
+          placeholder={placeholder}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); add(); } }}
+        />
+        <button type="button" className={btnGhost} disabled={disabled || !draft.trim()} onClick={add}>
+          <Plus className="w-4 h-4" /> Add
+        </button>
+      </div>
+      {values.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {values.map((value) => (
+            <span key={value} className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 text-slate-700 px-2.5 py-1 text-xs">
+              {value}
+              <button
+                type="button"
+                className="text-slate-500 hover:text-red-600 disabled:opacity-40"
+                disabled={disabled}
+                title={`Remove ${value}`}
+                onClick={() => onChange(values.filter((item) => item !== value))}
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
 export const InboundMailboxPanel: React.FC<{ tenantId: string; canEdit: boolean }> = ({ tenantId, canEdit }) => {
   const base = `/api/tenants/${encodeURIComponent(tenantId)}/inbound`;
   const [view, setView] = useState<InboundView | null>(null);
@@ -116,6 +182,7 @@ export const InboundMailboxPanel: React.FC<{ tenantId: string; canEdit: boolean 
   const [port, setPort] = useState('993');
   const [showPw, setShowPw] = useState(false);
   const [newInquiries, setNewInquiries] = useState(false);
+  const [ignoreRules, setIgnoreRules] = useState<InboundEmailIgnoreRules>(DEFAULT_INBOUND_EMAIL_IGNORE_RULES);
 
   const connected = Boolean(view && view.status !== 'not_configured');
   const isOAuth = view?.authType === 'oauth';
@@ -128,6 +195,7 @@ export const InboundMailboxPanel: React.FC<{ tenantId: string; canEdit: boolean 
     setHost(v.host && v.host !== 'imap.gmail.com' ? v.host : '');
     setPort(String(v.port || 993));
     setNewInquiries(Boolean(v.processNewInquiries));
+    setIgnoreRules(normalizeInboundEmailIgnoreRules(v.ignoreRules));
     setPassword('');
   };
 
@@ -284,6 +352,81 @@ export const InboundMailboxPanel: React.FC<{ tenantId: string; canEdit: boolean 
               </span>
             </span>
           </label>
+
+          <section className="border-t border-slate-100 pt-4 space-y-4">
+            <div>
+              <h4 className="text-sm font-semibold text-slate-900">Email ignore rules</h4>
+              <p className="text-xs text-slate-500 mt-1">
+                These rules apply only to this workspace and run before CRM, Unified Inbox and AI processing.
+                Ignored emails stay in your mailbox and are recorded as skipped in the system.
+              </p>
+            </div>
+
+            <div className="space-y-3">
+              <label className="flex items-start gap-3 text-sm">
+                <input type="checkbox" className="mt-1" checked={ignoreRules.ignoreNewsletters} disabled={!canEdit}
+                  onChange={(e) => setIgnoreRules((v) => ({ ...v, ignoreNewsletters: e.target.checked }))} />
+                <span>
+                  <span className="font-medium text-slate-900">Ignore newsletters and promotions</span>
+                  <span className="block text-slate-500">Newsletters, mailing lists, weekly digests, product updates and promotional emails.</span>
+                </span>
+              </label>
+              <label className="flex items-start gap-3 text-sm">
+                <input type="checkbox" className="mt-1" checked={ignoreRules.ignoreAutomatedEmails} disabled={!canEdit}
+                  onChange={(e) => setIgnoreRules((v) => ({ ...v, ignoreAutomatedEmails: e.target.checked }))} />
+                <span>
+                  <span className="font-medium text-slate-900">Ignore automated notifications</span>
+                  <span className="block text-slate-500">No-reply senders, verification codes, system notifications and automated messages.</span>
+                </span>
+              </label>
+              <label className="flex items-start gap-3 text-sm">
+                <input type="checkbox" className="mt-1" checked={ignoreRules.ignoreGoogleNotifications} disabled={!canEdit}
+                  onChange={(e) => setIgnoreRules((v) => ({ ...v, ignoreGoogleNotifications: e.target.checked }))} />
+                <span>
+                  <span className="font-medium text-slate-900">Ignore Google notifications and product emails</span>
+                  <span className="block text-slate-500">Google Account, Search Console, Google Cloud and similar Google service messages. Add exceptions under Always allow below.</span>
+                </span>
+              </label>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+              <RuleListEditor label="Ignore specific email addresses" description="Messages from these exact senders will be skipped."
+                values={ignoreRules.ignoredSenders} placeholder="updates@example.com" kind="email" disabled={!canEdit}
+                onChange={(values) => setIgnoreRules((v) => ({ ...v, ignoredSenders: values }))} />
+              <RuleListEditor label="Ignore sender domains" description="Also matches subdomains, such as alerts.example.com."
+                values={ignoreRules.ignoredDomains} placeholder="example.com" kind="domain" disabled={!canEdit}
+                onChange={(values) => setIgnoreRules((v) => ({ ...v, ignoredDomains: values }))} />
+              <RuleListEditor label="Ignore subject keywords" description="Any matching keyword in the subject will be skipped."
+                values={ignoreRules.ignoredSubjectKeywords} placeholder="weekly snapshot" kind="keyword" disabled={!canEdit}
+                onChange={(values) => setIgnoreRules((v) => ({ ...v, ignoredSubjectKeywords: values }))} />
+              <div className="rounded-xl border border-emerald-100 bg-emerald-50/50 p-3 space-y-4">
+                <div>
+                  <div className="text-sm font-semibold text-emerald-900">Always allow these senders</div>
+                  <p className="text-xs text-emerald-800">Allow rules override every ignore rule, including the Google preset.</p>
+                </div>
+                <RuleListEditor label="Allowed email addresses" description="Allow a specific sender, e.g. a Google security alert."
+                  values={ignoreRules.allowedSenders} placeholder="security-noreply@google.com" kind="email" disabled={!canEdit}
+                  onChange={(values) => setIgnoreRules((v) => ({ ...v, allowedSenders: values }))} />
+                <RuleListEditor label="Allowed domains" description="Allow every sender from a domain and its subdomains."
+                  values={ignoreRules.allowedDomains} placeholder="google.com" kind="domain" disabled={!canEdit}
+                  onChange={(values) => setIgnoreRules((v) => ({ ...v, allowedDomains: values }))} />
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <button className={btnPrimary} disabled={!canEdit || busy === 'rules'}
+                onClick={() => run('rules', 'options', { ignoreRules }, 'Email ignore rules saved.')}>
+                {busy === 'rules' ? <Loader2 className="w-4 h-4 animate-spin" /> : null} Save ignore rules
+              </button>
+              <button className={btnGhost} disabled={!canEdit || busy === 'rules'}
+                onClick={() => run('rules', 'options', { ignoreRules: DEFAULT_INBOUND_EMAIL_IGNORE_RULES }, 'Ignore rules reset to defaults.')}>
+                Reset to defaults
+              </button>
+            </div>
+            <p className="text-xs text-slate-500">
+              Allow rules only bypass ignore filters. The existing “Also handle brand-new enquiries” setting still determines whether unrelated new senders can start a conversation.
+            </p>
+          </section>
 
           <p className="text-xs text-slate-500">
             We only read new mail. Nothing is marked as read, moved or deleted, and mail already in the inbox when you connected is never processed.

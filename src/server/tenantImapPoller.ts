@@ -4,7 +4,7 @@ import { isFirebaseConfigured } from '../firebase/config.js';
 import { db, getDocs, query, where, limit } from './adminFirestore.js';
 import { tenantRepo } from './tenantRepo.js';
 import { isMessageAlreadyProcessed, recordProcessedInboundEmail, normalizeIdentifier } from './firestorePersistence.js';
-import { isBotOrNewsletter } from './imapService.js';
+import { getInboundIgnoreReason, getInboundHeaderIgnoreReason } from '../shared/inboundEmailRules.js';
 import { findExistingConversationForInboundEmail, processLiveInboundEmail, runWithInboundCtx } from './inboundPipeline.js';
 import {
   createTenantImapClient,
@@ -135,7 +135,8 @@ async function fetchNewMessages(
 
         if (!fromAddr) { candidates.push({ ...base, skipReason: 'No sender address' }); continue; }
         if (fromAddr === ownAddress) { candidates.push({ ...base, skipReason: 'Sent from the connected mailbox itself' }); continue; }
-        if (isBotOrNewsletter(fromAddr, subject)) { candidates.push({ ...base, skipReason: 'Automated / newsletter sender' }); continue; }
+        const ignoreReason = getInboundIgnoreReason(fromAddr, subject, settings.ignoreRules);
+        if (ignoreReason) { candidates.push({ ...base, skipReason: ignoreReason }); continue; }
         if (h.size > MAX_MESSAGE_BYTES) { candidates.push({ ...base, skipReason: 'Message too large' }); continue; }
 
         try {
@@ -143,22 +144,22 @@ async function fetchNewMessages(
           if (!full || !full.source) { candidates.push({ ...base, skipReason: 'Message body unavailable' }); continue; }
           const parsed = await simpleParser(full.source);
 
-          const xAutomatedBy = parsed.headers.get('x-automated-by');
-          const xMailer = parsed.headers.get('x-mailer');
-          const autoSubmitted = String(parsed.headers.get('auto-submitted') || '').toLowerCase();
-          const precedence = String(parsed.headers.get('precedence') || '').toLowerCase();
-          if (
-            xAutomatedBy ||
-            xMailer === 'Umrah360-AI-Automated-Platform' ||
-            (autoSubmitted && autoSubmitted !== 'no') ||
-            ['bulk', 'junk', 'list'].includes(precedence) ||
-            parsed.headers.get('list-unsubscribe')
-          ) {
-            candidates.push({ ...base, skipReason: 'Automated or bulk email' });
+          const from = parsed.from?.value?.[0]?.address?.toLowerCase() || fromAddr;
+          const parsedIgnoreReason = getInboundIgnoreReason(from, parsed.subject || subject, settings.ignoreRules);
+          if (parsedIgnoreReason) {
+            candidates.push({ ...base, from, skipReason: parsedIgnoreReason });
             continue;
           }
-
-          const from = parsed.from?.value?.[0]?.address?.toLowerCase() || fromAddr;
+          const headerIgnoreReason = getInboundHeaderIgnoreReason(
+            from,
+            parsed.headers,
+            parsed.headers.get('x-mailer'),
+            settings.ignoreRules
+          );
+          if (headerIgnoreReason) {
+            candidates.push({ ...base, from, skipReason: headerIgnoreReason });
+            continue;
+          }
           const refs = Array.isArray(parsed.references) ? parsed.references : parsed.references ? [parsed.references] : undefined;
           candidates.push({
             uid: h.uid,

@@ -1349,7 +1349,7 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
         } else if (action === 'test') {
           view = await svc.testStoredInbound(tId);
         } else if (action === 'options') {
-          view = await svc.setInboundOptions(tId, { enabled: body?.enabled, processNewInquiries: body?.processNewInquiries });
+          view = await svc.setInboundOptions(tId, { enabled: body?.enabled, processNewInquiries: body?.processNewInquiries, ignoreRules: body?.ignoreRules });
         } else if (action === 'poll') {
           const poller = await import('./tenantImapPoller.js');
           await poller.pollTenantMailbox(tId, { force: true });

@@ -1749,7 +1749,7 @@ export const EmailDesignStudio: React.FC<EmailDesignStudioProps> = ({ tenantId, 
               brand={brandData}
               mode={previewMode}
               content={isCampaignMode ? previewCampaignValue(editing.campaignBody || '') : undefined}
-              interactive={editorMode === 'visual' && editing.customHtml === undefined}
+              interactive={editorMode === 'visual'}
               selectedBlockId={selectedBlockId}
               onSelectBlock={selectCanvasBlock}
               onTextChange={saveInlineText}

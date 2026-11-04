@@ -88,8 +88,17 @@ function findEmailDesignElement(sections: EmailDesignSection[], id: string): Ema
 const CAMPAIGN_PREDEFINED_IDS = new Set(['tpl-b2b-portal', 'tpl-visa-allotments', 'tpl-enterprise-suite']);
 
 function campaignEmailToDesign(template: EmailTemplate): EmailDesignTemplate {
-  const snapshot = template.designSnapshot && Array.isArray(template.designSnapshot.blocks)
-    ? cloneTemplate(template.designSnapshot as unknown as EmailDesignTemplate)
+  const storedSnapshot = template.designSnapshot && typeof template.designSnapshot === 'object'
+    ? template.designSnapshot as any
+    : null;
+  const snapshot = storedSnapshot
+    ? cloneTemplate({
+        ...storedSnapshot,
+        // Older Agent-created templates stored customHtml but omitted blocks. Preserve
+        // that HTML and normalize the shape instead of silently opening a blank editor.
+        blocks: Array.isArray(storedSnapshot.blocks) ? storedSnapshot.blocks : [],
+        customHtml: String(storedSnapshot.customHtml || (template.isHtml ? template.htmlBody || '' : '') || ''),
+      } as EmailDesignTemplate)
     : createBlankEmailDesignTemplate();
   const isPredefined = CAMPAIGN_PREDEFINED_IDS.has(template.templateId);
   return {
@@ -106,7 +115,7 @@ function campaignEmailToDesign(template: EmailTemplate): EmailDesignTemplate {
     campaignAttachments: Array.isArray(template.attachments) ? template.attachments : [],
     createdAt: template.createdAt || snapshot.createdAt,
     updatedAt: template.updatedAt || snapshot.updatedAt,
-    ...(!template.designSnapshot && template.htmlBody ? { customHtml: template.htmlBody } : {}),
+    ...(!snapshot.customHtml && template.isHtml && template.htmlBody ? { customHtml: template.htmlBody } : {}),
   };
 }
 

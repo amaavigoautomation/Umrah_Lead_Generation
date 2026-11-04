@@ -5,7 +5,7 @@ import { isFirebaseConfigured } from '../firebase/config.js';
 import { tenantRepo } from './tenantRepo.js';
 import { getTenantBrand } from './brandService.js';
 import { generateOpenAICompletion } from './openaiClient.js';
-import { DEFAULT_EMAIL_DESIGN_ID, PREDEFINED_EMAIL_DESIGNS, normalizeEmailDesignTemplate, renderEmailDesignHtml, isSafeEmailUrl, validateEmailDesignHtml, type EmailBrandProfile, type EmailDesignTemplate } from '../shared/emailDesign.js';
+import { DEFAULT_EMAIL_DESIGN_ID, PREDEFINED_EMAIL_DESIGNS, normalizeEmailDesignTemplate, renderEmailDesignHtml, isSafeEmailUrl, validateEmailDesignHtml, type EmailBrandProfile, type EmailDesignTemplate, type EmailWebsitePageLink } from '../shared/emailDesign.js';
 import type { TenantContext } from '../types/tenant.js';
 const memoryTemplates = new Map<string, Map<string, EmailDesignTemplate>>();
 const memoryDefaults = new Map<string, string>();
@@ -122,32 +122,210 @@ function extractProfile(websiteUrl: string, html: string, pageUrl: URL): EmailBr
     description: textFromHtml(description,1200), logoUrl: isSafeEmailUrl(logoUrl,false), contactEmail: emails[0] || '',
     contactPhone: phones[0] || '', colors, socialLinks };
 }
+function normalizedWebsiteHost(value: string): string {
+  return value.toLowerCase().replace(/^www\./, '');
+}
+
+function websiteLinkPriority(value: string): number {
+  const text = value.toLowerCase();
+  if (/\b(pricing|prices|plans|subscription|rate card|packages|cost)\b/.test(text)) return 100;
+  if (/\b(demo|book|schedule|request demo|trial|walkthrough)\b/.test(text)) return 90;
+  if (/\b(contact|enquir|inquir|sales|talk to|speak to|support)\b/.test(text)) return 80;
+  if (/\b(features|product|solutions|services|suite)\b/.test(text)) return 60;
+  if (/\b(about|company|who we are|our story)\b/.test(text)) return 30;
+  return 0;
+}
+
+function websiteLinksFromHtml(html: string, pageUrl: URL): Array<{ label: string; url: string; priority: number }> {
+  const anchors = html.match(/<a\b[^>]*>[\s\S]*?<\/a>/gi) || [];
+  const result: Array<{ label: string; url: string; priority: number }> = [];
+  for (const anchor of anchors) {
+    const href = attr(anchor, 'href').replace(/&amp;/gi, '&').trim();
+    if (!href || /^(?:#|javascript:|mailto:|tel:|sms:)/i.test(href)) continue;
+    try {
+      const url = new URL(href, pageUrl);
+      if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || normalizedWebsiteHost(url.hostname) !== normalizedWebsiteHost(pageUrl.hostname)) continue;
+      url.hash = '';
+      if (url.pathname === '/' && !url.search) continue;
+      const inner = (anchor.match(/^<a\b[^>]*>([\s\S]*?)<\/a>$/i) || [])[1] || '';
+      const label = textFromHtml(inner, 120) || textFromHtml(attr(anchor, 'aria-label') || attr(anchor, 'title'), 120) || url.pathname.split('/').filter(Boolean).pop() || 'Website page';
+      const priority = websiteLinkPriority(label + ' ' + url.pathname);
+      result.push({ label, url: url.toString(), priority });
+    } catch {}
+  }
+  return result;
+}
+
+function websitePageTitle(html: string, fallback: string): string {
+  const title = textFromHtml(((html.match(/<title\b[^>]*>([\s\S]*?)<\/title>/i) || [])[1]) || '', 140);
+  return title || fallback;
+}
+
 export async function analyzeCompanyWebsite(websiteUrl: string): Promise<EmailBrandProfile> {
   const first = await fetchPublicHtml(websiteUrl);
-  const pages = [first];
+  const rootLinks = websiteLinksFromHtml(first.html, first.url);
   const visited = new Set<string>([first.url.toString()]);
-  const anchors = first.html.match(/<a\b[^>]*>/gi) || [];
-  const candidates = anchors.map((tag) => ({
-    href: attr(tag, 'href'),
-    label: textFromHtml(tag, 80),
-  })).filter((item) => /about|contact|company|who we are|our story/i.test(item.href + ' ' + item.label));
-  for (const candidate of candidates) {
-    if (pages.length >= 3) break;
+  const selected = rootLinks
+    .slice()
+    .sort((a, b) => b.priority - a.priority)
+    .filter((item) => item.priority > 0)
+    .filter((item) => {
+      if (visited.has(item.url)) return false;
+      visited.add(item.url);
+      return true;
+    })
+    .slice(0, 7);
+
+  // Discover useful tenant pages (pricing, demo, contact, products) in parallel.
+  // fetchPublicHtml validates every URL and every redirect against private-network SSRF.
+  const fetched = await Promise.all(selected.map(async (item) => {
     try {
-      const url = new URL(candidate.href, first.url);
-      if (!['http:', 'https:'].includes(url.protocol) || url.hostname !== first.url.hostname) continue;
-      url.hash = '';
-      const key = url.toString();
-      if (visited.has(key)) continue;
-      visited.add(key);
-      const page = await fetchPublicHtml(key);
-      if (page.url.hostname === first.url.hostname) pages.push(page);
+      const page = await fetchPublicHtml(item.url);
+      if (normalizedWebsiteHost(page.url.hostname) !== normalizedWebsiteHost(first.url.hostname)) return null;
+      return { ...item, page };
     } catch {
-      // The homepage is sufficient when optional About or Contact pages cannot be fetched.
+      return null;
+    }
+  }));
+  const validFetched = fetched.filter((item): item is NonNullable<typeof item> => Boolean(item));
+  const discovered = new Map<string, EmailWebsitePageLink>();
+  const homeTitle = websitePageTitle(first.html, first.url.hostname);
+  discovered.set(first.url.toString(), {
+    label: 'Home',
+    title: homeTitle,
+    url: first.url.toString(),
+    summary: meta(first.html, 'description') || meta(first.html, 'og:description'),
+  });
+
+  for (const item of rootLinks) {
+    discovered.set(item.url, {
+      label: item.label,
+      title: item.label,
+      url: item.url,
+      summary: '',
+    });
+  }
+
+  const allPages = [first, ...validFetched.map((item) => item.page)];
+  for (const item of validFetched) {
+    const summary = meta(item.page.html, 'description') || meta(item.page.html, 'og:description');
+    discovered.set(item.page.url.toString(), {
+      label: item.label,
+      title: websitePageTitle(item.page.html, item.label),
+      url: item.page.url.toString(),
+      summary: textFromHtml(summary, 420),
+    });
+    // Include links found inside pricing/product pages (e.g. a page's Demo Request CTA).
+    for (const nested of websiteLinksFromHtml(item.page.html, item.page.url)) {
+      if (!discovered.has(nested.url)) {
+        discovered.set(nested.url, { label: nested.label, title: nested.label, url: nested.url, summary: '' });
+      }
     }
   }
-  const combinedHtml = pages.map((page) => page.html).join('\n');
-  return extractProfile(first.url.toString(), combinedHtml, first.url);
+
+  const combinedHtml = allPages.map((page) => page.html).join('\n');
+  const profile = extractProfile(first.url.toString(), combinedHtml, first.url);
+  return {
+    ...profile,
+    pages: Array.from(discovered.values()).slice(0, 40),
+  };
+}
+
+function classifyEmailCta(label: string, nearbyText: string): 'pricing' | 'demo' | 'contact' | 'features' | 'offer' | 'home' {
+  const cta = label.toLowerCase();
+  const nearby = nearbyText.toLowerCase();
+  if (/\b(pricing|plan|plans|price|subscription|compare|rate)\b/.test(cta)) return 'pricing';
+  if (/\b(book|schedule|request|get a|free)\b.{0,18}\bdemo\b|\bdemo\b/.test(cta)) return 'demo';
+  if (/\b(contact|ask|talk|speak|team|sales|enquir|inquir|support)\b/.test(cta)) return 'contact';
+  if (/\b(feature|product|solution|service|suite)\b/.test(cta)) return 'features';
+  if (/\b(offer|discount|coupon|save \d|% off)\b/.test(cta)) return 'offer';
+  if (/\b(pricing|plans|subscription|price|all plans)\b/.test(nearby)) return 'pricing';
+  if (/\b(demo|walkthrough|book a call|schedule a call)\b/.test(nearby)) return 'demo';
+  if (/\b(contact|talk to|speak to|sales team|enquir|inquir)\b/.test(nearby)) return 'contact';
+  return 'home';
+}
+
+function chooseWebsitePage(
+  intent: ReturnType<typeof classifyEmailCta>,
+  pages: EmailWebsitePageLink[],
+  homeUrl: string,
+): string {
+  const pageText = (page: EmailWebsitePageLink) => page.label + ' ' + page.title + ' ' + page.url + ' ' + page.summary;
+  const candidates = pages.filter((page) => page.url !== homeUrl);
+  const choose = (pattern: RegExp) => candidates.find((page) => pattern.test(pageText(page).toLowerCase()))?.url || '';
+  if (intent === 'pricing') return choose(/\b(pricing|plans|price|subscription|rate|packages)\b/) || homeUrl;
+  if (intent === 'demo') return choose(/\b(demo|book|request|schedule|walkthrough)\b/) || choose(/\b(contact|enquir|inquir|sales)\b/) || homeUrl;
+  if (intent === 'contact') return choose(/\b(contact|enquir|inquir|sales|request-demo)\b/) || choose(/\b(demo|book|request|schedule)\b/) || homeUrl;
+  if (intent === 'features') return choose(/\b(features|product|solutions|services|suite)\b/) || homeUrl;
+  if (intent === 'offer') return choose(/\b(offer|pricing|plans|price|discount)\b/) || choose(/\b(contact|demo|sales)\b/) || homeUrl;
+  return homeUrl;
+}
+
+function sameTenantWebsiteUrl(candidate: string, base: URL): boolean {
+  try {
+    const url = new URL(candidate, base);
+    const hostname = (value: string) => value.toLowerCase().replace(/^www\./, '');
+    return ['http:', 'https:'].includes(url.protocol) && !url.username && !url.password && hostname(url.hostname) === hostname(base.hostname);
+  } catch {
+    return false;
+  }
+}
+
+/** Rewrites generated CTA destinations to verified links discovered on the tenant's own website. */
+export function resolveTenantWebsiteLinksInEmailHtml(
+  html: string,
+  profile: EmailBrandProfile | null | undefined,
+  fallbackEmail = '',
+): { html: string; links: Array<{ label: string; url: string; intent: string }> } {
+  const links: Array<{ label: string; url: string; intent: string }> = [];
+  const website = String(profile?.websiteUrl || '').trim();
+  let base: URL | null = null;
+  try {
+    if (website) {
+      const parsed = new URL(website);
+      if (['http:', 'https:'].includes(parsed.protocol) && !parsed.username && !parsed.password) base = parsed;
+    }
+  } catch {}
+  const pages = Array.isArray(profile?.pages) ? profile!.pages! : [];
+  const homeUrl = base?.toString() || '';
+  const rewritten = html.replace(/<a\b[^>]*>[\s\S]*?<\/a>/gi, (anchor) => {
+    const startTag = (anchor.match(/^<a\b[^>]*>/i) || [])[0] || anchor;
+    const href = attr(startTag, 'href').replace(/&amp;/gi, '&').trim();
+    if (/^(?:mailto:|tel:|sms:)/i.test(href)) return anchor;
+    const inner = (anchor.match(/^<a\b[^>]*>([\s\S]*?)<\/a>$/i) || [])[1] || '';
+    const label = textFromHtml(inner, 120) || textFromHtml(attr(startTag, 'aria-label') || attr(startTag, 'title'), 120);
+    const anchorAt = html.indexOf(anchor);
+    const nearbyText = textFromHtml(
+      html.slice(Math.max(0, anchorAt - 480), Math.min(html.length, anchorAt + anchor.length + 480)),
+      1000,
+    );
+    const intent = classifyEmailCta(label, nearbyText);
+    let target = '';
+    if (base) {
+      const knownExisting = href && sameTenantWebsiteUrl(href, base) &&
+        pages.some((page) => {
+          try { return new URL(page.url).pathname === new URL(href, base!).pathname; } catch { return false; }
+        });
+      target = knownExisting && intent === 'home' ? new URL(href, base).toString() : chooseWebsitePage(intent, pages, homeUrl);
+      if (intent === 'contact' && target === homeUrl && fallbackEmail && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(fallbackEmail)) target = 'mailto:' + fallbackEmail;
+    } else if (intent === 'contact' && fallbackEmail && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(fallbackEmail)) {
+      target = 'mailto:' + fallbackEmail;
+    }
+    if (!target) {
+      // Never ship an invented or off-domain destination when the tenant website is unavailable.
+      return startTag.replace(/\s+href\s*=\s*(?:"[^"]*"|'[^']*')/i, '') + anchor.slice(startTag.length);
+    }
+    links.push({ label, url: target, intent });
+    const escaped = target.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+    let nextStart = startTag;
+    if (/\bhref\s*=/i.test(nextStart)) {
+      nextStart = nextStart.replace(/\bhref\s*=\s*(?:"[^"]*"|'[^']*')/i, 'href="' + escaped + '"');
+    } else {
+      nextStart = nextStart.replace(/>$/, ' href="' + escaped + '">');
+    }
+    return nextStart + anchor.slice(startTag.length);
+  });
+  return { html: rewritten, links };
 }
 
 function parseJson(raw: string): any {

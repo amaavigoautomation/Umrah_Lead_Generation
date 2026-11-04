@@ -58,3 +58,13 @@ When the user asks to create an ambiguous template, the Agent first asks which p
 - Conversation/task memory is private to the initiating user. Company preferences are tenant-wide and admin-managed.
 - Template saving, external Meta submission and email campaign dispatch are separate approval stages.
 - The Agent never sends email merely because it prepared a template or campaign draft.
+
+
+## Email campaign rendering and website CTAs
+
+- Campaign-template snapshots always include a `blocks` array and preserve `customHtml`, `theme`, and campaign metadata. The Campaign Email Studio loader also recovers custom HTML from legacy `htmlBody` when an older snapshot omitted `blocks`.
+- This keeps the exact responsive email HTML, hero artwork, logo and CTA layout when the saved design is reopened in Campaign Emails → My Designs.
+- Website analysis discovers same-domain pricing, demo, contact and product pages from the tenant's configured website. It checks links found on relevant pages (including demo links embedded inside Pricing pages).
+- Generated email CTA destinations are normalized server-side to the tenant website's verified page directory. Pricing/plans point to Pricing, demo CTAs to demo requests, and contact CTAs to Contact/demo enquiry pages (or the configured sales email when there is no contact page). Unverified off-domain or guessed links are removed.
+- Email-only template requests clarify only between Conversation / AI Email Design and Campaign Email Template. WhatsApp is offered only for a generic channel-ambiguous template request, and explicitly named template types start directly without another type question.
+- The preview and saved-design cards show the resolved website CTA destinations for review.

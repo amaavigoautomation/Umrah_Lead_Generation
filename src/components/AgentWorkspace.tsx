@@ -150,8 +150,9 @@ function CampaignEmailArtifactPreview({
     <div className="bg-slate-100 p-2 sm:p-3">
       <iframe title={(artifact.name || 'Email design') + ' preview'} srcDoc={artifact.html} sandbox="allow-same-origin" className="block w-full border-0 bg-white shadow-sm" style={{ height: 560 }} />
     </div>
+    {artifact.websiteLinks?.length ? <div className="border-t border-slate-100 px-3 py-2 text-[10px] leading-5 text-slate-500">Verified tenant website CTA destinations: {artifact.websiteLinks.map((link, index) => <span key={link.url + index}>{index ? ' · ' : ''}<a href={link.url} target="_blank" rel="noopener noreferrer" className="font-medium text-blue-700 underline">{link.label || link.intent}</a></span>)}</div> : null}
     <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 px-3 py-2.5">
-      <div className="min-w-0 text-[10px] leading-4 text-slate-500">{isPreview ? 'Artwork saved to Company Assets. Choose where to save the editable design.' : artifact.savedTo}</div>
+      <div className="min-w-0 text-[10px] leading-4 text-slate-500">{isPreview ? 'Artwork saved in Company Assets. Choose where to save the editable design.' : artifact.savedTo}</div>
       <div className="flex flex-wrap gap-2">
         {isPreview && artifact.draftId && onAction && <>
           {isCampaign && <button type="button" onClick={() => onAction('Save this as a campaign template. Draft ID: ' + artifact.draftId)} className="rounded-lg bg-orange-600 px-3 py-2 text-[10px] font-semibold text-white hover:bg-orange-700">Save to Campaign Emails</button>}

@@ -39,6 +39,7 @@ export interface AgentArtifact {
   templateName?: string;
   sendReady?: boolean;
   sendReadinessError?: string;
+  websiteLinks?: Array<{ label: string; url: string; intent: string }>;
   updatedAt?: string;
 }
 export interface AgentMessage {

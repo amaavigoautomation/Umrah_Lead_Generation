@@ -22,9 +22,16 @@ export interface EmailDesignSection {
  backgroundImagePosition?:'center'|'top'|'bottom'|'left'|'right'; backgroundImageSize?:'cover'|'contain';
  rows:EmailDesignRow[];
 }
+export interface EmailWebsitePageLink {
+  label: string;
+  title: string;
+  url: string;
+  summary: string;
+}
 export interface EmailBrandProfile {
   websiteUrl:string; companyName:string; tagline:string; description:string; logoUrl:string;
   contactEmail:string; contactPhone:string; colors:string[]; socialLinks:Record<string,string>;
+  pages?: EmailWebsitePageLink[];
 }
 export interface EmailDesignTemplate {
   id:string; name:string; description:string; category:string; source:EmailDesignSource; version:number;

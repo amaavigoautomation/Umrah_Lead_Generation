@@ -8,7 +8,7 @@ import { checkTenantQuota, recordTenantUsage } from './usageService.js';
 import { writeTenantAuditEvent } from './auditLogger.js';
 import { getCompanyProfile } from './companyProfileService.js';
 import { listTenantAssets, saveTenantAsset, deleteTenantAsset, resolveAssetRaw } from './assetService.js';
-import { analyzeCompanyWebsite, saveEmailDesignTemplate } from './emailDesignService.js';
+import { analyzeCompanyWebsite, resolveTenantWebsiteLinksInEmailHtml, saveEmailDesignTemplate } from './emailDesignService.js';
 import { sanitizeCustomEmailHtml, renderEmailDesignHtml } from '../shared/emailDesign.js';
 import { requireFeature } from './entitlements.js';
 import { getEmailSendReadiness } from './smtpService.js';
@@ -285,6 +285,10 @@ export async function prepareAgentTemplateDraft(
   }
 
   let resolvedHtml = htmlDraft;
+  const websiteLinkResolution = kind !== 'whatsapp_template'
+    ? resolveTenantWebsiteLinksInEmailHtml(resolvedHtml, websiteProfile, String(brand?.salesEmail || ''))
+    : { html: resolvedHtml, links: [] as Array<{ label: string; url: string; intent: string }> };
+  resolvedHtml = websiteLinkResolution.html;
   if (kind !== 'whatsapp_template') {
     if (logoUrl) {
       resolvedHtml = resolvedHtml.replace('{{COMPANY_LOGO_URL}}', escapeHtml(logoUrl));
@@ -323,6 +327,7 @@ export async function prepareAgentTemplateDraft(
     imageAssetId: image?.id || '',
     imageUrl: image?.url || '',
     imageAltText,
+    websiteLinks: websiteLinkResolution.links,
     whatsappCategory,
     whatsappLanguage,
     whatsappHeader,
@@ -345,7 +350,7 @@ export async function prepareAgentTemplateDraft(
     : {
         type: 'agent_email_design_draft', draftId, templateKind: kind, name, subject, preheader,
         html: previewHtml, imageUrl: image?.url || '', imageAssetId: image?.id || '',
-        logoUrl, status: 'PREVIEW',
+        logoUrl, websiteLinks: websiteLinkResolution.links, status: 'PREVIEW',
       };
   await writeTenantAuditEvent(ctx, {
     action: 'AGENT_TEMPLATE_PREVIEW_CREATED',
@@ -355,7 +360,7 @@ export async function prepareAgentTemplateDraft(
     metadata: { kind, imageAssetId: image?.id || '', imageModel: image ? IMAGE_MODEL : '' },
   });
   return {
-    output: { success: true, prepared: true, draftId, kind, name, imageGenerated: Boolean(image), imageSavedToCompanyAssets: Boolean(image), logoResolved: Boolean(logoUrl), nextStep: 'Ask the user where to save this preview. Do not save it automatically.' },
+    output: { success: true, prepared: true, draftId, kind, name, imageGenerated: Boolean(image), imageSavedToCompanyAssets: Boolean(image), logoResolved: Boolean(logoUrl), websiteLinksResolved: websiteLinkResolution.links, nextStep: 'Ask the user where to save this preview. Do not save it automatically.' },
     artifact,
   };
 }
@@ -383,8 +388,8 @@ export async function savePreparedAgentTemplate(
   if (draft.status === 'SAVED') {
     if (draft.destination !== destination) throw new Error('This design has already been saved to ' + String(draft.savedTo || 'another destination') + '. Create a new preview to save a separate copy.');
     const preview = draft.kind === 'whatsapp_template'
-      ? { type: 'whatsapp_template_preview', draftId, templateId: draft.savedTemplateId, name: draft.name, body: draft.body, imageUrl: draft.imageUrl, status: 'SAVED_DRAFT', savedTo: draft.savedTo }
-      : { type: destination === 'campaign' ? 'campaign_email_template' : 'conversation_email_design', draftId, templateId: draft.savedTemplateId, name: draft.name, subject: draft.subject, preheader: draft.preheader, html: draft.previewHtml, imageUrl: draft.imageUrl, imageAssetId: draft.imageAssetId, savedTo: draft.savedTo, version: 1 };
+      ? { type: 'whatsapp_template_preview', draftId, templateId: draft.savedTemplateId, name: draft.name, body: draft.body, imageUrl: draft.imageUrl, status: 'SAVED_DRAFT', savedTo: draft.savedTo, websiteLinks: draft.websiteLinks || [] }
+      : { type: destination === 'campaign' ? 'campaign_email_template' : 'conversation_email_design', draftId, templateId: draft.savedTemplateId, name: draft.name, subject: draft.subject, preheader: draft.preheader, html: draft.previewHtml, imageUrl: draft.imageUrl, imageAssetId: draft.imageAssetId, savedTo: draft.savedTo, version: 1, websiteLinks: draft.websiteLinks || [] };
     return { output: { success: true, saved: true, alreadySaved: true, templateId: draft.savedTemplateId, name: draft.name, savedTo: draft.savedTo }, artifact: preview };
   }
   if (draft.status !== 'PREVIEW') throw new Error('This draft is no longer available for saving.');
@@ -424,6 +429,8 @@ export async function savePreparedAgentTemplate(
           generatedHeroAssetUrl: draft.imageUrl,
           companyLogoUrl: draft.companyLogoUrl,
           brandColors: [draft.theme.primaryColor, draft.theme.accentColor],
+          blocks: [],
+          sections: [],
         },
       } as any);
     });
@@ -474,7 +481,7 @@ export async function savePreparedAgentTemplate(
   });
   const artifact = draft.kind === 'whatsapp_template'
     ? { type: 'whatsapp_template_preview', draftId, templateId: savedId, templateKind: draft.kind, name: savedName, body: draft.body, imageUrl: draft.imageUrl, status: 'SAVED_DRAFT', savedTo }
-    : { type: destination === 'campaign' ? 'campaign_email_template' : 'conversation_email_design', draftId, templateId: savedId, name: savedName, subject: draft.subject, preheader: draft.preheader, html: draft.previewHtml, imageUrl: draft.imageUrl, imageAssetId: draft.imageAssetId, savedTo, version: 1 };
+    : { type: destination === 'campaign' ? 'campaign_email_template' : 'conversation_email_design', draftId, templateId: savedId, name: savedName, subject: draft.subject, preheader: draft.preheader, html: draft.previewHtml, imageUrl: draft.imageUrl, imageAssetId: draft.imageAssetId, savedTo, version: 1, websiteLinks: draft.websiteLinks || [] };
   return {
     output: { success: true, saved: true, templateId: savedId, name: savedName, destination, savedTo },
     artifact,

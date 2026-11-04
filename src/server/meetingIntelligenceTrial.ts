@@ -152,13 +152,15 @@ function installRemoteAudioCapture() {
 
 async function getMeetState(page: Page) {
   return page.evaluate(() => {
-    const bodyText = (document.body?.innerText || '').toLowerCase();
+    const visibleText = (document.body?.innerText || '').replace(/\s+/g, ' ').trim();
+    const bodyText = visibleText.toLowerCase();
     const labels = Array.from(document.querySelectorAll('button,[role="button"]'))
       .map((element) => [
         element.getAttribute('aria-label') || '',
         element.getAttribute('data-tooltip') || '',
         element.textContent || '',
-      ].join(' ').replace(/\s+/g, ' ').trim().toLowerCase());
+      ].join(' ').replace(/\s+/g, ' ').trim().toLowerCase())
+      .filter(Boolean);
 
     const joined = labels.some((label) => /leave call|hang up|end call/.test(label)) ||
       bodyText.includes("you're in the meeting") ||
@@ -166,21 +168,45 @@ async function getMeetState(page: Page) {
     const waiting = bodyText.includes('asking to be let in') ||
       bodyText.includes("you'll join the call when someone lets you in") ||
       bodyText.includes('waiting for the host') ||
-      bodyText.includes('waiting for someone to let you in');
+      bodyText.includes('waiting for someone to let you in') ||
+      labels.some((label) => /ask to join/.test(label));
     const signInRequired = location.hostname === 'accounts.google.com' ||
       bodyText.includes('sign in to continue') ||
-      bodyText.includes('you need to sign in');
-    const blocked = bodyText.includes("you can't join this video call") ||
-      bodyText.includes('the meeting code you entered is invalid') ||
-      bodyText.includes('this meeting has ended');
+      bodyText.includes('you need to sign in') ||
+      bodyText.includes('sign in with google') ||
+      bodyText.includes('use your google account') ||
+      bodyText.includes('sign in to join');
+    const invalidCode = bodyText.includes('the meeting code you entered is invalid') ||
+      bodyText.includes('meeting code is invalid') ||
+      bodyText.includes('check that the code is correct');
+    const meetingEnded = bodyText.includes('this meeting has ended') ||
+      bodyText.includes('the meeting has ended');
+    const accessDenied = bodyText.includes("you can't join this video call") ||
+      bodyText.includes('you are not allowed to join') ||
+      bodyText.includes('you do not have permission to join');
+    const blocked = invalidCode || meetingEnded || accessDenied;
+    const diagnosticLines = visibleText
+      .split(/(?<=[.!?])\s+/)
+      .filter((line) => /join|sign in|account|meeting|invalid|ended|host|permission|access|request/i.test(line))
+      .slice(0, 5)
+      .join(' | ')
+      .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, '[email hidden]')
+      .slice(0, 500);
 
     return {
       joined,
       waiting,
       signInRequired,
       blocked,
+      blockedReason: invalidCode ? 'INVALID_MEETING_CODE'
+        : meetingEnded ? 'MEETING_ALREADY_ENDED'
+          : accessDenied ? 'MEET_ACCESS_RESTRICTED'
+            : 'UNKNOWN_BLOCKED_SCREEN',
       hasJoinButton: labels.some((label) => /ask to join|join now/.test(label)),
       pageTitle: document.title || '',
+      pageUrl: location.href,
+      diagnosticText: diagnosticLines || 'Google Meet loaded a page, but no recognizable join/status text was found.',
+      visibleButtonLabels: labels.slice(0, 8),
     };
   });
 }
@@ -325,9 +351,20 @@ export async function handleMeetingIntelligenceTrial(
       if (initialState.blocked) {
         return sendJson(res, 422, {
           success: false,
-          code: 'MEET_LINK_NOT_JOINABLE',
-          error: 'Google Meet did not allow this bot to join. Check the meeting link and guest-access settings.',
-          diagnostics,
+          code: initialState.blockedReason || 'MEET_ACCESS_SCREEN',
+          error: initialState.blockedReason === 'INVALID_MEETING_CODE'
+            ? 'Google Meet says this meeting code is invalid. Recheck the link or create a fresh Meet.'
+            : initialState.blockedReason === 'MEETING_ALREADY_ENDED'
+              ? 'Google Meet says this meeting has already ended.'
+              : 'Google Meet displayed an access-restricted screen before the bot could request admission.',
+          diagnostics: [
+            ...diagnostics,
+            'Meet page title: ' + (initialState.pageTitle || '(empty)'),
+            'Meet page URL: ' + (initialState.pageUrl || '(unavailable)'),
+            'Detected reason: ' + (initialState.blockedReason || 'UNKNOWN'),
+            'Meet status text: ' + (initialState.diagnosticText || '(unavailable)'),
+            'Visible controls: ' + (initialState.visibleButtonLabels || []).join(' || '),
+          ],
         });
       }
 

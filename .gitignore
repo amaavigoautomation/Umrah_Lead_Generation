@@ -14,3 +14,7 @@ gen-lang-client-*.json
 .env
 
 .aistudio/
+
+# Local Google Meet bot sign-in profile and exported session (sensitive)
+.meeting-bot-google-profile/
+meeting-bot-google-session.json

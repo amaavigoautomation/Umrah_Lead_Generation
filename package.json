@@ -16,7 +16,8 @@
     "bootstrap:admin": "tsx scripts/bootstrap-platform-admin.ts",
     "create:user": "tsx scripts/create-tenant-user.ts",
     "migrate:users": "tsx scripts/migrate-users-to-auth.ts",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "meeting-bot:login": "node scripts/capture-meeting-bot-session.mjs"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",

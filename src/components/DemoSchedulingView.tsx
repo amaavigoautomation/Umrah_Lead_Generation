@@ -677,13 +677,73 @@ export const DemoSchedulingView: React.FC<DemoSchedulingViewProps> = ({ leads = 
                 <span className="px-2 py-0.5 rounded-md bg-indigo-50 border border-indigo-200 text-indigo-700 text-[10px] font-extrabold uppercase">Experimental</span>
               </div>
               <p className="text-xs text-slate-600 max-w-3xl">
-                Manually test whether serverless Chromium can join a Google Meet and capture incoming participant audio through WebRTC.
-                This is a short test only; it does not automatically join booked demos.
+                Test whether serverless Chromium can join Google Meet using a dedicated, authenticated Google account and capture incoming participant audio through WebRTC.
+                This remains a short manual test; it does not automatically join booked demos.
               </p>
             </div>
             <span className="shrink-0 text-[10px] font-bold uppercase tracking-wide rounded-lg border border-amber-200 bg-amber-50 text-amber-800 px-2.5 py-1">
               Vercel runtime test
             </span>
+          </div>
+
+          <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-4 space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
+              <div>
+                <div className="text-sm font-bold text-slate-900">Dedicated Google bot account</div>
+                <p className="mt-1 text-xs text-slate-600">
+                  Sign in manually to a dedicated Google account on your computer, then upload its temporary browser-session export here.
+                  The password and 2-step verification code are never entered into this app.
+                </p>
+              </div>
+              <span className="shrink-0 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[10px] font-extrabold uppercase text-slate-700">
+                {isMeetingBotSessionLoading ? 'Checking account' : meetingBotGoogleSession?.configured ? 'Account connected' : 'Account not connected'}
+              </span>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-xs">
+              <div className="rounded-lg bg-white border border-slate-200 p-3">
+                <div className="font-bold text-slate-700">1. Sign in locally</div>
+                <div className="mt-1 text-slate-500">From your local trial-1 repository, run:</div>
+                <code className="mt-2 block rounded bg-slate-100 px-2 py-1.5 text-[11px] text-slate-800">npm run meeting-bot:login</code>
+              </div>
+              <div className="rounded-lg bg-white border border-slate-200 p-3">
+                <div className="font-bold text-slate-700">2. Upload session</div>
+                <div className="mt-1 text-slate-500">Chrome opens for manual Google sign-in and creates a JSON export.</div>
+                <label className="mt-2 inline-flex cursor-pointer items-center gap-2 rounded-lg bg-indigo-600 px-3 py-2 text-xs font-bold text-white hover:bg-indigo-700">
+                  <ExternalLink className="h-3.5 w-3.5" />
+                  {isMeetingBotSessionSaving ? 'Saving session…' : 'Upload Google session JSON'}
+                  <input type="file" accept="application/json,.json" className="hidden"
+                    disabled={isMeetingBotSessionSaving || !canEditSettings}
+                    onChange={handleMeetingBotSessionUpload} />
+                </label>
+              </div>
+              <div className="rounded-lg bg-white border border-slate-200 p-3">
+                <div className="font-bold text-slate-700">3. Invite this account</div>
+                <div className="mt-1 text-slate-500">Add the bot email as an attendee to the Google Calendar event that owns the Meet link.</div>
+                <div className="mt-2 text-slate-800 font-semibold break-all">
+                  {meetingBotGoogleSession?.accountEmail || 'Available after account upload'}
+                </div>
+              </div>
+            </div>
+            {meetingBotGoogleSession?.configured && (
+              <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-xs">
+                <div className="text-emerald-800">
+                  <strong>{meetingBotGoogleSession.accountEmail}</strong>
+                  <span className="ml-2 text-emerald-700">Encrypted session saved · {meetingBotGoogleSession.cookieCount || 0} cookies</span>
+                </div>
+                <button type="button" onClick={handleMeetingBotSessionDelete}
+                  disabled={isMeetingBotSessionSaving}
+                  className="rounded-lg border border-red-200 bg-white px-3 py-1.5 font-bold text-red-700 hover:bg-red-50 disabled:opacity-50">
+                  Disconnect account
+                </button>
+              </div>
+            )}
+            {meetingBotSessionMessage && (
+              <p className="text-xs text-slate-700" role="status">{meetingBotSessionMessage}</p>
+            )}
+            <p className="text-[11px] leading-relaxed text-slate-500">
+              Security: the export contains reusable Google sign-in cookies. It is sent over HTTPS and encrypted with a trial-only server key before being stored in this workspace’s private secrets collection.
+              After upload, securely delete the JSON export and keep the local Chrome profile private. Re-export if Google expires or revokes the session.
+            </p>
           </div>
 
           <form onSubmit={handleMeetingBotTrial} className="space-y-3">
@@ -720,18 +780,18 @@ export const DemoSchedulingView: React.FC<DemoSchedulingViewProps> = ({ leads = 
 
             <div className="flex flex-wrap items-center gap-3">
               <button type="submit"
-                disabled={isMeetingBotTestRunning || !meetingBotTestConsent || !meetingBotTestUrl.trim()}
+                disabled={isMeetingBotTestRunning || !meetingBotTestConsent || !meetingBotTestUrl.trim() || !meetingBotGoogleSession?.configured}
                 className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-sm font-bold px-4 py-2.5">
                 <Video className="w-4 h-4" />
                 {isMeetingBotTestRunning ? 'Launching bot and testing audio…' : 'Join Meet & capture sample'}
               </button>
-              <span className="text-[11px] text-slate-500">Bot display name: Amaavigo Meeting Intelligence Trial Bot</span>
+              <span className="text-[11px] text-slate-500">Signed in as: {meetingBotGoogleSession?.accountEmail || 'Connect a bot account first'}</span>
             </div>
           </form>
 
           {isMeetingBotTestRunning && (
             <div className="rounded-lg border border-indigo-100 bg-indigo-50/60 px-3 py-2.5 text-xs text-indigo-800">
-              Chromium is starting, joining the meeting and waiting for the host to admit it. Keep a participant speaking during the audio sample.
+              Chromium is restoring the dedicated Google account session, joining the invited meeting and capturing the short audio sample. Keep a participant speaking.
             </div>
           )}
 
@@ -768,7 +828,7 @@ export const DemoSchedulingView: React.FC<DemoSchedulingViewProps> = ({ leads = 
             </div>
           )}
           <p className="text-[11px] text-slate-500">
-            Privacy: run this only with participant consent. The bot joins with its trial name, keeps its microphone and camera off, and the temporary audio is returned for this test rather than persisted.
+            Privacy: run this only with participant consent. The dedicated bot account joins as an invited participant with microphone and camera off. Temporary test audio is returned for playback and is not saved to Firestore.
           </p>
         </section>
       )}

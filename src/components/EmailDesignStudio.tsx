@@ -470,13 +470,13 @@ export const EmailDesignStudio: React.FC<EmailDesignStudioProps> = ({ tenantId, 
   };
 
   useEffect(() => {
-    if (!isCampaignMode || !initialTemplateId || loading || editing || initialTemplateOpenedRef.current === initialTemplateId) return;
+    if (!initialTemplateId || loading || editing || initialTemplateOpenedRef.current === initialTemplateId) return;
     const match = templates.find((item) => item.campaignTemplateId === initialTemplateId || item.id === initialTemplateId);
     if (match) {
       initialTemplateOpenedRef.current = initialTemplateId;
       startEditing(match);
     }
-  }, [initialTemplateId, isCampaignMode, loading, templates, editing]);
+  }, [initialTemplateId, loading, templates, editing]);
 
   const startFromScratch = () => {
     const template = createBlankEmailDesignTemplate();

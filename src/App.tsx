@@ -269,8 +269,10 @@ export default function App() {
     writeTabToLocation(tab);
   }, []);
   const [agentEmailTemplateId, setAgentEmailTemplateId] = useState<string | undefined>(undefined);
-  const openAgentEmailTemplate = useCallback((templateId: string) => {
+  const [agentEmailTemplateKind, setAgentEmailTemplateKind] = useState<'campaign' | 'conversation'>('campaign');
+  const openAgentEmailTemplate = useCallback((templateId: string, kind: 'campaign' | 'conversation' = 'campaign') => {
     setAgentEmailTemplateId(templateId);
+    setAgentEmailTemplateKind(kind);
     setActiveTab('email-design-studio');
   }, [setActiveTab]);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(false);  
@@ -2664,7 +2666,7 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
               />
             )}
 
-            {activeTab === 'email-design-studio' && <TemplateStudio tenantId={currentTenantId} canManageWhatsAppTemplates={Boolean(currentUser && (currentUser.role === 'ADMIN' || currentUser.accessLevel === 'ALL'))} initialView={agentEmailTemplateId ? 'campaign' : 'conversation'} initialTemplateId={agentEmailTemplateId} />}
+            {activeTab === 'email-design-studio' && <TemplateStudio tenantId={currentTenantId} canManageWhatsAppTemplates={Boolean(currentUser && (currentUser.role === 'ADMIN' || currentUser.accessLevel === 'ALL'))} initialView={agentEmailTemplateId ? agentEmailTemplateKind : 'conversation'} initialTemplateId={agentEmailTemplateId} />}
 
             {activeTab === 'playground' && <AiTestingPlayground knowledgeDocs={knowledgeDocs} />}
 

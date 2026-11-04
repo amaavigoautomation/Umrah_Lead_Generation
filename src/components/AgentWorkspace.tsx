@@ -70,44 +70,113 @@ function AgentMarkdown({ content }: { content: string }) {
   </div>;
 }
 
-function CampaignEmailArtifactPreview({ artifact, onOpenTemplate }: { artifact: AgentArtifact; onOpenTemplate?: (id: string) => void }) {
-  if (artifact.type !== 'campaign_email_template' || !artifact.html) return null;
+function CampaignEmailArtifactPreview({
+  artifact,
+  onOpenTemplate,
+  onAction,
+}: {
+  artifact: AgentArtifact;
+  onOpenTemplate?: (id: string, kind?: 'campaign' | 'conversation') => void;
+  onAction?: (query: string) => void;
+}) {
+  if (artifact.type === 'campaign_dispatch_approval') {
+    return <div className="mt-4 w-full overflow-hidden rounded-xl border border-orange-200 bg-white shadow-sm">
+      <div className="border-b border-orange-100 bg-orange-50 px-3 py-2.5">
+        <div className="flex items-center gap-2 text-xs font-bold text-slate-900"><Send className="h-4 w-4 text-orange-600" /> {artifact.status === 'DISPATCH_STARTED' ? 'Campaign dispatch started' : artifact.status === 'BLOCKED' ? 'Campaign dispatch blocked' : 'Campaign prepared — not sent'}</div>
+        <div className="mt-0.5 text-[11px] text-slate-600">{artifact.name}</div>
+      </div>
+      <div className="grid grid-cols-2 gap-2 p-3 sm:grid-cols-4">
+        {[
+          ['Database', artifact.databaseName || '—'],
+          ['Recipients', Number(artifact.recipientCount || 0).toLocaleString()],
+          ['Excluded', Number(artifact.excludedWithoutEmail || 0).toLocaleString()],
+          ['Template', artifact.templateName || '—'],
+        ].map(([label, value]) => <div key={label} className="rounded-lg bg-slate-50 p-2"><div className="text-[9px] font-semibold uppercase tracking-wide text-slate-500">{label}</div><div className="mt-1 break-words text-xs font-semibold text-slate-900">{value}</div></div>)}
+      </div>
+      <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 px-3 py-2.5">
+        {artifact.sendReady
+          ? <span className="text-[10px] font-medium text-emerald-700">Email sender check passed · Awaiting your approval</span>
+          : <span className="max-w-full text-[10px] font-medium text-rose-700">{artifact.sendReadinessError || 'Email sender is not ready.'}</span>}
+        {artifact.status === 'PENDING_APPROVAL' && artifact.sendReady && artifact.approvalId && onAction && <button type="button" onClick={() => onAction('Yes, send this campaign now. Approval ID: ' + artifact.approvalId)} className="rounded-lg bg-orange-600 px-3 py-2 text-[10px] font-semibold text-white shadow-sm hover:bg-orange-700">Confirm & send</button>}
+      </div>
+      <div className="border-t border-slate-100 px-3 py-2 text-[10px] text-slate-500">Sending begins only after your confirmation. Final delivery is tracked in Campaigns.</div>
+    </div>;
+  }
+
+  if (artifact.type === 'whatsapp_template_preview') {
+    return <div className="mt-4 w-full overflow-hidden rounded-xl border border-emerald-200 bg-white shadow-sm">
+      <div className="flex items-center justify-between gap-2 border-b border-emerald-100 bg-emerald-50 px-3 py-2.5">
+        <div className="text-xs font-bold text-slate-900">WhatsApp template preview</div>
+        <span className="rounded-full border border-emerald-200 bg-white px-2 py-1 text-[9px] font-semibold text-emerald-700">{artifact.status || 'Preview'}</span>
+      </div>
+      {artifact.imageUrl && <div className="bg-slate-100 p-3"><img src={artifact.imageUrl} alt="Generated WhatsApp template artwork" className="mx-auto max-h-52 max-w-full rounded-lg object-contain" /></div>}
+      <div className="bg-[#e9f7ee] p-3">
+        <div className="ml-auto max-w-[94%] rounded-xl rounded-tr-sm bg-white p-3 text-sm leading-6 text-slate-900 shadow-sm">
+          {artifact.header && <div className="mb-1 font-semibold">{artifact.header}</div>}
+          <div className="whitespace-pre-wrap">{artifact.body}</div>
+          {artifact.footer && <div className="mt-2 border-t border-slate-100 pt-1 text-[10px] text-slate-500">{artifact.footer}</div>}
+        </div>
+      </div>
+      <div className="flex flex-wrap gap-2 border-t border-slate-100 p-3">
+        {(artifact.status === 'PREVIEW' || artifact.status === 'SAVED_DRAFT') && artifact.draftId && onAction && <>
+          {artifact.status === 'PREVIEW' && <button type="button" onClick={() => onAction('Save this WhatsApp draft. Draft ID: ' + artifact.draftId)} className="rounded-lg border border-emerald-200 bg-white px-3 py-2 text-[10px] font-semibold text-emerald-800 hover:bg-emerald-50">Save WhatsApp draft</button>}
+          <button type="button" onClick={() => onAction('Submit this WhatsApp template to Meta for review. Draft ID: ' + artifact.draftId)} className="rounded-lg bg-emerald-600 px-3 py-2 text-[10px] font-semibold text-white hover:bg-emerald-700">Submit to Meta for review</button>
+        </>}
+      </div>
+      <div className="px-3 pb-3 text-[10px] text-slate-500">Meta submission is separate from message sending. Approval is determined by Meta.</div>
+    </div>;
+  }
+
+  const isPreview = artifact.type === 'agent_email_design_draft';
+  const isCampaign = artifact.templateKind === 'campaign_email' || artifact.type === 'campaign_email_template';
+  const isConversation = artifact.templateKind === 'conversation_email' || artifact.type === 'conversation_email_design';
+  if (!['agent_email_design_draft','campaign_email_template','conversation_email_design'].includes(artifact.type) || !artifact.html) return null;
   return <div className="mt-4 w-full overflow-hidden rounded-xl border border-orange-200 bg-white shadow-sm">
     <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-orange-50/70 px-3 py-2.5">
       <div className="min-w-0">
-        <div className="flex items-center gap-2 text-xs font-bold text-slate-900"><Check className="h-4 w-4 text-emerald-600" /> Email draft saved</div>
-        <div className="mt-0.5 truncate text-[11px] text-slate-600">{artifact.name} · Version {artifact.version || 1}</div>
+        <div className="flex items-center gap-2 text-xs font-bold text-slate-900">
+          {isPreview ? <Sparkles className="h-4 w-4 text-orange-600" /> : <Check className="h-4 w-4 text-emerald-600" />}
+          {isPreview ? 'Design preview ready — not saved' : 'Email design saved'}
+        </div>
+        <div className="mt-0.5 truncate text-[11px] text-slate-600">{artifact.name}{artifact.version ? ' · Version ' + artifact.version : ''}</div>
       </div>
-      <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-1 text-[9px] font-semibold text-emerald-700">Editable draft</span>
+      <span className={'rounded-full border px-2 py-1 text-[9px] font-semibold ' + (isPreview ? 'border-orange-200 bg-white text-orange-700' : 'border-emerald-200 bg-emerald-50 text-emerald-700')}>{isPreview ? 'Preview only' : 'Editable draft'}</span>
     </div>
     <div className="border-b border-slate-100 px-3 py-2">
       <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Subject</div>
-      <div className="mt-0.5 text-xs font-semibold text-slate-900">{artifact.subject}</div>
+      <div className="mt-0.5 text-xs font-semibold text-slate-900">{artifact.subject || 'Conversation email design'}</div>
       {artifact.preheader && <div className="mt-1 text-[11px] text-slate-600">{artifact.preheader}</div>}
     </div>
     <div className="bg-slate-100 p-2 sm:p-3">
-      <iframe
-        title={(artifact.name || 'Campaign email') + ' preview'}
-        srcDoc={artifact.html}
-        sandbox="allow-same-origin"
-        className="block w-full border-0 bg-white shadow-sm"
-        style={{ height: 560 }}
-      />
+      <iframe title={(artifact.name || 'Email design') + ' preview'} srcDoc={artifact.html} sandbox="allow-same-origin" className="block w-full border-0 bg-white shadow-sm" style={{ height: 560 }} />
     </div>
     <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 px-3 py-2.5">
-      <div className="text-[10px] leading-4 text-slate-500">Hero image saved in Company Assets · {artifact.savedTo}</div>
-      {artifact.templateId && onOpenTemplate && <button type="button" onClick={() => onOpenTemplate(artifact.templateId!)} className="rounded-lg bg-gradient-to-r from-orange-500 to-orange-600 px-3 py-2 text-[10px] font-semibold text-white shadow-sm transition hover:brightness-105">Open in Template Studio <ArrowUpRight className="ml-1 inline h-3 w-3" /></button>}
+      <div className="min-w-0 text-[10px] leading-4 text-slate-500">{isPreview ? 'Artwork saved to Company Assets. Choose where to save the editable design.' : artifact.savedTo}</div>
+      <div className="flex flex-wrap gap-2">
+        {isPreview && artifact.draftId && onAction && <>
+          {isCampaign && <button type="button" onClick={() => onAction('Save this as a campaign template. Draft ID: ' + artifact.draftId)} className="rounded-lg bg-orange-600 px-3 py-2 text-[10px] font-semibold text-white hover:bg-orange-700">Save to Campaign Emails</button>}
+          {isConversation && <button type="button" onClick={() => onAction('Save this as a conversation email design in Email Design Studio. Draft ID: ' + artifact.draftId)} className="rounded-lg bg-orange-600 px-3 py-2 text-[10px] font-semibold text-white hover:bg-orange-700">Save to Email Design Studio</button>}
+        </>}
+        {!isPreview && artifact.templateId && onOpenTemplate && <button type="button" onClick={() => onOpenTemplate(artifact.templateId!, isConversation ? 'conversation' : 'campaign')} className="rounded-lg bg-gradient-to-r from-orange-500 to-orange-600 px-3 py-2 text-[10px] font-semibold text-white shadow-sm transition hover:brightness-105">Open in Template Studio <ArrowUpRight className="ml-1 inline h-3 w-3" /></button>}
+      </div>
     </div>
   </div>;
 }
 
-function Messages({ messages, sending, compact, onOpenTemplate, activityLabel }: { messages: AgentMessage[]; sending: boolean; compact?: boolean; onOpenTemplate?: (id: string) => void; activityLabel?: string }) {
+function Messages({ messages, sending, compact, onOpenTemplate, onAction, activityLabel }: {
+  messages: AgentMessage[];
+  sending: boolean;
+  compact?: boolean;
+  onOpenTemplate?: (id: string, kind?: 'campaign' | 'conversation') => void;
+  onAction?: (query: string) => void;
+  activityLabel?: string;
+}) {
   return <div className={'agent-messages flex-1 min-h-0 overflow-y-auto ' + (compact ? 'px-3 py-4' : 'px-5 py-6')}>
     {messages.length === 0 && (
       <div className="flex h-full min-h-[250px] flex-col items-center justify-center text-center">
         <Orb />
         <div className="mt-5 text-lg font-semibold text-slate-900">Where should we start?</div>
-        <p className="mt-2 max-w-sm text-sm leading-6 text-slate-600">Ask about your workspace, company knowledge, lead databases, or campaign planning.</p>
+        <p className="mt-2 max-w-sm text-sm leading-6 text-slate-600">Ask about your workspace, company knowledge, lead databases, campaigns, or template design.</p>
         {!compact && <div className="mt-6 grid w-full max-w-2xl grid-cols-1 gap-2 sm:grid-cols-3">
           {QUICK_PROMPTS.map((item) => {
             const Icon = item.icon;
@@ -132,7 +201,7 @@ function Messages({ messages, sending, compact, onOpenTemplate, activityLabel }:
             {message.role === 'assistant'
               ? <AgentMarkdown content={message.content} />
               : <div className="whitespace-pre-wrap break-words">{message.content}</div>}
-            {message.artifacts?.map((artifact, index) => <CampaignEmailArtifactPreview key={(artifact.templateId || artifact.type) + '-' + index} artifact={artifact} onOpenTemplate={onOpenTemplate} />)}
+            {message.artifacts?.map((artifact, index) => <CampaignEmailArtifactPreview key={(artifact.draftId || artifact.approvalId || artifact.templateId || artifact.type) + '-' + index} artifact={artifact} onOpenTemplate={onOpenTemplate} onAction={onAction} />)}
             {message.toolsUsed && message.toolsUsed.length > 0 && (
               <div className="mt-3 flex flex-wrap gap-1.5 border-t border-slate-200 pt-2">
                 {message.toolsUsed.map((tool) => <span key={tool} className="rounded-md bg-orange-50 px-2 py-0.5 text-[10px] text-orange-700">{tool.replaceAll('_', ' ')}</span>)}
@@ -220,8 +289,8 @@ function ConfigPanel({ compact = false }: { compact?: boolean }) {
   </div>;
 }
 
-export const AgentWorkspace: React.FC<{ currentUser: AppUser; onOpenEmailTemplate?: (id: string) => void }> = ({ currentUser, onOpenEmailTemplate }) => {
-  const { conversations, activeConversationId, messages, loading, sending, activityLabel, error, canManageConfig, selectConversation, newConversation, clearError, refresh } = useAgent();
+export const AgentWorkspace: React.FC<{ currentUser: AppUser; onOpenEmailTemplate?: (id: string, kind?: 'campaign' | 'conversation') => void }> = ({ currentUser, onOpenEmailTemplate }) => {
+  const { conversations, activeConversationId, messages, loading, sending, activityLabel, error, canManageConfig, selectConversation, newConversation, sendMessage, clearError, refresh } = useAgent();
   const [showSettings, setShowSettings] = useState(false);
   return <div className="agent-shell min-h-[calc(100vh-105px)] overflow-hidden rounded-3xl border border-slate-200 bg-white text-slate-900 shadow-2xl">
     <div className="agent-grid relative flex min-h-[calc(100vh-105px)] flex-col">
@@ -241,7 +310,7 @@ export const AgentWorkspace: React.FC<{ currentUser: AppUser; onOpenEmailTemplat
         </aside>
         <section className="flex min-h-[520px] min-w-0 flex-col">
           <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3 sm:px-5"><div className="truncate text-xs font-semibold text-slate-700">{conversations.find((x) => x.id === activeConversationId)?.title || 'New workspace task'}</div><div className="flex items-center gap-2"><span className="text-[10px] text-slate-600">{currentUser.name}</span><button type="button" onClick={() => void newConversation('agent')} className="rounded-lg border border-slate-200 p-1.5 text-slate-600 hover:text-slate-900 lg:hidden"><Plus className="h-3.5 w-3.5" /></button></div></div>
-          <Messages messages={messages} sending={sending} onOpenTemplate={onOpenEmailTemplate} activityLabel={activityLabel} />
+          <Messages messages={messages} sending={sending} onOpenTemplate={onOpenEmailTemplate} onAction={(query) => void sendMessage(query, 'agent')} activityLabel={activityLabel} />
           <ChatComposer moduleContext="agent" />
         </section>
         <aside className="hidden border-l border-slate-200 p-4 xl:block">
@@ -271,7 +340,7 @@ function clampAgentPosition(left: number, top: number, width: number, height: nu
   };
 }
 
-export const AgentFloatingCompanion: React.FC<{ hidden?: boolean; moduleContext: string; onOpenEmailTemplate?: (id: string) => void }> = ({ hidden, moduleContext, onOpenEmailTemplate }) => {
+export const AgentFloatingCompanion: React.FC<{ hidden?: boolean; moduleContext: string; onOpenEmailTemplate?: (id: string, kind?: 'campaign' | 'conversation') => void }> = ({ hidden, moduleContext, onOpenEmailTemplate }) => {
   const [open, setOpen] = useState(false);
   const [position, setPosition] = useState<AgentLauncherPosition | null>(() => {
     if (typeof window === 'undefined') return null;
@@ -284,7 +353,7 @@ export const AgentFloatingCompanion: React.FC<{ hidden?: boolean; moduleContext:
   const launcherRef = useRef<HTMLButtonElement | null>(null);
   const dragRef = useRef<AgentDragState | null>(null);
   const suppressClickRef = useRef(false);
-  const { messages, sending, error, clearError, newConversation, conversations, activeConversationId, selectConversation } = useAgent();
+  const { messages, sending, error, clearError, newConversation, conversations, activeConversationId, selectConversation, sendMessage } = useAgent();
 
   useEffect(() => {
     if (!position) return;

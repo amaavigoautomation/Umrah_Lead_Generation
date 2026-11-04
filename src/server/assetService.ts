@@ -201,9 +201,13 @@ export async function resolveAssetRaw(
     };
   }
 
-  // If not in cache, resolve tenantId from assetId
-  const match = assetId.match(/^ast_([^_]+)__/);
-  const tenantId = match ? match[1] : null;
+  // Asset IDs are ast_{tenantId}__{opaqueId}. Tenant IDs may contain
+  // underscores, so split only at the dedicated double-underscore delimiter.
+  const separator = assetId.startsWith('ast_') ? assetId.indexOf('__', 4) : -1;
+  const tenantId = separator > 4 ? assetId.slice(4, separator) : null;
+  if (!tenantId || !/^[a-zA-Z0-9_-]{1,128}$/.test(tenantId) || !/^ast_[a-zA-Z0-9_-]+__[a-zA-Z0-9_-]+$/.test(assetId)) {
+    return null;
+  }
 
   if (tenantId && isFirebaseConfigured && db) {
     try {

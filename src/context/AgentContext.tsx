@@ -13,12 +13,41 @@ export interface AgentConversation {
   updatedAt: string;
   moduleContext?: string;
 }
+export interface AgentArtifact {
+  type: string;
+  draftId?: string;
+  templateKind?: string;
+  approvalId?: string;
+  campaignId?: string;
+  templateId?: string;
+  name?: string;
+  subject?: string;
+  preheader?: string;
+  html?: string;
+  body?: string;
+  header?: string;
+  footer?: string;
+  imageUrl?: string;
+  imageAssetId?: string;
+  logoUrl?: string;
+  version?: number;
+  savedTo?: string;
+  status?: string;
+  recipientCount?: number;
+  excludedWithoutEmail?: number;
+  databaseName?: string;
+  templateName?: string;
+  sendReady?: boolean;
+  sendReadinessError?: string;
+  updatedAt?: string;
+}
 export interface AgentMessage {
   id: string;
   role: 'user' | 'assistant';
   content: string;
   createdAt: string;
   toolsUsed?: string[];
+  artifacts?: AgentArtifact[];
 }
 interface AgentContextValue {
   config: AgentConfig;
@@ -134,20 +163,41 @@ export const AgentProvider: React.FC<{ tenantId: string; userId: string; enabled
       const userMessage: AgentMessage = { id: 'local-' + executionId, role: 'user', content: message, createdAt: new Date().toISOString() };
       setMessages((prev) => [...prev, userMessage]);
       let data: { success: boolean; assistantMessage: AgentMessage; conversation: AgentConversation };
+      let needsPoll = false;
+      let lastDeliveryError: any = null;
       try {
-        data = await api<{ success: boolean; assistantMessage: AgentMessage; conversation: AgentConversation }>('/api/agent/chat', {
+        const initial = await api<{ success: boolean; status?: string; progress?: string; assistantMessage?: AgentMessage; conversation?: AgentConversation }>('/api/agent/chat', {
           method: 'POST',
           body: JSON.stringify({ conversationId, executionId, message, moduleContext }),
         });
+        if (initial.status === 'processing' || !initial.assistantMessage) {
+          needsPoll = true;
+          setActivityLabel(initial.progress || 'Agent task started…');
+        } else {
+          data = { success: true, assistantMessage: initial.assistantMessage, conversation: initial.conversation! };
+        }
       } catch (deliveryError: any) {
+        needsPoll = true;
+        lastDeliveryError = deliveryError;
         setActivityLabel('Reconnecting to the same Agent task…');
-        const deadline = Date.now() + 180000;
+      }
+
+      if (needsPoll) {
+        const deadline = Date.now() + 300000;
         let recovered: { success: boolean; assistantMessage: AgentMessage; conversation: AgentConversation } | null = null;
-        let lastDeliveryError = deliveryError;
+        let interimMessageId: string | null = null;
         while (Date.now() < deadline && !recovered) {
-          await new Promise((resolve) => setTimeout(resolve, 2500));
+          await new Promise((resolve) => setTimeout(resolve, 2000));
           try {
-            const status = await api<{ success: boolean; status: string; assistantMessage?: AgentMessage | null; error?: string; conversationId?: string }>('/api/agent/executions/' + encodeURIComponent(executionId));
+            const status = await api<{ success: boolean; status: string; progress?: string; assistantMessage?: AgentMessage | null; error?: string; conversationId?: string }>('/api/agent/executions/' + encodeURIComponent(executionId));
+            if (status.assistantMessage && status.status === 'processing') {
+              interimMessageId = status.assistantMessage.id;
+              setMessages((prev) => [
+                ...prev.filter((item) => item.id !== interimMessageId && item.id !== userMessage.id),
+                { id: 'user-' + executionId, role: 'user', content: message, createdAt: userMessage.createdAt },
+                status.assistantMessage!,
+              ]);
+            }
             if (status.status === 'completed' && status.assistantMessage) {
               recovered = {
                 success: true,
@@ -157,7 +207,7 @@ export const AgentProvider: React.FC<{ tenantId: string; userId: string; enabled
               break;
             }
             if (status.status === 'failed') throw new Error(status.error || 'The Agent task failed.');
-            setActivityLabel('Still creating your design. The same task is running; no duplicate draft will be started…');
+            setActivityLabel(status.progress || 'The Agent is still working on your request…');
           } catch (pollError: any) {
             if (String(pollError?.message || '').toLowerCase().includes('execution not found')) {
               lastDeliveryError = pollError;
@@ -166,7 +216,7 @@ export const AgentProvider: React.FC<{ tenantId: string; userId: string; enabled
             throw pollError;
           }
         }
-        if (!recovered) throw new Error('The chat connection timed out while this task was running. Reopen this conversation shortly to check its saved result. Do not submit the same creation request again yet. ' + (lastDeliveryError?.message || ''));
+        if (!recovered) throw new Error('The Agent task is still running or the connection was interrupted. Reopen this conversation to check its status; do not submit the same request again yet. ' + (lastDeliveryError?.message || ''));
         data = recovered;
       }
       setMessages((prev) => [

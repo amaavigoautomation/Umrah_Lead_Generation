@@ -1,62 +1,60 @@
-# AI Agent workspace — Build 2
-
-## Workspace experience
-
-- Dedicated AI Agent workspace and a draggable floating companion.
-- The full workspace and companion share conversation history and task context.
-- Campaign email artifacts are stored on assistant messages and render as sandboxed HTML previews inside the chat.
-- The preview provides an action to open the matching draft in Template Studio → Campaign Emails → My Designs.
+# AI Agent workspace — proactive operations and execution
 
 ## Models
+- Agent reasoning and tool orchestration: OpenAI Responses API using `gpt-6.1-sol` by default. Override through `AGENT_MODEL_ID`.
+- Campaign artwork: OpenAI image generation using `gpt-image-2.5-flare` by default. Override through `AGENT_IMAGE_MODEL_ID`.
+- Reasoning effort defaults to `medium`. OpenAI credentials remain on the server.
 
-- Agent reasoning and tool orchestration use OpenAI Responses API with `gpt-6.1-sol` by default. Override with `AGENT_MODEL_ID`.
-- The reasoning effort defaults to `medium`; override with `AGENT_REASONING_EFFORT`.
-- Campaign artwork uses `gpt-image-2.5-flare` by default. Override with `AGENT_IMAGE_MODEL_ID`.
-- The OpenAI API key remains server-side.
+## Template type discovery
+When the user asks to create an ambiguous template, the Agent first asks which platform destination they mean:
+- Conversation / AI Email Design for Unified Inbox replies and follow-ups.
+- Campaign Email Template for outbound campaigns.
+- WhatsApp Template for WhatsApp marketing or utility.
 
-## Registered capabilities
+## Preview-first design workflow
+1. Read Company Profile and the uploaded company logo.
+2. Check the tenant's LOGO asset before using a website logo. Verify the tenant asset document and its public asset route.
+3. Research the official website when configured to gather public brand colors and visual cues.
+4. Search the published Knowledge Base for products, pricing, eligibility and claims. Check both module access and the tenant's `knowledge_base` entitlement.
+5. Generate relevant artwork with GPT Image Flare. Keep the company's existing logo and all copy as separate editable elements.
+6. Save generated artwork as a tenant Company Asset and verify that the asset can be served before returning a preview.
+7. Render the design in the Agent conversation. No email or WhatsApp template collection is modified at this stage.
+8. Ask where the user wants the design saved. Save only after the user confirms the destination.
 
-The Agent can inspect company profile details, search published Knowledge Base articles, research the official company website, list company assets and email designs, and inspect lead database summaries.
+### Destinations
+- Campaign email → existing tenant campaign template service, shown in Template Studio → Campaign Emails → My Designs.
+- Conversation email → existing Email Design Studio service, shown in Email Design Studio → My Designs. It must have exactly one `{{content}}` placeholder.
+- WhatsApp → Agent draft collection, or a separate explicit submission to Meta for review.
+- The conversation card provides a rendered preview and an action to open the saved email design in the correct Template Studio tab.
 
-It can also create and revise AI-managed campaign email drafts:
-1. Read Company Profile and search the Knowledge Base for facts, plans, pricing, eligibility and offer details.
-2. Research the official website for brand identity and color cues when a website is configured.
-3. Use the company logo from Company Profile or the existing LOGO asset; never redraw the company logo.
-4. Generate an artwork-only campaign hero with GPT Image 2.5 Flare (no baked-in logo or copy).
-5. Save the generated image to the tenant's Company Assets.
-6. Build email-client-friendly, table-based HTML with inline styles, accessible image text, subject and preheader.
-7. Save to the existing tenant campaign template store, which appears under Template Studio → Campaign Emails → My Designs.
-8. Return the rendered HTML and metadata as a conversation artifact so the preview is visible in the Agent chat.
+## Campaign preparation and sending
+- The Agent can inspect saved campaign templates and lead databases.
+- Preparing an outbound campaign requires Campaigns and Database module permissions and the campaign entitlement.
+- The Agent uses the existing server-side database snapshot function. The model does not receive individual recipient addresses.
+- It creates a campaign in DRAFT status and a separate tenant-scoped approval record. The chat card shows the chosen template, selected database, eligible recipients, excluded records without a valid email, and sender readiness.
+- Preparation never sends email.
+- A separate explicit confirmation is required to dispatch. The server verifies the approval record owner and conversation, checks permissions and campaign entitlement, rechecks sender readiness, and atomically claims the dispatch.
+- Dispatch uses the existing campaign engine, tracking and status counters. The Agent reports that dispatch started, not that every email was delivered.
+- Campaign status can be inspected through the registered status tool.
 
-Only AI-managed drafts created by the current user in the same conversation can be revised through the revision tool. Copy/layout revisions can preserve the existing hero image; a requested image change generates a replacement. Recent versions are retained in the template snapshot.
+## WhatsApp
+- A WhatsApp preview is stored privately under the initiating user and conversation.
+- A generated artwork asset can be uploaded to Meta through the existing resumable media upload service.
+- Saving an Agent draft and submitting a template to Meta are distinct actions.
+- Meta submission requires an authorized workspace role/module and explicit confirmation. The Agent reports Meta's returned status; submission is not described as approval.
 
-## Security and execution boundaries
+## Execution, timeout recovery and audit
+- Every Agent turn uses an atomic execution ID.
+- Chat POST returns a processing acknowledgement. The task runs through Vercel `waitUntil`; progress is saved on the same execution document.
+- The client polls the same execution ID and recovers the completed response without submitting a duplicate turn.
+- This is bounded by the configured Vercel function runtime; it is not a separate durable job queue.
+- Asset URLs use the active Vercel deployment URL when available, so preview links resolve against the deployment being tested.
+- Asset IDs are parsed at their explicit double-underscore delimiter; tenant IDs containing underscores no longer fail the older first-underscore parser.
+- Every write uses existing domain services. Audit events record tool execution, failures, template saves, Meta submission, campaign preparation and dispatch approval.
 
-- Every request derives tenant identity and actor identity from the verified Firebase session. The model cannot choose a tenant.
-- Agent access, Email Design Studio permission, Knowledge Base permission, campaign entitlement and AI usage quota are checked server-side.
-- Tenant campaign templates and Company Assets are written using existing service methods, not raw model-authored Firestore writes.
-- Template creation/revision never sends email, launches campaigns, dispatches WhatsApp, invokes Meta operations or deletes unrelated records.
-- Other existing saved templates cannot be modified by the revision tool.
-- Generated HTML is sanitized before persistence and rendering. It must contain a safe table layout, generated hero image and one company logo slot.
-- Generated images are bounded to fit the Company Assets storage limits. If template persistence fails, a newly generated image is cleaned up.
-- Each chat turn has an atomic execution ID. A saved artifact is attached to the chat as soon as the template is verified, so a timeout during final wording does not lose the preview.
-- The client can query the same execution ID after a connection interruption and recover the saved assistant artifact without submitting a duplicate task.
-- Audit events include the actor, tool, action, outcome and resulting template/image IDs.
-
-## Memory
-
-- Conversation/task memory is private to the initiating user and stored in tenant-scoped conversation messages.
-- Company preferences are tenant-wide and shared with Agent users; only workspace admins can edit them.
-- No individual-user long-term memory is stored.
-- The Agent asks before turning inferred recurring preferences into permanent company guidance.
-
-## API surface
-
-- GET /api/agent/bootstrap
-- POST /api/agent/conversations
-- GET /api/agent/conversations/:id
-- POST /api/agent/chat
-- GET /api/agent/executions/:id
-- PATCH /api/agent/config
-
-All routes are authenticated and pass through the common AI Agent entitlement gate. Campaign email draft creation separately checks the campaign entitlement.
+## Security boundaries
+- Tenant and actor identity come only from the verified Firebase session. The model cannot choose a tenant.
+- Module permissions, plan entitlements and AI usage quota are enforced server-side.
+- Conversation/task memory is private to the initiating user. Company preferences are tenant-wide and admin-managed.
+- Template saving, external Meta submission and email campaign dispatch are separate approval stages.
+- The Agent never sends email merely because it prepared a template or campaign draft.

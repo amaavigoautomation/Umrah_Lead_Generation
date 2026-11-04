@@ -105,6 +105,18 @@ export async function saveTenantAsset(
   const id = input.id || `ast_${tenantId}__${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
   const mimeType = input.mimeType || (input.dataUrl ? input.dataUrl.split(';')[0].replace('data:', '') : 'image/jpeg');
 
+  // Validate logo uploads on the server too; browser-side file checks are not a security boundary.
+  if (input.category === 'LOGO' && input.dataUrl) {
+    const match = input.dataUrl.match(/^data:(image\/(?:png|jpeg|webp|gif|svg\+xml));base64,([A-Za-z0-9+/=\r\n]+)$/i);
+    if (!match || match[1].toLowerCase() !== mimeType.toLowerCase()) {
+      throw new Error('Company logos must be uploaded as PNG, JPG, WEBP, GIF or SVG images.');
+    }
+    const actualBytes = Buffer.from(match[2], 'base64').length;
+    if (actualBytes > 700 * 1024) {
+      throw new Error('Company logo images must be 700 KB or smaller.');
+    }
+  }
+
   // Compute size
   let size = input.size || 0;
   if (!size && input.dataUrl) {
@@ -141,12 +153,14 @@ export async function saveTenantAsset(
     });
   }
 
-  // Persist to Firestore
+  // Persist to Firestore. Do not report upload success when the tenant asset was not saved.
   if (isFirebaseConfigured && db) {
     try {
       await safeSetDoc(tenantRepo(ctx).assetDoc(id), asset, { merge: true });
     } catch (err) {
+      assetMemoryCache.delete(id);
       console.error('[AssetService] Firestore write failed:', err);
+      throw new Error('Could not save the image in Company Assets. Please try again.');
     }
   }
 

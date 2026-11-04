@@ -1,12 +1,13 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Building2, Globe, Save, Loader2, CheckCircle2, AlertTriangle,
-  ExternalLink, X, Image as ImageIcon,
+  ExternalLink, X, Image as ImageIcon, Upload,
 } from 'lucide-react';
 import { useBrand } from '../context/BrandContext';
 import type { TenantBrand } from '../shared/brand';
 import { CompanyAssetsPanel } from './CompanyAssetsPanel';
 import type { CompanyAsset } from '../types';
+import { fileToDataUrl, getImageDimensions, uploadCompanyAsset } from '../services/assetClientService';
 
 const inputCls = 'w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-orange-500 disabled:bg-slate-50 disabled:text-slate-500';
 const labelCls = 'block text-xs font-semibold text-slate-600 mb-1';
@@ -27,6 +28,7 @@ export const BrandSettingsPanel: React.FC<{ tenantId: string; canEdit: boolean }
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [showAssets, setShowAssets] = useState(false);
+  const logoFileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => setDraft(brand), [brand]);
 
@@ -89,6 +91,72 @@ export const BrandSettingsPanel: React.FC<{ tenantId: string; canEdit: boolean }
     }
   };
 
+
+  const handleLogoUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const allowedTypes = ['image/png', 'image/jpeg', 'image/webp', 'image/gif', 'image/svg+xml'];
+    if (!allowedTypes.includes(file.type)) {
+      setError('Please upload a PNG, JPG, WEBP, GIF or SVG image.');
+      event.target.value = '';
+      return;
+    }
+    // Company assets keep the original image in a tenant-scoped Firestore document.
+    // This limit leaves room for the base64 expansion and document metadata under Firestore's 1 MiB limit.
+    if (file.size > 700 * 1024) {
+      setError('Please use a logo image smaller than 700 KB.');
+      event.target.value = '';
+      return;
+    }
+
+    setBusy(true);
+    setError(null);
+    setNotice(null);
+    let uploadedAssetUrl = '';
+    try {
+      const dataUrl = await fileToDataUrl(file);
+      const dimensions = await getImageDimensions(dataUrl);
+      const assetName = ((draft.companyName || 'Company').trim() + ' Logo').slice(0, 100);
+      const asset = await uploadCompanyAsset({
+        name: assetName,
+        category: 'LOGO',
+        mimeType: file.type,
+        dataUrl,
+        size: file.size,
+        dimensions,
+        altText: assetName,
+      });
+      uploadedAssetUrl = asset.url;
+      set('logoUrl', asset.url);
+
+      // Persist the selected asset URL to the tenant's brand profile immediately.
+      const response = await fetch('/api/tenants/' + encodeURIComponent(tenantId) + '/company-profile/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ brand: { logoUrl: asset.url } }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data.error || 'The logo was uploaded, but the company profile could not be updated.');
+      }
+      if (data.brand) {
+        setBrand(data.brand);
+        setDraft((current) => ({ ...current, logoUrl: data.brand.logoUrl || asset.url }));
+      }
+      setNotice('Logo uploaded, saved to Company Assets, and applied to your company profile.');
+    } catch (uploadError: any) {
+      if (uploadedAssetUrl) {
+        set('logoUrl', uploadedAssetUrl);
+        setNotice('The image is saved in Company Assets. Click Save company profile to apply it as your logo.');
+      }
+      setError(uploadError && uploadError.message ? uploadError.message : 'Could not upload company logo.');
+    } finally {
+      setBusy(false);
+      event.target.value = '';
+    }
+  };
+
   return (
     <div className="max-w-5xl mx-auto space-y-5 pb-8">
       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
@@ -126,9 +194,40 @@ export const BrandSettingsPanel: React.FC<{ tenantId: string; canEdit: boolean }
             {text('defaultProduct', 'Main product / service', 'Primary product or service')}
             {text('salesEmail', 'Business contact email', 'hello@company.com')}
             {text('supportPhone', 'Business phone / WhatsApp', '+91 …')}
-            <div className="md:col-span-2 grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-2 items-end">
-              {text('logoUrl', 'Company logo URL', 'https://…/logo.png', 'You can also select an image from your existing Company Assets.')}
-              {canEdit && <button type="button" onClick={() => setShowAssets(true)} disabled={busy || loading} className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 hover:border-orange-300 disabled:opacity-50"><ImageIcon className="w-4 h-4" />Choose asset</button>}
+            <div className="md:col-span-2 space-y-2">
+              <span className={labelCls}>Company logo</span>
+              <div className="flex flex-col sm:flex-row sm:items-center gap-3 rounded-xl border border-slate-200 p-3">
+                <div className="flex h-16 w-24 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-slate-50 border border-slate-100">
+                  {draft.logoUrl
+                    ? <img src={draft.logoUrl} alt="Company logo preview" className="max-h-full max-w-full object-contain" />
+                    : <ImageIcon className="w-7 h-7 text-slate-300" />}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="text-xs font-semibold text-slate-700">{draft.logoUrl ? 'Logo selected' : 'No logo uploaded'}</div>
+                  <div className="mt-1 text-[11px] text-slate-400">Upload an image directly. It will be saved in this workspace's Company Assets as a LOGO.</div>
+                  {draft.logoUrl && <div className="mt-1 truncate text-[10px] text-slate-400">{draft.logoUrl}</div>}
+                </div>
+                {canEdit && <>
+                  <input
+                    ref={logoFileInputRef}
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml"
+                    className="hidden"
+                    onChange={handleLogoUpload}
+                    disabled={busy || loading}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => logoFileInputRef.current?.click()}
+                    disabled={busy || loading}
+                    className="inline-flex items-center justify-center gap-2 rounded-lg bg-orange-600 hover:bg-orange-700 disabled:opacity-50 px-3 py-2 text-xs font-semibold text-white"
+                  >
+                    {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                    Upload logo
+                  </button>
+                  <button type="button" onClick={() => setShowAssets(true)} disabled={busy || loading} className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 hover:border-orange-300 disabled:opacity-50"><ImageIcon className="w-4 h-4" />Choose asset</button>
+                </>}
+              </div>
             </div>
           </div>
           <Field label="Company description" hint="A short overview of what the company does. Keep detailed product information, pricing, FAQs and policies in Knowledge Base.">

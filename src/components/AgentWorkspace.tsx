@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Activity, Bot, Check, Command, Database, FileText, History, Loader2, Plus, Send, Settings2, ShieldCheck, Sparkles, X } from 'lucide-react';
-import { useAgent, AgentAutonomy, AgentMessage } from '../context/AgentContext';
+import { Activity, ArrowUpRight, Bot, Check, Command, Database, FileText, History, Loader2, Plus, Send, Settings2, ShieldCheck, Sparkles, X } from 'lucide-react';
+import { useAgent, AgentAutonomy, AgentMessage, AgentArtifact } from '../context/AgentContext';
 import type { AppUser } from '../types';
 
 const QUICK_PROMPTS = [
@@ -70,7 +70,38 @@ function AgentMarkdown({ content }: { content: string }) {
   </div>;
 }
 
-function Messages({ messages, sending, compact }: { messages: AgentMessage[]; sending: boolean; compact?: boolean }) {
+function CampaignEmailArtifactPreview({ artifact, onOpenTemplate }: { artifact: AgentArtifact; onOpenTemplate?: (id: string) => void }) {
+  if (artifact.type !== 'campaign_email_template' || !artifact.html) return null;
+  return <div className="mt-4 w-full overflow-hidden rounded-xl border border-orange-200 bg-white shadow-sm">
+    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-orange-50/70 px-3 py-2.5">
+      <div className="min-w-0">
+        <div className="flex items-center gap-2 text-xs font-bold text-slate-900"><Check className="h-4 w-4 text-emerald-600" /> Email draft saved</div>
+        <div className="mt-0.5 truncate text-[11px] text-slate-600">{artifact.name} · Version {artifact.version || 1}</div>
+      </div>
+      <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-1 text-[9px] font-semibold text-emerald-700">Editable draft</span>
+    </div>
+    <div className="border-b border-slate-100 px-3 py-2">
+      <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Subject</div>
+      <div className="mt-0.5 text-xs font-semibold text-slate-900">{artifact.subject}</div>
+      {artifact.preheader && <div className="mt-1 text-[11px] text-slate-600">{artifact.preheader}</div>}
+    </div>
+    <div className="bg-slate-100 p-2 sm:p-3">
+      <iframe
+        title={(artifact.name || 'Campaign email') + ' preview'}
+        srcDoc={artifact.html}
+        sandbox="allow-same-origin"
+        className="block w-full border-0 bg-white shadow-sm"
+        style={{ height: 560 }}
+      />
+    </div>
+    <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 px-3 py-2.5">
+      <div className="text-[10px] leading-4 text-slate-500">Hero image saved in Company Assets · {artifact.savedTo}</div>
+      {artifact.templateId && onOpenTemplate && <button type="button" onClick={() => onOpenTemplate(artifact.templateId!)} className="rounded-lg bg-gradient-to-r from-orange-500 to-orange-600 px-3 py-2 text-[10px] font-semibold text-white shadow-sm transition hover:brightness-105">Open in Template Studio <ArrowUpRight className="ml-1 inline h-3 w-3" /></button>}
+    </div>
+  </div>;
+}
+
+function Messages({ messages, sending, compact, onOpenTemplate, activityLabel }: { messages: AgentMessage[]; sending: boolean; compact?: boolean; onOpenTemplate?: (id: string) => void; activityLabel?: string }) {
   return <div className={'agent-messages flex-1 min-h-0 overflow-y-auto ' + (compact ? 'px-3 py-4' : 'px-5 py-6')}>
     {messages.length === 0 && (
       <div className="flex h-full min-h-[250px] flex-col items-center justify-center text-center">
@@ -101,6 +132,7 @@ function Messages({ messages, sending, compact }: { messages: AgentMessage[]; se
             {message.role === 'assistant'
               ? <AgentMarkdown content={message.content} />
               : <div className="whitespace-pre-wrap break-words">{message.content}</div>}
+            {message.artifacts?.map((artifact, index) => <CampaignEmailArtifactPreview key={(artifact.templateId || artifact.type) + '-' + index} artifact={artifact} onOpenTemplate={onOpenTemplate} />)}
             {message.toolsUsed && message.toolsUsed.length > 0 && (
               <div className="mt-3 flex flex-wrap gap-1.5 border-t border-slate-200 pt-2">
                 {message.toolsUsed.map((tool) => <span key={tool} className="rounded-md bg-orange-50 px-2 py-0.5 text-[10px] text-orange-700">{tool.replaceAll('_', ' ')}</span>)}
@@ -109,7 +141,7 @@ function Messages({ messages, sending, compact }: { messages: AgentMessage[]; se
           </div>
         </div>
       ))}
-      {sending && <div className="flex items-center gap-2 text-xs text-orange-700"><Loader2 className="h-4 w-4 animate-spin" /> Agent is reasoning and checking workspace data…</div>}
+      {sending && <div className="flex items-center gap-2 text-xs text-orange-700"><Loader2 className="h-4 w-4 animate-spin" /> {activityLabel || 'Agent is reasoning and checking workspace data…'}</div>}
     </div>
   </div>;
 }
@@ -188,8 +220,8 @@ function ConfigPanel({ compact = false }: { compact?: boolean }) {
   </div>;
 }
 
-export const AgentWorkspace: React.FC<{ currentUser: AppUser }> = ({ currentUser }) => {
-  const { conversations, activeConversationId, messages, loading, sending, error, canManageConfig, selectConversation, newConversation, clearError, refresh } = useAgent();
+export const AgentWorkspace: React.FC<{ currentUser: AppUser; onOpenEmailTemplate?: (id: string) => void }> = ({ currentUser, onOpenEmailTemplate }) => {
+  const { conversations, activeConversationId, messages, loading, sending, activityLabel, error, canManageConfig, selectConversation, newConversation, clearError, refresh } = useAgent();
   const [showSettings, setShowSettings] = useState(false);
   return <div className="agent-shell min-h-[calc(100vh-105px)] overflow-hidden rounded-3xl border border-slate-200 bg-white text-slate-900 shadow-2xl">
     <div className="agent-grid relative flex min-h-[calc(100vh-105px)] flex-col">
@@ -209,7 +241,7 @@ export const AgentWorkspace: React.FC<{ currentUser: AppUser }> = ({ currentUser
         </aside>
         <section className="flex min-h-[520px] min-w-0 flex-col">
           <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3 sm:px-5"><div className="truncate text-xs font-semibold text-slate-700">{conversations.find((x) => x.id === activeConversationId)?.title || 'New workspace task'}</div><div className="flex items-center gap-2"><span className="text-[10px] text-slate-600">{currentUser.name}</span><button type="button" onClick={() => void newConversation('agent')} className="rounded-lg border border-slate-200 p-1.5 text-slate-600 hover:text-slate-900 lg:hidden"><Plus className="h-3.5 w-3.5" /></button></div></div>
-          <Messages messages={messages} sending={sending} />
+          <Messages messages={messages} sending={sending} onOpenTemplate={onOpenEmailTemplate} activityLabel={activityLabel} />
           <ChatComposer moduleContext="agent" />
         </section>
         <aside className="hidden border-l border-slate-200 p-4 xl:block">
@@ -239,7 +271,7 @@ function clampAgentPosition(left: number, top: number, width: number, height: nu
   };
 }
 
-export const AgentFloatingCompanion: React.FC<{ hidden?: boolean; moduleContext: string }> = ({ hidden, moduleContext }) => {
+export const AgentFloatingCompanion: React.FC<{ hidden?: boolean; moduleContext: string; onOpenEmailTemplate?: (id: string) => void }> = ({ hidden, moduleContext, onOpenEmailTemplate }) => {
   const [open, setOpen] = useState(false);
   const [position, setPosition] = useState<AgentLauncherPosition | null>(() => {
     if (typeof window === 'undefined') return null;
@@ -330,7 +362,7 @@ export const AgentFloatingCompanion: React.FC<{ hidden?: boolean; moduleContext:
     >
       <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-4 py-3"><div className="flex items-center gap-2"><Orb small /><div><div className="text-sm font-bold">AI Companion</div><div className="text-[10px] text-slate-600">Context: {moduleContext}</div></div></div><div className="flex items-center gap-1"><button type="button" onClick={() => void newConversation(moduleContext)} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-900" title="New chat"><Plus className="h-4 w-4" /></button><button type="button" onClick={() => setOpen(false)} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-900"><X className="h-4 w-4" /></button></div></div>
       <div className="flex gap-1 overflow-x-auto border-b border-slate-200 px-3 py-2">{conversations.slice(0, 4).map((item) => <button type="button" key={item.id} onClick={() => void selectConversation(item.id)} className={'max-w-[130px] truncate rounded-lg px-2 py-1 text-[10px] ' + (activeConversationId === item.id ? 'bg-orange-50 text-orange-700' : 'text-slate-600 hover:bg-slate-100')}>{item.title}</button>)}</div>
-      <Messages messages={messages} sending={sending} compact />
+      <Messages messages={messages} sending={sending} compact onOpenTemplate={onOpenEmailTemplate} activityLabel={activityLabel} />
       <ChatComposer moduleContext={moduleContext} compact />
       {error && <div className="flex items-center justify-between bg-rose-50 px-3 py-2 text-[10px] text-rose-700"><span>{error}</span><button type="button" onClick={clearError}><X className="h-3 w-3" /></button></div>}
     </div>}

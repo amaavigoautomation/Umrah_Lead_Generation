@@ -268,6 +268,11 @@ export default function App() {
     setActiveTabState(tab);
     writeTabToLocation(tab);
   }, []);
+  const [agentEmailTemplateId, setAgentEmailTemplateId] = useState<string | undefined>(undefined);
+  const openAgentEmailTemplate = useCallback((templateId: string) => {
+    setAgentEmailTemplateId(templateId);
+    setActiveTab('email-design-studio');
+  }, [setActiveTab]);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(false);  
 const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ? [] : INITIAL_CONTACTS);
   const [leads, setLeads] = useState<Lead[]>(() => isFirebaseConfigured ? [] : INITIAL_LEADS);
@@ -2519,7 +2524,7 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
           />
         ) : (
           <Suspense fallback={<ScreenLoading />}>
-            {activeTab === 'agent' && <AgentWorkspace currentUser={currentUser} />}
+            {activeTab === 'agent' && <AgentWorkspace currentUser={currentUser} onOpenEmailTemplate={openAgentEmailTemplate} />}
 
             {activeTab === 'inbox' && (
               <UnifiedInbox
@@ -2659,7 +2664,7 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
               />
             )}
 
-            {activeTab === 'email-design-studio' && <TemplateStudio tenantId={currentTenantId} canManageWhatsAppTemplates={Boolean(currentUser && (currentUser.role === 'ADMIN' || currentUser.accessLevel === 'ALL'))} />}
+            {activeTab === 'email-design-studio' && <TemplateStudio tenantId={currentTenantId} canManageWhatsAppTemplates={Boolean(currentUser && (currentUser.role === 'ADMIN' || currentUser.accessLevel === 'ALL'))} initialView={agentEmailTemplateId ? 'campaign' : 'conversation'} initialTemplateId={agentEmailTemplateId} />}
 
             {activeTab === 'playground' && <AiTestingPlayground knowledgeDocs={knowledgeDocs} />}
 
@@ -2704,7 +2709,7 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
       </main>
     </div>
   </div>
-    <AgentFloatingCompanion hidden={activeTab === 'agent' || !(currentUser.accessLevel === 'ALL' || currentUser.role === 'ADMIN' || (currentUser.allowedModules || []).includes('agent'))} moduleContext={activeTab} />
+    <AgentFloatingCompanion hidden={activeTab === 'agent' || !(currentUser.accessLevel === 'ALL' || currentUser.role === 'ADMIN' || (currentUser.allowedModules || []).includes('agent'))} moduleContext={activeTab} onOpenEmailTemplate={openAgentEmailTemplate} />
     </AgentProvider>
     </BrandProvider>
   );

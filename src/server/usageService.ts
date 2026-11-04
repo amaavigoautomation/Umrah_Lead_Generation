@@ -93,7 +93,9 @@ export async function recordAiCompletionUsage(
     usage.prompt_tokens_details?.cached_tokens ?? usage.input_tokens_details?.cached_tokens ?? usage.cachedContentTokenCount ?? 0
   ) || 0));
   const model = String(completion.model || requestedModel || 'unknown').toLowerCase();
-  const openAiRates = model.startsWith('gpt-4o-mini')
+  const openAiRates = model.startsWith('gpt-6.1-sol')
+    ? { input: 2.00, cachedInput: 0.10, output: 10.00 }
+    : model.startsWith('gpt-4o-mini')
     ? { input: 0.15, cachedInput: 0.075, output: 0.60 }
     : model.startsWith('gpt-4o')
       ? { input: 2.50, cachedInput: 1.25, output: 10.00 }

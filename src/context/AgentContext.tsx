@@ -27,6 +27,7 @@ interface AgentContextValue {
   messages: AgentMessage[];
   loading: boolean;
   sending: boolean;
+  activityLabel: string;
   error: string;
   canManageConfig: boolean;
   selectConversation: (id: string) => Promise<void>;
@@ -61,6 +62,7 @@ export const AgentProvider: React.FC<{ tenantId: string; userId: string; enabled
   const [messages, setMessages] = useState<AgentMessage[]>([]);
   const [loading, setLoading] = useState(false);
   const [sending, setSending] = useState(false);
+  const [activityLabel, setActivityLabel] = useState('');
   const [error, setError] = useState('');
   const [canManageConfig, setCanManageConfig] = useState(false);
 
@@ -122,6 +124,7 @@ export const AgentProvider: React.FC<{ tenantId: string; userId: string; enabled
     const message = rawMessage.trim();
     if (!message || sending) return;
     setSending(true);
+    setActivityLabel(/template|email|campaign|image|design|banner/i.test(message) ? 'Researching your brand, creating campaign artwork and saving the editable draft…' : 'Reviewing your workspace and preparing an answer…');
     setError('');
     let conversationId = activeConversationId;
     try {
@@ -130,10 +133,42 @@ export const AgentProvider: React.FC<{ tenantId: string; userId: string; enabled
       const executionId = createId();
       const userMessage: AgentMessage = { id: 'local-' + executionId, role: 'user', content: message, createdAt: new Date().toISOString() };
       setMessages((prev) => [...prev, userMessage]);
-      const data = await api<{ success: boolean; assistantMessage: AgentMessage; conversation: AgentConversation }>('/api/agent/chat', {
-        method: 'POST',
-        body: JSON.stringify({ conversationId, executionId, message, moduleContext }),
-      });
+      let data: { success: boolean; assistantMessage: AgentMessage; conversation: AgentConversation };
+      try {
+        data = await api<{ success: boolean; assistantMessage: AgentMessage; conversation: AgentConversation }>('/api/agent/chat', {
+          method: 'POST',
+          body: JSON.stringify({ conversationId, executionId, message, moduleContext }),
+        });
+      } catch (deliveryError: any) {
+        setActivityLabel('Reconnecting to the same Agent task…');
+        const deadline = Date.now() + 180000;
+        let recovered: { success: boolean; assistantMessage: AgentMessage; conversation: AgentConversation } | null = null;
+        let lastDeliveryError = deliveryError;
+        while (Date.now() < deadline && !recovered) {
+          await new Promise((resolve) => setTimeout(resolve, 2500));
+          try {
+            const status = await api<{ success: boolean; status: string; assistantMessage?: AgentMessage | null; error?: string; conversationId?: string }>('/api/agent/executions/' + encodeURIComponent(executionId));
+            if (status.status === 'completed' && status.assistantMessage) {
+              recovered = {
+                success: true,
+                assistantMessage: status.assistantMessage,
+                conversation: { id: conversationId, title: message.slice(0, 64), createdAt: new Date().toISOString(), updatedAt: status.assistantMessage.createdAt, moduleContext },
+              };
+              break;
+            }
+            if (status.status === 'failed') throw new Error(status.error || 'The Agent task failed.');
+            setActivityLabel('Still creating your design. The same task is running; no duplicate draft will be started…');
+          } catch (pollError: any) {
+            if (String(pollError?.message || '').toLowerCase().includes('execution not found')) {
+              lastDeliveryError = pollError;
+              continue;
+            }
+            throw pollError;
+          }
+        }
+        if (!recovered) throw new Error('The chat connection timed out while this task was running. Reopen this conversation shortly to check its saved result. Do not submit the same creation request again yet. ' + (lastDeliveryError?.message || ''));
+        data = recovered;
+      }
       setMessages((prev) => [
         ...prev.filter((item) => item.id !== userMessage.id),
         { id: 'user-' + executionId, role: 'user', content: message, createdAt: userMessage.createdAt },
@@ -145,6 +180,7 @@ export const AgentProvider: React.FC<{ tenantId: string; userId: string; enabled
       setMessages((prev) => prev.filter((item) => !item.id.startsWith('local-')));
     } finally {
       setSending(false);
+      setActivityLabel('');
     }
   }, [activeConversationId, newConversation, sending]);
 
@@ -164,9 +200,9 @@ export const AgentProvider: React.FC<{ tenantId: string; userId: string; enabled
   }, []);
 
   const value = useMemo<AgentContextValue>(() => ({
-    config, conversations, activeConversationId, messages, loading, sending, error, canManageConfig,
+    config, conversations, activeConversationId, messages, loading, sending, activityLabel, error, canManageConfig,
     selectConversation, newConversation, sendMessage, saveConfig, refresh, clearError: () => setError(''),
-  }), [config, conversations, activeConversationId, messages, loading, sending, error, canManageConfig, selectConversation, newConversation, sendMessage, saveConfig, refresh]);
+  }), [config, conversations, activeConversationId, messages, loading, sending, activityLabel, error, canManageConfig, selectConversation, newConversation, sendMessage, saveConfig, refresh]);
 
   return <AgentContext.Provider value={value}>{children}</AgentContext.Provider>;
 };

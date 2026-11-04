@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import {
-  Building2, Globe, Sparkles, Save, Loader2, CheckCircle2, AlertTriangle,
-  ExternalLink, Palette, BookOpen, X, Image as ImageIcon,
+  Building2, Globe, Save, Loader2, CheckCircle2, AlertTriangle,
+  ExternalLink, X, Image as ImageIcon,
 } from 'lucide-react';
 import { useBrand } from '../context/BrandContext';
 import type { TenantBrand } from '../shared/brand';
@@ -22,9 +22,6 @@ const Field: React.FC<{ label: string; hint?: string; children: React.ReactNode 
 export const BrandSettingsPanel: React.FC<{ tenantId: string; canEdit: boolean }> = ({ tenantId, canEdit }) => {
   const { brand, setBrand } = useBrand();
   const [draft, setDraft] = useState<TenantBrand>(brand);
-  const [knowledgeContent, setKnowledgeContent] = useState('');
-  const [metadata, setMetadata] = useState<any>(null);
-  const [analysis, setAnalysis] = useState<any>(null);
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -37,14 +34,13 @@ export const BrandSettingsPanel: React.FC<{ tenantId: string; canEdit: boolean }
     let active = true;
     const load = async () => {
       setLoading(true);
+      setError(null);
       try {
         const response = await fetch('/api/tenants/' + encodeURIComponent(tenantId) + '/company-profile');
         const data = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(data.error || 'Could not load company profile.');
         if (!active) return;
         if (data.brand) setDraft(data.brand);
-        setMetadata(data.metadata || null);
-        setKnowledgeContent(data.knowledgeContent || '');
       } catch (loadError: any) {
         if (active) setError(loadError && loadError.message ? loadError.message : 'Could not load company profile.');
       } finally {
@@ -71,56 +67,6 @@ export const BrandSettingsPanel: React.FC<{ tenantId: string; canEdit: boolean }
     </Field>
   );
 
-  const updateSocialLink = (platform: string, value: string) => {
-    set('socialLinks', { ...(draft.socialLinks || {}), [platform]: value } as any);
-  };
-
-  const analyzeWebsite = async () => {
-    setBusy(true);
-    setError(null);
-    setNotice(null);
-    setAnalysis(null);
-    try {
-      const response = await fetch('/api/tenants/' + encodeURIComponent(tenantId) + '/company-profile/analyze', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ websiteUrl: draft.websiteUrl }),
-      });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(data.error || 'Website analysis failed.');
-      const result = data.analysis;
-      if (!result || !result.brandProfile) throw new Error('The website analyzer returned an incomplete company profile.');
-      setAnalysis(result);
-      setKnowledgeContent(result.knowledgeContent || '');
-      setDraft((current) => ({
-        ...current,
-        websiteUrl: result.brandProfile.websiteUrl || current.websiteUrl,
-        companyName: result.brandProfile.companyName || current.companyName,
-        tagline: result.brandProfile.tagline || current.tagline,
-        companyDescription: result.companyDescription || result.brandProfile.description || current.companyDescription || '',
-        industryDescription: [result.industry, result.targetAudience ? 'Target audience: ' + result.targetAudience : ''].filter(Boolean).join(' — ') || current.industryDescription,
-        defaultProduct: result.structuredData && result.structuredData.productsAndServices && result.structuredData.productsAndServices[0]
-          ? (result.structuredData.productsAndServices[0].name || current.defaultProduct)
-          : current.defaultProduct,
-        salesEmail: result.brandProfile.contactEmail || current.salesEmail,
-        supportPhone: result.brandProfile.contactPhone || current.supportPhone,
-        logoUrl: result.brandProfile.logoUrl || current.logoUrl,
-        primaryColor: result.brandProfile.colors && result.brandProfile.colors[0] || current.primaryColor || '',
-        secondaryColor: result.brandProfile.colors && result.brandProfile.colors[1] || current.secondaryColor || '',
-        accentColor: result.brandProfile.colors && result.brandProfile.colors[2] || current.accentColor || '',
-        headingFontFamily: result.headingFontFamily || current.headingFontFamily || '',
-        bodyFontFamily: result.bodyFontFamily || current.bodyFontFamily || '',
-        brandVoice: result.brandVoice || current.brandVoice || '',
-        socialLinks: { ...(current.socialLinks || {}), ...(result.brandProfile.socialLinks || {}) },
-      }));
-      setNotice('Analyzed ' + ((result.pagesScanned && result.pagesScanned.length) || 1) + ' relevant website page(s). Review the extracted facts and save to approve them.');
-    } catch (analysisError: any) {
-      setError(analysisError && analysisError.message ? analysisError.message : 'Website analysis failed.');
-    } finally {
-      setBusy(false);
-    }
-  };
-
   const save = async () => {
     setBusy(true);
     setError(null);
@@ -129,16 +75,13 @@ export const BrandSettingsPanel: React.FC<{ tenantId: string; canEdit: boolean }
       const response = await fetch('/api/tenants/' + encodeURIComponent(tenantId) + '/company-profile/save', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ brand: draft, analysis, knowledgeContent }),
+        body: JSON.stringify({ brand: draft }),
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.error || 'Could not save company profile.');
       setBrand(data.brand);
       setDraft(data.brand);
-      setMetadata(data.metadata || null);
-      setKnowledgeContent(data.knowledgeContent || knowledgeContent);
-      setAnalysis(null);
-      setNotice('Company profile saved. Approved website knowledge is now published to this workspace knowledge base.');
+      setNotice('Company profile saved successfully.');
     } catch (saveError: any) {
       setError(saveError && saveError.message ? saveError.message : 'Could not save company profile.');
     } finally {
@@ -146,25 +89,13 @@ export const BrandSettingsPanel: React.FC<{ tenantId: string; canEdit: boolean }
     }
   };
 
-  const colors: Array<{ key: 'primaryColor' | 'secondaryColor' | 'accentColor'; label: string }> = [
-    { key: 'primaryColor', label: 'Primary' },
-    { key: 'secondaryColor', label: 'Secondary' },
-    { key: 'accentColor', label: 'Accent' },
-  ];
-  const socialPlatforms = ['instagram', 'facebook', 'linkedin', 'youtube', 'x'];
-
   return (
-    <div className="max-w-6xl mx-auto space-y-5 pb-8">
+    <div className="max-w-5xl mx-auto space-y-5 pb-8">
       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
         <div>
-          <div className="flex items-center gap-2 text-orange-600"><Building2 className="w-5 h-5" /><span className="text-[10px] font-bold uppercase tracking-[0.18em]">Workspace identity</span></div>
+          <div className="flex items-center gap-2 text-orange-600"><Building2 className="w-5 h-5" /><span className="text-[10px] font-bold uppercase tracking-[0.18em]">Workspace setup</span></div>
           <h1 className="text-2xl font-extrabold text-slate-900 mt-1">Company Profile</h1>
-          <p className="text-sm text-slate-500 mt-1 max-w-2xl">Analyze your public website once, review the extracted company facts, and approve them for the workspace knowledge base.</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className={'inline-flex items-center gap-1.5 px-3 py-2 rounded-full text-[11px] font-semibold border ' + (metadata && metadata.analyzedAt ? 'bg-emerald-50 border-emerald-100 text-emerald-700' : 'bg-slate-50 border-slate-200 text-slate-500')}>
-            <CheckCircle2 className="w-3.5 h-3.5" />{metadata && metadata.analyzedAt ? 'Website analyzed' : 'Not analyzed yet'}
-          </span>
+          <p className="text-sm text-slate-500 mt-1 max-w-2xl">Save your company's essential contact and identity details. Product information, services, FAQs and policies are managed in the existing Knowledge Base.</p>
         </div>
       </div>
 
@@ -173,16 +104,16 @@ export const BrandSettingsPanel: React.FC<{ tenantId: string; canEdit: boolean }
 
       <div className="bg-white border border-slate-200 rounded-2xl p-5 sm:p-6 space-y-5 shadow-sm">
         <div className="flex items-center gap-2"><Globe className="w-4 h-4 text-orange-600" /><h2 className="text-sm font-bold text-slate-900">Company website</h2></div>
-        <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-3 items-end">
-          <Field label="Website URL" hint="We inspect the homepage and a small set of relevant same-domain pages such as About, Services, Pricing, FAQ and Contact.">
-            <input className={inputCls} disabled={!canEdit || busy} type="url" placeholder="https://www.yourcompany.com" value={draft.websiteUrl || ''} onChange={(event) => set('websiteUrl', event.target.value)} />
-          </Field>
-          {canEdit && <button type="button" onClick={analyzeWebsite} disabled={busy || loading || !draft.websiteUrl || !draft.websiteUrl.trim()} className="inline-flex items-center justify-center gap-2 rounded-lg bg-slate-900 hover:bg-slate-800 disabled:opacity-50 text-white text-sm font-semibold px-4 py-2.5">
-            {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />} {metadata && metadata.analyzedAt ? 'Refresh website analysis' : 'Analyze website'}
-          </button>}
-        </div>
-        {metadata && metadata.analyzedAt && <p className="text-[11px] text-slate-400">Last approved analysis: {new Date(metadata.analyzedAt).toLocaleString()} · {(metadata.pagesScanned || []).length || 1} page(s) scanned</p>}
-        {!canEdit && <p className="text-xs text-slate-500">Only workspace admins can analyze or change the company profile. You can view the approved information below.</p>}
+        <Field label="Website URL" hint="Your public website address, used as a reference when company-specific online research is needed.">
+          <input
+            className={inputCls}
+            disabled={!canEdit || busy || loading}
+            type="url"
+            placeholder="https://www.yourcompany.com"
+            value={draft.websiteUrl || ''}
+            onChange={(event) => set('websiteUrl', event.target.value)}
+          />
+        </Field>
       </div>
 
       <div className="bg-white border border-slate-200 rounded-2xl p-5 sm:p-6 space-y-4 shadow-sm">
@@ -196,53 +127,30 @@ export const BrandSettingsPanel: React.FC<{ tenantId: string; canEdit: boolean }
             {text('salesEmail', 'Business contact email', 'hello@company.com')}
             {text('supportPhone', 'Business phone / WhatsApp', '+91 …')}
             <div className="md:col-span-2 grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-2 items-end">
-              {text('logoUrl', 'Logo URL', 'https://…/logo.png', 'Use the website-detected logo or choose an approved Company Asset.')}
-              {canEdit && <button type="button" onClick={() => setShowAssets(true)} className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 hover:border-orange-300"><ImageIcon className="w-4 h-4" />Choose asset</button>}
+              {text('logoUrl', 'Company logo URL', 'https://…/logo.png', 'You can also select an image from your existing Company Assets.')}
+              {canEdit && <button type="button" onClick={() => setShowAssets(true)} disabled={busy || loading} className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 hover:border-orange-300 disabled:opacity-50"><ImageIcon className="w-4 h-4" />Choose asset</button>}
             </div>
           </div>
-          <Field label="Company description">
-            <textarea className={inputCls + ' min-h-[100px] resize-y'} disabled={!canEdit || busy} value={draft.companyDescription || ''} onChange={(event) => set('companyDescription', event.target.value)} placeholder="A verified description of the company, its offering and value proposition." />
+          <Field label="Company description" hint="A short overview of what the company does. Keep detailed product information, pricing, FAQs and policies in Knowledge Base.">
+            <textarea
+              className={inputCls + ' min-h-[100px] resize-y'}
+              disabled={!canEdit || busy}
+              value={draft.companyDescription || ''}
+              onChange={(event) => set('companyDescription', event.target.value)}
+              placeholder="A short overview of your company."
+            />
           </Field>
         </>}
       </div>
 
-      <div className="bg-white border border-slate-200 rounded-2xl p-5 sm:p-6 space-y-4 shadow-sm">
-        <div className="flex items-center gap-2"><Palette className="w-4 h-4 text-orange-600" /><h2 className="text-sm font-bold text-slate-900">Brand identity</h2></div>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          {colors.map(({ key, label }) => <label key={key} className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 px-3 py-2">
-            <span className="text-xs font-medium text-slate-600">{label} colour</span>
-            <span className="flex items-center gap-2"><span className="text-[10px] font-mono text-slate-400">{draft[key] || 'Not detected'}</span><input aria-label={label + ' brand colour'} disabled={!canEdit || busy} type="color" value={/^#[0-9a-fA-F]{6}$/.test(draft[key] || '') ? draft[key] : '#183B66'} onChange={(event) => set(key, event.target.value)} className="h-7 w-8 cursor-pointer rounded border-0 bg-transparent p-0 disabled:opacity-50" /></span>
-          </label>)}
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {text('headingFontFamily', 'Heading font', 'Arial, sans-serif')}
-          {text('bodyFontFamily', 'Body font', 'Arial, sans-serif')}
-        </div>
-        <Field label="Brand voice and communication style" hint="Review the detected writing style or add your preferred instructions for future AI-generated content.">
-          <textarea className={inputCls + ' min-h-[88px] resize-y'} disabled={!canEdit || busy} value={draft.brandVoice || ''} onChange={(event) => set('brandVoice', event.target.value)} placeholder="For example: warm, trustworthy, concise and premium." />
-        </Field>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          {socialPlatforms.map((platform) => <Field key={platform} label={platform.charAt(0).toUpperCase() + platform.slice(1) + ' URL'}>
-            <input className={inputCls} disabled={!canEdit || busy} value={(draft.socialLinks && draft.socialLinks[platform]) || ''} onChange={(event) => updateSocialLink(platform, event.target.value)} placeholder={'https://' + platform + '.com/…'} />
-          </Field>)}
-        </div>
-      </div>
-
-      <div className="bg-white border border-slate-200 rounded-2xl p-5 sm:p-6 space-y-3 shadow-sm">
-        <div className="flex items-center gap-2"><BookOpen className="w-4 h-4 text-orange-600" /><h2 className="text-sm font-bold text-slate-900">Company knowledge review</h2></div>
-        <p className="text-xs text-slate-500">Products and services, published pricing, FAQs, policies, booking details and key facts are combined into one searchable tenant knowledge document. Review or correct it before approving.</p>
-        {(analysis && analysis.counts || metadata && metadata.counts) && <div className="flex flex-wrap gap-2">{Object.entries((analysis && analysis.counts) || metadata.counts || {}).map(([key, value]) => <span key={key} className="rounded-lg bg-slate-50 border border-slate-200 px-2.5 py-1.5 text-[11px] text-slate-600"><strong>{String(value)}</strong> {key.replace(/([A-Z])/g, ' $1').toLowerCase()}</span>)}</div>}
-        <textarea className={inputCls + ' min-h-[300px] resize-y font-mono text-xs leading-relaxed'} disabled={!canEdit || busy} value={knowledgeContent} onChange={(event) => setKnowledgeContent(event.target.value)} placeholder="Run website analysis to draft your company knowledge. You can edit the extracted facts or add other verified business information." />
-        <p className="text-[11px] text-slate-400">Website content is not published automatically. It enters the knowledge base only after an admin saves the approved profile.</p>
-      </div>
-
       {canEdit && <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
-        <div className="text-[11px] text-slate-400">Saving publishes the reviewed knowledge to this tenant only. It does not send campaigns or messages.</div>
+        <div className="text-[11px] text-slate-400">Only these company profile details are saved here. Your Knowledge Base remains the source for products, services and business policies.</div>
         <button type="button" onClick={save} disabled={busy || loading} className="inline-flex items-center gap-2 rounded-xl bg-orange-600 hover:bg-orange-700 disabled:opacity-50 text-white text-sm font-bold px-5 py-3 shadow-sm">
-          {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} Save &amp; approve company profile
+          {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} Save company profile
         </button>
       </div>}
-      {metadata && metadata.websiteUrl && <a href={metadata.websiteUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-[11px] text-slate-400 hover:text-orange-700"><ExternalLink className="w-3 h-3" />Open analyzed website</a>}
+
+      {draft.websiteUrl && <a href={draft.websiteUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-[11px] text-slate-400 hover:text-orange-700"><ExternalLink className="w-3 h-3" />Open company website</a>}
 
       {showAssets && <div className="fixed inset-0 z-[95] bg-slate-950/50 flex items-center justify-center p-3">
         <div className="w-full max-w-5xl max-h-[90vh] overflow-y-auto rounded-2xl bg-white shadow-2xl">

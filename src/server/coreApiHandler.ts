@@ -974,7 +974,7 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
 
 
   // Company Profile APIs are tenant-scoped and workspace-admin managed.
-  const companyProfileMatch = url.split('?')[0].match(/^\/api\/tenants\/([^/]+)\/company-profile(?:\/(analyze|save))?$/);
+  const companyProfileMatch = url.split('?')[0].match(/^\/api\/tenants\/([^/]+)\/company-profile(?:\/(save))?$/);
   if (companyProfileMatch) {
     const targetTenantId = decodeURIComponent(companyProfileMatch[1]);
     const action = companyProfileMatch[2] || '';
@@ -992,16 +992,10 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
         res.end(JSON.stringify(await profileService.getCompanyProfile(profileCtx)));
         return true;
       }
-      if (req.method === 'POST' && (action === 'analyze' || action === 'save')) {
+      if (req.method === 'POST' && action === 'save') {
         if (!isPlatformAdmin && userRole !== 'admin') {
           res.statusCode = 403;
           res.end(JSON.stringify({ error: 'Only workspace admins can edit the company profile.' }));
-          return true;
-        }
-        if (action === 'analyze') {
-          const analysis = await profileService.analyzeCompanyProfileWebsite(profileCtx, body && body.websiteUrl);
-          res.statusCode = 200;
-          res.end(JSON.stringify({ success: true, analysis }));
           return true;
         }
         const result = await profileService.saveCompanyProfile(profileCtx, body || {});

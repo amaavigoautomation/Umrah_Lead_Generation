@@ -162,6 +162,14 @@ async function getMeetState(page: Page) {
       ].join(' ').replace(/\s+/g, ' ').trim().toLowerCase())
       .filter(Boolean);
 
+    const hasJoinButton = labels.some((label) => /ask to join|join now/.test(label));
+    const hasContinueWithoutMedia = labels.some((label) =>
+      /continue without (?:a )?microphone and camera|continue without (?:microphone|camera)/.test(label)
+    );
+    const hasAllowMediaButton = labels.some((label) =>
+      /allow microphone and camera|turn on microphone and camera/.test(label)
+    );
+
     const joined = labels.some((label) => /leave call|hang up|end call/.test(label)) ||
       bodyText.includes("you're in the meeting") ||
       bodyText.includes('you are in the meeting');
@@ -181,17 +189,23 @@ async function getMeetState(page: Page) {
       bodyText.includes('check that the code is correct');
     const meetingEnded = bodyText.includes('this meeting has ended') ||
       bodyText.includes('the meeting has ended');
-    const accessDenied = bodyText.includes("you can't join this video call") ||
-      bodyText.includes('you are not allowed to join') ||
-      bodyText.includes('you do not have permission to join');
+    const explicitAccessDenied = bodyText.includes('you are not allowed to join') ||
+      bodyText.includes('you do not have permission to join') ||
+      bodyText.includes('you are not permitted to join');
+    // Google currently includes generic security copy saying "You can't join this video call"
+    // on the guest pre-join screen. Treat it as a denial only after the actionable
+    // "Continue without microphone and camera" and "Ask to join / Join now" controls vanish.
+    const genericAccessDeniedCopy = bodyText.includes("you can't join this video call");
+    const accessDenied = explicitAccessDenied ||
+      (genericAccessDeniedCopy && !hasContinueWithoutMedia && !hasJoinButton);
     const blocked = invalidCode || meetingEnded || accessDenied;
     const diagnosticLines = visibleText
       .split(/(?<=[.!?])\s+/)
-      .filter((line) => /join|sign in|account|meeting|invalid|ended|host|permission|access|request/i.test(line))
-      .slice(0, 5)
+      .filter((line) => /join|sign in|account|meeting|invalid|ended|host|permission|access|request|microphone|camera/i.test(line))
+      .slice(0, 6)
       .join(' | ')
       .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, '[email hidden]')
-      .slice(0, 500);
+      .slice(0, 600);
 
     return {
       joined,
@@ -202,12 +216,32 @@ async function getMeetState(page: Page) {
         : meetingEnded ? 'MEETING_ALREADY_ENDED'
           : accessDenied ? 'MEET_ACCESS_RESTRICTED'
             : 'UNKNOWN_BLOCKED_SCREEN',
-      hasJoinButton: labels.some((label) => /ask to join|join now/.test(label)),
+      hasJoinButton,
+      hasContinueWithoutMedia,
+      hasAllowMediaButton,
       pageTitle: document.title || '',
       pageUrl: location.href,
       diagnosticText: diagnosticLines || 'Google Meet loaded a page, but no recognizable join/status text was found.',
-      visibleButtonLabels: labels.slice(0, 8),
+      visibleButtonLabels: labels.slice(0, 12),
     };
+  });
+}
+
+async function clickContinueWithoutMedia(page: Page): Promise<boolean> {
+  return page.evaluate(() => {
+    const candidates = Array.from(document.querySelectorAll('button,[role="button"]'));
+    const button = candidates.find((element) => {
+      const label = [
+        element.getAttribute('aria-label') || '',
+        element.getAttribute('data-tooltip') || '',
+        element.textContent || '',
+      ].join(' ').replace(/\s+/g, ' ').trim().toLowerCase();
+      const visible = Boolean((element as HTMLElement).offsetWidth || (element as HTMLElement).offsetHeight);
+      return visible && /continue without (?:a )?microphone and camera|continue without (?:microphone|camera)/.test(label);
+    }) as HTMLElement | undefined;
+    if (!button) return false;
+    button.click();
+    return true;
   });
 }
 
@@ -339,8 +373,8 @@ export async function handleMeetingIntelligenceTrial(
       await page.goto(meetingUrl.toString(), { waitUntil: 'domcontentloaded', timeout: 45_000 });
       await sleep(4_000);
 
-      const initialState = await getMeetState(page);
-      if (initialState.signInRequired) {
+      let meetState = await getMeetState(page);
+      if (meetState.signInRequired) {
         return sendJson(res, 422, {
           success: false,
           code: 'MEET_REQUIRES_GOOGLE_SIGN_IN',
@@ -348,22 +382,46 @@ export async function handleMeetingIntelligenceTrial(
           diagnostics: [...diagnostics, 'Google sign-in was required; no credentials were entered.'],
         });
       }
-      if (initialState.blocked) {
+
+      // Google Meet can show a guest pre-join confirmation before exposing the
+      // "Join now" / "Ask to join" button. Explicitly continue with both devices off.
+      if (meetState.hasContinueWithoutMedia) {
+        const continued = await clickContinueWithoutMedia(page);
+        diagnostics.push(
+          continued
+            ? 'Selected Continue without microphone and camera.'
+            : 'Meet showed the no-microphone/no-camera option, but it could not be clicked.'
+        );
+        if (continued) {
+          await sleep(1_500);
+          meetState = await getMeetState(page);
+        }
+      }
+
+      if (meetState.signInRequired) {
         return sendJson(res, 422, {
           success: false,
-          code: initialState.blockedReason || 'MEET_ACCESS_SCREEN',
-          error: initialState.blockedReason === 'INVALID_MEETING_CODE'
+          code: 'MEET_REQUIRES_GOOGLE_SIGN_IN',
+          error: 'Google Meet redirected the bot to sign-in. Guest access is not enabled for this meeting.',
+          diagnostics,
+        });
+      }
+      if (meetState.blocked) {
+        return sendJson(res, 422, {
+          success: false,
+          code: meetState.blockedReason || 'MEET_ACCESS_SCREEN',
+          error: meetState.blockedReason === 'INVALID_MEETING_CODE'
             ? 'Google Meet says this meeting code is invalid. Recheck the link or create a fresh Meet.'
-            : initialState.blockedReason === 'MEETING_ALREADY_ENDED'
+            : meetState.blockedReason === 'MEETING_ALREADY_ENDED'
               ? 'Google Meet says this meeting has already ended.'
-              : 'Google Meet displayed an access-restricted screen before the bot could request admission.',
+              : 'Google Meet is restricting this guest from entering. The host may need to admit the bot or allow guest access.',
           diagnostics: [
             ...diagnostics,
-            'Meet page title: ' + (initialState.pageTitle || '(empty)'),
-            'Meet page URL: ' + (initialState.pageUrl || '(unavailable)'),
-            'Detected reason: ' + (initialState.blockedReason || 'UNKNOWN'),
-            'Meet status text: ' + (initialState.diagnosticText || '(unavailable)'),
-            'Visible controls: ' + (initialState.visibleButtonLabels || []).join(' || '),
+            'Meet page title: ' + (meetState.pageTitle || '(empty)'),
+            'Meet page URL: ' + (meetState.pageUrl || '(unavailable)'),
+            'Detected reason: ' + (meetState.blockedReason || 'UNKNOWN'),
+            'Meet status text: ' + (meetState.diagnosticText || '(unavailable)'),
+            'Visible controls: ' + (meetState.visibleButtonLabels || []).join(' || '),
           ],
         });
       }
@@ -384,7 +442,13 @@ export async function handleMeetingIntelligenceTrial(
           success: false,
           code: 'MEET_JOIN_CONTROL_NOT_FOUND',
           error: 'Could not find the Google Meet Join now / Ask to join control. The page may require sign-in or a different access flow.',
-          diagnostics: [...diagnostics, 'No supported join button was found.'],
+          diagnostics: [
+            ...diagnostics,
+            'No supported Join now / Ask to join button was found.',
+            'Meet page title: ' + (state.pageTitle || '(empty)'),
+            'Meet status text: ' + (state.diagnosticText || '(unavailable)'),
+            'Visible controls: ' + (state.visibleButtonLabels || []).join(' || '),
+          ],
         });
       }
       diagnostics.push('Join request submitted. Waiting for admission into the meeting.');

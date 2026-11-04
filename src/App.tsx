@@ -13,6 +13,8 @@ import { logAuditEvent } from './services/auditService';
 import { LockedModuleView } from './components/LockedModuleView';
 import { UpgradeRequiredView } from './components/UpgradeRequiredView';
 import { FEATURES, FEATURE_BY_TAB } from './shared/features';
+import { AgentProvider } from './context/AgentContext';
+import { AgentWorkspace, AgentFloatingCompanion } from './components/AgentWorkspace';
 import {
   Contact,
   Lead,
@@ -225,6 +227,7 @@ const ALL_TABS: readonly ActiveTab[] = [
   'database',
   'campaign-reports',
   'company-profile',
+  'agent',
 ];
 
 function isActiveTab(value: string | null | undefined): value is ActiveTab {
@@ -2456,6 +2459,7 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
 
   return (
     <BrandProvider tenantId={currentTenantId} tenantName={currentTenant?.name}>
+    <AgentProvider tenantId={currentTenantId} userId={currentUser.userId} enabled={currentUser.accessLevel === 'ALL' || currentUser.role === 'ADMIN' || (currentUser.allowedModules || []).includes('agent')}>
     <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col md:flex-row font-sans selection:bg-orange-500/20 selection:text-orange-950">
       <Navbar
         activeTab={activeTab}
@@ -2515,6 +2519,8 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
           />
         ) : (
           <Suspense fallback={<ScreenLoading />}>
+            {activeTab === 'agent' && <AgentWorkspace currentUser={currentUser} />}
+
             {activeTab === 'inbox' && (
               <UnifiedInbox
                 tenantId={currentTenantId}
@@ -2698,6 +2704,8 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
       </main>
     </div>
   </div>
+    <AgentFloatingCompanion hidden={activeTab === 'agent' || !(currentUser.accessLevel === 'ALL' || currentUser.role === 'ADMIN' || (currentUser.allowedModules || []).includes('agent'))} moduleContext={activeTab} />
+    </AgentProvider>
     </BrandProvider>
   );
 }

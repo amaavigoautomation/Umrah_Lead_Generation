@@ -49,3 +49,46 @@
   background: #ef741a;
 }
 
+
+
+/* Futuristic AI Agent experience */
+@keyframes agent-orbit {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+@keyframes agent-orbit-reverse {
+  from { transform: rotate(360deg); }
+  to { transform: rotate(0deg); }
+}
+@keyframes agent-core-pulse {
+  0%, 100% { transform: scale(.9); opacity: .78; filter: hue-rotate(0deg); }
+  50% { transform: scale(1.12); opacity: 1; filter: hue-rotate(24deg); }
+}
+@keyframes agent-message-enter {
+  from { opacity: 0; transform: translateY(7px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes agent-panel-enter {
+  from { opacity: 0; transform: translateY(12px) scale(.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+.agent-orb { filter: drop-shadow(0 0 15px rgba(34,211,238,.22)); }
+.agent-orb-core {
+  background: radial-gradient(circle at 35% 30%, #e0f2fe 0%, #67e8f9 18%, #22d3ee 42%, #7c3aed 76%, #111827 100%);
+  box-shadow: 0 0 24px rgba(34,211,238,.55), inset 0 0 12px rgba(255,255,255,.55);
+  animation: agent-core-pulse 3.4s ease-in-out infinite;
+}
+.agent-orb-ring { border: 1px solid rgba(103,232,249,.48); box-shadow: 0 0 14px rgba(34,211,238,.12), inset 0 0 12px rgba(124,58,237,.1); }
+.agent-orb-ring-one { border-left-color: transparent; border-right-color: rgba(167,139,250,.65); animation: agent-orbit 7s linear infinite; }
+.agent-orb-ring-two { inset: -9%; border-top-color: transparent; border-bottom-color: rgba(34,211,238,.7); animation: agent-orbit-reverse 11s linear infinite; }
+.agent-grid {
+  background-image: linear-gradient(rgba(103,232,249,.035) 1px, transparent 1px), linear-gradient(90deg, rgba(103,232,249,.035) 1px, transparent 1px), radial-gradient(ellipse at 48% -20%, rgba(79,70,229,.24), transparent 48%);
+  background-size: 34px 34px, 34px 34px, auto;
+}
+.agent-message-enter { animation: agent-message-enter .22s ease-out both; }
+.agent-float-panel { animation: agent-panel-enter .18s ease-out both; }
+.agent-messages { scrollbar-color: rgba(100,116,139,.5) transparent; scrollbar-width: thin; }
+.agent-messages::-webkit-scrollbar-thumb { background: rgba(100,116,139,.5); }
+@media (prefers-reduced-motion: reduce) {
+  .agent-orb-core, .agent-orb-ring-one, .agent-orb-ring-two, .agent-message-enter, .agent-float-panel { animation: none !important; }
+}

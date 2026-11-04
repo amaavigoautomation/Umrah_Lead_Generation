@@ -16,6 +16,7 @@ export interface FeatureDef {
 }
 
 export const FEATURES: FeatureDef[] = [
+  { key: 'ai_agent', label: 'AI Agent Workspace', description: 'Context-aware AI workspace and registered agent tools', tab: 'agent', defaultEnabled: true },
   { key: 'campaigns', label: 'Outbound campaigns', description: 'Cold outreach campaigns and batch sending', tab: 'campaigns', defaultEnabled: true },
   { key: 'campaign_reports', label: 'AI Campaign Reporting', description: 'Campaign performance reports, comparisons, AI recommendations and branded PDF exports', tab: 'campaign-reports', defaultEnabled: true },
   { key: 'scheduling', label: 'Demo scheduling', description: 'Calendar availability and demo booking', tab: 'scheduling', defaultEnabled: true },

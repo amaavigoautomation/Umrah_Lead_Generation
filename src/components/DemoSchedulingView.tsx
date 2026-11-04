@@ -162,6 +162,11 @@ export const DemoSchedulingView: React.FC<DemoSchedulingViewProps> = ({ leads = 
   const [isMeetingBotTestRunning, setIsMeetingBotTestRunning] = useState(false);
   const [meetingBotTestError, setMeetingBotTestError] = useState<string | null>(null);
   const [meetingBotTestResult, setMeetingBotTestResult] = useState<any | null>(null);
+  const [meetingBotGoogleSession, setMeetingBotGoogleSession] = useState<any | null>(null);
+  const [isMeetingBotSessionLoading, setIsMeetingBotSessionLoading] = useState(false);
+  const [isMeetingBotSessionSaving, setIsMeetingBotSessionSaving] = useState(false);
+  const [meetingBotSessionMessage, setMeetingBotSessionMessage] = useState<string | null>(null);
+
 
 
   // Reschedule Modal State
@@ -662,6 +667,74 @@ export const DemoSchedulingView: React.FC<DemoSchedulingViewProps> = ({ leads = 
       setMeetingBotTestError(error?.message || 'Meeting bot test failed.');
     } finally {
       setIsMeetingBotTestRunning(false);
+    }
+  };
+
+  const refreshMeetingBotGoogleSession = async () => {
+    setIsMeetingBotSessionLoading(true);
+    try {
+      const response = await fetch('/api/meeting-intelligence', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'session-status' }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data?.error || 'Could not read Google bot account status.');
+      setMeetingBotGoogleSession(data.session || { configured: false });
+    } catch (error: any) {
+      setMeetingBotSessionMessage(error?.message || 'Could not read Google bot account status.');
+    } finally {
+      setIsMeetingBotSessionLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (canEditSettings) refreshMeetingBotGoogleSession();
+  }, [tenantId, canEditSettings]);
+
+  const handleMeetingBotSessionUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    if (file.size > 1_500_000) {
+      setMeetingBotSessionMessage('Session export is too large. Re-export the account session and try again.');
+      return;
+    }
+    setIsMeetingBotSessionSaving(true);
+    setMeetingBotSessionMessage(null);
+    try {
+      const session = JSON.parse(await file.text());
+      const response = await fetch('/api/meeting-intelligence', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'session-upload', session }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data?.error || 'Could not save the Google bot account session.');
+      setMeetingBotGoogleSession(data.session || { configured: true });
+      setMeetingBotSessionMessage('Dedicated Google account session encrypted and saved for this workspace.');
+    } catch (error: any) {
+      setMeetingBotSessionMessage(error?.message || 'Could not upload this Google session export.');
+    } finally {
+      setIsMeetingBotSessionSaving(false);
+    }
+  };
+
+  const handleMeetingBotSessionDelete = async () => {
+    if (!window.confirm('Disconnect the saved Google bot account session for this workspace?')) return;
+    setIsMeetingBotSessionSaving(true);
+    setMeetingBotSessionMessage(null);
+    try {
+      const response = await fetch('/api/meeting-intelligence', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'session-delete' }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data?.error || 'Could not remove the saved Google bot session.');
+      setMeetingBotGoogleSession(data.session || { configured: false });
+      setMeetingBotSessionMessage('Google bot account disconnected. The encrypted session was deleted.');
+    } catch (error: any) {
+      setMeetingBotSessionMessage(error?.message || 'Could not remove the saved Google bot session.');
+    } finally {
+      setIsMeetingBotSessionSaving(false);
     }
   };
 

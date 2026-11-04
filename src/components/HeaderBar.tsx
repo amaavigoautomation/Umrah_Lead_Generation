@@ -18,6 +18,7 @@ import {
   Database,
   ShieldCheck,
   FileBarChart,
+  Building2,
 } from 'lucide-react';
 import { ActiveTab } from './Navbar';
 import { AppUser } from '../types';
@@ -47,6 +48,7 @@ const TAB_TITLES: Record<ActiveTab, { title: string; icon: React.ReactNode }> = 
   knowledge: { title: 'Knowledge Base (RAG)', icon: <BookOpen className="w-4 h-4 text-orange-600" /> },
   playground: { title: 'AI Testing Playground', icon: <Sparkles className="w-4 h-4 text-orange-600" /> },
   'audit-logs': { title: 'System Audit Trail', icon: <ShieldCheck className="w-4 h-4 text-orange-600" /> },
+  'company-profile': { title: 'Company Profile', icon: <Building2 className="w-4 h-4 text-orange-600" /> },
   settings: { title: 'Settings & Channels', icon: <Settings className="w-4 h-4 text-orange-600" /> },
 };
 

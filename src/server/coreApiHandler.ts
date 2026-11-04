@@ -972,6 +972,53 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
     }
   }
 
+
+  // Company Profile APIs are tenant-scoped and workspace-admin managed.
+  const companyProfileMatch = url.split('?')[0].match(/^\/api\/tenants\/([^/]+)\/company-profile(?:\/(analyze|save))?$/);
+  if (companyProfileMatch) {
+    const targetTenantId = decodeURIComponent(companyProfileMatch[1]);
+    const action = companyProfileMatch[2] || '';
+    res.setHeader('Content-Type', 'application/json');
+    if (!isPlatformAdmin && targetTenantId !== resolvedTenantId) {
+      res.statusCode = 403;
+      res.end(JSON.stringify({ error: 'You cannot access another workspace company profile.' }));
+      return true;
+    }
+    const profileCtx: TenantContext = { ...activeTenantCtx, tenantId: targetTenantId };
+    try {
+      const profileService = await import('./companyProfileService.js');
+      if (req.method === 'GET' && !action) {
+        res.statusCode = 200;
+        res.end(JSON.stringify(await profileService.getCompanyProfile(profileCtx)));
+        return true;
+      }
+      if (req.method === 'POST' && (action === 'analyze' || action === 'save')) {
+        if (!isPlatformAdmin && userRole !== 'admin') {
+          res.statusCode = 403;
+          res.end(JSON.stringify({ error: 'Only workspace admins can edit the company profile.' }));
+          return true;
+        }
+        if (action === 'analyze') {
+          const analysis = await profileService.analyzeCompanyProfileWebsite(profileCtx, body && body.websiteUrl);
+          res.statusCode = 200;
+          res.end(JSON.stringify({ success: true, analysis }));
+          return true;
+        }
+        const result = await profileService.saveCompanyProfile(profileCtx, body || {});
+        res.statusCode = 200;
+        res.end(JSON.stringify({ success: true, ...result }));
+        return true;
+      }
+      res.statusCode = 405;
+      res.end(JSON.stringify({ error: 'Method not allowed.' }));
+      return true;
+    } catch (err: any) {
+      res.statusCode = 400;
+      res.end(JSON.stringify({ error: err && err.message ? err.message : 'Company profile request failed.' }));
+      return true;
+    }
+  }
+
   // Company brand profile: /api/tenants/:tenantId/brand (GET: any member, POST: workspace admin)
   const brandMatch = url.split('?')[0].match(/^\/api\/tenants\/([^/]+)\/brand$/);
   if (brandMatch) {

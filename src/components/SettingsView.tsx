@@ -18,7 +18,6 @@ import { EmailSettingsPanel } from './EmailSettingsPanel';
 import { InboundMailboxPanel } from './InboundMailboxPanel';
 import { WebsiteWebhookPanel } from './WebsiteWebhookPanel';
 import { ChatbotIntegrationPanel } from './ChatbotIntegrationPanel';
-import { BrandSettingsPanel } from './BrandSettingsPanel';
 import { BillingView } from './BillingView';
 import { ConnectedChannelsPanel } from './ConnectedChannelsPanel';
 import { normalizeChannelMode } from '../shared/channelModes';
@@ -402,7 +401,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
       {tenantId && canEditEmail && <InboundMailboxPanel tenantId={tenantId} canEdit />}
 
-      {tenantId && <BrandSettingsPanel tenantId={tenantId} canEdit={canEditEmail} />}
       {tenantId && canEditEmail && <WebsiteWebhookPanel tenantId={tenantId} canEdit />}
       {tenantId && canEditEmail && <ChatbotIntegrationPanel tenantId={tenantId} canEdit />}
 

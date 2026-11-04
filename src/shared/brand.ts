@@ -34,6 +34,18 @@ export interface TenantBrand {
   aiAgentName: string;
   /** Logo URL ("" = text wordmark). */
   logoUrl: string;
+  /** Longer company description extracted from the approved website. */
+  companyDescription?: string;
+  /** Brand voice guidance for AI-generated customer-facing content. */
+  brandVoice?: string;
+  /** Approved visual palette. */
+  primaryColor?: string;
+  secondaryColor?: string;
+  accentColor?: string;
+  headingFontFamily?: string;
+  bodyFontFamily?: string;
+  /** Verified public social profile URLs. */
+  socialLinks?: Record<string, string>;
   /** IANA timezone used for scheduling & follow-up windows. */
   timezone: string;
   /** Label shown to customers next to times, e.g. "IST". */
@@ -123,7 +135,23 @@ export function mergeBrand(base: TenantBrand, stored: Partial<TenantBrand> | nul
     if (typeof v === 'string') (out as any)[k] = v.trim();
   };
   (['companyName', 'tagline', 'defaultProduct', 'industryDescription', 'websiteUrl', 'salesEmail', 'supportPhone',
-    'teamName', 'senderName', 'aiAgentName', 'logoUrl', 'timezone', 'timezoneLabel', 'calendarEmail'] as (keyof TenantBrand)[]).forEach(str);
+    'teamName', 'senderName', 'aiAgentName', 'logoUrl', 'timezone', 'timezoneLabel', 'calendarEmail',
+    'companyDescription', 'brandVoice', 'headingFontFamily', 'bodyFontFamily'] as (keyof TenantBrand)[]).forEach(str);
+  for (const key of ['primaryColor', 'secondaryColor', 'accentColor'] as const) {
+    const value = (stored as any)[key];
+    if (typeof value === 'string' && /^#[0-9a-fA-F]{6}$/.test(value.trim())) out[key] = value.trim().toUpperCase();
+  }
+  if ((stored as any).socialLinks && typeof (stored as any).socialLinks === 'object' && !Array.isArray((stored as any).socialLinks)) {
+    const links: Record<string, string> = {};
+    for (const [key, value] of Object.entries((stored as any).socialLinks).slice(0, 8)) {
+      if (typeof value !== 'string' || !value.trim()) continue;
+      try {
+        const parsed = new URL(value.trim());
+        if (parsed.protocol === 'http:' || parsed.protocol === 'https:') links[key.slice(0, 32)] = parsed.toString();
+      } catch {}
+    }
+    out.socialLinks = links;
+  }
   if (stored.playbook === 'umrah360' || stored.playbook === 'generic') out.playbook = stored.playbook;
   const duration = (stored as any).demoDurationMinutes;
   if (Number.isInteger(duration) && duration >= 5 && duration <= 240) out.demoDurationMinutes = duration;

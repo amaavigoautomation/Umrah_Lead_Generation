@@ -64,6 +64,7 @@ const KnowledgeBaseView = lazyNamed(() => import('./components/KnowledgeBaseView
 const AiTestingPlayground = lazyNamed(() => import('./components/AiTestingPlayground'), 'AiTestingPlayground');
 const AuditLogsView = lazyNamed(() => import('./components/AuditLogsView'), 'AuditLogsView');
 const SettingsView = lazyNamed(() => import('./components/SettingsView'), 'SettingsView');
+const BrandSettingsPanel = lazyNamed(() => import('./components/BrandSettingsPanel'), 'BrandSettingsPanel');
 const DemoSchedulingView = lazyNamed(() => import('./components/DemoSchedulingView'), 'DemoSchedulingView');
 const AutoFollowUpDashboard = lazyNamed(() => import('./components/AutoFollowUpDashboard'), 'AutoFollowUpDashboard');
 const LeadDatabase = lazyNamed(() => import('./components/LeadDatabase'), 'LeadDatabase');
@@ -223,6 +224,7 @@ const ALL_TABS: readonly ActiveTab[] = [
   'auto-followup',
   'database',
   'campaign-reports',
+  'company-profile',
 ];
 
 function isActiveTab(value: string | null | undefined): value is ActiveTab {
@@ -2449,7 +2451,8 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
     currentUser.role === 'ADMIN' ||
     (currentUser.allowedModules || []).includes(activeTab) ||
     (activeTab === 'email-design-studio' && (currentUser.allowedModules || []).includes('settings')) ||
-    activeTab === 'database';
+    activeTab === 'database' ||
+    activeTab === 'company-profile';
 
   return (
     <BrandProvider tenantId={currentTenantId} tenantName={currentTenant?.name}>
@@ -2656,6 +2659,10 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
 
             {activeTab === 'audit-logs' && (
               <AuditLogsView tenantId={currentTenantId} currentUserEmail={currentUser.email} />
+            )}
+
+            {activeTab === 'company-profile' && (
+              <BrandSettingsPanel tenantId={currentTenantId} canEdit={currentUser.role === 'ADMIN'} />
             )}
 
             {activeTab === 'settings' && (

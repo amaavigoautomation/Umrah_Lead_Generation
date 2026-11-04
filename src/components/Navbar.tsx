@@ -23,6 +23,7 @@ import {
   ChevronRight,
   ShieldCheck,
   FileBarChart,
+  Building2,
 } from 'lucide-react';
 import { AppUser } from '../types';
 import { Umrah360Logo } from './Umrah360Logo';
@@ -40,7 +41,8 @@ export type ActiveTab =
   | 'auto-followup'
   | 'audit-logs'
   | 'database'
-  | 'campaign-reports';
+  | 'campaign-reports'
+  | 'company-profile';
 
 export interface NavbarProps {
   activeTab: ActiveTab;
@@ -91,7 +93,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   const isModuleAccessible = (tabId: ActiveTab): boolean => {
     if (planLocked?.(tabId)) return false;
     // Database is shared by authenticated workspace users; deletion is admin-only on the server.
-    if (tabId === 'database') return true;
+    if (tabId === 'database' || tabId === 'company-profile') return true;
     if (!currentUser) return true;
     if (currentUser.accessLevel === 'ALL' || currentUser.role === 'ADMIN') return true;
     if (tabId === 'email-design-studio' && (currentUser.allowedModules || []).includes('settings')) return true;
@@ -155,6 +157,11 @@ export const Navbar: React.FC<NavbarProps> = ({
       id: 'audit-logs',
       label: 'Audit Logs',
       icon: <ShieldCheck className="w-4 h-4 shrink-0" />,
+    },
+    {
+      id: 'company-profile',
+      label: 'Company Profile',
+      icon: <Building2 className="w-4 h-4 shrink-0" />,
     },
     {
       id: 'settings',

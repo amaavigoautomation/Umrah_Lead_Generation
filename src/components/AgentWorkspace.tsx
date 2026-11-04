@@ -18,6 +18,58 @@ function Orb({ small = false }: { small?: boolean }) {
   </div>;
 }
 
+function renderAgentInlineMarkdown(value: string, keyPrefix: string): React.ReactNode[] {
+  const tokens = value.split(/(\\*\\*[^*]+\\*\\*|\\*[^*]+\\*)/g);
+  return tokens.filter(Boolean).map((token, index) => {
+    const key = keyPrefix + '-' + index;
+    if (token.startsWith('**') && token.endsWith('**')) {
+      return <strong key={key} className="font-semibold" style={{ color: '#111827' }}>{token.slice(2, -2)}</strong>;
+    }
+    if (token.startsWith('*') && token.endsWith('*')) {
+      return <em key={key}>{token.slice(1, -1)}</em>;
+    }
+    return <React.Fragment key={key}>{token}</React.Fragment>;
+  });
+}
+
+function AgentMarkdown({ content }: { content: string }) {
+  const lines = String(content || '').replace(/\\r\\n?/g, '\\n').split('\\n');
+  return <div className="agent-response space-y-1.5 break-words" style={{ color: '#172033', opacity: 1 }}>
+    {lines.map((rawLine, index) => {
+      const line = rawLine.trimEnd();
+      const trimmed = line.trim();
+      const key = 'line-' + index;
+      if (!trimmed) return <div key={key} aria-hidden="true" className="h-1" />;
+      const heading = trimmed.match(/^(#{1,3})\\s+(.+)$/);
+      if (heading) {
+        const level = heading[1].length;
+        return <div key={key} className={level === 1 ? 'pt-2 text-base font-bold' : level === 2 ? 'pt-2 text-sm font-bold' : 'pt-1 text-[13px] font-semibold'} style={{ color: '#111827' }}>
+          {renderAgentInlineMarkdown(heading[2], key)}
+        </div>;
+      }
+      const numbered = trimmed.match(/^(\\d+)[.)]\\s+(.+)$/);
+      if (numbered) {
+        return <div key={key} className="flex items-start gap-2 pl-1">
+          <span className="shrink-0 font-semibold tabular-nums" style={{ color: '#c2410c' }}>{numbered[1]}.</span>
+          <span className="min-w-0">{renderAgentInlineMarkdown(numbered[2], key)}</span>
+        </div>;
+      }
+      const bullet = line.match(/^(\\s*)[-*]\\s+(.+)$/);
+      if (bullet) {
+        const indent = Math.min(3, Math.floor(bullet[1].length / 2));
+        return <div key={key} className="flex items-start gap-2" style={{ paddingLeft: 10 + indent * 14 }}>
+          <span className="mt-0.5 shrink-0" style={{ color: '#ef741a' }}>•</span>
+          <span className="min-w-0">{renderAgentInlineMarkdown(bullet[2], key)}</span>
+        </div>;
+      }
+      if (trimmed.startsWith('> ')) {
+        return <div key={key} className="border-l-2 border-orange-300 pl-3 italic" style={{ color: '#334155' }}>{renderAgentInlineMarkdown(trimmed.slice(2), key)}</div>;
+      }
+      return <p key={key} className="leading-6" style={{ color: '#172033' }}>{renderAgentInlineMarkdown(trimmed, key)}</p>;
+    })}
+  </div>;
+}
+
 function Messages({ messages, sending, compact }: { messages: AgentMessage[]; sending: boolean; compact?: boolean }) {
   return <div className={'agent-messages flex-1 min-h-0 overflow-y-auto ' + (compact ? 'px-3 py-4' : 'px-5 py-6')}>
     {messages.length === 0 && (
@@ -41,10 +93,14 @@ function Messages({ messages, sending, compact }: { messages: AgentMessage[]; se
       {messages.map((message) => (
         <div key={message.id} className={'agent-message-enter flex ' + (message.role === 'user' ? 'justify-end' : 'justify-start')}>
           {message.role === 'assistant' && <div className="mr-2 mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-blue-200 bg-orange-50"><Bot className="h-4 w-4 text-orange-600" /></div>}
-          <div className={'max-w-[88%] rounded-2xl px-4 py-3 text-sm leading-6 ' + (message.role === 'user'
-            ? 'rounded-br-md border border-orange-200 bg-orange-50 text-slate-900'
-            : 'rounded-bl-md border border-slate-200 bg-slate-50 text-slate-800')}>
-            <div className="whitespace-pre-wrap break-words">{message.content}</div>
+          <div
+            style={message.role === 'assistant' ? { color: '#172033', opacity: 1, backgroundColor: '#ffffff' } : undefined}
+            className={'max-w-[88%] rounded-2xl px-4 py-3 text-sm leading-6 ' + (message.role === 'user'
+              ? 'rounded-br-md border border-orange-200 bg-orange-50 text-slate-900'
+              : 'agent-response rounded-bl-md border border-slate-200 bg-white text-slate-900 shadow-sm')}>
+            {message.role === 'assistant'
+              ? <AgentMarkdown content={message.content} />
+              : <div className="whitespace-pre-wrap break-words">{message.content}</div>}
             {message.toolsUsed && message.toolsUsed.length > 0 && (
               <div className="mt-3 flex flex-wrap gap-1.5 border-t border-slate-200 pt-2">
                 {message.toolsUsed.map((tool) => <span key={tool} className="rounded-md bg-orange-50 px-2 py-0.5 text-[10px] text-orange-700">{tool.replaceAll('_', ' ')}</span>)}
@@ -111,7 +167,7 @@ function ConfigPanel({ compact = false }: { compact?: boolean }) {
           ['balanced', 'Balanced · recommended', 'New items may be prepared automatically; changes need approval.'],
           ['full', 'Full autonomy', 'Allow registered actions within the configured permission and safety boundaries.'],
         ] as [AgentAutonomy, string, string][]).map(([mode, title, subtitle]) => (
-          <button key={mode} type="button" disabled={!canManageConfig || saving} onClick={() => void updateAutonomy(mode)} className={'w-full rounded-xl border p-3 text-left transition disabled:cursor-not-allowed disabled:opacity-60 ' + (config.autonomy === mode ? 'border-orange-400 bg-orange-50' : 'border-slate-200 bg-white hover:bg-slate-100')}>
+          <button key={mode} type="button" disabled={!canManageConfig || saving} onClick={() => void updateAutonomy(mode)} className={'w-full rounded-xl border p-3 text-left transition disabled:cursor-not-allowed disabled:opacity-100 ' + (config.autonomy === mode ? 'border-orange-400 bg-orange-50' : 'border-slate-200 bg-white hover:bg-slate-100')}>
             <div className="flex items-center justify-between gap-2 text-xs font-semibold text-slate-800"><span>{title}</span>{config.autonomy === mode && <Check className="h-4 w-4 text-orange-600" />}</div>
             <div className="mt-1 text-[11px] leading-4 text-slate-500">{subtitle}</div>
           </button>

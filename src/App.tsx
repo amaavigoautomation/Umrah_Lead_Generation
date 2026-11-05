@@ -13,6 +13,8 @@ import { logAuditEvent } from './services/auditService';
 import { LockedModuleView } from './components/LockedModuleView';
 import { UpgradeRequiredView } from './components/UpgradeRequiredView';
 import { FEATURES, FEATURE_BY_TAB } from './shared/features';
+import { AgentProvider } from './context/AgentContext';
+import { AgentWorkspace, AgentFloatingCompanion } from './components/AgentWorkspace';
 import {
   Contact,
   Lead,
@@ -225,6 +227,7 @@ const ALL_TABS: readonly ActiveTab[] = [
   'database',
   'campaign-reports',
   'company-profile',
+  'agent',
 ];
 
 function isActiveTab(value: string | null | undefined): value is ActiveTab {
@@ -265,6 +268,13 @@ export default function App() {
     setActiveTabState(tab);
     writeTabToLocation(tab);
   }, []);
+  const [agentEmailTemplateId, setAgentEmailTemplateId] = useState<string | undefined>(undefined);
+  const [agentEmailTemplateKind, setAgentEmailTemplateKind] = useState<'campaign' | 'conversation'>('campaign');
+  const openAgentEmailTemplate = useCallback((templateId: string, kind: 'campaign' | 'conversation' = 'campaign') => {
+    setAgentEmailTemplateId(templateId);
+    setAgentEmailTemplateKind(kind);
+    setActiveTab('email-design-studio');
+  }, [setActiveTab]);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(false);  
 const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ? [] : INITIAL_CONTACTS);
   const [leads, setLeads] = useState<Lead[]>(() => isFirebaseConfigured ? [] : INITIAL_LEADS);
@@ -2456,6 +2466,7 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
 
   return (
     <BrandProvider tenantId={currentTenantId} tenantName={currentTenant?.name}>
+    <AgentProvider tenantId={currentTenantId} userId={currentUser.userId} enabled={currentUser.accessLevel === 'ALL' || currentUser.role === 'ADMIN' || (currentUser.allowedModules || []).includes('agent')}>
     <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col md:flex-row font-sans selection:bg-orange-500/20 selection:text-orange-950">
       <Navbar
         activeTab={activeTab}
@@ -2486,7 +2497,7 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
           onLogout={handleLogout}
         />
 
-        <main className={`flex-1 min-w-0 min-h-0 ${activeTab === 'inbox' ? 'p-0 h-full overflow-hidden flex flex-col' : 'p-3 sm:p-5 overflow-y-auto'}`}>
+        <main className={`flex-1 min-w-0 min-h-0 ${activeTab === 'inbox' ? 'p-0 h-full overflow-hidden flex flex-col' : activeTab === 'agent' ? 'p-3 sm:p-5 overflow-hidden flex flex-col' : 'p-3 sm:p-5 overflow-y-auto'}`}>
         {entitlements?.billing?.status === 'past_due' && (
           <div className="mb-3 flex items-center justify-between gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-800">
             <span>
@@ -2515,6 +2526,8 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
           />
         ) : (
           <Suspense fallback={<ScreenLoading />}>
+            {activeTab === 'agent' && <AgentWorkspace currentUser={currentUser} onOpenEmailTemplate={openAgentEmailTemplate} />}
+
             {activeTab === 'inbox' && (
               <UnifiedInbox
                 tenantId={currentTenantId}
@@ -2653,7 +2666,7 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
               />
             )}
 
-            {activeTab === 'email-design-studio' && <TemplateStudio tenantId={currentTenantId} canManageWhatsAppTemplates={Boolean(currentUser && (currentUser.role === 'ADMIN' || currentUser.accessLevel === 'ALL'))} />}
+            {activeTab === 'email-design-studio' && <TemplateStudio tenantId={currentTenantId} canManageWhatsAppTemplates={Boolean(currentUser && (currentUser.role === 'ADMIN' || currentUser.accessLevel === 'ALL'))} initialView={agentEmailTemplateId ? agentEmailTemplateKind : 'conversation'} initialTemplateId={agentEmailTemplateId} />}
 
             {activeTab === 'playground' && <AiTestingPlayground knowledgeDocs={knowledgeDocs} />}
 
@@ -2698,6 +2711,8 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
       </main>
     </div>
   </div>
+    <AgentFloatingCompanion hidden={activeTab === 'agent' || !(currentUser.accessLevel === 'ALL' || currentUser.role === 'ADMIN' || (currentUser.allowedModules || []).includes('agent'))} moduleContext={activeTab} onOpenEmailTemplate={openAgentEmailTemplate} />
+    </AgentProvider>
     </BrandProvider>
   );
 }

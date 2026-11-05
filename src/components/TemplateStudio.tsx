@@ -76,7 +76,7 @@ export const TemplateStudio: React.FC<Props> = ({
       </div>
 
       {visitedSections.has('conversation') && <div className={section === 'conversation' ? 'block' : 'hidden'} aria-hidden={section !== 'conversation'}>
-        <EmailDesignStudio tenantId={tenantId} purpose="conversation" />
+        <EmailDesignStudio tenantId={tenantId} purpose="conversation" initialTemplateId={pendingTemplateId} />
       </div>}
       {visitedSections.has('campaign') && <div className={section === 'campaign' ? 'block' : 'hidden'} aria-hidden={section !== 'campaign'}>
         <EmailDesignStudio tenantId={tenantId} purpose="campaign" initialTemplateId={pendingTemplateId} />

@@ -1,0 +1,619 @@
+import React, { useEffect, useRef, useState } from 'react';
+import { Activity, ArrowUpRight, Bot, Check, Command, Database, File, FileDown, FileText, History, Image, Loader2, PanelLeftClose, PanelLeftOpen, Paperclip, Plus, Send, Settings2, ShieldCheck, Sparkles, X } from 'lucide-react';
+import { useAgent, AgentAutonomy, AgentMessage, AgentArtifact, AgentAttachmentInput } from '../context/AgentContext';
+import type { AppUser } from '../types';
+import { buildCampaignReportPdfDocument } from './CampaignReports';
+import type { CampaignReport } from './CampaignReports';
+
+const QUICK_PROMPTS = [
+  { icon: Database, label: 'Review my lead databases', prompt: 'Review the lead databases available in this workspace. Summarize their names, sizes, and what campaign use cases they may support.' },
+  { icon: FileText, label: 'Find product knowledge', prompt: 'Search the Knowledge Base for the most important product, pricing, and policy information. Summarize what is available and highlight gaps.' },
+  { icon: Activity, label: 'Plan a campaign', prompt: 'Help me plan an outbound campaign. First inspect the available databases and email designs, then recommend a safe draft plan. Do not create or send anything.' },
+];
+
+function Orb({ small = false }: { small?: boolean }) {
+  return <div className={'agent-orb relative shrink-0 ' + (small ? 'h-9 w-9' : 'h-16 w-16')}>
+    <div className="agent-orb-core absolute inset-[24%] rounded-full" />
+    <div className="agent-orb-ring agent-orb-ring-one absolute inset-[7%] rounded-full" />
+    <div className="agent-orb-ring agent-orb-ring-two absolute inset-0 rounded-full" />
+    <div className="absolute inset-[39%] rounded-full bg-white/90 blur-[1px]" />
+  </div>;
+}
+
+function normalizeAgentMessage(content: string): string {
+  const normalized = String(content || '').replace(/\r\n?/g, '\n');
+  return normalized.split('\n').flatMap((line) => {
+    const inlineHeading = line.match(/^(.*?)\s+(#{1,6}\s+.+)$/);
+    if (inlineHeading) return [inlineHeading[1], inlineHeading[2]];
+    const inlineList = line.match(/^(.*?:)\s+[-*•]\s+(.+)$/);
+    if (inlineList) {
+      const parts = inlineList[2].split(/\s+[-*•]\s+/).filter(Boolean);
+      if (parts.length) {
+        const last = parts[parts.length - 1];
+        const followUp = last.match(/^(.*?)(\s+(?:Which|What|Would you like|Nothing has been sent|No action has been taken)\b.*)$/i);
+        if (followUp && followUp[1].trim()) {
+          parts[parts.length - 1] = followUp[1].trim();
+          return [inlineList[1], ...parts.map((part) => '• ' + part), followUp[2].trim()];
+        }
+        return [inlineList[1], ...parts.map((part) => '• ' + part)];
+      }
+    }
+    return [line.replace(/^(\s*)[-*]\s+/, '$1• ')];
+  }).join('\n');
+}
+
+function renderAgentInlineMarkdown(value: string, keyPrefix: string): React.ReactNode[] {
+  const tokens = value.split(/(\*\*[^*\n]+?\*\*|__[^_\n]+?__|~~[^~\n]+?~~|\`[^\`\n]+\`|\*[^*\n]+?\*)/g);
+  return tokens.filter(Boolean).map((token, index) => {
+    const key = keyPrefix + '-' + index;
+    if ((token.startsWith('**') && token.endsWith('**')) || (token.startsWith('__') && token.endsWith('__'))) {
+      return <strong key={key} className="font-semibold" style={{ color: '#111827' }}>{token.slice(2, -2)}</strong>;
+    }
+    if (token.startsWith('~~') && token.endsWith('~~')) {
+      return <del key={key}>{token.slice(2, -2)}</del>;
+    }
+    if (token.startsWith('`') && token.endsWith('`')) {
+      return <code key={key} className="rounded bg-slate-100 px-1 py-0.5 text-[0.92em]">{token.slice(1, -1)}</code>;
+    }
+    if (token.startsWith('*') && token.endsWith('*')) {
+      return <em key={key}>{token.slice(1, -1)}</em>;
+    }
+    const cleaned = token.replace(/\*\*/g, '').replace(/__/g, '').replace(/~~/g, '').replace(/\`/g, '').replace(/(^|\s)#{1,6}(?=\s|$)/g, '$1');
+    return <React.Fragment key={key}>{cleaned}</React.Fragment>;
+  });
+}
+
+function AgentMarkdown({ content }: { content: string }) {
+  const lines = normalizeAgentMessage(content).split('\n');
+  return <div className="agent-response space-y-1.5 break-words" style={{ color: '#172033', opacity: 1 }}>
+    {lines.map((rawLine, index) => {
+      const line = rawLine.trimEnd();
+      const trimmed = line.trim();
+      const key = 'line-' + index;
+      if (!trimmed) return <div key={key} aria-hidden="true" className="h-1" />;
+      const heading = trimmed.match(/^(#{1,6})\s+(.+)$/);
+      if (heading) {
+        const level = Math.min(3, heading[1].length);
+        return <div key={key} className={level === 1 ? 'pt-2 text-base font-bold' : level === 2 ? 'pt-2 text-sm font-bold' : 'pt-1 text-[13px] font-semibold'} style={{ color: '#111827' }}>
+          {renderAgentInlineMarkdown(heading[2], key)}
+        </div>;
+      }
+      const numbered = trimmed.match(/^(\d+)[.)]\s+(.+)$/);
+      if (numbered) {
+        return <div key={key} className="flex items-start gap-2 pl-1">
+          <span className="shrink-0 font-semibold tabular-nums" style={{ color: '#c2410c' }}>{numbered[1]}.</span>
+          <span className="min-w-0">{renderAgentInlineMarkdown(numbered[2], key)}</span>
+        </div>;
+      }
+      const bullet = line.match(/^(\s*)[-*•]\s+(.+)$/);
+      if (bullet) {
+        const indent = Math.min(3, Math.floor(bullet[1].length / 2));
+        return <div key={key} className="flex items-start gap-2" style={{ paddingLeft: 10 + indent * 14 }}>
+          <span className="mt-0.5 shrink-0" style={{ color: '#ef741a' }}>•</span>
+          <span className="min-w-0">{renderAgentInlineMarkdown(bullet[2], key)}</span>
+        </div>;
+      }
+      const safeLine = trimmed.replace(/^#{1,6}\s*/, '');
+      return <p key={key} className="leading-6" style={{ color: '#172033' }}>{renderAgentInlineMarkdown(safeLine, key)}</p>;
+    })}
+  </div>;
+}
+
+function CampaignReportArtifactPreview({ artifact }: { artifact: AgentArtifact }) {
+  const report = artifact.report as unknown as CampaignReport | undefined;
+  if (!report || !Array.isArray(report.campaigns)) return null;
+  const downloadPdf = () => {
+    const pdf = buildCampaignReportPdfDocument(report);
+    const blob = new Blob([pdf], { type: 'application/pdf' });
+    const downloadUrl = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    const safeName = (report.title || 'campaign-report')
+      .normalize('NFKD')
+      .replace(/[^a-zA-Z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .toLowerCase() || 'campaign-report';
+    anchor.href = downloadUrl;
+    anchor.download = safeName + '.pdf';
+    anchor.style.display = 'none';
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    window.setTimeout(() => URL.revokeObjectURL(downloadUrl), 60_000);
+  };
+  const campaignNames = Array.isArray(report.campaignNames) ? report.campaignNames : [];
+  return <div className="mt-4 w-full overflow-hidden rounded-xl border border-blue-200 bg-white shadow-sm">
+    <div className="flex items-center justify-between gap-3 border-b border-blue-100 bg-blue-50 px-3 py-2.5">
+      <div className="flex items-center gap-2 text-xs font-bold text-slate-900"><FileText className="h-4 w-4 text-blue-600" /> Campaign report ready</div>
+      <span className="rounded-full border border-blue-200 bg-white px-2 py-1 text-[9px] font-semibold text-blue-700">{report.reportType === 'INDIVIDUAL' ? 'Individual report' : 'Campaign comparison'}</span>
+    </div>
+    <div className="space-y-2 p-3">
+      <div className="text-sm font-bold text-slate-900">{report.title}</div>
+      <div className="text-[10px] text-slate-500">{report.campaigns.length} campaign{report.campaigns.length === 1 ? '' : 's'} · Generated {report.generatedAt ? new Date(report.generatedAt).toLocaleString() : 'just now'}</div>
+      {report.analysis?.executiveSummary && <p className="text-xs leading-5 text-slate-700">{report.analysis.executiveSummary}</p>}
+      {campaignNames.length > 0 && <div className="text-[10px] leading-5 text-slate-500">Included: {campaignNames.slice(0, 5).join(' · ')}{campaignNames.length > 5 ? ' · +' + (campaignNames.length - 5) + ' more' : ''}</div>}
+    </div>
+    <div className="border-t border-slate-100 p-3">
+      <button type="button" onClick={downloadPdf} className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-blue-700"><FileDown className="h-4 w-4" /> Download PDF report</button>
+    </div>
+  </div>;
+}
+
+function CampaignEmailArtifactPreview({
+  artifact,
+  onOpenTemplate,
+  onAction,
+}: {
+  artifact: AgentArtifact;
+  onOpenTemplate?: (id: string, kind?: 'campaign' | 'conversation') => void;
+  onAction?: (query: string) => void;
+}) {
+  if (artifact.type === 'campaign_report') return <CampaignReportArtifactPreview artifact={artifact} />;
+
+  if (artifact.type === 'campaign_dispatch_approval') {
+    return <div className="mt-4 w-full overflow-hidden rounded-xl border border-orange-200 bg-white shadow-sm">
+      <div className="border-b border-orange-100 bg-orange-50 px-3 py-2.5">
+        <div className="flex items-center gap-2 text-xs font-bold text-slate-900"><Send className="h-4 w-4 text-orange-600" /> {artifact.status === 'DISPATCH_STARTED' ? 'Campaign dispatch started' : artifact.status === 'BLOCKED' ? 'Campaign dispatch blocked' : 'Campaign prepared — not sent'}</div>
+        <div className="mt-0.5 text-[11px] text-slate-600">{artifact.name}</div>
+      </div>
+      <div className="grid grid-cols-2 gap-2 p-3 sm:grid-cols-4">
+        {[
+          ['Database', artifact.databaseName || '—'],
+          ['Recipients', Number(artifact.recipientCount || 0).toLocaleString()],
+          ['Excluded', Number(artifact.excludedWithoutEmail || 0).toLocaleString()],
+          ['Template', artifact.templateName || '—'],
+        ].map(([label, value]) => <div key={label} className="rounded-lg bg-slate-50 p-2"><div className="text-[9px] font-semibold uppercase tracking-wide text-slate-500">{label}</div><div className="mt-1 break-words text-xs font-semibold text-slate-900">{value}</div></div>)}
+      </div>
+      <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 px-3 py-2.5">
+        {artifact.sendReady
+          ? <span className="text-[10px] font-medium text-emerald-700">Email sender check passed · Awaiting your approval</span>
+          : <span className="max-w-full text-[10px] font-medium text-rose-700">{artifact.sendReadinessError || 'Email sender is not ready.'}</span>}
+        {artifact.status === 'PENDING_APPROVAL' && artifact.sendReady && artifact.approvalId && onAction && <button type="button" onClick={() => onAction('Yes, send this campaign now. Approval ID: ' + artifact.approvalId)} className="rounded-lg bg-orange-600 px-3 py-2 text-[10px] font-semibold text-white shadow-sm hover:bg-orange-700">Confirm & send</button>}
+      </div>
+      <div className="border-t border-slate-100 px-3 py-2 text-[10px] text-slate-500">Sending begins only after your confirmation. Final delivery is tracked in Campaigns.</div>
+    </div>;
+  }
+
+  if (artifact.type === 'whatsapp_template_preview') {
+    return <div className="mt-4 w-full overflow-hidden rounded-xl border border-emerald-200 bg-white shadow-sm">
+      <div className="flex items-center justify-between gap-2 border-b border-emerald-100 bg-emerald-50 px-3 py-2.5">
+        <div className="text-xs font-bold text-slate-900">WhatsApp template preview</div>
+        <span className="rounded-full border border-emerald-200 bg-white px-2 py-1 text-[9px] font-semibold text-emerald-700">{artifact.status || 'Preview'}</span>
+      </div>
+      {artifact.imageUrl && <div className="bg-slate-100 p-3"><img src={artifact.imageUrl} alt="Generated WhatsApp template artwork" className="mx-auto max-h-52 max-w-full rounded-lg object-contain" /></div>}
+      <div className="bg-[#e9f7ee] p-3">
+        <div className="ml-auto max-w-[94%] rounded-xl rounded-tr-sm bg-white p-3 text-sm leading-6 text-slate-900 shadow-sm">
+          {artifact.header && <div className="mb-1 font-semibold">{artifact.header}</div>}
+          <div className="whitespace-pre-wrap">{artifact.body}</div>
+          {artifact.footer && <div className="mt-2 border-t border-slate-100 pt-1 text-[10px] text-slate-500">{artifact.footer}</div>}
+        </div>
+      </div>
+      <div className="flex flex-wrap gap-2 border-t border-slate-100 p-3">
+        {(artifact.status === 'PREVIEW' || artifact.status === 'SAVED_DRAFT') && artifact.draftId && onAction && <>
+          {artifact.status === 'PREVIEW' && <button type="button" onClick={() => onAction('Save this WhatsApp draft. Draft ID: ' + artifact.draftId)} className="rounded-lg border border-emerald-200 bg-white px-3 py-2 text-[10px] font-semibold text-emerald-800 hover:bg-emerald-50">Save WhatsApp draft</button>}
+          <button type="button" onClick={() => onAction('Submit this WhatsApp template to Meta for review. Draft ID: ' + artifact.draftId)} className="rounded-lg bg-emerald-600 px-3 py-2 text-[10px] font-semibold text-white hover:bg-emerald-700">Submit to Meta for review</button>
+        </>}
+      </div>
+      <div className="px-3 pb-3 text-[10px] text-slate-500">Meta submission is separate from message sending. Approval is determined by Meta.</div>
+    </div>;
+  }
+
+  const isPreview = artifact.type === 'agent_email_design_draft';
+  const isCampaign = artifact.templateKind === 'campaign_email' || artifact.type === 'campaign_email_template';
+  const isConversation = artifact.templateKind === 'conversation_email' || artifact.type === 'conversation_email_design';
+  if (!['agent_email_design_draft','campaign_email_template','conversation_email_design'].includes(artifact.type) || !artifact.html) return null;
+  return <div className="mt-4 w-full overflow-hidden rounded-xl border border-orange-200 bg-white shadow-sm">
+    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-orange-50/70 px-3 py-2.5">
+      <div className="min-w-0">
+        <div className="flex items-center gap-2 text-xs font-bold text-slate-900">
+          {isPreview ? <Sparkles className="h-4 w-4 text-orange-600" /> : <Check className="h-4 w-4 text-emerald-600" />}
+          {isPreview ? 'Design preview ready — not saved' : 'Email design saved'}
+        </div>
+        <div className="mt-0.5 truncate text-[11px] text-slate-600">{artifact.name}{artifact.version ? ' · Version ' + artifact.version : ''}</div>
+      </div>
+      <span className={'rounded-full border px-2 py-1 text-[9px] font-semibold ' + (isPreview ? 'border-orange-200 bg-white text-orange-700' : 'border-emerald-200 bg-emerald-50 text-emerald-700')}>{isPreview ? 'Preview only' : 'Editable draft'}</span>
+    </div>
+    <div className="border-b border-slate-100 px-3 py-2">
+      <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Subject</div>
+      <div className="mt-0.5 text-xs font-semibold text-slate-900">{artifact.subject || 'Conversation email design'}</div>
+      {artifact.preheader && <div className="mt-1 text-[11px] text-slate-600">{artifact.preheader}</div>}
+    </div>
+    <div className="bg-slate-100 p-2 sm:p-3">
+      <iframe title={(artifact.name || 'Email design') + ' preview'} srcDoc={artifact.html} sandbox="allow-same-origin" className="block w-full border-0 bg-white shadow-sm" style={{ height: 560 }} />
+    </div>
+    {artifact.websiteLinks?.length ? <div className="border-t border-slate-100 px-3 py-2 text-[10px] leading-5 text-slate-500">Verified tenant website CTA destinations: {artifact.websiteLinks.map((link, index) => <span key={link.url + index}>{index ? ' · ' : ''}<a href={link.url} target="_blank" rel="noopener noreferrer" className="font-medium text-blue-700 underline">{link.label || link.intent}</a></span>)}</div> : null}
+    <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 px-3 py-2.5">
+      <div className="min-w-0 text-[10px] leading-4 text-slate-500">{isPreview ? 'Artwork saved in Company Assets. Choose where to save the editable design.' : artifact.savedTo}</div>
+      <div className="flex flex-wrap gap-2">
+        {isPreview && artifact.draftId && onAction && <>
+          {isCampaign && <button type="button" onClick={() => onAction('Save this as a campaign template. Draft ID: ' + artifact.draftId)} className="rounded-lg bg-orange-600 px-3 py-2 text-[10px] font-semibold text-white hover:bg-orange-700">Save to Campaign Emails</button>}
+          {isConversation && <button type="button" onClick={() => onAction('Save this as a conversation email design in Email Design Studio. Draft ID: ' + artifact.draftId)} className="rounded-lg bg-orange-600 px-3 py-2 text-[10px] font-semibold text-white hover:bg-orange-700">Save to Email Design Studio</button>}
+        </>}
+        {!isPreview && artifact.templateId && onOpenTemplate && <button type="button" onClick={() => onOpenTemplate(artifact.templateId!, isConversation ? 'conversation' : 'campaign')} className="rounded-lg bg-gradient-to-r from-orange-500 to-orange-600 px-3 py-2 text-[10px] font-semibold text-white shadow-sm transition hover:brightness-105">Open in Template Studio <ArrowUpRight className="ml-1 inline h-3 w-3" /></button>}
+      </div>
+    </div>
+  </div>;
+}
+
+function Messages({ messages, sending, compact, onOpenTemplate, onAction, activityLabel }: {
+  messages: AgentMessage[];
+  sending: boolean;
+  compact?: boolean;
+  onOpenTemplate?: (id: string, kind?: 'campaign' | 'conversation') => void;
+  onAction?: (query: string) => void;
+  activityLabel?: string;
+}) {
+  return <div className={'agent-messages w-full min-w-0 flex-1 min-h-0 overflow-y-auto ' + (compact ? 'px-3 py-4' : 'px-5 py-6')}>
+    {messages.length === 0 && (
+      <div className="flex h-full min-h-[250px] flex-col items-center justify-center text-center">
+        <Orb />
+        <div className="mt-5 text-lg font-semibold text-slate-900">Where should we start?</div>
+        <p className="mt-2 max-w-sm text-sm leading-6 text-slate-600">Ask about your workspace, company knowledge, lead databases, campaigns, or template design.</p>
+        {!compact && <div className="mt-6 grid w-full max-w-4xl grid-cols-1 gap-2 sm:grid-cols-3">
+          {QUICK_PROMPTS.map((item) => {
+            const Icon = item.icon;
+            return <div key={item.label} className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-left">
+              <Icon className="h-4 w-4 text-orange-600" />
+              <div className="mt-2 text-xs font-semibold text-slate-800">{item.label}</div>
+              <div className="mt-1 text-[11px] leading-4 text-slate-500">Select a starter prompt below</div>
+            </div>;
+          })}
+        </div>}
+      </div>
+    )}
+    <div className="mx-auto flex w-full min-w-0 max-w-[90rem] flex-col gap-4">
+      {messages.map((message) => (
+        <div key={message.id} className={'agent-message-enter flex ' + (message.role === 'user' ? 'justify-end' : 'justify-start')}>
+          {message.role === 'assistant' && <div className="mr-2 mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-blue-200 bg-orange-50"><Bot className="h-4 w-4 text-orange-600" /></div>}
+          <div
+            style={message.role === 'assistant' ? { color: '#172033', opacity: 1, backgroundColor: '#ffffff' } : undefined}
+            className={'max-w-[88%] rounded-2xl px-4 py-3 text-sm leading-6 ' + (message.role === 'user'
+              ? 'rounded-br-md border border-orange-200 bg-orange-50 text-slate-900'
+              : 'agent-response rounded-bl-md border border-slate-200 bg-white text-slate-900 shadow-sm')}>
+            {message.role === 'assistant'
+              ? <AgentMarkdown content={message.content} />
+              : <>
+                  <div className="whitespace-pre-wrap break-words">{message.content}</div>
+                  {message.attachments?.length ? <div className="mt-2 flex flex-wrap gap-1.5 border-t border-orange-200 pt-2">{message.attachments.map((file) => <span key={file.id} className="inline-flex max-w-full items-center gap-1.5 rounded-lg border border-orange-200 bg-white/80 px-2 py-1 text-[10px] text-slate-700"><Paperclip className="h-3 w-3 shrink-0 text-orange-600" /><span className="truncate">{file.name}</span><span className="shrink-0 text-slate-500">{(file.size / 1024).toFixed(0)} KB</span></span>)}</div> : null}
+                </>}
+            {message.artifacts?.map((artifact, index) => <CampaignEmailArtifactPreview key={(artifact.draftId || artifact.approvalId || artifact.templateId || artifact.type) + '-' + index} artifact={artifact} onOpenTemplate={onOpenTemplate} onAction={onAction} />)}
+            {message.toolsUsed && message.toolsUsed.length > 0 && (
+              <div className="mt-3 flex flex-wrap gap-1.5 border-t border-slate-200 pt-2">
+                {message.toolsUsed.map((tool) => <span key={tool} className="rounded-md bg-orange-50 px-2 py-0.5 text-[10px] text-orange-700">{tool.replaceAll('_', ' ')}</span>)}
+              </div>
+            )}
+          </div>
+        </div>
+      ))}
+      {sending && <div className="flex items-center gap-2 text-xs text-orange-700"><Loader2 className="h-4 w-4 animate-spin" /> {activityLabel || 'Agent is reasoning and checking workspace data…'}</div>}
+    </div>
+  </div>;
+}
+
+function ChatComposer({ moduleContext, compact }: { moduleContext: string; compact?: boolean }) {
+  const { sendMessage, sending } = useAgent();
+  const [value, setValue] = useState('');
+  const [attachments, setAttachments] = useState<AgentAttachmentInput[]>([]);
+  const [attachmentError, setAttachmentError] = useState('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const MAX_FILES = 5;
+  const MAX_FILE_BYTES = 1.7 * 1024 * 1024;
+  const MAX_TOTAL_BYTES = 2.5 * 1024 * 1024;
+  const acceptedExtensions = new Set(['png','jpg','jpeg','webp','gif','pdf','csv','tsv','xls','xlsx','txt','md','json']);
+  const formatSize = (bytes: number) => bytes < 1024 * 1024 ? Math.max(1, Math.round(bytes / 1024)) + ' KB' : (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+  const readAsDataUrl = (file: globalThis.File) => new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => typeof reader.result === 'string' ? resolve(reader.result) : reject(new Error('Could not read ' + file.name));
+    reader.onerror = () => reject(new Error('Could not read ' + file.name));
+    reader.readAsDataURL(file);
+  });
+  const addFiles = async (list: FileList | null) => {
+    if (!list?.length) return;
+    setAttachmentError('');
+    const incoming = Array.from(list);
+    const available = MAX_FILES - attachments.length;
+    if (available <= 0) {
+      setAttachmentError('Attach up to five files per message.');
+      return;
+    }
+    const next: AgentAttachmentInput[] = [];
+    let totalBytes = attachments.reduce((sum, item) => sum + item.size, 0);
+    try {
+      for (const file of incoming.slice(0, available)) {
+        const extension = file.name.toLowerCase().split('.').pop() || '';
+        if (!acceptedExtensions.has(extension)) {
+          setAttachmentError(file.name + ' is not a supported file type.');
+          continue;
+        }
+        if (file.size > MAX_FILE_BYTES) {
+          setAttachmentError(file.name + ' is larger than 1.7 MB.');
+          continue;
+        }
+        if (totalBytes + file.size > MAX_TOTAL_BYTES) {
+          setAttachmentError('The combined attachment size must be 2.5 MB or smaller.');
+          break;
+        }
+        const dataUrl = await readAsDataUrl(file);
+        let id = '';
+        try { id = crypto.randomUUID(); } catch { id = 'att_' + Date.now() + '_' + Math.random().toString(36).slice(2, 9); }
+        next.push({ id, name: file.name, mimeType: file.type || 'application/octet-stream', size: file.size, dataUrl });
+        totalBytes += file.size;
+      }
+      if (next.length) setAttachments((current) => [...current, ...next].slice(0, MAX_FILES));
+    } catch (error: any) {
+      setAttachmentError(error?.message || 'Could not read the selected file.');
+    } finally {
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+  const removeAttachment = (id: string) => setAttachments((current) => current.filter((item) => item.id !== id));
+  const submit = () => {
+    if ((!value.trim() && !attachments.length) || sending) return;
+    const text = value.trim() || 'Please inspect the attached files and help me with the appropriate next step. Ask a focused question if my intended action is unclear.';
+    const selected = attachments;
+    setValue('');
+    setAttachments([]);
+    setAttachmentError('');
+    void sendMessage(text, moduleContext, selected);
+  };
+  return <div className={'border-t border-slate-200 ' + (compact ? 'p-3' : 'p-5')}>
+    {!compact && <div className="mb-2 flex flex-wrap gap-2">
+      {QUICK_PROMPTS.map((item) => <button key={item.label} type="button" onClick={() => { setValue(item.prompt); }} className="rounded-full border border-slate-200 px-3 py-1.5 text-[11px] text-slate-700 transition hover:border-orange-300 hover:bg-orange-50">{item.label}</button>)}
+    </div>}
+    {attachments.length > 0 && <div className="mb-2 flex flex-wrap gap-2">{attachments.map((file) => <div key={file.id} className="flex max-w-full items-center gap-2 rounded-lg border border-orange-200 bg-orange-50/70 px-2.5 py-1.5 text-[11px] text-slate-700"><span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-white text-orange-600">{file.mimeType.startsWith('image/') ? <Image className="h-3.5 w-3.5" /> : <File className="h-3.5 w-3.5" />}</span><span className="max-w-[180px] truncate">{file.name}</span><span className="shrink-0 text-[10px] text-slate-500">{formatSize(file.size)}</span><button type="button" onClick={() => removeAttachment(file.id)} disabled={sending} aria-label={'Remove ' + file.name} className="rounded p-0.5 text-slate-500 hover:bg-white hover:text-rose-600"><X className="h-3 w-3" /></button></div>)}</div>}
+    {attachmentError && <div className="mb-2 text-[11px] text-rose-600">{attachmentError}</div>}
+    <div className="flex items-end gap-2 rounded-2xl border border-orange-200 bg-white p-2 shadow-[0_0_24px_rgba(239,116,26,0.07)] focus-within:border-orange-400">
+      <input ref={fileInputRef} type="file" multiple className="hidden" accept="image/png,image/jpeg,image/webp,image/gif,application/pdf,.csv,.tsv,.xls,.xlsx,.txt,.md,.json" onChange={(event) => void addFiles(event.target.files)} />
+      <button type="button" disabled={sending || attachments.length >= MAX_FILES} onClick={() => fileInputRef.current?.click()} className="mb-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 text-slate-600 transition hover:border-orange-300 hover:bg-orange-50 hover:text-orange-700 disabled:opacity-40" title="Attach files" aria-label="Attach files"><Paperclip className="h-4 w-4" /></button>
+      <textarea value={value} onChange={(e) => setValue(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit(); } }} rows={compact ? 2 : 2} placeholder="Message your AI Agent…" className="max-h-32 min-h-[48px] flex-1 resize-y bg-transparent px-2 py-2 text-sm text-slate-900 outline-none placeholder:text-slate-600" />
+      <button type="button" disabled={(!value.trim() && !attachments.length) || sending} onClick={submit} className="mb-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-orange-500 to-orange-600 text-white shadow-lg shadow-orange-500/10 transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-35"><Send className="h-4 w-4" /></button>
+    </div>
+    <div className="mt-2 flex items-center justify-between gap-2 text-[10px] text-slate-500"><span>Enter to send · Shift + Enter for a new line</span><span className="text-right">Images · PDFs · Spreadsheets · Text · JSON</span></div>
+  </div>;
+}
+
+function ConfigPanel({ compact = false }: { compact?: boolean }) {
+  const { config, saveConfig, canManageConfig } = useAgent();
+  const [preference, setPreference] = useState('');
+  const [saving, setSaving] = useState(false);
+  const updateAutonomy = async (autonomy: AgentAutonomy) => {
+    setSaving(true);
+    await saveConfig({ autonomy });
+    setSaving(false);
+  };
+  const addPreference = async () => {
+    const next = preference.trim();
+    if (!next || !canManageConfig) return;
+    setSaving(true);
+    const ok = await saveConfig({ companyPreferences: [...config.companyPreferences, next].slice(0, 20) });
+    if (ok) setPreference('');
+    setSaving(false);
+  };
+  const removePreference = async (index: number) => {
+    setSaving(true);
+    await saveConfig({ companyPreferences: config.companyPreferences.filter((_, i) => i !== index) });
+    setSaving(false);
+  };
+  return <div className={'space-y-4 ' + (compact ? '' : 'rounded-2xl border border-slate-200 bg-slate-50 p-4')}>
+    <div>
+      <div className="flex items-center gap-2 text-sm font-semibold text-slate-900"><Settings2 className="h-4 w-4 text-orange-600" /> Agent autonomy</div>
+      <p className="mt-1 text-xs leading-5 text-slate-500">This is the workspace policy for future registered actions. It never bypasses permissions or safety approvals.</p>
+      <div className="mt-3 space-y-2">
+        {([
+          ['ask', 'Ask before everything', 'Request approval before each action.'],
+          ['balanced', 'Balanced · recommended', 'New items may be prepared automatically; changes need approval.'],
+          ['full', 'Full autonomy', 'Allow registered actions within the configured permission and safety boundaries.'],
+        ] as [AgentAutonomy, string, string][]).map(([mode, title, subtitle]) => (
+          <button key={mode} type="button" disabled={!canManageConfig || saving} onClick={() => void updateAutonomy(mode)} className={'w-full rounded-xl border p-3 text-left transition disabled:cursor-not-allowed disabled:opacity-100 ' + (config.autonomy === mode ? 'border-orange-400 bg-orange-50' : 'border-slate-200 bg-white hover:bg-slate-100')}>
+            <div className="flex items-center justify-between gap-2 text-xs font-semibold text-slate-800"><span>{title}</span>{config.autonomy === mode && <Check className="h-4 w-4 text-orange-600" />}</div>
+            <div className="mt-1 text-[11px] leading-4 text-slate-500">{subtitle}</div>
+          </button>
+        ))}
+      </div>
+      {!canManageConfig && <div className="mt-2 text-[10px] text-slate-600">Only workspace admins can change this policy.</div>}
+    </div>
+    <div className="border-t border-slate-200 pt-4">
+      <div className="flex items-center gap-2 text-sm font-semibold text-slate-900"><Sparkles className="h-4 w-4 text-blue-600" /> Company memory</div>
+      <p className="mt-1 text-xs leading-5 text-slate-500">Shared workspace preferences. Add only guidance the team has approved.</p>
+      <div className="mt-3 space-y-2">
+        {config.companyPreferences.map((item, index) => <div key={item + index} className="flex items-start gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2"><span className="flex-1 text-xs leading-5 text-slate-700">{item}</span>{canManageConfig && <button type="button" disabled={saving} onClick={() => void removePreference(index)} className="text-slate-500 hover:text-rose-600" aria-label="Remove preference"><X className="h-3.5 w-3.5" /></button>}</div>)}
+        {config.companyPreferences.length === 0 && <div className="rounded-lg border border-dashed border-slate-200 px-3 py-3 text-xs text-slate-600">No company preferences saved yet.</div>}
+      </div>
+      {canManageConfig && <div className="mt-3 flex gap-2"><input value={preference} onChange={(e) => setPreference(e.target.value)} maxLength={300} placeholder="Add an approved company preference…" className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-900 outline-none placeholder:text-slate-600 focus:border-orange-400" /><button type="button" disabled={!preference.trim() || saving} onClick={() => void addPreference()} className="rounded-lg bg-slate-100 px-3 text-xs font-semibold text-slate-900 disabled:opacity-40">Save</button></div>}
+    </div>
+  </div>;
+}
+
+export const AgentWorkspace: React.FC<{ currentUser: AppUser; onOpenEmailTemplate?: (id: string, kind?: 'campaign' | 'conversation') => void }> = ({ currentUser, onOpenEmailTemplate }) => {
+  const { conversations, activeConversationId, messages, loading, sending, activityLabel, error, selectConversation, newConversation, sendMessage, clearError, refresh } = useAgent();
+  const [showSettings, setShowSettings] = useState(false);
+  const [showSidebar, setShowSidebar] = useState(() => typeof window !== 'undefined' && window.innerWidth >= 1024);
+
+  return <div className="agent-shell flex h-full min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white text-slate-900 shadow-2xl">
+    <div className="agent-grid relative flex h-full min-h-0 w-full min-w-0 flex-1 flex-col">
+      <div className="relative flex items-center justify-between border-b border-slate-200 px-5 py-4 sm:px-7">
+        <div className="flex items-center gap-3"><Orb small /><div><div className="flex items-center gap-2 text-base font-bold tracking-tight">AI Agent <span className="rounded-full border border-orange-200 bg-orange-50 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.18em] text-orange-700">Workspace</span></div><div className="mt-0.5 text-[11px] text-slate-500">Context-aware assistant · secure execution boundary</div></div></div>
+        <div className="flex items-center gap-2">
+          <div className="hidden items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-[10px] text-emerald-700 sm:flex"><span className="h-1.5 w-1.5 rounded-full bg-emerald-500 shadow-[0_0_9px_rgba(110,231,183,.8)]" /> Workspace connected</div>
+          <button type="button" onClick={() => setShowSettings(true)} aria-label="Open Agent settings" title="Agent settings" className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:border-orange-200 hover:bg-orange-50 hover:text-orange-700"><Settings2 className="h-4 w-4" /><span>Settings</span></button>
+          <button type="button" onClick={() => void refresh()} title="Refresh workspace" aria-label="Refresh workspace" className="rounded-xl border border-slate-200 p-2 text-slate-600 hover:bg-slate-100 hover:text-slate-900"><Activity className="h-4 w-4" /></button>
+        </div>
+      </div>
+
+      <div className={'relative grid min-h-0 min-w-0 w-full flex-1 ' + (showSidebar ? 'lg:grid-cols-[260px_minmax(0,1fr)]' : 'grid-cols-1')}>
+        {showSidebar && <>
+          <button type="button" aria-label="Close conversations sidebar" onClick={() => setShowSidebar(false)} className="absolute inset-0 z-20 bg-slate-950/20 lg:hidden" />
+          <aside className="absolute inset-y-0 left-0 z-30 flex w-[280px] flex-col overflow-y-auto border-r border-slate-200 bg-white p-4 shadow-xl lg:relative lg:z-auto lg:w-auto lg:shadow-none">
+            <div className="mb-3 flex items-center justify-between">
+              <div className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">Workspace</div>
+              <button type="button" onClick={() => setShowSidebar(false)} className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100 lg:hidden" aria-label="Close sidebar"><X className="h-4 w-4" /></button>
+            </div>
+            <button type="button" onClick={() => void newConversation('agent')} className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-orange-500 to-orange-600 px-3 py-2.5 text-xs font-bold text-white shadow-lg shadow-orange-500/10"><Plus className="h-4 w-4" /> New conversation</button>
+            <div className="mt-6 flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-600"><History className="h-3.5 w-3.5" /> Recent conversations</div>
+            <div className="mt-3 space-y-1.5">
+              {conversations.map((item) => <button key={item.id} type="button" onClick={() => { void selectConversation(item.id); if (typeof window !== 'undefined' && window.innerWidth < 1024) setShowSidebar(false); }} className={'w-full rounded-xl px-3 py-2.5 text-left transition ' + (activeConversationId === item.id ? 'bg-orange-50 text-orange-700' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900')}><div className="truncate text-xs font-medium">{item.title || 'New conversation'}</div><div className="mt-1 text-[10px] text-slate-600">{new Date(item.updatedAt || item.createdAt).toLocaleDateString()}</div></button>)}
+              {conversations.length === 0 && !loading && <div className="px-2 py-3 text-xs text-slate-600">Your recent tasks will appear here.</div>}
+            </div>
+            <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-3"><div className="flex items-center gap-2 text-xs font-semibold text-slate-700"><Command className="h-3.5 w-3.5 text-orange-600" /> Workspace content</div><div className="mt-2 text-[11px] leading-5 text-slate-500">The Agent can inspect approved company profile, published knowledge, lead databases, company assets, and email designs.</div></div>
+          </aside>
+        </>}
+
+        <section className="flex min-h-0 min-w-0 w-full flex-col">
+          <div className="flex items-center justify-between border-b border-slate-200 px-3 py-3 sm:px-5">
+            <div className="flex min-w-0 items-center gap-2">
+              <button type="button" onClick={() => setShowSidebar((value) => !value)} aria-expanded={showSidebar} aria-label={showSidebar ? 'Hide conversations sidebar' : 'Show conversations sidebar'} title={showSidebar ? 'Hide sidebar' : 'Show sidebar'} className="shrink-0 rounded-lg border border-slate-200 p-2 text-slate-600 transition hover:border-orange-200 hover:bg-orange-50 hover:text-orange-700">
+                {showSidebar ? <PanelLeftClose className="h-4 w-4" /> : <PanelLeftOpen className="h-4 w-4" />}
+              </button>
+              <div className="truncate text-xs font-semibold text-slate-700">{conversations.find((x) => x.id === activeConversationId)?.title || 'New workspace task'}</div>
+            </div>
+            <div className="ml-2 flex shrink-0 items-center gap-2"><span className="hidden text-[10px] text-slate-600 sm:inline">{currentUser.name}</span><button type="button" onClick={() => void newConversation('agent')} title="New conversation" aria-label="New conversation" className="rounded-lg border border-slate-200 p-1.5 text-slate-600 hover:text-slate-900 lg:hidden"><Plus className="h-3.5 w-3.5" /></button></div>
+          </div>
+          <Messages messages={messages} sending={sending} onOpenTemplate={onOpenEmailTemplate} onAction={(query) => void sendMessage(query, 'agent')} activityLabel={activityLabel} />
+          <ChatComposer moduleContext="agent" />
+        </section>
+      </div>
+
+      {showSettings && <>
+        <button type="button" aria-label="Close Agent settings" onClick={() => setShowSettings(false)} className="fixed inset-0 z-[90] bg-slate-950/25" />
+        <section role="dialog" aria-modal="true" aria-label="Agent settings" className="fixed inset-y-0 right-0 z-[91] flex w-full max-w-[440px] flex-col border-l border-slate-200 bg-white text-slate-900 shadow-2xl">
+          <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+            <div className="flex items-center gap-2"><Settings2 className="h-4 w-4 text-orange-600" /><div><div className="text-sm font-bold text-slate-900">Agent settings</div><div className="mt-0.5 text-[11px] text-slate-500">Workspace policy and shared company memory</div></div></div>
+            <button type="button" onClick={() => setShowSettings(false)} aria-label="Close settings" className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-900"><X className="h-4 w-4" /></button>
+          </div>
+          <div className="min-h-0 flex-1 overflow-y-auto p-4"><ConfigPanel compact /></div>
+        </section>
+      </>}
+
+      {error && <div className="flex items-center justify-between border-t border-rose-200 bg-rose-50 px-4 py-2 text-xs text-rose-700"><span>{error}</span><button type="button" onClick={clearError}><X className="h-3.5 w-3.5" /></button></div>}
+      {loading && <div className="absolute right-4 top-20 flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[10px] text-slate-600"><Loader2 className="h-3 w-3 animate-spin" /> Syncing conversations</div>}
+    </div>
+  </div>;
+};
+
+type AgentLauncherPosition = { left: number; top: number };
+type AgentDragState = { pointerId: number; offsetX: number; offsetY: number; startX: number; startY: number; moved: boolean };
+
+const AGENT_LAUNCHER_POSITION_KEY = 'amaavigo.agentLauncher.position';
+
+function clampAgentPosition(left: number, top: number, width: number, height: number): AgentLauncherPosition {
+  const maxLeft = Math.max(8, window.innerWidth - width - 8);
+  const maxTop = Math.max(8, window.innerHeight - height - 8);
+  return {
+    left: Math.max(8, Math.min(left, maxLeft)),
+    top: Math.max(8, Math.min(top, maxTop)),
+  };
+}
+
+export const AgentFloatingCompanion: React.FC<{ hidden?: boolean; moduleContext: string; onOpenEmailTemplate?: (id: string, kind?: 'campaign' | 'conversation') => void }> = ({ hidden, moduleContext, onOpenEmailTemplate }) => {
+  const [open, setOpen] = useState(false);
+  const [position, setPosition] = useState<AgentLauncherPosition | null>(() => {
+    if (typeof window === 'undefined') return null;
+    try {
+      const saved = JSON.parse(window.localStorage.getItem(AGENT_LAUNCHER_POSITION_KEY) || 'null');
+      if (Number.isFinite(saved?.left) && Number.isFinite(saved?.top)) return { left: saved.left, top: saved.top };
+    } catch {}
+    return null;
+  });
+  const launcherRef = useRef<HTMLButtonElement | null>(null);
+  const dragRef = useRef<AgentDragState | null>(null);
+  const suppressClickRef = useRef(false);
+  const { messages, sending, activityLabel, error, clearError, newConversation, conversations, activeConversationId, selectConversation, sendMessage } = useAgent();
+
+  useEffect(() => {
+    if (!position) return;
+    try { window.localStorage.setItem(AGENT_LAUNCHER_POSITION_KEY, JSON.stringify(position)); } catch {}
+  }, [position]);
+
+  useEffect(() => {
+    const resize = () => {
+      if (!launcherRef.current) return;
+      const rect = launcherRef.current.getBoundingClientRect();
+      setPosition((current) => current ? clampAgentPosition(current.left, current.top, rect.width, rect.height) : current);
+    };
+    window.addEventListener('resize', resize);
+    return () => window.removeEventListener('resize', resize);
+  }, []);
+
+  const onLauncherPointerDown = (event: React.PointerEvent<HTMLButtonElement>) => {
+    if (event.button !== 0 && event.pointerType !== 'touch') return;
+    const rect = event.currentTarget.getBoundingClientRect();
+    dragRef.current = {
+      pointerId: event.pointerId,
+      offsetX: event.clientX - rect.left,
+      offsetY: event.clientY - rect.top,
+      startX: event.clientX,
+      startY: event.clientY,
+      moved: false,
+    };
+    try { event.currentTarget.setPointerCapture(event.pointerId); } catch {}
+  };
+
+  const onLauncherPointerMove = (event: React.PointerEvent<HTMLButtonElement>) => {
+    const drag = dragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    if (!drag.moved && Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY) < 5) return;
+    drag.moved = true;
+    const rect = event.currentTarget.getBoundingClientRect();
+    setPosition(clampAgentPosition(
+      event.clientX - drag.offsetX,
+      event.clientY - drag.offsetY,
+      rect.width,
+      rect.height,
+    ));
+  };
+
+  const finishLauncherDrag = (event: React.PointerEvent<HTMLButtonElement>) => {
+    const drag = dragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    suppressClickRef.current = drag.moved;
+    dragRef.current = null;
+    if (suppressClickRef.current) window.setTimeout(() => { suppressClickRef.current = false; }, 0);
+  };
+
+  if (hidden) return null;
+
+  const launcherRect = launcherRef.current?.getBoundingClientRect();
+  const anchorLeft = position?.left ?? (typeof window !== 'undefined' ? window.innerWidth - (launcherRect?.width || 190) - 20 : 0);
+  const anchorTop = position?.top ?? (typeof window !== 'undefined' ? window.innerHeight - (launcherRect?.height || 52) - 20 : 0);
+  const panelAbove = typeof window !== 'undefined' && anchorTop > window.innerHeight * 0.52;
+  const panelRight = typeof window !== 'undefined' && anchorLeft > window.innerWidth * 0.52;
+  const availablePanelHeight = typeof window !== 'undefined'
+    ? (panelAbove ? anchorTop - 24 : window.innerHeight - anchorTop - (launcherRect?.height || 52) - 24)
+    : 560;
+
+  return <div
+    className="fixed z-[80]"
+    style={position ? { left: position.left, top: position.top } : { right: 20, bottom: 20 }}
+  >
+    {open && <div
+      className="agent-float-panel absolute flex w-[min(430px,calc(100vw-28px))] flex-col overflow-hidden rounded-2xl border border-orange-200 bg-white text-slate-900 shadow-[0_18px_60px_rgba(15,23,42,.14)]"
+      style={{
+        ...(panelAbove ? { bottom: 'calc(100% + 12px)' } : { top: 'calc(100% + 12px)' }),
+        ...(panelRight ? { right: 0 } : { left: 0 }),
+        maxHeight: Math.max(240, availablePanelHeight),
+      }}
+    >
+      <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-4 py-3"><div className="flex items-center gap-2"><Orb small /><div><div className="text-sm font-bold">AI Companion</div><div className="text-[10px] text-slate-600">Context: {moduleContext}</div></div></div><div className="flex items-center gap-1"><button type="button" onClick={() => void newConversation(moduleContext)} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-900" title="New chat"><Plus className="h-4 w-4" /></button><button type="button" onClick={() => setOpen(false)} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-900"><X className="h-4 w-4" /></button></div></div>
+      <div className="flex gap-1 overflow-x-auto border-b border-slate-200 px-3 py-2">{conversations.slice(0, 4).map((item) => <button type="button" key={item.id} onClick={() => void selectConversation(item.id)} className={'max-w-[130px] truncate rounded-lg px-2 py-1 text-[10px] ' + (activeConversationId === item.id ? 'bg-orange-50 text-orange-700' : 'text-slate-600 hover:bg-slate-100')}>{item.title}</button>)}</div>
+      <Messages messages={messages} sending={sending} compact onOpenTemplate={onOpenEmailTemplate} activityLabel={activityLabel} />
+      <ChatComposer moduleContext={moduleContext} compact />
+      {error && <div className="flex items-center justify-between bg-rose-50 px-3 py-2 text-[10px] text-rose-700"><span>{error}</span><button type="button" onClick={clearError}><X className="h-3 w-3" /></button></div>}
+    </div>}
+    <button
+      ref={launcherRef}
+      type="button"
+      aria-label="Drag or open AI Agent companion"
+      title="Drag to move · Click to open"
+      onPointerDown={onLauncherPointerDown}
+      onPointerMove={onLauncherPointerMove}
+      onPointerUp={finishLauncherDrag}
+      onPointerCancel={finishLauncherDrag}
+      onClick={() => {
+        if (suppressClickRef.current) return;
+        setOpen((x) => !x);
+      }}
+      className="group flex touch-none select-none cursor-grab active:cursor-grabbing items-center gap-3 rounded-full border border-orange-200 bg-white px-3 py-2.5 text-xs font-semibold text-slate-900 shadow-[0_8px_28px_rgba(239,116,26,.18)] transition hover:border-orange-300"
+    >
+      <Orb small /><span className="pr-1">Ask AI Agent</span><span className="h-2 w-2 rounded-full bg-orange-500 shadow-[0_0_9px_rgba(239,116,26,.35)]" />
+    </button>
+  </div>;
+};

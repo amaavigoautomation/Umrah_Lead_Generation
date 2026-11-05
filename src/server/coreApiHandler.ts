@@ -147,6 +147,7 @@ import {
   runAutoFollowUpWorkerCycle,
 } from './autoFollowUpService.js';
 import { encryptSecret, decryptSecret } from './cryptoUtils.js';
+import { handleAgentApi } from './agentService.js';
 import { getTenantCurrentUsage, getTenantCurrentDailyEmailCount, getTenantUsageForDateRange, recordTenantUsage, recordAiCompletionUsage, checkTenantQuota } from './usageService.js';
 import {
   routeWebsiteLeadWebhook,
@@ -373,6 +374,11 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
       res.end(JSON.stringify({ error: 'Payment required. Choose or fix your plan to continue.', code: 'billing_required', billingStatus: ent.billing.status }));
       return true;
     }
+  }
+
+  // AI Agent routes are authenticated, entitlement-gated and tenant-scoped.
+  if (url === '/api/agent' || url.startsWith('/api/agent/')) {
+    return await handleAgentApi(req, res, activeTenantCtx, body, url);
   }
 
   // Billing (workspace admins): /api/billing, /checkout, /portal, /sync

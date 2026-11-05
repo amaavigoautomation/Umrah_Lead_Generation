@@ -42,7 +42,8 @@ export type ActiveTab =
   | 'audit-logs'
   | 'database'
   | 'campaign-reports'
-  | 'company-profile';
+  | 'company-profile'
+  | 'agent';
 
 export interface NavbarProps {
   activeTab: ActiveTab;
@@ -106,6 +107,12 @@ export const Navbar: React.FC<NavbarProps> = ({
       label: 'Unified Inbox',
       icon: <Inbox className="w-4 h-4 shrink-0" />,
       badgeCount: unreadCount,
+    },
+    {
+      id: 'agent',
+      label: 'AI Agent',
+      icon: <Sparkles className="w-4 h-4 shrink-0" />,
+      hasPulse: true,
     },
     {
       id: 'auto-followup',

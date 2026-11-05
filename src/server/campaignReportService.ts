@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 import OpenAI from 'openai';
-import { getCampaignByIdAsync, getCampaignEngagementStats } from './campaignService.js';
+import { getAllCampaigns, getCampaignByIdAsync, getCampaignEngagementStats, initCampaignStore, runWithCampaignCtx } from './campaignService.js';
 import { getTenantBrand } from './brandService.js';
 import { tenantRepo } from './tenantRepo.js';
 import { getDoc, getDocs, setDoc, deleteDoc, query, orderBy, limit } from './adminFirestore.js';
@@ -27,6 +27,21 @@ function n(value: unknown): number {
 }
 function rate(value: number, total: number): number {
   return total > 0 ? Math.round((value / total) * 1000) / 10 : 0;
+}
+
+export async function listCampaignsForAgentReport(ctx: TenantContext) {
+  return runWithCampaignCtx(ctx, async () => {
+    await initCampaignStore();
+    return getAllCampaigns()
+      .map((campaign: any) => ({
+        campaignId: String(campaign.campaignId || ''),
+        name: String(campaign.name || 'Untitled campaign'),
+        status: String(campaign.status || 'UNKNOWN'),
+        type: String(campaign.type || 'EMAIL'),
+        createdAt: String(campaign.createdAt || ''),
+      }))
+      .filter((campaign) => Boolean(campaign.campaignId));
+  });
 }
 
 async function buildCampaignSnapshot(campaignId: string): Promise<CampaignSnapshot> {
@@ -164,7 +179,7 @@ async function generateAnalysis(campaigns: CampaignSnapshot[], tenantId: string)
 
 export async function generateCampaignReport(ctx: TenantContext, campaignIdsInput: unknown, generatedBy: string) {
   const campaignIds = Array.isArray(campaignIdsInput)
-    ? Array.from(new Set(campaignIdsInput.map((id) => String(id || '').trim()).filter(Boolean))).slice(0, 10)
+    ? Array.from(new Set(campaignIdsInput.map((id) => String(id || '').trim()).filter(Boolean))).slice(0, 100)
     : [];
   if (campaignIds.length < 1) throw new Error('Select at least one campaign to generate a report.');
   const campaigns = await Promise.all(campaignIds.map(buildCampaignSnapshot));

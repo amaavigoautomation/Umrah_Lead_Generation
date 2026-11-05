@@ -43,6 +43,21 @@ export interface AgentArtifact {
   report?: Record<string, any>;
   updatedAt?: string;
 }
+export interface AgentAttachmentInput {
+  id: string;
+  name: string;
+  mimeType: string;
+  size: number;
+  dataUrl: string;
+}
+export interface AgentAttachmentMeta {
+  id: string;
+  name: string;
+  mimeType: string;
+  size: number;
+  kind?: string;
+  rowCount?: number;
+}
 export interface AgentMessage {
   id: string;
   role: 'user' | 'assistant';
@@ -50,6 +65,7 @@ export interface AgentMessage {
   createdAt: string;
   toolsUsed?: string[];
   artifacts?: AgentArtifact[];
+  attachments?: AgentAttachmentMeta[];
 }
 interface AgentContextValue {
   config: AgentConfig;
@@ -63,7 +79,7 @@ interface AgentContextValue {
   canManageConfig: boolean;
   selectConversation: (id: string) => Promise<void>;
   newConversation: (moduleContext?: string) => Promise<string | null>;
-  sendMessage: (message: string, moduleContext?: string) => Promise<void>;
+  sendMessage: (message: string, moduleContext?: string, attachments?: AgentAttachmentInput[]) => Promise<void>;
   saveConfig: (patch: Partial<AgentConfig>) => Promise<boolean>;
   refresh: () => Promise<void>;
   clearError: () => void;
@@ -151,9 +167,12 @@ export const AgentProvider: React.FC<{ tenantId: string; userId: string; enabled
     }
   }, []);
 
-  const sendMessage = useCallback(async (rawMessage: string, moduleContext = '') => {
-    const message = rawMessage.trim();
-    if (!message || sending) return;
+  const sendMessage = useCallback(async (rawMessage: string, moduleContext = '', attachments: AgentAttachmentInput[] = []) => {
+    const message = rawMessage.trim() || (attachments.length
+      ? 'Please inspect the attached files and help me with the appropriate next step. Ask a focused question if my intended action is unclear.'
+      : '');
+    if ((!message && !attachments.length) || sending) return;
+    const attachmentMeta: AgentAttachmentMeta[] = attachments.map(({ id, name, mimeType, size }) => ({ id, name, mimeType, size }));
     setSending(true);
     setActivityLabel(/template|email|campaign|image|design|banner/i.test(message) ? 'Researching your brand, creating campaign artwork and saving the editable draft…' : 'Reviewing your workspace and preparing an answer…');
     setError('');
@@ -162,7 +181,7 @@ export const AgentProvider: React.FC<{ tenantId: string; userId: string; enabled
       if (!conversationId) conversationId = await newConversation(moduleContext);
       if (!conversationId) return;
       const executionId = createId();
-      const userMessage: AgentMessage = { id: 'local-' + executionId, role: 'user', content: message, createdAt: new Date().toISOString() };
+      const userMessage: AgentMessage = { id: 'local-' + executionId, role: 'user', content: message, createdAt: new Date().toISOString(), attachments: attachmentMeta };
       setMessages((prev) => [...prev, userMessage]);
       let data: { success: boolean; assistantMessage: AgentMessage; conversation: AgentConversation };
       let needsPoll = false;
@@ -170,7 +189,7 @@ export const AgentProvider: React.FC<{ tenantId: string; userId: string; enabled
       try {
         const initial = await api<{ success: boolean; status?: string; progress?: string; assistantMessage?: AgentMessage; conversation?: AgentConversation }>('/api/agent/chat', {
           method: 'POST',
-          body: JSON.stringify({ conversationId, executionId, message, moduleContext }),
+          body: JSON.stringify({ conversationId, executionId, message, moduleContext, attachments }),
         });
         if (initial.status === 'processing' || !initial.assistantMessage) {
           needsPoll = true;
@@ -196,7 +215,7 @@ export const AgentProvider: React.FC<{ tenantId: string; userId: string; enabled
               interimMessageId = status.assistantMessage.id;
               setMessages((prev) => [
                 ...prev.filter((item) => item.id !== interimMessageId && item.id !== userMessage.id),
-                { id: 'user-' + executionId, role: 'user', content: message, createdAt: userMessage.createdAt },
+                { id: 'user-' + executionId, role: 'user', content: message, createdAt: userMessage.createdAt, attachments: attachmentMeta },
                 status.assistantMessage!,
               ]);
             }
@@ -223,7 +242,7 @@ export const AgentProvider: React.FC<{ tenantId: string; userId: string; enabled
       }
       setMessages((prev) => [
         ...prev.filter((item) => item.id !== userMessage.id),
-        { id: 'user-' + executionId, role: 'user', content: message, createdAt: userMessage.createdAt },
+        { id: 'user-' + executionId, role: 'user', content: message, createdAt: userMessage.createdAt, attachments: attachmentMeta },
         data.assistantMessage,
       ]);
       if (data.conversation) setConversations((prev) => [data.conversation, ...prev.filter((x) => x.id !== data.conversation.id)]);

@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Activity, ArrowUpRight, Bot, Check, Command, Database, FileDown, FileText, History, Loader2, Plus, Send, Settings2, ShieldCheck, Sparkles, X } from 'lucide-react';
-import { useAgent, AgentAutonomy, AgentMessage, AgentArtifact } from '../context/AgentContext';
+import { Activity, ArrowUpRight, Bot, Check, Command, Database, File, FileDown, FileText, History, Image, Loader2, Paperclip, Plus, Send, Settings2, ShieldCheck, Sparkles, X } from 'lucide-react';
+import { useAgent, AgentAutonomy, AgentMessage, AgentArtifact, AgentAttachmentInput } from '../context/AgentContext';
 import type { AppUser } from '../types';
 import { buildCampaignReportPdfDocument } from './CampaignReports';
 import type { CampaignReport } from './CampaignReports';
@@ -271,7 +271,10 @@ function Messages({ messages, sending, compact, onOpenTemplate, onAction, activi
               : 'agent-response rounded-bl-md border border-slate-200 bg-white text-slate-900 shadow-sm')}>
             {message.role === 'assistant'
               ? <AgentMarkdown content={message.content} />
-              : <div className="whitespace-pre-wrap break-words">{message.content}</div>}
+              : <>
+                  <div className="whitespace-pre-wrap break-words">{message.content}</div>
+                  {message.attachments?.length ? <div className="mt-2 flex flex-wrap gap-1.5 border-t border-orange-200 pt-2">{message.attachments.map((file) => <span key={file.id} className="inline-flex max-w-full items-center gap-1.5 rounded-lg border border-orange-200 bg-white/80 px-2 py-1 text-[10px] text-slate-700"><Paperclip className="h-3 w-3 shrink-0 text-orange-600" /><span className="truncate">{file.name}</span><span className="shrink-0 text-slate-500">{(file.size / 1024).toFixed(0)} KB</span></span>)}</div> : null}
+                </>}
             {message.artifacts?.map((artifact, index) => <CampaignEmailArtifactPreview key={(artifact.draftId || artifact.approvalId || artifact.templateId || artifact.type) + '-' + index} artifact={artifact} onOpenTemplate={onOpenTemplate} onAction={onAction} />)}
             {message.toolsUsed && message.toolsUsed.length > 0 && (
               <div className="mt-3 flex flex-wrap gap-1.5 border-t border-slate-200 pt-2">
@@ -289,21 +292,82 @@ function Messages({ messages, sending, compact, onOpenTemplate, onAction, activi
 function ChatComposer({ moduleContext, compact }: { moduleContext: string; compact?: boolean }) {
   const { sendMessage, sending } = useAgent();
   const [value, setValue] = useState('');
+  const [attachments, setAttachments] = useState<AgentAttachmentInput[]>([]);
+  const [attachmentError, setAttachmentError] = useState('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const MAX_FILES = 5;
+  const MAX_FILE_BYTES = 1.7 * 1024 * 1024;
+  const MAX_TOTAL_BYTES = 2.5 * 1024 * 1024;
+  const acceptedExtensions = new Set(['png','jpg','jpeg','webp','gif','pdf','csv','tsv','xls','xlsx','txt','md','json']);
+  const formatSize = (bytes: number) => bytes < 1024 * 1024 ? Math.max(1, Math.round(bytes / 1024)) + ' KB' : (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+  const readAsDataUrl = (file: globalThis.File) => new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => typeof reader.result === 'string' ? resolve(reader.result) : reject(new Error('Could not read ' + file.name));
+    reader.onerror = () => reject(new Error('Could not read ' + file.name));
+    reader.readAsDataURL(file);
+  });
+  const addFiles = async (list: FileList | null) => {
+    if (!list?.length) return;
+    setAttachmentError('');
+    const incoming = Array.from(list);
+    const available = MAX_FILES - attachments.length;
+    if (available <= 0) {
+      setAttachmentError('Attach up to five files per message.');
+      return;
+    }
+    const next: AgentAttachmentInput[] = [];
+    let totalBytes = attachments.reduce((sum, item) => sum + item.size, 0);
+    try {
+      for (const file of incoming.slice(0, available)) {
+        const extension = file.name.toLowerCase().split('.').pop() || '';
+        if (!acceptedExtensions.has(extension)) {
+          setAttachmentError(file.name + ' is not a supported file type.');
+          continue;
+        }
+        if (file.size > MAX_FILE_BYTES) {
+          setAttachmentError(file.name + ' is larger than 1.7 MB.');
+          continue;
+        }
+        if (totalBytes + file.size > MAX_TOTAL_BYTES) {
+          setAttachmentError('The combined attachment size must be 2.5 MB or smaller.');
+          break;
+        }
+        const dataUrl = await readAsDataUrl(file);
+        let id = '';
+        try { id = crypto.randomUUID(); } catch { id = 'att_' + Date.now() + '_' + Math.random().toString(36).slice(2, 9); }
+        next.push({ id, name: file.name, mimeType: file.type || 'application/octet-stream', size: file.size, dataUrl });
+        totalBytes += file.size;
+      }
+      if (next.length) setAttachments((current) => [...current, ...next].slice(0, MAX_FILES));
+    } catch (error: any) {
+      setAttachmentError(error?.message || 'Could not read the selected file.');
+    } finally {
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+  const removeAttachment = (id: string) => setAttachments((current) => current.filter((item) => item.id !== id));
   const submit = () => {
-    if (!value.trim() || sending) return;
-    const text = value;
+    if ((!value.trim() && !attachments.length) || sending) return;
+    const text = value.trim() || 'Please inspect the attached files and help me with the appropriate next step. Ask a focused question if my intended action is unclear.';
+    const selected = attachments;
     setValue('');
-    void sendMessage(text, moduleContext);
+    setAttachments([]);
+    setAttachmentError('');
+    void sendMessage(text, moduleContext, selected);
   };
   return <div className={'border-t border-slate-200 ' + (compact ? 'p-3' : 'p-5')}>
     {!compact && <div className="mb-2 flex flex-wrap gap-2">
       {QUICK_PROMPTS.map((item) => <button key={item.label} type="button" onClick={() => { setValue(item.prompt); }} className="rounded-full border border-slate-200 px-3 py-1.5 text-[11px] text-slate-700 transition hover:border-orange-300 hover:bg-orange-50">{item.label}</button>)}
     </div>}
+    {attachments.length > 0 && <div className="mb-2 flex flex-wrap gap-2">{attachments.map((file) => <div key={file.id} className="flex max-w-full items-center gap-2 rounded-lg border border-orange-200 bg-orange-50/70 px-2.5 py-1.5 text-[11px] text-slate-700"><span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-white text-orange-600">{file.mimeType.startsWith('image/') ? <Image className="h-3.5 w-3.5" /> : <File className="h-3.5 w-3.5" />}</span><span className="max-w-[180px] truncate">{file.name}</span><span className="shrink-0 text-[10px] text-slate-500">{formatSize(file.size)}</span><button type="button" onClick={() => removeAttachment(file.id)} disabled={sending} aria-label={'Remove ' + file.name} className="rounded p-0.5 text-slate-500 hover:bg-white hover:text-rose-600"><X className="h-3 w-3" /></button></div>)}</div>}
+    {attachmentError && <div className="mb-2 text-[11px] text-rose-600">{attachmentError}</div>}
     <div className="flex items-end gap-2 rounded-2xl border border-orange-200 bg-white p-2 shadow-[0_0_24px_rgba(239,116,26,0.07)] focus-within:border-orange-400">
+      <input ref={fileInputRef} type="file" multiple className="hidden" accept="image/png,image/jpeg,image/webp,image/gif,application/pdf,.csv,.tsv,.xls,.xlsx,.txt,.md,.json" onChange={(event) => void addFiles(event.target.files)} />
+      <button type="button" disabled={sending || attachments.length >= MAX_FILES} onClick={() => fileInputRef.current?.click()} className="mb-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 text-slate-600 transition hover:border-orange-300 hover:bg-orange-50 hover:text-orange-700 disabled:opacity-40" title="Attach files" aria-label="Attach files"><Paperclip className="h-4 w-4" /></button>
       <textarea value={value} onChange={(e) => setValue(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit(); } }} rows={compact ? 2 : 2} placeholder="Message your AI Agent…" className="max-h-32 min-h-[48px] flex-1 resize-y bg-transparent px-2 py-2 text-sm text-slate-900 outline-none placeholder:text-slate-600" />
-      <button type="button" disabled={!value.trim() || sending} onClick={submit} className="mb-1 flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-orange-500 to-orange-600 text-white shadow-lg shadow-orange-500/10 transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-35"><Send className="h-4 w-4" /></button>
+      <button type="button" disabled={(!value.trim() && !attachments.length) || sending} onClick={submit} className="mb-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-orange-500 to-orange-600 text-white shadow-lg shadow-orange-500/10 transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-35"><Send className="h-4 w-4" /></button>
     </div>
-    <div className="mt-2 flex items-center justify-between text-[10px] text-slate-500"><span>Enter to send · Shift + Enter for a new line</span><span>Read-only tools · workspace-scoped</span></div>
+    <div className="mt-2 flex items-center justify-between gap-2 text-[10px] text-slate-500"><span>Enter to send · Shift + Enter for a new line</span><span className="text-right">Images · PDFs · Spreadsheets · Text · JSON</span></div>
   </div>;
 }
 

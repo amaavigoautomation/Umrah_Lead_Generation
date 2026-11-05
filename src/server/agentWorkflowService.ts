@@ -235,6 +235,7 @@ export async function prepareAgentTemplateDraft(
   const preheader = clean(args?.preheader, 180);
   let heroPrompt = clean(args?.heroImagePrompt, 3500);
   const imageAltText = clean(args?.imageAltText, 240);
+  const heroImageAssetId = clean(args?.heroImageAssetId, 180);
   let htmlDraft = String(args?.htmlBody || '').trim();
   const whatsappCategory = clean(args?.whatsappCategory || 'MARKETING', 20).toUpperCase();
   const whatsappLanguage = clean(args?.whatsappLanguage || 'en_US', 20);
@@ -275,11 +276,18 @@ export async function prepareAgentTemplateDraft(
   let image: { id: string; url: string; mimeType: string; size: number } | null = null;
 
   if (kind !== 'whatsapp_template' || whatsappCategory === 'MARKETING') {
-    image = await generateCampaignArtwork(
-      ctx, appBaseUrl, heroPrompt || ('Create a tasteful marketing artwork for a WhatsApp campaign for ' + String(brand?.companyName || 'the company') + ', related to: ' + body.slice(0, 500)), imageAltText,
-      String(brand?.companyName || websiteProfile?.companyName || 'Company'),
-      primaryColor, accentColor,
-    );
+    if (heroImageAssetId && kind !== 'whatsapp_template') {
+      if (!heroImageAssetId.startsWith('ast_' + ctx.tenantId + '__')) throw Object.assign(new Error('The selected hero image does not belong to this workspace.'), { status: 403 });
+      const attachedImage = await resolveAssetRaw(heroImageAssetId);
+      if (!attachedImage?.buffer?.length || !/^image\/(?:png|jpeg|webp|gif)$/i.test(String(attachedImage.mimeType || ''))) throw new Error('The selected Company Asset is not an available email image.');
+      image = { id: heroImageAssetId, url: publicAssetUrl('/api/assets/' + heroImageAssetId + '/view', appBaseUrl), mimeType: attachedImage.mimeType, size: attachedImage.buffer.length };
+    } else {
+      image = await generateCampaignArtwork(
+        ctx, appBaseUrl, heroPrompt || ('Create a tasteful marketing artwork for a WhatsApp campaign for ' + String(brand?.companyName || 'the company') + ', related to: ' + body.slice(0, 500)), imageAltText,
+        String(brand?.companyName || websiteProfile?.companyName || 'Company'),
+        primaryColor, accentColor,
+      );
+    }
   } else if (kind !== 'whatsapp_template') {
     throw new Error('A campaign or conversation design needs a relevant generated hero image. Please provide an image direction.');
   }
@@ -562,6 +570,110 @@ export async function submitPreparedWhatsAppDraft(
   return {
     output: { success: true, submitted: true, templateId: meta.id, status: meta.status, message: 'Submitted to Meta for review. This is not an approval.' },
     artifact: { type: 'whatsapp_template_preview', draftId, templateId: meta.id, name: slug, body: draft.body, imageUrl: draft.imageUrl, status: meta.status, savedTo: 'Meta WhatsApp template manager' },
+  };
+}
+
+export async function insertImageIntoCampaignTemplate(
+  args: any,
+  ctx: TenantContext,
+  modules: string[],
+  conversationId: string,
+  appBaseUrl: string,
+  userMessage: string,
+): Promise<{ output: Record<string, unknown>; artifact?: Record<string, unknown> }> {
+  const canCampaign = modules.includes('*') || modules.includes('campaigns') || modules.includes('email-design-studio');
+  if (!canCampaign) throw Object.assign(new Error('Campaign email template permission is required.'), { status: 403 });
+  if (!/\b(add|insert|place|include|put|use)\b/i.test(userMessage)) {
+    throw new Error('Updating a saved email needs a direct instruction to add or place the image.');
+  }
+  await requireFeature(ctx.tenantId, 'campaigns');
+  const templateQuery = clean(args?.templateNameOrId, 180);
+  const assetId = clean(args?.assetId, 180);
+  const placement = ['top', 'after_intro', 'before_cta', 'bottom'].includes(String(args?.placement || ''))
+    ? String(args.placement) : 'after_intro';
+  const altText = clean(args?.altText || 'Campaign image', 220);
+  if (!templateQuery || !assetId) throw new Error('Select a saved campaign email and an uploaded image asset.');
+  if (!assetId.startsWith('ast_' + ctx.tenantId + '__')) throw Object.assign(new Error('The image asset does not belong to this workspace.'), { status: 403 });
+  const raw = await resolveAssetRaw(assetId);
+  if (!raw?.buffer?.length || !/^image\/(?:png|jpeg|webp|gif)$/i.test(String(raw.mimeType || ''))) {
+    throw new Error('The selected Company Asset is not an available email image.');
+  }
+  const imageUrl = publicAssetUrl('/api/assets/' + assetId + '/view', appBaseUrl);
+  const templates = await runWithCampaignCtx(ctx, async () => {
+    await initCampaignStore();
+    return getTemplatesFromDbOrCache();
+  });
+  const matches = templates.filter((item: any) =>
+    String(item.templateId || '').toLowerCase() === templateQuery.toLowerCase() ||
+    String(item.name || '').toLowerCase() === templateQuery.toLowerCase()
+  );
+  if (matches.length !== 1) {
+    return {
+      output: {
+        needsClarification: true,
+        reason: matches.length ? 'More than one saved email matches that name.' : 'The saved campaign email was not found.',
+        availableTemplates: templates.filter((item: any) => item.isHtml && item.htmlBody).map((item: any) => ({ id: item.templateId, name: item.name, subject: item.subject })).slice(0, 80),
+      },
+    };
+  }
+  const template: any = matches[0];
+  if (!template.isHtml || !template.htmlBody) throw new Error('The selected campaign template is not a saved HTML email.');
+  const existingHtml = String(template.htmlBody);
+  if (existingHtml.includes(imageUrl)) {
+    return { output: { success: true, alreadyPresent: true, templateId: template.templateId, templateName: template.name, imageUrl } };
+  }
+  const imageBlock = '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0"><tr><td align="center" style="padding:16px 20px"><img src="' + escapeHtml(imageUrl) + '" alt="' + escapeHtml(altText) + '" width="560" style="display:block;width:100%;max-width:560px;height:auto;border:0;margin:0 auto" /></td></tr></table>';
+  let updatedHtml = existingHtml;
+  if (placement === 'top' && /<body\b[^>]*>/i.test(updatedHtml)) {
+    updatedHtml = updatedHtml.replace(/<body\b[^>]*>/i, (opening) => opening + imageBlock);
+  } else if (placement === 'before_cta') {
+    const ctaIndex = updatedHtml.search(/<a\b[^>]*href\s*=/i);
+    if (ctaIndex >= 0) {
+      const tableStart = updatedHtml.lastIndexOf('<table', ctaIndex);
+      const insertAt = tableStart >= 0 ? tableStart : ctaIndex;
+      updatedHtml = updatedHtml.slice(0, insertAt) + imageBlock + updatedHtml.slice(insertAt);
+    } else {
+      updatedHtml = /<\/body>/i.test(updatedHtml) ? updatedHtml.replace(/<\/body>/i, imageBlock + '</body>') : updatedHtml + imageBlock;
+    }
+  } else if (placement === 'bottom') {
+    updatedHtml = /<\/body>/i.test(updatedHtml) ? updatedHtml.replace(/<\/body>/i, imageBlock + '</body>') : updatedHtml + imageBlock;
+  } else {
+    const introMatch = /<\/(?:h1|h2|h3|p)>/i.exec(updatedHtml);
+    if (introMatch && introMatch.index !== undefined) {
+      const end = introMatch.index + introMatch[0].length;
+      updatedHtml = updatedHtml.slice(0, end) + imageBlock + updatedHtml.slice(end);
+    } else if (/<body\b[^>]*>/i.test(updatedHtml)) {
+      updatedHtml = updatedHtml.replace(/<body\b[^>]*>/i, (opening) => opening + imageBlock);
+    } else {
+      updatedHtml = imageBlock + updatedHtml;
+    }
+  }
+  const sanitized = sanitizeCustomEmailHtml(updatedHtml);
+  if (!sanitized || !sanitized.includes(imageUrl) || !/<table\b/i.test(sanitized)) {
+    throw new Error('The updated email did not pass HTML validation. The saved template was not changed.');
+  }
+  const snapshot = template.designSnapshot && typeof template.designSnapshot === 'object' ? template.designSnapshot : {};
+  const saved = await runWithCampaignCtx(ctx, async () => saveCampaignTemplate({
+    ...template,
+    htmlBody: sanitized,
+    isHtml: true,
+    format: 'html',
+    designSnapshot: { ...snapshot, customHtml: sanitized, htmlBody: sanitized },
+  } as any));
+  const verified = await getDoc(tenantRepo(ctx).emailTemplateDoc(saved.templateId));
+  if (!saved?.templateId || !verified.exists() || String((verified.data() as any)?.htmlBody || '') !== sanitized) {
+    throw new Error('The updated email could not be verified after saving. Please inspect the template before sending.');
+  }
+  await writeTenantAuditEvent(ctx, {
+    action: 'AGENT_CAMPAIGN_TEMPLATE_IMAGE_ADDED',
+    module: 'CAMPAIGNS',
+    description: 'AI Agent inserted a workspace image asset into a saved campaign email template.',
+    target: { type: 'Campaign Email Template', id: saved.templateId, name: saved.name },
+    metadata: { assetId, placement, conversationId },
+  });
+  return {
+    output: { success: true, updated: true, templateId: saved.templateId, templateName: saved.name, subject: saved.subject, placement, imageUrl },
+    artifact: { type: 'campaign_email_template', templateId: saved.templateId, templateKind: 'campaign_email', name: saved.name, subject: saved.subject, html: sanitized, savedTo: 'Campaign Emails', status: 'SAVED' },
   };
 }
 

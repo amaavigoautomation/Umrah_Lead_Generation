@@ -308,9 +308,22 @@ export async function prepareAgentTemplateDraft(
 
   const draftId = randomUUID();
   const companyName = String(brand?.companyName || websiteProfile?.companyName || 'Company');
+  // The sent email must keep absolute public URLs, but the embedded Agent preview
+  // should resolve uploaded assets against the current app origin. This avoids
+  // preview requests being sent to a protected Vercel deployment hostname.
+  const previewLogoAssetId = assetIdFromUrl(logoUrl);
+  const previewLogoUrl = previewLogoAssetId ? '/api/assets/' + previewLogoAssetId + '/view' : logoUrl;
+  const previewHeroUrl = image?.id ? '/api/assets/' + image.id + '/view' : (image?.url || '');
+  let previewEmailHtml = resolvedHtml;
+  if (logoUrl && previewLogoUrl !== logoUrl) {
+    previewEmailHtml = previewEmailHtml.replaceAll(escapeHtml(logoUrl), escapeHtml(previewLogoUrl));
+  }
+  if (image?.url && previewHeroUrl !== image.url) {
+    previewEmailHtml = previewEmailHtml.replaceAll(escapeHtml(image.url), escapeHtml(previewHeroUrl));
+  }
   const previewHtml = kind === 'whatsapp_template'
     ? ''
-    : makePreviewHtml(kind, resolvedHtml, body, { ...brand, logoUrl }, theme, name);
+    : makePreviewHtml(kind, previewEmailHtml, body, { ...brand, logoUrl: previewLogoUrl }, theme, name);
   const draft = {
     id: draftId,
     kind,

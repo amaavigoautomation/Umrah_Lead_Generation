@@ -1,7 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Activity, ArrowUpRight, Bot, Check, Command, Database, FileText, History, Loader2, Plus, Send, Settings2, ShieldCheck, Sparkles, X } from 'lucide-react';
+import { Activity, ArrowUpRight, Bot, Check, Command, Database, FileDown, FileText, History, Loader2, Plus, Send, Settings2, ShieldCheck, Sparkles, X } from 'lucide-react';
 import { useAgent, AgentAutonomy, AgentMessage, AgentArtifact } from '../context/AgentContext';
 import type { AppUser } from '../types';
+import { buildCampaignReportPdfDocument } from './CampaignReports';
+import type { CampaignReport } from './CampaignReports';
 
 const QUICK_PROMPTS = [
   { icon: Database, label: 'Review my lead databases', prompt: 'Review the lead databases available in this workspace. Summarize their names, sizes, and what campaign use cases they may support.' },
@@ -18,43 +20,72 @@ function Orb({ small = false }: { small?: boolean }) {
   </div>;
 }
 
+function normalizeAgentMessage(content: string): string {
+  const normalized = String(content || '').replace(/\r\n?/g, '\n');
+  return normalized.split('\n').flatMap((line) => {
+    const inlineHeading = line.match(/^(.*?)\s+(#{1,6}\s+.+)$/);
+    if (inlineHeading) return [inlineHeading[1], inlineHeading[2]];
+    const inlineList = line.match(/^(.*?:)\s+[-*•]\s+(.+)$/);
+    if (inlineList) {
+      const parts = inlineList[2].split(/\s+[-*•]\s+/).filter(Boolean);
+      if (parts.length) {
+        const last = parts[parts.length - 1];
+        const followUp = last.match(/^(.*?)(\s+(?:Which|What|Would you like|Nothing has been sent|No action has been taken)\b.*)$/i);
+        if (followUp && followUp[1].trim()) {
+          parts[parts.length - 1] = followUp[1].trim();
+          return [inlineList[1], ...parts.map((part) => '• ' + part), followUp[2].trim()];
+        }
+        return [inlineList[1], ...parts.map((part) => '• ' + part)];
+      }
+    }
+    return [line.replace(/^(\s*)[-*]\s+/, '$1• ')];
+  }).join('\n');
+}
+
 function renderAgentInlineMarkdown(value: string, keyPrefix: string): React.ReactNode[] {
-  const tokens = value.split(/(\\*\\*[^*]+\\*\\*|\\*[^*]+\\*)/g);
+  const tokens = value.split(/(\*\*[^*\n]+?\*\*|__[^_\n]+?__|~~[^~\n]+?~~|\`[^\`\n]+\`|\*[^*\n]+?\*)/g);
   return tokens.filter(Boolean).map((token, index) => {
     const key = keyPrefix + '-' + index;
-    if (token.startsWith('**') && token.endsWith('**')) {
+    if ((token.startsWith('**') && token.endsWith('**')) || (token.startsWith('__') && token.endsWith('__'))) {
       return <strong key={key} className="font-semibold" style={{ color: '#111827' }}>{token.slice(2, -2)}</strong>;
+    }
+    if (token.startsWith('~~') && token.endsWith('~~')) {
+      return <del key={key}>{token.slice(2, -2)}</del>;
+    }
+    if (token.startsWith('`') && token.endsWith('`')) {
+      return <code key={key} className="rounded bg-slate-100 px-1 py-0.5 text-[0.92em]">{token.slice(1, -1)}</code>;
     }
     if (token.startsWith('*') && token.endsWith('*')) {
       return <em key={key}>{token.slice(1, -1)}</em>;
     }
-    return <React.Fragment key={key}>{token}</React.Fragment>;
+    const cleaned = token.replace(/\*\*/g, '').replace(/__/g, '').replace(/~~/g, '').replace(/\`/g, '').replace(/(^|\s)#{1,6}(?=\s|$)/g, '$1');
+    return <React.Fragment key={key}>{cleaned}</React.Fragment>;
   });
 }
 
 function AgentMarkdown({ content }: { content: string }) {
-  const lines = String(content || '').replace(/\\r\\n?/g, '\\n').split('\\n');
+  const lines = normalizeAgentMessage(content).split('\n');
   return <div className="agent-response space-y-1.5 break-words" style={{ color: '#172033', opacity: 1 }}>
     {lines.map((rawLine, index) => {
       const line = rawLine.trimEnd();
       const trimmed = line.trim();
       const key = 'line-' + index;
       if (!trimmed) return <div key={key} aria-hidden="true" className="h-1" />;
-      const heading = trimmed.match(/^(#{1,3})\\s+(.+)$/);
+      const heading = trimmed.match(/^(#{1,6})\s+(.+)$/);
       if (heading) {
-        const level = heading[1].length;
+        const level = Math.min(3, heading[1].length);
         return <div key={key} className={level === 1 ? 'pt-2 text-base font-bold' : level === 2 ? 'pt-2 text-sm font-bold' : 'pt-1 text-[13px] font-semibold'} style={{ color: '#111827' }}>
           {renderAgentInlineMarkdown(heading[2], key)}
         </div>;
       }
-      const numbered = trimmed.match(/^(\\d+)[.)]\\s+(.+)$/);
+      const numbered = trimmed.match(/^(\d+)[.)]\s+(.+)$/);
       if (numbered) {
         return <div key={key} className="flex items-start gap-2 pl-1">
           <span className="shrink-0 font-semibold tabular-nums" style={{ color: '#c2410c' }}>{numbered[1]}.</span>
           <span className="min-w-0">{renderAgentInlineMarkdown(numbered[2], key)}</span>
         </div>;
       }
-      const bullet = line.match(/^(\\s*)[-*]\\s+(.+)$/);
+      const bullet = line.match(/^(\s*)[-*•]\s+(.+)$/);
       if (bullet) {
         const indent = Math.min(3, Math.floor(bullet[1].length / 2));
         return <div key={key} className="flex items-start gap-2" style={{ paddingLeft: 10 + indent * 14 }}>
@@ -62,11 +93,48 @@ function AgentMarkdown({ content }: { content: string }) {
           <span className="min-w-0">{renderAgentInlineMarkdown(bullet[2], key)}</span>
         </div>;
       }
-      if (trimmed.startsWith('> ')) {
-        return <div key={key} className="border-l-2 border-orange-300 pl-3 italic" style={{ color: '#334155' }}>{renderAgentInlineMarkdown(trimmed.slice(2), key)}</div>;
-      }
-      return <p key={key} className="leading-6" style={{ color: '#172033' }}>{renderAgentInlineMarkdown(trimmed, key)}</p>;
+      const safeLine = trimmed.replace(/^#{1,6}\s*/, '');
+      return <p key={key} className="leading-6" style={{ color: '#172033' }}>{renderAgentInlineMarkdown(safeLine, key)}</p>;
     })}
+  </div>;
+}
+
+function CampaignReportArtifactPreview({ artifact }: { artifact: AgentArtifact }) {
+  const report = artifact.report as unknown as CampaignReport | undefined;
+  if (!report || !Array.isArray(report.campaigns)) return null;
+  const downloadPdf = () => {
+    const pdf = buildCampaignReportPdfDocument(report);
+    const blob = new Blob([pdf], { type: 'application/pdf' });
+    const downloadUrl = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    const safeName = (report.title || 'campaign-report')
+      .normalize('NFKD')
+      .replace(/[^a-zA-Z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .toLowerCase() || 'campaign-report';
+    anchor.href = downloadUrl;
+    anchor.download = safeName + '.pdf';
+    anchor.style.display = 'none';
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    window.setTimeout(() => URL.revokeObjectURL(downloadUrl), 60_000);
+  };
+  const campaignNames = Array.isArray(report.campaignNames) ? report.campaignNames : [];
+  return <div className="mt-4 w-full overflow-hidden rounded-xl border border-blue-200 bg-white shadow-sm">
+    <div className="flex items-center justify-between gap-3 border-b border-blue-100 bg-blue-50 px-3 py-2.5">
+      <div className="flex items-center gap-2 text-xs font-bold text-slate-900"><FileText className="h-4 w-4 text-blue-600" /> Campaign report ready</div>
+      <span className="rounded-full border border-blue-200 bg-white px-2 py-1 text-[9px] font-semibold text-blue-700">{report.reportType === 'INDIVIDUAL' ? 'Individual report' : 'Campaign comparison'}</span>
+    </div>
+    <div className="space-y-2 p-3">
+      <div className="text-sm font-bold text-slate-900">{report.title}</div>
+      <div className="text-[10px] text-slate-500">{report.campaigns.length} campaign{report.campaigns.length === 1 ? '' : 's'} · Generated {report.generatedAt ? new Date(report.generatedAt).toLocaleString() : 'just now'}</div>
+      {report.analysis?.executiveSummary && <p className="text-xs leading-5 text-slate-700">{report.analysis.executiveSummary}</p>}
+      {campaignNames.length > 0 && <div className="text-[10px] leading-5 text-slate-500">Included: {campaignNames.slice(0, 5).join(' · ')}{campaignNames.length > 5 ? ' · +' + (campaignNames.length - 5) + ' more' : ''}</div>}
+    </div>
+    <div className="border-t border-slate-100 p-3">
+      <button type="button" onClick={downloadPdf} className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-blue-700"><FileDown className="h-4 w-4" /> Download PDF report</button>
+    </div>
   </div>;
 }
 
@@ -79,6 +147,8 @@ function CampaignEmailArtifactPreview({
   onOpenTemplate?: (id: string, kind?: 'campaign' | 'conversation') => void;
   onAction?: (query: string) => void;
 }) {
+  if (artifact.type === 'campaign_report') return <CampaignReportArtifactPreview artifact={artifact} />;
+
   if (artifact.type === 'campaign_dispatch_approval') {
     return <div className="mt-4 w-full overflow-hidden rounded-xl border border-orange-200 bg-white shadow-sm">
       <div className="border-b border-orange-100 bg-orange-50 px-3 py-2.5">

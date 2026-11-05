@@ -4,7 +4,7 @@ import { useBrand } from '../context/BrandContext';
 import { authFetch } from '../services/authService';
 import type { Campaign } from '../types';
 
-type ReportCampaign = {
+export type ReportCampaign = {
   campaignId: string;
   name: string;
   status: string;
@@ -18,7 +18,7 @@ type ReportCampaign = {
   activity: { repeatOpens: number; repeatClicks: number; averageOpensPerUniqueLead: number; averageClicksPerUniqueLead: number };
   tracking: { trackedLeads: number; ignoredAfterDays: number; hasTrackingData: boolean };
 };
-type CampaignReport = {
+export type CampaignReport = {
   reportId: string;
   reportType: 'INDIVIDUAL' | 'COMPARISON';
   title: string;
@@ -40,7 +40,7 @@ function escapeHtml(value: unknown): string {
   }[char] || char));
 }
 
-function buildPdfDocument(report: CampaignReport): string {
+export function buildCampaignReportPdfDocument(report: CampaignReport): string {
   const PAGE_WIDTH = 595;
   const PAGE_HEIGHT = 842;
   const LEFT = 42;
@@ -368,7 +368,7 @@ export const CampaignReports: React.FC<{ tenantId: string }> = ({ tenantId }) =>
   const exportPdf = () => {
     if (!report) return;
     try {
-      const pdf = buildPdfDocument(report);
+      const pdf = buildCampaignReportPdfDocument(report);
       const blob = new Blob([pdf], { type: 'application/pdf' });
       const downloadUrl = URL.createObjectURL(blob);
       const anchor = document.createElement('a');

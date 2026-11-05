@@ -40,6 +40,7 @@ export interface AgentArtifact {
   sendReady?: boolean;
   sendReadinessError?: string;
   websiteLinks?: Array<{ label: string; url: string; intent: string }>;
+  report?: Record<string, any>;
   updatedAt?: string;
 }
 export interface AgentMessage {

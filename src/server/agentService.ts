@@ -375,6 +375,7 @@ async function executeRegisteredTool(
   userMessage: string,
   appBaseUrl: string,
   attachments: AgentAttachment[],
+  attachmentIntentContext: string,
 ): Promise<{ toolOutput: unknown; artifact?: Record<string, unknown> }> {
   const canUse = (module: string) => modules.includes('*') || modules.includes(module);
   switch (name) {
@@ -441,7 +442,7 @@ async function executeRegisteredTool(
     }
     case 'store_attached_leads': {
       if (!canUse('database')) throw Object.assign(new Error('Database module permission is required to store leads.'), { status: 403 });
-      if (!/\b(store|save|import|add|upload)\b/i.test(userMessage)) throw new Error('Importing attached leads requires a direct user instruction.');
+      if (!/\b(store|save|import|add|upload|send|campaign|recipient)\b/i.test(attachmentIntentContext)) throw new Error('Importing attached leads requires a direct user instruction.');
       const attachment = await resolveAgentAttachment(ctx, conversationId, attachments, args?.attachmentId);
       if (!attachment || !attachment.rows?.length || attachment.kind !== 'spreadsheet') throw new Error('The selected attachment does not contain importable spreadsheet or JSON rows.');
       const mappedRows = mapAttachedLeadRows(attachment.rows,args?.fieldMappings);
@@ -464,7 +465,7 @@ async function executeRegisteredTool(
     }
     case 'save_attachment_as_company_asset': {
       if (!canUse('company-profile') && !canUse('email-design-studio') && !canUse('campaigns') && !canUse('agent')) throw Object.assign(new Error('Company Assets permission is required.'), { status: 403 });
-      if (!/\b(save|upload|add|insert|place|include|use)\b/i.test(userMessage)) throw new Error('Saving an attached image requires a direct user instruction.');
+      if (!/\b(save|upload|add|insert|place|include|use)\b/i.test(attachmentIntentContext)) throw new Error('Saving an attached image requires a direct user instruction.');
       const attachment=await resolveAgentAttachment(ctx,conversationId,attachments,args?.attachmentId);
       if(!attachment || attachment.kind!=='image') throw new Error('Select an attached image to save as a Company Asset.');
       if(attachment.size>700*1024) throw new Error('This image is too large to store as a Company Asset. Use an image up to 700 KB, or attach a compressed copy.');
@@ -603,6 +604,13 @@ async function runAgent(
     }),
     { role: 'user', content: buildAgentUserInputContent(message, attachments) },
   ];
+  const lastAttachmentMessageIndex = history.reduce((last: number, item: any, index: number) =>
+    Array.isArray(item.attachments) && item.attachments.length ? index : last, -1);
+  const intentHistoryStart = lastAttachmentMessageIndex >= 0 ? lastAttachmentMessageIndex : Math.max(0, history.length - 6);
+  const attachmentIntentContext = [
+    ...history.slice(intentHistoryStart).filter((item: any) => item.role === 'user').map((item: any) => String(item.content || '')),
+    message,
+  ].join('\n').slice(-MAX_USER_MESSAGE * 2);
   const calledTools: string[] = [];
   const artifacts: Record<string, unknown>[] = [];
   let finalText = '';
@@ -650,7 +658,7 @@ async function runAgent(
       let output: unknown;
       try {
         const parsed = call.arguments ? JSON.parse(call.arguments) : {};
-        const execution = await executeRegisteredTool(toolName, parsed, ctx, modules, conversationId, message, appBaseUrl, attachments);
+        const execution = await executeRegisteredTool(toolName, parsed, ctx, modules, conversationId, message, appBaseUrl, attachments, attachmentIntentContext);
         output = execution.toolOutput;
         if (execution.artifact) artifacts.push(execution.artifact);
         calledTools.push(toolName);

@@ -420,41 +420,69 @@ function ConfigPanel({ compact = false }: { compact?: boolean }) {
       </div>
       {canManageConfig && <div className="mt-3 flex gap-2"><input value={preference} onChange={(e) => setPreference(e.target.value)} maxLength={300} placeholder="Add an approved company preference…" className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-900 outline-none placeholder:text-slate-600 focus:border-orange-400" /><button type="button" disabled={!preference.trim() || saving} onClick={() => void addPreference()} className="rounded-lg bg-slate-100 px-3 text-xs font-semibold text-slate-900 disabled:opacity-40">Save</button></div>}
     </div>
-    <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-[11px] leading-5 text-amber-800"><ShieldCheck className="mr-1 inline h-3.5 w-3.5" /> Current release: read-only tool registry. No campaigns, messages, settings, or other records can be changed from the Agent yet.</div>
   </div>;
 }
 
 export const AgentWorkspace: React.FC<{ currentUser: AppUser; onOpenEmailTemplate?: (id: string, kind?: 'campaign' | 'conversation') => void }> = ({ currentUser, onOpenEmailTemplate }) => {
-  const { conversations, activeConversationId, messages, loading, sending, activityLabel, error, canManageConfig, selectConversation, newConversation, sendMessage, clearError, refresh } = useAgent();
+  const { conversations, activeConversationId, messages, loading, sending, activityLabel, error, selectConversation, newConversation, sendMessage, clearError, refresh } = useAgent();
   const [showSettings, setShowSettings] = useState(false);
+  const [showSidebar, setShowSidebar] = useState(() => typeof window !== 'undefined' && window.innerWidth >= 1024);
+
   return <div className="agent-shell min-h-[calc(100vh-105px)] overflow-hidden rounded-3xl border border-slate-200 bg-white text-slate-900 shadow-2xl">
     <div className="agent-grid relative flex min-h-[calc(100vh-105px)] flex-col">
       <div className="relative flex items-center justify-between border-b border-slate-200 px-5 py-4 sm:px-7">
         <div className="flex items-center gap-3"><Orb small /><div><div className="flex items-center gap-2 text-base font-bold tracking-tight">AI Agent <span className="rounded-full border border-orange-200 bg-orange-50 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.18em] text-orange-700">Workspace</span></div><div className="mt-0.5 text-[11px] text-slate-500">Context-aware assistant · secure execution boundary</div></div></div>
-        <div className="flex items-center gap-2"><div className="hidden items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-[10px] text-emerald-700 sm:flex"><span className="h-1.5 w-1.5 rounded-full bg-emerald-500 shadow-[0_0_9px_rgba(110,231,183,.8)]" /> Workspace connected</div><button type="button" onClick={() => setShowSettings((x) => !x)} className="rounded-xl border border-slate-200 p-2 text-slate-600 hover:bg-slate-100 hover:text-slate-900"><Settings2 className="h-4 w-4" /></button><button type="button" onClick={() => void refresh()} className="rounded-xl border border-slate-200 p-2 text-slate-600 hover:bg-slate-100 hover:text-slate-900"><Activity className="h-4 w-4" /></button></div>
+        <div className="flex items-center gap-2">
+          <div className="hidden items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-[10px] text-emerald-700 sm:flex"><span className="h-1.5 w-1.5 rounded-full bg-emerald-500 shadow-[0_0_9px_rgba(110,231,183,.8)]" /> Workspace connected</div>
+          <button type="button" onClick={() => setShowSettings(true)} aria-label="Open Agent settings" title="Agent settings" className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:border-orange-200 hover:bg-orange-50 hover:text-orange-700"><Settings2 className="h-4 w-4" /><span>Settings</span></button>
+          <button type="button" onClick={() => void refresh()} title="Refresh workspace" aria-label="Refresh workspace" className="rounded-xl border border-slate-200 p-2 text-slate-600 hover:bg-slate-100 hover:text-slate-900"><Activity className="h-4 w-4" /></button>
+        </div>
       </div>
-      <div className="grid min-h-0 flex-1 lg:grid-cols-[250px_minmax(0,1fr)_300px]">
-        <aside className="hidden border-r border-slate-200 p-4 lg:block">
-          <button type="button" onClick={() => void newConversation('agent')} className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-orange-500 to-orange-600 px-3 py-2.5 text-xs font-bold text-white shadow-lg shadow-orange-500/10"><Plus className="h-4 w-4" /> New conversation</button>
-          <div className="mt-6 flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-600"><History className="h-3.5 w-3.5" /> Recent conversations</div>
-          <div className="mt-3 space-y-1.5">
-            {conversations.map((item) => <button key={item.id} type="button" onClick={() => void selectConversation(item.id)} className={'w-full rounded-xl px-3 py-2.5 text-left transition ' + (activeConversationId === item.id ? 'bg-orange-50 text-orange-700' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900')}><div className="truncate text-xs font-medium">{item.title || 'New conversation'}</div><div className="mt-1 text-[10px] text-slate-600">{new Date(item.updatedAt || item.createdAt).toLocaleDateString()}</div></button>)}
-            {conversations.length === 0 && !loading && <div className="px-2 py-3 text-xs text-slate-600">Your recent tasks will appear here.</div>}
-          </div>
-          <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-3"><div className="flex items-center gap-2 text-xs font-semibold text-slate-700"><Command className="h-3.5 w-3.5 text-orange-600" /> Workspace context</div><div className="mt-2 text-[11px] leading-5 text-slate-500">The Agent can inspect approved company profile, published knowledge, lead database summaries, assets, and email designs.</div></div>
-        </aside>
+
+      <div className={'relative grid min-h-0 flex-1 ' + (showSidebar ? 'lg:grid-cols-[260px_minmax(0,1fr)]' : 'grid-cols-1')}>
+        {showSidebar && <>
+          <button type="button" aria-label="Close conversations sidebar" onClick={() => setShowSidebar(false)} className="absolute inset-0 z-20 bg-slate-950/20 lg:hidden" />
+          <aside className="absolute inset-y-0 left-0 z-30 flex w-[280px] flex-col overflow-y-auto border-r border-slate-200 bg-white p-4 shadow-xl lg:relative lg:z-auto lg:w-auto lg:shadow-none">
+            <div className="mb-3 flex items-center justify-between">
+              <div className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">Workspace</div>
+              <button type="button" onClick={() => setShowSidebar(false)} className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100 lg:hidden" aria-label="Close sidebar"><X className="h-4 w-4" /></button>
+            </div>
+            <button type="button" onClick={() => void newConversation('agent')} className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-orange-500 to-orange-600 px-3 py-2.5 text-xs font-bold text-white shadow-lg shadow-orange-500/10"><Plus className="h-4 w-4" /> New conversation</button>
+            <div className="mt-6 flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-600"><History className="h-3.5 w-3.5" /> Recent conversations</div>
+            <div className="mt-3 space-y-1.5">
+              {conversations.map((item) => <button key={item.id} type="button" onClick={() => { void selectConversation(item.id); if (typeof window !== 'undefined' && window.innerWidth < 1024) setShowSidebar(false); }} className={'w-full rounded-xl px-3 py-2.5 text-left transition ' + (activeConversationId === item.id ? 'bg-orange-50 text-orange-700' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900')}><div className="truncate text-xs font-medium">{item.title || 'New conversation'}</div><div className="mt-1 text-[10px] text-slate-600">{new Date(item.updatedAt || item.createdAt).toLocaleDateString()}</div></button>)}
+              {conversations.length === 0 && !loading && <div className="px-2 py-3 text-xs text-slate-600">Your recent tasks will appear here.</div>}
+            </div>
+            <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-3"><div className="flex items-center gap-2 text-xs font-semibold text-slate-700"><Command className="h-3.5 w-3.5 text-orange-600" /> Workspace content</div><div className="mt-2 text-[11px] leading-5 text-slate-500">The Agent can inspect approved company profile, published knowledge, lead databases, company assets, and email designs.</div></div>
+          </aside>
+        </>}
+
         <section className="flex min-h-[520px] min-w-0 flex-col">
-          <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3 sm:px-5"><div className="truncate text-xs font-semibold text-slate-700">{conversations.find((x) => x.id === activeConversationId)?.title || 'New workspace task'}</div><div className="flex items-center gap-2"><span className="text-[10px] text-slate-600">{currentUser.name}</span><button type="button" onClick={() => void newConversation('agent')} className="rounded-lg border border-slate-200 p-1.5 text-slate-600 hover:text-slate-900 lg:hidden"><Plus className="h-3.5 w-3.5" /></button></div></div>
+          <div className="flex items-center justify-between border-b border-slate-200 px-3 py-3 sm:px-5">
+            <div className="flex min-w-0 items-center gap-2">
+              <button type="button" onClick={() => setShowSidebar((value) => !value)} aria-expanded={showSidebar} aria-label={showSidebar ? 'Hide conversations sidebar' : 'Show conversations sidebar'} title={showSidebar ? 'Hide sidebar' : 'Show sidebar'} className="shrink-0 rounded-lg border border-slate-200 p-2 text-slate-600 transition hover:border-orange-200 hover:bg-orange-50 hover:text-orange-700">
+                {showSidebar ? <PanelLeftClose className="h-4 w-4" /> : <PanelLeftOpen className="h-4 w-4" />}
+              </button>
+              <div className="truncate text-xs font-semibold text-slate-700">{conversations.find((x) => x.id === activeConversationId)?.title || 'New workspace task'}</div>
+            </div>
+            <div className="ml-2 flex shrink-0 items-center gap-2"><span className="hidden text-[10px] text-slate-600 sm:inline">{currentUser.name}</span><button type="button" onClick={() => void newConversation('agent')} title="New conversation" aria-label="New conversation" className="rounded-lg border border-slate-200 p-1.5 text-slate-600 hover:text-slate-900 lg:hidden"><Plus className="h-3.5 w-3.5" /></button></div>
+          </div>
           <Messages messages={messages} sending={sending} onOpenTemplate={onOpenEmailTemplate} onAction={(query) => void sendMessage(query, 'agent')} activityLabel={activityLabel} />
           <ChatComposer moduleContext="agent" />
         </section>
-        <aside className="hidden border-l border-slate-200 p-4 xl:block">
-          <div className="mb-3 flex items-center justify-between"><div className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">Policy & memory</div><ShieldCheck className="h-4 w-4 text-orange-600" /></div>
-          <ConfigPanel />
-          {showSettings && <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700">Agent settings are visible to workspace admins. {canManageConfig ? 'Changes are saved to this workspace.' : 'Contact an admin to change them.'}</div>}
-        </aside>
       </div>
-      {showSettings && <div className="border-t border-slate-200 p-4 xl:hidden"><ConfigPanel /></div>}
+
+      {showSettings && <>
+        <button type="button" aria-label="Close Agent settings" onClick={() => setShowSettings(false)} className="fixed inset-0 z-[90] bg-slate-950/25" />
+        <section role="dialog" aria-modal="true" aria-label="Agent settings" className="fixed inset-y-0 right-0 z-[91] flex w-full max-w-[440px] flex-col border-l border-slate-200 bg-white text-slate-900 shadow-2xl">
+          <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+            <div className="flex items-center gap-2"><Settings2 className="h-4 w-4 text-orange-600" /><div><div className="text-sm font-bold text-slate-900">Agent settings</div><div className="mt-0.5 text-[11px] text-slate-500">Workspace policy and shared company memory</div></div></div>
+            <button type="button" onClick={() => setShowSettings(false)} aria-label="Close settings" className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-900"><X className="h-4 w-4" /></button>
+          </div>
+          <div className="min-h-0 flex-1 overflow-y-auto p-4"><ConfigPanel compact /></div>
+        </section>
+      </>}
+
       {error && <div className="flex items-center justify-between border-t border-rose-200 bg-rose-50 px-4 py-2 text-xs text-rose-700"><span>{error}</span><button type="button" onClick={clearError}><X className="h-3.5 w-3.5" /></button></div>}
       {loading && <div className="absolute right-4 top-20 flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[10px] text-slate-600"><Loader2 className="h-3 w-3 animate-spin" /> Syncing conversations</div>}
     </div>

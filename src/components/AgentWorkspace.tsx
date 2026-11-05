@@ -242,13 +242,13 @@ function Messages({ messages, sending, compact, onOpenTemplate, onAction, activi
   onAction?: (query: string) => void;
   activityLabel?: string;
 }) {
-  return <div className={'agent-messages flex-1 min-h-0 overflow-y-auto ' + (compact ? 'px-3 py-4' : 'px-5 py-6')}>
+  return <div className={'agent-messages w-full min-w-0 flex-1 min-h-0 overflow-y-auto ' + (compact ? 'px-3 py-4' : 'px-5 py-6')}>
     {messages.length === 0 && (
       <div className="flex h-full min-h-[250px] flex-col items-center justify-center text-center">
         <Orb />
         <div className="mt-5 text-lg font-semibold text-slate-900">Where should we start?</div>
         <p className="mt-2 max-w-sm text-sm leading-6 text-slate-600">Ask about your workspace, company knowledge, lead databases, campaigns, or template design.</p>
-        {!compact && <div className="mt-6 grid w-full max-w-2xl grid-cols-1 gap-2 sm:grid-cols-3">
+        {!compact && <div className="mt-6 grid w-full max-w-4xl grid-cols-1 gap-2 sm:grid-cols-3">
           {QUICK_PROMPTS.map((item) => {
             const Icon = item.icon;
             return <div key={item.label} className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-left">
@@ -260,7 +260,7 @@ function Messages({ messages, sending, compact, onOpenTemplate, onAction, activi
         </div>}
       </div>
     )}
-    <div className="mx-auto flex max-w-3xl flex-col gap-4">
+    <div className="mx-auto flex w-full min-w-0 max-w-[90rem] flex-col gap-4">
       {messages.map((message) => (
         <div key={message.id} className={'agent-message-enter flex ' + (message.role === 'user' ? 'justify-end' : 'justify-start')}>
           {message.role === 'assistant' && <div className="mr-2 mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-blue-200 bg-orange-50"><Bot className="h-4 w-4 text-orange-600" /></div>}
@@ -428,8 +428,8 @@ export const AgentWorkspace: React.FC<{ currentUser: AppUser; onOpenEmailTemplat
   const [showSettings, setShowSettings] = useState(false);
   const [showSidebar, setShowSidebar] = useState(() => typeof window !== 'undefined' && window.innerWidth >= 1024);
 
-  return <div className="agent-shell min-h-[calc(100vh-105px)] overflow-hidden rounded-3xl border border-slate-200 bg-white text-slate-900 shadow-2xl">
-    <div className="agent-grid relative flex min-h-[calc(100vh-105px)] flex-col">
+  return <div className="agent-shell flex h-full min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white text-slate-900 shadow-2xl">
+    <div className="agent-grid relative flex h-full min-h-0 w-full min-w-0 flex-1 flex-col">
       <div className="relative flex items-center justify-between border-b border-slate-200 px-5 py-4 sm:px-7">
         <div className="flex items-center gap-3"><Orb small /><div><div className="flex items-center gap-2 text-base font-bold tracking-tight">AI Agent <span className="rounded-full border border-orange-200 bg-orange-50 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.18em] text-orange-700">Workspace</span></div><div className="mt-0.5 text-[11px] text-slate-500">Context-aware assistant · secure execution boundary</div></div></div>
         <div className="flex items-center gap-2">
@@ -439,7 +439,7 @@ export const AgentWorkspace: React.FC<{ currentUser: AppUser; onOpenEmailTemplat
         </div>
       </div>
 
-      <div className={'relative grid min-h-0 flex-1 ' + (showSidebar ? 'lg:grid-cols-[260px_minmax(0,1fr)]' : 'grid-cols-1')}>
+      <div className={'relative grid min-h-0 min-w-0 w-full flex-1 ' + (showSidebar ? 'lg:grid-cols-[260px_minmax(0,1fr)]' : 'grid-cols-1')}>
         {showSidebar && <>
           <button type="button" aria-label="Close conversations sidebar" onClick={() => setShowSidebar(false)} className="absolute inset-0 z-20 bg-slate-950/20 lg:hidden" />
           <aside className="absolute inset-y-0 left-0 z-30 flex w-[280px] flex-col overflow-y-auto border-r border-slate-200 bg-white p-4 shadow-xl lg:relative lg:z-auto lg:w-auto lg:shadow-none">
@@ -457,7 +457,7 @@ export const AgentWorkspace: React.FC<{ currentUser: AppUser; onOpenEmailTemplat
           </aside>
         </>}
 
-        <section className="flex min-h-[520px] min-w-0 flex-col">
+        <section className="flex min-h-0 min-w-0 w-full flex-col">
           <div className="flex items-center justify-between border-b border-slate-200 px-3 py-3 sm:px-5">
             <div className="flex min-w-0 items-center gap-2">
               <button type="button" onClick={() => setShowSidebar((value) => !value)} aria-expanded={showSidebar} aria-label={showSidebar ? 'Hide conversations sidebar' : 'Show conversations sidebar'} title={showSidebar ? 'Hide sidebar' : 'Show sidebar'} className="shrink-0 rounded-lg border border-slate-200 p-2 text-slate-600 transition hover:border-orange-200 hover:bg-orange-50 hover:text-orange-700">
@@ -516,7 +516,7 @@ export const AgentFloatingCompanion: React.FC<{ hidden?: boolean; moduleContext:
   const launcherRef = useRef<HTMLButtonElement | null>(null);
   const dragRef = useRef<AgentDragState | null>(null);
   const suppressClickRef = useRef(false);
-  const { messages, sending, error, clearError, newConversation, conversations, activeConversationId, selectConversation, sendMessage } = useAgent();
+  const { messages, sending, activityLabel, error, clearError, newConversation, conversations, activeConversationId, selectConversation, sendMessage } = useAgent();
 
   useEffect(() => {
     if (!position) return;

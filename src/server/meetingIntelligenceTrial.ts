@@ -567,7 +567,7 @@ export async function handleMeetingIntelligenceTrial(
         return sendJson(res, 422, {
           success: false,
           code: 'MEET_REQUIRES_GOOGLE_SIGN_IN',
-          code: 'GOOGLE_BOT_SESSION_NOT_ACCEPTED',
+
           error: 'Google Meet did not accept the saved dedicated-account session. Re-export the session after signing in to the bot account.',
           diagnostics,
         });
@@ -580,7 +580,7 @@ export async function handleMeetingIntelligenceTrial(
             ? 'Google Meet says this meeting code is invalid. Recheck the link or create a fresh Meet.'
             : meetState.blockedReason === 'MEETING_ALREADY_ENDED'
               ? 'Google Meet says this meeting has already ended.'
-              : 'Google Meet is restricting the signed-in bot account. Confirm that this exact Google account is invited to the Calendar event and allowed by the organizer's access policy.',
+              : "Google Meet is restricting the signed-in bot account. Confirm that this exact Google account is invited to the Calendar event and allowed by the organizer's access policy.",
           diagnostics: [
             ...diagnostics,
             'Meet page title: ' + (meetState.pageTitle || '(empty)'),

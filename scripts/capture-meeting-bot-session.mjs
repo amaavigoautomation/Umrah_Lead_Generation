@@ -59,12 +59,11 @@ async function readOriginStorage(page, origin) {
 }
 
 async function main() {
-  const executablePath = await findChrome();
   const profileDir = path.join(process.cwd(), '.meeting-bot-google-profile');
   const outputPath = path.resolve(process.cwd(), process.env.MEETING_BOT_SESSION_OUT || 'meeting-bot-google-session.json');
 
   console.log('\nAmaavigo Meeting Intelligence — Google account session setup');
-  console.log('Chrome:', executablePath);
+  console.log("Chrome: existing manually authenticated Chrome via CDP");
   console.log('Dedicated profile:', profileDir);
   console.log('\nUse a dedicated Google Workspace account for the meeting bot.');
   console.log('Do not use your personal Google account. Do not share this browser profile or exported file.');
@@ -75,21 +74,16 @@ async function main() {
     throw new Error('Enter a valid Google account email address.');
   }
 
-  const browser = await puppeteer.launch({
-    executablePath,
-    headless: false,
-    userDataDir: profileDir,
-    defaultViewport: null,
-    args: ['--no-first-run', '--no-default-browser-check'],
-    timeout: 60_000,
-  });
+  const cdpUrl = process.env.MEETING_BOT_CDP_URL || "http://127.0.0.1:9222";
+  const browser = await puppeteer.connect({ browserURL: cdpUrl, defaultViewport: null });
+  console.log("Connected to existing Chrome:", cdpUrl);
 
   try {
     const pages = await browser.pages();
     const page = pages[0] || await browser.newPage();
     await page.goto('https://accounts.google.com/', { waitUntil: 'domcontentloaded', timeout: 45_000 });
 
-    console.log('\nA Chrome window has opened.');
+    console.log('\nConnected to your existing Chrome session.');
     console.log('Sign in manually to the dedicated bot account, complete any Google security checks,');
     console.log('and confirm that the account avatar/profile is visible. Do not automate or bypass security checks.');
     await rl.question('\nWhen the dedicated account is signed in, return here and press Enter: ');
@@ -147,7 +141,7 @@ async function main() {
     console.log('3. After the upload succeeds, securely delete the exported JSON file.');
     console.log('4. Keep the local Chrome profile private; it contains the signed-in account session.');
   } finally {
-    await browser.close().catch(() => {});
+    browser.disconnect();
     rl.close();
   }
 }

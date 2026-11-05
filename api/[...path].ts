@@ -48,7 +48,7 @@ export default async function handler(req: IncomingMessage & { body?: any }, res
           code: auth?.code || 'AUTH_REQUIRED',
         }));
       }
-      const { handleMeetingIntelligenceTrial } = await import('../src/server/meetingIntelligenceTrial.js');
+      const { handleMeetingIntelligenceTrial } = await import('./meeting-intelligence.bundle.js');
       await handleMeetingIntelligenceTrial(req, res, auth.ctx);
       return;
     } catch (error: any) {

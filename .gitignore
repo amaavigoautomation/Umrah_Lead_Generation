@@ -18,3 +18,9 @@ gen-lang-client-*.json
 # Local Google Meet bot sign-in profile and exported session (sensitive)
 .meeting-bot-google-profile/
 meeting-bot-google-session.json
+
+# Generated Meeting Intelligence server bundle
+api/meeting-intelligence.bundle.js
+
+# Local Amaavigo Google browser profile (sensitive)
+.amaavigo-google-profile/

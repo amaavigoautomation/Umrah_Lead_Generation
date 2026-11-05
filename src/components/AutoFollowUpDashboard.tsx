@@ -466,9 +466,21 @@ export const AutoFollowUpDashboard: React.FC<AutoFollowUpDashboardProps> = ({
                         <td className="py-3 px-3 max-w-xs">
                           {j.audit ? (
                             <div>
-                              <p className="font-medium text-slate-800 line-clamp-1">
-                                Objective: {j.audit.objective || j.audit.reason}
-                              </p>
+                              {j.audit.decision && (
+                                <p className="font-semibold text-slate-800">
+                                  Decision: {String(j.audit.decision).replace(/_/g, ' ').toUpperCase()}
+                                </p>
+                              )}
+                              {j.audit.objective && (
+                                <p className="text-[11px] text-slate-700 mt-0.5">
+                                  Objective: {j.audit.objective}
+                                </p>
+                              )}
+                              {j.audit.reason && (
+                                <p className="text-[11px] text-slate-600 mt-0.5">
+                                  Reason: {j.audit.reason}
+                                </p>
+                              )}
                               {j.audit.generatedMessage && (
                                 <p className="text-[11px] text-slate-500 line-clamp-2 italic mt-0.5">
                                   "{j.audit.generatedMessage}"

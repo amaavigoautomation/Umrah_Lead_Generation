@@ -923,11 +923,11 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
                         ? 'bg-emerald-50 border-emerald-300 text-emerald-800 hover:bg-emerald-100'
                         : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
                     }`}
-                    title={activeLeadHasBookedDemo ? 'A demo is booked. Auto Follow-Up cannot be enabled for this lead.' : 'Toggle AI Auto Follow-Up for this lead'}
+                    title={activeLeadHasBookedDemo ? 'A demo is booked. Auto Follow-Up cannot be enabled for this lead.' : 'Controls the recurring sequence. CRM-scheduled one-time messages are shown separately below.'}
                   >
                     <Clock className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
                     <span>
-                      AI Auto Follow-Up Sequence [{isAutoFollowUpUiActive ? ' ON ' : ' OFF '}]
+                      Recurring AI Auto Follow-Up [{isAutoFollowUpUiActive ? ' ON ' : ' OFF '}]
                       {!activeLead?.autoFollowUp?.enabled && activeLead?.autoFollowUp?.disabledReason === 'completed' && (
                         <span className="ml-1 font-semibold text-slate-500">
                           · Completed {activeLead.autoFollowUp.attemptCount || activeLead.autoFollowUp.maxAttempts}/
@@ -1002,7 +1002,7 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
                 <div className="flex items-center space-x-2">
                   <span className="flex items-center space-x-1.5">
                     <span className={`w-2 h-2 rounded-full ${isAutoFollowUpUiActive ? 'bg-orange-500 animate-pulse' : 'bg-slate-400'}`} />
-                    <span className="font-semibold text-slate-800">AI Auto Follow-Up Sequence:</span>
+                    <span className="font-semibold text-slate-800">Recurring AI Auto Follow-Up Sequence:</span>
                   </span>
                   {activeLead.demoStatus === 'BOOKED' || activeLead.status === 'DEMO_BOOKED' ? (
                     <span className="text-amber-700 font-medium">[ OFF ] — Demo booked</span>
@@ -1038,7 +1038,7 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
 
             {activeLead?.aiAutoFollowUp && (
               <div className="px-3.5 py-1.5 bg-emerald-50/80 border-b border-emerald-100 text-xs flex items-center justify-between">
-                <span className="font-semibold text-slate-800">AI Auto Follow-Up:</span>
+                <span className="font-semibold text-slate-800">CRM-Scheduled One-Time Message:</span>
                 {activeLead.aiAutoFollowUp.status === 'scheduled' ? (
                   <span className="text-emerald-700 font-medium">
                     AI message scheduled for {new Date(activeLead.aiAutoFollowUp.scheduledAt).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })}. It will be cancelled if the lead replies first.

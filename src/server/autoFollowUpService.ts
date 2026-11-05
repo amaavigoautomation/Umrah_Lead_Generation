@@ -1051,12 +1051,16 @@ export async function evaluateAndGenerateAiFollowUp(params: {
     .map((m) => `[${m.senderType} - ${m.timestamp}]: ${m.text}`)
     .join('\n');
 
+  const oneTimeInstruction = job.oneTime
+    ? 'CRM-SCHEDULED ONE-TIME FOLLOW-UP: A team member explicitly scheduled this message. After the worker verifies that the lead has not replied and all safety, consent, recipient, and delivery checks pass, you MUST generate and send one concise, contextual follow-up. Do not choose skip merely because there is no new question, a demo was proposed/booked, or the conversation is waiting for an outcome. Use human_review only for a genuine issue that requires a person.'
+    : '';
   const systemPrompt = `You are the AI Operations & Conversation Engine for ${isUmrah ? 'Umrah360 (www.umrah360.in), the travel ERP & CRM software for Hajj & Umrah tour operators' : brandIntro(brand)}.
 
 YOUR MISSION:
 Analyze the conversation thread with a lead who stopped responding after our last message. Decide whether an automated follow-up is appropriate and, if so, write a natural, contextual follow-up.
 
 STRICT RULES:
+${oneTimeInstruction}
 1. NO GENERIC FOLLOW-UPS. Do not say "Just checking in...", "The system noticed you haven't replied", or "This is an automated follow-up".
 2. NO HALLUCINATIONS. Never invent prices, discounts, availability, features, or promises. Use only information present in the conversation or confirmed lead details.
 3. DO NOT REPEAT questions or information already given in recent messages.
@@ -1115,6 +1119,17 @@ Decide SEND, SKIP, or HUMAN_REVIEW and produce the JSON.`;
     }
 
     const parsed = JSON.parse(raw);
+    if (job.oneTime && parsed.decision === 'skip') {
+      const modelReason = String(parsed.reason || 'The model did not provide a reason.');
+      return {
+        decision: 'send',
+        reason: `The AI suggested skipping this message: ${modelReason} A team member explicitly scheduled this one-time follow-up, so a safe fallback message was used instead.`,
+        objective: parsed.objective || 'Send the CRM-scheduled follow-up',
+        generatedMessage: fallbackFollowUpText(brand, lead.serviceInterest || snap.serviceInterest),
+        language: parsed.language || 'English',
+        model: 'fallback-one-time',
+      };
+    }
     if (parsed.decision === 'send' && parsed.generatedMessage) {
       const msg = String(parsed.generatedMessage).toLowerCase();
       if (

@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Activity, ArrowUpRight, Bot, Check, Command, Database, File, FileDown, FileText, History, Image, Loader2, Paperclip, Plus, Send, Settings2, ShieldCheck, Sparkles, X } from 'lucide-react';
+import { Activity, ArrowUpRight, Bot, Check, Command, Database, File, FileDown, FileText, History, Image, Loader2, PanelLeftClose, PanelLeftOpen, Paperclip, Plus, Send, Settings2, ShieldCheck, Sparkles, X } from 'lucide-react';
 import { useAgent, AgentAutonomy, AgentMessage, AgentArtifact, AgentAttachmentInput } from '../context/AgentContext';
 import type { AppUser } from '../types';
 import { buildCampaignReportPdfDocument } from './CampaignReports';

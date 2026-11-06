@@ -3,7 +3,7 @@ import { sanitizeForFirestore } from './firestoreUtils.js';
 import { tenantRepo } from './tenantRepo.js';
 import type { TenantContext } from '../types/tenant.js';
 
-export type ServerAuditModule = 'CAMPAIGNS' | 'CRM' | 'INBOX' | 'KNOWLEDGE' | 'SETTINGS' | 'AUTH' | 'SCHEDULING' | 'AI_ENGINE' | 'WHATSAPP' | 'EMAIL_DESIGN' | 'SYSTEM';
+export type ServerAuditModule = 'CAMPAIGNS' | 'CRM' | 'INBOX' | 'KNOWLEDGE' | 'SETTINGS' | 'AUTH' | 'SCHEDULING' | 'AI_ENGINE' | 'WHATSAPP' | 'EMAIL_DESIGN' | 'DATABASE' | 'SYSTEM';
 export type ServerAuditSeverity = 'INFO' | 'WARNING' | 'CRITICAL' | 'SECURITY';
 
 export interface ServerAuditEntry {

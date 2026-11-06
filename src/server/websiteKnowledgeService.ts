@@ -8,7 +8,7 @@ import { tenantRepo } from './tenantRepo.js';
 import { getTenantBrand } from './brandService.js';
 import { generateOpenAICompletion } from './openaiClient.js';
 import { getAllKnowledgeDocs, saveKnowledgeDoc, deleteKnowledgeDoc } from './knowledgeService.js';
-import type { KnowledgeDocument, KnowledgeStatus } from '../types/index.js';
+import type { KnowledgeDocument } from '../types/index.js';
 import type { TenantContext } from '../types/tenant.js';
 
 const MAX_PAGES = 40;
@@ -314,9 +314,10 @@ async function generateWebsiteArticles(
     const category = String(item?.category || '').trim().slice(0, 80);
     const content = String(item?.content || '').trim().slice(0, 18_000);
     if (title.length < 3 || category.length < 2 || content.length < 80) continue;
-    const sourceUrls = Array.isArray(item?.sourceUrls)
-      ? item.sourceUrls.map((value: unknown) => String(value || '').trim()).filter((value: string) => allowed.has(value))
-      : [];
+    const sourceValues: unknown[] = Array.isArray(item?.sourceUrls) ? item.sourceUrls : [];
+    const sourceUrls: string[] = sourceValues
+      .map((value: unknown) => String(value || '').trim())
+      .filter((value: string) => allowed.has(value));
     if (!sourceUrls.length) continue;
     const id = 'website-' + hash(category.toLowerCase() + '|' + title.toLowerCase()).slice(0, 32);
     const old = existingById.get(id);

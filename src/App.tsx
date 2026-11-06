@@ -2663,6 +2663,7 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
                 onAddDocument={handleSaveKnowledgeDoc}
                 onUpdateDocument={handleSaveKnowledgeDoc}
                 onDeleteDocument={handleDeleteKnowledgeDoc}
+                canManageWebsiteScan={currentUser.role === 'ADMIN'}
               />
             )}
 

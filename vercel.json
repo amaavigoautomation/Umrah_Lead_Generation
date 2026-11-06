@@ -6,6 +6,10 @@
   "functions": {
     "api/**/*.ts": {
       "includeFiles": "src/{server,firebase}/**"
+    },
+    "api/[...path].ts": {
+      "includeFiles": "src/{server,firebase}/**",
+      "maxDuration": 60
     }
   },
   "crons": [

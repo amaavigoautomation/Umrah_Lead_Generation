@@ -163,6 +163,7 @@ import {
   deleteKnowledgeDoc,
   retrieveRelevantKnowledge as serverRetrieveKnowledge,
 } from './knowledgeService.js';
+import { getKnowledgeWebsiteScanState, startKnowledgeWebsiteScan, processKnowledgeWebsiteScanStep } from './websiteKnowledgeService.js';
 
 /**
  * Universal API request handler that works in both:
@@ -2447,6 +2448,45 @@ ${signature || defSig}`;
       })
     );
     return true;
+  }
+
+  // Website scanner routes are tenant-scoped and must precede generic Knowledge Base CRUD.
+  if (url === '/api/knowledge/website-scan' || url.startsWith('/api/knowledge/website-scan/')) {
+    const scanAction = url.split('/').filter(Boolean).slice(3).join('/');
+    if (req.method !== 'GET' && userRole !== 'admin' && !isPlatformAdmin) {
+      res.statusCode = 403;
+      res.end(JSON.stringify({ success: false, error: 'Only workspace admins can scan the company website.' }));
+      return true;
+    }
+    try {
+      if (req.method === 'GET' && url === '/api/knowledge/website-scan') {
+        const state = await getKnowledgeWebsiteScanState(activeTenantCtx);
+        res.statusCode = 200;
+        res.end(JSON.stringify({ success: true, config: state, job: state.job }));
+        return true;
+      }
+      if (req.method === 'POST' && scanAction === 'start') {
+        await initKnowledgeStore(activeTenantCtx);
+        const result = await startKnowledgeWebsiteScan(activeTenantCtx, body?.excludePatterns);
+        res.statusCode = 200;
+        res.end(JSON.stringify({ success: true, ...result }));
+        return true;
+      }
+      if (req.method === 'POST' && scanAction === 'step') {
+        await initKnowledgeStore(activeTenantCtx);
+        const result = await processKnowledgeWebsiteScanStep(activeTenantCtx);
+        res.statusCode = 200;
+        res.end(JSON.stringify({ success: true, ...result }));
+        return true;
+      }
+      res.statusCode = 405;
+      res.end(JSON.stringify({ success: false, error: 'Unsupported website scan action.' }));
+      return true;
+    } catch (err: any) {
+      res.statusCode = 400;
+      res.end(JSON.stringify({ success: false, error: err?.message || 'Website scan failed.' }));
+      return true;
+    }
   }
 
   // 4. Knowledge Base CRUD & Synchronization (/api/knowledge)

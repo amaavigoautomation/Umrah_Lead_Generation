@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useBrand } from '../context/BrandContext';
 import {
   BookOpen,
@@ -12,6 +12,11 @@ import {
   Sparkles,
   Check,
   Filter,
+  Globe,
+  RefreshCw,
+  AlertCircle,
+  ExternalLink,
+  Loader2,
 } from 'lucide-react';
 import { KnowledgeDocument, KnowledgeStatus } from '../types';
 import { retrieveRelevantKnowledge, RetrievedChunk } from '../services/ragService';
@@ -21,6 +26,7 @@ interface KnowledgeBaseViewProps {
   onAddDocument: (doc: KnowledgeDocument) => Promise<void> | void;
   onUpdateDocument: (doc: KnowledgeDocument) => Promise<void> | void;
   onDeleteDocument?: (id: string) => Promise<void> | void;
+  canManageWebsiteScan?: boolean;
 }
 
 export const KnowledgeBaseView: React.FC<KnowledgeBaseViewProps> = ({
@@ -28,6 +34,7 @@ export const KnowledgeBaseView: React.FC<KnowledgeBaseViewProps> = ({
   onAddDocument,
   onUpdateDocument,
   onDeleteDocument,
+  canManageWebsiteScan = false,
 }) => {
   const { brand, tenantId } = useBrand();
   const [selectedDocId, setSelectedDocId] = useState<string>(documents[0]?.id || '');
@@ -41,17 +48,41 @@ export const KnowledgeBaseView: React.FC<KnowledgeBaseViewProps> = ({
   const [saveToast, setSaveToast] = useState<string | null>(null);
   const [deleteCandidateDoc, setDeleteCandidateDoc] = useState<KnowledgeDocument | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [scanConfig, setScanConfig] = useState<any>({ websiteUrl: brand.websiteUrl, excludePatterns: [], lastSyncedAt: null });
+  const [excludeText, setExcludeText] = useState('');
+  const [scanJob, setScanJob] = useState<any>(null);
+  const [scanReport, setScanReport] = useState<any>(null);
+  const [scanError, setScanError] = useState('');
+  const [scanLoading, setScanLoading] = useState(false);
+  const [scanPanelOpen, setScanPanelOpen] = useState(false);
 
   // Form State
   const [editingDoc, setEditingDoc] = useState<Partial<KnowledgeDocument>>({
     title: '',
-    category: 'PRODUCT',
+    category: 'General',
     content: '',
     tags: [],
     status: 'PUBLISHED',
   });
 
   const selectedDoc = documents.find((d) => d.id === selectedDocId) || documents[0];
+  const categories = Array.from(new Set(documents.map((doc) => String(doc.category || '').trim()).filter(Boolean))).sort((a, b) => a.localeCompare(b));
+  const scanWebsiteUrl = scanConfig.websiteUrl || brand.websiteUrl || '';
+
+  useEffect(() => {
+    let active = true;
+    fetch('/api/knowledge/website-scan')
+      .then(async (response) => {
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.error || 'Could not load website scan settings.');
+        if (!active) return;
+        setScanConfig(data.config || { websiteUrl: brand.websiteUrl, excludePatterns: [], lastSyncedAt: null });
+        setExcludeText((data.config?.excludePatterns || []).join('\n'));
+        setScanJob(data.job || null);
+      })
+      .catch((error) => console.warn('[Knowledge Base] Website scan settings could not be loaded:', error));
+    return () => { active = false; };
+  }, [tenantId, brand.websiteUrl]);
 
   // Counts for metric cards (matching the screenshot)
   const publishedCount = documents.filter((d) => d.status === 'PUBLISHED').length;
@@ -92,7 +123,10 @@ export const KnowledgeBaseView: React.FC<KnowledgeBaseViewProps> = ({
       if (editingDoc.id) {
         const updatedDoc: KnowledgeDocument = {
           ...(editingDoc as KnowledgeDocument),
-          version: (editingDoc.version || 1) + 1,
+          category: String(editingDoc.category || 'General').trim(),
+          sourceType: 'MANUAL',
+          sourceUrls: [],
+          version: editingDoc.version || 1,
           updatedAt: new Date().toISOString(),
         };
         await onUpdateDocument(updatedDoc);
@@ -101,11 +135,13 @@ export const KnowledgeBaseView: React.FC<KnowledgeBaseViewProps> = ({
         const newDoc: KnowledgeDocument = {
           id: `KB-${Date.now().toString().slice(-5)}`,
           title: editingDoc.title.trim(),
-          category: editingDoc.category || 'PRODUCT',
+          category: String(editingDoc.category || 'General').trim(),
           content: editingDoc.content.trim(),
           tags: editingDoc.tags && editingDoc.tags.length > 0 ? editingDoc.tags : [tenantId || 'general'],
           status: editingDoc.status || 'PUBLISHED',
           version: 1,
+          sourceType: 'MANUAL',
+          sourceUrls: [],
           author: 'Admin',
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
@@ -131,7 +167,7 @@ export const KnowledgeBaseView: React.FC<KnowledgeBaseViewProps> = ({
       ...doc,
       status: nextStatus,
       updatedAt: new Date().toISOString(),
-      version: doc.version + 1,
+      version: doc.version || 1,
     };
     await onUpdateDocument(updated);
     setSaveToast(`Article "${doc.title}" is now ${nextStatus}`);
@@ -162,6 +198,55 @@ export const KnowledgeBaseView: React.FC<KnowledgeBaseViewProps> = ({
     }
   };
 
+  const handleRunWebsiteScan = async (resume = false) => {
+    setScanLoading(true);
+    setScanError('');
+    setScanReport(null);
+    try {
+      let job = scanJob;
+      if (!resume || !job) {
+        const startResponse = await fetch('/api/knowledge/website-scan/start', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ excludePatterns: excludeText.split(/\r?\n/).map((value) => value.trim()).filter(Boolean) }),
+        });
+        const startData = await startResponse.json().catch(() => ({}));
+        if (!startResponse.ok) throw new Error(startData.error || 'Could not start website scan.');
+        job = startData.job;
+        setScanJob(job);
+      }
+      let finished = false;
+      let safetyCounter = 0;
+      while (job && !finished && safetyCounter < 120) {
+        safetyCounter += 1;
+        const stepResponse = await fetch('/api/knowledge/website-scan/step', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: '{}',
+        });
+        const stepData = await stepResponse.json().catch(() => ({}));
+        if (!stepResponse.ok) throw new Error(stepData.error || 'Website scan could not continue.');
+        if (stepData.done) {
+          finished = true;
+          setScanJob(null);
+          setScanReport(stepData.report || null);
+          setScanConfig((current) => ({ ...current, lastSyncedAt: stepData.report?.lastSyncedAt || new Date().toISOString(), excludePatterns: scanJob?.excludePatterns || excludeText.split(/\r?\n/).map((value) => value.trim()).filter(Boolean) }));
+          setSaveToast('Website knowledge synchronized successfully.');
+          window.setTimeout(() => setSaveToast(null), 4500);
+        } else {
+          job = stepData.job || job;
+          setScanJob(job);
+          await new Promise((resolve) => window.setTimeout(resolve, 180));
+        }
+      }
+      if (!finished) throw new Error('The scan has not finished yet. Use Resume scan to continue.');
+    } catch (error: any) {
+      setScanError(error?.message || 'Website scan failed.');
+    } finally {
+      setScanLoading(false);
+    }
+  };
+
   const getDocDisplayId = (doc: KnowledgeDocument, index: number) => {
     if (doc.id.startsWith('KB-') || doc.id.startsWith('AMA-')) return doc.id;
     return `AMA-KB-POL-${String(index + 1).padStart(3, '0')}`;
@@ -185,11 +270,11 @@ export const KnowledgeBaseView: React.FC<KnowledgeBaseViewProps> = ({
               Knowledge Base
             </h1>
             <span className="bg-orange-50 text-orange-700 border border-orange-200/80 rounded-full px-3 py-0.5 text-xs font-semibold inline-flex items-center">
-              Authoring & Revisions
+              Website & Manual Knowledge
             </span>
           </div>
           <p className="text-xs sm:text-sm text-slate-500 mt-1.5 font-medium max-w-3xl leading-relaxed">
-            Ground truth repository for all AI Inbound email auto-replies, WhatsApp dialogues, website leads, and AI testing. All PUBLISHED articles are automatically active in RAG with 0ms in-memory latency.
+            Manage knowledge sourced from your company website or written manually. Published articles are available to the AI assistants through RAG.
           </p>
         </div>
 
@@ -199,7 +284,7 @@ export const KnowledgeBaseView: React.FC<KnowledgeBaseViewProps> = ({
             onClick={() => {
               setEditingDoc({
                 title: '',
-                category: 'PRODUCT',
+                category: categories[0] || 'General',
                 content: '',
                 tags: tenantId === 'umrah360' ? ['umrah360', 'crm'] : [tenantId || 'general'],
                 status: 'PUBLISHED',
@@ -213,6 +298,76 @@ export const KnowledgeBaseView: React.FC<KnowledgeBaseViewProps> = ({
           </button>
         </div>
       </div>
+
+
+      {canManageWebsiteScan && (
+        <section className="bg-white border border-slate-200/90 rounded-2xl p-5 shadow-xs space-y-4">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+            <div className="flex items-start gap-3">
+              <div className="p-2.5 rounded-xl bg-orange-50 text-orange-600"><Globe className="w-5 h-5" /></div>
+              <div>
+                <h2 className="text-sm font-extrabold text-slate-900">Website knowledge sync</h2>
+                <p className="text-xs text-slate-500 mt-1">AI analyzes your company website and keeps website-owned articles synchronized.</p>
+                <p className="text-xs text-slate-700 mt-2 break-all">{scanWebsiteUrl || 'Add a website URL in Company Profile to get started.'}</p>
+                {scanConfig.lastSyncedAt && <p className="text-[11px] text-slate-400 mt-1">Last synchronized: {new Date(scanConfig.lastSyncedAt).toLocaleString()}</p>}
+              </div>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <button onClick={() => setScanPanelOpen((open) => !open)} className="px-3 py-2 rounded-lg border border-slate-200 text-slate-700 text-xs font-semibold hover:bg-slate-50">
+                {scanPanelOpen ? 'Hide settings' : 'Scan settings'}
+              </button>
+              <button
+                onClick={() => handleRunWebsiteScan(Boolean(scanJob))}
+                disabled={scanLoading || !scanWebsiteUrl}
+                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-gradient-to-r from-orange-500 to-amber-600 text-white text-xs font-bold shadow-xs disabled:opacity-50"
+              >
+                {scanLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : scanJob ? <RefreshCw className="w-4 h-4" /> : <Globe className="w-4 h-4" />}
+                {scanLoading ? 'Scanning website…' : scanJob ? 'Resume scan' : 'Scan website'}
+              </button>
+            </div>
+          </div>
+          {scanPanelOpen && (
+            <div className="border-t border-slate-100 pt-4 space-y-2">
+              <label className="block text-xs font-bold text-slate-700">Exclude URL paths</label>
+              <textarea
+                rows={3}
+                value={excludeText}
+                onChange={(event) => setExcludeText(event.target.value)}
+                placeholder={'/careers/*\n/blog/*\n/privacy-policy'}
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-400"
+              />
+              <p className="text-[11px] text-slate-400">One path pattern per line. Wildcards are supported. Excluded pages are removed from website-derived knowledge.</p>
+            </div>
+          )}
+          {scanJob && (
+            <div className="border-t border-slate-100 pt-4 space-y-2">
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-bold text-slate-700">{scanJob.status === 'DISCOVERING' ? 'Finding the sitemap and website pages' : scanJob.status === 'CRAWLING' ? 'Discovering and reading pages' : scanJob.status === 'VERIFYING' ? 'Verifying previously indexed pages' : 'Generating and synchronizing articles'}</span>
+                <span className="text-slate-500">{scanJob.pagesVisited || scanJob.processedPages || 0} pages processed</span>
+              </div>
+              <div className="h-2 rounded-full bg-slate-100 overflow-hidden"><div className="h-full rounded-full bg-orange-500 transition-all" style={{ width: (scanJob.progress || 5) + '%' }} /></div>
+              <p className="text-[11px] text-slate-400">This scan runs in small resumable batches. Keep this page open until it completes, or return and choose Resume scan.</p>
+            </div>
+          )}
+          {scanLoading && <p className="text-[11px] text-slate-500">The AI is comparing current website information with the existing Knowledge Base.</p>}
+          {scanError && <div className="flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-700"><AlertCircle className="w-4 h-4 shrink-0 mt-0.5" /><span>{scanError}</span></div>}
+          {scanReport && (
+            <div className="border-t border-slate-100 pt-4 space-y-3">
+              <div className="flex items-center gap-2"><CheckCircle className="w-4 h-4 text-emerald-600" /><span className="text-sm font-extrabold text-slate-900">Website synchronization complete</span></div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                <div className="rounded-xl bg-emerald-50 p-3"><p className="text-xl font-extrabold text-emerald-700">{scanReport.articlesAdded || 0}</p><p className="text-[11px] text-emerald-700">Articles added</p></div>
+                <div className="rounded-xl bg-blue-50 p-3"><p className="text-xl font-extrabold text-blue-700">{scanReport.articlesUpdated || 0}</p><p className="text-[11px] text-blue-700">Articles updated</p></div>
+                <div className="rounded-xl bg-red-50 p-3"><p className="text-xl font-extrabold text-red-700">{scanReport.articlesRemoved || 0}</p><p className="text-[11px] text-red-700">Articles removed</p></div>
+                <div className="rounded-xl bg-slate-100 p-3"><p className="text-xl font-extrabold text-slate-700">{scanReport.articlesUnchanged || 0}</p><p className="text-[11px] text-slate-600">Unchanged articles</p></div>
+              </div>
+              <p className="text-[11px] text-slate-500">Pages: {scanReport.pagesDiscovered || 0} discovered · {scanReport.pagesAdded || 0} added · {scanReport.pagesUpdated || 0} modified · {scanReport.pagesRemoved || 0} removed · {scanReport.pagesUnchanged || 0} unchanged</p>
+              {scanReport.initialScan && <p className="rounded-lg bg-amber-50 border border-amber-200 p-2.5 text-xs text-amber-800">New website articles are in Review. Publish them after checking their accuracy.</p>}
+              {scanReport.truncated && <p className="text-xs text-amber-700">The site exceeded the per-scan page limit. Unvisited previously indexed pages were retained to avoid accidental deletion.</p>}
+              {Array.isArray(scanReport.warnings) && scanReport.warnings.length > 0 && <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 space-y-1"><p className="text-xs font-bold text-amber-800">Pages needing attention</p>{scanReport.warnings.slice(0, 6).map((warning, index) => <p key={index} className="text-[11px] text-amber-700">{warning}</p>)}</div>}
+            </div>
+          )}
+        </section>
+      )}
 
       {/* 3. SEARCH & FILTER TOOLBAR (Matches Screenshot) */}
       <div className="bg-white border border-slate-200/90 rounded-2xl p-3.5 shadow-xs flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
@@ -240,13 +395,7 @@ export const KnowledgeBaseView: React.FC<KnowledgeBaseViewProps> = ({
               className="bg-transparent text-slate-900 font-bold focus:outline-none cursor-pointer"
             >
               <option value="ALL">All Categories</option>
-              <option value="PRODUCT">PRODUCT</option>
-              <option value="B2B">B2B</option>
-              <option value="MODULES">MODULES</option>
-              <option value="PRICING">PRICING</option>
-              <option value="OPERATIONS">OPERATIONS</option>
-              <option value="FAQS">FAQS</option>
-              <option value="INTEGRATIONS">INTEGRATIONS</option>
+              {categories.map((category) => <option key={category} value={category}>{category}</option>)}
             </select>
           </div>
 
@@ -260,7 +409,9 @@ export const KnowledgeBaseView: React.FC<KnowledgeBaseViewProps> = ({
             >
               <option value="ALL">All Statuses</option>
               <option value="PUBLISHED">PUBLISHED</option>
+              <option value="REVIEW">REVIEW</option>
               <option value="DRAFT">DRAFT</option>
+              <option value="APPROVED">APPROVED</option>
             </select>
           </div>
 
@@ -291,7 +442,7 @@ export const KnowledgeBaseView: React.FC<KnowledgeBaseViewProps> = ({
                       <span className="text-[10px] font-extrabold text-orange-600 uppercase">
                         {doc.category}
                       </span>
-                      <span className="text-[10px] text-slate-400 font-mono">v{doc.version || 1}</span>
+                      <span className="text-[10px] text-slate-400">{doc.sourceType === 'WEBSITE' ? 'WEBSITE' : 'MANUAL'}</span>
                     </div>
                     <h4 className="font-bold text-xs text-slate-900 mt-1 line-clamp-1">{doc.title}</h4>
                     <p className="text-[11px] text-slate-500 mt-1 line-clamp-2 leading-relaxed">
@@ -309,10 +460,11 @@ export const KnowledgeBaseView: React.FC<KnowledgeBaseViewProps> = ({
               <div className="bg-white border border-slate-200/90 rounded-2xl p-6 shadow-xs space-y-4">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-100 pb-4 gap-3">
                   <div>
-                    <div className="flex items-center space-x-2">
+                    <div className="flex items-center space-x-2 flex-wrap">
                       <span className="text-xs font-bold text-orange-600 uppercase">
                         {selectedDoc.category}
                       </span>
+                      <span className="text-[10px] rounded-full bg-slate-100 text-slate-600 px-2 py-0.5 font-bold">{selectedDoc.sourceType === 'WEBSITE' ? 'WEBSITE SOURCE' : 'MANUAL ARTICLE'}</span>
                       <span className="bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full px-2.5 py-0.5 text-xs font-bold">
                         {selectedDoc.status}
                       </span>
@@ -359,6 +511,12 @@ export const KnowledgeBaseView: React.FC<KnowledgeBaseViewProps> = ({
                 <div className="bg-slate-50/70 p-4 rounded-xl border border-slate-200 text-xs leading-relaxed text-slate-800 whitespace-pre-wrap font-sans">
                   {selectedDoc.content}
                 </div>
+                {selectedDoc.sourceType === 'WEBSITE' && Array.isArray(selectedDoc.sourceUrls) && selectedDoc.sourceUrls.length > 0 && (
+                  <div className="rounded-xl border border-slate-200 p-3 space-y-2">
+                    <p className="text-[11px] font-bold text-slate-600">Website sources supporting this article</p>
+                    <div className="flex flex-wrap gap-2">{selectedDoc.sourceUrls.map((sourceUrl) => <a key={sourceUrl} href={sourceUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 rounded-lg bg-slate-50 border border-slate-200 px-2.5 py-1.5 text-[11px] text-blue-700 hover:bg-blue-50"><ExternalLink className="w-3 h-3" />{new URL(sourceUrl).pathname || sourceUrl}</a>)}</div>
+                  </div>
+                )}
 
                 <div className="flex items-center justify-between text-[11px] text-slate-400 pt-2 border-t border-slate-100">
                   <span className="flex items-center space-x-1">
@@ -447,19 +605,14 @@ export const KnowledgeBaseView: React.FC<KnowledgeBaseViewProps> = ({
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-slate-700 block mb-1 font-bold">Category</label>
-                  <select
-                    value={editingDoc.category || 'PRODUCT'}
-                    onChange={(e) => setEditingDoc({ ...editingDoc, category: e.target.value as any })}
+                  <input
+                    list="knowledge-category-suggestions"
+                    value={editingDoc.category || ''}
+                    onChange={(e) => setEditingDoc({ ...editingDoc, category: e.target.value })}
+                    placeholder="Enter a category"
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-900 font-semibold focus:outline-none"
-                  >
-                    <option value="PRODUCT">PRODUCT</option>
-                    <option value="B2B">B2B</option>
-                    <option value="MODULES">MODULES</option>
-                    <option value="PRICING">PRICING</option>
-                    <option value="OPERATIONS">OPERATIONS</option>
-                    <option value="FAQS">FAQS</option>
-                    <option value="INTEGRATIONS">INTEGRATIONS</option>
-                  </select>
+                  />
+                  <datalist id="knowledge-category-suggestions">{categories.map((category) => <option key={category} value={category} />)}</datalist>
                 </div>
 
                 <div>

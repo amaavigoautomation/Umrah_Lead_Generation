@@ -542,7 +542,11 @@ export interface EmailThread {
 export interface KnowledgeDocument {
   id: string;
   title: string;
-  category: 'PRODUCT' | 'MODULES' | 'PRICING' | 'B2B' | 'OPERATIONS' | 'FAQS' | 'INTEGRATIONS';
+  category: string;
+  /** Ownership marker used to protect manually authored articles during website sync. */
+  sourceType?: 'MANUAL' | 'WEBSITE';
+  /** Verified company pages supporting a website-generated article. */
+  sourceUrls?: string[];
   content: string;
   tags: string[];
   status: KnowledgeStatus;

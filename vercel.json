@@ -7,7 +7,7 @@
     "api/**/*.ts": {
       "includeFiles": "src/{server,firebase}/**"
     },
-    "api/[...path].ts": {
+    "api/*.ts": {
       "includeFiles": "src/{server,firebase}/**",
       "maxDuration": 60
     }

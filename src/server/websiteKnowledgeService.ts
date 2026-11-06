@@ -367,7 +367,7 @@ export async function getKnowledgeWebsiteScanState(ctx: TenantContext): Promise<
 export async function startKnowledgeWebsiteScan(ctx: TenantContext, patternsInput?: unknown): Promise<any> {
   if (!isFirebaseConfigured || !db) throw new Error('Firestore must be configured before website scanning.');
   const current = await getJob(ctx);
-  if (current.job && ['CRAWLING', 'VERIFYING', 'GENERATING'].includes(current.job.status)) {
+  if (current.job && ['DISCOVERING', 'CRAWLING', 'VERIFYING', 'GENERATING'].includes(current.job.status)) {
     throw new Error('A website scan is already in progress. Resume that scan instead.');
   }
   const brand = await getTenantBrand(ctx.tenantId);
@@ -379,7 +379,11 @@ export async function startKnowledgeWebsiteScan(ctx: TenantContext, patternsInpu
   const warnings: string[] = [];
   const home = await fetchPage(websiteUrl);
   if (!home.page || home.missing) throw new Error('The company homepage returned 404/410. No Knowledge Base content was changed.');
+  const configuredHost = normalizeHost(new URL(websiteUrl).hostname);
   const root = new URL(home.page.url);
+  if (normalizeHost(root.hostname) !== configuredHost) {
+    throw new Error('The company homepage redirected outside the configured website domain. No Knowledge Base content was changed.');
+  }
   if (isExcluded(home.page.url, excludePatterns)) throw new Error('The company homepage cannot be excluded from the Knowledge Base scan.');
   await clearCollection(ctx, WORK_COLLECTION);
   await writeWorkPage(ctx, home.page);

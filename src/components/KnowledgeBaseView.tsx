@@ -233,7 +233,9 @@ export const KnowledgeBaseView: React.FC<KnowledgeBaseViewProps> = ({
             lastSyncedAt: stepData.report?.lastSyncedAt || new Date().toISOString(),
             excludePatterns: job?.excludePatterns || excludeText.split(/\r?\n/).map((value) => value.trim()).filter(Boolean),
           }));
-          setSaveToast('Website knowledge synchronized successfully.');
+          setSaveToast((stepData.report?.pagesFailed || 0) > 0
+            ? 'Website sync finished with some page failures. Review the scan report.'
+            : 'Website knowledge synchronized successfully.');
           window.setTimeout(() => setSaveToast(null), 4500);
         } else {
           if (!stepData.job) throw new Error('The scanner did not return its progress state. Refresh the page and resume the scan.');

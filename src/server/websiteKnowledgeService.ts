@@ -219,9 +219,15 @@ function extractPageMetadata(html: string): string {
       values.push(name + ': ' + value);
     }
   }
-  const structured = Array.from(html.matchAll(/<script\b(?=[^>]*type\s*=\s*["']application\/ld\+json["'])[^>]*>([\s\S]*?)<\/script>/gi))
-    .map((match) => match[1].trim())
-    .filter(Boolean);
+  const structured: string[] = [];
+  for (const match of html.matchAll(/<script\\b[^>]*>([\\s\\S]*?)<\\/script>/gi)) {
+    const openingEnd = html.indexOf('>', match.index || 0);
+    const openingTag = openingEnd >= 0 ? html.slice(match.index || 0, openingEnd + 1) : '';
+    if (openingTag.toLowerCase().includes('application/ld+json')) {
+      const value = String(match[1] || '').trim();
+      if (value) structured.push(value);
+    }
+  }
   if (structured.length) values.push('Structured data (JSON-LD):\n' + structured.join('\n'));
   return values.length ? 'PAGE METADATA AND STRUCTURED DATA:\n' + values.join('\n') : '';
 }

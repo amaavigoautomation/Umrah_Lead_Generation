@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   Inbox,
+  LayoutDashboard,
   Send,
   Mail,
   Users,
@@ -30,6 +31,7 @@ import { Umrah360Logo } from './Umrah360Logo';
 import { useBrand } from '../context/BrandContext';
 
 export type ActiveTab =
+  | 'dashboard'
   | 'inbox'
   | 'campaigns'
   | 'email-design-studio'
@@ -94,7 +96,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   const isModuleAccessible = (tabId: ActiveTab): boolean => {
     if (planLocked?.(tabId)) return false;
     // Database is shared by authenticated workspace users; deletion is admin-only on the server.
-    if (tabId === 'database' || tabId === 'company-profile') return true;
+    if (tabId === 'dashboard' || tabId === 'database' || tabId === 'company-profile') return true;
     if (!currentUser) return true;
     if (currentUser.accessLevel === 'ALL' || currentUser.role === 'ADMIN') return true;
     if (tabId === 'email-design-studio' && (currentUser.allowedModules || []).includes('settings')) return true;
@@ -102,6 +104,11 @@ export const Navbar: React.FC<NavbarProps> = ({
   };
 
   const navItems: { id: ActiveTab; label: string; icon: React.ReactNode; badgeCount?: number; hasPulse?: boolean }[] = [
+    {
+      id: 'dashboard',
+      label: 'Dashboard',
+      icon: <LayoutDashboard className="w-4 h-4 shrink-0" />,
+    },
     {
       id: 'inbox',
       label: 'Unified Inbox',

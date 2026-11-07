@@ -71,6 +71,8 @@ export interface CrmPipelineProps {
   onUpdateLead?: (updatedLead: Lead) => void;
   onScheduleAiFollowUp?: (leadId: string, scheduledAt: string) => Promise<void>;
   onAddLead?: (newLead: Lead, newContact: Contact) => void;
+  openAddLeadRequest?: boolean;
+  onAddLeadRequestHandled?: () => void;
   /** Workspace team members that leads can be assigned to (used for non-Umrah360 workspaces). */
   teamMembers?: { id: string; name: string; role?: string }[];
   users?: AppUser[];
@@ -110,6 +112,8 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
   onUpdateLead,
   onScheduleAiFollowUp,
   onAddLead,
+  openAddLeadRequest = false,
+  onAddLeadRequestHandled,
   teamMembers,
   users,
 }) => {
@@ -157,6 +161,12 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
 
   // Modals
   const [isAddLeadModalOpen, setIsAddLeadModalOpen] = useState(false);
+  useEffect(() => {
+    if (!openAddLeadRequest) return;
+    setAddLeadMode('SINGLE');
+    setIsAddLeadModalOpen(true);
+    onAddLeadRequestHandled?.();
+  }, [openAddLeadRequest]);
   const [addLeadMode, setAddLeadMode] = useState<'SINGLE' | 'BULK'>('SINGLE');
   const [bulkCsvText, setBulkCsvText] = useState<string>('');
   const [bulkUploadSuccessCount, setBulkUploadSuccessCount] = useState<number | null>(null);

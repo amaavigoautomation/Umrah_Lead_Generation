@@ -58,6 +58,7 @@ import { db, isFirebaseConfigured } from './firebase/config';
 import { collection, doc, setDoc, getDoc, getDocs, updateDoc, deleteDoc, query, where, orderBy, limit, onSnapshot } from 'firebase/firestore';
 
 // thsi is a test Screens loaded on demand (own JS files). Login, navigation and the inbox stay in the main bundle.
+const DashboardView = lazyNamed(() => import('./components/DashboardView'), 'DashboardView');
 const CampaignManagement = lazyNamed(() => import('./components/CampaignManagement'), 'CampaignManagement');
 const CampaignReports = lazyNamed(() => import('./components/CampaignReports'), 'CampaignReports');
 const TemplateStudio = lazyNamed(() => import('./components/TemplateStudio'), 'TemplateStudio');
@@ -215,6 +216,7 @@ function toAppUser(u: any): AppUser {
 //   );
 //   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(false);
 const ALL_TABS: readonly ActiveTab[] = [
+  'dashboard',
   'inbox',
   'campaigns',
   'email-design-studio',
@@ -241,11 +243,7 @@ function readTabFromLocation(): ActiveTab {
   const tab = params.get('tab');
   if (isActiveTab(tab)) return tab;
   if (params.has('mailbox')) return 'settings';
-  try {
-    const stored = sessionStorage.getItem('umrah360.activeTab');
-    if (isActiveTab(stored)) return stored;
-  } catch {}
-  return 'inbox';
+  return 'dashboard';
 }
 
 function writeTabToLocation(tab: ActiveTab) {
@@ -254,7 +252,7 @@ function writeTabToLocation(tab: ActiveTab) {
     sessionStorage.setItem('umrah360.activeTab', tab);
   } catch {}
   const url = new URL(window.location.href);
-  if (tab === 'inbox') url.searchParams.delete('tab');
+  if (tab === 'dashboard') url.searchParams.delete('tab');
   else url.searchParams.set('tab', tab);
   const next = `${url.pathname}${url.search}${url.hash}`;
   const current = `${window.location.pathname}${window.location.search}${window.location.hash}`;
@@ -294,6 +292,8 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
   const [knowledgeDocs, setKnowledgeDocs] = useState<KnowledgeDocument[]>(() => isFirebaseConfigured ? [] : INITIAL_KNOWLEDGE_DOCUMENTS);
   const [settings, setSettings] = useState<SystemSettings>(DEFAULT_SETTINGS);
   const [selectedLeadIdForCrm, setSelectedLeadIdForCrm] = useState<string | null>(null);
+  const [openCrmAddLead, setOpenCrmAddLead] = useState(false);
+  const handleCrmAddLeadRequestHandled = useCallback(() => setOpenCrmAddLead(false), []);
 
   // A CRM drawer opened from Unified Inbox is a one-time navigation request; never restore it after leaving CRM.
   useEffect(() => {
@@ -2298,6 +2298,13 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
 
   // User Authentication Handlers
   const handleLogout = async () => {
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.delete('tab');
+      url.searchParams.delete('mailbox');
+      window.history.replaceState(window.history.state, '', url.pathname + url.search + url.hash);
+      sessionStorage.removeItem('umrah360.activeTab');
+    } catch {}
     await signOutUser().catch(() => {});
     setCurrentUser(null);
     setSession(null);
@@ -2481,6 +2488,7 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
     currentUser.role === 'ADMIN' ||
     (currentUser.allowedModules || []).includes(activeTab) ||
     (activeTab === 'email-design-studio' && (currentUser.allowedModules || []).includes('settings')) ||
+    activeTab === 'dashboard' ||
     activeTab === 'database' ||
     activeTab === 'company-profile';
 
@@ -2552,6 +2560,21 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
           />
         ) : (
           <Suspense fallback={<ScreenLoading />}>
+            {activeTab === 'dashboard' && (
+              <DashboardView
+                tenantId={currentTenantId}
+                tenantName={currentTenant?.name}
+                userName={currentUser.name}
+                leads={leads}
+                contacts={contacts}
+                conversations={conversations}
+                campaigns={campaigns}
+                onNavigate={setActiveTab}
+                onAddLead={() => { setOpenCrmAddLead(true); setActiveTab('crm'); }}
+                onOpenLead={handleViewLeadInCrm}
+              />
+            )}
+
             {activeTab === 'agent' && <AgentWorkspace currentUser={currentUser} onOpenEmailTemplate={openAgentEmailTemplate} />}
 
             {activeTab === 'inbox' && (
@@ -2617,6 +2640,8 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
                 contacts={contacts}
                 activities={activities}
                 selectedLeadId={selectedLeadIdForCrm}
+                openAddLeadRequest={openCrmAddLead}
+                onAddLeadRequestHandled={handleCrmAddLeadRequestHandled}
                 onDismissSelectedLead={() => setSelectedLeadIdForCrm(null)}
                 teamMembers={users
                   .filter((u) => u.isActive !== false)

@@ -8,6 +8,7 @@ import {
   LogOut,
   Shield,
   Inbox,
+  LayoutDashboard,
   Send,
   Users,
   Calendar,
@@ -38,6 +39,7 @@ interface HeaderBarProps {
 }
 
 const TAB_TITLES: Record<ActiveTab, { title: string; icon: React.ReactNode }> = {
+  dashboard: { title: 'Dashboard', icon: <LayoutDashboard className="w-4 h-4 text-orange-600" /> },
   inbox: { title: 'Unified Inbox', icon: <Inbox className="w-4 h-4 text-orange-600" /> },
   agent: { title: 'AI Agent Workspace', icon: <Bot className="w-4 h-4 text-cyan-600" /> },
   'auto-followup': { title: 'Auto Follow-Up Agent', icon: <Bot className="w-4 h-4 text-orange-600" /> },

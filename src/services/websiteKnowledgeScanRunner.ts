@@ -29,10 +29,10 @@ export function startWebsiteKnowledgeScanRunner(tenantId: string): Promise<void>
           const response = await fetch('/api/knowledge/website-scan/step', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
           const data = await response.json().catch(() => ({}));
           if (!response.ok) {
-            if (String(data.error || '').toLowerCase().includes('no website scan')) {
+            if (/no (active )?website scan/i.test(String(data.error || ''))) {
               state = await readScanState();
-              if (!state.job && state.lastReport) {
-                emitScanEvent('completed', { tenantId, report: state.lastReport });
+              if (!state.job && state.config?.lastReport) {
+                emitScanEvent('completed', { tenantId, report: state.config?.lastReport });
                 return;
               }
               if (!state.job) throw new Error('The scan job is no longer available. Start a new scan; previously saved Knowledge Base articles are preserved.');
@@ -46,8 +46,8 @@ export function startWebsiteKnowledgeScanRunner(tenantId: string): Promise<void>
             emitScanEvent('progress', { tenantId, job });
           } else {
             state = await readScanState();
-            if (!state.job && state.lastReport) {
-              emitScanEvent('completed', { tenantId, report: state.lastReport });
+            if (!state.job && state.config?.lastReport) {
+              emitScanEvent('completed', { tenantId, report: state.config?.lastReport });
               return;
             }
             if (state.job) {

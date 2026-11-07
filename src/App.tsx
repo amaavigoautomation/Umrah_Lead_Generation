@@ -2467,7 +2467,7 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
   return (
     <BrandProvider tenantId={currentTenantId} tenantName={currentTenant?.name}>
     <AgentProvider tenantId={currentTenantId} userId={currentUser.userId} enabled={currentUser.accessLevel === 'ALL' || currentUser.role === 'ADMIN' || (currentUser.allowedModules || []).includes('agent')}>
-    <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col md:flex-row font-sans selection:bg-orange-500/20 selection:text-orange-950">
+    <div className="h-dvh w-full overflow-hidden bg-slate-50 text-slate-900 flex flex-col md:flex-row font-sans selection:bg-orange-500/20 selection:text-orange-950">
       <Navbar
         activeTab={activeTab}
         setActiveTab={setActiveTab}
@@ -2484,7 +2484,7 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
         onToggleCollapse={() => setIsSidebarCollapsed((prev) => !prev)}
       />
 
-      <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
+      <div className="flex-1 flex flex-col min-w-0 min-h-0 h-[calc(100dvh-56px)] md:h-dvh overflow-hidden">
         <HeaderBar
           activeTab={activeTab}
           setActiveTab={setActiveTab}

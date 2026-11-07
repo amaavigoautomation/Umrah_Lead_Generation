@@ -1,24 +1,12 @@
-import { useBrand } from '../context/BrandContext';
 import React from 'react';
 import {
-  PanelLeft,
   PanelLeftClose,
+  PanelLeftOpen,
   Radio,
   MessageSquare,
   LogOut,
-  Shield,
   Inbox,
-  Send,
-  Users,
-  Calendar,
-  BookOpen,
-  Sparkles,
-  Settings,
-  Bot,
-  Database,
-  ShieldCheck,
-  FileBarChart,
-  Building2,
+  AlertCircle,
 } from 'lucide-react';
 import { ActiveTab } from './Navbar';
 import { AppUser } from '../types';
@@ -31,27 +19,35 @@ interface HeaderBarProps {
   onToggleCollapse: () => void;
   unreadCount: number;
   handoffCount: number;
-  /** Workspace whose connected email / WhatsApp number are shown in the header. */
   tenantId?: string;
   currentUser?: AppUser | null;
   onLogout?: () => void;
 }
 
-const TAB_TITLES: Record<ActiveTab, { title: string; icon: React.ReactNode }> = {
-  inbox: { title: 'Unified Inbox', icon: <Inbox className="w-4 h-4 text-orange-600" /> },
-  agent: { title: 'AI Agent Workspace', icon: <Bot className="w-4 h-4 text-cyan-600" /> },
-  'auto-followup': { title: 'Auto Follow-Up Agent', icon: <Bot className="w-4 h-4 text-orange-600" /> },
-  database: { title: 'Lead Database', icon: <Database className="w-4 h-4 text-orange-600" /> },
-  campaigns: { title: 'Outbound Campaigns', icon: <Send className="w-4 h-4 text-orange-600" /> },
-  'campaign-reports': { title: 'AI Campaign Reporting', icon: <FileBarChart className="w-4 h-4 text-orange-600" /> },
-  crm: { title: 'CRM & Lead Pipeline', icon: <Users className="w-4 h-4 text-orange-600" /> },
-  scheduling: { title: 'Demo Scheduling Agent', icon: <Calendar className="w-4 h-4 text-orange-600" /> },
-  knowledge: { title: 'Knowledge Base (RAG)', icon: <BookOpen className="w-4 h-4 text-orange-600" /> },
-  playground: { title: 'AI Testing Playground', icon: <Sparkles className="w-4 h-4 text-orange-600" /> },
-  'audit-logs': { title: 'System Audit Trail', icon: <ShieldCheck className="w-4 h-4 text-orange-600" /> },
-  'company-profile': { title: 'Company Profile', icon: <Building2 className="w-4 h-4 text-orange-600" /> },
-  settings: { title: 'Settings & Channels', icon: <Settings className="w-4 h-4 text-orange-600" /> },
+const PAGE_META: Record<ActiveTab, { section: string; title: string; description: string }> = {
+  inbox: { section: 'CONVERSATIONS', title: 'Unified Inbox', description: 'Manage every customer conversation in one workspace.' },
+  agent: { section: 'AI WORKSPACE', title: 'AI Agent', description: 'Work with your AI assistant, tools, and generated deliverables.' },
+  'auto-followup': { section: 'SALES OPERATIONS', title: 'Auto Follow-Up', description: 'Monitor scheduled follow-ups and execution outcomes.' },
+  database: { section: 'GROWTH', title: 'Lead Database', description: 'Organize prospect lists and campaign-ready audiences.' },
+  campaigns: { section: 'GROWTH', title: 'Campaigns', description: 'Build, manage, and measure outbound campaigns.' },
+  'campaign-reports': { section: 'GROWTH', title: 'Campaign Reports', description: 'Review campaign performance and AI-generated analysis.' },
+  crm: { section: 'SALES OPERATIONS', title: 'CRM & Leads', description: 'Manage your pipeline, ownership, and next sales actions.' },
+  scheduling: { section: 'SALES OPERATIONS', title: 'Demo Scheduling', description: 'Coordinate consultations, availability, and booked meetings.' },
+  knowledge: { section: 'AI WORKSPACE', title: 'Knowledge Base', description: 'Manage the sources that ground your AI responses.' },
+  playground: { section: 'AI WORKSPACE', title: 'AI Testing', description: 'Test responses and validate your AI configuration.' },
+  'audit-logs': { section: 'ADMINISTRATION', title: 'Audit Logs', description: 'Review important changes and workspace activity.' },
+  'company-profile': { section: 'ADMINISTRATION', title: 'Company Profile', description: 'Manage workspace identity and brand information.' },
+  settings: { section: 'ADMINISTRATION', title: 'Settings', description: 'Configure your workspace, team, and connected services.' },
+  'email-design-studio': { section: 'GROWTH', title: 'Email Design Studio', description: 'Create, edit, and prepare branded email experiences.' },
 };
+
+const initialsFor = (user?: AppUser | null) =>
+  (user?.name || user?.email || 'U')
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() || '')
+    .join('');
 
 export const HeaderBar: React.FC<HeaderBarProps> = ({
   activeTab,
@@ -64,89 +60,92 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
   currentUser,
   onLogout,
 }) => {
-  const { brand } = useBrand();
-  const isUmrahBrand = brand.playbook === 'umrah360';
-  // Only what THIS workspace has actually connected is shown. Nothing is shown when nothing is connected.
-  const { mailbox: connectedMailbox, whatsapp: connectedWhatsApp } = useConnectedChannels(tenantId);
-
-  const currentTabMeta = TAB_TITLES[activeTab] || { title: 'Dashboard', icon: null };
+  const { mailbox, whatsapp } = useConnectedChannels(tenantId);
+  const meta = PAGE_META[activeTab];
 
   return (
-    <header className="h-13 bg-white border-b border-slate-200/90 px-4 sm:px-6 flex items-center justify-between sticky top-0 z-30 shadow-2xs shrink-0 select-none">
-      {/* Left: Company Logo (Amaavigo), Collapse Sidebar Button & View Icon */}
-      <div className="flex items-center space-x-3">
-        {/* Company Logo: Amaavigo */}
-        {(isUmrahBrand || brand.logoUrl) && (
-          <div className="flex items-center space-x-2 border-r border-slate-200 pr-3">
-            <img
-              src={brand.logoUrl || '/amaavigo-logo.png'}
-              alt={brand.logoUrl ? brand.companyName : 'Amaavigo'}
-              className="h-6 w-auto object-contain"
-            />
-          </div>
-        )}
-
+    <header className="hidden h-[76px] shrink-0 items-center justify-between border-b border-slate-200 bg-white px-5 lg:px-7 md:flex">
+      <div className="flex min-w-0 items-center gap-4">
         <button
+          type="button"
           onClick={onToggleCollapse}
-          className="p-1.5 rounded-lg text-slate-500 hover:text-slate-900 hover:bg-slate-100 transition flex items-center justify-center border border-slate-200/60 shadow-2xs"
-          title={isCollapsed ? 'Expand Sidebar' : 'Collapse Sidebar'}
+          title={isCollapsed ? 'Expand navigation' : 'Collapse navigation'}
+          aria-label={isCollapsed ? 'Expand navigation' : 'Collapse navigation'}
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 text-slate-500 transition hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900"
         >
-          {isCollapsed ? <PanelLeft className="w-4 h-4 text-orange-600" /> : <PanelLeftClose className="w-4 h-4" />}
+          {isCollapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
         </button>
-
-        {currentTabMeta.icon && (
-          <div className="flex items-center">
-            {currentTabMeta.icon}
-          </div>
-        )}
+        <div className="min-w-0">
+          <div className="mb-0.5 text-[9px] font-semibold uppercase tracking-[0.16em] text-slate-400">{meta.section}</div>
+          <div className="truncate text-[17px] font-semibold leading-5 tracking-tight text-slate-900">{meta.title}</div>
+          <div className="mt-0.5 truncate text-[11px] text-slate-500">{meta.description}</div>
+        </div>
       </div>
 
-      {/* Right: Live Channel Badges & Actions with Sign Out at Rightmost Corner */}
-      <div className="flex items-center space-x-2 sm:space-x-3 text-xs">
-        {/* Connected mailbox (this workspace only; hidden when none is connected) */}
-        {connectedMailbox && (
+      <div className="flex shrink-0 items-center gap-2.5">
+        {mailbox && (
           <div
-            className="hidden sm:flex items-center space-x-1.5 px-2.5 py-1 rounded-lg border bg-slate-50 border-slate-200/80 text-slate-600 text-xs"
-            title={`Connected mailbox: ${connectedMailbox}`}
+            title={'Connected mailbox: ' + mailbox}
+            className="hidden max-w-[210px] items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-2 xl:flex"
           >
-            <Radio className="w-3.5 h-3.5 text-blue-500 animate-pulse shrink-0" />
-            <span className="font-mono text-[11px] truncate max-w-[180px]">{connectedMailbox}</span>
+            <Radio className="h-3.5 w-3.5 shrink-0 text-emerald-600" />
+            <span className="truncate text-[11px] font-medium text-slate-600">{mailbox}</span>
           </div>
         )}
-
-        {/* Connected WhatsApp number (this workspace only; hidden when none is connected) */}
-        {connectedWhatsApp && (
+        {whatsapp && (
           <button
+            type="button"
             onClick={() => setActiveTab('inbox')}
-            className="hidden md:flex items-center space-x-1.5 px-2.5 py-1 rounded-lg border border-slate-200/80 bg-slate-50 text-slate-600 hover:text-slate-900 hover:bg-slate-100 text-xs transition"
-            title={`Connected WhatsApp Business: ${connectedWhatsApp}`}
+            title={'Connected WhatsApp Business: ' + whatsapp}
+            className="hidden max-w-[185px] items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-2 transition hover:bg-slate-100 xl:flex"
           >
-            <MessageSquare className="w-3.5 h-3.5 text-emerald-500 animate-pulse shrink-0" />
-            <span className="font-mono text-[11px] truncate">{connectedWhatsApp}</span>
+            <MessageSquare className="h-3.5 w-3.5 shrink-0 text-emerald-600" />
+            <span className="truncate text-[11px] font-medium text-slate-600">{whatsapp}</span>
           </button>
         )}
-
-        {/* Handoff Alert Badge */}
+        {unreadCount > 0 && (
+          <button
+            type="button"
+            onClick={() => setActiveTab('inbox')}
+            className="inline-flex h-9 items-center gap-2 rounded-lg border border-slate-200 px-3 text-[11px] font-medium text-slate-600 transition hover:bg-slate-50"
+            title="Open unread conversations"
+          >
+            <Inbox className="h-3.5 w-3.5" />
+            <span className="tabular-nums">{unreadCount > 99 ? '99+' : unreadCount}</span>
+          </button>
+        )}
         {handoffCount > 0 && (
           <button
+            type="button"
             onClick={() => setActiveTab('inbox')}
-            className="flex items-center space-x-1.5 px-2.5 py-1 rounded-full bg-orange-50 border border-orange-200 text-orange-800 font-bold text-[11px] shadow-2xs"
+            className="inline-flex h-9 items-center gap-2 rounded-lg border border-rose-200 bg-rose-50 px-3 text-[11px] font-semibold text-rose-700 transition hover:bg-rose-100"
+            title="Open conversations waiting for human handoff"
           >
-            <span className="w-2 h-2 rounded-full bg-orange-500 animate-ping"></span>
-            <span>{handoffCount} Handoff</span>
+            <AlertCircle className="h-3.5 w-3.5" />
+            <span className="tabular-nums">{handoffCount} handoff</span>
           </button>
         )}
-
-        {/* Rightmost Corner: Sign Out Button */}
-        {currentUser && onLogout && (
-          <button
-            onClick={onLogout}
-            title="Sign Out"
-            className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-white hover:bg-red-50 text-slate-700 hover:text-red-600 border border-slate-200 hover:border-red-200 text-xs font-bold transition shadow-2xs shrink-0"
-          >
-            <LogOut className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Sign Out</span>
-          </button>
+        {currentUser && (
+          <div className="ml-1 flex items-center gap-2 border-l border-slate-200 pl-3">
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-900 text-[10px] font-semibold text-white">
+              {initialsFor(currentUser) || 'U'}
+            </div>
+            <div className="hidden min-w-0 xl:block">
+              <div className="max-w-[130px] truncate text-[11px] font-semibold text-slate-800">{currentUser.name}</div>
+              <div className="text-[10px] text-slate-500">{currentUser.role === 'ADMIN' ? 'Administrator' : currentUser.role === 'SALES' ? 'Sales' : 'Workspace member'}</div>
+            </div>
+            {onLogout && (
+              <button
+                type="button"
+                onClick={onLogout}
+                title="Sign out"
+                aria-label="Sign out"
+                className="ml-1 rounded-lg p-2 text-slate-400 transition hover:bg-rose-50 hover:text-rose-600"
+              >
+                <LogOut className="h-4 w-4" />
+              </button>
+            )}
+          </div>
         )}
       </div>
     </header>

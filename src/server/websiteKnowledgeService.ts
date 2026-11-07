@@ -307,7 +307,8 @@ function candidateCollection(level: number): string {
   return CANDIDATE_PREFIX + String(level);
 }
 function queueRef(ctx: TenantContext, kind: QueueItem['kind'], url: string) {
-  return tenantRepo(ctx).doc(QUEUE_COLLECTION, hash(kind + '|' + url).slice(0, 40));
+  const identityKind = kind === 'PAGE_DONE' ? 'PAGE' : kind === 'SITEMAP_DONE' ? 'SITEMAP' : kind;
+  return tenantRepo(ctx).doc(QUEUE_COLLECTION, hash(identityKind + '|' + url).slice(0, 40));
 }
 async function getQueueBatch(ctx: TenantContext, kind: QueueItem['kind'], amount: number): Promise<Array<{ ref: any; item: QueueItem }>> {
   const snap = await getDocs(query(tenantRepo(ctx).collection(QUEUE_COLLECTION), where('kind', '==', kind), limit(amount)));

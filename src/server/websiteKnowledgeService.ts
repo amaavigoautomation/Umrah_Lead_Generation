@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { lookup } from 'node:dns/promises';
 import { isIP } from 'node:net';
-import { getDoc, getDocs, setDoc, deleteDoc, query, where, limit, orderByDocumentId, startAfterId } from './adminFirestore.js';
+import { getDoc, getDocs, setDoc, createDoc, deleteDoc, query, where, limit, orderByDocumentId, startAfterId } from './adminFirestore.js';
 import { isFirebaseConfigured } from '../firebase/config.js';
 import { db } from './adminFirestore.js';
 import { tenantRepo } from './tenantRepo.js';
@@ -17,7 +17,9 @@ const AI_FRAGMENT_CHARS = 18_000;
 const MERGE_BATCH_SIZE = 8;
 const MERGE_OUTPUT_LIMIT = 5;
 const PAGE_WRITE_BATCH_SIZE = 50;
-const MAX_HTML_BYTES = 700_000;
+const MAX_HTML_BYTES = 850_000;
+const MAX_SITEMAP_BYTES = 8_000_000;
+const WARNING_LIMIT = 80;
 const PAGE_COLLECTION = 'knowledge_source_pages';
 const WORK_COLLECTION = 'knowledge_website_scan_work';
 const QUEUE_COLLECTION = 'knowledge_website_scan_queue';
@@ -137,7 +139,7 @@ async function validatePublicUrl(raw: string): Promise<URL> {
   return url;
 }
 
-async function requestPublicText(raw: string): Promise<HttpResult> {
+async function requestPublicText(raw: string, maxBytes = MAX_HTML_BYTES): Promise<HttpResult> {
   let url = await validatePublicUrl(raw);
   let networkAttempt = 0;
   for (let redirectAttempt = 0; redirectAttempt <= 3; redirectAttempt += 1) {
@@ -176,9 +178,9 @@ async function requestPublicText(raw: string): Promise<HttpResult> {
     }
     if (!response.ok) throw new Error('The website returned HTTP ' + response.status + '.');
     const length = Number(response.headers.get('content-length') || 0);
-    if (length > MAX_HTML_BYTES) throw new Error('The webpage exceeds the supported 700 KB source size and needs to be split by the website.');
+    if (length > maxBytes) throw new Error('The webpage exceeds the supported ' + Math.round(maxBytes / 1024) + ' KB source size.');
     const bytes = Buffer.from(await response.arrayBuffer());
-    if (bytes.byteLength > MAX_HTML_BYTES) throw new Error('The webpage exceeds the supported 700 KB source size and needs to be split by the website.');
+    if (bytes.byteLength > maxBytes) throw new Error('The webpage exceeds the supported ' + Math.round(maxBytes / 1024) + ' KB source size.');
     return { url, status: response.status, contentType: (response.headers.get('content-type') || '').toLowerCase(), text: bytes.toString('utf8') };
   }
   throw new Error('Could not load the website resource.');
@@ -303,6 +305,27 @@ function safePatterns(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
   return Array.from(new Set(value.map((item) => String(item || '').trim()).filter((item) => item.startsWith('/') && item.length <= 180))).slice(0, 100);
 }
+function addWarning(job: CrawlJob, message: string): void {
+  if (job.warnings.length >= WARNING_LIMIT) job.warnings.shift();
+  job.warnings.push(String(message || 'Unknown warning').slice(0, 320));
+}
+function isAlreadyExists(error: any): boolean {
+  return error?.code === 6 || error?.code === '6' || error?.code === 'already-exists';
+}
+async function createQueueItem(ctx: TenantContext, kind: QueueItem['kind'], url: string): Promise<boolean> {
+  try {
+    await createDoc(queueRef(ctx, kind, url), { kind, url, createdAt: new Date().toISOString() });
+    return true;
+  } catch (error: any) {
+    if (isAlreadyExists(error)) return false;
+    throw error;
+  }
+}
+async function runBatches<T>(items: T[], batchSize: number, handler: (item: T) => Promise<unknown>): Promise<void> {
+  for (let offset = 0; offset < items.length; offset += batchSize) {
+    await Promise.all(items.slice(offset, offset + batchSize).map((item) => handler(item)));
+  }
+}
 function candidateCollection(level: number): string {
   return CANDIDATE_PREFIX + String(level);
 }
@@ -318,42 +341,27 @@ async function enqueuePage(ctx: TenantContext, job: CrawlJob, rawUrl: string): P
   const root = new URL(job.websiteUrl);
   const normalized = normalizeInternalUrl(rawUrl, root);
   if (!normalized || isExcluded(normalized, job.excludePatterns)) return false;
-  const pageId = hash(normalized).slice(0, 40);
-  const [work, failed, queued, completed] = await Promise.all([
-    getDoc(tenantRepo(ctx).doc(WORK_COLLECTION, pageId)),
-    getDoc(tenantRepo(ctx).doc(FAILURE_COLLECTION, pageId)),
-    getDoc(queueRef(ctx, 'PAGE', normalized)),
-    getDoc(queueRef(ctx, 'PAGE_DONE', normalized)),
-  ]);
-  if (work.exists() || failed.exists() || queued.exists() || completed.exists()) return false;
-  await setDoc(queueRef(ctx, 'PAGE', normalized), { kind: 'PAGE', url: normalized, createdAt: new Date().toISOString() }, { merge: false });
+  const created = await createQueueItem(ctx, 'PAGE', normalized);
+  if (!created) return false;
   job.pagesQueued += 1;
   job.pagesDiscovered += 1;
   return true;
 }
 async function enqueueSitemap(ctx: TenantContext, job: CrawlJob, rawUrl: string): Promise<boolean> {
   try {
-    const safe = await validatePublicUrl(rawUrl);
+    const parsed = new URL(rawUrl, job.websiteUrl);
+    if (normalizeHost(parsed.hostname) !== normalizeHost(new URL(job.websiteUrl).hostname)) return false;
+    const safe = await validatePublicUrl(parsed.toString());
     if (normalizeHost(safe.hostname) !== normalizeHost(new URL(job.websiteUrl).hostname)) return false;
-    const normalized = safe.toString();
-    const ref = queueRef(ctx, 'SITEMAP', normalized);
-    const [existing, completed] = await Promise.all([
-      getDoc(ref),
-      getDoc(queueRef(ctx, 'SITEMAP_DONE', normalized)),
-    ]);
-    if (existing.exists() || completed.exists()) return false;
-    await setDoc(ref, { kind: 'SITEMAP', url: normalized, createdAt: new Date().toISOString() }, { merge: false });
-    return true;
+    return await createQueueItem(ctx, 'SITEMAP', safe.toString());
   } catch {
     return false;
   }
 }
 async function enqueueVerify(ctx: TenantContext, job: CrawlJob, rawUrl: string): Promise<boolean> {
   if (isExcluded(rawUrl, job.excludePatterns)) return false;
-  const ref = queueRef(ctx, 'VERIFY', rawUrl);
-  const existing = await getDoc(ref);
-  if (existing.exists()) return false;
-  await setDoc(ref, { kind: 'VERIFY', url: rawUrl, createdAt: new Date().toISOString() }, { merge: false });
+  const created = await createQueueItem(ctx, 'VERIFY', rawUrl);
+  if (!created) return false;
   job.pagesToVerify += 1;
   return true;
 }
@@ -616,6 +624,7 @@ export async function startKnowledgeWebsiteScan(ctx: TenantContext, patternsInpu
     ...Array.from({ length: 20 }, (_, level) => clearCollection(ctx, candidateCollection(level))),
   ]);
   await writeWorkPage(ctx, home.page);
+  await setDoc(queueRef(ctx, 'PAGE_DONE', home.page.url), { kind: 'PAGE_DONE', url: home.page.url, completedAt: new Date().toISOString() }, { merge: false });
 
   const settingsSnap = await getDoc(tenantRepo(ctx).settingsDoc(SETTINGS_DOC));
   const settings = settingsSnap.exists() ? settingsSnap.data() as any : {};
@@ -689,7 +698,7 @@ function preservePreviousPage(ctx: TenantContext, url: string, job: CrawlJob): P
   return getDoc(tenantRepo(ctx).doc(PAGE_COLLECTION, hash(url).slice(0, 40))).then(async (snap) => {
     if (snap.exists()) {
       await writeWorkPage(ctx, snap.data() as SourcePage);
-      job.warnings.push('Preserved the last successfully fetched content for ' + url + ' because the current scan could not verify it.');
+      addWarning(job, 'Preserved the last successfully fetched content for ' + url + ' because the current scan could not verify it.');
     }
   });
 }
@@ -706,7 +715,7 @@ function decodeSitemapLocations(xml: string): string[] {
 }
 
 async function processDiscoveryStep(ctx: TenantContext, current: { ref: any; job: CrawlJob }): Promise<any> {
-  const batch = await getQueueBatch(ctx, 'SITEMAP', 2);
+  const batch = await getQueueBatch(ctx, 'SITEMAP', 1);
   if (!batch.length) {
     current.job.status = 'CRAWLING';
     await setDoc(current.ref, current.job, { merge: false });
@@ -717,9 +726,9 @@ async function processDiscoveryStep(ctx: TenantContext, current: { ref: any; job
     try {
       const sitemapUrl = await validatePublicUrl(entry.item.url);
       if (normalizeHost(sitemapUrl.hostname) !== normalizeHost(new URL(job.websiteUrl).hostname)) {
-        job.warnings.push('Skipped a sitemap outside the configured website domain.');
+        addWarning(job, 'Skipped a sitemap outside the configured website domain.');
       } else {
-        const response = await requestPublicText(sitemapUrl.toString());
+        const response = await requestPublicText(sitemapUrl.toString(), MAX_SITEMAP_BYTES);
         if (response.status === 200) {
           if (sitemapUrl.pathname.toLowerCase() === '/robots.txt') {
             for (const line of response.text.split(/\r?\n/)) {
@@ -729,15 +738,15 @@ async function processDiscoveryStep(ctx: TenantContext, current: { ref: any; job
           } else {
             const locations = decodeSitemapLocations(response.text);
             if (/<sitemapindex\b/i.test(response.text)) {
-              for (const location of locations) await enqueueSitemap(ctx, job, location);
+              await runBatches(locations, 20, async (location) => enqueueSitemap(ctx, job, location));
             } else {
-              for (const location of locations) await enqueuePage(ctx, job, location);
+              await runBatches(locations, 100, async (location) => enqueuePage(ctx, job, location));
             }
           }
         }
       }
     } catch (error: any) {
-      job.warnings.push('Could not read sitemap resource ' + entry.item.url + ': ' + String(error?.message || error).slice(0, 120));
+      addWarning(job, 'Could not read sitemap resource ' + entry.item.url + ': ' + String(error?.message || error).slice(0, 120));
     }
     await setDoc(entry.ref, { kind: 'SITEMAP_DONE', url: entry.item.url, completedAt: new Date().toISOString() }, { merge: true });
   }
@@ -769,13 +778,13 @@ async function processCrawlStep(ctx: TenantContext, current: { ref: any; job: Cr
       for (const link of extractLinks(result.html, new URL(result.page.url))) await enqueuePage(ctx, job, link);
     } else if (result.error) {
       job.pagesFailed += 1;
-      job.warnings.push('Could not read ' + sourceUrl + ': ' + result.error.slice(0, 150));
+      addWarning(job, 'Could not read ' + sourceUrl + ': ' + result.error.slice(0, 150));
       await savePageFailure(ctx, sourceUrl, result.error);
       await preservePreviousPage(ctx, sourceUrl, job);
     } else if (result.page) {
       job.pagesFailed += 1;
       const reason = 'The page redirected outside the configured website domain.';
-      job.warnings.push('Could not safely index ' + sourceUrl + ': ' + reason);
+      addWarning(job, 'Could not safely index ' + sourceUrl + ': ' + reason);
       await savePageFailure(ctx, sourceUrl, reason);
       await preservePreviousPage(ctx, sourceUrl, job);
     }
@@ -806,7 +815,7 @@ async function processVerifyStep(ctx: TenantContext, current: { ref: any; job: C
       await writeWorkPage(ctx, item.result.page);
     } else if (item.error || item.result?.page) {
       job.pagesFailed += 1;
-      job.warnings.push('Could not verify whether ' + item.entry.item.url + ' was removed: ' + String(item.error || 'the page redirected outside the company website').slice(0, 120));
+      addWarning(job, 'Could not verify whether ' + item.entry.item.url + ' was removed: ' + String(item.error || 'the page redirected outside the company website').slice(0, 120));
       await savePageFailure(ctx, item.entry.item.url, item.error || 'Redirected outside the configured website domain.');
       await preservePreviousPage(ctx, item.entry.item.url, job);
     }

@@ -1109,7 +1109,6 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
                 </select>
               </div>
 
-              {(dateFilter !==
               <div className="flex items-center space-x-1.5 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1 text-xs">
                 <Target className="w-3.5 h-3.5 text-slate-500" />
                 <select value={intentFilter} onChange={(e) => setIntentFilter(e.target.value as 'ALL' | 'HIGH' | 'MEDIUM' | 'LOW')} className="bg-transparent text-xs font-bold text-slate-700 focus:outline-none cursor-pointer">
@@ -1128,7 +1127,8 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
                   <Layers className="h-3.5 w-3.5" /> Pipeline
                 </button>
               </div>
- 'ALL' || callerFilter !== 'ALL' || sourceFilter !== 'ALL' || scoreFilter !== 'ALL' || intentFilter !== 'ALL' || searchQuery || stageTab !== 'ALL') && (
+
+              {(dateFilter !== 'ALL' || callerFilter !== 'ALL' || sourceFilter !== 'ALL' || scoreFilter !== 'ALL' || intentFilter !== 'ALL' || searchQuery || stageTab !== 'ALL') && (
                 <button
                   onClick={() => {
                     setDateFilter('ALL');
@@ -1145,8 +1145,7 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
                 >
                   Reset
                 </button>
-              )}
-            </div>
+              )}</div>
           </div>
         </div>
       </div>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useBrand } from '../context/BrandContext';
 import type { TenantBrand } from '../shared/brand';
 import { DAY_NAMES, brandTzLabel, brandWorkingDaysLabel, brandWorkingWindowLabel, fmtHour, workingHoursForDay } from '../shared/brand';
@@ -22,8 +22,24 @@ import {
   Globe,
   UserPlus,
   Users,
+  ChevronLeft,
+  ChevronRight,
+  Search,
+  List,
+  CalendarDays,
+  Settings2,
+  Link2,
+  Check,
+  X,
+  ClipboardList,
+  Copy,
+  Filter,
+  ArrowUpRight,
+  AlertTriangle,
+  Building2,
+  UserRoundCheck,
 } from 'lucide-react';
-import { Booking, Channel, Lead } from '../types/index.js';
+import { Booking, Channel, Contact, Lead } from '../types/index.js';
 import {
   signInWithGoogleCalendar,
   getCalendarAccessToken,
@@ -33,17 +49,51 @@ import {
   CALENDAR_TARGET_ACCOUNT,
 } from '../services/googleCalendarAuth.js';
 
+type SchedulingView = 'CALENDAR' | 'BOOKINGS' | 'AVAILABILITY' | 'INTEGRATIONS' | 'SIMULATOR';
+type SchedulingCalendarMode = 'WEEK' | 'DAY' | 'AGENDA';
+
+const dateKeyInTimezone = (date: Date, timezone: string) => {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: timezone || 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).formatToParts(date);
+  const part = (key: string) => parts.find((entry) => entry.type === key)?.value || '';
+  return `${part('year')}-${part('month')}-${part('day')}`;
+};
+const addDateKeyDays = (dateKey: string, amount: number) => {
+  const [year, month, day] = dateKey.split('-').map(Number);
+  return new Date(Date.UTC(year, month - 1, day + amount, 12)).toISOString().slice(0, 10);
+};
+const mondayOfDateKey = (dateKey: string) => {
+  const [year, month, day] = dateKey.split('-').map(Number);
+  const weekday = new Date(Date.UTC(year, month - 1, day, 12)).getUTCDay();
+  return addDateKeyDays(dateKey, -((weekday + 6) % 7));
+};
+const formatDateKey = (dateKey: string, options: Intl.DateTimeFormatOptions = {}) =>
+  new Intl.DateTimeFormat('en-IN', { timeZone: 'UTC', ...options }).format(new Date(`${dateKey}T12:00:00.000Z`));
 interface DemoSchedulingViewProps {
   leads?: Lead[];
+  contacts?: Contact[];
   tenantId: string;
   canEditSettings: boolean;
 }
 
-export const DemoSchedulingView: React.FC<DemoSchedulingViewProps> = ({ leads = [], tenantId, canEditSettings }) => {
+export const DemoSchedulingView: React.FC<DemoSchedulingViewProps> = ({ leads = [], contacts = [], tenantId, canEditSettings }) => {
   const { brand, setBrand } = useBrand();
   const [availabilityDraft, setAvailabilityDraft] = useState<TenantBrand>(brand);
   const [isSavingAvailability, setIsSavingAvailability] = useState(false);
   const [availabilitySaveMessage, setAvailabilitySaveMessage] = useState<string | null>(null);
+  const [activeView, setActiveView] = useState<SchedulingView>('CALENDAR');
+  const [calendarMode, setCalendarMode] = useState<SchedulingCalendarMode>('WEEK');
+  const [calendarAnchorDate, setCalendarAnchorDate] = useState(() => dateKeyInTimezone(new Date(), brand.timezone || 'Asia/Kolkata'));
+  const [selectedCalendarDate, setSelectedCalendarDate] = useState(() => dateKeyInTimezone(new Date(), brand.timezone || 'Asia/Kolkata'));
+  const [bookingSearch, setBookingSearch] = useState('');
+  const [bookingStatusFilter, setBookingStatusFilter] = useState<'ALL' | Booking['status']>('ALL');
+  const [bookingChannelFilter, setBookingChannelFilter] = useState<'ALL' | Channel>('ALL');
+  const [selectedBookingId, setSelectedBookingId] = useState<string | null>(null);
+  const [selectedLeadId, setSelectedLeadId] = useState('');
+  const [bookingError, setBookingError] = useState<string | null>(null);
+  const [isRescheduling, setIsRescheduling] = useState(false);
+  const [bookingDetailsTab, setBookingDetailsTab] = useState<'DETAILS' | 'ATTENDEES'>('DETAILS');
   useEffect(() => setAvailabilityDraft(brand), [brand]);
 
   const updateAvailabilityText = (field: 'timezone' | 'timezoneLabel' | 'calendarEmail', value: string) => {
@@ -100,8 +150,6 @@ export const DemoSchedulingView: React.FC<DemoSchedulingViewProps> = ({ leads = 
     }
   };
   const tzl = brandTzLabel(brand);
-  const dayRange = brandWorkingDaysLabel(brand).replace(' to ', '–').replace(/Monday/g, 'Mon').replace(/Tuesday/g, 'Tue').replace(/Wednesday/g, 'Wed').replace(/Thursday/g, 'Thu').replace(/Friday/g, 'Fri').replace(/Saturday/g, 'Sat').replace(/Sunday/g, 'Sun');
-  const hoursLabel = brandWorkingWindowLabel(brand);
   const [calendarConnected, setCalendarConnected] = useState(() => hasCalendarToken());
   const [calendarProvider, setCalendarProvider] = useState<'google' | 'microsoft' | null>(null);
   const [connectedEmail, setConnectedEmail] = useState<string>('');
@@ -120,6 +168,65 @@ export const DemoSchedulingView: React.FC<DemoSchedulingViewProps> = ({ leads = 
 
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [isLoadingBookings, setIsLoadingBookings] = useState(false);
+
+  const calendarWeekStart = useMemo(() => mondayOfDateKey(calendarAnchorDate), [calendarAnchorDate]);
+  const calendarWeekStartRef = useRef(calendarWeekStart);
+  useEffect(() => { calendarWeekStartRef.current = calendarWeekStart; }, [calendarWeekStart]);
+  const calendarWeekEnd = useMemo(() => addDateKeyDays(calendarWeekStart, 6), [calendarWeekStart]);
+  const calendarDays = useMemo(() => Array.from({ length: 7 }, (_, index) => addDateKeyDays(calendarWeekStart, index)), [calendarWeekStart]);
+  const calendarVisibleDays = calendarMode === 'DAY' ? [selectedCalendarDate] : calendarDays;
+  const todayKey = dateKeyInTimezone(new Date(), brand.timezone || 'Asia/Kolkata');
+  const selectedBooking = useMemo(() => bookings.find((booking) => booking.bookingId === selectedBookingId) || null, [bookings, selectedBookingId]);
+  const filteredBookings = useMemo(() => {
+    const query = bookingSearch.trim().toLowerCase();
+    return [...bookings]
+      .filter((booking) => bookingStatusFilter === 'ALL' || booking.status === bookingStatusFilter)
+      .filter((booking) => bookingChannelFilter === 'ALL' || booking.channel === bookingChannelFilter)
+      .filter((booking) => !query || [booking.leadName, booking.leadEmail, booking.companyName, booking.leadPhone, booking.bookingId].some((value) => String(value || '').toLowerCase().includes(query)))
+      .sort((a, b) => String(a.startDateTimeIso || a.date).localeCompare(String(b.startDateTimeIso || b.date)));
+  }, [bookings, bookingSearch, bookingStatusFilter, bookingChannelFilter]);
+  const bookingStats = useMemo(() => {
+    const activeUpcoming = (booking: Booking) => booking.date >= todayKey && (booking.status === 'BOOKED' || booking.status === 'RESCHEDULED');
+    return {
+      today: bookings.filter((booking) => booking.date === todayKey && activeUpcoming(booking)).length,
+      thisWeek: bookings.filter((booking) => booking.date >= calendarWeekStart && booking.date <= calendarWeekEnd && activeUpcoming(booking)).length,
+      upcoming: bookings.filter(activeUpcoming).length,
+      completed: bookings.filter((booking) => booking.status === 'COMPLETED').length,
+      cancelled: bookings.filter((booking) => booking.status === 'CANCELLED').length,
+    };
+  }, [bookings, todayKey, calendarWeekStart, calendarWeekEnd]);
+  const calendarSlots = useMemo(
+    () => availableSlots.filter((slot) => slot.date >= calendarWeekStart && slot.date <= calendarWeekEnd),
+    [availableSlots, calendarWeekStart, calendarWeekEnd]
+  );
+
+  const navigateCalendar = (direction: -1 | 1) => {
+    const amount = calendarMode === 'DAY' ? 1 : 7;
+    const nextDate = addDateKeyDays(calendarAnchorDate, amount * direction);
+    setCalendarAnchorDate(nextDate);
+    setSelectedCalendarDate(nextDate);
+  };
+  const goToToday = () => {
+    const today = dateKeyInTimezone(new Date(), brand.timezone || 'Asia/Kolkata');
+    setCalendarAnchorDate(today);
+    setSelectedCalendarDate(today);
+  };
+  const selectCrmLead = (leadId: string) => {
+    setSelectedLeadId(leadId);
+    if (!leadId) return;
+    const lead = leads.find((item) => item.leadId === leadId);
+    if (!lead) return;
+    const contact = contacts.find((item) => item.contactId === lead.contactId);
+    setLeadName([contact?.firstName, contact?.lastName].filter(Boolean).join(' '));
+    setLeadEmail(contact?.email || '');
+    setLeadPhone(contact?.phone || '');
+    setCompanyName(contact?.companyName || '');
+    const sourceChannel: Record<string, Channel> = {
+      EMAIL: 'EMAIL', WHATSAPP: 'WHATSAPP', WEBSITE: 'WEBSITE',
+      INSTAGRAM: 'INSTAGRAM', FACEBOOK: 'FACEBOOK', LINKEDIN: 'LINKEDIN',
+    };
+    setChannel(sourceChannel[lead.source] || 'EMAIL');
+  };
 
   // Manual Token / Settings State
   const [showManualTokenInput, setShowManualTokenInput] = useState(false);
@@ -195,14 +302,15 @@ export const DemoSchedulingView: React.FC<DemoSchedulingViewProps> = ({ leads = 
   };
 
   // 2. Fetch Realtime Slots from Google Calendar
-  const fetchAvailability = async () => {
+  const fetchAvailability = async (preferredDate: string = calendarWeekStart) => {
     setIsLoadingSlots(true);
     try {
       const token = await getCalendarAccessToken();
       const headers: Record<string, string> = {};
       if (token) headers['X-Google-Access-Token'] = token;
 
-      const res = await fetch('/api/calendar/availability?count=8', { headers });
+      const query = new URLSearchParams({ count: '100', preferredDate });
+      const res = await fetch('/api/calendar/availability?' + query.toString(), { headers });
       if (res.status === 401) {
         // A 401 can come from the app's own login check, not only from Google. Do not throw the token
         // away on it: let the status check (which asks Google directly) decide.
@@ -265,7 +373,7 @@ export const DemoSchedulingView: React.FC<DemoSchedulingViewProps> = ({ leads = 
       (_user, token) => {
         if (token) {
           setCalendarConnected(true);
-          fetchAvailability();
+          fetchAvailability(calendarWeekStart);
           fetchBookings();
         }
       },
@@ -274,7 +382,6 @@ export const DemoSchedulingView: React.FC<DemoSchedulingViewProps> = ({ leads = 
       }
     );
     checkStatus();
-    fetchAvailability();
     fetchBookings();
 
     // Booking changes may be made by the AI from email/WhatsApp while this page is open.
@@ -282,7 +389,7 @@ export const DemoSchedulingView: React.FC<DemoSchedulingViewProps> = ({ leads = 
     const refreshCalendarData = () => {
       if (document.visibilityState !== 'visible') return;
       fetchBookings();
-      fetchAvailability();
+      fetchAvailability(calendarWeekStartRef.current);
     };
     const refreshTimer = window.setInterval(refreshCalendarData, 30000);
     window.addEventListener('focus', refreshCalendarData);
@@ -295,6 +402,10 @@ export const DemoSchedulingView: React.FC<DemoSchedulingViewProps> = ({ leads = 
       document.removeEventListener('visibilitychange', refreshCalendarData);
     };
   }, []);
+
+  useEffect(() => {
+    fetchAvailability(calendarWeekStart);
+  }, [calendarWeekStart]);
 
   const videoLabel = calendarProvider === 'microsoft' ? 'Microsoft Teams' : 'Google Meet';
   const googleActive = calendarConnected && calendarProvider === 'google';
@@ -386,7 +497,7 @@ export const DemoSchedulingView: React.FC<DemoSchedulingViewProps> = ({ leads = 
     setIsTestingBooking(true);
     try {
       const token = await getCalendarAccessToken();
-      const slotsRes = await fetch('/api/calendar/availability?count=1');
+      const slotsRes = await fetch('/api/calendar/availability?count=1&preferredDate=' + encodeURIComponent(calendarWeekStart));
       const slotsData = await slotsRes.json();
       const testSlot = slotsData.slots?.[0] || availableSlots[0];
       if (!testSlot) {
@@ -437,6 +548,7 @@ export const DemoSchedulingView: React.FC<DemoSchedulingViewProps> = ({ leads = 
 
     setIsBooking(true);
     setBookingSuccessMsg(null);
+    setBookingError(null);
     try {
       const token = await getCalendarAccessToken();
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
@@ -454,6 +566,8 @@ export const DemoSchedulingView: React.FC<DemoSchedulingViewProps> = ({ leads = 
           companyName,
           leadPhone,
           channel,
+          leadId: selectedLeadId || undefined,
+          contactId: leads.find((lead) => lead.leadId === selectedLeadId)?.contactId || undefined,
           startIso: selectedSlot.startIso,
           endIso: selectedSlot.endIso,
           dateString: selectedSlot.date,
@@ -467,13 +581,16 @@ export const DemoSchedulingView: React.FC<DemoSchedulingViewProps> = ({ leads = 
       if (data.success && data.booking) {
         setBookingSuccessMsg(`Demo booked. ${videoLabel} link: ${data.booking.googleMeetLink}`);
         setSelectedSlot(null);
-        fetchAvailability();
+        setSelectedLeadId('');
+        setSelectedBookingId(data.booking.bookingId || null);
+        fetchAvailability(calendarWeekStart);
         fetchBookings();
       } else {
-        alert(data.error || 'Failed to book slot on Google Calendar');
+        setBookingError(data.error || 'The selected time could not be booked. Please choose another available slot.');
+        if (res.status === 409) fetchAvailability(calendarWeekStart);
       }
     } catch (err: any) {
-      alert(err?.message || 'Booking failed');
+      setBookingError(err?.message || 'Booking failed. Please try again.');
     } finally {
       setIsBooking(false);
     }
@@ -490,17 +607,22 @@ export const DemoSchedulingView: React.FC<DemoSchedulingViewProps> = ({ leads = 
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ bookingId, reason: 'Operator cancelled from CRM UI' }),
       });
-      if (res.ok) {
-        fetchBookings();
-        fetchAvailability();
-      }
-    } catch (err) {
-      console.warn('Error cancelling:', err);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success) throw new Error(data.error || 'Could not cancel this meeting.');
+      setBookingSuccessMsg('Meeting cancelled and the calendar slot has been released.');
+      setBookingError(null);
+      setSelectedBookingId(null);
+      fetchBookings();
+      fetchAvailability(calendarWeekStart);
+    } catch (err: any) {
+      setBookingError(err?.message || 'Error cancelling meeting.');
     }
   };
 
   // Handle Reschedule
   const handleRescheduleBooking = async (bookingId: string, slot: any) => {
+    setIsRescheduling(true);
+    setBookingError(null);
     try {
       const token = await getCalendarAccessToken();
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
@@ -523,14 +645,21 @@ export const DemoSchedulingView: React.FC<DemoSchedulingViewProps> = ({ leads = 
         }),
       });
 
-      if (res.ok) {
-        setRescheduleBookingId(null);
-        setBookingSuccessMsg(`Demo rescheduled on Google Calendar!`);
-        fetchBookings();
-        fetchAvailability();
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success) {
+        setBookingError(data.error || 'Could not move the meeting. The original booking remains unchanged.');
+        if (res.status === 409) fetchAvailability(calendarWeekStart);
+        return;
       }
-    } catch (e) {
-      console.warn('Error rescheduling:', e);
+      setRescheduleBookingId(null);
+      setSelectedBookingId(data.booking?.bookingId || bookingId);
+      setBookingSuccessMsg('Demo successfully rescheduled.');
+      fetchBookings();
+      fetchAvailability(calendarWeekStart);
+    } catch (e: any) {
+      setBookingError(e?.message || 'Error rescheduling meeting.');
+    } finally {
+      setIsRescheduling(false);
     }
   };
 
@@ -626,946 +755,300 @@ export const DemoSchedulingView: React.FC<DemoSchedulingViewProps> = ({ leads = 
     }
   };
 
+  const chooseSlot = (slot: (typeof availableSlots)[number]) => {
+    if (rescheduleBookingId) {
+      void handleRescheduleBooking(rescheduleBookingId, slot);
+      return;
+    }
+    setBookingError(null);
+    setSelectedLeadId('');
+    setLeadName('');
+    setLeadEmail('');
+    setCompanyName('');
+    setLeadPhone('');
+    setChannel('EMAIL');
+    setSelectedSlot(slot);
+  };
+  const visibleCalendarBookings = (dateKey: string) => bookings
+    .filter((booking) => booking.date === dateKey)
+    .sort((a, b) => String(a.startTime).localeCompare(String(b.startTime)));
+  const renderBookingStatus = (status: Booking['status']) => {
+    const styles: Record<Booking['status'], string> = {
+      BOOKED: 'is-booked', RESCHEDULED: 'is-rescheduled', COMPLETED: 'is-completed', CANCELLED: 'is-cancelled',
+    };
+    return <span className={'schedule-status ' + styles[status]}>{status.toLowerCase().replace('_', ' ')}</span>;
+  };
+  const openBookingAttendees = (booking: Booking) => {
+    setAttendeeModalBooking(booking);
+    setNewAttendeeEmailInput('');
+    setAddAttendeeSuccess(null);
+  };
+
   return (
-    <div data-umrah360-module="scheduling" className="space-y-5">
-      <section className="bg-white border border-slate-200 rounded-xl p-4 sm:p-5 space-y-4">
-        <div className="flex items-center gap-2">
-          <Clock className="w-5 h-5 text-orange-600" />
-          <h2 className="text-base font-bold text-slate-900">Demo booking availability</h2>
+    <div data-umrah360-module="scheduling" className="demo-scheduling-workspace">
+      <header className="schedule-page-header">
+        <div className="schedule-heading">
+          <div className="schedule-heading-icon"><CalendarDays className="h-5 w-5" /></div>
+          <div><div className="schedule-eyebrow">SALES OPERATIONS</div><h1>Demo Scheduling</h1><p>Manage meetings, calendar availability and automated scheduling in one workspace.</p></div>
         </div>
-        <p className="text-xs text-slate-500">
-          Choose the session length first. Start times repeat at that interval, and the full session must fit inside each day's working window.
-        </p>
-        <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-3">
-          <label className="block">
-            <span className="block text-xs font-semibold text-slate-600 mb-1">Demo duration (minutes)</span>
-            <input type="number" min={5} max={240} step={1}
-              disabled={!canEditSettings || isSavingAvailability}
-              value={availabilityDraft.demoDurationMinutes}
-              onChange={(e) => setAvailabilityDraft((current) => ({ ...current, demoDurationMinutes: Number(e.target.value) }))}
-              className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-orange-500 disabled:bg-slate-100" />
-            <span className="block text-[11px] text-slate-400 mt-1">Examples: 20, 30, 45 or 60 minutes.</span>
-          </label>
-          {([
-            ['timezone', 'Timezone (IANA)', 'Asia/Kolkata'],
-            ['timezoneLabel', 'Timezone label shown to customers', 'IST'],
-            ['calendarEmail', 'Calendar email for demo invites', 'you@company.com'],
-          ] as const).map(([field, label, placeholder]) => (
-            <label key={field} className="block">
-              <span className="block text-xs font-semibold text-slate-600 mb-1">{label}</span>
-              <input type="text" disabled={!canEditSettings || isSavingAvailability}
-                value={availabilityDraft[field]} placeholder={placeholder}
-                onChange={(e) => updateAvailabilityText(field, e.target.value)}
-                className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-orange-500 disabled:bg-slate-100" />
-            </label>
-          ))}
+        <div className="schedule-header-actions">
+          <div className={'schedule-calendar-connection ' + (calendarConnected ? 'is-connected' : 'is-disconnected')}><span className="schedule-connection-dot" /><span>{calendarConnected ? (calendarProvider === 'microsoft' ? 'Microsoft Teams connected' : 'Google Meet connected') : 'Calendar not connected'}</span></div>
+          <button type="button" className="schedule-primary-button" onClick={() => { const nextSlot = calendarSlots.find((slot) => slot.startIso && Date.parse(slot.startIso) > Date.now()); if (nextSlot) chooseSlot(nextSlot); else setActiveView('CALENDAR'); }} disabled={!calendarConnected || (isLoadingSlots && calendarSlots.length === 0)}><CalendarDays className="h-4 w-4" /> Book Demo</button>
         </div>
-        <div className="space-y-2">
-          {DAY_NAMES.map((day, dayIndex) => {
-            const enabled = availabilityDraft.workingDays.includes(dayIndex);
-            const hours = workingHoursForDay(availabilityDraft, dayIndex);
-            return (
-              <div key={day} className="grid grid-cols-1 sm:grid-cols-[minmax(130px,1fr)_1fr_1fr] gap-3 items-center rounded-lg border border-slate-100 p-3">
-                <label className="flex items-center gap-2 text-sm font-semibold text-slate-700">
-                  <input type="checkbox" disabled={!canEditSettings || isSavingAvailability}
-                    checked={enabled} onChange={() => toggleAvailabilityDay(dayIndex)}
-                    className="h-4 w-4 accent-orange-600" />
-                  {day}
-                  {!enabled && <span className="text-xs font-normal text-slate-400">Closed</span>}
-                </label>
-                <label className="block">
-                  <span className="mb-1 block text-[11px] font-semibold text-slate-500">Start time</span>
-                  <select
-                    className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 disabled:bg-slate-100"
-                    disabled={!canEditSettings || isSavingAvailability || !enabled}
-                    value={hours.start} onChange={(e) => updateAvailabilityHours(dayIndex, 'start', Number(e.target.value))}>
-                    {Array.from({ length: 24 }, (_, hour) => <option key={hour} value={hour}>{fmtHour(hour)}</option>)}
-                  </select>
-                </label>
-                <label className="block">
-                  <span className="mb-1 block text-[11px] font-semibold text-slate-500">End time</span>
-                  <select
-                    className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 disabled:bg-slate-100"
-                    disabled={!canEditSettings || isSavingAvailability || !enabled}
-                    value={hours.end} onChange={(e) => updateAvailabilityHours(dayIndex, 'end', Number(e.target.value))}>
-                    {Array.from({ length: 24 }, (_, index) => index + 1).map((hour) =>
-                      <option key={hour} value={hour}>{hour === 24 ? '12:00 AM (midnight)' : fmtHour(hour)}</option>
-                    )}
-                  </select>
-                </label>
-              </div>
-            );
-          })}
-        </div>
-        <p className="text-xs text-slate-500">
-          Customers will see: {brandWorkingWindowLabel(availabilityDraft)}. Each demo is {availabilityDraft.demoDurationMinutes} minutes; start times repeat every {availabilityDraft.demoDurationMinutes} minutes.
-        </p>
-        {!canEditSettings && <p className="text-xs text-slate-500">Only an administrator can change demo booking availability.</p>}
-        {availabilitySaveMessage && (
-          <p className={`text-xs ${availabilitySaveMessage === 'Demo booking availability saved.' ? 'text-emerald-700' : 'text-red-600'}`}>
-            {availabilitySaveMessage}
-          </p>
-        )}
-        {canEditSettings && (
-          <button type="button" onClick={saveDemoAvailability} disabled={isSavingAvailability}
-            className="inline-flex items-center gap-2 bg-orange-600 hover:bg-orange-700 disabled:opacity-50 text-white text-sm font-semibold rounded-lg px-4 py-2">
-            {isSavingAvailability ? 'Saving…' : 'Save demo availability'}
-          </button>
-        )}
+      </header>
+
+      <section className="schedule-stats-grid" aria-label="Meeting overview">
+        <button type="button" className="schedule-stat-card" onClick={() => { setActiveView('CALENDAR'); setCalendarMode('DAY'); setSelectedCalendarDate(todayKey); setCalendarAnchorDate(todayKey); }}><span className="schedule-stat-icon violet"><CalendarDays className="h-4 w-4" /></span><span className="schedule-stat-copy"><span>Today's meetings</span><strong>{bookingStats.today}</strong></span><span className="schedule-stat-foot">Scheduled for today</span></button>
+        <button type="button" className="schedule-stat-card" onClick={() => { setActiveView('CALENDAR'); setCalendarMode('WEEK'); goToToday(); }}><span className="schedule-stat-icon blue"><Calendar className="h-4 w-4" /></span><span className="schedule-stat-copy"><span>This week</span><strong>{bookingStats.thisWeek}</strong></span><span className="schedule-stat-foot">Upcoming this week</span></button>
+        <button type="button" className="schedule-stat-card" onClick={() => { setActiveView('BOOKINGS'); setBookingStatusFilter('BOOKED'); }}><span className="schedule-stat-icon green"><CheckCircle2 className="h-4 w-4" /></span><span className="schedule-stat-copy"><span>Upcoming</span><strong>{bookingStats.upcoming}</strong></span><span className="schedule-stat-foot">Booked or rescheduled</span></button>
+        <button type="button" className="schedule-stat-card" onClick={() => { setActiveView('BOOKINGS'); setBookingStatusFilter('COMPLETED'); }}><span className="schedule-stat-icon teal"><ClipboardList className="h-4 w-4" /></span><span className="schedule-stat-copy"><span>Completed</span><strong>{bookingStats.completed}</strong></span><span className="schedule-stat-foot">Past completed meetings</span></button>
+        <button type="button" className="schedule-stat-card" onClick={() => { setActiveView('BOOKINGS'); setBookingStatusFilter('CANCELLED'); }}><span className="schedule-stat-icon rose"><XCircle className="h-4 w-4" /></span><span className="schedule-stat-copy"><span>Cancelled</span><strong>{bookingStats.cancelled}</strong></span><span className="schedule-stat-foot">Cancelled bookings</span></button>
       </section>
-      <div className="space-y-6">
-      {/* Top Banner / Calendar Integration Status */}
-      <div className="bg-gradient-to-r from-orange-50/80 via-white to-amber-50/40 border border-slate-200/90 rounded-2xl p-5 sm:p-6 shadow-2xs space-y-4">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="space-y-1.5">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="px-3 py-1 bg-orange-500 text-white font-bold text-xs rounded-lg flex items-center gap-1.5 shadow-2xs">
-                <ShieldCheck className="w-3.5 h-3.5" />
-                CENTRAL DEMO SCHEDULING AGENT
-              </span>
-              <span className="px-2.5 py-0.5 bg-slate-100 text-slate-700 border border-slate-200/90 text-xs rounded-lg font-bold">
-                {brand.timezone}{brand.timezoneLabel ? ` (${brand.timezoneLabel})` : ''}
-              </span>
-            </div>
-            <h2 className="text-xl md:text-2xl font-extrabold text-slate-900 flex items-center gap-2">
-              <CalendarIcon className="w-6 h-6 text-orange-500" />
-              Demo calendar (Google or Microsoft)
-            </h2>
-            <p className="text-xs sm:text-sm text-slate-600 max-w-2xl font-medium leading-relaxed">
-              All demo requests across <strong className="text-slate-900 font-bold">Website, Email, WhatsApp, and Campaigns</strong> use one connected calendar.
-              Google → <strong>Google Meet</strong>. Microsoft 365 → <strong>Microsoft Teams</strong>. Only one can be connected at a time
-              ({dayRange}, {hoursLabel} · {brand.demoDurationMinutes} min per demo
-              {connectedEmail ? <> · {connectedEmail}</> : CALENDAR_TARGET_ACCOUNT ? <> · {CALENDAR_TARGET_ACCOUNT}</> : null}).
-            </p>
-          </div>
 
-          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2.5 shrink-0">
-            <div className="flex items-center gap-2 text-xs bg-slate-900 text-white px-3.5 py-2 rounded-xl border border-slate-800 shadow-2xs">
-              <span
-                className={`w-2.5 h-2.5 rounded-full ${
-                  calendarConnected ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'
-                }`}
-              />
-              <span className="font-bold">
-                {calendarConnected
-                  ? `Active · ${calendarProvider === 'microsoft' ? 'Microsoft / Teams' : 'Google / Meet'}`
-                  : 'No calendar connected'}
-              </span>
-            </div>
-            {calendarConnected && (
-              <button
-                onClick={handleTestGoogleBooking}
-                disabled={isTestingBooking}
-                className="px-3.5 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-xs font-bold transition-all shadow-2xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-                title={`Book a test demo on the next free slot to verify ${videoLabel}`}
-              >
-                <Video className={`w-3.5 h-3.5 ${isTestingBooking ? 'animate-pulse' : ''}`} />
-                <span>{isTestingBooking ? 'Booking Test...' : `Test ${calendarProvider === 'microsoft' ? 'Teams' : 'Meet'} Booking`}</span>
-              </button>
-            )}
-          </div>
+      <nav className="schedule-workspace-tabs" aria-label="Scheduling sections">
+        {([
+          ['CALENDAR', 'Calendar', CalendarDays],
+          ['BOOKINGS', 'Bookings', ClipboardList],
+          ['AVAILABILITY', 'Availability', Clock],
+          ['INTEGRATIONS', 'Integrations', Link2],
+          ['SIMULATOR', 'Agent Simulator', Sparkles],
+        ] as const).map(([key, label, Icon]) => (
+          <button key={key} type="button" onClick={() => setActiveView(key)} className={activeView === key ? 'is-active' : ''} aria-current={activeView === key ? 'page' : undefined}><Icon className="h-4 w-4" /> {label}{key === 'BOOKINGS' && <span className="schedule-tab-count">{bookings.length}</span>}</button>
+        ))}
+      </nav>
+
+      {(bookingSuccessMsg || bookingError || authError) && (
+        <div className="schedule-feedback-stack" role="status" aria-live="polite">
+          {bookingSuccessMsg && <div className="schedule-feedback success"><CheckCircle2 className="h-4 w-4 shrink-0" /><span>{bookingSuccessMsg}</span><button type="button" onClick={() => setBookingSuccessMsg(null)} aria-label="Dismiss success"><X className="h-4 w-4" /></button></div>}
+          {(bookingError || authError) && <div className="schedule-feedback error"><AlertTriangle className="h-4 w-4 shrink-0" /><span>{bookingError || authError}</span><button type="button" onClick={() => { setBookingError(null); setAuthError(null); }} aria-label="Dismiss error"><X className="h-4 w-4" /></button></div>}
         </div>
+      )}
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <div
-            className={`rounded-xl border p-4 space-y-3 ${
-              googleActive ? 'border-emerald-300 bg-emerald-50/70' : 'border-slate-200 bg-white'
-            }`}
-          >
-            <div className="flex items-start justify-between gap-2">
-              <div>
-                <h3 className="text-sm font-extrabold text-slate-900">Google Calendar sync</h3>
-                <p className="text-xs text-slate-600 mt-0.5 font-medium">
-                  Books on Google Calendar. Invite includes a <strong>Google Meet</strong> link.
-                </p>
-              </div>
-              <span
-                className={`text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full shrink-0 ${
-                  googleActive ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-500'
-                }`}
-              >
-                {googleActive ? 'Connected' : 'Off'}
-              </span>
+      {activeView === 'CALENDAR' && (
+        <section className="schedule-content-panel">
+          <div className="schedule-calendar-toolbar">
+            <div className="schedule-calendar-title-group">
+              <div><h2>{calendarMode === 'DAY' ? formatDateKey(selectedCalendarDate, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) : formatDateKey(calendarWeekStart, { day: 'numeric', month: 'short' }) + ' – ' + formatDateKey(calendarWeekEnd, { day: 'numeric', month: 'short', year: 'numeric' })}</h2><p><Globe className="h-3.5 w-3.5" /> {tzl} · {availabilityDraft.demoDurationMinutes || brand.demoDurationMinutes} minute sessions</p></div>
+              <div className="schedule-date-nav"><button type="button" onClick={() => navigateCalendar(-1)} aria-label="Previous date range"><ChevronLeft className="h-4 w-4" /></button><button type="button" onClick={goToToday}>Today</button><button type="button" onClick={() => navigateCalendar(1)} aria-label="Next date range"><ChevronRight className="h-4 w-4" /></button></div>
             </div>
-            {googleActive && connectedEmail && (
-              <p className="text-[11px] text-slate-600 font-medium break-all">{connectedEmail}</p>
-            )}
-            {microsoftActive && (
-              <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-100 rounded-lg px-2 py-1.5">
-                Connecting Google will disconnect Microsoft Calendar.
-              </p>
-            )}
-            {googleActive && googleAutoRenew === true && (
-              <p className="text-[11px] text-emerald-800 bg-emerald-50 border border-emerald-100 rounded-lg px-2 py-1.5">
-                Renews automatically. No need to re-sync.
-              </p>
-            )}
-            {googleActive && googleAutoRenew === false && googleOAuthAvailable !== false && (
-              <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-100 rounded-lg px-2 py-1.5">
-                This connection expires after about an hour. Click Re-sync once to switch to automatic renewal.
-              </p>
-            )}
-            {googleOAuthAvailable === false && (
-              <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-100 rounded-lg px-2 py-1.5">
-                Automatic renewal is not set up on this server (GOOGLE_CALENDAR_CLIENT_ID, GOOGLE_CALENDAR_CLIENT_SECRET, APP_URL), so Google disconnects after about an hour.
-              </p>
-            )}
-            <div className="flex flex-wrap gap-2">
-              <button
-                onClick={handleConnectGoogleCalendar}
-                disabled={isAuthenticating || isMsAuthenticating}
-                className="text-xs font-bold bg-slate-900 hover:bg-slate-800 text-white px-3.5 py-2 rounded-lg disabled:opacity-50"
-              >
-                {isAuthenticating ? 'Authorizing…' : googleActive ? 'Re-sync Google Calendar' : 'Sync Google Calendar'}
-              </button>
-              {googleActive && (
-                <button onClick={handleDisconnectCalendar} className="text-xs font-bold border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 px-3.5 py-2 rounded-lg">
-                  Disconnect
-                </button>
-              )}
-              <button
-                type="button"
-                onClick={() => setShowManualTokenInput(!showManualTokenInput)}
-                className="text-xs font-bold text-slate-500 hover:text-slate-800 px-2 py-2"
-              >
-                Paste Google token
-              </button>
+            <div className="schedule-calendar-tools">
+              <div className="schedule-calendar-mode" role="group" aria-label="Calendar view">{(['WEEK', 'DAY', 'AGENDA'] as SchedulingCalendarMode[]).map((mode) => <button key={mode} type="button" onClick={() => setCalendarMode(mode)} className={calendarMode === mode ? 'is-active' : ''}>{mode === 'WEEK' ? 'Week' : mode === 'DAY' ? 'Day' : 'Agenda'}</button>)}</div>
+              <span className="schedule-timezone-chip">{brand.timezoneLabel || brand.timezone || 'Workspace timezone'}</span>
+              <button type="button" className="schedule-icon-button" onClick={() => { fetchBookings(); fetchAvailability(calendarWeekStart); }} disabled={isLoadingBookings || isLoadingSlots} title="Refresh calendar and bookings"><RefreshCw className={'h-4 w-4 ' + (isLoadingBookings || isLoadingSlots ? 'animate-spin' : '')} /></button>
             </div>
           </div>
 
-          <div
-            className={`rounded-xl border p-4 space-y-3 ${
-              microsoftActive ? 'border-emerald-300 bg-emerald-50/70' : 'border-slate-200 bg-white'
-            }`}
-          >
-            <div className="flex items-start justify-between gap-2">
-              <div>
-                <h3 className="text-sm font-extrabold text-slate-900">Microsoft Calendar sync</h3>
-                <p className="text-xs text-slate-600 mt-0.5 font-medium">
-                  Books on Outlook / Microsoft 365. Invite includes a <strong>Microsoft Teams</strong> link.
-                </p>
-              </div>
-              <span
-                className={`text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full shrink-0 ${
-                  microsoftActive ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-500'
-                }`}
-              >
-                {microsoftActive ? 'Connected' : 'Off'}
-              </span>
-            </div>
-            {microsoftActive && connectedEmail && (
-              <p className="text-[11px] text-slate-600 font-medium break-all">{connectedEmail}</p>
-            )}
-            {googleActive && (
-              <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-100 rounded-lg px-2 py-1.5">
-                Connecting Microsoft will disconnect Google Calendar.
-              </p>
-            )}
-            {!microsoftAvailable && (
-              <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-100 rounded-lg px-2 py-1.5">
-                Microsoft Calendar is not set up on this server yet (MICROSOFT_CLIENT_ID, SECRET, APP_URL).
-              </p>
-            )}
-            <div className="flex flex-wrap gap-2">
-              <button
-                onClick={handleConnectMicrosoftCalendar}
-                disabled={isAuthenticating || isMsAuthenticating || !microsoftAvailable}
-                className="text-xs font-bold bg-[#5B5FC7] hover:bg-[#4B4FAE] text-white px-3.5 py-2 rounded-lg disabled:opacity-50"
-              >
-                {isMsAuthenticating ? 'Redirecting…' : microsoftActive ? 'Re-sync Microsoft Calendar' : 'Sync Microsoft Calendar'}
-              </button>
-              {microsoftActive && (
-                <button onClick={handleDisconnectCalendar} className="text-xs font-bold border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 px-3.5 py-2 rounded-lg">
-                  Disconnect
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
+          {rescheduleBookingId && <div className="schedule-reschedule-banner"><div><RefreshCw className="h-4 w-4" /><span>Choose a live available slot to reschedule booking <strong>#{rescheduleBookingId.slice(-6)}</strong>.</span></div><button type="button" onClick={() => setRescheduleBookingId(null)}>Exit reschedule</button></div>}
 
-        {/* Manual Token Setup Accordion */}
-        {showManualTokenInput && (
-          <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 text-xs space-y-3 shadow-2xs">
-            <div className="flex items-center justify-between">
-              <h4 className="font-extrabold text-slate-900 text-sm flex items-center gap-1.5">
-                <ShieldCheck className="w-4 h-4 text-emerald-600" />
-                Google Calendar OAuth Token Manual Override
-              </h4>
-              <button onClick={() => setShowManualTokenInput(false)} className="text-slate-400 hover:text-slate-600 cursor-pointer font-bold">
-                ✕
-              </button>
-            </div>
-            <p className="text-slate-600 font-medium">
-              If browser popup was blocked in preview iframe, you can paste a Google OAuth Access Token here. It will immediately be synchronized with the server engine and stored in Firestore for background scheduling pipelines.
-            </p>
-            <form onSubmit={handleManualTokenSubmit} className="flex flex-col sm:flex-row gap-2">
-              <input
-                type="text"
-                value={manualToken}
-                onChange={(e) => setManualToken(e.target.value)}
-                placeholder="ya29.a0..."
-                className="flex-1 bg-white border border-slate-200 rounded-xl px-3 py-2 text-slate-900 font-mono text-xs focus:outline-none focus:border-emerald-500 shadow-2xs"
-              />
-              <button
-                type="submit"
-                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs transition-colors cursor-pointer shrink-0 shadow-2xs"
-              >
-                Save & Activate Token
-              </button>
-            </form>
-            {manualTokenStatus && (
-              <div className="text-emerald-700 text-xs font-mono font-bold">{manualTokenStatus}</div>
-            )}
-          </div>
-        )}
-
-        {authError && (
-          <div className="p-3 bg-red-50 border border-red-200 text-red-800 text-xs rounded-xl flex items-center gap-2 font-medium shadow-2xs">
-            <AlertCircle className="w-4 h-4 shrink-0 text-red-600" />
-            <span>{authError}</span>
-          </div>
-        )}
-
-        {bookingSuccessMsg && (
-          <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs rounded-xl flex items-center justify-between gap-2 font-medium shadow-2xs">
-            <span className="flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-              {bookingSuccessMsg}
-            </span>
-            <button onClick={() => setBookingSuccessMsg(null)} className="text-slate-400 hover:text-slate-600 cursor-pointer font-bold">
-              ×
-            </button>
-          </div>
-        )}
-      </div>
-
-      {/* Main Grid: Realtime Available Slots & Confirmed Bookings */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left Column: Realtime Google Calendar Slots (Mon–Fri 10–19 IST) */}
-        <div className="bg-white border border-slate-200/90 rounded-2xl p-5 shadow-2xs flex flex-col justify-between">
-          <div>
-            <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-100">
-              <div className="flex items-center gap-2">
-                <Clock className="w-5 h-5 text-orange-500" />
-                <h3 className="font-extrabold text-slate-900 text-base">Realtime Free Slots</h3>
-              </div>
-              <button
-                onClick={fetchAvailability}
-                disabled={isLoadingSlots}
-                className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
-                title="Refresh Availability from Google Calendar"
-              >
-                <RefreshCw className={`w-4 h-4 ${isLoadingSlots ? 'animate-spin text-orange-500' : ''}`} />
-              </button>
-            </div>
-
-            <p className="text-xs text-slate-500 mb-4 font-medium leading-relaxed">
-              Queried directly from Google Calendar API. {dayRange}, {hoursLabel} only. Click any slot to quick-book
-              or reschedule.
-            </p>
-
-            {isLoadingSlots && availableSlots.length === 0 ? (
-              <div className="py-8 text-center text-xs text-slate-400 font-medium animate-pulse">
-                Querying Google Calendar freebusy...
-              </div>
-            ) : availableSlots.length === 0 ? (
-              <div className="py-8 text-center text-xs text-slate-500 bg-slate-50 rounded-xl p-4 font-medium border border-slate-100">
-                No open slots found for the upcoming 5 days.
-              </div>
-            ) : (
-              <div className="space-y-2 max-h-[380px] overflow-y-auto pr-1">
-                {availableSlots.map((slot, i) => (
-                  <div
-                    key={`${slot.date}-${slot.startHour}-${slot.startMinute}-${i}`}
-                    onClick={() => {
-                      if (rescheduleBookingId) {
-                        handleRescheduleBooking(rescheduleBookingId, slot);
-                      } else {
-                        setSelectedSlot(slot);
-                      }
-                    }}
-                    className={`p-3 rounded-xl border text-xs cursor-pointer transition-all flex items-center justify-between ${
-                      selectedSlot?.startIso === slot.startIso
-                        ? 'bg-orange-50 border-orange-400 text-orange-950 font-bold shadow-2xs'
-                        : 'bg-slate-50/80 border-slate-200/90 hover:border-orange-300 hover:bg-orange-50/40 text-slate-800'
-                    }`}
-                  >
-                    <div className="space-y-0.5">
-                      <div className="font-bold text-slate-900">{slot.label}</div>
-                      <div className="text-[11px] text-slate-500 font-medium">Duration: {slot.durationMinutes || brand.demoDurationMinutes} min • {videoLabel}</div>
+          <div className="schedule-calendar-layout">
+            <div className={'schedule-calendar-days ' + (calendarMode === 'DAY' ? 'is-day' : calendarMode === 'AGENDA' ? 'is-agenda' : '')}>
+              {calendarVisibleDays.map((dateKey) => {
+                const dayBookings = visibleCalendarBookings(dateKey);
+                const daySlots = calendarSlots.filter((slot) => slot.date === dateKey);
+                const isToday = dateKey === todayKey;
+                return (
+                  <section key={dateKey} className={'schedule-calendar-day ' + (isToday ? 'is-today' : '')}>
+                    <header className="schedule-day-header">
+                      <button type="button" className="schedule-day-label" onClick={() => { setSelectedCalendarDate(dateKey); setCalendarAnchorDate(dateKey); setCalendarMode('DAY'); }}><span>{formatDateKey(dateKey, { weekday: 'short' })}</span><strong>{formatDateKey(dateKey, { day: 'numeric' })}</strong></button>
+                      <div className="schedule-day-counts"><span>{dayBookings.filter((booking) => booking.status === 'BOOKED' || booking.status === 'RESCHEDULED').length} meetings</span>{isToday && <em>Today</em>}</div>
+                    </header>
+                    <div className="schedule-day-content">
+                      {dayBookings.map((booking) => <article key={booking.bookingId} className={'schedule-event-card ' + (booking.status === 'CANCELLED' ? 'is-cancelled' : booking.status === 'COMPLETED' ? 'is-completed' : booking.status === 'RESCHEDULED' ? 'is-rescheduled' : 'is-booked')} onClick={() => { setSelectedBookingId(booking.bookingId); setBookingDetailsTab('DETAILS'); }}><div className="schedule-event-time">{booking.startTime} – {booking.endTime}</div><strong>{booking.leadName || 'Demo meeting'}</strong><span>{booking.companyName || booking.leadEmail}</span><div className="schedule-event-footer"><span>{booking.channel}</span>{renderBookingStatus(booking.status)}</div></article>)}
+                      {calendarConnected && daySlots.slice(0, calendarMode === 'AGENDA' ? 8 : 4).map((slot, index) => <button type="button" key={slot.startIso + '-' + index} className={'schedule-open-slot ' + (rescheduleBookingId ? 'is-reschedule' : '')} onClick={() => chooseSlot(slot)} disabled={isRescheduling}><span><CircleDot className="h-3.5 w-3.5" /> {slot.startTime} – {slot.endTime}</span><em>{rescheduleBookingId ? 'Move here' : 'Available'}</em></button>)}
+                      {!calendarConnected && dayBookings.length === 0 && <div className="schedule-day-empty">Connect a calendar to load live availability.</div>}
+                      {calendarConnected && dayBookings.length === 0 && daySlots.length === 0 && <div className="schedule-day-empty">{isLoadingSlots ? 'Checking live availability…' : 'No free slots returned for this date.'}</div>}
+                      {calendarConnected && daySlots.length > (calendarMode === 'AGENDA' ? 8 : 4) && <span className="schedule-more-slots">+{daySlots.length - (calendarMode === 'AGENDA' ? 8 : 4)} more available slots</span>}
                     </div>
-                    <span className="px-2 py-0.5 bg-orange-100 text-orange-800 border border-orange-200/80 rounded text-[10px] font-bold">
-                      {rescheduleBookingId ? 'Reschedule' : 'Select'}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          <div className="mt-4 pt-4 border-t border-slate-100 text-[11px] text-slate-500 flex items-center justify-between font-medium">
-            <span>Hours: {hoursLabel}</span>
-            <span className="text-orange-600 font-bold font-mono tabular-nums">{availableSlots.length} available</span>
-          </div>
-        </div>
-
-        {/* Middle & Right Column: Confirmed Bookings Table */}
-        <div className="lg:col-span-2 bg-white border border-slate-200/90 rounded-2xl p-5 shadow-2xs flex flex-col justify-between">
-          <div>
-            <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-100">
-              <div className="flex items-center gap-2">
-                <Video className="w-5 h-5 text-orange-500" />
-                <h3 className="font-extrabold text-slate-900 text-base">Confirmed Demo Meetings</h3>
-                <span className="px-2.5 py-0.5 bg-slate-100 text-slate-800 text-xs rounded-full border border-slate-200 font-bold font-mono tabular-nums">
-                  {bookings.length}
-                </span>
-              </div>
-              <button
-                onClick={fetchBookings}
-                disabled={isLoadingBookings}
-                className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
-                title="Refresh Bookings Ledger"
-              >
-                <RefreshCw className={`w-4 h-4 ${isLoadingBookings ? 'animate-spin text-orange-500' : ''}`} />
-              </button>
+                  </section>
+                );
+              })}
             </div>
-
-            {rescheduleBookingId && (
-              <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900 flex items-center justify-between font-medium">
-                <span>Click any free slot on the left to reschedule booking #{rescheduleBookingId.slice(-6)}.</span>
-                <button
-                  onClick={() => setRescheduleBookingId(null)}
-                  className="px-2.5 py-1 bg-amber-100 hover:bg-amber-200 text-amber-900 rounded-lg text-[11px] font-bold cursor-pointer transition"
-                >
-                  Cancel
-                </button>
+            <aside className="schedule-calendar-sidebar">
+              <div className="schedule-sidebar-card schedule-calendar-health">
+                <div className="schedule-card-title"><span>Calendar connection</span><Settings2 className="h-4 w-4" /></div>
+                <div className="schedule-provider-row"><span className={'schedule-provider-icon ' + (calendarConnected ? 'is-active' : '')}>{calendarProvider === 'microsoft' ? 'M' : 'G'}</span><div><strong>{calendarConnected ? (calendarProvider === 'microsoft' ? 'Microsoft 365' : 'Google Calendar') : 'Not connected'}</strong><span>{connectedEmail || 'Connect a calendar to begin'}</span></div><span className={'schedule-health-dot ' + (calendarConnected ? 'is-online' : '')} /></div>
+                <button type="button" className="schedule-text-link" onClick={() => setActiveView('INTEGRATIONS')}>{calendarConnected ? 'Manage integration' : 'Connect calendar'} <ArrowUpRight className="h-3 w-3" /></button>
               </div>
-            )}
-
-            {isLoadingBookings && bookings.length === 0 ? (
-              <div className="py-12 text-center text-xs text-slate-400 font-medium animate-pulse">Loading demo bookings...</div>
-            ) : bookings.length === 0 ? (
-              <div className="py-12 text-center text-xs text-slate-500 bg-slate-50 rounded-xl p-6 font-medium border border-slate-100">
-                No demo appointments booked yet. Use the simulator below or select a slot to test.
+              <div className="schedule-sidebar-card">
+                <div className="schedule-card-title"><span>Availability summary</span><Clock className="h-4 w-4" /></div>
+                <div className="schedule-summary-row"><span>Working days</span><strong>{brandWorkingDaysLabel(brand)}</strong></div>
+                <div className="schedule-summary-row"><span>Working hours</span><strong>{brandWorkingWindowLabel(brand)}</strong></div>
+                <div className="schedule-summary-row"><span>Session duration</span><strong>{brand.demoDurationMinutes} min</strong></div>
+                <div className="schedule-summary-row"><span>Live free slots this week</span><strong>{calendarSlots.length}</strong></div>
+                <button type="button" className="schedule-text-link" onClick={() => setActiveView('AVAILABILITY')}>Edit availability <ArrowUpRight className="h-3 w-3" /></button>
               </div>
-            ) : (
-              <div className="overflow-x-auto max-h-[380px] overflow-y-auto pr-1">
-                <table className="w-full text-left text-xs">
-                  <thead className="bg-slate-50/90 text-slate-700 uppercase text-[10px] tracking-wider sticky top-0 backdrop-blur-sm font-extrabold border-b border-slate-200">
-                    <tr>
-                      <th className="py-2.5 px-3">Lead & Company</th>
-                      <th className="py-2.5 px-3">Attendees & Invites</th>
-                      <th className="py-2.5 px-3">Date & Time ({tzl})</th>
-                      <th className="py-2.5 px-3">Channel</th>
-                      <th className="py-2.5 px-3">{videoLabel}</th>
-                      <th className="py-2.5 px-3">Status</th>
-                      <th className="py-2.5 px-3 text-right">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 text-slate-800">
-                    {bookings.map((b) => {
-                      const additionalAttendees = (b.attendees || []).filter(
-                        (a) => a && a.toLowerCase() !== b.leadEmail?.toLowerCase() && a.toLowerCase() !== CALENDAR_TARGET_ACCOUNT.toLowerCase()
-                      );
-                      return (
-                        <tr key={b.bookingId} className="hover:bg-slate-50/80 transition-colors">
-                          <td className="py-3 px-3">
-                            <div className="font-bold text-slate-900">{b.leadName}</div>
-                            <div className="text-[11px] text-slate-600 font-medium">{b.companyName}</div>
-                            <div className="text-[10px] text-slate-400 font-medium">{b.leadEmail}</div>
-                          </td>
-                          <td className="py-3 px-3">
-                            <div className="space-y-1">
-                              <div className="flex items-center gap-1.5 text-[11px] text-slate-700 font-medium">
-                                <Users className="w-3.5 h-3.5 text-orange-500 shrink-0" />
-                                <span>1 Lead + {additionalAttendees.length} Guest{additionalAttendees.length === 1 ? '' : 's'}</span>
-                              </div>
-                              {additionalAttendees.length > 0 && (
-                                <div className="flex flex-wrap gap-1 max-w-[200px]">
-                                  {additionalAttendees.map((att, idx) => (
-                                    <span
-                                      key={idx}
-                                      className="px-1.5 py-0.5 bg-slate-100 text-slate-700 rounded text-[9px] font-mono border border-slate-200/80 truncate max-w-[190px]"
-                                      title={att}
-                                    >
-                                      {att}
-                                    </span>
-                                  ))}
-                                </div>
-                              )}
-                              {b.status !== 'CANCELLED' && (
-                                <button
-                                  onClick={() => {
-                                    setAttendeeModalBooking(b);
-                                    setNewAttendeeEmailInput('');
-                                    setAddAttendeeSuccess(null);
-                                  }}
-                                  className="inline-flex items-center gap-1 text-[10px] text-orange-600 hover:text-orange-700 font-bold hover:underline cursor-pointer pt-0.5"
-                                >
-                                  <UserPlus className="w-3 h-3" />
-                                  <span>+ Add Attendee</span>
-                                </button>
-                              )}
-                            </div>
-                          </td>
-                          <td className="py-3 px-3">
-                            <div className="font-bold text-emerald-700">{b.date}</div>
-                            <div className="text-[11px] text-slate-600 font-mono">
-                              {b.startTime} – {b.endTime} {tzl}
-                            </div>
-                          </td>
-                          <td className="py-3 px-3">
-                            <span className="px-2 py-0.5 bg-slate-100 text-slate-700 rounded text-[10px] font-bold border border-slate-200/80">
-                              {b.channel}
-                            </span>
-                          </td>
-                          <td className="py-3 px-3">
-                            {b.googleMeetLink ? (
-                              <div className="flex flex-col gap-1 items-start">
-                                <a
-                                  href={b.googleMeetLink}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-lg text-[11px] font-bold transition-colors cursor-pointer shadow-2xs"
-                                >
-                                  <Video className="w-3.5 h-3.5 text-emerald-600" />
-                                  <span>Join Meet</span>
-                                  <ExternalLink className="w-2.5 h-2.5" />
-                                </a>
-                              </div>
-                            ) : (
-                              <span className="text-slate-400 text-[11px]">—</span>
-                            )}
-                          </td>
-                          <td className="py-3 px-3">
-                            <span
-                              className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                                b.status === 'BOOKED'
-                                  ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
-                                  : b.status === 'RESCHEDULED'
-                                  ? 'bg-blue-50 text-blue-800 border border-blue-200'
-                                  : 'bg-red-50 text-red-800 border border-red-200'
-                              }`}
-                            >
-                              {b.status}
-                            </span>
-                          </td>
-                          <td className="py-3 px-3 text-right">
-                            {b.status !== 'CANCELLED' ? (
-                              <div className="flex items-center justify-end gap-1.5">
-                                <button
-                                  onClick={() => setRescheduleBookingId(b.bookingId)}
-                                  className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-lg text-[10px] font-bold cursor-pointer transition border border-slate-200"
-                                >
-                                  Reschedule
-                                </button>
-                                <button
-                                  onClick={() => handleCancelBooking(b.bookingId)}
-                                  className="px-2.5 py-1 bg-red-50 hover:bg-red-100 text-red-700 rounded-lg text-[10px] font-bold cursor-pointer transition border border-red-200"
-                                >
-                                  Cancel
-                                </button>
-                              </div>
-                            ) : (
-                              <span className="text-slate-400 text-[10px] font-medium">Cancelled</span>
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
+              <div className="schedule-sidebar-card schedule-legend-card"><div className="schedule-card-title"><span>Calendar legend</span></div><div className="schedule-legend-row"><i className="legend-booked" /> Booked meeting</div><div className="schedule-legend-row"><i className="legend-rescheduled" /> Rescheduled</div><div className="schedule-legend-row"><i className="legend-completed" /> Completed</div><div className="schedule-legend-row"><i className="legend-available" /> Live available slot</div></div>
+              {calendarConnected && <button type="button" className="schedule-test-booking-button" onClick={handleTestGoogleBooking} disabled={isTestingBooking}><Video className="h-4 w-4" /> {isTestingBooking ? 'Creating test event…' : 'Create real ' + (calendarProvider === 'microsoft' ? 'Teams' : 'Meet') + ' test booking'}</button>}
+            </aside>
           </div>
-        </div>
-      </div>
+        </section>
+      )}
 
-      {/* Quick Booking Modal (when slot is selected on the left) */}
+      {activeView === 'BOOKINGS' && (
+        <section className="schedule-content-panel">
+          <div className="schedule-section-heading"><div><h2>Bookings</h2><p>Manage confirmed, completed, rescheduled and cancelled meetings.</p></div><button type="button" className="schedule-icon-button" onClick={fetchBookings} disabled={isLoadingBookings} title="Refresh bookings"><RefreshCw className={'h-4 w-4 ' + (isLoadingBookings ? 'animate-spin' : '')} /></button></div>
+          <div className="schedule-booking-filters">
+            <label className="schedule-booking-search"><Search className="h-4 w-4" /><input value={bookingSearch} onChange={(event) => setBookingSearch(event.target.value)} placeholder="Search lead, company, email or booking ID…" /></label>
+            <label className="schedule-filter-select"><Filter className="h-3.5 w-3.5" /><select value={bookingStatusFilter} onChange={(event) => setBookingStatusFilter(event.target.value as 'ALL' | Booking['status'])}><option value="ALL">All statuses</option><option value="BOOKED">Booked</option><option value="RESCHEDULED">Rescheduled</option><option value="COMPLETED">Completed</option><option value="CANCELLED">Cancelled</option></select></label>
+            <label className="schedule-filter-select"><List className="h-3.5 w-3.5" /><select value={bookingChannelFilter} onChange={(event) => setBookingChannelFilter(event.target.value as 'ALL' | Channel)}><option value="ALL">All channels</option><option value="EMAIL">Email</option><option value="WHATSAPP">WhatsApp</option><option value="WEBSITE">Website</option><option value="INSTAGRAM">Instagram</option><option value="FACEBOOK">Facebook</option><option value="LINKEDIN">LinkedIn</option></select></label>
+            <span className="schedule-results-count">{filteredBookings.length} of {bookings.length} bookings</span>
+          </div>
+          {isLoadingBookings && bookings.length === 0 ? <div className="schedule-empty-state"><RefreshCw className="h-5 w-5 animate-spin" /><strong>Loading bookings</strong><span>Fetching the latest booking records.</span></div> : filteredBookings.length === 0 ? <div className="schedule-empty-state"><CalendarDays className="h-6 w-6" /><strong>No matching bookings</strong><span>Try another search or status filter.</span><button type="button" onClick={() => { setBookingSearch(''); setBookingStatusFilter('ALL'); setBookingChannelFilter('ALL'); }}>Clear filters</button></div> : (
+            <div className="schedule-bookings-table-wrap"><table className="schedule-bookings-table"><thead><tr><th>Lead / Company</th><th>Date & time</th><th>Channel</th><th>Meeting</th><th>Attendees</th><th>Status</th><th /></tr></thead><tbody>
+              {filteredBookings.map((booking) => {
+                const guests = (booking.attendees || []).filter((attendee) => attendee && attendee.toLowerCase() !== booking.leadEmail?.toLowerCase() && attendee.toLowerCase() !== CALENDAR_TARGET_ACCOUNT.toLowerCase());
+                return <tr key={booking.bookingId} onClick={() => { setSelectedBookingId(booking.bookingId); setBookingDetailsTab('DETAILS'); }}><td><strong>{booking.leadName}</strong><span>{booking.companyName || 'Company not provided'}</span><small>{booking.leadEmail}</small></td><td><strong>{formatDateKey(booking.date, { day: 'numeric', month: 'short', year: 'numeric' })}</strong><span>{booking.startTime} – {booking.endTime} {tzl}</span></td><td><span className="schedule-channel-chip">{booking.channel}</span></td><td>{booking.googleMeetLink ? <a className="schedule-join-link" href={booking.googleMeetLink} target="_blank" rel="noreferrer" onClick={(event) => event.stopPropagation()}><Video className="h-3.5 w-3.5" /> Join meeting <ArrowUpRight className="h-3 w-3" /></a> : <span className="schedule-table-muted">Link unavailable</span>}</td><td><span className="schedule-attendee-count"><Users className="h-3.5 w-3.5" /> {1 + guests.length}</span></td><td>{renderBookingStatus(booking.status)}</td><td><button type="button" className="schedule-row-open" onClick={(event) => { event.stopPropagation(); setSelectedBookingId(booking.bookingId); setBookingDetailsTab('DETAILS'); }} aria-label="Open booking details"><ArrowUpRight className="h-4 w-4" /></button></td></tr>;
+              })}
+            </tbody></table></div>
+          )}
+          <div className="schedule-list-footnote">Booking history is retrieved from the workspace booking service (up to the latest 100 records).</div>
+        </section>
+      )}
+
+      {activeView === 'AVAILABILITY' && (
+        <section className="schedule-content-panel">
+          <div className="schedule-section-heading"><div><h2>Availability</h2><p>Control when customers can request and book a demo.</p></div>{canEditSettings && <button type="button" className="schedule-primary-button" onClick={saveDemoAvailability} disabled={isSavingAvailability}><Check className="h-4 w-4" /> {isSavingAvailability ? 'Saving…' : 'Save availability'}</button>}</div>
+          <div className="schedule-availability-layout">
+            <div className="schedule-settings-card">
+              <div className="schedule-card-title"><span>Meeting configuration</span><Settings2 className="h-4 w-4" /></div>
+              <div className="schedule-settings-grid">
+                <label><span>Session duration</span><div className="schedule-input-with-suffix"><input type="number" min={5} max={240} step={1} disabled={!canEditSettings || isSavingAvailability} value={availabilityDraft.demoDurationMinutes} onChange={(event) => setAvailabilityDraft((current) => ({ ...current, demoDurationMinutes: Number(event.target.value) }))} /><em>minutes</em></div></label>
+                <label><span>Timezone (IANA)</span><input type="text" disabled={!canEditSettings || isSavingAvailability} value={availabilityDraft.timezone} onChange={(event) => updateAvailabilityText('timezone', event.target.value)} placeholder="Asia/Kolkata" /></label>
+                <label><span>Timezone label</span><input type="text" disabled={!canEditSettings || isSavingAvailability} value={availabilityDraft.timezoneLabel} onChange={(event) => updateAvailabilityText('timezoneLabel', event.target.value)} placeholder="IST" /></label>
+                <label><span>Calendar invite email</span><input type="email" disabled={!canEditSettings || isSavingAvailability} value={availabilityDraft.calendarEmail} onChange={(event) => updateAvailabilityText('calendarEmail', event.target.value)} placeholder="calendar@company.com" /></label>
+              </div>
+              <p className="schedule-settings-hint">The full session must fit inside a working window. Start times repeat at the selected session duration.</p>
+            </div>
+            <div className="schedule-settings-card">
+              <div className="schedule-card-title"><span>Weekly working hours</span><span className="schedule-card-subtitle">{availabilityDraft.workingDays.length} days enabled</span></div>
+              <div className="schedule-working-days">
+                {DAY_NAMES.map((day, dayIndex) => {
+                  const enabled = availabilityDraft.workingDays.includes(dayIndex);
+                  const hours = workingHoursForDay(availabilityDraft, dayIndex);
+                  return <div className={'schedule-working-day ' + (!enabled ? 'is-disabled' : '')} key={day}><label className="schedule-day-toggle"><input type="checkbox" disabled={!canEditSettings || isSavingAvailability} checked={enabled} onChange={() => toggleAvailabilityDay(dayIndex)} /><strong>{day.slice(0, 3)}</strong><span>{enabled ? 'Open' : 'Closed'}</span></label><label><span>From</span><select disabled={!canEditSettings || isSavingAvailability || !enabled} value={hours.start} onChange={(event) => updateAvailabilityHours(dayIndex, 'start', Number(event.target.value))}>{Array.from({ length: 24 }, (_, hour) => <option key={hour} value={hour}>{fmtHour(hour)}</option>)}</select></label><label><span>To</span><select disabled={!canEditSettings || isSavingAvailability || !enabled} value={hours.end} onChange={(event) => updateAvailabilityHours(dayIndex, 'end', Number(event.target.value))}>{Array.from({ length: 24 }, (_, index) => index + 1).map((hour) => <option key={hour} value={hour}>{hour === 24 ? '12:00 AM' : fmtHour(hour)}</option>)}</select></label></div>;
+                })}
+              </div>
+              <div className="schedule-availability-preview"><Clock className="h-4 w-4" /><span>Customers see: <strong>{brandWorkingWindowLabel(availabilityDraft)}</strong> · {availabilityDraft.demoDurationMinutes} minute sessions · {availabilityDraft.timezoneLabel || availabilityDraft.timezone}</span></div>
+              {!canEditSettings && <p className="schedule-readonly-note"><ShieldCheck className="h-3.5 w-3.5" /> Only administrators can change demo booking availability.</p>}
+              {availabilitySaveMessage && <p className={'schedule-inline-message ' + (availabilitySaveMessage === 'Demo booking availability saved.' ? 'success' : 'error')}>{availabilitySaveMessage}</p>}
+            </div>
+          </div>
+        </section>
+      )}
+
+      {activeView === 'INTEGRATIONS' && (
+        <section className="schedule-content-panel">
+          <div className="schedule-section-heading"><div><h2>Calendar integrations</h2><p>Connect one calendar provider to create meeting events and video links automatically.</p></div><div className={'schedule-integration-state ' + (calendarConnected ? 'is-connected' : 'is-disconnected')}><span className="schedule-connection-dot" />{calendarConnected ? 'One calendar connected' : 'No calendar connected'}</div></div>
+          <div className="schedule-integration-notice"><AlertTriangle className="h-4 w-4" /><span>Only one calendar provider can be active at a time. Connecting Google will disconnect Microsoft, and connecting Microsoft will disconnect Google.</span></div>
+          <div className="schedule-integrations-grid">
+            <article className={'schedule-integration-card ' + (googleActive ? 'is-active' : '')}>
+              <div className="schedule-integration-card-head"><div className="schedule-brand-icon google">G</div><div><h3>Google Calendar</h3><p>Google Calendar events with Google Meet links.</p></div><span className={'schedule-status ' + (googleActive ? 'is-booked' : 'is-neutral')}>{googleActive ? 'Connected' : 'Disconnected'}</span></div>
+              {googleActive && <div className="schedule-connected-account"><Mail className="h-3.5 w-3.5" /> {connectedEmail || 'Connected Google account'}</div>}
+              {googleActive && googleAutoRenew === true && <div className="schedule-integration-health success"><CheckCircle2 className="h-3.5 w-3.5" /> Automatic token renewal is enabled.</div>}
+              {googleActive && googleAutoRenew === false && googleOAuthAvailable !== false && <div className="schedule-integration-health warning"><AlertTriangle className="h-3.5 w-3.5" /> This connection may expire after about an hour. Re-sync to enable automatic renewal.</div>}
+              {googleOAuthAvailable === false && <div className="schedule-integration-health warning"><AlertTriangle className="h-3.5 w-3.5" /> Server-side automatic renewal is not configured. The manual token fallback remains available.</div>}
+              <div className="schedule-integration-actions"><button type="button" className="schedule-primary-button" onClick={handleConnectGoogleCalendar} disabled={isAuthenticating || isMsAuthenticating}>{isAuthenticating ? 'Authorizing…' : googleActive ? 'Re-sync Google' : 'Connect Google'}</button>{googleActive && <button type="button" className="schedule-secondary-button" onClick={handleDisconnectCalendar}>Disconnect</button>}</div>
+            </article>
+            <article className={'schedule-integration-card ' + (microsoftActive ? 'is-active' : '')}>
+              <div className="schedule-integration-card-head"><div className="schedule-brand-icon microsoft">M</div><div><h3>Microsoft 365</h3><p>Outlook calendar events with Microsoft Teams links.</p></div><span className={'schedule-status ' + (microsoftActive ? 'is-booked' : 'is-neutral')}>{microsoftActive ? 'Connected' : 'Disconnected'}</span></div>
+              {microsoftActive && <div className="schedule-connected-account"><Mail className="h-3.5 w-3.5" /> {connectedEmail || 'Connected Microsoft account'}</div>}
+              {!microsoftAvailable && <div className="schedule-integration-health warning"><AlertTriangle className="h-3.5 w-3.5" /> Microsoft Calendar is not configured on this server.</div>}
+              <div className="schedule-integration-actions"><button type="button" className="schedule-primary-button microsoft-button" onClick={handleConnectMicrosoftCalendar} disabled={isAuthenticating || isMsAuthenticating || !microsoftAvailable}>{isMsAuthenticating ? 'Redirecting…' : microsoftActive ? 'Re-sync Microsoft' : 'Connect Microsoft'}</button>{microsoftActive && <button type="button" className="schedule-secondary-button" onClick={handleDisconnectCalendar}>Disconnect</button>}</div>
+            </article>
+          </div>
+          <div className="schedule-settings-card schedule-advanced-integration">
+            <button type="button" className="schedule-advanced-toggle" onClick={() => setShowManualTokenInput((current) => !current)} aria-expanded={showManualTokenInput}><span><ShieldCheck className="h-4 w-4" /> Advanced troubleshooting</span><span>{showManualTokenInput ? 'Hide' : 'Show'} <ChevronRight className={'h-4 w-4 ' + (showManualTokenInput ? 'rotate-90' : '')} /></span></button>
+            {showManualTokenInput && <div className="schedule-manual-token"><p>Use this fallback only when the Google sign-in flow is blocked by a browser or authorized-domain issue. The token is registered with the calendar service.</p><form onSubmit={handleManualTokenSubmit}><input type="password" value={manualToken} onChange={(event) => setManualToken(event.target.value)} placeholder="Paste Google OAuth access token" autoComplete="off" /><button type="submit" disabled={!manualToken.trim()}>Register token</button></form>{manualTokenStatus && <span className="schedule-inline-message">{manualTokenStatus}</span>}</div>}
+          </div>
+          <div className="schedule-live-test-warning"><AlertTriangle className="h-4 w-4" /><span><strong>Test booking creates a real calendar event.</strong> It is not a dry-run. Use it only when you are comfortable sending an actual calendar invitation.</span><button type="button" onClick={handleTestGoogleBooking} disabled={!calendarConnected || isTestingBooking}>{isTestingBooking ? 'Creating…' : 'Run test booking'}</button></div>
+        </section>
+      )}
+
+      {activeView === 'SIMULATOR' && (
+        <section className="schedule-content-panel">
+          <div className="schedule-section-heading"><div><h2>Scheduling Agent Simulator</h2><p>Test how the agent interprets natural-language meeting requests from each inbound channel.</p></div><span className="schedule-live-test-warning-chip"><AlertTriangle className="h-3.5 w-3.5" /> Live endpoint</span></div>
+          <div className="schedule-simulator-warning"><AlertTriangle className="h-4 w-4" /><span>This calls the live scheduling endpoint. A request that the agent confirms can create or change a real calendar event and send invitations.</span></div>
+          <div className="schedule-simulator-layout">
+            <div className="schedule-simulator-form">
+              <div className="schedule-card-title"><span>Incoming customer request</span><MessageSquare className="h-4 w-4" /></div>
+              <div className="schedule-settings-grid simulator-fields">
+                <label><span>Channel</span><select value={simChannel} onChange={(event) => setSimChannel(event.target.value as Channel)}><option value="EMAIL">Email</option><option value="WHATSAPP">WhatsApp</option><option value="WEBSITE">Website</option></select></label>
+                <label><span>Customer name</span><input value={simLeadName} onChange={(event) => setSimLeadName(event.target.value)} /></label>
+                <label><span>Customer email</span><input type="email" value={simLeadEmail} onChange={(event) => setSimLeadEmail(event.target.value)} /></label>
+                <label><span>Company / agency</span><input value={simCompanyName} onChange={(event) => setSimCompanyName(event.target.value)} /></label>
+              </div>
+              <label className="schedule-simulator-message"><span>Incoming message</span><textarea rows={5} value={simMessage} onChange={(event) => setSimMessage(event.target.value)} placeholder="Can we schedule a demo on Thursday at 3 PM?" /></label>
+              <div className="schedule-simulator-prompts"><span>Try a prompt</span><button type="button" onClick={() => setSimMessage('I would like to schedule a demo.')}>Request a demo</button><button type="button" onClick={() => setSimMessage('Can we do Thursday at 3 PM?')}>Specific date and time</button><button type="button" onClick={() => setSimMessage('Can we schedule for Saturday morning?')}>Non-working day</button><button type="button" onClick={() => setSimMessage('Please add my colleague Tariq at tariq@bakhla.com to the meeting')}>Add a colleague</button></div>
+              <button type="button" className="schedule-primary-button schedule-run-simulator" onClick={handleRunSimulator} disabled={isSimulating || !simMessage.trim()}><Sparkles className="h-4 w-4" /> {isSimulating ? 'Running scheduling agent…' : 'Run live agent test'}</button>
+            </div>
+            <div className="schedule-simulator-result">
+              <div className="schedule-card-title"><span>Agent execution result</span><span className="schedule-simulator-channel">{simChannel}</span></div>
+              {simResponse ? <div className="schedule-simulator-output">
+                {simResponse.action && <div className="schedule-action-result"><span>Detected action</span><strong>{String(simResponse.action).replace(/_/g, ' ')}</strong></div>}
+                <div className="schedule-agent-reply"><span>Customer-facing response</span><p>{simResponse.replyText || simResponse.error || 'The agent returned without a reply.'}</p></div>
+                {simResponse.booking && <div className="schedule-agent-booking"><div><CheckCircle2 className="h-4 w-4" /><strong>Calendar event created</strong></div><span>{simResponse.booking.date} · {simResponse.booking.startTime} – {simResponse.booking.endTime} {tzl}</span>{simResponse.booking.googleMeetLink && <a href={simResponse.booking.googleMeetLink} target="_blank" rel="noreferrer">Open meeting link <ArrowUpRight className="h-3 w-3" /></a>}</div>}
+                {simResponse.handled === false && <div className="schedule-integration-health warning"><AlertTriangle className="h-3.5 w-3.5" /> The scheduling agent did not complete this request.</div>}
+              </div> : <div className="schedule-simulator-placeholder"><Sparkles className="h-7 w-7" /><strong>Waiting for a test</strong><span>Run a customer request to inspect the agent's reply and calendar action.</span></div>}
+            </div>
+          </div>
+        </section>
+      )}
+
       {selectedSlot && (
-        <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xl animate-in fade-in zoom-in-95 duration-200">
-          <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-4">
-            <div className="flex items-center gap-2">
-              <CalendarIcon className="w-5 h-5 text-orange-500" />
-              <h3 className="font-extrabold text-slate-900 text-base">
-                Book Demo for Slot: <span className="text-orange-600">{selectedSlot.label}</span>
-              </h3>
-            </div>
-            <button
-              onClick={() => setSelectedSlot(null)}
-              className="text-slate-400 hover:text-slate-700 p-1 rounded-lg hover:bg-slate-100 cursor-pointer font-bold"
-            >
-              ✕
-            </button>
-          </div>
-
-          <form onSubmit={handleQuickBook} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div>
-              <label className="block text-[11px] text-slate-600 mb-1 font-bold">Lead Name *</label>
-              <input
-                type="text"
-                required
-                value={leadName}
-                onChange={(e) => setLeadName(e.target.value)}
-                placeholder="e.g. Wasim Saikh"
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 font-medium placeholder-slate-400 focus:outline-none focus:border-orange-500 focus:bg-white shadow-2xs"
-              />
-            </div>
-
-            <div>
-              <label className="block text-[11px] text-slate-600 mb-1 font-bold">Lead Email *</label>
-              <input
-                type="email"
-                required
-                value={leadEmail}
-                onChange={(e) => setLeadEmail(e.target.value)}
-                placeholder="lead@bakhlatours.com"
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 font-medium placeholder-slate-400 focus:outline-none focus:border-orange-500 focus:bg-white shadow-2xs"
-              />
-            </div>
-
-            <div>
-              <label className="block text-[11px] text-slate-600 mb-1 font-bold">Company / Agency *</label>
-              <input
-                type="text"
-                required
-                value={companyName}
-                onChange={(e) => setCompanyName(e.target.value)}
-                placeholder="Bakhla Tours & Travels"
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 font-medium placeholder-slate-400 focus:outline-none focus:border-orange-500 focus:bg-white shadow-2xs"
-              />
-            </div>
-
-            <div>
-              <label className="block text-[11px] text-slate-600 mb-1 font-bold">Origin Channel</label>
-              <select
-                value={channel}
-                onChange={(e) => setChannel(e.target.value as Channel)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 font-bold focus:outline-none focus:border-orange-500 focus:bg-white shadow-2xs"
-              >
-                <option value="EMAIL">Email</option>
-                <option value="WHATSAPP">WhatsApp</option>
-                <option value="WEBSITE">Website</option>
-              </select>
-            </div>
-
-            <div className="sm:col-span-2 lg:col-span-4 flex items-center justify-end gap-3 pt-2">
-              <button
-                type="button"
-                onClick={() => setSelectedSlot(null)}
-                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl cursor-pointer"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={isBooking}
-                className="px-5 py-2 bg-orange-500 hover:bg-orange-600 text-white text-xs font-bold rounded-xl shadow-2xs transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-              >
-                {isBooking ? (
-                  <>
-                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                    <span>Booking on Google Calendar...</span>
-                  </>
-                ) : (
-                  <>
-                    <CheckCircle2 className="w-3.5 h-3.5" />
-                    <span>Confirm & Generate {videoLabel} Link</span>
-                  </>
-                )}
-              </button>
-            </div>
-          </form>
+        <div className="schedule-modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setSelectedSlot(null); }}>
+          <section className="schedule-booking-modal" role="dialog" aria-modal="true" aria-labelledby="schedule-booking-title">
+            <div className="schedule-modal-header"><div><span className="schedule-eyebrow">NEW MEETING</span><h2 id="schedule-booking-title">Book a demo</h2><p>{formatDateKey(selectedSlot.date, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })} · {selectedSlot.startTime} – {selectedSlot.endTime} {tzl}</p></div><button type="button" className="schedule-icon-button" onClick={() => setSelectedSlot(null)} aria-label="Close booking modal"><X className="h-4 w-4" /></button></div>
+            <form onSubmit={handleQuickBook} className="schedule-booking-form">
+              {leads.length > 0 && <label className="schedule-full-field"><span>Select existing CRM lead (optional)</span><select value={selectedLeadId} onChange={(event) => selectCrmLead(event.target.value)}><option value="">Create a new contact / enter details manually</option>{leads.map((lead) => { const contact = contacts.find((item) => item.contactId === lead.contactId); return <option key={lead.leadId} value={lead.leadId}>{[contact?.firstName, contact?.lastName].filter(Boolean).join(' ') || 'Unnamed lead'} · {contact?.companyName || contact?.email || lead.leadId}</option>; })}</select></label>}
+              <label><span>Lead name *</span><input required value={leadName} onChange={(event) => setLeadName(event.target.value)} placeholder="Customer name" /></label>
+              <label><span>Email address *</span><input type="email" required value={leadEmail} onChange={(event) => setLeadEmail(event.target.value)} placeholder="customer@agency.com" /></label>
+              <label><span>Company / agency *</span><input required value={companyName} onChange={(event) => setCompanyName(event.target.value)} placeholder="Agency name" /></label>
+              <label><span>Phone number</span><input value={leadPhone} onChange={(event) => setLeadPhone(event.target.value)} placeholder="+91…" /></label>
+              <label><span>Origin channel</span><select value={channel} onChange={(event) => setChannel(event.target.value as Channel)}><option value="EMAIL">Email</option><option value="WHATSAPP">WhatsApp</option><option value="WEBSITE">Website</option><option value="INSTAGRAM">Instagram</option><option value="FACEBOOK">Facebook</option><option value="LINKEDIN">LinkedIn</option></select></label>
+              <div className="schedule-booking-confirmation"><CalendarDays className="h-4 w-4" /><span>{videoLabel} · {brand.demoDurationMinutes} minutes · {tzl}</span></div>
+              {bookingError && <div className="schedule-inline-message error">{bookingError}</div>}
+              <div className="schedule-modal-actions"><button type="button" className="schedule-secondary-button" onClick={() => { setSelectedSlot(null); setSelectedLeadId(''); }}>Cancel</button><button type="submit" className="schedule-primary-button" disabled={isBooking}>{isBooking ? <><RefreshCw className="h-4 w-4 animate-spin" /> Booking…</> : <><CheckCircle2 className="h-4 w-4" /> Confirm and send invite</>}</button></div>
+            </form>
+          </section>
         </div>
       )}
 
-      {/* Add Attendee to Demo Meeting Modal */}
+      {selectedBooking && (
+        <div className="schedule-detail-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setSelectedBookingId(null); }}>
+          <aside className="schedule-booking-detail" role="dialog" aria-modal="true" aria-label="Booking details">
+            <header className="schedule-detail-header"><div><span className="schedule-eyebrow">MEETING DETAILS</span><h2>{selectedBooking.leadName || 'Demo meeting'}</h2><p>{selectedBooking.companyName || selectedBooking.leadEmail}</p></div><button type="button" className="schedule-icon-button" onClick={() => setSelectedBookingId(null)} aria-label="Close booking details"><X className="h-4 w-4" /></button></header>
+            <div className="schedule-detail-tabs"><button type="button" className={bookingDetailsTab === 'DETAILS' ? 'is-active' : ''} onClick={() => setBookingDetailsTab('DETAILS')}>Overview</button><button type="button" className={bookingDetailsTab === 'ATTENDEES' ? 'is-active' : ''} onClick={() => setBookingDetailsTab('ATTENDEES')}>Attendees ({selectedBooking.attendees?.length || 1})</button></div>
+            {bookingDetailsTab === 'DETAILS' ? <div className="schedule-detail-body">
+              <div className="schedule-detail-date"><CalendarDays className="h-5 w-5" /><div><strong>{formatDateKey(selectedBooking.date, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</strong><span>{selectedBooking.startTime} – {selectedBooking.endTime} · {selectedBooking.timezone || tzl}</span></div></div>
+              <div className="schedule-detail-facts"><div><span>Status</span>{renderBookingStatus(selectedBooking.status)}</div><div><span>Channel</span><strong>{selectedBooking.channel}</strong></div><div><span>Platform</span><strong>{selectedBooking.calendarProvider === 'microsoft' ? 'Microsoft Teams' : 'Google Meet'}</strong></div><div><span>Email</span><strong>{selectedBooking.leadEmail || '—'}</strong></div><div><span>Phone</span><strong>{selectedBooking.leadPhone || '—'}</strong></div><div><span>Booking ID</span><strong>{selectedBooking.bookingId}</strong></div></div>
+              {selectedBooking.googleMeetLink && <a className="schedule-detail-join" href={selectedBooking.googleMeetLink} target="_blank" rel="noreferrer"><Video className="h-4 w-4" /> Join {selectedBooking.calendarProvider === 'microsoft' ? 'Teams' : 'Meet'} <ArrowUpRight className="h-3.5 w-3.5" /></a>}
+              {selectedBooking.notes && <div className="schedule-detail-note"><strong>Notes</strong><p>{selectedBooking.notes}</p></div>}
+            </div> : <div className="schedule-detail-body">
+              <div className="schedule-attendee-primary"><User className="h-4 w-4" /><div><strong>{selectedBooking.leadName}</strong><span>{selectedBooking.leadEmail}</span></div><em>Lead</em></div>
+              {(selectedBooking.attendees || []).filter((attendee) => attendee && attendee.toLowerCase() !== selectedBooking.leadEmail?.toLowerCase() && attendee.toLowerCase() !== CALENDAR_TARGET_ACCOUNT.toLowerCase()).map((attendee) => <div className="schedule-attendee-primary" key={attendee}><Mail className="h-4 w-4" /><div><strong>{attendee}</strong><span>Invited guest</span></div></div>)}
+              {selectedBooking.status !== 'CANCELLED' && selectedBooking.status !== 'COMPLETED' && <button type="button" className="schedule-secondary-button" onClick={() => openBookingAttendees(selectedBooking)}><UserPlus className="h-4 w-4" /> Add attendees</button>}
+            </div>}
+            <footer className="schedule-detail-actions">
+              {selectedBooking.status !== 'CANCELLED' && selectedBooking.status !== 'COMPLETED' ? <><button type="button" className="schedule-secondary-button" onClick={() => { setRescheduleBookingId(selectedBooking.bookingId); setSelectedBookingId(null); setActiveView('CALENDAR'); setCalendarMode('WEEK'); }}><CalendarClock className="h-4 w-4" /> Reschedule</button><button type="button" className="schedule-danger-button" onClick={() => handleCancelBooking(selectedBooking.bookingId)}><XCircle className="h-4 w-4" /> Cancel meeting</button></> : <span className="schedule-detail-closed">This booking is {selectedBooking.status.toLowerCase()}.</span>}
+            </footer>
+          </aside>
+        </div>
+      )}
+
       {attendeeModalBooking && (
-        <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xl animate-in fade-in zoom-in-95 duration-200">
-          <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-4">
-            <div className="flex items-center gap-2">
-              <UserPlus className="w-5 h-5 text-orange-500" />
-              <div>
-                <h3 className="font-extrabold text-slate-900 text-base">
-                  Add Attendee to Demo Meeting
-                </h3>
-                <p className="text-xs text-slate-500 font-medium">
-                  {attendeeModalBooking.companyName} ({attendeeModalBooking.leadName}) • {attendeeModalBooking.date} ({attendeeModalBooking.startTime} – {attendeeModalBooking.endTime} {tzl})
-                </p>
-              </div>
-            </div>
-            <button
-              onClick={() => setAttendeeModalBooking(null)}
-              className="text-slate-400 hover:text-slate-700 p-1 rounded-lg hover:bg-slate-100 cursor-pointer font-bold"
-            >
-              ✕
-            </button>
-          </div>
-
-          <div className="mb-4">
-            <label className="block text-[11px] text-slate-600 mb-1.5 font-bold">Currently Invited Attendees:</label>
-            <div className="flex flex-wrap gap-1.5 p-2.5 bg-slate-50 rounded-xl border border-slate-200/80">
-              {(attendeeModalBooking.attendees || [attendeeModalBooking.leadEmail]).map((att, i) => (
-                <span key={i} className="px-2 py-1 bg-white text-slate-800 rounded-lg text-xs font-mono border border-slate-200 flex items-center gap-1.5 shadow-2xs font-bold">
-                  <User className="w-3 h-3 text-slate-400" />
-                  {att}
-                </span>
-              ))}
-            </div>
-          </div>
-
-          <form onSubmit={handleAddAttendeeSubmit} className="space-y-4">
-            <div>
-              <label className="block text-[11px] text-slate-600 mb-1 font-bold">
-                New Colleague / Guest Email Address(es) *
-              </label>
-              <input
-                type="text"
-                required
-                value={newAttendeeEmailInput}
-                onChange={(e) => setNewAttendeeEmailInput(e.target.value)}
-                placeholder="e.g. tariq@bakhla.com, partner@umrahagency.com"
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 font-medium placeholder-slate-400 focus:outline-none focus:border-orange-500 focus:bg-white shadow-2xs"
-              />
-              <p className="text-[11px] text-slate-500 mt-1 font-medium">
-                The connected calendar will send the invite and {videoLabel} link to these email addresses.
-              </p>
-            </div>
-
-            {addAttendeeSuccess && (
-              <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs rounded-xl flex items-center gap-2 font-medium">
-                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                <span>{addAttendeeSuccess}</span>
-              </div>
-            )}
-
-            <div className="flex items-center justify-end gap-3 pt-2">
-              <button
-                type="button"
-                onClick={() => setAttendeeModalBooking(null)}
-                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl cursor-pointer"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={isAddingAttendee}
-                className="px-5 py-2 bg-orange-500 hover:bg-orange-600 text-white text-xs font-bold rounded-xl shadow-2xs transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-              >
-                {isAddingAttendee ? (
-                  <>
-                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                    <span>Sending Calendar Invite...</span>
-                  </>
-                ) : (
-                  <>
-                    <UserPlus className="w-3.5 h-3.5" />
-                    <span>Add Attendee & Send Google Calendar Invite</span>
-                  </>
-                )}
-              </button>
-            </div>
-          </form>
+        <div className="schedule-modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setAttendeeModalBooking(null); }}>
+          <section className="schedule-booking-modal schedule-attendee-modal" role="dialog" aria-modal="true" aria-labelledby="schedule-attendee-title">
+            <div className="schedule-modal-header"><div><span className="schedule-eyebrow">MEETING INVITATIONS</span><h2 id="schedule-attendee-title">Manage attendees</h2><p>{attendeeModalBooking.leadName} · {attendeeModalBooking.date} · {attendeeModalBooking.startTime}</p></div><button type="button" className="schedule-icon-button" onClick={() => setAttendeeModalBooking(null)} aria-label="Close"><X className="h-4 w-4" /></button></div>
+            <div className="schedule-current-attendees"><strong>Current invitees</strong>{(attendeeModalBooking.attendees || [attendeeModalBooking.leadEmail]).map((attendee) => <span key={attendee}><Mail className="h-3.5 w-3.5" />{attendee}</span>)}</div>
+            <form onSubmit={handleAddAttendeeSubmit} className="schedule-booking-form">
+              <label className="schedule-full-field"><span>Additional attendee emails</span><textarea rows={3} value={newAttendeeEmailInput} onChange={(event) => setNewAttendeeEmailInput(event.target.value)} placeholder="colleague@agency.com, manager@agency.com" required /></label>
+              <p className="schedule-settings-hint">Separate multiple email addresses with commas or spaces. The calendar provider will send the invitation.</p>
+              {addAttendeeSuccess && <div className="schedule-inline-message success">{addAttendeeSuccess}</div>}
+              <div className="schedule-modal-actions"><button type="button" className="schedule-secondary-button" onClick={() => setAttendeeModalBooking(null)}>Close</button><button type="submit" className="schedule-primary-button" disabled={isAddingAttendee}>{isAddingAttendee ? 'Sending invitations…' : 'Add attendees and send invites'}</button></div>
+            </form>
+          </section>
         </div>
       )}
-
-      {/* Bottom Section: Omnichannel Scheduling Agent Interactive Simulator */}
-      <div className="bg-white border border-slate-200/90 rounded-2xl p-5 sm:p-6 shadow-2xs">
-        <div className="flex items-center gap-2 mb-1.5">
-          <Sparkles className="w-5 h-5 text-orange-500" />
-          <h3 className="font-extrabold text-slate-900 text-base">Omnichannel Scheduling Agent Interactive Simulator</h3>
-        </div>
-        <p className="text-xs text-slate-500 mb-5 font-medium leading-relaxed max-w-3xl">
-          Test conversational scheduling requests across Website, Email, or WhatsApp. The agent parses intent,
-          converts natural relative dates ("Tomorrow afternoon", "Wednesday 3 PM") into {tzl}, checks Google Calendar in
-          realtime, and creates meetings or suggests alternatives.
-        </p>
-
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Input Panel */}
-          <div className="space-y-4 bg-slate-50/80 p-4 rounded-xl border border-slate-200/80">
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div>
-                <label className="block text-[11px] text-slate-600 mb-1 font-bold">Channel</label>
-                <div className="flex rounded-lg overflow-hidden border border-slate-200 text-xs bg-white p-0.5 shadow-2xs">
-                  <button
-                    type="button"
-                    onClick={() => setSimChannel('EMAIL')}
-                    className={`flex-1 py-1 text-center cursor-pointer font-bold rounded-md transition-colors ${
-                      simChannel === 'EMAIL' ? 'bg-orange-500 text-white' : 'text-slate-600 hover:text-slate-900'
-                    }`}
-                  >
-                    Email
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setSimChannel('WHATSAPP')}
-                    className={`flex-1 py-1 text-center cursor-pointer font-bold rounded-md transition-colors ${
-                      simChannel === 'WHATSAPP' ? 'bg-orange-500 text-white' : 'text-slate-600 hover:text-slate-900'
-                    }`}
-                  >
-                    WhatsApp
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setSimChannel('WEBSITE')}
-                    className={`flex-1 py-1 text-center cursor-pointer font-bold rounded-md transition-colors ${
-                      simChannel === 'WEBSITE' ? 'bg-orange-500 text-white' : 'text-slate-600 hover:text-slate-900'
-                    }`}
-                  >
-                    Website
-                  </button>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-[11px] text-slate-600 mb-1 font-bold">Lead Name</label>
-                <input
-                  type="text"
-                  value={simLeadName}
-                  onChange={(e) => setSimLeadName(e.target.value)}
-                  className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-900 font-medium focus:outline-none focus:border-orange-500 shadow-2xs"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[11px] text-slate-600 mb-1 font-bold">Email</label>
-                <input
-                  type="email"
-                  value={simLeadEmail}
-                  onChange={(e) => setSimLeadEmail(e.target.value)}
-                  className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-900 font-medium focus:outline-none focus:border-orange-500 shadow-2xs"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-[11px] text-slate-600 mb-1 font-bold">Simulated Incoming Message</label>
-              <textarea
-                rows={3}
-                value={simMessage}
-                onChange={(e) => setSimMessage(e.target.value)}
-                placeholder="e.g. Can we schedule a demo on Thursday at 3 PM?"
-                className="w-full bg-white border border-slate-200 rounded-xl p-3 text-xs text-slate-900 font-medium placeholder-slate-400 focus:outline-none focus:border-orange-500 shadow-2xs"
-              />
-            </div>
-
-            {/* Quick Sample Prompts */}
-            <div className="flex flex-wrap gap-1.5 text-[11px]">
-              <span className="text-slate-500 self-center font-bold">Try:</span>
-              <button
-                type="button"
-                onClick={() => setSimMessage('I would like to schedule a demo.')}
-                className="px-2.5 py-1 bg-white hover:bg-slate-100 text-slate-700 rounded-lg border border-slate-200 cursor-pointer font-medium shadow-2xs transition"
-              >
-                "I want a demo"
-              </button>
-              <button
-                type="button"
-                onClick={() => setSimMessage('Can we do Thursday at 3 PM?')}
-                className="px-2.5 py-1 bg-white hover:bg-slate-100 text-slate-700 rounded-lg border border-slate-200 cursor-pointer font-medium shadow-2xs transition"
-              >
-                "Thursday at 3 PM"
-              </button>
-              <button
-                type="button"
-                onClick={() => setSimMessage('Can we schedule for Saturday morning?')}
-                className="px-2.5 py-1 bg-white hover:bg-slate-100 text-slate-700 rounded-lg border border-slate-200 cursor-pointer font-medium shadow-2xs transition"
-              >
-                "Saturday" (Weekend policy)
-              </button>
-              <button
-                type="button"
-                onClick={() => setSimMessage('Please also add my colleague Tariq at tariq@bakhla.com to the meeting')}
-                className="px-2.5 py-1 bg-orange-50 hover:bg-orange-100 text-orange-800 rounded-lg border border-orange-200 cursor-pointer font-bold shadow-2xs transition flex items-center gap-1"
-              >
-                <UserPlus className="w-3 h-3 text-orange-600" />
-                <span>"Add Colleague (Tariq)"</span>
-              </button>
-            </div>
-
-            <div className="pt-2">
-              <button
-                type="button"
-                onClick={handleRunSimulator}
-                disabled={isSimulating}
-                className="w-full py-2.5 bg-orange-500 hover:bg-orange-600 text-white text-xs font-bold rounded-xl shadow-2xs transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
-              >
-                {isSimulating ? (
-                  <>
-                    <RefreshCw className="w-4 h-4 animate-spin" />
-                    <span>Processing with Google Calendar Agent...</span>
-                  </>
-                ) : (
-                  <>
-                    <Sparkles className="w-4 h-4" />
-                    <span>Test Demo Scheduling Agent</span>
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
-
-          {/* Agent Output Panel */}
-          <div className="bg-slate-50/80 p-4 rounded-xl border border-slate-200/80 flex flex-col justify-between">
-            <div>
-              <div className="flex items-center justify-between mb-3 pb-2 border-b border-slate-200">
-                <span className="text-xs font-extrabold text-slate-900 flex items-center gap-1.5">
-                  <MessageSquare className="w-4 h-4 text-orange-500" />
-                  Agent Response ({simChannel})
-                </span>
-                {simResponse?.action && (
-                  <span
-                    className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                      simResponse.action === 'CONFIRMED_BOOKING'
-                        ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
-                        : simResponse.action === 'OFFERED_ALTERNATIVES' || simResponse.action === 'AWAITING_CONFIRMATION'
-                        ? 'bg-amber-50 text-amber-800 border border-amber-200'
-                        : 'bg-blue-50 text-blue-800 border border-blue-200'
-                    }`}
-                  >
-                    Action: {simResponse.action}
-                  </span>
-                )}
-              </div>
-
-              {simResponse ? (
-                <div className="space-y-3">
-                  <div className="p-3.5 bg-white rounded-xl border border-slate-200 text-xs text-slate-900 whitespace-pre-wrap leading-relaxed shadow-2xs font-medium">
-                    {simResponse.replyText}
-                  </div>
-
-                  {simResponse.booking && (
-                    <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs space-y-1">
-                      <div className="font-bold text-emerald-900 flex items-center gap-1.5">
-                        <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                        Google Calendar Event Created!
-                      </div>
-                      <div className="text-[11px] text-slate-700 font-medium">
-                        Date: {simResponse.booking.date} | {simResponse.booking.startTime} –{' '}
-                        {simResponse.booking.endTime} {tzl}
-                      </div>
-                      <div className="text-[11px] text-emerald-800 font-mono font-bold break-all">
-                        Meet: {simResponse.booking.googleMeetLink}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <div className="py-16 text-center text-xs text-slate-400 font-medium">
-                  Agent response preview will appear here when you run the simulator.
-                </div>
-              )}
-            </div>
-
-            <div className="text-[10px] text-slate-400 pt-3 border-t border-slate-200 font-medium">
-              Response is automatically formatted for the target channel (Email / WhatsApp / Website) with {videoLabel}
-              link.
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
     </div>
   );
 };

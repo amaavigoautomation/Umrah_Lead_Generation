@@ -216,9 +216,7 @@ export const KnowledgeBaseView: React.FC<KnowledgeBaseViewProps> = ({
         setScanJob(job);
       }
       let finished = false;
-      let safetyCounter = 0;
-      while (job && !finished && safetyCounter < 120) {
-        safetyCounter += 1;
+      while (job && !finished) {
         const stepResponse = await fetch('/api/knowledge/website-scan/step', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -230,16 +228,21 @@ export const KnowledgeBaseView: React.FC<KnowledgeBaseViewProps> = ({
           finished = true;
           setScanJob(null);
           setScanReport(stepData.report || null);
-          setScanConfig((current) => ({ ...current, lastSyncedAt: stepData.report?.lastSyncedAt || new Date().toISOString(), excludePatterns: scanJob?.excludePatterns || excludeText.split(/\r?\n/).map((value) => value.trim()).filter(Boolean) }));
+          setScanConfig((current) => ({
+            ...current,
+            lastSyncedAt: stepData.report?.lastSyncedAt || new Date().toISOString(),
+            excludePatterns: job?.excludePatterns || excludeText.split(/\r?\n/).map((value) => value.trim()).filter(Boolean),
+          }));
           setSaveToast('Website knowledge synchronized successfully.');
           window.setTimeout(() => setSaveToast(null), 4500);
         } else {
-          job = stepData.job || job;
+          if (!stepData.job) throw new Error('The scanner did not return its progress state. Refresh the page and resume the scan.');
+          job = stepData.job;
           setScanJob(job);
           await new Promise((resolve) => window.setTimeout(resolve, 180));
         }
       }
-      if (!finished) throw new Error('The scan has not finished yet. Use Resume scan to continue.');
+      if (!finished) throw new Error('The scan stopped before completion. Use Resume scan to continue.');
     } catch (error: any) {
       setScanError(error?.message || 'Website scan failed.');
     } finally {
@@ -307,7 +310,8 @@ export const KnowledgeBaseView: React.FC<KnowledgeBaseViewProps> = ({
               <div className="p-2.5 rounded-xl bg-orange-50 text-orange-600"><Globe className="w-5 h-5" /></div>
               <div>
                 <h2 className="text-sm font-extrabold text-slate-900">Website knowledge sync</h2>
-                <p className="text-xs text-slate-500 mt-1">AI analyzes your company website and keeps website-owned articles synchronized.</p>
+                <p className="text-xs text-slate-500 mt-1">Fetches all discoverable internal pages, then builds and synchronizes a source-linked Knowledge Base.</p>
+                <p className="text-[11px] text-slate-500 mt-1.5">AI analysis: <strong>GPT-6.1-sol</strong> · Fallback: GPT-4o → GPT-4o-mini</p>
                 <p className="text-xs text-slate-700 mt-2 break-all">{scanWebsiteUrl || 'Add a website URL in Company Profile to get started.'}</p>
                 {scanConfig.lastSyncedAt && <p className="text-[11px] text-slate-400 mt-1">Last synchronized: {new Date(scanConfig.lastSyncedAt).toLocaleString()}</p>}
               </div>
@@ -336,17 +340,23 @@ export const KnowledgeBaseView: React.FC<KnowledgeBaseViewProps> = ({
                 placeholder={'/careers/*\n/blog/*\n/privacy-policy'}
                 className="w-full rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-400"
               />
-              <p className="text-[11px] text-slate-400">One path pattern per line. Wildcards are supported. Excluded pages are removed from website-derived knowledge.</p>
+              <p className="text-[11px] text-slate-400">One URL path pattern per line. Wildcards are supported. Only matching paths are excluded; other discoverable internal HTML pages are queued for scanning.</p>
             </div>
           )}
           {scanJob && (
             <div className="border-t border-slate-100 pt-4 space-y-2">
               <div className="flex items-center justify-between text-xs">
-                <span className="font-bold text-slate-700">{scanJob.status === 'DISCOVERING' ? 'Finding the sitemap and website pages' : scanJob.status === 'CRAWLING' ? 'Discovering and reading pages' : scanJob.status === 'VERIFYING' ? 'Verifying previously indexed pages' : 'Generating and synchronizing articles'}</span>
-                <span className="text-slate-500">{scanJob.pagesVisited || scanJob.processedPages || 0} pages processed</span>
+                <span className="font-bold text-slate-700">{scanJob.status === 'DISCOVERING' ? 'Finding sitemaps and website page URLs' : scanJob.status === 'CRAWLING' ? 'Fetching all discovered pages' : scanJob.status === 'VERIFYING' ? 'Checking previously indexed pages' : scanJob.status === 'GENERATING' ? 'Extracting knowledge from every page segment' : scanJob.status === 'MERGING' ? 'Consolidating and deduplicating knowledge articles' : 'Saving the complete website index'}</span>
+                <span className="text-slate-500">{scanJob.processedPages || 0} fetch attempts</span>
               </div>
               <div className="h-2 rounded-full bg-slate-100 overflow-hidden"><div className="h-full rounded-full bg-orange-500 transition-all" style={{ width: (scanJob.progress || 5) + '%' }} /></div>
-              <p className="text-[11px] text-slate-400">This scan runs in small resumable batches. Keep this page open until it completes, or return and choose Resume scan.</p>
+              <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-slate-500">
+                <span>{scanJob.pagesDiscovered || 0} discovered</span>
+                <span>{scanJob.pagesQueued || 0} queued</span>
+                <span>{scanJob.pagesFailed || 0} failed</span>
+                <span>{scanJob.pagesToVerify || 0} awaiting verification</span>
+              </div>
+              <p className="text-[11px] text-slate-400">The scan runs in resumable batches and continues until every discovered eligible URL has been accounted for. Keep this page open, or return later and choose Resume scan.</p>
             </div>
           )}
           {scanLoading && <p className="text-[11px] text-slate-500">The AI is comparing current website information with the existing Knowledge Base.</p>}
@@ -360,10 +370,20 @@ export const KnowledgeBaseView: React.FC<KnowledgeBaseViewProps> = ({
                 <div className="rounded-xl bg-red-50 p-3"><p className="text-xl font-extrabold text-red-700">{scanReport.articlesRemoved || 0}</p><p className="text-[11px] text-red-700">Articles removed</p></div>
                 <div className="rounded-xl bg-slate-100 p-3"><p className="text-xl font-extrabold text-slate-700">{scanReport.articlesUnchanged || 0}</p><p className="text-[11px] text-slate-600">Unchanged articles</p></div>
               </div>
-              <p className="text-[11px] text-slate-500">Pages: {scanReport.pagesDiscovered || 0} discovered · {scanReport.pagesAdded || 0} added · {scanReport.pagesUpdated || 0} modified · {scanReport.pagesRemoved || 0} removed · {scanReport.pagesUnchanged || 0} unchanged</p>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-1 text-[11px] text-slate-600">
+                <span>Discovered: <strong>{scanReport.pagesDiscovered || 0}</strong></span>
+                <span>Attempted: <strong>{scanReport.pagesAttempted || 0}</strong></span>
+                <span>Indexed: <strong>{scanReport.pagesIndexed || 0}</strong></span>
+                <span>Added: <strong>{scanReport.pagesAdded || 0}</strong></span>
+                <span>Modified: <strong>{scanReport.pagesUpdated || 0}</strong></span>
+                <span>Removed: <strong>{scanReport.pagesRemoved || 0}</strong></span>
+                <span>Unchanged: <strong>{scanReport.pagesUnchanged || 0}</strong></span>
+                <span>Excluded: <strong>{scanReport.pagesExcluded || 0}</strong></span>
+                <span>Failed: <strong>{scanReport.pagesFailed || 0}</strong></span>
+              </div>
               {scanReport.initialScan && <p className="rounded-lg bg-amber-50 border border-amber-200 p-2.5 text-xs text-amber-800">New website articles are in Review. Publish them after checking their accuracy.</p>}
-              {scanReport.truncated && <p className="text-xs text-amber-700">The site exceeded the per-scan page limit. Unvisited previously indexed pages were retained to avoid accidental deletion.</p>}
-              {Array.isArray(scanReport.warnings) && scanReport.warnings.length > 0 && <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 space-y-1"><p className="text-xs font-bold text-amber-800">Pages needing attention</p>{scanReport.warnings.slice(0, 6).map((warning, index) => <p key={index} className="text-[11px] text-amber-700">{warning}</p>)}</div>}
+              {(scanReport.pagesFailed || 0) > 0 && <p className="text-xs text-amber-700">Some pages could not be fetched. They are listed below; previously indexed content was preserved when available. Review these failures before treating the Knowledge Base as fully complete.</p>}
+              {Array.isArray(scanReport.warnings) && scanReport.warnings.length > 0 && <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 space-y-1"><p className="text-xs font-bold text-amber-800">Pages needing attention</p>{scanReport.warnings.slice(0, 10).map((warning, index) => <p key={index} className="text-[11px] text-amber-700">{warning}</p>)}</div>}
             </div>
           )}
         </section>

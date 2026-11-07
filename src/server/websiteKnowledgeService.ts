@@ -210,6 +210,28 @@ function htmlToText(html: string): string {
   return value.split(/\r?\n/).map((line) => line.replace(/[ \t]+/g, ' ').trim())
     .filter(Boolean).join('\n').replace(/\n{3,}/g, '\n\n');
 }
+function extractPageMetadata(html: string): string {
+  const values: string[] = [];
+  for (const tag of html.match(/<meta\b[^>]*>/gi) || []) {
+    const name = attribute(tag, 'name') || attribute(tag, 'property');
+    const value = attribute(tag, 'content');
+    if (value && /^(description|og:title|og:description|twitter:title|twitter:description|keywords)$/i.test(name)) {
+      values.push(name + ': ' + value);
+    }
+  }
+  const structured: string[] = [];
+  for (const match of html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi)) {
+    const openingEnd = html.indexOf('>', match.index || 0);
+    const openingTag = openingEnd >= 0 ? html.slice(match.index || 0, openingEnd + 1) : '';
+    if (openingTag.toLowerCase().includes('application/ld+json')) {
+      const value = String(match[1] || '').trim();
+      if (value) structured.push(value);
+    }
+  }
+  if (structured.length) values.push('Structured data (JSON-LD):\n' + structured.join('\n'));
+  return values.length ? 'PAGE METADATA AND STRUCTURED DATA:\n' + values.join('\n') : '';
+}
+
 function pageTitle(html: string, url: URL): string {
   const title = (html.match(/<title\b[^>]*>([\s\S]*?)<\/title>/i) || [])[1] || '';
   const heading = (html.match(/<h1\b[^>]*>([\s\S]*?)<\/h1>/i) || [])[1] || '';
@@ -266,7 +288,9 @@ async function fetchPage(rawUrl: string): Promise<{ page: SourcePage | null; htm
   if (!result.contentType.includes('text/html') && !result.contentType.includes('application/xhtml+xml')) {
     throw new Error('The URL did not return an HTML webpage.');
   }
-  const content = htmlToText(result.text);
+  const visibleText = htmlToText(result.text);
+  const metadata = extractPageMetadata(result.text);
+  const content = [metadata, visibleText].filter(Boolean).join('\n\n');
   if (content.length < 24) throw new Error('The webpage returned no meaningful readable text. It may require client-side JavaScript rendering.');
   const url = result.url.toString();
   return {
@@ -294,12 +318,13 @@ async function enqueuePage(ctx: TenantContext, job: CrawlJob, rawUrl: string): P
   const normalized = normalizeInternalUrl(rawUrl, root);
   if (!normalized || isExcluded(normalized, job.excludePatterns)) return false;
   const pageId = hash(normalized).slice(0, 40);
-  const [work, failed, queued] = await Promise.all([
+  const [work, failed, queued, completed] = await Promise.all([
     getDoc(tenantRepo(ctx).doc(WORK_COLLECTION, pageId)),
     getDoc(tenantRepo(ctx).doc(FAILURE_COLLECTION, pageId)),
     getDoc(queueRef(ctx, 'PAGE', normalized)),
+    getDoc(queueRef(ctx, 'PAGE_DONE', normalized)),
   ]);
-  if (work.exists() || failed.exists() || queued.exists()) return false;
+  if (work.exists() || failed.exists() || queued.exists() || completed.exists()) return false;
   await setDoc(queueRef(ctx, 'PAGE', normalized), { kind: 'PAGE', url: normalized, createdAt: new Date().toISOString() }, { merge: false });
   job.pagesQueued += 1;
   job.pagesDiscovered += 1;
@@ -311,8 +336,11 @@ async function enqueueSitemap(ctx: TenantContext, job: CrawlJob, rawUrl: string)
     if (normalizeHost(safe.hostname) !== normalizeHost(new URL(job.websiteUrl).hostname)) return false;
     const normalized = safe.toString();
     const ref = queueRef(ctx, 'SITEMAP', normalized);
-    const existing = await getDoc(ref);
-    if (existing.exists()) return false;
+    const [existing, completed] = await Promise.all([
+      getDoc(ref),
+      getDoc(queueRef(ctx, 'SITEMAP_DONE', normalized)),
+    ]);
+    if (existing.exists() || completed.exists()) return false;
     await setDoc(ref, { kind: 'SITEMAP', url: normalized, createdAt: new Date().toISOString() }, { merge: false });
     return true;
   } catch {
@@ -709,7 +737,7 @@ async function processDiscoveryStep(ctx: TenantContext, current: { ref: any; job
     } catch (error: any) {
       job.warnings.push('Could not read sitemap resource ' + entry.item.url + ': ' + String(error?.message || error).slice(0, 120));
     }
-    await deleteDoc(entry.ref);
+    await setDoc(entry.ref, { kind: 'SITEMAP_DONE', url: entry.item.url, completedAt: new Date().toISOString() }, { merge: true });
   }
   const remaining = await getQueueBatch(ctx, 'SITEMAP', 1);
   if (!remaining.length) job.status = 'CRAWLING';
@@ -749,8 +777,8 @@ async function processCrawlStep(ctx: TenantContext, current: { ref: any; job: Cr
       await savePageFailure(ctx, sourceUrl, reason);
       await preservePreviousPage(ctx, sourceUrl, job);
     }
-    // A confirmed 404/410 is treated as a deleted page. Other errors preserve the previous indexed copy.
-    await deleteDoc(result.entry.ref);
+    // Keep a completion marker so circular internal links and confirmed 404 pages are not fetched repeatedly.
+    await setDoc(result.entry.ref, { kind: 'PAGE_DONE', url: sourceUrl, completedAt: new Date().toISOString() }, { merge: true });
   }
   const remaining = await getQueueBatch(ctx, 'PAGE', 1);
   if (!remaining.length) await beginVerification(ctx, job);
@@ -963,7 +991,7 @@ async function processSavePagesStep(ctx: TenantContext, current: { ref: any; job
     report: {
       initialScan: job.initialScan,
       pagesDiscovered: job.pagesDiscovered,
-      pagesFetched: job.processedPages,
+      pagesAttempted: job.processedPages,
       pagesIndexed: finalPageCount,
       pagesAdded: job.pagesAdded || 0,
       pagesUpdated: job.pagesUpdated || 0,

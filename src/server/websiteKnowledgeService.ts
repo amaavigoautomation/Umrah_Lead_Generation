@@ -220,7 +220,7 @@ function extractPageMetadata(html: string): string {
     }
   }
   const structured: string[] = [];
-  for (const match of html.matchAll(/<script\\b[^>]*>([\\s\\S]*?)<\\/script>/gi)) {
+  for (const match of html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi)) {
     const openingEnd = html.indexOf('>', match.index || 0);
     const openingTag = openingEnd >= 0 ? html.slice(match.index || 0, openingEnd + 1) : '';
     if (openingTag.toLowerCase().includes('application/ld+json')) {

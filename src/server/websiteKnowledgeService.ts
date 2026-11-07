@@ -496,7 +496,7 @@ function knowledgeSystemPrompt(): string {
     'Create categories dynamically for this company. There is no predefined taxonomy and no one-page-one-article rule.',
     'Synthesize related facts into useful comprehensive articles. Preserve exact figures, named entities, conditions, caveats and procedural order. Do not replace detail with vague summaries.',
     'Do not invent, infer or embellish information. When a statement is ambiguous, omit it.',
-    'Write all article content in clean plain text, not Markdown or HTML. Never use heading markers (# or ##), bold markers (**), underscores for emphasis, backticks, fenced code blocks or decorative Markdown separators. Use plain-text section labels and readable paragraphs.'
+    'Write all article content in clean plain text, not Markdown or HTML. Never use heading markers (# or ##), bold markers (**), underscores for emphasis, backticks, fenced code blocks or decorative Markdown separators. Use plain-text section labels and readable paragraphs.',
     'Every article must include exact sourceUrls copied from the supplied source URLs that substantiate its content.',
     'Return valid JSON only: {"articles":[{"title":"...","category":"...","content":"...","tags":["..."],"sourceUrls":["https://..."]}]}',
   ].join('\n');

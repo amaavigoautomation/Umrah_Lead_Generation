@@ -121,7 +121,7 @@ export async function generateOpenAICompletion(options: OpenAIRequestOptions): P
             .flatMap((item: any) => Array.isArray(item.content) ? item.content : [])
             .filter((part: any) => part?.type === 'output_text')
             .map((part: any) => String(part.text || ''))
-            .join('\\n')
+            .join('\n')
             .trim();
         }
         if (responseText) return responseText;

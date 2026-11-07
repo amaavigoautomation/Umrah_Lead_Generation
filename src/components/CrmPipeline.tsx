@@ -99,8 +99,6 @@ const TELECRM_STAGES: { key: string; label: string; bg: string; text: string; bo
   { key: 'CLOSED_LOST', label: 'Lost / Junk', bg: 'bg-rose-50', text: 'text-rose-700', border: 'border-rose-300', dot: 'bg-rose-500' },
 ];
 
-export const CrmPipeline
-
 const CRM_STATUS_OPTIONS: { value: LeadStatus; label: string }[] = [
   { value: 'NEW', label: 'New' },
   { value: 'CONTACTED', label: 'Contacted' },
@@ -116,7 +114,8 @@ const CRM_STATUS_OPTIONS: { value: LeadStatus; label: string }[] = [
   { value: 'UNSUBSCRIBED', label: 'Unsubscribed' },
   { value: 'HUMAN_HANDOFF', label: 'Human Handoff' },
 ];
-: React.FC<CrmPipelineProps> = ({
+
+export const CrmPipeline: React.FC<CrmPipelineProps> = ({
   leads,
   contacts,
   activities,

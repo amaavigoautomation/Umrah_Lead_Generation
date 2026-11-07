@@ -57,6 +57,10 @@ interface CrawlJob {
   pagesToVerify: number;
   pagesVerified: number;
   pagesFailed: number;
+  homeLinksComplete?: boolean;
+  sitemapSeedsComplete?: boolean;
+  verificationCursor?: string;
+  verificationDiscoveryComplete?: boolean;
   generationPageIndex: number;
   generationPageId?: string;
   generationPageOffset: number;
@@ -382,10 +386,6 @@ async function enqueueVerify(ctx: TenantContext, job: CrawlJob, rawUrl: string):
 async function writeWorkPage(ctx: TenantContext, page: SourcePage): Promise<void> {
   await setDoc(tenantRepo(ctx).doc(WORK_COLLECTION, page.id), page, { merge: false });
 }
-async function readWorkPages(ctx: TenantContext): Promise<SourcePage[]> {
-  const snap = await getDocs(tenantRepo(ctx).collection(WORK_COLLECTION));
-  return snap.docs.map((item) => item.data() as SourcePage).filter((page) => page?.url && page?.contentHash);
-}
 async function clearCollection(ctx: TenantContext, collectionName: string): Promise<void> {
   const ref = tenantRepo(ctx).collection(collectionName);
   while (true) {
@@ -527,13 +527,11 @@ async function mergeCandidateBatch(
 async function saveFinalWebsiteArticles(
   ctx: TenantContext,
   finalDrafts: ArticleDraft[],
-  pages: SourcePage[],
   initialScan: boolean,
 ): Promise<{ added: number; updated: number; removed: number; unchanged: number }> {
   const existingDocs = getAllKnowledgeDocs(ctx);
   const existingWebsiteDocs = existingDocs.filter((doc) => doc.sourceType === 'WEBSITE');
   const existingById = new Map(existingWebsiteDocs.map((doc) => [doc.id, doc]));
-  const allowed = new Set(pages.map((page) => page.url));
   const now = new Date().toISOString();
   const generated: KnowledgeDocument[] = finalDrafts.map((draft) => {
     const id = 'website-' + hash(draft.category.toLowerCase() + '|' + draft.title.toLowerCase()).slice(0, 32);
@@ -550,7 +548,7 @@ async function saveFinalWebsiteArticles(
       createdAt: old?.createdAt || now,
       updatedAt: now,
       sourceType: 'WEBSITE' as const,
-      sourceUrls: Array.from(new Set(draft.sourceUrls.filter((url) => allowed.has(url)))).slice(0, 100),
+      sourceUrls: Array.from(new Set(draft.sourceUrls)).slice(0, 100),
     };
   }).filter((doc) => doc.sourceUrls?.length);
   if (!generated.length) throw new Error('The AI did not produce usable articles with verified source URLs. Existing Knowledge Base content was left unchanged.');
@@ -620,8 +618,8 @@ export async function startKnowledgeWebsiteScan(ctx: TenantContext, patternsInpu
   const websiteUrl = String(brand.websiteUrl || '').trim();
   if (!websiteUrl) throw new Error('Add the company website URL in Company Profile before scanning.');
   const excludePatterns = safePatterns(patternsInput);
-  const previous = await getDocs(tenantRepo(ctx).collection(PAGE_COLLECTION));
-  const previousPages = previous.docs.map((item) => item.data() as SourcePage).filter((page) => page?.url);
+  const previous = await getDocs(query(tenantRepo(ctx).collection(PAGE_COLLECTION), orderByDocumentId(), limit(1)));
+  const previousPage = previous.docs.length ? previous.docs[0].data() as SourcePage : null;
   const home = await fetchPage(websiteUrl);
   if (!home.page || home.missing) throw new Error('The company homepage returned 404/410. No Knowledge Base content was changed.');
   const configuredHost = normalizeHost(new URL(websiteUrl).hostname);
@@ -646,18 +644,16 @@ export async function startKnowledgeWebsiteScan(ctx: TenantContext, patternsInpu
   let previousHost = '';
   try { previousHost = previousWebsiteUrl ? normalizeHost(new URL(previousWebsiteUrl).hostname) : ''; } catch {}
   const currentHost = normalizeHost(root.hostname);
-  const sameWebsite = previousHost ? previousHost === currentHost : previousPages.some((item) => {
-    try { return normalizeHost(new URL(item.url).hostname) === currentHost; } catch { return false; }
-  });
-  const relevantPreviousPages = previousPages.filter((item) => {
-    try { return normalizeHost(new URL(item.url).hostname) === currentHost; } catch { return false; }
-  });
+  let previousPageHost = '';
+  try { previousPageHost = previousPage?.url ? normalizeHost(new URL(previousPage.url).hostname) : ''; } catch {}
+  const sameWebsite = previousHost ? previousHost === currentHost : previousPageHost === currentHost;
+  const hasPreviousPagesForHost = previousPageHost === currentHost;
   const job: CrawlJob = {
     jobId: 'wkb-' + Date.now().toString(36),
     status: 'DISCOVERING',
     websiteUrl: home.page.url,
     excludePatterns,
-    initialScan: !Boolean(settings.initialized) || !sameWebsite || relevantPreviousPages.length === 0,
+    initialScan: !Boolean(settings.initialized) || !sameWebsite || !hasPreviousPagesForHost,
     warnings: [],
     processedPages: 1,
     pagesDiscovered: 1,
@@ -665,6 +661,10 @@ export async function startKnowledgeWebsiteScan(ctx: TenantContext, patternsInpu
     pagesToVerify: 0,
     pagesVerified: 0,
     pagesFailed: 0,
+    homeLinksComplete: false,
+    sitemapSeedsComplete: false,
+    verificationCursor: '',
+    verificationDiscoveryComplete: false,
     generationPageIndex: 0,
     generationPageOffset: 0,
     generationBatchIndex: 0,
@@ -680,34 +680,11 @@ export async function startKnowledgeWebsiteScan(ctx: TenantContext, patternsInpu
     pagesExcluded: 0,
     startedAt: new Date().toISOString(),
   };
-  for (const link of extractLinks(home.html, root)) await enqueuePage(ctx, job, link);
-  await enqueueSitemap(ctx, job, new URL('/robots.txt', root).toString());
-  await enqueueSitemap(ctx, job, new URL('/sitemap.xml', root).toString());
   await setDoc(current.ref, job, { merge: false });
   return { job: jobView(job) };
 }
 
-async function beginVerification(ctx: TenantContext, job: CrawlJob): Promise<void> {
-  const [previousSnap, workPages] = await Promise.all([
-    getDocs(tenantRepo(ctx).collection(PAGE_COLLECTION)),
-    readWorkPages(ctx),
-  ]);
-  const workIds = new Set(workPages.map((page) => page.id));
-  for (const item of previousSnap.docs) {
-    const page = item.data() as SourcePage;
-    if (!page?.url || workIds.has(page.id)) continue;
-    try {
-      if (normalizeHost(new URL(page.url).hostname) !== normalizeHost(new URL(job.websiteUrl).hostname)) continue;
-    } catch { continue; }
-    // Excluded URLs are intentionally not re-verified and will be removed from the synchronized snapshot.
-    if (isExcluded(page.url, job.excludePatterns)) {
-      await recordExcludedPage(ctx, job, page.url);
-      continue;
-    }
-    await enqueueVerify(ctx, job, page.url);
-  }
-  job.status = 'VERIFYING';
-}
+
 function preservePreviousPage(ctx: TenantContext, url: string, job: CrawlJob): Promise<void> {
   return getDoc(tenantRepo(ctx).doc(PAGE_COLLECTION, hash(url).slice(0, 40))).then(async (snap) => {
     if (snap.exists()) {
@@ -729,13 +706,37 @@ function decodeSitemapLocations(xml: string): string[] {
 }
 
 async function processDiscoveryStep(ctx: TenantContext, current: { ref: any; job: CrawlJob }): Promise<any> {
+  const job = current.job;
+  if (!job.homeLinksComplete) {
+    const home = await fetchPage(job.websiteUrl);
+    if (!home.page || home.missing) throw new Error('The homepage could not be re-read during discovery. Resume the scan to retry; existing Knowledge Base content has not been changed.');
+    await writeWorkPage(ctx, home.page);
+    const links = extractLinks(home.html, new URL(home.page.url));
+    await runBatches(links, 100, async (link) => enqueuePage(ctx, job, link), async () => {
+      await setDoc(current.ref, job, { merge: false });
+    });
+    job.homeLinksComplete = true;
+    await setDoc(current.ref, job, { merge: false });
+    return { done: false, job: jobView(job) };
+  }
+
+  if (!job.sitemapSeedsComplete) {
+    const root = new URL(job.websiteUrl);
+    const sitemapSeeds = [new URL('/robots.txt', root).toString(), new URL('/sitemap.xml', root).toString()];
+    await runBatches(sitemapSeeds, 2, async (url) => enqueueSitemap(ctx, job, url), async () => {
+      await setDoc(current.ref, job, { merge: false });
+    });
+    job.sitemapSeedsComplete = true;
+    await setDoc(current.ref, job, { merge: false });
+    return { done: false, job: jobView(job) };
+  }
+
   const batch = await getQueueBatch(ctx, 'SITEMAP', 1);
   if (!batch.length) {
-    current.job.status = 'CRAWLING';
-    await setDoc(current.ref, current.job, { merge: false });
-    return { done: false, job: jobView(current.job) };
+    job.status = 'CRAWLING';
+    await setDoc(current.ref, job, { merge: false });
+    return { done: false, job: jobView(job) };
   }
-  const job = current.job;
   for (const entry of batch) {
     try {
       const sitemapUrl = await validatePublicUrl(entry.item.url);
@@ -745,10 +746,12 @@ async function processDiscoveryStep(ctx: TenantContext, current: { ref: any; job
         const response = await requestPublicText(sitemapUrl.toString(), MAX_SITEMAP_BYTES);
         if (response.status === 200) {
           if (sitemapUrl.pathname.toLowerCase() === '/robots.txt') {
-            for (const line of response.text.split(/\r?\n/)) {
-              const match = line.match(/^\s*sitemap\s*:\s*(\S+)/i);
-              if (match) await enqueueSitemap(ctx, job, match[1]);
-            }
+            const sitemapUrls = response.text.split(/\r?\n/)
+              .map((line) => line.match(/^\s*sitemap\s*:\s*(\S+)/i)?.[1])
+              .filter((value): value is string => Boolean(value));
+            await runBatches(sitemapUrls, 20, async (url) => enqueueSitemap(ctx, job, url), async () => {
+              await setDoc(current.ref, job, { merge: false });
+            });
           } else {
             const locations = decodeSitemapLocations(response.text);
             if (/<sitemapindex\b/i.test(response.text)) {
@@ -778,7 +781,9 @@ async function processCrawlStep(ctx: TenantContext, current: { ref: any; job: Cr
   const job = current.job;
   const batch = await getQueueBatch(ctx, 'PAGE', PAGE_BATCH_SIZE);
   if (!batch.length) {
-    await beginVerification(ctx, job);
+    job.status = 'VERIFYING';
+    job.verificationCursor = '';
+    job.verificationDiscoveryComplete = false;
     await setDoc(current.ref, job, { merge: false });
     return { done: false, job: jobView(job) };
   }
@@ -810,13 +815,56 @@ async function processCrawlStep(ctx: TenantContext, current: { ref: any; job: Cr
     await setDoc(result.entry.ref, { kind: 'PAGE_DONE', url: sourceUrl, completedAt: new Date().toISOString() }, { merge: true });
   }
   const remaining = await getQueueBatch(ctx, 'PAGE', 1);
-  if (!remaining.length) await beginVerification(ctx, job);
+  if (!remaining.length) {
+    job.status = 'VERIFYING';
+    job.verificationCursor = '';
+    job.verificationDiscoveryComplete = false;
+  }
   await setDoc(current.ref, job, { merge: false });
   return { done: false, job: jobView(job) };
 }
 
+async function processVerificationDiscoveryStep(ctx: TenantContext, current: { ref: any; job: CrawlJob }): Promise<void> {
+  const job = current.job;
+  const pageCollection = tenantRepo(ctx).collection(PAGE_COLLECTION);
+  const pageQuery = job.verificationCursor
+    ? query(pageCollection, orderByDocumentId(), startAfterId(job.verificationCursor), limit(PAGE_WRITE_BATCH_SIZE))
+    : query(pageCollection, orderByDocumentId(), limit(PAGE_WRITE_BATCH_SIZE));
+  const previousPages = await getDocs(pageQuery);
+  if (!previousPages.docs.length) {
+    job.verificationDiscoveryComplete = true;
+    await setDoc(current.ref, job, { merge: false });
+    return;
+  }
+  const workChecks = await Promise.all(previousPages.docs.map((item) =>
+    getDoc(tenantRepo(ctx).doc(WORK_COLLECTION, item.id))
+  ));
+  const rootHost = normalizeHost(new URL(job.websiteUrl).hostname);
+  const candidates = previousPages.docs
+    .map((item, index) => ({ page: item.data() as SourcePage, alreadyInWork: workChecks[index].exists() }))
+    .filter(({ page, alreadyInWork }) => {
+      if (alreadyInWork || !page?.url) return false;
+      try { return normalizeHost(new URL(page.url).hostname) === rootHost; } catch { return false; }
+    });
+  await runBatches(candidates, 25, async ({ page }) => {
+    if (isExcluded(page.url, job.excludePatterns)) {
+      await recordExcludedPage(ctx, job, page.url);
+      return;
+    }
+    await enqueueVerify(ctx, job, page.url);
+  }, async () => {
+    await setDoc(current.ref, job, { merge: false });
+  });
+  job.verificationCursor = previousPages.docs[previousPages.docs.length - 1].id;
+  await setDoc(current.ref, job, { merge: false });
+}
+
 async function processVerifyStep(ctx: TenantContext, current: { ref: any; job: CrawlJob }): Promise<any> {
   const job = current.job;
+  if (!job.verificationDiscoveryComplete) {
+    await processVerificationDiscoveryStep(ctx, current);
+    return { done: false, job: jobView(job) };
+  }
   const batch = await getQueueBatch(ctx, 'VERIFY', PAGE_BATCH_SIZE);
   if (!batch.length) {
     job.status = 'GENERATING';
@@ -951,8 +999,7 @@ async function processMergeStep(ctx: TenantContext, current: { ref: any; job: Cr
 
   const finalDrafts = await mergeCandidateBatch(ctx, currentDocs.map((item) => item.draft), 30);
   if (!finalDrafts.length) throw new Error('The AI could not produce the final Knowledge Base articles. Existing Knowledge Base content was left unchanged; resume to retry.');
-  const pages = await readWorkPages(ctx);
-  const report = await saveFinalWebsiteArticles(ctx, finalDrafts, pages, job.initialScan);
+  const report = await saveFinalWebsiteArticles(ctx, finalDrafts, job.initialScan);
   job.articlesAdded = report.added;
   job.articlesUpdated = report.updated;
   job.articlesRemoved = report.removed;

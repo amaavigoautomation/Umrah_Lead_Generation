@@ -83,7 +83,7 @@ interface HttpResult {
 }
 interface QueueItem {
   id: string;
-  kind: 'PAGE' | 'SITEMAP' | 'VERIFY';
+  kind: 'PAGE' | 'SITEMAP' | 'VERIFY' | 'PAGE_DONE' | 'SITEMAP_DONE';
   url: string;
   createdAt: string;
 }
@@ -525,7 +525,7 @@ async function saveFinalWebsiteArticles(
       author: 'Website AI',
       createdAt: old?.createdAt || now,
       updatedAt: now,
-      sourceType: 'WEBSITE',
+      sourceType: 'WEBSITE' as const,
       sourceUrls: Array.from(new Set(draft.sourceUrls.filter((url) => allowed.has(url)))).slice(0, 100),
     };
   }).filter((doc) => doc.sourceUrls?.length);

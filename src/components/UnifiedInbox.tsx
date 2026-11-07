@@ -1115,7 +1115,7 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
 
             {/* Compact Auto Follow-Up Status Bar */}
             {activeLead && (
-              <div className="inbox-followup-status px-3.5 py-1.5 bg-orange-50/80 border-b border-orange-100 text-xs flex items-center justify-between>
+              <div className="inbox-followup-status px-3.5 py-1.5 bg-orange-50/80 border-b border-orange-100 text-xs flex items-center justify-between">
                 <div className="flex items-center space-x-2">
                   <span className="flex items-center space-x-1.5">
                     <span className={`w-2 h-2 rounded-full ${isAutoFollowUpUiActive ? 'bg-orange-500 animate-pulse' : 'bg-slate-400'}`} />
@@ -1154,7 +1154,7 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
             )}
 
             {activeLead?.aiAutoFollowUp && (
-              <div className="inbox-one-time-followup-status px-3.5 py-1.5 bg-emerald-50/80 border-b border-emerald-100 text-xs flex items-center justify-between>
+              <div className="inbox-one-time-followup-status px-3.5 py-1.5 bg-emerald-50/80 border-b border-emerald-100 text-xs flex items-center justify-between">
                 <span className="font-semibold text-slate-800">CRM-Scheduled One-Time Message:</span>
                 {activeLead.aiAutoFollowUp.status === 'scheduled' ? (
                   <span className="text-emerald-700 font-medium">
@@ -1176,7 +1176,7 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
 
             {/* Email Metadata banner if email channel */}
             {!isUnifiedAllPlatforms && activeConversation.channel === 'EMAIL' && (
-              <div className="inbox-email-subject px-4 py-2 bg-slate-50 border-b border-slate-200 text-xs text-slate-700 flex items-center justify-between>
+              <div className="inbox-email-subject px-4 py-2 bg-slate-50 border-b border-slate-200 text-xs text-slate-700 flex items-center justify-between">
                 <div className="flex items-center space-x-2 truncate">
                   <span className="font-semibold text-slate-500">Subject:</span>
                   <span className="font-medium text-slate-900 truncate">

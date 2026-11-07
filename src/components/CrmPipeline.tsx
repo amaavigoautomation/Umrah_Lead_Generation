@@ -99,7 +99,24 @@ const TELECRM_STAGES: { key: string; label: string; bg: string; text: string; bo
   { key: 'CLOSED_LOST', label: 'Lost / Junk', bg: 'bg-rose-50', text: 'text-rose-700', border: 'border-rose-300', dot: 'bg-rose-500' },
 ];
 
-export const CrmPipeline: React.FC<CrmPipelineProps> = ({
+export const CrmPipeline
+
+const CRM_STATUS_OPTIONS: { value: LeadStatus; label: string }[] = [
+  { value: 'NEW', label: 'New' },
+  { value: 'CONTACTED', label: 'Contacted' },
+  { value: 'FOLLOW_UP', label: 'Follow-up' },
+  { value: 'ENGAGED', label: 'In Discussion' },
+  { value: 'QUALIFIED', label: 'Qualified' },
+  { value: 'DEMO_SCHEDULED', label: 'Demo Scheduled' },
+  { value: 'DEMO_BOOKED', label: 'Consultation Booked' },
+  { value: 'PROPOSAL_SENT', label: 'Proposal Sent' },
+  { value: 'CLOSED_WON', label: 'Won / Booking Done' },
+  { value: 'CLOSED_LOST', label: 'Lost' },
+  { value: 'NOT_INTERESTED', label: 'Not Interested' },
+  { value: 'UNSUBSCRIBED', label: 'Unsubscribed' },
+  { value: 'HUMAN_HANDOFF', label: 'Human Handoff' },
+];
+: React.FC<CrmPipelineProps> = ({
   leads,
   contacts,
   activities,
@@ -147,13 +164,19 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
   const greet = (name: string) => (isUmrah ? `Assalamu Alaikum ${name}!` : `Hi ${name}!`);
   const fallbackName = isUmrah ? 'Brother/Sister' : 'there';
 
-  // Selected lead for 360° Drawer
+  // Selected lead for the 360° profile panel.
   const [activeDrawerLeadId, setActiveDrawerLeadId] = useState<string | null>(initialSelectedLeadId || null);
+  const [leadViewMode, setLeadViewMode] = useState<'LIST' | 'PIPELINE'>('LIST');
+  const [profileTab, setProfileTab] = useState<'OVERVIEW' | 'ACTIVITY' | 'AI_INSIGHTS' | 'CALLS'>('OVERVIEW');
 
   // Keep externally requested drawer selection synchronized, including explicit dismissal.
   useEffect(() => {
     setActiveDrawerLeadId(initialSelectedLeadId || null);
   }, [initialSelectedLeadId]);
+
+  useEffect(() => {
+    setProfileTab('OVERVIEW');
+  }, [activeDrawerLeadId]);
 
   // Modals
   const [isAddLeadModalOpen, setIsAddLeadModalOpen] = useState(false);
@@ -181,6 +204,7 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
   const [callerFilter, setCallerFilter] = useState<string>('ALL');
   const [sourceFilter, setSourceFilter] = useState<string>('ALL');
   const [scoreFilter, setScoreFilter] = useState<'ALL' | 'HOT' | 'WARM' | 'COLD'>('ALL');
+  const [intentFilter, setIntentFilter] = useState<'ALL' | 'HIGH' | 'MEDIUM' | 'LOW'>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');
 
   // Default sorting: DATE NEWEST FIRST
@@ -643,20 +667,23 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
     return index;
   }, [leads, contactsMap]);
 
-  // 2. Filter & Sort across ALL leads (Search operates on entire index)
+  // Outbound campaign leads appear in CRM only after a reply.
+  const crmEligibleLeads = useMemo(() => leads.filter((lead) => {
+    const isCampaignLead = Boolean(lead.campaignId || lead.campaignLeadId || (lead.leadType === 'OUTBOUND' && lead.source === 'EMAIL'));
+    return !isCampaignLead || lead.replyStatus === 'REPLIED';
+  }), [leads]);
+
+  // Search and filters are applied to the same CRM-eligible lead population.
   const processedLeads = useMemo(() => {
-    let result = leads.filter((lead) => {
-      // Outbound campaign leads MUST ONLY be shown in CRM if they have replied
-      const isCampaignLead = Boolean(
-        lead.campaignId || lead.campaignLeadId || (lead.leadType === 'OUTBOUND' && lead.source === 'EMAIL')
-      );
-      if (isCampaignLead && lead.replyStatus !== 'REPLIED') return false;
+    let result = crmEligibleLeads.filter((lead) => {
 
       // Stage tab filter
       if (stageTab !== 'ALL') {
         if (stageTab === 'FOLLOW_UP') {
-          const hasFollowUp = Boolean(lead.nextFollowUpAt) || lead.status === 'FOLLOW_UP';
+          const hasFollowUp = Boolean(lead.status === 'FOLLOW_UP' || lead.nextFollowUpAt || lead.aiAutoFollowUp?.status === 'scheduled' || (lead.autoFollowUp?.enabled && lead.autoFollowUp.nextScheduledAt));
           if (!hasFollowUp) return false;
+        } else if (stageTab === 'DEMO_BOOKED') {
+          if (lead.status !== 'DEMO_BOOKED' && lead.status !== 'DEMO_SCHEDULED' && lead.demoStatus !== 'BOOKED') return false;
         } else if (lead.status !== stageTab) {
           return false;
         }
@@ -670,15 +697,17 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
       // Caller filter
       if (callerFilter !== 'ALL') {
         if (callerFilter === 'UNASSIGNED') {
-          if (lead.assignedCaller && lead.assignedCaller !== 'Unassigned') return false;
+          const currentOwner = lead.assignedCaller || lead.ownerId || '';
+          if (currentOwner && currentOwner !== 'Unassigned') return false;
         } else {
           if (lead.assignedCaller !== callerFilter && lead.ownerId !== callerFilter) return false;
         }
       }
 
       // Source filter
-      if (sourceFilter !== 'ALL' && lead.source !== sourceFilter) {
-        return false;
+      if (sourceFilter !== 'ALL') {
+        const isOutboundCampaign = Boolean(lead.campaignId || lead.campaignLeadId || lead.leadType === 'OUTBOUND');
+        if (sourceFilter === 'OUTBOUND' ? !isOutboundCampaign : lead.source !== sourceFilter) return false;
       }
 
       // Score filter
@@ -688,6 +717,8 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
         if (scoreFilter === 'WARM' && (score < 50 || score >= 80)) return false;
         if (scoreFilter === 'COLD' && score >= 50) return false;
       }
+
+      if (intentFilter !== 'ALL' && lead.intent !== intentFilter) return false;
 
       // Fast Index Search across ALL leads
       if (searchQuery.trim()) {
@@ -719,8 +750,10 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
         const nameB = `${contactB?.firstName || ''} ${contactB?.lastName || ''}`.toLowerCase();
         comparison = nameA.localeCompare(nameB);
       } else if (sortField === 'followup') {
-        const fA = a.nextFollowUpAt ? parseLeadDate(a.nextFollowUpAt).getTime() : Infinity;
-        const fB = b.nextFollowUpAt ? parseLeadDate(b.nextFollowUpAt).getTime() : Infinity;
+        const nextA = a.aiAutoFollowUp?.status === 'scheduled' ? a.aiAutoFollowUp.scheduledAt : a.autoFollowUp?.nextScheduledAt || a.nextFollowUpAt;
+        const nextB = b.aiAutoFollowUp?.status === 'scheduled' ? b.aiAutoFollowUp.scheduledAt : b.autoFollowUp?.nextScheduledAt || b.nextFollowUpAt;
+        const fA = nextA ? parseLeadDate(nextA).getTime() : Infinity;
+        const fB = nextB ? parseLeadDate(nextB).getTime() : Infinity;
         comparison = fA - fB;
       }
 
@@ -728,7 +761,7 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
     });
 
     return result;
-  }, [leads, contactsMap, leadSearchIndex, stageTab, dateFilter, callerFilter, sourceFilter, scoreFilter, searchQuery, sortField, sortAsc]);
+  }, [crmEligibleLeads, contactsMap, leadSearchIndex, stageTab, dateFilter, callerFilter, sourceFilter, scoreFilter, intentFilter, searchQuery, sortField, sortAsc]);
 
   // 3. Pagination State (25 leads per page)
   const PAGE_SIZE = 25;
@@ -737,7 +770,7 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
   // Auto-reset to Page 1 whenever search query, filters, or sorting change
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery, stageTab, dateFilter, callerFilter, sourceFilter, scoreFilter, sortField, sortAsc]);
+  }, [searchQuery, stageTab, dateFilter, callerFilter, sourceFilter, scoreFilter, intentFilter, sortField, sortAsc]);
 
   const totalPages = Math.max(1, Math.ceil(processedLeads.length / PAGE_SIZE));
   const safePage = Math.min(Math.max(1, currentPage), totalPages);
@@ -749,27 +782,24 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
   }, [processedLeads, safePage]);
 
   const stageCounts = useMemo(() => {
-    const counts: Record<string, number> = {
-      ALL: leads.length,
-      NEW: 0,
-      FOLLOW_UP: 0,
-      CONTACTED: 0,
-      ENGAGED: 0,
-      QUALIFIED: 0,
-      DEMO_BOOKED: 0,
-      CLOSED_WON: 0,
-      CLOSED_LOST: 0,
-    };
-    leads.forEach((l) => {
-      if (l.status && counts[l.status] !== undefined) {
-        counts[l.status]++;
-      }
-      if (l.nextFollowUpAt || l.status === 'FOLLOW_UP') {
-        counts.FOLLOW_UP++;
-      }
-    });
+    const counts: Record<string, number> = { ALL: crmEligibleLeads.length, NEW: 0, FOLLOW_UP: 0, CONTACTED: 0, ENGAGED: 0, QUALIFIED: 0, DEMO_BOOKED: 0, CLOSED_WON: 0, CLOSED_LOST: 0 };
+    crmEligibleLeads.forEach((lead) => { if (lead.status && counts[lead.status] !== undefined) counts[lead.status]++; });
+    counts.FOLLOW_UP = crmEligibleLeads.filter((lead) => Boolean(lead.status === 'FOLLOW_UP' || lead.nextFollowUpAt || lead.aiAutoFollowUp?.status === 'scheduled' || (lead.autoFollowUp?.enabled && lead.autoFollowUp.nextScheduledAt))).length;
+    counts.DEMO_BOOKED = crmEligibleLeads.filter((lead) => lead.status === 'DEMO_BOOKED' || lead.status === 'DEMO_SCHEDULED' || lead.demoStatus === 'BOOKED').length;
     return counts;
-  }, [leads]);
+  }, [crmEligibleLeads]);
+
+  const crmKpiCounts = useMemo(() => {
+    const now = Date.now();
+    const isDue = (iso?: string | null) => Boolean(iso && !Number.isNaN(Date.parse(iso)) && Date.parse(iso) <= now);
+    return {
+      total: crmEligibleLeads.length,
+      newLeads: crmEligibleLeads.filter((lead) => lead.status === 'NEW').length,
+      followUpsDue: crmEligibleLeads.filter((lead) => lead.status === 'FOLLOW_UP' || isDue(lead.nextFollowUpAt) || (lead.aiAutoFollowUp?.status === 'scheduled' && isDue(lead.aiAutoFollowUp.scheduledAt)) || (lead.autoFollowUp?.enabled && isDue(lead.autoFollowUp.nextScheduledAt))).length,
+      highIntent: crmEligibleLeads.filter((lead) => lead.intent === 'HIGH').length,
+      consultationsBooked: crmEligibleLeads.filter((lead) => lead.status === 'DEMO_BOOKED' || lead.status === 'DEMO_SCHEDULED' || lead.demoStatus === 'BOOKED').length,
+    };
+  }, [crmEligibleLeads]);
 
   const handleSelectAll = () => {
     const pageLeadIds = paginatedLeads.map((l) => l.leadId);
@@ -864,7 +894,7 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
   const drawerActivities = drawerLead ? activities.filter((a) => a.leadId === drawerLead.leadId) : [];
 
   return (
-    <div data-umrah360-module="crm" className="w-full min-h-screen bg-slate-50 text-slate-800 font-sans pb-16">
+    <div data-umrah360-module="crm" className="crm-workspace w-full min-h-screen bg-slate-50 text-slate-800 font-sans pb-16">
       {/* Sticky Header & Filter Container */}
       <div className="sticky -top-4 sm:-top-5 z-30 bg-slate-50/95 backdrop-blur-xs pt-3 pb-2 border-b border-slate-200/60 shadow-xs -mx-3 sm:-mx-5 px-3 sm:px-5">
         {/* 1. TeleCRM Top Header Bar */}
@@ -877,26 +907,26 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
               </div>
               <div>
                 <div className="flex items-center space-x-2">
-                  <h1 className="text-xl font-extrabold text-slate-900 tracking-tight">CRM</h1>
+                  <h1 className="text-xl font-extrabold text-slate-900 tracking-tight">CRM &amp; Leads</h1>
                   <span className="px-2 py-0.5 text-[11px] font-bold bg-slate-100 text-slate-700 rounded-md">
                     {processedLeads.length} Leads
                   </span>
                 </div>
-                <p className="text-xs text-slate-500 font-medium">
-                  High-velocity lead management, click-to-call dialer & smart follow-up tracker
-                </p>
+                <p className="text-xs text-slate-500 font-medium">Manage your sales pipeline, contacts and follow-ups</p>
               </div>
             </div>
 
             {/* Action Buttons */}
             <div className="flex items-center space-x-2 self-stretch md:self-auto flex-wrap gap-y-2">
               <button
-                onClick={handleExportCsv}
-                className="flex items-center space-x-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg border border-slate-300 transition-colors"
-                title="Export filtered leads to Excel/CSV"
+                onClick={() => { setAddLeadMode('BULK'); setBulkUploadError(null); setIsAddLeadModalOpen(true); }}
+                className="crm-secondary-action flex items-center space-x-1.5 px-3 py-2 text-xs font-semibold rounded-lg border transition-colors"
+                title="Import leads from CSV or Excel"
               >
-                <Download className="w-3.5 h-3.5 text-slate-600" />
-                <span>Export CSV</span>
+                <Upload className="w-3.5 h-3.5" /><span>Import Leads</span>
+              </button>
+              <button onClick={handleExportCsv} className="crm-secondary-action flex items-center space-x-1.5 px-3 py-2 text-xs font-semibold rounded-lg border transition-colors" title="Export filtered leads to Excel/CSV">
+                <Download className="w-3.5 h-3.5" /><span>Export</span>
               </button>
 
               {/* Add Lead Button */}
@@ -905,7 +935,7 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
                   setAddLeadMode('SINGLE');
                   setIsAddLeadModalOpen(true);
                 }}
-                className="flex items-center space-x-1.5 px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white text-xs font-bold rounded-lg shadow-sm shadow-orange-500/25 transition-all hover:scale-[1.02] active:scale-[0.98]"
+                className="crm-primary-action flex items-center space-x-1.5 px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white text-xs font-bold rounded-lg shadow-sm transition-all"
               >
                 <Plus className="w-4 h-4 stroke-[2.5]" />
                 <span>Add Lead</span>
@@ -914,7 +944,36 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
           </div>
 
           {/* 2. TeleCRM Signature Stage Counters Strip */}
-          <div className="max-w-[1700px] mx-auto px-4 pt-1 pb-2 flex items-center space-x-2 overflow-x-auto no-scrollbar border-t border-slate-100">
+          <div className="crm-kpi-grid" aria-label="CRM performance overview">
+            <button type="button" className="crm-kpi-card" onClick={() => { setStageTab('ALL'); setScoreFilter('ALL'); setIntentFilter('ALL'); setCallerFilter('ALL'); setSourceFilter('ALL'); setDateFilter('ALL'); setSearchQuery(''); }}>
+              <span className="crm-kpi-icon violet"><Users className="h-4 w-4" /></span>
+              <span className="crm-kpi-copy"><span>Total Leads</span><strong>{crmKpiCounts.total.toLocaleString('en-IN')}</strong></span>
+              <span className="crm-kpi-hint">Eligible in CRM</span>
+            </button>
+            <button type="button" className="crm-kpi-card" onClick={() => setStageTab('NEW')}>
+              <span className="crm-kpi-icon blue"><Plus className="h-4 w-4" /></span>
+              <span className="crm-kpi-copy"><span>New Leads</span><strong>{crmKpiCounts.newLeads.toLocaleString('en-IN')}</strong></span>
+              <span className="crm-kpi-hint">Awaiting first contact</span>
+            </button>
+            <button type="button" className="crm-kpi-card" onClick={() => setStageTab('FOLLOW_UP')}>
+              <span className="crm-kpi-icon amber"><CalendarClock className="h-4 w-4" /></span>
+              <span className="crm-kpi-copy"><span>Follow-ups Due</span><strong>{crmKpiCounts.followUpsDue.toLocaleString('en-IN')}</strong></span>
+              <span className="crm-kpi-hint">Due or needing follow-up</span>
+            </button>
+            <button type="button" className="crm-kpi-card" onClick={() => { setStageTab('ALL'); setScoreFilter('ALL'); setIntentFilter('HIGH'); }}>
+              <span className="crm-kpi-icon orange"><Flame className="h-4 w-4" /></span>
+              <span className="crm-kpi-copy"><span>High Intent</span><strong>{crmKpiCounts.highIntent.toLocaleString('en-IN')}</strong></span>
+              <span className="crm-kpi-hint">AI intent marked high</span>
+            </button>
+            <button type="button" className="crm-kpi-card" onClick={() => setStageTab('DEMO_BOOKED')}>
+              <span className="crm-kpi-icon green"><Calendar className="h-4 w-4" /></span>
+              <span className="crm-kpi-copy"><span>Consultations Booked</span><strong>{crmKpiCounts.consultationsBooked.toLocaleString('en-IN')}</strong></span>
+              <span className="crm-kpi-hint">Booked or scheduled</span>
+            </button>
+          </div>
+
+
+          <div className="crm-stage-strip max-w-[1700px] mx-auto px-4 pt-1 pb-2 flex items-center space-x-2 overflow-x-auto no-scrollbar border-t border-slate-100">
             {TELECRM_STAGES.map((st) => {
               const isSelected = stageTab === st.key;
               const count = stageCounts[st.key] || 0;
@@ -922,7 +981,7 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
                 <button
                   key={st.key}
                   onClick={() => setStageTab(st.key)}
-                  className={`flex items-center space-x-2 px-3.5 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition-all border ${
+                  className={`crm-stage-tab flex items-center space-x-2 px-3.5 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition-all border ${
                     isSelected
                       ? `${st.bg} ${st.text} ${st.border} shadow-2xs ring-1 ring-orange-500/30 font-extrabold`
                       : 'bg-white hover:bg-slate-50 text-slate-600 border-slate-200'
@@ -944,9 +1003,9 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
         </div>
 
         {/* 3. TeleCRM Advanced Filter & Search Toolbar */}
-        <div className="max-w-[1700px] mx-auto px-4 mt-3">
-          <div className="bg-white border border-slate-200/90 rounded-xl p-3 shadow-2xs flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
-            <div className="relative flex-1 min-w-[260px]">
+        <div className="crm-filter-wrap max-w-[1700px] mx-auto px-4 mt-3">
+          <div className="crm-filter-toolbar bg-white border border-slate-200/90 rounded-xl p-3 shadow-2xs flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
+            <div className="crm-search-field relative flex-1 min-w-[260px]">
               <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
@@ -965,7 +1024,7 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
               )}
             </div>
 
-            <div className="flex items-center space-x-2 flex-wrap gap-y-2">
+            <div className="crm-filter-controls flex items-center space-x-2 flex-wrap gap-y-2">
               <div className="flex items-center space-x-1.5 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1 text-xs">
                 <Calendar className="w-3.5 h-3.5 text-slate-500" />
                 <span className="text-[11px] font-semibold text-slate-500">Date:</span>
@@ -1051,13 +1110,33 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
                 </select>
               </div>
 
-              {(dateFilter !== 'ALL' || callerFilter !== 'ALL' || sourceFilter !== 'ALL' || scoreFilter !== 'ALL' || searchQuery || stageTab !== 'ALL') && (
+              {(dateFilter !==
+              <div className="flex items-center space-x-1.5 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1 text-xs">
+                <Target className="w-3.5 h-3.5 text-slate-500" />
+                <select value={intentFilter} onChange={(e) => setIntentFilter(e.target.value as 'ALL' | 'HIGH' | 'MEDIUM' | 'LOW')} className="bg-transparent text-xs font-bold text-slate-700 focus:outline-none cursor-pointer">
+                  <option value="ALL">All Intent</option>
+                  <option value="HIGH">High Intent</option>
+                  <option value="MEDIUM">Medium Intent</option>
+                  <option value="LOW">Low Intent</option>
+                </select>
+              </div>
+
+              <div className="crm-view-toggle" role="group" aria-label="Lead view">
+                <button type="button" onClick={() => setLeadViewMode('LIST')} aria-pressed={leadViewMode === 'LIST'} className={leadViewMode === 'LIST' ? 'is-active' : ''}>
+                  <FileText className="h-3.5 w-3.5" /> List
+                </button>
+                <button type="button" onClick={() => setLeadViewMode('PIPELINE')} aria-pressed={leadViewMode === 'PIPELINE'} className={leadViewMode === 'PIPELINE' ? 'is-active' : ''}>
+                  <Layers className="h-3.5 w-3.5" /> Pipeline
+                </button>
+              </div>
+ 'ALL' || callerFilter !== 'ALL' || sourceFilter !== 'ALL' || scoreFilter !== 'ALL' || intentFilter !== 'ALL' || searchQuery || stageTab !== 'ALL') && (
                 <button
                   onClick={() => {
                     setDateFilter('ALL');
                     setCallerFilter('ALL');
                     setSourceFilter('ALL');
                     setScoreFilter('ALL');
+                    setIntentFilter('ALL');
                     setSearchQuery('');
                     setStageTab('ALL');
                     setSortField('date');
@@ -1076,7 +1155,7 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
       {/* 4. TeleCRM Bulk Action Float Bar */}
       {selectedLeadIds.size > 0 && (
         <div className="max-w-[1700px] mx-auto px-4 mt-3">
-          <div className="bg-slate-900 text-white rounded-xl p-2.5 px-4 shadow-lg flex items-center justify-between flex-wrap gap-2 animate-in fade-in slide-in-from-top-2">
+          <div className="crm-bulk-action-bar bg-slate-900 text-white rounded-xl p-2.5 px-4 shadow-lg flex items-center justify-between flex-wrap gap-2 animate-in fade-in slide-in-from-top-2">
             <div className="flex items-center space-x-3">
               <span className="px-2 py-0.5 bg-orange-500 text-white font-extrabold text-xs rounded-md">
                 {selectedLeadIds.size} Selected
@@ -1114,10 +1193,8 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
                   <option value="" disabled>
                     Change Status...
                   </option>
-                  {TELECRM_STAGES.filter((s) => s.key !== 'ALL').map((s) => (
-                    <option key={s.key} value={s.key}>
-                      {s.label}
-                    </option>
+                  {CRM_STATUS_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
                   ))}
                 </select>
               </div>
@@ -1142,7 +1219,8 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
       )}
 
       {/* 5. The Pure TeleCRM Leads Table */}
-      <div className="max-w-[1700px] mx-auto px-4 mt-3">
+      {leadViewMode === 'LIST' ? (
+      <div className="crm-table-wrap max-w-[1700px] mx-auto px-4 mt-3">
         <div className="bg-white border border-slate-200/90 rounded-xl shadow-2xs overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
@@ -1172,7 +1250,7 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
                     }}
                   >
                     <div className="flex items-center space-x-1">
-                      <span>Date & Time</span>
+                      <span>Last Activity</span>
                       <ArrowUpDown className="w-3 h-3 text-slate-400" />
                       {sortField === 'date' && (
                         <span className="text-orange-600 font-extrabold">{sortAsc ? '↑' : '↓'}</span>
@@ -1180,7 +1258,7 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
                     </div>
                   </th>
                   <th className="py-3 px-3 min-w-[220px]">Lead / Contact</th>
-                  <th className="py-3 px-3 min-w-[210px]">Phone & Call Action</th>
+                  
                   <th className="py-3 px-3 min-w-[150px]">Status</th>
                   <th
                     className="py-3 px-3 cursor-pointer hover:text-slate-900 min-w-[170px]"
@@ -1193,14 +1271,14 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
                     }}
                   >
                     <div className="flex items-center space-x-1">
-                      <span>AI Auto Follow-Up</span>
+                      <span>Next Action</span>
                       <Clock className="w-3 h-3 text-slate-400" />
                       {sortField === 'followup' && (
                         <span className="text-orange-600 font-extrabold">{sortAsc ? '↑' : '↓'}</span>
                       )}
                     </div>
                   </th>
-                  <th className="py-3 px-3 min-w-[160px]">Assigned Telecaller</th>
+                  <th className="py-3 px-3 min-w-[145px]">Owner</th>
                   <th className="py-3 px-3 min-w-[120px]">Source</th>
                   <th
                     className="py-3 px-3 cursor-pointer hover:text-slate-900 min-w-[110px]"
@@ -1213,7 +1291,7 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
                     }}
                   >
                     <div className="flex items-center space-x-1">
-                      <span>AI Score</span>
+                      <span>Intent / Score</span>
                       <Flame className="w-3 h-3 text-orange-400" />
                       {sortField === 'score' && (
                         <span className="text-orange-600 font-extrabold">{sortAsc ? '↑' : '↓'}</span>
@@ -1227,7 +1305,7 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
               <tbody className="divide-y divide-slate-100 text-xs">
                 {processedLeads.length === 0 ? (
                   <tr>
-                    <td colSpan={11} className="py-16 text-center text-slate-400">
+                    <td colSpan={10} className="py-16 text-center text-slate-400">
                       <div className="flex flex-col items-center justify-center space-y-3">
                         <Users className="w-10 h-10 text-slate-300 stroke-[1.5]" />
                         <span className="text-sm font-semibold text-slate-600">No leads match your criteria</span>
@@ -1254,9 +1332,9 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
                   paginatedLeads.map((lead) => {
                     const contact = contactsMap.get(lead.contactId);
                     const isSelected = selectedLeadIds.has(lead.leadId);
-                    const dt = formatLeadDateTime(lead.createdAt || lead.lastActivityAt);
+                    const dt = formatLeadDateTime(lead.lastActivityAt || lead.updatedAt || lead.createdAt);
                     const currentStage =
-                      TELECRM_STAGES.find((s) => s.key === lead.status) || TELECRM_STAGES[1];
+                      TELECRM_STAGES.find((s) => s.key === lead.status) || { bg: 'bg-slate-100', text: 'text-slate-700', border: 'border-slate-200' };
                     const callerName = lead.assignedCaller || lead.ownerId || 'Unassigned';
                     const callerObj = telecallers.find((c) => c.name === callerName);
                     const followupDate = lead.aiAutoFollowUp?.status === 'scheduled' ? parseLeadDate(lead.aiAutoFollowUp.scheduledAt) : null;
@@ -1320,7 +1398,11 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
                                 {[contact?.firstName, contact?.lastName].filter(Boolean).join(' ') || 'Unnamed Lead'}
                               </div>
                               <div className="text-[11px] text-slate-500 truncate max-w-[180px]">
-                                {contact?.email || lead.serviceInterest || contact?.companyName || "—"}
+                                {lead.serviceInterest || contact?.companyName || "—"}
+                              </div>
+                              <div className="crm-table-contact-lines">
+                                {contact?.phone && <span><Phone className="h-3 w-3" />{contact.phone}</span>}
+                                {contact?.email && <span><Mail className="h-3 w-3" />{contact.email}</span>}
                               </div>
                               {(lead.city || contact?.city) && (
                                 <div className="flex items-center space-x-1 text-[10px] text-slate-400 mt-0.5">
@@ -1333,56 +1415,14 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
                         </td>
 
                         <td className="py-3 px-3 whitespace-nowrap">
-                          <div className="flex flex-col space-y-1">
-                            <span className={contact?.phone ? "font-mono text-xs font-semibold text-slate-800" : "text-xs text-slate-400 font-normal"}>
-                              {contact?.phone || "—"}
-                            </span>
-                            <div className="flex items-center space-x-1.5">
-                              {contact?.phone ? (
-                                <>
-                                  <button
-                                    onClick={() => handleStartCall(lead)}
-                                    className="px-2 py-0.8 bg-orange-500 hover:bg-orange-600 text-white rounded-md text-[11px] font-bold flex items-center space-x-1 shadow-2xs transition-all hover:scale-105 active:scale-95"
-                                    title="Click to call"
-                                  >
-                                    <PhoneCall className="w-3 h-3" />
-                                    <span>Call</span>
-                                  </button>
-                                  <button
-                                    onClick={() => handleOpenWhatsApp(lead)}
-                                    className="px-2 py-0.8 bg-green-500 hover:bg-green-600 text-white rounded-md text-[11px] font-bold flex items-center space-x-1 shadow-2xs transition-all hover:scale-105 active:scale-95"
-                                    title="Send WhatsApp Message"
-                                  >
-                                    <MessageCircle className="w-3 h-3" />
-                                    <span>WhatsApp</span>
-                                  </button>
-                                </>
-                              ) : (
-                                <span className="text-[10px] text-slate-400 italic">No phone added</span>
-                              )}
-
-                              <button
-                                onClick={() => onOpenConversation(undefined, lead.leadId)}
-                                className="p-1 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-md transition-colors"
-                                title="Open in Unified Inbox"
-                              >
-                                <Mail className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
-                          </div>
-                        </td>
-
-                        <td className="py-3 px-3 whitespace-nowrap">
                           <div className="relative inline-block">
                             <select
                               value={lead.status}
                               onChange={(e) => handleUpdateStatus(lead.leadId, e.target.value as LeadStatus)}
                               className={`appearance-none font-bold text-xs px-2.5 py-1 pr-6 rounded-lg border cursor-pointer focus:outline-none transition-all ${currentStage.bg} ${currentStage.text} ${currentStage.border}`}
                             >
-                              {TELECRM_STAGES.filter((s) => s.key !== 'ALL').map((s) => (
-                                <option key={s.key} value={s.key} className="bg-white text-slate-800">
-                                  {s.label}
-                                </option>
+                              {CRM_STATUS_OPTIONS.map((option) => (
+                                <option key={option.value} value={option.value} className="bg-white text-slate-800">{option.label}</option>
                               ))}
                             </select>
                             <ChevronDown className="w-3 h-3 absolute right-1.5 top-1/2 -translate-y-1/2 pointer-events-none opacity-60" />
@@ -1433,10 +1473,21 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
                               </button>
                             </div>
                           )}
+                          {lead.autoFollowUp?.enabled ? (
+                            <div className="crm-recurring-followup">
+                              <RefreshCw className="h-3 w-3" />
+                              <span>Recurring active{lead.autoFollowUp.nextScheduledAt ? ' · ' + new Date(lead.autoFollowUp.nextScheduledAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : ''}</span>
+                            </div>
+                          ) : lead.aiAutoFollowUp?.status && lead.aiAutoFollowUp.status !== 'scheduled' ? (
+                            <div className="crm-followup-state crm-followup-state-muted">One-time: {lead.aiAutoFollowUp.status.replace('_', ' ')}</div>
+                          ) : (
+                            <div className="crm-followup-state crm-followup-state-muted">Recurring sequence off</div>
+                          )}
+
                         </td>
 
                         <td className="py-3 px-3 whitespace-nowrap">
-                          <div className="flex items-center space-x-1.5">
+                          <div className="crm-owner-cell flex items-center space-x-1.5">
                             <div
                               className={`w-5 h-5 rounded-full flex items-center justify-center text-white text-[10px] font-bold shrink-0 ${
                                 callerObj?.avatarColor || 'bg-slate-400'
@@ -1481,9 +1532,10 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
                                   : 'bg-slate-100 text-slate-600'
                               }`}
                             >
-                              {lead.leadScore || 50}
+                              {lead.leadScore || 0}
                             </span>
                             {(lead.leadScore || 0) >= 80 && <Flame className="w-3.5 h-3.5 text-orange-500" />}
+                            <span className="crm-intent-label">{lead.intent || "—"}</span>
                           </div>
                         </td>
 
@@ -1497,14 +1549,21 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
                           </div>
                         </td>
 
-                        <td className="py-3 px-3 text-right whitespace-nowrap">
-                          <button
-                            onClick={() => setActiveDrawerLeadId(lead.leadId)}
-                            className="p-1.5 text-slate-400 hover:text-orange-700 hover:bg-orange-50 rounded-lg transition-colors"
-                            title="View Lead 360° Profile"
-                          >
-                            <Eye className="w-4 h-4" />
-                          </button>
+                        <td className="crm-row-actions py-3 px-3 text-right whitespace-nowrap">
+                          <div className="flex items-center justify-end gap-1">
+                            <button type="button" onClick={() => contact?.phone && handleStartCall(lead)} disabled={!contact?.phone} title={contact?.phone ? 'Call lead' : 'Phone number unavailable'}>
+                              <PhoneCall className="h-3.5 w-3.5" />
+                            </button>
+                            <button type="button" onClick={() => contact?.phone && handleOpenWhatsApp(lead)} disabled={!contact?.phone} title={contact?.phone ? 'WhatsApp lead' : 'Phone number unavailable'}>
+                              <MessageCircle className="h-3.5 w-3.5" />
+                            </button>
+                            <button type="button" onClick={() => onOpenConversation(undefined, lead.leadId)} title="Open in Unified Inbox">
+                              <Mail className="h-3.5 w-3.5" />
+                            </button>
+                            <button type="button" onClick={() => setActiveDrawerLeadId(lead.leadId)} title="View Lead 360 profile">
+                              <Eye className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     );
@@ -1520,8 +1579,8 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
               <span>
                 Showing <strong className="text-slate-800 font-bold">{processedLeads.length === 0 ? 0 : (safePage - 1) * PAGE_SIZE + 1}</strong> - <strong className="text-slate-800 font-bold">{Math.min(safePage * PAGE_SIZE, processedLeads.length)}</strong> of{' '}
                 <strong className="text-slate-800 font-bold">{processedLeads.length}</strong> matching leads
-                {processedLeads.length !== leads.length && (
-                  <span className="text-slate-400 font-normal"> (from {leads.length} total)</span>
+                {processedLeads.length !== crmEligibleLeads.length && (
+                  <span className="text-slate-400 font-normal"> (from {crmEligibleLeads.length} CRM-eligible)</span>
                 )}
               </span>
               <span className="px-2 py-0.5 bg-orange-50 text-orange-700 border border-orange-200 rounded text-[10px] font-bold">
@@ -1584,13 +1643,67 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
             <div className="hidden md:flex items-center space-x-3 text-[11px]">
               <span className="flex items-center space-x-1 text-emerald-700 font-semibold">
                 <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                <span>Search Indexed Across All {leads.length} Leads</span>
+                <span>Search Indexed Across All {crmEligibleLeads.length} CRM-eligible Leads</span>
               </span>
             </div>
           </div>
         </div>
       </div>
 
+    ) : (
+      <div className="crm-pipeline-board" aria-label="Lead pipeline board">
+        {TELECRM_STAGES.filter((stage) => stage.key !== 'ALL').map((stage) => {
+          const stageLeads = processedLeads.filter((lead) =>
+            stage.key === 'FOLLOW_UP'
+              ? lead.status === 'FOLLOW_UP' || Boolean(lead.nextFollowUpAt) || lead.aiAutoFollowUp?.status === 'scheduled' || Boolean(lead.autoFollowUp?.enabled && lead.autoFollowUp.nextScheduledAt)
+              : stage.key === 'DEMO_BOOKED'
+                ? lead.status === 'DEMO_BOOKED' || lead.status === 'DEMO_SCHEDULED' || lead.demoStatus === 'BOOKED'
+                : lead.status === stage.key
+          );
+          return (
+            <section className="crm-pipeline-column" key={stage.key}>
+              <header className="crm-pipeline-column-header">
+                <span className={`crm-pipeline-stage-dot ${stage.dot}`} />
+                <strong>{stage.label}</strong>
+                <span className="crm-pipeline-count">{stageLeads.length}</span>
+              </header>
+              <div className="crm-pipeline-cards">
+                {stageLeads.map((lead) => {
+                  const contact = contactsMap.get(lead.contactId);
+                  const owner = lead.assignedCaller || lead.ownerId || 'Unassigned';
+                  const nextAction = lead.aiAutoFollowUp?.status === 'scheduled'
+                    ? lead.aiAutoFollowUp.scheduledAt
+                    : lead.autoFollowUp?.nextScheduledAt || lead.nextFollowUpAt;
+                  return (
+                    <article className="crm-pipeline-card" key={lead.leadId} onClick={() => setActiveDrawerLeadId(lead.leadId)}>
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <strong>{[contact?.firstName, contact?.lastName].filter(Boolean).join(' ') || 'Unnamed Lead'}</strong>
+                          <span>{lead.serviceInterest || contact?.companyName || contact?.email || 'Lead enquiry'}</span>
+                        </div>
+                        <span className="crm-pipeline-score">{lead.leadScore || 0}</span>
+                      </div>
+                      <div className="crm-pipeline-meta">
+                        <span><UserCheck className="h-3 w-3" /> {owner}</span>
+                        <span><Flame className="h-3 w-3" /> {lead.intent || '—'}</span>
+                      </div>
+                      {nextAction && <div className="crm-pipeline-next"><CalendarClock className="h-3 w-3" /> {new Date(nextAction).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</div>}
+                      <div className="crm-pipeline-card-actions" onClick={(event) => event.stopPropagation()}>
+                        <select aria-label={'Change stage for ' + (contact?.firstName || 'lead')} value={lead.status} onChange={(event) => handleUpdateStatus(lead.leadId, event.target.value as LeadStatus)}>
+                          {CRM_STATUS_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                        </select>
+                        <button type="button" onClick={() => setActiveDrawerLeadId(lead.leadId)} aria-label="Open lead profile"><Eye className="h-3.5 w-3.5" /></button>
+                      </div>
+                    </article>
+                  );
+                })}
+                {stageLeads.length === 0 && <div className="crm-pipeline-empty">No leads in this stage</div>}
+              </div>
+            </section>
+          );
+        })}
+      </div>
+    )}
       {/* 6. Calling Modal */}
       {callingLead && (
         <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4">
@@ -2102,10 +2215,9 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
                       name="status"
                       className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-medium focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
                     >
-                      <option value="NEW">Fresh / New</option>
-                      <option value="CONTACTED">Contacted</option>
-                      <option value="FOLLOW_UP">Follow Up Due</option>
-                      <option value="QUALIFIED">Interested / Hot</option>
+                      {CRM_STATUS_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>{option.label}</option>
+                      ))}
                     </select>
                   </div>
                   <div>
@@ -2248,7 +2360,7 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
       {/* 11. TeleCRM Lead 360° Slide-over Drawer (Right Sheet) */}
       {drawerLead && drawerContact && (
         <div className="fixed inset-0 z-40 bg-slate-950/40 backdrop-blur-2xs flex justify-end">
-          <div className="bg-white w-full max-w-xl h-full shadow-2xl border-l border-slate-200 flex flex-col animate-in slide-in-from-right duration-200">
+          <div className="crm-lead-profile-drawer bg-white w-full max-w-xl h-full shadow-2xl border-l border-slate-200 flex flex-col animate-in slide-in-from-right duration-200">
             {/* Drawer Header */}
             <div className="p-5 border-b border-slate-200 bg-slate-50/80 flex items-start justify-between">
               <div className="flex items-center space-x-3">
@@ -2315,17 +2427,24 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
                   onChange={(e) => handleUpdateStatus(drawerLead.leadId, e.target.value as LeadStatus)}
                   className="px-2 py-1 bg-slate-100 border border-slate-200 rounded-lg text-xs font-bold text-slate-800 focus:outline-none"
                 >
-                  {TELECRM_STAGES.filter((s) => s.key !== 'ALL').map((s) => (
-                    <option key={s.key} value={s.key}>
-                      {s.label}
-                    </option>
+                  {CRM_STATUS_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
                   ))}
                 </select>
               </div>
             </div>
 
+            <div className="crm-profile-tabs" role="tablist" aria-label="Lead profile sections">
+              <button type="button" role="tab" aria-selected={profileTab === 'OVERVIEW'} onClick={() => setProfileTab('OVERVIEW')} className={profileTab === 'OVERVIEW' ? 'is-active' : ''}>Overview</button>
+              <button type="button" role="tab" aria-selected={profileTab === 'ACTIVITY'} onClick={() => setProfileTab('ACTIVITY')} className={profileTab === 'ACTIVITY' ? 'is-active' : ''}>Activity</button>
+              <button type="button" role="tab" aria-selected={profileTab === 'AI_INSIGHTS'} onClick={() => setProfileTab('AI_INSIGHTS')} className={profileTab === 'AI_INSIGHTS' ? 'is-active' : ''}>AI Insights</button>
+              <button type="button" role="tab" aria-selected={profileTab === 'CALLS'} onClick={() => setProfileTab('CALLS')} className={profileTab === 'CALLS' ? 'is-active' : ''}>Calls</button>
+            </div>
             {/* Drawer Body */}
             <div className="flex-1 overflow-y-auto p-5 space-y-6">
+              {profileTab === 'OVERVIEW' && (
+                <>
+
               <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
                 <h4 className="text-xs font-extrabold text-slate-900 uppercase tracking-wider flex items-center space-x-1.5">
                   <PhoneForwarded className="w-3.5 h-3.5 text-orange-600" />
@@ -2415,7 +2534,13 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
                 </div>
               </div>
 
-              <div className="space-y-2">
+              
+                </>
+              )}
+
+              {profileTab === 'CALLS' && (
+                <>
+<div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <h4 className="text-xs font-extrabold text-slate-900 uppercase tracking-wider flex items-center space-x-1.5">
                     <PhoneCall className="w-3.5 h-3.5 text-orange-600" />
@@ -2457,7 +2582,13 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
                 </div>
               </div>
 
-              <div className="space-y-2">
+              
+                </>
+              )}
+
+              {profileTab === 'ACTIVITY' && (
+                <>
+<div className="space-y-2">
                 <h4 className="text-xs font-extrabold text-slate-900 uppercase tracking-wider">
                   Recent Activities & Touchpoints
                 </h4>
@@ -2484,6 +2615,60 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
                   )}
                 </div>
               </div>
+                </>
+              )}
+
+
+              {profileTab === 'AI_INSIGHTS' && (
+                <div className="crm-ai-insights space-y-4">
+                  <section className="crm-insight-score-card">
+                    <div>
+                      <span>AI lead score</span>
+                      <strong>{drawerLead.leadScore || 0}<small>/100</small></strong>
+                    </div>
+                    <div>
+                      <span>Intent</span>
+                      <strong className={drawerLead.intent === 'HIGH' ? 'high' : drawerLead.intent === 'MEDIUM' ? 'medium' : 'low'}>{drawerLead.intent || 'Not assessed'}</strong>
+                    </div>
+                    <div>
+                      <span>Buying stage</span>
+                      <strong>{drawerLead.buyingStage ? drawerLead.buyingStage.replace('_', ' ') : 'Not set'}</strong>
+                    </div>
+                  </section>
+                  <section className="crm-insight-card">
+                    <h4><Sparkles className="h-4 w-4" /> AI Summary</h4>
+                    <p>{drawerLead.aiSummary || 'No AI-generated summary is available for this lead yet.'}</p>
+                  </section>
+                  <section className="crm-insight-card">
+                    <h4><Target className="h-4 w-4" /> Recommended Next Action</h4>
+                    <p>{drawerLead.aiRecommendation || 'No AI recommendation is available yet.'}</p>
+                  </section>
+                  <section className="crm-insight-card">
+                    <h4><FileText className="h-4 w-4" /> Extracted Requirements</h4>
+                    {drawerLead.requirements?.length ? (
+                      <div className="crm-requirement-chips">{drawerLead.requirements.map((item, index) => <span key={index}>{item}</span>)}</div>
+                    ) : <p>No requirements have been extracted yet.</p>}
+                    <div className="crm-insight-facts">
+                      <div><span>Service interest</span><strong>{drawerLead.serviceInterest || 'Not specified'}</strong></div>
+                      <div><span>Budget</span><strong>{drawerLead.budget || 'Not specified'}</strong></div>
+                      <div><span>Timeline</span><strong>{drawerLead.timeline || 'Not specified'}</strong></div>
+                      <div><span>Source</span><strong>{drawerLead.source}</strong></div>
+                    </div>
+                  </section>
+                  <section className="crm-insight-card">
+                    <h4><CalendarClock className="h-4 w-4" /> Automation status</h4>
+                    <div className="crm-insight-facts">
+                      <div><span>One-time AI follow-up</span><strong>{drawerLead.aiAutoFollowUp?.status ? drawerLead.aiAutoFollowUp.status.replace('_', ' ') : 'Not scheduled'}</strong></div>
+                      <div><span>One-time scheduled at</span><strong>{drawerLead.aiAutoFollowUp?.scheduledAt ? new Date(drawerLead.aiAutoFollowUp.scheduledAt).toLocaleString('en-IN') : '—'}</strong></div>
+                      {drawerLead.aiAutoFollowUp?.cancelReason && <div><span>Last outcome reason</span><strong>{drawerLead.aiAutoFollowUp.cancelReason}</strong></div>}
+                      <div><span>Recurring sequence</span><strong>{drawerLead.autoFollowUp?.enabled ? 'Active' : drawerLead.autoFollowUp?.disabledReason ? drawerLead.autoFollowUp.disabledReason.replace('_', ' ') : 'Off'}</strong></div>
+                      <div><span>Recurring progress</span><strong>{drawerLead.autoFollowUp ? (drawerLead.autoFollowUp.attemptCount || 0) + (drawerLead.autoFollowUp.maxAttempts ? ' / ' + drawerLead.autoFollowUp.maxAttempts : ' attempts') : '—'}</strong></div>
+                      <div><span>Next recurring action</span><strong>{drawerLead.autoFollowUp?.nextScheduledAt ? new Date(drawerLead.autoFollowUp.nextScheduledAt).toLocaleString('en-IN') : '—'}</strong></div>
+                    </div>
+                  </section>
+                </div>
+              )}
+
             </div>
           </div>
         </div>

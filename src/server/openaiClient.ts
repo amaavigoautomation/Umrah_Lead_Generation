@@ -75,6 +75,8 @@ export interface OpenAIRequestOptions {
   timeoutMs?: number;
   /** Reasoning effort for Responses API reasoning models. */
   reasoningEffort?: string;
+  /** Override SDK retries when model fallback is responsible for resilience. */
+  maxRetries?: number;
 }
 
 /**
@@ -86,7 +88,7 @@ export async function generateOpenAICompletion(options: OpenAIRequestOptions): P
     throw new Error('OPENAI_API_KEY is not configured.');
   }
 
-  const openai = new OpenAI({ apiKey, ...(options.timeoutMs ? { timeout: options.timeoutMs } : {}) });
+  const openai = new OpenAI({ apiKey, ...(options.timeoutMs ? { timeout: options.timeoutMs } : {}), ...(options.maxRetries !== undefined ? { maxRetries: options.maxRetries } : {}) });
   const candidateModels = options.models && options.models.length > 0 
     ? options.models 
     : ['gpt-4o-mini', 'gpt-4o', 'gpt-3.5-turbo'];

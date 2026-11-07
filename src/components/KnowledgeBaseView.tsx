@@ -256,7 +256,7 @@ export const KnowledgeBaseView: React.FC<KnowledgeBaseViewProps> = ({
   };
 
   return (
-    <div className="max-w-7xl mx-auto p-4 sm:p-6 space-y-6">
+    <div data-umrah360-module="knowledge" className="max-w-7xl mx-auto p-4 sm:p-6 space-y-6">
       {/* Toast Notification */}
       {saveToast && (
         <div className="fixed top-20 right-6 z-50 bg-white border border-emerald-500 text-emerald-800 px-4 py-3 rounded-xl shadow-lg flex items-center space-x-3 text-xs animate-in fade-in slide-in-from-top-4">

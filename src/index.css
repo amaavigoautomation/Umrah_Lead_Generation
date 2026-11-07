@@ -273,3 +273,76 @@ select:focus-visible {
 @media(prefers-reduced-motion:reduce){
  .umrah360-app-shell *, .umrah360-main *{transition-duration:.01ms!important;scroll-behavior:auto!important}
 }
+
+
+/* Screen-specific refinements for the complete workspace. */
+[data-umrah360-module="crm"]{min-height:0!important;padding-bottom:26px!important;background:transparent!important}
+[data-umrah360-module="crm"]>div:first-child{top:-24px;background:rgba(244,246,250,.96)!important;border-color:var(--u360-line)!important;box-shadow:0 8px 22px rgba(20,32,51,.035)!important}
+[data-umrah360-module="crm"]>div:first-child>div:first-child{border:1px solid var(--u360-line)!important;border-radius:15px;overflow:hidden;box-shadow:var(--u360-shadow)!important}
+[data-umrah360-module="crm"]>div:first-child>div:first-child>div:last-child{background:#fbfcfe;padding-top:10px;padding-bottom:10px}
+[data-umrah360-module="crm"]>div:first-child>div:last-child>div{border-radius:13px!important;border-color:var(--u360-line)!important;box-shadow:0 5px 18px rgba(20,32,51,.04)}
+[data-umrah360-module="crm"] thead th{padding-top:13px!important;padding-bottom:13px!important;white-space:nowrap}
+[data-umrah360-module="crm"] tbody td{padding-top:12px!important;padding-bottom:12px!important}
+
+[data-umrah360-module="auto-followup"]{min-height:0!important;padding:0 0 24px!important;background:transparent!important}
+[data-umrah360-module="auto-followup"]>div:first-child{padding:3px 0 18px;margin-bottom:18px;border-bottom:1px solid var(--u360-line)}
+[data-umrah360-module="auto-followup"]>div:nth-child(2)>div{border-radius:14px!important;border-color:var(--u360-line)!important;padding:16px!important;box-shadow:var(--u360-shadow)!important}
+[data-umrah360-module="auto-followup"]>div:nth-child(3){border-color:var(--u360-line)!important;border-radius:14px 14px 0 0}
+
+[data-umrah360-module="scheduling"]{max-width:1320px;margin:0 auto;padding-bottom:28px!important}
+[data-umrah360-module="scheduling"]>section{border-radius:16px!important;border-color:var(--u360-line)!important;padding:22px!important;box-shadow:var(--u360-shadow)!important}
+[data-umrah360-module="scheduling"]>section>div:first-child{gap:12px}
+[data-umrah360-module="scheduling"]>section h2{font-size:16px;font-weight:750}
+[data-umrah360-module="scheduling"]>section [class*="bg-slate-50"]{border-radius:12px}
+[data-umrah360-module="scheduling"] table thead th{padding:13px 14px!important}
+[data-umrah360-module="scheduling"] table tbody td{padding:12px 14px!important}
+
+[data-umrah360-module="knowledge"]{max-width:1440px!important;padding:0 0 26px!important}
+[data-umrah360-module="knowledge"]>div:has(>div h1){border-radius:17px!important;border-color:var(--u360-line)!important;padding:26px!important;box-shadow:var(--u360-shadow)!important;background:linear-gradient(120deg,#fff 0%,#fffaf7 100%)}
+[data-umrah360-module="knowledge"]>div:has(>div h1) h1{font-size:25px;letter-spacing:-.04em}
+[data-umrah360-module="knowledge"]>div:has(>div h1) p{max-width:720px}
+[data-umrah360-module="knowledge"] [class*="rounded-2xl"][class*="border"]{border-color:var(--u360-line)!important}
+
+[data-umrah360-module="settings"]{max-width:1200px!important;padding:0 0 28px!important}
+[data-umrah360-module="settings"]>div:first-child{border-radius:16px!important;border-color:var(--u360-line)!important;padding:22px 24px!important;background:linear-gradient(120deg,#fff 0%,#fffaf7 100%)!important;box-shadow:var(--u360-shadow)!important}
+[data-umrah360-module="settings"]>div:first-child h2{font-size:22px;letter-spacing:-.04em}
+[data-umrah360-module="settings"]>div:first-child p{max-width:720px}
+[data-umrah360-module="settings"]>div:not(:first-child){border-color:var(--u360-line)!important}
+
+[data-umrah360-module="reports"]{max-width:1440px;margin:0 auto;padding-bottom:28px}
+[data-umrah360-module="reports"]>div:first-child{padding-bottom:16px;border-bottom:1px solid var(--u360-line)}
+[data-umrah360-module="reports"]>div:first-child h1{font-size:24px;letter-spacing:-.04em}
+[data-umrah360-module="reports"] [class*="grid"]>[class*="bg-white"]{border-radius:14px!important;border-color:var(--u360-line)!important;box-shadow:var(--u360-shadow)!important}
+
+[data-umrah360-module="email-studio"]{max-width:1480px;margin:0 auto;padding-bottom:28px}
+[data-umrah360-module="email-studio"]>div:first-child{border-radius:16px!important;border-color:var(--u360-line)!important;padding:22px!important;box-shadow:var(--u360-shadow)!important;background:linear-gradient(120deg,#fff 0%,#fffaf7 100%)}
+[data-umrah360-module="email-studio"]>div:first-child h1{font-size:24px;letter-spacing:-.04em}
+[data-umrah360-module="email-studio"] [role="tablist"]{gap:10px!important}
+[data-umrah360-module="email-studio"] [role="tab"]{min-height:76px;border-radius:13px!important;border-color:var(--u360-line)!important;background:#fff}
+[data-umrah360-module="email-studio"] [role="tab"][aria-selected="true"]{background:var(--u360-accent-soft)!important;border-color:#f3c2a5!important;color:#9a431b!important}
+
+[data-umrah360-module="playground"]{max-width:1440px!important;padding:0 0 28px!important}
+[data-umrah360-module="playground"]>div:first-child{border-radius:16px!important;padding:22px 24px!important;background:linear-gradient(120deg,#fff 0%,#fffaf7 100%)!important;box-shadow:var(--u360-shadow)!important}
+[data-umrah360-module="playground"]>div:first-child h2{font-size:23px;letter-spacing:-.04em}
+
+[data-umrah360-module="company-profile"]{max-width:1280px!important;padding-bottom:28px}
+[data-umrah360-module="company-profile"]>div:first-child{padding:4px 0 18px;border-bottom:1px solid var(--u360-line)}
+[data-umrah360-module="company-profile"]>div:first-child h1{font-size:25px;letter-spacing:-.04em}
+[data-umrah360-module="company-profile"] [class*="bg-white"][class*="border"]{padding:20px!important}
+
+[data-umrah360-module="audit-logs"]{max-width:1440px!important;padding-bottom:28px}
+[data-umrah360-module="audit-logs"]>div:first-child{border-bottom:1px solid var(--u360-line);padding-bottom:16px}
+[data-umrah360-module="audit-logs"] [class*="bg-white"][class*="border"]{border-color:var(--u360-line)!important;border-radius:14px!important;box-shadow:var(--u360-shadow)}
+[data-umrah360-module="audit-logs"] table tbody tr{cursor:pointer}
+
+[data-umrah360-module="agent"]{border-radius:18px!important;border-color:var(--u360-line)!important;box-shadow:0 16px 45px rgba(20,32,51,.07)!important}
+[data-umrah360-module="agent"]>div:first-child{background-color:#fbfcfe}
+
+@media(max-width:1023px){
+ [data-umrah360-module="crm"]>div:first-child{margin-left:-14px!important;margin-right:-14px!important;padding-left:14px!important;padding-right:14px!important}
+}
+@media(max-width:767px){
+ [data-umrah360-module="scheduling"]>section{padding:15px!important}
+ [data-umrah360-module="settings"]>div:first-child,[data-umrah360-module="email-studio"]>div:first-child{padding:16px!important}
+ [data-umrah360-module="company-profile"]>div:first-child h1{font-size:22px}
+}

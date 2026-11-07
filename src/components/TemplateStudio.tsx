@@ -43,7 +43,7 @@ export const TemplateStudio: React.FC<Props> = ({
   };
 
   return (
-    <div className="space-y-4">
+    <div data-umrah360-module="email-studio" className="space-y-4">
       <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
         <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
           <div>

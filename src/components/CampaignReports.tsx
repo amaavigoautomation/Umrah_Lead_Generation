@@ -394,7 +394,7 @@ export const CampaignReports: React.FC<{ tenantId: string }> = ({ tenantId }) =>
   const displayBrand = brand.companyName || 'Your workspace';
 
   return (
-    <div className="space-y-5 font-sans">
+    <div data-umrah360-module="reports" className="space-y-5 font-sans">
       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
         <div>
           <div className="flex items-center gap-2">

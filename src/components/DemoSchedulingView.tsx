@@ -627,7 +627,7 @@ export const DemoSchedulingView: React.FC<DemoSchedulingViewProps> = ({ leads = 
   };
 
   return (
-    <div className="space-y-5">
+    <div data-umrah360-module="scheduling" className="space-y-5">
       <section className="bg-white border border-slate-200 rounded-xl p-4 sm:p-5 space-y-4">
         <div className="flex items-center gap-2">
           <Clock className="w-5 h-5 text-orange-600" />

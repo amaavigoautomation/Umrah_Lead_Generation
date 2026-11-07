@@ -130,7 +130,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   };
 
   return (
-    <div className="max-w-5xl mx-auto p-4 space-y-6 font-sans">
+    <div data-umrah360-module="settings" className="max-w-5xl mx-auto p-4 space-y-6 font-sans">
       <div className="bg-white border border-slate-200/90 rounded-2xl p-6 shadow-sm flex items-center justify-between">
         <div>
           <div className="flex items-center space-x-2">

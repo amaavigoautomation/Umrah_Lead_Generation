@@ -330,7 +330,7 @@ export const AuditLogsView: React.FC<AuditLogsViewProps> = ({
   };
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto font-sans">
+    <div data-umrah360-module="audit-logs" className="space-y-6 max-w-7xl mx-auto font-sans">
       
       {/* Toast Notification */}
       {toastMessage && (

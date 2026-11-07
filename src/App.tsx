@@ -238,7 +238,7 @@ function isActiveTab(value: string | null | undefined): value is ActiveTab {
 }
 
 function readTabFromLocation(): ActiveTab {
-  if (typeof window === 'undefined') return 'inbox';
+  if (typeof window === 'undefined') return 'dashboard';
   const params = new URLSearchParams(window.location.search);
   const tab = params.get('tab');
   if (isActiveTab(tab)) return tab;

@@ -161,13 +161,13 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
 
   // Modals
   const [isAddLeadModalOpen, setIsAddLeadModalOpen] = useState(false);
+  const [addLeadMode, setAddLeadMode] = useState<'SINGLE' | 'BULK'>('SINGLE');
   useEffect(() => {
     if (!openAddLeadRequest) return;
     setAddLeadMode('SINGLE');
     setIsAddLeadModalOpen(true);
     onAddLeadRequestHandled?.();
   }, [openAddLeadRequest]);
-  const [addLeadMode, setAddLeadMode] = useState<'SINGLE' | 'BULK'>('SINGLE');
   const [bulkCsvText, setBulkCsvText] = useState<string>('');
   const [bulkUploadSuccessCount, setBulkUploadSuccessCount] = useState<number | null>(null);
   const [bulkUploadError, setBulkUploadError] = useState<string | null>(null);

@@ -4,6 +4,7 @@ import { STOP_FOLLOWUPS_WHEN_DEMO_BOOKED } from '../shared/followUpPolicy';
 import { lazyNamed } from '../lazyLoad';
 import {
   Search,
+  Inbox,
   Bot,
   User,
   Send,
@@ -126,6 +127,9 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
   const [searchQuery, setSearchQuery] = useState<string>('');
   // Lead Profile 360 side panel: slides in/out from the right edge
   const [isProfileOpen, setIsProfileOpen] = useState<boolean>(true);
+  const [profileTab, setProfileTab] = useState<'DETAILS' | 'AI_CONTEXT'>('DETAILS');
+  const [mobileThreadOpen, setMobileThreadOpen] = useState<boolean>(false);
+  const [mobileProfileOpen, setMobileProfileOpen] = useState<boolean>(false);
   const [replyText, setReplyText] = useState<string>('');
   const connected = useConnectedChannels(tenantId);
   const [isGeneratingAi, setIsGeneratingAi] = useState<boolean>(false);
@@ -426,10 +430,39 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
     }
   };
 
+  // Live counts and filters for the inbox navigation rail.
+  const getLinkedLead = (conv: Conversation) =>
+    leads.find((lead) => lead.leadId === conv.leadId) ||
+    leads.find((lead) => lead.contactId === conv.contactId);
+  const isConversationUnread = (conv: Conversation) =>
+    Boolean(conv.unread || conv.isRead === false || (conv.unreadCount || 0) > 0);
+  const isConversationUnassigned = (conv: Conversation) => {
+    const lead = getLinkedLead(conv);
+    return !lead?.ownerId && !lead?.assignedCaller;
+  };
+  const viewCounts = {
+    all: conversations.length,
+    open: conversations.filter((conv) => conv.status === 'ACTIVE' || conv.status === 'REVIEW').length,
+    unread: conversations.filter(isConversationUnread).length,
+    unassigned: conversations.filter(isConversationUnassigned).length,
+    handoff: conversations.filter((conv) => conv.humanHandoff).length,
+    ai: conversations.filter((conv) => conv.aiEnabled && !conv.humanHandoff).length,
+    highIntent: conversations.filter((conv) => getLinkedLead(conv)?.intent === 'HIGH').length,
+    resolved: conversations.filter((conv) => conv.status === 'RESOLVED').length,
+  };
+  const channelCounts: Record<Channel, number> = {
+    EMAIL: conversations.filter((conv) => conv.channel === 'EMAIL' || messages.some((message) => message.conversationId === conv.conversationId && message.channel === 'EMAIL')).length,
+    WHATSAPP: conversations.filter((conv) => conv.channel === 'WHATSAPP').length,
+    WEBSITE: conversations.filter((conv) => conv.channel === 'WEBSITE' || conv.conversationId?.startsWith('conv-web-')).length,
+    INSTAGRAM: conversations.filter((conv) => conv.channel === 'INSTAGRAM').length,
+    FACEBOOK: conversations.filter((conv) => conv.channel === 'FACEBOOK').length,
+    LINKEDIN: conversations.filter((conv) => conv.channel === 'LINKEDIN').length,
+  };
+
   // Filter conversations
   const filteredConversations = conversations.filter((conv) => {
     const contact = contacts.find((c) => c.contactId === conv.contactId);
-    const lead = leads.find((l) => l.leadId === conv.leadId);
+    const lead = getLinkedLead(conv);
 
     // Channel filter
     if (channelFilter !== 'ALL') {
@@ -450,10 +483,13 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
     }
 
     // Status / Mode filter
-    if (statusFilter === 'UNREAD' && !conv.unread && conv.isRead !== false && (conv.unreadCount || 0) === 0) return false;
-    if (statusFilter === 'AI_ACTIVE' && !conv.aiEnabled) return false;
+    if (statusFilter === 'OPEN' && conv.status !== 'ACTIVE' && conv.status !== 'REVIEW') return false;
+    if (statusFilter === 'UNREAD' && !isConversationUnread(conv)) return false;
+    if (statusFilter === 'UNASSIGNED' && !isConversationUnassigned(conv)) return false;
+    if (statusFilter === 'AI_ACTIVE' && (!conv.aiEnabled || conv.humanHandoff)) return false;
     if (statusFilter === 'HUMAN_HANDOFF' && !conv.humanHandoff) return false;
     if (statusFilter === 'HIGH_INTENT' && lead?.intent !== 'HIGH') return false;
+    if (statusFilter === 'RESOLVED' && conv.status !== 'RESOLVED') return false;
     if (statusFilter === 'INBOUND' && conv.direction !== 'INBOUND') return false;
     if (statusFilter === 'OUTBOUND' && conv.direction !== 'OUTBOUND') return false;
 
@@ -597,13 +633,85 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
   };
 
   return (
-    <div data-umrah360-module="inbox" className="inbox-workspace flex flex-col lg:flex-row h-full w-full bg-white text-slate-900 overflow-hidden relative">
+    <div data-umrah360-module="inbox" data-mobile-thread-open={mobileThreadOpen ? 'true' : 'false'} data-mobile-profile-open={mobileProfileOpen ? 'true' : 'false'} className="inbox-workspace h-full w-full min-w-0 min-h-0 bg-white text-slate-900 overflow-hidden relative">
+      <aside className="inbox-views-sidebar flex min-h-0 flex-col" aria-label="Inbox views and channels">
+        <div className="inbox-views-heading">
+          <div>
+            <div className="text-[15px] font-bold tracking-tight text-slate-900">Inbox</div>
+            <div className="mt-0.5 text-[11px] text-slate-500">Customer conversations</div>
+          </div>
+          <span className="inbox-view-total">{viewCounts.all}</span>
+        </div>
+        <div className="inbox-view-section">
+          <div className="inbox-view-section-label">Views</div>
+          {[
+            { id: 'ALL', label: 'All conversations', count: viewCounts.all, icon: <MessageSquare className="h-4 w-4" /> },
+            { id: 'OPEN', label: 'Open', count: viewCounts.open, icon: <Inbox className="h-4 w-4" /> },
+            { id: 'UNREAD', label: 'Unread', count: viewCounts.unread, icon: <Mail className="h-4 w-4" /> },
+            { id: 'UNASSIGNED', label: 'Unassigned', count: viewCounts.unassigned, icon: <User className="h-4 w-4" /> },
+            { id: 'HUMAN_HANDOFF', label: 'Human handoff', count: viewCounts.handoff, icon: <UserCheck className="h-4 w-4" /> },
+            { id: 'AI_ACTIVE', label: 'AI active', count: viewCounts.ai, icon: <Bot className="h-4 w-4" /> },
+            { id: 'HIGH_INTENT', label: 'High intent', count: viewCounts.highIntent, icon: <Sparkles className="h-4 w-4" /> },
+            { id: 'RESOLVED', label: 'Resolved', count: viewCounts.resolved, icon: <CheckCircle2 className="h-4 w-4" /> },
+          ].map((view) => (
+            <button key={view.id} type="button" onClick={() => setStatusFilter(view.id)} aria-pressed={statusFilter === view.id}
+              className={'inbox-view-item ' + (statusFilter === view.id ? 'is-active' : '')}>
+              <span className="inbox-view-icon">{view.icon}</span>
+              <span className="min-w-0 flex-1 truncate">{view.label}</span>
+              <span className="inbox-view-count">{view.count}</span>
+            </button>
+          ))}
+        </div>
+        <div className="inbox-view-section inbox-channel-section">
+          <div className="inbox-view-section-label flex items-center justify-between">
+            <span>Channels</span><span className="text-[10px] font-medium normal-case tracking-normal text-slate-400">Filter</span>
+          </div>
+          <button type="button" onClick={() => setChannelFilter('ALL')} aria-pressed={channelFilter === 'ALL'}
+            className={'inbox-channel-item ' + (channelFilter === 'ALL' ? 'is-active' : '')}>
+            <Globe className="h-4 w-4" /><span className="min-w-0 flex-1">All channels</span>
+          </button>
+          {([
+            ['EMAIL', 'Email'],
+            ['WHATSAPP', 'WhatsApp'],
+            ['WEBSITE', 'Website'],
+            ['INSTAGRAM', 'Instagram'],
+            ['FACEBOOK', 'Facebook'],
+            ['LINKEDIN', 'LinkedIn'],
+          ] as Array<[Channel, string]>).map(([channel, label]) => (
+            <button key={channel} type="button" onClick={() => setChannelFilter(channel)} aria-pressed={channelFilter === channel}
+              className={'inbox-channel-item ' + (channelFilter === channel ? 'is-active' : '')}>
+              <span className="inbox-channel-icon">{renderChannelIcon(channel, 4)}</span>
+              <span className="min-w-0 flex-1">{label}</span>
+              <span className="inbox-view-count">{channelCounts[channel]}</span>
+            </button>
+          ))}
+        </div>
+        <div className="inbox-views-spacer" />
+        <div className="inbox-connection-actions">
+          {connected.mailbox && (
+            <button type="button" onClick={() => setShowInboundFlowModal(true)} title={'Open inbound email flow for ' + connected.mailbox}>
+              <Mail className="h-4 w-4 text-violet-600" /><span className="min-w-0 flex-1 truncate">Email connection</span><span className="inbox-connection-dot" />
+            </button>
+          )}
+          {connected.whatsapp && (
+            <button type="button" onClick={() => setShowInboundWhatsAppModal(true)} title={'Open WhatsApp flow for ' + connected.whatsapp}>
+              <MessageCircle className="h-4 w-4 text-emerald-600" /><span className="min-w-0 flex-1 truncate">WhatsApp connection</span><span className="inbox-connection-dot" />
+            </button>
+          )}
+          {onSyncNow && (
+            <button type="button" onClick={onSyncNow}><RefreshCw className="h-4 w-4" /><span className="min-w-0 flex-1">Sync conversations</span></button>
+          )}
+        </div>
+      </aside>
+
+      {/* Conversation list and its own search/filter toolbar. */}
+
       {/* 1. LEFT COLUMN: Conversation List & Filters (Width: 340px) */}
-      <div className="w-full lg:w-84 border-r border-slate-200/90 flex flex-col bg-slate-50/60 h-full min-h-0 shrink-0">
+      <div className="inbox-conversation-list min-w-0 flex flex-col h-full min-h-0 border-r border-slate-200/90 bg-white">
         {/* Search Header */}
-        <div className="p-3 border-b border-slate-200 space-y-2 shrink-0">
+        <div className="inbox-list-toolbar p-3 border-b border-slate-200 space-y-2 shrink-0">
           {/* Live Inbound Mailbox & WhatsApp Triggers */}
-          <div className="space-y-1.5">
+          <div className="inbox-connected-channels space-y-1.5">
             <div className="flex items-center space-x-1.5">
               {connected.mailbox && (
                 <button
@@ -665,7 +773,7 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
           </div>
 
           {/* Channel Pills */}
-          <div className="flex space-x-1 overflow-x-auto pb-1 scrollbar-none text-xs">
+          <div className="inbox-legacy-channel-pills flex space-x-1 overflow-x-auto pb-1 scrollbar-none text-xs">
             {['ALL', 'EMAIL', 'WHATSAPP', 'WEBSITE', 'INSTAGRAM', 'LINKEDIN'].map((ch) => (
               <button
                 key={ch}
@@ -682,7 +790,7 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
           </div>
 
           {/* Status Filters */}
-          <div className="flex items-center space-x-1 text-[11px] overflow-x-auto pb-1">
+          <div className="inbox-legacy-status-pills flex items-center space-x-1 text-[11px] overflow-x-auto pb-1">
             <button
               onClick={() => setStatusFilter('ALL')}
               className={`px-2 py-0.5 rounded-md transition whitespace-nowrap font-semibold ${
@@ -749,12 +857,13 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
                   key={conv.conversationId}
                   onClick={() => {
                     setSelectedConversationId(conv.conversationId);
+                    setMobileThreadOpen(true);
                     setIsUnifiedAllPlatforms(false);
                     if (isUnread) {
                       onMarkAsRead?.(conv.conversationId);
                     }
                   }}
-                  className={`p-3 cursor-pointer transition relative ${
+                  className={`inbox-conversation-row p-3 cursor-pointer transition relative ${
                     isSelected
                       ? 'bg-orange-50/90 border-l-4 border-orange-500 shadow-2xs'
                       : isUnread
@@ -762,31 +871,28 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
                       : 'hover:bg-slate-50'
                   }`}
                 >
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-center space-x-2">
-                      {renderChannelIcon(conv.channel, 4)}
-                      <span className={`text-xs ${isUnread ? 'font-bold text-slate-900' : 'font-semibold text-slate-800'}`}>
-                        {contact?.firstName} {contact?.lastName}
-                      </span>
-                      {isUnread && (
-                        <span className="w-2 h-2 rounded-full bg-orange-500 animate-pulse" title="Unread Message" />
-                      )}
+                  <div className="flex items-start gap-2.5">
+                    <div className="inbox-conversation-avatar">
+                      {((contact?.firstName?.[0] || contact?.companyName?.[0] || '?') + (contact?.lastName?.[0] || '')).toUpperCase()}
                     </div>
-                    <span className="text-[10px] text-slate-500">
-                      {new Date(conv.lastMessageAt || conv.createdAt || 0).toLocaleDateString([], {
-                        month: 'short',
-                        day: 'numeric',
-                      })}
-                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className={`min-w-0 truncate text-[13px] ${isUnread ? 'font-bold text-slate-900' : 'font-semibold text-slate-800'}`}>
+                          {contact?.firstName} {contact?.lastName}
+                        </span>
+                        <span className="shrink-0 text-[10px] text-slate-400">
+                          {new Date(conv.lastMessageAt || conv.createdAt || 0).toLocaleDateString([], {
+                            month: 'short',
+                            day: 'numeric',
+                          })}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-500 font-medium mt-0.5 truncate">{contact?.companyName}</p>
+                      <p className={`mt-1 text-xs line-clamp-2 leading-relaxed ${isUnread ? 'text-slate-900 font-semibold' : 'text-slate-600'}`}>
+                        {conv.lastMessageText || 'New conversation started'}
+                      </p>
+                    </div>
                   </div>
-
-                  <p className="text-[11px] text-slate-500 font-medium mt-0.5 truncate">
-                    {contact?.companyName}
-                  </p>
-
-                  <p className={`text-xs mt-1 line-clamp-2 leading-relaxed ${isUnread ? 'text-slate-900 font-bold' : 'text-slate-700 font-normal'}`}>
-                    {conv.lastMessageText || 'New conversation started'}
-                  </p>
 
                   <div className="flex items-center justify-between mt-2 pt-1 border-t border-slate-200/80 text-[10px]">
                     <div className="flex items-center space-x-1.5 flex-wrap gap-y-1">
@@ -860,21 +966,27 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
       </div>
 
       {/* Thread + sliding Lead Profile panel share one row, so the panel always stays on the right */}
-      <div className="flex-1 flex flex-row min-w-0 min-h-0 h-full relative">
+      <div className="inbox-thread-workspace flex min-w-0 min-h-0 h-full relative">
       {/* 2. MIDDLE COLUMN: Conversation & Message Thread UI */}
-      <div className="flex-1 flex flex-col bg-white overflow-hidden min-w-0 min-h-0 h-full">
+      <div className="inbox-thread-pane flex-1 flex flex-col bg-white overflow-hidden min-w-0 min-h-0 h-full">
         {/* Active Conversation Header */}
         {activeConversation && activeContact ? (
           <>
-            <div className="p-3.5 border-b border-slate-200/80 bg-white flex items-center justify-between shrink-0">
-              <div className="flex items-center space-x-3">
-                <div className="w-9 h-9 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center font-bold text-slate-800 text-sm shadow-2xs">
+            <div className="inbox-thread-header p-3.5 border-b border-slate-200/80 bg-white flex items-center justify-between shrink-0">
+              <div className="flex min-w-0 items-center space-x-3">
+                <button type="button" className="inbox-mobile-back" onClick={() => setMobileThreadOpen(false)} aria-label="Back to conversations">
+                  <ChevronLeft className="h-4 w-4" />
+                </button>
+                <button type="button" className="inbox-mobile-details" onClick={() => setMobileProfileOpen(true)} aria-label="Open lead details">
+                  <User className="h-4 w-4" />
+                </button>
+                <div className="inbox-active-avatar w-9 h-9 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center font-bold text-slate-800 text-sm shadow-2xs">
                   {activeContact.firstName?.[0]}
                   {activeContact.lastName?.[0]}
                 </div>
                 <div>
                   <div className="flex items-center space-x-2">
-                    <h3 className="font-bold text-sm text-slate-900">
+                    <h3 className="inbox-active-contact-name font-bold text-sm text-slate-900">
                       {activeContact.firstName} {activeContact.lastName}
                     </h3>
                     <div className="flex items-center space-x-1 text-xs text-slate-500 font-medium">
@@ -897,11 +1009,11 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
               </div>
 
               {/* AI vs Human Takeover Toggle & SMTP Settings */}
-              <div className="flex items-center space-x-2">
+              <div className="inbox-thread-actions flex items-center space-x-2">
                 {(activeConversation.channel === 'EMAIL' || activeConversation.channel === 'WEBSITE') && (
                   <button
                     onClick={() => setShowSmtpModal(true)}
-                    className={`flex items-center space-x-1 px-2.5 py-1 rounded-lg text-xs font-bold border transition ${
+                    className={`inbox-smtp-action flex items-center space-x-1 px-2.5 py-1 rounded-lg text-xs font-bold border transition ${
                       smtpStatus?.configured
                         ? 'bg-emerald-50 border-emerald-200 text-emerald-800 hover:bg-emerald-100'
                         : 'bg-amber-50 border-amber-200 text-amber-800 hover:bg-amber-100 animate-pulse'
@@ -918,7 +1030,7 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
                   <button
                     onClick={() => handleToggleAutoFollowUp(!isAutoFollowUpUiActive)}
                     disabled={isTogglingAutoFollowUp || (activeLeadHasBookedDemo && !isAutoFollowUpUiActive)}
-                    className={`flex items-center space-x-1.5 px-2.5 py-1 rounded-lg text-xs font-bold border transition ${
+                    className={`inbox-followup-toggle flex items-center space-x-1.5 px-2.5 py-1 rounded-lg text-xs font-bold border transition ${
                       isAutoFollowUpUiActive
                         ? 'bg-emerald-50 border-emerald-300 text-emerald-800 hover:bg-emerald-100'
                         : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
@@ -927,7 +1039,7 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
                   >
                     <Clock className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
                     <span>
-                      Recurring AI Auto Follow-Up [{isAutoFollowUpUiActive ? ' ON ' : ' OFF '}]
+                      Auto Follow-Up {isAutoFollowUpUiActive ? 'ON' : 'OFF'}
                       {!activeLead?.autoFollowUp?.enabled && activeLead?.autoFollowUp?.disabledReason === 'completed' && (
                         <span className="ml-1 font-semibold text-slate-500">
                           · Completed {activeLead.autoFollowUp.attemptCount || activeLead.autoFollowUp.maxAttempts}/
@@ -938,26 +1050,18 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
                   </button>
                 )}
 
-                {activeConversation.humanHandoff ? (
+                {activeConversation.humanHandoff && (
                   <button
                     onClick={() => onToggleAi(activeConversation.conversationId, true)}
-                    className="flex items-center space-x-1.5 px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition shadow-2xs"
+                    className="inbox-takeover-action inbox-resume-ai flex items-center space-x-1.5 px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition shadow-2xs"
                   >
                     <Bot className="w-3.5 h-3.5" />
                     <span>Resume AI</span>
                   </button>
-                ) : (
-                  <button
-                    onClick={() => onToggleAi(activeConversation.conversationId, false)}
-                    className="flex items-center space-x-1.5 px-3 py-1 rounded-lg bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold transition shadow-2xs"
-                  >
-                    <User className="w-3.5 h-3.5" />
-                    <span>Take Over (Human)</span>
-                  </button>
                 )}
 
                 <div
-                  className={`px-2.5 py-1 rounded-lg text-xs font-extrabold flex items-center space-x-1 border ${
+                  className={`inbox-ai-status px-2.5 py-1 rounded-lg text-xs font-extrabold flex items-center space-x-1 border ${
                     activeConversation.aiEnabled && !activeConversation.humanHandoff
                       ? 'bg-blue-50 border-blue-200 text-blue-800'
                       : 'bg-amber-50 border-amber-200 text-amber-900'
@@ -983,8 +1087,21 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
               </div>
             </div>
 
+            {!activeConversation.humanHandoff && activeConversation.aiEnabled && normalizeChannelMode(channelModes[activeConversation.channel]) !== 'OFF' && (
+              <div className="inbox-ai-active-banner" role="status">
+                <span className="inbox-ai-banner-icon"><Bot className="h-4 w-4" /></span>
+                <div className="min-w-0 flex-1">
+                  <div className="text-[12px] font-semibold text-violet-950">{normalizeChannelMode(channelModes[activeConversation.channel]) === 'REVIEW' ? 'AI drafts are ready for your review' : 'AI is handling this conversation'}</div>
+                  <div className="text-[11px] text-violet-700">{normalizeChannelMode(channelModes[activeConversation.channel]) === 'REVIEW' ? 'Every generated reply waits for human approval before sending.' : 'Responses are grounded in your configured Knowledge Base.'}</div>
+                </div>
+                <button type="button" onClick={() => onToggleAi(activeConversation.conversationId, false)} className="inbox-ai-takeover-button">
+                  <UserCheck className="h-3.5 w-3.5" /> Take over
+                </button>
+              </div>
+            )}
+
             {activeConversation.humanHandoff && (
-              <div className="px-4 py-3 bg-amber-50 border-b border-amber-200 text-xs" role="status" aria-live="polite">
+              <div className="inbox-handoff-banner px-4 py-3 bg-amber-50 border-b border-amber-200 text-xs" role="status" aria-live="polite">
                 <div className="flex items-start gap-2">
                   <AlertTriangle className="w-4 h-4 text-amber-700 mt-0.5 shrink-0" />
                   <div className="min-w-0">
@@ -998,7 +1115,7 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
 
             {/* Compact Auto Follow-Up Status Bar */}
             {activeLead && (
-              <div className="px-3.5 py-1.5 bg-orange-50/80 border-b border-orange-100 text-xs flex items-center justify-between">
+              <div className="inbox-followup-status px-3.5 py-1.5 bg-orange-50/80 border-b border-orange-100 text-xs flex items-center justify-between>
                 <div className="flex items-center space-x-2">
                   <span className="flex items-center space-x-1.5">
                     <span className={`w-2 h-2 rounded-full ${isAutoFollowUpUiActive ? 'bg-orange-500 animate-pulse' : 'bg-slate-400'}`} />
@@ -1037,7 +1154,7 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
             )}
 
             {activeLead?.aiAutoFollowUp && (
-              <div className="px-3.5 py-1.5 bg-emerald-50/80 border-b border-emerald-100 text-xs flex items-center justify-between">
+              <div className="inbox-one-time-followup-status px-3.5 py-1.5 bg-emerald-50/80 border-b border-emerald-100 text-xs flex items-center justify-between>
                 <span className="font-semibold text-slate-800">CRM-Scheduled One-Time Message:</span>
                 {activeLead.aiAutoFollowUp.status === 'scheduled' ? (
                   <span className="text-emerald-700 font-medium">
@@ -1059,7 +1176,7 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
 
             {/* Email Metadata banner if email channel */}
             {!isUnifiedAllPlatforms && activeConversation.channel === 'EMAIL' && (
-              <div className="px-4 py-2 bg-slate-50 border-b border-slate-200 text-xs text-slate-700 flex items-center justify-between">
+              <div className="inbox-email-subject px-4 py-2 bg-slate-50 border-b border-slate-200 text-xs text-slate-700 flex items-center justify-between>
                 <div className="flex items-center space-x-2 truncate">
                   <span className="font-semibold text-slate-500">Subject:</span>
                   <span className="font-medium text-slate-900 truncate">
@@ -1096,7 +1213,7 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
             )}
 
             {/* Message Thread Scroll Area */}
-            <div ref={threadScrollRef} onScroll={onThreadScroll} className="flex-1 overflow-y-auto min-h-0 p-4 space-y-4">
+            <div ref={threadScrollRef} onScroll={onThreadScroll} className="inbox-message-scroll flex-1 overflow-y-auto min-h-0 p-4 space-y-4">
               {displayMessages.length === 0 ? (
                 <div className="text-center py-12 text-slate-500 text-xs">
                   No messages on this platform yet. Use &ldquo;Simulate Inbound Platform Msg&rdquo; or dispatch cold outreach.
@@ -1109,10 +1226,10 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
                   return (
                     <div
                       key={msg.messageId}
-                      className={`flex flex-col ${isIncoming ? 'items-start' : 'items-end'}`}
+                      className={`inbox-message-row flex flex-col ${isIncoming ? 'items-start' : 'items-end'}`}
                     >
                       {/* Sender label & Platform Badge */}
-                      <div className="flex items-center space-x-2 text-[11px] text-slate-400 mb-1 px-1">
+                      <div className="inbox-message-meta flex items-center space-x-2 text-[11px] text-slate-400 mb-1 px-1">
                         {/* Channel Badge */}
                         <span
                           className={`px-1.5 py-0.2 rounded text-[10px] font-semibold border flex items-center space-x-1 ${getChannelColor(
@@ -1143,7 +1260,7 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
 
                       {/* Bubble */}
                       <div
-                        className={`max-w-xl p-3.5 rounded-2xl text-xs leading-relaxed ${
+                        className={`inbox-message-bubble max-w-xl p-3.5 rounded-2xl text-xs leading-relaxed ${
                           isIncoming
                             ? 'bg-slate-100 text-slate-900 rounded-tl-none border border-slate-200/80 shadow-2xs'
                             : isAi
@@ -1218,19 +1335,6 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
               )}
             </div>
 
-            {/* Quick Actions & AI Draft generation bar */}
-            <div className="p-2.5 bg-slate-50 border-t border-slate-200/80 flex items-center justify-end text-xs shrink-0">
-              <button
-                onClick={handleAiAutoGenerate}
-                disabled={isGeneratingAi || normalizeChannelMode(channelModes[activeConversation.channel]) === 'OFF'}
-                title={normalizeChannelMode(channelModes[activeConversation.channel]) === 'OFF' ? 'AI drafting is disabled for this channel.' : 'Generate an AI draft from the conversation.'}
-                className="flex items-center space-x-1.5 px-3.5 py-1.5 rounded-lg bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 text-white font-semibold text-xs transition disabled:opacity-50 shadow-xs whitespace-nowrap"
-              >
-                <Sparkles className="w-3.5 h-3.5" />
-                <span>{isGeneratingAi ? 'Consulting KB...' : 'AI Auto-Draft'}</span>
-              </button>
-            </div>
-
             {/* AI Draft Reply Awaiting Verification Card (REVIEW Mode) */}
             {activeConversation.draftReply &&
               activeConversation.draftReply.status === 'PENDING' && (
@@ -1291,7 +1395,19 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
             )}
 
             {/* Message Reply Box */}
-            <div className="p-3 bg-white border-t border-slate-200/80 shrink-0">
+            <div className="inbox-composer p-3 bg-white border-t border-slate-200/80 shrink-0">
+              <div className="inbox-composer-toolbar">
+                <div className="flex items-center gap-1">
+                  <span className="inbox-composer-tab is-active">Reply</span>
+                  <button type="button" onClick={handleAiAutoGenerate}
+                    disabled={isGeneratingAi || normalizeChannelMode(channelModes[activeConversation.channel]) === 'OFF'}
+                    title={normalizeChannelMode(channelModes[activeConversation.channel]) === 'OFF' ? 'AI drafting is disabled for this channel.' : 'Generate a grounded reply draft.'}
+                    className="inbox-composer-tab inbox-composer-ai-tab">
+                    <Sparkles className="h-3.5 w-3.5" />{isGeneratingAi ? 'Drafting…' : 'AI Draft'}
+                  </button>
+                </div>
+                <span className="text-[10px] text-slate-400">Replies are sent via the selected channel</span>
+              </div>
               {/* Channel Selector for Unified Mode */}
               {isUnifiedAllPlatforms && (
                 <div className="flex items-center space-x-2 mb-2 text-xs">
@@ -1319,7 +1435,7 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
                 </div>
               )}
 
-              <div className="flex items-end space-x-2">
+              <div className="inbox-composer-input-row flex items-end space-x-2">
                 <textarea
                   ref={replyBoxRef}
                   rows={2}
@@ -1332,12 +1448,12 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
                       handleSendReply();
                     }
                   }}
-                  className="flex-1 bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-orange-500 resize-none transition font-medium"
+                  className="inbox-reply-textarea flex-1 bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-orange-500 resize-none transition font-medium"
                 />
                 <button
                   onClick={handleSendReply}
                   disabled={!replyText.trim()}
-                  className="h-14 px-4 rounded-xl bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 text-white text-xs font-bold flex items-center justify-center transition disabled:opacity-40 shadow-xs"
+                  className="inbox-send-button h-14 px-4 rounded-xl bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 text-white text-xs font-bold flex items-center justify-center transition disabled:opacity-40 shadow-xs"
                 >
                   <Send className="w-4 h-4 mr-1.5" />
                   <span>Send</span>
@@ -1381,7 +1497,8 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
           aria-controls="lead-profile-panel"
           aria-label={isProfileOpen ? 'Hide lead profile' : 'Show lead profile'}
           title={isProfileOpen ? 'Hide lead profile' : 'Show lead profile'}
-          className={`absolute top-4 z-20 w-6 h-12 flex items-center justify-center bg-white text-orange-600 border border-r-0 border-slate-200 rounded-l-xl shadow-[-2px_0_6px_rgba(15,23,42,0.06)] hover:bg-orange-50 transition-[right] duration-300 ease-in-out ${
+          style={{ right: isProfileOpen ? 304 : 0, top: "50%" }}
+          className={`inbox-profile-toggle absolute top-4 z-20 w-6 h-12 flex items-center justify-center bg-white text-orange-600 border border-r-0 border-slate-200 rounded-l-xl shadow-[-2px_0_6px_rgba(15,23,42,0.06)] hover:bg-orange-50 transition-[right] duration-300 ease-in-out ${
             isProfileOpen ? 'right-80' : 'right-0'
           }`}
         >
@@ -1390,12 +1507,19 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
 
         {/* Sliding wrapper: animates width; inner panel keeps a fixed 320px so content never squashes */}
         <div
-          className={`shrink-0 h-full overflow-hidden transition-[width,opacity] duration-300 ease-in-out ${
+          className={`inbox-profile-panel-shell shrink-0 h-full overflow-hidden transition-[width,opacity] duration-300 ease-in-out ${
             isProfileOpen ? 'w-80 opacity-100' : 'w-0 opacity-0'
           }`}
           aria-hidden={!isProfileOpen}
         >
-        <div id="lead-profile-panel" className="w-80 border-l border-slate-200/90 bg-slate-50/50 p-4 overflow-y-auto min-h-0 h-full space-y-4">
+        <div id="lead-profile-panel" className="inbox-profile-panel w-80 border-l border-slate-200/90 bg-slate-50/50 p-4 overflow-y-auto min-h-0 h-full space-y-4">
+          <div className="inbox-profile-tabs" role="tablist" aria-label="Lead profile sections">
+            <button type="button" role="tab" aria-selected={profileTab === 'DETAILS'} onClick={() => setProfileTab('DETAILS')} className={profileTab === 'DETAILS' ? 'is-active' : ''}>Details</button>
+            <button type="button" role="tab" aria-selected={profileTab === 'AI_CONTEXT'} onClick={() => setProfileTab('AI_CONTEXT')} className={profileTab === 'AI_CONTEXT' ? 'is-active' : ''}>AI Context</button>
+            <button type="button" className="inbox-mobile-profile-close" onClick={() => setMobileProfileOpen(false)} aria-label="Close lead details"><X className="h-4 w-4" /></button>
+          </div>
+          {profileTab === 'DETAILS' && (
+            <>
           {/* Customer Card Header */}
           <div className="border-b border-slate-200 pb-3">
             <div className="flex items-center justify-between">
@@ -1418,6 +1542,11 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
             <div className="flex items-center space-x-1.5 text-xs text-slate-600 mt-0.5">
               <Building className="w-3.5 h-3.5 text-slate-400" />
               <span>{activeContact.companyName}</span>
+            </div>
+            <div className="inbox-contact-facts">
+              {activeContact.email && <div><Mail className="h-3.5 w-3.5" /><span className="truncate">{activeContact.email}</span></div>}
+              {activeContact.phone && <div><MessageCircle className="h-3.5 w-3.5" /><span>{activeContact.phone}</span></div>}
+              {activeContact.city && <div><Globe className="h-3.5 w-3.5" /><span>{activeContact.city}{activeContact.country ? ', ' + activeContact.country : ''}</span></div>}
             </div>
           </div>
 
@@ -1445,6 +1574,7 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
                     onClick={() => {
                       setIsUnifiedAllPlatforms(false);
                       setSelectedConversationId(conv.conversationId);
+                      setMobileThreadOpen(true);
                     }}
                     className={`p-2 rounded-xl border text-xs cursor-pointer transition flex items-center justify-between ${
                       isSelected
@@ -1518,6 +1648,22 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
               </div>
             </div>
           )}
+          {profileTab === 'DETAILS' && activeLead && (
+            <div className="inbox-profile-quick-actions">
+              <button type="button" onClick={() => onViewLeadInCrm(activeLead.leadId)}>
+                <ExternalLink className="h-3.5 w-3.5" /> Open in CRM
+              </button>
+              <button type="button" onClick={() => handleToggleAutoFollowUp(!isAutoFollowUpUiActive)} disabled={isTogglingAutoFollowUp || (activeLeadHasBookedDemo && !isAutoFollowUpUiActive)}>
+                <Clock className="h-3.5 w-3.5" /> {isAutoFollowUpUiActive ? 'Pause follow-up' : 'Enable follow-up'}
+              </button>
+            </div>
+          )}
+
+            </>
+          )}
+
+          {profileTab === 'AI_CONTEXT' && (
+            <>
 
           {/* Section 23 Conversation Memory (Customer Facts & Extracted Requirements) */}
           <div className="space-y-3">
@@ -1534,7 +1680,7 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
                   ? activeLead.requirements
                   : typeof activeLead?.requirements === 'string'
                   ? (activeLead.requirements as string).split('|').map((s) => s.trim())
-                  : ['Umrah Packages', 'Costing Engine']
+                  : []
                 ).map((req, i) => (
                   <span
                     key={i}
@@ -1574,6 +1720,8 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
               </div>
             )}
           </div>
+            </>
+          )}
         </div>
         </div>
         </>

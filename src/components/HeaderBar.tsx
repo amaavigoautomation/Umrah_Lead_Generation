@@ -71,7 +71,7 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
           onClick={onToggleCollapse}
           title={isCollapsed ? 'Expand navigation' : 'Collapse navigation'}
           aria-label={isCollapsed ? 'Expand navigation' : 'Collapse navigation'}
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 text-slate-500 transition hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900"
+          className={`${activeTab === "inbox" ? "hidden" : "flex"} h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 text-slate-500 transition hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900`}
         >
           {isCollapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
         </button>

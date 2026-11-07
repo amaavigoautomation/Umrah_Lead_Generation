@@ -115,6 +115,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   const [internalCollapsed, setInternalCollapsed] = useState(false);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const isCollapsed = controlledIsCollapsed !== undefined ? controlledIsCollapsed : internalCollapsed;
+  const compactInboxRail = activeTab === 'inbox';
 
   const toggleCollapse = () => {
     if (onToggleCollapse) onToggleCollapse();
@@ -331,9 +332,9 @@ export const Navbar: React.FC<NavbarProps> = ({
       </div>
 
       <aside
-        className={'hidden h-dvh shrink-0 border-r border-slate-200 bg-white transition-[width] duration-200 md:flex md:flex-col ' + (isCollapsed ? 'w-[76px]' : 'w-[264px]')}
+        className={'hidden h-dvh shrink-0 border-r border-slate-200 bg-white transition-[width] duration-200 md:flex md:flex-col ' + (compactInboxRail ? 'w-[68px]' : isCollapsed ? 'w-[76px]' : 'w-[264px]')}
       >
-        {renderSidebar(isCollapsed)}
+        {renderSidebar(compactInboxRail || isCollapsed)}
       </aside>
 
       {isMobileOpen && (

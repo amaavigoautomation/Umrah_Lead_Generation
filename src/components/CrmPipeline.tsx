@@ -864,7 +864,7 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
   const drawerActivities = drawerLead ? activities.filter((a) => a.leadId === drawerLead.leadId) : [];
 
   return (
-    <div className="w-full min-h-screen bg-slate-50 text-slate-800 font-sans pb-16">
+    <div data-umrah360-module="crm" className="w-full min-h-screen bg-slate-50 text-slate-800 font-sans pb-16">
       {/* Sticky Header & Filter Container */}
       <div className="sticky -top-4 sm:-top-5 z-30 bg-slate-50/95 backdrop-blur-xs pt-3 pb-2 border-b border-slate-200/60 shadow-xs -mx-3 sm:-mx-5 px-3 sm:px-5">
         {/* 1. TeleCRM Top Header Bar */}

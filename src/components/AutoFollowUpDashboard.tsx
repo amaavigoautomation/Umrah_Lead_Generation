@@ -230,7 +230,7 @@ export const AutoFollowUpDashboard: React.FC<AutoFollowUpDashboardProps> = ({
   };
 
   return (
-    <div className="flex-1 p-6 bg-slate-50 min-h-screen text-slate-900 font-sans">
+    <div data-umrah360-module="auto-followup" className="flex-1 p-6 bg-slate-50 min-h-screen text-slate-900 font-sans">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
         <div>

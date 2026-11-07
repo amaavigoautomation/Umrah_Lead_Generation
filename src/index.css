@@ -165,3 +165,111 @@ select:focus-visible {
   background: rgba(239, 116, 26, 0.18);
   color: #9a3412;
 }
+
+
+/* Umrah360 workspace redesign — shared visual system, scoped to authenticated UI. */
+:root {
+  --u360-canvas:#f4f6fa; --u360-surface:#fff; --u360-soft:#f8fafc;
+  --u360-line:#e6eaf1; --u360-line-strong:#d6dce7; --u360-ink:#182437;
+  --u360-muted:#738096; --u360-accent:#e96b2c; --u360-accent-soft:#fff3ec;
+  --u360-sidebar:#111b2b; --u360-sidebar-soft:#1a2739; --u360-sidebar-line:#29384d;
+  --u360-shadow:0 10px 30px rgba(20,32,51,.055);
+}
+.umrah360-app-shell{background:var(--u360-canvas);color:var(--u360-ink)}
+.umrah360-app-shell>aside{background:var(--u360-sidebar)!important;border-color:var(--u360-sidebar-line)!important;box-shadow:5px 0 24px rgba(10,20,36,.045);z-index:30}
+.umrah360-app-shell>aside>div{background:var(--u360-sidebar)!important;color:#d9e2ef!important}
+.umrah360-app-shell>aside [class*="border-slate"]{border-color:var(--u360-sidebar-line)!important}
+.umrah360-app-shell>aside [class*="bg-slate-50"],.umrah360-app-shell>aside [class*="bg-white"]{background:var(--u360-sidebar-soft)!important}
+.umrah360-app-shell>aside [class*="text-slate-900"],.umrah360-app-shell>aside [class*="text-slate-800"],.umrah360-app-shell>aside [class*="text-slate-700"]{color:#edf2f9!important}
+.umrah360-app-shell>aside [class*="text-slate-600"],.umrah360-app-shell>aside [class*="text-slate-500"],.umrah360-app-shell>aside [class*="text-slate-400"]{color:#9eacc0!important}
+.umrah360-app-shell>aside nav h2{color:#8190a7!important;letter-spacing:.17em}
+.umrah360-app-shell>aside nav button{min-height:42px;border-radius:10px;letter-spacing:-.01em}
+.umrah360-app-shell>aside nav button[aria-current="page"]{color:#fff7f2!important;background:linear-gradient(100deg,rgba(233,107,44,.22),rgba(233,107,44,.08))!important;box-shadow:inset 0 0 0 1px rgba(248,146,91,.2)}
+.umrah360-app-shell>aside nav button[aria-current="page"] span{color:#ffb28a!important}
+.umrah360-app-shell>aside nav button:not([aria-current="page"]):hover{background:#202e43!important;color:#fff!important}
+.umrah360-app-shell>aside nav button:not([aria-current="page"]):hover span{color:#dce5f1!important}
+.umrah360-app-shell>aside>div>div:first-child{border-color:var(--u360-sidebar-line)!important}
+.umrah360-app-shell>aside select{color:#f1f5fb!important}
+.umrah360-app-shell>aside option{color:#182437}
+.umrah360-app-shell>aside [class*="bg-slate-900"]{background:#e96b2c!important}
+.umrah360-app-shell>aside>div>div:last-child{border-color:var(--u360-sidebar-line)!important}
+.umrah360-app-shell>div:first-of-type{background:#fff;border-color:var(--u360-line)!important}
+.umrah360-app-shell>div>header{height:72px;background:rgba(255,255,255,.96)!important;border-color:var(--u360-line)!important;box-shadow:0 3px 16px rgba(20,32,51,.025);backdrop-filter:blur(12px);z-index:20}
+.umrah360-app-shell>div>header>div:first-child>div>div:nth-child(2){font-size:18px;font-weight:750;letter-spacing:-.035em;color:var(--u360-ink)}
+.umrah360-app-shell>div>header>div:first-child>div>div:first-child{color:var(--u360-accent);font-size:9px;letter-spacing:.2em}
+.umrah360-main{background:var(--u360-canvas);overscroll-behavior:contain;scrollbar-gutter:stable}
+.umrah360-main:has([data-umrah360-module="inbox"]){padding:0!important;overflow:hidden!important;background:#fff!important}
+.umrah360-main:has(.agent-shell){background:var(--u360-canvas)}
+.umrah360-main [class*="bg-white"][class*="border"]{border-color:var(--u360-line)!important}
+.umrah360-main input:not([type="checkbox"]):not([type="radio"]),.umrah360-main textarea,.umrah360-main select{border-color:var(--u360-line-strong);border-radius:10px;background-color:#fff;color:var(--u360-ink);transition:border-color .16s ease,box-shadow .16s ease}
+.umrah360-main input:focus,.umrah360-main textarea:focus,.umrah360-main select:focus{border-color:rgba(233,107,44,.72);box-shadow:0 0 0 3px rgba(233,107,44,.11);outline:none}
+.umrah360-main table{border-collapse:separate;border-spacing:0}
+.umrah360-main thead th{color:#647187;font-size:10px;font-weight:750;letter-spacing:.09em;background:#f7f9fc}
+.umrah360-main tbody tr{transition:background-color .14s ease}
+.umrah360-main tbody tr:hover{background:#f8fafc}
+.umrah360-main button{transition:color .16s ease,background-color .16s ease,border-color .16s ease,box-shadow .16s ease,transform .16s ease}
+.umrah360-main button:focus-visible{outline:2px solid rgba(233,107,44,.65);outline-offset:2px}
+.umrah360-main [class*="shadow-2xs"],.umrah360-main [class*="shadow-xs"],.umrah360-main [class*="shadow-sm"]{box-shadow:var(--u360-shadow)!important}
+
+/* Inbox: familiar queue on the left, focused thread center, context to the right. */
+.inbox-workspace{display:grid!important;grid-template-columns:minmax(300px,340px) minmax(0,1fr);min-height:0;height:100%;background:#fff;color:var(--u360-ink)}
+.inbox-workspace>div:first-child{width:auto!important;min-width:0;background:#f9fafc!important;border-right:1px solid var(--u360-line)!important}
+.inbox-workspace>div:first-child>div:first-child{padding:15px 14px 12px!important;background:#fff!important;border-color:var(--u360-line)!important}
+.inbox-workspace>div:first-child input{min-height:40px;border-radius:11px!important;background:#f7f9fc!important}
+.inbox-workspace>div:first-child>div:nth-child(2)>div{padding:13px 14px!important;border-bottom:1px solid #edf0f5;border-top:0;box-shadow:none!important}
+.inbox-workspace>div:first-child>div:nth-child(2)>div:hover{background:#f1f5fa!important}
+.inbox-workspace>div:first-child>div:nth-child(2)>div[class*="border-l-4"]{border-left:3px solid var(--u360-accent)!important;background:#fff3ec!important}
+.inbox-workspace>div:nth-child(2){min-width:0;min-height:0;background:#fff}
+.inbox-workspace>div:nth-child(2)>div:first-child{min-width:0;background:#fff}
+.inbox-workspace>div:nth-child(2)>div:first-child>div:first-child{min-height:72px;padding:14px 20px!important;border-color:var(--u360-line)!important;background:#fff!important}
+.inbox-workspace .max-w-xl{max-width:min(680px,88%);border-radius:16px!important;padding:13px 16px!important;line-height:1.65;box-shadow:0 4px 14px rgba(20,32,51,.045)!important}
+.inbox-workspace [class*="bg-slate-100"][class*="rounded-tl-none"]{background:#f2f5f9!important;border-color:#e8edf3!important}
+.inbox-workspace [class*="bg-orange-50"][class*="rounded-tr-none"]{background:#fff4ed!important;border-color:#ffe0cf!important;color:#512a17!important}
+.inbox-workspace [class*="bg-gradient-to-r"][class*="rounded-tr-none"]{background:#e96b2c!important}
+.inbox-workspace textarea{border-radius:13px!important}
+.inbox-workspace [class*="border-slate-200"]{border-color:var(--u360-line)!important}
+
+/* Lead Database: larger hierarchy, calmer list cards, readable data table. */
+[data-umrah360-module="database"]{max-width:1440px!important;padding:3px 2px 24px}
+[data-umrah360-module="database"]>div:first-child{padding:2px 0 18px;border-bottom:1px solid var(--u360-line)}
+[data-umrah360-module="database"]>div:first-child h2{font-size:25px;letter-spacing:-.04em}
+[data-umrah360-module="database"]>div:first-child svg{color:var(--u360-accent)}
+[data-umrah360-module="database"]>div:nth-child(2){border-bottom-color:var(--u360-line)}
+[data-umrah360-module="database"]>div:nth-child(2) button{padding:12px 16px}
+[data-umrah360-module="database"]>div:nth-child(2) button[class*="border-orange-500"]{color:var(--u360-accent)!important;border-bottom-color:var(--u360-accent)!important}
+[data-umrah360-module="database"] .grid-cols-2>div{border:1px solid var(--u360-line)!important;border-radius:14px!important;padding:18px 20px!important;background:#fff;box-shadow:var(--u360-shadow)}
+[data-umrah360-module="database"] .grid-cols-2>div p:last-child{font-size:27px;letter-spacing:-.04em}
+[data-umrah360-module="database"] .md\:grid-cols-2>div,[data-umrah360-module="database"] .xl\:grid-cols-3>div{border-radius:15px!important;border-color:var(--u360-line)!important;padding:18px!important;box-shadow:var(--u360-shadow)!important;transition:transform .16s ease,box-shadow .16s ease,border-color .16s ease}
+[data-umrah360-module="database"] .md\:grid-cols-2>div:hover,[data-umrah360-module="database"] .xl\:grid-cols-3>div:hover{transform:translateY(-2px);border-color:#d6dce7!important;box-shadow:0 16px 34px rgba(20,32,51,.09)!important}
+
+/* Remaining modules share a consistent card language without changing workflows. */
+.umrah360-main [class*="rounded-2xl"][class*="bg-white"],
+.umrah360-main [class*="rounded-xl"][class*="bg-white"][class*="border"]{border-color:var(--u360-line)!important;box-shadow:var(--u360-shadow)}
+.umrah360-main h1,.umrah360-main h2,.umrah360-main h3,.umrah360-main h4{letter-spacing:-.025em}
+.umrah360-main [class*="bg-orange-50"]{border-color:#f8ddcc}
+.agent-shell{border-radius:18px!important;border-color:var(--u360-line)!important;box-shadow:0 16px 45px rgba(20,32,51,.07)!important}
+#campaign-management-root{border:1px solid var(--u360-line);border-radius:16px;box-shadow:var(--u360-shadow);background:#fff!important}
+#campaign-management-root>header{padding:18px 22px!important;border-color:var(--u360-line)!important;box-shadow:none!important}
+#campaign-management-root>header h1{font-size:22px;letter-spacing:-.035em}
+#campaign-management-root>div:nth-child(2)>aside{width:310px;background:#fbfcfe!important;border-color:var(--u360-line)!important}
+#campaign-management-root>div:nth-child(2)>aside [id^="campaign-card-"]{border-radius:13px!important;border-color:var(--u360-line)!important;padding:14px!important}
+#campaign-management-root>div:nth-child(2)>aside [id^="campaign-card-"][class*="bg-orange-50"]{background:#fff4ed!important;border-color:#f4b38f!important}
+#campaign-management-root>div:nth-child(2)>main{background:#f7f9fc!important}
+
+@media(max-width:1023px){
+ .umrah360-app-shell>aside{display:none!important}
+ .umrah360-app-shell>div>header{display:none!important}
+ .umrah360-main:not(:has([data-umrah360-module="inbox"])){padding:14px!important}
+}
+@media(max-width:767px){
+ .inbox-workspace{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(220px,42%) minmax(0,1fr)}
+ .inbox-workspace>div:first-child{border-right:0!important;border-bottom:1px solid var(--u360-line)!important}
+ .inbox-workspace>div:first-child>div:first-child{padding:10px!important}
+ .inbox-workspace>div:first-child>div:nth-child(2)>div{padding:9px 11px!important}
+ .inbox-workspace>div:nth-child(2){min-height:0}
+ .inbox-workspace>div:nth-child(2)>div:first-child>div:first-child{min-height:58px;padding:10px 12px!important}
+ #campaign-management-root>div:nth-child(2)>aside{width:230px}
+}
+@media(prefers-reduced-motion:reduce){
+ .umrah360-app-shell *, .umrah360-main *{transition-duration:.01ms!important;scroll-behavior:auto!important}
+}

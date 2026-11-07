@@ -307,7 +307,7 @@ export const LeadDatabase: React.FC<Props> = ({ isAdmin = false, tenantId = '' }
   const tableTitle = activeSection === 'all-leads' ? 'All Leads' : selectedDatabase?.name || 'Database Leads';
 
   return (
-    <div className="max-w-7xl mx-auto space-y-5 font-sans">
+    <div data-umrah360-module="database" className="max-w-7xl mx-auto space-y-5 font-sans">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <div className="flex items-center gap-2">

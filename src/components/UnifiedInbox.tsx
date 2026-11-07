@@ -597,7 +597,7 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
   };
 
   return (
-    <div className="flex flex-col lg:flex-row h-full w-full bg-white text-slate-900 overflow-hidden relative">
+    <div data-umrah360-module="inbox" className="inbox-workspace flex flex-col lg:flex-row h-full w-full bg-white text-slate-900 overflow-hidden relative">
       {/* 1. LEFT COLUMN: Conversation List & Filters (Width: 340px) */}
       <div className="w-full lg:w-84 border-r border-slate-200/90 flex flex-col bg-slate-50/60 h-full min-h-0 shrink-0">
         {/* Search Header */}

@@ -2467,7 +2467,7 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
   return (
     <BrandProvider tenantId={currentTenantId} tenantName={currentTenant?.name}>
     <AgentProvider tenantId={currentTenantId} userId={currentUser.userId} enabled={currentUser.accessLevel === 'ALL' || currentUser.role === 'ADMIN' || (currentUser.allowedModules || []).includes('agent')}>
-    <div className="h-dvh w-full overflow-hidden bg-slate-50 text-slate-900 flex flex-col md:flex-row font-sans selection:bg-orange-500/20 selection:text-orange-950">
+    <div className="umrah360-app-shell h-dvh w-full overflow-hidden bg-slate-50 text-slate-900 flex flex-col md:flex-row font-sans selection:bg-orange-500/20 selection:text-orange-950">
       <Navbar
         activeTab={activeTab}
         setActiveTab={setActiveTab}
@@ -2497,7 +2497,7 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
           onLogout={handleLogout}
         />
 
-        <main className={`flex-1 min-w-0 min-h-0 ${activeTab === 'inbox' ? 'p-0 h-full overflow-hidden flex flex-col' : activeTab === 'agent' ? 'p-3 sm:p-5 overflow-hidden flex flex-col' : 'p-3 sm:p-5 overflow-y-auto'}`}>
+        <main data-umrah360-main="true" className={`umrah360-main flex-1 min-w-0 min-h-0 ${activeTab === 'inbox' ? 'p-0 h-full overflow-hidden flex flex-col' : activeTab === 'agent' ? 'p-3 sm:p-5 overflow-hidden flex flex-col' : 'p-3 sm:p-5 overflow-y-auto'}`}>
         {entitlements?.billing?.status === 'past_due' && (
           <div className="mb-3 flex items-center justify-between gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-800">
             <span>

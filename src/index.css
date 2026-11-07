@@ -257,8 +257,6 @@ select:focus-visible {
 #campaign-management-root>div:nth-child(2)>main{background:#f7f9fc!important}
 
 @media(max-width:1023px){
- .umrah360-app-shell>aside{display:none!important}
- .umrah360-app-shell>div>header{display:none!important}
  .umrah360-main:not(:has([data-umrah360-module="inbox"])){padding:14px!important}
 }
 @media(max-width:767px){

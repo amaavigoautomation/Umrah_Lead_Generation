@@ -410,8 +410,9 @@ async function modelJson(ctx: TenantContext, systemPrompt: string, userPrompt: s
     models: WEBSITE_MODELS,
     temperature: 0.15,
     maxTokens,
-    timeoutMs: 45_000,
-    reasoningEffort: 'medium',
+    timeoutMs: 15_000,
+    maxRetries: 0,
+    reasoningEffort: 'high',
     tenantId: ctx.tenantId,
   });
   const first = raw.indexOf('{'), last = raw.lastIndexOf('}');

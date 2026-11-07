@@ -441,13 +441,32 @@ async function modelJson(ctx: TenantContext, systemPrompt: string, userPrompt: s
   if (first < 0 || last <= first) throw new Error('The AI returned invalid Knowledge Base JSON.');
   return JSON.parse(raw.slice(first, last + 1));
 }
+function cleanKnowledgePlainText(value: unknown): string {
+  return String(value ?? '')
+    .replace(/<\/?[a-z][^>]*>/gi, ' ')
+    .replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g, '$1 ($2)')
+    .replace(/^\s{0,3}#{1,6}\s*/gm, '')
+    .replace(/(\*\*|__)(.*?)\1/g, '$2')
+    .replace(/~~(.*?)~~/g, '$1')
+    .replace(/\x60([^\x60]+)\x60/g, '$1')
+    .replace(/^\s*[-*+]\s+/gm, '• ')
+    .replace(/^\s*[-*_]{3,}\s*$/gm, '')
+    .replace(/\*\*/g, '')
+    .replace(/__/g, '')
+    .replace(/#{2,}/g, '')
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
 function normalizeDrafts(items: unknown, allowedUrls: Set<string>, maxItems: number): ArticleDraft[] {
   if (!Array.isArray(items)) return [];
   const result: ArticleDraft[] = [];
   for (const item of items.slice(0, maxItems) as any[]) {
-    const title = String(item?.title || '').trim().slice(0, 180);
-    const category = String(item?.category || '').trim().slice(0, 80);
-    const content = String(item?.content || '').trim();
+    const title = cleanKnowledgePlainText(item?.title).slice(0, 180);
+    const category = cleanKnowledgePlainText(item?.category).slice(0, 80);
+    const content = cleanKnowledgePlainText(item?.content);
     const sourceValues: unknown[] = Array.isArray(item?.sourceUrls) ? item.sourceUrls : [];
     const sourceUrls = Array.from(new Set(sourceValues.map((value) => String(value || '').trim()).filter((url) => allowedUrls.has(url))));
     if (title.length < 3 || category.length < 2 || content.length < 80 || !sourceUrls.length) continue;
@@ -457,7 +476,7 @@ function normalizeDrafts(items: unknown, allowedUrls: Set<string>, maxItems: num
 }
 function normalizeTags(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
-  return Array.from(new Set(value.map((item) => String(item || '').trim()).filter(Boolean))).slice(0, 16);
+  return Array.from(new Set(value.map((item) => cleanKnowledgePlainText(item)).filter(Boolean))).slice(0, 16);
 }
 function companyProfilePrompt(brand: any): string {
   return JSON.stringify({
@@ -477,6 +496,7 @@ function knowledgeSystemPrompt(): string {
     'Create categories dynamically for this company. There is no predefined taxonomy and no one-page-one-article rule.',
     'Synthesize related facts into useful comprehensive articles. Preserve exact figures, named entities, conditions, caveats and procedural order. Do not replace detail with vague summaries.',
     'Do not invent, infer or embellish information. When a statement is ambiguous, omit it.',
+    'Write all article content in clean plain text, not Markdown or HTML. Never use heading markers (# or ##), bold markers (**), underscores for emphasis, backticks, fenced code blocks or decorative Markdown separators. Use plain-text section labels and readable paragraphs.'
     'Every article must include exact sourceUrls copied from the supplied source URLs that substantiate its content.',
     'Return valid JSON only: {"articles":[{"title":"...","category":"...","content":"...","tags":["..."],"sourceUrls":["https://..."]}]}',
   ].join('\n');
@@ -538,9 +558,9 @@ async function saveFinalWebsiteArticles(
     const old = existingById.get(id);
     return {
       id,
-      title: draft.title,
-      category: draft.category,
-      content: draft.content,
+      title: cleanKnowledgePlainText(draft.title),
+      category: cleanKnowledgePlainText(draft.category),
+      content: cleanKnowledgePlainText(draft.content),
       tags: draft.tags,
       status: old?.status || (initialScan ? 'REVIEW' : 'PUBLISHED'),
       version: Number(old?.version || 1),
@@ -604,6 +624,7 @@ export async function getKnowledgeWebsiteScanState(ctx: TenantContext): Promise<
     excludePatterns: Array.isArray(settings.excludePatterns) ? settings.excludePatterns : [],
     lastSyncedAt: settings.lastSyncedAt || null,
     initialized: Boolean(settings.initialized),
+    lastReport: settings.lastReport || null,
     job: jobView(jobResult.job),
   };
 }
@@ -680,6 +701,7 @@ export async function startKnowledgeWebsiteScan(ctx: TenantContext, patternsInpu
     pagesExcluded: 0,
     startedAt: new Date().toISOString(),
   };
+  await setDoc(tenantRepo(ctx).settingsDoc(SETTINGS_DOC), { lastReport: null }, { merge: true });
   await setDoc(current.ref, job, { merge: false });
   return { job: jobView(job) };
 }
@@ -1052,6 +1074,29 @@ async function processSavePagesStep(ctx: TenantContext, current: { ref: any; job
 
   const now = new Date().toISOString();
   const finalPageCount = (job.pagesAdded || 0) + (job.pagesUpdated || 0) + (job.pagesUnchanged || 0);
+  const finalDocs = getAllKnowledgeDocs(ctx);
+  const report = {
+    initialScan: job.initialScan,
+    pagesDiscovered: job.pagesDiscovered,
+    pagesAttempted: job.processedPages,
+    pagesIndexed: finalPageCount,
+    pagesAdded: job.pagesAdded || 0,
+    pagesUpdated: job.pagesUpdated || 0,
+    pagesRemoved: job.pagesRemoved || 0,
+    pagesUnchanged: job.pagesUnchanged || 0,
+    pagesExcluded: job.pagesExcluded || 0,
+    pagesFailed: job.pagesFailed,
+    pagesVerified: job.pagesVerified,
+    articlesAdded: job.articlesAdded || 0,
+    articlesUpdated: job.articlesUpdated || 0,
+    articlesRemoved: job.articlesRemoved || 0,
+    articlesUnchanged: job.articlesUnchanged || 0,
+    categories: Array.from(new Set(finalDocs.map((doc) => doc.category))).sort(),
+    warnings: job.warnings.slice(0, 30),
+    lastSyncedAt: now,
+    unchanged: Boolean((job.articlesAdded || 0) === 0 && (job.articlesUpdated || 0) === 0 && (job.articlesRemoved || 0) === 0),
+    truncated: false,
+  };
   await setDoc(tenantRepo(ctx).settingsDoc(SETTINGS_DOC), {
     websiteUrl: job.websiteUrl,
     excludePatterns: job.excludePatterns,
@@ -1059,39 +1104,20 @@ async function processSavePagesStep(ctx: TenantContext, current: { ref: any; job
     lastSyncedAt: now,
     lastPageCount: finalPageCount,
     lastFailedPageCount: job.pagesFailed,
+    lastReport: report,
   }, { merge: true });
-  const finalDocs = getAllKnowledgeDocs(ctx);
   await deleteDoc(current.ref);
-  return {
-    done: true,
-    report: {
-      initialScan: job.initialScan,
-      pagesDiscovered: job.pagesDiscovered,
-      pagesAttempted: job.processedPages,
-      pagesIndexed: finalPageCount,
-      pagesAdded: job.pagesAdded || 0,
-      pagesUpdated: job.pagesUpdated || 0,
-      pagesRemoved: job.pagesRemoved || 0,
-      pagesUnchanged: job.pagesUnchanged || 0,
-      pagesExcluded: job.pagesExcluded || 0,
-      pagesFailed: job.pagesFailed,
-      pagesVerified: job.pagesVerified,
-      articlesAdded: job.articlesAdded || 0,
-      articlesUpdated: job.articlesUpdated || 0,
-      articlesRemoved: job.articlesRemoved || 0,
-      articlesUnchanged: job.articlesUnchanged || 0,
-      categories: Array.from(new Set(finalDocs.map((doc) => doc.category))).sort(),
-      warnings: job.warnings.slice(0, 30),
-      lastSyncedAt: now,
-      unchanged: Boolean((job.articlesAdded || 0) === 0 && (job.articlesUpdated || 0) === 0 && (job.articlesRemoved || 0) === 0),
-      truncated: false,
-    },
-  };
+  return { done: true, report };
 }
 
 export async function processKnowledgeWebsiteScanStep(ctx: TenantContext): Promise<any> {
   const current = await getJob(ctx);
-  if (!current.job) throw new Error('There is no website scan to continue.');
+  if (!current.job) {
+    const settingsSnap = await getDoc(tenantRepo(ctx).settingsDoc(SETTINGS_DOC));
+    const settings = settingsSnap.exists() ? settingsSnap.data() as any : {};
+    if (settings.lastReport) return { done: true, report: settings.lastReport, alreadyCompleted: true };
+    throw new Error('There is no active website scan. Start a new scan to build the Knowledge Base.');
+  }
   switch (current.job.status) {
     case 'DISCOVERING': return processDiscoveryStep(ctx, current);
     case 'CRAWLING': return processCrawlStep(ctx, current);

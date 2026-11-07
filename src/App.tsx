@@ -85,6 +85,7 @@ function ScreenLoading() {
 // Inbox page size: how many conversations the live listener loads at a time.
 const CONVERSATION_PAGE_SIZE = 50;
 import { initCalendarAuth } from './services/googleCalendarAuth';
+import { startWebsiteKnowledgeScanRunner } from './services/websiteKnowledgeScanRunner';
 
 // Per-workspace brand strings for locally-built message records (read at call time).
 const bn = () => getCurrentBrand();
@@ -341,6 +342,7 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
   const [session, setSession] = useState<SessionInfo | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [authError, setAuthError] = useState<string | null>(null);
+  const [websiteScanToast, setWebsiteScanToast] = useState<string | null>(null);
 
   useEffect(() => {
     installAuthFetch();
@@ -692,6 +694,24 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
     markAppLoaded();
     prefetchLazy();
   }, [currentUser?.userId]);
+
+  useEffect(() => {
+    if (!session || !currentTenantId || currentUser?.role !== 'ADMIN') return;
+    void startWebsiteKnowledgeScanRunner(currentTenantId);
+  }, [session, currentTenantId, currentUser?.userId, currentUser?.role]);
+
+  useEffect(() => {
+    const onCompleted = (event: Event) => {
+      const detail = (event as CustomEvent).detail;
+      if (detail?.tenantId !== currentTenantId) return;
+      setWebsiteScanToast((detail.report?.pagesFailed || 0) > 0
+        ? 'Website scan finished with some page failures. Your Knowledge Base is saved; review the scan report.'
+        : 'Your Knowledge Base is set and ready to use.');
+      window.setTimeout(() => setWebsiteScanToast(null), 6500);
+    };
+    window.addEventListener('website-knowledge-scan:completed', onCompleted);
+    return () => window.removeEventListener('website-knowledge-scan:completed', onCompleted);
+  }, [currentTenantId]);
 
   const loadMoreConversations = useCallback(() => {
     setConversationLimit((n) => n + CONVERSATION_PAGE_SIZE);
@@ -2467,7 +2487,13 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
   return (
     <BrandProvider tenantId={currentTenantId} tenantName={currentTenant?.name}>
     <AgentProvider tenantId={currentTenantId} userId={currentUser.userId} enabled={currentUser.accessLevel === 'ALL' || currentUser.role === 'ADMIN' || (currentUser.allowedModules || []).includes('agent')}>
-    <div className="umrah360-app-shell h-dvh w-full overflow-hidden bg-slate-50 text-slate-900 flex flex-col md:flex-row font-sans selection:bg-orange-500/20 selection:text-orange-950">
+    <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col md:flex-row font-sans selection:bg-orange-500/20 selection:text-orange-950">
+      {websiteScanToast && (
+        <div role="status" className="fixed top-5 right-5 z-[100] max-w-sm rounded-xl border border-emerald-200 bg-white px-4 py-3 text-sm font-semibold text-emerald-800 shadow-xl flex items-center gap-2 animate-in fade-in slide-in-from-top-3">
+          <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-emerald-50 text-emerald-600">✓</span>
+          <span>{websiteScanToast}</span>
+        </div>
+      )}
       <Navbar
         activeTab={activeTab}
         setActiveTab={setActiveTab}
@@ -2484,7 +2510,7 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
         onToggleCollapse={() => setIsSidebarCollapsed((prev) => !prev)}
       />
 
-      <div className="flex-1 flex flex-col min-w-0 min-h-0 h-[calc(100dvh-56px)] md:h-dvh overflow-hidden">
+      <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
         <HeaderBar
           activeTab={activeTab}
           setActiveTab={setActiveTab}
@@ -2497,7 +2523,7 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
           onLogout={handleLogout}
         />
 
-        <main data-umrah360-main="true" data-active-tab={activeTab} className={`umrah360-main flex-1 min-w-0 min-h-0 ${activeTab === 'inbox' ? 'p-0 h-full overflow-hidden flex flex-col' : activeTab === 'agent' ? 'p-3 sm:p-5 overflow-hidden flex flex-col' : 'p-3 sm:p-5 overflow-y-auto'}`}>
+        <main className={`flex-1 min-w-0 min-h-0 ${activeTab === 'inbox' ? 'p-0 h-full overflow-hidden flex flex-col' : activeTab === 'agent' ? 'p-3 sm:p-5 overflow-hidden flex flex-col' : 'p-3 sm:p-5 overflow-y-auto'}`}>
         {entitlements?.billing?.status === 'past_due' && (
           <div className="mb-3 flex items-center justify-between gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-800">
             <span>

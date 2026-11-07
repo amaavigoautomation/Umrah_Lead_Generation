@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { KnowledgeDocument, KnowledgeStatus } from '../types';
 import { retrieveRelevantKnowledge, RetrievedChunk } from '../services/ragService';
+import { startWebsiteKnowledgeScanRunner } from '../services/websiteKnowledgeScanRunner';
 
 interface KnowledgeBaseViewProps {
   documents: KnowledgeDocument[];
@@ -71,17 +72,53 @@ export const KnowledgeBaseView: React.FC<KnowledgeBaseViewProps> = ({
 
   useEffect(() => {
     let active = true;
-    fetch('/api/knowledge/website-scan')
+    const onProgress = (event: Event) => {
+      const detail = (event as CustomEvent).detail;
+      if (detail?.tenantId !== tenantId) return;
+      setScanJob(detail.job || null);
+      setScanLoading(true);
+      setScanError('');
+    };
+    const onCompleted = (event: Event) => {
+      const detail = (event as CustomEvent).detail;
+      if (detail?.tenantId !== tenantId) return;
+      setScanJob(null);
+      setScanLoading(false);
+      setScanReport(detail.report || null);
+      setScanConfig((current: any) => ({ ...current, lastSyncedAt: detail.report?.lastSyncedAt || new Date().toISOString() }));
+      setSaveToast((detail.report?.pagesFailed || 0) > 0 ? 'Website sync finished with some page failures. Review the scan report.' : 'Your Knowledge Base is set and ready.');
+      window.setTimeout(() => setSaveToast(null), 6000);
+    };
+    const onFailed = (event: Event) => {
+      const detail = (event as CustomEvent).detail;
+      if (detail?.tenantId !== tenantId) return;
+      setScanLoading(false);
+      setScanError(detail.message || 'Website scan stopped unexpectedly. Previously saved Knowledge Base articles have been preserved.');
+    };
+    window.addEventListener('website-knowledge-scan:progress', onProgress);
+    window.addEventListener('website-knowledge-scan:completed', onCompleted);
+    window.addEventListener('website-knowledge-scan:failed', onFailed);
+    fetch('/api/knowledge/website-scan', { cache: 'no-store' })
       .then(async (response) => {
         const data = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(data.error || 'Could not load website scan settings.');
         if (!active) return;
-        setScanConfig(data.config || { websiteUrl: brand.websiteUrl, excludePatterns: [], lastSyncedAt: null });
-        setExcludeText((data.config?.excludePatterns || []).join('\n'));
+        const config = data.config || {};
+        setScanConfig({ ...config, websiteUrl: config.websiteUrl || brand.websiteUrl, excludePatterns: config.excludePatterns || [], lastSyncedAt: config.lastSyncedAt || null });
+        setExcludeText((config.excludePatterns || []).join('\n'));
         setScanJob(data.job || null);
+        if (data.job) {
+          setScanLoading(true);
+          void startWebsiteKnowledgeScanRunner(tenantId);
+        } else if (data.lastReport) setScanReport(data.lastReport);
       })
       .catch((error) => console.warn('[Knowledge Base] Website scan settings could not be loaded:', error));
-    return () => { active = false; };
+    return () => {
+      active = false;
+      window.removeEventListener('website-knowledge-scan:progress', onProgress);
+      window.removeEventListener('website-knowledge-scan:completed', onCompleted);
+      window.removeEventListener('website-knowledge-scan:failed', onFailed);
+    };
   }, [tenantId, brand.websiteUrl]);
 
   // Counts for metric cards (matching the screenshot)
@@ -211,43 +248,18 @@ export const KnowledgeBaseView: React.FC<KnowledgeBaseViewProps> = ({
           body: JSON.stringify({ excludePatterns: excludeText.split(/\r?\n/).map((value) => value.trim()).filter(Boolean) }),
         });
         const startData = await startResponse.json().catch(() => ({}));
-        if (!startResponse.ok) throw new Error(startData.error || 'Could not start website scan.');
-        job = startData.job;
+        if (!startResponse.ok) {
+          const stateResponse = await fetch('/api/knowledge/website-scan', { cache: 'no-store' });
+          const stateData = await stateResponse.json().catch(() => ({}));
+          if (!stateResponse.ok || !stateData.job) throw new Error(startData.error || 'Could not start website scan.');
+          job = stateData.job;
+        } else job = startData.job;
         setScanJob(job);
       }
-      let finished = false;
-      while (job && !finished) {
-        const stepResponse = await fetch('/api/knowledge/website-scan/step', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: '{}',
-        });
-        const stepData = await stepResponse.json().catch(() => ({}));
-        if (!stepResponse.ok) throw new Error(stepData.error || 'Website scan could not continue.');
-        if (stepData.done) {
-          finished = true;
-          setScanJob(null);
-          setScanReport(stepData.report || null);
-          setScanConfig((current) => ({
-            ...current,
-            lastSyncedAt: stepData.report?.lastSyncedAt || new Date().toISOString(),
-            excludePatterns: job?.excludePatterns || excludeText.split(/\r?\n/).map((value) => value.trim()).filter(Boolean),
-          }));
-          setSaveToast((stepData.report?.pagesFailed || 0) > 0
-            ? 'Website sync finished with some page failures. Review the scan report.'
-            : 'Website knowledge synchronized successfully.');
-          window.setTimeout(() => setSaveToast(null), 4500);
-        } else {
-          if (!stepData.job) throw new Error('The scanner did not return its progress state. Refresh the page and resume the scan.');
-          job = stepData.job;
-          setScanJob(job);
-          await new Promise((resolve) => window.setTimeout(resolve, 180));
-        }
-      }
-      if (!finished) throw new Error('The scan stopped before completion. Use Resume scan to continue.');
+      if (!job) throw new Error('The website scanner did not return an active job.');
+      void startWebsiteKnowledgeScanRunner(tenantId);
     } catch (error: any) {
-      setScanError(error?.message || 'Website scan failed.');
-    } finally {
+      setScanError(error?.message || 'Website scan could not start.');
       setScanLoading(false);
     }
   };
@@ -328,7 +340,7 @@ export const KnowledgeBaseView: React.FC<KnowledgeBaseViewProps> = ({
                 className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-gradient-to-r from-orange-500 to-amber-600 text-white text-xs font-bold shadow-xs disabled:opacity-50"
               >
                 {scanLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : scanJob ? <RefreshCw className="w-4 h-4" /> : <Globe className="w-4 h-4" />}
-                {scanLoading ? 'Scanning website…' : scanJob ? 'Resume scan' : 'Scan website'}
+                {scanLoading ? 'Scanning in background…' : scanJob ? 'Resume scan' : 'Scan website'}
               </button>
             </div>
           </div>
@@ -358,7 +370,7 @@ export const KnowledgeBaseView: React.FC<KnowledgeBaseViewProps> = ({
                 <span>{scanJob.pagesFailed || 0} failed</span>
                 <span>{scanJob.pagesToVerify || 0} awaiting verification</span>
               </div>
-              <p className="text-[11px] text-slate-400">The scan runs in resumable batches and continues until every discovered eligible URL has been accounted for. Keep this page open, or return later and choose Resume scan.</p>
+              <p className="text-[11px] text-slate-400">The scan runs in the background. You can switch modules or return to this page; progress continues automatically.</p>
             </div>
           )}
           {scanLoading && <p className="text-[11px] text-slate-500">The AI is comparing current website information with the existing Knowledge Base.</p>}

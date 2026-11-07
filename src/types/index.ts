@@ -108,7 +108,7 @@ export interface EmailTemplate {
   subject: string;
   body: string;
   htmlBody?: string;
-  format?: 'text' | 'html';
+  format?: 'text' | 'html' | 'visual';
   isHtml?: boolean;
   attachments?: TemplateAttachment[];
   /** Optional inbox display text shown before the main campaign content. */

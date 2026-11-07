@@ -71,6 +71,10 @@ export interface OpenAIRequestOptions {
   maxTokens?: number;
   /** Tenant whose workspace initiated the AI operation. When present, provider usage is recorded. */
   tenantId?: string;
+  /** Per-request provider timeout. Useful for resumable serverless jobs. */
+  timeoutMs?: number;
+  /** Reasoning effort for Responses API reasoning models. */
+  reasoningEffort?: string;
 }
 
 /**
@@ -82,7 +86,7 @@ export async function generateOpenAICompletion(options: OpenAIRequestOptions): P
     throw new Error('OPENAI_API_KEY is not configured.');
   }
 
-  const openai = new OpenAI({ apiKey });
+  const openai = new OpenAI({ apiKey, ...(options.timeoutMs ? { timeout: options.timeoutMs } : {}) });
   const candidateModels = options.models && options.models.length > 0 
     ? options.models 
     : ['gpt-4o-mini', 'gpt-4o', 'gpt-3.5-turbo'];
@@ -95,6 +99,35 @@ export async function generateOpenAICompletion(options: OpenAIRequestOptions): P
 
   for (const model of candidateModels) {
     try {
+      if (/^gpt-6(?:[.-]|$)/i.test(model)) {
+        // The Agent's reasoning model uses the Responses API rather than Chat Completions.
+        const response: any = await openai.responses.create({
+          model,
+          input: [
+            ...(options.systemPrompt ? [{ role: 'system', content: [{ type: 'input_text', text: options.systemPrompt }] }] : []),
+            { role: 'user', content: [{ type: 'input_text', text: options.userPrompt }] },
+          ],
+          reasoning: { effort: options.reasoningEffort || 'medium' },
+          max_output_tokens: options.maxTokens ?? 1000,
+          ...(options.jsonMode ? { text: { format: { type: 'json_object' } } } : {}),
+          store: false,
+        } as any);
+
+        if (options.tenantId) await recordAiCompletionUsage(options.tenantId, response, model, 'openai');
+        let responseText = String(response.output_text || '').trim();
+        if (!responseText && Array.isArray(response.output)) {
+          responseText = response.output
+            .filter((item: any) => item?.type === 'message')
+            .flatMap((item: any) => Array.isArray(item.content) ? item.content : [])
+            .filter((part: any) => part?.type === 'output_text')
+            .map((part: any) => String(part.text || ''))
+            .join('\\n')
+            .trim();
+        }
+        if (responseText) return responseText;
+        throw new Error('The reasoning model returned an empty response.');
+      }
+
       const completion = await openai.chat.completions.create({
         model,
         messages,

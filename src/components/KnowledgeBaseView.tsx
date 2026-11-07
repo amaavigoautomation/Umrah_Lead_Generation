@@ -233,7 +233,9 @@ export const KnowledgeBaseView: React.FC<KnowledgeBaseViewProps> = ({
             lastSyncedAt: stepData.report?.lastSyncedAt || new Date().toISOString(),
             excludePatterns: job?.excludePatterns || excludeText.split(/\r?\n/).map((value) => value.trim()).filter(Boolean),
           }));
-          setSaveToast('Website knowledge synchronized successfully.');
+          setSaveToast((stepData.report?.pagesFailed || 0) > 0
+            ? 'Website sync finished with some page failures. Review the scan report.'
+            : 'Website knowledge synchronized successfully.');
           window.setTimeout(() => setSaveToast(null), 4500);
         } else {
           if (!stepData.job) throw new Error('The scanner did not return its progress state. Refresh the page and resume the scan.');
@@ -256,7 +258,7 @@ export const KnowledgeBaseView: React.FC<KnowledgeBaseViewProps> = ({
   };
 
   return (
-    <div data-umrah360-module="knowledge" className="max-w-7xl mx-auto p-4 sm:p-6 space-y-6">
+    <div className="max-w-7xl mx-auto p-4 sm:p-6 space-y-6">
       {/* Toast Notification */}
       {saveToast && (
         <div className="fixed top-20 right-6 z-50 bg-white border border-emerald-500 text-emerald-800 px-4 py-3 rounded-xl shadow-lg flex items-center space-x-3 text-xs animate-in fade-in slide-in-from-top-4">

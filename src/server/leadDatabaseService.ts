@@ -161,28 +161,49 @@ export async function getLeadDatabase(ctx: TenantContext, databaseId: string): P
 
 export async function listLeadDatabaseEntries(
   ctx: TenantContext,
-  opts: { databaseId?: string; cursor?: string; pageSize?: number } = {},
+  opts: { databaseId?: string; cursor?: string; pageSize?: number; search?: string } = {},
 ): Promise<{ leads: Array<Record<string, unknown>>; nextCursor: string | null }> {
   const repo = tenantRepo(ctx);
   const size = Math.min(PAGE_SIZE_MAX, Math.max(1, Number(opts.pageSize) || PAGE_SIZE_DEFAULT));
-  const constraints: any[] = [];
-  if (opts.databaseId) constraints.push(where('databaseId', '==', opts.databaseId));
-  constraints.push(orderByDocumentId());
-  if (opts.cursor) constraints.push(startAfterId(opts.cursor));
-  constraints.push(limit(size + 1));
+  const term = cleanString(opts.search, 120).toLowerCase();
+  const scanSize = term ? 200 : size + 1;
+  const matches: Array<Record<string, unknown>> = [];
+  let scanCursor = opts.cursor || '';
+  let reachedEnd = false;
 
-  const snap = await getDocs(query(repo.leadDatabaseEntries(), ...constraints));
-  const pageDocs = snap.docs.slice(0, size);
+  // Search across the full collection server-side, rather than only the browser's current page.
+  while (!reachedEnd && matches.length <= size) {
+    const constraints: any[] = [];
+    if (opts.databaseId) constraints.push(where('databaseId', '==', opts.databaseId));
+    constraints.push(orderByDocumentId());
+    if (scanCursor) constraints.push(startAfterId(scanCursor));
+    constraints.push(limit(scanSize));
+    const snap = await getDocs(query(repo.leadDatabaseEntries(), ...constraints));
+    if (!snap.docs.length) { reachedEnd = true; break; }
+    for (const doc of snap.docs) {
+      const data = doc.data() as Record<string, unknown>;
+      if (!term || [
+        data.name, data.email, data.phone, data.companyName, data.designation,
+        data.city, data.country, data.website, data.sourceFileName,
+      ].some((value) => String(value || '').toLowerCase().includes(term))) {
+        matches.push({ ...data, entryId: doc.id });
+        if (matches.length > size) break;
+      }
+    }
+    scanCursor = snap.docs[snap.docs.length - 1].id;
+    if (matches.length > size) break;
+    if (snap.docs.length < scanSize) reachedEnd = true;
+  }
+  const pageDocs = matches.slice(0, size);
   const databases = await listLeadDatabases(ctx);
-  const names = new Map(databases.map((d) => [d.databaseId, d.name]));
-  const leads = pageDocs.map((doc) => ({
-    ...(doc.data() as Record<string, unknown>),
-    entryId: doc.id,
-    sourceDatabaseName: names.get(String((doc.data() as any).databaseId || '')) || 'Unknown database',
+  const names = new Map(databases.map((database) => [database.databaseId, database.name]));
+  const leads = pageDocs.map((lead) => ({
+    ...lead,
+    sourceDatabaseName: names.get(String(lead.databaseId || '')) || 'Unknown database',
   }));
   return {
     leads,
-    nextCursor: snap.docs.length > size ? pageDocs[pageDocs.length - 1]?.id || null : null,
+    nextCursor: matches.length > size ? String(pageDocs[pageDocs.length - 1]?.entryId || '') || null : null,
   };
 }
 
@@ -196,7 +217,74 @@ export async function listLeadDatabaseImports(
     orderByDocumentId(),
     limit(100),
   ));
-  return snap.docs.map((doc) => ({ ...(doc.data() as Record<string, unknown>), importId: doc.id }));
+  return snap.docs
+    .map((doc) => ({ ...(doc.data() as Record<string, unknown>), importId: doc.id } as Record<string, unknown>))
+    .sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
+}
+
+export async function previewLeadDatabaseRows(
+  ctx: TenantContext,
+  databaseId: string,
+  input: { rows: Array<Record<string, unknown>> },
+): Promise<{
+  received: number; readyCount: number; duplicateCount: number; invalidCount: number;
+  duplicates: Array<Record<string, unknown>>; invalidRows: Array<Record<string, unknown>>;
+}> {
+  if (!Array.isArray(input.rows) || !input.rows.length) throw new Error('Upload a spreadsheet containing at least one data row.');
+  if (input.rows.length > MAX_IMPORT_ROWS) throw new Error('A single import can contain up to ' + MAX_IMPORT_ROWS.toLocaleString() + ' rows. Split larger files into smaller uploads.');
+  if (!(await getLeadDatabase(ctx, databaseId))) throw new Error('Database not found.');
+
+  const repo = tenantRepo(ctx);
+  const normalized = normalizeRows(databaseId, input.rows, 'Preview');
+  const duplicates: Array<Record<string, unknown>> = [];
+  const unique: NormalizedEntry[] = [];
+  const seenEmails = new Map<string, number>();
+  const seenPhones = new Map<string, number>();
+  const seenFallback = new Map<string, number>();
+  for (const entry of normalized.valid) {
+    const previous = entry.normalizedEmail ? seenEmails.get(entry.normalizedEmail)
+      : entry.normalizedPhone ? seenPhones.get(entry.normalizedPhone) : seenFallback.get(entry.identityKey);
+    if (previous !== undefined) {
+      duplicates.push({ rowNumber: entry.sourceRowNumber, duplicateOfRow: previous, identity: entry.email || entry.phone || entry.name, reason: 'Duplicate within this upload' });
+      continue;
+    }
+    if (entry.normalizedEmail) seenEmails.set(entry.normalizedEmail, entry.sourceRowNumber);
+    if (entry.normalizedPhone && !seenPhones.has(entry.normalizedPhone)) seenPhones.set(entry.normalizedPhone, entry.sourceRowNumber);
+    if (!entry.normalizedEmail && !entry.normalizedPhone) seenFallback.set(entry.identityKey, entry.sourceRowNumber);
+    unique.push(entry);
+  }
+
+  const existingEmails = new Set<string>();
+  const existingPhones = new Set<string>();
+  const existingFallbackKeys = new Set<string>();
+  const emails = Array.from(new Set(unique.map((entry) => entry.normalizedEmail).filter(Boolean)));
+  const phones = Array.from(new Set(unique.filter((entry) => !entry.normalizedEmail).map((entry) => entry.normalizedPhone).filter(Boolean)));
+  const fallbackKeys = Array.from(new Set(unique.filter((entry) => !entry.normalizedEmail && !entry.normalizedPhone).map((entry) => entry.identityKey)));
+  for (const batch of chunks(emails, 30)) {
+    const existing = await getDocs(query(repo.leadDatabaseEntries(), where('databaseId', '==', databaseId), where('normalizedEmail', 'in', batch)));
+    existing.forEach((doc) => existingEmails.add(String((doc.data() as any).normalizedEmail || '')));
+  }
+  for (const batch of chunks(phones, 30)) {
+    const existing = await getDocs(query(repo.leadDatabaseEntries(), where('databaseId', '==', databaseId), where('normalizedPhone', 'in', batch)));
+    existing.forEach((doc) => existingPhones.add(String((doc.data() as any).normalizedPhone || '')));
+  }
+  for (const batch of chunks(fallbackKeys, 30)) {
+    const existing = await getDocs(query(repo.leadDatabaseEntries(), where('databaseId', '==', databaseId), where('identityKey', 'in', batch)));
+    existing.forEach((doc) => existingFallbackKeys.add(String((doc.data() as any).identityKey || '')));
+  }
+  for (const entry of unique) {
+    const exists = entry.normalizedEmail ? existingEmails.has(entry.normalizedEmail)
+      : entry.normalizedPhone ? existingPhones.has(entry.normalizedPhone) : existingFallbackKeys.has(entry.identityKey);
+    if (exists) duplicates.push({ rowNumber: entry.sourceRowNumber, identity: entry.email || entry.phone || entry.name, reason: 'Already exists in this database' });
+  }
+  return {
+    received: input.rows.length,
+    readyCount: Math.max(0, normalized.valid.length - duplicates.length),
+    duplicateCount: duplicates.length,
+    invalidCount: normalized.invalid.length,
+    duplicates: duplicates.slice(0, 500),
+    invalidRows: normalized.invalid.slice(0, 500),
+  };
 }
 
 export async function importLeadDatabaseRows(
@@ -455,6 +543,33 @@ export async function getCampaignDatabaseSnapshot(
       rowNumber: index + 1,
     }));
   return { database, leads, excludedWithoutEmail: entries.length - leads.length };
+}
+
+export async function listLeadDatabaseCampaignCounts(ctx: TenantContext): Promise<Record<string, number>> {
+  const snap = await getDocs(query(tenantRepo(ctx).campaigns()));
+  const counts: Record<string, number> = {};
+  snap.docs.forEach((doc) => {
+    const databaseId = String((doc.data() as any).sourceDatabaseId || '');
+    if (databaseId) counts[databaseId] = (counts[databaseId] || 0) + 1;
+  });
+  return counts;
+}
+
+export async function listLeadDatabaseCampaignUsage(ctx: TenantContext, databaseId: string): Promise<Array<Record<string, unknown>>> {
+  if (!(await getLeadDatabase(ctx, databaseId))) throw new Error('Database not found.');
+  const snap = await getDocs(query(tenantRepo(ctx).campaigns(), where('sourceDatabaseId', '==', databaseId)));
+  return snap.docs.map((doc) => {
+    const campaign = doc.data() as Record<string, any>;
+    const recipientCount = Number(campaign.snapshotRecipientCount ?? campaign.recipientCount ?? campaign.totalRecipients ?? campaign.leadCount);
+    return {
+      campaignId: doc.id,
+      name: String(campaign.name || campaign.campaignName || campaign.title || 'Untitled campaign'),
+      status: String(campaign.status || 'UNKNOWN').toUpperCase(),
+      ...(Number.isFinite(recipientCount) ? { recipientCount } : {}),
+      createdAt: campaign.createdAt,
+      updatedAt: campaign.updatedAt,
+    };
+  }).sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
 }
 
 export async function deleteLeadDatabase(ctx: TenantContext, databaseId: string): Promise<void> {

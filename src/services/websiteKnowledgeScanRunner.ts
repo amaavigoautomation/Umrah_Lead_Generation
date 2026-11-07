@@ -29,9 +29,9 @@ export function startWebsiteKnowledgeScanRunner(tenantId: string): Promise<void>
           const response = await fetch('/api/knowledge/website-scan/step', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
           const data = await response.json().catch(() => ({}));
           if (!response.ok) {
-            if (String(data.error || '').toLowerCase().includes('no website scan')) {
+            if (/no (active )?website scan/i.test(String(data.error || ''))) {
               state = await readScanState();
-              if (!state.job && state.lastReport) {
+              if (!state.job && state.config?.lastReport) {
                 emitScanEvent('completed', { tenantId, report: state.lastReport });
                 return;
               }

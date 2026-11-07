@@ -985,7 +985,7 @@ async function processSavePagesStep(ctx: TenantContext, current: { ref: any; job
     report: {
       initialScan: job.initialScan,
       pagesDiscovered: job.pagesDiscovered,
-      pagesFetched: job.processedPages,
+      pagesAttempted: job.processedPages,
       pagesIndexed: finalPageCount,
       pagesAdded: job.pagesAdded || 0,
       pagesUpdated: job.pagesUpdated || 0,

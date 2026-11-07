@@ -212,18 +212,18 @@ function htmlToText(html: string): string {
 }
 function extractPageMetadata(html: string): string {
   const values: string[] = [];
-  for (const tag of html.match(/<meta\\b[^>]*>/gi) || []) {
+  for (const tag of html.match(/<meta\b[^>]*>/gi) || []) {
     const name = attribute(tag, 'name') || attribute(tag, 'property');
     const value = attribute(tag, 'content');
     if (value && /^(description|og:title|og:description|twitter:title|twitter:description|keywords)$/i.test(name)) {
       values.push(name + ': ' + value);
     }
   }
-  const structured = Array.from(html.matchAll(/<script\\b(?=[^>]*type\\s*=\\s*["']application\\/ld\\+json["'])[^>]*>([\\s\\S]*?)<\\/script>/gi))
+  const structured = Array.from(html.matchAll(/<script\b(?=[^>]*type\s*=\s*["']application\/ld\+json["'])[^>]*>([\s\S]*?)<\/script>/gi))
     .map((match) => match[1].trim())
     .filter(Boolean);
-  if (structured.length) values.push('Structured data (JSON-LD):\\n' + structured.join('\\n'));
-  return values.length ? 'PAGE METADATA AND STRUCTURED DATA:\\n' + values.join('\\n') : '';
+  if (structured.length) values.push('Structured data (JSON-LD):\n' + structured.join('\n'));
+  return values.length ? 'PAGE METADATA AND STRUCTURED DATA:\n' + values.join('\n') : '';
 }
 
 function pageTitle(html: string, url: URL): string {
@@ -284,7 +284,7 @@ async function fetchPage(rawUrl: string): Promise<{ page: SourcePage | null; htm
   }
   const visibleText = htmlToText(result.text);
   const metadata = extractPageMetadata(result.text);
-  const content = [metadata, visibleText].filter(Boolean).join('\\n\\n');
+  const content = [metadata, visibleText].filter(Boolean).join('\n\n');
   if (content.length < 24) throw new Error('The webpage returned no meaningful readable text. It may require client-side JavaScript rendering.');
   const url = result.url.toString();
   return {

@@ -372,7 +372,7 @@ export const KnowledgeBaseView: React.FC<KnowledgeBaseViewProps> = ({
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-1 text-[11px] text-slate-600">
                 <span>Discovered: <strong>{scanReport.pagesDiscovered || 0}</strong></span>
-                <span>Fetched: <strong>{scanReport.pagesFetched || 0}</strong></span>
+                <span>Attempted: <strong>{scanReport.pagesAttempted || 0}</strong></span>
                 <span>Indexed: <strong>{scanReport.pagesIndexed || 0}</strong></span>
                 <span>Added: <strong>{scanReport.pagesAdded || 0}</strong></span>
                 <span>Modified: <strong>{scanReport.pagesUpdated || 0}</strong></span>

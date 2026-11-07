@@ -32,7 +32,7 @@ export function startWebsiteKnowledgeScanRunner(tenantId: string): Promise<void>
             if (/no (active )?website scan/i.test(String(data.error || ''))) {
               state = await readScanState();
               if (!state.job && state.config?.lastReport) {
-                emitScanEvent('completed', { tenantId, report: state.lastReport });
+                emitScanEvent('completed', { tenantId, report: state.config?.lastReport });
                 return;
               }
               if (!state.job) throw new Error('The scan job is no longer available. Start a new scan; previously saved Knowledge Base articles are preserved.');
@@ -46,7 +46,7 @@ export function startWebsiteKnowledgeScanRunner(tenantId: string): Promise<void>
             emitScanEvent('progress', { tenantId, job });
           } else {
             state = await readScanState();
-            if (!state.job && state.lastReport) {
+            if (!state.job && state.config?.lastReport) {
               emitScanEvent('completed', { tenantId, report: state.lastReport });
               return;
             }

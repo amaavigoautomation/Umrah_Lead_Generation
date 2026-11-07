@@ -110,7 +110,7 @@ export const KnowledgeBaseView: React.FC<KnowledgeBaseViewProps> = ({
         if (data.job) {
           setScanLoading(true);
           void startWebsiteKnowledgeScanRunner(tenantId);
-        } else if (data.lastReport) setScanReport(data.lastReport);
+        } else if (data.config?.lastReport) setScanReport(data.config.lastReport);
       })
       .catch((error) => console.warn('[Knowledge Base] Website scan settings could not be loaded:', error));
     return () => {

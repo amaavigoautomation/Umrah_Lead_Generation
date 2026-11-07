@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { lookup } from 'node:dns/promises';
 import { isIP } from 'node:net';
-import { getDoc, getDocs, setDoc, deleteDoc, query, where, limit } from './adminFirestore.js';
+import { getDoc, getDocs, setDoc, deleteDoc, query, where, limit, orderByDocumentId, startAfterId } from './adminFirestore.js';
 import { isFirebaseConfigured } from '../firebase/config.js';
 import { db } from './adminFirestore.js';
 import { tenantRepo } from './tenantRepo.js';
@@ -56,11 +56,19 @@ interface CrawlJob {
   pagesVerified: number;
   pagesFailed: number;
   generationPageIndex: number;
+  generationPageId?: string;
   generationPageOffset: number;
   generationBatchIndex: number;
   mergeLevel: number;
   mergeBatchIndex: number;
   pagePersistOffset: number;
+  pagePersistCursor?: string;
+  pageCleanupCursor?: string;
+  pagesAdded?: number;
+  pagesUpdated?: number;
+  pagesRemoved?: number;
+  pagesUnchanged?: number;
+  pagesExcluded?: number;
   articlesAdded?: number;
   articlesUpdated?: number;
   articlesRemoved?: number;
@@ -610,6 +618,13 @@ export async function startKnowledgeWebsiteScan(ctx: TenantContext, patternsInpu
     mergeLevel: 0,
     mergeBatchIndex: 0,
     pagePersistOffset: 0,
+    pagePersistCursor: '',
+    pageCleanupCursor: '',
+    pagesAdded: 0,
+    pagesUpdated: 0,
+    pagesRemoved: 0,
+    pagesUnchanged: 0,
+    pagesExcluded: 0,
     startedAt: new Date().toISOString(),
   };
   for (const link of extractLinks(home.html, root)) await enqueuePage(ctx, job, link);
@@ -632,7 +647,10 @@ async function beginVerification(ctx: TenantContext, job: CrawlJob): Promise<voi
       if (normalizeHost(new URL(page.url).hostname) !== normalizeHost(new URL(job.websiteUrl).hostname)) continue;
     } catch { continue; }
     // Excluded URLs are intentionally not re-verified and will be removed from the synchronized snapshot.
-    if (isExcluded(page.url, job.excludePatterns)) continue;
+    if (isExcluded(page.url, job.excludePatterns)) {
+      job.pagesExcluded = (job.pagesExcluded || 0) + 1;
+      continue;
+    }
     await enqueueVerify(ctx, job, page.url);
   }
   job.status = 'VERIFYING';
@@ -775,16 +793,26 @@ async function processVerifyStep(ctx: TenantContext, current: { ref: any; job: C
 
 async function processGenerationStep(ctx: TenantContext, current: { ref: any; job: CrawlJob }): Promise<any> {
   const job = current.job;
-  const pages = (await readWorkPages(ctx)).sort((a, b) => priority(b.url) - priority(a.url) || a.url.localeCompare(b.url));
+  const workCollection = tenantRepo(ctx).collection(WORK_COLLECTION);
+  let pageId = String(job.generationPageId || '');
+  let pageOffset = job.generationPageOffset || 0;
+  let page: SourcePage | null = null;
+  if (pageId && pageOffset > 0) {
+    const currentPage = await getDoc(tenantRepo(ctx).doc(WORK_COLLECTION, pageId));
+    if (currentPage.exists()) page = currentPage.data() as SourcePage;
+  }
   const fragments: Array<{ url: string; title: string; part: number; content: string }> = [];
-  let pageIndex = job.generationPageIndex;
-  let pageOffset = job.generationPageOffset;
-  while (fragments.length < AI_FRAGMENT_BATCH_SIZE && pageIndex < pages.length) {
-    const page = pages[pageIndex];
-    if (!page.content || pageOffset >= page.content.length) {
-      pageIndex += 1;
+  while (fragments.length < AI_FRAGMENT_BATCH_SIZE) {
+    if (!page || pageOffset >= page.content.length) {
+      const nextQuery = pageId
+        ? query(workCollection, orderByDocumentId(), startAfterId(pageId), limit(1))
+        : query(workCollection, orderByDocumentId(), limit(1));
+      const next = await getDocs(nextQuery);
+      if (!next.docs.length) break;
+      pageId = next.docs[0].id;
+      page = next.docs[0].data() as SourcePage;
       pageOffset = 0;
-      continue;
+      if (!page.content) continue;
     }
     const end = Math.min(page.content.length, pageOffset + AI_FRAGMENT_CHARS);
     fragments.push({
@@ -794,10 +822,7 @@ async function processGenerationStep(ctx: TenantContext, current: { ref: any; jo
       content: page.content.slice(pageOffset, end),
     });
     pageOffset = end;
-    if (pageOffset >= page.content.length) {
-      pageIndex += 1;
-      pageOffset = 0;
-    }
+    if (pageOffset >= page.content.length) page = null;
   }
   if (!fragments.length) {
     job.status = 'MERGING';
@@ -810,8 +835,14 @@ async function processGenerationStep(ctx: TenantContext, current: { ref: any; jo
     const id = hash(job.jobId + '|0|' + job.generationBatchIndex + '|' + index + '|' + draft.title + '|' + draft.category).slice(0, 40);
     await setDoc(tenantRepo(ctx).doc(candidateCollection(0), id), { ...draft, id, level: 0, createdAt: new Date().toISOString() }, { merge: false });
   }
-  job.generationPageIndex = pageIndex;
-  job.generationPageOffset = pageOffset;
+  job.generationPageId = pageId;
+  if (page) {
+    job.generationPageOffset = pageOffset;
+  } else {
+    const cursorPage = await getDoc(tenantRepo(ctx).doc(WORK_COLLECTION, pageId));
+    job.generationPageOffset = cursorPage.exists() ? String((cursorPage.data() as SourcePage).content || '').length : pageOffset;
+  }
+  job.generationPageIndex = job.generationBatchIndex + 1;
   job.generationBatchIndex += 1;
   await setDoc(current.ref, job, { merge: false });
   return { done: false, job: jobView(job) };
@@ -878,31 +909,51 @@ async function processMergeStep(ctx: TenantContext, current: { ref: any; job: Cr
 
 async function processSavePagesStep(ctx: TenantContext, current: { ref: any; job: CrawlJob }): Promise<any> {
   const job = current.job;
-  const pages = (await readWorkPages(ctx)).sort((a, b) => a.url.localeCompare(b.url));
-  if (job.pagePersistOffset < pages.length) {
-    const batch = pages.slice(job.pagePersistOffset, job.pagePersistOffset + PAGE_WRITE_BATCH_SIZE);
-    await Promise.all(batch.map((page) => setDoc(tenantRepo(ctx).doc(PAGE_COLLECTION, page.id), page, { merge: false })));
-    job.pagePersistOffset += batch.length;
+  const workCollection = tenantRepo(ctx).collection(WORK_COLLECTION);
+  const workQuery = job.pagePersistCursor
+    ? query(workCollection, orderByDocumentId(), startAfterId(job.pagePersistCursor), limit(PAGE_WRITE_BATCH_SIZE))
+    : query(workCollection, orderByDocumentId(), limit(PAGE_WRITE_BATCH_SIZE));
+  const nextWork = await getDocs(workQuery);
+  if (nextWork.docs.length) {
+    const pages = nextWork.docs.map((item) => item.data() as SourcePage);
+    const previous = await Promise.all(pages.map((page) => getDoc(tenantRepo(ctx).doc(PAGE_COLLECTION, page.id))));
+    for (let index = 0; index < pages.length; index += 1) {
+      if (!previous[index].exists()) job.pagesAdded = (job.pagesAdded || 0) + 1;
+      else if ((previous[index].data() as SourcePage).contentHash !== pages[index].contentHash) job.pagesUpdated = (job.pagesUpdated || 0) + 1;
+      else job.pagesUnchanged = (job.pagesUnchanged || 0) + 1;
+    }
+    await Promise.all(pages.map((page) => setDoc(tenantRepo(ctx).doc(PAGE_COLLECTION, page.id), page, { merge: false })));
+    job.pagePersistCursor = nextWork.docs[nextWork.docs.length - 1].id;
     await setDoc(current.ref, job, { merge: false });
     return { done: false, job: jobView(job) };
   }
 
-  const currentIds = new Set(pages.map((page) => page.id));
-  const oldSnap = await getDocs(tenantRepo(ctx).collection(PAGE_COLLECTION));
-  const stale = oldSnap.docs.filter((item) => !currentIds.has(item.id)).slice(0, PAGE_WRITE_BATCH_SIZE);
-  if (stale.length) {
-    await Promise.all(stale.map((item) => deleteDoc(item.ref)));
+  const pagesCollection = tenantRepo(ctx).collection(PAGE_COLLECTION);
+  const oldQuery = job.pageCleanupCursor
+    ? query(pagesCollection, orderByDocumentId(), startAfterId(job.pageCleanupCursor), limit(PAGE_WRITE_BATCH_SIZE))
+    : query(pagesCollection, orderByDocumentId(), limit(PAGE_WRITE_BATCH_SIZE));
+  const oldBatch = await getDocs(oldQuery);
+  if (oldBatch.docs.length) {
+    const currentPages = await Promise.all(oldBatch.docs.map((item) => getDoc(tenantRepo(ctx).doc(WORK_COLLECTION, item.id))));
+    for (let index = 0; index < oldBatch.docs.length; index += 1) {
+      if (!currentPages[index].exists()) {
+        await deleteDoc(oldBatch.docs[index].ref);
+        job.pagesRemoved = (job.pagesRemoved || 0) + 1;
+      }
+    }
+    job.pageCleanupCursor = oldBatch.docs[oldBatch.docs.length - 1].id;
     await setDoc(current.ref, job, { merge: false });
     return { done: false, job: jobView(job) };
   }
 
   const now = new Date().toISOString();
+  const finalPageCount = (job.pagesAdded || 0) + (job.pagesUpdated || 0) + (job.pagesUnchanged || 0);
   await setDoc(tenantRepo(ctx).settingsDoc(SETTINGS_DOC), {
     websiteUrl: job.websiteUrl,
     excludePatterns: job.excludePatterns,
     initialized: true,
     lastSyncedAt: now,
-    lastPageCount: pages.length,
+    lastPageCount: finalPageCount,
     lastFailedPageCount: job.pagesFailed,
   }, { merge: true });
   const finalDocs = getAllKnowledgeDocs(ctx);
@@ -913,8 +964,12 @@ async function processSavePagesStep(ctx: TenantContext, current: { ref: any; job
       initialScan: job.initialScan,
       pagesDiscovered: job.pagesDiscovered,
       pagesFetched: job.processedPages,
-      pagesIndexed: pages.length,
-      pagesAdded: pages.filter((page) => !oldSnap.docs.some((item) => item.id === page.id)).length,
+      pagesIndexed: finalPageCount,
+      pagesAdded: job.pagesAdded || 0,
+      pagesUpdated: job.pagesUpdated || 0,
+      pagesRemoved: job.pagesRemoved || 0,
+      pagesUnchanged: job.pagesUnchanged || 0,
+      pagesExcluded: job.pagesExcluded || 0,
       pagesFailed: job.pagesFailed,
       pagesVerified: job.pagesVerified,
       articlesAdded: job.articlesAdded || 0,

@@ -85,7 +85,7 @@ interface HttpResult {
 }
 interface QueueItem {
   id: string;
-  kind: 'PAGE' | 'SITEMAP' | 'VERIFY' | 'PAGE_DONE' | 'SITEMAP_DONE';
+  kind: 'PAGE' | 'SITEMAP' | 'VERIFY' | 'PAGE_DONE' | 'SITEMAP_DONE' | 'PAGE_EXCLUDED';
   url: string;
   createdAt: string;
 }
@@ -321,16 +321,26 @@ async function createQueueItem(ctx: TenantContext, kind: QueueItem['kind'], url:
     throw error;
   }
 }
-async function runBatches<T>(items: T[], batchSize: number, handler: (item: T) => Promise<unknown>): Promise<void> {
+async function runBatches<T>(
+  items: T[],
+  batchSize: number,
+  handler: (item: T) => Promise<unknown>,
+  checkpoint?: () => Promise<void>,
+): Promise<void> {
   for (let offset = 0; offset < items.length; offset += batchSize) {
     await Promise.all(items.slice(offset, offset + batchSize).map((item) => handler(item)));
+    if (checkpoint) await checkpoint();
   }
+}
+async function recordExcludedPage(ctx: TenantContext, job: CrawlJob, url: string): Promise<void> {
+  const created = await createQueueItem(ctx, 'PAGE_EXCLUDED', url);
+  if (created) job.pagesExcluded = (job.pagesExcluded || 0) + 1;
 }
 function candidateCollection(level: number): string {
   return CANDIDATE_PREFIX + String(level);
 }
 function queueRef(ctx: TenantContext, kind: QueueItem['kind'], url: string) {
-  const identityKind = kind === 'PAGE_DONE' ? 'PAGE' : kind === 'SITEMAP_DONE' ? 'SITEMAP' : kind;
+  const identityKind = kind === 'PAGE_DONE' || kind === 'PAGE_EXCLUDED' ? 'PAGE' : kind === 'SITEMAP_DONE' ? 'SITEMAP' : kind;
   return tenantRepo(ctx).doc(QUEUE_COLLECTION, hash(identityKind + '|' + url).slice(0, 40));
 }
 async function getQueueBatch(ctx: TenantContext, kind: QueueItem['kind'], amount: number): Promise<Array<{ ref: any; item: QueueItem }>> {
@@ -340,7 +350,11 @@ async function getQueueBatch(ctx: TenantContext, kind: QueueItem['kind'], amount
 async function enqueuePage(ctx: TenantContext, job: CrawlJob, rawUrl: string): Promise<boolean> {
   const root = new URL(job.websiteUrl);
   const normalized = normalizeInternalUrl(rawUrl, root);
-  if (!normalized || isExcluded(normalized, job.excludePatterns)) return false;
+  if (!normalized) return false;
+  if (isExcluded(normalized, job.excludePatterns)) {
+    await recordExcludedPage(ctx, job, normalized);
+    return false;
+  }
   const created = await createQueueItem(ctx, 'PAGE', normalized);
   if (!created) return false;
   job.pagesQueued += 1;
@@ -687,7 +701,7 @@ async function beginVerification(ctx: TenantContext, job: CrawlJob): Promise<voi
     } catch { continue; }
     // Excluded URLs are intentionally not re-verified and will be removed from the synchronized snapshot.
     if (isExcluded(page.url, job.excludePatterns)) {
-      job.pagesExcluded = (job.pagesExcluded || 0) + 1;
+      await recordExcludedPage(ctx, job, page.url);
       continue;
     }
     await enqueueVerify(ctx, job, page.url);
@@ -738,9 +752,13 @@ async function processDiscoveryStep(ctx: TenantContext, current: { ref: any; job
           } else {
             const locations = decodeSitemapLocations(response.text);
             if (/<sitemapindex\b/i.test(response.text)) {
-              await runBatches(locations, 20, async (location) => enqueueSitemap(ctx, job, location));
+              await runBatches(locations, 20, async (location) => enqueueSitemap(ctx, job, location), async () => {
+                await setDoc(current.ref, job, { merge: false });
+              });
             } else {
-              await runBatches(locations, 100, async (location) => enqueuePage(ctx, job, location));
+              await runBatches(locations, 100, async (location) => enqueuePage(ctx, job, location), async () => {
+                await setDoc(current.ref, job, { merge: false });
+              });
             }
           }
         }

@@ -3,7 +3,7 @@ import { useBrand } from '../context/BrandContext';
 import type { TenantBrand } from '../shared/brand';
 import { DAY_NAMES, brandTzLabel, brandWorkingDaysLabel, brandWorkingWindowLabel, fmtHour, workingHoursForDay } from '../shared/brand';
 import {
-  Calendar as CalendarIcon,
+  Calendar,
   Video,
   Clock,
   CheckCircle2,
@@ -24,6 +24,8 @@ import {
   Users,
   ChevronLeft,
   ChevronRight,
+  CircleDot,
+  CalendarClock,
   Search,
   List,
   CalendarDays,

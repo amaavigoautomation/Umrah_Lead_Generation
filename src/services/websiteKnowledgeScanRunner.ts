@@ -47,7 +47,7 @@ export function startWebsiteKnowledgeScanRunner(tenantId: string): Promise<void>
           } else {
             state = await readScanState();
             if (!state.job && state.config?.lastReport) {
-              emitScanEvent('completed', { tenantId, report: state.lastReport });
+              emitScanEvent('completed', { tenantId, report: state.config?.lastReport });
               return;
             }
             if (state.job) {

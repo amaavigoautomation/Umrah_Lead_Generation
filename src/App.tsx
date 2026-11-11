@@ -2705,7 +2705,7 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
             )}
 
             {activeTab === 'scheduling' && (
-              <DemoSchedulingView leads={leads} tenantId={currentTenantId} canEditSettings={currentUser?.role === 'ADMIN'} />
+              <DemoSchedulingView leads={leads} contacts={contacts} tenantId={currentTenantId} canEditSettings={currentUser?.role === 'ADMIN'} />
             )}
 
             {activeTab === 'knowledge' && (

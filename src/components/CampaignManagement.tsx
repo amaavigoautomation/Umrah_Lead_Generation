@@ -107,6 +107,14 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
     selectedCampaignIdRef.current = selectedCampaignId;
   }, [selectedCampaignId]);
   const [selectedCampaign, setSelectedCampaign] = useState<Campaign | null>(null);
+  // Campaign directory controls are separate from recipient filters used inside a campaign.
+  const [campaignDirectorySearch, setCampaignDirectorySearch] = useState('');
+  const [campaignDirectoryStatus, setCampaignDirectoryStatus] = useState('ALL');
+  const [campaignDirectorySort, setCampaignDirectorySort] = useState<'activity' | 'sent' | 'replies' | 'name'>('activity');
+  const [campaignDirectoryPage, setCampaignDirectoryPage] = useState(1);
+  const [activeCampaignTab, setActiveCampaignTab] = useState<'overview' | 'recipients' | 'activity' | 'settings'>('overview');
+  const [activeCreateStep, setActiveCreateStep] = useState<'basics' | 'audience' | 'mapping' | 'content' | 'delivery' | 'review'>('basics');
+  const campaignDirectoryPageSize = 10;
   const [campaignLeads, setCampaignLeads] = useState<CampaignLead[]>([]);
   const [campaignRuns, setCampaignRuns] = useState<CampaignRun[]>([]);
   const [templates, setTemplates] = useState<EmailTemplate[]>([]);
@@ -230,6 +238,7 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
   };
 
   const openCreateCampaignModal = async (preferredTemplateId?: string) => {
+    setActiveCreateStep('basics');
     setCampaignMode('PREDEFINED');
     setIsCreateModalOpen(true);
     const dbTpls = await fetchTemplatesDirectlyFromDb();
@@ -442,6 +451,7 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
 
   // Campaign Selection Handler - Instant, stable selection that is never overwritten by background polls
   const handleSelectCampaign = (camp: Campaign) => {
+    setActiveCampaignTab('overview');
     setSelectedCampaignId(camp.campaignId);
     selectedCampaignIdRef.current = camp.campaignId;
     setSelectedCampaign(camp);
@@ -1404,8 +1414,40 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
     return templates.find((t) => t.templateId === selectedCampaign?.templateId) || templates[0];
   }, [templates, selectedCampaign?.templateId]);
 
+  const directoryStatusOptions = ['ALL', 'DRAFT', 'SCHEDULED', 'RUNNING', 'PAUSED', 'COMPLETED', 'FAILED'] as const;
+  const filteredDirectoryCampaigns = useMemo(() => {
+    const search = campaignDirectorySearch.trim().toLowerCase();
+    return [...campaigns]
+      .filter((campaign) => campaignDirectoryStatus === 'ALL' || campaign.status === campaignDirectoryStatus)
+      .filter((campaign) => {
+        if (!search) return true;
+        return [campaign.name, campaign.sourceDatabaseName, campaign.sourceFileName, campaign.templateName, campaign.type]
+          .some((value) => String(value || '').toLowerCase().includes(search));
+      })
+      .sort((a, b) => {
+        if (campaignDirectorySort === 'name') return (a.name || '').localeCompare(b.name || '');
+        if (campaignDirectorySort === 'sent') return (b.sentCount || 0) - (a.sentCount || 0);
+        if (campaignDirectorySort === 'replies') return (b.repliedCount || 0) - (a.repliedCount || 0);
+        return new Date(b.updatedAt || b.createdAt || 0).getTime() - new Date(a.updatedAt || a.createdAt || 0).getTime();
+      });
+  }, [campaigns, campaignDirectorySearch, campaignDirectoryStatus, campaignDirectorySort]);
+  const campaignDirectoryPages = Math.max(1, Math.ceil(filteredDirectoryCampaigns.length / campaignDirectoryPageSize));
+  const visibleDirectoryCampaigns = filteredDirectoryCampaigns.slice((campaignDirectoryPage - 1) * campaignDirectoryPageSize, campaignDirectoryPage * campaignDirectoryPageSize);
+  const campaignDirectoryStats = {
+    running: campaigns.filter((campaign) => campaign.status === 'RUNNING').length,
+    scheduled: campaigns.filter((campaign) => campaign.status === 'SCHEDULED').length,
+    sent: campaigns.reduce((total, campaign) => total + (campaign.sentCount || 0), 0),
+    replies: campaigns.reduce((total, campaign) => total + (campaign.repliedCount || 0), 0),
+  };
+  const formatDirectoryActivity = (value?: string) => {
+    if (!value) return '—';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '—';
+    return new Intl.DateTimeFormat('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: timezone }).format(date);
+  };
+
   return (
-    <div id="campaign-management-root" className="flex flex-col h-full bg-slate-50 text-slate-900 overflow-hidden font-sans">
+    <div id="campaign-management-root" data-umrah360-module="campaigns" className="flex flex-col h-full bg-slate-50 text-slate-900 overflow-hidden font-sans">
       {/* Top Header */}
       <header className="px-6 py-4 bg-white border-b border-slate-200 flex items-center justify-between shrink-0 shadow-xs">
         <div className="flex items-center gap-4">
@@ -1427,6 +1469,12 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
 
         {/* Campaign Actions */}
       <div className="flex items-center gap-2">
+        {selectedCampaign && (
+          <button type="button" onClick={() => { setSelectedCampaign(null); setSelectedCampaignId(null); selectedCampaignIdRef.current = null; }}
+            className="hidden sm:inline-flex items-center gap-2 px-3 py-2 text-sm font-semibold text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition">
+            <span aria-hidden="true">←</span> All campaigns
+          </button>
+        )}
         <button
           id="refresh-campaigns-btn"
           onClick={() => {
@@ -1453,135 +1501,6 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
 
       {/* Main Body */}
       <div className="flex-1 flex overflow-hidden">
-          {/* Left Sidebar: Campaigns List */}
-          <aside className="w-80 border-r border-slate-200 bg-white flex flex-col shrink-0">
-            <div className="p-3 border-b border-slate-200 flex items-center justify-between">
-              <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                All Campaigns
-              </span>
-              <span className="text-xs text-slate-600 bg-slate-100 px-2 py-0.5 rounded-full font-medium">
-                {campaigns.length}
-              </span>
-            </div>
-
-            <div className="flex-1 overflow-y-auto p-2 space-y-1.5">
-              {campaigns.length === 0 ? (
-                <div className="p-6 text-center text-slate-400">
-                  <Layers className="w-8 h-8 mx-auto mb-2 text-slate-400 opacity-60" />
-                  <p className="text-sm font-medium text-slate-600">No campaigns yet</p>
-                  <p className="text-xs text-slate-400 mt-1">Create your first campaign to begin cold outreach</p>
-                  <button
-                    onClick={() => openCreateCampaignModal()}
-                    className="mt-3 px-3 py-1.5 text-xs bg-orange-50 text-orange-600 border border-orange-200 rounded-lg hover:bg-orange-100 transition inline-block font-semibold"
-                  >
-                    Create Campaign
-                  </button>
-                </div>
-              ) : (
-                campaigns.map((camp) => {
-                  const isSelected = camp.campaignId === selectedCampaignId;
-                  // Counters come from the campaign document (kept up to date by the server). The leads table
-                  // only holds one page, so counting it would be wrong.
-                  const liveCampTotal = camp.totalLeads || 0;
-                  const liveCampSent = camp.sentCount || 0;
-                  const liveCampReplied = camp.repliedCount || 0;
-                  const percentSent = liveCampTotal > 0 ? Math.round((liveCampSent / liveCampTotal) * 100) : 0;
-                  return (
-                    <div
-                      key={camp.campaignId}
-                      id={`campaign-card-${camp.campaignId}`}
-                      role="button"
-                      tabIndex={0}
-                      onClick={() => handleSelectCampaign(camp)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' || e.key === ' ') {
-                          e.preventDefault();
-                          handleSelectCampaign(camp);
-                        }
-                      }}
-                      className={`p-3 rounded-xl cursor-pointer border transition-all select-none group active:scale-[0.99] ${
-                        isSelected
-                          ? 'bg-orange-50/70 border-orange-500 shadow-xs ring-1 ring-orange-500/30'
-                          : 'bg-white border-slate-200/90 hover:bg-slate-50 hover:border-slate-300'
-                      }`}
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex items-center gap-1.5 flex-1 min-w-0">
-                          <h3 className={`text-sm font-semibold truncate transition-colors ${
-                            isSelected ? 'text-orange-600 font-bold' : 'text-slate-800 group-hover:text-orange-600'
-                          }`}>
-                            {camp.name}
-                          </h3>
-                          {isSelected && (
-                            <span className="text-[9px] px-1.5 py-0.2 bg-orange-100 text-orange-700 border border-orange-200 font-bold rounded-sm uppercase tracking-wider shrink-0">
-                              Selected
-                            </span>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-1.5 shrink-0">
-                          <span
-                            className={`text-[10px] px-2 py-0.5 font-medium rounded-full ${
-                              camp.status === 'RUNNING'
-                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                                : camp.status === 'PAUSED'
-                                ? 'bg-amber-50 text-amber-700 border border-amber-200'
-                                : camp.status === 'COMPLETED'
-                                ? 'bg-blue-50 text-blue-700 border border-blue-200'
-                                : camp.status === 'SCHEDULED'
-                                ? 'bg-sky-50 text-sky-700 border border-sky-200'
-                                : 'bg-slate-100 text-slate-600'
-                            }`}
-                            title={camp.status === 'SCHEDULED' && camp.scheduledStartAt ? formatZoned(camp.scheduledStartAt, camp.scheduledTimezone || timezone) : undefined}
-                          >
-                            {camp.status === 'SCHEDULED' && camp.scheduledStartAt
-                              ? `Scheduled · ${new Intl.DateTimeFormat('en-IN', { timeZone: camp.scheduledTimezone || timezone, day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' }).format(new Date(camp.scheduledStartAt))}`
-                              : camp.status}
-                          </span>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setCampaignToDelete(camp);
-                              setIsDeleteModalOpen(true);
-                            }}
-                            title="Delete Campaign"
-                            className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </div>
-
-                      <div className="mt-2 text-xs text-slate-500 flex items-center justify-between">
-                        <span>{liveCampTotal} Leads</span>
-                        <span>{percentSent}% Sent</span>
-                      </div>
-
-                      {/* Progress bar */}
-                      <div className="mt-1.5 w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
-                        <div
-                          className="bg-orange-500 h-full rounded-full transition-all duration-300"
-                          style={{ width: `${percentSent}%` }}
-                        />
-                      </div>
-
-                      {/* Quick metrics */}
-                      <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500">
-                        <span className="flex items-center gap-1">
-                          <CheckCircle2 className="w-3 h-3 text-emerald-500" />
-                          <span>{liveCampSent}</span>
-                        </span>
-                        <span className="flex items-center gap-1">
-                          <MessageSquare className="w-3 h-3 text-sky-500" />
-                          <span>{liveCampReplied}</span>
-                        </span>
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          </aside>
-
           {/* Right Main Content: Selected Campaign Execution Dashboard */}
           <main className="flex-1 flex flex-col overflow-y-auto bg-slate-50">
             {selectedCampaign ? (
@@ -1624,8 +1543,25 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                   </div>
                 )}
 
+                <nav aria-label="Campaign workspace sections" className="sticky top-0 z-20 -mx-1 flex items-center gap-1 overflow-x-auto rounded-xl border border-slate-200 bg-white/95 p-1.5 shadow-sm backdrop-blur">
+                  {([
+                    ['overview', 'Overview'],
+                    ['recipients', 'Recipients'],
+                    ['activity', 'Activity & Runs'],
+                    ['settings', 'Settings'],
+                  ] as const).map(([tab, label]) => (
+                    <button key={tab} type="button" onClick={() => {
+                      setActiveCampaignTab(tab);
+                      document.getElementById('campaign-' + tab)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }} className={"shrink-0 rounded-lg px-4 py-2 text-xs font-semibold transition " + (activeCampaignTab === tab ? 'bg-slate-900 text-white' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-800')}>
+                      {label}
+                    </button>
+                  ))}
+                  <span className="ml-auto hidden md:inline-flex shrink-0 items-center gap-1.5 px-3 text-[10px] text-slate-400"><span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> Live campaign data</span>
+                </nav>
+
                 {/* Campaign Header Toolbar */}
-                <div className="flex flex-wrap items-center justify-between gap-4 p-5 bg-white border border-slate-200 rounded-2xl shadow-2xs">
+                <div id="campaign-overview" className="scroll-mt-20 flex flex-wrap items-center justify-between gap-4 p-5 bg-white border border-slate-200 rounded-2xl shadow-2xs">
                   <div>
                     <div className="flex items-center gap-3">
                       <h2 className="text-xl font-bold text-slate-900">{selectedCampaign.name}</h2>
@@ -1900,6 +1836,27 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                   );
                 })()}
 
+                <section id="campaign-settings" className="scroll-mt-20 rounded-2xl border border-slate-200 bg-white p-5 shadow-2xs">
+                  <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+                    <div>
+                      <div className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-400">Campaign configuration</div>
+                      <h3 className="mt-1 text-sm font-bold text-slate-900">Source, content and schedule</h3>
+                      <p className="mt-1 text-xs text-slate-500">Reference details for this campaign. Audience snapshots are preserved after creation.</p>
+                    </div>
+                    {selectedCampaign.sourceDatabaseId && <span className="inline-flex items-center gap-1.5 self-start rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-semibold text-emerald-700"><CheckCircle2 className="h-3.5 w-3.5" /> Snapshot captured</span>}
+                  </div>
+                  <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
+                    <div className="rounded-xl bg-slate-50 p-3"><div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Channel</div><div className="mt-1 text-sm font-semibold text-slate-800">{selectedCampaign.type || 'EMAIL'}</div></div>
+                    <div className="rounded-xl bg-slate-50 p-3"><div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Audience source</div><div className="mt-1 truncate text-sm font-semibold text-slate-800" title={selectedCampaign.sourceDatabaseName || selectedCampaign.sourceFileName || 'Manual audience'}>{selectedCampaign.sourceDatabaseName || selectedCampaign.sourceFileName || 'Manual audience'}</div></div>
+                    <div className="rounded-xl bg-slate-50 p-3"><div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Email content</div><div className="mt-1 truncate text-sm font-semibold text-slate-800" title={selectedCampaign.templateName || 'No template name'}>{selectedCampaign.templateName || 'No template name'}</div></div>
+                    <div className="rounded-xl bg-slate-50 p-3"><div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Schedule timezone</div><div className="mt-1 text-sm font-semibold text-slate-800">{selectedCampaign.scheduledTimezone || timezone}</div></div>
+                  </div>
+                  {selectedCampaign.sourceDatabaseId && (
+                    <p className="mt-3 flex items-start gap-2 text-[11px] leading-relaxed text-emerald-700"><Database className="mt-0.5 h-3.5 w-3.5 shrink-0" /> This campaign uses a point-in-time audience snapshot from {selectedCampaign.sourceDatabaseName || 'the selected database'}. Changes made to that database later do not change the campaign audience.</p>
+                  )}
+                </section>
+
+                <div id="campaign-activity" className="scroll-mt-20" />
                 {/* Runs History Accordion / Bar if multiple runs exist */}
                 {campaignRuns.length > 0 && (
                   <div className="p-4 bg-white border border-slate-200 rounded-xl shadow-2xs">
@@ -1937,7 +1894,7 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                 )}
 
                 {/* Leads Table Card */}
-                <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-2xs">
+                <div id="campaign-recipients" className="scroll-mt-20 bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-2xs">
                   {/* Table Controls Header */}
                   <div className="p-4 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3 bg-white">
                     <div className="flex items-center gap-2">
@@ -2192,8 +2149,101 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                 </div>
               </div>
             ) : (
-              <div className="p-12 text-center text-slate-400">
-                <p>Select a campaign on the left or create a new campaign</p>
+              <div className="campaign-directory w-full max-w-[1600px] mx-auto p-5 md:p-7 space-y-6 overflow-y-auto">
+                <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4">
+                  <div>
+                    <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-orange-600"><span className="h-2 w-2 rounded-full bg-orange-500" /> Campaign workspace</div>
+                    <h2 className="mt-2 text-2xl md:text-3xl font-bold tracking-tight text-slate-950">Outbound campaigns</h2>
+                    <p className="mt-1 text-sm text-slate-500">Create, schedule and monitor every outbound campaign from one place.</p>
+                  </div>
+                  <div className="flex items-center gap-2 text-xs text-slate-500">
+                    <span className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-2"><span className="h-2 w-2 rounded-full bg-emerald-500" /> Live workspace</span>
+                    <span className="rounded-full border border-slate-200 bg-white px-3 py-2">{campaigns.length} total campaigns</span>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
+                  <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><div className="flex items-center justify-between"><span className="text-xs font-medium text-slate-500">Running</span><span className="h-8 w-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center"><Play className="w-4 h-4" /></span></div><div className="mt-3 text-2xl font-bold tabular-nums text-slate-950">{campaignDirectoryStats.running}</div><div className="mt-1 text-[11px] text-slate-400">Actively sending</div></div>
+                  <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><div className="flex items-center justify-between"><span className="text-xs font-medium text-slate-500">Scheduled</span><span className="h-8 w-8 rounded-xl bg-sky-50 text-sky-600 flex items-center justify-center"><Calendar className="w-4 h-4" /></span></div><div className="mt-3 text-2xl font-bold tabular-nums text-slate-950">{campaignDirectoryStats.scheduled}</div><div className="mt-1 text-[11px] text-slate-400">Queued to start</div></div>
+                  <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><div className="flex items-center justify-between"><span className="text-xs font-medium text-slate-500">Emails sent</span><span className="h-8 w-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center"><Send className="w-4 h-4" /></span></div><div className="mt-3 text-2xl font-bold tabular-nums text-slate-950">{campaignDirectoryStats.sent.toLocaleString('en-IN')}</div><div className="mt-1 text-[11px] text-slate-400">Across all campaigns</div></div>
+                  <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><div className="flex items-center justify-between"><span className="text-xs font-medium text-slate-500">Replies</span><span className="h-8 w-8 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center"><MessageSquare className="w-4 h-4" /></span></div><div className="mt-3 text-2xl font-bold tabular-nums text-slate-950">{campaignDirectoryStats.replies.toLocaleString('en-IN')}</div><div className="mt-1 text-[11px] text-slate-400">Confirmed responses</div></div>
+                </div>
+
+                <section className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+                  <div className="p-4 md:p-5 border-b border-slate-100 space-y-4">
+                    <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
+                      <div><h3 className="text-base font-bold text-slate-900">Campaign directory</h3><p className="mt-0.5 text-xs text-slate-500">Search by campaign, source database or email template.</p></div>
+                      <div className="flex w-full lg:w-auto flex-col sm:flex-row gap-2">
+                        <div className="relative w-full sm:w-72"><Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                          <input type="search" value={campaignDirectorySearch} onChange={(event) => { setCampaignDirectorySearch(event.target.value); setCampaignDirectoryPage(1); }} placeholder="Search campaigns..." aria-label="Search campaigns" className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm text-slate-800 placeholder:text-slate-400 outline-none focus:ring-2 focus:ring-orange-100 focus:border-orange-300" />
+                        </div>
+                        <select aria-label="Sort campaigns" value={campaignDirectorySort} onChange={(event) => setCampaignDirectorySort(event.target.value as 'activity' | 'sent' | 'replies' | 'name')} className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs font-semibold text-slate-600 outline-none focus:ring-2 focus:ring-orange-100">
+                          <option value="activity">Sort: Last activity</option>
+                          <option value="sent">Sort: Emails sent</option>
+                          <option value="replies">Sort: Replies</option>
+                          <option value="name">Sort: Campaign name</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5">
+                      {directoryStatusOptions.map((status) => {
+                        const count = status === 'ALL' ? campaigns.length : campaigns.filter((campaign) => campaign.status === status).length;
+                        const active = campaignDirectoryStatus === status;
+                        return <button key={status} type="button" onClick={() => { setCampaignDirectoryStatus(status); setCampaignDirectoryPage(1); }} className={"shrink-0 px-3 py-2 rounded-lg text-xs font-semibold transition " + (active ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-800')}>
+                          {status === 'ALL' ? 'All campaigns' : status.charAt(0) + status.slice(1).toLowerCase()}
+                          <span className={"ml-1.5 tabular-nums " + (active ? 'text-slate-300' : 'text-slate-400')}>{count}</span>
+                        </button>;
+                      })}
+                    </div>
+                  </div>
+
+                  {loading && campaigns.length === 0 ? (
+                    <div className="p-12 text-center text-sm text-slate-500"><RefreshCw className="w-5 h-5 mx-auto mb-3 animate-spin text-orange-500" />Loading campaigns...</div>
+                  ) : visibleDirectoryCampaigns.length === 0 ? (
+                    <div className="px-6 py-16 text-center">
+                      <div className="mx-auto h-12 w-12 rounded-2xl bg-slate-100 text-slate-500 flex items-center justify-center"><Send className="w-5 h-5" /></div>
+                      <h4 className="mt-4 text-sm font-bold text-slate-900">{campaigns.length === 0 ? 'No campaigns yet' : 'No matching campaigns'}</h4>
+                      <p className="mt-1 text-xs text-slate-500">{campaigns.length === 0 ? 'Build your first campaign to start reaching the right audience.' : 'Try another search term or status filter.'}</p>
+                      {campaigns.length === 0 && <button type="button" onClick={() => openCreateCampaignModal()} className="mt-4 inline-flex items-center gap-2 rounded-lg bg-orange-500 px-4 py-2.5 text-xs font-semibold text-white hover:bg-orange-600"><Plus className="w-4 h-4" /> Create campaign</button>}
+                    </div>
+                  ) : (
+                    <>
+                      <div className="overflow-x-auto"><table className="w-full min-w-[980px] text-left">
+                        <thead className="bg-slate-50/80 border-b border-slate-100"><tr className="text-[10px] uppercase tracking-[0.12em] text-slate-400">
+                          <th className="px-5 py-3 font-semibold">Campaign</th><th className="px-4 py-3 font-semibold">Status</th><th className="px-4 py-3 font-semibold">Audience / Source</th><th className="px-4 py-3 font-semibold min-w-[180px]">Sent progress</th><th className="px-4 py-3 font-semibold">Replies</th><th className="px-4 py-3 font-semibold">Last activity</th><th className="px-4 py-3 font-semibold text-right"> </th>
+                        </tr></thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {visibleDirectoryCampaigns.map((campaign) => {
+                            const total = campaign.totalLeads || 0;
+                            const sent = campaign.sentCount || 0;
+                            const replied = campaign.repliedCount || 0;
+                            const progress = total > 0 ? Math.min(100, Math.round(sent / total * 100)) : 0;
+                            const statusTone = campaign.status === 'RUNNING' ? 'bg-emerald-50 text-emerald-700 ring-emerald-200' : campaign.status === 'SCHEDULED' ? 'bg-sky-50 text-sky-700 ring-sky-200' : campaign.status === 'COMPLETED' ? 'bg-blue-50 text-blue-700 ring-blue-200' : campaign.status === 'FAILED' ? 'bg-rose-50 text-rose-700 ring-rose-200' : campaign.status === 'PAUSED' ? 'bg-amber-50 text-amber-700 ring-amber-200' : 'bg-slate-100 text-slate-600 ring-slate-200';
+                            const source = campaign.sourceDatabaseName || campaign.sourceFileName || 'Manual audience';
+                            return <tr key={campaign.campaignId} role="button" tabIndex={0} aria-label={"Open campaign " + campaign.name} onClick={() => handleSelectCampaign(campaign)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); handleSelectCampaign(campaign); } }} className="group cursor-pointer hover:bg-orange-50/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-orange-400 transition-colors">
+                              <td className="px-5 py-4"><div className="flex items-center gap-3"><div className="h-9 w-9 shrink-0 rounded-xl bg-orange-50 text-orange-600 flex items-center justify-center border border-orange-100"><Send className="w-4 h-4" /></div><div className="min-w-0"><div className="font-semibold text-sm text-slate-900 truncate max-w-[260px]">{campaign.name || 'Untitled campaign'}</div><div className="mt-1 flex items-center gap-2 text-[11px] text-slate-400"><span>{campaign.type || 'EMAIL'}</span><span>·</span><span className="truncate max-w-[160px]">{campaign.templateName || 'No template label'}</span></div></div></div></td>
+                              <td className="px-4 py-4"><span className={"inline-flex rounded-full px-2.5 py-1 text-[10px] font-bold tracking-wide ring-1 ring-inset " + statusTone}>{campaign.status}</span></td>
+                              <td className="px-4 py-4"><div className="text-sm font-semibold text-slate-700 tabular-nums">{total.toLocaleString('en-IN')} leads</div><div className="mt-1 text-[11px] text-slate-400 truncate max-w-[190px]" title={source}>{source}</div></td>
+                              <td className="px-4 py-4"><div className="flex items-center justify-between text-xs"><span className="font-semibold text-slate-700 tabular-nums">{sent.toLocaleString('en-IN')} <span className="font-normal text-slate-400">/ {total.toLocaleString('en-IN')}</span></span><span className="text-slate-400 tabular-nums">{progress}%</span></div><div className="mt-2 h-1.5 rounded-full bg-slate-100 overflow-hidden"><div className="h-full rounded-full bg-orange-500 transition-all" style={{ width: progress + '%' }} /></div></td>
+                              <td className="px-4 py-4"><div className="text-sm font-semibold text-slate-800 tabular-nums">{replied.toLocaleString('en-IN')}</div><div className="mt-0.5 text-[10px] text-slate-400">{sent > 0 ? (replied / sent * 100).toFixed(1) + '% of sent' : 'No sends yet'}</div></td>
+                              <td className="px-4 py-4"><div className="text-xs font-medium text-slate-600">{formatDirectoryActivity(campaign.updatedAt || campaign.createdAt)}</div><div className="mt-1 text-[10px] text-slate-400">{campaign.status === 'SCHEDULED' && campaign.scheduledStartAt ? 'Starts ' + formatDirectoryActivity(campaign.scheduledStartAt) : campaign.status === 'RUNNING' ? 'Live sending' : campaign.status === 'COMPLETED' ? 'Completed' : 'Updated'}</div></td>
+                              <td className="px-4 py-4 text-right"><button type="button" onClick={(event) => { event.stopPropagation(); handleSelectCampaign(campaign); }} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 group-hover:border-orange-200 group-hover:text-orange-700">Open →</button></td>
+                            </tr>;
+                          })}
+                        </tbody>
+                      </table></div>
+                      <div className="px-5 py-3 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500">
+                        <span>Showing {(campaignDirectoryPage - 1) * campaignDirectoryPageSize + 1}–{Math.min(campaignDirectoryPage * campaignDirectoryPageSize, filteredDirectoryCampaigns.length)} of {filteredDirectoryCampaigns.length} campaigns</span>
+                        <div className="flex items-center gap-2">
+                          <button type="button" disabled={campaignDirectoryPage <= 1} onClick={() => setCampaignDirectoryPage((page) => Math.max(1, page - 1))} className="rounded-lg border border-slate-200 px-3 py-2 font-semibold disabled:opacity-40">Previous</button>
+                          <span className="tabular-nums">Page {campaignDirectoryPage} of {campaignDirectoryPages}</span>
+                          <button type="button" disabled={campaignDirectoryPage >= campaignDirectoryPages} onClick={() => setCampaignDirectoryPage((page) => Math.min(campaignDirectoryPages, page + 1))} className="rounded-lg border border-slate-200 px-3 py-2 font-semibold disabled:opacity-40">Next</button>
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </section>
+                <div className="flex items-center justify-between gap-3 text-[11px] text-slate-400"><span>Metrics reflect campaign-level counters. Open tracking is estimated; replies are confirmed.</span><span>Workspace timezone: {timezone}</span></div>
               </div>
             )}
           </main>
@@ -2205,7 +2255,7 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
       {/* CREATE CAMPAIGN MODAL (WIZARD) */}
       {isCreateModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden shadow-2xl text-slate-900">
+          <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-5xl max-h-[92vh] flex flex-col overflow-hidden shadow-2xl text-slate-900">
             {/* Modal Header */}
             <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
               <div>
@@ -2224,7 +2274,21 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
 
             {/* Modal Scrollable Content */}
             <div className="flex-1 overflow-y-auto p-6 space-y-5">
+              <nav aria-label="Campaign setup steps" className="sticky top-0 z-20 -mx-2 flex items-center gap-1 overflow-x-auto rounded-xl border border-slate-200 bg-white/95 p-1.5 shadow-sm backdrop-blur">
+                {([
+                  ['basics', '1', 'Basics'], ['audience', '2', 'Audience'], ['mapping', '3', 'Validate'],
+                  ['content', '4', 'Content'], ['delivery', '5', 'Delivery'], ['review', '6', 'Review'],
+                ] as const).map(([step, number, label]) => (
+                  <button key={step} type="button" onClick={() => {
+                    setActiveCreateStep(step);
+                    document.getElementById('campaign-create-' + step)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                  }} className={"shrink-0 inline-flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold transition " + (activeCreateStep === step ? 'bg-slate-900 text-white' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-800')}>
+                    <span className={"flex h-5 w-5 items-center justify-center rounded-full text-[10px] " + (activeCreateStep === step ? 'bg-white/15 text-white' : 'bg-slate-100 text-slate-500')}>{number}</span>{label}
+                  </button>
+                ))}
+              </nav>
               {/* Campaign Name */}
+              <div id="campaign-create-basics" className="scroll-mt-20" />
               <div>
                 <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1.5">
                   Campaign Name *
@@ -2271,6 +2335,7 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                 </div>
               </div>
 
+              <div id="campaign-create-audience" className="scroll-mt-20" />
               {/* Lead Sources Selection Tabs */}
               <div>
                 <div className="flex items-center justify-between mb-2">
@@ -2462,6 +2527,7 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                 )}
               </div>
 
+              <div id="campaign-create-mapping" className="scroll-mt-20" />
               {/* Column Mapping Preview if headers detected */}
               {rawHeaders.length > 0 && (
                 <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
@@ -2584,6 +2650,7 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                 </div>
               )}
 
+              <div id="campaign-create-content" className="scroll-mt-20" />
               {/* Campaign Mode Selection */}
               <div>
                 <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-2">
@@ -2691,7 +2758,7 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                                     }
                                     if (tpl.format === 'visual' || (!tpl.format && (tpl.isHtml || tpl.htmlBody))) {
                                       return (
-                                        <span className="text-[9px] px-1.5 py-0.5 bg-indigo-50 text-indigo-700 rounded font-medium">
+                                        <span className="text-[9px] px-1.5 py-0.5 bg-blue-50 text-blue-700 rounded font-medium">
                                           Visual Styled Template
                                         </span>
                                       );
@@ -2865,6 +2932,7 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                 </div>
               )}
 
+              <div id="campaign-create-delivery" className="scroll-mt-20" />
               {/* When to send: now / draft / schedule */}
               <div className="pt-2 space-y-2">
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
@@ -2923,6 +2991,7 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
               </div>
             )}
 
+            <div id="campaign-create-review" className="scroll-mt-20" />
             {/* Modal Actions */}
             <div className="px-6 py-4 border-t border-slate-200 bg-slate-50 flex items-center justify-between gap-3">
               <div className="text-xs text-slate-500">

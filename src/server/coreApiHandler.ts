@@ -62,9 +62,12 @@ import {
   deleteLeadDatabase,
   getCampaignDatabaseSnapshot,
   importLeadDatabaseRows,
+  listLeadDatabaseCampaignCounts,
+  listLeadDatabaseCampaignUsage,
   listLeadDatabaseEntries,
   listLeadDatabaseImports,
   listLeadDatabases,
+  previewLeadDatabaseRows,
   updateLeadDatabase,
 } from './leadDatabaseService.js';
 import { CHANNELS, isSupportedChannelMode, normalizeChannelMode, normalizeChannelModes } from '../shared/channelModes.js';
@@ -3340,9 +3343,12 @@ ${signature || defSig}`;
   // Workspace lead databases. These collections are server-written and always tenant-scoped.
   if (url === '/api/lead-databases' && req.method === 'GET') {
     try {
-      const databases = await listLeadDatabases(activeTenantCtx);
+      const [databases, campaignCounts] = await Promise.all([
+        listLeadDatabases(activeTenantCtx),
+        listLeadDatabaseCampaignCounts(activeTenantCtx),
+      ]);
       res.statusCode = 200;
-      res.end(JSON.stringify({ success: true, databases }));
+      res.end(JSON.stringify({ success: true, databases, campaignCounts }));
     } catch (err: any) {
       res.statusCode = 500;
       res.end(JSON.stringify({ error: err?.message || 'Could not load databases.' }));
@@ -3373,6 +3379,8 @@ ${signature || defSig}`;
       const page = await listLeadDatabaseEntries(activeTenantCtx, {
         pageSize: Number(params.get('limit')) || 50,
         cursor: params.get('cursor') || '',
+        search: params.get('q') || '',
+        databaseId: params.get('databaseId') || undefined,
       });
       res.statusCode = 200;
       res.end(JSON.stringify({ success: true, ...page }));
@@ -3391,6 +3399,7 @@ ${signature || defSig}`;
         databaseId: databaseLeadsMatch[1],
         pageSize: Number(params.get('limit')) || 50,
         cursor: params.get('cursor') || '',
+        search: params.get('q') || '',
       });
       res.statusCode = 200;
       res.end(JSON.stringify({ success: true, ...page }));
@@ -3410,6 +3419,34 @@ ${signature || defSig}`;
     } catch (err: any) {
       res.statusCode = 500;
       res.end(JSON.stringify({ error: err?.message || 'Could not load import history.' }));
+    }
+    return true;
+  }
+
+  const databasePreviewMatch = url.match(/^\/api\/lead-databases\/([a-zA-Z0-9_-]+)\/preview$/);
+  if (databasePreviewMatch && req.method === 'POST') {
+    try {
+      const result = await previewLeadDatabaseRows(activeTenantCtx, databasePreviewMatch[1], {
+        rows: Array.isArray(body?.rows) ? body.rows : [],
+      });
+      res.statusCode = 200;
+      res.end(JSON.stringify({ success: true, ...result }));
+    } catch (err: any) {
+      res.statusCode = 400;
+      res.end(JSON.stringify({ error: err?.message || 'Could not preview this import.' }));
+    }
+    return true;
+  }
+
+  const databaseCampaignUsageMatch = url.match(/^\/api\/lead-databases\/([a-zA-Z0-9_-]+)\/campaign-usage$/);
+  if (databaseCampaignUsageMatch && req.method === 'GET') {
+    try {
+      const campaigns = await listLeadDatabaseCampaignUsage(activeTenantCtx, databaseCampaignUsageMatch[1]);
+      res.statusCode = 200;
+      res.end(JSON.stringify({ success: true, campaigns }));
+    } catch (err: any) {
+      res.statusCode = 400;
+      res.end(JSON.stringify({ error: err?.message || 'Could not load campaign usage.' }));
     }
     return true;
   }

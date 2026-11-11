@@ -187,7 +187,17 @@ export const brandFallbackAgency = (b: TenantBrand, firstName: string): string =
 export const brandIntro = (b: TenantBrand): string =>
   `${b.companyName}${b.websiteUrl ? ` (${brandHost(b)})` : ''}${b.tagline ? `, ${b.tagline}` : ''}`;
 
-export const brandTzLabel = (b: TenantBrand): string => b.timezoneLabel || b.timezone;
+export function timezoneLabelFor(timezone: string, date: Date = new Date()): string {
+  try {
+    return new Intl.DateTimeFormat('en-US', { timeZone: timezone, timeZoneName: 'short' })
+      .formatToParts(date)
+      .find((part) => part.type === 'timeZoneName')?.value || timezone;
+  } catch {
+    return '';
+  }
+}
+
+export const brandTzLabel = (b: TenantBrand): string => timezoneLabelFor(b.timezone) || b.timezone;
 
 export const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 

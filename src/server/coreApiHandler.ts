@@ -2015,6 +2015,7 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
       preferredDate,
       preferredPeriod,
       targetDaysCount,
+      calendarRange: requestedDays !== null && Number.isFinite(requestedDays) && requestedDays > 0,
       maxSlotsToReturn: count,
       accessToken: requestBearerToken || undefined,
     });

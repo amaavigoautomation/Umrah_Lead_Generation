@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useBrand } from '../context/BrandContext';
 import type { TenantBrand } from '../shared/brand';
-import { DAY_NAMES, brandTzLabel, brandWorkingDaysLabel, brandWorkingWindowLabel, fmtHour, workingHoursForDay } from '../shared/brand';
+import { DAY_NAMES, brandTzLabel, brandWorkingDaysLabel, brandWorkingWindowLabel, fmtHour, workingHoursForDay, timezoneLabelFor } from '../shared/brand';
 import {
   Calendar,
   Video,
@@ -72,6 +72,24 @@ const mondayOfDateKey = (dateKey: string) => {
 };
 const formatDateKey = (dateKey: string, options: Intl.DateTimeFormatOptions = {}) =>
   new Intl.DateTimeFormat('en-IN', { timeZone: 'UTC', ...options }).format(new Date(`${dateKey}T12:00:00.000Z`));
+
+const getIanaTimeZones = (): string[] => {
+  const intlWithTimeZones = Intl as unknown as { supportedValuesOf?: (key: string) => string[] };
+  const supported = intlWithTimeZones.supportedValuesOf?.('timeZone') || [
+    'Africa/Cairo', 'Africa/Johannesburg', 'America/Chicago', 'America/Denver',
+    'America/Los_Angeles', 'America/New_York', 'America/Phoenix', 'America/Sao_Paulo',
+    'Asia/Dubai', 'Asia/Hong_Kong', 'Asia/Kolkata', 'Asia/Kuala_Lumpur',
+    'Asia/Riyadh', 'Asia/Seoul', 'Asia/Shanghai', 'Asia/Singapore', 'Asia/Tokyo',
+    'Australia/Adelaide', 'Australia/Brisbane', 'Australia/Melbourne', 'Australia/Perth',
+    'Europe/Amsterdam', 'Europe/Berlin', 'Europe/Dublin', 'Europe/London',
+    'Europe/Madrid', 'Europe/Paris', 'Europe/Rome', 'Europe/Zurich',
+    'Pacific/Auckland', 'Pacific/Honolulu',
+  ];
+  return Array.from(new Set(['UTC', 'Asia/Kolkata', ...supported])).sort((a, b) => a.localeCompare(b));
+};
+
+const IANA_TIME_ZONES = getIanaTimeZones();
+
 interface DemoSchedulingViewProps {
   leads?: Lead[];
   contacts?: Contact[];
@@ -85,7 +103,7 @@ export const DemoSchedulingView: React.FC<DemoSchedulingViewProps> = ({ leads = 
   const [isSavingAvailability, setIsSavingAvailability] = useState(false);
   const [availabilitySaveMessage, setAvailabilitySaveMessage] = useState<string | null>(null);
   const [activeView, setActiveView] = useState<SchedulingView>('CALENDAR');
-  const [calendarMode, setCalendarMode] = useState<SchedulingCalendarMode>('WEEK');
+  const [calendarMode, setCalendarMode] = useState<SchedulingCalendarMode>('DAY');
   const [calendarAnchorDate, setCalendarAnchorDate] = useState(() => dateKeyInTimezone(new Date(), brand.timezone || 'Asia/Kolkata'));
   const [bookingSearch, setBookingSearch] = useState('');
   const [bookingStatusFilter, setBookingStatusFilter] = useState<'ALL' | 'UPCOMING' | Booking['status']>('ALL');
@@ -97,8 +115,11 @@ export const DemoSchedulingView: React.FC<DemoSchedulingViewProps> = ({ leads = 
   const [bookingDetailsTab, setBookingDetailsTab] = useState<'DETAILS' | 'ATTENDEES'>('DETAILS');
   useEffect(() => setAvailabilityDraft(brand), [brand]);
 
-  const updateAvailabilityText = (field: 'timezone' | 'timezoneLabel' | 'calendarEmail', value: string) => {
+  const updateAvailabilityText = (field: 'calendarEmail', value: string) => {
     setAvailabilityDraft((current) => ({ ...current, [field]: value }));
+  };
+  const updateAvailabilityTimezone = (timezone: string) => {
+    setAvailabilityDraft((current) => ({ ...current, timezone, timezoneLabel: timezoneLabelFor(timezone) }));
   };
   const toggleAvailabilityDay = (dayIndex: number) => {
     setAvailabilityDraft((current) => ({
@@ -115,6 +136,10 @@ export const DemoSchedulingView: React.FC<DemoSchedulingViewProps> = ({ leads = 
     });
   };
   const saveDemoAvailability = async () => {
+    if (!timezoneLabelFor(availabilityDraft.timezone)) {
+      setAvailabilitySaveMessage('Select a valid IANA timezone.');
+      return;
+    }
     if (!Number.isInteger(availabilityDraft.demoDurationMinutes) || availabilityDraft.demoDurationMinutes < 5 || availabilityDraft.demoDurationMinutes > 240) {
       setAvailabilitySaveMessage('Demo duration must be a whole number between 5 and 240 minutes.');
       return;
@@ -136,14 +161,16 @@ export const DemoSchedulingView: React.FC<DemoSchedulingViewProps> = ({ leads = 
       const res = await fetch(`/api/tenants/${encodeURIComponent(tenantId)}/brand`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ brand: availabilityDraft }),
+        body: JSON.stringify({ brand: { ...availabilityDraft, timezoneLabel: timezoneLabelFor(availabilityDraft.timezone) } }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error || `Request failed (${res.status})`);
       setBrand(data.brand);
       setAvailabilityDraft(data.brand);
+      const nextCalendarDate = dateKeyInTimezone(new Date(), data.brand.timezone || 'Asia/Kolkata');
+      setCalendarAnchorDate(nextCalendarDate);
       setAvailabilitySaveMessage('Demo booking availability saved.');
-      fetchAvailability();
+      fetchAvailability(mondayOfDateKey(nextCalendarDate));
     } catch (err: any) {
       setAvailabilitySaveMessage(err?.message || 'Could not save demo booking availability.');
     } finally {
@@ -166,6 +193,7 @@ export const DemoSchedulingView: React.FC<DemoSchedulingViewProps> = ({ leads = 
     Array<{ date: string; startHour: number; startMinute: number; startTime: string; endTime: string; durationMinutes: number; label: string; startIso: string; endIso: string }>
   >([]);
   const [isLoadingSlots, setIsLoadingSlots] = useState(false);
+  const [availabilityError, setAvailabilityError] = useState<string | null>(null);
 
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [isLoadingBookings, setIsLoadingBookings] = useState(false);
@@ -312,6 +340,7 @@ export const DemoSchedulingView: React.FC<DemoSchedulingViewProps> = ({ leads = 
   const fetchAvailability = async (preferredDate: string = calendarWeekStart) => {
     const requestId = ++availabilityRequestRef.current;
     setIsLoadingSlots(true);
+    setAvailabilityError(null);
     try {
       const token = await getCalendarAccessToken();
       const headers: Record<string, string> = {};
@@ -323,12 +352,26 @@ export const DemoSchedulingView: React.FC<DemoSchedulingViewProps> = ({ leads = 
       if (res.status === 401) {
         console.warn('[Calendar] availability returned 401, re-checking status');
         checkStatus();
+        if (requestId === availabilityRequestRef.current) {
+          setAvailableSlots([]);
+          setAvailabilityError('Calendar authorization expired. Reconnect your calendar to see available slots.');
+        }
       } else if (res.ok) {
         const data = await res.json();
         if (requestId === availabilityRequestRef.current) setAvailableSlots(data.slots || []);
+      } else {
+        const data = await res.json().catch(() => ({}));
+        if (requestId === availabilityRequestRef.current) {
+          setAvailableSlots([]);
+          setAvailabilityError(data?.error || `Could not verify calendar availability (${res.status}).`);
+        }
       }
     } catch (e) {
       console.warn('Error fetching calendar availability:', e);
+      if (requestId === availabilityRequestRef.current) {
+        setAvailableSlots([]);
+        setAvailabilityError(e instanceof Error ? e.message : 'Could not verify calendar availability.');
+      }
     } finally {
       if (requestId === availabilityRequestRef.current) setIsLoadingSlots(false);
     }
@@ -879,7 +922,8 @@ export const DemoSchedulingView: React.FC<DemoSchedulingViewProps> = ({ leads = 
                         </button>
                       ))}
                       {!calendarConnected && dayBookings.length === 0 && <div className="schedule-day-empty">Connect a calendar to load live availability.</div>}
-                      {calendarConnected && dayBookings.length === 0 && daySlots.length === 0 && <div className="schedule-day-empty">{isLoadingSlots ? 'Checking live availability…' : 'No free slots returned for this date.'}</div>}
+                      {calendarConnected && availabilityError && dateKey === calendarVisibleDays[0] && <div className="schedule-inline-message error">Live calendar availability could not be verified: {availabilityError}</div>}
+                      {calendarConnected && !availabilityError && dayBookings.length === 0 && daySlots.length === 0 && <div className="schedule-day-empty">{isLoadingSlots ? 'Checking live availability…' : 'No free slots returned for this date.'}</div>}
                     </div>
                   </section>
                 );
@@ -935,8 +979,8 @@ export const DemoSchedulingView: React.FC<DemoSchedulingViewProps> = ({ leads = 
               <div className="schedule-card-title"><span>Meeting configuration</span><Settings2 className="h-4 w-4" /></div>
               <div className="schedule-settings-grid">
                 <label><span>Session duration</span><div className="schedule-input-with-suffix"><input type="number" min={5} max={240} step={1} disabled={!canEditSettings || isSavingAvailability} value={availabilityDraft.demoDurationMinutes} onChange={(event) => setAvailabilityDraft((current) => ({ ...current, demoDurationMinutes: Number(event.target.value) }))} /><em>minutes</em></div></label>
-                <label><span>Timezone (IANA)</span><input type="text" disabled={!canEditSettings || isSavingAvailability} value={availabilityDraft.timezone} onChange={(event) => updateAvailabilityText('timezone', event.target.value)} placeholder="Asia/Kolkata" /></label>
-                <label><span>Timezone label</span><input type="text" disabled={!canEditSettings || isSavingAvailability} value={availabilityDraft.timezoneLabel} onChange={(event) => updateAvailabilityText('timezoneLabel', event.target.value)} placeholder="IST" /></label>
+                <label><span>Timezone (IANA)</span><select disabled={!canEditSettings || isSavingAvailability} value={availabilityDraft.timezone} onChange={(event) => updateAvailabilityTimezone(event.target.value)}>{IANA_TIME_ZONES.map((timezone) => <option key={timezone} value={timezone}>{timezone}</option>)}</select></label>
+                <label><span>Timezone label (automatic)</span><input type="text" readOnly aria-readonly="true" value={timezoneLabelFor(availabilityDraft.timezone) || 'Select a valid timezone'} /></label>
                 <label><span>Calendar invite email</span><input type="email" disabled={!canEditSettings || isSavingAvailability} value={availabilityDraft.calendarEmail} onChange={(event) => updateAvailabilityText('calendarEmail', event.target.value)} placeholder="calendar@company.com" /></label>
               </div>
               <p className="schedule-settings-hint">The full session must fit inside a working window. Start times repeat at the selected session duration.</p>
@@ -950,7 +994,7 @@ export const DemoSchedulingView: React.FC<DemoSchedulingViewProps> = ({ leads = 
                   return <div className={'schedule-working-day ' + (!enabled ? 'is-disabled' : '')} key={day}><label className="schedule-day-toggle"><input type="checkbox" disabled={!canEditSettings || isSavingAvailability} checked={enabled} onChange={() => toggleAvailabilityDay(dayIndex)} /><strong>{day.slice(0, 3)}</strong><span>{enabled ? 'Open' : 'Closed'}</span></label><label><span>From</span><select disabled={!canEditSettings || isSavingAvailability || !enabled} value={hours.start} onChange={(event) => updateAvailabilityHours(dayIndex, 'start', Number(event.target.value))}>{Array.from({ length: 24 }, (_, hour) => <option key={hour} value={hour}>{fmtHour(hour)}</option>)}</select></label><label><span>To</span><select disabled={!canEditSettings || isSavingAvailability || !enabled} value={hours.end} onChange={(event) => updateAvailabilityHours(dayIndex, 'end', Number(event.target.value))}>{Array.from({ length: 24 }, (_, index) => index + 1).map((hour) => <option key={hour} value={hour}>{hour === 24 ? '12:00 AM' : fmtHour(hour)}</option>)}</select></label></div>;
                 })}
               </div>
-              <div className="schedule-availability-preview"><Clock className="h-4 w-4" /><span>Customers see: <strong>{brandWorkingWindowLabel(availabilityDraft)}</strong> · {availabilityDraft.demoDurationMinutes} minute sessions · {availabilityDraft.timezoneLabel || availabilityDraft.timezone}</span></div>
+              <div className="schedule-availability-preview"><Clock className="h-4 w-4" /><span>Customers see: <strong>{brandWorkingWindowLabel(availabilityDraft)}</strong> · {availabilityDraft.demoDurationMinutes} minute sessions · {timezoneLabelFor(availabilityDraft.timezone) || availabilityDraft.timezone}</span></div>
               {!canEditSettings && <p className="schedule-readonly-note"><ShieldCheck className="h-3.5 w-3.5" /> Only administrators can change demo booking availability.</p>}
               {availabilitySaveMessage && <p className={'schedule-inline-message ' + (availabilitySaveMessage === 'Demo booking availability saved.' ? 'success' : 'error')}>{availabilitySaveMessage}</p>}
             </div>

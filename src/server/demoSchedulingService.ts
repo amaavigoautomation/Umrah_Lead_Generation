@@ -9,7 +9,7 @@ import {
 import { STOP_FOLLOWUPS_WHEN_DEMO_BOOKED } from '../shared/followUpPolicy.js';
 import type { TenantContext } from '../types/tenant.js';
 import { getTenantBrand, getBrandSync } from './brandService.js';
-import { brandTzLabel, brandWorkingDaysLabel, brandWorkingWindowLabel, workingHoursForDay, fmtHour, DAY_NAMES } from '../shared/brand.js';
+import { brandTzLabel, brandWorkingDaysLabel, brandWorkingWindowLabel, workingHoursForDay, fmtHour, DAY_NAMES, timezoneLabelFor } from '../shared/brand.js';
 
 const DEFAULT_UMRAH_CTX: TenantContext = {
   tenantId: 'umrah360',
@@ -426,7 +426,8 @@ export function formatSlotLabel(dateString: string, startHour: number, startMinu
     day: 'numeric',
   }).format(dateObj);
   const endTotal = slotEndTotalMinutes(startHour, startMinute);
-  return `${dayName}: ${formatClockTime(startHour, startMinute)} – ${formatClockTime(Math.floor(endTotal / 60), endTotal % 60)} ${TZL()}`;
+  const slotTimezoneLabel = timezoneLabelFor(tz(), new Date(createIstIsoString(dateString, startHour, startMinute))) || TZL();
+  return `${dayName}: ${formatClockTime(startHour, startMinute)} – ${formatClockTime(Math.floor(endTotal / 60), endTotal % 60)} ${slotTimezoneLabel}`;
 }
 
 // -----------------------------------------------------------------------------
@@ -638,9 +639,91 @@ export async function checkFirestoreBookingsConflict(
  * A slot is only offered when the complete session fits within the configured day.
  * NO AVAILABLE SLOTS ARE SAVED TO ANY DATABASE; slots are computed from live Google Calendar availability.
  */
+/**
+ * Reads Google Calendar busy intervals for one visible calendar range in a single request.
+ * The connected calendar is the availability source of truth; tenant booking records are
+ * merged as a second guard for meetings created through this application.
+ */
+async function getCalendarBusyIntervalsForRange(
+  startIso: string,
+  endIso: string,
+  accessTokenOverride?: string
+): Promise<CalendarBusyInterval[]> {
+  const token = await getLiveCalendarToken(accessTokenOverride);
+  if (!token) {
+    throw new Error('Google Calendar availability could not be verified. Reconnect the calendar and try again.');
+  }
+
+  const response = await fetch('https://www.googleapis.com/calendar/v3/freeBusy', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      timeMin: startIso,
+      timeMax: endIso,
+      timeZone: tz(),
+      items: [{ id: 'primary' }],
+    }),
+  });
+
+  if (response.status === 401) {
+    await handleExpiredCalendarToken();
+    throw new Error('Google Calendar authorization expired. Reconnect Google Calendar to refresh availability.');
+  }
+  if (!response.ok) {
+    const details = await response.text().catch(() => '');
+    throw new Error(`Google Calendar availability check failed (${response.status}). ${details.slice(0, 220)}`.trim());
+  }
+
+  const payload = await response.json();
+  const primary = payload?.calendars?.primary;
+  if (!primary || (Array.isArray(primary.errors) && primary.errors.length > 0) || !Array.isArray(primary.busy)) {
+    const reason = primary?.errors?.[0]?.reason || primary?.errors?.[0]?.message || 'Google did not return the primary calendar busy intervals.';
+    throw new Error(`Google Calendar did not return verified availability: ${reason}`);
+  }
+
+  const busyIntervals: CalendarBusyInterval[] = primary.busy
+    .filter((interval: any) => Number.isFinite(Date.parse(interval?.start)) && Number.isFinite(Date.parse(interval?.end)))
+    .map((interval: any) => ({ start: interval.start, end: interval.end }));
+
+  // Preserve the workspace's own booking ledger as a double-booking safeguard.
+  if (isFirebaseConfigured && db) {
+    try {
+      const snapshot = await getDocs(query(
+        tenantRepo(getSchedCtx()).bookings(),
+        where('status', 'in', ['BOOKED', 'RESCHEDULED']),
+        limit(500)
+      ));
+      const rangeStart = Date.parse(startIso);
+      const rangeEnd = Date.parse(endIso);
+      for (const document of snapshot.docs) {
+        const booking = document.data() as Booking;
+        const bookingStart = Date.parse(booking.startDateTimeIso || '');
+        const bookingEnd = Date.parse(booking.endDateTimeIso || '');
+        if (
+          Number.isFinite(bookingStart) &&
+          Number.isFinite(bookingEnd) &&
+          bookingStart < rangeEnd &&
+          bookingEnd > rangeStart
+        ) {
+          busyIntervals.push({ start: booking.startDateTimeIso, end: booking.endDateTimeIso });
+        }
+      }
+    } catch (error) {
+      console.warn('[Calendar Service Notice] Could not merge workspace bookings into availability:', error);
+    }
+  }
+
+  return busyIntervals;
+}
+
 export async function findNextAvailableSlots(
   options: {
     targetDaysCount?: number;
+    /** Scan exactly this many calendar dates and query Google FreeBusy once for the whole range. */
+    calendarRange?: boolean;
     maxSlotsToReturn?: number;
     preferredDate?: string;
     /** Start scanning from this date (YYYY-MM-DD) instead of today. Past dates fall back to today. */
@@ -655,6 +738,7 @@ export async function findNextAvailableSlots(
   await warmSchedBrand();
   const {
     targetDaysCount = 10,
+    calendarRange = false,
     maxSlotsToReturn = 4,
     preferredDate,
     preferredPeriod = 'ANY',
@@ -680,6 +764,55 @@ export async function findNextAvailableSlots(
     const [year, month, day] = dateKey.split('-').map(Number);
     return new Date(Date.UTC(year, month - 1, day + amount, 12)).toISOString().slice(0, 10);
   };
+  if (calendarRange) {
+    const rangeStartIso = createIstIsoString(scanStartDate, 0, 0);
+    const rangeEndIso = createIstIsoString(addDateKeyDays(scanStartDate, targetDaysCount), 0, 0);
+    const busyIntervals = await getCalendarBusyIntervalsForRange(rangeStartIso, rangeEndIso, accessToken);
+    const availableInRange: Array<{
+      date: string; startHour: number; startMinute: number; startTime: string; endTime: string;
+      durationMinutes: number; label: string; startIso: string; endIso: string;
+    }> = [];
+    const busyRanges = busyIntervals
+      .map((interval) => ({ start: Date.parse(interval.start), end: Date.parse(interval.end) }))
+      .filter((interval) => Number.isFinite(interval.start) && Number.isFinite(interval.end) && interval.end > interval.start);
+
+    // This range is exactly the seven visible calendar dates. Each configured slot is
+    // generated locally, then checked against the complete Google busy-interval response.
+    for (let offset = 0; offset < targetDaysCount && availableInRange.length < maxSlotsToReturn; offset++) {
+      const dateStr = addDateKeyDays(scanStartDate, offset);
+      const dayOfWeek = dayOfWeekFor(dateStr);
+      if (!isWorkingDay(dayOfWeek)) continue;
+
+      for (const totalStart of slotStartMinutes(dayOfWeek)) {
+        if (availableInRange.length >= maxSlotsToReturn) break;
+        const startHour = Math.floor(totalStart / 60);
+        const startMinute = totalStart % 60;
+        const endTotal = totalStart + duration;
+        const startIso = createIstIsoString(dateStr, startHour, startMinute);
+        const endIso = createIstIsoString(dateStr, Math.floor(endTotal / 60), endTotal % 60);
+        const startMs = Date.parse(startIso);
+        const endMs = Date.parse(endIso);
+        if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || startMs <= nowMs + MIN_LEAD_TIME_MS) continue;
+
+        const overlapsBusyTime = busyRanges.some((busy) => startMs < busy.end && endMs > busy.start);
+        if (overlapsBusyTime) continue;
+
+        availableInRange.push({
+          date: dateStr,
+          startHour,
+          startMinute,
+          startTime: formatClockTime24(totalStart),
+          endTime: formatClockTime24(endTotal),
+          durationMinutes: duration,
+          label: formatSlotLabel(dateStr, startHour, startMinute),
+          startIso,
+          endIso,
+        });
+      }
+    }
+    return availableInRange;
+  }
+
   const liveCalendarToken = await getLiveCalendarToken(accessToken);
   let fallbackBookings: Booking[] = [];
   if (!liveCalendarToken && isFirebaseConfigured && db) {

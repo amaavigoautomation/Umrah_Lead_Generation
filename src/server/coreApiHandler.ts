@@ -2021,11 +2021,17 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
     const parsedUrl = new URL(url, 'http://localhost:3000');
     const preferredDate = parsedUrl.searchParams.get('date') || parsedUrl.searchParams.get('preferredDate') || undefined;
     const preferredPeriod = (parsedUrl.searchParams.get('period') as any) || 'ANY';
-    const count = parseInt(parsedUrl.searchParams.get('count') || '8', 10);
+    const requestedCount = Number.parseInt(parsedUrl.searchParams.get('count') || '8', 10);
+    const count = Number.isFinite(requestedCount) ? Math.min(Math.max(requestedCount, 1), 1000) : 8;
+    const requestedDays = Number.parseInt(parsedUrl.searchParams.get('days') || '', 10);
+    const targetDaysCount = Number.isFinite(requestedDays) && requestedDays > 0
+      ? Math.min(requestedDays, 31)
+      : undefined;
 
     const slots = await findNextAvailableSlots({
       preferredDate,
       preferredPeriod,
+      targetDaysCount,
       maxSlotsToReturn: count,
       accessToken: requestBearerToken || undefined,
     });

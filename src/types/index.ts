@@ -710,6 +710,8 @@ export interface Booking {
   notes?: string;
   createdAt: string;
   updatedAt: string;
+  /** Set by the server once the scheduled end time has passed. */
+  completedAt?: string;
 }
 
 

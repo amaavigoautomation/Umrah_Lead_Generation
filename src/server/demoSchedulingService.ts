@@ -108,6 +108,7 @@ import {
   createDoc,
   deleteDoc,
   setDoc,
+  runTransaction,
 } from './adminFirestore.js';
 import crypto from 'crypto';
 import { safeSetDoc } from './firestoreUtils.js';
@@ -660,21 +661,39 @@ export async function findNextAvailableSlots(
     accessToken,
   } = options;
   const nowIst = getNowInIst();
+  const nowMs = Date.now();
   const duration = demoDurationMinutes();
   const availableSlots: Array<{
     date: string; startHour: number; startMinute: number; startTime: string; endTime: string;
     durationMinutes: number; label: string; startIso: string; endIso: string;
   }> = [];
 
+  // Start from the date currently displayed in the calendar. Past slots are filtered below,
+  // while future dates in a partially elapsed week are still scanned.
+  const requestedStartDate = options.startFromDate || preferredDate;
+  const scanStartDate = requestedStartDate && /^\d{4}-\d{2}-\d{2}$/.test(requestedStartDate)
+    ? requestedStartDate
+    : nowIst.dateString;
   let currentOffset = 0;
-  const firstDate = options.startFromDate || preferredDate;
-  if (firstDate && /^\d{4}-\d{2}-\d{2}$/.test(firstDate) && firstDate > nowIst.dateString) {
-    const diffDays = Math.round(
-      (Date.parse(`${firstDate}T12:00:00Z`) - Date.parse(`${nowIst.dateString}T12:00:00Z`)) / 86_400_000
-    );
-    currentOffset = Math.min(Math.max(diffDays, 0), 60);
+  const maxOffset = Math.max(14, targetDaysCount * 7);
+  const addDateKeyDays = (dateKey: string, amount: number) => {
+    const [year, month, day] = dateKey.split('-').map(Number);
+    return new Date(Date.UTC(year, month - 1, day + amount, 12)).toISOString().slice(0, 10);
+  };
+  const liveCalendarToken = await getLiveCalendarToken(accessToken);
+  let fallbackBookings: Booking[] = [];
+  if (!liveCalendarToken && isFirebaseConfigured && db) {
+    try {
+      const booked = await getDocs(query(
+        tenantRepo(getSchedCtx()).bookings(),
+        where('status', 'in', ['BOOKED', 'RESCHEDULED']),
+        limit(500)
+      ));
+      fallbackBookings = booked.docs.map((document) => document.data() as Booking);
+    } catch (error) {
+      console.warn('[Calendar Service Notice] Could not load booking fallback for availability:', error);
+    }
   }
-  const maxOffset = currentOffset + Math.max(14, targetDaysCount * 7);
   const filterByPeriod = (starts: number[]) => starts.filter((totalMinutes) => {
     const hour = Math.floor(totalMinutes / 60);
     if (preferredPeriod === 'MORNING') return hour < 12;
@@ -685,11 +704,7 @@ export async function findNextAvailableSlots(
 
   let daysChecked = 0;
   while (daysChecked < targetDaysCount && availableSlots.length < maxSlotsToReturn && currentOffset < maxOffset) {
-    const checkDate = new Date();
-    checkDate.setDate(checkDate.getDate() + currentOffset);
-    const dateStr = new Intl.DateTimeFormat('en-CA', {
-      timeZone: tz(), year: 'numeric', month: '2-digit', day: '2-digit',
-    }).format(checkDate);
+    const dateStr = addDateKeyDays(scanStartDate, currentOffset);
     const dayOfWeek = dayOfWeekFor(dateStr);
     currentOffset++;
     if (!isWorkingDay(dayOfWeek)) continue;
@@ -698,28 +713,42 @@ export async function findNextAvailableSlots(
     if (starts.length === 0) continue;
     daysChecked++;
 
-    for (const totalStart of starts) {
-      if (availableSlots.length >= maxSlotsToReturn) break;
+    const dayCandidates = starts.map((totalStart) => {
       const startHour = Math.floor(totalStart / 60);
       const startMinute = totalStart % 60;
       const startIso = createIstIsoString(dateStr, startHour, startMinute);
-      if (dateStr === nowIst.dateString && Date.parse(startIso) <= Date.now() + MIN_LEAD_TIME_MS) continue;
-
       const endTotal = totalStart + duration;
       const endIso = createIstIsoString(dateStr, Math.floor(endTotal / 60), endTotal % 60);
-      const check = await checkRealtimeGoogleCalendarSlot(startIso, endIso, accessToken);
-      if (check.available) {
-        availableSlots.push({
-          date: dateStr,
-          startHour,
-          startMinute,
-          startTime: formatClockTime24(totalStart),
-          endTime: formatClockTime24(endTotal),
-          durationMinutes: duration,
-          label: formatSlotLabel(dateStr, startHour, startMinute),
-          startIso,
-          endIso,
+      return {
+        date: dateStr, startHour, startMinute,
+        startTime: formatClockTime24(totalStart),
+        endTime: formatClockTime24(endTotal),
+        durationMinutes: duration,
+        label: formatSlotLabel(dateStr, startHour, startMinute),
+        startIso, endIso,
+      };
+    }).filter((slot) => Date.parse(slot.startIso) > nowMs + MIN_LEAD_TIME_MS);
+
+    // Check slots in small batches so a full week's calendar fits within the API execution window.
+    for (let index = 0; index < dayCandidates.length && availableSlots.length < maxSlotsToReturn; index += 8) {
+      const batch = dayCandidates.slice(index, index + 8);
+      const results = await Promise.all(batch.map(async (slot) => {
+        if (liveCalendarToken) {
+          const check = await checkRealtimeGoogleCalendarSlot(slot.startIso, slot.endIso, liveCalendarToken);
+          return { slot, available: check.available };
+        }
+        const slotStart = Date.parse(slot.startIso);
+        const slotEnd = Date.parse(slot.endIso);
+        const conflict = fallbackBookings.some((booking) => {
+          const bookedStart = Date.parse(booking.startDateTimeIso || '');
+          const bookedEnd = Date.parse(booking.endDateTimeIso || '');
+          return Number.isFinite(bookedStart) && Number.isFinite(bookedEnd) && slotStart < bookedEnd && slotEnd > bookedStart;
         });
+        return { slot, available: !conflict };
+      }));
+      for (const result of results) {
+        if (availableSlots.length >= maxSlotsToReturn) break;
+        if (result.available) availableSlots.push(result.slot);
       }
     }
   }
@@ -2718,7 +2747,41 @@ export async function getAllBookings(): Promise<Booking[]> {
   try {
     const q = query(tenantRepo(getSchedCtx()).bookings(), orderBy('createdAt', 'desc'), limit(100));
     const snap = await getDocs(q);
-    return snap.docs.map((d) => d.data() as Booking);
+    const nowMs = Date.now();
+    const completedAt = new Date(nowMs).toISOString();
+    const candidates = snap.docs.filter((document) => {
+      const booking = document.data() as Booking;
+      const endIso = booking.endDateTimeIso || (booking.date && booking.endTime ? `${booking.date}T${booking.endTime}:00+05:30` : '');
+      const endMs = Date.parse(endIso);
+      return (booking.status === 'BOOKED' || booking.status === 'RESCHEDULED') && Number.isFinite(endMs) && endMs <= nowMs;
+    });
+
+    const completedIds = candidates.length ? await runTransaction(async (transaction) => {
+      const latestSnapshots = await Promise.all(candidates.map((document) => transaction.get(document.ref)));
+      const ids: string[] = [];
+      latestSnapshots.forEach((latest, index) => {
+        if (!latest.exists) return;
+        const booking = latest.data() as Booking;
+        const endIso = booking.endDateTimeIso || (booking.date && booking.endTime ? `${booking.date}T${booking.endTime}:00+05:30` : '');
+        const endMs = Date.parse(endIso);
+        if ((booking.status === 'BOOKED' || booking.status === 'RESCHEDULED') && Number.isFinite(endMs) && endMs <= nowMs) {
+          transaction.update(latest.ref, { status: 'COMPLETED', completedAt, updatedAt: completedAt });
+          ids.push(candidates[index].id);
+        }
+      });
+      return ids;
+    }).catch((error) => {
+      console.warn('[Calendar Service Notice] Could not auto-complete elapsed bookings:', error);
+      return [] as string[];
+    }) : [];
+    const completedSet = new Set(completedIds);
+
+    return snap.docs.map((document) => {
+      const booking = document.data() as Booking;
+      return completedSet.has(document.id)
+        ? { ...booking, status: 'COMPLETED', completedAt, updatedAt: completedAt }
+        : booking;
+    });
   } catch (e) {
     console.warn('[Calendar Service Notice] Error listing bookings:', e);
     return [];

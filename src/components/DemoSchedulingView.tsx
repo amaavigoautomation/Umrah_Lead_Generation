@@ -87,7 +87,6 @@ export const DemoSchedulingView: React.FC<DemoSchedulingViewProps> = ({ leads = 
   const [activeView, setActiveView] = useState<SchedulingView>('CALENDAR');
   const [calendarMode, setCalendarMode] = useState<SchedulingCalendarMode>('WEEK');
   const [calendarAnchorDate, setCalendarAnchorDate] = useState(() => dateKeyInTimezone(new Date(), brand.timezone || 'Asia/Kolkata'));
-  const [selectedCalendarDate, setSelectedCalendarDate] = useState(() => dateKeyInTimezone(new Date(), brand.timezone || 'Asia/Kolkata'));
   const [bookingSearch, setBookingSearch] = useState('');
   const [bookingStatusFilter, setBookingStatusFilter] = useState<'ALL' | 'UPCOMING' | Booking['status']>('ALL');
   const [bookingChannelFilter, setBookingChannelFilter] = useState<'ALL' | Channel>('ALL');
@@ -173,10 +172,11 @@ export const DemoSchedulingView: React.FC<DemoSchedulingViewProps> = ({ leads = 
 
   const calendarWeekStart = useMemo(() => mondayOfDateKey(calendarAnchorDate), [calendarAnchorDate]);
   const calendarWeekStartRef = useRef(calendarWeekStart);
+  const availabilityRequestRef = useRef(0);
   useEffect(() => { calendarWeekStartRef.current = calendarWeekStart; }, [calendarWeekStart]);
   const calendarWeekEnd = useMemo(() => addDateKeyDays(calendarWeekStart, 6), [calendarWeekStart]);
   const calendarDays = useMemo(() => Array.from({ length: 7 }, (_, index) => addDateKeyDays(calendarWeekStart, index)), [calendarWeekStart]);
-  const calendarVisibleDays = calendarMode === 'DAY' ? [selectedCalendarDate] : calendarDays;
+  const calendarVisibleDays = calendarMode === 'DAY' ? [calendarAnchorDate] : calendarDays;
   const todayKey = dateKeyInTimezone(new Date(), brand.timezone || 'Asia/Kolkata');
   const selectedBooking = useMemo(() => bookings.find((booking) => booking.bookingId === selectedBookingId) || null, [bookings, selectedBookingId]);
   const filteredBookings = useMemo(() => {
@@ -211,15 +211,12 @@ export const DemoSchedulingView: React.FC<DemoSchedulingViewProps> = ({ leads = 
   );
 
   const navigateCalendar = (direction: -1 | 1) => {
+    const navigationBase = calendarMode === 'DAY' ? calendarAnchorDate : calendarWeekStart;
     const amount = calendarMode === 'DAY' ? 1 : 7;
-    const nextDate = addDateKeyDays(calendarAnchorDate, amount * direction);
-    setCalendarAnchorDate(nextDate);
-    setSelectedCalendarDate(nextDate);
+    setCalendarAnchorDate(addDateKeyDays(navigationBase, amount * direction));
   };
   const goToToday = () => {
-    const today = dateKeyInTimezone(new Date(), brand.timezone || 'Asia/Kolkata');
-    setCalendarAnchorDate(today);
-    setSelectedCalendarDate(today);
+    setCalendarAnchorDate(dateKeyInTimezone(new Date(), brand.timezone || 'Asia/Kolkata'));
   };
   const selectCrmLead = (leadId: string) => {
     setSelectedLeadId(leadId);
@@ -313,27 +310,27 @@ export const DemoSchedulingView: React.FC<DemoSchedulingViewProps> = ({ leads = 
 
   // 2. Fetch Realtime Slots from Google Calendar
   const fetchAvailability = async (preferredDate: string = calendarWeekStart) => {
+    const requestId = ++availabilityRequestRef.current;
     setIsLoadingSlots(true);
     try {
       const token = await getCalendarAccessToken();
       const headers: Record<string, string> = {};
       if (token) headers['X-Google-Access-Token'] = token;
 
-      const query = new URLSearchParams({ count: '100', preferredDate });
+      // Request enough slots for the whole visible week rather than a small next-slot shortlist.
+      const query = new URLSearchParams({ count: '1000', days: '7', preferredDate });
       const res = await fetch('/api/calendar/availability?' + query.toString(), { headers });
       if (res.status === 401) {
-        // A 401 can come from the app's own login check, not only from Google. Do not throw the token
-        // away on it: let the status check (which asks Google directly) decide.
         console.warn('[Calendar] availability returned 401, re-checking status');
         checkStatus();
       } else if (res.ok) {
         const data = await res.json();
-        setAvailableSlots(data.slots || []);
+        if (requestId === availabilityRequestRef.current) setAvailableSlots(data.slots || []);
       }
     } catch (e) {
       console.warn('Error fetching calendar availability:', e);
     } finally {
-      setIsLoadingSlots(false);
+      if (requestId === availabilityRequestRef.current) setIsLoadingSlots(false);
     }
   };
 
@@ -780,7 +777,8 @@ export const DemoSchedulingView: React.FC<DemoSchedulingViewProps> = ({ leads = 
     setSelectedSlot(slot);
   };
   const visibleCalendarBookings = (dateKey: string) => bookings
-    .filter((booking) => booking.date === dateKey)
+    // Cancelled meetings no longer occupy a calendar slot. Their history remains in Bookings.
+    .filter((booking) => booking.date === dateKey && booking.status !== 'CANCELLED')
     .sort((a, b) => String(a.startTime).localeCompare(String(b.startTime)));
   const renderBookingStatus = (status: Booking['status']) => {
     const styles: Record<Booking['status'], string> = {
@@ -808,7 +806,7 @@ export const DemoSchedulingView: React.FC<DemoSchedulingViewProps> = ({ leads = 
       </header>
 
       <section className="schedule-stats-grid" aria-label="Meeting overview">
-        <button type="button" className="schedule-stat-card" onClick={() => { setActiveView('CALENDAR'); setCalendarMode('DAY'); setSelectedCalendarDate(todayKey); setCalendarAnchorDate(todayKey); }}><span className="schedule-stat-icon violet"><CalendarDays className="h-4 w-4" /></span><span className="schedule-stat-copy"><span>Today's meetings</span><strong>{bookingStats.today}</strong></span><span className="schedule-stat-foot">Scheduled for today</span></button>
+        <button type="button" className="schedule-stat-card" onClick={() => { setActiveView('CALENDAR'); setCalendarMode('DAY'); setCalendarAnchorDate(todayKey); }}><span className="schedule-stat-icon violet"><CalendarDays className="h-4 w-4" /></span><span className="schedule-stat-copy"><span>Today's meetings</span><strong>{bookingStats.today}</strong></span><span className="schedule-stat-foot">Scheduled for today</span></button>
         <button type="button" className="schedule-stat-card" onClick={() => { setActiveView('CALENDAR'); setCalendarMode('WEEK'); goToToday(); }}><span className="schedule-stat-icon blue"><Calendar className="h-4 w-4" /></span><span className="schedule-stat-copy"><span>This week</span><strong>{bookingStats.thisWeek}</strong></span><span className="schedule-stat-foot">Upcoming this week</span></button>
         <button type="button" className="schedule-stat-card" onClick={() => { setActiveView('BOOKINGS'); setBookingStatusFilter('UPCOMING'); }}><span className="schedule-stat-icon green"><CheckCircle2 className="h-4 w-4" /></span><span className="schedule-stat-copy"><span>Upcoming</span><strong>{bookingStats.upcoming}</strong></span><span className="schedule-stat-foot">Booked or rescheduled</span></button>
         <button type="button" className="schedule-stat-card" onClick={() => { setActiveView('BOOKINGS'); setBookingStatusFilter('COMPLETED'); }}><span className="schedule-stat-icon teal"><ClipboardList className="h-4 w-4" /></span><span className="schedule-stat-copy"><span>Completed</span><strong>{bookingStats.completed}</strong></span><span className="schedule-stat-foot">Past completed meetings</span></button>
@@ -838,7 +836,7 @@ export const DemoSchedulingView: React.FC<DemoSchedulingViewProps> = ({ leads = 
         <section className="schedule-content-panel">
           <div className="schedule-calendar-toolbar">
             <div className="schedule-calendar-title-group">
-              <div><h2>{calendarMode === 'DAY' ? formatDateKey(selectedCalendarDate, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) : formatDateKey(calendarWeekStart, { day: 'numeric', month: 'short' }) + ' – ' + formatDateKey(calendarWeekEnd, { day: 'numeric', month: 'short', year: 'numeric' })}</h2><p><Globe className="h-3.5 w-3.5" /> {tzl} · {availabilityDraft.demoDurationMinutes || brand.demoDurationMinutes} minute sessions</p></div>
+              <div><h2>{calendarMode === 'DAY' ? formatDateKey(calendarAnchorDate, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) : formatDateKey(calendarWeekStart, { day: 'numeric', month: 'short' }) + ' – ' + formatDateKey(calendarWeekEnd, { day: 'numeric', month: 'short', year: 'numeric' })}</h2><p><Globe className="h-3.5 w-3.5" /> {tzl} · {availabilityDraft.demoDurationMinutes || brand.demoDurationMinutes} minute sessions</p></div>
               <div className="schedule-date-nav"><button type="button" onClick={() => navigateCalendar(-1)} aria-label="Previous date range"><ChevronLeft className="h-4 w-4" /></button><button type="button" onClick={goToToday}>Today</button><button type="button" onClick={() => navigateCalendar(1)} aria-label="Next date range"><ChevronRight className="h-4 w-4" /></button></div>
             </div>
             <div className="schedule-calendar-tools">
@@ -855,19 +853,33 @@ export const DemoSchedulingView: React.FC<DemoSchedulingViewProps> = ({ leads = 
               {calendarVisibleDays.map((dateKey) => {
                 const dayBookings = visibleCalendarBookings(dateKey);
                 const daySlots = calendarSlots.filter((slot) => slot.date === dateKey);
+                const dayItems = [
+                  ...dayBookings.map((booking) => ({ kind: 'booking' as const, sortAt: Date.parse(booking.startDateTimeIso || `${dateKey}T${booking.startTime}:00`), booking })),
+                  ...(calendarConnected ? daySlots : []).map((slot) => ({ kind: 'slot' as const, sortAt: Date.parse(slot.startIso), slot })),
+                ].sort((a, b) => a.sortAt - b.sortAt);
                 const isToday = dateKey === todayKey;
                 return (
                   <section key={dateKey} className={'schedule-calendar-day ' + (isToday ? 'is-today' : '')}>
                     <header className="schedule-day-header">
-                      <button type="button" className="schedule-day-label" onClick={() => { setSelectedCalendarDate(dateKey); setCalendarAnchorDate(dateKey); setCalendarMode('DAY'); }}><span>{formatDateKey(dateKey, { weekday: 'short' })}</span><strong>{formatDateKey(dateKey, { day: 'numeric' })}</strong></button>
-                      <div className="schedule-day-counts"><span>{dayBookings.filter((booking) => booking.status === 'BOOKED' || booking.status === 'RESCHEDULED').length} meetings</span>{isToday && <em>Today</em>}</div>
+                      <button type="button" className="schedule-day-label" onClick={() => { setCalendarAnchorDate(dateKey); setCalendarMode('DAY'); }}><span>{formatDateKey(dateKey, { weekday: 'short' })}</span><strong>{formatDateKey(dateKey, { day: 'numeric' })}</strong></button>
+                      <div className="schedule-day-counts"><span>{dayBookings.length} meetings</span>{isToday && <em>Today</em>}</div>
                     </header>
                     <div className="schedule-day-content">
-                      {dayBookings.map((booking) => <article key={booking.bookingId} className={'schedule-event-card ' + (booking.status === 'CANCELLED' ? 'is-cancelled' : booking.status === 'COMPLETED' ? 'is-completed' : booking.status === 'RESCHEDULED' ? 'is-rescheduled' : 'is-booked')} onClick={() => { setSelectedBookingId(booking.bookingId); setBookingDetailsTab('DETAILS'); }}><div className="schedule-event-time">{booking.startTime} – {booking.endTime}</div><strong>{booking.leadName || 'Demo meeting'}</strong><span>{booking.companyName || booking.leadEmail}</span><div className="schedule-event-footer"><span>{booking.channel}</span>{renderBookingStatus(booking.status)}</div></article>)}
-                      {calendarConnected && daySlots.slice(0, calendarMode === 'AGENDA' ? 8 : 4).map((slot, index) => <button type="button" key={slot.startIso + '-' + index} className={'schedule-open-slot ' + (rescheduleBookingId ? 'is-reschedule' : '')} onClick={() => chooseSlot(slot)} disabled={isRescheduling}><span><CircleDot className="h-3.5 w-3.5" /> {slot.startTime} – {slot.endTime}</span><em>{rescheduleBookingId ? 'Move here' : 'Available'}</em></button>)}
+                      {dayItems.map((item) => item.kind === 'booking' ? (
+                        <article key={`booking-${item.booking.bookingId}`} className={'schedule-event-card ' + (item.booking.status === 'COMPLETED' ? 'is-completed' : item.booking.status === 'RESCHEDULED' ? 'is-rescheduled' : 'is-booked')} onClick={() => { setSelectedBookingId(item.booking.bookingId); setBookingDetailsTab('DETAILS'); }}>
+                          <div className="schedule-event-time">{item.booking.startTime} – {item.booking.endTime}</div>
+                          <strong>{item.booking.leadName || 'Demo meeting'}</strong>
+                          <span>{item.booking.companyName || item.booking.leadEmail}</span>
+                          <div className="schedule-event-footer"><span>{item.booking.channel}</span>{renderBookingStatus(item.booking.status)}</div>
+                        </article>
+                      ) : (
+                        <button type="button" key={`slot-${item.slot.startIso}`} className={'schedule-open-slot ' + (rescheduleBookingId ? 'is-reschedule' : '')} onClick={() => chooseSlot(item.slot)} disabled={isRescheduling}>
+                          <span><CircleDot className="h-3.5 w-3.5" /> {item.slot.startTime} – {item.slot.endTime}</span>
+                          <em>{rescheduleBookingId ? 'Move here' : 'Available'}</em>
+                        </button>
+                      ))}
                       {!calendarConnected && dayBookings.length === 0 && <div className="schedule-day-empty">Connect a calendar to load live availability.</div>}
                       {calendarConnected && dayBookings.length === 0 && daySlots.length === 0 && <div className="schedule-day-empty">{isLoadingSlots ? 'Checking live availability…' : 'No free slots returned for this date.'}</div>}
-                      {calendarConnected && daySlots.length > (calendarMode === 'AGENDA' ? 8 : 4) && <span className="schedule-more-slots">+{daySlots.length - (calendarMode === 'AGENDA' ? 8 : 4)} more available slots</span>}
                     </div>
                   </section>
                 );

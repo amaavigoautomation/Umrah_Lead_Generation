@@ -2,8 +2,6 @@ import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { handleCoreApi } from './src/server/coreApiHandler.js';
-import { pollAndProcessImapMailbox } from './src/server/inboundPipeline.js';
-import { getImapConfig } from './src/server/imapService.js';
 import { checkAndDispatchPendingWebsiteLeadEmails } from './src/server/websiteLeadAutoResponder.js';
 import { processActiveRunningCampaignsBatch } from './src/server/campaignService.js';
 import { runAutoFollowUpWorkerCycle, isFollowUpWorkerDue } from './src/server/autoFollowUpService.js';
@@ -133,14 +131,6 @@ const safeBackgroundPoll = async () => {
         await checkAndDispatchPendingWebsiteLeadEmails(ctx).catch(() => {});
       }).catch(() => {});
 
-      // B. Poll IMAP if configured
-      const cfg = getImapConfig();
-      if (cfg && cfg.configured) {
-        await runWithJobLease(tId, 'imap_poller_worker', 30_000, async () => {
-          await pollAndProcessImapMailbox(ctx).catch(() => {});
-        }).catch(() => {});
-      }
-
       // C. Process active campaign batches
       if (await hasFeature(tId, 'campaigns')) {
         await runWithJobLease(tId, 'campaign_dispatch_worker', 20_000, async () => {
@@ -163,8 +153,8 @@ const safeBackgroundPoll = async () => {
   }
 };
 
-// Start background poller interval (every 30 seconds; was 4s, which used up the Firestore free read quota)
-// Each company's own connected mailbox (independent of the platform mailbox loop above)
+// Start the tenant-specific mailbox poller. It only reads mailboxes registered to their own workspace.
+// No shared environment-backed IMAP mailbox is polled.
 startTenantMailboxPoller();
 setTimeout(safeBackgroundPoll, 2000);
 setInterval(safeBackgroundPoll, 30_000);

@@ -104,13 +104,13 @@ export function updateImapConfig(newConfig: {
 }
 
 export function getImapConfig() {
-  const host = runtimeImapConfig?.host || process.env.IMAP_HOST || (process.env.SMTP_HOST ? process.env.SMTP_HOST.replace('smtp.', 'imap.') : 'imap.gmail.com');
-  const port = runtimeImapConfig?.port || parseInt(process.env.IMAP_PORT || '993', 10);
-  const secure = runtimeImapConfig?.secure !== undefined
-    ? runtimeImapConfig.secure
-    : process.env.IMAP_SECURE !== 'false';
-  const user = runtimeImapConfig?.user || process.env.IMAP_USER || process.env.SMTP_USER || '';
-  const pass = (runtimeImapConfig?.pass || process.env.IMAP_PASS || process.env.SMTP_PASS || '').trim();
+  // This service is retained only for compatibility with diagnostic helpers. Environment variables
+  // must never create a shared inbound mailbox; all live polling uses tenantInboundService credentials.
+  const host = runtimeImapConfig?.host || '';
+  const port = runtimeImapConfig?.port || 993;
+  const secure = runtimeImapConfig?.secure ?? true;
+  const user = runtimeImapConfig?.user || '';
+  const pass = (runtimeImapConfig?.pass || '').trim();
 
   const configured = Boolean(host && pass && user);
 

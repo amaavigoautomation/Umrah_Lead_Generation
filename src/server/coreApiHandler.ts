@@ -2,11 +2,8 @@ import OpenAI from 'openai';
 import { sanitizeAiEmailText } from './emailSanitizer.js';
 import { AI_RESPONSE_FORMATTING_INSTRUCTIONS } from '../shared/aiResponseFormatting.js';
 import { verifySmtpConnection, sendLiveEmail, getSmtpConfig, updateSmtpConfig, getResendConfig } from './smtpService.js';
-import { checkImapStatus, getImapConfig, updateImapConfig } from './imapService.js';
 import {
   processLiveInboundEmail,
-  pollAndProcessImapMailbox,
-  getImapOwnerTenantId,
   getRecentProcessedEmails,
   getConversationTurnStates,
   getAllThreadMessages,
@@ -1449,20 +1446,6 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
         ? await poller.pollAllTenantMailboxes()
         : [await poller.pollTenantMailbox(callerCtx!.tenantId)];
 
-      // The shared env mailbox (IMAP_* / SMTP_* vars) belongs to one workspace and is polled by a
-      // different routine. The browser used to trigger it every 25s via /api/inbound/sync; that timer is
-      // gone, so the cron covers it here. pollAndProcessImapMailbox is a no-op for any other workspace.
-      const ownerTenantId = getImapOwnerTenantId();
-      if (getImapConfig().configured && (runAll || callerCtx?.tenantId === ownerTenantId)) {
-        const ownerCtx: TenantContext = { tenantId: ownerTenantId, uid: 'system', email: 'system', role: 'admin' };
-        const legacy = await pollAndProcessImapMailbox(ownerCtx).catch((err: any) => ({
-          success: false,
-          polledCount: 0,
-          error: err?.message || String(err),
-        }));
-        results.push({ tenantId: ownerTenantId, mailbox: 'shared-env', polledCount: legacy.polledCount, error: (legacy as any).error });
-      }
-
       // Website-form leads whose thank-you email did not go out the first time (provider hiccup, domain not
       // verified yet). The retry loop lives in server.ts, which does not run on Vercel, so the cron does it.
       try {
@@ -2750,12 +2733,11 @@ ${signature || defSig}`;
     return true;
   }
 
-  // The shared SMTP/IMAP mailbox settings belong to one workspace (see getImapOwnerTenantId).
-  // Other workspaces must never read or change them.
+  // Platform SMTP environment credentials remain restricted to the Umrah360 workspace.
   if (
-    /^\/api\/(smtp\/(config|status|verify)|imap\/(config|status|verify|poll))(\?|$)/.test(url) &&
+    /^\/api\/smtp\/(config|status|verify)(\?|$)/.test(url) &&
     !isPlatformAdmin &&
-    resolvedTenantId !== getImapOwnerTenantId()
+    resolvedTenantId !== 'umrah360'
   ) {
     res.statusCode = 403;
     res.setHeader('Content-Type', 'application/json');
@@ -2790,13 +2772,6 @@ ${signature || defSig}`;
         pass: body.pass,
         from: body.from,
       });
-      // Also update IMAP password if same user
-      if (body.pass) {
-        updateImapConfig({
-          user: body.user || updated.user,
-          pass: body.pass,
-        });
-      }
       res.statusCode = 200;
       res.end(
         JSON.stringify({
@@ -2986,84 +2961,8 @@ ${signature || defSig}`;
     }
   }
 
-  // 6. IMAP Operations
-  if (url === '/api/imap/config') {
-    if (req.method === 'GET') {
-      const config = getImapConfig();
-      res.statusCode = 200;
-      res.end(
-        JSON.stringify({
-          configured: config.configured,
-          host: config.host || '',
-          port: config.port,
-          secure: config.secure,
-          user: config.user,
-          hasPassword: Boolean(config.pass),
-        })
-      );
-      return true;
-    } else if (req.method === 'POST') {
-      const updated = updateImapConfig({
-        host: body.host,
-        port: body.port ? parseInt(body.port, 10) : undefined,
-        secure: body.secure,
-        user: body.user,
-        pass: body.pass,
-      });
-      res.statusCode = 200;
-      res.end(
-        JSON.stringify({
-          success: true,
-          configured: updated.configured,
-          host: updated.host,
-          port: updated.port,
-          user: updated.user,
-          hasPassword: Boolean(updated.pass),
-        })
-      );
-      return true;
-    }
-  }
-  if (url === '/api/imap/status' && req.method === 'GET') {
-    const config = getImapConfig();
-    res.statusCode = 200;
-    res.end(
-      JSON.stringify({
-        configured: config.configured,
-        host: config.host || '(not set)',
-        port: config.port,
-        secure: config.secure,
-        user: config.user,
-        passConfigured: Boolean(config.pass),
-      })
-    );
-    return true;
-  }
-
-  if (url === '/api/imap/verify' && req.method === 'POST') {
-    const result = await checkImapStatus();
-    res.statusCode = result.verified ? 200 : 400;
-    res.end(JSON.stringify({ success: result.verified, ...result }));
-    return true;
-  }
-
-  if (url === '/api/imap/poll' && req.method === 'POST') {
-    const result = await pollAndProcessImapMailbox(activeTenantCtx);
-    res.statusCode = result.success ? 200 : 500;
-    res.end(JSON.stringify(result));
-    return true;
-  }
-
   // 7. Inbound Email Webhook & Mailbox Sync
   if ((url === '/api/inbound/sync' || url === '/api/inbound/history') && (req.method === 'GET' || req.method === 'POST')) {
-    // Poll IMAP mailbox on demand if configured
-    const imapCfg = getImapConfig();
-    if (imapCfg.configured) {
-      await pollAndProcessImapMailbox(activeTenantCtx).catch((err) => {
-        console.warn('IMAP on-demand poll notice in /api/inbound/sync:', err);
-      });
-    }
-
     res.statusCode = 200;
     res.setHeader('Content-Type', 'application/json');
     res.end(

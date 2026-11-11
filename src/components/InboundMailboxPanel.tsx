@@ -19,7 +19,6 @@ interface InboundView {
   lastSuccessAt?: string;
   connectedAt?: string;
   hasPassword: boolean;
-  sharedMailbox?: boolean;
 }
 
 async function api<T = any>(url: string, init?: RequestInit): Promise<T> {
@@ -186,7 +185,7 @@ export const InboundMailboxPanel: React.FC<{ tenantId: string; canEdit: boolean 
   const [ignoreRules, setIgnoreRules] = useState<InboundEmailIgnoreRules>(DEFAULT_INBOUND_EMAIL_IGNORE_RULES);
 
   const connected = Boolean(view && view.status !== 'not_configured');
-  const canConfigureIgnoreRules = Boolean(view && (connected || view.sharedMailbox));
+  const canConfigureIgnoreRules = Boolean(view && connected);
   const isOAuth = view?.authType === 'oauth';
 
   const apply = (v: InboundView) => {
@@ -272,7 +271,7 @@ export const InboundMailboxPanel: React.FC<{ tenantId: string; canEdit: boolean 
     );
   }
 
-  const showForm = (!connected && !view?.sharedMailbox) || editing;
+  const showForm = !connected || editing;
   const help = PROVIDERS.find((p) => p.id === provider)?.help;
   const microsoftAvailable = view?.microsoftAvailable !== false;
   const keepSavedPassword = Boolean(
@@ -391,12 +390,6 @@ export const InboundMailboxPanel: React.FC<{ tenantId: string; canEdit: boolean 
             </button>
           </div>
         </section>
-      )}
-
-      {view?.sharedMailbox && !connected && !editing && (
-        <div className="text-sm bg-slate-50 border border-slate-200 text-slate-700 rounded-lg px-3 py-2">
-          This workspace is using the platform-managed inbound mailbox. The ignore rules below apply to that mailbox too.
-        </div>
       )}
 
       {canConfigureIgnoreRules && view && !editing && (

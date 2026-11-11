@@ -33,13 +33,6 @@ function getInboundCtx(): TenantContext {
   return inboundCtxStore.getStore() ?? activeInboundCtx;
 }
 
-/**
- * The shared IMAP mailbox (IMAP_* / SMTP_* env) belongs to exactly one workspace. Until per-workspace
- * mailboxes exist, only that workspace may poll it, read its results or change its settings.
- */
-export function getImapOwnerTenantId(): string {
-  return (process.env.IMAP_OWNER_TENANT_ID || 'umrah360').trim();
-}
 import OpenAI from 'openai';
 // The Human Handoff classifier now lives in humanHandoffService.ts (shared by every channel).
 export { classifyHumanHandoffWithAi } from './humanHandoffService.js';
@@ -49,7 +42,6 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { sendLiveEmail, SendMailResult, getSmtpConfig } from './smtpService.js';
-import { pollUnreadEmails, FetchedInboundEmail } from './imapService.js';
 import type { InboundEmailIgnoreRules } from '../shared/inboundEmailRules.js';
 import { getPublishedKnowledgeDocs, initKnowledgeStore } from './knowledgeService.js';
 import {
@@ -451,7 +443,7 @@ export interface PipelineConfig {
 
 const pipelineConfig: PipelineConfig = {
   emailMode: 'AUTO',
-  sendingAccount: process.env.SMTP_USER || process.env.IMAP_USER || '',
+  sendingAccount: process.env.SMTP_USER || '',
   emailSignature: 'Regards,\nUmrah360 Automation Team\nwww.umrah360.in',
 };
 
@@ -2047,110 +2039,5 @@ async function persistInboundCrmEntities(ctx: TenantContext, crmEntities: Inboun
     await Promise.all(writes);
   } catch (err) {
     console.warn('[Inbound Pipeline] Notice syncing CRM entities to Firestore:', err);
-  }
-}
-
-let isImapPollingActive = false;
-let lastImapPollTimestamp = 0;
-const IMAP_POLL_MIN_INTERVAL_MS = 15000; // 15s cooldown to prevent IMAP and proxy rate limit exceeding
-
-/**
- * Polls IMAP inbox automation@amaavigo.com, processes all new emails, and dispatches real SMTP replies!
- */
-export async function pollAndProcessImapMailbox(forceOrCtx: boolean | TenantContext = false): Promise<{
-  success: boolean;
-  polledCount: number;
-  results: ProcessedInboundEmailResult[];
-  error?: string;
-}> {
-  const force = forceOrCtx === true;
-  const callerCtx = typeof forceOrCtx === 'object' ? forceOrCtx : getInboundCtx();
-
-  // The shared mailbox only ever belongs to its owner workspace. Any other workspace is a no-op,
-  // otherwise its login would pull the owner's customer emails into the wrong tenant.
-  if (callerCtx.tenantId !== getImapOwnerTenantId()) {
-    return { success: true, polledCount: 0, results: [] };
-  }
-  return runWithInboundCtx(callerCtx, () => pollImapForOwner(force));
-}
-
-async function pollImapForOwner(force: boolean): Promise<{
-  success: boolean;
-  polledCount: number;
-  results: ProcessedInboundEmailResult[];
-  error?: string;
-}> {
-  const now = Date.now();
-  if (isImapPollingActive) {
-    return {
-      success: true,
-      polledCount: 0,
-      results: getRecentProcessedEmails(getInboundCtx().tenantId).slice(0, 10),
-    };
-  }
-
-  if (!force && now - lastImapPollTimestamp < IMAP_POLL_MIN_INTERVAL_MS) {
-    return {
-      success: true,
-      polledCount: 0,
-      results: getRecentProcessedEmails(getInboundCtx().tenantId).slice(0, 10),
-    };
-  }
-
-  isImapPollingActive = true;
-  lastImapPollTimestamp = now;
-
-  try {
-    let ignoreRules: Partial<InboundEmailIgnoreRules> | undefined;
-    try {
-      const inboundSettingsService = await import('./tenantInboundService.js');
-      const ownerSettings = await inboundSettingsService.getInboundSettings(getInboundCtx().tenantId, { fresh: true });
-      ignoreRules = ownerSettings.ignoreRules;
-    } catch {
-      // Defaults in the shared rule evaluator still protect the mailbox if settings cannot be read.
-    }
-    const imapResult = await pollUnreadEmails(true, ignoreRules);
-
-    if (!imapResult.success) {
-      return {
-        success: false,
-        polledCount: 0,
-        results: [],
-        error: imapResult.error,
-      };
-    }
-
-    const processedResults: ProcessedInboundEmailResult[] = [];
-
-    for (const email of imapResult.emails) {
-      console.log(`[IMAP Inbound] Found live email from ${email.from}: "${email.subject}"`);
-      const result = await processLiveInboundEmail({
-        from: email.from,
-        fromName: email.fromName,
-        to: email.to,
-        subject: email.subject,
-        body: email.text || '',
-        messageId: email.messageId,
-        inReplyTo: email.inReplyTo,
-        references: email.references,
-      });
-      processedResults.push(result);
-    }
-
-    return {
-      success: true,
-      polledCount: processedResults.length,
-      results: processedResults,
-    };
-  } catch (err: any) {
-    console.error('[IMAP Inbound] Error during scheduled mailbox poll:', err?.message || err);
-    return {
-      success: false,
-      polledCount: 0,
-      results: [],
-      error: err?.message || 'IMAP polling failed',
-    };
-  } finally {
-    isImapPollingActive = false;
   }
 }

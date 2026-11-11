@@ -6,7 +6,7 @@ import { db, doc, collection, getDoc, getDocs, setDoc, createDoc, deleteDoc } fr
 import { isFirebaseConfigured } from '../firebase/config.js';
 import { tenantRepo } from './tenantRepo.js';
 import { encryptSecret, decryptSecret } from './cryptoUtils.js';
-import { describeImapError, getImapConfig } from './imapService.js';
+import { describeImapError } from './imapService.js';
 import {
   DEFAULT_INBOUND_EMAIL_IGNORE_RULES,
   normalizeInboundEmailIgnoreRules,
@@ -40,8 +40,8 @@ import {
  * Mailbox registry:        imap_mailboxes/{hash(host|user)}     (one mailbox can belong to ONE workspace;
  *                                                               also the list the poller walks)
  *
- * The platform-wide env mailbox (IMAP_*) that belongs to IMAP_OWNER_TENANT_ID is a separate, older path and
- * is not touched by anything in this file.
+ * No platform-wide environment mailbox is used here. Every connection is resolved from this tenant's
+ * settings document and encrypted secret record.
  */
 
 export type InboundStatus = 'not_configured' | 'connected' | 'error' | 'auth_failed' | 'paused';
@@ -381,9 +381,6 @@ export async function getInboundView(tenantId: string) {
     lastSuccessAt: s.lastSuccessAt,
     connectedAt: s.connectedAt,
     hasPassword,
-    sharedMailbox:
-      tenantId === (process.env.IMAP_OWNER_TENANT_ID || 'umrah360').trim() &&
-      Boolean(getImapConfig().configured),
   };
 }
 

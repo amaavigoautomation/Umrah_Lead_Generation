@@ -30,7 +30,7 @@ import { MicrosoftReauthRequired } from './microsoftOAuth.js';
  *  - Only mail that arrived after the mailbox was connected (UID high-water mark) is considered.
  *  - Unless "process new inquiries" is on, only replies to our conversations / known contacts are ingested,
  *    so unrelated personal mail never reaches the AI.
- *  - Never touches the platform env mailbox (that is the separate owner path in imapService).
+ *  - Uses only the connected tenant's saved settings and encrypted credentials; no environment mailbox is polled.
  */
 
 const JOB_NAME = 'tenant_imap_inbound';

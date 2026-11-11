@@ -14,8 +14,6 @@ import {
   User,
   ArrowRight,
   Clock,
-  Key,
-  Info,
   ChevronRight,
   Radio,
   MessageSquare,
@@ -23,7 +21,6 @@ import {
   X,
   Smartphone,
 } from 'lucide-react';
-import { INBOUND_MAILBOX } from '../services/emailInboundService';
 import {
   WHATSAPP_BUSINESS_NUMBER,
   WHATSAPP_BUSINESS_NUMBER_FORMATTED,
@@ -40,16 +37,6 @@ interface SmtpStatus {
   verified?: boolean;
   lastChecked?: string;
   lastError?: string;
-}
-
-interface ImapStatus {
-  configured: boolean;
-  host: string;
-  port: number;
-  secure: boolean;
-  user: string;
-  verified: boolean;
-  error?: string;
 }
 
 interface ProcessedEmail {
@@ -104,7 +91,6 @@ export const LiveMailboxCenter: React.FC<LiveMailboxCenterProps> = ({
   const { brand } = useBrand();
   const isUmrah = brand.playbook === 'umrah360';
   const [smtpStatus, setSmtpStatus] = useState<SmtpStatus | null>(null);
-  const [imapStatus, setImapStatus] = useState<ImapStatus | null>(null);
   const [tenantInbound, setTenantInbound] = useState<TenantInboundStatus | null>(null);
   const [isLoadingStatus, setIsLoadingStatus] = useState<boolean>(true);
   const [isVerifyingSmtp, setIsVerifyingSmtp] = useState<boolean>(false);
@@ -123,10 +109,10 @@ export const LiveMailboxCenter: React.FC<LiveMailboxCenterProps> = ({
   const [isPollingImap, setIsPollingImap] = useState<boolean>(false);
   const [pollResult, setPollResult] = useState<{ success: boolean; count: number; message: string } | null>(null);
 
-  const tenantMailboxConnected =
-    Boolean(tenantInbound?.user) && tenantInbound?.status && tenantInbound.status !== 'not_configured';
-  const activeMailbox =
-    (tenantMailboxConnected && tenantInbound?.user) || smtpStatus?.user || imapStatus?.user || INBOUND_MAILBOX;
+  const tenantMailboxConnected = Boolean(
+    tenantInbound?.user && tenantInbound?.status && tenantInbound.status !== 'not_configured'
+  );
+  const activeMailbox = tenantMailboxConnected ? tenantInbound!.user! : 'No workspace mailbox connected';
   const inboundProviderLabel =
     tenantInbound?.provider === 'microsoft'
       ? 'Microsoft 365 / Outlook (OAuth IMAP)'
@@ -236,9 +222,8 @@ export const LiveMailboxCenter: React.FC<LiveMailboxCenterProps> = ({
     setIsLoadingStatus(true);
     try {
       const safeJson = (r: Response) => (r.ok && r.headers.get('content-type')?.includes('application/json') ? r.json() : null);
-      const [smtpRes, imapRes, historyRes, waRes, inboundRes] = await Promise.all([
+      const [smtpRes, historyRes, waRes, inboundRes] = await Promise.all([
         fetch('/api/smtp/status').then(safeJson).catch(() => null),
-        fetch('/api/imap/status').then(safeJson).catch(() => null),
         fetch('/api/inbound/history').then(safeJson).catch(() => ({ history: [] })),
         fetch('/api/whatsapp/status').then(safeJson).catch(() => null),
         tenantId
@@ -247,7 +232,6 @@ export const LiveMailboxCenter: React.FC<LiveMailboxCenterProps> = ({
       ]);
 
       if (smtpRes) setSmtpStatus(smtpRes);
-      if (imapRes) setImapStatus(imapRes);
       if (historyRes?.history) setProcessedHistory(historyRes.history);
       if (waRes?.gateway) setWaGatewayStatus(waRes.gateway);
       if (inboundRes) setTenantInbound(inboundRes);
@@ -284,30 +268,38 @@ export const LiveMailboxCenter: React.FC<LiveMailboxCenterProps> = ({
     }
   };
 
-  // Poll IMAP Inbox — uses the workspace mailbox (Gmail / Microsoft / other IMAP) when connected.
+  // Manually poll only this workspace's saved mailbox. The API resolves credentials from
+  // tenants/{tenantId}/settings/inbound and its encrypted secret; no shared env mailbox is used.
   const handlePollImap = async () => {
+    if (!tenantId || !tenantMailboxConnected) {
+      setPollResult({ success: false, count: 0, message: 'Connect a workspace mailbox under Settings → Inbound mailbox first.' });
+      return;
+    }
     setIsPollingImap(true);
     setPollResult(null);
     try {
-      const res = await fetch('/api/inbound/poll', { method: 'POST' });
-      const data = await res.json();
-      const mailbox = data.mailbox || activeMailbox;
-      if (res.ok && data.success) {
+      const res = await fetch(`/api/tenants/${encodeURIComponent(tenantId)}/inbound/poll`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: '{}',
+      });
+      const data = await res.json().catch(() => ({}));
+      const mailbox = data.user || activeMailbox;
+      const needsAttention = ['error', 'auth_failed', 'paused'].includes(String(data.status || ''));
+      if (res.ok && !needsAttention) {
         setPollResult({
           success: true,
-          count: data.polledCount || 0,
-          message: data.polledCount > 0
-            ? `Successfully ingested ${data.polledCount} new email(s) from ${mailbox} into the AI / CRM pipeline.`
-            : `Inbox ${mailbox} checked: connection active. No new mail to process right now.`,
+          count: 0,
+          message: `Workspace mailbox ${mailbox} poll completed. Eligible messages are processed only inside this workspace.`,
         });
-        if (onSyncNow) {
-          onSyncNow();
-        }
+        onSyncNow?.();
       } else {
         setPollResult({
           success: false,
           count: 0,
-          message: data.error || 'IMAP polling failed',
+          message: data.lastError || data.error || (data.status === 'paused'
+            ? `Mailbox ${mailbox} is paused. Re-enable it under Settings → Inbound mailbox.`
+            : 'The workspace mailbox needs attention. Check Settings → Inbound mailbox.'),
         });
       }
       fetchStatus();
@@ -315,7 +307,7 @@ export const LiveMailboxCenter: React.FC<LiveMailboxCenterProps> = ({
       setPollResult({
         success: false,
         count: 0,
-        message: err.message || 'IMAP polling network error',
+        message: err.message || 'Workspace mailbox poll failed',
       });
     } finally {
       setIsPollingImap(false);
@@ -442,7 +434,7 @@ export const LiveMailboxCenter: React.FC<LiveMailboxCenterProps> = ({
                 </span>
               </div>
               <p className="text-xs text-slate-500 font-medium mt-0.5">
-                Direct live synchronization with <strong className="text-slate-800">{INBOUND_MAILBOX}</strong> and SMTP delivery to personal mailboxes.
+                Direct live synchronization with <strong className="text-slate-800">{activeMailbox}</strong> and SMTP delivery to personal mailboxes.
               </p>
             </div>
           </div>
@@ -460,11 +452,11 @@ export const LiveMailboxCenter: React.FC<LiveMailboxCenterProps> = ({
 
           <button
             onClick={handlePollImap}
-            disabled={isPollingImap}
+            disabled={isPollingImap || !tenantMailboxConnected}
             className="flex items-center space-x-1.5 px-4 py-2 rounded-xl bg-gradient-to-r from-[#ef741a] to-[#f97316] hover:from-[#d9620b] hover:to-[#ea580c] text-white text-xs font-bold shadow-xs transition"
           >
             <Inbox className={`w-3.5 h-3.5 ${isPollingImap ? 'animate-bounce' : ''}`} />
-            <span>{isPollingImap ? 'Checking Inbox...' : 'Check Inbox Now (IMAP Sync)'}</span>
+            <span>{isPollingImap ? 'Checking Inbox...' : 'Check Workspace Inbox Now'}</span>
           </button>
         </div>
       </div>
@@ -587,42 +579,46 @@ export const LiveMailboxCenter: React.FC<LiveMailboxCenterProps> = ({
           </div>
         </div>
 
-        {/* Card 4: IMAP Inbound Listener */}
+        {/* Card 4: Workspace Inbound Mailbox */}
         <div className="bg-white border border-slate-200/90 rounded-2xl p-5 space-y-3 shadow-xs">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold uppercase tracking-wider text-slate-400">IMAP Inbound Listener</span>
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Workspace Inbound Mailbox</span>
             <span
               className={`px-2 py-0.5 rounded text-[11px] font-semibold border ${
-                imapStatus?.configured
+                tenantMailboxConnected && tenantInbound?.status === 'connected'
                   ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                  : 'bg-amber-50 text-amber-700 border-amber-200'
+                  : tenantMailboxConnected
+                    ? 'bg-amber-50 text-amber-700 border-amber-200'
+                    : 'bg-slate-50 text-slate-600 border-slate-200'
               }`}
             >
-              {imapStatus?.configured ? 'Active Poller' : 'Needs Credentials'}
+              {tenantMailboxConnected ? (tenantInbound?.status === 'connected' ? 'Connected' : 'Needs attention') : 'Not connected'}
             </span>
           </div>
           <div className="space-y-1">
-            <div className="flex items-center space-x-2 text-xs text-slate-700 font-mono">
-              <Inbox className="w-3.5 h-3.5 text-[#ef741a]" />
-              <span>{imapStatus?.host || 'IMAP_HOST not set'}</span>
-              <span>:{imapStatus?.port || 993}</span>
+            <div className="flex items-center space-x-2 text-xs text-slate-700 font-mono break-all">
+              <Inbox className="w-3.5 h-3.5 text-[#ef741a] shrink-0" />
+              <span>{tenantMailboxConnected ? tenantInbound?.user : 'Connect under Settings → Inbound mailbox'}</span>
             </div>
+            {tenantMailboxConnected && tenantInbound?.host && (
+              <div className="text-xs text-slate-500">{tenantInbound.host}:{tenantInbound.port || 993}</div>
+            )}
             <div className="flex items-center space-x-2 text-xs text-slate-500">
               <Clock className="w-3.5 h-3.5 text-slate-400" />
-              <span>Auto-poll: Every 30s background cycle</span>
+              <span>Background polling is scoped to this workspace</span>
             </div>
           </div>
           <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
             <button
               onClick={handlePollImap}
-              disabled={isPollingImap}
-              className="text-xs text-[#ef741a] hover:underline font-semibold flex items-center space-x-1"
+              disabled={isPollingImap || !tenantMailboxConnected}
+              className="text-xs text-[#ef741a] hover:underline font-semibold flex items-center space-x-1 disabled:opacity-40 disabled:cursor-not-allowed"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${isPollingImap ? 'animate-spin' : ''}`} />
-              <span>Sync Unread Now</span>
+              <span>{isPollingImap ? 'Checking workspace inbox…' : 'Sync Workspace Inbox Now'}</span>
             </button>
             <span className="text-[11px] text-slate-400 font-medium">
-              {imapStatus?.configured ? 'Listening' : 'Waiting for host'}
+              {tenantMailboxConnected ? tenantInbound?.status : 'No mailbox connected'}
             </span>
           </div>
         </div>
@@ -666,7 +662,7 @@ export const LiveMailboxCenter: React.FC<LiveMailboxCenterProps> = ({
           )}
           <div className="flex-1">
             <span className="font-bold block">
-              {pollResult.success ? 'IMAP Mailbox Check Completed' : 'IMAP Mailbox Notice'}
+              {pollResult.success ? 'Workspace Mailbox Check Completed' : 'Workspace Mailbox Notice'}
             </span>
             <p className="mt-0.5">{pollResult.message}</p>
           </div>
@@ -679,7 +675,7 @@ export const LiveMailboxCenter: React.FC<LiveMailboxCenterProps> = ({
           <div className="flex items-center space-x-2 text-[#c2410c] font-bold">
             <CheckCircle2 className="w-4 h-4 shrink-0 text-[#ef741a]" />
             <span className="text-sm font-display">
-              Active Mailbox: {activeMailbox} ({tenantMailboxConnected ? inboundProviderLabel : 'legacy env IMAP'})
+              Active Mailbox: {activeMailbox} ({tenantMailboxConnected ? inboundProviderLabel : 'not connected'})
             </span>
           </div>
           <span className="px-2.5 py-0.5 rounded-full text-[11px] font-mono bg-white text-[#c2410c] border border-[#fed7aa] font-semibold w-fit">
@@ -687,7 +683,7 @@ export const LiveMailboxCenter: React.FC<LiveMailboxCenterProps> = ({
               ? `${tenantInbound?.host || 'imap'}:${tenantInbound?.port || 993}${
                   tenantInbound?.authType === 'oauth' ? ' · Microsoft OAuth' : ''
                 }`
-              : 'IMAP: env IMAP_* · connect in Settings → Inbound for Gmail / Microsoft / IMAP'}
+              : 'Connect in Settings → Inbound mailbox'}
           </span>
         </div>
         <p className="text-slate-700 leading-relaxed text-xs">
@@ -697,7 +693,7 @@ export const LiveMailboxCenter: React.FC<LiveMailboxCenterProps> = ({
             </>
           ) : (
             <>
-              No workspace mailbox is connected yet. Open <strong>Settings → Inbound mailbox</strong> to connect Gmail (app password), Microsoft 365 / Outlook (Sign in with Microsoft), or any other IMAP server. Until then, the legacy env IMAP_* mailbox is used when configured.
+              No workspace mailbox is connected yet. Open <strong>Settings → Inbound mailbox</strong> to connect Gmail (app password), Microsoft 365 / Outlook (Sign in with Microsoft), or any other IMAP server. Inbound email will start processing after a mailbox is connected.
             </>
           )}
         </p>
@@ -728,7 +724,7 @@ export const LiveMailboxCenter: React.FC<LiveMailboxCenterProps> = ({
               </span>
             </div>
             <p className="text-xs text-slate-500 font-medium leading-relaxed">
-              Simulates receiving an email from your personal account into <strong className="text-slate-800">{INBOUND_MAILBOX}</strong>. Tests the complete pipeline: lead scoring, pushing contact/lead to CRM, thread to Unified Inbox, and <strong>sending a real SMTP auto-reply to your personal inbox</strong>.
+              Simulates receiving an email from your personal account into <strong className="text-slate-800">{activeMailbox}</strong>. Tests the complete pipeline: lead scoring, pushing contact/lead to CRM, thread to Unified Inbox, and <strong>sending a real SMTP auto-reply to your personal inbox</strong>.
             </p>
 
             <form onSubmit={handleIngestInboundTest} className="space-y-3 pt-1">
@@ -805,7 +801,7 @@ export const LiveMailboxCenter: React.FC<LiveMailboxCenterProps> = ({
 
               <div className="flex items-center justify-between pt-1">
                 <span className="text-[11px] text-slate-500">
-                  Target: <strong className="text-slate-800">{INBOUND_MAILBOX}</strong>
+                  Target: <strong className="text-slate-800">{activeMailbox}</strong>
                 </span>
 
                 <button
@@ -928,7 +924,7 @@ export const LiveMailboxCenter: React.FC<LiveMailboxCenterProps> = ({
 
               <div className="flex items-center justify-between pt-1">
                 <span className="text-[11px] text-slate-500">
-                  Sender: <strong className="text-slate-800">{INBOUND_MAILBOX}</strong>
+                  Sender: <strong className="text-slate-800">{smtpStatus?.user || 'SMTP_USER not set'}</strong>
                 </span>
 
                 <button
@@ -981,14 +977,13 @@ export const LiveMailboxCenter: React.FC<LiveMailboxCenterProps> = ({
         </div>
       </div>
 
-      {/* Live Mailbox Environment Credentials Checklist */}
+      {/* Outbound SMTP Environment Credentials */}
       <div className="bg-white border border-slate-200/90 rounded-2xl p-6 space-y-4 shadow-xs">
         <div className="flex items-center space-x-2">
-          <Key className="w-4 h-4 text-[#ef741a]" />
-          <h2 className="text-sm font-extrabold text-slate-900 font-display">Live Connection Environment Setup</h2>
+          <h2 className="text-sm font-extrabold text-slate-900 font-display">Outbound SMTP Environment Setup</h2>
         </div>
         <p className="text-xs text-slate-500">
-          To allow the application container to directly access your email host for <strong className="text-slate-800">{INBOUND_MAILBOX}</strong>, configure these variables in your project settings:
+          These environment variables are used only for outbound SMTP delivery. Inbound mailbox credentials are configured and stored separately for each workspace under <strong className="text-slate-800">Settings → Inbound mailbox</strong>.
         </p>
 
         <div className="space-y-2 text-xs">
@@ -1006,45 +1001,18 @@ export const LiveMailboxCenter: React.FC<LiveMailboxCenterProps> = ({
             </div>
             <div className="flex justify-between">
               <span>SMTP_USER=</span>
-              <span className="text-emerald-700 font-bold">{INBOUND_MAILBOX}</span>
+              <span className="text-emerald-700 font-bold">{smtpStatus?.user || 'SMTP_USER not set'}</span>
             </div>
             <div className="flex justify-between">
               <span>SMTP_PASS=</span>
               <span className={smtpStatus?.hasPassword ? 'text-emerald-700 font-bold' : 'text-amber-700 font-bold'}>
-                {smtpStatus?.hasPassword ? '••••••••' : '(your_mailbox_password)'}
-              </span>
-            </div>
-
-            <div className="text-slate-400 font-semibold font-sans pt-2 border-t border-slate-200"># IMAP Configuration (For Reading Inbound Emails)</div>
-            <div className="flex justify-between">
-              <span>IMAP_HOST=</span>
-              <span className={imapStatus?.host && imapStatus.host !== '(not set)' ? 'text-emerald-700 font-bold' : 'text-amber-700 font-bold'}>
-                {imapStatus?.host && imapStatus.host !== '(not set)' ? imapStatus.host : 'imap.yourdomain.com'}
-              </span>
-            </div>
-            <div className="flex justify-between">
-              <span>IMAP_PORT=</span>
-              <span className="text-slate-600">{imapStatus?.port || 993}</span>
-            </div>
-            <div className="flex justify-between">
-              <span>IMAP_USER=</span>
-              <span className="text-emerald-700 font-bold">{INBOUND_MAILBOX}</span>
-            </div>
-            <div className="flex justify-between">
-              <span>IMAP_PASS=</span>
-              <span className={imapStatus?.configured ? 'text-emerald-700 font-bold' : 'text-amber-700 font-bold'}>
-                {imapStatus?.configured ? '••••••••' : '(your_mailbox_password)'}
+                {smtpStatus?.hasPassword ? '••••••••' : '(SMTP password not configured)'}
               </span>
             </div>
           </div>
-
           <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-[11px] text-blue-900 space-y-1">
-            <div className="font-bold flex items-center space-x-1.5 text-[#0848ef]">
-              <Info className="w-3.5 h-3.5" />
-              <span>How to set credentials in Google AI Studio:</span>
-            </div>
             <p className="text-slate-600">
-              Open the <strong>Settings</strong> menu in AI Studio, go to <strong>Secrets / Environment Variables</strong>, and add the variables listed above. Once saved, click <strong>"Test SMTP Connection"</strong> or <strong>"Check Inbox Now"</strong>.
+              To connect or test inbound email, open <strong>Settings → Inbound mailbox</strong>. Each tenant's own mailbox is polled independently and its credentials are never shared with another workspace.
             </p>
           </div>
         </div>
@@ -1067,7 +1035,7 @@ export const LiveMailboxCenter: React.FC<LiveMailboxCenterProps> = ({
             <Inbox className="w-8 h-8 text-slate-400 mx-auto" />
             <p className="text-xs text-slate-700 font-bold">No live inbound emails captured yet</p>
             <p className="text-xs text-slate-500 max-w-md mx-auto">
-              Once you send an email to <strong className="text-slate-700">{INBOUND_MAILBOX}</strong> and click "Check Inbox Now" (or let the 30-second background listener poll it), the email and its live SMTP auto-reply will appear here with full audit traces.
+              Once you send an email to <strong className="text-slate-700">{activeMailbox}</strong> and click "Check Inbox Now" (or let the 30-second background listener poll it), the email and its live SMTP auto-reply will appear here with full audit traces.
             </p>
           </div>
         ) : (

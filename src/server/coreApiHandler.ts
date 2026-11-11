@@ -2307,7 +2307,7 @@ Generate a helpful, accurate, grounded response adhering to all rules.`;
               temperature: 0.3,
             });
 
-            await recordAiCompletionUsage(activeTenantCtx.tenantId, completion, modelName, process.env.OPENAI_API_KEY ? 'openai' : 'gemini');
+            await recordAiCompletionUsage(activeTenantCtx.tenantId, completion, modelName, process.env.OPENAI_API_KEY ? 'openai' : 'gemini', 'unified_inbox');
             const content = completion.choices[0]?.message?.content?.trim() || '';
             if (content.length > 20) {
               generatedText = content;
@@ -2675,7 +2675,7 @@ ${signature || defSig}`;
               ],
               temperature: 0.3,
             });
-            await recordAiCompletionUsage(activeTenantCtx.tenantId, completion, modelName, isGemini ? 'gemini' : 'openai');
+            await recordAiCompletionUsage(activeTenantCtx.tenantId, completion, modelName, isGemini ? 'gemini' : 'openai', 'playground');
             const content = completion.choices[0]?.message?.content?.trim() || '';
             if (content.length > 10) {
               generatedText = content;

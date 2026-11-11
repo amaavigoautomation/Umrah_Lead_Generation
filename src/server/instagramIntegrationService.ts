@@ -455,7 +455,7 @@ async function processInstagramMessageEvent(tenantId: string, accountId: string,
       { role: 'user', content: (aiFeedbackPromptSection ? aiFeedbackPromptSection + '\n\n' : '') + 'CUSTOMER MESSAGE:\n' + messageText.slice(0, 3000) },
     ],
   });
-  await recordAiCompletionUsage(ctx.tenantId, completion, process.env.INSTAGRAM_AI_MODEL || 'gpt-4o-mini', 'openai');
+  await recordAiCompletionUsage(ctx.tenantId, completion, process.env.INSTAGRAM_AI_MODEL || 'gpt-4o-mini', 'openai', 'instagram');
   const replyText = completion.choices[0]?.message?.content?.trim();
   if (!replyText) {
     await updateDoc(eventRef, { status: 'processed_no_reply', reason: 'AI returned an empty response', processedAt: now, conversationId });

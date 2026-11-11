@@ -642,7 +642,7 @@ INSTRUCTIONS FOR WHATSAPP RESPONSE:
             temperature: 0.3,
           });
 
-          await recordAiCompletionUsage(getWACtx().tenantId, completion, modelName, 'openai');
+          await recordAiCompletionUsage(getWACtx().tenantId, completion, modelName, 'openai', 'inbound_whatsapp');
           const rawText = completion.choices[0]?.message?.content?.trim() || '';
           if (rawText.length > 30) {
             const replyText = sanitizeAiEmailText(rawText, senderGreetingName);

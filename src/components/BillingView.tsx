@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { CreditCard, CheckCircle2, AlertTriangle, Loader2, LogOut, ExternalLink } from 'lucide-react';
 import { FEATURES, LIMITS } from '../shared/features';
+import { AI_USAGE_FEATURES, type AiFeatureUsageTotals } from '../shared/aiUsageFeatures';
 
 interface BillingPlan {
   id: string;
@@ -20,7 +21,7 @@ interface BillingState {
   plans: BillingPlan[];
 }
 interface TenantUsageState {
-  usage: { aiInputTokens?: number; aiOutputTokens?: number; aiTotalTokens?: number; aiCostUsd?: number; aiUnpricedRequestCount?: number; coldEmailCount?: number; solicitedEmailCount?: number };
+  usage: { aiInputTokens?: number; aiOutputTokens?: number; aiTotalTokens?: number; aiCostUsd?: number; aiUnpricedRequestCount?: number; aiModelCostUsd?: number; aiModelUnpricedRequestCount?: number; aiFeatureUsage?: Record<string, AiFeatureUsageTotals>; coldEmailCount?: number; solicitedEmailCount?: number };
   limits: { monthlyAiTokens: number; dailyOutboundSends: number };
   dailyUsage?: { emailSentCount?: number };
   percentages?: { aiTokens?: number; dailySends?: number };
@@ -28,11 +29,11 @@ interface TenantUsageState {
     from: string; to: string; timezone: string;
     emailSentCount: number; coldEmailCount: number; solicitedEmailCount: number;
     aiInputTokens: number; aiOutputTokens: number; aiTotalTokens: number; aiRequestCount: number;
-    aiCostUsd: number; aiUnpricedRequestCount: number;
+    aiCostUsd: number; aiUnpricedRequestCount: number; aiModelCostUsd: number; aiModelUnpricedRequestCount: number; aiFeatureUsage?: Record<string, AiFeatureUsageTotals>;
     days: Array<{
       day: string; emailSentCount: number; coldEmailCount: number; solicitedEmailCount: number;
       aiInputTokens: number; aiOutputTokens: number; aiTotalTokens: number; aiRequestCount: number;
-      aiCostUsd: number; aiUnpricedRequestCount: number;
+      aiCostUsd: number; aiUnpricedRequestCount: number; aiModelCostUsd: number; aiModelUnpricedRequestCount: number; aiFeatureUsage?: Record<string, AiFeatureUsageTotals>;
     }>;
   };
 }
@@ -108,7 +109,9 @@ export const BillingView: React.FC<{ fullScreen?: boolean; onLogout?: () => void
   const subscribed = state?.billing.planSource === 'stripe' && ['active', 'trialing', 'past_due'].includes(status);
   const monthlyEmails = (usageState?.usage?.coldEmailCount || 0) + (usageState?.usage?.solicitedEmailCount || 0);
   const aiTokens = usageState?.usage?.aiTotalTokens || 0;
-  const aiCostUsd = usageState?.usage?.aiCostUsd || 0;
+  const aiCostUsd = usageState?.usage?.aiModelCostUsd || 0;
+  const monthlyFeatureUsage = usageState?.usage?.aiFeatureUsage || {};
+  const monthlyFeaturesUsed = AI_USAGE_FEATURES.filter((feature) => Number(monthlyFeatureUsage[feature.key]?.aiRequestCount || monthlyFeatureUsage[feature.key]?.aiTotalTokens || 0) > 0);
   const formatUsd = (value: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 4, maximumFractionDigits: 4 }).format(value);
 
   const body = (
@@ -165,10 +168,40 @@ export const BillingView: React.FC<{ fullScreen?: boolean; onLogout?: () => void
               <div className="text-[11px] text-slate-400 mt-1">USD · model token-rate estimate</div>
             </div>
           </div>
-          {(usageState?.usage?.aiUnpricedRequestCount || 0) > 0 && (
-            <p className="text-[11px] text-amber-700">Cost is incomplete for {usageState?.usage?.aiUnpricedRequestCount} AI request(s) because their model pricing is not configured. Their tokens are still included.</p>
+          {(usageState?.usage?.aiModelUnpricedRequestCount || 0) > 0 && (
+            <p className="text-[11px] text-amber-700">Cost is incomplete for {usageState?.usage?.aiModelUnpricedRequestCount} AI request(s) because the pricing catalogue has no matching rate or the provider did not return a usage breakdown. Their tokens are still included.</p>
           )}
-          <p className="text-[11px] text-slate-400">AI cost is an estimate based on recorded provider tokens and configured model rates; it is not a provider invoice.</p>
+          <p className="text-[11px] text-slate-400">AI cost is an estimate based on provider-reported usage and the matching model pricing catalogue; it is not a provider invoice.</p>
+        </section>
+
+        <section className="rounded-xl border border-slate-200 bg-white p-4 space-y-3">
+          <div className="flex items-center justify-between gap-2">
+            <h4 className="text-sm font-bold text-slate-900">AI usage by feature</h4>
+            <span className="text-[11px] text-slate-400">Current UTC month</span>
+          </div>
+          <p className="text-xs text-slate-500">Estimated tokens consumed by each AI-powered feature. This includes both input and output tokens.</p>
+          {monthlyFeaturesUsed.length > 0 ? (
+            <div className="overflow-x-auto rounded-lg border border-slate-200">
+              <table className="w-full text-sm">
+                <thead className="bg-slate-50 text-slate-500">
+                  <tr>
+                    <th className="px-3 py-2 text-left font-semibold">Feature</th>
+                    <th className="px-3 py-2 text-right font-semibold">Estimated tokens</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {monthlyFeaturesUsed.map((feature) => (
+                    <tr key={feature.key}>
+                      <td className="px-3 py-2 text-slate-700">{feature.label}</td>
+                      <td className="px-3 py-2 text-right font-medium text-slate-900">{Number(monthlyFeatureUsage[feature.key]?.aiTotalTokens || 0).toLocaleString('en-US')}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p className="text-xs text-slate-400">Feature-level AI usage will appear here as new AI requests are recorded.</p>
+          )}
         </section>
 
         <section className="rounded-xl border border-slate-200 bg-white p-4 space-y-3">
@@ -211,7 +244,7 @@ export const BillingView: React.FC<{ fullScreen?: boolean; onLogout?: () => void
                 </div>
                 <div className="rounded-lg bg-slate-50 border border-slate-200 p-3">
                   <div className="text-xs text-slate-500">Estimated AI cost</div>
-                  <div className="text-lg font-bold text-slate-900">{formatUsd(usageState.periodUsage.aiCostUsd)}</div>
+                  <div className="text-lg font-bold text-slate-900">{formatUsd(usageState.periodUsage.aiModelCostUsd)}</div>
                 </div>
               </div>
               <div className="overflow-x-auto rounded-lg border border-slate-200">
@@ -232,15 +265,30 @@ export const BillingView: React.FC<{ fullScreen?: boolean; onLogout?: () => void
                         <td className="px-3 py-2 text-right font-medium text-slate-900">{day.emailSentCount.toLocaleString('en-US')}</td>
                         <td className="px-3 py-2 text-right font-medium text-slate-900">{day.aiTotalTokens.toLocaleString('en-US')}</td>
                         <td className="px-3 py-2 text-right text-slate-500">{day.aiInputTokens.toLocaleString('en-US')} / {day.aiOutputTokens.toLocaleString('en-US')}</td>
-                        <td className="px-3 py-2 text-right text-slate-700">{formatUsd(day.aiCostUsd)}</td>
+                        <td className="px-3 py-2 text-right text-slate-700">{formatUsd(day.aiModelCostUsd)}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
+              {usageState.periodUsage.aiFeatureUsage && Object.keys(usageState.periodUsage.aiFeatureUsage).some((key) => Number(usageState.periodUsage?.aiFeatureUsage?.[key]?.aiRequestCount || 0) > 0) && (
+                <div className="rounded-lg border border-slate-200 overflow-hidden">
+                  <div className="px-3 py-2 bg-slate-50 text-xs font-semibold text-slate-600">Estimated tokens by feature</div>
+                  <table className="w-full text-xs">
+                    <tbody className="divide-y divide-slate-100">
+                      {AI_USAGE_FEATURES.filter((feature) => Number(usageState.periodUsage?.aiFeatureUsage?.[feature.key]?.aiRequestCount || 0) > 0).map((feature) => (
+                        <tr key={feature.key}>
+                          <td className="px-3 py-2 text-slate-700">{feature.label}</td>
+                          <td className="px-3 py-2 text-right font-medium text-slate-900">{Number(usageState.periodUsage?.aiFeatureUsage?.[feature.key]?.aiTotalTokens || 0).toLocaleString('en-US')}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </>
           )}
-          {(usageState?.periodUsage?.aiUnpricedRequestCount || 0) > 0 && <p className="text-[11px] text-amber-700">Cost is incomplete for {usageState.periodUsage.aiUnpricedRequestCount} AI request(s) in this date range because their model pricing is not configured; their tokens are included.</p>}
+          {(usageState?.periodUsage?.aiModelUnpricedRequestCount || 0) > 0 && <p className="text-[11px] text-amber-700">Cost is incomplete for {usageState.periodUsage.aiModelUnpricedRequestCount} AI request(s) in this date range because the pricing catalogue has no matching rate or the provider did not return a usage breakdown; their tokens are included.</p>}
           <p className="text-[11px] text-slate-400">Only emails accepted by the sending provider are counted; scheduled or future emails are not counted until sent. Daily AI breakdown starts with this usage-tracking release, so earlier AI activity may only be available in monthly totals.</p>
         </section>
         </div>

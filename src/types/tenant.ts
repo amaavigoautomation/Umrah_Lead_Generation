@@ -105,6 +105,12 @@ export interface TenantMonthlyUsage {
   aiRequestCount: number;
   aiCostUsd?: number;
   aiUnpricedRequestCount?: number;
+  aiModelCostUsd?: number;
+  aiModelUnpricedRequestCount?: number;
+  aiFeatureUsage?: Record<string, {
+    aiInputTokens: number; aiOutputTokens: number; aiTotalTokens: number;
+    aiRequestCount: number; aiCostUsd: number; aiUnpricedRequestCount: number;
+  }>;
   solicitedEmailCount: number;
   coldEmailCount: number;
   whatsappMessageCount: number;

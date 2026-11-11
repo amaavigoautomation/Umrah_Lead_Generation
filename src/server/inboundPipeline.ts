@@ -1057,7 +1057,7 @@ ${brandAutomationSignature(brand)}${targetMailbox ? `\n${targetMailbox}` : ''}`;
             temperature: 0.3,
           });
 
-          await recordAiCompletionUsage(getInboundCtx().tenantId, completion, modelName, 'openai');
+          await recordAiCompletionUsage(getInboundCtx().tenantId, completion, modelName, 'openai', 'inbound_email');
           const rawText = completion.choices[0]?.message?.content?.trim() || '';
           if (rawText.length > 30) {
             const replyText = sanitizeAiEmailText(rawText, senderGreetingName);

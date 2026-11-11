@@ -322,7 +322,7 @@ export async function generateTenantChatbotReply(tenantId: string, payload: any)
     console.warn('[ChatbotWebhook] AI request failed for tenant ' + tenantId + ':', error?.message || error);
     throw new ChatbotWebhookError('The AI assistant could not generate a reply right now. Please retry shortly.', 502);
   }
-  await recordAiCompletionUsage(tenantId, completion, modelName, provider);
+  await recordAiCompletionUsage(tenantId, completion, modelName, provider, 'website_chatbot');
   const rawContent = completion?.choices?.[0]?.message?.content;
   const content = typeof rawContent === 'string' ? rawContent.trim() : '';
   if (!content) throw new ChatbotWebhookError('The AI provider returned an empty response. Please retry.', 502);

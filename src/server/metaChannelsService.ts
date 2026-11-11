@@ -1191,7 +1191,7 @@ async function processInbound(tenantId: string, event: InboundEvent, eventId: st
       { role: 'user', content: (aiFeedbackPromptSection ? aiFeedbackPromptSection + '\n\n' : '') + 'CUSTOMER MESSAGE:\n' + event.text.slice(0, 3000) },
     ],
   });
-  await recordAiCompletionUsage(ctx.tenantId, completion, process.env.META_CHANNELS_AI_MODEL || process.env.INSTAGRAM_AI_MODEL || 'gpt-4o-mini', 'openai');
+  await recordAiCompletionUsage(ctx.tenantId, completion, process.env.META_CHANNELS_AI_MODEL || process.env.INSTAGRAM_AI_MODEL || 'gpt-4o-mini', 'openai', 'meta_channels');
   const replyText = completion.choices[0]?.message?.content?.trim();
   if (!replyText) {
     await updateDoc(eventRef, { status: 'processed_no_reply', reason: 'AI returned an empty response', processedAt: now, conversationId });

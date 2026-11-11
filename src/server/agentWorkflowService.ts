@@ -4,7 +4,7 @@ import { waitUntil } from '@vercel/functions';
 import { getDoc, setDoc, createDoc } from './adminFirestore.js';
 import { tenantRepo } from './tenantRepo.js';
 import { getOpenAIApiKey } from './openaiClient.js';
-import { checkTenantQuota, recordTenantUsage } from './usageService.js';
+import { checkTenantQuota, recordAiCompletionUsage } from './usageService.js';
 import { writeTenantAuditEvent } from './auditLogger.js';
 import { getCompanyProfile } from './companyProfileService.js';
 import { listTenantAssets, saveTenantAsset, deleteTenantAsset, resolveAssetRaw } from './assetService.js';
@@ -108,6 +108,8 @@ async function generateCampaignArtwork(
     output_format: 'jpeg',
     output_compression: 30,
   } as any);
+  // Record immediately after provider completion, even if downstream asset storage/validation fails.
+  await recordAiCompletionUsage(ctx.tenantId, generated, IMAGE_MODEL, 'openai', 'campaign_image_generation');
   const base64 = generated?.data?.[0]?.b64_json;
   if (!base64 || typeof base64 !== 'string') throw new Error('The image model returned no image data.');
   const buffer = Buffer.from(base64, 'base64');
@@ -132,7 +134,6 @@ async function generateCampaignArtwork(
     await deleteTenantAsset(ctx, saved.id).catch(() => false);
     throw new Error('The generated image was saved but cannot be served by the public asset endpoint.');
   }
-  await recordTenantUsage(ctx.tenantId, { aiRequestCount: 1, aiUnpricedRequestCount: 1 });
   return {
     id: saved.id,
     url: publicAssetUrl(saved.url, appBaseUrl),

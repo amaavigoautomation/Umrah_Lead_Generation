@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 
 import { PlansManager, type Catalog } from './PlansManager';
+import { AI_USAGE_FEATURES, type AiFeatureUsageTotals } from '../shared/aiUsageFeatures';
 
 type Plan = 'starter' | 'growth' | 'enterprise';
 type Status = 'active' | 'suspended';
@@ -36,10 +37,13 @@ interface UsagePeriod {
   aiRequestCount: number;
   aiCostUsd: number;
   aiUnpricedRequestCount: number;
+  aiModelCostUsd: number;
+  aiModelUnpricedRequestCount: number;
+  aiFeatureUsage?: Record<string, AiFeatureUsageTotals>;
   days?: Array<{
     day: string; emailSentCount: number; coldEmailCount: number; solicitedEmailCount: number;
     aiInputTokens: number; aiOutputTokens: number; aiTotalTokens: number; aiRequestCount: number;
-    aiCostUsd: number; aiUnpricedRequestCount: number;
+    aiCostUsd: number; aiUnpricedRequestCount: number; aiModelCostUsd: number; aiModelUnpricedRequestCount: number; aiFeatureUsage?: Record<string, AiFeatureUsageTotals>;
   }>;
 }
 
@@ -57,7 +61,7 @@ interface Tenant {
   timezone?: string;
   createdAt?: string;
   limits?: { monthlyAiTokens: number; dailyOutboundSends: number; hourlyOutboundSends: number; seats: number };
-  currentMonthUsage?: { aiTotalTokens?: number; aiCostUsd?: number; aiUnpricedRequestCount?: number; coldEmailCount?: number; solicitedEmailCount?: number };
+  currentMonthUsage?: { aiTotalTokens?: number; aiModelCostUsd?: number; aiModelUnpricedRequestCount?: number; coldEmailCount?: number; solicitedEmailCount?: number };
   periodUsage?: UsagePeriod;
 }
 
@@ -70,7 +74,7 @@ interface TenantUser {
 }
 
 interface Usage {
-  usage: { aiInputTokens?: number; aiOutputTokens?: number; aiTotalTokens?: number; aiCostUsd?: number; aiUnpricedRequestCount?: number; coldEmailCount?: number; solicitedEmailCount?: number; whatsappMessageCount?: number };
+  usage: { aiInputTokens?: number; aiOutputTokens?: number; aiTotalTokens?: number; aiCostUsd?: number; aiUnpricedRequestCount?: number; aiModelCostUsd?: number; aiModelUnpricedRequestCount?: number; aiFeatureUsage?: Record<string, AiFeatureUsageTotals>; coldEmailCount?: number; solicitedEmailCount?: number; whatsappMessageCount?: number };
   limits: { monthlyAiTokens: number; dailyOutboundSends: number; seats: number };
   dailyUsage?: { emailSentCount?: number };
   periodUsage?: UsagePeriod;
@@ -175,7 +179,7 @@ export const PlatformConsole: React.FC<Props> = ({ email, onLogout }) => {
     const u = t.periodUsage || {};
     sum.emails += Number(u.emailSentCount || 0);
     sum.tokens += Number(u.aiTotalTokens || 0);
-    sum.costUsd += Number(u.aiCostUsd || 0);
+    sum.costUsd += Number(u.aiModelCostUsd || 0);
     return sum;
   }, { emails: 0, tokens: 0, costUsd: 0 });
 
@@ -360,7 +364,7 @@ export const PlatformConsole: React.FC<Props> = ({ email, onLogout }) => {
                     </td>
                     <td className="px-4 py-3 hidden lg:table-cell text-slate-700">{(t.periodUsage?.emailSentCount || 0).toLocaleString('en-US')}</td>
                     <td className="px-4 py-3 hidden lg:table-cell text-slate-700">{(t.periodUsage?.aiTotalTokens || 0).toLocaleString('en-US')}</td>
-                    <td className="px-4 py-3 hidden lg:table-cell text-slate-700">{new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 4 }).format(t.periodUsage?.aiCostUsd || 0)}</td>
+                    <td className="px-4 py-3 hidden lg:table-cell text-slate-700">{new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 4 }).format(t.periodUsage?.aiModelCostUsd || 0)}</td>
                     <td className="px-4 py-3 hidden md:table-cell text-slate-600">{t.contactEmail || '—'}</td>
                     <td className="px-4 py-3 hidden md:table-cell text-slate-600">{fmtDate(t.createdAt)}</td>
                   </tr>
@@ -623,8 +627,10 @@ const WorkspacePanel: React.FC<{ tenant: Tenant; catalog: Catalog; dateFrom: str
   const aiPct = usage?.percentages?.aiTokens ?? 0;
   const emailsThisMonth = (usage?.usage?.coldEmailCount || 0) + (usage?.usage?.solicitedEmailCount || 0);
   const dailyEmails = usage?.dailyUsage?.emailSentCount || 0;
-  const aiCostUsd = usage?.usage?.aiCostUsd || 0;
+  const aiCostUsd = usage?.usage?.aiModelCostUsd || 0;
   const selectedPeriod = usage?.periodUsage;
+  const featureUsage = usage?.usage?.aiFeatureUsage || {};
+  const featuresUsed = AI_USAGE_FEATURES.filter((feature) => Number(featureUsage[feature.key]?.aiRequestCount || featureUsage[feature.key]?.aiTotalTokens || 0) > 0);
 
   return (
     <div className="fixed inset-0 z-40 flex justify-end bg-slate-900/30" onClick={onClose}>
@@ -693,7 +699,28 @@ const WorkspacePanel: React.FC<{ tenant: Tenant; catalog: Catalog; dateFrom: str
                 <div className="text-[11px] text-slate-400">Provider reported</div>
               </div>
             </div>
-            {(usage?.usage?.aiUnpricedRequestCount || 0) > 0 && <p className="text-[11px] text-amber-700">Cost excludes {fmt(usage?.usage?.aiUnpricedRequestCount)} AI request(s) with no configured model rate.</p>}
+            {(usage?.usage?.aiModelUnpricedRequestCount || 0) > 0 && <p className="text-[11px] text-amber-700">Estimated expenditure is incomplete for {fmt(usage?.usage?.aiModelUnpricedRequestCount)} AI request(s) because a matching model price or usage breakdown was unavailable.</p>}
+            <div className="rounded-lg border border-slate-200 overflow-hidden">
+              <div className="px-3 py-2 bg-slate-50 text-xs font-semibold text-slate-600">AI usage by feature · Estimated tokens</div>
+              {featuresUsed.length > 0 ? (
+                <table className="w-full text-xs">
+                  <thead className="text-slate-500">
+                    <tr>
+                      <th className="px-3 py-2 text-left font-semibold">Feature</th>
+                      <th className="px-3 py-2 text-right font-semibold">Estimated tokens</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {featuresUsed.map((feature) => (
+                      <tr key={feature.key}>
+                        <td className="px-3 py-2 text-slate-700">{feature.label}</td>
+                        <td className="px-3 py-2 text-right font-medium text-slate-900">{fmt(featureUsage[feature.key]?.aiTotalTokens)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : <p className="px-3 py-3 text-xs text-slate-400">Feature usage will appear as AI requests are recorded.</p>}
+            </div>
           </section>
 
           <section className="space-y-3">
@@ -713,7 +740,7 @@ const WorkspacePanel: React.FC<{ tenant: Tenant; catalog: Catalog; dateFrom: str
                   </div>
                   <div className="rounded-lg bg-slate-50 border border-slate-200 px-3 py-2">
                     <div className="text-xs text-slate-500">AI cost</div>
-                    <div className="font-semibold text-slate-900">{new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 4 }).format(selectedPeriod.aiCostUsd)}</div>
+                    <div className="font-semibold text-slate-900">{new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 4 }).format(selectedPeriod.aiModelCostUsd)}</div>
                   </div>
                   <div className="rounded-lg bg-slate-50 border border-slate-200 px-3 py-2">
                     <div className="text-xs text-slate-500">Input / output</div>
@@ -736,7 +763,7 @@ const WorkspacePanel: React.FC<{ tenant: Tenant; catalog: Catalog; dateFrom: str
                           <td className="px-3 py-2 text-slate-700">{day.day}</td>
                           <td className="px-3 py-2 text-right text-slate-900">{fmt(day.emailSentCount)}</td>
                           <td className="px-3 py-2 text-right text-slate-900">{fmt(day.aiTotalTokens)}</td>
-                          <td className="px-3 py-2 text-right text-slate-700">{new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 4 }).format(day.aiCostUsd)}</td>
+                          <td className="px-3 py-2 text-right text-slate-700">{new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 4 }).format(day.aiModelCostUsd)}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -744,7 +771,22 @@ const WorkspacePanel: React.FC<{ tenant: Tenant; catalog: Catalog; dateFrom: str
                 </div>
               </>
             )}
-            {(selectedPeriod?.aiUnpricedRequestCount || 0) > 0 && <p className="text-[11px] text-amber-700">Some AI requests in this range have no configured model price.</p>}
+            {(selectedPeriod?.aiModelUnpricedRequestCount || 0) > 0 && <p className="text-[11px] text-amber-700">Some AI requests in this range could not be priced from the current model catalogue.</p>}
+            {selectedPeriod?.aiFeatureUsage && Object.keys(selectedPeriod.aiFeatureUsage).some((key) => Number(selectedPeriod.aiFeatureUsage?.[key]?.aiRequestCount || 0) > 0) && (
+              <div className="rounded-lg border border-slate-200 overflow-hidden">
+                <div className="px-3 py-2 bg-slate-50 text-xs font-semibold text-slate-600">Estimated tokens by feature · Selected date range</div>
+                <table className="w-full text-xs">
+                  <tbody className="divide-y divide-slate-100">
+                    {AI_USAGE_FEATURES.filter((feature) => Number(selectedPeriod?.aiFeatureUsage?.[feature.key]?.aiRequestCount || 0) > 0).map((feature) => (
+                      <tr key={feature.key}>
+                        <td className="px-3 py-2 text-slate-700">{feature.label}</td>
+                        <td className="px-3 py-2 text-right font-medium text-slate-900">{fmt(selectedPeriod?.aiFeatureUsage?.[feature.key]?.aiTotalTokens)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
             <p className="text-[11px] text-slate-400">Future dates show zero until emails are accepted or AI calls consume tokens. Daily AI history starts with this usage-tracking release.</p>
           </section>
 

@@ -626,7 +626,7 @@ async function runAgent(
       max_output_tokens: 10000,
       store: false,
     } as any);
-    await recordAiCompletionUsage(ctx.tenantId, response, MODEL, 'openai');
+    await recordAiCompletionUsage(ctx.tenantId, response, MODEL, 'openai', 'ai_agent');
     const outputItems: any[] = Array.isArray(response.output) ? response.output : [];
     if (!outputItems.length) break;
     input.push(...outputItems);

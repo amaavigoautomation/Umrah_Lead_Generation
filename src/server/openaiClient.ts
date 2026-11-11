@@ -71,6 +71,8 @@ export interface OpenAIRequestOptions {
   maxTokens?: number;
   /** Tenant whose workspace initiated the AI operation. When present, provider usage is recorded. */
   tenantId?: string;
+  /** Feature key used for workspace-level AI usage attribution. */
+  usageFeature?: string;
   /** Per-request provider timeout. Useful for resumable serverless jobs. */
   timeoutMs?: number;
   /** Reasoning effort for Responses API reasoning models. */
@@ -115,7 +117,7 @@ export async function generateOpenAICompletion(options: OpenAIRequestOptions): P
           store: false,
         } as any);
 
-        if (options.tenantId) await recordAiCompletionUsage(options.tenantId, response, model, 'openai');
+        if (options.tenantId) await recordAiCompletionUsage(options.tenantId, response, model, 'openai', options.usageFeature || 'unclassified');
         let responseText = String(response.output_text || '').trim();
         if (!responseText && Array.isArray(response.output)) {
           responseText = response.output
@@ -138,7 +140,7 @@ export async function generateOpenAICompletion(options: OpenAIRequestOptions): P
         ...(options.jsonMode ? { response_format: { type: 'json_object' } } : {}),
       });
 
-      if (options.tenantId) await recordAiCompletionUsage(options.tenantId, completion, model, 'openai');
+      if (options.tenantId) await recordAiCompletionUsage(options.tenantId, completion, model, 'openai', options.usageFeature || 'unclassified');
       const responseText = completion.choices?.[0]?.message?.content?.trim() || '';
       if (responseText) {
         return responseText;

@@ -436,6 +436,7 @@ async function modelJson(ctx: TenantContext, systemPrompt: string, userPrompt: s
     maxRetries: 0,
     reasoningEffort: 'high',
     tenantId: ctx.tenantId,
+    usageFeature: 'knowledge_base_scan',
   });
   const first = raw.indexOf('{'), last = raw.lastIndexOf('}');
   if (first < 0 || last <= first) throw new Error('The AI returned invalid Knowledge Base JSON.');

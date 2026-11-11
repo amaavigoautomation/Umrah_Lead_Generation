@@ -153,7 +153,7 @@ async function generateAnalysis(campaigns: CampaignSnapshot[], tenantId: string)
         { role: 'user', content: JSON.stringify({ campaigns }) },
       ],
     });
-    await recordAiCompletionUsage(tenantId, completion, model, isGemini ? 'gemini' : 'openai').catch(() => {});
+    await recordAiCompletionUsage(tenantId, completion, model, isGemini ? 'gemini' : 'openai', 'campaign_reports').catch(() => {});
   } catch (error: any) {
     console.warn('[Campaign Reports] AI provider unavailable; using aggregate-rule fallback:', error?.message || error);
     return { ...fallbackAnalysis(campaigns), aiGenerated: false, model: model + ' (AI unavailable)' };

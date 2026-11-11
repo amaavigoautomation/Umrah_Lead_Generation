@@ -92,7 +92,7 @@ export async function generateAiEmailForLead(lead: {
   phone?: string;
   designation?: string;
   website?: string;
-}): Promise<{
+}, usageFeature: string = 'campaign_personalization'): Promise<{
   subject: string;
   body: string;
   researchData: {
@@ -248,7 +248,7 @@ Output strictly as a JSON object with keys: subject, body, researchData {company
           response_format: { type: 'json_object' },
           temperature: 0.3,
         });
-        await recordAiCompletionUsage(getCampaignActiveCtx().tenantId, completion, modelName, 'openai');
+        await recordAiCompletionUsage(getCampaignActiveCtx().tenantId, completion, modelName, 'openai', usageFeature);
         const content = completion.choices[0]?.message?.content;
         if (content) {
           text = content;
@@ -868,7 +868,7 @@ export async function generateAiSamplePreviews(leads: any[]): Promise<any[]> {
   const results: any[] = [];
   for (const lead of sampleLeads) {
     try {
-      const generated = await generateAiEmailForLead(lead);
+      const generated = await generateAiEmailForLead(lead, 'campaign_preview');
       results.push({
         lead,
         subject: generated.subject,

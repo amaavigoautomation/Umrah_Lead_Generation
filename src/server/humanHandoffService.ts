@@ -118,7 +118,7 @@ export async function classifyHumanHandoffWithAi(
         },
       ],
     });
-    if (opts.tenantId) await recordAiCompletionUsage(opts.tenantId, result, modelName, isGemini ? 'gemini' : 'openai');
+    if (opts.tenantId) await recordAiCompletionUsage(opts.tenantId, result, modelName, isGemini ? 'gemini' : 'openai', 'human_handoff');
     const raw = result.choices[0]?.message?.content;
     if (!raw) return fallback;
     const parsed = JSON.parse(raw);

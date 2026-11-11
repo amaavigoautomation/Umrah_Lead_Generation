@@ -1,4 +1,5 @@
 import OpenAI from "openai";
+import { recordAiCompletionUsage } from "./usageService.js";
 
 export interface ClassificationParams {
   subject?: string;
@@ -6,6 +7,7 @@ export interface ClassificationParams {
   from?: string;
   channel?: string;
   companyName?: string;
+  tenantId?: string;
   /**
    * True when this message continues an existing conversation (a reply in a thread). Replies such as
    * "yes", "ok" or "send the details" carry no topic keywords, so they must not be dropped as unrelated.
@@ -273,6 +275,7 @@ ${params.body}
         temperature: 0.1,
       });
 
+      if (params.tenantId) await recordAiCompletionUsage(params.tenantId, response, 'gpt-4o-mini', process.env.OPENAI_API_KEY ? 'openai' : 'gemini', 'message_classification');
       const content = response.choices[0]?.message?.content;
       if (content) {
         const parsed = JSON.parse(content.trim()) as ClassificationResult;

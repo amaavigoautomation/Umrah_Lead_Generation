@@ -2561,7 +2561,7 @@ Output JSON only: {"isDemoIntent": boolean, "requestedDate": string|null, "reque
             response_format: { type: 'json_object' },
             temperature: 0,
           });
-          await recordAiCompletionUsage(getSchedCtx().tenantId, completion, modelName, 'openai');
+          await recordAiCompletionUsage(getSchedCtx().tenantId, completion, modelName, 'openai', 'demo_scheduling');
           const content = completion.choices[0]?.message?.content;
           if (content) {
             Object.assign(ai, JSON.parse(content.trim()));

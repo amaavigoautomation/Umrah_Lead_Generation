@@ -334,6 +334,21 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
   const tCol = useCallback((colName: string) => collection(db, 'tenants', currentTenantId, colName), [currentTenantId]);
   const tDoc = useCallback((colName: string, docId: string) => doc(db, 'tenants', currentTenantId, colName, docId), [currentTenantId]);
 
+  // Clear workspace-owned state immediately when the signed-in tenant changes. Without this,
+  // the previous workspace can remain visible until the next tenant's Firestore snapshots arrive.
+  useEffect(() => {
+    if (!isFirebaseConfigured || !db) return;
+    setLeads([]);
+    setContacts([]);
+    setConversations([]);
+    setMessages([]);
+    setCampaigns([]);
+    setProspects([]);
+    setActivities([]);
+    setKnowledgeDocs([]);
+    setIsFirebaseActive(false);
+  }, [currentTenantId]);
+
   // Users & Authentication State (Firebase Auth is the single source of truth)
   const [users, setUsers] = useState<AppUser[]>([]);
   const [usersLoading, setUsersLoading] = useState(false);
@@ -610,37 +625,22 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
             }
           });
           setLeads(list);
-        }, () => {});
+        }, (err) => console.warn('[CRM] Tenant leads listener error:', err));
 
         unsubContacts = onSnapshot(tCol('contacts'), (snap) => {
           const list = snap.docs.map((d) => sanitizeContact(d.data()));
           setContacts(list);
-        }, () => {});
+        }, (err) => console.warn('[CRM] Tenant contacts listener error:', err));
 
         unsubKb = onSnapshot(tCol('knowledge_documents'), (snap) => {
           setKnowledgeDocs(snap.docs.map((d) => d.data() as KnowledgeDocument));
-        }, () => {});
+        }, (err) => console.warn('[Knowledge Base] Tenant documents listener error:', err));
 
+        // Never delete tenant campaign records by name or hard-coded IDs during page load.
+        // Test campaigns remain real workspace data and are removed only by explicit user action.
         unsubOutboundCamps = onSnapshot(tCol('outbound_campaigns'), (snap) => {
-          const list: OutboundCampaign[] = [];
-          snap.docs.forEach((d) => {
-            const data = d.data() as OutboundCampaign;
-            const cleanName = (data.name || '').toLowerCase().trim();
-            if (
-              data.campaignId === 'camp-umrah-1448' ||
-              data.campaignId === 'camp-indian-umrah-operators' ||
-              cleanName === 'indian umrah operators 2026' ||
-              data.campaignId === 'camp-1790758967982-7his' ||
-              cleanName === 'test'
-            ) {
-              deleteDoc(tDoc('outbound_campaigns', d.id)).catch(() => {});
-              deleteDoc(tDoc('campaigns', d.id)).catch(() => {});
-            } else {
-              list.push(data);
-            }
-          });
-          setCampaigns(list);
-        }, () => {});
+          setCampaigns(snap.docs.map((d) => d.data() as OutboundCampaign));
+        }, (err) => console.warn('[Campaigns] Tenant outbound campaigns listener error:', err));
 
         // outbound_prospects is no longer streamed: no screen renders prospects, so watching the whole
         // collection only cost reads.
@@ -1952,7 +1952,7 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
     setCampaigns((prev) => prev.map((c) => c.campaignId === campaignId ? { ...c, status: nextStatus, updatedAt: new Date().toISOString() } : c));
     let saved = !(isFirebaseConfigured && db);
     if (isFirebaseConfigured && db) {
-      try { await updateDoc(doc(db, 'outbound_campaigns', campaignId), { status: nextStatus, updatedAt: new Date().toISOString() }); saved = true; }
+      try { await updateDoc(tDoc('outbound_campaigns', campaignId), { status: nextStatus, updatedAt: new Date().toISOString() }); saved = true; }
       catch (err) { console.warn('Error toggling campaign status in Firestore:', err); }
     }
     if (saved) recordAuditAction({ action: nextStatus === 'RUNNING' ? 'OUTBOUND_CAMPAIGN_STARTED' : 'OUTBOUND_CAMPAIGN_PAUSED', module: 'CAMPAIGNS', description: 'Outbound campaign status changed to ' + nextStatus + '.', target: { type: 'Campaign', id: campaignId } });
@@ -2568,7 +2568,6 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
                 leads={leads}
                 contacts={contacts}
                 conversations={conversations}
-                campaigns={campaigns}
                 onNavigate={setActiveTab}
                 onAddLead={() => { setOpenCrmAddLead(true); setActiveTab('crm'); }}
                 onOpenLead={handleViewLeadInCrm}

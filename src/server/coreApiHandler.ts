@@ -84,7 +84,7 @@ import {
 } from './demoSchedulingService.js';
 import { isFirebaseConfigured } from '../firebase/config.js';
 import { db } from './adminFirestore.js';
-import { getDoc, getDocs, setDoc, updateDoc, deleteDoc, collection, doc, query as fsQuery, where as fsWhere } from './adminFirestore.js';
+import { getDoc, getDocs, setDoc, updateDoc, deleteDoc, collection, doc, query as fsQuery, where as fsWhere, countDocs, sumDocs } from './adminFirestore.js';
 import { safeSetDoc } from './firestoreUtils.js';
 import {
   setCampaignActiveContext,
@@ -3452,6 +3452,87 @@ ${signature || defSig}`;
     } catch (err: any) {
       res.statusCode = 400;
       res.end(JSON.stringify({ error: err?.message || 'Could not delete database.' }));
+    }
+    return true;
+  }
+
+  // Low-read, tenant-scoped dashboard metrics. Aggregate queries avoid treating the inbox's
+  // latest-50 conversation page as the workspace-wide total.
+  if (url === '/api/dashboard/summary' && req.method === 'GET') {
+    try {
+      const tenant = tenantRepo(activeTenantCtx);
+      const conversations = tenant.conversations();
+      const campaigns = tenant.campaigns();
+      const campaignLeadRows = tenant.campaignLeads();
+
+      const [
+        totalConversations,
+        activeConversations,
+        unreadTotals,
+        unreadFlagged,
+        humanHandoffFlagged,
+        humanModeFlagged,
+        totalCampaigns,
+        runningCampaigns,
+        campaignLeadCount,
+        emailsSent,
+        pendingEmails,
+        replies,
+        demosBooked,
+        failedEmails,
+      ] = await Promise.all([
+        countDocs(conversations),
+        countDocs(fsQuery(conversations, fsWhere('status', 'in', ['ACTIVE', 'REVIEW']))),
+        sumDocs(conversations, ['unreadCount']),
+        getDocs(fsQuery(conversations, fsWhere('unread', '==', true))),
+        getDocs(fsQuery(conversations, fsWhere('humanHandoff', '==', true))),
+        getDocs(fsQuery(conversations, fsWhere('managementMode', '==', 'HUMAN'))),
+        countDocs(campaigns),
+        countDocs(fsQuery(campaigns, fsWhere('status', '==', 'RUNNING'))),
+        countDocs(campaignLeadRows),
+        countDocs(fsQuery(campaignLeadRows, fsWhere('sendStatus', '==', 'SENT'))),
+        countDocs(fsQuery(campaignLeadRows, fsWhere('sendStatus', 'in', ['PENDING', 'SENDING']))),
+        countDocs(fsQuery(campaignLeadRows, fsWhere('replyStatus', '==', 'REPLIED'))),
+        countDocs(fsQuery(campaignLeadRows, fsWhere('demoStatus', '==', 'BOOKED'))),
+        countDocs(fsQuery(campaignLeadRows, fsWhere('sendStatus', '==', 'FAILED'))),
+      ]);
+
+      const legacyUnreadCount = unreadFlagged.docs.filter((d) =>
+        typeof d.data()?.unreadCount !== 'number'
+      ).length;
+
+      const handoffsById = new Map<string, any>();
+      for (const snap of [humanHandoffFlagged, humanModeFlagged]) {
+        snap.docs.forEach((d) => handoffsById.set(d.id, d.data()));
+      }
+      const humanHandoffs = Array.from(handoffsById.values()).filter((conversation: any) =>
+        conversation.status !== 'RESOLVED' && conversation.status !== 'ARCHIVED'
+      ).length;
+
+      const summary = {
+        totalConversations,
+        activeConversations,
+        unreadMessages: Math.max(0, Math.round(unreadTotals.unreadCount || 0)) + legacyUnreadCount,
+        humanHandoffs,
+        totalCampaigns,
+        runningCampaigns,
+        campaignLeads: campaignLeadCount,
+        emailsSent,
+        pendingEmails,
+        replies,
+        demosBooked,
+        failedEmails,
+        updatedAt: new Date().toISOString(),
+      };
+
+      res.statusCode = 200;
+      res.setHeader('Content-Type', 'application/json');
+      res.end(JSON.stringify({ success: true, summary }));
+    } catch (err: any) {
+      console.error('[Dashboard] Could not aggregate tenant metrics:', err?.message || err);
+      res.statusCode = 500;
+      res.setHeader('Content-Type', 'application/json');
+      res.end(JSON.stringify({ success: false, error: 'Could not load workspace dashboard metrics.' }));
     }
     return true;
   }

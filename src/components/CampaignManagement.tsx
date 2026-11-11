@@ -895,14 +895,6 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
       setSelectedCampaign((prev) => (prev ? { ...prev, status: 'RUNNING', updatedAt: nowIso } : null));
     }
 
-    if (isFirebaseConfigured && db) {
-      try {
-        await setDoc(doc(db, 'campaigns', campaignId), { status: 'RUNNING', updatedAt: nowIso }, { merge: true });
-      } catch (err) {
-        console.warn('Browser Firestore start update note:', err);
-      }
-    }
-
     try {
       const res = await fetch(`/api/campaigns/${campaignId}/start`, { method: 'POST' });
       const data = await res.json();
@@ -926,14 +918,6 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
     );
     if (selectedCampaign?.campaignId === campaignId) {
       setSelectedCampaign((prev) => (prev ? { ...prev, status: 'PAUSED', updatedAt: nowIso } : null));
-    }
-
-    if (isFirebaseConfigured && db) {
-      try {
-        await setDoc(doc(db, 'campaigns', campaignId), { status: 'PAUSED', updatedAt: nowIso }, { merge: true });
-      } catch (err) {
-        console.warn('Browser Firestore pause update note:', err);
-      }
     }
 
     try {

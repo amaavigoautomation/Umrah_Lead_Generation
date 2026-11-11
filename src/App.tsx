@@ -2704,7 +2704,30 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
             )}
 
             {activeTab === 'scheduling' && (
-              <DemoSchedulingView leads={leads} contacts={contacts} tenantId={currentTenantId} canEditSettings={currentUser?.role === 'ADMIN'} />
+              <DemoSchedulingView
+                leads={leads}
+                contacts={contacts}
+                tenantId={currentTenantId}
+                canEditSettings={currentUser?.role === 'ADMIN'}
+                onLeadDemoBooked={(leadId, booking) => {
+                  const bookedAt = booking.updatedAt || booking.createdAt || new Date().toISOString();
+                  setLeads((prev) => prev.map((lead) => lead.leadId === leadId ? {
+                    ...lead,
+                    status: 'DEMO_BOOKED',
+                    demoStatus: 'BOOKED',
+                    demoSource: 'AUTOMATIC',
+                    demoBookedAt: bookedAt,
+                    demoDate: booking.date,
+                    demoStartTime: booking.startTime,
+                    demoEndTime: booking.endTime,
+                    demoTimezone: booking.timezone,
+                    calendarEventId: booking.calendarEventId,
+                    googleMeetLink: booking.googleMeetLink,
+                    updatedAt: bookedAt,
+                    lastActivityAt: bookedAt,
+                  } : lead));
+                }}
+              />
             )}
 
             {activeTab === 'knowledge' && (

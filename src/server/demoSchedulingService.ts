@@ -925,6 +925,8 @@ export interface CreateBookingResult {
   /** The lead already has an upcoming demo: nothing was booked. */
   alreadyBooked?: boolean;
   existingBooking?: Booking;
+  /** True only when a confirmed booking was synchronized to an existing CRM lead. */
+  crmLeadUpdated?: boolean;
   error?: string;
 }
 
@@ -933,6 +935,72 @@ const phoneLast10 = (p?: string) => {
   const d = String(p || '').replace(/\D/g, '');
   return d.length >= 7 ? d.slice(-10) : '';
 };
+
+/**
+ * Resolve an existing CRM lead for a confirmed booking. Not every booking path has
+ * the lead document ID, so fall back to the tenant contact link and normalized
+ * contact email/phone. These lookups never cross the active workspace boundary.
+ */
+async function findCrmLeadIdForBooking(params: {
+  leadId?: string;
+  contactId?: string;
+  leadEmail?: string;
+  leadPhone?: string;
+}): Promise<string> {
+  if (!isFirebaseConfigured || !db) return '';
+  const repo = tenantRepo(getSchedCtx());
+
+  if (params.leadId) {
+    const directLead = await getDoc(repo.leadDoc(params.leadId)).catch(() => null);
+    if (directLead?.exists()) return params.leadId;
+  }
+
+  const findByContactId = async (contactId: string): Promise<string> => {
+    if (!contactId) return '';
+    const snapshot = await getDocs(query(repo.leads(), where('contactId', '==', contactId), limit(1))).catch(() => null);
+    return snapshot?.docs?.[0]?.id || '';
+  };
+
+  if (params.contactId) {
+    const linkedLeadId = await findByContactId(params.contactId);
+    if (linkedLeadId) return linkedLeadId;
+  }
+
+  const emailValues = Array.from(new Set([
+    normalizeLeadEmail(params.leadEmail),
+    String(params.leadEmail || '').trim(),
+  ].filter(Boolean)));
+  for (const email of emailValues) {
+    const contactSnapshot = await getDocs(query(repo.contacts(), where('email', '==', email), limit(10))).catch(() => null);
+    const contactIds = Array.from(new Set((contactSnapshot?.docs || []).map((entry) => {
+      const data = entry.data() as any;
+      return String(data.contactId || entry.id);
+    }).filter(Boolean)));
+    for (const contactId of contactIds) {
+      const linkedLeadId = await findByContactId(contactId);
+      if (linkedLeadId) return linkedLeadId;
+    }
+  }
+
+  const phoneValues = Array.from(new Set([
+    String(params.leadPhone || '').trim(),
+    phoneLast10(params.leadPhone),
+  ].filter(Boolean)));
+  for (const phone of phoneValues) {
+    const contactSnapshot = await getDocs(query(repo.contacts(), where('phone', '==', phone), limit(10))).catch(() => null);
+    const contactIds = Array.from(new Set((contactSnapshot?.docs || []).map((entry) => {
+      const data = entry.data() as any;
+      return String(data.contactId || entry.id);
+    }).filter(Boolean)));
+    for (const contactId of contactIds) {
+      const linkedLeadId = await findByContactId(contactId);
+      if (linkedLeadId) return linkedLeadId;
+    }
+  }
+
+  return '';
+}
+
 /** A booking blocks a new one only while its demo has not happened yet. */
 function isUpcomingBooking(b: Booking): boolean {
   const end = Date.parse(b.endDateTimeIso || b.startDateTimeIso || '');
@@ -1297,61 +1365,74 @@ async function createGoogleCalendarDemoBookingInner(
     updatedAt: nowIso,
   };
 
+  let persistedBooking: Booking = booking;
+  let crmLeadUpdated = false;
   if (isFirebaseConfigured && db) {
     try {
-      // A reschedule updates the ORIGINAL booking record itself; saving another one here left the lead with
-      // two active bookings.
-      if (!params.replacingBookingId) {
-        await safeSetDoc(tenantRepo(getSchedCtx()).bookingDoc(bookingId), booking, { merge: true });
+      // Manual booking and inbound AI paths do not always carry the CRM lead ID.
+      // Resolve by tenant contact/email/phone before saving the authoritative booking.
+      const resolvedLeadId = params.replacingBookingId
+        ? leadId || ''
+        : await findCrmLeadIdForBooking({ leadId, contactId, leadEmail, leadPhone });
+      if (!params.replacingBookingId && resolvedLeadId) {
+        persistedBooking = { ...booking, leadId: resolvedLeadId };
       }
 
-      // A reschedule's coordinating method updates CRM only after the old event is released.
-      // Avoid side effects while the replacement calendar event is still provisional.
-      if (leadId && !params.replacingBookingId) {
-        await safeSetDoc(
-          tenantRepo(getSchedCtx()).leadDoc(leadId),
-          {
-            status: 'DEMO_BOOKED',
-            demoStatus: 'BOOKED',
-            demoSource: 'AUTOMATIC',
-            demoBookedAt: nowIso,
-            demoDate: dateString,
-            demoStartTime: startTime,
-            demoEndTime: endTime,
-            demoTimezone: tz(),
-            calendarEventId,
-            googleMeetLink,
-            // Booking only switches follow-ups off when the policy says so (shared/followUpPolicy.ts).
-            ...(STOP_FOLLOWUPS_WHEN_DEMO_BOOKED
-              ? {
-                  autoFollowUp: {
-                    enabled: false,
-                    disabledBy: 'System Demo Booking',
-                    disabledAt: nowIso,
-                    disabledReason: 'demo_booked',
-                    activeFollowUpId: null,
-                    nextScheduledAt: null,
-                    channelDelayOverride: null,
-                  },
-                }
-              : {}),
-            updatedAt: nowIso,
-          },
-          { merge: true }
-        );
+      // Reschedules update the original booking document in their coordinating method.
+      if (!params.replacingBookingId) {
+        await safeSetDoc(tenantRepo(getSchedCtx()).bookingDoc(bookingId), persistedBooking, { merge: true });
+      }
 
-        // Hard stop: cancel any scheduled follow-up jobs for this lead.
-        if (STOP_FOLLOWUPS_WHEN_DEMO_BOOKED) {
+      // A reschedule syncs CRM only after the original event is safely released.
+      if (resolvedLeadId && !params.replacingBookingId) {
+        try {
+          await safeSetDoc(
+            tenantRepo(getSchedCtx()).leadDoc(resolvedLeadId),
+            {
+              status: 'DEMO_BOOKED',
+              demoStatus: 'BOOKED',
+              demoSource: 'AUTOMATIC',
+              demoBookedAt: nowIso,
+              demoDate: dateString,
+              demoStartTime: startTime,
+              demoEndTime: endTime,
+              demoTimezone: tz(),
+              calendarEventId,
+              googleMeetLink,
+              ...(STOP_FOLLOWUPS_WHEN_DEMO_BOOKED
+                ? {
+                    autoFollowUp: {
+                      enabled: false,
+                      disabledBy: 'System Demo Booking',
+                      disabledAt: nowIso,
+                      disabledReason: 'demo_booked',
+                      activeFollowUpId: null,
+                      nextScheduledAt: null,
+                      channelDelayOverride: null,
+                    },
+                  }
+                : {}),
+              updatedAt: nowIso,
+            },
+            { merge: true }
+          );
+          crmLeadUpdated = true;
+        } catch (leadSyncError) {
+          console.warn('[Demo Booking] CRM lead status sync failed:', leadSyncError);
+        }
+
+        // Cancel scheduled follow-up jobs only after the CRM update has succeeded.
+        if (crmLeadUpdated && STOP_FOLLOWUPS_WHEN_DEMO_BOOKED) {
           try {
             const { cancelFollowUpsForLead } = await import('./autoFollowUpService.js');
-            await cancelFollowUpsForLead(getSchedCtx(), leadId, 'demo_booked');
+            await cancelFollowUpsForLead(getSchedCtx(), resolvedLeadId, 'demo_booked');
           } catch (fuErr) {
             console.warn('[Demo Booking] Auto follow-up cancel notice:', fuErr);
           }
         }
       }
 
-      // 5. Update Campaign analytics if lead originated from outbound campaign
+      // Campaign metrics retain their existing campaign-lead identity.
       if (campaignId && leadId && !params.replacingBookingId) {
         await updateCampaignLeadStatus({
           leadId,
@@ -1368,7 +1449,8 @@ async function createGoogleCalendarDemoBookingInner(
 
   return {
     success: true,
-    booking,
+    booking: persistedBooking,
+    crmLeadUpdated,
     googleMeetLink,
     calendarEventId,
     calendarInviteSent,

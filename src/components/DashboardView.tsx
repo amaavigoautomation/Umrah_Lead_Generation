@@ -188,17 +188,45 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     return scheduledAt ? dateValue(scheduledAt) <= now : lead.status === 'FOLLOW_UP';
   }), [leads, now]);
 
-  const crmDemoCount = leads.filter(
-    (lead) => lead.demoStatus === 'BOOKED' || lead.status === 'DEMO_BOOKED' || lead.status === 'DEMO_SCHEDULED'
-  ).length;
-  const scheduledDemoCount = bookingsLoaded
-    ? bookings.filter((booking) => {
-        if (booking.status !== 'BOOKED' && booking.status !== 'RESCHEDULED') return false;
+  const scheduledDemoCount = useMemo(() => {
+    // CRM status is authoritative for a lead marked Demo Booked, even when there is no
+    // calendar booking row linked to it (such as a manual CRM status update).
+    const bookedLeadIds = new Set(
+      leads
+        .filter((lead) => lead.demoStatus === 'BOOKED' || lead.status === 'DEMO_BOOKED' || lead.status === 'DEMO_SCHEDULED')
+        .map((lead) => lead.leadId)
+    );
+    const bookingOnlyIds = new Set<string>();
+
+    if (bookingsLoaded) {
+      const contactsById = new Map<string, Contact>(contacts.map((contact) => [contact.contactId, contact] as const));
+      const leadIdByEmail = new Map<string, string>();
+      const leadIdByPhone = new Map<string, string>();
+      leads.forEach((lead) => {
+        const contact = contactsById.get(lead.contactId);
+        const email = String(contact?.email || '').trim().toLowerCase();
+        const phone = String(contact?.phone || '').replace(/\D/g, '').slice(-10);
+        if (email && !leadIdByEmail.has(email)) leadIdByEmail.set(email, lead.leadId);
+        if (phone && !leadIdByPhone.has(phone)) leadIdByPhone.set(phone, lead.leadId);
+      });
+
+      bookings.forEach((booking) => {
+        if (booking.status !== 'BOOKED' && booking.status !== 'RESCHEDULED') return;
         const startsAt = booking.startDateTimeIso ||
           (booking.date && booking.startTime ? booking.date + 'T' + booking.startTime + ':00+05:30' : '');
-        return Boolean(startsAt) && dateValue(startsAt) >= now;
-      }).length
-    : crmDemoCount;
+        if (!startsAt || dateValue(startsAt) < now) return;
+
+        const email = String(booking.leadEmail || '').trim().toLowerCase();
+        const phone = String(booking.leadPhone || '').replace(/\D/g, '').slice(-10);
+        const matchingLeadId = booking.leadId || leadIdByEmail.get(email) || leadIdByPhone.get(phone);
+        if (matchingLeadId) bookedLeadIds.add(matchingLeadId);
+        else if (booking.bookingId) bookingOnlyIds.add(booking.bookingId);
+      });
+    }
+
+    // Count a CRM lead once when both its CRM record and calendar booking exist.
+    return bookedLeadIds.size + bookingOnlyIds.size;
+  }, [leads, contacts, bookings, bookingsLoaded, now]);
 
   const stages = [
     { key: 'NEW', label: 'New', statuses: ['NEW'], color: 'bg-slate-400' },
@@ -266,7 +294,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     { label: 'Total leads', value: leads.length, note: 'Across this workspace', icon: <Users className="h-4 w-4" />, tone: 'bg-orange-50 text-orange-600', tab: 'crm' as ActiveTab },
     { label: 'Active conversations', value: summary?.activeConversations ?? null, note: summary ? `${summary.unreadMessages.toLocaleString('en-IN')} unread messages` : 'Loading workspace totals', icon: <MessageCircle className="h-4 w-4" />, tone: 'bg-blue-50 text-[#0848ef]', tab: 'inbox' as ActiveTab },
     { label: 'Follow-ups due', value: dueFollowUps.length, note: 'Require attention', icon: <Clock3 className="h-4 w-4" />, tone: 'bg-amber-50 text-amber-600', tab: 'auto-followup' as ActiveTab },
-    { label: 'Scheduled demos', value: scheduledDemoCount, note: 'Upcoming booked or rescheduled', icon: <CalendarCheck className="h-4 w-4" />, tone: 'bg-emerald-50 text-emerald-600', tab: 'scheduling' as ActiveTab },
+    { label: 'Demo / consultation booked', value: scheduledDemoCount, note: 'CRM demo status + upcoming calendar bookings', icon: <CalendarCheck className="h-4 w-4" />, tone: 'bg-emerald-50 text-emerald-600', tab: 'scheduling' as ActiveTab },
     { label: 'Email campaigns', value: summary?.totalCampaigns ?? null, note: summary ? `${summary.runningCampaigns} running · ${summary.campaignLeads.toLocaleString('en-IN')} recipients` : 'Loading campaign totals', icon: <Send className="h-4 w-4" />, tone: 'bg-sky-50 text-sky-600', tab: 'campaigns' as ActiveTab },
     { label: 'Human handoffs', value: summary?.humanHandoffs ?? null, note: 'Waiting for your team', icon: <Bot className="h-4 w-4" />, tone: 'bg-rose-50 text-rose-600', tab: 'inbox' as ActiveTab },
   ];

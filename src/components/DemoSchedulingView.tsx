@@ -95,9 +95,10 @@ interface DemoSchedulingViewProps {
   contacts?: Contact[];
   tenantId: string;
   canEditSettings: boolean;
+  onLeadDemoBooked?: (leadId: string, booking: Booking) => void;
 }
 
-export const DemoSchedulingView: React.FC<DemoSchedulingViewProps> = ({ leads = [], contacts = [], tenantId, canEditSettings }) => {
+export const DemoSchedulingView: React.FC<DemoSchedulingViewProps> = ({ leads = [], contacts = [], tenantId, canEditSettings, onLeadDemoBooked }) => {
   const { brand, setBrand } = useBrand();
   const [availabilityDraft, setAvailabilityDraft] = useState<TenantBrand>(brand);
   const [isSavingAvailability, setIsSavingAvailability] = useState(false);
@@ -629,7 +630,15 @@ export const DemoSchedulingView: React.FC<DemoSchedulingViewProps> = ({ leads = 
 
       const data = await res.json();
       if (data.success && data.booking) {
-        setBookingSuccessMsg(`Demo booked. ${videoLabel} link: ${data.booking.googleMeetLink}`);
+        if (data.crmLeadUpdated && data.booking.leadId) {
+          onLeadDemoBooked?.(data.booking.leadId, data.booking as Booking);
+        }
+        const crmSyncMessage = data.crmLeadUpdated
+          ? ' CRM status updated to Demo Booked.'
+          : selectedLeadId
+            ? ' The booking is confirmed, but CRM status sync could not be verified. Please refresh the lead in CRM.'
+            : '';
+        setBookingSuccessMsg(`Demo booked.${crmSyncMessage} ${videoLabel} link: ${data.booking.googleMeetLink}`);
         setSelectedSlot(null);
         setSelectedLeadId('');
         setSelectedBookingId(data.booking.bookingId || null);

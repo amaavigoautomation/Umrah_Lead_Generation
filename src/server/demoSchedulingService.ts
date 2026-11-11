@@ -972,10 +972,10 @@ async function findCrmLeadIdForBooking(params: {
   ].filter(Boolean)));
   for (const email of emailValues) {
     const contactSnapshot = await getDocs(query(repo.contacts(), where('email', '==', email), limit(10))).catch(() => null);
-    const contactIds = Array.from(new Set((contactSnapshot?.docs || []).map((entry) => {
+    const contactIds: string[] = Array.from(new Set<string>((contactSnapshot?.docs || []).map((entry) => {
       const data = entry.data() as any;
       return String(data.contactId || entry.id);
-    }).filter(Boolean)));
+    })));
     for (const contactId of contactIds) {
       const linkedLeadId = await findByContactId(contactId);
       if (linkedLeadId) return linkedLeadId;
@@ -988,10 +988,10 @@ async function findCrmLeadIdForBooking(params: {
   ].filter(Boolean)));
   for (const phone of phoneValues) {
     const contactSnapshot = await getDocs(query(repo.contacts(), where('phone', '==', phone), limit(10))).catch(() => null);
-    const contactIds = Array.from(new Set((contactSnapshot?.docs || []).map((entry) => {
+    const contactIds: string[] = Array.from(new Set<string>((contactSnapshot?.docs || []).map((entry) => {
       const data = entry.data() as any;
       return String(data.contactId || entry.id);
-    }).filter(Boolean)));
+    })));
     for (const contactId of contactIds) {
       const linkedLeadId = await findByContactId(contactId);
       if (linkedLeadId) return linkedLeadId;

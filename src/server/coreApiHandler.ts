@@ -2001,7 +2001,9 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
   }
 
   if ((url === '/api/calendar/availability' || url.startsWith('/api/calendar/availability?')) && req.method === 'GET') {
-    const parsedUrl = new URL(url, 'http://localhost:3000');
+    // Route matching uses the normalized pathname above; query options must come from rawUrl,
+    // because `url` has already had its query string stripped during handler normalization.
+    const parsedUrl = new URL(rawUrl || url, 'http://localhost:3000');
     const preferredDate = parsedUrl.searchParams.get('date') || parsedUrl.searchParams.get('preferredDate') || undefined;
     const preferredPeriod = (parsedUrl.searchParams.get('period') as any) || 'ANY';
     const requestedCount = Number.parseInt(parsedUrl.searchParams.get('count') || '8', 10);

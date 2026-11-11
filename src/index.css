@@ -114,7 +114,8 @@
   .agent-orb-core, .agent-orb-ring-one, .agent-orb-ring-two, .agent-message-enter, .agent-float-panel { animation: none !important; }
 }
 
-Demo Scheduling — calendar-first control center (scoped to this module).
+/* --------------------------------------------------------------------------
+   Demo Scheduling — calendar-first control center (scoped to this module).
    -------------------------------------------------------------------------- */
 .demo-scheduling-workspace {
   --schedule-accent:var(--brand-orange);

@@ -726,7 +726,7 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
                   <div className="flex items-center justify-between mt-2 pt-1 border-t border-slate-200/80 text-[10px]">
                     <div className="flex items-center space-x-1.5 flex-wrap gap-y-1">
                       {conv.direction === 'OUTBOUND' || (Boolean(conv.campaignId || lead?.campaignId || lead?.campaignLeadId) && conv.channel !== 'WEBSITE' && lead?.source !== 'WEBSITE' && !conv.conversationId?.startsWith('conv-web-')) ? (
-                        <span className="px-1.5 py-0.5 rounded bg-purple-50 text-purple-700 border border-purple-200 font-semibold">
+                        <span className="px-1.5 py-0.5 rounded bg-orange-50 text-orange-700 border border-orange-200 font-semibold">
                           Outbound
                         </span>
                       ) : (

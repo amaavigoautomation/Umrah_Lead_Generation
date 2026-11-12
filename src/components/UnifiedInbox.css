@@ -883,8 +883,8 @@
   font-size: var(--uinbox-font-body) !important;
   line-height: 1.5 !important;
 }
-.unified-inbox-layout-root .unified-inbox-conversation-item .text-\\[10px\\],
-.unified-inbox-layout-root .unified-inbox-conversation-item .text-\\[9px\\] {
+.unified-inbox-layout-root .unified-inbox-conversation-item [class~="text-[10px]"],
+.unified-inbox-layout-root .unified-inbox-conversation-item [class~="text-[9px]"] {
   font-size: var(--uinbox-font-micro) !important;
 }
 .unified-inbox-layout-root .unified-inbox-conversation-item .text-xs {
@@ -924,10 +924,10 @@
 .unified-inbox-layout-root .unified-inbox-profile h4 { font-size: var(--uinbox-font-heading) !important; }
 .unified-inbox-layout-root .unified-inbox-profile h5,
 .unified-inbox-layout-root .unified-inbox-profile .text-xs { font-size: var(--uinbox-font-body) !important; }
-.unified-inbox-layout-root .unified-inbox-profile .text-\\[11px\\],
-.unified-inbox-layout-root .unified-inbox-profile .text-\\[10px\\] { font-size: var(--uinbox-font-meta) !important; }
+.unified-inbox-layout-root .unified-inbox-profile [class~="text-[11px]"],
+.unified-inbox-layout-root .unified-inbox-profile [class~="text-[10px]"] { font-size: var(--uinbox-font-meta) !important; }
 .unified-inbox-layout-root .unified-inbox-profile button { font-size: var(--uinbox-font-meta) !important; }
-.unified-inbox-layout-root .unified-inbox-profile .text-\\[8px\\] { font-size: var(--uinbox-font-micro) !important; }
+.unified-inbox-layout-root .unified-inbox-profile [class~="text-[8px]"] { font-size: var(--uinbox-font-micro) !important; }
 /* Orange for selection, Umrah360 blue for AI actions. */
 .unified-inbox-layout-root .uinbox-view-item.is-active {
   border-color: #f5d5c0 !important;

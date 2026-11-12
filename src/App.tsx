@@ -212,7 +212,7 @@ function toAppUser(u: any): AppUser {
 //   const [activeTab, setActiveTab] = useState<ActiveTab>(() =>
 //     typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('mailbox') ? 'settings' : 'inbox'
 //   );
-//   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(false);
+//   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(true);
 type WorkspaceSection = 'overview' | 'company' | 'channels' | 'ai' | 'team' | 'billing' | 'audit';
 
 const LEGACY_WORKSPACE_SECTIONS: Partial<Record<ActiveTab, WorkspaceSection>> = {
@@ -2676,17 +2676,19 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
       />
 
       <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
-        <HeaderBar
-          activeTab={activeTab}
-          setActiveTab={setActiveTab}
-          isCollapsed={isSidebarCollapsed}
-          onToggleCollapse={() => setIsSidebarCollapsed((prev) => !prev)}
-          unreadCount={unreadCount}
-          handoffCount={handoffCount}
-          tenantId={currentTenantId}
-          currentUser={currentUser}
-          onLogout={handleLogout}
-        />
+{activeTab !== 'inbox' && (
+          <HeaderBar
+            activeTab={activeTab}
+            setActiveTab={setActiveTab}
+            isCollapsed={isSidebarCollapsed}
+            onToggleCollapse={() => setIsSidebarCollapsed((prev) => !prev)}
+            unreadCount={unreadCount}
+            handoffCount={handoffCount}
+            tenantId={currentTenantId}
+            currentUser={currentUser}
+            onLogout={handleLogout}
+          />
+        )}
 
         <main className={`flex-1 min-w-0 min-h-0 ${activeTab === 'inbox' ? 'p-0 h-full overflow-hidden flex flex-col' : activeTab === 'agent' ? 'p-3 sm:p-5 overflow-hidden flex flex-col' : 'p-3 sm:p-5 overflow-y-auto'}`}>
         {entitlements?.billing?.status === 'past_due' && (

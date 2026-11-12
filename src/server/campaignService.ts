@@ -1233,6 +1233,34 @@ export async function getCampaignEngagementStats(campaignId: string) {
 }
 
 /**
+ * Workspace-wide open-rate inputs for the campaign directory.
+ * One opened flag per campaign recipient means repeat opens never inflate the numerator.
+ * Bot-like opens do not set opened=true; only recipients with tracked delivery are eligible.
+ */
+export async function getCampaignOverviewEngagementStats() {
+  if (!isFirebaseConfigured || !db) {
+    return { trackedDelivered: 0, uniqueOpened: 0 };
+  }
+  const base = leadsCol();
+  const trackedDeliveredQuery = query(
+    base,
+    where('trackingEnabledAtSend', '==', true),
+    where('delivered', '==', true)
+  );
+  const uniqueOpenedQuery = query(
+    base,
+    where('trackingEnabledAtSend', '==', true),
+    where('delivered', '==', true),
+    where('opened', '==', true)
+  );
+  const [trackedDelivered, uniqueOpened] = await Promise.all([
+    countDocs(trackedDeliveredQuery),
+    countDocs(uniqueOpenedQuery),
+  ]);
+  return { trackedDelivered, uniqueOpened };
+}
+
+/**
  * One page of a campaign's leads for the leads table: reads `pageSize` documents, never the whole list.
  * Ordered by rowNumber (needs the composite indexes in firestore.indexes.json). If those indexes are not
  * deployed yet, Firestore refuses the query (FAILED_PRECONDITION) and we fall back to document-ID order,

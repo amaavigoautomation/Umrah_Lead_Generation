@@ -30,6 +30,7 @@ import {
   getCampaignLeads,
   getCampaignLeadsPage,
   getCampaignEngagementStats,
+  getCampaignOverviewEngagementStats,
   ensureCampaignSearchIndex,
   scheduleCampaign,
   unscheduleCampaign,
@@ -4241,6 +4242,19 @@ ${signature || defSig}`;
     } catch (err: any) {
       res.statusCode = 500;
       res.end(JSON.stringify({ error: err?.message || 'Failed to build search index' }));
+    }
+    return true;
+  }
+
+  // Workspace-wide unique open rate inputs for the Campaigns directory.
+  if (url === '/api/campaigns/overview-engagement' && req.method === 'GET') {
+    try {
+      const stats = await getCampaignOverviewEngagementStats();
+      res.statusCode = 200;
+      res.end(JSON.stringify({ success: true, ...stats }));
+    } catch (err: any) {
+      res.statusCode = 500;
+      res.end(JSON.stringify({ error: err?.message || 'Failed to load campaign overview engagement' }));
     }
     return true;
   }

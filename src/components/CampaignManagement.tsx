@@ -112,7 +112,6 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
   const [campaignDirectoryStatus, setCampaignDirectoryStatus] = useState('ALL');
   const [campaignDirectorySort, setCampaignDirectorySort] = useState<'activity' | 'sent' | 'replies' | 'name'>('activity');
   const [campaignDirectoryPage, setCampaignDirectoryPage] = useState(1);
-  const [activeCampaignTab, setActiveCampaignTab] = useState<'overview' | 'recipients' | 'activity' | 'settings'>('overview');
   const [activeCreateStep, setActiveCreateStep] = useState<'basics' | 'audience' | 'mapping' | 'content' | 'delivery' | 'review'>('basics');
   const campaignDirectoryPageSize = 10;
   const [campaignLeads, setCampaignLeads] = useState<CampaignLead[]>([]);
@@ -451,7 +450,6 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
 
   // Campaign Selection Handler - Instant, stable selection that is never overwritten by background polls
   const handleSelectCampaign = (camp: Campaign) => {
-    setActiveCampaignTab('overview');
     setSelectedCampaignId(camp.campaignId);
     selectedCampaignIdRef.current = camp.campaignId;
     setSelectedCampaign(camp);
@@ -478,6 +476,34 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
       clearTimeout(t);
     }
   };
+
+  // Workspace-wide, weighted open-rate inputs. These are aggregate counts, not page-level lead samples.
+  const [campaignOverviewEngagement, setCampaignOverviewEngagement] = useState<{
+    trackedDelivered: number;
+    uniqueOpened: number;
+  } | null>(null);
+  useEffect(() => {
+    if (!tenantId) {
+      setCampaignOverviewEngagement(null);
+      return;
+    }
+    let active = true;
+    const refreshOverviewEngagement = async () => {
+      const data = await fetchJsonWithTimeout('/api/campaigns/overview-engagement');
+      if (!active || !data?.success) return;
+      setCampaignOverviewEngagement({
+        trackedDelivered: Math.max(0, Number(data.trackedDelivered) || 0),
+        uniqueOpened: Math.max(0, Number(data.uniqueOpened) || 0),
+      });
+    };
+    void refreshOverviewEngagement();
+    // Open events update recipient records independently of campaign status counters.
+    const intervalId = window.setInterval(() => void refreshOverviewEngagement(), 60_000);
+    return () => {
+      active = false;
+      window.clearInterval(intervalId);
+    };
+  }, [tenantId, campaigns.length]);
 
   const templatesLoadedRef = useRef(false);
   const loadSeqRef = useRef(0);
@@ -508,23 +534,12 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
         if (updated) {
           setSelectedCampaign((prev) => (prev ? { ...prev, ...updated } : updated));
         } else if (activeId && wasSeen.has(activeId)) {
-          // The selected campaign was in an earlier snapshot and is gone now: it was deleted (here or
-          // elsewhere). Select the newest one, or none. (A campaign created a moment ago that the
-          // listener has not delivered yet was never "seen", so it stays selected.)
-          const next = list[0] || null;
-          setSelectedCampaignId(next ? next.campaignId : null);
-          selectedCampaignIdRef.current = next ? next.campaignId : null;
-          setSelectedCampaign(next);
-          if (!next) {
-            setCampaignLeads([]);
-            setCampaignRuns([]);
-          }
-        } else if (!activeId && list.length > 0) {
-          const firstCamp = list[0];
-          setSelectedCampaignId(firstCamp.campaignId);
-          selectedCampaignIdRef.current = firstCamp.campaignId;
-          setSelectedCampaign(firstCamp);
-        }
+          // The selected campaign was deleted. Return to the directory instead of opening another campaign.
+          setSelectedCampaignId(null);
+          selectedCampaignIdRef.current = null;
+          setSelectedCampaign(null);
+          setCampaignLeads([]);
+          setCampaignRuns([]);
       },
       (err) => console.warn('[Campaigns] listener error:', err)
     );
@@ -1433,10 +1448,13 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
   }, [campaigns, campaignDirectorySearch, campaignDirectoryStatus, campaignDirectorySort]);
   const campaignDirectoryPages = Math.max(1, Math.ceil(filteredDirectoryCampaigns.length / campaignDirectoryPageSize));
   const visibleDirectoryCampaigns = filteredDirectoryCampaigns.slice((campaignDirectoryPage - 1) * campaignDirectoryPageSize, campaignDirectoryPage * campaignDirectoryPageSize);
+  const trackedDeliveredEmails = campaignOverviewEngagement?.trackedDelivered || 0;
+  const uniqueOpenedRecipients = campaignOverviewEngagement?.uniqueOpened || 0;
   const campaignDirectoryStats = {
+    total: campaigns.length,
     running: campaigns.filter((campaign) => campaign.status === 'RUNNING').length,
     scheduled: campaigns.filter((campaign) => campaign.status === 'SCHEDULED').length,
-    sent: campaigns.reduce((total, campaign) => total + (campaign.sentCount || 0), 0),
+    avgOpenRate: trackedDeliveredEmails > 0 ? (uniqueOpenedRecipients / trackedDeliveredEmails) * 100 : null,
     replies: campaigns.reduce((total, campaign) => total + (campaign.repliedCount || 0), 0),
   };
   const formatDirectoryActivity = (value?: string) => {
@@ -1543,22 +1561,6 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                   </div>
                 )}
 
-                <nav aria-label="Campaign workspace sections" className="sticky top-0 z-20 -mx-1 flex items-center gap-1 overflow-x-auto rounded-xl border border-slate-200 bg-white/95 p-1.5 shadow-sm backdrop-blur">
-                  {([
-                    ['overview', 'Overview'],
-                    ['recipients', 'Recipients'],
-                    ['activity', 'Activity & Runs'],
-                    ['settings', 'Settings'],
-                  ] as const).map(([tab, label]) => (
-                    <button key={tab} type="button" onClick={() => {
-                      setActiveCampaignTab(tab);
-                      document.getElementById('campaign-' + tab)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                    }} className={"shrink-0 rounded-lg px-4 py-2 text-xs font-semibold transition " + (activeCampaignTab === tab ? 'bg-slate-900 text-white' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-800')}>
-                      {label}
-                    </button>
-                  ))}
-                  <span className="ml-auto hidden md:inline-flex shrink-0 items-center gap-1.5 px-3 text-[10px] text-slate-400"><span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> Live campaign data</span>
-                </nav>
 
                 {/* Campaign Header Toolbar */}
                 <div id="campaign-overview" className="scroll-mt-20 flex flex-wrap items-center justify-between gap-4 p-5 bg-white border border-slate-200 rounded-2xl shadow-2xs">
@@ -2158,15 +2160,35 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                   </div>
                   <div className="flex items-center gap-2 text-xs text-slate-500">
                     <span className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-2"><span className="h-2 w-2 rounded-full bg-emerald-500" /> Live workspace</span>
-                    <span className="rounded-full border border-slate-200 bg-white px-3 py-2">{campaigns.length} total campaigns</span>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
-                  <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><div className="flex items-center justify-between"><span className="text-xs font-medium text-slate-500">Running</span><span className="h-8 w-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center"><Play className="w-4 h-4" /></span></div><div className="mt-3 text-2xl font-bold tabular-nums text-slate-950">{campaignDirectoryStats.running}</div><div className="mt-1 text-[11px] text-slate-400">Actively sending</div></div>
-                  <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><div className="flex items-center justify-between"><span className="text-xs font-medium text-slate-500">Scheduled</span><span className="h-8 w-8 rounded-xl bg-sky-50 text-sky-600 flex items-center justify-center"><Calendar className="w-4 h-4" /></span></div><div className="mt-3 text-2xl font-bold tabular-nums text-slate-950">{campaignDirectoryStats.scheduled}</div><div className="mt-1 text-[11px] text-slate-400">Queued to start</div></div>
-                  <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><div className="flex items-center justify-between"><span className="text-xs font-medium text-slate-500">Emails sent</span><span className="h-8 w-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center"><Send className="w-4 h-4" /></span></div><div className="mt-3 text-2xl font-bold tabular-nums text-slate-950">{campaignDirectoryStats.sent.toLocaleString('en-IN')}</div><div className="mt-1 text-[11px] text-slate-400">Across all campaigns</div></div>
-                  <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><div className="flex items-center justify-between"><span className="text-xs font-medium text-slate-500">Replies</span><span className="h-8 w-8 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center"><MessageSquare className="w-4 h-4" /></span></div><div className="mt-3 text-2xl font-bold tabular-nums text-slate-950">{campaignDirectoryStats.replies.toLocaleString('en-IN')}</div><div className="mt-1 text-[11px] text-slate-400">Confirmed responses</div></div>
+                <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3">
+                  <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                    <div className="flex items-center justify-between"><span className="text-xs font-medium text-slate-500">Total Campaigns</span><span className="h-8 w-8 rounded-xl bg-orange-50 text-orange-600 flex items-center justify-center"><Layers className="w-4 h-4" /></span></div>
+                    <div className="mt-3 text-2xl font-bold tabular-nums text-slate-950">{campaignDirectoryStats.total.toLocaleString('en-IN')}</div>
+                    <div className="mt-1 text-[11px] text-slate-400">Created in this workspace</div>
+                  </div>
+                  <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                    <div className="flex items-center justify-between"><span className="text-xs font-medium text-slate-500">Running</span><span className="h-8 w-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center"><Play className="w-4 h-4" /></span></div>
+                    <div className="mt-3 text-2xl font-bold tabular-nums text-slate-950">{campaignDirectoryStats.running}</div>
+                    <div className="mt-1 text-[11px] text-slate-400">Actively sending</div>
+                  </div>
+                  <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                    <div className="flex items-center justify-between"><span className="text-xs font-medium text-slate-500">Scheduled</span><span className="h-8 w-8 rounded-xl bg-sky-50 text-sky-600 flex items-center justify-center"><Calendar className="w-4 h-4" /></span></div>
+                    <div className="mt-3 text-2xl font-bold tabular-nums text-slate-950">{campaignDirectoryStats.scheduled}</div>
+                    <div className="mt-1 text-[11px] text-slate-400">Queued to start</div>
+                  </div>
+                  <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm" title="Weighted rate: recipients with at least one real tracked open ÷ tracked delivered emails across all campaigns. Repeat opens and detected bot opens are excluded.">
+                    <div className="flex items-center justify-between"><span className="text-xs font-medium text-slate-500">Avg. Open Rate</span><span className="h-8 w-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center"><Eye className="w-4 h-4" /></span></div>
+                    <div className="mt-3 text-2xl font-bold tabular-nums text-slate-950">{campaignDirectoryStats.avgOpenRate === null ? '—' : `${campaignDirectoryStats.avgOpenRate.toFixed(1)}%`}</div>
+                    <div className="mt-1 text-[11px] text-slate-400">Unique tracked opens · delivered</div>
+                  </div>
+                  <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                    <div className="flex items-center justify-between"><span className="text-xs font-medium text-slate-500">Replies</span><span className="h-8 w-8 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center"><MessageSquare className="w-4 h-4" /></span></div>
+                    <div className="mt-3 text-2xl font-bold tabular-nums text-slate-950">{campaignDirectoryStats.replies.toLocaleString('en-IN')}</div>
+                    <div className="mt-1 text-[11px] text-slate-400">Confirmed responses</div>
+                  </div>
                 </div>
 
                 <section className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
@@ -2243,7 +2265,7 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                     </>
                   )}
                 </section>
-                <div className="flex items-center justify-between gap-3 text-[11px] text-slate-400"><span>Metrics reflect campaign-level counters. Open tracking is estimated; replies are confirmed.</span><span>Workspace timezone: {timezone}</span></div>
+                <div className="flex items-center justify-between gap-3 text-[11px] text-slate-400"><span>Open rate is weighted by tracked delivered emails. Detected bot opens and repeat opens are excluded.</span><span>Workspace timezone: {timezone}</span></div>
               </div>
             )}
           </main>

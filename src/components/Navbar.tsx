@@ -8,7 +8,6 @@ import {
   Calendar,
   BookOpen,
   Sparkles,
-  Settings,
   Bot,
   Database,
   Radio,
@@ -22,7 +21,6 @@ import {
   PanelLeftOpen,
   ChevronLeft,
   ChevronRight,
-  ShieldCheck,
   FileBarChart,
   Building2,
 } from 'lucide-react';
@@ -39,6 +37,7 @@ export type ActiveTab =
   | 'scheduling'
   | 'knowledge'
   | 'playground'
+  | 'workspace'
   | 'settings'
   | 'auto-followup'
   | 'audit-logs'
@@ -96,7 +95,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   const isModuleAccessible = (tabId: ActiveTab): boolean => {
     if (planLocked?.(tabId)) return false;
     // Database is shared by authenticated workspace users; deletion is admin-only on the server.
-    if (tabId === 'dashboard' || tabId === 'database' || tabId === 'company-profile') return true;
+    if (tabId === 'dashboard' || tabId === 'database' || tabId === 'workspace' || tabId === 'company-profile') return true;
     if (!currentUser) return true;
     if (currentUser.accessLevel === 'ALL' || currentUser.role === 'ADMIN') return true;
     if (tabId === 'email-design-studio' && (currentUser.allowedModules || []).includes('settings')) return true;
@@ -168,19 +167,9 @@ export const Navbar: React.FC<NavbarProps> = ({
       icon: <Sparkles className="w-4 h-4 shrink-0" />,
     },
     {
-      id: 'audit-logs',
-      label: 'Audit Logs',
-      icon: <ShieldCheck className="w-4 h-4 shrink-0" />,
-    },
-    {
-      id: 'company-profile',
-      label: 'Company Profile',
+      id: 'workspace',
+      label: 'Workspace',
       icon: <Building2 className="w-4 h-4 shrink-0" />,
-    },
-    {
-      id: 'settings',
-      label: 'Settings',
-      icon: <Settings className="w-4 h-4 shrink-0" />,
     },
   ];
 

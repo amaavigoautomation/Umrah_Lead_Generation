@@ -65,9 +65,7 @@ const TemplateStudio = lazyNamed(() => import('./components/TemplateStudio'), 'T
 const CrmPipeline = lazyNamed(() => import('./components/CrmPipeline'), 'CrmPipeline');
 const KnowledgeBaseView = lazyNamed(() => import('./components/KnowledgeBaseView'), 'KnowledgeBaseView');
 const AiTestingPlayground = lazyNamed(() => import('./components/AiTestingPlayground'), 'AiTestingPlayground');
-const AuditLogsView = lazyNamed(() => import('./components/AuditLogsView'), 'AuditLogsView');
-const SettingsView = lazyNamed(() => import('./components/SettingsView'), 'SettingsView');
-const BrandSettingsPanel = lazyNamed(() => import('./components/BrandSettingsPanel'), 'BrandSettingsPanel');
+const WorkspaceView = lazyNamed(() => import('./components/SettingsView'), 'WorkspaceView');
 const DemoSchedulingView = lazyNamed(() => import('./components/DemoSchedulingView'), 'DemoSchedulingView');
 const AutoFollowUpDashboard = lazyNamed(() => import('./components/AutoFollowUpDashboard'), 'AutoFollowUpDashboard');
 const LeadDatabase = lazyNamed(() => import('./components/LeadDatabase'), 'LeadDatabase');
@@ -215,8 +213,17 @@ function toAppUser(u: any): AppUser {
 //     typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('mailbox') ? 'settings' : 'inbox'
 //   );
 //   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(false);
+type WorkspaceSection = 'overview' | 'company' | 'channels' | 'ai' | 'team' | 'billing' | 'audit';
+
+const LEGACY_WORKSPACE_SECTIONS: Partial<Record<ActiveTab, WorkspaceSection>> = {
+  settings: 'overview',
+  'company-profile': 'company',
+  'audit-logs': 'audit',
+};
+
 const ALL_TABS: readonly ActiveTab[] = [
   'dashboard',
+  'workspace',
   'inbox',
   'campaigns',
   'email-design-studio',
@@ -237,23 +244,42 @@ function isActiveTab(value: string | null | undefined): value is ActiveTab {
   return !!value && (ALL_TABS as readonly string[]).includes(value);
 }
 
+function isWorkspaceSection(value: string | null): value is WorkspaceSection {
+  return value === 'overview' || value === 'company' || value === 'channels' ||
+    value === 'ai' || value === 'team' || value === 'billing' || value === 'audit';
+}
+
+function readWorkspaceSectionFromLocation(): WorkspaceSection {
+  if (typeof window === 'undefined') return 'overview';
+  const params = new URLSearchParams(window.location.search);
+  if (params.has('mailbox')) return 'channels';
+  const requestedSection = params.get('workspaceSection');
+  if (isWorkspaceSection(requestedSection)) return requestedSection;
+  const legacyTab = params.get('tab') as ActiveTab | null;
+  return (legacyTab && LEGACY_WORKSPACE_SECTIONS[legacyTab]) || 'overview';
+}
+
 function readTabFromLocation(): ActiveTab {
   if (typeof window === 'undefined') return 'dashboard';
   const params = new URLSearchParams(window.location.search);
   const tab = params.get('tab');
+  if (tab === 'workspace' || (tab && LEGACY_WORKSPACE_SECTIONS[tab as ActiveTab])) return 'workspace';
+  if (params.has('mailbox')) return 'workspace';
   if (isActiveTab(tab)) return tab;
-  if (params.has('mailbox')) return 'settings';
   return 'dashboard';
 }
 
-function writeTabToLocation(tab: ActiveTab) {
+function writeTabToLocation(tab: ActiveTab, workspaceSection: WorkspaceSection = 'overview') {
   if (typeof window === 'undefined') return;
   try {
     sessionStorage.setItem('umrah360.activeTab', tab);
+    if (tab === 'workspace') sessionStorage.setItem('umrah360.workspaceSection', workspaceSection);
   } catch {}
   const url = new URL(window.location.href);
   if (tab === 'dashboard') url.searchParams.delete('tab');
   else url.searchParams.set('tab', tab);
+  if (tab === 'workspace') url.searchParams.set('workspaceSection', workspaceSection);
+  else url.searchParams.delete('workspaceSection');
   const next = `${url.pathname}${url.search}${url.hash}`;
   const current = `${window.location.pathname}${window.location.search}${window.location.hash}`;
   if (next !== current) {
@@ -263,9 +289,28 @@ function writeTabToLocation(tab: ActiveTab) {
 
 export default function App() {
   const [activeTab, setActiveTabState] = useState<ActiveTab>(readTabFromLocation);
+  const [workspaceSection, setWorkspaceSection] = useState<WorkspaceSection>(readWorkspaceSectionFromLocation);
+  const openWorkspaceSection = useCallback((section: WorkspaceSection) => {
+    setWorkspaceSection(section);
+    setActiveTabState('workspace');
+    writeTabToLocation('workspace', section);
+  }, []);
   const setActiveTab = useCallback((tab: ActiveTab) => {
+    if (tab === 'workspace') {
+      openWorkspaceSection('overview');
+      return;
+    }
+    const legacySection = LEGACY_WORKSPACE_SECTIONS[tab];
+    if (legacySection) {
+      openWorkspaceSection(legacySection);
+      return;
+    }
     setActiveTabState(tab);
     writeTabToLocation(tab);
+  }, [openWorkspaceSection]);
+  const handleWorkspaceSectionChange = useCallback((section: WorkspaceSection) => {
+    setWorkspaceSection(section);
+    writeTabToLocation('workspace', section);
   }, []);
   const [agentEmailTemplateId, setAgentEmailTemplateId] = useState<string | undefined>(undefined);
   const [agentEmailTemplateKind, setAgentEmailTemplateKind] = useState<'campaign' | 'conversation'>('campaign');
@@ -2601,7 +2646,8 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
     (activeTab === 'email-design-studio' && (currentUser.allowedModules || []).includes('settings')) ||
     activeTab === 'dashboard' ||
     activeTab === 'database' ||
-    activeTab === 'company-profile';
+    activeTab === 'company-profile' ||
+    activeTab === 'workspace';
 
   return (
     <BrandProvider tenantId={currentTenantId} tenantName={currentTenant?.name}>
@@ -2650,7 +2696,7 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
               {entitlements.billing.graceEndsAt ? ` Access continues until ${new Date(entitlements.billing.graceEndsAt).toLocaleDateString()}.` : ''}
             </span>
             {currentUser.role === 'ADMIN' && (
-              <button onClick={() => setActiveTab('settings')} className="font-bold underline">
+              <button onClick={() => openWorkspaceSection('billing')} className="font-bold underline">
                 Fix payment
               </button>
             )}
@@ -2855,16 +2901,8 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
 
             {activeTab === 'playground' && <AiTestingPlayground knowledgeDocs={knowledgeDocs} />}
 
-            {activeTab === 'audit-logs' && (
-              <AuditLogsView tenantId={currentTenantId} currentUserEmail={currentUser.email} />
-            )}
-
-            {activeTab === 'company-profile' && (
-              <BrandSettingsPanel tenantId={currentTenantId} canEdit={currentUser.role === 'ADMIN'} />
-            )}
-
-            {activeTab === 'settings' && (
-              <SettingsView
+            {activeTab === 'workspace' && (
+              <WorkspaceView
                 settings={settings}
                 onSaveSettings={handleSaveSettings}
                 users={users}
@@ -2874,12 +2912,16 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
                 onDeleteUser={handleDeleteUser}
                 tenantId={currentTenantId}
                 canEditEmail={currentUser.role === 'ADMIN'}
+                canAccessSettings={currentUser.accessLevel === 'ALL' || currentUser.role === 'ADMIN' || (currentUser.allowedModules || []).includes('settings')}
+                canAccessAuditLogs={currentUser.accessLevel === 'ALL' || currentUser.role === 'ADMIN' || (currentUser.allowedModules || []).includes('audit-logs')}
+                currentUserEmail={currentUser.email}
+                initialSection={workspaceSection}
+                onSectionChange={handleWorkspaceSectionChange}
                 timezone={currentTenant?.timezone || 'Asia/Kolkata'}
                 workspaceName={currentTenant?.name || currentTenantId}
                 unreadCount={unreadCount}
                 handoffCount={handoffCount}
                 knowledgeDocumentCount={knowledgeDocs.length}
-                onOpenAuditLogs={() => setActiveTab('audit-logs')}
               />
             )}
 

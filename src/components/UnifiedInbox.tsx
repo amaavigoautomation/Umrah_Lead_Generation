@@ -45,6 +45,8 @@ import {
 import { normalizeChannelMode } from '../shared/channelModes';
 import { generateOmnichannelResponse } from '../services/aiService';
 import { FormattedMessage } from './FormattedMessage';
+import InboxViewsPanel from './InboxViewsPanel';
+import { useConnectedChannels } from '../hooks/useConnectedChannels';
 import { aiResponseMarkdownToPlainText } from '../shared/aiResponseFormatting';
 import { useBrand } from '../context/BrandContext';
 import {
@@ -105,6 +107,7 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
   onAutoFollowUpChanged,
 }) => {
   const { brand } = useBrand();
+  const connected = useConnectedChannels(tenantId);
   const [selectedConversationId, setSelectedConversationId] = useState<string>(
     conversations[0]?.conversationId || ''
   );
@@ -113,7 +116,48 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
   const [searchQuery, setSearchQuery] = useState<string>('');
   // Lead Profile 360 side panel: slides in/out from the right edge
   const [isProfileOpen, setIsProfileOpen] = useState<boolean>(true);
+  const [isViewsPanelCollapsed, setIsViewsPanelCollapsed] = useState<boolean>(false);
+  const [isConversationListCollapsed, setIsConversationListCollapsed] = useState<boolean>(false);
+  const [viewsPanelWidth, setViewsPanelWidth] = useState<number>(205);
+  const [conversationListWidth, setConversationListWidth] = useState<number>(292);
+  const [profilePanelWidth, setProfilePanelWidth] = useState<number>(292);
+  const [composerTab, setComposerTab] = useState<'REPLY' | 'AI_DRAFT'>('REPLY');
+  const resizeStateRef = useRef<{ panel: 'views' | 'list' | 'profile'; startX: number; startWidth: number } | null>(null);
   const [replyText, setReplyText] = useState<string>('');
+  const inboxLayoutStorageKey = 'umrah360:unified-inbox-layout:' + (tenantId || 'workspace');
+  useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem(inboxLayoutStorageKey);
+      if (!saved) return;
+      const layout = JSON.parse(saved);
+      if (Number.isFinite(layout.viewsPanelWidth)) setViewsPanelWidth(Math.min(320, Math.max(180, layout.viewsPanelWidth)));
+      if (Number.isFinite(layout.conversationListWidth)) setConversationListWidth(Math.min(440, Math.max(230, layout.conversationListWidth)));
+      if (Number.isFinite(layout.profilePanelWidth)) setProfilePanelWidth(Math.min(420, Math.max(250, layout.profilePanelWidth)));
+      if (typeof layout.isViewsPanelCollapsed === 'boolean') setIsViewsPanelCollapsed(layout.isViewsPanelCollapsed);
+      if (typeof layout.isConversationListCollapsed === 'boolean') setIsConversationListCollapsed(layout.isConversationListCollapsed);
+      if (typeof layout.isProfileOpen === 'boolean') setIsProfileOpen(layout.isProfileOpen);
+    } catch (error) { console.warn('[UnifiedInbox] Could not restore panel layout preferences.', error); }
+  }, [inboxLayoutStorageKey]);
+  useEffect(() => {
+    try { window.localStorage.setItem(inboxLayoutStorageKey, JSON.stringify({ viewsPanelWidth, conversationListWidth, profilePanelWidth, isViewsPanelCollapsed, isConversationListCollapsed, isProfileOpen })); } catch (error) { /* Storage is optional. */ }
+  }, [inboxLayoutStorageKey, viewsPanelWidth, conversationListWidth, profilePanelWidth, isViewsPanelCollapsed, isConversationListCollapsed, isProfileOpen]);
+  const beginPanelResize = (panel: 'views' | 'list' | 'profile', event: React.PointerEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    const startWidth = panel === 'views' ? viewsPanelWidth : panel === 'list' ? conversationListWidth : profilePanelWidth;
+    resizeStateRef.current = { panel, startX: event.clientX, startWidth };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+  const movePanelResize = (event: React.PointerEvent<HTMLDivElement>) => {
+    const drag = resizeStateRef.current; if (!drag) return;
+    const delta = event.clientX - drag.startX;
+    if (drag.panel === 'views') setViewsPanelWidth(Math.min(320, Math.max(180, drag.startWidth + delta)));
+    else if (drag.panel === 'list') setConversationListWidth(Math.min(440, Math.max(230, drag.startWidth + delta)));
+    else setProfilePanelWidth(Math.min(420, Math.max(250, drag.startWidth - delta)));
+  };
+  const endPanelResize = (event: React.PointerEvent<HTMLDivElement>) => {
+    resizeStateRef.current = null;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+  };
   const [isGeneratingAi, setIsGeneratingAi] = useState<boolean>(false);
   const [isUnifiedAllPlatforms, setIsUnifiedAllPlatforms] = useState<boolean>(false);
   const [replyChannelOverride, setReplyChannelOverride] = useState<Channel | ''>('');
@@ -407,6 +451,34 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
     }
   };
 
+  const isConversationUnread = (conv: Conversation) => Boolean(conv.unread || conv.isRead === false || (conv.unreadCount || 0) > 0);
+  const getConversationLead = (conv: Conversation) => leads.find((lead) => lead.leadId === conv.leadId);
+  const matchesChannel = (conv: Conversation, channel: string) => {
+    if (channel === 'ALL') return true;
+    if (channel === 'EMAIL') return conv.channel === 'EMAIL' || messages.some((message) => message.conversationId === conv.conversationId && message.channel === 'EMAIL');
+    if (channel === 'WEBSITE') return conv.channel === 'WEBSITE' || conv.conversationId?.startsWith('conv-web-') || conv.conversationSummary?.toLowerCase().includes('website demo');
+    return conv.channel === channel;
+  };
+  const viewCounts = {
+    ALL: conversations.length,
+    OPEN: conversations.filter((conv) => conv.status === 'ACTIVE' || conv.status === 'REVIEW').length,
+    UNREAD: conversations.filter(isConversationUnread).length,
+    UNASSIGNED: conversations.filter((conv) => { const lead = getConversationLead(conv); return !lead?.ownerId && !lead?.assignedCaller; }).length,
+    HUMAN_HANDOFF: conversations.filter((conv) => conv.humanHandoff).length,
+    AI_ACTIVE: conversations.filter((conv) => conv.aiEnabled && !conv.humanHandoff).length,
+    HIGH_INTENT: conversations.filter((conv) => getConversationLead(conv)?.intent === 'HIGH').length,
+    RESOLVED: conversations.filter((conv) => conv.status === 'RESOLVED').length,
+  };
+  const channelCounts = {
+    ALL: conversations.length,
+    EMAIL: conversations.filter((conv) => matchesChannel(conv, 'EMAIL')).length,
+    WHATSAPP: conversations.filter((conv) => matchesChannel(conv, 'WHATSAPP')).length,
+    WEBSITE: conversations.filter((conv) => matchesChannel(conv, 'WEBSITE')).length,
+    FACEBOOK: conversations.filter((conv) => matchesChannel(conv, 'FACEBOOK')).length,
+    INSTAGRAM: conversations.filter((conv) => matchesChannel(conv, 'INSTAGRAM')).length,
+    LINKEDIN: conversations.filter((conv) => matchesChannel(conv, 'LINKEDIN')).length,
+  };
+
   // Filter conversations
   const filteredConversations = conversations.filter((conv) => {
     const contact = contacts.find((c) => c.contactId === conv.contactId);
@@ -431,10 +503,13 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
     }
 
     // Status / Mode filter
-    if (statusFilter === 'UNREAD' && !conv.unread && conv.isRead !== false && (conv.unreadCount || 0) === 0) return false;
-    if (statusFilter === 'AI_ACTIVE' && !conv.aiEnabled) return false;
+    if (statusFilter === 'OPEN' && conv.status !== 'ACTIVE' && conv.status !== 'REVIEW') return false;
+    if (statusFilter === 'UNREAD' && !isConversationUnread(conv)) return false;
+    if (statusFilter === 'UNASSIGNED' && (lead?.ownerId || lead?.assignedCaller)) return false;
+    if (statusFilter === 'AI_ACTIVE' && (!conv.aiEnabled || conv.humanHandoff)) return false;
     if (statusFilter === 'HUMAN_HANDOFF' && !conv.humanHandoff) return false;
     if (statusFilter === 'HIGH_INTENT' && lead?.intent !== 'HIGH') return false;
+    if (statusFilter === 'RESOLVED' && conv.status !== 'RESOLVED') return false;
     if (statusFilter === 'INBOUND' && conv.direction !== 'INBOUND') return false;
     if (statusFilter === 'OUTBOUND' && conv.direction !== 'OUTBOUND') return false;
 
@@ -495,6 +570,7 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
       });
 
       setReplyText(result.responseText);
+      setComposerTab('AI_DRAFT');
     } catch (error) {
       console.error('Error generating AI response:', error);
     } finally {
@@ -570,11 +646,27 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
   };
 
   return (
-    <div className="unified-inbox-shell flex flex-col lg:flex-row h-full w-full bg-white text-slate-900 overflow-hidden relative">
+    <div className="unified-inbox-shell unified-inbox-layout-root flex flex-row h-full w-full bg-white text-slate-900 overflow-hidden relative" style={{ ['--uinbox-profile-width' as any]: (isProfileOpen ? profilePanelWidth : 0) + 'px' }}>
+      <InboxViewsPanel collapsed={isViewsPanelCollapsed} width={isViewsPanelCollapsed ? 58 : viewsPanelWidth} statusFilter={statusFilter} channelFilter={channelFilter} viewCounts={viewCounts} channelCounts={channelCounts} connected={connected} onToggleCollapsed={() => setIsViewsPanelCollapsed((value) => !value)} onSelectView={setStatusFilter} onSelectChannel={setChannelFilter} />
+      <div className="uinbox-resize-handle" role="separator" aria-orientation="vertical" aria-label="Resize inbox views panel" onPointerDown={(event) => beginPanelResize('views', event)} onPointerMove={movePanelResize} onPointerUp={endPanelResize} onPointerCancel={endPanelResize} onDoubleClick={() => setViewsPanelWidth(205)} />
       {/* 1. LEFT COLUMN: Conversation List & Filters (Width: 340px) */}
-      <div className="unified-inbox-sidebar w-full lg:w-84 border-r border-slate-200/90 flex flex-col bg-slate-50/60 h-full min-h-0 shrink-0">
+      <div className="unified-inbox-sidebar unified-inbox-conversation-panel flex flex-col bg-white h-full min-h-0 shrink-0" style={{ ['--uinbox-conversation-width' as any]: (isConversationListCollapsed ? 64 : conversationListWidth) + 'px' }}>
+        {isConversationListCollapsed ? (
+          <div className="uinbox-list-collapsed">
+            <button type="button" onClick={() => setIsConversationListCollapsed(false)} className="uinbox-list-expand" title="Expand conversation list" aria-label="Expand conversation list"><ChevronRight size={16} /></button>
+            {filteredConversations.slice(0, 14).map((conv) => {
+              const contact = contacts.find((item) => item.contactId === conv.contactId);
+              const selected = conv.conversationId === activeConversation?.conversationId;
+              return <button key={conv.conversationId} type="button" onClick={() => { setSelectedConversationId(conv.conversationId); setIsUnifiedAllPlatforms(false); if (isConversationUnread(conv)) onMarkAsRead?.(conv.conversationId); }} className={'uinbox-list-avatar' + (selected ? ' is-active' : '')} title={(contact?.firstName || 'Unknown') + ' ' + (contact?.lastName || '')}>
+                {(contact?.firstName?.[0] || contact?.companyName?.[0] || '?').toUpperCase()}
+                {isConversationUnread(conv) && <span className="uinbox-list-unread-dot" />}
+              </button>;
+            })}
+          </div>
+        ) : (<>
         {/* Search Header */}
         <div className="unified-inbox-sidebar-tools p-3 border-b border-slate-200 space-y-2 shrink-0">
+          <div className="uinbox-conversation-list-heading"><div><strong>Conversations</strong><span>{filteredConversations.length} results</span></div><button type="button" onClick={() => setIsConversationListCollapsed(true)} title="Collapse conversation list" aria-label="Collapse conversation list"><ChevronLeft size={15} /></button></div>
           <div className="relative">
             <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
             <input
@@ -586,70 +678,6 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
             />
           </div>
 
-          {/* Channel Pills */}
-          <div className="unified-inbox-channel-filters flex space-x-1 overflow-x-auto pb-1 scrollbar-none text-xs">
-            {['ALL', 'EMAIL', 'WHATSAPP', 'WEBSITE', 'INSTAGRAM', 'LINKEDIN'].map((ch) => (
-              <button
-                key={ch}
-                onClick={() => setChannelFilter(ch)}
-                className={`px-2.5 py-1 rounded-lg whitespace-nowrap font-bold transition ${
-                  channelFilter === ch
-                    ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-2xs'
-                    : 'bg-white border border-slate-200 text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                {ch}
-              </button>
-            ))}
-          </div>
-
-          {/* Status Filters */}
-          <div className="unified-inbox-status-filters flex items-center space-x-1 text-[11px] overflow-x-auto pb-1">
-            <button
-              onClick={() => setStatusFilter('ALL')}
-              className={`px-2 py-0.5 rounded-md transition whitespace-nowrap font-semibold ${
-                statusFilter === 'ALL' ? 'bg-orange-500 text-white' : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              All ({conversations.length})
-            </button>
-            <button
-              onClick={() => setStatusFilter('UNREAD')}
-              className={`px-2 py-0.5 rounded-md transition whitespace-nowrap font-semibold ${
-                statusFilter === 'UNREAD' ? 'bg-orange-500 text-white' : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              Unread
-            </button>
-            <button
-              onClick={() => setStatusFilter('AI_ACTIVE')}
-              className={`px-2 py-0.5 rounded-md transition whitespace-nowrap font-semibold ${
-                statusFilter === 'AI_ACTIVE' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              AI Active
-            </button>
-            <button
-              onClick={() => setStatusFilter('HUMAN_HANDOFF')}
-              className={`px-2 py-0.5 rounded transition whitespace-nowrap ${
-                statusFilter === 'HUMAN_HANDOFF'
-                  ? 'bg-amber-600 text-white font-semibold'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              Handoff
-            </button>
-            <button
-              onClick={() => setStatusFilter('HIGH_INTENT')}
-              className={`px-2 py-0.5 rounded transition whitespace-nowrap ${
-                statusFilter === 'HIGH_INTENT'
-                  ? 'bg-emerald-600 text-white font-semibold'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              High Intent
-            </button>
-          </div>
         </div>
 
         {/* Conversation List */}
@@ -779,7 +807,9 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
             </div>
           )}
         </div>
+        </>)}
       </div>
+      <div className="uinbox-resize-handle" role="separator" aria-orientation="vertical" aria-label="Resize conversation list" onPointerDown={(event) => beginPanelResize('list', event)} onPointerMove={movePanelResize} onPointerUp={endPanelResize} onPointerCancel={endPanelResize} onDoubleClick={() => setConversationListWidth(292)} />
 
       {/* Thread + sliding Lead Profile panel share one row, so the panel always stays on the right */}
       <div className="unified-inbox-main flex-1 flex flex-row min-w-0 min-h-0 h-full relative">
@@ -1060,21 +1090,26 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
               )}
             </div>
 
-            {/* Quick Actions & AI Draft generation bar */}
-            <div className="unified-inbox-ai-tools p-2.5 bg-slate-50 border-t border-slate-200/80 flex items-center justify-end text-xs shrink-0">
-              <button
-                onClick={handleAiAutoGenerate}
-                disabled={isGeneratingAi || normalizeChannelMode(channelModes[activeConversation.channel]) === 'OFF'}
-                title={normalizeChannelMode(channelModes[activeConversation.channel]) === 'OFF' ? 'AI drafting is disabled for this channel.' : 'Generate an AI draft from the conversation.'}
-                className="flex items-center space-x-1.5 px-3.5 py-1.5 rounded-lg bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 text-white font-semibold text-xs transition disabled:opacity-50 shadow-xs whitespace-nowrap"
-              >
-                <Sparkles className="w-3.5 h-3.5" />
-                <span>{isGeneratingAi ? 'Consulting KB...' : 'AI Auto-Draft'}</span>
-              </button>
+            {/* Reply / AI Draft tabs */}
+            <div className="uinbox-composer-tabs">
+              <div className="uinbox-composer-tab-group" role="tablist" aria-label="Reply composer mode">
+                <button type="button" role="tab" aria-selected={composerTab === 'REPLY'} className={composerTab === 'REPLY' ? 'is-active' : ''} onClick={() => setComposerTab('REPLY')}>Reply</button>
+                <button type="button" role="tab" aria-selected={composerTab === 'AI_DRAFT'} className={composerTab === 'AI_DRAFT' ? 'is-active' : ''} onClick={() => setComposerTab('AI_DRAFT')}><Sparkles size={13} /> AI Draft</button>
+              </div>
+              <span>Replies are sent via the selected channel</span>
             </div>
+            {composerTab === 'AI_DRAFT' && (
+              <div className="uinbox-ai-draft-tab">
+                {replyText.trim() && !(activeConversation.draftReply && activeConversation.draftReply.status === 'PENDING') ? <div className="uinbox-ai-draft-preview"><FormattedMessage text={replyText} channel={activeConversation.channel} /></div> : <p className="uinbox-ai-draft-empty">{isGeneratingAi ? 'Preparing a context-aware response…' : 'Generate a reply using the conversation and your approved Knowledge Base.'}</p>}
+                <div className="uinbox-ai-draft-actions">
+                  <button type="button" onClick={handleAiAutoGenerate} disabled={isGeneratingAi || normalizeChannelMode(channelModes[activeConversation.channel]) === 'OFF'} className="uinbox-ai-generate-button"><Sparkles size={14} /> {isGeneratingAi ? 'Generating draft…' : replyText.trim() ? 'Regenerate draft' : 'Generate AI draft'}</button>
+                  {replyText.trim() && <button type="button" onClick={() => setComposerTab('REPLY')} className="uinbox-ai-use-button">Use in Reply</button>}
+                </div>
+              </div>
+            )}
 
             {/* AI Draft Reply Awaiting Verification Card (REVIEW Mode) */}
-            {activeConversation.draftReply &&
+            {composerTab === 'AI_DRAFT' && activeConversation.draftReply &&
               activeConversation.draftReply.status === 'PENDING' && (
               <div className="unified-inbox-draft-review p-3.5 bg-orange-50/70 border-t border-b border-orange-200 flex flex-col space-y-2">
                 <div className="flex items-center justify-between text-xs">
@@ -1099,6 +1134,7 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
                         : true;
                       if (!movedToComposer) return;
                       setReplyText(draft.text);
+                      setComposerTab('REPLY');
                       replyBoxRef.current?.focus();
                     }}
                     className="px-3 py-1 rounded-lg bg-white hover:bg-slate-100 text-slate-700 text-xs font-semibold border border-slate-200 transition"
@@ -1133,6 +1169,7 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
             )}
 
             {/* Message Reply Box */}
+            {composerTab === 'REPLY' && (
             <div className="unified-inbox-composer p-3 bg-white border-t border-slate-200/80 shrink-0">
               {/* Channel Selector for Unified Mode */}
               {isUnifiedAllPlatforms && (
@@ -1204,6 +1241,7 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
                 </div>
               )}
             </div>
+            )}
           </>
         ) : (
           <div className="flex-1 flex items-center justify-center text-slate-500 text-sm">
@@ -1215,6 +1253,7 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
       {/* 3. RIGHT COLUMN: Lead Profile 360 & Conversation Memory (Width: 320px) */}
       {activeConversation && activeContact && (
         <>
+        {isProfileOpen && <div className="uinbox-resize-handle uinbox-profile-resize" role="separator" aria-orientation="vertical" aria-label="Resize lead profile panel" onPointerDown={(event) => beginPanelResize('profile', event)} onPointerMove={movePanelResize} onPointerUp={endPanelResize} onPointerCancel={endPanelResize} onDoubleClick={() => setProfilePanelWidth(292)} />}
         {/* Arrow tab: toggles the panel and slides along with its edge */}
         <button
           type="button"
@@ -1223,18 +1262,16 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
           aria-controls="lead-profile-panel"
           aria-label={isProfileOpen ? 'Hide lead profile' : 'Show lead profile'}
           title={isProfileOpen ? 'Hide lead profile' : 'Show lead profile'}
-          className={`unified-inbox-profile-toggle absolute top-4 z-20 w-6 h-12 flex items-center justify-center bg-white text-orange-600 border border-r-0 border-slate-200 rounded-l-xl shadow-[-2px_0_6px_rgba(15,23,42,0.06)] hover:bg-orange-50 transition-[right] duration-300 ease-in-out ${
-            isProfileOpen ? 'right-80' : 'right-0'
-          }`}
+          style={{ right: isProfileOpen ? profilePanelWidth : 0 }}
+          className="unified-inbox-profile-toggle absolute top-4 z-20 w-6 h-12 flex items-center justify-center bg-white text-orange-600 border border-r-0 border-slate-200 rounded-l-xl shadow-[-2px_0_6px_rgba(15,23,42,0.06)] hover:bg-orange-50 transition-[right] duration-300 ease-in-out"
         >
           {isProfileOpen ? <ChevronRight className="w-3.5 h-3.5" /> : <ChevronLeft className="w-3.5 h-3.5" />}
         </button>
 
         {/* Sliding wrapper: animates width; inner panel keeps a fixed 320px so content never squashes */}
         <div
-          className={`unified-inbox-profile-wrapper shrink-0 h-full overflow-hidden transition-[width,opacity] duration-300 ease-in-out ${
-            isProfileOpen ? 'w-80 opacity-100' : 'w-0 opacity-0'
-          }`}
+          className="unified-inbox-profile-wrapper shrink-0 h-full overflow-hidden"
+          style={{ width: isProfileOpen ? profilePanelWidth : 0, flexBasis: isProfileOpen ? profilePanelWidth : 0, opacity: isProfileOpen ? 1 : 0 }}
           aria-hidden={!isProfileOpen}
         >
         <div id="lead-profile-panel" className="unified-inbox-profile w-80 border-l border-slate-200/90 bg-slate-50/50 p-4 overflow-y-auto min-h-0 h-full space-y-4">

@@ -4,7 +4,7 @@ import { EmailDesignStudio } from './EmailDesignStudio';
 import { WhatsAppTemplatesPanel } from './WhatsAppTemplatesPanel';
 import { CompanyAssetsPanel } from './CompanyAssetsPanel';
 
-export type TemplateStudioSection = 'conversation' | 'campaign' | 'whatsapp' | 'assets';
+export type TemplateStudioSection = 'conversation' | 'campaign' | 'website-thankyou' | 'whatsapp' | 'assets';
 
 type Props = {
   tenantId: string;
@@ -16,6 +16,7 @@ type Props = {
 const SECTIONS: Array<{ id: TemplateStudioSection; label: string; description: string; icon: React.ReactNode }> = [
   { id: 'conversation', label: 'Conversation & AI', description: 'Branded designs for inbox emails and AI replies.', icon: <Mail className="h-4 w-4" /> },
   { id: 'campaign', label: 'Campaign Emails', description: 'Complete personalized emails for outbound campaigns.', icon: <LayoutTemplate className="h-4 w-4" /> },
+  { id: 'website-thankyou', label: 'Website Form Thank-you', description: 'Tenant-owned acknowledgement emails for website form submissions.', icon: <Mail className="h-4 w-4" /> },
   { id: 'whatsapp', label: 'WhatsApp Templates', description: 'Utility and marketing templates submitted to Meta.', icon: <MessageCircle className="h-4 w-4" /> },
   { id: 'assets', label: 'Company Assets', description: 'Reusable company logos, images, banners and video cards.', icon: <ImageIcon className="h-4 w-4" /> },
 ];
@@ -80,6 +81,9 @@ export const TemplateStudio: React.FC<Props> = ({
       </div>}
       {visitedSections.has('campaign') && <div className={section === 'campaign' ? 'block' : 'hidden'} aria-hidden={section !== 'campaign'}>
         <EmailDesignStudio tenantId={tenantId} purpose="campaign" initialTemplateId={pendingTemplateId} />
+      </div>}
+      {visitedSections.has('website-thankyou') && <div className={section === 'website-thankyou' ? 'block' : 'hidden'} aria-hidden={section !== 'website-thankyou'}>
+        <EmailDesignStudio tenantId={tenantId} purpose="website-thankyou" initialTemplateId={pendingTemplateId} />
       </div>}
       {visitedSections.has('whatsapp') && <div className={section === 'whatsapp' ? 'block' : 'hidden'} aria-hidden={section !== 'whatsapp'}>
         <WhatsAppTemplatesPanel canEdit={canManageWhatsAppTemplates} />

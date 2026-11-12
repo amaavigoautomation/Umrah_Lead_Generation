@@ -8,7 +8,7 @@ import { decryptSecret, encryptSecret, generateWebhookId, generateWebhookSecret,
 import { getTenantBrand } from './brandService.js';
 import { initKnowledgeStore, retrieveRelevantKnowledge } from './knowledgeService.js';
 import { recordAiCompletionUsage } from './usageService.js';
-import { AI_RESPONSE_FORMATTING_INSTRUCTIONS } from '../shared/aiResponseFormatting.js';
+import { AI_RESPONSE_FORMATTING_INSTRUCTIONS, aiResponseMarkdownToPlainText, renderAiResponseMarkdownHtml } from '../shared/aiResponseFormatting.js';
 import type { EncryptedSecretPayload, TenantContext, WebhookRoute } from '../types/tenant.js';
 
 export type ChatbotResponseLength = 'short' | 'balanced' | 'detailed';
@@ -229,8 +229,9 @@ async function ensureKnowledgeLoaded(ctx: TenantContext): Promise<void> {
 export async function generateTenantChatbotReply(tenantId: string, payload: any): Promise<{
   success: true;
   conversationId: string;
-  messages: Array<{ id: string; type: 'text'; format: 'markdown'; text: string }>;
+  messages: Array<{ id: string; type: 'text'; format: 'html'; text: string; html: string }>;
   responseText: string;
+  responseHtml: string;
   knowledgeSources: string[];
 }> {
   const message = String(payload?.message ?? payload?.text ?? '').trim();
@@ -328,7 +329,16 @@ export async function generateTenantChatbotReply(tenantId: string, payload: any)
   if (!content) throw new ChatbotWebhookError('The AI provider returned an empty response. Please retry.', 502);
 
   const texts = parseModelMessages(content, preferences.bubbleMode);
-  const messages = texts.map((text) => ({ id: crypto.randomUUID(), type: 'text' as const, format: 'markdown' as const, text: text.slice(0, 6000) }));
+  const messages = texts.map((rawText) => {
+    const markdown = String(rawText || '').slice(0, 6000);
+    return {
+      id: crypto.randomUUID(),
+      type: 'text' as const,
+      format: 'html' as const,
+      text: aiResponseMarkdownToPlainText(markdown).slice(0, 6000),
+      html: renderAiResponseMarkdownHtml(markdown),
+    };
+  });
   const suppliedConversationId = String(payload?.conversationId || '').trim().slice(0, 128);
   const conversationId = suppliedConversationId || crypto.randomUUID();
   return {
@@ -336,6 +346,7 @@ export async function generateTenantChatbotReply(tenantId: string, payload: any)
     conversationId,
     messages,
     responseText: messages.map((item) => item.text).join('\n\n'),
+    responseHtml: messages.map((item) => item.html).join(''),
     knowledgeSources: chunks.map((chunk) => chunk.title),
   };
 }

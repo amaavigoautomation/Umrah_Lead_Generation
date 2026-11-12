@@ -14,6 +14,8 @@ const InlineText: React.FC<{ text: string }> = ({ text }) => (
       if (segment.type === 'strong') return <strong key={key} className="font-semibold">{segment.text}</strong>;
       if (segment.type === 'em') return <em key={key}>{segment.text}</em>;
       if (segment.type === 'strike') return <del key={key}>{segment.text}</del>;
+      if (segment.type === 'underline') return <u key={key} className="underline decoration-current underline-offset-2">{segment.text}</u>;
+      if (segment.type === 'highlight') return <mark key={key} className="rounded bg-amber-100 px-1 text-inherit">{segment.text}</mark>;
       if (segment.type === 'code') return <code key={key} className="rounded bg-slate-200/70 px-1 py-0.5 font-mono text-[0.95em]">{segment.text}</code>;
       return <React.Fragment key={key}>{segment.text}</React.Fragment>;
     })}

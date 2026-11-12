@@ -105,8 +105,9 @@ export const ChatbotIntegrationPanel: React.FC<{ tenantId: string; canEdit: bool
     '  });',
     '  const data = await response.json();',
     '  if (!response.ok) throw new Error(data.error || "Chatbot request failed");',
-    '  // data.messages[*].text uses Markdown (**bold**, _italic_, - lists). Render with a safe Markdown renderer; never inject raw HTML.',
-    '  return data; // Render data.messages as separate chat bubbles.',
+    '  // message.text is a clean plain-text fallback; message.html is safe server-rendered rich content.',
+    '  // Render each message.html in its own chat bubble, or use message.text in plain-text-only widgets.',
+    '  return data;',
     '}',
   ].join('\n'), []);
 

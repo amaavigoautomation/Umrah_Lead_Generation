@@ -585,7 +585,7 @@ export async function sendLiveEmail(params: SendMailParams): Promise<SendMailRes
   const { html: inlinedHtml, attachments: inlinedAttachments } = await inlineEmailAssets(htmlToSend, params.attachments);
   const effectiveParams: SendMailParams = {
     ...params,
-    text: params.applyWorkspaceDesign ? aiResponseMarkdownToPlainText(params.text) : params.text,
+    text: aiResponseMarkdownToPlainText(params.text),
     html: inlinedHtml,
     attachments: inlinedAttachments,
   };

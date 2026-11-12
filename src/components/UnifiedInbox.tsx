@@ -1,4 +1,5 @@
 import React, { useState, Suspense, useRef, useLayoutEffect, useEffect } from 'react';
+import './UnifiedInbox.css';
 import { stripQuotedReply } from '../shared/quotedReply';
 import { STOP_FOLLOWUPS_WHEN_DEMO_BOOKED } from '../shared/followUpPolicy';
 import { lazyNamed } from '../lazyLoad';
@@ -597,13 +598,13 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
   };
 
   return (
-    <div className="flex flex-col lg:flex-row h-full w-full bg-white text-slate-900 overflow-hidden relative">
+    <div className="unified-inbox-shell flex flex-col lg:flex-row h-full w-full bg-white text-slate-900 overflow-hidden relative">
       {/* 1. LEFT COLUMN: Conversation List & Filters (Width: 340px) */}
-      <div className="w-full lg:w-84 border-r border-slate-200/90 flex flex-col bg-slate-50/60 h-full min-h-0 shrink-0">
+      <div className="unified-inbox-sidebar w-full lg:w-84 border-r border-slate-200/90 flex flex-col bg-slate-50/60 h-full min-h-0 shrink-0">
         {/* Search Header */}
-        <div className="p-3 border-b border-slate-200 space-y-2 shrink-0">
+        <div className="unified-inbox-sidebar-tools p-3 border-b border-slate-200 space-y-2 shrink-0">
           {/* Live Inbound Mailbox & WhatsApp Triggers */}
-          <div className="space-y-1.5">
+          <div className="unified-inbox-connections space-y-1.5">
             <div className="flex items-center space-x-1.5">
               {connected.mailbox && (
                 <button
@@ -665,7 +666,7 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
           </div>
 
           {/* Channel Pills */}
-          <div className="flex space-x-1 overflow-x-auto pb-1 scrollbar-none text-xs">
+          <div className="unified-inbox-channel-filters flex space-x-1 overflow-x-auto pb-1 scrollbar-none text-xs">
             {['ALL', 'EMAIL', 'WHATSAPP', 'WEBSITE', 'INSTAGRAM', 'LINKEDIN'].map((ch) => (
               <button
                 key={ch}
@@ -682,7 +683,7 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
           </div>
 
           {/* Status Filters */}
-          <div className="flex items-center space-x-1 text-[11px] overflow-x-auto pb-1">
+          <div className="unified-inbox-status-filters flex items-center space-x-1 text-[11px] overflow-x-auto pb-1">
             <button
               onClick={() => setStatusFilter('ALL')}
               className={`px-2 py-0.5 rounded-md transition whitespace-nowrap font-semibold ${
@@ -731,7 +732,7 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
         </div>
 
         {/* Conversation List */}
-        <div className="flex-1 overflow-y-auto min-h-0 divide-y divide-slate-200">
+        <div className="unified-inbox-conversation-list flex-1 overflow-y-auto min-h-0 divide-y divide-slate-200">
           {filteredConversations.length === 0 ? (
             <div className="p-8 text-center text-slate-500 text-xs">
               No conversations found matching filters.
@@ -754,7 +755,7 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
                       onMarkAsRead?.(conv.conversationId);
                     }
                   }}
-                  className={`p-3 cursor-pointer transition relative ${
+                  className={`unified-inbox-conversation-item p-3 cursor-pointer transition relative ${
                     isSelected
                       ? 'bg-orange-50/90 border-l-4 border-orange-500 shadow-2xs'
                       : isUnread
@@ -860,13 +861,13 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
       </div>
 
       {/* Thread + sliding Lead Profile panel share one row, so the panel always stays on the right */}
-      <div className="flex-1 flex flex-row min-w-0 min-h-0 h-full relative">
+      <div className="unified-inbox-main flex-1 flex flex-row min-w-0 min-h-0 h-full relative">
       {/* 2. MIDDLE COLUMN: Conversation & Message Thread UI */}
-      <div className="flex-1 flex flex-col bg-white overflow-hidden min-w-0 min-h-0 h-full">
+      <div className="unified-inbox-thread flex-1 flex flex-col bg-white overflow-hidden min-w-0 min-h-0 h-full">
         {/* Active Conversation Header */}
         {activeConversation && activeContact ? (
           <>
-            <div className="p-3.5 border-b border-slate-200/80 bg-white flex items-center justify-between shrink-0">
+            <div className="unified-inbox-thread-header p-3.5 border-b border-slate-200/80 bg-white flex items-center justify-between shrink-0">
               <div className="flex items-center space-x-3">
                 <div className="w-9 h-9 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center font-bold text-slate-800 text-sm shadow-2xs">
                   {activeContact.firstName?.[0]}
@@ -918,7 +919,7 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
                   <button
                     onClick={() => handleToggleAutoFollowUp(!isAutoFollowUpUiActive)}
                     disabled={isTogglingAutoFollowUp || (activeLeadHasBookedDemo && !isAutoFollowUpUiActive)}
-                    className={`flex items-center space-x-1.5 px-2.5 py-1 rounded-lg text-xs font-bold border transition ${
+                    className={`unified-inbox-followup-toggle flex items-center space-x-1.5 px-2.5 py-1 rounded-lg text-xs font-bold border transition ${
                       isAutoFollowUpUiActive
                         ? 'bg-emerald-50 border-emerald-300 text-emerald-800 hover:bg-emerald-100'
                         : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
@@ -984,7 +985,7 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
             </div>
 
             {activeConversation.humanHandoff && (
-              <div className="px-4 py-3 bg-amber-50 border-b border-amber-200 text-xs" role="status" aria-live="polite">
+              <div className="unified-inbox-handoff px-4 py-3 bg-amber-50 border-b border-amber-200 text-xs" role="status" aria-live="polite">
                 <div className="flex items-start gap-2">
                   <AlertTriangle className="w-4 h-4 text-amber-700 mt-0.5 shrink-0" />
                   <div className="min-w-0">
@@ -998,7 +999,7 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
 
             {/* Compact Auto Follow-Up Status Bar */}
             {activeLead && (
-              <div className="px-3.5 py-1.5 bg-orange-50/80 border-b border-orange-100 text-xs flex items-center justify-between">
+              <div className="unified-inbox-followup-status px-3.5 py-1.5 bg-orange-50/80 border-b border-orange-100 text-xs flex items-center justify-between">
                 <div className="flex items-center space-x-2">
                   <span className="flex items-center space-x-1.5">
                     <span className={`w-2 h-2 rounded-full ${isAutoFollowUpUiActive ? 'bg-orange-500 animate-pulse' : 'bg-slate-400'}`} />
@@ -1037,7 +1038,7 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
             )}
 
             {activeLead?.aiAutoFollowUp && (
-              <div className="px-3.5 py-1.5 bg-emerald-50/80 border-b border-emerald-100 text-xs flex items-center justify-between">
+              <div className="unified-inbox-scheduled-status px-3.5 py-1.5 bg-emerald-50/80 border-b border-emerald-100 text-xs flex items-center justify-between">
                 <span className="font-semibold text-slate-800">CRM-Scheduled One-Time Message:</span>
                 {activeLead.aiAutoFollowUp.status === 'scheduled' ? (
                   <span className="text-emerald-700 font-medium">
@@ -1059,7 +1060,7 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
 
             {/* Email Metadata banner if email channel */}
             {!isUnifiedAllPlatforms && activeConversation.channel === 'EMAIL' && (
-              <div className="px-4 py-2 bg-slate-50 border-b border-slate-200 text-xs text-slate-700 flex items-center justify-between">
+              <div className="unified-inbox-email-subject px-4 py-2 bg-slate-50 border-b border-slate-200 text-xs text-slate-700 flex items-center justify-between">
                 <div className="flex items-center space-x-2 truncate">
                   <span className="font-semibold text-slate-500">Subject:</span>
                   <span className="font-medium text-slate-900 truncate">
@@ -1082,7 +1083,7 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
 
             {/* Unified Stream Notification Banner */}
             {isUnifiedAllPlatforms && (
-              <div className="px-4 py-1.5 bg-orange-50 border-b border-orange-200 text-[11px] text-orange-950 flex items-center justify-between">
+              <div className="unified-inbox-unified-stream px-4 py-1.5 bg-orange-50 border-b border-orange-200 text-[11px] text-orange-950 flex items-center justify-between">
                 <div className="flex items-center space-x-2">
                   <Globe className="w-3.5 h-3.5 text-orange-600" />
                   <span>
@@ -1096,7 +1097,7 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
             )}
 
             {/* Message Thread Scroll Area */}
-            <div ref={threadScrollRef} onScroll={onThreadScroll} className="flex-1 overflow-y-auto min-h-0 p-4 space-y-4">
+            <div ref={threadScrollRef} onScroll={onThreadScroll} className="unified-inbox-message-timeline flex-1 overflow-y-auto min-h-0 p-4 space-y-4">
               {displayMessages.length === 0 ? (
                 <div className="text-center py-12 text-slate-500 text-xs">
                   No messages on this platform yet. Use &ldquo;Simulate Inbound Platform Msg&rdquo; or dispatch cold outreach.
@@ -1112,7 +1113,7 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
                       className={`flex flex-col ${isIncoming ? 'items-start' : 'items-end'}`}
                     >
                       {/* Sender label & Platform Badge */}
-                      <div className="flex items-center space-x-2 text-[11px] text-slate-400 mb-1 px-1">
+                      <div className="unified-inbox-message-meta flex items-center space-x-2 text-[11px] text-slate-400 mb-1 px-1">
                         {/* Channel Badge */}
                         <span
                           className={`px-1.5 py-0.2 rounded text-[10px] font-semibold border flex items-center space-x-1 ${getChannelColor(
@@ -1143,7 +1144,7 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
 
                       {/* Bubble */}
                       <div
-                        className={`max-w-xl p-3.5 rounded-2xl text-xs leading-relaxed ${
+                        className={`unified-inbox-message-bubble ${isIncoming ? 'is-incoming' : isAi ? 'is-ai' : 'is-agent'} max-w-xl p-3.5 rounded-2xl text-xs leading-relaxed ${
                           isIncoming
                             ? 'bg-slate-100 text-slate-900 rounded-tl-none border border-slate-200/80 shadow-2xs'
                             : isAi
@@ -1219,7 +1220,7 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
             </div>
 
             {/* Quick Actions & AI Draft generation bar */}
-            <div className="p-2.5 bg-slate-50 border-t border-slate-200/80 flex items-center justify-end text-xs shrink-0">
+            <div className="unified-inbox-ai-tools p-2.5 bg-slate-50 border-t border-slate-200/80 flex items-center justify-end text-xs shrink-0">
               <button
                 onClick={handleAiAutoGenerate}
                 disabled={isGeneratingAi || normalizeChannelMode(channelModes[activeConversation.channel]) === 'OFF'}
@@ -1234,7 +1235,7 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
             {/* AI Draft Reply Awaiting Verification Card (REVIEW Mode) */}
             {activeConversation.draftReply &&
               activeConversation.draftReply.status === 'PENDING' && (
-              <div className="p-3.5 bg-orange-50/70 border-t border-b border-orange-200 flex flex-col space-y-2">
+              <div className="unified-inbox-draft-review p-3.5 bg-orange-50/70 border-t border-b border-orange-200 flex flex-col space-y-2">
                 <div className="flex items-center justify-between text-xs">
                   <span className="flex items-center space-x-1.5 font-bold text-orange-800">
                     <Sparkles className="w-4 h-4 text-orange-500" />
@@ -1291,7 +1292,7 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
             )}
 
             {/* Message Reply Box */}
-            <div className="p-3 bg-white border-t border-slate-200/80 shrink-0">
+            <div className="unified-inbox-composer p-3 bg-white border-t border-slate-200/80 shrink-0">
               {/* Channel Selector for Unified Mode */}
               {isUnifiedAllPlatforms && (
                 <div className="flex items-center space-x-2 mb-2 text-xs">
@@ -1381,7 +1382,7 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
           aria-controls="lead-profile-panel"
           aria-label={isProfileOpen ? 'Hide lead profile' : 'Show lead profile'}
           title={isProfileOpen ? 'Hide lead profile' : 'Show lead profile'}
-          className={`absolute top-4 z-20 w-6 h-12 flex items-center justify-center bg-white text-orange-600 border border-r-0 border-slate-200 rounded-l-xl shadow-[-2px_0_6px_rgba(15,23,42,0.06)] hover:bg-orange-50 transition-[right] duration-300 ease-in-out ${
+          className={`unified-inbox-profile-toggle absolute top-4 z-20 w-6 h-12 flex items-center justify-center bg-white text-orange-600 border border-r-0 border-slate-200 rounded-l-xl shadow-[-2px_0_6px_rgba(15,23,42,0.06)] hover:bg-orange-50 transition-[right] duration-300 ease-in-out ${
             isProfileOpen ? 'right-80' : 'right-0'
           }`}
         >
@@ -1390,12 +1391,12 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
 
         {/* Sliding wrapper: animates width; inner panel keeps a fixed 320px so content never squashes */}
         <div
-          className={`shrink-0 h-full overflow-hidden transition-[width,opacity] duration-300 ease-in-out ${
+          className={`unified-inbox-profile-wrapper shrink-0 h-full overflow-hidden transition-[width,opacity] duration-300 ease-in-out ${
             isProfileOpen ? 'w-80 opacity-100' : 'w-0 opacity-0'
           }`}
           aria-hidden={!isProfileOpen}
         >
-        <div id="lead-profile-panel" className="w-80 border-l border-slate-200/90 bg-slate-50/50 p-4 overflow-y-auto min-h-0 h-full space-y-4">
+        <div id="lead-profile-panel" className="unified-inbox-profile w-80 border-l border-slate-200/90 bg-slate-50/50 p-4 overflow-y-auto min-h-0 h-full space-y-4">
           {/* Customer Card Header */}
           <div className="border-b border-slate-200 pb-3">
             <div className="flex items-center justify-between">

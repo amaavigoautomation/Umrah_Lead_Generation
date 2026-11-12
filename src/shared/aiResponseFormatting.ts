@@ -2,7 +2,7 @@
  * Shared Markdown subset for AI-generated customer replies.
  * This format is translated for each channel at the rendering/sending boundary.
  */
-export type AiResponseSegmentType = 'text' | 'strong' | 'em' | 'strike' | 'code';
+export type AiResponseSegmentType = 'text' | 'strong' | 'em' | 'strike' | 'code' | 'underline' | 'highlight';
 export interface AiResponseSegment { type: AiResponseSegmentType; text: string; }
 export type AiResponseBlock =
   | { type: 'paragraph'; text: string }
@@ -14,14 +14,15 @@ export const AI_RESPONSE_FORMATTING_INSTRUCTIONS = [
   'Use restrained, professional Markdown formatting to make the answer easy to scan.',
   'Use **bold** selectively for important labels, prices, dates, deadlines, key conditions and next steps; do not bold whole paragraphs.',
   'Use _italics_ sparingly for secondary notes or qualifications.',
-  'For three or more related items, use a concise - bullet list; use a numbered list only for sequential steps.',
+  'Use ++underline++ very sparingly for a short important phrase and ==highlight== only for a critical short note; avoid decorating whole paragraphs.',
+  'For three or more related items, use a concise - bullet list; use a numbered list only for sequential steps.'
   'Use short paragraphs and, only for longer replies, simple ## headings.',
   'Do not add decorative separators, unnecessary emojis, tables, or excessive formatting.',
   'Generate one channel-neutral Markdown source. The application converts it to each channel’s native display format; never write platform-specific markup or HTML.',
   'Never change, infer or invent facts while formatting. Do not output HTML or fenced code blocks.'
 ].join(' ');
 
-const INLINE_PATTERN = /(\*\*[^*\n]+?\*\*|__[^_\n]+?__|~~[^~\n]+?~~|`[^`\n]+`|(?<!\*)\*[^*\n]+?\*(?!\*)|(?<!_)_[^_\n]+?_(?!_)|(?<!~)~[^~\n]+?~(?!~))/g;
+const INLINE_PATTERN = /(\+\+[^+\n]+?\+\+|==[^=\n]+?==|\*\*[^*\n]+?\*\*|__[^_\n]+?__|~~[^~\n]+?~~|`[^`\n]+`|(?<!\*)\*[^*\n]+?\*(?!\*)|(?<!_)_[^_\n]+?_(?!_)|(?<!~)~[^~\n]+?~(?!~))/g;
 
 export function parseAiResponseInline(input: string): AiResponseSegment[] {
   const text = String(input || ''), segments: AiResponseSegment[] = [];
@@ -31,7 +32,9 @@ export function parseAiResponseInline(input: string): AiResponseSegment[] {
   while ((match = INLINE_PATTERN.exec(text)) !== null) {
     if (match.index > cursor) segments.push({ type: 'text', text: text.slice(cursor, match.index) });
     const token = match[0];
-    if (token.startsWith('**') || token.startsWith('__')) segments.push({ type: 'strong', text: token.slice(2, -2) });
+    if (token.startsWith('++')) segments.push({ type: 'underline', text: token.slice(2, -2) });
+    else if (token.startsWith('==')) segments.push({ type: 'highlight', text: token.slice(2, -2) });
+    else if (token.startsWith('**') || token.startsWith('__')) segments.push({ type: 'strong', text: token.slice(2, -2) });
     else if (token.startsWith('~~')) segments.push({ type: 'strike', text: token.slice(2, -2) });
     else if (token.startsWith('~')) segments.push({ type: 'strike', text: token.slice(1, -1) });
     else if (token.startsWith('`')) segments.push({ type: 'code', text: token.slice(1, -1) });
@@ -77,6 +80,8 @@ function inlineHtml(value: string): string {
       case 'strong': return '<strong>' + safe + '</strong>';
       case 'em': return '<em>' + safe + '</em>';
       case 'strike': return '<del>' + safe + '</del>';
+      case 'underline': return '<u style="text-decoration:underline;text-underline-offset:2px">' + safe + '</u>';
+      case 'highlight': return '<mark style="background-color:#fff1bd;color:inherit;padding:0 3px;border-radius:3px">' + safe + '</mark>';
       case 'code': return '<code style="font-family:Consolas,monospace;background:#F1F3F5;padding:1px 3px">' + safe + '</code>';
       default: return safe;
     }
@@ -102,14 +107,26 @@ export function aiResponseMarkdownToPlainText(input: string): string {
     return parseAiResponseInline(block.text).map((s) => s.text).join('');
   }).join('\n\n').trim();
 }
+function inlineWhatsApp(value: string): string {
+  return parseAiResponseInline(value).map((segment) => {
+    if (segment.type === 'strong' || segment.type === 'underline' || segment.type === 'highlight') return '*' + segment.text + '*';
+    if (segment.type === 'em') return '_' + segment.text + '_';
+    if (segment.type === 'strike') return '~' + segment.text + '~';
+    if (segment.type === 'code') return segment.text;
+    return segment.text;
+  }).join('');
+}
+
 export function aiResponseMarkdownToWhatsApp(input: string): string {
-  return String(input || '')
-    .replace(/\*\*([^*\n]+)\*\*/g, '*$1*')
-    .replace(/__([^_\n]+)__/g, '*$1*')
-    .replace(/~~([^~\n]+)~~/g, '~$1~')
-    .replace(/^\s*#{1,3}\s+(.+?)\s*$/gm, '*$1*')
-    .replace(/^\s*[-*]\s+/gm, '• ')
-    .trim();
+  return parseAiResponseMarkdown(input).map((block) => {
+    if (block.type === 'heading') {
+      const heading = aiResponseMarkdownToPlainText(block.text);
+      return heading ? '*' + heading + '*' : '';
+    }
+    if (block.type === 'ul') return block.items.map((item) => '• ' + inlineWhatsApp(item)).join('\n');
+    if (block.type === 'ol') return block.items.map((item, index) => (index + 1) + '. ' + inlineWhatsApp(item)).join('\n');
+    return inlineWhatsApp(block.text);
+  }).filter(Boolean).join('\n\n').trim();
 }
 
 

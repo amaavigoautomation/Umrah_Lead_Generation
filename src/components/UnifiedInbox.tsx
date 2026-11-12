@@ -45,6 +45,7 @@ import {
 import { normalizeChannelMode } from '../shared/channelModes';
 import { generateOmnichannelResponse } from '../services/aiService';
 import { FormattedMessage } from './FormattedMessage';
+import { aiResponseMarkdownToPlainText } from '../shared/aiResponseFormatting';
 import { useBrand } from '../context/BrandContext';
 import {
   InboundEmailPayload,
@@ -706,7 +707,7 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
                   </p>
 
                   <p className={`text-xs mt-1 line-clamp-2 leading-relaxed ${isUnread ? 'text-slate-900 font-bold' : 'text-slate-700 font-normal'}`}>
-                    {conv.lastMessageText || 'New conversation started'}
+                    {aiResponseMarkdownToPlainText(conv.lastMessageText || 'New conversation started')}
                   </p>
 
                   <div className="flex items-center justify-between mt-2 pt-1 border-t border-slate-200/80 text-[10px]">
@@ -1262,6 +1263,32 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
             </div>
           </div>
 
+          {/* Shared AI / Human conversation control; mirrors the quick action in the thread header. */}
+          <div className="unified-inbox-conversation-control p-3 bg-white rounded-2xl border border-slate-200 shadow-2xs space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 min-w-0">
+                <div className={"flex h-8 w-8 shrink-0 items-center justify-center rounded-lg " + (activeConversation.humanHandoff ? 'bg-amber-50 text-amber-700' : 'bg-blue-50 text-blue-700')}>
+                  {activeConversation.humanHandoff ? <UserCheck className="w-4 h-4" /> : <Bot className="w-4 h-4" />}
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs font-bold text-slate-800">Conversation control</p>
+                  <p className="text-[10px] text-slate-500 mt-0.5">
+                    {activeConversation.humanHandoff ? 'A human is managing this conversation' : activeConversation.aiEnabled ? 'AI is managing this conversation' : 'AI auto-reply is paused'}
+                  </p>
+                </div>
+              </div>
+              <span className={"shrink-0 rounded-full border px-2 py-1 text-[9px] font-bold " + (activeConversation.humanHandoff ? 'border-amber-200 bg-amber-50 text-amber-700' : activeConversation.aiEnabled ? 'border-blue-200 bg-blue-50 text-blue-700' : 'border-slate-200 bg-slate-50 text-slate-600')}>
+                {activeConversation.humanHandoff ? 'HUMAN' : activeConversation.aiEnabled ? 'AI ACTIVE' : 'AI PAUSED'}
+              </span>
+            </div>
+            <button type="button" onClick={() => onToggleAi(activeConversation.conversationId, Boolean(activeConversation.humanHandoff))}
+              title={activeConversation.humanHandoff ? 'Resume AI for this conversation' : 'Take over this conversation as a human'}
+              aria-label={activeConversation.humanHandoff ? 'Resume AI' : 'Take over as human'}
+              className={"flex w-full items-center justify-center gap-2 rounded-lg px-3 py-2 text-[11px] font-bold transition " + (activeConversation.humanHandoff ? 'bg-emerald-600 text-white hover:bg-emerald-700' : 'border border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100')}>
+              {activeConversation.humanHandoff ? <Bot className="h-3.5 w-3.5" /> : <User className="h-3.5 w-3.5" />}
+              {activeConversation.humanHandoff ? 'Resume AI' : 'Take Over (Human)'}
+            </button>
+          </div>
           {/* Recurring follow-up controls live with lead context, not in the conversation toolbar. */}
           {activeLead && (
             <div className="unified-inbox-followup-card p-3 bg-white rounded-2xl border border-slate-200 shadow-2xs space-y-2">

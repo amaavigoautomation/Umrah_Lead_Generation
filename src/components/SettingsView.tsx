@@ -1,16 +1,19 @@
 import React, { useState } from 'react';
 import {
+  Activity,
+  Bot,
+  CheckCircle,
+  ChevronRight,
+  CreditCard,
+  KeyRound,
+  Mail,
+  Plug,
+  Save,
   Settings,
   Shield,
-  Mail,
+  ShieldCheck,
+  Users,
   Zap,
-  CheckCircle,
-  Save,
-  Radio,
-  Clock,
-  Key,
-  Globe,
-  RefreshCw,
 } from 'lucide-react';
 import { SystemSettings, Channel, ChannelMode, AppUser } from '../types';
 import { UserManagementView } from './UserManagementView';
@@ -49,11 +52,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [isSaved, setIsSaved] = useState(false);
   const [isSavingSettings, setIsSavingSettings] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [openAiKeyInput, setOpenAiKeyInput] = useState('');
-  const [isOpenAiConfigured, setIsOpenAiConfigured] = useState(false);
-  const [maskedOpenAiKey, setMaskedOpenAiKey] = useState('');
-  const [isSavingOpenAiKey, setIsSavingOpenAiKey] = useState(false);
-  const [openAiKeySaveStatus, setOpenAiKeySaveStatus] = useState<string | null>(null);
+  const [aiCredentialStatus, setAiCredentialStatus] = useState<'loading' | 'configured' | 'missing' | 'unavailable'>('loading');
+  const [aiModel, setAiModel] = useState('gpt-4o-mini');
+  const [activeSection, setActiveSection] = useState<'overview' | 'ai' | 'channels' | 'email' | 'team' | 'billing'>('overview');
   const [handoffKeywordsText, setHandoffKeywordsText] = useState((settings.humanHandoffKeywords || []).join('\n'));
   const handoffRules = formData.humanHandoffRules || { explicitRequest: true, frustration: true, aiUnableToResolve: true, failureThreshold: 2 };
 
@@ -63,44 +64,22 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   }, [settings]);
 
   React.useEffect(() => {
-    // Fetch current OpenAI key status
-    fetch('/api/ai/openai-key')
-      .then((res) => res.json())
-      .then((data) => {
-        if (data) {
-          setIsOpenAiConfigured(Boolean(data.configured));
-          if (data.maskedKey) setMaskedOpenAiKey(data.maskedKey);
-        }
+    const controller = new AbortController();
+    fetch('/api/health', { signal: controller.signal })
+      .then((res) => {
+        if (!res.ok) throw new Error('AI status unavailable');
+        return res.json();
       })
-      .catch((err) => console.warn('Notice loading OpenAI key status:', err));
-  }, []);
-
-  const handleSaveOpenAiKey = async () => {
-    if (!openAiKeyInput.trim()) return;
-    setIsSavingOpenAiKey(true);
-    setOpenAiKeySaveStatus(null);
-    try {
-      const res = await fetch('/api/ai/openai-key', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ apiKey: openAiKeyInput.trim() }),
+      .then((data) => {
+        if (data?.status !== 'healthy') throw new Error('AI status unavailable');
+        setAiCredentialStatus(data.openaiKeyPresent ? 'configured' : 'missing');
+        setAiModel(String(data.openaiModel || 'gpt-4o-mini'));
+      })
+      .catch((error) => {
+        if (error?.name !== 'AbortError') setAiCredentialStatus('unavailable');
       });
-      const data = await res.json();
-      if (res.ok && data.success) {
-        setIsOpenAiConfigured(true);
-        setMaskedOpenAiKey(`${openAiKeyInput.trim().slice(0, 7)}...${openAiKeyInput.trim().slice(-4)}`);
-        setOpenAiKeyInput('');
-        setOpenAiKeySaveStatus('OpenAI API Key saved & active!');
-      } else {
-        setOpenAiKeySaveStatus('Failed to save API key');
-      }
-    } catch (err: any) {
-      setOpenAiKeySaveStatus(err?.message || 'Error saving key');
-    } finally {
-      setIsSavingOpenAiKey(false);
-      setTimeout(() => setOpenAiKeySaveStatus(null), 3500);
-    }
-  };
+    return () => controller.abort();
+  }, []);
 
   const channels: Channel[] = ['WHATSAPP', 'EMAIL', 'INSTAGRAM', 'FACEBOOK', 'LINKEDIN', 'WEBSITE'];
 
@@ -129,31 +108,142 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     }
   };
 
+  const sectionItems = [
+    { id: 'overview' as const, label: 'Overview', description: 'Workspace configuration at a glance', icon: <Activity className="h-4 w-4" /> },
+    { id: 'ai' as const, label: 'AI & Automation', description: 'AI behaviour, handoff and runtime', icon: <Bot className="h-4 w-4" /> },
+    { id: 'channels' as const, label: 'Channels & Integrations', description: 'Connected channels and website tools', icon: <Plug className="h-4 w-4" /> },
+    { id: 'email' as const, label: 'Email & Mailboxes', description: 'Sending domain and inbound email', icon: <Mail className="h-4 w-4" /> },
+    ...(canEditEmail ? [
+      { id: 'team' as const, label: 'Team & Access', description: 'Users, roles and module access', icon: <Users className="h-4 w-4" /> },
+      { id: 'billing' as const, label: 'Billing & Usage', description: 'Plan, consumption and payments', icon: <CreditCard className="h-4 w-4" /> },
+    ] : []),
+  ];
+  const activeSectionMeta = sectionItems.find((item) => item.id === activeSection) || sectionItems[0];
+  const modeCounts = channels.reduce((counts, channel) => {
+    const mode = normalizeChannelMode(formData.channelModes?.[channel]);
+    counts[mode] += 1;
+    return counts;
+  }, { AUTO: 0, REVIEW: 0, OFF: 0 });
+  const overviewCards = sectionItems.filter((item) => item.id !== 'overview');
+
   return (
-    <div className="max-w-5xl mx-auto p-4 space-y-6 font-sans">
-      <div className="bg-white border border-slate-200/90 rounded-2xl p-6 shadow-sm flex items-center justify-between">
-        <div>
-          <div className="flex items-center space-x-2">
-            <Settings className="w-6 h-6 text-orange-500" />
-            <h2 className="text-xl font-extrabold text-slate-900">System Settings & Channel Configurations</h2>
+    <div className="w-full max-w-7xl mx-auto space-y-4 font-sans">
+      <header className="rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 text-orange-600">
+              <Settings className="h-5 w-5" />
+              <span className="text-[10px] font-bold uppercase tracking-[0.18em]">Workspace configuration</span>
+            </div>
+            <h1 className="mt-1 text-xl font-extrabold text-slate-950 sm:text-2xl">Settings</h1>
+            <p className="mt-1 max-w-2xl text-xs leading-relaxed text-slate-500">
+              Manage AI behaviour, channels, email, team access and billing from one organized workspace.
+            </p>
           </div>
-          <p className="text-xs text-slate-500 mt-1 font-medium">
-            Configure operational modes (AUTO, REVIEW, OFF), verified email identities,
-            and debounce intervals.
-          </p>
+          <div className="flex shrink-0 flex-col items-stretch gap-1 sm:items-end">
+            {(activeSection === 'ai' || activeSection === 'email') && (
+              <button
+                type="button"
+                onClick={handleSave}
+                disabled={isSavingSettings || !canEditEmail}
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-orange-500 px-4 py-2.5 text-xs font-bold text-white shadow-sm transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-50"
+                title={!canEditEmail ? 'Only workspace admins can save these settings' : 'Save AI, handoff, channel, email signature and runtime settings'}
+              >
+                {isSaved ? <CheckCircle className="h-4 w-4" /> : <Save className="h-4 w-4" />}
+                <span>{isSavingSettings ? 'Saving changes…' : isSaved ? 'Changes saved' : 'Save settings'}</span>
+              </button>
+            )}
+            {saveError ? <span role="alert" className="text-[11px] text-rose-600">{saveError}</span> : (
+              (activeSection === 'ai' || activeSection === 'email') && <span className="text-[10px] text-slate-400">Saves AI modes, handoff, runtime preferences and email signature</span>
+            )}
+          </div>
         </div>
+      </header>
 
-        <div className="flex flex-col items-end gap-1">
-          <button onClick={handleSave} disabled={isSavingSettings} className="flex items-center space-x-1.5 px-4 py-2.5 rounded-xl bg-orange-500 hover:bg-orange-600 disabled:opacity-60 text-white text-xs font-bold transition shadow-md shadow-orange-500/20">
-            {isSaved ? <CheckCircle className="w-4 h-4 text-white" /> : <Save className="w-4 h-4" />}
-            <span>{isSavingSettings ? 'Saving…' : isSaved ? 'Saved!' : 'Save Settings'}</span>
-          </button>
-          {saveError && <span role="alert" className="text-xs text-red-600">{saveError}</span>}
-        </div>
-      </div>
+      <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[228px_minmax(0,1fr)]">
+        <aside className="rounded-2xl border border-slate-200 bg-white p-2 shadow-sm lg:sticky lg:top-4">
+          <div className="hidden px-3 pb-2 pt-2 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400 lg:block">Settings menu</div>
+          <nav aria-label="Settings sections" className="flex gap-1.5 overflow-x-auto pb-1 lg:flex-col lg:overflow-visible lg:pb-0">
+            {sectionItems.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => setActiveSection(item.id)}
+                aria-current={activeSection === item.id ? 'page' : undefined}
+                className={`group flex min-w-max items-center gap-2.5 rounded-xl border px-3 py-2.5 text-left transition lg:w-full ${activeSection === item.id ? 'border-orange-200 bg-orange-50 text-orange-800' : 'border-transparent text-slate-600 hover:border-slate-200 hover:bg-slate-50 hover:text-slate-900'}`}
+              >
+                <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${activeSection === item.id ? 'bg-white text-orange-600 shadow-sm' : 'bg-slate-100 text-slate-500 group-hover:text-slate-700'}`}>{item.icon}</span>
+                <span className="min-w-0">
+                  <span className="block whitespace-nowrap text-xs font-bold">{item.label}</span>
+                  <span className={`hidden whitespace-normal text-[10px] leading-relaxed lg:block ${activeSection === item.id ? 'text-orange-700/80' : 'text-slate-400'}`}>{item.description}</span>
+                </span>
+                <ChevronRight className={`ml-auto hidden h-3.5 w-3.5 shrink-0 lg:block ${activeSection === item.id ? 'text-orange-500' : 'text-slate-300'}`} />
+              </button>
+            ))}
+          </nav>
+        </aside>
 
-      <ConnectedChannelsPanel tenantId={tenantId} canEdit={canEditEmail} />
+        <main className="min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
+          <div className="mb-5 flex flex-col gap-1 border-b border-slate-100 pb-4">
+            <h2 className="text-lg font-extrabold text-slate-950">{activeSectionMeta.label}</h2>
+            <p className="text-xs text-slate-500">{activeSectionMeta.description}</p>
+          </div>
 
+          {activeSection === 'overview' && (
+            <div className="space-y-5">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                  <span className="text-[11px] font-medium text-slate-500">AI response modes</span>
+                  <div className="mt-2 text-2xl font-bold tabular-nums text-slate-950">{modeCounts.AUTO + modeCounts.REVIEW + modeCounts.OFF}<span className="ml-1 text-xs font-medium text-slate-400">channels</span></div>
+                  <div className="mt-2 flex flex-wrap gap-1.5 text-[10px] font-bold">
+                    <span className="rounded-full bg-orange-100 px-2 py-1 text-orange-800">AUTO {modeCounts.AUTO}</span>
+                    <span className="rounded-full bg-slate-200 px-2 py-1 text-slate-700">REVIEW {modeCounts.REVIEW}</span>
+                    <span className="rounded-full bg-slate-200 px-2 py-1 text-slate-600">OFF {modeCounts.OFF}</span>
+                  </div>
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                  <span className="text-[11px] font-medium text-slate-500">AI credentials</span>
+                  <div className="mt-2 text-lg font-bold text-slate-950">{aiCredentialStatus === 'configured' ? 'Configured' : aiCredentialStatus === 'missing' ? 'Needs attention' : aiCredentialStatus === 'loading' ? 'Checking…' : 'Unavailable'}</div>
+                  <div className="mt-1 text-[11px] text-slate-500">Server-side environment</div>
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                  <span className="text-[11px] font-medium text-slate-500">Workspace team</span>
+                  <div className="mt-2 text-lg font-bold text-slate-950">{users?.length ?? '—'}<span className="ml-1 text-xs font-medium text-slate-400">users</span></div>
+                  <div className="mt-1 text-[11px] text-slate-500">{canEditEmail ? 'Manage roles and access below' : 'Team management is admin-only'}</div>
+                </div>
+              </div>
+              <div>
+                <div className="mb-3 flex items-center justify-between">
+                  <h3 className="text-sm font-bold text-slate-900">Quick access</h3>
+                  <span className="text-[10px] text-slate-400">Choose a settings area</span>
+                </div>
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                  {overviewCards.map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => setActiveSection(item.id)}
+                      className="group flex items-start gap-3 rounded-xl border border-slate-200 p-4 text-left transition hover:border-orange-200 hover:bg-orange-50/40"
+                    >
+                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-600 transition group-hover:bg-orange-100 group-hover:text-orange-700">{item.icon}</span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-xs font-bold text-slate-900">{item.label}</span>
+                        <span className="mt-1 block text-[11px] leading-relaxed text-slate-500">{item.description}</span>
+                      </span>
+                      <ChevronRight className="mt-1 h-4 w-4 shrink-0 text-slate-300 transition group-hover:text-orange-600" />
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="flex items-start gap-2 rounded-xl border border-blue-100 bg-blue-50/60 p-3 text-xs text-blue-800">
+                <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" />
+                <span>Configuration is organized by task. Connected-channel setup, email domains, billing and team management retain their existing save and permission flows.</span>
+              </div>
+            </div>
+          )}
+
+          {activeSection === 'ai' && (
+            <div className="space-y-5">
       {/* Human Handoff configuration */}
       <div className="bg-white border border-amber-200 rounded-2xl p-6 shadow-sm space-y-4">
         <div className="flex items-center gap-2"><Shield className="w-5 h-5 text-amber-600" /><h3 className="font-extrabold text-sm text-slate-900">Human Handoff</h3></div>
@@ -217,6 +307,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   {(['AUTO', 'REVIEW', 'OFF'] as ChannelMode[]).map((m) => (
                     <button
                       key={m}
+                      disabled={!canEditEmail}
                       onClick={() => handleModeChange(ch, m)}
                       className={`py-1 rounded-lg text-center font-bold transition ${
                         currentMode === m
@@ -234,76 +325,89 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         </div>
       </div>
 
-      {/* OpenAI AI Model & API Key Configuration */}
-      <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs space-y-4 text-slate-900">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-2">
-            <Key className="w-5 h-5 text-orange-500" />
-            <h3 className="font-extrabold text-sm text-slate-900 font-display">OpenAI Engine & API Credentials</h3>
-          </div>
-          <span
-            className={`text-xs px-2.5 py-1 rounded-full font-bold flex items-center space-x-1.5 ${
-              isOpenAiConfigured
-                ? 'bg-orange-50 text-orange-700 border border-orange-200'
-                : 'bg-amber-50 text-amber-700 border border-amber-200'
-            }`}
-          >
-            <span className={`w-2 h-2 rounded-full ${isOpenAiConfigured ? 'bg-orange-500 animate-pulse' : 'bg-amber-400'}`} />
-            <span>{isOpenAiConfigured ? 'OpenAI Model Active' : 'API Key Required'}</span>
+      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm space-y-3">
+        <div className="flex items-center gap-2">
+          <KeyRound className="h-4 w-4 text-orange-600" />
+          <h3 className="text-sm font-bold text-slate-900">AI provider credentials</h3>
+          <span className={`ml-auto inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-bold ${aiCredentialStatus === 'configured' ? 'bg-emerald-50 text-emerald-700' : aiCredentialStatus === 'missing' ? 'bg-amber-50 text-amber-700' : 'bg-slate-100 text-slate-600'}`}>
+            <span className={`h-1.5 w-1.5 rounded-full ${aiCredentialStatus === 'configured' ? 'bg-emerald-500' : aiCredentialStatus === 'missing' ? 'bg-amber-500' : 'bg-slate-400'}`} />
+            {aiCredentialStatus === 'configured' ? 'Configured' : aiCredentialStatus === 'missing' ? 'Credential missing' : aiCredentialStatus === 'loading' ? 'Checking status' : 'Status unavailable'}
           </span>
         </div>
-
-        <p className="text-xs text-slate-600 leading-relaxed">
-          OpenAI models (<strong className="text-orange-600">gpt-4o</strong>, <strong className="text-orange-600">gpt-4o-mini</strong>) power the
-          real-time Email Auto-Responder, Universal Demo Scheduling Agent, Outbound Personalization, and WhatsApp Inbound channels.
-        </p>
-
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
-          <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
-            <span className="text-[11px] text-slate-500 font-medium block">Default Production Model</span>
-            <span className="text-xs font-mono font-bold text-orange-600 mt-0.5 block">gpt-4o-mini / gpt-4o</span>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+            <span className="block text-[11px] text-slate-500">Runtime model</span>
+            <span className="mt-1 block font-mono text-sm font-semibold text-slate-900">{aiModel}</span>
           </div>
-          <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
-            <span className="text-[11px] text-slate-500 font-medium block">Active Key Status</span>
-            <span className="text-xs font-mono font-bold text-slate-800 mt-0.5 block">
-              {isOpenAiConfigured ? (maskedOpenAiKey || 'Active in Environment') : 'Not Configured'}
-            </span>
-          </div>
-          <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
-            <span className="text-[11px] text-slate-500 font-medium block">Active Integrations</span>
-            <span className="text-xs font-semibold text-slate-800 mt-0.5 block">Email, Demo Agent, WhatsApp, Campaigns</span>
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+            <span className="block text-[11px] text-slate-500">Credential storage</span>
+            <span className="mt-1 block text-sm font-semibold text-slate-900">Server environment</span>
           </div>
         </div>
+        <p className="text-xs leading-relaxed text-slate-500">
+          AI secrets are read by the server from <code className="font-mono text-slate-700">OPENAI_API_KEY</code> or <code className="font-mono text-slate-700">GEMINI_API_KEY</code>. They are not displayed or entered in the browser. Update credentials in the deployment environment when rotation is required.
+        </p>
+      </section>
+      {/* Section 46 & 47: Debouncing, Idempotency & Webhooks */}
+      <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs space-y-4 text-slate-900">
+        <h3 className="font-bold text-sm text-slate-900 font-display flex items-center space-x-2">
+          <Shield className="w-4 h-4 text-orange-500" />
+          <span>Idempotency & Debounce Engine (Section 46, 47 & 68)</span>
+        </h3>
 
-        <div className="pt-2 border-t border-slate-100 space-y-2">
-          <label className="text-xs font-semibold text-slate-700 block">
-            Update or Provide OpenAI API Key
-          </label>
-          <div className="flex flex-col sm:flex-row gap-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+          <div>
+            <label className="text-slate-600 block mb-1 font-semibold">
+              Debounce Waiting Window (seconds)
+            </label>
             <input
-              type="password"
-              value={openAiKeyInput}
-              onChange={(e) => setOpenAiKeyInput(e.target.value)}
-              placeholder="sk-proj-..."
-              className="flex-1 bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 font-mono focus:outline-none focus:border-orange-500"
+              type="number"
+              disabled={!canEditEmail}
+              min={1}
+              max={30}
+              value={formData.debounceSeconds}
+              onChange={(e) =>
+                setFormData({ ...formData, debounceSeconds: parseInt(e.target.value) || 3 })
+              }
+              className="w-full bg-white border border-slate-200 rounded-xl p-2 text-slate-800 focus:outline-none focus:border-orange-500"
             />
-            <button
-              onClick={handleSaveOpenAiKey}
-              disabled={isSavingOpenAiKey || !openAiKeyInput.trim()}
-              className="px-4 py-2 bg-orange-500 hover:bg-orange-600 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition flex items-center justify-center space-x-1.5 cursor-pointer shadow-xs"
-            >
-              {isSavingOpenAiKey ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
-              <span>{isSavingOpenAiKey ? 'Saving...' : 'Save OpenAI Key'}</span>
-            </button>
+            <span className="text-[11px] text-slate-500 mt-1 block">
+              Batches bursts of messages arriving within this window into a single unified AI context.
+            </span>
           </div>
-          {openAiKeySaveStatus && (
-            <p className={`text-xs font-semibold mt-1 ${openAiKeySaveStatus.includes('active') || openAiKeySaveStatus.includes('saved') ? 'text-orange-600' : 'text-amber-600'}`}>
-              ✓ {openAiKeySaveStatus}
-            </p>
-          )}
+
+          <div>
+            <label className="text-slate-600 block mb-1 font-semibold">Webhook Endpoint URL</label>
+            <input
+              type="text"
+              readOnly
+              value={formData.webhookEndpoint}
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2 text-slate-600 font-mono"
+            />
+            <span className="text-[11px] text-emerald-600 mt-1 block flex items-center space-x-1 font-medium">
+              <CheckCircle className="w-3 h-3 text-emerald-500" />
+              <span>Idempotency hash verification active for Meta, Apollo, & Email webhooks</span>
+            </span>
+          </div>
         </div>
       </div>
 
+
+            </div>
+          )}
+
+          {activeSection === 'channels' && (
+            <div className="space-y-5">
+      <ConnectedChannelsPanel tenantId={tenantId} canEdit={canEditEmail} />
+
+      {tenantId && canEditEmail && <WebsiteWebhookPanel tenantId={tenantId} canEdit />}
+      {tenantId && canEditEmail && <ChatbotIntegrationPanel tenantId={tenantId} canEdit />}
+
+            </div>
+          )}
+
+          {activeSection === 'email' && (
+            <div className="space-y-5">
       {/* Section 41: Email Identities & Signature */}
       <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs space-y-4 text-slate-900">
         <h3 className="font-bold text-sm text-slate-900 font-display flex items-center space-x-2">
@@ -344,6 +448,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             <label className="text-slate-600 block mb-1 font-semibold">Configurable Outbound Email Signature</label>
             <textarea
               rows={4}
+              disabled={!canEditEmail}
               value={formData?.emailSignature || ''}
               onChange={(e) => setFormData({ ...formData, emailSignature: e.target.value })}
               className="w-full bg-white border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 resize-none font-mono focus:outline-none focus:border-orange-500"
@@ -352,58 +457,14 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         </div>
       </div>
 
-      {/* Section 46 & 47: Debouncing, Idempotency & Webhooks */}
-      <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs space-y-4 text-slate-900">
-        <h3 className="font-bold text-sm text-slate-900 font-display flex items-center space-x-2">
-          <Shield className="w-4 h-4 text-orange-500" />
-          <span>Idempotency & Debounce Engine (Section 46, 47 & 68)</span>
-        </h3>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
-          <div>
-            <label className="text-slate-600 block mb-1 font-semibold">
-              Debounce Waiting Window (seconds)
-            </label>
-            <input
-              type="number"
-              min={1}
-              max={30}
-              value={formData.debounceSeconds}
-              onChange={(e) =>
-                setFormData({ ...formData, debounceSeconds: parseInt(e.target.value) || 3 })
-              }
-              className="w-full bg-white border border-slate-200 rounded-xl p-2 text-slate-800 focus:outline-none focus:border-orange-500"
-            />
-            <span className="text-[11px] text-slate-500 mt-1 block">
-              Batches bursts of messages arriving within this window into a single unified AI context.
-            </span>
-          </div>
-
-          <div>
-            <label className="text-slate-600 block mb-1 font-semibold">Webhook Endpoint URL</label>
-            <input
-              type="text"
-              readOnly
-              value={formData.webhookEndpoint}
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2 text-slate-600 font-mono"
-            />
-            <span className="text-[11px] text-emerald-600 mt-1 block flex items-center space-x-1 font-medium">
-              <CheckCircle className="w-3 h-3 text-emerald-500" />
-              <span>Idempotency hash verification active for Meta, Apollo, & Email webhooks</span>
-            </span>
-          </div>
-        </div>
-      </div>
-
-      {tenantId && canEditEmail && <BillingView tenantId={tenantId} />}
-
       {tenantId && <EmailSettingsPanel tenantId={tenantId} canEdit={Boolean(canEditEmail)} />}
-
       {tenantId && canEditEmail && <InboundMailboxPanel tenantId={tenantId} canEdit />}
 
-      {tenantId && canEditEmail && <WebsiteWebhookPanel tenantId={tenantId} canEdit />}
-      {tenantId && canEditEmail && <ChatbotIntegrationPanel tenantId={tenantId} canEdit />}
+            </div>
+          )}
 
+          {activeSection === 'team' && canEditEmail && (
+            <div className="space-y-5">
       {/* Workspace user management is admin-only. */}
       {tenantId && canEditEmail && users && onSaveUser && onDeleteUser && (
         <UserManagementView
@@ -414,6 +475,18 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           onDeleteUser={onDeleteUser}
         />
       )}
+
+            </div>
+          )}
+
+          {activeSection === 'billing' && canEditEmail && (
+            <div className="space-y-5">
+      {tenantId && canEditEmail && <BillingView tenantId={tenantId} />}
+
+            </div>
+          )}
+        </main>
+      </div>
     </div>
   );
 };

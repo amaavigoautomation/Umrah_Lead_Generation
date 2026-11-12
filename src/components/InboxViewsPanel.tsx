@@ -12,7 +12,6 @@ import {
   Linkedin,
   Mail,
   MessageCircle,
-  MessageSquare,
   UserRoundX,
   Users,
   FolderOpen,
@@ -50,7 +49,6 @@ interface InboxViewsPanelProps {
   channelFilter: string;
   viewCounts: ViewCountMap;
   channelCounts: ChannelCountMap;
-  connected: { mailbox: string; whatsapp: string };
   onToggleCollapsed: () => void;
   onSelectView: (view: InboxViewKey) => void;
   onSelectChannel: (channel: InboxChannelKey) => void;
@@ -83,16 +81,10 @@ export const InboxViewsPanel: React.FC<InboxViewsPanelProps> = ({
   channelFilter,
   viewCounts,
   channelCounts,
-  connected,
   onToggleCollapsed,
   onSelectView,
   onSelectChannel,
 }) => {
-  const connectionItems = [
-    { label: 'Email connection', detail: connected.mailbox, active: Boolean(connected.mailbox), icon: Mail },
-    { label: 'WhatsApp connection', detail: connected.whatsapp, active: Boolean(connected.whatsapp), icon: MessageCircle },
-  ];
-
   return (
     <aside
       className={'uinbox-views-panel' + (collapsed ? ' is-collapsed' : '')}
@@ -172,18 +164,7 @@ export const InboxViewsPanel: React.FC<InboxViewsPanelProps> = ({
         </nav>
       </div>
 
-      {!collapsed && (
-        <div className="uinbox-connections">
-          <p className="uinbox-section-label">Connections</p>
-          {connectionItems.map(({ label, detail, active, icon: Icon }) => (
-            <div className="uinbox-connection-item" key={label} title={detail || label}>
-              <Icon size={14} />
-              <span className="uinbox-connection-name">{label}</span>
-              <span className={'uinbox-connection-indicator' + (active ? ' is-connected' : '')} />
-            </div>
-          ))}
-        </div>
-      )}
+
     </aside>
   );
 };

@@ -46,7 +46,6 @@ import { normalizeChannelMode } from '../shared/channelModes';
 import { generateOmnichannelResponse } from '../services/aiService';
 import { FormattedMessage } from './FormattedMessage';
 import InboxViewsPanel from './InboxViewsPanel';
-import { useConnectedChannels } from '../hooks/useConnectedChannels';
 import { aiResponseMarkdownToPlainText } from '../shared/aiResponseFormatting';
 import { useBrand } from '../context/BrandContext';
 import {
@@ -108,7 +107,6 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
   onAutoFollowUpChanged,
 }) => {
   const { brand } = useBrand();
-  const connected = useConnectedChannels(tenantId);
   const [selectedConversationId, setSelectedConversationId] = useState<string>(
     conversations[0]?.conversationId || ''
   );
@@ -118,7 +116,6 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
   // Lead Profile 360 side panel: slides in/out from the right edge
   const [isProfileOpen, setIsProfileOpen] = useState<boolean>(true);
   const [isViewsPanelCollapsed, setIsViewsPanelCollapsed] = useState<boolean>(false);
-  const [isConversationListCollapsed, setIsConversationListCollapsed] = useState<boolean>(false);
   const [viewsPanelWidth, setViewsPanelWidth] = useState<number>(205);
   const [conversationListWidth, setConversationListWidth] = useState<number>(292);
   const [profilePanelWidth, setProfilePanelWidth] = useState<number>(292);
@@ -135,13 +132,12 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
       if (Number.isFinite(layout.conversationListWidth)) setConversationListWidth(Math.min(440, Math.max(230, layout.conversationListWidth)));
       if (Number.isFinite(layout.profilePanelWidth)) setProfilePanelWidth(Math.min(420, Math.max(250, layout.profilePanelWidth)));
       if (typeof layout.isViewsPanelCollapsed === 'boolean') setIsViewsPanelCollapsed(layout.isViewsPanelCollapsed);
-      if (typeof layout.isConversationListCollapsed === 'boolean') setIsConversationListCollapsed(layout.isConversationListCollapsed);
       if (typeof layout.isProfileOpen === 'boolean') setIsProfileOpen(layout.isProfileOpen);
     } catch (error) { console.warn('[UnifiedInbox] Could not restore panel layout preferences.', error); }
   }, [inboxLayoutStorageKey]);
   useEffect(() => {
-    try { window.localStorage.setItem(inboxLayoutStorageKey, JSON.stringify({ viewsPanelWidth, conversationListWidth, profilePanelWidth, isViewsPanelCollapsed, isConversationListCollapsed, isProfileOpen })); } catch (error) { /* Storage is optional. */ }
-  }, [inboxLayoutStorageKey, viewsPanelWidth, conversationListWidth, profilePanelWidth, isViewsPanelCollapsed, isConversationListCollapsed, isProfileOpen]);
+    try { window.localStorage.setItem(inboxLayoutStorageKey, JSON.stringify({ viewsPanelWidth, conversationListWidth, profilePanelWidth, isViewsPanelCollapsed, isProfileOpen })); } catch (error) { /* Storage is optional. */ }
+  }, [inboxLayoutStorageKey, viewsPanelWidth, conversationListWidth, profilePanelWidth, isViewsPanelCollapsed, isProfileOpen]);
   const beginPanelResize = (panel: 'views' | 'list' | 'profile', event: React.PointerEvent<HTMLDivElement>) => {
     event.preventDefault();
     const startWidth = panel === 'views' ? viewsPanelWidth : panel === 'list' ? conversationListWidth : profilePanelWidth;
@@ -648,26 +644,14 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
 
   return (
     <div className="unified-inbox-shell unified-inbox-layout-root flex flex-row h-full w-full bg-white text-slate-900 overflow-hidden relative" style={{ ['--uinbox-profile-width' as any]: (isProfileOpen ? profilePanelWidth : 0) + 'px' }}>
-      <InboxViewsPanel collapsed={isViewsPanelCollapsed} width={isViewsPanelCollapsed ? 58 : viewsPanelWidth} statusFilter={statusFilter} channelFilter={channelFilter} viewCounts={viewCounts} channelCounts={channelCounts} connected={connected} onToggleCollapsed={() => setIsViewsPanelCollapsed((value) => !value)} onSelectView={setStatusFilter} onSelectChannel={setChannelFilter} />
+      <InboxViewsPanel collapsed={isViewsPanelCollapsed} width={isViewsPanelCollapsed ? 58 : viewsPanelWidth} statusFilter={statusFilter} channelFilter={channelFilter} viewCounts={viewCounts} channelCounts={channelCounts} onToggleCollapsed={() => setIsViewsPanelCollapsed((value) => !value)} onSelectView={setStatusFilter} onSelectChannel={setChannelFilter} />
       <div className="uinbox-resize-handle" role="separator" aria-orientation="vertical" aria-label="Resize inbox views panel" onPointerDown={(event) => beginPanelResize('views', event)} onPointerMove={movePanelResize} onPointerUp={endPanelResize} onPointerCancel={endPanelResize} onDoubleClick={() => setViewsPanelWidth(205)} />
       {/* 1. LEFT COLUMN: Conversation List & Filters (Width: 340px) */}
-      <div className="unified-inbox-sidebar unified-inbox-conversation-panel flex flex-col bg-white h-full min-h-0 shrink-0" style={{ ['--uinbox-conversation-width' as any]: (isConversationListCollapsed ? 64 : conversationListWidth) + 'px' }}>
-        {isConversationListCollapsed ? (
-          <div className="uinbox-list-collapsed">
-            <button type="button" onClick={() => setIsConversationListCollapsed(false)} className="uinbox-list-expand" title="Expand conversation list" aria-label="Expand conversation list"><ChevronRight size={16} /></button>
-            {filteredConversations.slice(0, 14).map((conv) => {
-              const contact = contacts.find((item) => item.contactId === conv.contactId);
-              const selected = conv.conversationId === activeConversation?.conversationId;
-              return <button key={conv.conversationId} type="button" onClick={() => { setSelectedConversationId(conv.conversationId); setIsUnifiedAllPlatforms(false); if (isConversationUnread(conv)) onMarkAsRead?.(conv.conversationId); }} className={'uinbox-list-avatar' + (selected ? ' is-active' : '')} title={(contact?.firstName || 'Unknown') + ' ' + (contact?.lastName || '')}>
-                {(contact?.firstName?.[0] || contact?.companyName?.[0] || '?').toUpperCase()}
-                {isConversationUnread(conv) && <span className="uinbox-list-unread-dot" />}
-              </button>;
-            })}
-          </div>
-        ) : (<>
+      <div className="unified-inbox-sidebar unified-inbox-conversation-panel flex flex-col bg-white h-full min-h-0 shrink-0" style={{ ['--uinbox-conversation-width' as any]: conversationListWidth + 'px' }}>
+
         {/* Search Header */}
         <div className="unified-inbox-sidebar-tools p-3 border-b border-slate-200 space-y-2 shrink-0">
-          <div className="uinbox-conversation-list-heading"><div><strong>Conversations</strong><span>{filteredConversations.length} results</span></div><button type="button" onClick={() => setIsConversationListCollapsed(true)} title="Collapse conversation list" aria-label="Collapse conversation list"><ChevronLeft size={15} /></button></div>
+          <div className="uinbox-conversation-list-heading"><div><strong>Conversations</strong><span>{filteredConversations.length} results</span></div></div>
           <div className="relative">
             <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
             <input
@@ -808,7 +792,6 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
             </div>
           )}
         </div>
-        </>)}
       </div>
       <div className="uinbox-resize-handle" role="separator" aria-orientation="vertical" aria-label="Resize conversation list" onPointerDown={(event) => beginPanelResize('list', event)} onPointerMove={movePanelResize} onPointerUp={endPanelResize} onPointerCancel={endPanelResize} onDoubleClick={() => setConversationListWidth(292)} />
 
@@ -851,24 +834,6 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
 
               {/* AI vs Human Takeover Toggle & SMTP Settings */}
               <div className="flex items-center space-x-2">
-                {activeConversation.humanHandoff ? (
-                  <button
-                    onClick={() => onToggleAi(activeConversation.conversationId, true)}
-                    className="flex items-center space-x-1.5 px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition shadow-2xs"
-                  >
-                    <Bot className="w-3.5 h-3.5" />
-                    <span>Resume AI</span>
-                  </button>
-                ) : (
-                  <button
-                    onClick={() => onToggleAi(activeConversation.conversationId, false)}
-                    className="flex items-center space-x-1.5 px-3 py-1 rounded-lg bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold transition shadow-2xs"
-                  >
-                    <User className="w-3.5 h-3.5" />
-                    <span>Take Over (Human)</span>
-                  </button>
-                )}
-
                 <div
                   className={`px-2.5 py-1 rounded-lg text-xs font-extrabold flex items-center space-x-1 border ${
                     activeConversation.aiEnabled && !activeConversation.humanHandoff

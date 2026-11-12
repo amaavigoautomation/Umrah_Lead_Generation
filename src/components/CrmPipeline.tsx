@@ -896,9 +896,9 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
   const drawerActivities = drawerLead ? activities.filter((a) => a.leadId === drawerLead.leadId) : [];
 
   return (
-    <div className="crm-workspace w-full min-h-full bg-slate-50 text-slate-800 font-sans pb-10">
+    <div className="crm-workspace w-full h-full min-h-0 flex flex-col overflow-hidden bg-slate-50 text-slate-800 font-sans">
       {/* Sticky Header & Filter Container */}
-      <div className="crm-sticky-header sticky -top-4 sm:-top-5 z-30 bg-slate-50/95 backdrop-blur-xs pt-3 pb-2 border-b border-slate-200/60 shadow-xs -mx-3 sm:-mx-5 px-3 sm:px-5">
+      <div className="crm-sticky-header shrink-0 z-10 bg-slate-50/95 pt-3 pb-2 border-b border-slate-200/60 shadow-xs">
         {/* 1. TeleCRM Top Header Bar */}
         <div className="crm-header-card bg-white border-b border-slate-200/95 shadow-2xs">
           <div className="crm-page-header max-w-[1700px] mx-auto px-4 py-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
@@ -1147,7 +1147,7 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
 
       {/* 4. TeleCRM Bulk Action Float Bar */}
       {selectedLeadIds.size > 0 && (
-        <div className="crm-bulk-actions max-w-[1700px] mx-auto px-4 mt-3">
+        <div className="crm-bulk-actions max-w-[1700px] w-full mx-auto px-4 mt-3">
           <div className="crm-bulk-actions-bar bg-slate-900 text-white rounded-xl p-2.5 px-4 shadow-lg flex items-center justify-between flex-wrap gap-2 animate-in fade-in slide-in-from-top-2">
             <div className="flex items-center space-x-3">
               <span className="px-2 py-0.5 bg-orange-500 text-white font-extrabold text-xs rounded-md">
@@ -1214,7 +1214,7 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
       )}
 
       {/* 5. The Pure TeleCRM Leads Table */}
-      <div className="crm-table-wrap max-w-[1700px] mx-auto px-4 mt-4">
+      <div className="crm-table-wrap max-w-[1700px] w-full mx-auto px-4 mt-3">
         <div className="crm-table-panel bg-white border border-slate-200/90 rounded-xl shadow-2xs overflow-hidden">
           <div className="crm-table-heading flex items-center justify-between gap-3">
             <div>
@@ -1227,7 +1227,7 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
               <span>25 rows per page</span>
             </div>
           </div>
-          <div className="crm-table-scroll overflow-x-auto">
+          <div className="crm-table-scroll overflow-auto">
             <table className="crm-leads-table w-full text-left border-collapse">
               <thead>
                 <tr className="bg-slate-100/80 border-b border-slate-200 text-[11px] font-bold text-slate-600 uppercase tracking-wider select-none">
@@ -1598,7 +1598,7 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
           </div>
 
           {/* Pagination & Status Footer */}
-          <div className="bg-slate-50 border-t border-slate-200 px-4 py-3 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500 font-medium">
+          <div className="crm-table-pagination bg-slate-50 border-t border-slate-200 px-4 py-3 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500 font-medium">
             <div className="flex items-center space-x-2 flex-wrap gap-y-1">
               <span>
                 Showing <strong className="text-slate-800 font-bold">{processedLeads.length === 0 ? 0 : (safePage - 1) * PAGE_SIZE + 1}</strong> - <strong className="text-slate-800 font-bold">{Math.min(safePage * PAGE_SIZE, processedLeads.length)}</strong> of{' '}

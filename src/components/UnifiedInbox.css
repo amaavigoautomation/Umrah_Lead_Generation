@@ -36,33 +36,6 @@
   border-bottom: 1px solid var(--inbox-line) !important;
   gap: 10px !important;
 }
-.unified-inbox-connections {
-  display: flex !important;
-  align-items: center;
-  gap: 6px !important;
-  min-width: 0;
-  overflow: hidden;
-}
-.unified-inbox-connections > div:first-child { display: contents !important; }
-.unified-inbox-connections button {
-  min-width: 0;
-  min-height: 32px;
-  padding: 6px 8px !important;
-  border-radius: 8px !important;
-  font-size: 9px !important;
-  line-height: 1.15;
-  box-shadow: none !important;
-}
-.unified-inbox-connections button[title*="Sync"] {
-  flex: 0 0 32px !important;
-  width: 32px;
-  height: 32px;
-  justify-content: center;
-  padding: 0 !important;
-}
-.unified-inbox-connections > button { flex: 1 1 0 !important; }
-.unified-inbox-connections button > span,
-.unified-inbox-connections button > div { min-width: 0; }
 .unified-inbox-sidebar-tools input {
   min-height: 36px;
   border-radius: 9px !important;
@@ -526,10 +499,6 @@
 .unified-inbox-followup-action:disabled {
   opacity: .5;
   cursor: not-allowed;
-}
-.unified-inbox-smtp-button {
-  flex: 0 0 32px !important;
-  padding: 0 !important;
 }
 .unified-inbox-profile-wrapper.w-0 {
   width: 0 !important;

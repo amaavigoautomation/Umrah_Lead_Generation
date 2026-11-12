@@ -1,8 +1,7 @@
-import React, { useState, Suspense, useRef, useLayoutEffect, useEffect } from 'react';
+import React, { useState, useRef, useLayoutEffect, useEffect } from 'react';
 import './UnifiedInbox.css';
 import { stripQuotedReply } from '../shared/quotedReply';
 import { STOP_FOLLOWUPS_WHEN_DEMO_BOOKED } from '../shared/followUpPolicy';
-import { lazyNamed } from '../lazyLoad';
 import {
   Search,
   Bot,
@@ -27,9 +26,7 @@ import {
   Smartphone,
   Share2,
   X,
-  MessageSquare,
   RefreshCw,
-  Key,
   Settings,
   ExternalLink,
   Clock,
@@ -49,7 +46,6 @@ import { normalizeChannelMode } from '../shared/channelModes';
 import { generateOmnichannelResponse } from '../services/aiService';
 import { FormattedMessage } from './FormattedMessage';
 import { useBrand } from '../context/BrandContext';
-import { useConnectedChannels } from '../hooks/useConnectedChannels';
 import {
   InboundEmailPayload,
   InboundProcessingResult,
@@ -57,13 +53,7 @@ import {
 import {
   InboundWhatsAppPayload,
   InboundWhatsAppProcessingResult,
-  WHATSAPP_BUSINESS_NUMBER,
-  WHATSAPP_BUSINESS_NUMBER_FORMATTED,
 } from '../services/whatsappInboundService';
-
-// Simulator modals: loaded only when opened.
-const InboundEmailFlowModal = lazyNamed(() => import('./InboundEmailFlowModal'), 'InboundEmailFlowModal');
-const InboundWhatsAppFlowModal = lazyNamed(() => import('./InboundWhatsAppFlowModal'), 'InboundWhatsAppFlowModal');
 
 interface UnifiedInboxProps {
   /** Workspace whose connected mailbox / WhatsApp number are shown above the conversation list. */
@@ -95,7 +85,6 @@ interface UnifiedInboxProps {
 }
 
 export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
-  tenantId,
   channelModes = {},
   conversations,
   hasMoreConversations,
@@ -112,13 +101,9 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
   onEditDraft,
   onUpdateLeadScore,
   onViewLeadInCrm,
-  onProcessInboundEmail,
-  onProcessInboundWhatsApp,
-  onSyncNow,
   onAutoFollowUpChanged,
 }) => {
   const { brand } = useBrand();
-  const isUmrah = brand.playbook === 'umrah360';
   const [selectedConversationId, setSelectedConversationId] = useState<string>(
     conversations[0]?.conversationId || ''
   );
@@ -128,15 +113,9 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
   // Lead Profile 360 side panel: slides in/out from the right edge
   const [isProfileOpen, setIsProfileOpen] = useState<boolean>(true);
   const [replyText, setReplyText] = useState<string>('');
-  const connected = useConnectedChannels(tenantId);
   const [isGeneratingAi, setIsGeneratingAi] = useState<boolean>(false);
   const [isUnifiedAllPlatforms, setIsUnifiedAllPlatforms] = useState<boolean>(false);
   const [replyChannelOverride, setReplyChannelOverride] = useState<Channel | ''>('');
-  const [showSimulateModal, setShowSimulateModal] = useState<boolean>(false);
-  const [showInboundFlowModal, setShowInboundFlowModal] = useState<boolean>(false);
-  const [showInboundWhatsAppModal, setShowInboundWhatsAppModal] = useState<boolean>(false);
-  const [simulatedPlatform, setSimulatedPlatform] = useState<Channel>('WHATSAPP');
-  const [simulatedText, setSimulatedText] = useState<string>(isUmrah ? 'Hi, can you send us your B2B package cost breakdown for 5-star Makkah hotels?' : `Hi, I would like to know more about ${brand.companyName}.`);
 
   // SMTP Configuration & Delivery State
   const [smtpStatus, setSmtpStatus] = useState<{
@@ -489,14 +468,6 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
   };
 
   // Handle simulating customer message on specific platform
-  const handleSimulateInbound = () => {
-    if (!simulatedText.trim()) return;
-    const targetConv = contactConversations.find((c) => c.channel === simulatedPlatform) || activeConversation;
-    if (!targetConv) return;
-    onSendMessage(targetConv.conversationId, simulatedText, 'CUSTOMER');
-    setShowSimulateModal(false);
-  };
-
   // Handle AI Auto-generate button
   const handleAiAutoGenerate = async () => {
     if (!activeConversation || !activeContact) return;
@@ -603,57 +574,6 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
       <div className="unified-inbox-sidebar w-full lg:w-84 border-r border-slate-200/90 flex flex-col bg-slate-50/60 h-full min-h-0 shrink-0">
         {/* Search Header */}
         <div className="unified-inbox-sidebar-tools p-3 border-b border-slate-200 space-y-2 shrink-0">
-          {/* Live Inbound Mailbox & WhatsApp Triggers */}
-          <div className="unified-inbox-connections space-y-1.5">
-            <div className="flex items-center space-x-1.5">
-              {connected.mailbox && (
-                <button
-                  onClick={() => setShowInboundFlowModal(true)}
-                  className="flex-1 flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-orange-50/80 hover:bg-orange-100/90 border border-orange-200 text-orange-950 transition text-left group"
-                >
-                  <div className="flex items-center space-x-2 truncate">
-                    <Mail className="w-3.5 h-3.5 text-orange-600 shrink-0" />
-                    <div className="truncate">
-                      <span className="text-[11px] font-bold block truncate text-slate-800">{connected.mailbox}</span>
-                    </div>
-                  </div>
-                  <span className="flex items-center space-x-1 text-[10px] text-orange-700 bg-orange-100 px-1.5 py-0.5 rounded font-semibold shrink-0 border border-orange-200">
-                    <span className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse"></span>
-                    <span>Email</span>
-                  </span>
-                </button>
-              )}
-
-              {onSyncNow && (
-                <button
-                  onClick={onSyncNow}
-                  title="Sync Inbound Mailbox with Live Server"
-                  className="p-1.5 rounded-lg bg-white hover:bg-slate-100 text-slate-700 hover:text-slate-900 border border-slate-200 transition shrink-0"
-                >
-                  <RefreshCw className="w-3.5 h-3.5" />
-                </button>
-              )}
-            </div>
-
-            {connected.whatsapp && (
-              <button
-                onClick={() => setShowInboundWhatsAppModal(true)}
-                className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-emerald-50/80 hover:bg-emerald-100/90 border border-emerald-200 text-emerald-950 transition text-left group"
-              >
-                <div className="flex items-center space-x-2 truncate">
-                  <MessageSquare className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                  <div className="truncate">
-                    <span className="text-[11px] font-bold block truncate font-mono text-slate-800">{connected.whatsapp}</span>
-                  </div>
-                </div>
-                <span className="flex items-center space-x-1 text-[10px] text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded font-semibold shrink-0 border border-emerald-200">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                  <span>WhatsApp Flow</span>
-                </span>
-              </button>
-            )}
-          </div>
-
           <div className="relative">
             <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
             <input
@@ -899,22 +819,6 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
 
               {/* AI vs Human Takeover Toggle & SMTP Settings */}
               <div className="flex items-center space-x-2">
-                {(activeConversation.channel === 'EMAIL' || activeConversation.channel === 'WEBSITE') && (
-                  <button
-                    type="button"
-                    onClick={() => setShowSmtpModal(true)}
-                    aria-label="Email delivery settings"
-                    className={`unified-inbox-smtp-button flex h-8 w-8 items-center justify-center rounded-lg border transition ${
-                      smtpStatus?.configured
-                        ? 'bg-emerald-50 border-emerald-200 text-emerald-800 hover:bg-emerald-100'
-                        : 'bg-amber-50 border-amber-200 text-amber-800 hover:bg-amber-100'
-                    }`}
-                    title="Email delivery settings"
-                  >
-                    <Key className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                  </button>
-                )}
-
                 {activeConversation.humanHandoff ? (
                   <button
                     onClick={() => onToggleAi(activeConversation.conversationId, true)}
@@ -1582,153 +1486,6 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
         </>
       )}
       </div>
-
-      {/* 4. MODAL: Simulate Inbound Customer Message from Any Platform */}
-      {showSimulateModal && activeContact && (
-        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white border border-slate-200 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <div className="flex items-center space-x-2">
-                <Sparkles className="w-4 h-4 text-orange-500" />
-                <h3 className="font-bold text-sm text-slate-900 font-display">
-                  Simulate Inbound Platform Message
-                </h3>
-              </div>
-              <button
-                onClick={() => setShowSimulateModal(false)}
-                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg transition"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <p className="text-xs text-slate-600">
-              Simulate an incoming message from <strong>{activeContact.firstName} {activeContact.lastName}</strong> across different external platforms to verify omnichannel ingestion and AI grounding.
-            </p>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                Select Platform Channel
-              </label>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                {(['WHATSAPP', 'INSTAGRAM', 'EMAIL', 'LINKEDIN'] as Channel[]).map((ch) => (
-                  <button
-                    key={ch}
-                    type="button"
-                    onClick={() => setSimulatedPlatform(ch)}
-                    className={`px-2.5 py-2 rounded-lg border text-xs font-semibold flex items-center justify-center space-x-1.5 transition ${
-                      simulatedPlatform === ch
-                        ? 'bg-orange-500 text-white border-orange-500 shadow-xs'
-                        : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
-                    }`}
-                  >
-                    {renderChannelIcon(ch, 3.5)}
-                    <span className="capitalize">{ch.toLowerCase()}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                Customer Message Text
-              </label>
-              <textarea
-                rows={3}
-                value={simulatedText}
-                onChange={(e) => setSimulatedText(e.target.value)}
-                className="w-full bg-white border border-slate-200 rounded-lg p-2.5 text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-orange-500 resize-none transition"
-              />
-            </div>
-
-            <div className="flex items-center justify-end space-x-2 pt-3 border-t border-slate-100">
-              <button
-                type="button"
-                onClick={() => setShowSimulateModal(false)}
-                className="px-3.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleSimulateInbound}
-                className="px-4 py-1.5 rounded-lg bg-orange-500 hover:bg-orange-600 text-white text-xs font-semibold flex items-center space-x-1.5 shadow-xs transition"
-              >
-                <Send className="w-3.5 h-3.5" />
-                <span>Inject Message</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Inbound Email Flow Simulator Modal for automation@amaavigo.com */}
-      {showInboundFlowModal && (
-        <Suspense fallback={null}>
-        <InboundEmailFlowModal
-          isOpen={showInboundFlowModal}
-          onClose={() => setShowInboundFlowModal(false)}
-          onProcessEmail={async (payload) => {
-            if (onProcessInboundEmail) {
-              const res = await onProcessInboundEmail(payload);
-              if (res.conversation) {
-                setSelectedConversationId(res.conversation.conversationId);
-              }
-              return res;
-            }
-            throw new Error('Inbound processor not configured');
-          }}
-          onNavigateToThread={(convId) => {
-            setSelectedConversationId(convId);
-          }}
-          onNavigateToCrmLead={(leadId) => {
-            onViewLeadInCrm(leadId);
-          }}
-        />
-        </Suspense>
-      )}
-
-      {/* Inbound WhatsApp Flow Simulator Modal for +919820252434 */}
-      {showInboundWhatsAppModal && (
-        <Suspense fallback={null}>
-        <InboundWhatsAppFlowModal
-          isOpen={showInboundWhatsAppModal}
-          onClose={() => setShowInboundWhatsAppModal(false)}
-          contacts={contacts}
-          leads={leads}
-          conversations={conversations}
-          messages={messages}
-          knowledgeDocs={knowledgeDocs}
-          settings={{
-            autoPilot: true,
-            defaultTone: 'PROFESSIONAL',
-            humanHandoffThreshold: 0.7,
-            officeHoursOnly: false,
-            maxAutoRepliesPerLead: 5,
-          } as any}
-          onInboundComplete={(res) => {
-            if (onProcessInboundWhatsApp && res.incomingMessage) {
-              onProcessInboundWhatsApp({
-                from: res.contact.phone || '',
-                fromName: `${res.contact.firstName} ${res.contact.lastName}`,
-                to: WHATSAPP_BUSINESS_NUMBER,
-                body: res.incomingMessage.text,
-                companyName: res.contact.companyName,
-              }).catch(() => {});
-            }
-            if (res.conversation) {
-              setSelectedConversationId(res.conversation.conversationId);
-            }
-          }}
-          onNavigateToConversation={(convId) => {
-            setSelectedConversationId(convId);
-          }}
-          onNavigateToLead={(leadId) => {
-            onViewLeadInCrm(leadId);
-          }}
-        />
-        </Suspense>
-      )}
 
       {/* SMTP & Live Outbound Mail Delivery Settings Modal */}
       {showSmtpModal && (

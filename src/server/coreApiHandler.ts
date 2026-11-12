@@ -88,7 +88,7 @@ import {
 } from './demoSchedulingService.js';
 import { isFirebaseConfigured } from '../firebase/config.js';
 import { db } from './adminFirestore.js';
-import { getDoc, getDocs, setDoc, updateDoc, deleteDoc, collection, doc, query as fsQuery, where as fsWhere, countDocs, sumDocs } from './adminFirestore.js';
+import { getDoc, getDocs, setDoc, updateDoc, deleteDoc, collection, doc, query as fsQuery, where as fsWhere, orderBy as fsOrderBy, limit as fsLimit, countDocs, sumDocs } from './adminFirestore.js';
 import { safeSetDoc } from './firestoreUtils.js';
 import {
   setCampaignActiveContext,
@@ -4416,12 +4416,21 @@ ${signature || defSig}`;
       if (isFirebaseConfigured && db) {
         try {
           const colRef = collection(db, 'tenants', targetTenant, 'audit_logs');
-          const snap = await getDocs(colRef);
+          const requestedLimit = qp.has('limit') ? Number(qp.get('limit')) : null;
+          const safeLimit = requestedLimit !== null && Number.isFinite(requestedLimit)
+            ? Math.min(50, Math.max(1, Math.floor(requestedLimit)))
+            : null;
+          const auditQuery = safeLimit
+            ? fsQuery(colRef, fsOrderBy('timestamp', 'desc'), fsLimit(safeLimit))
+            : colRef;
+          const snap = await getDocs(auditQuery);
           snap.forEach((d) => {
             const data = d.data();
             if (data && data.id) auditList.push(data);
           });
-          auditList.sort((a, b) => new Date(b.timestamp || 0).getTime() - new Date(a.timestamp || 0).getTime());
+          if (!safeLimit) {
+            auditList.sort((a, b) => new Date(b.timestamp || 0).getTime() - new Date(a.timestamp || 0).getTime());
+          }
         } catch (e: any) {
           console.error('[AuditLogs API] Firestore fetch failed:', e);
           res.statusCode = 500;

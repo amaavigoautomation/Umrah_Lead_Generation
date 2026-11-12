@@ -2875,6 +2875,11 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
                 tenantId={currentTenantId}
                 canEditEmail={currentUser.role === 'ADMIN'}
                 timezone={currentTenant?.timezone || 'Asia/Kolkata'}
+                workspaceName={currentTenant?.name || currentTenantId}
+                unreadCount={unreadCount}
+                handoffCount={handoffCount}
+                knowledgeDocumentCount={knowledgeDocs.length}
+                onOpenAuditLogs={() => setActiveTab('audit-logs')}
               />
             )}
 

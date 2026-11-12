@@ -1,13 +1,18 @@
 import React, { useState } from 'react';
 import {
   Activity,
+  AlertTriangle,
   Bell,
   Bot,
   CheckCircle,
+  CheckCircle2,
+  Clock3,
   CreditCard,
+  ExternalLink,
   Globe,
   Mail,
   Plug,
+  RefreshCw,
   Save,
   Settings,
   Shield,
@@ -16,7 +21,7 @@ import {
   Users,
   Zap,
 } from 'lucide-react';
-import { SystemSettings, Channel, ChannelMode, AppUser } from '../types';
+import { SystemSettings, Channel, ChannelMode, AppUser, AuditLog } from '../types';
 import { UserManagementView } from './UserManagementView';
 import { EmailSettingsPanel } from './EmailSettingsPanel';
 import { InboundMailboxPanel } from './InboundMailboxPanel';
@@ -37,6 +42,11 @@ interface SettingsViewProps {
   tenantId?: string;
   canEditEmail?: boolean;
   timezone?: string;
+  workspaceName?: string;
+  unreadCount?: number;
+  handoffCount?: number;
+  knowledgeDocumentCount?: number;
+  onOpenAuditLogs?: () => void;
 }
 
 export const SettingsView: React.FC<SettingsViewProps> = ({
@@ -50,6 +60,11 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   tenantId,
   canEditEmail,
   timezone,
+  workspaceName,
+  unreadCount = 0,
+  handoffCount = 0,
+  knowledgeDocumentCount = 0,
+  onOpenAuditLogs,
 }) => {
   const [formData, setFormData] = useState<SystemSettings>(settings);
   const [isSaved, setIsSaved] = useState(false);
@@ -57,6 +72,26 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [saveError, setSaveError] = useState<string | null>(null);
   const [activeSection, setActiveSection] = useState<'overview' | 'ai' | 'channels' | 'email' | 'notifications' | 'preferences' | 'teamBilling'>('overview');
   const [notificationPermissionError, setNotificationPermissionError] = useState<string | null>(null);
+  const [overviewRefreshKey, setOverviewRefreshKey] = useState(0);
+  const [overviewData, setOverviewData] = useState<{
+    loading: boolean;
+    loadedAt: string | null;
+    health: any | null;
+    channels: any | null;
+    email: any | null;
+    brand: any | null;
+    activity: AuditLog[];
+    errors: string[];
+  }>({
+    loading: false,
+    loadedAt: null,
+    health: null,
+    channels: null,
+    email: null,
+    brand: null,
+    activity: [],
+    errors: [],
+  });
   const [handoffKeywordsText, setHandoffKeywordsText] = useState((settings.humanHandoffKeywords || []).join('\n'));
   const handoffRules = formData.humanHandoffRules || { explicitRequest: true, frustration: true, aiUnableToResolve: true, failureThreshold: 2 };
 
@@ -64,6 +99,50 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     setFormData(settings);
     setHandoffKeywordsText((settings.humanHandoffKeywords || []).join('\n'));
   }, [settings]);
+
+  React.useEffect(() => {
+    if (activeSection !== 'overview' || !tenantId) return;
+    const controller = new AbortController();
+    let active = true;
+    const fetchJson = async (url: string) => {
+      const response = await fetch(url, { signal: controller.signal, cache: 'no-store' });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data?.error || `Request failed (${response.status})`);
+      return data;
+    };
+
+    setOverviewData((current) => ({ ...current, loading: true, errors: [] }));
+    const activityUrl = `/api/audit-logs?limit=6&tenantId=${encodeURIComponent(tenantId)}`;
+    void Promise.allSettled([
+      fetchJson('/api/health'),
+      fetchJson('/api/channels/status'),
+      fetchJson(`/api/tenants/${encodeURIComponent(tenantId)}/email`),
+      fetchJson(`/api/tenants/${encodeURIComponent(tenantId)}/brand`),
+      fetchJson(activityUrl),
+    ]).then((results) => {
+      if (!active) return;
+      const valueAt = (index: number) => results[index].status === 'fulfilled' ? results[index].value : null;
+      const errors = results.flatMap((result, index) => result.status === 'rejected'
+        ? [['health', 'channels', 'email', 'company profile', 'recent activity'][index]]
+        : []);
+      const auditPayload = valueAt(4);
+      setOverviewData({
+        loading: false,
+        loadedAt: new Date().toISOString(),
+        health: valueAt(0),
+        channels: valueAt(1),
+        email: valueAt(2),
+        brand: valueAt(3),
+        activity: Array.isArray(auditPayload?.logs) ? auditPayload.logs.slice(0, 6) : [],
+        errors,
+      });
+    });
+
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [activeSection, tenantId, overviewRefreshKey]);
 
   const channels: Channel[] = ['WHATSAPP', 'EMAIL', 'INSTAGRAM', 'FACEBOOK', 'LINKEDIN', 'WEBSITE'];
 
@@ -140,14 +219,14 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   };
 
   const sectionItems = [
-    { id: 'overview' as const, label: 'Overview', icon: <Activity className="h-4 w-4" /> },
-    { id: 'ai' as const, label: 'AI & Automation', icon: <Bot className="h-4 w-4" /> },
-    { id: 'channels' as const, label: 'Channels', icon: <Plug className="h-4 w-4" /> },
-    { id: 'email' as const, label: 'Email', icon: <Mail className="h-4 w-4" /> },
-    { id: 'notifications' as const, label: 'Notifications', icon: <Bell className="h-4 w-4" /> },
-    { id: 'preferences' as const, label: 'Preferences', icon: <SlidersHorizontal className="h-4 w-4" /> },
+    { id: 'overview' as const, label: 'Overview', description: 'Workspace health and operational readiness', icon: <Activity className="h-4 w-4" /> },
+    { id: 'ai' as const, label: 'AI & Automation', description: 'AI behaviour, handoff and runtime', icon: <Bot className="h-4 w-4" /> },
+    { id: 'channels' as const, label: 'Channels', description: 'Connected channels and website tools', icon: <Plug className="h-4 w-4" /> },
+    { id: 'email' as const, label: 'Email', description: 'Sending domain and inbound mailboxes', icon: <Mail className="h-4 w-4" /> },
+    { id: 'notifications' as const, label: 'Notifications', description: 'Browser alerts for workspace events', icon: <Bell className="h-4 w-4" /> },
+    { id: 'preferences' as const, label: 'Preferences', description: 'Workspace defaults and regional settings', icon: <SlidersHorizontal className="h-4 w-4" /> },
     ...(canEditEmail ? [
-      { id: 'teamBilling' as const, label: 'Team, Billing & Access', icon: <Users className="h-4 w-4" /> },
+      { id: 'teamBilling' as const, label: 'Team, Billing & Access', description: 'Members, roles, plan and usage', icon: <Users className="h-4 w-4" /> },
     ] : []),
   ];
   const activeSectionMeta = sectionItems.find((item) => item.id === activeSection) || sectionItems[0];
@@ -212,35 +291,333 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             <p className="text-xs text-slate-500">{activeSectionMeta.description}</p>
           </div>
 
-          {activeSection === 'overview' && (
-            <div className="space-y-4">
-              <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-3">
-                <div className="min-w-0 rounded-xl border border-slate-200 bg-slate-50 p-3 sm:p-4">
-                  <div className="flex items-center gap-2 text-[11px] font-medium text-slate-500"><Bot className="h-4 w-4 shrink-0" /> AI response modes</div>
-                  <div className="mt-2 text-2xl font-bold tabular-nums text-slate-950">{modeCounts.AUTO + modeCounts.REVIEW + modeCounts.OFF}<span className="ml-1 text-xs font-medium text-slate-400">channels</span></div>
-                  <div className="mt-2 flex flex-wrap gap-1.5 text-[10px] font-bold">
-                    <span className="rounded-full bg-orange-100 px-2 py-1 text-orange-800">AUTO {modeCounts.AUTO}</span>
-                    <span className="rounded-full bg-slate-200 px-2 py-1 text-slate-700">REVIEW {modeCounts.REVIEW}</span>
-                    <span className="rounded-full bg-slate-200 px-2 py-1 text-slate-600">OFF {modeCounts.OFF}</span>
+          {activeSection === 'overview' && (() => {
+            const health = overviewData.health;
+            const channelStatus = overviewData.channels;
+            const email = overviewData.email;
+            const brand = overviewData.brand?.brand || null;
+            const aiConfigured = health?.openaiKeyPresent === true;
+            const defaultLandingPage = workspacePreferences.defaultLandingPage || 'dashboard';
+            const landingPageLabel = defaultLandingPage === 'inbox' ? 'Unified Inbox' : defaultLandingPage === 'campaigns' ? 'Campaigns' : 'Dashboard';
+            const rules = formData.humanHandoffRules || { explicitRequest: true, frustration: true, aiUnableToResolve: true, failureThreshold: 2 };
+            const activeHandoffRules = [rules.explicitRequest, rules.frustration, rules.aiUnableToResolve].filter(Boolean).length;
+
+            const metaState = (key: 'whatsapp' | 'instagram' | 'messenger') => channelStatus?.[key];
+            const metaLabel = (key: 'whatsapp' | 'instagram' | 'messenger') => {
+              const state = metaState(key);
+              if (!state) return 'Not checked';
+              if (state.error) return 'Status unavailable';
+              if (state.connected) return 'Connected';
+              if (state.available === false) return 'Setup incomplete';
+              return 'Not connected';
+            };
+            const metaTone = (key: 'whatsapp' | 'instagram' | 'messenger') => {
+              const state = metaState(key);
+              if (state?.connected && !state.error) return 'success';
+              if (state?.error) return 'danger';
+              if (state && state.available === false) return 'warning';
+              return 'muted';
+            };
+            const emailLabel = !email
+              ? 'Not checked'
+              : email.canSend
+                ? 'Ready to send'
+                : email.domain
+                  ? email.status === 'verified' ? 'Sender setup needed' : 'Domain verification pending'
+                  : email.resendConfigured === false ? 'Provider unavailable' : 'Not configured';
+            const emailTone = !email ? 'muted' : email.canSend ? 'success' : email.domain ? 'warning' : email.resendConfigured === false ? 'danger' : 'muted';
+            const websiteReady = health?.websiteWebhook?.status === 'ready';
+            const websiteLabel = !health ? 'Not checked' : websiteReady ? 'Endpoint ready' : 'Unavailable';
+            const websiteTone = !health ? 'muted' : websiteReady ? 'success' : 'danger';
+
+            const monitoredConnected = [
+              Boolean(channelStatus?.whatsapp?.connected && !channelStatus?.whatsapp?.error),
+              Boolean(channelStatus?.instagram?.connected && !channelStatus?.instagram?.error),
+              Boolean(channelStatus?.messenger?.connected && !channelStatus?.messenger?.error),
+              Boolean(email?.canSend),
+            ].filter(Boolean).length;
+            const monitoredCount = 4;
+
+            const issues: Array<{ title: string; detail: string; section: 'ai' | 'channels' | 'email' }> = [];
+            if (!overviewData.loading && overviewData.errors.includes('health')) {
+              issues.push({ title: 'Core health check unavailable', detail: 'The application could not retrieve its current server health status.', section: 'ai' });
+            }
+            if (!overviewData.loading && overviewData.errors.includes('channels')) {
+              issues.push({ title: 'Channel status could not be loaded', detail: 'The workspace connection check failed. Open Channels to retry.', section: 'channels' });
+            }
+            if (!overviewData.loading && overviewData.errors.includes('email')) {
+              issues.push({ title: 'Email readiness could not be checked', detail: 'The email settings service did not return a status.', section: 'email' });
+            }
+            if (health && !aiConfigured) {
+              issues.push({ title: 'AI provider credentials are not configured', detail: 'AI requests may fail until a provider credential is configured on the server.', section: 'ai' });
+            }
+            if (email?.resendConfigured === false) {
+              issues.push({ title: 'Email sending provider is unavailable', detail: 'The platform email provider is not configured for this workspace.', section: 'email' });
+            } else if (email?.domain && email.status !== 'verified') {
+              issues.push({ title: 'Email domain verification is incomplete', detail: `${email.domain} is not verified yet. Complete the DNS checks before sending from this domain.`, section: 'email' });
+            } else if (email?.domain && email.status === 'verified' && !email.canSend) {
+              issues.push({ title: 'Email sender is not ready', detail: 'The domain is verified, but a usable sender address is not enabled yet.', section: 'email' });
+            }
+            if (channelStatus && ['whatsapp', 'instagram', 'messenger'].some((key) => channelStatus[key]?.error)) {
+              issues.push({ title: 'A channel connection check failed', detail: 'One or more Meta channel statuses could not be verified. Review Channels for details.', section: 'channels' });
+            }
+            if (health && !websiteReady) {
+              issues.push({ title: 'Website webhook endpoint is unavailable', detail: 'The server health check did not report the website webhook endpoint as ready.', section: 'channels' });
+            }
+            const checkedCount = [health, channelStatus, email, brand].filter(Boolean).length;
+            const healthLabel = overviewData.loading ? 'Checking' : issues.length > 0 ? 'Needs attention' : checkedCount > 0 ? 'Operational' : 'Unavailable';
+            const healthTone = overviewData.loading ? 'muted' : issues.length > 0 ? 'warning' : checkedCount > 0 ? 'success' : 'danger';
+
+            const channelRows = [
+              { name: 'WhatsApp', channel: 'WHATSAPP' as Channel, label: metaLabel('whatsapp'), tone: metaTone('whatsapp'), destination: 'channels' as const, note: channelStatus?.whatsapp?.connection?.displayPhoneNumber || 'Meta WhatsApp connection' },
+              { name: 'Instagram', channel: 'INSTAGRAM' as Channel, label: metaLabel('instagram'), tone: metaTone('instagram'), destination: 'channels' as const, note: channelStatus?.instagram?.connection?.username || 'Instagram business account' },
+              { name: 'Facebook Messenger', channel: 'FACEBOOK' as Channel, label: metaLabel('messenger'), tone: metaTone('messenger'), destination: 'channels' as const, note: channelStatus?.messenger?.connection?.pageName || 'Facebook Page connection' },
+              { name: 'Email', channel: 'EMAIL' as Channel, label: emailLabel, tone: emailTone, destination: 'email' as const, note: email?.fromAddress || email?.domain || 'Sending domain and sender' },
+              { name: 'Website', channel: 'WEBSITE' as Channel, label: websiteLabel, tone: websiteTone, destination: 'channels' as const, note: 'Inbound webhook endpoint' },
+              { name: 'LinkedIn', channel: 'LINKEDIN' as Channel, label: 'Connection status not monitored', tone: 'muted', destination: 'channels' as const, note: 'Operating mode shown; no live connection check is exposed yet' },
+            ];
+
+            const toneClass = (tone: string) => tone === 'success'
+              ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
+              : tone === 'warning'
+                ? 'bg-amber-50 text-amber-800 border-amber-100'
+                : tone === 'danger'
+                  ? 'bg-rose-50 text-rose-700 border-rose-100'
+                  : 'bg-slate-100 text-slate-600 border-slate-200';
+            const companyName = brand?.companyName || workspaceName || tenantId || 'Workspace';
+
+            return (
+              <div className="space-y-5">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <h3 className="text-base font-extrabold text-slate-950">Workspace Control Center</h3>
+                    <p className="mt-1 text-xs text-slate-500">A live view of configuration health, integrations and workspace readiness.</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] text-slate-400">{overviewData.loadedAt ? `Updated ${new Date(overviewData.loadedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : 'Live status checks'}</span>
+                    <button type="button" onClick={() => setOverviewRefreshKey((value) => value + 1)} disabled={overviewData.loading} className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-50" title="Refresh workspace checks">
+                      <RefreshCw className={overviewData.loading ? 'h-3.5 w-3.5 animate-spin' : 'h-3.5 w-3.5'} />
+                      Refresh
+                    </button>
                   </div>
                 </div>
-                <div className="min-w-0 rounded-xl border border-slate-200 bg-slate-50 p-3 sm:p-4">
-                  <div className="flex items-center gap-2 text-[11px] font-medium text-slate-500"><Bell className="h-4 w-4 shrink-0" /> Browser notifications</div>
-                  <div className="mt-2 text-lg font-bold text-slate-950">{notificationPreferences.newMessages || notificationPreferences.humanHandoff ? 'Enabled' : 'Off'}</div>
-                  <div className="mt-1 break-words text-[11px] text-slate-500">{[notificationPreferences.newMessages && 'New messages', notificationPreferences.humanHandoff && 'Human handoffs'].filter(Boolean).join(' · ') || 'No browser alerts selected'}</div>
+
+                <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                  <div className="min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs font-semibold text-slate-500">Workspace health</span>
+                      <Activity className="h-4 w-4 text-slate-400" />
+                    </div>
+                    <div className="mt-3 flex items-center gap-2">
+                      <span className={`h-2.5 w-2.5 rounded-full ${healthTone === 'success' ? 'bg-emerald-500' : healthTone === 'warning' ? 'bg-amber-500' : healthTone === 'danger' ? 'bg-rose-500' : 'bg-slate-400'}`} />
+                      <span className="text-xl font-extrabold text-slate-950">{healthLabel}</span>
+                    </div>
+                    <p className="mt-1 text-[11px] text-slate-500">{overviewData.loading ? 'Checking workspace services…' : `${issues.length} item(s) need review`}</p>
+                  </div>
+                  <div className="min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs font-semibold text-slate-500">Connected integrations</span>
+                      <Plug className="h-4 w-4 text-slate-400" />
+                    </div>
+                    <div className="mt-3 text-2xl font-extrabold tabular-nums text-slate-950">{channelStatus && email ? `${monitoredConnected}/${monitoredCount}` : '—'}</div>
+                    <p className="mt-1 text-[11px] text-slate-500">WhatsApp, Instagram, Messenger and Email</p>
+                  </div>
+                  <div className="min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs font-semibold text-slate-500">AI readiness</span>
+                      <Bot className="h-4 w-4 text-slate-400" />
+                    </div>
+                    <div className="mt-3 text-xl font-extrabold text-slate-950">{health ? aiConfigured ? 'Provider ready' : 'Needs setup' : 'Checking'}</div>
+                    <p className="mt-1 truncate text-[11px] text-slate-500">{health?.openaiModel || 'Runtime model not available'}</p>
+                  </div>
+                  <div className="min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs font-semibold text-slate-500">Workspace team</span>
+                      <Users className="h-4 w-4 text-slate-400" />
+                    </div>
+                    <div className="mt-3 text-2xl font-extrabold tabular-nums text-slate-950">{usersLoading ? '…' : users?.length ?? '—'}</div>
+                    <p className="mt-1 text-[11px] text-slate-500">{handoffCount} handoffs waiting · {unreadCount} unread conversations</p>
+                  </div>
                 </div>
-                <div className="min-w-0 rounded-xl border border-slate-200 bg-slate-50 p-3 sm:p-4">
-                  <div className="flex items-center gap-2 text-[11px] font-medium text-slate-500"><Users className="h-4 w-4 shrink-0" /> Workspace team</div>
-                  <div className="mt-2 text-lg font-bold text-slate-950">{users?.length ?? '—'}<span className="ml-1 text-xs font-medium text-slate-400">users</span></div>
-                  <div className="mt-1 text-[11px] text-slate-500">{canEditEmail ? 'Team and billing settings are available above' : 'Team management is admin-only'}</div>
+
+                {issues.length > 0 ? (
+                  <section className="overflow-hidden rounded-2xl border border-amber-200 bg-white shadow-sm">
+                    <div className="flex items-center justify-between gap-3 border-b border-amber-100 bg-amber-50/70 px-4 py-3">
+                      <div className="flex items-center gap-2">
+                        <AlertTriangle className="h-4 w-4 text-amber-600" />
+                        <h4 className="text-sm font-bold text-slate-900">Needs attention</h4>
+                      </div>
+                      <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-800">{issues.length} items</span>
+                    </div>
+                    <div className="divide-y divide-slate-100">
+                      {issues.map((issue, index) => (
+                        <button key={`${issue.title}-${index}`} type="button" onClick={() => setActiveSection(issue.section)} className="flex w-full items-start gap-3 px-4 py-3 text-left hover:bg-slate-50">
+                          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+                          <span className="min-w-0 flex-1">
+                            <span className="block text-xs font-semibold text-slate-900">{issue.title}</span>
+                            <span className="mt-1 block text-[11px] leading-relaxed text-slate-500">{issue.detail}</span>
+                          </span>
+                          <ExternalLink className="mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-400" />
+                        </button>
+                      ))}
+                    </div>
+                  </section>
+                ) : (
+                  <div className="flex items-center gap-2 rounded-xl border border-emerald-100 bg-emerald-50/60 px-4 py-3 text-xs text-emerald-800">
+                    <CheckCircle2 className="h-4 w-4 shrink-0" />
+                    {overviewData.loading ? 'Running workspace checks…' : 'No configuration issues detected by the available checks.'}
+                  </div>
+                )}
+
+                <div className="grid min-w-0 grid-cols-1 gap-4 xl:grid-cols-2">
+                  <section className="min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+                    <div className="flex items-center justify-between gap-2 border-b border-slate-100 px-4 py-3">
+                      <div>
+                        <h4 className="text-sm font-bold text-slate-900">Channel overview</h4>
+                        <p className="mt-0.5 text-[11px] text-slate-500">Connection status and operating mode</p>
+                      </div>
+                      <button type="button" onClick={() => setActiveSection('channels')} className="text-[11px] font-semibold text-orange-700 hover:text-orange-800">Manage channels</button>
+                    </div>
+                    <div className="divide-y divide-slate-100">
+                      {channelRows.map((row) => (
+                        <button key={row.channel} type="button" onClick={() => setActiveSection(row.destination)} className="flex w-full min-w-0 items-center gap-3 px-4 py-3 text-left transition hover:bg-slate-50">
+                          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-50 text-slate-500">
+                            {row.channel === 'EMAIL' ? <Mail className="h-4 w-4" /> : row.channel === 'WEBSITE' ? <Globe className="h-4 w-4" /> : row.channel === 'LINKEDIN' ? <ExternalLink className="h-4 w-4" /> : <Plug className="h-4 w-4" />}
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate text-xs font-semibold text-slate-900">{row.name}</span>
+                            <span className="block truncate text-[10px] text-slate-400">{row.note}</span>
+                          </span>
+                          <span className={`hidden rounded-full border px-2 py-1 text-[10px] font-semibold sm:inline-flex ${toneClass(row.tone)}`}>{row.label}</span>
+                          <span className="shrink-0 rounded-md bg-slate-100 px-2 py-1 text-[10px] font-bold text-slate-600">{normalizeChannelMode(formData.channelModes?.[row.channel])}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </section>
+
+                  <section className="min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                    <div className="flex items-center justify-between gap-2">
+                      <div>
+                        <h4 className="text-sm font-bold text-slate-900">AI & automation health</h4>
+                        <p className="mt-0.5 text-[11px] text-slate-500">Runtime and knowledge readiness</p>
+                      </div>
+                      <button type="button" onClick={() => setActiveSection('ai')} className="text-[11px] font-semibold text-orange-700 hover:text-orange-800">Configure</button>
+                    </div>
+                    <div className="mt-4 grid grid-cols-2 gap-3">
+                      <div className="rounded-xl bg-slate-50 p-3">
+                        <span className="text-[10px] text-slate-500">Provider</span>
+                        <p className="mt-1 text-sm font-bold text-slate-900">{health ? aiConfigured ? 'Configured' : 'Missing' : 'Unknown'}</p>
+                        <p className="mt-1 truncate text-[10px] text-slate-400">{health?.openaiModel || 'Model unavailable'}</p>
+                      </div>
+                      <div className="rounded-xl bg-slate-50 p-3">
+                        <span className="text-[10px] text-slate-500">Knowledge base</span>
+                        <p className="mt-1 text-sm font-bold text-slate-900">{knowledgeDocumentCount}</p>
+                        <p className="mt-1 text-[10px] text-slate-400">Documents in workspace</p>
+                      </div>
+                      <div className="rounded-xl bg-slate-50 p-3">
+                        <span className="text-[10px] text-slate-500">Human handoff</span>
+                        <p className="mt-1 text-sm font-bold text-slate-900">{formData.humanHandoffEnabled === false ? 'Disabled' : 'Enabled'}</p>
+                        <p className="mt-1 text-[10px] text-slate-400">{activeHandoffRules} built-in rules enabled</p>
+                      </div>
+                      <div className="rounded-xl bg-slate-50 p-3">
+                        <span className="text-[10px] text-slate-500">Response modes</span>
+                        <p className="mt-1 text-sm font-bold text-slate-900">{modeCounts.AUTO} Auto · {modeCounts.REVIEW} Review</p>
+                        <p className="mt-1 text-[10px] text-slate-400">{modeCounts.OFF} channels off</p>
+                      </div>
+                    </div>
+                    {knowledgeDocumentCount === 0 && <p className="mt-3 rounded-lg border border-amber-100 bg-amber-50 px-3 py-2 text-[11px] text-amber-800">No knowledge documents are currently loaded. Add and publish content in Knowledge Base to ground AI responses.</p>}
+                  </section>
+
+                  <section className="min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                    <div className="flex items-center justify-between gap-2">
+                      <div>
+                        <h4 className="text-sm font-bold text-slate-900">Email readiness</h4>
+                        <p className="mt-0.5 text-[11px] text-slate-500">Sending domain and sender configuration</p>
+                      </div>
+                      <button type="button" onClick={() => setActiveSection('email')} className="text-[11px] font-semibold text-orange-700 hover:text-orange-800">Open email settings</button>
+                    </div>
+                    <div className="mt-4 flex flex-wrap items-center gap-2">
+                      <span className={`rounded-full border px-2.5 py-1 text-[10px] font-semibold ${toneClass(emailTone)}`}>{emailLabel}</span>
+                      {email?.trackingEnabled !== undefined && <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[10px] font-semibold text-slate-600">Open/click tracking {email.trackingEnabled ? 'on' : 'off'}</span>}
+                    </div>
+                    <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                      <div className="min-w-0">
+                        <span className="text-[10px] text-slate-500">Sending domain</span>
+                        <p className="mt-1 truncate text-xs font-semibold text-slate-900">{email?.domain || 'Not configured'}</p>
+                      </div>
+                      <div className="min-w-0">
+                        <span className="text-[10px] text-slate-500">Sender address</span>
+                        <p className="mt-1 truncate text-xs font-semibold text-slate-900">{email?.fromAddress || 'Not configured'}</p>
+                      </div>
+                    </div>
+                    {email?.usingPlatformSender && <p className="mt-3 text-[11px] text-slate-500">Email is currently sent through the platform shared sender.</p>}
+                    {!email && <p className="mt-3 text-[11px] text-slate-500">Email status has not been verified yet.</p>}
+                  </section>
+
+                  <section className="min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                    <div className="flex items-center justify-between gap-2">
+                      <div>
+                        <h4 className="text-sm font-bold text-slate-900">Workspace information</h4>
+                        <p className="mt-0.5 text-[11px] text-slate-500">Company, regional and team defaults</p>
+                      </div>
+                      <button type="button" onClick={() => setActiveSection('preferences')} className="text-[11px] font-semibold text-orange-700 hover:text-orange-800">Preferences</button>
+                    </div>
+                    <dl className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                      <div className="min-w-0">
+                        <dt className="text-[10px] text-slate-500">Company</dt>
+                        <dd className="mt-1 truncate text-xs font-semibold text-slate-900">{companyName}</dd>
+                      </div>
+                      <div className="min-w-0">
+                        <dt className="text-[10px] text-slate-500">Timezone</dt>
+                        <dd className="mt-1 truncate text-xs font-semibold text-slate-900">{timezone || 'Managed in Company Profile'}</dd>
+                      </div>
+                      <div className="min-w-0">
+                        <dt className="text-[10px] text-slate-500">Default landing page</dt>
+                        <dd className="mt-1 truncate text-xs font-semibold text-slate-900">{landingPageLabel}</dd>
+                      </div>
+                      <div className="min-w-0">
+                        <dt className="text-[10px] text-slate-500">Browser alerts</dt>
+                        <dd className="mt-1 truncate text-xs font-semibold text-slate-900">{notificationPreferences.newMessages || notificationPreferences.humanHandoff ? 'Enabled' : 'Off'}</dd>
+                      </div>
+                    </dl>
+                    <div className="mt-4 flex flex-wrap gap-2 text-[10px] text-slate-500">
+                      <span className="rounded-full bg-slate-100 px-2.5 py-1">{users?.length ?? 0} team members</span>
+                      <span className="rounded-full bg-slate-100 px-2.5 py-1">{handoffCount} active handoffs</span>
+                      <span className="rounded-full bg-slate-100 px-2.5 py-1">{unreadCount} unread conversations</span>
+                    </div>
+                  </section>
                 </div>
+
+                <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+                  <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-4 py-3">
+                    <div>
+                      <h4 className="text-sm font-bold text-slate-900">Recent workspace activity</h4>
+                      <p className="mt-0.5 text-[11px] text-slate-500">Latest events recorded in Audit Logs</p>
+                    </div>
+                    <button type="button" onClick={onOpenAuditLogs} disabled={!onOpenAuditLogs} className="inline-flex items-center gap-1 text-[11px] font-semibold text-orange-700 hover:text-orange-800 disabled:opacity-50">View audit logs <ExternalLink className="h-3.5 w-3.5" /></button>
+                  </div>
+                  {overviewData.activity.length > 0 ? (
+                    <div className="divide-y divide-slate-100">
+                      {overviewData.activity.map((log) => (
+                        <div key={log.id} className="flex min-w-0 items-start gap-3 px-4 py-3">
+                          <span className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${log.severity === 'CRITICAL' || log.severity === 'SECURITY' ? 'bg-rose-50 text-rose-600' : log.severity === 'WARNING' ? 'bg-amber-50 text-amber-600' : 'bg-slate-50 text-slate-500'}`}>
+                            {log.severity === 'CRITICAL' || log.severity === 'SECURITY' || log.severity === 'WARNING' ? <AlertTriangle className="h-3.5 w-3.5" /> : <Clock3 className="h-3.5 w-3.5" />}
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            <span className="block break-words text-xs font-semibold text-slate-900">{log.description || log.action}</span>
+                            <span className="mt-1 block text-[10px] text-slate-500">{log.actor?.name || 'Workspace'} · {log.module || 'SYSTEM'}</span>
+                          </span>
+                          <time className="shrink-0 text-[10px] text-slate-400">{log.timestamp ? new Date(log.timestamp).toLocaleDateString() : '—'}</time>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="px-4 py-6 text-center text-xs text-slate-500">{overviewData.loading ? 'Loading recent activity…' : overviewData.errors.includes('recent activity') ? 'Recent activity could not be loaded.' : 'No workspace activity has been recorded yet.'}</div>
+                  )}
+                </section>
               </div>
-              <div className="flex items-start gap-2 rounded-xl border border-slate-200 bg-white px-3 py-3 text-xs text-slate-500">
-                <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-orange-600" />
-                <span>Choose a section from the navigation above. Each area opens on its own, so configuration panels no longer compete for space or load together.</span>
-              </div>
-            </div>
-          )}
+            );
+          })()}
 
           {activeSection === 'ai' && (
             <div className="space-y-5">

@@ -89,6 +89,12 @@ const UMRAH360_TELECALLERS = [
 const AVATAR_COLORS = ['bg-emerald-500', 'bg-blue-500', 'bg-purple-500', 'bg-amber-500', 'bg-rose-500', 'bg-cyan-500'];
 
 // TeleCRM Core Statuses with colors & labels
+const CRM_STAGE_LABELS: Record<string, string> = {
+  ALL: 'All', NEW: 'New', FOLLOW_UP: 'Follow up', CONTACTED: 'Contacted',
+  ENGAGED: 'Engaged', QUALIFIED: 'Qualified', DEMO_BOOKED: 'Demo booked',
+  CLOSED_WON: 'Won', CLOSED_LOST: 'Lost',
+};
+
 const TELECRM_STAGES: { key: string; label: string; bg: string; text: string; border: string; dot: string }[] = [
   { key: 'ALL', label: 'All Leads', bg: 'bg-slate-100', text: 'text-slate-700', border: 'border-slate-300', dot: 'bg-slate-400' },
   { key: 'NEW', label: 'Fresh / New', bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-300', dot: 'bg-blue-500' },
@@ -781,6 +787,22 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
     return counts;
   }, [leads]);
 
+  const crmSummary = useMemo(() => {
+    const currentLeads = leads.filter((lead) => {
+      const isCampaignLead = Boolean(
+        lead.campaignId || lead.campaignLeadId || (lead.leadType === 'OUTBOUND' && lead.source === 'EMAIL')
+      );
+      return !(isCampaignLead && lead.replyStatus !== 'REPLIED');
+    });
+    return {
+      total: currentLeads.length,
+      fresh: currentLeads.filter((lead) => lead.status === 'NEW').length,
+      followUps: currentLeads.filter((lead) => Boolean(lead.nextFollowUpAt) || lead.status === 'FOLLOW_UP').length,
+      hot: currentLeads.filter((lead) => (lead.leadScore || 0) >= 80).length,
+      demos: currentLeads.filter((lead) => lead.status === 'DEMO_BOOKED').length,
+    };
+  }, [leads]);
+
   const handleSelectAll = () => {
     const pageLeadIds = paginatedLeads.map((l) => l.leadId);
     const allSelectedOnPage = pageLeadIds.length > 0 && pageLeadIds.every((id) => selectedLeadIds.has(id));
@@ -874,35 +896,46 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
   const drawerActivities = drawerLead ? activities.filter((a) => a.leadId === drawerLead.leadId) : [];
 
   return (
-    <div className="w-full min-h-screen bg-slate-50 text-slate-800 font-sans pb-16">
+    <div className="crm-workspace w-full min-h-full bg-slate-50 text-slate-800 font-sans pb-10">
       {/* Sticky Header & Filter Container */}
-      <div className="sticky -top-4 sm:-top-5 z-30 bg-slate-50/95 backdrop-blur-xs pt-3 pb-2 border-b border-slate-200/60 shadow-xs -mx-3 sm:-mx-5 px-3 sm:px-5">
+      <div className="crm-sticky-header sticky -top-4 sm:-top-5 z-30 bg-slate-50/95 backdrop-blur-xs pt-3 pb-2 border-b border-slate-200/60 shadow-xs -mx-3 sm:-mx-5 px-3 sm:px-5">
         {/* 1. TeleCRM Top Header Bar */}
-        <div className="bg-white border-b border-slate-200/95 shadow-2xs">
-          <div className="max-w-[1700px] mx-auto px-4 py-3 flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
+        <div className="crm-header-card bg-white border-b border-slate-200/95 shadow-2xs">
+          <div className="crm-page-header max-w-[1700px] mx-auto px-4 py-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
             {/* Logo & Title */}
             <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-orange-500 to-orange-600 flex items-center justify-center text-white shadow-md shadow-orange-500/20">
+              <div className="crm-page-icon w-10 h-10 rounded-xl bg-gradient-to-tr from-orange-500 to-orange-600 flex items-center justify-center text-white shadow-md shadow-orange-500/20">
                 <PhoneCall className="w-5 h-5" />
               </div>
               <div>
                 <div className="flex items-center space-x-2">
-                  <h1 className="text-xl font-extrabold text-slate-900 tracking-tight">CRM</h1>
-                  <span className="px-2 py-0.5 text-[11px] font-bold bg-slate-100 text-slate-700 rounded-md">
-                    {processedLeads.length} Leads
+                  <h1 className="text-xl font-extrabold text-slate-900 tracking-tight">Lead management</h1>
+                  <span className="crm-lead-count px-2 py-0.5 text-[11px] font-bold bg-slate-100 text-slate-700 rounded-md">
+                    {processedLeads.length.toLocaleString()} matching leads
                   </span>
                 </div>
                 <p className="text-xs text-slate-500 font-medium">
-                  High-velocity lead management, click-to-call dialer & smart follow-up tracker
+                  Keep every enquiry, conversation and next step organized in one place.
                 </p>
               </div>
             </div>
 
             {/* Action Buttons */}
-            <div className="flex items-center space-x-2 self-stretch md:self-auto flex-wrap gap-y-2">
+            <div className="crm-header-actions flex items-center space-x-2 self-stretch md:self-auto flex-wrap gap-y-2">
+              <button
+                onClick={() => {
+                  setAddLeadMode('BULK');
+                  setIsAddLeadModalOpen(true);
+                }}
+                className="crm-secondary-action flex items-center space-x-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg border border-slate-300 transition-colors"
+                title="Import leads from CSV or Excel"
+              >
+                <Upload className="w-3.5 h-3.5" />
+                <span>Import leads</span>
+              </button>
               <button
                 onClick={handleExportCsv}
-                className="flex items-center space-x-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg border border-slate-300 transition-colors"
+                className="crm-secondary-action flex items-center space-x-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg border border-slate-300 transition-colors"
                 title="Export filtered leads to Excel/CSV"
               >
                 <Download className="w-3.5 h-3.5 text-slate-600" />
@@ -915,7 +948,7 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
                   setAddLeadMode('SINGLE');
                   setIsAddLeadModalOpen(true);
                 }}
-                className="flex items-center space-x-1.5 px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white text-xs font-bold rounded-lg shadow-sm shadow-orange-500/25 transition-all hover:scale-[1.02] active:scale-[0.98]"
+                className="crm-primary-action flex items-center space-x-1.5 px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white text-xs font-bold rounded-lg shadow-sm shadow-orange-500/25 transition-all hover:scale-[1.02] active:scale-[0.98]"
               >
                 <Plus className="w-4 h-4 stroke-[2.5]" />
                 <span>Add Lead</span>
@@ -923,8 +956,36 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
             </div>
           </div>
 
-          {/* 2. TeleCRM Signature Stage Counters Strip */}
-          <div className="max-w-[1700px] mx-auto px-4 pt-1 pb-2 flex items-center space-x-2 overflow-x-auto no-scrollbar border-t border-slate-100">
+          <div className="crm-summary-grid max-w-[1700px] mx-auto px-4 pb-4">
+            <div className="crm-summary-card crm-summary-card--total">
+              <span className="crm-summary-icon"><Users className="w-4 h-4" /></span>
+              <div className="crm-summary-copy"><span>Total leads</span><strong>{crmSummary.total.toLocaleString()}</strong></div>
+              <span className="crm-summary-foot">All active enquiries</span>
+            </div>
+            <div className="crm-summary-card crm-summary-card--new">
+              <span className="crm-summary-icon"><Zap className="w-4 h-4" /></span>
+              <div className="crm-summary-copy"><span>New leads</span><strong>{crmSummary.fresh.toLocaleString()}</strong></div>
+              <span className="crm-summary-foot">Awaiting first action</span>
+            </div>
+            <div className="crm-summary-card crm-summary-card--followup">
+              <span className="crm-summary-icon"><Clock className="w-4 h-4" /></span>
+              <div className="crm-summary-copy"><span>Follow-ups</span><strong>{crmSummary.followUps.toLocaleString()}</strong></div>
+              <span className="crm-summary-foot">Scheduled or due</span>
+            </div>
+            <div className="crm-summary-card crm-summary-card--hot">
+              <span className="crm-summary-icon"><Flame className="w-4 h-4" /></span>
+              <div className="crm-summary-copy"><span>Hot leads</span><strong>{crmSummary.hot.toLocaleString()}</strong></div>
+              <span className="crm-summary-foot">AI score 80 or higher</span>
+            </div>
+            <div className="crm-summary-card crm-summary-card--demo">
+              <span className="crm-summary-icon"><Calendar className="w-4 h-4" /></span>
+              <div className="crm-summary-copy"><span>Demo booked</span><strong>{crmSummary.demos.toLocaleString()}</strong></div>
+              <span className="crm-summary-foot">Consultations confirmed</span>
+            </div>
+          </div>
+
+          {/* 2. Pipeline stages — filter the table without leaving the page. */}
+          <div className="crm-stage-strip max-w-[1700px] mx-auto px-4 pt-3 pb-3 flex items-center space-x-2 overflow-x-auto no-scrollbar border-t border-slate-100">
             {TELECRM_STAGES.map((st) => {
               const isSelected = stageTab === st.key;
               const count = stageCounts[st.key] || 0;
@@ -932,14 +993,15 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
                 <button
                   key={st.key}
                   onClick={() => setStageTab(st.key)}
-                  className={`flex items-center space-x-2 px-3.5 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition-all border ${
+                  aria-pressed={isSelected}
+                  className={`crm-stage-tab flex items-center space-x-2 px-3.5 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition-all border ${
                     isSelected
                       ? `${st.bg} ${st.text} ${st.border} shadow-2xs ring-1 ring-orange-500/30 font-extrabold`
                       : 'bg-white hover:bg-slate-50 text-slate-600 border-slate-200'
                   }`}
                 >
                   <span className={`w-2 h-2 rounded-full ${st.dot}`} />
-                  <span>{st.label}</span>
+                  <span>{CRM_STAGE_LABELS[st.key] || st.label}</span>
                   <span
                     className={`px-1.5 py-0.2 rounded-md text-[11px] font-mono tabular-nums ${
                       isSelected ? 'bg-white/80 shadow-2xs' : 'bg-slate-100 text-slate-600'
@@ -954,8 +1016,8 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
         </div>
 
         {/* 3. TeleCRM Advanced Filter & Search Toolbar */}
-        <div className="max-w-[1700px] mx-auto px-4 mt-3">
-          <div className="bg-white border border-slate-200/90 rounded-xl p-3 shadow-2xs flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
+        <div className="crm-filter-wrap max-w-[1700px] mx-auto px-4 mt-3">
+          <div className="crm-filter-toolbar bg-white border border-slate-200/90 rounded-xl p-3 shadow-2xs flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
             <div className="relative flex-1 min-w-[260px]">
               <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
               <input
@@ -963,7 +1025,7 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
                 placeholder="Search by Name, Phone (+91...), Email, Package or City..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-9 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all font-medium"
+                className="crm-search-input w-full pl-9 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all font-medium"
               />
               {searchQuery && (
                 <button
@@ -975,7 +1037,7 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
               )}
             </div>
 
-            <div className="flex items-center space-x-2 flex-wrap gap-y-2">
+            <div className="crm-filter-controls flex items-center space-x-2 flex-wrap gap-y-2">
               <div className="flex items-center space-x-1.5 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1 text-xs">
                 <Calendar className="w-3.5 h-3.5 text-slate-500" />
                 <span className="text-[11px] font-semibold text-slate-500">Date:</span>
@@ -1085,8 +1147,8 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
 
       {/* 4. TeleCRM Bulk Action Float Bar */}
       {selectedLeadIds.size > 0 && (
-        <div className="max-w-[1700px] mx-auto px-4 mt-3">
-          <div className="bg-slate-900 text-white rounded-xl p-2.5 px-4 shadow-lg flex items-center justify-between flex-wrap gap-2 animate-in fade-in slide-in-from-top-2">
+        <div className="crm-bulk-actions max-w-[1700px] mx-auto px-4 mt-3">
+          <div className="crm-bulk-actions-bar bg-slate-900 text-white rounded-xl p-2.5 px-4 shadow-lg flex items-center justify-between flex-wrap gap-2 animate-in fade-in slide-in-from-top-2">
             <div className="flex items-center space-x-3">
               <span className="px-2 py-0.5 bg-orange-500 text-white font-extrabold text-xs rounded-md">
                 {selectedLeadIds.size} Selected
@@ -1152,10 +1214,21 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
       )}
 
       {/* 5. The Pure TeleCRM Leads Table */}
-      <div className="max-w-[1700px] mx-auto px-4 mt-3">
-        <div className="bg-white border border-slate-200/90 rounded-xl shadow-2xs overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
+      <div className="crm-table-wrap max-w-[1700px] mx-auto px-4 mt-4">
+        <div className="crm-table-panel bg-white border border-slate-200/90 rounded-xl shadow-2xs overflow-hidden">
+          <div className="crm-table-heading flex items-center justify-between gap-3">
+            <div>
+              <span className="crm-eyebrow">LEADS DIRECTORY</span>
+              <h2>All leads <span>{processedLeads.length.toLocaleString()}</span></h2>
+              <p>{stageTab === 'ALL' ? 'Every enquiry in your workspace, in one searchable view.' : 'Showing leads in the selected pipeline stage.'}</p>
+            </div>
+            <div className="crm-table-heading-meta">
+              <span><i className="crm-live-dot" /> Live workspace data</span>
+              <span>25 rows per page</span>
+            </div>
+          </div>
+          <div className="crm-table-scroll overflow-x-auto">
+            <table className="crm-leads-table w-full text-left border-collapse">
               <thead>
                 <tr className="bg-slate-100/80 border-b border-slate-200 text-[11px] font-bold text-slate-600 uppercase tracking-wider select-none">
                   <th className="py-3 px-3 w-10 text-center">
@@ -1283,7 +1356,7 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
                     return (
                       <tr
                         key={lead.leadId}
-                        className={`hover:bg-slate-50/90 transition-colors group ${
+                        className={`crm-lead-row hover:bg-slate-50/90 transition-colors group ${
                           isSelected ? 'bg-orange-50/50' : ''
                         }`}
                       >
@@ -1603,7 +1676,7 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
 
       {/* 6. Calling Modal */}
       {callingLead && (
-        <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4">
+        <div className="crm-modal-overlay fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl max-w-lg w-full shadow-2xl border border-slate-200 overflow-hidden animate-in zoom-in-95">
             <div className="bg-gradient-to-r from-orange-600 to-orange-500 text-white p-6 text-center relative">
               <button
@@ -1706,7 +1779,7 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
 
       {/* 7. WhatsApp Quick Sender Modal */}
       {whatsAppModalLead && (
-        <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4">
+        <div className="crm-modal-overlay fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl max-w-lg w-full shadow-2xl border border-slate-200 overflow-hidden animate-in zoom-in-95">
             <div className="bg-emerald-600 text-white p-4 flex items-center justify-between">
               <div className="flex items-center space-x-2">
@@ -1818,7 +1891,7 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
 
       {/* 8. Custom AI Auto Follow-Up Modal */}
       {customFollowUpLead && (
-        <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4">
+        <div className="crm-modal-overlay fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl max-w-sm w-full p-5 shadow-2xl border border-slate-200 space-y-4 animate-in zoom-in-95">
             <div className="flex items-center justify-between">
               <h3 className="font-bold text-sm text-slate-900 flex items-center space-x-1.5">
@@ -1874,7 +1947,7 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
 
       {/* 9. Quick Note Modal */}
       {quickNoteLead && (
-        <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4">
+        <div className="crm-modal-overlay fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl max-w-sm w-full p-5 shadow-2xl border border-slate-200 space-y-4 animate-in zoom-in-95">
             <div className="flex items-center justify-between">
               <h3 className="font-bold text-sm text-slate-900 flex items-center space-x-1.5">
@@ -1924,7 +1997,7 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
 
       {/* 10. Add New Lead Modal (Single or Bulk Excel/CSV upload) */}
       {isAddLeadModalOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4">
+        <div className="crm-modal-overlay fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl max-w-xl w-full shadow-2xl border border-slate-200 overflow-hidden animate-in zoom-in-95">
             {/* Modal Header with Single / Bulk Toggle */}
             <div className="bg-orange-500 text-white p-4 flex items-center justify-between">
@@ -2257,8 +2330,8 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
 
       {/* 11. TeleCRM Lead 360° Slide-over Drawer (Right Sheet) */}
       {drawerLead && drawerContact && (
-        <div className="fixed inset-0 z-40 bg-slate-950/40 backdrop-blur-2xs flex justify-end">
-          <div className="bg-white w-full max-w-xl h-full shadow-2xl border-l border-slate-200 flex flex-col animate-in slide-in-from-right duration-200">
+        <div className="crm-drawer-overlay fixed inset-0 z-40 bg-slate-950/40 backdrop-blur-2xs flex justify-end">
+          <div className="crm-drawer bg-white w-full max-w-xl h-full shadow-2xl border-l border-slate-200 flex flex-col animate-in slide-in-from-right duration-200">
             {/* Drawer Header */}
             <div className="p-5 border-b border-slate-200 bg-slate-50/80 flex items-start justify-between">
               <div className="flex items-center space-x-3">

@@ -482,3 +482,60 @@
   .unified-inbox-profile-wrapper,
   .unified-inbox-profile-toggle { transition: none !important; }
 }
+
+
+/* Follow-up card: compact, lead-context control matching the requested reference. */
+.unified-inbox-followup-card {
+  padding: 12px !important;
+  gap: 5px !important;
+}
+.unified-inbox-followup-card .unified-inbox-followup-status {
+  display: block !important;
+  min-height: 0 !important;
+  margin: 1px 0 0 !important;
+  padding: 8px 0 0 !important;
+  border: 0 !important;
+  border-top: 1px solid #edf0f5 !important;
+  background: transparent !important;
+  color: #66738a !important;
+  font-size: 9px !important;
+}
+.unified-inbox-followup-card .unified-inbox-followup-status > div {
+  display: block !important;
+  min-width: 0;
+  overflow: visible !important;
+  white-space: normal !important;
+  line-height: 1.45;
+}
+.unified-inbox-followup-card .unified-inbox-followup-status > div > span:first-child {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px !important;
+}
+.unified-inbox-followup-card .unified-inbox-followup-status > div > span:last-child {
+  display: block;
+  margin-top: 3px;
+  color: #909bad !important;
+  font-family: var(--font-sans, 'Lexend', sans-serif) !important;
+  font-size: 8px !important;
+}
+.unified-inbox-followup-card .unified-inbox-followup-status .animate-pulse {
+  animation: none !important;
+}
+.unified-inbox-followup-action:disabled {
+  opacity: .5;
+  cursor: not-allowed;
+}
+.unified-inbox-smtp-button {
+  flex: 0 0 32px !important;
+  padding: 0 !important;
+}
+.unified-inbox-profile-wrapper.w-0 {
+  width: 0 !important;
+  min-width: 0 !important;
+  max-width: 0 !important;
+  flex: 0 0 0 !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}

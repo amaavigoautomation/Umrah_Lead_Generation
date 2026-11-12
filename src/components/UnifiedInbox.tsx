@@ -901,41 +901,17 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
               <div className="flex items-center space-x-2">
                 {(activeConversation.channel === 'EMAIL' || activeConversation.channel === 'WEBSITE') && (
                   <button
+                    type="button"
                     onClick={() => setShowSmtpModal(true)}
-                    className={`flex items-center space-x-1 px-2.5 py-1 rounded-lg text-xs font-bold border transition ${
+                    aria-label="Email delivery settings"
+                    className={`unified-inbox-smtp-button flex h-8 w-8 items-center justify-center rounded-lg border transition ${
                       smtpStatus?.configured
                         ? 'bg-emerald-50 border-emerald-200 text-emerald-800 hover:bg-emerald-100'
-                        : 'bg-amber-50 border-amber-200 text-amber-800 hover:bg-amber-100 animate-pulse'
+                        : 'bg-amber-50 border-amber-200 text-amber-800 hover:bg-amber-100'
                     }`}
-                    title="Configure SMTP Delivery & Gmail App Password"
+                    title="Email delivery settings"
                   >
                     <Key className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                    <span>{smtpStatus?.emailProvider === 'resend' ? 'Resend Live' : smtpStatus?.configured ? 'SMTP Live' : 'Configure SMTP'}</span>
-                  </button>
-                )}
-
-                {/* Auto Follow-Up Toggle Button */}
-                {activeLead && (
-                  <button
-                    onClick={() => handleToggleAutoFollowUp(!isAutoFollowUpUiActive)}
-                    disabled={isTogglingAutoFollowUp || (activeLeadHasBookedDemo && !isAutoFollowUpUiActive)}
-                    className={`unified-inbox-followup-toggle flex items-center space-x-1.5 px-2.5 py-1 rounded-lg text-xs font-bold border transition ${
-                      isAutoFollowUpUiActive
-                        ? 'bg-emerald-50 border-emerald-300 text-emerald-800 hover:bg-emerald-100'
-                        : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
-                    }`}
-                    title={activeLeadHasBookedDemo ? 'A demo is booked. Auto Follow-Up cannot be enabled for this lead.' : 'Controls the recurring sequence. CRM-scheduled one-time messages are shown separately below.'}
-                  >
-                    <Clock className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                    <span>
-                      Recurring AI Auto Follow-Up [{isAutoFollowUpUiActive ? ' ON ' : ' OFF '}]
-                      {!activeLead?.autoFollowUp?.enabled && activeLead?.autoFollowUp?.disabledReason === 'completed' && (
-                        <span className="ml-1 font-semibold text-slate-500">
-                          · Completed {activeLead.autoFollowUp.attemptCount || activeLead.autoFollowUp.maxAttempts}/
-                          {activeLead.autoFollowUp.maxAttempts || activeLead.autoFollowUp.attemptCount}
-                        </span>
-                      )}
-                    </span>
                   </button>
                 )}
 
@@ -994,46 +970,6 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
                     <p className="text-amber-800 mt-1">CRM owner: {activeLead?.ownerId || 'Unassigned'}{!activeLead?.ownerId ? ' · This conversation remains unassigned until an admin assigns it.' : ' · Existing CRM assignment is retained.'}</p>
                   </div>
                 </div>
-              </div>
-            )}
-
-            {/* Compact Auto Follow-Up Status Bar */}
-            {activeLead && (
-              <div className="unified-inbox-followup-status px-3.5 py-1.5 bg-orange-50/80 border-b border-orange-100 text-xs flex items-center justify-between">
-                <div className="flex items-center space-x-2">
-                  <span className="flex items-center space-x-1.5">
-                    <span className={`w-2 h-2 rounded-full ${isAutoFollowUpUiActive ? 'bg-orange-500 animate-pulse' : 'bg-slate-400'}`} />
-                    <span className="font-semibold text-slate-800">Recurring AI Auto Follow-Up Sequence:</span>
-                  </span>
-                  {activeLead.demoStatus === 'BOOKED' || activeLead.status === 'DEMO_BOOKED' ? (
-                    <span className="text-amber-700 font-medium">[ OFF ] — Demo booked</span>
-                  ) : followUpClosedByReply ? (
-                    <span className="text-slate-600 font-medium">[ OFF ] — CLOSED: Lead replied</span>
-                  ) : isAutoFollowUpUiActive ? (
-                    activeLead.autoFollowUp?.nextScheduledAt ? (
-                      new Date(activeLead.autoFollowUp.nextScheduledAt).getTime() <= Date.now() ? (
-                        <span className="text-amber-700 font-medium animate-pulse">[ ON ] — Due now (processing follow-up...)</span>
-                      ) : (
-                        <span className="text-orange-700 font-medium">
-                          [ ON ] — Next follow-up: {new Date(activeLead.autoFollowUp.nextScheduledAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })}
-                        </span>
-                      )
-                    ) : (
-                      <span className="text-blue-700 font-medium">[ ON ] — Waiting for our next message</span>
-                    )
-                  ) : activeLead.autoFollowUp?.disabledReason === 'completed' ? (
-                    <span className="text-slate-600 font-medium">
-                      [ OFF ] — Completed: all {activeLead.autoFollowUp.maxAttempts || activeLead.autoFollowUp.attemptCount} follow-ups sent
-                      {activeLead.autoFollowUp.completedAt
-                        ? ` (${new Date(activeLead.autoFollowUp.completedAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })})`
-                        : ''}
-                      . Turn ON to start again.
-                    </span>
-                  ) : (
-                    <span className="text-slate-500 font-medium">[ OFF ] — No automatic follow-up</span>
-                  )}
-                </div>
-                <span className="text-[10px] text-slate-500 font-mono">Human Control Layer</span>
               </div>
             )}
 
@@ -1421,6 +1357,72 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
               <span>{activeContact.companyName}</span>
             </div>
           </div>
+
+          {/* Recurring follow-up controls live with lead context, not in the conversation toolbar. */}
+          {activeLead && (
+            <div className="unified-inbox-followup-card p-3 bg-white rounded-2xl border border-slate-200 shadow-2xs space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="text-xs font-bold text-slate-800">Recurring follow-up</p>
+                  <p className="text-[10px] text-slate-500 mt-0.5">
+                    {isAutoFollowUpUiActive ? 'Recurring sequence is running' : 'No recurring sequence running'}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleToggleAutoFollowUp(!isAutoFollowUpUiActive)}
+                  disabled={isTogglingAutoFollowUp || (activeLeadHasBookedDemo && !isAutoFollowUpUiActive)}
+                  title={activeLeadHasBookedDemo ? 'A demo is booked. Auto Follow-Up cannot be enabled for this lead.' : 'Turn the recurring follow-up sequence on or off.'}
+                  className={`unified-inbox-followup-action shrink-0 px-3 py-1.5 rounded-lg border text-[10px] font-bold transition ${
+                    isAutoFollowUpUiActive
+                      ? 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100'
+                      : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
+                  }`}
+                >
+                  {isTogglingAutoFollowUp ? 'Saving…' : isAutoFollowUpUiActive ? 'Turn off' : 'Turn on'}
+                </button>
+              </div>
+                          {/* Compact Auto Follow-Up Status Bar */}
+            {activeLead && (
+              <div className="unified-inbox-followup-status px-3.5 py-1.5 bg-orange-50/80 border-b border-orange-100 text-xs flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <span className="flex items-center space-x-1.5">
+                    <span className={`w-2 h-2 rounded-full ${isAutoFollowUpUiActive ? 'bg-orange-500 animate-pulse' : 'bg-slate-400'}`} />
+                    <span className="font-semibold text-slate-800">Recurring AI Auto Follow-Up Sequence:</span>
+                  </span>
+                  {activeLead.demoStatus === 'BOOKED' || activeLead.status === 'DEMO_BOOKED' ? (
+                    <span className="text-amber-700 font-medium">[ OFF ] — Demo booked</span>
+                  ) : followUpClosedByReply ? (
+                    <span className="text-slate-600 font-medium">[ OFF ] — CLOSED: Lead replied</span>
+                  ) : isAutoFollowUpUiActive ? (
+                    activeLead.autoFollowUp?.nextScheduledAt ? (
+                      new Date(activeLead.autoFollowUp.nextScheduledAt).getTime() <= Date.now() ? (
+                        <span className="text-amber-700 font-medium animate-pulse">[ ON ] — Due now (processing follow-up...)</span>
+                      ) : (
+                        <span className="text-orange-700 font-medium">
+                          [ ON ] — Next follow-up: {new Date(activeLead.autoFollowUp.nextScheduledAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })}
+                        </span>
+                      )
+                    ) : (
+                      <span className="text-blue-700 font-medium">[ ON ] — Waiting for our next message</span>
+                    )
+                  ) : activeLead.autoFollowUp?.disabledReason === 'completed' ? (
+                    <span className="text-slate-600 font-medium">
+                      [ OFF ] — Completed: all {activeLead.autoFollowUp.maxAttempts || activeLead.autoFollowUp.attemptCount} follow-ups sent
+                      {activeLead.autoFollowUp.completedAt
+                        ? ` (${new Date(activeLead.autoFollowUp.completedAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })})`
+                        : ''}
+                      . Turn ON to start again.
+                    </span>
+                  ) : (
+                    <span className="text-slate-500 font-medium">[ OFF ] — No automatic follow-up</span>
+                  )}
+                </div>
+                <span className="text-[10px] text-slate-500 font-mono">Human Control Layer</span>
+              </div>
+            )}
+            </div>
+          )}
 
           {/* Connected Channels & Platform Streams */}
           <div className="p-3.5 bg-white rounded-2xl border border-slate-200 shadow-2xs space-y-2">

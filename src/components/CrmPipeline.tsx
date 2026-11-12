@@ -896,9 +896,9 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
   const drawerActivities = drawerLead ? activities.filter((a) => a.leadId === drawerLead.leadId) : [];
 
   return (
-    <div className="crm-workspace w-full h-full min-h-0 flex flex-col overflow-hidden bg-slate-50 text-slate-800 font-sans">
+    <div className="crm-workspace w-full min-h-full bg-slate-50 text-slate-800 font-sans pb-10">
       {/* Sticky Header & Filter Container */}
-      <div className="crm-sticky-header shrink-0 z-10 bg-slate-50/95 pt-3 pb-2 border-b border-slate-200/60 shadow-xs">
+      <div className="crm-sticky-header sticky top-0 z-30 bg-slate-50/95 pt-3 pb-2 border-b border-slate-200/60 shadow-xs">
         {/* 1. TeleCRM Top Header Bar */}
         <div className="crm-header-card bg-white border-b border-slate-200/95 shadow-2xs">
           <div className="crm-page-header max-w-[1700px] mx-auto px-4 py-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
@@ -1227,7 +1227,7 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
               <span>25 rows per page</span>
             </div>
           </div>
-          <div className="crm-table-scroll overflow-auto">
+          <div className="crm-table-scroll overflow-x-auto">
             <table className="crm-leads-table w-full text-left border-collapse">
               <thead>
                 <tr className="bg-slate-100/80 border-b border-slate-200 text-[11px] font-bold text-slate-600 uppercase tracking-wider select-none">

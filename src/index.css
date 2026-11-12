@@ -1381,3 +1381,89 @@
     padding-bottom: 7px;
   }
 }
+
+
+/* CRM page-level scrolling: all 25 paginated rows remain in normal document
+   flow. The CRM toolbar sticks to the top of the app's scrollable main area;
+   only horizontal table overflow is handled by the table wrapper. */
+.crm-workspace {
+  display:block;
+  width:100%;
+  height:auto;
+  min-height:100%;
+  max-height:none;
+  overflow:visible;
+  padding-bottom:40px;
+}
+.crm-workspace .crm-sticky-header {
+  position:sticky;
+  top:0;
+  z-index:30;
+  display:block;
+  width:auto;
+  min-width:0;
+  height:auto;
+  margin:0;
+  padding:8px 0 10px;
+  flex:none;
+  background:rgba(245,247,251,.98);
+  border-bottom:1px solid #e7ebf2;
+  box-shadow:0 5px 18px rgba(20,34,58,.06);
+  backdrop-filter:blur(12px);
+}
+.crm-workspace .crm-table-wrap {
+  display:block;
+  width:100%;
+  height:auto;
+  min-height:0;
+  margin-top:13px;
+  padding-bottom:12px;
+  overflow:visible;
+}
+.crm-workspace .crm-table-panel {
+  display:block;
+  width:100%;
+  height:auto;
+  min-height:0;
+  overflow:visible;
+}
+.crm-workspace .crm-table-heading {
+  display:flex;
+}
+.crm-workspace .crm-table-scroll {
+  display:block;
+  width:100%;
+  height:auto;
+  max-height:none;
+  min-height:0;
+  overflow-x:auto;
+  overflow-y:visible;
+  overscroll-behavior-x:contain;
+  scrollbar-gutter:auto;
+}
+.crm-workspace .crm-leads-table {
+  width:max(100%,1320px);
+  min-width:1320px;
+}
+.crm-workspace .crm-leads-table thead th {
+  position:static;
+  top:auto;
+  z-index:auto;
+}
+.crm-workspace .crm-table-pagination {
+  display:flex;
+  position:relative;
+  flex:none;
+  width:100%;
+}
+@media(max-width:760px) {
+  .crm-workspace .crm-sticky-header {
+    position:sticky;
+    top:0;
+    padding:7px 0 8px;
+  }
+  .crm-workspace .crm-table-wrap {
+    margin-top:9px;
+    padding-bottom:9px;
+  }
+}

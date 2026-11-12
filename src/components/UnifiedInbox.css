@@ -580,8 +580,8 @@
   margin-left: auto;
   padding: 0 7px;
   border-radius: 8px;
-  background: #f0ebff;
-  color: #7652d5;
+  background: #fff1e8;
+  color: #bd5d17;
   font-size: 10px;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
@@ -637,11 +637,11 @@
 .uinbox-view-item:hover, .uinbox-channel-item:hover { background: #fff; color: #26334a; }
 .uinbox-view-item.is-active {
   border-color: #e9e2ff;
-  background: #eee9ff;
-  color: #6844c5;
+  background: #fff1e8;
+  color: #bd5d17;
   font-weight: 800;
 }
-.uinbox-view-item.is-active svg { color: #7958d6; }
+.uinbox-view-item.is-active svg { color: #ef741a; }
 .uinbox-view-label, .uinbox-connection-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .uinbox-view-count, .uinbox-channel-count {
   min-width: 17px;
@@ -777,9 +777,9 @@
   color: #c46624;
 }
 .uinbox-composer-tab-group button:nth-child(2).is-active {
-  border-bottom-color: #7754d4;
-  background: #f6f2ff;
-  color: #7252cc;
+  border-bottom-color: #0848ef;
+  background: #eff4ff;
+  color: #0848ef;
 }
 .uinbox-composer-tabs > span {
   display: flex;
@@ -795,13 +795,13 @@
   gap: 10px;
   padding: 12px 16px;
   border-bottom: 1px solid #e8ebf2;
-  background: #fcfbff;
+  background: #f7f9fd;
 }
 .uinbox-ai-draft-preview {
   max-height: 150px;
   overflow: auto;
   padding: 10px 12px;
-  border: 1px solid #e8e2f7;
+  border: 1px solid #dce7ff;
   border-radius: 10px;
   background: #fff;
   color: #34405a;
@@ -817,9 +817,9 @@
   justify-content: center;
   gap: 7px;
   padding: 0 12px;
-  border: 1px solid #e6ddf9;
+  border: 1px solid #d6e4ff;
   border-radius: 8px;
-  background: #7552d2;
+  background: #0848ef;
   color: #fff;
   font-size: 9px;
   font-weight: 800;
@@ -854,3 +854,97 @@
 @media (prefers-reduced-motion: reduce) {
   .uinbox-resize-handle::after, .uinbox-view-item, .uinbox-channel-item { transition: none !important; }
 }
+
+/* Unified Inbox — Dashboard theme + shared typography scale.
+   Views panel is the reference scale for the other three panels. */
+.unified-inbox-layout-root {
+  --uinbox-font-heading: 12px;
+  --uinbox-font-body: 10px;
+  --uinbox-font-message: 11px;
+  --uinbox-font-meta: 9px;
+  --uinbox-font-micro: 8px;
+  font-family: var(--font-sans, 'Lexend', sans-serif) !important;
+  color: #172033;
+}
+.unified-inbox-layout-root .unified-inbox-conversation-item {
+  color: #26334a;
+  font-size: var(--uinbox-font-body) !important;
+}
+.unified-inbox-layout-root .unified-inbox-conversation-item > div:first-child span,
+.unified-inbox-layout-root .unified-inbox-conversation-item > div:first-child strong {
+  font-size: 10px !important;
+}
+.unified-inbox-layout-root .unified-inbox-conversation-item > p:first-of-type {
+  color: #748096 !important;
+  font-size: var(--uinbox-font-meta) !important;
+}
+.unified-inbox-layout-root .unified-inbox-conversation-item > p:nth-of-type(2) {
+  color: #364258 !important;
+  font-size: var(--uinbox-font-body) !important;
+  line-height: 1.5 !important;
+}
+.unified-inbox-layout-root .unified-inbox-conversation-item .text-\\[10px\\],
+.unified-inbox-layout-root .unified-inbox-conversation-item .text-\\[9px\\] {
+  font-size: var(--uinbox-font-micro) !important;
+}
+.unified-inbox-layout-root .unified-inbox-conversation-item .text-xs {
+  font-size: var(--uinbox-font-body) !important;
+}
+.unified-inbox-layout-root .uinbox-conversation-list-heading strong { font-size: 10px !important; }
+.unified-inbox-layout-root .uinbox-conversation-list-heading span { font-size: 8px !important; }
+.unified-inbox-layout-root .unified-inbox-thread-header h3 { font-size: var(--uinbox-font-heading) !important; }
+.unified-inbox-layout-root .unified-inbox-thread-header p { font-size: var(--uinbox-font-meta) !important; }
+.unified-inbox-layout-root .unified-inbox-thread-header button,
+.unified-inbox-layout-root .unified-inbox-thread-header > div:last-child > div { font-size: var(--uinbox-font-meta) !important; }
+.unified-inbox-layout-root .unified-inbox-message-meta { font-size: var(--uinbox-font-meta) !important; }
+.unified-inbox-layout-root .unified-inbox-message-meta > span:first-child { font-size: var(--uinbox-font-micro) !important; }
+.unified-inbox-layout-root .unified-inbox-message-bubble {
+  font-size: var(--uinbox-font-message) !important;
+  line-height: 1.6 !important;
+}
+.unified-inbox-layout-root .unified-inbox-message-bubble h1,
+.unified-inbox-layout-root .unified-inbox-message-bubble h2,
+.unified-inbox-layout-root .unified-inbox-message-bubble h3,
+.unified-inbox-layout-root .unified-inbox-message-bubble h4 {
+  color: inherit;
+  font-size: 11px !important;
+  line-height: 1.4 !important;
+}
+.unified-inbox-layout-root .unified-inbox-message-bubble p,
+.unified-inbox-layout-root .unified-inbox-message-bubble li { font-size: var(--uinbox-font-message); }
+.unified-inbox-layout-root .unified-inbox-email-subject,
+.unified-inbox-layout-root .unified-inbox-handoff { font-size: var(--uinbox-font-body) !important; }
+.unified-inbox-layout-root .unified-inbox-handoff p,
+.unified-inbox-layout-root .unified-inbox-followup-status,
+.unified-inbox-layout-root .unified-inbox-scheduled-status { font-size: var(--uinbox-font-meta) !important; }
+.unified-inbox-layout-root .unified-inbox-composer textarea { font-size: var(--uinbox-font-body) !important; }
+.unified-inbox-layout-root .unified-inbox-composer button,
+.unified-inbox-layout-root .uinbox-composer-tab-group button,
+.unified-inbox-layout-root .uinbox-composer-tabs > span { font-size: var(--uinbox-font-meta) !important; }
+.unified-inbox-layout-root .unified-inbox-profile h4 { font-size: var(--uinbox-font-heading) !important; }
+.unified-inbox-layout-root .unified-inbox-profile h5,
+.unified-inbox-layout-root .unified-inbox-profile .text-xs { font-size: var(--uinbox-font-body) !important; }
+.unified-inbox-layout-root .unified-inbox-profile .text-\\[11px\\],
+.unified-inbox-layout-root .unified-inbox-profile .text-\\[10px\\] { font-size: var(--uinbox-font-meta) !important; }
+.unified-inbox-layout-root .unified-inbox-profile button { font-size: var(--uinbox-font-meta) !important; }
+.unified-inbox-layout-root .unified-inbox-profile .text-\\[8px\\] { font-size: var(--uinbox-font-micro) !important; }
+/* Orange for selection, Umrah360 blue for AI actions. */
+.unified-inbox-layout-root .uinbox-view-item.is-active {
+  border-color: #f5d5c0 !important;
+  background: #fff1e8 !important;
+  color: #bd5d17 !important;
+}
+.unified-inbox-layout-root .uinbox-view-item.is-active svg { color: var(--brand-orange, #ef741a) !important; }
+.unified-inbox-layout-root .uinbox-views-total { background: #fff1e8 !important; color: #bd5d17 !important; }
+.unified-inbox-layout-root .uinbox-composer-tab-group button:nth-child(2).is-active {
+  border-bottom-color: var(--brand-blue, #0848ef) !important;
+  background: #eff4ff !important;
+  color: var(--brand-blue, #0848ef) !important;
+}
+.unified-inbox-layout-root .uinbox-ai-draft-tab { background: #f7f9fd !important; border-bottom-color: #e7eaf1 !important; }
+.unified-inbox-layout-root .uinbox-ai-draft-preview { border-color: #dce7ff !important; color: #263653 !important; }
+.unified-inbox-layout-root .uinbox-ai-generate-button {
+  border-color: var(--brand-blue, #0848ef) !important;
+  background: var(--brand-blue, #0848ef) !important;
+}
+.unified-inbox-layout-root .uinbox-ai-use-button { border-color: #e2e8f0 !important; color: #56627a !important; }

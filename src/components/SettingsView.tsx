@@ -5,7 +5,6 @@ import {
   CheckCircle,
   ChevronRight,
   CreditCard,
-  KeyRound,
   Mail,
   Plug,
   Save,
@@ -52,8 +51,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [isSaved, setIsSaved] = useState(false);
   const [isSavingSettings, setIsSavingSettings] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [aiCredentialStatus, setAiCredentialStatus] = useState<'loading' | 'configured' | 'missing' | 'unavailable'>('loading');
-  const [aiModel, setAiModel] = useState('gpt-4o-mini');
   const [activeSection, setActiveSection] = useState<'overview' | 'ai' | 'channels' | 'email' | 'team' | 'billing'>('overview');
   const [handoffKeywordsText, setHandoffKeywordsText] = useState((settings.humanHandoffKeywords || []).join('\n'));
   const handoffRules = formData.humanHandoffRules || { explicitRequest: true, frustration: true, aiUnableToResolve: true, failureThreshold: 2 };
@@ -62,24 +59,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     setFormData(settings);
     setHandoffKeywordsText((settings.humanHandoffKeywords || []).join('\n'));
   }, [settings]);
-
-  React.useEffect(() => {
-    const controller = new AbortController();
-    fetch('/api/health', { signal: controller.signal })
-      .then((res) => {
-        if (!res.ok) throw new Error('AI status unavailable');
-        return res.json();
-      })
-      .then((data) => {
-        if (data?.status !== 'healthy') throw new Error('AI status unavailable');
-        setAiCredentialStatus(data.openaiKeyPresent ? 'configured' : 'missing');
-        setAiModel(String(data.openaiModel || 'gpt-4o-mini'));
-      })
-      .catch((error) => {
-        if (error?.name !== 'AbortError') setAiCredentialStatus('unavailable');
-      });
-    return () => controller.abort();
-  }, []);
 
   const channels: Channel[] = ['WHATSAPP', 'EMAIL', 'INSTAGRAM', 'FACEBOOK', 'LINKEDIN', 'WEBSITE'];
 
@@ -191,7 +170,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
           {activeSection === 'overview' && (
             <div className="space-y-5">
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
                   <span className="text-[11px] font-medium text-slate-500">AI response modes</span>
                   <div className="mt-2 text-2xl font-bold tabular-nums text-slate-950">{modeCounts.AUTO + modeCounts.REVIEW + modeCounts.OFF}<span className="ml-1 text-xs font-medium text-slate-400">channels</span></div>
@@ -200,11 +179,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     <span className="rounded-full bg-slate-200 px-2 py-1 text-slate-700">REVIEW {modeCounts.REVIEW}</span>
                     <span className="rounded-full bg-slate-200 px-2 py-1 text-slate-600">OFF {modeCounts.OFF}</span>
                   </div>
-                </div>
-                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                  <span className="text-[11px] font-medium text-slate-500">AI credentials</span>
-                  <div className="mt-2 text-lg font-bold text-slate-950">{aiCredentialStatus === 'configured' ? 'Configured' : aiCredentialStatus === 'missing' ? 'Needs attention' : aiCredentialStatus === 'loading' ? 'Checking…' : 'Unavailable'}</div>
-                  <div className="mt-1 text-[11px] text-slate-500">Server-side environment</div>
                 </div>
                 <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
                   <span className="text-[11px] font-medium text-slate-500">Workspace team</span>
@@ -325,29 +299,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         </div>
       </div>
 
-      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm space-y-3">
-        <div className="flex items-center gap-2">
-          <KeyRound className="h-4 w-4 text-orange-600" />
-          <h3 className="text-sm font-bold text-slate-900">AI provider credentials</h3>
-          <span className={`ml-auto inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-bold ${aiCredentialStatus === 'configured' ? 'bg-emerald-50 text-emerald-700' : aiCredentialStatus === 'missing' ? 'bg-amber-50 text-amber-700' : 'bg-slate-100 text-slate-600'}`}>
-            <span className={`h-1.5 w-1.5 rounded-full ${aiCredentialStatus === 'configured' ? 'bg-emerald-500' : aiCredentialStatus === 'missing' ? 'bg-amber-500' : 'bg-slate-400'}`} />
-            {aiCredentialStatus === 'configured' ? 'Configured' : aiCredentialStatus === 'missing' ? 'Credential missing' : aiCredentialStatus === 'loading' ? 'Checking status' : 'Status unavailable'}
-          </span>
-        </div>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-            <span className="block text-[11px] text-slate-500">Runtime model</span>
-            <span className="mt-1 block font-mono text-sm font-semibold text-slate-900">{aiModel}</span>
-          </div>
-          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-            <span className="block text-[11px] text-slate-500">Credential storage</span>
-            <span className="mt-1 block text-sm font-semibold text-slate-900">Server environment</span>
-          </div>
-        </div>
-        <p className="text-xs leading-relaxed text-slate-500">
-          AI secrets are read by the server from <code className="font-mono text-slate-700">OPENAI_API_KEY</code> or <code className="font-mono text-slate-700">GEMINI_API_KEY</code>. They are not displayed or entered in the browser. Update credentials in the deployment environment when rotation is required.
-        </p>
-      </section>
       {/* Section 46 & 47: Debouncing, Idempotency & Webhooks */}
       <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs space-y-4 text-slate-900">
         <h3 className="font-bold text-sm text-slate-900 font-display flex items-center space-x-2">

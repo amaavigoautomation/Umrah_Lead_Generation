@@ -116,6 +116,8 @@ export interface EmailTemplate {
   preheader?: string;
   /** Reusable Visual Builder / Full HTML design snapshot used by Template Studio. */
   designSnapshot?: Record<string, any>;
+  /** Purpose separates website form acknowledgements from outbound campaign templates. */
+  purpose?: 'CAMPAIGN' | 'WEBSITE_FORM_THANKYOU' | string;
   createdAt: string;
   updatedAt: string;
 }
@@ -459,6 +461,8 @@ export interface Conversation {
   /** Why the thank-you email was not sent (shown in the thread; cleared once it goes out). */
   thankYouError?: string;
   thankYouAttemptedAt?: string;
+  /** Per-submission channel drafts for website form confirmations; WEBSITE remains the parent conversation channel. */
+  websiteFormConfirmationDrafts?: Array<{ submissionId: string; status: 'PENDING' | 'APPROVED' | 'COMPLETED'; channels: Array<{ channel: 'EMAIL' | 'WHATSAPP'; messageId: string; subject?: string; text: string; status: string }> }>;
   customerEmail?: string;
   memory?: ConversationMemory;
   startedAt: string;
@@ -523,6 +527,9 @@ export interface Message {
   smtpMessageId?: string;
   deliveryStatus?: 'DELIVERED' | 'FAILED' | 'PENDING' | 'QUEUED' | string;
   emailDeliveredAt?: string;
+  whatsappMessageId?: string;
+  websiteFormSubmissionId?: string;
+  isWebsiteFormConfirmation?: boolean;
 }
 
 export interface EmailThread {

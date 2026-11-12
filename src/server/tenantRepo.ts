@@ -109,6 +109,10 @@ export function tenantRepo(ctx: TenantContext) {
     websiteLeadThankYouHistory: () => collection(db, `${tenantDocPath}/website_lead_thankyou_history`),
     websiteLeadThankYouHistoryDoc: (id: string) => doc(db, `${tenantDocPath}/website_lead_thankyou_history`, id),
 
+    // One durable delivery ledger per website-form submission and outbound channel.
+    websiteFormDeliveries: () => collection(db, `${tenantDocPath}/website_form_deliveries`),
+    websiteFormDeliveryDoc: (id: string) => doc(db, `${tenantDocPath}/website_form_deliveries`, id),
+
     suppressions: () => collection(db, `${tenantDocPath}/suppressions`),
     suppressionDoc: (email: string) => doc(db, `${tenantDocPath}/suppressions`, email.toLowerCase().trim()),
 

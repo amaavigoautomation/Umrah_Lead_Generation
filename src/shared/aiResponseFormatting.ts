@@ -16,6 +16,7 @@ export const AI_RESPONSE_FORMATTING_INSTRUCTIONS = [
   'Use _italics_ sparingly for secondary notes or qualifications.',
   'Use ++underline++ very sparingly for a short important phrase and ==highlight== only for a critical short note; avoid decorating whole paragraphs.',
   'For three or more related items, use a concise - bullet list; use a numbered list only for sequential steps.',
+  'When numbered entries have bullet-detail lists between them, continue the numbering 1., 2., 3. instead of restarting at 1.',
   'Use short paragraphs and, only for longer replies, simple ## headings.',
   'Do not add decorative separators, unnecessary emojis, tables, or excessive formatting.',
   'Generate one channel-neutral Markdown source. The application converts it to each channel’s native display format; never write platform-specific markup or HTML.',
@@ -70,6 +71,23 @@ export function parseAiResponseMarkdown(input: string): AiResponseBlock[] {
   return blocks;
 }
 
+export function getAiResponseOrderedListStarts(blocks: AiResponseBlock[]): Array<number | null> {
+  let nextOrderedNumber = 1;
+  return blocks.map((block) => {
+    if (block.type === 'heading' || block.type === 'paragraph') {
+      nextOrderedNumber = 1;
+      return null;
+    }
+    if (block.type === 'ol') {
+      const start = nextOrderedNumber;
+      nextOrderedNumber += block.items.length;
+      return start;
+    }
+    // Unordered detail bullets are subordinate to the surrounding numbered sequence.
+    return null;
+  });
+}
+
 function escapeHtml(value: string): string {
   return String(value).replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char] || char));
 }
@@ -89,21 +107,26 @@ function inlineHtml(value: string): string {
 }
 export function renderAiResponseMarkdownHtml(input: string, lineHeight = 1.72): string {
   const safeLineHeight = Number.isFinite(lineHeight) ? Math.max(1.35, Math.min(2, lineHeight)) : 1.72;
-  return parseAiResponseMarkdown(input).map((block) => {
+  const blocks = parseAiResponseMarkdown(input);
+  const orderedStarts = getAiResponseOrderedListStarts(blocks);
+  return blocks.map((block, blockIndex) => {
     if (block.type === 'heading') return '<h3 style="margin:0 0 12px 0;font-family:Arial,Helvetica,sans-serif;font-size:16px;line-height:1.35;font-weight:700;color:inherit">' + inlineHtml(block.text) + '</h3>';
     if (block.type === 'ul' || block.type === 'ol') {
       const tag = block.type === 'ul' ? 'ul' : 'ol';
       const items = block.items.map((item) => '<li style="margin:0 0 7px 0;padding-left:2px;line-height:' + safeLineHeight + '">' + inlineHtml(item) + '</li>').join('');
-      return '<' + tag + ' style="margin:0 0 17px 0;padding-left:23px">' + items + '</' + tag + '>';
+      const startAttribute = block.type === 'ol' && (orderedStarts[blockIndex] || 1) > 1 ? ' start="' + orderedStarts[blockIndex] + '"' : '';
+      return '<' + tag + startAttribute + ' style="margin:0 0 17px 0;padding-left:23px">' + items + '</' + tag + '>';
     }
     return '<p style="margin:0 0 17px 0;line-height:' + safeLineHeight + '">' + inlineHtml(block.text).replace(/\n/g, '<br/>') + '</p>';
   }).join('');
 }
 export function aiResponseMarkdownToPlainText(input: string): string {
-  return parseAiResponseMarkdown(input).map((block) => {
+  const blocks = parseAiResponseMarkdown(input);
+  const orderedStarts = getAiResponseOrderedListStarts(blocks);
+  return blocks.map((block, blockIndex) => {
     if (block.type === 'heading') return parseAiResponseInline(block.text).map((s) => s.text).join('');
     if (block.type === 'ul') return block.items.map((item) => '• ' + parseAiResponseInline(item).map((s) => s.text).join('')).join('\n');
-    if (block.type === 'ol') return block.items.map((item, index) => (index + 1) + '. ' + parseAiResponseInline(item).map((s) => s.text).join('')).join('\n');
+    if (block.type === 'ol') return block.items.map((item, index) => ((orderedStarts[blockIndex] || 1) + index) + '. ' + parseAiResponseInline(item).map((s) => s.text).join('')).join('\n');
     return parseAiResponseInline(block.text).map((s) => s.text).join('');
   }).join('\n\n').trim();
 }
@@ -118,13 +141,15 @@ function inlineWhatsApp(value: string): string {
 }
 
 export function aiResponseMarkdownToWhatsApp(input: string): string {
-  return parseAiResponseMarkdown(input).map((block) => {
+  const blocks = parseAiResponseMarkdown(input);
+  const orderedStarts = getAiResponseOrderedListStarts(blocks);
+  return blocks.map((block, blockIndex) => {
     if (block.type === 'heading') {
       const heading = aiResponseMarkdownToPlainText(block.text);
       return heading ? '*' + heading + '*' : '';
     }
     if (block.type === 'ul') return block.items.map((item) => '• ' + inlineWhatsApp(item)).join('\n');
-    if (block.type === 'ol') return block.items.map((item, index) => (index + 1) + '. ' + inlineWhatsApp(item)).join('\n');
+    if (block.type === 'ol') return block.items.map((item, index) => ((orderedStarts[blockIndex] || 1) + index) + '. ' + inlineWhatsApp(item)).join('\n');
     return inlineWhatsApp(block.text);
   }).filter(Boolean).join('\n\n').trim();
 }

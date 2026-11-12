@@ -1,6 +1,7 @@
 import React from 'react';
 import {
   formatAiResponseForChannel,
+  getAiResponseOrderedListStarts,
   parseAiResponseInline,
   parseAiResponseMarkdown,
 } from '../shared/aiResponseFormatting';
@@ -37,12 +38,15 @@ export const FormattedMessage: React.FC<{ text: string; className?: string; chan
     );
   }
 
+  const blocks = parseAiResponseMarkdown(displayText);
+  const orderedStarts = getAiResponseOrderedListStarts(blocks);
+
   return (
     <div className={className || 'space-y-2'}>
-      {parseAiResponseMarkdown(displayText).map((block, index) => {
+      {blocks.map((block, index) => {
         if (block.type === 'heading') return <h4 key={'heading-' + index} className="font-semibold leading-snug"><InlineText text={block.text} /></h4>;
         if (block.type === 'ul') return <ul key={'ul-' + index} className="list-disc space-y-1 pl-5">{block.items.map((item, i) => <li key={i}><InlineText text={item} /></li>)}</ul>;
-        if (block.type === 'ol') return <ol key={'ol-' + index} className="list-decimal space-y-1 pl-5">{block.items.map((item, i) => <li key={i}><InlineText text={item} /></li>)}</ol>;
+        if (block.type === 'ol') return <ol key={'ol-' + index} start={orderedStarts[index] || 1} className="list-decimal space-y-1 pl-5">{block.items.map((item, i) => <li key={i}><InlineText text={item} /></li>)}</ol>;
         return <p key={'paragraph-' + index} className="whitespace-pre-wrap leading-relaxed"><InlineText text={block.text} /></p>;
       })}
     </div>

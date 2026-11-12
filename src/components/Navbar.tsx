@@ -8,7 +8,6 @@ import {
   Calendar,
   BookOpen,
   Sparkles,
-  Settings,
   Bot,
   Database,
   Radio,
@@ -22,7 +21,7 @@ import {
   PanelLeftOpen,
   ChevronLeft,
   ChevronRight,
-  ShieldCheck,
+  ChevronDown,
   FileBarChart,
   Building2,
 } from 'lucide-react';
@@ -39,6 +38,7 @@ export type ActiveTab =
   | 'scheduling'
   | 'knowledge'
   | 'playground'
+  | 'workspace'
   | 'settings'
   | 'auto-followup'
   | 'audit-logs'
@@ -96,93 +96,131 @@ export const Navbar: React.FC<NavbarProps> = ({
   const isModuleAccessible = (tabId: ActiveTab): boolean => {
     if (planLocked?.(tabId)) return false;
     // Database is shared by authenticated workspace users; deletion is admin-only on the server.
-    if (tabId === 'dashboard' || tabId === 'database' || tabId === 'company-profile') return true;
+    if (tabId === 'dashboard' || tabId === 'database' || tabId === 'workspace' || tabId === 'company-profile') return true;
     if (!currentUser) return true;
     if (currentUser.accessLevel === 'ALL' || currentUser.role === 'ADMIN') return true;
     if (tabId === 'email-design-studio' && (currentUser.allowedModules || []).includes('settings')) return true;
     return (currentUser.allowedModules || []).includes(tabId);
   };
 
-  const navItems: { id: ActiveTab; label: string; icon: React.ReactNode; badgeCount?: number; hasPulse?: boolean }[] = [
+  type NavItem = {
+    id: ActiveTab;
+    label: string;
+    icon: React.ReactNode;
+    badgeCount?: number;
+    hasPulse?: boolean;
+  };
+
+  const navGroups: { id: string; label: string; icon: React.ReactNode; items: NavItem[] }[] = [
     {
-      id: 'dashboard',
-      label: 'Dashboard',
-      icon: <LayoutDashboard className="w-4 h-4 shrink-0" />,
+      id: 'conversation',
+      label: 'Conversation',
+      icon: <MessageSquare className="w-4 h-4 shrink-0" />,
+      items: [
+        { id: 'inbox', label: 'Unified Inbox', icon: <Inbox className="w-4 h-4 shrink-0" />, badgeCount: unreadCount },
+      ],
     },
     {
-      id: 'inbox',
-      label: 'Unified Inbox',
-      icon: <Inbox className="w-4 h-4 shrink-0" />,
-      badgeCount: unreadCount,
-    },
-    {
-      id: 'agent',
-      label: 'AI Agent',
-      icon: <Sparkles className="w-4 h-4 shrink-0" />,
-      hasPulse: true,
-    },
-    {
-      id: 'auto-followup',
-      label: 'Auto Follow-Up',
+      id: 'ai',
+      label: 'AI',
       icon: <Bot className="w-4 h-4 shrink-0" />,
-      hasPulse: true,
+      items: [
+        { id: 'agent', label: 'AI Agent', icon: <Sparkles className="w-4 h-4 shrink-0" />, hasPulse: true },
+        { id: 'auto-followup', label: 'Auto Follow-Up Agent', icon: <Bot className="w-4 h-4 shrink-0" />, hasPulse: true },
+        { id: 'scheduling', label: 'Demo Scheduling Agent', icon: <Calendar className="w-4 h-4 shrink-0" /> },
+        { id: 'playground', label: 'AI Testing', icon: <Sparkles className="w-4 h-4 shrink-0" /> },
+      ],
     },
     {
-      id: 'database',
-      label: 'Database',
-      icon: <Database className="w-4 h-4 shrink-0" />,
-    },
-    {
-      id: 'campaigns',
-      label: 'Campaigns',
-      icon: <Send className="w-4 h-4 shrink-0" />,
-    },
-    {
-      id: 'campaign-reports',
-      label: 'AI Campaign Reporting',
-      icon: <FileBarChart className="w-4 h-4 shrink-0" />,
-    },
-    {
-      id: 'email-design-studio',
-      label: 'Template Studio',
-      icon: <Mail className="w-4 h-4 shrink-0" />,
-    },
-    {
-      id: 'crm',
-      label: 'CRM & Leads',
+      id: 'sales',
+      label: 'Sales',
       icon: <Users className="w-4 h-4 shrink-0" />,
+      items: [
+        { id: 'crm', label: 'CRM', icon: <Users className="w-4 h-4 shrink-0" /> },
+      ],
     },
     {
-      id: 'scheduling',
-      label: 'Demo Scheduling',
-      icon: <Calendar className="w-4 h-4 shrink-0" />,
-    },
-    {
-      id: 'knowledge',
-      label: 'Knowledge Base',
-      icon: <BookOpen className="w-4 h-4 shrink-0" />,
-    },
-    {
-      id: 'playground',
-      label: 'AI Testing',
-      icon: <Sparkles className="w-4 h-4 shrink-0" />,
-    },
-    {
-      id: 'audit-logs',
-      label: 'Audit Logs',
-      icon: <ShieldCheck className="w-4 h-4 shrink-0" />,
-    },
-    {
-      id: 'company-profile',
-      label: 'Company Profile',
-      icon: <Building2 className="w-4 h-4 shrink-0" />,
-    },
-    {
-      id: 'settings',
-      label: 'Settings',
-      icon: <Settings className="w-4 h-4 shrink-0" />,
+      id: 'marketing',
+      label: 'Marketing',
+      icon: <Send className="w-4 h-4 shrink-0" />,
+      items: [
+        { id: 'campaigns', label: 'Campaigns', icon: <Send className="w-4 h-4 shrink-0" /> },
+        { id: 'email-design-studio', label: 'Template Studio', icon: <Mail className="w-4 h-4 shrink-0" /> },
+        { id: 'campaign-reports', label: 'AI Campaign Report', icon: <FileBarChart className="w-4 h-4 shrink-0" /> },
+      ],
     },
   ];
+
+  const standaloneItems: NavItem[] = [
+    { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard className="w-4 h-4 shrink-0" /> },
+    { id: 'database', label: 'Database', icon: <Database className="w-4 h-4 shrink-0" /> },
+    { id: 'knowledge', label: 'Knowledge Base', icon: <BookOpen className="w-4 h-4 shrink-0" /> },
+    { id: 'workspace', label: 'Workspace', icon: <Building2 className="w-4 h-4 shrink-0" /> },
+  ];
+
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({
+    conversation: true,
+  });
+
+  useEffect(() => {
+    const activeGroup = navGroups.find((group) => group.items.some((item) => item.id === activeTab));
+    if (activeGroup) {
+      setExpandedGroups((current) => current[activeGroup.id] ? current : { ...current, [activeGroup.id]: true });
+    }
+  }, [activeTab]);
+
+  const toggleNavGroup = (groupId: string) => {
+    if (isCollapsed) {
+      handleToggle();
+      setExpandedGroups((current) => ({ ...current, [groupId]: true }));
+      return;
+    }
+    setExpandedGroups((current) => ({ ...current, [groupId]: !current[groupId] }));
+  };
+
+  const renderNavItem = (item: NavItem, nested = false) => {
+    const accessible = isModuleAccessible(item.id);
+    const isActive = activeTab === item.id;
+
+    return (
+      <button
+        key={item.id}
+        type="button"
+        onClick={() => handleSelectTab(item.id)}
+        title={isCollapsed ? item.label : undefined}
+        aria-current={isActive ? 'page' : undefined}
+        className={`w-full flex items-center ${
+          isCollapsed ? 'justify-center px-0 py-2.5' : nested ? 'justify-between px-3 py-2' : 'justify-between px-3 py-2.5'
+        } rounded-xl text-xs transition-all ${
+          !accessible
+            ? 'opacity-40 text-slate-400 hover:opacity-60 cursor-pointer'
+            : isActive
+            ? 'bg-gradient-to-r from-[#ef741a] to-[#f97316] text-white shadow-2xs font-semibold'
+            : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/80 font-medium'
+        } ${nested && !isCollapsed ? 'min-h-9' : ''}`}
+      >
+        <div className={`flex items-center ${isCollapsed ? 'justify-center' : 'space-x-2.5'} truncate`}>
+          <span className={isActive ? 'text-white' : 'text-slate-500'}>{item.icon}</span>
+          {!isCollapsed && <span className="truncate">{item.label}</span>}
+        </div>
+        {!isCollapsed ? (
+          <div className="flex items-center space-x-1 shrink-0">
+            {!accessible ? (
+              <Lock className="w-3.5 h-3.5 text-orange-400" />
+            ) : item.badgeCount && item.badgeCount > 0 ? (
+              <span className={`px-1.5 py-0.2 ${isActive ? 'bg-white text-orange-600' : 'bg-orange-500 text-white'} text-[10px] font-bold rounded-full`}>
+                {item.badgeCount}
+              </span>
+            ) : item.hasPulse ? (
+              <span className={`w-2 h-2 rounded-full ${isActive ? 'bg-white' : 'bg-orange-500'} animate-pulse`} />
+            ) : null}
+          </div>
+        ) : item.badgeCount && item.badgeCount > 0 ? (
+          <span className="absolute top-1 right-1 w-2 h-2 bg-orange-500 rounded-full" />
+        ) : null}
+      </button>
+    );
+  };
 
   const handleSelectTab = (tabId: ActiveTab) => {
     setActiveTab(tabId);
@@ -271,50 +309,54 @@ export const Navbar: React.FC<NavbarProps> = ({
           </div>
         )}
 
-        {navItems.map((item) => {
-          const accessible = isModuleAccessible(item.id);
-          const isActive = activeTab === item.id;
+        {renderNavItem(standaloneItems[0])}
+
+        <div className={isCollapsed ? 'my-2 border-t border-slate-100' : 'my-3 border-t border-slate-100'} />
+
+        {navGroups.map((group) => {
+          const isExpanded = expandedGroups[group.id] === true;
+          const containsActiveTab = group.items.some((item) => item.id === activeTab);
+          const isEntireGroupLocked = group.items.every((item) => !isModuleAccessible(item.id));
 
           return (
-            <button
-              key={item.id}
-              onClick={() => handleSelectTab(item.id)}
-              title={isCollapsed ? item.label : undefined}
-              className={`w-full flex items-center ${
-                isCollapsed ? 'justify-center px-0 py-2.5' : 'justify-between px-3 py-2'
-              } rounded-xl text-xs font-medium transition-all ${
-                !accessible
-                  ? 'opacity-40 text-slate-400 hover:opacity-60 cursor-pointer'
-                  : isActive
-                  ? 'bg-gradient-to-r from-[#ef741a] to-[#f97316] text-white shadow-2xs font-semibold'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/80 font-medium'
-              }`}
-            >
-              <div className={`flex items-center ${isCollapsed ? 'justify-center' : 'space-x-2.5'} truncate`}>
-                <span className={isActive ? 'text-white' : 'text-slate-500'}>{item.icon}</span>
-                {!isCollapsed && <span className="truncate">{item.label}</span>}
-              </div>
+            <div key={group.id} className="space-y-1">
+              <button
+                type="button"
+                onClick={() => toggleNavGroup(group.id)}
+                title={isCollapsed ? group.label : undefined}
+                aria-expanded={!isCollapsed && isExpanded}
+                className={`w-full flex items-center rounded-xl text-xs font-semibold transition-all ${
+                  isCollapsed ? 'justify-center px-0 py-2.5' : 'justify-between px-3 py-2.5'
+                } ${
+                  containsActiveTab
+                    ? 'bg-orange-50 text-orange-800'
+                    : 'text-slate-500 hover:bg-slate-100/80 hover:text-slate-800'
+                }`}
+              >
+                <span className={`flex items-center truncate ${isCollapsed ? 'justify-center' : 'gap-2.5'}`}>
+                  <span className={containsActiveTab ? 'text-orange-600' : 'text-slate-500'}>{group.icon}</span>
+                  {!isCollapsed && <span>{group.label}</span>}
+                </span>
+                {!isCollapsed && (
+                  <span className="flex items-center gap-1.5">
+                    {isEntireGroupLocked && <Lock className="h-3.5 w-3.5 text-orange-400" />}
+                    <ChevronDown className={`h-3.5 w-3.5 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                  </span>
+                )}
+                {isCollapsed && containsActiveTab && <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-orange-500" />}
+              </button>
 
-              {!isCollapsed ? (
-                <div className="flex items-center space-x-1 shrink-0">
-                  {!accessible ? (
-                    <Lock className="w-3.5 h-3.5 text-orange-400" />
-                  ) : item.badgeCount && item.badgeCount > 0 ? (
-                    <span className={`px-1.5 py-0.2 ${isActive ? 'bg-white text-orange-600' : 'bg-orange-500 text-white'} text-[10px] font-bold rounded-full`}>
-                      {item.badgeCount}
-                    </span>
-                  ) : item.hasPulse ? (
-                    <span className={`w-2 h-2 rounded-full ${isActive ? 'bg-white' : 'bg-orange-500'} animate-pulse`} />
-                  ) : null}
+              {isExpanded && !isCollapsed && (
+                <div className="ml-4 space-y-1 border-l border-slate-200 pl-2">
+                  {group.items.map((item) => renderNavItem(item, true))}
                 </div>
-              ) : (
-                item.badgeCount && item.badgeCount > 0 ? (
-                  <span className="absolute top-1 right-1 w-2 h-2 bg-orange-500 rounded-full" />
-                ) : null
               )}
-            </button>
+            </div>
           );
         })}
+
+        <div className={isCollapsed ? 'my-2 border-t border-slate-100' : 'my-3 border-t border-slate-100'} />
+        {standaloneItems.slice(1).map((item) => renderNavItem(item))}
       </div>
 
       {/* Footer Section */}

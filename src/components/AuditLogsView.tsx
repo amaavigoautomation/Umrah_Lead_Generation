@@ -36,11 +36,13 @@ import { logAuditEvent } from '../services/auditService';
 interface AuditLogsViewProps {
   tenantId?: string;
   currentUserEmail?: string;
+  canCreateTestLog?: boolean;
 }
 
 export const AuditLogsView: React.FC<AuditLogsViewProps> = ({
   tenantId = 'umrah360',
   currentUserEmail = 'automation@amaavigo.com',
+  canCreateTestLog = false,
 }) => {
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -142,7 +144,7 @@ export const AuditLogsView: React.FC<AuditLogsViewProps> = ({
 
   // Handle creating a test audit log event
   const handleCreateTestLog = async () => {
-    if (!testDescription.trim()) return;
+    if (!canCreateTestLog || !testDescription.trim()) return;
     setIsSubmittingTest(true);
 
     try {
@@ -387,6 +389,7 @@ export const AuditLogsView: React.FC<AuditLogsViewProps> = ({
             <span>Export CSV</span>
           </button>
 
+          {canCreateTestLog && (
           <button
             onClick={() => setIsTestLogModalOpen(true)}
             className="px-3.5 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-xs font-semibold transition flex items-center gap-1.5 shadow-2xs"
@@ -394,6 +397,7 @@ export const AuditLogsView: React.FC<AuditLogsViewProps> = ({
             <Plus className="w-4 h-4" />
             <span>Log Audit Event</span>
           </button>
+          )}
         </div>
       </div>
 
@@ -763,7 +767,7 @@ export const AuditLogsView: React.FC<AuditLogsViewProps> = ({
       )}
 
       {/* CREATE TEST AUDIT LOG MODAL */}
-      {isTestLogModalOpen && (
+      {canCreateTestLog && isTestLogModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-lg p-6 space-y-4 shadow-2xl text-slate-900 animate-in fade-in zoom-in-95 duration-150">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">

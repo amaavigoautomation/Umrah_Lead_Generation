@@ -46,9 +46,11 @@ async function readJson(url: string) {
 export const WebsiteFormConfirmationPanel: React.FC<{ tenantId: string; canEdit: boolean }> = ({ tenantId, canEdit }) => {
   const [settings, setSettings] = useState<FormSettings>(DEFAULT_SETTINGS);
   const [emailTemplates, setEmailTemplates] = useState<EmailTemplate[]>([]);
+  const [defaultEmailTemplateId, setDefaultEmailTemplateId] = useState(DEFAULT_SETTINGS.emailTemplateId);
   const [whatsappTemplates, setWhatsappTemplates] = useState<WhatsAppTemplate[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [settingDefault, setSettingDefault] = useState(false);
   const [refreshingWhatsApp, setRefreshingWhatsApp] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -62,6 +64,7 @@ export const WebsiteFormConfirmationPanel: React.FC<{ tenantId: string; canEdit:
         readJson('/api/whatsapp/templates').catch(() => ({ templates: [] })),
       ]);
       setSettings({ ...DEFAULT_SETTINGS, ...(configuration.settings || {}) });
+      setDefaultEmailTemplateId(String(configuration.settings?.emailTemplateId || DEFAULT_SETTINGS.emailTemplateId));
       setEmailTemplates(Array.isArray(configuration.emailTemplates) ? configuration.emailTemplates : []);
       setWhatsappTemplates(Array.isArray(whatsapp.templates) ? whatsapp.templates : []);
     } catch (e: any) {
@@ -79,6 +82,30 @@ export const WebsiteFormConfirmationPanel: React.FC<{ tenantId: string; canEdit:
     () => whatsappTemplates.find((item) => item.name === settings.whatsappTemplateName && item.language === settings.whatsappLanguage && String(item.category || '').toUpperCase() === 'UTILITY'),
     [whatsappTemplates, settings.whatsappTemplateName, settings.whatsappLanguage],
   );
+
+  const setSelectedEmailAsDefault = async () => {
+    if (!canEdit || !settings.emailTemplateId || settingDefault) return;
+    setSettingDefault(true);
+    setError('');
+    setNotice('');
+    try {
+      const response = await fetch('/api/website-form-confirmations/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'set-default-email-template', emailTemplateId: settings.emailTemplateId }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || !data.success) throw new Error(data?.error || 'Could not set the default email template.');
+      const newDefaultId = String(data.settings?.emailTemplateId || settings.emailTemplateId);
+      setSettings((current) => ({ ...current, emailTemplateId: newDefaultId }));
+      setDefaultEmailTemplateId(newDefaultId);
+      setNotice('Default Website Form Thank-you email updated for this workspace.');
+    } catch (e: any) {
+      setError(e?.message || 'Could not set the default email template.');
+    } finally {
+      setSettingDefault(false);
+    }
+  };
 
   const refreshWhatsApp = async () => {
     setRefreshingWhatsApp(true);
@@ -170,16 +197,26 @@ export const WebsiteFormConfirmationPanel: React.FC<{ tenantId: string; canEdit:
 
           {wantsEmail && (
             <div className="rounded-xl border border-slate-200 p-4 space-y-2">
-              <div className="flex items-center gap-2 text-sm font-bold text-slate-800"><Mail className="h-4 w-4 text-orange-600" />Email thank-you template</div>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-2 text-sm font-bold text-slate-800"><Mail className="h-4 w-4 text-orange-600" />Email thank-you template</div>
+                <span className="rounded-full bg-emerald-50 px-2 py-1 text-[10px] font-bold text-emerald-700">{settings.emailTemplateId === defaultEmailTemplateId ? "Default selected" : "Default: " + (emailTemplates.find((item) => item.templateId === defaultEmailTemplateId)?.name || "Not set")}</span>
+              </div>
               <select
                 disabled={!canEdit}
                 value={settings.emailTemplateId}
                 onChange={(event) => setSettings((current) => ({ ...current, emailTemplateId: event.target.value }))}
                 className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800"
               >
-                {emailTemplates.map((template) => <option key={template.templateId} value={template.templateId}>{template.name}</option>)}
+                {emailTemplates.map((template) => <option key={template.templateId} value={template.templateId}>{template.name}{template.templateId === defaultEmailTemplateId ? ' · Default' : ''}</option>)}
               </select>
-              <p className="text-[11px] text-slate-500">Create or edit these designs in Template Studio → Website Form Thank-you. Personalization fields: {{first_name}}, {{full_name}}, {{company}}, {{email}}, {{phone}}, {{product}}, {{team_size}}, {{city}}, {{country}}, {{message}}.</p>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-[11px] text-slate-500">The default is used for new website form submissions in this workspace.</p>
+                <button type="button" onClick={setSelectedEmailAsDefault} disabled={!canEdit || settingDefault || !settings.emailTemplateId || settings.emailTemplateId === defaultEmailTemplateId} className="inline-flex items-center gap-1.5 rounded-lg border border-orange-200 bg-orange-50 px-3 py-1.5 text-xs font-semibold text-orange-800 hover:bg-orange-100 disabled:opacity-50">
+                  {settingDefault ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+                  {settings.emailTemplateId === defaultEmailTemplateId ? 'Default selected' : 'Set as default'}
+                </button>
+              </div>
+              <p className="text-[11px] text-slate-500">Create or edit these designs in Template Studio → Website Form Thank-you. Personalization fields: <code>{'{{first_name}}'}</code>, <code>{'{{full_name}}'}</code>, <code>{'{{company}}'}</code>, <code>{'{{email}}'}</code>, <code>{'{{phone}}'}</code>, <code>{'{{product}}'}</code>, <code>{'{{team_size}}'}</code>, <code>{'{{city}}'}</code>, <code>{'{{country}}'}</code>, <code>{'{{message}}'}</code>.</p>
               {!emailTemplates.length && <p className="text-xs text-amber-700">No Website Form Thank-you templates are available yet. The default template is created automatically when settings load.</p>}
             </div>
           )}

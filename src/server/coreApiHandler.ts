@@ -1239,7 +1239,9 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
           res.end(JSON.stringify({ success: false, error: 'Only workspace admins can change website confirmation settings.' }));
           return true;
         }
-        const settings = await svc.saveWebsiteFormConfirmationSettings(activeTenantCtx, body || {});
+        const settings = body?.action === 'set-default-email-template'
+          ? await svc.setDefaultWebsiteFormEmailTemplate(activeTenantCtx, body?.emailTemplateId)
+          : await svc.saveWebsiteFormConfirmationSettings(activeTenantCtx, body || {});
         res.statusCode = 200;
         res.end(JSON.stringify({ success: true, settings }));
         return true;

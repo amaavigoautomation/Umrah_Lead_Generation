@@ -164,6 +164,27 @@ export async function getWebsiteFormConfirmationSettings(ctx: TenantContext): Pr
   };
 }
 
+export async function setDefaultWebsiteFormEmailTemplate(
+  ctx: TenantContext,
+  templateIdInput: unknown,
+): Promise<WebsiteFormConfirmationSettings> {
+  const templateId = String(templateIdInput || '').trim();
+  if (!templateId) throw new Error('Choose a Website Form Thank-you email template first.');
+  const repo = tenantRepo(ctx);
+  const templateSnap = await getDoc(repo.emailTemplateDoc(templateId));
+  if (!templateSnap.exists() || (templateSnap.data() as EmailTemplate).purpose !== 'WEBSITE_FORM_THANKYOU') {
+    throw new Error('The selected template is not a saved Website Form Thank-you email.');
+  }
+  const current = await getWebsiteFormConfirmationSettings(ctx);
+  const saved: WebsiteFormConfirmationSettings = {
+    ...current,
+    emailTemplateId: templateId,
+    updatedAt: new Date().toISOString(),
+  };
+  await setDoc(repo.settingsDoc(SETTINGS_DOC), saved, { merge: true });
+  return saved;
+}
+
 export async function saveWebsiteFormConfirmationSettings(
   ctx: TenantContext,
   input: Partial<WebsiteFormConfirmationSettings>

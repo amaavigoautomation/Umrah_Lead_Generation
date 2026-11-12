@@ -435,7 +435,7 @@ export async function processWebsiteFormConfirmation(input: {
 
   if (mode === 'REVIEW' && drafts.length) {
     const currentDrafts = Array.isArray(conversation.websiteFormConfirmationDrafts) ? conversation.websiteFormConfirmationDrafts : [];
-    conversation.websiteFormConfirmationDrafts = [...currentDrafts.filter((item: any) => item.submissionId !== submissionId), { submissionId, status: 'PENDING', channels: drafts }].slice(-20);
+    conversation.websiteFormConfirmationDrafts = [...currentDrafts.filter((item: any) => item.submissionId !== submissionId), { submissionId, status: 'PENDING' as const, channels: drafts }].slice(-20);
     conversation.status = 'REVIEW';
   }
   const latestMessage = messages[messages.length - 1];

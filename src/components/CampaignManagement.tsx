@@ -540,6 +540,7 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
           setSelectedCampaign(null);
           setCampaignLeads([]);
           setCampaignRuns([]);
+        }
       },
       (err) => console.warn('[Campaigns] listener error:', err)
     );

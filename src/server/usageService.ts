@@ -1,4 +1,4 @@
-import { getDoc, getDocs, setDoc, increment, query, where } from './adminFirestore.js';
+import { getDoc, getDocs, setDoc, increment, query, where, limit, orderByDocumentId, startAfterId, runTransaction } from './adminFirestore.js';
 import { getEffectiveLimits } from './entitlements.js';
 import { isFirebaseConfigured } from '../firebase/config.js';
 import { db } from './adminFirestore.js';
@@ -101,6 +101,188 @@ export async function recordTenantUsage(tenantId: string, delta: UsageDelta): Pr
  * summaries. Pricing is resolved from the refreshed external model catalogue, never from
  * an in-code list of model rates.
  */
+interface AiUsageParts {
+  model: string;
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+  cachedInputTokens: number;
+  cachedImageTokens: number;
+  reasoningTokens: number;
+  inputImageTokens: number;
+  outputImageTokens: number;
+  inputAudioTokens: number;
+  outputAudioTokens: number;
+  generatedImageCount: number;
+  hasTokenUsage: boolean;
+}
+
+function numericTokenValue(...values: unknown[]): number {
+  for (const value of values) {
+    if (value === undefined || value === null || value === '') continue;
+    const parsed = Number(value);
+    if (Number.isFinite(parsed) && parsed >= 0) return parsed;
+  }
+  return 0;
+}
+
+function extractAiUsageParts(completion: any, requestedModel: string): AiUsageParts {
+  const usage = completion?.usage || completion?.usageMetadata || null;
+  const model = String(completion?.model || requestedModel || 'unknown').trim();
+  const imageModel = /^gpt-image-/i.test(model);
+  const inputTokens = numericTokenValue(usage?.prompt_tokens, usage?.input_tokens, usage?.promptTokenCount, usage?.inputTokenCount);
+  const outputTokens = numericTokenValue(
+    usage?.completion_tokens,
+    usage?.output_tokens,
+    usage?.candidatesTokenCount !== undefined
+      ? numericTokenValue(usage?.candidatesTokenCount) + numericTokenValue(usage?.thoughtsTokenCount)
+      : undefined,
+    usage?.outputTokenCount,
+  );
+  const totalTokens = Math.max(
+    numericTokenValue(usage?.total_tokens, usage?.totalTokens, usage?.totalTokenCount),
+    inputTokens + outputTokens,
+  );
+  const cachedInputTokens = Math.min(inputTokens, numericTokenValue(
+    usage?.prompt_tokens_details?.cached_tokens,
+    usage?.input_tokens_details?.cached_tokens,
+    usage?.cachedContentTokenCount,
+    usage?.cached_tokens,
+  ));
+  const reasoningTokens = Math.min(outputTokens, numericTokenValue(
+    usage?.completion_tokens_details?.reasoning_tokens,
+    usage?.output_tokens_details?.reasoning_tokens,
+    usage?.thoughtsTokenCount,
+  ));
+  const inputImageTokens = Math.min(inputTokens, numericTokenValue(
+    usage?.prompt_tokens_details?.image_tokens,
+    usage?.input_tokens_details?.image_tokens,
+    usage?.inputImageTokens,
+  ));
+  // The direct Images API returns input text/image details but can omit output_tokens_details.
+  // GPT Image output_tokens are image-output tokens, so price them at the image output rate.
+  const outputImageTokens = Math.min(outputTokens, numericTokenValue(
+    usage?.completion_tokens_details?.image_tokens,
+    usage?.output_tokens_details?.image_tokens,
+    usage?.outputImageTokens,
+    imageModel ? outputTokens : undefined,
+  ));
+  const inputAudioTokens = Math.min(inputTokens, numericTokenValue(
+    usage?.prompt_tokens_details?.audio_tokens,
+    usage?.input_tokens_details?.audio_tokens,
+    usage?.inputAudioTokens,
+  ));
+  const outputAudioTokens = Math.min(outputTokens, numericTokenValue(
+    usage?.completion_tokens_details?.audio_tokens,
+    usage?.output_tokens_details?.audio_tokens,
+    usage?.outputAudioTokens,
+  ));
+  const cachedImageTokens = Math.min(inputImageTokens, numericTokenValue(
+    usage?.input_tokens_details?.cached_image_tokens,
+    usage?.input_tokens_details?.cachedImageTokens,
+    usage?.cachedImageTokens,
+  ));
+  const generatedImageCount = Array.isArray(completion?.data)
+    ? completion.data.length
+    : Array.isArray(completion?.output)
+      ? completion.output.filter((item: any) => item?.type === 'image_generation_call' && item?.status === 'completed').length
+      : 0;
+
+  return {
+    model, inputTokens, outputTokens, totalTokens, cachedInputTokens, cachedImageTokens,
+    reasoningTokens, inputImageTokens, outputImageTokens, inputAudioTokens, outputAudioTokens,
+    generatedImageCount,
+    hasTokenUsage: inputTokens + outputTokens > 0,
+  };
+}
+
+interface AiCostResult {
+  estimatedCostUsd: number;
+  pricingComplete: boolean;
+  pricingRates: Record<string, number | null>;
+  pricingSource: string | null;
+  pricingSourceUrl: string | null;
+  pricingVersion: string | null;
+}
+
+function calculateAiUsageCost(
+  pricing: Awaited<ReturnType<typeof getModelTokenPricing>>,
+  parts: AiUsageParts,
+): AiCostResult {
+  if (!pricing || !parts.hasTokenUsage) {
+    return {
+      estimatedCostUsd: 0,
+      pricingComplete: false,
+      pricingRates: {},
+      pricingSource: pricing?.source || null,
+      pricingSourceUrl: pricing?.sourceUrl || null,
+      pricingVersion: pricing?.pricingVersion || null,
+    };
+  }
+
+  const cachedTextTokens = Math.min(
+    parts.cachedInputTokens,
+    Math.max(0, parts.inputTokens - parts.inputImageTokens - parts.inputAudioTokens),
+  );
+  const cachedImageTokens = Math.min(
+    parts.inputImageTokens,
+    Math.max(parts.cachedImageTokens, parts.cachedInputTokens - cachedTextTokens),
+  );
+  const textInputTokens = Math.max(0,
+    parts.inputTokens - parts.inputImageTokens - parts.inputAudioTokens - cachedTextTokens - cachedImageTokens);
+  const uncachedImageTokens = Math.max(0, parts.inputImageTokens - cachedImageTokens);
+  const textOutputTokens = Math.max(0,
+    parts.outputTokens - parts.outputImageTokens - parts.outputAudioTokens - parts.reasoningTokens);
+
+  const cachedTextRate = pricing.cacheRead ?? pricing.input;
+  const cachedImageRate = pricing.cacheReadImage;
+  const reasoningRate = pricing.reasoning ?? pricing.output;
+  const imageOutputRate = pricing.outputImage ?? pricing.output;
+
+  const pricingComplete =
+    (textInputTokens <= 0 || pricing.input !== undefined) &&
+    (cachedTextTokens <= 0 || cachedTextRate !== undefined) &&
+    (uncachedImageTokens <= 0 || pricing.inputImage !== undefined) &&
+    (cachedImageTokens <= 0 || cachedImageRate !== undefined) &&
+    (parts.inputAudioTokens <= 0 || pricing.inputAudio !== undefined) &&
+    (textOutputTokens <= 0 || pricing.output !== undefined) &&
+    (parts.reasoningTokens <= 0 || reasoningRate !== undefined) &&
+    (parts.outputImageTokens <= 0 || imageOutputRate !== undefined) &&
+    (parts.outputAudioTokens <= 0 || pricing.outputAudio !== undefined);
+
+  const estimatedCostUsd = pricingComplete ? (
+    textInputTokens * Number(pricing.input || 0) +
+    cachedTextTokens * Number(cachedTextRate || 0) +
+    uncachedImageTokens * Number(pricing.inputImage || 0) +
+    cachedImageTokens * Number(cachedImageRate || 0) +
+    parts.inputAudioTokens * Number(pricing.inputAudio || 0) +
+    textOutputTokens * Number(pricing.output || 0) +
+    parts.reasoningTokens * Number(reasoningRate || 0) +
+    parts.outputImageTokens * Number(imageOutputRate || 0) +
+    parts.outputAudioTokens * Number(pricing.outputAudio || 0)
+  ) / 1_000_000 : 0;
+
+  return {
+    estimatedCostUsd,
+    pricingComplete,
+    pricingRates: {
+      input: pricing.input ?? null,
+      output: pricing.output ?? null,
+      reasoning: pricing.reasoning ?? null,
+      cacheRead: pricing.cacheRead ?? null,
+      cacheReadImage: pricing.cacheReadImage ?? null,
+      cacheWrite: pricing.cacheWrite ?? null,
+      inputImage: pricing.inputImage ?? null,
+      outputImage: pricing.outputImage ?? null,
+      inputAudio: pricing.inputAudio ?? null,
+      outputAudio: pricing.outputAudio ?? null,
+    },
+    pricingSource: pricing.source || null,
+    pricingSourceUrl: pricing.sourceUrl || null,
+    pricingVersion: pricing.pricingVersion || null,
+  };
+}
+
 export async function recordAiCompletionUsage(
   tenantId: string,
   completion: any,
@@ -110,118 +292,37 @@ export async function recordAiCompletionUsage(
 ): Promise<void> {
   if (!tenantId) return;
   const usage = completion?.usage || completion?.usageMetadata || null;
-  const inputTokens = Math.max(0, Number(
-    usage?.prompt_tokens ?? usage?.input_tokens ?? usage?.promptTokenCount ?? usage?.inputTokenCount ?? 0
-  ) || 0);
-  const outputTokens = Math.max(0, Number(
-    usage?.completion_tokens ??
-    usage?.output_tokens ??
-    (usage?.candidatesTokenCount !== undefined
-      ? ((Number(usage.candidatesTokenCount) || 0) + (Number(usage?.thoughtsTokenCount ?? 0) || 0))
-      : (Number(usage?.outputTokenCount ?? 0) || 0))
-  ) || 0);
-  const reportedTotalTokens = Math.max(0, Number(
-    usage?.total_tokens ?? usage?.totalTokens ?? usage?.totalTokenCount ?? 0
-  ) || 0);
-  const totalTokens = Math.max(reportedTotalTokens, inputTokens + outputTokens);
-  const cachedInputTokens = Math.min(inputTokens, Math.max(0, Number(
-    usage?.prompt_tokens_details?.cached_tokens ??
-    usage?.input_tokens_details?.cached_tokens ??
-    usage?.cachedContentTokenCount ??
-    usage?.cached_tokens ?? 0
-  ) || 0));
-  const reasoningTokens = Math.min(outputTokens, Math.max(0, Number(
-    usage?.completion_tokens_details?.reasoning_tokens ??
-    usage?.output_tokens_details?.reasoning_tokens ??
-    usage?.thoughtsTokenCount ?? 0
-  ) || 0));
-  const inputImageTokens = Math.min(inputTokens, Math.max(0, Number(
-    usage?.prompt_tokens_details?.image_tokens ??
-    usage?.input_tokens_details?.image_tokens ??
-    usage?.inputImageTokens ?? 0
-  ) || 0));
-  const outputImageTokens = Math.min(outputTokens, Math.max(0, Number(
-    usage?.completion_tokens_details?.image_tokens ??
-    usage?.output_tokens_details?.image_tokens ??
-    usage?.outputImageTokens ?? 0
-  ) || 0));
-  const inputAudioTokens = Math.min(inputTokens, Math.max(0, Number(
-    usage?.prompt_tokens_details?.audio_tokens ??
-    usage?.input_tokens_details?.audio_tokens ??
-    usage?.inputAudioTokens ?? 0
-  ) || 0));
-  const outputAudioTokens = Math.min(outputTokens, Math.max(0, Number(
-    usage?.completion_tokens_details?.audio_tokens ??
-    usage?.output_tokens_details?.audio_tokens ??
-    usage?.outputAudioTokens ?? 0
-  ) || 0));
-
-  const model = String(completion?.model || requestedModel || 'unknown').trim();
-  const hasTokenUsage = inputTokens + outputTokens + totalTokens > 0;
+  const parts = extractAiUsageParts(completion, requestedModel);
   const normalizedProvider = String(provider || 'openai').trim().toLowerCase();
   const safeFeatureId = String(featureId || 'unclassified').trim().toLowerCase().replace(/[^a-z0-9_-]/g, '_').slice(0, 80) || 'unclassified';
-  const pricing = hasTokenUsage && model !== 'unknown'
-    ? await getModelTokenPricing(normalizedProvider, model).catch(() => null)
+  const pricing = (parts.hasTokenUsage || parts.generatedImageCount > 0) && parts.model !== 'unknown'
+    ? await getModelTokenPricing(normalizedProvider, parts.model).catch(() => null)
     : null;
-
-  const textInputTokens = Math.max(0, inputTokens - cachedInputTokens - inputImageTokens - inputAudioTokens);
-  const textOutputTokens = Math.max(0, outputTokens - reasoningTokens - outputImageTokens - outputAudioTokens);
-  const cachedRate = pricing?.cacheRead ?? pricing?.input;
-  const reasoningRate = pricing?.reasoning ?? pricing?.output;
-  const imageOutputRate = pricing?.outputImage ?? pricing?.output;
-  let pricingComplete = Boolean(hasTokenUsage && pricing);
-  const missingRate =
-    (textInputTokens > 0 && pricing?.input === undefined) ||
-    (cachedInputTokens > 0 && cachedRate === undefined) ||
-    (textOutputTokens > 0 && pricing?.output === undefined) ||
-    (reasoningTokens > 0 && reasoningRate === undefined) ||
-    (inputImageTokens > 0 && pricing?.inputImage === undefined) ||
-    (outputImageTokens > 0 && imageOutputRate === undefined) ||
-    (inputAudioTokens > 0 && pricing?.inputAudio === undefined) ||
-    (outputAudioTokens > 0 && pricing?.outputAudio === undefined);
-  if (missingRate) pricingComplete = false;
-
-  let estimatedCostUsd = 0;
-  if (pricingComplete && pricing) {
-    estimatedCostUsd = (
-      textInputTokens * Number(pricing.input || 0) +
-      cachedInputTokens * Number(cachedRate || 0) +
-      textOutputTokens * Number(pricing.output || 0) +
-      reasoningTokens * Number(reasoningRate || 0) +
-      inputImageTokens * Number(pricing.inputImage || 0) +
-      outputImageTokens * Number(imageOutputRate || 0) +
-      inputAudioTokens * Number(pricing.inputAudio || 0) +
-      outputAudioTokens * Number(pricing.outputAudio || 0)
-    ) / 1_000_000;
-  }
-  // Provider tool calls (for example, Responses API web search) can carry separate per-call
-  // charges that are not token rates. Keep token cost, but flag the request as partially priced.
+  const cost = calculateAiUsageCost(pricing, parts);
   const unpricedToolCallCount = Array.isArray(completion?.output)
     ? completion.output.filter((item: any) => item?.type === 'web_search_call').length
     : 0;
-  const requestCount = 1;
-  const unpricedCount = pricingComplete && unpricedToolCallCount === 0 ? 0 : 1;
+  const unpricedCount = cost.pricingComplete && unpricedToolCallCount === 0 ? 0 : 1;
   const featureTotals: AiFeatureUsageTotals = {
-    aiInputTokens: inputTokens,
-    aiOutputTokens: outputTokens,
-    aiTotalTokens: totalTokens,
-    aiRequestCount: requestCount,
-    aiCostUsd: estimatedCostUsd,
+    aiInputTokens: parts.inputTokens,
+    aiOutputTokens: parts.outputTokens,
+    aiTotalTokens: parts.totalTokens,
+    aiRequestCount: 1,
+    aiCostUsd: cost.estimatedCostUsd,
     aiUnpricedRequestCount: unpricedCount,
   };
 
   await recordTenantUsage(tenantId, {
-    aiInputTokens: inputTokens,
-    aiOutputTokens: outputTokens,
-    aiCachedInputTokens: cachedInputTokens,
-    aiTotalTokens: totalTokens,
-    aiRequestCount: requestCount,
-    aiModelCostUsd: estimatedCostUsd,
+    aiInputTokens: parts.inputTokens,
+    aiOutputTokens: parts.outputTokens,
+    aiCachedInputTokens: parts.cachedInputTokens,
+    aiTotalTokens: parts.totalTokens,
+    aiRequestCount: 1,
+    aiModelCostUsd: cost.estimatedCostUsd,
     aiModelUnpricedRequestCount: unpricedCount,
     aiFeatureUsage: { [safeFeatureId]: featureTotals },
   });
 
-  // Store model/provider/rate metadata per request; never store prompts or customer content.
   if (isFirebaseConfigured && db) {
     try {
       const ctx: TenantContext = { tenantId, uid: 'system', email: 'system@umrah360.in', role: 'admin' };
@@ -230,36 +331,28 @@ export async function recordAiCompletionUsage(
         eventId,
         provider: normalizedProvider,
         requestedModel: String(requestedModel || 'unknown'),
-        actualModel: model,
+        actualModel: parts.model,
         feature: safeFeatureId,
         usageAvailable: Boolean(usage),
-        inputTokens,
-        outputTokens,
-        totalTokens,
-        cachedInputTokens,
-        reasoningTokens,
-        inputImageTokens,
-        outputImageTokens,
-        inputAudioTokens,
-        outputAudioTokens,
-        estimatedCostUsd,
-        pricingRates: pricing ? {
-          input: pricing.input ?? null,
-          output: pricing.output ?? null,
-          reasoning: pricing.reasoning ?? null,
-          cacheRead: pricing.cacheRead ?? null,
-          cacheWrite: pricing.cacheWrite ?? null,
-          inputImage: pricing.inputImage ?? null,
-          outputImage: pricing.outputImage ?? null,
-          inputAudio: pricing.inputAudio ?? null,
-          outputAudio: pricing.outputAudio ?? null,
-        } : null,
-        hasTokenUsage,
+        hasTokenUsage: parts.hasTokenUsage,
+        inputTokens: parts.inputTokens,
+        outputTokens: parts.outputTokens,
+        totalTokens: parts.totalTokens,
+        cachedInputTokens: parts.cachedInputTokens,
+        cachedImageTokens: parts.cachedImageTokens,
+        reasoningTokens: parts.reasoningTokens,
+        inputImageTokens: parts.inputImageTokens,
+        outputImageTokens: parts.outputImageTokens,
+        inputAudioTokens: parts.inputAudioTokens,
+        outputAudioTokens: parts.outputAudioTokens,
+        generatedImageCount: parts.generatedImageCount,
+        estimatedCostUsd: cost.estimatedCostUsd,
+        pricingRates: cost.pricingRates,
         unpricedToolCallCount,
-        pricingStatus: !pricingComplete ? 'UNPRICED' : unpricedToolCallCount > 0 ? 'PARTIALLY_PRICED' : 'PRICED',
-        pricingSource: pricing?.source || null,
-        pricingSourceUrl: pricing?.sourceUrl || null,
-        pricingVersion: pricing?.pricingVersion || null,
+        pricingStatus: !cost.pricingComplete ? 'UNPRICED' : unpricedToolCallCount > 0 ? 'PARTIALLY_PRICED' : 'PRICED',
+        pricingSource: cost.pricingSource,
+        pricingSourceUrl: cost.pricingSourceUrl,
+        pricingVersion: cost.pricingVersion,
         pricingFetchedAt: pricing?.fetchedAt || null,
         createdAt: new Date().toISOString(),
       });
@@ -267,6 +360,135 @@ export async function recordAiCompletionUsage(
       console.warn('[UsageService] Could not write the AI usage event:', error);
     }
   }
+}
+
+/**
+ * Reprices historical AI events using the event's actual model and recorded text/image token counts.
+ * Each event and both summary-ledger deltas are updated transactionally, preventing double-counting
+ * when a billing page refresh repeats the migration.
+ */
+export async function repriceTenantAiUsageEvents(
+  tenantId: string,
+  batchSize = 80,
+): Promise<{ processed: number; pending: boolean }> {
+  if (!isFirebaseConfigured || !db || !tenantId) return { processed: 0, pending: false };
+  const ctx: TenantContext = { tenantId, uid: 'system', email: 'system@umrah360.in', role: 'admin' };
+  const repo = tenantRepo(ctx);
+  const markerRef = repo.settingsDoc('ai_usage_cost_repricing_v2');
+  const markerSnap = await getDoc(markerRef);
+  const marker = markerSnap.exists() ? markerSnap.data() as any : {};
+  const version = 2;
+
+  if (marker.version === version && marker.status === 'COMPLETE') return { processed: 0, pending: false };
+  const cursor = marker.version === version ? String(marker.cursor || '') : '';
+  const eventQuery = cursor
+    ? query(repo.aiUsageEvents(), orderByDocumentId(), startAfterId(cursor), limit(batchSize))
+    : query(repo.aiUsageEvents(), orderByDocumentId(), limit(batchSize));
+  const events = await getDocs(eventQuery);
+  if (!events.docs.length) {
+    await setDoc(markerRef, { version, status: 'COMPLETE', cursor: '', completedAt: new Date().toISOString() }, { merge: true });
+    return { processed: 0, pending: false };
+  }
+
+  let processed = 0;
+  for (const eventDoc of events.docs) {
+    const event = eventDoc.data() as any;
+    const oldStatus = String(event.pricingStatus || 'UNPRICED');
+    if (oldStatus === 'PRICED') continue;
+    const model = String(event.actualModel || event.requestedModel || 'unknown');
+    const provider = String(event.provider || 'openai');
+    if (model === 'unknown') continue;
+
+    const eventInputTokens = numericTokenValue(event.inputTokens);
+    const eventOutputTokens = numericTokenValue(event.outputTokens);
+    const parts: AiUsageParts = {
+      model,
+      inputTokens: eventInputTokens,
+      outputTokens: eventOutputTokens,
+      totalTokens: Math.max(numericTokenValue(event.totalTokens), eventInputTokens + eventOutputTokens),
+      cachedInputTokens: numericTokenValue(event.cachedInputTokens),
+      cachedImageTokens: numericTokenValue(event.cachedImageTokens),
+      reasoningTokens: numericTokenValue(event.reasoningTokens),
+      inputImageTokens: numericTokenValue(event.inputImageTokens),
+      outputImageTokens: numericTokenValue(event.outputImageTokens, /^gpt-image-/i.test(model) ? eventOutputTokens : 0),
+      inputAudioTokens: numericTokenValue(event.inputAudioTokens),
+      outputAudioTokens: numericTokenValue(event.outputAudioTokens),
+      generatedImageCount: numericTokenValue(event.generatedImageCount),
+      hasTokenUsage: eventInputTokens + eventOutputTokens > 0,
+    };
+    const pricing = await getModelTokenPricing(provider, model).catch(() => null);
+    const cost = calculateAiUsageCost(pricing, parts);
+    if (!cost.pricingComplete || !parts.hasTokenUsage) continue;
+
+    const newStatus = numericTokenValue(event.unpricedToolCallCount) > 0 ? 'PARTIALLY_PRICED' : 'PRICED';
+    const createdAt = String(event.createdAt || '');
+    const day = createdAt.slice(0, 10);
+    const month = day.slice(0, 7);
+    const feature = String(event.feature || 'unclassified').replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 80) || 'unclassified';
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(day) || !/^\d{4}-\d{2}$/.test(month)) continue;
+
+    const eventRef = repo.aiUsageEventDoc(eventDoc.id);
+    const monthRef = repo.usageDoc(month);
+    const dayRef = repo.dailyUsageDoc(day);
+    const now = new Date().toISOString();
+    await runTransaction(async (transaction: any) => {
+      const currentEventSnap = await transaction.get(eventRef);
+      if (!currentEventSnap.exists) return;
+      const currentEvent = currentEventSnap.data() as any;
+      const currentStatus = String(currentEvent.pricingStatus || 'UNPRICED');
+      if (currentStatus === 'PRICED') return;
+      const [monthSnap, daySnap] = await Promise.all([
+        transaction.get(monthRef),
+        transaction.get(dayRef),
+      ]);
+      const oldUnpriced = currentStatus === 'PRICED' ? 0 : 1;
+      const newUnpriced = newStatus === 'PRICED' ? 0 : 1;
+      const unpricedDelta = newUnpriced - oldUnpriced;
+      const currentFeature = monthSnap.exists ? (monthSnap.data() as any)?.aiFeatureUsage?.[feature] || {} : {};
+      const currentDailyFeature = daySnap.exists ? (daySnap.data() as any)?.aiFeatureUsage?.[feature] || {} : {};
+      const monthlyUnpriced = Math.max(0, numericTokenValue(monthSnap.exists ? (monthSnap.data() as any)?.aiModelUnpricedRequestCount : 0) + unpricedDelta);
+      const dailyUnpriced = Math.max(0, numericTokenValue(daySnap.exists ? (daySnap.data() as any)?.aiModelUnpricedRequestCount : 0) + unpricedDelta);
+      const oldCost = numericTokenValue(currentEvent.estimatedCostUsd);
+      const costDelta = cost.estimatedCostUsd - oldCost;
+      const monthlyFeatureUnpriced = Math.max(0, numericTokenValue(currentFeature.aiUnpricedRequestCount) + unpricedDelta);
+      const dailyFeatureUnpriced = Math.max(0, numericTokenValue(currentDailyFeature.aiUnpricedRequestCount) + unpricedDelta);
+
+      transaction.set(monthRef, {
+        aiModelCostUsd: increment(costDelta),
+        aiModelUnpricedRequestCount: monthlyUnpriced,
+        aiFeatureUsage: { [feature]: { aiCostUsd: increment(costDelta), aiUnpricedRequestCount: monthlyFeatureUnpriced } },
+        updatedAt: now,
+      }, { merge: true });
+      transaction.set(dayRef, {
+        aiModelCostUsd: increment(costDelta),
+        aiModelUnpricedRequestCount: dailyUnpriced,
+        aiFeatureUsage: { [feature]: { aiCostUsd: increment(costDelta), aiUnpricedRequestCount: dailyFeatureUnpriced } },
+        updatedAt: now,
+      }, { merge: true });
+      transaction.set(eventRef, {
+        estimatedCostUsd: cost.estimatedCostUsd,
+        pricingRates: cost.pricingRates,
+        pricingStatus: newStatus,
+        pricingSource: cost.pricingSource,
+        pricingSourceUrl: cost.pricingSourceUrl,
+        pricingVersion: cost.pricingVersion,
+        pricingFetchedAt: pricing?.fetchedAt || null,
+        repricedAt: now,
+      }, { merge: true });
+    });
+    processed += 1;
+  }
+
+  const nextCursor = events.docs[events.docs.length - 1].id;
+  const pending = events.docs.length >= batchSize;
+  await setDoc(markerRef, {
+    version,
+    status: pending ? 'RUNNING' : 'COMPLETE',
+    cursor: pending ? nextCursor : '',
+    processedAt: new Date().toISOString(),
+    ...(pending ? {} : { completedAt: new Date().toISOString() }),
+  }, { merge: true });
+  return { processed, pending };
 }
 
 export interface TenantDailyUsageRow {

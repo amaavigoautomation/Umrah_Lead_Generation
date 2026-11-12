@@ -149,7 +149,7 @@ import {
 } from './autoFollowUpService.js';
 import { encryptSecret, decryptSecret } from './cryptoUtils.js';
 import { handleAgentApi } from './agentService.js';
-import { getTenantCurrentUsage, getTenantCurrentDailyEmailCount, getTenantUsageForDateRange, recordTenantUsage, recordAiCompletionUsage, checkTenantQuota } from './usageService.js';
+import { getTenantCurrentUsage, getTenantCurrentDailyEmailCount, getTenantUsageForDateRange, recordTenantUsage, recordAiCompletionUsage, checkTenantQuota, repriceTenantAiUsageEvents } from './usageService.js';
 import {
   routeWebsiteLeadWebhook,
   routeWhatsAppWebhook,
@@ -1052,6 +1052,10 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
     const requestParams = new URL(req.url || '/', 'http://localhost').searchParams;
     const from = requestParams.get('from');
     const to = requestParams.get('to');
+    const costRepricing = await repriceTenantAiUsageEvents(tId, 80).catch((error) => {
+      console.warn('[Usage API] Historical AI cost repricing is pending:', error);
+      return { processed: 0, pending: true };
+    });
     const usage = await getTenantCurrentUsage(tId);
     let periodUsage;
     try {
@@ -1084,6 +1088,7 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
         limits,
         dailyUsage: { emailSentCount: dailyEmailCount },
         periodUsage,
+        costRepricing,
         percentages: {
           aiTokens: Math.min(100, Math.round(((usage.aiTotalTokens || 0) / limits.monthlyAiTokens) * 100)),
           dailySends: Math.min(100, Math.round((dailyEmailCount / limits.dailyOutboundSends) * 100)),

@@ -22,6 +22,7 @@ interface BillingState {
 }
 interface TenantUsageState {
   usage: { aiInputTokens?: number; aiOutputTokens?: number; aiTotalTokens?: number; aiCostUsd?: number; aiUnpricedRequestCount?: number; aiModelCostUsd?: number; aiModelUnpricedRequestCount?: number; aiFeatureUsage?: Record<string, AiFeatureUsageTotals>; coldEmailCount?: number; solicitedEmailCount?: number };
+  costRepricing?: { processed: number; pending: boolean };
   limits: { monthlyAiTokens: number; dailyOutboundSends: number };
   dailyUsage?: { emailSentCount?: number };
   percentages?: { aiTokens?: number; dailySends?: number };
@@ -39,6 +40,7 @@ interface TenantUsageState {
 }
 
 const currentUtcDateKey = () => new Date().toISOString().slice(0, 10);
+const currentUtcMonthStartKey = () => new Date().toISOString().slice(0, 8) + '01';
 
 async function api<T = any>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, { ...init, headers: { 'Content-Type': 'application/json', ...(init?.headers || {}) } });
@@ -60,9 +62,9 @@ export const BillingView: React.FC<{ fullScreen?: boolean; onLogout?: () => void
   const [state, setState] = useState<BillingState | null>(null);
   const [usageState, setUsageState] = useState<TenantUsageState | null>(null);
   const [usageError, setUsageError] = useState<string | null>(null);
-  const [dateFrom, setDateFrom] = useState(currentUtcDateKey);
+  const [dateFrom, setDateFrom] = useState(currentUtcMonthStartKey);
   const [dateTo, setDateTo] = useState(currentUtcDateKey);
-  const [appliedDateRange, setAppliedDateRange] = useState(() => ({ from: currentUtcDateKey(), to: currentUtcDateKey() }));
+  const [appliedDateRange, setAppliedDateRange] = useState(() => ({ from: currentUtcMonthStartKey(), to: currentUtcDateKey() }));
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
 
@@ -107,12 +109,34 @@ export const BillingView: React.FC<{ fullScreen?: boolean; onLogout?: () => void
   const status = state?.billing.status || 'active';
   const note = STATUS_TEXT[status];
   const subscribed = state?.billing.planSource === 'stripe' && ['active', 'trialing', 'past_due'].includes(status);
-  const monthlyEmails = (usageState?.usage?.coldEmailCount || 0) + (usageState?.usage?.solicitedEmailCount || 0);
-  const aiTokens = usageState?.usage?.aiTotalTokens || 0;
-  const aiCostUsd = usageState?.usage?.aiModelCostUsd || 0;
-  const monthlyFeatureUsage = usageState?.usage?.aiFeatureUsage || {};
-  const monthlyFeaturesUsed = AI_USAGE_FEATURES.filter((feature) => Number(monthlyFeatureUsage[feature.key]?.aiRequestCount || monthlyFeatureUsage[feature.key]?.aiTotalTokens || 0) > 0);
-  const formatUsd = (value: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 4, maximumFractionDigits: 4 }).format(value);
+  const isCurrentMonthRange = appliedDateRange.from === currentUtcMonthStartKey() && appliedDateRange.to === currentUtcDateKey();
+  const selectedEmails = isCurrentMonthRange
+    ? (usageState?.usage?.coldEmailCount || 0) + (usageState?.usage?.solicitedEmailCount || 0)
+    : usageState?.periodUsage?.emailSentCount || 0;
+  const selectedTokens = isCurrentMonthRange
+    ? usageState?.usage?.aiTotalTokens || 0
+    : usageState?.periodUsage?.aiTotalTokens || 0;
+  const selectedInputTokens = isCurrentMonthRange
+    ? usageState?.usage?.aiInputTokens || 0
+    : usageState?.periodUsage?.aiInputTokens || 0;
+  const selectedOutputTokens = isCurrentMonthRange
+    ? usageState?.usage?.aiOutputTokens || 0
+    : usageState?.periodUsage?.aiOutputTokens || 0;
+  const selectedCostUsd = isCurrentMonthRange
+    ? usageState?.usage?.aiModelCostUsd || 0
+    : usageState?.periodUsage?.aiModelCostUsd || 0;
+  const selectedUnpricedRequests = isCurrentMonthRange
+    ? usageState?.usage?.aiModelUnpricedRequestCount || 0
+    : usageState?.periodUsage?.aiModelUnpricedRequestCount || 0;
+  const selectedFeatureUsage = (isCurrentMonthRange
+    ? usageState?.usage?.aiFeatureUsage
+    : usageState?.periodUsage?.aiFeatureUsage) || {};
+  const selectedFeaturesUsed = AI_USAGE_FEATURES.filter((feature) =>
+    Number(selectedFeatureUsage[feature.key]?.aiRequestCount || selectedFeatureUsage[feature.key]?.aiTotalTokens || 0) > 0
+  );
+  const formatUsd = (value: number) => new Intl.NumberFormat('en-US', {
+    style: 'currency', currency: 'USD', minimumFractionDigits: 4, maximumFractionDigits: 6,
+  }).format(value);
 
   const body = (
     <div className="space-y-5">
@@ -143,154 +167,92 @@ export const BillingView: React.FC<{ fullScreen?: boolean; onLogout?: () => void
 
       {tenantId && (
         <div className="space-y-4">
-        <section className="rounded-xl border border-slate-200 bg-white p-4 space-y-3">
-          <div className="flex items-center justify-between gap-2">
-            <h4 className="text-sm font-bold text-slate-900">Usage this month</h4>
-            <span className="text-[11px] text-slate-400">UTC calendar month</span>
-          </div>
-          {usageError && <p className="text-xs text-red-600">{usageError}</p>}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <div className="rounded-lg bg-slate-50 border border-slate-200 p-3">
-              <div className="text-xs text-slate-500">Emails sent</div>
-              <div className="text-xl font-bold text-slate-900 mt-1">{monthlyEmails.toLocaleString('en-US')}</div>
-              <div className="text-[11px] text-slate-500 mt-1">UTC today {((usageState?.dailyUsage?.emailSentCount || 0)).toLocaleString('en-US')} / {(usageState?.limits?.dailyOutboundSends || 0).toLocaleString('en-US')}</div>
-              <div className="text-[11px] text-slate-400">Campaign {((usageState?.usage?.coldEmailCount || 0)).toLocaleString('en-US')} · Other {((usageState?.usage?.solicitedEmailCount || 0)).toLocaleString('en-US')}</div>
-            </div>
-            <div className="rounded-lg bg-slate-50 border border-slate-200 p-3">
-              <div className="text-xs text-slate-500">AI tokens consumed</div>
-              <div className="text-xl font-bold text-slate-900 mt-1">{aiTokens.toLocaleString('en-US')}</div>
-              <div className="text-[11px] text-slate-500 mt-1">of {(usageState?.limits?.monthlyAiTokens || 0).toLocaleString('en-US')} monthly tokens</div>
-              <div className="text-[11px] text-slate-400">Input {(usageState?.usage?.aiInputTokens || 0).toLocaleString('en-US')} · Output {(usageState?.usage?.aiOutputTokens || 0).toLocaleString('en-US')}</div>
-            </div>
-            <div className="rounded-lg bg-slate-50 border border-slate-200 p-3">
-              <div className="text-xs text-slate-500">Estimated AI cost</div>
-              <div className="text-xl font-bold text-slate-900 mt-1">{formatUsd(aiCostUsd)}</div>
-              <div className="text-[11px] text-slate-400 mt-1">USD · model token-rate estimate</div>
-            </div>
-          </div>
-          {(usageState?.usage?.aiModelUnpricedRequestCount || 0) > 0 && (
-            <p className="text-[11px] text-amber-700">Cost is incomplete for {usageState?.usage?.aiModelUnpricedRequestCount} AI request(s) because the pricing catalogue has no matching rate or the provider did not return a usage breakdown. Their tokens are still included.</p>
-          )}
-          <p className="text-[11px] text-slate-400">AI cost is an estimate based on provider-reported usage and the matching model pricing catalogue; it is not a provider invoice.</p>
-        </section>
-
-        <section className="rounded-xl border border-slate-200 bg-white p-4 space-y-3">
-          <div className="flex items-center justify-between gap-2">
-            <h4 className="text-sm font-bold text-slate-900">AI usage by feature</h4>
-            <span className="text-[11px] text-slate-400">Current UTC month</span>
-          </div>
-          <p className="text-xs text-slate-500">Estimated tokens consumed by each AI-powered feature. This includes both input and output tokens.</p>
-          {monthlyFeaturesUsed.length > 0 ? (
-            <div className="overflow-x-auto rounded-lg border border-slate-200">
-              <table className="w-full text-sm">
-                <thead className="bg-slate-50 text-slate-500">
-                  <tr>
-                    <th className="px-3 py-2 text-left font-semibold">Feature</th>
-                    <th className="px-3 py-2 text-right font-semibold">Estimated tokens</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {monthlyFeaturesUsed.map((feature) => (
-                    <tr key={feature.key}>
-                      <td className="px-3 py-2 text-slate-700">{feature.label}</td>
-                      <td className="px-3 py-2 text-right font-medium text-slate-900">{Number(monthlyFeatureUsage[feature.key]?.aiTotalTokens || 0).toLocaleString('en-US')}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <p className="text-xs text-slate-400">Feature-level AI usage will appear here as new AI requests are recorded.</p>
-          )}
-        </section>
-
-        <section className="rounded-xl border border-slate-200 bg-white p-4 space-y-3">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div>
-              <h4 className="text-sm font-bold text-slate-900">Usage by date</h4>
-              <p className="text-[11px] text-slate-500">Filter sent emails and AI consumption by UTC date.</p>
-            </div>
-            <span className="text-[11px] text-slate-400">Maximum 93 days</span>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] gap-2 items-end">
-            <label className="text-xs font-medium text-slate-600">
-              From
-              <input type="date" value={dateFrom} max="9999-12-31" onChange={(event) => setDateFrom(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800" />
-            </label>
-            <label className="text-xs font-medium text-slate-600">
-              To
-              <input type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800" />
-            </label>
-            <button
-              type="button"
-              disabled={!dateFrom || !dateTo || dateFrom > dateTo}
-              onClick={() => setAppliedDateRange({ from: dateFrom, to: dateTo })}
-              className="px-4 py-2 rounded-lg bg-slate-900 text-white text-sm font-semibold disabled:opacity-40"
-            >
-              Apply filter
-            </button>
-          </div>
-          {usageError && <p className="text-xs text-red-600">{usageError}</p>}
-          {usageState?.periodUsage && (
-            <>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                <div className="rounded-lg bg-slate-50 border border-slate-200 p-3">
-                  <div className="text-xs text-slate-500">Emails sent</div>
-                  <div className="text-lg font-bold text-slate-900">{usageState.periodUsage.emailSentCount.toLocaleString('en-US')}</div>
-                </div>
-                <div className="rounded-lg bg-slate-50 border border-slate-200 p-3">
-                  <div className="text-xs text-slate-500">AI tokens consumed</div>
-                  <div className="text-lg font-bold text-slate-900">{usageState.periodUsage.aiTotalTokens.toLocaleString('en-US')}</div>
-                </div>
-                <div className="rounded-lg bg-slate-50 border border-slate-200 p-3">
-                  <div className="text-xs text-slate-500">Estimated AI cost</div>
-                  <div className="text-lg font-bold text-slate-900">{formatUsd(usageState.periodUsage.aiModelCostUsd)}</div>
-                </div>
+          <section className="rounded-xl border border-slate-200 bg-white p-4 space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <h4 className="text-sm font-bold text-slate-900">{isCurrentMonthRange ? 'Usage this month' : 'Usage for selected dates'}</h4>
+                <p className="text-[11px] text-slate-500">All usage and cost totals use UTC dates. The default range is the current calendar month.</p>
               </div>
+              <span className="text-[11px] text-slate-400">Maximum 93 days</span>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] gap-2 items-end">
+              <label className="text-xs font-medium text-slate-600">
+                From
+                <input type="date" value={dateFrom} max="9999-12-31" onChange={(event) => setDateFrom(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800" />
+              </label>
+              <label className="text-xs font-medium text-slate-600">
+                To
+                <input type="date" value={dateTo} max="9999-12-31" onChange={(event) => setDateTo(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800" />
+              </label>
+              <button
+                type="button"
+                disabled={!dateFrom || !dateTo || dateFrom > dateTo}
+                onClick={() => setAppliedDateRange({ from: dateFrom, to: dateTo })}
+                className="px-4 py-2 rounded-lg bg-slate-900 text-white text-sm font-semibold disabled:opacity-40"
+              >
+                Apply filter
+              </button>
+            </div>
+            {usageError && <p className="text-xs text-red-600">{usageError}</p>}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="rounded-lg bg-slate-50 border border-slate-200 p-3">
+                <div className="text-xs text-slate-500">Emails sent</div>
+                <div className="text-xl font-bold text-slate-900 mt-1">{selectedEmails.toLocaleString('en-US')}</div>
+                {isCurrentMonthRange && <div className="text-[11px] text-slate-500 mt-1">UTC today {(usageState?.dailyUsage?.emailSentCount || 0).toLocaleString('en-US')} / {(usageState?.limits?.dailyOutboundSends || 0).toLocaleString('en-US')}</div>}
+                {isCurrentMonthRange && <div className="text-[11px] text-slate-400">Campaign {(usageState?.usage?.coldEmailCount || 0).toLocaleString('en-US')} · Other {(usageState?.usage?.solicitedEmailCount || 0).toLocaleString('en-US')}</div>}
+              </div>
+              <div className="rounded-lg bg-slate-50 border border-slate-200 p-3">
+                <div className="text-xs text-slate-500">AI tokens consumed</div>
+                <div className="text-xl font-bold text-slate-900 mt-1">{selectedTokens.toLocaleString('en-US')}</div>
+                {isCurrentMonthRange && <div className="text-[11px] text-slate-500 mt-1">of {(usageState?.limits?.monthlyAiTokens || 0).toLocaleString('en-US')} monthly tokens</div>}
+                <div className="text-[11px] text-slate-400">Input {selectedInputTokens.toLocaleString('en-US')} · Output {selectedOutputTokens.toLocaleString('en-US')}</div>
+              </div>
+              <div className="rounded-lg bg-slate-50 border border-slate-200 p-3">
+                <div className="text-xs text-slate-500">Estimated AI cost</div>
+                <div className="text-xl font-bold text-slate-900 mt-1">{formatUsd(selectedCostUsd)}</div>
+                <div className="text-[11px] text-slate-400 mt-1">USD · text, reasoning and image usage</div>
+              </div>
+            </div>
+            {usageState?.costRepricing?.pending && (
+              <p className="text-[11px] text-sky-700">Recalculating historical model and image costs. This summary will update automatically as stored usage events are re-priced.</p>
+            )}
+            {selectedUnpricedRequests > 0 && (
+              <p className="text-[11px] text-amber-700">Cost is incomplete for {selectedUnpricedRequests.toLocaleString('en-US')} AI request(s) because usage details or an official model rate were unavailable. Their tokens remain included.</p>
+            )}
+            <p className="text-[11px] text-slate-400">Includes provider-reported text, reasoning, image input and generated image output tokens where available. This is an estimate, not a provider invoice.</p>
+          </section>
+
+          <section className="rounded-xl border border-slate-200 bg-white p-4 space-y-3">
+            <div className="flex items-center justify-between gap-2">
+              <h4 className="text-sm font-bold text-slate-900">AI usage by feature</h4>
+              <span className="text-[11px] text-slate-400">{isCurrentMonthRange ? 'Current UTC month' : `${appliedDateRange.from} to ${appliedDateRange.to} UTC`}</span>
+            </div>
+            <p className="text-xs text-slate-500">Estimated tokens and model-priced cost, including AI-generated images, grouped by feature.</p>
+            {selectedFeaturesUsed.length > 0 ? (
               <div className="overflow-x-auto rounded-lg border border-slate-200">
-                <table className="w-full text-xs min-w-[560px]">
+                <table className="w-full text-sm min-w-[440px]">
                   <thead className="bg-slate-50 text-slate-500">
                     <tr>
-                      <th className="px-3 py-2 text-left font-semibold">Date (UTC)</th>
-                      <th className="px-3 py-2 text-right font-semibold">Emails sent</th>
+                      <th className="px-3 py-2 text-left font-semibold">Feature</th>
                       <th className="px-3 py-2 text-right font-semibold">AI tokens</th>
-                      <th className="px-3 py-2 text-right font-semibold">Input / output</th>
-                      <th className="px-3 py-2 text-right font-semibold">AI cost</th>
+                      <th className="px-3 py-2 text-right font-semibold">Estimated cost</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {usageState.periodUsage.days.map((day) => (
-                      <tr key={day.day}>
-                        <td className="px-3 py-2 text-slate-700">{day.day}</td>
-                        <td className="px-3 py-2 text-right font-medium text-slate-900">{day.emailSentCount.toLocaleString('en-US')}</td>
-                        <td className="px-3 py-2 text-right font-medium text-slate-900">{day.aiTotalTokens.toLocaleString('en-US')}</td>
-                        <td className="px-3 py-2 text-right text-slate-500">{day.aiInputTokens.toLocaleString('en-US')} / {day.aiOutputTokens.toLocaleString('en-US')}</td>
-                        <td className="px-3 py-2 text-right text-slate-700">{formatUsd(day.aiModelCostUsd)}</td>
+                    {selectedFeaturesUsed.map((feature) => (
+                      <tr key={feature.key}>
+                        <td className="px-3 py-2 text-slate-700">{feature.label}</td>
+                        <td className="px-3 py-2 text-right font-medium text-slate-900">{Number(selectedFeatureUsage[feature.key]?.aiTotalTokens || 0).toLocaleString('en-US')}</td>
+                        <td className="px-3 py-2 text-right text-slate-700">{formatUsd(Number(selectedFeatureUsage[feature.key]?.aiCostUsd || 0))}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
-              {usageState.periodUsage.aiFeatureUsage && Object.keys(usageState.periodUsage.aiFeatureUsage).some((key) => Number(usageState.periodUsage?.aiFeatureUsage?.[key]?.aiRequestCount || 0) > 0) && (
-                <div className="rounded-lg border border-slate-200 overflow-hidden">
-                  <div className="px-3 py-2 bg-slate-50 text-xs font-semibold text-slate-600">Estimated tokens by feature</div>
-                  <table className="w-full text-xs">
-                    <tbody className="divide-y divide-slate-100">
-                      {AI_USAGE_FEATURES.filter((feature) => Number(usageState.periodUsage?.aiFeatureUsage?.[feature.key]?.aiRequestCount || 0) > 0).map((feature) => (
-                        <tr key={feature.key}>
-                          <td className="px-3 py-2 text-slate-700">{feature.label}</td>
-                          <td className="px-3 py-2 text-right font-medium text-slate-900">{Number(usageState.periodUsage?.aiFeatureUsage?.[feature.key]?.aiTotalTokens || 0).toLocaleString('en-US')}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </>
-          )}
-          {(usageState?.periodUsage?.aiModelUnpricedRequestCount || 0) > 0 && <p className="text-[11px] text-amber-700">Cost is incomplete for {usageState.periodUsage.aiModelUnpricedRequestCount} AI request(s) in this date range because the pricing catalogue has no matching rate or the provider did not return a usage breakdown; their tokens are included.</p>}
-          <p className="text-[11px] text-slate-400">Only emails accepted by the sending provider are counted; scheduled or future emails are not counted until sent. Daily AI breakdown starts with this usage-tracking release, so earlier AI activity may only be available in monthly totals.</p>
-        </section>
+            ) : (
+              <p className="text-xs text-slate-400">Feature-level AI usage will appear here as new AI requests are recorded.</p>
+            )}
+          </section>
         </div>
       )}
       {error && <div className="text-sm bg-red-50 border border-red-100 text-red-700 rounded-lg px-3 py-2">{error}</div>}

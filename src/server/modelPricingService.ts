@@ -16,6 +16,7 @@ export interface ModelTokenPricing {
   output?: number;
   reasoning?: number;
   cacheRead?: number;
+  cacheReadImage?: number;
   cacheWrite?: number;
   inputImage?: number;
   outputImage?: number;
@@ -88,6 +89,7 @@ function buildSnapshot(payload: unknown, fetchedAt: string): PricingSnapshot {
         output,
         reasoning: positiveRate(cost.reasoning),
         cacheRead: positiveRate(cost.cache_read ?? cost.cacheRead),
+        cacheReadImage: positiveRate(cost.cache_read_image ?? cost.image_cache_read ?? cost.cacheReadImage),
         cacheWrite: positiveRate(cost.cache_write ?? cost.cacheWrite),
         inputImage: positiveRate(cost.input_image ?? cost.image_input),
         outputImage: positiveRate(cost.output_image ?? cost.image_output),
@@ -174,14 +176,64 @@ async function getPricingSnapshot(): Promise<PricingSnapshot | null> {
   return refreshInFlight;
 }
 
-/** Resolves current per-million-token rates from the external model catalogue. No rate values are embedded in application code. */
+const OFFICIAL_OPENAI_PRICING: Record<string, Omit<ModelTokenPricing, 'providerId' | 'modelId' | 'modelName' | 'pricingVersion' | 'fetchedAt' | 'source' | 'sourceUrl'>> = {
+  'gpt-6.1-sol': { input: 2, output: 10, reasoning: 10, cacheRead: 0.10, cacheWrite: 2.50 },
+  'gpt-4o': { input: 2.50, output: 10, cacheRead: 1.25 },
+  'gpt-4o-mini': { input: 0.15, output: 0.60, cacheRead: 0.075 },
+  'gpt-image-2.5-flare': { input: 5, output: 0, cacheRead: 1.25, cacheReadImage: 2, inputImage: 8, outputImage: 30 },
+  'gpt-image-2.5-sunburst': { input: 5, output: 0, cacheRead: 1.25, cacheReadImage: 2, inputImage: 8, outputImage: 30 },
+};
+
+const OPENAI_PRICING_URLS: Record<string, string> = {
+  'gpt-6.1-sol': 'https://developers.openai.com/api/docs/models/gpt-6.1-sol',
+  'gpt-4o': 'https://developers.openai.com/api/docs/models/gpt-4o',
+  'gpt-4o-mini': 'https://developers.openai.com/api/docs/models/gpt-4o-mini',
+  'gpt-image-2.5-flare': 'https://developers.openai.com/api/docs/models/gpt-image-2.5-flare',
+  'gpt-image-2.5-sunburst': 'https://developers.openai.com/api/docs/models/gpt-image-2.5-sunburst',
+};
+
+function officialFallback(providerId: string, modelId: string): ModelTokenPricing | null {
+  if (providerId !== 'openai') return null;
+  const knownModel = Object.keys(OFFICIAL_OPENAI_PRICING)
+    .find((candidate) => modelId === candidate || modelId.startsWith(candidate + '-'));
+  if (!knownModel) return null;
+  return {
+    providerId: 'openai',
+    modelId,
+    modelName: knownModel,
+    ...OFFICIAL_OPENAI_PRICING[knownModel],
+    pricingVersion: 'official-pricing-2026-11-12',
+    fetchedAt: new Date().toISOString(),
+    source: 'OpenAI official pricing fallback',
+    sourceUrl: OPENAI_PRICING_URLS[knownModel],
+  };
+}
+
+/** Resolve the external catalogue first, then fill missing model/modality rates from official provider pricing. */
 export async function getModelTokenPricing(provider: string, model: string): Promise<ModelTokenPricing | null> {
-  const snapshot = await getPricingSnapshot();
-  if (!snapshot) return null;
   const providerId = normalizeProviderId(provider);
   const modelId = normalizeModelId(model);
   if (!providerId || !modelId) return null;
-  return snapshot.providers[providerId]?.[modelId] || null;
+
+  const fallback = officialFallback(providerId, modelId);
+  const snapshot = await getPricingSnapshot();
+  const catalogue = snapshot?.providers[providerId]?.[modelId] || null;
+  if (!catalogue) return fallback;
+  if (!fallback) return catalogue;
+
+  const merged: ModelTokenPricing = { ...fallback, ...catalogue };
+  const fields: Array<keyof ModelTokenPricing> = [
+    'input', 'output', 'reasoning', 'cacheRead', 'cacheReadImage', 'cacheWrite',
+    'inputImage', 'outputImage', 'inputAudio', 'outputAudio',
+  ];
+  for (const field of fields) {
+    if (merged[field] === undefined || merged[field] === null) {
+      (merged as any)[field] = fallback[field];
+    }
+  }
+  merged.source = catalogue.source || fallback.source;
+  merged.sourceUrl = catalogue.sourceUrl || fallback.sourceUrl;
+  return merged;
 }
 
 /** Exposed for diagnostics/tests; refresh is still performed lazily by the first usage event. */

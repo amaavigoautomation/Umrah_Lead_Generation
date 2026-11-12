@@ -88,6 +88,7 @@ interface UnifiedInboxProps {
 }
 
 export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
+  tenantId,
   channelModes = {},
   conversations,
   hasMoreConversations,

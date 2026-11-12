@@ -649,6 +649,13 @@ export interface SystemSettings {
   debounceSeconds: number;
   apolloApiKeyConfigured: boolean;
   webhookEndpoint: string;
+  notificationPreferences?: {
+    newMessages: boolean;
+    humanHandoff: boolean;
+  };
+  workspacePreferences?: {
+    defaultLandingPage: 'dashboard' | 'inbox' | 'campaigns';
+  };
   updatedAt: string;
 }
 

@@ -96,6 +96,8 @@ export const DEFAULT_SETTINGS: SystemSettings = {
   debounceSeconds: 3,
   apolloApiKeyConfigured: true,
   webhookEndpoint: 'https://api.umrah360.in/v1/webhooks',
+  notificationPreferences: { newMessages: false, humanHandoff: false },
+  workspacePreferences: { defaultLandingPage: 'dashboard' },
   updatedAt: new Date().toISOString(),
 };
 

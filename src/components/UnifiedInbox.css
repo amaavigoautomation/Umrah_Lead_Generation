@@ -429,7 +429,6 @@
     border-bottom: 1px solid var(--inbox-line);
   }
   .unified-inbox-sidebar-tools { padding: 9px 10px !important; gap: 7px !important; }
-  .unified-inbox-connections button { min-height: 29px; }
   .unified-inbox-channel-filters button { min-height: 26px; padding: 0 8px !important; }
   .unified-inbox-status-filters { display: none !important; }
   .unified-inbox-main { min-height: 0; flex: 1 1 auto; }

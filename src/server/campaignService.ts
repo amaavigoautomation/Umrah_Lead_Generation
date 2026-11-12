@@ -1239,7 +1239,7 @@ export async function getCampaignEngagementStats(campaignId: string) {
  */
 export async function getCampaignOverviewEngagementStats() {
   if (!isFirebaseConfigured || !db) {
-    return { trackedDelivered: 0, uniqueOpened: 0 };
+    return { trackedDelivered: 0, uniqueOpened: 0, sentRecipients: 0, uniqueReplied: 0 };
   }
   const base = leadsCol();
   const trackedDeliveredQuery = query(
@@ -1253,11 +1253,15 @@ export async function getCampaignOverviewEngagementStats() {
     where('delivered', '==', true),
     where('opened', '==', true)
   );
-  const [trackedDelivered, uniqueOpened] = await Promise.all([
+  const sentRecipientsQuery = query(base, where('sendStatus', '==', 'SENT'));
+  const uniqueRepliedQuery = query(base, where('replyStatus', '==', 'REPLIED'));
+  const [trackedDelivered, uniqueOpened, sentRecipients, uniqueReplied] = await Promise.all([
     countDocs(trackedDeliveredQuery),
     countDocs(uniqueOpenedQuery),
+    countDocs(sentRecipientsQuery),
+    countDocs(uniqueRepliedQuery),
   ]);
-  return { trackedDelivered, uniqueOpened };
+  return { trackedDelivered, uniqueOpened, sentRecipients, uniqueReplied };
 }
 
 /**

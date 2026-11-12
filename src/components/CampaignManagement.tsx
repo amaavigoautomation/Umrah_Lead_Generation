@@ -481,6 +481,8 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
   const [campaignOverviewEngagement, setCampaignOverviewEngagement] = useState<{
     trackedDelivered: number;
     uniqueOpened: number;
+    sentRecipients: number;
+    uniqueReplied: number;
   } | null>(null);
   useEffect(() => {
     if (!tenantId) {
@@ -494,6 +496,8 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
       setCampaignOverviewEngagement({
         trackedDelivered: Math.max(0, Number(data.trackedDelivered) || 0),
         uniqueOpened: Math.max(0, Number(data.uniqueOpened) || 0),
+        sentRecipients: Math.max(0, Number(data.sentRecipients) || 0),
+        uniqueReplied: Math.max(0, Number(data.uniqueReplied) || 0),
       });
     };
     void refreshOverviewEngagement();
@@ -1451,12 +1455,14 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
   const visibleDirectoryCampaigns = filteredDirectoryCampaigns.slice((campaignDirectoryPage - 1) * campaignDirectoryPageSize, campaignDirectoryPage * campaignDirectoryPageSize);
   const trackedDeliveredEmails = campaignOverviewEngagement?.trackedDelivered || 0;
   const uniqueOpenedRecipients = campaignOverviewEngagement?.uniqueOpened || 0;
+  const sentRecipients = campaignOverviewEngagement?.sentRecipients || 0;
+  const uniqueRepliedRecipients = campaignOverviewEngagement?.uniqueReplied || 0;
   const campaignDirectoryStats = {
     total: campaigns.length,
     running: campaigns.filter((campaign) => campaign.status === 'RUNNING').length,
     scheduled: campaigns.filter((campaign) => campaign.status === 'SCHEDULED').length,
     avgOpenRate: trackedDeliveredEmails > 0 ? (uniqueOpenedRecipients / trackedDeliveredEmails) * 100 : null,
-    replies: campaigns.reduce((total, campaign) => total + (campaign.repliedCount || 0), 0),
+    avgReplyRate: sentRecipients > 0 ? (uniqueRepliedRecipients / sentRecipients) * 100 : null,
   };
   const formatDirectoryActivity = (value?: string) => {
     if (!value) return '—';
@@ -2185,10 +2191,10 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                     <div className="mt-3 text-2xl font-bold tabular-nums text-slate-950">{campaignDirectoryStats.avgOpenRate === null ? '—' : `${campaignDirectoryStats.avgOpenRate.toFixed(1)}%`}</div>
                     <div className="mt-1 text-[11px] text-slate-400">Unique tracked opens · delivered</div>
                   </div>
-                  <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                    <div className="flex items-center justify-between"><span className="text-xs font-medium text-slate-500">Replies</span><span className="h-8 w-8 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center"><MessageSquare className="w-4 h-4" /></span></div>
-                    <div className="mt-3 text-2xl font-bold tabular-nums text-slate-950">{campaignDirectoryStats.replies.toLocaleString('en-IN')}</div>
-                    <div className="mt-1 text-[11px] text-slate-400">Confirmed responses</div>
+                  <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm" title="Unique recipients who replied ÷ unique recipients sent at least one campaign email across all campaigns.">
+                    <div className="flex items-center justify-between"><span className="text-xs font-medium text-slate-500">Avg. Reply Rate</span><span className="h-8 w-8 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center"><MessageSquare className="w-4 h-4" /></span></div>
+                    <div className="mt-3 text-2xl font-bold tabular-nums text-slate-950">{campaignDirectoryStats.avgReplyRate === null ? '—' : `${campaignDirectoryStats.avgReplyRate.toFixed(1)}%`}</div>
+                    <div className="mt-1 text-[11px] text-slate-400">Unique replies · sent recipients</div>
                   </div>
                 </div>
 

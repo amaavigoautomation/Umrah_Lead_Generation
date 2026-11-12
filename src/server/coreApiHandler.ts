@@ -1535,6 +1535,7 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
         websiteWebhook: {
           endpoint: '/api/webhooks/umrah-demo',
           status: 'ready',
+          available: true,
         },
         calendar: await (async () => {
           const b = await getTenantBrand(resolvedTenantId);

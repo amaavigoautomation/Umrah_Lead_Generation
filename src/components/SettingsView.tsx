@@ -296,7 +296,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             const channelStatus = overviewData.channels;
             const email = overviewData.email;
             const brand = overviewData.brand?.brand || null;
-            const aiConfigured = health?.openaiKeyPresent === true;
             const defaultLandingPage = workspacePreferences.defaultLandingPage || 'dashboard';
             const landingPageLabel = defaultLandingPage === 'inbox' ? 'Unified Inbox' : defaultLandingPage === 'campaigns' ? 'Campaigns' : 'Dashboard';
             const rules = formData.humanHandoffRules || { explicitRequest: true, frustration: true, aiUnableToResolve: true, failureThreshold: 2 };
@@ -326,9 +325,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   ? email.status === 'verified' ? 'Sender setup needed' : 'Domain verification pending'
                   : email.resendConfigured === false ? 'Provider unavailable' : 'Not configured';
             const emailTone = !email ? 'muted' : email.canSend ? 'success' : email.domain ? 'warning' : email.resendConfigured === false ? 'danger' : 'muted';
-            const websiteReady = health?.websiteWebhook?.status === 'ready';
-            const websiteLabel = !health ? 'Not checked' : websiteReady ? 'Endpoint ready' : 'Unavailable';
-            const websiteTone = !health ? 'muted' : websiteReady ? 'success' : 'danger';
+            const websiteWebhook = health?.websiteWebhook;
+            const websiteReady = websiteWebhook?.available === true || websiteWebhook?.status === 'ready';
+            const websiteLabel = !health || !websiteWebhook ? 'Status not available' : websiteReady ? 'Endpoint available' : 'Needs review';
+            const websiteTone = !health || !websiteWebhook ? 'muted' : websiteReady ? 'success' : 'warning';
 
             const monitoredConnected = [
               Boolean(channelStatus?.whatsapp?.connected && !channelStatus?.whatsapp?.error),
@@ -348,9 +348,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             if (!overviewData.loading && overviewData.errors.includes('email')) {
               issues.push({ title: 'Email readiness could not be checked', detail: 'The email settings service did not return a status.', section: 'email' });
             }
-            if (health && !aiConfigured) {
-              issues.push({ title: 'AI provider credentials are not configured', detail: 'AI requests may fail until a provider credential is configured on the server.', section: 'ai' });
-            }
             if (email?.resendConfigured === false) {
               issues.push({ title: 'Email sending provider is unavailable', detail: 'The platform email provider is not configured for this workspace.', section: 'email' });
             } else if (email?.domain && email.status !== 'verified') {
@@ -361,8 +358,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             if (channelStatus && ['whatsapp', 'instagram', 'messenger'].some((key) => channelStatus[key]?.error)) {
               issues.push({ title: 'A channel connection check failed', detail: 'One or more Meta channel statuses could not be verified. Review Channels for details.', section: 'channels' });
             }
-            if (health && !websiteReady) {
-              issues.push({ title: 'Website webhook endpoint is unavailable', detail: 'The server health check did not report the website webhook endpoint as ready.', section: 'channels' });
+            if (websiteWebhook && !websiteReady) {
+              issues.push({ title: 'Website webhook endpoint needs review', detail: 'The health endpoint explicitly reported that the website webhook route is not ready.', section: 'channels' });
             }
             const checkedCount = [health, channelStatus, email, brand].filter(Boolean).length;
             const healthLabel = overviewData.loading ? 'Checking' : issues.length > 0 ? 'Needs attention' : checkedCount > 0 ? 'Operational' : 'Unavailable';
@@ -424,11 +421,11 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   </div>
                   <div className="min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
                     <div className="flex items-center justify-between gap-2">
-                      <span className="text-xs font-semibold text-slate-500">AI readiness</span>
+                      <span className="text-xs font-semibold text-slate-500">AI service</span>
                       <Bot className="h-4 w-4 text-slate-400" />
                     </div>
-                    <div className="mt-3 text-xl font-extrabold text-slate-950">{health ? aiConfigured ? 'Provider ready' : 'Needs setup' : 'Checking'}</div>
-                    <p className="mt-1 truncate text-[11px] text-slate-500">{health?.openaiModel || 'Runtime model not available'}</p>
+                    <div className="mt-3 text-xl font-extrabold text-slate-950">Platform managed</div>
+                    <p className="mt-1 text-[11px] text-slate-500">AI model and credentials are managed by Amaavigo.</p>
                   </div>
                   <div className="min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
                     <div className="flex items-center justify-between gap-2">
@@ -505,9 +502,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     </div>
                     <div className="mt-4 grid grid-cols-2 gap-3">
                       <div className="rounded-xl bg-slate-50 p-3">
-                        <span className="text-[10px] text-slate-500">Provider</span>
-                        <p className="mt-1 text-sm font-bold text-slate-900">{health ? aiConfigured ? 'Configured' : 'Missing' : 'Unknown'}</p>
-                        <p className="mt-1 truncate text-[10px] text-slate-400">{health?.openaiModel || 'Model unavailable'}</p>
+                        <span className="text-[10px] text-slate-500">AI runtime</span>
+                        <p className="mt-1 text-sm font-bold text-slate-900">Managed by Amaavigo</p>
+                        <p className="mt-1 text-[10px] text-slate-400">Model selection and credentials are centrally managed</p>
                       </div>
                       <div className="rounded-xl bg-slate-50 p-3">
                         <span className="text-[10px] text-slate-500">Knowledge base</span>

@@ -39,6 +39,11 @@ export default async function handler(req: IncomingMessage & { body?: any }, res
       JSON.stringify({
         status: 'healthy',
         service: 'Umrah360 Vercel Serverless Gateway',
+        websiteWebhook: {
+          endpoint: '/api/webhooks/umrah-demo',
+          status: 'ready',
+          available: true,
+        },
         timestamp: new Date().toISOString(),
       })
     );

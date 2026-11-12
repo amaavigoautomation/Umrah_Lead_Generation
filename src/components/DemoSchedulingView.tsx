@@ -48,7 +48,6 @@ import {
   registerCalendarAccessToken,
   initCalendarAuth,
   hasCalendarToken,
-  CALENDAR_TARGET_ACCOUNT,
 } from '../services/googleCalendarAuth.js';
 
 type SchedulingView = 'CALENDAR' | 'BOOKINGS' | 'AVAILABILITY' | 'INTEGRATIONS' | 'SIMULATOR';
@@ -162,7 +161,7 @@ export const DemoSchedulingView: React.FC<DemoSchedulingViewProps> = ({ leads = 
       const res = await fetch(`/api/tenants/${encodeURIComponent(tenantId)}/brand`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ brand: { ...availabilityDraft, timezoneLabel: timezoneLabelFor(availabilityDraft.timezone) } }),
+        body: JSON.stringify({ brand: { ...availabilityDraft, calendarEmail: '', timezoneLabel: timezoneLabelFor(availabilityDraft.timezone) } }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error || `Request failed (${res.status})`);
@@ -323,7 +322,7 @@ export const DemoSchedulingView: React.FC<DemoSchedulingViewProps> = ({ leads = 
         const connected = Boolean(data.configured && data.connected);
         setCalendarConnected(connected);
         setCalendarProvider(data.provider === 'microsoft' || data.provider === 'google' ? data.provider : connected ? 'google' : null);
-        setConnectedEmail(data.email || data.targetAccount || '');
+        setConnectedEmail(connected ? String(data.connectedCalendarEmail || data.email || data.targetAccount || '').trim() : '');
         setMicrosoftAvailable(data.microsoftAvailable !== false);
         setGoogleAutoRenew(typeof data.autoRenew === 'boolean' ? data.autoRenew : null);
         setGoogleOAuthAvailable(typeof data.googleOAuthAvailable === 'boolean' ? data.googleOAuthAvailable : null);
@@ -359,7 +358,11 @@ export const DemoSchedulingView: React.FC<DemoSchedulingViewProps> = ({ leads = 
         }
       } else if (res.ok) {
         const data = await res.json();
-        if (requestId === availabilityRequestRef.current) setAvailableSlots(data.slots || []);
+        if (requestId === availabilityRequestRef.current) {
+          setAvailableSlots(data.slots || []);
+          const accountEmail = String(data.connectedCalendarEmail || data.targetAccount || '').trim();
+          if (accountEmail) setConnectedEmail(accountEmail);
+        }
       } else {
         const data = await res.json().catch(() => ({}));
         if (requestId === availabilityRequestRef.current) {
@@ -511,6 +514,7 @@ export const DemoSchedulingView: React.FC<DemoSchedulingViewProps> = ({ leads = 
         setCalendarConnected(true);
         setCalendarProvider('google');
         setBookingSuccessMsg(`Google Calendar & Meet connected. Microsoft Calendar was disconnected (only one calendar at a time).`);
+        checkStatus();
         fetchAvailability();
         fetchBookings();
       }
@@ -971,7 +975,7 @@ export const DemoSchedulingView: React.FC<DemoSchedulingViewProps> = ({ leads = 
           {isLoadingBookings && bookings.length === 0 ? <div className="schedule-empty-state"><RefreshCw className="h-5 w-5 animate-spin" /><strong>Loading bookings</strong><span>Fetching the latest booking records.</span></div> : filteredBookings.length === 0 ? <div className="schedule-empty-state"><CalendarDays className="h-6 w-6" /><strong>No matching bookings</strong><span>Try another search or status filter.</span><button type="button" onClick={() => { setBookingSearch(''); setBookingStatusFilter('ALL'); setBookingChannelFilter('ALL'); }}>Clear filters</button></div> : (
             <div className="schedule-bookings-table-wrap"><table className="schedule-bookings-table"><thead><tr><th>Lead / Company</th><th>Date & time</th><th>Channel</th><th>Meeting</th><th>Attendees</th><th>Status</th><th /></tr></thead><tbody>
               {filteredBookings.map((booking) => {
-                const guests = (booking.attendees || []).filter((attendee) => attendee && attendee.toLowerCase() !== booking.leadEmail?.toLowerCase() && attendee.toLowerCase() !== CALENDAR_TARGET_ACCOUNT.toLowerCase());
+                const guests = (booking.attendees || []).filter((attendee) => attendee && attendee.toLowerCase() !== booking.leadEmail?.toLowerCase() && (!connectedEmail || attendee.toLowerCase() !== connectedEmail.toLowerCase()));
                 return <tr key={booking.bookingId} onClick={() => { setSelectedBookingId(booking.bookingId); setBookingDetailsTab('DETAILS'); }}><td><strong>{booking.leadName}</strong><span>{booking.companyName || 'Company not provided'}</span><small>{booking.leadEmail}</small></td><td><strong>{formatDateKey(booking.date, { day: 'numeric', month: 'short', year: 'numeric' })}</strong><span>{booking.startTime} – {booking.endTime} {tzl}</span></td><td><span className="schedule-channel-chip">{booking.channel}</span></td><td>{booking.googleMeetLink ? <a className="schedule-join-link" href={booking.googleMeetLink} target="_blank" rel="noreferrer" onClick={(event) => event.stopPropagation()}><Video className="h-3.5 w-3.5" /> Join meeting <ArrowUpRight className="h-3 w-3" /></a> : <span className="schedule-table-muted">Link unavailable</span>}</td><td><span className="schedule-attendee-count"><Users className="h-3.5 w-3.5" /> {1 + guests.length}</span></td><td>{renderBookingStatus(booking.status)}</td><td><button type="button" className="schedule-row-open" onClick={(event) => { event.stopPropagation(); setSelectedBookingId(booking.bookingId); setBookingDetailsTab('DETAILS'); }} aria-label="Open booking details"><ArrowUpRight className="h-4 w-4" /></button></td></tr>;
               })}
             </tbody></table></div>
@@ -990,9 +994,9 @@ export const DemoSchedulingView: React.FC<DemoSchedulingViewProps> = ({ leads = 
                 <label><span>Session duration</span><div className="schedule-input-with-suffix"><input type="number" min={5} max={240} step={1} disabled={!canEditSettings || isSavingAvailability} value={availabilityDraft.demoDurationMinutes} onChange={(event) => setAvailabilityDraft((current) => ({ ...current, demoDurationMinutes: Number(event.target.value) }))} /><em>minutes</em></div></label>
                 <label><span>Timezone (IANA)</span><select disabled={!canEditSettings || isSavingAvailability} value={availabilityDraft.timezone} onChange={(event) => updateAvailabilityTimezone(event.target.value)}>{IANA_TIME_ZONES.map((timezone) => <option key={timezone} value={timezone}>{timezone}</option>)}</select></label>
                 <label><span>Timezone label (automatic)</span><input type="text" readOnly aria-readonly="true" value={timezoneLabelFor(availabilityDraft.timezone) || 'Select a valid timezone'} /></label>
-                <label><span>Calendar invite email</span><input type="email" disabled={!canEditSettings || isSavingAvailability} value={availabilityDraft.calendarEmail} onChange={(event) => updateAvailabilityText('calendarEmail', event.target.value)} placeholder="calendar@company.com" /></label>
+                <label><span>Connected calendar account</span><input type="email" readOnly aria-readonly="true" value={connectedEmail} placeholder="Connect Google Calendar to show the account" /></label>
               </div>
-              <p className="schedule-settings-hint">The full session must fit inside a working window. Start times repeat at the selected session duration.</p>
+              <p className="schedule-settings-hint">Live availability and new demo events use this connected account’s primary calendar. Re-sync the integration to change accounts. The full session must fit inside a working window.</p>
             </div>
             <div className="schedule-settings-card">
               <div className="schedule-card-title"><span>Weekly working hours</span><span className="schedule-card-subtitle">{availabilityDraft.workingDays.length} days enabled</span></div>
@@ -1100,7 +1104,7 @@ export const DemoSchedulingView: React.FC<DemoSchedulingViewProps> = ({ leads = 
               {selectedBooking.notes && <div className="schedule-detail-note"><strong>Notes</strong><p>{selectedBooking.notes}</p></div>}
             </div> : <div className="schedule-detail-body">
               <div className="schedule-attendee-primary"><User className="h-4 w-4" /><div><strong>{selectedBooking.leadName}</strong><span>{selectedBooking.leadEmail}</span></div><em>Lead</em></div>
-              {(selectedBooking.attendees || []).filter((attendee) => attendee && attendee.toLowerCase() !== selectedBooking.leadEmail?.toLowerCase() && attendee.toLowerCase() !== CALENDAR_TARGET_ACCOUNT.toLowerCase()).map((attendee) => <div className="schedule-attendee-primary" key={attendee}><Mail className="h-4 w-4" /><div><strong>{attendee}</strong><span>Invited guest</span></div></div>)}
+              {(selectedBooking.attendees || []).filter((attendee) => attendee && attendee.toLowerCase() !== selectedBooking.leadEmail?.toLowerCase() && (!connectedEmail || attendee.toLowerCase() !== connectedEmail.toLowerCase())).map((attendee) => <div className="schedule-attendee-primary" key={attendee}><Mail className="h-4 w-4" /><div><strong>{attendee}</strong><span>Invited guest</span></div></div>)}
               {selectedBooking.status !== 'CANCELLED' && selectedBooking.status !== 'COMPLETED' && <button type="button" className="schedule-secondary-button" onClick={() => openBookingAttendees(selectedBooking)}><UserPlus className="h-4 w-4" /> Add attendees</button>}
             </div>}
             <footer className="schedule-detail-actions">

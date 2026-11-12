@@ -254,7 +254,7 @@ export async function deleteGoogleCalendarConnection(tenantId: string) {
   await deleteDoc(tenantRepo(sysCtx(tenantId)).secretDoc(GOOGLE_CALENDAR_SECRET_NAME)).catch(() => {});
   await setDoc(
     tenantRepo(sysCtx(tenantId)).settingsDoc('calendar_auth'),
-    { accessToken: null, active: false, refreshTokenStored: false, updatedAt: new Date().toISOString() },
+    { accessToken: null, email: null, targetAccount: null, provider: null, active: false, expired: false, refreshTokenStored: false, updatedAt: new Date().toISOString() },
     { merge: true }
   ).catch(() => {});
 }
@@ -276,7 +276,19 @@ export async function hasGoogleCalendarRefreshToken(tenantId: string): Promise<b
 }
 
 export async function getGoogleCalendarConnectedEmail(tenantId: string): Promise<string> {
-  return (await readSecret(tenantId))?.email || '';
+  const secret = await readSecret(tenantId).catch(() => null);
+  const secretEmail = String(secret?.email || '').trim().toLowerCase();
+  if (secretEmail) return secretEmail;
+  if (!isFirebaseConfigured || !db) return '';
+  try {
+    const authSnap = await getDoc(tenantRepo(sysCtx(tenantId)).settingsDoc('calendar_auth'));
+    if (!authSnap.exists()) return '';
+    const auth = authSnap.data() as any;
+    if (auth?.active !== true || auth?.expired === true || !auth?.accessToken) return '';
+    return String(auth.email || '').trim().toLowerCase();
+  } catch {
+    return '';
+  }
 }
 
 /** Drops the cached access token so the next call renews it (used after a 401 from the Calendar API). */

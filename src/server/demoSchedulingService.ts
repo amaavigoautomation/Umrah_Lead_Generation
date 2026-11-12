@@ -2,6 +2,7 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import { tenantRepo } from './tenantRepo.js';
 import {
   getGoogleCalendarAccessToken,
+  getGoogleCalendarConnectedEmail,
   hasGoogleCalendarRefreshToken,
   invalidateGoogleCalendarAccessToken,
   GoogleCalendarReauthRequired,
@@ -35,7 +36,14 @@ function getSchedCtx(): TenantContext {
 
 // ---- Per-company scheduling brand (timezone, working days/hours, names). Cache is warmed by warmSchedBrand(). ----
 const sb = () => getBrandSync(getSchedCtx().tenantId);
-const warmSchedBrand = () => getTenantBrand(getSchedCtx().tenantId).catch(() => sb());
+const connectedCalendarEmails = new Map<string, string>();
+const warmSchedBrand = async () => {
+  const tenantId = getSchedCtx().tenantId;
+  const brand = await getTenantBrand(tenantId).catch(() => sb());
+  const connectedEmail = await getGoogleCalendarConnectedEmail(tenantId).catch(() => '');
+  connectedCalendarEmails.set(tenantId, String(connectedEmail || '').trim().toLowerCase());
+  return brand;
+};
 const tz = () => sb().timezone;
 const TZL = () => brandTzLabel(sb());
 const tzDisplay = () => (sb().timezoneLabel ? `${tz()} (${sb().timezoneLabel})` : tz());
@@ -82,7 +90,7 @@ const closedDaysLabel = () => {
 };
 const brandName = () => sb().companyName;
 /** Calendar account that hosts demos for this company ('' if none). */
-const hostCalendarEmail = () => sb().calendarEmail;
+const hostCalendarEmail = () => connectedCalendarEmails.get(getSchedCtx().tenantId) || '';
 const hostEmailList = (smtpUser?: string, smtpFrom?: string) =>
   [
     hostCalendarEmail(),

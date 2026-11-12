@@ -49,7 +49,7 @@ export interface TenantBrand {
   workingHoursEnd: number;
   /** Day-specific availability windows; end is exclusive and may be 24 (midnight). */
   workingHoursByDay: Record<number, { start: number; end: number }>;
-  /** Calendar account used for demo invites ("" = platform default). */
+  /** @deprecated Legacy compatibility field. The connected calendar identity is resolved from OAuth. */
   calendarEmail: string;
 }
 
@@ -79,7 +79,7 @@ export const UMRAH360_BRAND: TenantBrand = {
     4: { start: 10, end: 19 },
     5: { start: 10, end: 19 },
   },
-  calendarEmail: 'amaavigo@gmail.com',
+  calendarEmail: '',
 };
 
 /** Neutral defaults for any workspace that is not umrah360. */

@@ -10,6 +10,7 @@ export const CALENDAR_SCOPES = [
 ];
 
 let cachedAccessToken: string | null = null;
+let cachedCalendarAccountEmail = '';
 let cachedUser: User | null = null;
 let isSigningIn = false;
 
@@ -19,6 +20,7 @@ if (typeof window !== 'undefined') {
     // Only a token this browser got from the popup in the last 55 minutes (see dropExpiredToken).
     const exp = Number(window.sessionStorage.getItem('calendar_access_token_exp') || 0);
     cachedAccessToken = exp && Date.now() < exp ? window.sessionStorage.getItem('calendar_access_token') : null;
+    cachedCalendarAccountEmail = cachedAccessToken ? (window.sessionStorage.getItem('calendar_account_email') || '').trim().toLowerCase() : '';
   } catch {}
 }
 
@@ -28,7 +30,7 @@ export const hasCalendarToken = (): boolean => Boolean(cachedAccessToken);
 const provider = new GoogleAuthProvider();
 CALENDAR_SCOPES.forEach((scope) => provider.addScope(scope));
 provider.setCustomParameters({
-  login_hint: CALENDAR_TARGET_ACCOUNT,
+  // Let the operator choose the account; a previous workspace email must never preselect another host.
   prompt: 'consent',
   access_type: 'offline',
 });
@@ -68,7 +70,9 @@ function dropExpiredToken() {
     if (!exp || Date.now() > exp) {
       cachedAccessToken = null;
       window.sessionStorage.removeItem('calendar_access_token');
+      window.sessionStorage.removeItem('calendar_account_email');
       window.sessionStorage.removeItem(TOKEN_EXP_KEY);
+      cachedCalendarAccountEmail = '';
     }
   } catch {}
 }
@@ -80,7 +84,7 @@ export const initCalendarAuth = (
   dropExpiredToken();
   // If we already have a fresh session token, sync to server immediately
   if (cachedAccessToken && typeof window !== 'undefined') {
-    syncCalendarTokenToServer(cachedAccessToken, CALENDAR_TARGET_ACCOUNT).then((ok) => {
+    syncCalendarTokenToServer(cachedAccessToken, cachedCalendarAccountEmail).then((ok) => {
       if (ok && onAuthSuccess) {
         onAuthSuccess(cachedUser, cachedAccessToken!);
       }
@@ -121,16 +125,19 @@ export const signInWithGoogleCalendar = async (): Promise<{ user: User; accessTo
     }
 
     cachedAccessToken = credential.accessToken;
+    cachedCalendarAccountEmail = String(result.user.email || '').trim().toLowerCase();
 
     if (typeof window !== 'undefined') {
       try {
         window.sessionStorage.setItem('calendar_access_token', credential.accessToken);
+        if (cachedCalendarAccountEmail) window.sessionStorage.setItem('calendar_account_email', cachedCalendarAccountEmail);
+        else window.sessionStorage.removeItem('calendar_account_email');
         window.sessionStorage.setItem(TOKEN_EXP_KEY, String(Date.now() + TOKEN_LIFETIME_MS));
       } catch {}
     }
 
     // Sync token to the server (it stores it in this workspace's settings for background work)
-    await syncCalendarTokenToServer(cachedAccessToken, result.user.email || CALENDAR_TARGET_ACCOUNT);
+    await syncCalendarTokenToServer(cachedAccessToken, cachedCalendarAccountEmail);
 
     return { user: result.user, accessToken: cachedAccessToken };
   } catch (error: any) {
@@ -150,13 +157,16 @@ export const signInWithGoogleCalendar = async (): Promise<{ user: User; accessTo
 /**
  * Manually registers an OAuth access token (useful for direct testing or pasting).
  */
-export const registerCalendarAccessToken = async (token: string, userEmail: string = CALENDAR_TARGET_ACCOUNT): Promise<boolean> => {
+export const registerCalendarAccessToken = async (token: string, userEmail = ''): Promise<boolean> => {
   if (!token || !token.trim()) return false;
   const cleanToken = token.trim();
   cachedAccessToken = cleanToken;
+  cachedCalendarAccountEmail = String(userEmail || '').trim().toLowerCase();
   if (typeof window !== 'undefined') {
     try {
       window.sessionStorage.setItem('calendar_access_token', cleanToken);
+      if (cachedCalendarAccountEmail) window.sessionStorage.setItem('calendar_account_email', cachedCalendarAccountEmail);
+      else window.sessionStorage.removeItem('calendar_account_email');
       window.sessionStorage.setItem(TOKEN_EXP_KEY, String(Date.now() + TOKEN_LIFETIME_MS));
     } catch {}
   }
@@ -187,15 +197,18 @@ export const getCalendarAccessToken = async (): Promise<string | null> => {
 /**
  * Sends the acquired OAuth access token to the server, which stores it for this workspace.
  */
-export const syncCalendarTokenToServer = async (token: string, userEmail: string): Promise<boolean> => {
+export const syncCalendarTokenToServer = async (token: string, userEmail = ''): Promise<boolean> => {
   try {
     // 1. Send to server backend
-    await fetch('/api/calendar/auth-token', {
+    const response = await fetch('/api/calendar/auth-token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ accessToken: token, email: userEmail, updatedAt: new Date().toISOString() }),
-    }).catch(() => {});
-
+      body: JSON.stringify({ accessToken: token, email: userEmail || undefined, updatedAt: new Date().toISOString() }),
+    });
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw new Error(data?.error || `Calendar token verification failed (${response.status}).`);
+    }
     return true;
   } catch (err) {
     console.warn('[Calendar Auth Sync Notice]:', err);
@@ -210,7 +223,9 @@ export const logoutCalendar = async () => {
   if (typeof window !== 'undefined') {
     try {
       window.sessionStorage.removeItem('calendar_access_token');
+      window.sessionStorage.removeItem('calendar_account_email');
       window.sessionStorage.removeItem(TOKEN_EXP_KEY);
+      cachedCalendarAccountEmail = '';
     } catch {}
   }
 };

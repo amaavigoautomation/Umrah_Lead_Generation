@@ -1606,8 +1606,9 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
         },
         calendar: await (async () => {
           const b = await getTenantBrand(resolvedTenantId);
+          const googleCalendarOAuth = await import('./googleCalendarOAuth.js');
           return {
-            targetEmail: b.calendarEmail,
+            targetEmail: await googleCalendarOAuth.getGoogleCalendarConnectedEmail(resolvedTenantId),
             timezone: b.timezone,
             workingDays: brandWorkingDaysLabel(b).replace(' to ', ' - '),
             workingHours: brandWorkingWindowLabel(b),
@@ -2001,21 +2002,44 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
   }
 
   if (url === '/api/calendar/auth-token' && req.method === 'POST') {
-    const { accessToken, email, expiresIn } = body;
-    if (accessToken) {
-      setServerCalendarAccessToken(accessToken, expiresIn || 3600);
+    const { accessToken, expiresIn } = body;
+    if (!accessToken || typeof accessToken !== 'string' || !accessToken.trim()) {
+      res.statusCode = 400;
+      res.end(JSON.stringify({ error: 'accessToken is required' }));
+      return true;
+    }
+    try {
+      // Never trust a browser-supplied email or the legacy brand setting as the calendar identity.
+      // Ask Google which primary calendar this exact access token belongs to.
+      const identityResponse = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary', {
+        headers: { Authorization: `Bearer ${accessToken.trim()}` },
+      });
+      if (!identityResponse.ok) {
+        const details = await identityResponse.text().catch(() => '');
+        res.statusCode = identityResponse.status === 401 ? 401 : 400;
+        res.end(JSON.stringify({ error: `Google could not verify this calendar account (HTTP ${identityResponse.status}). ${details.slice(0, 180)}`.trim() }));
+        return true;
+      }
+      const identity = await identityResponse.json();
+      const connectedCalendarEmail = String(identity?.id || '').trim().toLowerCase();
+      if (!connectedCalendarEmail.includes('@')) {
+        res.statusCode = 400;
+        res.end(JSON.stringify({ error: 'Google did not return a verified primary calendar email for this account.' }));
+        return true;
+      }
+
+      setServerCalendarAccessToken(accessToken.trim(), expiresIn || 3600);
       if (isFirebaseConfigured && db) {
         await safeSetDoc(
           tenantRepo(activeTenantCtx).settingsDoc('calendar_auth'),
           {
-            accessToken,
-            email: email || (await getTenantBrand(resolvedTenantId)).calendarEmail,
-            targetAccount: (await getTenantBrand(resolvedTenantId)).calendarEmail,
+            accessToken: accessToken.trim(),
+            email: connectedCalendarEmail,
+            targetAccount: connectedCalendarEmail,
+            provider: 'google',
             updatedAt: new Date().toISOString(),
             active: true,
-            // A NEW token must clear an earlier "expired" flag. Without this, once any token had expired,
-            // every token saved afterwards was ignored by other server instances (they read this doc and
-            // skip it while expired is true), so the calendar looked disconnected again on the next visit.
+            // A new verified token clears a previous expiry state.
             expired: false,
             expiredAt: null,
           },
@@ -2023,17 +2047,21 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
         ).catch(() => {});
       }
       res.statusCode = 200;
-      res.end(JSON.stringify({ success: true, message: 'Google Calendar OAuth token registered on server' }));
-      return true;
+      res.end(JSON.stringify({ success: true, email: connectedCalendarEmail, message: 'Google Calendar token verified and registered on server' }));
+    } catch (err: any) {
+      res.statusCode = 502;
+      res.end(JSON.stringify({ error: err?.message || 'Could not verify the Google Calendar account.' }));
     }
-    res.statusCode = 400;
-    res.end(JSON.stringify({ error: 'accessToken is required' }));
     return true;
   }
 
   if (url === '/api/calendar/status' && req.method === 'GET') {
     const liveToken = await getLiveCalendarToken(requestBearerToken || undefined);
     const verification = liveToken ? await verifyGoogleCalendarConnection(liveToken) : { connected: false };
+    const googleCalendarOAuth = await import('./googleCalendarOAuth.js');
+    const connectedCalendarEmail = verification.connected
+      ? String((verification as any).email || await googleCalendarOAuth.getGoogleCalendarConnectedEmail(resolvedTenantId) || '').trim().toLowerCase()
+      : '';
     const cb = await getTenantBrand(resolvedTenantId);
     const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
     const closedNames = [6, 0, 1, 2, 3, 4, 5].filter((d) => !cb.workingDays.includes(d)).map((d) => dayNames[d]);
@@ -2060,11 +2088,12 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
         configured: Boolean(liveToken),
         connected: verification.connected,
         provider: 'google',
-        email: (verification as any).email || cb.calendarEmail,
+        email: connectedCalendarEmail,
+        connectedCalendarEmail,
         // true = connecting uses the server flow (no hourly reconnect); false = old popup fallback
         googleOAuthAvailable: (await import('./googleCalendarOAuth.js')).isGoogleCalendarOAuthConfigured(),
-        autoRenew: await (await import('./googleCalendarOAuth.js')).hasGoogleCalendarRefreshToken(resolvedTenantId).catch(() => false),
-        targetAccount: cb.calendarEmail,
+        autoRenew: await googleCalendarOAuth.hasGoogleCalendarRefreshToken(resolvedTenantId).catch(() => false),
+        targetAccount: connectedCalendarEmail,
         timezone: cb.timezone,
         workingDays: `${brandWorkingDaysLabel(cb).replace(' to ', ' – ')}${closedNames.length ? ` (${closedNames.join(' & ')} closed)` : ''}`,
         workingHours: brandWorkingWindowLabel(cb),
@@ -2100,11 +2129,14 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
     });
 
     const ab = await getTenantBrand(resolvedTenantId);
+    const googleCalendarOAuth = await import('./googleCalendarOAuth.js');
+    const connectedCalendarEmail = await googleCalendarOAuth.getGoogleCalendarConnectedEmail(resolvedTenantId);
     res.statusCode = 200;
     res.end(
       JSON.stringify({
         success: true,
-        targetAccount: ab.calendarEmail,
+        targetAccount: connectedCalendarEmail,
+        connectedCalendarEmail,
         timezone: ab.timezone,
         workingHours: brandWorkingWindowLabel(ab),
         workingSchedule: ab.workingHoursByDay,

@@ -3714,6 +3714,15 @@ ${signature || defSig}`;
           emailMode: channelModes.EMAIL,
           emailSignature: saved.emailSignature || '',
           debounceSeconds: Number(saved.debounceSeconds ?? 30),
+          notificationPreferences: {
+            newMessages: saved.notificationPreferences?.newMessages === true,
+            humanHandoff: saved.notificationPreferences?.humanHandoff === true,
+          },
+          workspacePreferences: {
+            defaultLandingPage: ['dashboard', 'inbox', 'campaigns'].includes(saved.workspacePreferences?.defaultLandingPage)
+              ? saved.workspacePreferences.defaultLandingPage
+              : 'dashboard',
+          },
         }));
         return true;
       }
@@ -3769,6 +3778,31 @@ ${signature || defSig}`;
           return true;
         }
         updates.debounceSeconds = debounceSeconds;
+      }
+      if (body?.notificationPreferences !== undefined) {
+        const prefs = body.notificationPreferences;
+        if (!prefs || typeof prefs !== 'object' || Array.isArray(prefs) ||
+            (prefs.newMessages !== undefined && typeof prefs.newMessages !== 'boolean') ||
+            (prefs.humanHandoff !== undefined && typeof prefs.humanHandoff !== 'boolean')) {
+          res.statusCode = 400;
+          res.end(JSON.stringify({ error: 'notificationPreferences must contain boolean newMessages and humanHandoff values.' }));
+          return true;
+        }
+        updates.notificationPreferences = {
+          newMessages: prefs.newMessages === true,
+          humanHandoff: prefs.humanHandoff === true,
+        };
+      }
+      if (body?.workspacePreferences !== undefined) {
+        const prefs = body.workspacePreferences;
+        const defaultLandingPage = String(prefs?.defaultLandingPage || '');
+        if (!prefs || typeof prefs !== 'object' || Array.isArray(prefs) ||
+            !['dashboard', 'inbox', 'campaigns'].includes(defaultLandingPage)) {
+          res.statusCode = 400;
+          res.end(JSON.stringify({ error: 'workspacePreferences.defaultLandingPage must be dashboard, inbox, or campaigns.' }));
+          return true;
+        }
+        updates.workspacePreferences = { defaultLandingPage };
       }
 
       await safeSetDoc(settingsRef, updates, { merge: true });

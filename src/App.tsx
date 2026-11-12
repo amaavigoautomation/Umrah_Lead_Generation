@@ -291,6 +291,9 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
   const [activities, setActivities] = useState<LeadActivity[]>(() => isFirebaseConfigured ? [] : INITIAL_ACTIVITIES);
   const [knowledgeDocs, setKnowledgeDocs] = useState<KnowledgeDocument[]>(() => isFirebaseConfigured ? [] : INITIAL_KNOWLEDGE_DOCUMENTS);
   const [settings, setSettings] = useState<SystemSettings>(DEFAULT_SETTINGS);
+  const appliedWorkspaceLandingRef = useRef<string | null>(null);
+  const conversationsLoadedRef = useRef(false);
+  const previousNotificationSnapshotRef = useRef<Map<string, { lastMessageAt: string; unread: boolean; humanHandoff: boolean }> | null>(null);
   const [selectedLeadIdForCrm, setSelectedLeadIdForCrm] = useState<string | null>(null);
   const [openCrmAddLead, setOpenCrmAddLead] = useState(false);
   const handleCrmAddLeadRequestHandled = useCallback(() => setOpenCrmAddLead(false), []);
@@ -337,6 +340,9 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
   // Clear workspace-owned state immediately when the signed-in tenant changes. Without this,
   // the previous workspace can remain visible until the next tenant's Firestore snapshots arrive.
   useEffect(() => {
+    appliedWorkspaceLandingRef.current = null;
+    conversationsLoadedRef.current = false;
+    previousNotificationSnapshotRef.current = null;
     if (!isFirebaseConfigured || !db) return;
     setLeads([]);
     setContacts([]);
@@ -504,6 +510,20 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
     if (!currentUser || !currentTenantId) return;
 
     async function initFirestore() {
+      let apiWorkspacePreferences: SystemSettings['workspacePreferences'] | null = null;
+      let apiNotificationPreferences: SystemSettings['notificationPreferences'] | null = null;
+      const applyWorkspaceLandingPreference = (prefs?: SystemSettings['workspacePreferences'] | null) => {
+        if (!currentTenantId || appliedWorkspaceLandingRef.current === currentTenantId) return;
+        appliedWorkspaceLandingRef.current = currentTenantId;
+        const params = new URLSearchParams(window.location.search);
+        // Explicit tab links (including OAuth return links) always take precedence.
+        if (params.has('tab') || params.has('mailbox')) return;
+        const destination = prefs?.defaultLandingPage;
+        if (destination === 'dashboard' || destination === 'inbox' || destination === 'campaigns') {
+          setActiveTab(destination);
+        }
+      };
+
       // Initialize Google Calendar authentication & sync token to backend
       initCalendarAuth();
 
@@ -526,7 +546,9 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
         const apiSetRes = await fetch('/api/settings');
         if (apiSetRes.ok) {
           const apiSet = await apiSetRes.json();
-          if (apiSet?.channelModes || apiSet?.emailMode) {
+          apiWorkspacePreferences = apiSet?.workspacePreferences || null;
+          apiNotificationPreferences = apiSet?.notificationPreferences || null;
+          if (apiSet?.channelModes || apiSet?.emailMode || apiSet?.notificationPreferences || apiSet?.workspacePreferences) {
             setSettings((prev) => ({
               ...prev,
               channelModes: normalizeChannelModes(apiSet.channelModes, {
@@ -535,12 +557,23 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
               }),
               emailSignature: apiSet.emailSignature || prev.emailSignature,
               debounceSeconds: apiSet.debounceSeconds ?? prev.debounceSeconds,
+              notificationPreferences: {
+                ...prev.notificationPreferences,
+                ...(apiSet.notificationPreferences || {}),
+              },
+              workspacePreferences: {
+                ...prev.workspacePreferences,
+                ...(apiSet.workspacePreferences || {}),
+              },
             }));
           }
         }
       } catch {}
 
-      if (!isFirebaseConfigured || !db) return;
+      if (!isFirebaseConfigured || !db) {
+        applyWorkspaceLandingPreference(apiWorkspacePreferences || settings.workspacePreferences);
+        return;
+      }
       try {
         // Load or seed settings in Firestore tenant scope
         const settingsRef = tDoc('settings', 'default');
@@ -548,6 +581,16 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
         if (settingsSnap.exists()) {
           const loadedSettings = settingsSnap.data() as SystemSettings;
           const workspaceDefaults = defaultSettingsFor(currentTenantId, currentTenant?.name);
+          const resolvedWorkspacePreferences = {
+            ...workspaceDefaults.workspacePreferences,
+            ...(apiWorkspacePreferences || {}),
+            ...(loadedSettings.workspacePreferences || {}),
+          };
+          const resolvedNotificationPreferences = {
+            ...workspaceDefaults.notificationPreferences,
+            ...(apiNotificationPreferences || {}),
+            ...(loadedSettings.notificationPreferences || {}),
+          };
           setSettings({
             ...workspaceDefaults,
             ...loadedSettings,
@@ -555,13 +598,21 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
               ...workspaceDefaults.channelModes,
               EMAIL: loadedSettings.emailMode ?? workspaceDefaults.channelModes.EMAIL,
             }),
+            notificationPreferences: resolvedNotificationPreferences,
+            workspacePreferences: resolvedWorkspacePreferences,
             humanHandoffEnabled: true,
             humanHandoffCustomPhrasesEnabled: backendHandoffConfig?.customPhrasesEnabled ?? loadedSettings.humanHandoffCustomPhrasesEnabled ?? workspaceDefaults.humanHandoffCustomPhrasesEnabled ?? true,
             humanHandoffKeywords: backendHandoffConfig?.keywords ?? loadedSettings.humanHandoffKeywords ?? workspaceDefaults.humanHandoffKeywords ?? [],
             humanHandoffRules: backendHandoffConfig?.rules ?? loadedSettings.humanHandoffRules ?? workspaceDefaults.humanHandoffRules ?? { explicitRequest: true, frustration: true, aiUnableToResolve: true, failureThreshold: 2 },
           });
+          applyWorkspaceLandingPreference(resolvedWorkspacePreferences);
         } else {
-          await setDoc(settingsRef, defaultSettingsFor(currentTenantId, currentTenant?.name)).catch(() => {});
+          const workspaceDefaults = defaultSettingsFor(currentTenantId, currentTenant?.name);
+          await setDoc(settingsRef, workspaceDefaults).catch(() => {});
+          applyWorkspaceLandingPreference({
+            ...workspaceDefaults.workspacePreferences,
+            ...(apiWorkspacePreferences || {}),
+          });
         }
 
         // Check if database was ever initialized before for this tenant
@@ -679,6 +730,7 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
       q,
       (snap) => {
         setConversations(snap.docs.map((d) => d.data() as Conversation));
+        conversationsLoadedRef.current = true;
         // A full page back means there may be older conversations to load.
         setHasMoreConversations(snap.size >= conversationLimit);
       },
@@ -2215,6 +2267,8 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
         emailMode: normalizedSettings.channelModes.EMAIL,
         emailSignature: normalizedSettings.emailSignature,
         debounceSeconds: normalizedSettings.debounceSeconds,
+        notificationPreferences: normalizedSettings.notificationPreferences,
+        workspacePreferences: normalizedSettings.workspacePreferences,
       }),
     });
     if (!apiSettingsRes.ok) throw new Error('Channel settings could not be saved.');
@@ -2295,6 +2349,63 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
     (acc, c) => acc + (c.unread || !c.isRead ? (c.unreadCount || 1) : 0),
     0
   );
+
+  useEffect(() => {
+    if (!currentUser || !currentTenantId || !conversationsLoadedRef.current) return;
+    const nextSnapshot = new Map(conversations.map((conversation) => [
+      conversation.conversationId,
+      {
+        lastMessageAt: conversation.lastMessageAt || '',
+        unread: Boolean(conversation.unread || !conversation.isRead),
+        humanHandoff: Boolean(conversation.humanHandoff),
+      },
+    ]));
+    const previousSnapshot = previousNotificationSnapshotRef.current;
+    if (!previousSnapshot) {
+      previousNotificationSnapshotRef.current = nextSnapshot;
+      return;
+    }
+
+    const preferences = settings.notificationPreferences || { newMessages: false, humanHandoff: false };
+    if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+      for (const conversation of conversations) {
+        const previous = previousSnapshot.get(conversation.conversationId);
+        const currentUnread = Boolean(conversation.unread || !conversation.isRead);
+        const hasNewUnreadMessage = currentUnread && Boolean(conversation.lastMessageAt) &&
+          (!previous || previous.lastMessageAt !== conversation.lastMessageAt);
+        const newHandoff = Boolean(conversation.humanHandoff) && !previous?.humanHandoff;
+
+        const sendBrowserAlert = (title: string, body: string, tag: string) => {
+          try {
+            const alert = new Notification(title, { body, tag });
+            alert.onclick = () => {
+              window.focus();
+              setActiveTab('inbox');
+              alert.close();
+            };
+          } catch (error) {
+            console.warn('[Notifications] Could not show browser alert:', error);
+          }
+        };
+
+        if (preferences.newMessages && hasNewUnreadMessage) {
+          sendBrowserAlert(
+            'New incoming conversation',
+            String(conversation.lastMessageText || 'A customer sent a new message.').slice(0, 140),
+            `new-message-${conversation.conversationId}`
+          );
+        }
+        if (preferences.humanHandoff && newHandoff) {
+          sendBrowserAlert(
+            'Human handoff required',
+            String(conversation.humanHandoffReason || conversation.lastMessageText || 'A conversation needs a team member.').slice(0, 140),
+            `human-handoff-${conversation.conversationId}`
+          );
+        }
+      }
+    }
+    previousNotificationSnapshotRef.current = nextSnapshot;
+  }, [conversations, settings.notificationPreferences, currentUser?.userId, currentTenantId, setActiveTab]);
 
   // User Authentication Handlers
   const handleLogout = async () => {
@@ -2763,6 +2874,7 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
                 onDeleteUser={handleDeleteUser}
                 tenantId={currentTenantId}
                 canEditEmail={currentUser.role === 'ADMIN'}
+                timezone={currentTenant?.timezone || 'Asia/Kolkata'}
               />
             )}
 

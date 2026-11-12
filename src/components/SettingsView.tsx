@@ -1,16 +1,18 @@
 import React, { useState } from 'react';
 import {
   Activity,
+  Bell,
   Bot,
   CheckCircle,
-  ChevronRight,
   CreditCard,
+  Globe,
   Mail,
   Plug,
   Save,
   Settings,
   Shield,
   ShieldCheck,
+  SlidersHorizontal,
   Users,
   Zap,
 } from 'lucide-react';
@@ -34,6 +36,7 @@ interface SettingsViewProps {
   onDeleteUser?: (userId: string) => Promise<void>;
   tenantId?: string;
   canEditEmail?: boolean;
+  timezone?: string;
 }
 
 export const SettingsView: React.FC<SettingsViewProps> = ({
@@ -46,12 +49,14 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   onDeleteUser,
   tenantId,
   canEditEmail,
+  timezone,
 }) => {
   const [formData, setFormData] = useState<SystemSettings>(settings);
   const [isSaved, setIsSaved] = useState(false);
   const [isSavingSettings, setIsSavingSettings] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [activeSection, setActiveSection] = useState<'overview' | 'ai' | 'channels' | 'email' | 'team' | 'billing'>('overview');
+  const [activeSection, setActiveSection] = useState<'overview' | 'ai' | 'channels' | 'email' | 'notifications' | 'preferences' | 'teamBilling'>('overview');
+  const [notificationPermissionError, setNotificationPermissionError] = useState<string | null>(null);
   const [handoffKeywordsText, setHandoffKeywordsText] = useState((settings.humanHandoffKeywords || []).join('\n'));
   const handoffRules = formData.humanHandoffRules || { explicitRequest: true, frustration: true, aiUnableToResolve: true, failureThreshold: 2 };
 
@@ -77,7 +82,25 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     setSaveError(null);
     setIsSaved(false);
     try {
-      await onSaveSettings({ ...formData, humanHandoffEnabled: true, humanHandoffCustomPhrasesEnabled: formData.humanHandoffCustomPhrasesEnabled ?? true, humanHandoffKeywords: handoffKeywordsText.split('\n').map((v) => v.trim()).filter(Boolean), humanHandoffRules: { explicitRequest: Boolean(handoffRules.explicitRequest), frustration: Boolean(handoffRules.frustration), aiUnableToResolve: Boolean(handoffRules.aiUnableToResolve), failureThreshold: Number(handoffRules.failureThreshold) || 2 } });
+      await onSaveSettings({
+        ...formData,
+        humanHandoffEnabled: true,
+        humanHandoffCustomPhrasesEnabled: formData.humanHandoffCustomPhrasesEnabled ?? true,
+        humanHandoffKeywords: handoffKeywordsText.split('\n').map((v) => v.trim()).filter(Boolean),
+        humanHandoffRules: {
+          explicitRequest: Boolean(handoffRules.explicitRequest),
+          frustration: Boolean(handoffRules.frustration),
+          aiUnableToResolve: Boolean(handoffRules.aiUnableToResolve),
+          failureThreshold: Number(handoffRules.failureThreshold) || 2,
+        },
+        notificationPreferences: {
+          newMessages: formData.notificationPreferences?.newMessages === true,
+          humanHandoff: formData.notificationPreferences?.humanHandoff === true,
+        },
+        workspacePreferences: {
+          defaultLandingPage: formData.workspacePreferences?.defaultLandingPage || 'dashboard',
+        },
+      });
       setIsSaved(true);
       setTimeout(() => setIsSaved(false), 2500);
     } catch (err: any) {
@@ -87,14 +110,44 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     }
   };
 
+  const notificationPreferences = formData.notificationPreferences || { newMessages: false, humanHandoff: false };
+  const workspacePreferences = formData.workspacePreferences || { defaultLandingPage: 'dashboard' as const };
+
+  const handleNotificationPreferenceChange = async (key: 'newMessages' | 'humanHandoff', enabled: boolean) => {
+    setNotificationPermissionError(null);
+    if (enabled) {
+      if (typeof window === 'undefined' || !('Notification' in window)) {
+        setNotificationPermissionError('This browser does not support desktop notifications.');
+        return;
+      }
+      let permission = Notification.permission;
+      if (permission === 'default') permission = await Notification.requestPermission();
+      if (permission !== 'granted') {
+        setNotificationPermissionError(permission === 'denied'
+          ? 'Browser notifications are blocked. Allow notifications for this site in your browser settings.'
+          : 'Notification permission was not granted.');
+        return;
+      }
+    }
+    setFormData((current) => ({
+      ...current,
+      notificationPreferences: {
+        newMessages: current.notificationPreferences?.newMessages === true,
+        humanHandoff: current.notificationPreferences?.humanHandoff === true,
+        [key]: enabled,
+      },
+    }));
+  };
+
   const sectionItems = [
-    { id: 'overview' as const, label: 'Overview', description: 'Workspace configuration at a glance', icon: <Activity className="h-4 w-4" /> },
-    { id: 'ai' as const, label: 'AI & Automation', description: 'AI behaviour, handoff and runtime', icon: <Bot className="h-4 w-4" /> },
-    { id: 'channels' as const, label: 'Channels & Integrations', description: 'Connected channels and website tools', icon: <Plug className="h-4 w-4" /> },
-    { id: 'email' as const, label: 'Email & Mailboxes', description: 'Sending domain and inbound email', icon: <Mail className="h-4 w-4" /> },
+    { id: 'overview' as const, label: 'Overview', icon: <Activity className="h-4 w-4" /> },
+    { id: 'ai' as const, label: 'AI & Automation', icon: <Bot className="h-4 w-4" /> },
+    { id: 'channels' as const, label: 'Channels', icon: <Plug className="h-4 w-4" /> },
+    { id: 'email' as const, label: 'Email', icon: <Mail className="h-4 w-4" /> },
+    { id: 'notifications' as const, label: 'Notifications', icon: <Bell className="h-4 w-4" /> },
+    { id: 'preferences' as const, label: 'Preferences', icon: <SlidersHorizontal className="h-4 w-4" /> },
     ...(canEditEmail ? [
-      { id: 'team' as const, label: 'Team & Access', description: 'Users, roles and module access', icon: <Users className="h-4 w-4" /> },
-      { id: 'billing' as const, label: 'Billing & Usage', description: 'Plan, consumption and payments', icon: <CreditCard className="h-4 w-4" /> },
+      { id: 'teamBilling' as const, label: 'Team, Billing & Access', icon: <Users className="h-4 w-4" /> },
     ] : []),
   ];
   const activeSectionMeta = sectionItems.find((item) => item.id === activeSection) || sectionItems[0];
@@ -103,7 +156,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     counts[mode] += 1;
     return counts;
   }, { AUTO: 0, REVIEW: 0, OFF: 0 });
-  const overviewCards = sectionItems.filter((item) => item.id !== 'overview');
 
   return (
     <div className="w-full max-w-7xl mx-auto space-y-4 font-sans">
@@ -116,11 +168,11 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             </div>
             <h1 className="mt-1 text-xl font-extrabold text-slate-950 sm:text-2xl">Settings</h1>
             <p className="mt-1 max-w-2xl text-xs leading-relaxed text-slate-500">
-              Manage AI behaviour, channels, email, team access and billing from one organized workspace.
+              Configure AI, integrations, notifications and workspace defaults.
             </p>
           </div>
           <div className="flex shrink-0 flex-col items-stretch gap-1 sm:items-end">
-            {(activeSection === 'ai' || activeSection === 'email') && (
+            {(activeSection === 'ai' || activeSection === 'email' || activeSection === 'notifications' || activeSection === 'preferences') && (
               <button
                 type="button"
                 onClick={handleSave}
@@ -133,46 +185,38 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               </button>
             )}
             {saveError ? <span role="alert" className="text-[11px] text-rose-600">{saveError}</span> : (
-              (activeSection === 'ai' || activeSection === 'email') && <span className="text-[10px] text-slate-400">Saves AI modes, handoff, runtime preferences and email signature</span>
+              (activeSection === 'ai' || activeSection === 'email' || activeSection === 'notifications' || activeSection === 'preferences') && <span className="text-[10px] text-slate-400">Saves changes in the selected settings section</span>
             )}
           </div>
         </div>
       </header>
 
-      <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[228px_minmax(0,1fr)]">
-        <aside className="rounded-2xl border border-slate-200 bg-white p-2 shadow-sm lg:sticky lg:top-4">
-          <div className="hidden px-3 pb-2 pt-2 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400 lg:block">Settings menu</div>
-          <nav aria-label="Settings sections" className="flex gap-1.5 overflow-x-auto pb-1 lg:flex-col lg:overflow-visible lg:pb-0">
-            {sectionItems.map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => setActiveSection(item.id)}
-                aria-current={activeSection === item.id ? 'page' : undefined}
-                className={`group flex min-w-max items-center gap-2.5 rounded-xl border px-3 py-2.5 text-left transition lg:w-full ${activeSection === item.id ? 'border-orange-200 bg-orange-50 text-orange-800' : 'border-transparent text-slate-600 hover:border-slate-200 hover:bg-slate-50 hover:text-slate-900'}`}
-              >
-                <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${activeSection === item.id ? 'bg-white text-orange-600 shadow-sm' : 'bg-slate-100 text-slate-500 group-hover:text-slate-700'}`}>{item.icon}</span>
-                <span className="min-w-0">
-                  <span className="block whitespace-nowrap text-xs font-bold">{item.label}</span>
-                  <span className={`hidden whitespace-normal text-[10px] leading-relaxed lg:block ${activeSection === item.id ? 'text-orange-700/80' : 'text-slate-400'}`}>{item.description}</span>
-                </span>
-                <ChevronRight className={`ml-auto hidden h-3.5 w-3.5 shrink-0 lg:block ${activeSection === item.id ? 'text-orange-500' : 'text-slate-300'}`} />
-              </button>
-            ))}
-          </nav>
-        </aside>
+      <nav aria-label="Settings sections" className="flex w-full min-w-0 flex-wrap gap-1.5 rounded-2xl border border-slate-200 bg-white p-2 shadow-sm">
+        {sectionItems.map((item) => (
+          <button
+            key={item.id}
+            type="button"
+            onClick={() => setActiveSection(item.id)}
+            aria-current={activeSection === item.id ? 'page' : undefined}
+            className={`inline-flex min-w-0 flex-1 basis-[118px] items-center justify-center gap-2 rounded-xl border px-3 py-2.5 text-xs font-semibold transition ${activeSection === item.id ? 'border-orange-200 bg-orange-50 text-orange-800 shadow-sm' : 'border-transparent text-slate-600 hover:border-slate-200 hover:bg-slate-50 hover:text-slate-900'}`}
+          >
+            <span className={`shrink-0 ${activeSection === item.id ? 'text-orange-600' : 'text-slate-400'}`}>{item.icon}</span>
+            <span className="truncate">{item.label}</span>
+          </button>
+        ))}
+      </nav>
 
-        <main className="min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
+      <main className="min-w-0 w-full rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
           <div className="mb-5 flex flex-col gap-1 border-b border-slate-100 pb-4">
             <h2 className="text-lg font-extrabold text-slate-950">{activeSectionMeta.label}</h2>
             <p className="text-xs text-slate-500">{activeSectionMeta.description}</p>
           </div>
 
           {activeSection === 'overview' && (
-            <div className="space-y-5">
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                  <span className="text-[11px] font-medium text-slate-500">AI response modes</span>
+            <div className="space-y-4">
+              <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-3">
+                <div className="min-w-0 rounded-xl border border-slate-200 bg-slate-50 p-3 sm:p-4">
+                  <div className="flex items-center gap-2 text-[11px] font-medium text-slate-500"><Bot className="h-4 w-4 shrink-0" /> AI response modes</div>
                   <div className="mt-2 text-2xl font-bold tabular-nums text-slate-950">{modeCounts.AUTO + modeCounts.REVIEW + modeCounts.OFF}<span className="ml-1 text-xs font-medium text-slate-400">channels</span></div>
                   <div className="mt-2 flex flex-wrap gap-1.5 text-[10px] font-bold">
                     <span className="rounded-full bg-orange-100 px-2 py-1 text-orange-800">AUTO {modeCounts.AUTO}</span>
@@ -180,38 +224,20 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     <span className="rounded-full bg-slate-200 px-2 py-1 text-slate-600">OFF {modeCounts.OFF}</span>
                   </div>
                 </div>
-                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                  <span className="text-[11px] font-medium text-slate-500">Workspace team</span>
+                <div className="min-w-0 rounded-xl border border-slate-200 bg-slate-50 p-3 sm:p-4">
+                  <div className="flex items-center gap-2 text-[11px] font-medium text-slate-500"><Bell className="h-4 w-4 shrink-0" /> Browser notifications</div>
+                  <div className="mt-2 text-lg font-bold text-slate-950">{notificationPreferences.newMessages || notificationPreferences.humanHandoff ? 'Enabled' : 'Off'}</div>
+                  <div className="mt-1 break-words text-[11px] text-slate-500">{[notificationPreferences.newMessages && 'New messages', notificationPreferences.humanHandoff && 'Human handoffs'].filter(Boolean).join(' · ') || 'No browser alerts selected'}</div>
+                </div>
+                <div className="min-w-0 rounded-xl border border-slate-200 bg-slate-50 p-3 sm:p-4">
+                  <div className="flex items-center gap-2 text-[11px] font-medium text-slate-500"><Users className="h-4 w-4 shrink-0" /> Workspace team</div>
                   <div className="mt-2 text-lg font-bold text-slate-950">{users?.length ?? '—'}<span className="ml-1 text-xs font-medium text-slate-400">users</span></div>
-                  <div className="mt-1 text-[11px] text-slate-500">{canEditEmail ? 'Manage roles and access below' : 'Team management is admin-only'}</div>
+                  <div className="mt-1 text-[11px] text-slate-500">{canEditEmail ? 'Team and billing settings are available above' : 'Team management is admin-only'}</div>
                 </div>
               </div>
-              <div>
-                <div className="mb-3 flex items-center justify-between">
-                  <h3 className="text-sm font-bold text-slate-900">Quick access</h3>
-                  <span className="text-[10px] text-slate-400">Choose a settings area</span>
-                </div>
-                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                  {overviewCards.map((item) => (
-                    <button
-                      key={item.id}
-                      type="button"
-                      onClick={() => setActiveSection(item.id)}
-                      className="group flex items-start gap-3 rounded-xl border border-slate-200 p-4 text-left transition hover:border-orange-200 hover:bg-orange-50/40"
-                    >
-                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-600 transition group-hover:bg-orange-100 group-hover:text-orange-700">{item.icon}</span>
-                      <span className="min-w-0 flex-1">
-                        <span className="block text-xs font-bold text-slate-900">{item.label}</span>
-                        <span className="mt-1 block text-[11px] leading-relaxed text-slate-500">{item.description}</span>
-                      </span>
-                      <ChevronRight className="mt-1 h-4 w-4 shrink-0 text-slate-300 transition group-hover:text-orange-600" />
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div className="flex items-start gap-2 rounded-xl border border-blue-100 bg-blue-50/60 p-3 text-xs text-blue-800">
-                <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" />
-                <span>Configuration is organized by task. Connected-channel setup, email domains, billing and team management retain their existing save and permission flows.</span>
+              <div className="flex items-start gap-2 rounded-xl border border-slate-200 bg-white px-3 py-3 text-xs text-slate-500">
+                <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-orange-600" />
+                <span>Choose a section from the navigation above. Each area opens on its own, so configuration panels no longer compete for space or load together.</span>
               </div>
             </div>
           )}
@@ -414,30 +440,119 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             </div>
           )}
 
-          {activeSection === 'team' && canEditEmail && (
+          {activeSection === 'notifications' && (
             <div className="space-y-5">
-      {/* Workspace user management is admin-only. */}
-      {tenantId && canEditEmail && users && onSaveUser && onDeleteUser && (
-        <UserManagementView
-          users={users}
-          usersLoading={usersLoading}
-          usersError={usersError}
-          onSaveUser={onSaveUser}
-          onDeleteUser={onDeleteUser}
-        />
-      )}
-
+              <section className="rounded-xl border border-slate-200 p-4 sm:p-5">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-900">Browser notifications</h3>
+                    <p className="mt-1 max-w-2xl text-xs leading-relaxed text-slate-500">Choose which events should trigger a desktop notification while this workspace is open in your browser.</p>
+                  </div>
+                  <span className="inline-flex w-fit items-center rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-semibold text-slate-600">
+                    {typeof window !== 'undefined' && 'Notification' in window ? (Notification.permission === 'granted' ? 'Browser permission granted' : Notification.permission === 'denied' ? 'Browser permission blocked' : 'Permission not yet granted') : 'Browser alerts unavailable'}
+                  </span>
+                </div>
+                {notificationPermissionError && <div role="alert" className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">{notificationPermissionError}</div>}
+                <div className="mt-4 divide-y divide-slate-100">
+                  <label className="flex cursor-pointer items-center justify-between gap-4 py-4">
+                    <span className="min-w-0">
+                      <span className="block text-xs font-semibold text-slate-800">New incoming conversations</span>
+                      <span className="mt-1 block text-[11px] leading-relaxed text-slate-500">Notify when a conversation receives a new unread customer message.</span>
+                    </span>
+                    <input
+                      type="checkbox"
+                      checked={notificationPreferences.newMessages}
+                      disabled={!canEditEmail}
+                      onChange={(event) => void handleNotificationPreferenceChange('newMessages', event.target.checked)}
+                      className="h-4 w-4 shrink-0 accent-orange-500"
+                    />
+                  </label>
+                  <label className="flex cursor-pointer items-center justify-between gap-4 py-4">
+                    <span className="min-w-0">
+                      <span className="block text-xs font-semibold text-slate-800">Human handoff alerts</span>
+                      <span className="mt-1 block text-[11px] leading-relaxed text-slate-500">Notify when a conversation is transferred from AI to a team member.</span>
+                    </span>
+                    <input
+                      type="checkbox"
+                      checked={notificationPreferences.humanHandoff}
+                      disabled={!canEditEmail}
+                      onChange={(event) => void handleNotificationPreferenceChange('humanHandoff', event.target.checked)}
+                      className="h-4 w-4 shrink-0 accent-orange-500"
+                    />
+                  </label>
+                </div>
+                <p className="border-t border-slate-100 pt-3 text-[11px] leading-relaxed text-slate-400">Notifications appear only while the application is running in a browser tab or window. They do not provide push delivery after the browser has been closed.</p>
+              </section>
             </div>
           )}
 
-          {activeSection === 'billing' && canEditEmail && (
+          {activeSection === 'preferences' && (
             <div className="space-y-5">
-      {tenantId && canEditEmail && <BillingView tenantId={tenantId} />}
+              <section className="rounded-xl border border-slate-200 p-4 sm:p-5">
+                <h3 className="text-sm font-bold text-slate-900">Workspace defaults</h3>
+                <p className="mt-1 text-xs leading-relaxed text-slate-500">Set where team members land when they open this workspace without a direct module link.</p>
+                <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <label className="block min-w-0">
+                    <span className="mb-1.5 block text-xs font-semibold text-slate-700">Default landing page</span>
+                    <select
+                      value={workspacePreferences.defaultLandingPage}
+                      disabled={!canEditEmail}
+                      onChange={(event) => setFormData((current) => ({
+                        ...current,
+                        workspacePreferences: {
+                          ...current.workspacePreferences,
+                          defaultLandingPage: event.target.value as 'dashboard' | 'inbox' | 'campaigns',
+                        },
+                      }))}
+                      className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs text-slate-800 outline-none transition focus:border-orange-400 disabled:bg-slate-50"
+                    >
+                      <option value="dashboard">Dashboard</option>
+                      <option value="inbox">Unified Inbox</option>
+                      <option value="campaigns">Campaigns</option>
+                    </select>
+                    <span className="mt-1 block text-[11px] text-slate-400">Applied on the next workspace session unless a direct module link is opened.</span>
+                  </label>
+                  <div className="min-w-0">
+                    <span className="mb-1.5 block text-xs font-semibold text-slate-700">Workspace timezone</span>
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs font-medium text-slate-800">{timezone || 'Managed in Company Profile'}</div>
+                    <span className="mt-1 block text-[11px] text-slate-400">The Company Profile remains the single source of truth for timezone and regional details.</span>
+                  </div>
+                </div>
+                <div className="mt-4 rounded-lg bg-slate-50 px-3 py-2.5 text-[11px] leading-relaxed text-slate-500">
+                  Language: English (current application language). Language and company-region settings are not duplicated here.
+                </div>
+              </section>
+            </div>
+          )}
 
+          {activeSection === 'teamBilling' && canEditEmail && (
+            <div className="space-y-6">
+              <section className="space-y-3">
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">Team & access</h3>
+                  <p className="mt-1 text-xs text-slate-500">Manage workspace members, roles and module permissions.</p>
+                </div>
+                 
+                {tenantId && canEditEmail && users && onSaveUser && onDeleteUser && (
+                  <UserManagementView
+                    users={users}
+                    usersLoading={usersLoading}
+                    usersError={usersError}
+                    onSaveUser={onSaveUser}
+                    onDeleteUser={onDeleteUser}
+                  />
+                )}
+              </section>
+              <section className="space-y-3 border-t border-slate-100 pt-5">
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">Billing & usage</h3>
+                  <p className="mt-1 text-xs text-slate-500">Review plan, subscription and workspace consumption.</p>
+                </div>
+                {tenantId && canEditEmail && <BillingView tenantId={tenantId} />}
+              </section>
             </div>
           )}
         </main>
-      </div>
     </div>
   );
 };

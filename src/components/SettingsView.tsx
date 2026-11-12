@@ -26,6 +26,7 @@ import { UserManagementView } from './UserManagementView';
 import { EmailSettingsPanel } from './EmailSettingsPanel';
 import { InboundMailboxPanel } from './InboundMailboxPanel';
 import { WebsiteWebhookPanel } from './WebsiteWebhookPanel';
+import { WebsiteFormConfirmationPanel } from './WebsiteFormConfirmationPanel';
 import { ChatbotIntegrationPanel } from './ChatbotIntegrationPanel';
 import { BillingView } from './BillingView';
 import { ConnectedChannelsPanel } from './ConnectedChannelsPanel';
@@ -851,6 +852,7 @@ export const WorkspaceView: React.FC<SettingsViewProps> = ({
       <ConnectedChannelsPanel tenantId={tenantId} canEdit={canEditEmail} />
 
       {tenantId && canEditEmail && <WebsiteWebhookPanel tenantId={tenantId} canEdit />}
+      {tenantId && canEditEmail && <WebsiteFormConfirmationPanel tenantId={tenantId} canEdit />}
       {tenantId && canEditEmail && <ChatbotIntegrationPanel tenantId={tenantId} canEdit />}
 
             

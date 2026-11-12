@@ -141,6 +141,7 @@ export async function sendTestLead(ctx: TenantContext) {
     leadId: result.lead?.leadId,
     thankYouEmailSent: Boolean(result.autoConfirmationSent),
     thankYouSuppressed: Boolean(result.duplicateThankYouSuppressed),
+    confirmationStatuses: result.confirmationStatuses || [],
     thankYouError: result.conversation?.thankYouError,
   };
 }

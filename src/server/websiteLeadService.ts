@@ -217,6 +217,7 @@ export interface ProcessedLeadResult {
   initialMessage: Message;
   autoConfirmationSent?: boolean;
   duplicateThankYouSuppressed?: boolean;
+  confirmationStatuses?: Array<{ channel: string; status: string; error?: string }>;
 }
 
 // Recursively flattens nested Elementor Pro form objects, arrays, and bracket keys
@@ -969,32 +970,8 @@ export async function processWebsiteLeadSubmission(
 
   const cleanEmail = email ? email.trim().toLowerCase() : '';
 
-  // -----------------------------------------------------------------
-  // 11. Deduplication Gate: Check if this email already received a Thank You email
-  // -----------------------------------------------------------------
-  let alreadySent = false;
-  let isInFlight = false;
-  const inFlightSet = getInFlightSet(ctx.tenantId);
-  if (cleanEmail && cleanEmail.includes('@')) {
-    alreadySent = await hasThankYouEmailBeenSent(cleanEmail, ctx);
-    isInFlight = inFlightSet.has(cleanEmail);
-  }
-
-  const shouldSendThankYou = Boolean(
-    channelMode !== 'OFF' &&
-    cleanEmail &&
-    cleanEmail.includes('@') &&
-    !cleanEmail.endsWith('@umrah360.in') &&
-    !alreadySent &&
-    !isInFlight
-  );
-
-  let duplicateThankYouSuppressed = alreadySent || isInFlight;
-  if (duplicateThankYouSuppressed) {
-    console.log(
-      `[Website Lead Idempotency] Thank you email already previously sent or in-flight for "${cleanEmail}". Strictly sending ONCE; suppressing duplicate email dispatch.`
-    );
-  }
+  // Confirmation idempotency is per form submission and channel, never per recipient address.
+  const duplicateThankYouSuppressed = false;
 
   const freshConversation: Conversation = {
     conversationId,
@@ -1008,12 +985,10 @@ export async function processWebsiteLeadSubmission(
     conversationSummary: `Website Demo Request: ${companyName} (${rawFullName})`,
     subject: `Website Demo Request: ${companyName} (${product})`,
     customerEmail: cleanEmail,
-    // Only true when it really went out (or went out earlier). Left false on failure so the
-    // background auto-responder retries instead of the lead silently never getting a thank-you.
-    thankYouEmailSent: alreadySent,
-    // A held/off acknowledgement must not be auto-sent later if the channel is switched to AUTO.
-    thankYouEmailSuppressed: channelMode !== 'AUTO',
-    thankYouSmtpMessageId: alreadySent ? 'ALREADY_SENT_PREVIOUSLY' : undefined,
+    thankYouEmailSent: false,
+    // New submissions use the channel-aware delivery ledger; this prevents the legacy
+    // email-only responder from duplicating these confirmation messages.
+    thankYouEmailSuppressed: true,
     startedAt: nowIso,
     lastMessageAt: nowIso,
     lastMessageText: inboundDetailsText.slice(0, 180) + '...',
@@ -1044,163 +1019,94 @@ export async function processWebsiteLeadSubmission(
   };
 
   // -----------------------------------------------------------------
-  // 12. Dispatch Confirmation Email via SMTP (Strictly ONCE per lead)
-  // -----------------------------------------------------------------
-  let autoConfirmationSent = false;
-  let autoReplyMessage: Message | null = null;
-
-  if (shouldSendThankYou) {
-    inFlightSet.add(cleanEmail);
-    try {
-      await fetchFirestoreSmtpConfig();
-      const smtpConfig = getSmtpConfig();
-      // Outbound email is Resend-only (sendLiveEmail). Gating on legacy SMTP creds skipped every
-      // thank-you on deployments that only set RESEND_API_KEY.
-      const emailReady = Boolean(getResendConfig().apiKey);
-
-      if (emailReady || channelMode === 'REVIEW') {
-        const emailSubject = brandDemoThankYouSubject(brand, companyName);
-        const emailBody = [
-          `Hello ${firstName},`,
-          ``,
-          `Thank you for requesting a live demo of ${brand.companyName} for ${companyName}!`,
-          ``,
-          `We have received your requirements:`,
-          `- Product: ${product}`,
-          `- Team Size: ${teamSize}`,
-          `- Location: ${city ? `${city}, ` : ''}${country}`,
-          `- Multi-Branch Setup: ${branches}`,
-          ``,
-          brandSpecialistLine(brand, fullPhone || cleanEmail),
-          ``,
-          brand.playbook === 'umrah360'
-            ? `If you need immediate assistance or have specific visa/hotel allotment workflows you would like to test, simply reply to this email.`
-            : `If you need immediate assistance, simply reply to this email.`,
-          ``,
-          `Warm regards,`,
-          ...brandThankYouSignoff(brand),
-        ].join('\n');
-
-        if (channelMode === 'REVIEW') {
-          conversation.status = 'REVIEW';
-          conversation.draftReply = {
-            draftId: `draft-website-${conversationId}`,
-            text: emailBody,
-            subject: emailSubject,
-            generatedAt: new Date().toISOString(),
-            status: 'PENDING',
-          };
-          console.log(`[Website Lead] Holding thank-you acknowledgement as a REVIEW draft for ${cleanEmail}.`);
-        } else {
-          console.log(`[Website Lead] Dispatching single Thank You email to ${cleanEmail} for ${companyName}...`);
-          const mailResult = await sendLiveEmail({
-          tenantId: ctx.tenantId,
-          to: cleanEmail,
-          subject: emailSubject,
-          text: emailBody,
-          headers: {
-            'X-Conversation-Id': conversationId,
-            'X-Lead-Id': leadId,
-            'X-Contact-Id': contactId,
-          },
-        });
-
-        if (mailResult.success) {
-          autoConfirmationSent = true;
-          const sentIso = new Date().toISOString();
-          console.log(`[Website Lead Success] ✓ Live Thank You email delivered to ${cleanEmail} (ID: ${mailResult.messageId})!`);
-
-          // Update conversation object
-          conversation.thankYouEmailSent = true;
-          conversation.thankYouEmailDeliveredAt = sentIso;
-          conversation.thankYouSmtpMessageId = mailResult.messageId;
-
-          // Record auto-confirmation outbound message
-          const replyMsgId = `msg-thankyou-${conversationId}`;
-          autoReplyMessage = {
-            messageId: replyMsgId,
-            conversationId,
-            senderType: 'AI',
-            senderName: brand.senderName,
-            senderEmail: smtpConfig.user || getResendConfig().from || brand.salesEmail || '',
-            recipientEmail: cleanEmail,
-            channel: 'EMAIL',
-            direction: 'OUTBOUND',
-            text: emailBody,
-            timestamp: sentIso,
-            sentAt: sentIso,
-            receivedAt: sentIso,
-            createdAt: sentIso,
-            deliveryStatus: 'DELIVERED',
-            smtpMessageId: mailResult.messageId,
-            emailDeliveredAt: sentIso,
-            aiReplied: true,
-          };
-
-          // Record in persistent history ledger so it can NEVER be sent again to this address
-          await recordThankYouEmailSent(cleanEmail, {
-            leadId,
-            conversationId,
-            smtpMessageId: mailResult.messageId,
-          }, ctx);
-        } else {
-          console.warn(`[Website Lead Warning] Thank-you email to ${cleanEmail} failed:`, mailResult.error);
-          conversation.thankYouError = String(mailResult.error || 'The email provider rejected the message').slice(0, 300);
-          conversation.thankYouAttemptedAt = new Date().toISOString();
-          }
-        }
-      } else {
-        console.warn(`[Website Lead Notice] RESEND_API_KEY is not set; skipping thank-you email.`);
-        conversation.thankYouError = 'RESEND_API_KEY is not set on the server';
-        conversation.thankYouAttemptedAt = new Date().toISOString();
-      }
-    } catch (smtpErr: any) {
-      console.warn('[Website Lead] Notice sending auto-confirmation email:', smtpErr);
-      conversation.thankYouError = String(smtpErr?.message || smtpErr || 'Unexpected error while sending').slice(0, 300);
-      conversation.thankYouAttemptedAt = new Date().toISOString();
-    } finally {
-      inFlightSet.delete(cleanEmail);
-    }
-  }
-
-  // -----------------------------------------------------------------
-  // 13. Persist All Entities Directly to Firestore DB
+  // 12. Persist lead and inbound conversation. Confirmation dispatch runs
+  // independently for each selected channel using a tenant-scoped ledger.
   // -----------------------------------------------------------------
   if (isFirebaseConfigured && db) {
     try {
       const repo = tenantRepo(ctx);
-      const writes: Promise<any>[] = [
+      await Promise.all([
         safeSetDoc(repo.contactDoc(contact.contactId), contact, { merge: true }),
         safeSetDoc(repo.leadDoc(lead.leadId), lead, { merge: true }),
         safeSetDoc(repo.conversationDoc(conversation.conversationId), conversation, { merge: true }),
         safeSetDoc(repo.messageDoc(initialMessage.messageId), initialMessage, { merge: true }),
-      ];
-
-      if (autoReplyMessage) {
-        writes.push(safeSetDoc(repo.messageDoc(autoReplyMessage.messageId), autoReplyMessage, { merge: true }));
-      }
-
-      await Promise.all(writes);
-      console.log(`[Website Lead] Successfully stored Lead "${companyName}" (${leadId}) directly into Firestore DB for tenant ${ctx.tenantId}!`);
+      ]);
+      console.log(`[Website Lead] Saved submission ${leadId} and its inbound conversation for tenant ${ctx.tenantId}.`);
     } catch (dbErr) {
-      console.error(`[Website Lead] Error writing to Firestore DB for ${ctx.tenantId}:`, dbErr);
+      console.error(`[Website Lead] Error writing lead entities for ${ctx.tenantId}:`, dbErr);
     }
   }
 
+  let autoConfirmationSent = false;
+  let confirmationStatuses: Array<{ channel: string; status: string; error?: string }> = [];
+  const submissionId = findValue([
+    /^submissionid$/, /^submission_id$/, /^entryid$/, /^entry_id$/, /^responseid$/,
+    /^formresponseid$/, /^webhookeventid$/, /^eventid$/, /^idempotencykey$/, /^requestid$/, /^timestamp$/, /^createdat$/,
+  ]).trim() || messageId;
+  const whatsappOptInValue = findValue([
+    /^whatsappoptin$/, /^whatsappconsent$/, /^optinwhatsapp$/, /^consentwhatsapp$/, /^whatsapptos$/,
+  ]).trim().toLowerCase();
+  const whatsappOptIn = ['1', 'true', 'yes', 'y', 'on', 'checked', 'accepted', 'subscribed'].includes(whatsappOptInValue);
+
+  if (isFirebaseConfigured && db) {
+    try {
+      const confirmationService = await import('./websiteFormConfirmationService.js');
+      const values = {
+        firstName: String(firstName || rawFullName.split(/\s+/)[0] || ''),
+        fullName: String(rawFullName || ''),
+        company: String(companyName || ''),
+        email: cleanEmail,
+        phone: String(fullPhone || ''),
+        product: String(product || ''),
+        teamSize: String(teamSize || ''),
+        city: String(city || ''),
+        country: String(country || ''),
+        message: String(message || ''),
+      };
+      const confirmation = await confirmationService.processWebsiteFormConfirmation({
+        ctx, submissionId, contact, lead, conversation, values, whatsappOptIn,
+        mode: channelMode as 'AUTO' | 'REVIEW' | 'OFF',
+      });
+      autoConfirmationSent = confirmation.sentChannels.includes('EMAIL');
+      confirmationStatuses = confirmation.statuses;
+      const sentEmailMessage = confirmation.messages.find((item: Message) => item.channel === 'EMAIL' && item.deliveryStatus === 'SENT');
+      if (autoConfirmationSent) {
+        const sentAt = new Date().toISOString();
+        conversation.thankYouEmailSent = true;
+        conversation.thankYouEmailSuppressed = true;
+        conversation.thankYouEmailDeliveredAt = sentAt;
+        conversation.thankYouSmtpMessageId = String(sentEmailMessage?.smtpMessageId || '');
+        await safeSetDoc(tenantRepo(ctx).conversationDoc(conversation.conversationId), {
+          thankYouEmailSent: true, thankYouEmailSuppressed: true, thankYouEmailDeliveredAt: sentAt,
+        }, { merge: true });
+      }
+    } catch (confirmationError: any) {
+      const errorText = String(confirmationError?.message || confirmationError || 'Website confirmation could not be processed').slice(0, 400);
+      conversation.thankYouError = errorText;
+      conversation.thankYouAttemptedAt = new Date().toISOString();
+      console.error(`[Website Confirmation] Tenant ${ctx.tenantId}, conversation ${conversationId}:`, confirmationError);
+      await safeSetDoc(tenantRepo(ctx).conversationDoc(conversationId), {
+        thankYouEmailSuppressed: true, thankYouError: errorText, thankYouAttemptedAt: conversation.thankYouAttemptedAt,
+      }, { merge: true });
+    }
+  }
+  const sentChannels = confirmationStatuses.filter((item) => item.status === 'SENT').map((item) => item.channel);
+  const confirmationSummary = confirmationStatuses.map((item) => item.channel + ': ' + item.status.toLowerCase().replace(/_/g, ' ')).join(', ');
   return {
     success: true,
-    message: duplicateThankYouSuppressed
-      ? `Lead for ${companyName} (${rawFullName}) saved in CRM. Thank-you email was already sent previously to ${cleanEmail} and preserved without duplicates.`
-      : channelMode === 'OFF'
-      ? `Lead for ${companyName} (${rawFullName}) saved in CRM. Website AI responses are OFF; no reply or draft was created.`
+    message: channelMode === 'OFF'
+      ? `Lead for ${companyName} (${rawFullName}) saved in CRM. Website confirmations are OFF; no confirmation was sent.`
       : channelMode === 'REVIEW'
-      ? `Lead for ${companyName} (${rawFullName}) saved in CRM. The thank-you acknowledgement is waiting for human review in Unified Inbox.`
-      : `Lead for ${companyName} (${rawFullName}) successfully pushed to CRM and thank-you confirmation delivered!`,
+      ? `Lead for ${companyName} (${rawFullName}) saved in CRM. Website form confirmations are waiting for human review in Unified Inbox.`
+      : sentChannels.length
+      ? `Lead for ${companyName} (${rawFullName}) saved in CRM. Website confirmation sent via ${sentChannels.join(' and ')}.`
+      : `Lead for ${companyName} (${rawFullName}) saved in CRM. Confirmation status: ${confirmationSummary || 'not sent'}.`,
     contact,
     lead,
     conversation,
     initialMessage,
     autoConfirmationSent,
     duplicateThankYouSuppressed,
+    confirmationStatuses,
   };
 }

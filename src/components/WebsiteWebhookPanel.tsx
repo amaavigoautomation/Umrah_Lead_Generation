@@ -92,6 +92,7 @@ export const WebsiteWebhookPanel: React.FC<{ tenantId: string; canEdit: boolean 
   <input name="name" placeholder="Your name" required>
   <input name="email" type="email" placeholder="Email" required>
   <input name="phone" placeholder="Phone">
+  <label><input type="checkbox" name="whatsapp_opt_in" value="yes"> I agree to receive WhatsApp updates about this enquiry</label>
   <textarea name="message" placeholder="How can we help?"></textarea>
   <button type="submit">Send</button>
   <p id="lead-msg"></p>
@@ -115,6 +116,7 @@ document.getElementById('lead-form').addEventListener('submit', async (e) => {
   <input name="name" placeholder="Your name" required>
   <input name="email" type="email" placeholder="Email" required>
   <input name="phone" placeholder="Phone">
+  <label><input type="checkbox" name="whatsapp_opt_in" value="yes"> I agree to receive WhatsApp updates about this enquiry</label>
   <textarea name="message" placeholder="How can we help?"></textarea>
   <button type="submit">Send</button>
 </form>`;
@@ -182,7 +184,7 @@ document.getElementById('lead-form').addEventListener('submit', async (e) => {
 
           <div>
             <div className="text-sm font-semibold text-slate-800 mb-1">4. Test it</div>
-            <p className="text-xs text-slate-500 mb-2">Sends a sample lead to your inbox. The thank-you email goes to your own address.</p>
+            <p className="text-xs text-slate-500 mb-2">Sends a sample lead through the configured Website Form Thank-you automation. WhatsApp is skipped unless the submission includes explicit customer opt-in.</p>
             <button
               className={btnGhost}
               disabled={busy !== null || view.allowedOrigins.length === 0}
@@ -190,12 +192,16 @@ document.getElementById('lead-form').addEventListener('submit', async (e) => {
               onClick={() =>
                 run('test', async () => {
                   const r: any = await api(`${base}/test`, { method: 'POST' });
-                  if (r?.thankYouEmailSent) {
-                    setNotice('Test lead sent and the thank-you email went out. Check your inbox and the Unified Inbox.');
-                  } else if (r?.thankYouSuppressed) {
-                    setNotice('Test lead saved. No thank-you was sent because this address already received one earlier (it is sent only once per address).');
+                  const statuses = Array.isArray(r?.confirmationStatuses) ? r.confirmationStatuses : [];
+                  const sentChannels = statuses.filter((item: any) => item.status === 'SENT').map((item: any) => item.channel);
+                  if (sentChannels.length) {
+                    setNotice('Test lead saved. Confirmation sent via ' + sentChannels.join(' and ') + '. Check the Unified Inbox and recipient channel.');
+                  } else if (statuses.length) {
+                    setNotice('Test lead saved. ' + statuses.map((item: any) => item.channel + ': ' + String(item.status).toLowerCase().replace(/_/g, ' ') + (item.error ? ' (' + item.error + ')' : '')).join(' · '));
+                  } else if (r?.thankYouError) {
+                    setError('Test lead saved, but confirmation failed: ' + r.thankYouError);
                   } else {
-                    setError(`Test lead saved, but the thank-you email was NOT sent${r?.thankYouError ? `: ${r.thankYouError}` : '.'}`);
+                    setNotice('Test lead saved. No confirmation was sent. Check the channel selection and delivery settings.');
                   }
                 })
               }

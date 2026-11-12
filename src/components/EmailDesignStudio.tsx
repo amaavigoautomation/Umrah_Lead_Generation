@@ -352,12 +352,13 @@ function HtmlSourceEditor({
 
 type EmailDesignStudioProps = {
   tenantId: string;
-  purpose?: 'conversation' | 'campaign';
+  purpose?: 'conversation' | 'campaign' | 'website-thankyou';
   initialTemplateId?: string;
 };
 
 export const EmailDesignStudio: React.FC<EmailDesignStudioProps> = ({ tenantId, purpose = 'conversation', initialTemplateId }) => {
-  const isCampaignMode = purpose === 'campaign';
+  const isWebsiteThankYouMode = purpose === 'website-thankyou';
+  const isCampaignMode = purpose === 'campaign' || isWebsiteThankYouMode;
   const { brand } = useBrand();
   const brandData = brand as unknown as Record<string, any>;
   const [templates, setTemplates] = useState<EmailDesignTemplate[]>(PREDEFINED_EMAIL_DESIGNS);
@@ -397,12 +398,16 @@ export const EmailDesignStudio: React.FC<EmailDesignStudioProps> = ({ tenantId, 
     setLoading(true);
     try {
       if (isCampaignMode) {
-        const response = await fetch('/api/templates');
+        const response = await fetch(isWebsiteThankYouMode ? '/api/website-form-confirmations/settings' : '/api/templates');
         const data = await response.json().catch(() => ({}));
-        if (!response.ok || !data.success) throw new Error(data.error || 'Could not load campaign email templates.');
-        const campaignTemplates = (Array.isArray(data.templates) ? data.templates : []).map((item: EmailTemplate) => campaignEmailToDesign(item));
+        if (!response.ok || !data.success) throw new Error(data.error || 'Could not load email templates.');
+        const rawTemplates = isWebsiteThankYouMode ? data.emailTemplates : data.templates;
+        const availableTemplates = (Array.isArray(rawTemplates) ? rawTemplates : []).filter((item: EmailTemplate) =>
+          isWebsiteThankYouMode ? item.purpose === 'WEBSITE_FORM_THANKYOU' : item.purpose !== 'WEBSITE_FORM_THANKYOU'
+        );
+        const campaignTemplates = availableTemplates.map((item: EmailTemplate) => campaignEmailToDesign(item));
         let sharedDesignStarters: EmailDesignTemplate[] = [];
-        try {
+        if (!isWebsiteThankYouMode) try {
           const designsResponse = await fetch('/api/email-design');
           const designsData = await designsResponse.json().catch(() => ({}));
           if (designsResponse.ok && designsData.success && Array.isArray(designsData.templates)) {
@@ -422,7 +427,7 @@ export const EmailDesignStudio: React.FC<EmailDesignStudioProps> = ({ tenantId, 
         } catch {
           // Campaign templates remain available when the optional shared-design request fails.
         }
-        setTemplates([...campaignTemplates, ...sharedDesignStarters]);
+        setTemplates(isWebsiteThankYouMode ? campaignTemplates : [...campaignTemplates, ...sharedDesignStarters]);
         setDefaultTemplateId('');
       } else {
         const response = await fetch('/api/email-design');
@@ -438,7 +443,7 @@ export const EmailDesignStudio: React.FC<EmailDesignStudioProps> = ({ tenantId, 
     }
   };
 
-  useEffect(() => { loadTemplates(); }, [tenantId, isCampaignMode]);
+  useEffect(() => { loadTemplates(); }, [tenantId, purpose]);
 
   const customTemplates = useMemo(() => templates.filter((item) => item.source !== 'PREDEFINED'), [templates]);
   const predefinedTemplates = useMemo(() => templates.filter((item) => item.source === 'PREDEFINED'), [templates]);
@@ -983,7 +988,17 @@ export const EmailDesignStudio: React.FC<EmailDesignStudioProps> = ({ tenantId, 
       setNotice({ tone: 'error', text: htmlUsesMessageSlot ? 'Add the campaign message for your {{content}} placeholder.' : 'Add the campaign message before saving this Visual Builder template.' });
       return null;
     }
-    if (isCampaignMode) {
+    if (isWebsiteThankYouMode) {
+      const allowedFields = new Set(['first_name', 'firstName', 'full_name', 'fullName', 'name', 'company', 'companyName', 'company_name', 'email', 'phone', 'product', 'productInterest', 'product_interest', 'team_size', 'teamSize', 'city', 'country', 'message', 'query', 'content', 'tagline', 'websiteUrl']);
+      const candidate = [editing.campaignSubject, editing.campaignPreheader, editing.campaignBody, editing.customHtml || ''].join(' ');
+      const unsupported = Array.from(candidate.matchAll(/\{\{\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*\}\}/g))
+        .map((match) => match[1])
+        .filter((field) => !allowedFields.has(field));
+      if (unsupported.length) {
+        setNotice({ tone: 'error', text: 'Unsupported Website Form field(s): ' + Array.from(new Set(unsupported)).map((field) => '{{' + field + '}}').join(', ') + '.' });
+        return null;
+      }
+    } else if (isCampaignMode) {
       const htmlForValidation = editing.customHtml || renderEmailDesignHtml(editing, String(editing.campaignBody || ''), brandData);
       const unsupported = getUnsupportedEmailTemplateVariables({
         subject: [editing.campaignSubject, editing.campaignPreheader].join(' '),
@@ -1032,6 +1047,7 @@ export const EmailDesignStudio: React.FC<EmailDesignStudioProps> = ({ tenantId, 
           isHtml: true,
           attachments: Array.isArray(editing.campaignAttachments) ? editing.campaignAttachments : [],
           designSnapshot,
+          purpose: isWebsiteThankYouMode ? 'WEBSITE_FORM_THANKYOU' : 'CAMPAIGN',
         };
         const response = await fetch('/api/templates', {
           method: 'POST',
@@ -1043,7 +1059,7 @@ export const EmailDesignStudio: React.FC<EmailDesignStudioProps> = ({ tenantId, 
         const saved = campaignEmailToDesign(data.template as EmailTemplate);
         setTemplates((current) => [...current.filter((item) => item.id !== saved.id), saved]);
         setEditing(saved);
-        setNotice({ tone: 'success', text: makeDefault ? 'Campaign email saved. Campaign templates are selected when creating a campaign.' : 'Campaign email template saved and is available in Campaigns.' });
+        setNotice({ tone: 'success', text: isWebsiteThankYouMode ? 'Website Form Thank-you email template saved. Select it in Website Leads settings.' : makeDefault ? 'Campaign email saved. Campaign templates are selected when creating a campaign.' : 'Campaign email template saved and is available in Campaigns.' });
         return saved;
       } catch (error: any) {
         setNotice({ tone: 'error', text: error?.message || 'Could not save the campaign email template.' });

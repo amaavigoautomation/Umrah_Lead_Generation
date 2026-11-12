@@ -177,7 +177,7 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
         const dbTpls: EmailTemplate[] = [];
         snap.forEach((d) => {
           const data = d.data() as EmailTemplate;
-          if (data && data.templateId) dbTpls.push(data);
+          if (data && data.templateId && data.purpose !== 'WEBSITE_FORM_THANKYOU') dbTpls.push(data);
         });
         list = dbTpls;
       }
@@ -189,7 +189,7 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
         const res = await fetch('/api/templates');
         const data = await res.json();
         if (data.templates && Array.isArray(data.templates)) {
-          list = data.templates;
+          list = data.templates.filter((template: EmailTemplate) => template.purpose !== 'WEBSITE_FORM_THANKYOU');
         }
       } catch (e) {}
     }

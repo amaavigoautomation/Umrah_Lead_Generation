@@ -2122,6 +2122,44 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
     return true;
   };
 
+  const handleApproveWebsiteConfirmation = async (conversationId: string, submissionId: string) => {
+    if (normalizeChannelMode(settings.channelModes?.WEBSITE) === 'OFF') {
+      window.alert('The Website channel is OFF. Enable it before approving a saved confirmation.');
+      return;
+    }
+    try {
+      const response = await fetch('/api/website-form-confirmations/approve', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ conversationId, submissionId }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || !data.success) throw new Error(data.error || 'Could not approve website form confirmation.');
+      const results = Array.isArray(data.results) ? data.results : [];
+      const failed = results.filter((item: any) => !['SENT', 'SKIPPED'].includes(String(item.status)));
+      if (failed.length) {
+        window.alert('One or more confirmation channels could not be sent. The review item has been kept so you can retry. ' + failed.map((item: any) => item.channel + ': ' + (item.error || item.status)).join('; '));
+      }
+      setConversations((current) => current.map((item) => {
+        if (item.conversationId !== conversationId) return item;
+        return {
+          ...item,
+          websiteFormConfirmationDrafts: (item.websiteFormConfirmationDrafts || []).map((draft: any) => {
+            if (draft.submissionId !== submissionId) return draft;
+            const updatedChannels = draft.channels.map((channel: any) => {
+              const result = results.find((entry: any) => entry.channel === channel.channel);
+              return result ? { ...channel, status: result.status === 'FAILED' || result.status === 'FAILED_FINAL' ? 'DRAFT' : result.status } : channel;
+            });
+            return { ...draft, status: failed.length ? 'APPROVED' : 'COMPLETED', channels: updatedChannels };
+          }),
+        };
+      }));
+      await syncWithBackendInbound();
+    } catch (error: any) {
+      window.alert(error?.message || 'The website confirmation could not be approved.');
+    }
+  };
+
   // Approve a saved AI draft only after a human explicitly verifies it.
   const handleApproveDraft = async (conversationId: string) => {
     const conv = conversations.find((c) => c.conversationId === conversationId);
@@ -2750,6 +2788,7 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
                 onToggleAi={handleToggleAi}
                 onMarkAsRead={handleMarkConversationAsRead}
                 onApproveDraft={handleApproveDraft}
+                onApproveWebsiteConfirmation={handleApproveWebsiteConfirmation}
                 onEditDraft={handleEditDraft}
                 onUpdateLeadScore={(leadId, delta) => {
                   setLeads((prev) =>
@@ -2949,3 +2988,5 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
     </BrandProvider>
   );
 }
+
+// Website form confirmation approval callback wiring.

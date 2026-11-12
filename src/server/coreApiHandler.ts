@@ -1220,6 +1220,61 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
     }
   }
 
+  // Tenant-owned Website Form Thank-you settings and per-submission REVIEW approval.
+  const websiteConfirmationPath = url.split('?')[0];
+  if (websiteConfirmationPath === '/api/website-form-confirmations/settings') {
+    try {
+      const svc = await import('./websiteFormConfirmationService.js');
+      res.setHeader('Content-Type', 'application/json');
+      if (req.method === 'GET') {
+        const settings = await svc.getWebsiteFormConfirmationSettings(activeTenantCtx);
+        const emailTemplates = (await getTemplatesFromDbOrCache()).filter((item: any) => item.purpose === 'WEBSITE_FORM_THANKYOU');
+        res.statusCode = 200;
+        res.end(JSON.stringify({ success: true, settings, emailTemplates }));
+        return true;
+      }
+      if (req.method === 'POST') {
+        if (activeTenantCtx.role === 'member') {
+          res.statusCode = 403;
+          res.end(JSON.stringify({ success: false, error: 'Only workspace admins can change website confirmation settings.' }));
+          return true;
+        }
+        const settings = await svc.saveWebsiteFormConfirmationSettings(activeTenantCtx, body || {});
+        res.statusCode = 200;
+        res.end(JSON.stringify({ success: true, settings }));
+        return true;
+      }
+      res.statusCode = 405;
+      res.end(JSON.stringify({ error: 'Method not allowed.' }));
+      return true;
+    } catch (err: any) {
+      res.statusCode = err?.status || 400;
+      res.end(JSON.stringify({ error: err?.message || 'Could not load Website Form Thank-you settings.' }));
+      return true;
+    }
+  }
+
+  if (websiteConfirmationPath === '/api/website-form-confirmations/approve' && req.method === 'POST') {
+    try {
+      const svc = await import('./websiteFormConfirmationService.js');
+      const conversationId = String(body?.conversationId || '').trim();
+      const submissionId = String(body?.submissionId || '').trim();
+      if (!conversationId || !submissionId) {
+        res.statusCode = 400;
+        res.end(JSON.stringify({ success: false, error: 'conversationId and submissionId are required.' }));
+        return true;
+      }
+      const result = await svc.approveWebsiteFormConfirmation(activeTenantCtx, conversationId, submissionId);
+      res.statusCode = 200;
+      res.end(JSON.stringify({ success: true, ...result }));
+      return true;
+    } catch (err: any) {
+      res.statusCode = err?.status || 400;
+      res.end(JSON.stringify({ success: false, error: err?.message || 'Could not approve this website form confirmation.' }));
+      return true;
+    }
+  }
+
   // Self-serve website-lead webhook: /api/tenants/:tenantId/webhook[/regenerate|/test]
   const webhookMatch = url.split('?')[0].match(/^\/api\/tenants\/([^/]+)\/webhook(?:\/(regenerate|test|simulate))?$/);
   if (webhookMatch) {
@@ -1468,6 +1523,18 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
         }
       } catch (retryErr: any) {
         console.warn('[Cron] Website thank-you retry notice:', retryErr?.message || retryErr);
+      }
+
+      // Per-submission confirmation delivery retries run under the existing cron endpoint,
+      // so this does not add another scheduled invocation or another Vercel build.
+      try {
+        const confirmationSvc = await import('./websiteFormConfirmationService.js');
+        const confirmationResults = runAll
+          ? await confirmationSvc.retryPendingWebsiteFormConfirmationsForAllTenants()
+          : await confirmationSvc.retryPendingWebsiteFormConfirmations({ tenantId: callerCtx!.tenantId, uid: 'system-cron', email: '', role: 'admin' }, 30);
+        if (confirmationResults.processedCount > 0) results.push({ websiteFormConfirmations: confirmationResults });
+      } catch (confirmationRetryError: any) {
+        console.warn('[Cron] Website form confirmation retry notice:', confirmationRetryError?.message || confirmationRetryError);
       }
       res.statusCode = 200;
       res.setHeader('Content-Type', 'application/json');
@@ -3142,7 +3209,7 @@ ${signature || defSig}`;
   // Templates endpoints (supports both /api/templates and /api/campaign-templates)
   if ((url === '/api/templates' || url === '/api/campaign-templates') && req.method === 'GET') {
     await initCampaignStore();
-    const tpls = await getTemplatesFromDbOrCache();
+    const tpls = (await getTemplatesFromDbOrCache()).filter((item: any) => item.purpose !== 'WEBSITE_FORM_THANKYOU');
     res.statusCode = 200;
     res.end(JSON.stringify({ success: true, templates: tpls }));
     return true;
@@ -3168,7 +3235,7 @@ ${signature || defSig}`;
 
     if (req.method === 'GET') {
       const tpl = await getTemplateFromDbById(templateId);
-      if (!tpl) {
+      if (!tpl || tpl.purpose === 'WEBSITE_FORM_THANKYOU') {
         res.statusCode = 404;
         res.end(JSON.stringify({ error: 'Template not found' }));
       } else {
@@ -4238,7 +4305,7 @@ ${signature || defSig}`;
       let availableTemplates: any[] = [];
       if (code === 'CAMPAIGN_TEMPLATE_MISSING') {
         try {
-          availableTemplates = (await getTemplatesFromDbOrCache()).map((template) => ({
+          availableTemplates = (await getTemplatesFromDbOrCache()).filter((template) => template.purpose !== 'WEBSITE_FORM_THANKYOU').map((template) => ({
             templateId: template.templateId, name: template.name, subject: template.subject,
             body: template.body, htmlBody: template.htmlBody, format: template.format, isHtml: template.isHtml,
             createdAt: template.createdAt, updatedAt: template.updatedAt,

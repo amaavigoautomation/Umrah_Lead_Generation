@@ -84,6 +84,7 @@ interface UnifiedInboxProps {
   onToggleAi: (conversationId: string, enabled: boolean) => void;
   onMarkAsRead?: (conversationId: string) => void;
   onApproveDraft?: (conversationId: string) => void;
+  onApproveWebsiteConfirmation?: (conversationId: string, submissionId: string) => void;
   onEditDraft?: (conversationId: string, draftId: string) => Promise<boolean> | boolean;
   onUpdateLeadScore: (leadId: string, delta: number) => void;
   onViewLeadInCrm: (leadId: string) => void;
@@ -109,6 +110,7 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
   onToggleAi,
   onMarkAsRead,
   onApproveDraft,
+  onApproveWebsiteConfirmation,
   onEditDraft,
   onUpdateLeadScore,
   onViewLeadInCrm,
@@ -743,7 +745,7 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
               const lead = leads.find((l) => l.leadId === conv.leadId);
               const isSelected = conv.conversationId === activeConversation?.conversationId;
               const isUnread = conv.unread || conv.isRead === false || ((conv.unreadCount || 0) > 0);
-              const hasPendingDraft = conv.draftReply && conv.draftReply.status === 'PENDING';
+              const hasPendingDraft = (conv.draftReply && conv.draftReply.status === 'PENDING') || Boolean(conv.websiteFormConfirmationDrafts?.some((item) => item.status === 'PENDING' || item.status === 'APPROVED'));
 
               return (
                 <div
@@ -1166,6 +1168,40 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
                 <span>{isGeneratingAi ? 'Consulting KB...' : 'AI Auto-Draft'}</span>
               </button>
             </div>
+
+            {/* Website form confirmations are approved per submission and independently by channel. */}
+            {(activeConversation.websiteFormConfirmationDrafts || [])
+              .filter((item) => item.status === 'PENDING' || item.status === 'APPROVED')
+              .map((item) => (
+                <div key={item.submissionId} className="border-t border-b border-emerald-200 bg-emerald-50/70 p-3.5 space-y-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                    <span className="font-bold text-emerald-900">Website Form Thank-you · Human review</span>
+                    <span className="rounded-full border border-emerald-200 bg-white px-2 py-0.5 text-[10px] font-bold uppercase text-emerald-800">Review mode</span>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {item.channels.map((entry) => (
+                      <span key={entry.recordId || entry.messageId} className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[11px] text-slate-700">
+                        <strong>{entry.channel}</strong> · {String(entry.status || 'DRAFT').replace(/_/g, ' ')}
+                      </span>
+                    ))}
+                  </div>
+                  <p className="text-[11px] text-slate-600">Each channel is approved and delivered independently. A successful Email is not resent if WhatsApp fails.</p>
+                  {normalizeChannelMode(channelModes.WEBSITE) === 'OFF' ? (
+                    <span className="text-[11px] font-semibold text-slate-500">Website channel is OFF. Enable it before approving this confirmation.</span>
+                  ) : (
+                    <div className="flex justify-end">
+                      <button
+                        type="button"
+                        onClick={() => onApproveWebsiteConfirmation?.(activeConversation.conversationId, item.submissionId)}
+                        className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-700 px-3.5 py-1.5 text-xs font-bold text-white transition hover:bg-emerald-800"
+                      >
+                        <Send className="h-3.5 w-3.5" />
+                        Approve &amp; Send Confirmation
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ))}
 
             {/* AI Draft Reply Awaiting Verification Card (REVIEW Mode) */}
             {activeConversation.draftReply &&

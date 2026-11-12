@@ -1,7 +1,7 @@
-import React, { useState, useRef, useLayoutEffect, useEffect } from 'react';
-import './UnifiedInbox.css';
+import React, { useState, Suspense, useRef, useLayoutEffect, useEffect } from 'react';
 import { stripQuotedReply } from '../shared/quotedReply';
 import { STOP_FOLLOWUPS_WHEN_DEMO_BOOKED } from '../shared/followUpPolicy';
+import { lazyNamed } from '../lazyLoad';
 import {
   Search,
   Bot,
@@ -26,7 +26,9 @@ import {
   Smartphone,
   Share2,
   X,
+  MessageSquare,
   RefreshCw,
+  Key,
   Settings,
   ExternalLink,
   Clock,
@@ -45,10 +47,9 @@ import {
 import { normalizeChannelMode } from '../shared/channelModes';
 import { generateOmnichannelResponse } from '../services/aiService';
 import { FormattedMessage } from './FormattedMessage';
-import InboxViewsPanel from './InboxViewsPanel';
-import { useConnectedChannels } from '../hooks/useConnectedChannels';
 import { aiResponseMarkdownToPlainText } from '../shared/aiResponseFormatting';
 import { useBrand } from '../context/BrandContext';
+import { useConnectedChannels } from '../hooks/useConnectedChannels';
 import {
   InboundEmailPayload,
   InboundProcessingResult,
@@ -56,7 +57,13 @@ import {
 import {
   InboundWhatsAppPayload,
   InboundWhatsAppProcessingResult,
+  WHATSAPP_BUSINESS_NUMBER,
+  WHATSAPP_BUSINESS_NUMBER_FORMATTED,
 } from '../services/whatsappInboundService';
+
+// Simulator modals: loaded only when opened.
+const InboundEmailFlowModal = lazyNamed(() => import('./InboundEmailFlowModal'), 'InboundEmailFlowModal');
+const InboundWhatsAppFlowModal = lazyNamed(() => import('./InboundWhatsAppFlowModal'), 'InboundWhatsAppFlowModal');
 
 interface UnifiedInboxProps {
   /** Workspace whose connected mailbox / WhatsApp number are shown above the conversation list. */
@@ -88,6 +95,7 @@ interface UnifiedInboxProps {
 }
 
 export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
+  tenantId,
   channelModes = {},
   conversations,
   hasMoreConversations,
@@ -104,10 +112,13 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
   onEditDraft,
   onUpdateLeadScore,
   onViewLeadInCrm,
+  onProcessInboundEmail,
+  onProcessInboundWhatsApp,
+  onSyncNow,
   onAutoFollowUpChanged,
 }) => {
   const { brand } = useBrand();
-  const connected = useConnectedChannels(tenantId);
+  const isUmrah = brand.playbook === 'umrah360';
   const [selectedConversationId, setSelectedConversationId] = useState<string>(
     conversations[0]?.conversationId || ''
   );
@@ -116,51 +127,16 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
   const [searchQuery, setSearchQuery] = useState<string>('');
   // Lead Profile 360 side panel: slides in/out from the right edge
   const [isProfileOpen, setIsProfileOpen] = useState<boolean>(true);
-  const [isViewsPanelCollapsed, setIsViewsPanelCollapsed] = useState<boolean>(false);
-  const [isConversationListCollapsed, setIsConversationListCollapsed] = useState<boolean>(false);
-  const [viewsPanelWidth, setViewsPanelWidth] = useState<number>(205);
-  const [conversationListWidth, setConversationListWidth] = useState<number>(292);
-  const [profilePanelWidth, setProfilePanelWidth] = useState<number>(292);
-  const [composerTab, setComposerTab] = useState<'REPLY' | 'AI_DRAFT'>('REPLY');
-  const resizeStateRef = useRef<{ panel: 'views' | 'list' | 'profile'; startX: number; startWidth: number } | null>(null);
   const [replyText, setReplyText] = useState<string>('');
-  const inboxLayoutStorageKey = 'umrah360:unified-inbox-layout:' + (tenantId || 'workspace');
-  useEffect(() => {
-    try {
-      const saved = window.localStorage.getItem(inboxLayoutStorageKey);
-      if (!saved) return;
-      const layout = JSON.parse(saved);
-      if (Number.isFinite(layout.viewsPanelWidth)) setViewsPanelWidth(Math.min(320, Math.max(180, layout.viewsPanelWidth)));
-      if (Number.isFinite(layout.conversationListWidth)) setConversationListWidth(Math.min(440, Math.max(230, layout.conversationListWidth)));
-      if (Number.isFinite(layout.profilePanelWidth)) setProfilePanelWidth(Math.min(420, Math.max(250, layout.profilePanelWidth)));
-      if (typeof layout.isViewsPanelCollapsed === 'boolean') setIsViewsPanelCollapsed(layout.isViewsPanelCollapsed);
-      if (typeof layout.isConversationListCollapsed === 'boolean') setIsConversationListCollapsed(layout.isConversationListCollapsed);
-      if (typeof layout.isProfileOpen === 'boolean') setIsProfileOpen(layout.isProfileOpen);
-    } catch (error) { console.warn('[UnifiedInbox] Could not restore panel layout preferences.', error); }
-  }, [inboxLayoutStorageKey]);
-  useEffect(() => {
-    try { window.localStorage.setItem(inboxLayoutStorageKey, JSON.stringify({ viewsPanelWidth, conversationListWidth, profilePanelWidth, isViewsPanelCollapsed, isConversationListCollapsed, isProfileOpen })); } catch (error) { /* Storage is optional. */ }
-  }, [inboxLayoutStorageKey, viewsPanelWidth, conversationListWidth, profilePanelWidth, isViewsPanelCollapsed, isConversationListCollapsed, isProfileOpen]);
-  const beginPanelResize = (panel: 'views' | 'list' | 'profile', event: React.PointerEvent<HTMLDivElement>) => {
-    event.preventDefault();
-    const startWidth = panel === 'views' ? viewsPanelWidth : panel === 'list' ? conversationListWidth : profilePanelWidth;
-    resizeStateRef.current = { panel, startX: event.clientX, startWidth };
-    event.currentTarget.setPointerCapture(event.pointerId);
-  };
-  const movePanelResize = (event: React.PointerEvent<HTMLDivElement>) => {
-    const drag = resizeStateRef.current; if (!drag) return;
-    const delta = event.clientX - drag.startX;
-    if (drag.panel === 'views') setViewsPanelWidth(Math.min(320, Math.max(180, drag.startWidth + delta)));
-    else if (drag.panel === 'list') setConversationListWidth(Math.min(440, Math.max(230, drag.startWidth + delta)));
-    else setProfilePanelWidth(Math.min(420, Math.max(250, drag.startWidth - delta)));
-  };
-  const endPanelResize = (event: React.PointerEvent<HTMLDivElement>) => {
-    resizeStateRef.current = null;
-    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
-  };
+  const connected = useConnectedChannels(tenantId);
   const [isGeneratingAi, setIsGeneratingAi] = useState<boolean>(false);
   const [isUnifiedAllPlatforms, setIsUnifiedAllPlatforms] = useState<boolean>(false);
   const [replyChannelOverride, setReplyChannelOverride] = useState<Channel | ''>('');
+  const [showSimulateModal, setShowSimulateModal] = useState<boolean>(false);
+  const [showInboundFlowModal, setShowInboundFlowModal] = useState<boolean>(false);
+  const [showInboundWhatsAppModal, setShowInboundWhatsAppModal] = useState<boolean>(false);
+  const [simulatedPlatform, setSimulatedPlatform] = useState<Channel>('WHATSAPP');
+  const [simulatedText, setSimulatedText] = useState<string>(isUmrah ? 'Hi, can you send us your B2B package cost breakdown for 5-star Makkah hotels?' : `Hi, I would like to know more about ${brand.companyName}.`);
 
   // SMTP Configuration & Delivery State
   const [smtpStatus, setSmtpStatus] = useState<{
@@ -451,34 +427,6 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
     }
   };
 
-  const isConversationUnread = (conv: Conversation) => Boolean(conv.unread || conv.isRead === false || (conv.unreadCount || 0) > 0);
-  const getConversationLead = (conv: Conversation) => leads.find((lead) => lead.leadId === conv.leadId);
-  const matchesChannel = (conv: Conversation, channel: string) => {
-    if (channel === 'ALL') return true;
-    if (channel === 'EMAIL') return conv.channel === 'EMAIL' || messages.some((message) => message.conversationId === conv.conversationId && message.channel === 'EMAIL');
-    if (channel === 'WEBSITE') return conv.channel === 'WEBSITE' || conv.conversationId?.startsWith('conv-web-') || conv.conversationSummary?.toLowerCase().includes('website demo');
-    return conv.channel === channel;
-  };
-  const viewCounts = {
-    ALL: conversations.length,
-    OPEN: conversations.filter((conv) => conv.status === 'ACTIVE' || conv.status === 'REVIEW').length,
-    UNREAD: conversations.filter(isConversationUnread).length,
-    UNASSIGNED: conversations.filter((conv) => { const lead = getConversationLead(conv); return !lead?.ownerId && !lead?.assignedCaller; }).length,
-    HUMAN_HANDOFF: conversations.filter((conv) => conv.humanHandoff).length,
-    AI_ACTIVE: conversations.filter((conv) => conv.aiEnabled && !conv.humanHandoff).length,
-    HIGH_INTENT: conversations.filter((conv) => getConversationLead(conv)?.intent === 'HIGH').length,
-    RESOLVED: conversations.filter((conv) => conv.status === 'RESOLVED').length,
-  };
-  const channelCounts = {
-    ALL: conversations.length,
-    EMAIL: conversations.filter((conv) => matchesChannel(conv, 'EMAIL')).length,
-    WHATSAPP: conversations.filter((conv) => matchesChannel(conv, 'WHATSAPP')).length,
-    WEBSITE: conversations.filter((conv) => matchesChannel(conv, 'WEBSITE')).length,
-    FACEBOOK: conversations.filter((conv) => matchesChannel(conv, 'FACEBOOK')).length,
-    INSTAGRAM: conversations.filter((conv) => matchesChannel(conv, 'INSTAGRAM')).length,
-    LINKEDIN: conversations.filter((conv) => matchesChannel(conv, 'LINKEDIN')).length,
-  };
-
   // Filter conversations
   const filteredConversations = conversations.filter((conv) => {
     const contact = contacts.find((c) => c.contactId === conv.contactId);
@@ -503,13 +451,10 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
     }
 
     // Status / Mode filter
-    if (statusFilter === 'OPEN' && conv.status !== 'ACTIVE' && conv.status !== 'REVIEW') return false;
-    if (statusFilter === 'UNREAD' && !isConversationUnread(conv)) return false;
-    if (statusFilter === 'UNASSIGNED' && (lead?.ownerId || lead?.assignedCaller)) return false;
-    if (statusFilter === 'AI_ACTIVE' && (!conv.aiEnabled || conv.humanHandoff)) return false;
+    if (statusFilter === 'UNREAD' && !conv.unread && conv.isRead !== false && (conv.unreadCount || 0) === 0) return false;
+    if (statusFilter === 'AI_ACTIVE' && !conv.aiEnabled) return false;
     if (statusFilter === 'HUMAN_HANDOFF' && !conv.humanHandoff) return false;
     if (statusFilter === 'HIGH_INTENT' && lead?.intent !== 'HIGH') return false;
-    if (statusFilter === 'RESOLVED' && conv.status !== 'RESOLVED') return false;
     if (statusFilter === 'INBOUND' && conv.direction !== 'INBOUND') return false;
     if (statusFilter === 'OUTBOUND' && conv.direction !== 'OUTBOUND') return false;
 
@@ -544,6 +489,14 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
   };
 
   // Handle simulating customer message on specific platform
+  const handleSimulateInbound = () => {
+    if (!simulatedText.trim()) return;
+    const targetConv = contactConversations.find((c) => c.channel === simulatedPlatform) || activeConversation;
+    if (!targetConv) return;
+    onSendMessage(targetConv.conversationId, simulatedText, 'CUSTOMER');
+    setShowSimulateModal(false);
+  };
+
   // Handle AI Auto-generate button
   const handleAiAutoGenerate = async () => {
     if (!activeConversation || !activeContact) return;
@@ -570,7 +523,6 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
       });
 
       setReplyText(result.responseText);
-      setComposerTab('AI_DRAFT');
     } catch (error) {
       console.error('Error generating AI response:', error);
     } finally {
@@ -646,27 +598,62 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
   };
 
   return (
-    <div className="unified-inbox-shell unified-inbox-layout-root flex flex-row h-full w-full bg-white text-slate-900 overflow-hidden relative" style={{ ['--uinbox-profile-width' as any]: (isProfileOpen ? profilePanelWidth : 0) + 'px' }}>
-      <InboxViewsPanel collapsed={isViewsPanelCollapsed} width={isViewsPanelCollapsed ? 58 : viewsPanelWidth} statusFilter={statusFilter} channelFilter={channelFilter} viewCounts={viewCounts} channelCounts={channelCounts} connected={connected} onToggleCollapsed={() => setIsViewsPanelCollapsed((value) => !value)} onSelectView={setStatusFilter} onSelectChannel={setChannelFilter} />
-      <div className="uinbox-resize-handle" role="separator" aria-orientation="vertical" aria-label="Resize inbox views panel" onPointerDown={(event) => beginPanelResize('views', event)} onPointerMove={movePanelResize} onPointerUp={endPanelResize} onPointerCancel={endPanelResize} onDoubleClick={() => setViewsPanelWidth(205)} />
+    <div className="flex flex-col lg:flex-row h-full w-full bg-white text-slate-900 overflow-hidden relative">
       {/* 1. LEFT COLUMN: Conversation List & Filters (Width: 340px) */}
-      <div className="unified-inbox-sidebar unified-inbox-conversation-panel flex flex-col bg-white h-full min-h-0 shrink-0" style={{ ['--uinbox-conversation-width' as any]: (isConversationListCollapsed ? 64 : conversationListWidth) + 'px' }}>
-        {isConversationListCollapsed ? (
-          <div className="uinbox-list-collapsed">
-            <button type="button" onClick={() => setIsConversationListCollapsed(false)} className="uinbox-list-expand" title="Expand conversation list" aria-label="Expand conversation list"><ChevronRight size={16} /></button>
-            {filteredConversations.slice(0, 14).map((conv) => {
-              const contact = contacts.find((item) => item.contactId === conv.contactId);
-              const selected = conv.conversationId === activeConversation?.conversationId;
-              return <button key={conv.conversationId} type="button" onClick={() => { setSelectedConversationId(conv.conversationId); setIsUnifiedAllPlatforms(false); if (isConversationUnread(conv)) onMarkAsRead?.(conv.conversationId); }} className={'uinbox-list-avatar' + (selected ? ' is-active' : '')} title={(contact?.firstName || 'Unknown') + ' ' + (contact?.lastName || '')}>
-                {(contact?.firstName?.[0] || contact?.companyName?.[0] || '?').toUpperCase()}
-                {isConversationUnread(conv) && <span className="uinbox-list-unread-dot" />}
-              </button>;
-            })}
-          </div>
-        ) : (<>
+      <div className="w-full lg:w-84 border-r border-slate-200/90 flex flex-col bg-slate-50/60 h-full min-h-0 shrink-0">
         {/* Search Header */}
-        <div className="unified-inbox-sidebar-tools p-3 border-b border-slate-200 space-y-2 shrink-0">
-          <div className="uinbox-conversation-list-heading"><div><strong>Conversations</strong><span>{filteredConversations.length} results</span></div><button type="button" onClick={() => setIsConversationListCollapsed(true)} title="Collapse conversation list" aria-label="Collapse conversation list"><ChevronLeft size={15} /></button></div>
+        <div className="p-3 border-b border-slate-200 space-y-2 shrink-0">
+          {/* Live Inbound Mailbox & WhatsApp Triggers */}
+          <div className="space-y-1.5">
+            <div className="flex items-center space-x-1.5">
+              {connected.mailbox && (
+                <button
+                  onClick={() => setShowInboundFlowModal(true)}
+                  className="flex-1 flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-orange-50/80 hover:bg-orange-100/90 border border-orange-200 text-orange-950 transition text-left group"
+                >
+                  <div className="flex items-center space-x-2 truncate">
+                    <Mail className="w-3.5 h-3.5 text-orange-600 shrink-0" />
+                    <div className="truncate">
+                      <span className="text-[11px] font-bold block truncate text-slate-800">{connected.mailbox}</span>
+                    </div>
+                  </div>
+                  <span className="flex items-center space-x-1 text-[10px] text-orange-700 bg-orange-100 px-1.5 py-0.5 rounded font-semibold shrink-0 border border-orange-200">
+                    <span className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse"></span>
+                    <span>Email</span>
+                  </span>
+                </button>
+              )}
+
+              {onSyncNow && (
+                <button
+                  onClick={onSyncNow}
+                  title="Sync Inbound Mailbox with Live Server"
+                  className="p-1.5 rounded-lg bg-white hover:bg-slate-100 text-slate-700 hover:text-slate-900 border border-slate-200 transition shrink-0"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+
+            {connected.whatsapp && (
+              <button
+                onClick={() => setShowInboundWhatsAppModal(true)}
+                className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-emerald-50/80 hover:bg-emerald-100/90 border border-emerald-200 text-emerald-950 transition text-left group"
+              >
+                <div className="flex items-center space-x-2 truncate">
+                  <MessageSquare className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                  <div className="truncate">
+                    <span className="text-[11px] font-bold block truncate font-mono text-slate-800">{connected.whatsapp}</span>
+                  </div>
+                </div>
+                <span className="flex items-center space-x-1 text-[10px] text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded font-semibold shrink-0 border border-emerald-200">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                  <span>WhatsApp Flow</span>
+                </span>
+              </button>
+            )}
+          </div>
+
           <div className="relative">
             <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
             <input
@@ -678,10 +665,74 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
             />
           </div>
 
+          {/* Channel Pills */}
+          <div className="flex space-x-1 overflow-x-auto pb-1 scrollbar-none text-xs">
+            {['ALL', 'EMAIL', 'WHATSAPP', 'WEBSITE', 'INSTAGRAM', 'LINKEDIN'].map((ch) => (
+              <button
+                key={ch}
+                onClick={() => setChannelFilter(ch)}
+                className={`px-2.5 py-1 rounded-lg whitespace-nowrap font-bold transition ${
+                  channelFilter === ch
+                    ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-2xs'
+                    : 'bg-white border border-slate-200 text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                {ch}
+              </button>
+            ))}
+          </div>
+
+          {/* Status Filters */}
+          <div className="flex items-center space-x-1 text-[11px] overflow-x-auto pb-1">
+            <button
+              onClick={() => setStatusFilter('ALL')}
+              className={`px-2 py-0.5 rounded-md transition whitespace-nowrap font-semibold ${
+                statusFilter === 'ALL' ? 'bg-orange-500 text-white' : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              All ({conversations.length})
+            </button>
+            <button
+              onClick={() => setStatusFilter('UNREAD')}
+              className={`px-2 py-0.5 rounded-md transition whitespace-nowrap font-semibold ${
+                statusFilter === 'UNREAD' ? 'bg-orange-500 text-white' : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Unread
+            </button>
+            <button
+              onClick={() => setStatusFilter('AI_ACTIVE')}
+              className={`px-2 py-0.5 rounded-md transition whitespace-nowrap font-semibold ${
+                statusFilter === 'AI_ACTIVE' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              AI Active
+            </button>
+            <button
+              onClick={() => setStatusFilter('HUMAN_HANDOFF')}
+              className={`px-2 py-0.5 rounded transition whitespace-nowrap ${
+                statusFilter === 'HUMAN_HANDOFF'
+                  ? 'bg-amber-600 text-white font-semibold'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Handoff
+            </button>
+            <button
+              onClick={() => setStatusFilter('HIGH_INTENT')}
+              className={`px-2 py-0.5 rounded transition whitespace-nowrap ${
+                statusFilter === 'HIGH_INTENT'
+                  ? 'bg-emerald-600 text-white font-semibold'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              High Intent
+            </button>
+          </div>
         </div>
 
         {/* Conversation List */}
-        <div className="unified-inbox-conversation-list flex-1 overflow-y-auto min-h-0 divide-y divide-slate-200">
+        <div className="flex-1 overflow-y-auto min-h-0 divide-y divide-slate-200">
           {filteredConversations.length === 0 ? (
             <div className="p-8 text-center text-slate-500 text-xs">
               No conversations found matching filters.
@@ -704,7 +755,7 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
                       onMarkAsRead?.(conv.conversationId);
                     }
                   }}
-                  className={`unified-inbox-conversation-item p-3 cursor-pointer transition relative ${
+                  className={`p-3 cursor-pointer transition relative ${
                     isSelected
                       ? 'bg-orange-50/90 border-l-4 border-orange-500 shadow-2xs'
                       : isUnread
@@ -807,18 +858,16 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
             </div>
           )}
         </div>
-        </>)}
       </div>
-      <div className="uinbox-resize-handle" role="separator" aria-orientation="vertical" aria-label="Resize conversation list" onPointerDown={(event) => beginPanelResize('list', event)} onPointerMove={movePanelResize} onPointerUp={endPanelResize} onPointerCancel={endPanelResize} onDoubleClick={() => setConversationListWidth(292)} />
 
       {/* Thread + sliding Lead Profile panel share one row, so the panel always stays on the right */}
-      <div className="unified-inbox-main flex-1 flex flex-row min-w-0 min-h-0 h-full relative">
+      <div className="flex-1 flex flex-row min-w-0 min-h-0 h-full relative">
       {/* 2. MIDDLE COLUMN: Conversation & Message Thread UI */}
-      <div className="unified-inbox-thread flex-1 flex flex-col bg-white overflow-hidden min-w-0 min-h-0 h-full">
+      <div className="flex-1 flex flex-col bg-white overflow-hidden min-w-0 min-h-0 h-full">
         {/* Active Conversation Header */}
         {activeConversation && activeContact ? (
           <>
-            <div className="unified-inbox-thread-header p-3.5 border-b border-slate-200/80 bg-white flex items-center justify-between shrink-0">
+            <div className="p-3.5 border-b border-slate-200/80 bg-white flex items-center justify-between shrink-0">
               <div className="flex items-center space-x-3">
                 <div className="w-9 h-9 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center font-bold text-slate-800 text-sm shadow-2xs">
                   {activeContact.firstName?.[0]}
@@ -850,6 +899,21 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
 
               {/* AI vs Human Takeover Toggle & SMTP Settings */}
               <div className="flex items-center space-x-2">
+                {(activeConversation.channel === 'EMAIL' || activeConversation.channel === 'WEBSITE') && (
+                  <button
+                    onClick={() => setShowSmtpModal(true)}
+                    className={`flex items-center space-x-1 px-2.5 py-1 rounded-lg text-xs font-bold border transition ${
+                      smtpStatus?.configured
+                        ? 'bg-emerald-50 border-emerald-200 text-emerald-800 hover:bg-emerald-100'
+                        : 'bg-amber-50 border-amber-200 text-amber-800 hover:bg-amber-100 animate-pulse'
+                    }`}
+                    title="Configure SMTP Delivery & Gmail App Password"
+                  >
+                    <Key className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                    <span>{smtpStatus?.emailProvider === 'resend' ? 'Resend Live' : smtpStatus?.configured ? 'SMTP Live' : 'Configure SMTP'}</span>
+                  </button>
+                )}
+
                 {activeConversation.humanHandoff ? (
                   <button
                     onClick={() => onToggleAi(activeConversation.conversationId, true)}
@@ -896,7 +960,7 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
             </div>
 
             {activeConversation.humanHandoff && (
-              <div className="unified-inbox-handoff px-4 py-3 bg-amber-50 border-b border-amber-200 text-xs" role="status" aria-live="polite">
+              <div className="px-4 py-3 bg-amber-50 border-b border-amber-200 text-xs" role="status" aria-live="polite">
                 <div className="flex items-start gap-2">
                   <AlertTriangle className="w-4 h-4 text-amber-700 mt-0.5 shrink-0" />
                   <div className="min-w-0">
@@ -909,7 +973,7 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
             )}
 
             {activeLead?.aiAutoFollowUp && (
-              <div className="unified-inbox-scheduled-status px-3.5 py-1.5 bg-emerald-50/80 border-b border-emerald-100 text-xs flex items-center justify-between">
+              <div className="px-3.5 py-1.5 bg-emerald-50/80 border-b border-emerald-100 text-xs flex items-center justify-between">
                 <span className="font-semibold text-slate-800">CRM-Scheduled One-Time Message:</span>
                 {activeLead.aiAutoFollowUp.status === 'scheduled' ? (
                   <span className="text-emerald-700 font-medium">
@@ -931,7 +995,7 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
 
             {/* Email Metadata banner if email channel */}
             {!isUnifiedAllPlatforms && activeConversation.channel === 'EMAIL' && (
-              <div className="unified-inbox-email-subject px-4 py-2 bg-slate-50 border-b border-slate-200 text-xs text-slate-700 flex items-center justify-between">
+              <div className="px-4 py-2 bg-slate-50 border-b border-slate-200 text-xs text-slate-700 flex items-center justify-between">
                 <div className="flex items-center space-x-2 truncate">
                   <span className="font-semibold text-slate-500">Subject:</span>
                   <span className="font-medium text-slate-900 truncate">
@@ -954,7 +1018,7 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
 
             {/* Unified Stream Notification Banner */}
             {isUnifiedAllPlatforms && (
-              <div className="unified-inbox-unified-stream px-4 py-1.5 bg-orange-50 border-b border-orange-200 text-[11px] text-orange-950 flex items-center justify-between">
+              <div className="px-4 py-1.5 bg-orange-50 border-b border-orange-200 text-[11px] text-orange-950 flex items-center justify-between">
                 <div className="flex items-center space-x-2">
                   <Globe className="w-3.5 h-3.5 text-orange-600" />
                   <span>
@@ -968,7 +1032,7 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
             )}
 
             {/* Message Thread Scroll Area */}
-            <div ref={threadScrollRef} onScroll={onThreadScroll} className="unified-inbox-message-timeline flex-1 overflow-y-auto min-h-0 p-4 space-y-4">
+            <div ref={threadScrollRef} onScroll={onThreadScroll} className="flex-1 overflow-y-auto min-h-0 p-4 space-y-4">
               {displayMessages.length === 0 ? (
                 <div className="text-center py-12 text-slate-500 text-xs">
                   No messages on this platform yet. Use &ldquo;Simulate Inbound Platform Msg&rdquo; or dispatch cold outreach.
@@ -984,7 +1048,7 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
                       className={`flex flex-col ${isIncoming ? 'items-start' : 'items-end'}`}
                     >
                       {/* Sender label & Platform Badge */}
-                      <div className="unified-inbox-message-meta flex items-center space-x-2 text-[11px] text-slate-400 mb-1 px-1">
+                      <div className="flex items-center space-x-2 text-[11px] text-slate-400 mb-1 px-1">
                         {/* Channel Badge */}
                         <span
                           className={`px-1.5 py-0.2 rounded text-[10px] font-semibold border flex items-center space-x-1 ${getChannelColor(
@@ -1015,7 +1079,7 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
 
                       {/* Bubble */}
                       <div
-                        className={`unified-inbox-message-bubble ${isIncoming ? 'is-incoming' : isAi ? 'is-ai' : 'is-agent'} max-w-xl p-3.5 rounded-2xl text-xs leading-relaxed ${
+                        className={`max-w-xl p-3.5 rounded-2xl text-xs leading-relaxed ${
                           isIncoming
                             ? 'bg-slate-100 text-slate-900 rounded-tl-none border border-slate-200/80 shadow-2xs'
                             : isAi
@@ -1090,28 +1154,23 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
               )}
             </div>
 
-            {/* Reply / AI Draft tabs */}
-            <div className="uinbox-composer-tabs">
-              <div className="uinbox-composer-tab-group" role="tablist" aria-label="Reply composer mode">
-                <button type="button" role="tab" aria-selected={composerTab === 'REPLY'} className={composerTab === 'REPLY' ? 'is-active' : ''} onClick={() => setComposerTab('REPLY')}>Reply</button>
-                <button type="button" role="tab" aria-selected={composerTab === 'AI_DRAFT'} className={composerTab === 'AI_DRAFT' ? 'is-active' : ''} onClick={() => setComposerTab('AI_DRAFT')}><Sparkles size={13} /> AI Draft</button>
-              </div>
-              <span>Replies are sent via the selected channel</span>
+            {/* Quick Actions & AI Draft generation bar */}
+            <div className="p-2.5 bg-slate-50 border-t border-slate-200/80 flex items-center justify-end text-xs shrink-0">
+              <button
+                onClick={handleAiAutoGenerate}
+                disabled={isGeneratingAi || normalizeChannelMode(channelModes[activeConversation.channel]) === 'OFF'}
+                title={normalizeChannelMode(channelModes[activeConversation.channel]) === 'OFF' ? 'AI drafting is disabled for this channel.' : 'Generate an AI draft from the conversation.'}
+                className="flex items-center space-x-1.5 px-3.5 py-1.5 rounded-lg bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 text-white font-semibold text-xs transition disabled:opacity-50 shadow-xs whitespace-nowrap"
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>{isGeneratingAi ? 'Consulting KB...' : 'AI Auto-Draft'}</span>
+              </button>
             </div>
-            {composerTab === 'AI_DRAFT' && (
-              <div className="uinbox-ai-draft-tab">
-                {replyText.trim() && !(activeConversation.draftReply && activeConversation.draftReply.status === 'PENDING') ? <div className="uinbox-ai-draft-preview"><FormattedMessage text={replyText} channel={activeConversation.channel} /></div> : <p className="uinbox-ai-draft-empty">{isGeneratingAi ? 'Preparing a context-aware response…' : 'Generate a reply using the conversation and your approved Knowledge Base.'}</p>}
-                <div className="uinbox-ai-draft-actions">
-                  <button type="button" onClick={handleAiAutoGenerate} disabled={isGeneratingAi || normalizeChannelMode(channelModes[activeConversation.channel]) === 'OFF'} className="uinbox-ai-generate-button"><Sparkles size={14} /> {isGeneratingAi ? 'Generating draft…' : replyText.trim() ? 'Regenerate draft' : 'Generate AI draft'}</button>
-                  {replyText.trim() && <button type="button" onClick={() => setComposerTab('REPLY')} className="uinbox-ai-use-button">Use in Reply</button>}
-                </div>
-              </div>
-            )}
 
             {/* AI Draft Reply Awaiting Verification Card (REVIEW Mode) */}
-            {composerTab === 'AI_DRAFT' && activeConversation.draftReply &&
+            {activeConversation.draftReply &&
               activeConversation.draftReply.status === 'PENDING' && (
-              <div className="unified-inbox-draft-review p-3.5 bg-orange-50/70 border-t border-b border-orange-200 flex flex-col space-y-2">
+              <div className="p-3.5 bg-orange-50/70 border-t border-b border-orange-200 flex flex-col space-y-2">
                 <div className="flex items-center justify-between text-xs">
                   <span className="flex items-center space-x-1.5 font-bold text-orange-800">
                     <Sparkles className="w-4 h-4 text-orange-500" />
@@ -1134,7 +1193,6 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
                         : true;
                       if (!movedToComposer) return;
                       setReplyText(draft.text);
-                      setComposerTab('REPLY');
                       replyBoxRef.current?.focus();
                     }}
                     className="px-3 py-1 rounded-lg bg-white hover:bg-slate-100 text-slate-700 text-xs font-semibold border border-slate-200 transition"
@@ -1169,8 +1227,7 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
             )}
 
             {/* Message Reply Box */}
-            {composerTab === 'REPLY' && (
-            <div className="unified-inbox-composer p-3 bg-white border-t border-slate-200/80 shrink-0">
+            <div className="p-3 bg-white border-t border-slate-200/80 shrink-0">
               {/* Channel Selector for Unified Mode */}
               {isUnifiedAllPlatforms && (
                 <div className="flex items-center space-x-2 mb-2 text-xs">
@@ -1241,7 +1298,6 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
                 </div>
               )}
             </div>
-            )}
           </>
         ) : (
           <div className="flex-1 flex items-center justify-center text-slate-500 text-sm">
@@ -1253,7 +1309,6 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
       {/* 3. RIGHT COLUMN: Lead Profile 360 & Conversation Memory (Width: 320px) */}
       {activeConversation && activeContact && (
         <>
-        {isProfileOpen && <div className="uinbox-resize-handle uinbox-profile-resize" role="separator" aria-orientation="vertical" aria-label="Resize lead profile panel" onPointerDown={(event) => beginPanelResize('profile', event)} onPointerMove={movePanelResize} onPointerUp={endPanelResize} onPointerCancel={endPanelResize} onDoubleClick={() => setProfilePanelWidth(292)} />}
         {/* Arrow tab: toggles the panel and slides along with its edge */}
         <button
           type="button"
@@ -1262,19 +1317,21 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
           aria-controls="lead-profile-panel"
           aria-label={isProfileOpen ? 'Hide lead profile' : 'Show lead profile'}
           title={isProfileOpen ? 'Hide lead profile' : 'Show lead profile'}
-          style={{ right: isProfileOpen ? profilePanelWidth : 0 }}
-          className="unified-inbox-profile-toggle absolute top-4 z-20 w-6 h-12 flex items-center justify-center bg-white text-orange-600 border border-r-0 border-slate-200 rounded-l-xl shadow-[-2px_0_6px_rgba(15,23,42,0.06)] hover:bg-orange-50 transition-[right] duration-300 ease-in-out"
+          className={`absolute top-4 z-20 w-6 h-12 flex items-center justify-center bg-white text-orange-600 border border-r-0 border-slate-200 rounded-l-xl shadow-[-2px_0_6px_rgba(15,23,42,0.06)] hover:bg-orange-50 transition-[right] duration-300 ease-in-out ${
+            isProfileOpen ? 'right-80' : 'right-0'
+          }`}
         >
           {isProfileOpen ? <ChevronRight className="w-3.5 h-3.5" /> : <ChevronLeft className="w-3.5 h-3.5" />}
         </button>
 
         {/* Sliding wrapper: animates width; inner panel keeps a fixed 320px so content never squashes */}
         <div
-          className="unified-inbox-profile-wrapper shrink-0 h-full overflow-hidden"
-          style={{ width: isProfileOpen ? profilePanelWidth : 0, flexBasis: isProfileOpen ? profilePanelWidth : 0, opacity: isProfileOpen ? 1 : 0 }}
+          className={`shrink-0 h-full overflow-hidden transition-[width,opacity] duration-300 ease-in-out ${
+            isProfileOpen ? 'w-80 opacity-100' : 'w-0 opacity-0'
+          }`}
           aria-hidden={!isProfileOpen}
         >
-        <div id="lead-profile-panel" className="unified-inbox-profile w-80 border-l border-slate-200/90 bg-slate-50/50 p-4 overflow-y-auto min-h-0 h-full space-y-4">
+        <div id="lead-profile-panel" className="w-80 border-l border-slate-200/90 bg-slate-50/50 p-4 overflow-y-auto min-h-0 h-full space-y-4">
           {/* Customer Card Header */}
           <div className="border-b border-slate-200 pb-3">
             <div className="flex items-center justify-between">
@@ -1326,7 +1383,6 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
               {activeConversation.humanHandoff ? 'Resume AI' : 'Take Over (Human)'}
             </button>
           </div>
-          {/* Recurring follow-up controls live with lead context, not in the conversation toolbar. */}
           {activeLead && (
             <div className="unified-inbox-followup-card p-3 bg-white rounded-2xl border border-slate-200 shadow-2xs space-y-2">
               <div className="flex items-center justify-between gap-2">
@@ -1336,23 +1392,16 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
                     {isAutoFollowUpUiActive ? 'Recurring sequence is running' : 'No recurring sequence running'}
                   </p>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => handleToggleAutoFollowUp(!isAutoFollowUpUiActive)}
+                <button type="button" onClick={() => handleToggleAutoFollowUp(!isAutoFollowUpUiActive)}
                   disabled={isTogglingAutoFollowUp || (activeLeadHasBookedDemo && !isAutoFollowUpUiActive)}
                   title={activeLeadHasBookedDemo ? 'A demo is booked. Auto Follow-Up cannot be enabled for this lead.' : 'Turn the recurring follow-up sequence on or off.'}
-                  className={`unified-inbox-followup-action shrink-0 px-3 py-1.5 rounded-lg border text-[10px] font-bold transition ${
-                    isAutoFollowUpUiActive
-                      ? 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100'
-                      : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
-                  }`}
-                >
+                  className="unified-inbox-followup-action shrink-0 px-3 py-1.5 rounded-lg border text-[10px] font-bold transition">
                   {isTogglingAutoFollowUp ? 'Saving…' : isAutoFollowUpUiActive ? 'Turn off' : 'Turn on'}
                 </button>
               </div>
                           {/* Compact Auto Follow-Up Status Bar */}
             {activeLead && (
-              <div className="unified-inbox-followup-status px-3.5 py-1.5 bg-orange-50/80 border-b border-orange-100 text-xs flex items-center justify-between">
+              <div className="px-3.5 py-1.5 bg-orange-50/80 border-b border-orange-100 text-xs flex items-center justify-between">
                 <div className="flex items-center space-x-2">
                   <span className="flex items-center space-x-1.5">
                     <span className={`w-2 h-2 rounded-full ${isAutoFollowUpUiActive ? 'bg-orange-500 animate-pulse' : 'bg-slate-400'}`} />
@@ -1391,7 +1440,6 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
             )}
             </div>
           )}
-
           {/* Connected Channels & Platform Streams */}
           <div className="p-3.5 bg-white rounded-2xl border border-slate-200 shadow-2xs space-y-2">
             <div className="flex items-center justify-between text-xs">
@@ -1550,6 +1598,153 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
         </>
       )}
       </div>
+
+      {/* 4. MODAL: Simulate Inbound Customer Message from Any Platform */}
+      {showSimulateModal && activeContact && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white border border-slate-200 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center space-x-2">
+                <Sparkles className="w-4 h-4 text-orange-500" />
+                <h3 className="font-bold text-sm text-slate-900 font-display">
+                  Simulate Inbound Platform Message
+                </h3>
+              </div>
+              <button
+                onClick={() => setShowSimulateModal(false)}
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg transition"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-600">
+              Simulate an incoming message from <strong>{activeContact.firstName} {activeContact.lastName}</strong> across different external platforms to verify omnichannel ingestion and AI grounding.
+            </p>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                Select Platform Channel
+              </label>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                {(['WHATSAPP', 'INSTAGRAM', 'EMAIL', 'LINKEDIN'] as Channel[]).map((ch) => (
+                  <button
+                    key={ch}
+                    type="button"
+                    onClick={() => setSimulatedPlatform(ch)}
+                    className={`px-2.5 py-2 rounded-lg border text-xs font-semibold flex items-center justify-center space-x-1.5 transition ${
+                      simulatedPlatform === ch
+                        ? 'bg-orange-500 text-white border-orange-500 shadow-xs'
+                        : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                    }`}
+                  >
+                    {renderChannelIcon(ch, 3.5)}
+                    <span className="capitalize">{ch.toLowerCase()}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                Customer Message Text
+              </label>
+              <textarea
+                rows={3}
+                value={simulatedText}
+                onChange={(e) => setSimulatedText(e.target.value)}
+                className="w-full bg-white border border-slate-200 rounded-lg p-2.5 text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-orange-500 resize-none transition"
+              />
+            </div>
+
+            <div className="flex items-center justify-end space-x-2 pt-3 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setShowSimulateModal(false)}
+                className="px-3.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSimulateInbound}
+                className="px-4 py-1.5 rounded-lg bg-orange-500 hover:bg-orange-600 text-white text-xs font-semibold flex items-center space-x-1.5 shadow-xs transition"
+              >
+                <Send className="w-3.5 h-3.5" />
+                <span>Inject Message</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Inbound Email Flow Simulator Modal for automation@amaavigo.com */}
+      {showInboundFlowModal && (
+        <Suspense fallback={null}>
+        <InboundEmailFlowModal
+          isOpen={showInboundFlowModal}
+          onClose={() => setShowInboundFlowModal(false)}
+          onProcessEmail={async (payload) => {
+            if (onProcessInboundEmail) {
+              const res = await onProcessInboundEmail(payload);
+              if (res.conversation) {
+                setSelectedConversationId(res.conversation.conversationId);
+              }
+              return res;
+            }
+            throw new Error('Inbound processor not configured');
+          }}
+          onNavigateToThread={(convId) => {
+            setSelectedConversationId(convId);
+          }}
+          onNavigateToCrmLead={(leadId) => {
+            onViewLeadInCrm(leadId);
+          }}
+        />
+        </Suspense>
+      )}
+
+      {/* Inbound WhatsApp Flow Simulator Modal for +919820252434 */}
+      {showInboundWhatsAppModal && (
+        <Suspense fallback={null}>
+        <InboundWhatsAppFlowModal
+          isOpen={showInboundWhatsAppModal}
+          onClose={() => setShowInboundWhatsAppModal(false)}
+          contacts={contacts}
+          leads={leads}
+          conversations={conversations}
+          messages={messages}
+          knowledgeDocs={knowledgeDocs}
+          settings={{
+            autoPilot: true,
+            defaultTone: 'PROFESSIONAL',
+            humanHandoffThreshold: 0.7,
+            officeHoursOnly: false,
+            maxAutoRepliesPerLead: 5,
+          } as any}
+          onInboundComplete={(res) => {
+            if (onProcessInboundWhatsApp && res.incomingMessage) {
+              onProcessInboundWhatsApp({
+                from: res.contact.phone || '',
+                fromName: `${res.contact.firstName} ${res.contact.lastName}`,
+                to: WHATSAPP_BUSINESS_NUMBER,
+                body: res.incomingMessage.text,
+                companyName: res.contact.companyName,
+              }).catch(() => {});
+            }
+            if (res.conversation) {
+              setSelectedConversationId(res.conversation.conversationId);
+            }
+          }}
+          onNavigateToConversation={(convId) => {
+            setSelectedConversationId(convId);
+          }}
+          onNavigateToLead={(leadId) => {
+            onViewLeadInCrm(leadId);
+          }}
+        />
+        </Suspense>
+      )}
 
       {/* SMTP & Live Outbound Mail Delivery Settings Modal */}
       {showSmtpModal && (

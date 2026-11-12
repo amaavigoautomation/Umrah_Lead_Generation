@@ -15,7 +15,7 @@ export const AI_RESPONSE_FORMATTING_INSTRUCTIONS = [
   'Use **bold** selectively for important labels, prices, dates, deadlines, key conditions and next steps; do not bold whole paragraphs.',
   'Use _italics_ sparingly for secondary notes or qualifications.',
   'Use ++underline++ very sparingly for a short important phrase and ==highlight== only for a critical short note; avoid decorating whole paragraphs.',
-  'For three or more related items, use a concise - bullet list; use a numbered list only for sequential steps.'
+  'For three or more related items, use a concise - bullet list; use a numbered list only for sequential steps.',
   'Use short paragraphs and, only for longer replies, simple ## headings.',
   'Do not add decorative separators, unnecessary emojis, tables, or excessive formatting.',
   'Generate one channel-neutral Markdown source. The application converts it to each channel’s native display format; never write platform-specific markup or HTML.',

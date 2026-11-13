@@ -1814,28 +1814,28 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                       </div>
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                         <div
-                          className="p-3 rounded-lg border border-dashed border-slate-300 bg-white"
+                          className="min-w-0 flex items-center gap-2.5 whitespace-nowrap px-3 py-3 rounded-lg border border-dashed border-slate-300 bg-white"
                           title="Unique leads with at least one tracked open. Open counts can be estimates because some mail apps pre-load or block tracking images."
                         >
-                          <p className="text-[11px] text-slate-500 font-medium">Opened <span className="text-[9px] font-semibold text-amber-600">EST.</span></p>
-                          <p className="text-xl font-bold text-slate-700">{engagement.uniqueOpened}</p>
-                          <p className="text-[10px] text-slate-400">~{pct(engagement.uniqueOpened)} · unique leads</p>
+                          <span className="text-[11px] text-slate-500 font-medium">Opened <span className="text-[9px] font-semibold text-amber-600">EST.</span></span>
+                          <strong className="text-lg font-bold text-slate-700">{engagement.uniqueOpened}</strong>
+                          <span className="text-[10px] text-slate-400">~{pct(engagement.uniqueOpened)} · unique leads</span>
                         </div>
                         <div
-                          className="p-3 rounded-lg border border-emerald-200 bg-emerald-50/50"
+                          className="min-w-0 flex items-center gap-2.5 whitespace-nowrap px-3 py-3 rounded-lg border border-emerald-200 bg-emerald-50/50"
                           title="Unique leads with at least one tracked link click."
                         >
-                          <p className="text-[11px] text-emerald-700 font-medium">Clicked</p>
-                          <p className="text-xl font-bold text-emerald-700">{engagement.clicked}</p>
-                          <p className="text-[10px] text-emerald-700/70">{pct(engagement.clicked)} · unique leads</p>
+                          <span className="text-[11px] text-emerald-700 font-medium">Clicked</span>
+                          <strong className="text-lg font-bold text-emerald-700">{engagement.clicked}</strong>
+                          <span className="text-[10px] text-emerald-700/70">{pct(engagement.clicked)} · unique leads</span>
                         </div>
                         <div
-                          className="p-3 rounded-lg border border-slate-200 bg-slate-50"
-                          title={`Unique delivered leads with no tracked open, click or reply ${engagement.ignoredAfterDays}+ days after sending`}
+                          className="min-w-0 flex items-center gap-2.5 whitespace-nowrap px-3 py-3 rounded-lg border border-slate-200 bg-slate-50"
+                          title={`Unique delivered leads with no tracked open, click or reply ${engagement.ignoredAfterDays}+ days after sending. ${engagement.waiting} leads are still within the waiting window.`}
                         >
-                          <p className="text-[11px] text-slate-500 font-medium">Ignored</p>
-                          <p className="text-xl font-bold text-slate-700">{engagement.ignored}</p>
-                          <p className="text-[10px] text-slate-400">{engagement.waiting} unique leads still waiting ({engagement.ignoredAfterDays}d window)</p>
+                          <span className="text-[11px] text-slate-500 font-medium">Ignored</span>
+                          <strong className="text-lg font-bold text-slate-700">{engagement.ignored}</strong>
+                          <span className="text-[10px] text-slate-400">{engagement.waiting} waiting · {engagement.ignoredAfterDays}d window</span>
                         </div>
                       </div>
                       <p className="text-[10px] text-slate-400">

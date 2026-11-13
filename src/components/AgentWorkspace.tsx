@@ -416,22 +416,12 @@ function ConfigPanel({ compact = false }: { compact?: boolean }) {
   </div>;
 }
 
-export const AgentWorkspace: React.FC<{ currentUser: AppUser; onOpenEmailTemplate?: (id: string, kind?: 'campaign' | 'conversation') => void }> = ({ currentUser, onOpenEmailTemplate }) => {
+export const AgentWorkspace: React.FC<{ currentUser: AppUser; onOpenEmailTemplate?: (id: string, kind?: 'campaign' | 'conversation') => void; showSettings: boolean; onShowSettingsChange: (open: boolean) => void }> = ({ currentUser, onOpenEmailTemplate, showSettings, onShowSettingsChange }) => {
   const { conversations, activeConversationId, messages, loading, sending, activityLabel, error, selectConversation, newConversation, sendMessage, clearError, refresh } = useAgent();
-  const [showSettings, setShowSettings] = useState(false);
   const [showSidebar, setShowSidebar] = useState(() => typeof window !== 'undefined' && window.innerWidth >= 1024);
 
   return <div className="agent-home-workspace agent-shell flex h-full min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden rounded-none border-0 bg-[#05051f] text-slate-100 shadow-none">
     <div className="agent-grid relative flex h-full min-h-0 w-full min-w-0 flex-1 flex-col">
-      <div className="agent-home-header relative flex items-center justify-between border-b border-slate-200 px-5 py-4 sm:px-7">
-        <div className="flex items-center gap-3"><Orb small /><div><div className="flex items-center gap-2 text-base font-bold tracking-tight">AI Agent <span className="rounded-full border border-orange-200 bg-orange-50 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.18em] text-orange-700">Workspace</span></div><div className="mt-0.5 text-[11px] text-slate-500">Context-aware assistant · secure execution boundary</div></div></div>
-        <div className="flex items-center gap-2">
-          <div className="hidden items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-[10px] text-emerald-700 sm:flex"><span className="h-1.5 w-1.5 rounded-full bg-emerald-500 shadow-[0_0_9px_rgba(110,231,183,.8)]" /> Workspace connected</div>
-          <button type="button" onClick={() => setShowSettings(true)} aria-label="Open Agent settings" title="Agent settings" className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:border-orange-200 hover:bg-orange-50 hover:text-orange-700"><Settings2 className="h-4 w-4" /><span>Settings</span></button>
-          <button type="button" onClick={() => void refresh()} title="Refresh workspace" aria-label="Refresh workspace" className="rounded-xl border border-slate-200 p-2 text-slate-600 hover:bg-slate-100 hover:text-slate-900"><Activity className="h-4 w-4" /></button>
-        </div>
-      </div>
-
       <div className={'relative grid min-h-0 min-w-0 w-full flex-1 ' + (showSidebar ? 'lg:grid-cols-[260px_minmax(0,1fr)]' : 'grid-cols-1')}>
         {showSidebar && <>
           <button type="button" aria-label="Close conversations sidebar" onClick={() => setShowSidebar(false)} className="absolute inset-0 z-20 bg-slate-950/20 lg:hidden" />
@@ -456,6 +446,7 @@ export const AgentWorkspace: React.FC<{ currentUser: AppUser; onOpenEmailTemplat
                 {showSidebar ? <PanelLeftClose className="h-4 w-4" /> : <PanelLeftOpen className="h-4 w-4" />}
               </button>
               <div className="truncate text-xs font-semibold text-slate-700">{conversations.find((x) => x.id === activeConversationId)?.title || 'New workspace task'}</div>
+              <button type="button" onClick={() => void refresh()} title="Refresh conversations" aria-label="Refresh conversations" className="agent-home-thread-refresh rounded-lg p-1.5 text-slate-500 transition hover:bg-white/5 hover:text-white"><Activity className="h-3.5 w-3.5" /></button>
             </div>
             <div className="ml-2 flex shrink-0 items-center gap-2"><span className="hidden text-[10px] text-slate-600 sm:inline">{currentUser.name}</span><button type="button" onClick={() => void newConversation('agent')} title="New conversation" aria-label="New conversation" className="rounded-lg border border-slate-200 p-1.5 text-slate-600 hover:text-slate-900 lg:hidden"><Plus className="h-3.5 w-3.5" /></button></div>
           </div>
@@ -465,11 +456,11 @@ export const AgentWorkspace: React.FC<{ currentUser: AppUser; onOpenEmailTemplat
       </div>
 
       {showSettings && <>
-        <button type="button" aria-label="Close Agent settings" onClick={() => setShowSettings(false)} className="agent-home-settings-backdrop fixed inset-0 z-[90] bg-slate-950/25" />
+        <button type="button" aria-label="Close Agent settings" onClick={() => onShowSettingsChange(false)} className="agent-home-settings-backdrop fixed inset-0 z-[90] bg-slate-950/25" />
         <section role="dialog" aria-modal="true" aria-label="Agent settings" className="agent-home-settings-panel fixed inset-y-0 right-0 z-[91] flex w-full max-w-[440px] flex-col border-l border-slate-200 bg-white text-slate-900 shadow-2xl">
           <div className="agent-home-settings-header flex items-center justify-between border-b border-slate-200 px-5 py-4">
             <div className="flex items-center gap-2"><Settings2 className="h-4 w-4 text-orange-600" /><div><div className="text-sm font-bold text-slate-900">Agent settings</div><div className="mt-0.5 text-[11px] text-slate-500">Workspace policy and shared company memory</div></div></div>
-            <button type="button" onClick={() => setShowSettings(false)} aria-label="Close settings" className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-900"><X className="h-4 w-4" /></button>
+            <button type="button" onClick={() => onShowSettingsChange(false)} aria-label="Close settings" className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-900"><X className="h-4 w-4" /></button>
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto p-4"><ConfigPanel compact /></div>
         </section>

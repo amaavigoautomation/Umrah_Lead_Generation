@@ -1,8 +1,5 @@
 import React from 'react';
 import {
-  Radio,
-  MessageSquare,
-  LogOut,
   LayoutDashboard,
   Send,
   Users,
@@ -15,47 +12,42 @@ import {
   Building2,
   Mail,
   Inbox,
-  Settings,
+  Settings2,
+  Activity,
   ShieldCheck,
 } from 'lucide-react';
-import { useBrand } from '../context/BrandContext';
 import { ActiveTab } from './Navbar';
-import { AppUser } from '../types';
-import { useConnectedChannels } from '../hooks/useConnectedChannels';
 
 interface HeaderBarProps {
   activeTab: ActiveTab;
   setActiveTab: (tab: ActiveTab) => void;
-  unreadCount: number;
-  handoffCount: number;
-  tenantId?: string;
-  currentUser?: AppUser | null;
-  onLogout?: () => void;
   currentTenant?: { id: string; name: string; plan?: string } | null;
   allTenants?: { id: string; name: string; plan?: string }[];
   onSwitchTenant?: (tenantId: string) => void;
   hideModuleNavigation?: boolean;
+  isWorkspaceConnected?: boolean;
+  onOpenAgentSettings?: () => void;
 }
 
 type ModuleTab = { id: ActiveTab; label: string; icon: React.ReactNode };
 
-const TAB_TITLES: Record<ActiveTab, { title: string; icon: React.ReactNode; category: string; workspaceLabel: string }> = {
-  dashboard: { title: 'Home', icon: <LayoutDashboard className="h-4 w-4" />, category: 'HOME', workspaceLabel: 'Home' },
-  inbox: { title: 'Unified Inbox', icon: <Inbox className="h-4 w-4" />, category: 'CONVERSATION', workspaceLabel: 'Conversation' },
-  agent: { title: 'AI Agent', icon: <Sparkles className="h-4 w-4" />, category: 'HOME', workspaceLabel: 'Home' },
-  'auto-followup': { title: 'Auto Follow-Up Agent', icon: <Bot className="h-4 w-4" />, category: 'AI & AUTOMATION', workspaceLabel: 'AI' },
-  scheduling: { title: 'Demo Scheduling Agent', icon: <Calendar className="h-4 w-4" />, category: 'AI & AUTOMATION', workspaceLabel: 'AI' },
-  playground: { title: 'AI Testing', icon: <Sparkles className="h-4 w-4" />, category: 'AI & AUTOMATION', workspaceLabel: 'AI' },
-  crm: { title: 'CRM', icon: <Users className="h-4 w-4" />, category: 'SALES', workspaceLabel: 'Sales' },
-  campaigns: { title: 'Campaigns', icon: <Send className="h-4 w-4" />, category: 'GROWTH & MARKETING', workspaceLabel: 'Marketing' },
-  'email-design-studio': { title: 'Template Studio', icon: <Mail className="h-4 w-4" />, category: 'GROWTH & MARKETING', workspaceLabel: 'Marketing' },
-  'campaign-reports': { title: 'AI Campaign Report', icon: <FileBarChart className="h-4 w-4" />, category: 'GROWTH & MARKETING', workspaceLabel: 'Marketing' },
-  database: { title: 'Database', icon: <Database className="h-4 w-4" />, category: 'DATA MANAGEMENT', workspaceLabel: 'Database' },
-  knowledge: { title: 'Knowledge Base', icon: <BookOpen className="h-4 w-4" />, category: 'AI KNOWLEDGE', workspaceLabel: 'Knowledge Base' },
-  workspace: { title: 'Workspace', icon: <Building2 className="h-4 w-4" />, category: 'WORKSPACE SETTINGS', workspaceLabel: 'Workspace' },
-  settings: { title: 'Workspace', icon: <Settings className="h-4 w-4" />, category: 'WORKSPACE SETTINGS', workspaceLabel: 'Workspace' },
-  'company-profile': { title: 'Workspace', icon: <Building2 className="h-4 w-4" />, category: 'WORKSPACE SETTINGS', workspaceLabel: 'Workspace' },
-  'audit-logs': { title: 'Workspace', icon: <ShieldCheck className="h-4 w-4" />, category: 'WORKSPACE SETTINGS', workspaceLabel: 'Workspace' },
+const TAB_TITLES: Record<ActiveTab, { title: string; icon: React.ReactNode; category: string; workspaceLabel: string; description: string }> = {
+  dashboard: { title: 'Dashboard', icon: <LayoutDashboard className="h-4 w-4" />, category: 'OVERVIEW', workspaceLabel: 'Home', description: 'Your workspace at a glance · AI-powered insights' },
+  inbox: { title: 'Unified Inbox', icon: <Inbox className="h-4 w-4" />, category: 'CONVERSATION', workspaceLabel: 'Conversation', description: 'Manage conversations across your connected channels' },
+  agent: { title: 'AI Agent', icon: <Sparkles className="h-4 w-4" />, category: 'HOME', workspaceLabel: 'Home', description: 'Context-aware assistant · secure execution boundary' },
+  'auto-followup': { title: 'Auto Follow-Up Agent', icon: <Bot className="h-4 w-4" />, category: 'AI', workspaceLabel: 'AI', description: 'Automate timely lead follow-ups' },
+  scheduling: { title: 'Demo Scheduling Agent', icon: <Calendar className="h-4 w-4" />, category: 'AI', workspaceLabel: 'AI', description: 'Coordinate demos and consultations' },
+  playground: { title: 'AI Testing', icon: <Sparkles className="h-4 w-4" />, category: 'AI', workspaceLabel: 'AI', description: 'Test AI responses and agent workflows' },
+  crm: { title: 'CRM', icon: <Users className="h-4 w-4" />, category: 'SALES', workspaceLabel: 'Sales', description: 'Manage leads, contacts and sales activity' },
+  campaigns: { title: 'Campaigns', icon: <Send className="h-4 w-4" />, category: 'MARKETING', workspaceLabel: 'Marketing', description: 'Create, organize and measure campaigns' },
+  'email-design-studio': { title: 'Template Studio', icon: <Mail className="h-4 w-4" />, category: 'MARKETING', workspaceLabel: 'Marketing', description: 'Design and manage reusable email templates' },
+  'campaign-reports': { title: 'AI Campaign Report', icon: <FileBarChart className="h-4 w-4" />, category: 'MARKETING', workspaceLabel: 'Marketing', description: 'Understand campaign performance and results' },
+  database: { title: 'Database', icon: <Database className="h-4 w-4" />, category: 'DATABASE', workspaceLabel: 'Database', description: 'Organize lead databases and audience records' },
+  knowledge: { title: 'Knowledge Base', icon: <BookOpen className="h-4 w-4" />, category: 'KNOWLEDGE', workspaceLabel: 'Knowledge Base', description: 'Manage verified information for your AI Agent' },
+  workspace: { title: 'Workspace', icon: <Building2 className="h-4 w-4" />, category: 'WORKSPACE', workspaceLabel: 'Workspace', description: 'Company profile, channels, team and preferences' },
+  settings: { title: 'Workspace', icon: <Building2 className="h-4 w-4" />, category: 'WORKSPACE', workspaceLabel: 'Workspace', description: 'Company profile, channels, team and preferences' },
+  'company-profile': { title: 'Company Profile', icon: <Building2 className="h-4 w-4" />, category: 'WORKSPACE', workspaceLabel: 'Workspace', description: 'Business identity, brand and company information' },
+  'audit-logs': { title: 'Audit & Security', icon: <ShieldCheck className="h-4 w-4" />, category: 'WORKSPACE', workspaceLabel: 'Workspace', description: 'Workspace activity and security history' },
 };
 
 const AI_TABS: ModuleTab[] = [
@@ -89,73 +81,59 @@ const MODULE_TABS: Partial<Record<ActiveTab, ModuleTab[]>> = {
 export const HeaderBar: React.FC<HeaderBarProps> = ({
   activeTab,
   setActiveTab,
-  unreadCount,
-  handoffCount,
-  tenantId,
-  currentUser,
-  onLogout,
   currentTenant,
   allTenants = [],
   onSwitchTenant,
   hideModuleNavigation = false,
+  isWorkspaceConnected = true,
+  onOpenAgentSettings,
 }) => {
-  const { brand } = useBrand();
-  const { mailbox: connectedMailbox, whatsapp: connectedWhatsApp } = useConnectedChannels(tenantId);
   const meta = TAB_TITLES[activeTab] || TAB_TITLES.dashboard;
   const moduleTabs = MODULE_TABS[activeTab] || [];
-  const workspaceName = brand.companyName || 'UMRAH360';
 
   return (
-    <header className="sticky top-0 z-30 shrink-0 border-b border-slate-200 bg-white">
-      <div className="flex min-h-[56px] items-center justify-between gap-4 bg-[#05051f] px-4 text-white sm:px-6">
-        <div className="flex min-w-0 items-center gap-4">
+    <header className="app-module-header sticky top-0 z-30 shrink-0">
+      <div className="app-module-header-main flex min-h-[76px] items-center justify-between gap-3 px-4 text-white sm:px-6">
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="app-module-orb relative h-10 w-10 shrink-0" aria-hidden="true">
+            <span className="app-module-orb-core absolute inset-[25%] rounded-full" />
+            <span className="app-module-orb-ring absolute inset-[7%] rounded-full" />
+            <span className="app-module-orb-ring app-module-orb-ring-outer absolute inset-0 rounded-full" />
+            <span className="absolute inset-[42%] rounded-full bg-white/90 blur-[1px]" />
+          </div>
           <div className="min-w-0">
-            <div className="mb-0.5 flex items-center gap-2 text-[8px] font-bold uppercase tracking-[0.2em] text-slate-400">
-              <span className="truncate">{workspaceName}</span>
-              <span className="text-slate-300">/</span>
-              <span className="truncate">{meta.category}</span>
+            <div className="flex min-w-0 items-center gap-2">
+              <h1 className="truncate text-[16px] font-bold leading-tight tracking-[-.025em] text-white sm:text-[17px]">{meta.title}</h1>
+              <span className="app-module-header-badge shrink-0 rounded-full px-2 py-1 text-[8px] font-bold uppercase tracking-[.19em]">Workspace</span>
             </div>
-            <div className="flex items-center gap-2 text-[14px] font-semibold leading-tight text-white">
-              <span className="text-[#6f9aff]">{meta.icon}</span>
-              <h1 className="truncate">{meta.title}</h1>
-            </div>
+            <p className="mt-1 truncate text-[10px] leading-4 text-slate-400 sm:text-[11px]">{meta.description}</p>
           </div>
         </div>
 
-        <div className="flex shrink-0 items-center gap-2 text-xs sm:gap-3">
+        <div className="flex shrink-0 items-center gap-2 sm:gap-2.5">
           {allTenants.length > 1 && onSwitchTenant && (
-            <label className="hidden items-center rounded-lg border border-white/15 bg-white/5 px-2.5 py-1.5 text-[10px] text-slate-200 sm:flex">
+            <label className="app-module-tenant-switch hidden items-center rounded-xl px-2.5 py-2 text-[10px] text-slate-200 lg:flex">
               <span className="mr-2 text-slate-400">Workspace</span>
               <select value={currentTenant?.id || ''} onChange={(event) => onSwitchTenant(event.target.value)}
-                className="max-w-[150px] bg-transparent font-semibold text-white outline-none" aria-label="Switch workspace">
+                className="max-w-[145px] bg-transparent font-semibold text-white outline-none" aria-label="Switch workspace">
                 {allTenants.map((item) => <option key={item.id} value={item.id} className="text-slate-900">{item.name} ({item.plan || 'growth'})</option>)}
               </select>
             </label>
           )}
-          {activeTab !== 'inbox' && connectedMailbox && (
-            <div title={"Connected mailbox: " + connectedMailbox} className="hidden max-w-[190px] items-center gap-1.5 truncate rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-slate-600 sm:flex">
-              <Radio className="h-3.5 w-3.5 shrink-0 animate-pulse text-blue-500" />
-              <span className="truncate font-mono text-[10px]">{connectedMailbox}</span>
-            </div>
-          )}
-          {activeTab !== 'inbox' && connectedWhatsApp && (
-            <button type="button" onClick={() => setActiveTab('inbox')} title={"Connected WhatsApp Business: " + connectedWhatsApp} className="hidden items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-slate-600 transition hover:bg-slate-100 md:flex">
-              <MessageSquare className="h-3.5 w-3.5 shrink-0 text-emerald-500" />
-              <span className="font-mono text-[10px]">{connectedWhatsApp}</span>
-            </button>
-          )}
-          {activeTab !== 'inbox' && handoffCount > 0 && (
-            <button type="button" onClick={() => setActiveTab('inbox')} className="flex items-center gap-1.5 rounded-full border border-orange-200 bg-orange-50 px-2.5 py-1.5 text-[10px] font-bold text-orange-800">
-              <span className="h-2 w-2 animate-pulse rounded-full bg-orange-500" />
-              <span>{handoffCount} Handoff</span>
-            </button>
-          )}
-          {currentUser && onLogout && (
-            <button type="button" onClick={onLogout} title="Sign out" className="flex shrink-0 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 transition hover:border-red-200 hover:bg-red-50 hover:text-red-600">
-              <LogOut className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">Sign Out</span>
-            </button>
-          )}
+          <div className={'app-module-connected hidden items-center gap-1.5 rounded-full px-3 py-2 text-[10px] font-medium sm:flex ' + (isWorkspaceConnected ? 'is-connected' : 'is-disconnected')}>
+            <span className="h-1.5 w-1.5 rounded-full" />
+            {isWorkspaceConnected ? 'Workspace connected' : 'Connecting workspace'}
+          </div>
+          <button type="button" onClick={() => activeTab === 'agent' ? onOpenAgentSettings?.() : setActiveTab('workspace')}
+            aria-label="Open settings" title="Settings"
+            className="app-module-header-action inline-flex items-center gap-2 rounded-xl px-3 py-2 text-[11px] font-semibold">
+            <Settings2 className="h-4 w-4" /><span className="hidden sm:inline">Settings</span>
+          </button>
+          <button type="button" onClick={() => setActiveTab('audit-logs')}
+            aria-label="Open activity and audit history" title="Activity"
+            className="app-module-header-action app-module-header-icon rounded-xl p-2">
+            <Activity className="h-4 w-4" />
+          </button>
         </div>
       </div>
 

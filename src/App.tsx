@@ -288,6 +288,10 @@ function writeTabToLocation(tab: ActiveTab, workspaceSection: WorkspaceSection =
 
 export default function App() {
   const [activeTab, setActiveTabState] = useState<ActiveTab>(readTabFromLocation);
+  const [isAgentSettingsOpen, setIsAgentSettingsOpen] = useState(false);
+  useEffect(() => {
+    if (activeTab !== 'agent') setIsAgentSettingsOpen(false);
+  }, [activeTab]);
   const [workspaceSection, setWorkspaceSection] = useState<WorkspaceSection>(readWorkspaceSectionFromLocation);
   const openWorkspaceSection = useCallback((section: WorkspaceSection) => {
     setWorkspaceSection(section);
@@ -2669,21 +2673,16 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
       />
 
       <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
-{activeTab !== 'crm' && activeTab !== 'agent' && (
-          <HeaderBar
-            activeTab={activeTab}
-            setActiveTab={setActiveTab}
-            unreadCount={unreadCount}
-            handoffCount={handoffCount}
-            tenantId={currentTenantId}
-            currentUser={currentUser}
-            onLogout={handleLogout}
-            currentTenant={currentTenant}
-            allTenants={allTenants}
-            onSwitchTenant={(tenantId) => setCurrentTenantId(tenantId)}
-            hideModuleNavigation={activeTab === 'inbox' || activeTab === 'dashboard'}
-          />
-        )}
+<HeaderBar
+          activeTab={activeTab}
+          setActiveTab={setActiveTab}
+          currentTenant={currentTenant}
+          allTenants={allTenants}
+          onSwitchTenant={(tenantId) => setCurrentTenantId(tenantId)}
+          isWorkspaceConnected={isFirebaseActive}
+          onOpenAgentSettings={() => setIsAgentSettingsOpen(true)}
+          hideModuleNavigation={activeTab === 'inbox' || activeTab === 'dashboard' || activeTab === 'agent'}
+        />
 
         <main className={`flex-1 min-w-0 min-h-0 ${activeTab === 'inbox' ? 'p-0 overflow-hidden flex flex-col' : activeTab === 'agent' ? 'p-0 overflow-hidden flex flex-col' : 'p-3 sm:p-5 overflow-y-auto'}`}>
         {entitlements?.billing?.status === 'past_due' && (
@@ -2729,7 +2728,7 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
               />
             )}
 
-            {activeTab === 'agent' && <AgentWorkspace currentUser={currentUser} onOpenEmailTemplate={openAgentEmailTemplate} />}
+            {activeTab === 'agent' && <AgentWorkspace currentUser={currentUser} onOpenEmailTemplate={openAgentEmailTemplate} showSettings={isAgentSettingsOpen} onShowSettingsChange={setIsAgentSettingsOpen} />}
 
             {activeTab === 'inbox' && (
               <UnifiedInbox

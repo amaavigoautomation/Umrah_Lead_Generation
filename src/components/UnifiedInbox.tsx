@@ -45,7 +45,6 @@ import {
 import { normalizeChannelMode } from '../shared/channelModes';
 import { generateOmnichannelResponse } from '../services/aiService';
 import { FormattedMessage } from './FormattedMessage';
-import InboxViewsPanel from './InboxViewsPanel';
 import { aiResponseMarkdownToPlainText } from '../shared/aiResponseFormatting';
 import { useBrand } from '../context/BrandContext';
 import {
@@ -115,12 +114,10 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
   const [searchQuery, setSearchQuery] = useState<string>('');
   // Lead Profile 360 side panel: slides in/out from the right edge
   const [isProfileOpen, setIsProfileOpen] = useState<boolean>(true);
-  const [isViewsPanelCollapsed, setIsViewsPanelCollapsed] = useState<boolean>(false);
-  const [viewsPanelWidth, setViewsPanelWidth] = useState<number>(205);
-  const [conversationListWidth, setConversationListWidth] = useState<number>(292);
-  const [profilePanelWidth, setProfilePanelWidth] = useState<number>(292);
+  const [conversationListWidth, setConversationListWidth] = useState<number>(310);
+  const [profilePanelWidth, setProfilePanelWidth] = useState<number>(312);
   const [composerTab, setComposerTab] = useState<'REPLY' | 'AI_DRAFT'>('REPLY');
-  const resizeStateRef = useRef<{ panel: 'views' | 'list' | 'profile'; startX: number; startWidth: number } | null>(null);
+  const resizeStateRef = useRef<{ panel: 'list' | 'profile'; startX: number; startWidth: number } | null>(null);
   const [replyText, setReplyText] = useState<string>('');
   const inboxLayoutStorageKey = 'umrah360:unified-inbox-layout:' + (tenantId || 'workspace');
   useEffect(() => {
@@ -128,28 +125,25 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
       const saved = window.localStorage.getItem(inboxLayoutStorageKey);
       if (!saved) return;
       const layout = JSON.parse(saved);
-      if (Number.isFinite(layout.viewsPanelWidth)) setViewsPanelWidth(Math.min(320, Math.max(180, layout.viewsPanelWidth)));
-      if (Number.isFinite(layout.conversationListWidth)) setConversationListWidth(Math.min(440, Math.max(230, layout.conversationListWidth)));
-      if (Number.isFinite(layout.profilePanelWidth)) setProfilePanelWidth(Math.min(420, Math.max(250, layout.profilePanelWidth)));
-      if (typeof layout.isViewsPanelCollapsed === 'boolean') setIsViewsPanelCollapsed(layout.isViewsPanelCollapsed);
+      if (Number.isFinite(layout.conversationListWidth)) setConversationListWidth(Math.min(420, Math.max(260, layout.conversationListWidth)));
+      if (Number.isFinite(layout.profilePanelWidth)) setProfilePanelWidth(Math.min(400, Math.max(260, layout.profilePanelWidth)));
       if (typeof layout.isProfileOpen === 'boolean') setIsProfileOpen(layout.isProfileOpen);
     } catch (error) { console.warn('[UnifiedInbox] Could not restore panel layout preferences.', error); }
   }, [inboxLayoutStorageKey]);
   useEffect(() => {
-    try { window.localStorage.setItem(inboxLayoutStorageKey, JSON.stringify({ viewsPanelWidth, conversationListWidth, profilePanelWidth, isViewsPanelCollapsed, isProfileOpen })); } catch (error) { /* Storage is optional. */ }
-  }, [inboxLayoutStorageKey, viewsPanelWidth, conversationListWidth, profilePanelWidth, isViewsPanelCollapsed, isProfileOpen]);
-  const beginPanelResize = (panel: 'views' | 'list' | 'profile', event: React.PointerEvent<HTMLDivElement>) => {
+    try { window.localStorage.setItem(inboxLayoutStorageKey, JSON.stringify({ conversationListWidth, profilePanelWidth, isProfileOpen })); } catch (error) { /* Storage is optional. */ }
+  }, [inboxLayoutStorageKey, conversationListWidth, profilePanelWidth, isProfileOpen]);
+  const beginPanelResize = (panel: 'list' | 'profile', event: React.PointerEvent<HTMLDivElement>) => {
     event.preventDefault();
-    const startWidth = panel === 'views' ? viewsPanelWidth : panel === 'list' ? conversationListWidth : profilePanelWidth;
+    const startWidth = panel === 'list' ? conversationListWidth : profilePanelWidth;
     resizeStateRef.current = { panel, startX: event.clientX, startWidth };
     event.currentTarget.setPointerCapture(event.pointerId);
   };
   const movePanelResize = (event: React.PointerEvent<HTMLDivElement>) => {
     const drag = resizeStateRef.current; if (!drag) return;
     const delta = event.clientX - drag.startX;
-    if (drag.panel === 'views') setViewsPanelWidth(Math.min(320, Math.max(180, drag.startWidth + delta)));
-    else if (drag.panel === 'list') setConversationListWidth(Math.min(440, Math.max(230, drag.startWidth + delta)));
-    else setProfilePanelWidth(Math.min(420, Math.max(250, drag.startWidth - delta)));
+    if (drag.panel === 'list') setConversationListWidth(Math.min(420, Math.max(260, drag.startWidth + delta)));
+    else setProfilePanelWidth(Math.min(400, Math.max(260, drag.startWidth - delta)));
   };
   const endPanelResize = (event: React.PointerEvent<HTMLDivElement>) => {
     resizeStateRef.current = null;
@@ -644,25 +638,66 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
 
   return (
     <div className="unified-inbox-shell unified-inbox-layout-root flex flex-row h-full w-full bg-white text-slate-900 overflow-hidden relative" style={{ ['--uinbox-profile-width' as any]: (isProfileOpen ? profilePanelWidth : 0) + 'px' }}>
-      <InboxViewsPanel collapsed={isViewsPanelCollapsed} width={isViewsPanelCollapsed ? 58 : viewsPanelWidth} statusFilter={statusFilter} channelFilter={channelFilter} viewCounts={viewCounts} channelCounts={channelCounts} onToggleCollapsed={() => setIsViewsPanelCollapsed((value) => !value)} onSelectView={setStatusFilter} onSelectChannel={setChannelFilter} />
-      <div className="uinbox-resize-handle" role="separator" aria-orientation="vertical" aria-label="Resize inbox views panel" onPointerDown={(event) => beginPanelResize('views', event)} onPointerMove={movePanelResize} onPointerUp={endPanelResize} onPointerCancel={endPanelResize} onDoubleClick={() => setViewsPanelWidth(205)} />
       {/* 1. LEFT COLUMN: Conversation List & Filters (Width: 340px) */}
       <div className="unified-inbox-sidebar unified-inbox-conversation-panel flex flex-col bg-white h-full min-h-0 shrink-0" style={{ ['--uinbox-conversation-width' as any]: conversationListWidth + 'px' }}>
 
-        {/* Search Header */}
-        <div className="unified-inbox-sidebar-tools p-3 border-b border-slate-200 space-y-2 shrink-0">
-          <div className="uinbox-conversation-list-heading"><div><strong>Conversations</strong><span>{filteredConversations.length} results</span></div></div>
-          <div className="relative">
-            <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
+        {/* Inbox search and filters — integrated into the list, not a separate sidebar. */}
+        <div className="unified-inbox-sidebar-tools uinbox-list-toolbar shrink-0">
+          <div className="uinbox-list-heading">
+            <div className="min-w-0">
+              <h2>Inbox</h2>
+              <span>{filteredConversations.length.toLocaleString()} conversations</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <button type="button" onClick={() => onSyncNow?.()} className="uinbox-refresh-button" title="Refresh conversations" aria-label="Refresh conversations">
+                <RefreshCw size={14} />
+              </button>
+              <span className="uinbox-count-pill">{viewCounts.ALL.toLocaleString()}</span>
+            </div>
+          </div>
+          <div className="relative uinbox-search-wrap">
+            <Search className="h-4 w-4" />
             <input
               type="text"
               placeholder="Search conversations, contacts..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-white border border-slate-200 rounded-xl pl-9 pr-3 py-1.5 text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-orange-500 transition font-medium"
+              aria-label="Search conversations and contacts"
+              className="w-full bg-white border border-slate-200 rounded-xl pl-9 pr-3 py-1.5 text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none transition font-medium"
             />
           </div>
-
+          <div className="uinbox-inline-status-filters" role="group" aria-label="Filter conversations">
+            {[
+              { key: 'ALL', label: 'All', count: viewCounts.ALL },
+              { key: 'UNREAD', label: 'Unread', count: viewCounts.UNREAD },
+              { key: 'AI_ACTIVE', label: 'AI active', count: viewCounts.AI_ACTIVE },
+              { key: 'HUMAN_HANDOFF', label: 'Handoff', count: viewCounts.HUMAN_HANDOFF },
+              { key: 'UNASSIGNED', label: 'Unassigned', count: viewCounts.UNASSIGNED },
+              { key: 'HIGH_INTENT', label: 'High intent', count: viewCounts.HIGH_INTENT },
+              { key: 'RESOLVED', label: 'Closed', count: viewCounts.RESOLVED },
+            ].map((view) => (
+              <button key={view.key} type="button" onClick={() => setStatusFilter(view.key)} aria-pressed={statusFilter === view.key}
+                className={statusFilter === view.key ? 'is-active' : ''}>
+                <span>{view.label}</span><span className="uinbox-filter-count">{view.count}</span>
+              </button>
+            ))}
+          </div>
+          <div className="uinbox-inline-channel-filters" role="group" aria-label="Filter by channel">
+            {[
+              { key: 'ALL', label: 'All' },
+              { key: 'EMAIL', label: 'Email' },
+              { key: 'WHATSAPP', label: 'WhatsApp' },
+              { key: 'WEBSITE', label: 'Website' },
+              { key: 'INSTAGRAM', label: 'Instagram' },
+              { key: 'FACEBOOK', label: 'Facebook' },
+              { key: 'LINKEDIN', label: 'LinkedIn' },
+            ].map((channel) => (
+              <button key={channel.key} type="button" onClick={() => setChannelFilter(channel.key)} aria-pressed={channelFilter === channel.key}
+                className={channelFilter === channel.key ? 'is-active' : ''} title={channel.label}>
+                {channel.label}
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* Conversation List */}
@@ -793,7 +828,7 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
           )}
         </div>
       </div>
-      <div className="uinbox-resize-handle" role="separator" aria-orientation="vertical" aria-label="Resize conversation list" onPointerDown={(event) => beginPanelResize('list', event)} onPointerMove={movePanelResize} onPointerUp={endPanelResize} onPointerCancel={endPanelResize} onDoubleClick={() => setConversationListWidth(292)} />
+      <div className="uinbox-resize-handle" role="separator" aria-orientation="vertical" aria-label="Resize conversation list" onPointerDown={(event) => beginPanelResize('list', event)} onPointerMove={movePanelResize} onPointerUp={endPanelResize} onPointerCancel={endPanelResize} onDoubleClick={() => setConversationListWidth(310)} />
 
       {/* Thread + sliding Lead Profile panel share one row, so the panel always stays on the right */}
       <div className="unified-inbox-main flex-1 flex flex-row min-w-0 min-h-0 h-full relative">

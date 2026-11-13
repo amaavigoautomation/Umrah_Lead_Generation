@@ -229,7 +229,7 @@ export const CompanyAssetsPanel: React.FC<CompanyAssetsPanelProps> = ({
   });
 
   return (
-    <div className={`space-y-6 ${isDrawerMode ? 'p-1' : ''}`}>
+    <div className={`marketing-company-assets space-y-6 ${isDrawerMode ? 'p-1' : ''}`}>
       {/* Hidden File Input */}
       <input
         ref={fileInputRef}

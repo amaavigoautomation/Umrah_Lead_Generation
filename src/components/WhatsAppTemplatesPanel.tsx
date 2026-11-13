@@ -183,7 +183,7 @@ export const WhatsAppTemplatesPanel: React.FC<Props> = ({ canEdit = false }) => 
   const rejectedCount = templates.filter((template) => ['REJECTED', 'PAUSED', 'DISABLED', 'PENDING_DELETION', 'LIMIT_EXCEEDED'].includes(String(template.status || '').toUpperCase())).length;
 
   return (
-    <div className="space-y-5">
+    <div className="marketing-whatsapp-panel space-y-5">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="flex items-start gap-3">
           <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700"><MessageCircle className="h-5 w-5" /></div>

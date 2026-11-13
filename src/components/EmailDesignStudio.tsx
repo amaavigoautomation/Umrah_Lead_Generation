@@ -1289,7 +1289,7 @@ export const EmailDesignStudio: React.FC<EmailDesignStudioProps> = ({ tenantId, 
       ? { valid: Boolean(String(editing.customHtml || '').trim()), error: 'Add your campaign email HTML before saving.', warnings: [] as string[] }
       : validateEmailDesignHtml(editing.customHtml ?? '');
     return (
-      <div className={htmlExpanded ? "fixed inset-0 z-[100] h-screen w-screen flex flex-col bg-slate-50" : "h-full min-h-[760px] flex flex-col bg-slate-50 -m-4 lg:-m-6"}>
+      <div className={htmlExpanded ? "marketing-email-editor fixed inset-0 z-[100] h-screen w-screen flex flex-col bg-slate-50" : "marketing-email-editor h-full min-h-[760px] flex flex-col bg-slate-50 -m-4 lg:-m-6"}>
         <div className="bg-white border-b border-slate-200 px-4 lg:px-6 py-3 flex flex-wrap items-center gap-3 shrink-0">
           <button onClick={() => { setEditing(null); setNotice(null); }} className="p-2 rounded-lg hover:bg-slate-100 text-slate-600" title="Back to Email Design Studio">
             <ArrowLeft className="w-4 h-4" />
@@ -1413,7 +1413,7 @@ export const EmailDesignStudio: React.FC<EmailDesignStudioProps> = ({ tenantId, 
   if (editing) {
     const selectedIndex = editing.blocks.findIndex((item) => item.id === selectedBlockId);
     return (
-      <div className="h-full min-h-[760px] flex flex-col bg-slate-50 -m-4 lg:-m-6">
+      <div className="marketing-email-editor h-full min-h-[760px] flex flex-col bg-slate-50 -m-4 lg:-m-6">
         <div className="bg-white border-b border-slate-200 px-4 lg:px-6 py-3 flex flex-wrap items-center gap-3 shrink-0">
           <button onClick={() => { setEditing(null); setNotice(null); }} className="p-2 rounded-lg hover:bg-slate-100 text-slate-600" title="Back to Email Design Studio">
             <ArrowLeft className="w-4 h-4" />
@@ -1710,7 +1710,7 @@ export const EmailDesignStudio: React.FC<EmailDesignStudioProps> = ({ tenantId, 
   }
 
   return (
-    <div className="space-y-6">
+    <div className="marketing-email-studio space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <div className="flex items-center gap-2 text-orange-600 mb-1"><Mail className="w-5 h-5" /><span className="text-[11px] uppercase tracking-[0.18em] font-bold">Amaavigo Workspace</span></div>

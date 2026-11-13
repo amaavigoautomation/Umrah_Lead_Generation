@@ -86,9 +86,9 @@ export function buildCampaignReportPdfDocument(report: CampaignReport): string {
   function newPage() {
     commands = [];
     pages.push(commands);
-    rect(0, 0, PAGE_WIDTH, 7, '0.93 0.39 0.09');
+    rect(0, 0, PAGE_WIDTH, 7, '0.08 0.37 0.94');
     text(brand.companyName || 'Workspace', LEFT, 22, 15, '0.10 0.16 0.23', true);
-    text('CAMPAIGN INTELLIGENCE', 390, 25, 8, '0.93 0.39 0.09', true);
+    text('CAMPAIGN INTELLIGENCE', 390, 25, 8, '0.08 0.37 0.94', true);
     rule(52, '0.88 0.90 0.93');
     y = 72;
   }
@@ -135,7 +135,7 @@ export function buildCampaignReportPdfDocument(report: CampaignReport): string {
   function section(title: string) {
     ensureRoom(34);
     y += 7;
-    text(title.toUpperCase(), LEFT, y, 9, '0.93 0.39 0.09', true);
+    text(title.toUpperCase(), LEFT, y, 9, '0.08 0.37 0.94', true);
     y += 17;
     rule(y, '0.91 0.92 0.94');
     y += 9;
@@ -157,7 +157,7 @@ export function buildCampaignReportPdfDocument(report: CampaignReport): string {
     for (const item of items) {
       const lines = wrap(item, 94);
       ensureRoom(lines.length * 13 + 6);
-      text('-', LEFT + 2, y, 9, '0.93 0.39 0.09', true);
+      text('-', LEFT + 2, y, 9, '0.08 0.37 0.94', true);
       for (const line of lines) {
         text(line, LEFT + 13, y, 8.5, '0.25 0.31 0.39');
         y += 12;
@@ -167,7 +167,7 @@ export function buildCampaignReportPdfDocument(report: CampaignReport): string {
   }
 
   newPage();
-  text(report.reportType === 'COMPARISON' ? 'Campaign comparison report' : 'Individual campaign report', LEFT, y, 8, '0.93 0.39 0.09', true);
+  text(report.reportType === 'COMPARISON' ? 'Campaign comparison report' : 'Individual campaign report', LEFT, y, 8, '0.08 0.37 0.94', true);
   y += 15;
   for (const line of wrap(report.title, 70)) {
     ensureRoom(28);
@@ -394,7 +394,7 @@ export const CampaignReports: React.FC<{ tenantId: string }> = ({ tenantId }) =>
   const displayBrand = brand.companyName || 'Your workspace';
 
   return (
-    <div className="space-y-5 font-sans">
+    <div className="campaign-reports-module space-y-5 font-sans">
       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
         <div>
           <div className="flex items-center gap-2">

@@ -43,8 +43,8 @@ export const TemplateStudio: React.FC<Props> = ({
   };
 
   return (
-    <div className="space-y-4">
-      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+    <div className="marketing-studio-shell space-y-4">
+      <div className="marketing-studio-header">
         <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-orange-600">Amaavigo Workspace</div>
@@ -52,7 +52,7 @@ export const TemplateStudio: React.FC<Props> = ({
             <p className="mt-1 text-xs text-slate-500">Create and manage branded communication templates from one workspace.</p>
           </div>
         </div>
-        <div className="mt-4 grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-4" role="tablist" aria-label="Template workspace sections">
+        <div className="marketing-studio-tabs" role="tablist" aria-label="Template workspace sections">
           {SECTIONS.map((item) => {
             const active = section === item.id;
             return (
@@ -62,7 +62,7 @@ export const TemplateStudio: React.FC<Props> = ({
                 role="tab"
                 aria-selected={active}
                 onClick={() => changeSection(item.id)}
-                className={'flex items-start gap-3 rounded-xl border px-3.5 py-3 text-left transition ' + (active ? 'border-orange-300 bg-orange-50 ring-1 ring-orange-100' : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50')}
+                className={'marketing-studio-tab ' + (active ? 'is-active' : '')}
               >
                 <span className={'mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ' + (active ? 'bg-orange-100 text-orange-700' : 'bg-slate-100 text-slate-600')}>{item.icon}</span>
                 <span className="min-w-0">

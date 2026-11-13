@@ -1472,7 +1472,7 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
   };
 
   return (
-    <div id="campaign-management-root" data-umrah360-module="campaigns" className="flex flex-col h-full bg-slate-50 text-slate-900 overflow-hidden font-sans">
+    <div id="campaign-management-root" data-umrah360-module="campaigns" className="campaign-module flex flex-col h-full bg-slate-50 text-slate-900 overflow-hidden font-sans">
       {/* Top Header */}
       <header className="px-6 py-4 bg-white border-b border-slate-200 flex items-center justify-between shrink-0 shadow-xs">
         <div className="flex items-center gap-4">

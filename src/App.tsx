@@ -7,7 +7,6 @@ import { HeaderBar } from './components/HeaderBar';
 import { UnifiedInbox } from './components/UnifiedInbox';
 import { LoginView } from './components/LoginView';
 import { LegalPage, legalSlugFromPath } from './components/LegalPage';
-import { LandingPage } from './components/LandingPage';
 import { onSession, signOutUser, installAuthFetch, type SessionInfo } from './services/authService';
 import { logAuditEvent } from './services/auditService';
 import { LockedModuleView } from './components/LockedModuleView';
@@ -71,6 +70,7 @@ const AutoFollowUpDashboard = lazyNamed(() => import('./components/AutoFollowUpD
 const LeadDatabase = lazyNamed(() => import('./components/LeadDatabase'), 'LeadDatabase');
 const PlatformConsole = lazyNamed(() => import('./components/PlatformConsole'), 'PlatformConsole');
 const BillingView = lazyNamed(() => import('./components/BillingView'), 'BillingView');
+const LandingPage = lazyNamed(() => import('./components/LandingPage'), 'LandingPage');
 
 function ScreenLoading() {
   return (
@@ -2596,7 +2596,7 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
     if (pathname === '/login') {
       return <LoginView isFirebaseActive={isFirebaseActive} initialError={authError} />;
     }
-    return <LandingPage />;
+    return <Suspense fallback={<ScreenLoading />}><LandingPage /></Suspense>;
   }
 
   if (session?.isPlatformAdmin) {

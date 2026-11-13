@@ -2837,3 +2837,172 @@
  #campaign-management-root.campaign-module>header{align-items:flex-start;gap:12px;flex-wrap:wrap;padding:13px}
  #campaign-management-root.campaign-module>header>div:last-child{width:100%;justify-content:flex-end}
 }
+
+
+/* Marketing typography normalization — match AI & Automation's compact type scale.
+   Apply after component styles so nested Tailwind text-size utilities cannot drift
+   between campaign, template, reporting, asset and messaging screens. */
+:where(
+  .marketing-studio-shell,
+  .marketing-email-studio,
+  .marketing-email-editor,
+  .marketing-whatsapp-panel,
+  .marketing-company-assets,
+  #campaign-management-root.campaign-module,
+  .campaign-reports-module
+) {
+  font-family: inherit;
+  font-size: 11px;
+  line-height: 1.5;
+  color: #40506b;
+}
+:where(
+  .marketing-studio-shell,
+  .marketing-email-studio,
+  .marketing-email-editor,
+  .marketing-whatsapp-panel,
+  .marketing-company-assets,
+  #campaign-management-root.campaign-module,
+  .campaign-reports-module
+) :where(div,span,p,label,a,li,td,th,small,strong,em) {
+  font-size: 11px !important;
+  line-height: 1.5;
+}
+:where(
+  .marketing-studio-shell,
+  .marketing-email-studio,
+  .marketing-email-editor,
+  .marketing-whatsapp-panel,
+  .marketing-company-assets,
+  #campaign-management-root.campaign-module,
+  .campaign-reports-module
+) :where(h1,h2,h3,h4,h5,h6) {
+  line-height: 1.3 !important;
+}
+:where(
+  .marketing-studio-shell,
+  .marketing-email-studio,
+  .marketing-email-editor,
+  .marketing-whatsapp-panel,
+  .marketing-company-assets,
+  #campaign-management-root.campaign-module,
+  .campaign-reports-module
+) :where(h1) {
+  font-size: 23px !important;
+  font-weight: 800 !important;
+  letter-spacing: -.045em;
+  color: #13213a;
+}
+:where(
+  .marketing-studio-shell,
+  .marketing-email-studio,
+  .marketing-email-editor,
+  .marketing-whatsapp-panel,
+  .marketing-company-assets,
+  #campaign-management-root.campaign-module,
+  .campaign-reports-module
+) :where(h2) {
+  font-size: 15px !important;
+  font-weight: 800 !important;
+  letter-spacing: -.02em;
+  color: #1c2b45;
+}
+:where(
+  .marketing-studio-shell,
+  .marketing-email-studio,
+  .marketing-email-editor,
+  .marketing-whatsapp-panel,
+  .marketing-company-assets,
+  #campaign-management-root.campaign-module,
+  .campaign-reports-module
+) :where(h3,h4) {
+  font-size: 13px !important;
+  font-weight: 760 !important;
+  color: #263650;
+}
+:where(
+  .marketing-studio-shell,
+  .marketing-email-studio,
+  .marketing-email-editor,
+  .marketing-whatsapp-panel,
+  .marketing-company-assets,
+  #campaign-management-root.campaign-module,
+  .campaign-reports-module
+) :where(button,[role="button"],input,select,textarea) {
+  font-size: 11px !important;
+  line-height: 1.4;
+}
+:where(
+  .marketing-studio-shell,
+  .marketing-email-studio,
+  .marketing-email-editor,
+  .marketing-whatsapp-panel,
+  .marketing-company-assets,
+  #campaign-management-root.campaign-module,
+  .campaign-reports-module
+) :where(th) {
+  font-size: 9px !important;
+  font-weight: 780 !important;
+  letter-spacing: .055em;
+}
+:where(
+  .marketing-studio-shell,
+  .marketing-email-studio,
+  .marketing-email-editor,
+  .marketing-whatsapp-panel,
+  .marketing-company-assets,
+  #campaign-management-root.campaign-module,
+  .campaign-reports-module
+) :where(.marketing-studio-tab>span:last-child>span:first-child) {
+  font-size: 11px !important;
+  font-weight: 760 !important;
+}
+:where(
+  .marketing-studio-shell,
+  .marketing-email-studio,
+  .marketing-email-editor,
+  .marketing-whatsapp-panel,
+  .marketing-company-assets,
+  #campaign-management-root.campaign-module,
+  .campaign-reports-module
+) :where(.text-2xl,.text-3xl,.text-4xl,.text-5xl,.text-6xl) {
+  font-size: 22px !important;
+  font-weight: 820 !important;
+  line-height: 1.1 !important;
+  font-variant-numeric: tabular-nums;
+}
+:where(
+  .marketing-studio-shell,
+  .marketing-email-studio,
+  .marketing-email-editor,
+  .marketing-whatsapp-panel,
+  .marketing-company-assets,
+  #campaign-management-root.campaign-module,
+  .campaign-reports-module
+) :where(.text-xs,.text-sm,.text-base,.text-lg,.text-xl) {
+  font-size: 11px !important;
+}
+:where(
+  .marketing-studio-shell,
+  .marketing-email-studio,
+  .marketing-email-editor,
+  .marketing-whatsapp-panel,
+  .marketing-company-assets,
+  #campaign-management-root.campaign-module,
+  .campaign-reports-module
+) :where(.text-\\[9px\\],.text-\\[10px\\]) {
+  font-size: 10px !important;
+}
+@media(max-width:640px) {
+  :where(
+    .marketing-studio-shell,
+    .marketing-email-studio,
+    .marketing-email-editor,
+    .marketing-whatsapp-panel,
+    .marketing-company-assets,
+    #campaign-management-root.campaign-module,
+    .campaign-reports-module
+  ) :where(h1) {
+    font-size: 19px !important;
+  }
+}

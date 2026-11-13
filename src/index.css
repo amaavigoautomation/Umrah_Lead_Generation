@@ -2484,65 +2484,6 @@
 }
 
 
-/* Shared application header. The chrome is fixed across modules; only title and subtitle vary. */
-.app-module-header {
-  border-bottom:1px solid rgba(129,143,194,.18);
-  background:#05051f;
-  box-shadow:0 5px 20px rgba(2,4,24,.12);
-}
-.app-module-header-main {
-  min-height:76px;
-  background:
-    radial-gradient(ellipse at 0% 0%,rgba(132,78,225,.16),transparent 34%),
-    linear-gradient(105deg,#090927 0%,#080823 64%,#0b1234 100%);
-}
-.app-module-orb { filter:drop-shadow(0 0 12px rgba(88,120,255,.22)); }
-.app-module-orb-core {
-  background:radial-gradient(circle at 35% 32%,#fff 0%,#dce6ff 18%,#7f9fff 36%,#8757e7 68%,#15164a 100%);
-  box-shadow:0 0 12px rgba(88,120,255,.54),0 0 24px rgba(132,84,235,.3);
-}
-.app-module-orb-ring {
-  border:1px solid rgba(126,154,255,.62);
-  box-shadow:0 0 10px rgba(87,126,255,.2),inset 0 0 9px rgba(123,94,237,.14);
-}
-.app-module-orb-ring-outer { border-color:rgba(192,145,255,.42); }
-.app-module-header-badge {
-  border:1px solid rgba(255,133,83,.55);
-  background:rgba(255,111,36,.09);
-  color:#ff9a68;
-}
-.app-module-connected {
-  border:1px solid rgba(52,211,153,.28);
-  background:rgba(16,185,129,.09);
-  color:#61e4b6;
-}
-.app-module-connected > span { background:#10c995;box-shadow:0 0 8px rgba(16,201,149,.58); }
-.app-module-connected.is-disconnected {
-  border-color:rgba(251,191,36,.32);background:rgba(245,158,11,.09);color:#fbbf24;
-}
-.app-module-connected.is-disconnected > span { background:#f59e0b;box-shadow:none; }
-.app-module-header-action {
-  min-height:36px;border:1px solid rgba(129,143,194,.28);background:rgba(255,255,255,.035);color:#e5eaff;
-  transition:background .16s ease,border-color .16s ease,color .16s ease;
-}
-.app-module-header-action:hover { border-color:rgba(130,157,255,.54);background:rgba(87,112,217,.13);color:#fff; }
-.app-module-header-icon { width:36px;height:36px;display:flex;align-items:center;justify-content:center; }
-.app-module-tenant-switch { border:1px solid rgba(129,143,194,.25);background:rgba(255,255,255,.035); }
-.app-module-header > div:nth-child(2) { background:#fff; }
-.app-module-header nav { min-height:48px; }
-.agent-home-workspace .agent-home-thread-refresh { border:1px solid rgba(129,143,194,.15) !important;background:transparent !important; }
-@media(max-width:640px) {
-  .app-module-header-main { min-height:64px;padding-left:12px;padding-right:12px; }
-  .app-module-orb { width:34px;height:34px; }
-  .app-module-header-main h1 { font-size:14px; }
-  .app-module-header-main p { max-width:48vw;font-size:9px; }
-  .app-module-header-badge { padding:3px 6px;font-size:7px; }
-  .app-module-connected { display:none !important; }
-  .app-module-header-action { min-height:33px;padding:7px 9px; }
-  .app-module-header-icon { width:33px;height:33px; }
-}
-
-
 /* Home is a full-bleed application canvas: no light gutters around the hero. */
 .dashboard-home-view {
   width:100%;

@@ -133,6 +133,7 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
     replied: number; repliedWithoutTrackedOpen: number; waiting: number; ignored: number;
     bounced: number; complained: number; delayed: number; ignoredAfterDays: number;
   } | null>(null);
+  const [engagementLoadStatus, setEngagementLoadStatus] = useState<'loading' | 'ready' | 'error'>('loading');
 
   // Modals
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -695,16 +696,29 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
   // (a handful of aggregation queries, not one read per lead).
   useEffect(() => {
     setEngagement(null);
-    if (!selectedCampaignId) return;
+    setEngagementLoadStatus('loading');
+    if (!selectedCampaignId) {
+      setEngagementLoadStatus('error');
+      return;
+    }
     let cancelled = false;
-    const load = () => {
+    const load = async () => {
       if (document.visibilityState !== 'visible') return;
-      fetchJsonWithTimeout(`/api/campaigns/${selectedCampaignId}/engagement`).then((d) => {
-        if (!cancelled && d && d.success) setEngagement(d);
-      });
+      try {
+        const d = await fetchJsonWithTimeout(`/api/campaigns/${selectedCampaignId}/engagement`);
+        if (cancelled) return;
+        if (d && d.success) {
+          setEngagement(d);
+          setEngagementLoadStatus('ready');
+        } else {
+          setEngagementLoadStatus('error');
+        }
+      } catch {
+        if (!cancelled) setEngagementLoadStatus('error');
+      }
     };
-    load();
-    const timer = setInterval(load, 60_000);
+    void load();
+    const timer = setInterval(() => void load(), 60_000);
     return () => {
       cancelled = true;
       clearInterval(timer);
@@ -1798,19 +1812,31 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                   );
                 })()}
 
-                {/* Email engagement: opened is estimated; clicked and replied are confirmed */}
-                {engagement && engagement.trackingEnabled === false && (
-                  <div className="px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-[11px] text-slate-500">
-                    Open and click tracking is off for this workspace (Settings → Email). Resend delivery status and inbound replies are tracked separately.
-                  </div>
-                )}
-                {engagement && engagement.trackingEnabled !== false && engagement.tracked > 0 && (() => {
-                  const pct = (n: number) => (engagement.delivered > 0 ? `${((n / engagement.delivered) * 100).toFixed(1)}%` : '0%');
+                {/* Engagement metrics remain visible for every email campaign, including zero-tracking campaigns. */}
+                {(selectedCampaign.type === 'EMAIL' || !selectedCampaign.type) && (() => {
+                  const stats = engagement;
+                  const pct = (n: number) => (stats && stats.delivered > 0
+                    ? `${((n / stats.delivered) * 100).toFixed(1)}%`
+                    : stats ? '0.0%' : '—');
+                  const value = (n?: number) => stats ? (n ?? 0) : '—';
+                  const trackingNotice = !stats
+                    ? engagementLoadStatus === 'error'
+                      ? 'Engagement metrics could not be loaded. The section will retry automatically.'
+                      : 'Loading engagement metrics…'
+                    : stats.tracked > 0
+                      ? (stats.trackingEnabled === false
+                        ? 'Tracking is currently off. Metrics from recipients tracked when these emails were sent are still shown.'
+                        : '')
+                      : stats.trackingEnabled === false
+                        ? 'Open and click tracking was off when these emails were sent, so these interactions could not be collected.'
+                        : 'No recipients were tracked when these emails were sent. Emails sent before tracking was enabled cannot be measured.';
                   return (
                     <div className="p-4 bg-white border border-slate-200 rounded-xl shadow-2xs space-y-3">
                       <div className="flex items-center justify-between">
                         <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Email engagement</span>
-                        <span className="text-[10px] text-slate-400">Updates every minute</span>
+                        <span className="text-[10px] text-slate-400">
+                          {engagementLoadStatus === 'ready' ? 'Updates every minute' : engagementLoadStatus === 'loading' ? 'Loading…' : 'Awaiting data'}
+                        </span>
                       </div>
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                         <div
@@ -1818,28 +1844,31 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                           title="Unique leads with at least one tracked open. Open counts can be estimates because some mail apps pre-load or block tracking images."
                         >
                           <span className="text-[11px] text-slate-500 font-medium">Opened <span className="text-[9px] font-semibold text-amber-600">EST.</span></span>
-                          <strong className="text-lg font-bold text-slate-700">{engagement.uniqueOpened}</strong>
-                          <span className="text-[10px] text-slate-400">~{pct(engagement.uniqueOpened)} · unique leads</span>
+                          <strong className="text-lg font-bold text-slate-700">{value(stats?.uniqueOpened)}</strong>
+                          <span className="text-[10px] text-slate-400">~{pct(stats?.uniqueOpened ?? 0)} · unique leads</span>
                         </div>
                         <div
                           className="min-w-0 flex items-center gap-2.5 whitespace-nowrap px-3 py-3 rounded-lg border border-emerald-200 bg-emerald-50/50"
                           title="Unique leads with at least one tracked link click."
                         >
                           <span className="text-[11px] text-emerald-700 font-medium">Clicked</span>
-                          <strong className="text-lg font-bold text-emerald-700">{engagement.clicked}</strong>
-                          <span className="text-[10px] text-emerald-700/70">{pct(engagement.clicked)} · unique leads</span>
+                          <strong className="text-lg font-bold text-emerald-700">{value(stats?.clicked)}</strong>
+                          <span className="text-[10px] text-emerald-700/70">{pct(stats?.clicked ?? 0)} · unique leads</span>
                         </div>
                         <div
                           className="min-w-0 flex items-center gap-2.5 whitespace-nowrap px-3 py-3 rounded-lg border border-slate-200 bg-slate-50"
-                          title={`Unique delivered leads with no tracked open, click or reply ${engagement.ignoredAfterDays}+ days after sending. ${engagement.waiting} leads are still within the waiting window.`}
+                          title={stats
+                            ? `Unique delivered leads with no tracked open, click or reply ${stats.ignoredAfterDays}+ days after sending. ${stats.waiting} leads are still within the waiting window.`
+                            : 'Unique delivered leads with no tracked open, click or reply.'}
                         >
                           <span className="text-[11px] text-slate-500 font-medium">Ignored</span>
-                          <strong className="text-lg font-bold text-slate-700">{engagement.ignored}</strong>
-                          <span className="text-[10px] text-slate-400">{engagement.waiting} waiting · {engagement.ignoredAfterDays}d window</span>
+                          <strong className="text-lg font-bold text-slate-700">{value(stats?.ignored)}</strong>
+                          <span className="text-[10px] text-slate-400">{value(stats?.waiting)} waiting · {stats?.ignoredAfterDays ?? 5}d window</span>
                         </div>
                       </div>
+                      {trackingNotice && <p className="text-[10px] text-amber-700">{trackingNotice}</p>}
                       <p className="text-[10px] text-slate-400">
-                        Counts show unique leads, not event totals: repeated opens or clicks increase the individual lead's activity count but only count once here. Scanner opens are excluded. Emails sent before tracking was turned on are not included.
+                        Counts show unique leads, not event totals. Repeated opens or clicks increase each lead’s activity count but count only once here. Scanner opens are excluded.
                       </p>
                     </div>
                   );

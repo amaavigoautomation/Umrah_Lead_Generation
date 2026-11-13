@@ -2654,7 +2654,7 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
   return (
     <BrandProvider tenantId={currentTenantId} tenantName={currentTenant?.name}>
     <AgentProvider tenantId={currentTenantId} userId={currentUser.userId} enabled={currentUser.accessLevel === 'ALL' || currentUser.role === 'ADMIN' || (currentUser.allowedModules || []).includes('agent')}>
-    <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col md:flex-row font-sans selection:bg-orange-500/20 selection:text-orange-950">
+    <div className={'min-h-screen w-full flex flex-col md:flex-row font-sans selection:bg-orange-500/20 selection:text-orange-950 ' + (activeTab === 'dashboard' ? 'bg-[#05051f] text-slate-100' : 'bg-slate-50 text-slate-900')}>
       {websiteScanToast && (
         <div role="status" className="fixed top-5 right-5 z-[100] max-w-sm rounded-xl border border-emerald-200 bg-white px-4 py-3 text-sm font-semibold text-emerald-800 shadow-xl flex items-center gap-2 animate-in fade-in slide-in-from-top-3">
           <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-emerald-50 text-emerald-600">✓</span>
@@ -2684,7 +2684,7 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
           hideModuleNavigation={activeTab === 'inbox' || activeTab === 'dashboard' || activeTab === 'agent'}
         />
 
-        <main className={`flex-1 min-w-0 min-h-0 ${activeTab === 'inbox' ? 'p-0 overflow-hidden flex flex-col' : activeTab === 'agent' ? 'p-0 overflow-hidden flex flex-col' : 'p-3 sm:p-5 overflow-y-auto'}`}>
+        <main className={`flex-1 min-w-0 min-h-0 ${activeTab === 'dashboard' ? 'p-0 overflow-y-auto' : activeTab === 'inbox' ? 'p-0 overflow-hidden flex flex-col' : activeTab === 'agent' ? 'p-0 overflow-hidden flex flex-col' : 'p-3 sm:p-5 overflow-y-auto'}`}>
         {entitlements?.billing?.status === 'past_due' && (
           <div className="mb-3 flex items-center justify-between gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-800">
             <span>

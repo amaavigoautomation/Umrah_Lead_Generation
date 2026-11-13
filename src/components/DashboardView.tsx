@@ -308,9 +308,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   ];
 
   return (
-    <div className="dashboard-view dashboard-home-view mx-auto w-full max-w-[1600px] space-y-5 rounded-2xl pb-8">
+    <div className="dashboard-view dashboard-home-view min-h-full w-full bg-[#05051f] pb-8">
       <DashboardAiHomeHero userName={userName} canUseAi={canUseAi} onNavigate={onNavigate} />
 
+      <div className="dashboard-home-content mx-auto w-full max-w-[1600px] space-y-5 px-3 pt-5 sm:px-5">
       <div className="flex flex-col gap-3 pt-1 sm:flex-row sm:items-end sm:justify-between">
         <div className="min-w-0">
           <div className="mb-1 flex items-center gap-2 text-[9px] font-bold uppercase tracking-[0.18em] text-slate-400">
@@ -462,6 +463,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         )}
       </section>
       <div className="flex items-center justify-center gap-1.5 pb-1 text-[10px] text-slate-400"><span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> Updated from your workspace data</div>
+      </div>
     </div>
   );
 };

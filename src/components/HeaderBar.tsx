@@ -34,6 +34,7 @@ interface HeaderBarProps {
   currentTenant?: { id: string; name: string; plan?: string } | null;
   allTenants?: { id: string; name: string; plan?: string }[];
   onSwitchTenant?: (tenantId: string) => void;
+  hideModuleNavigation?: boolean;
 }
 
 type ModuleTab = { id: ActiveTab; label: string; icon: React.ReactNode };
@@ -98,6 +99,7 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
   currentTenant,
   allTenants = [],
   onSwitchTenant,
+  hideModuleNavigation = false,
 }) => {
   const { brand } = useBrand();
   const { mailbox: connectedMailbox, whatsapp: connectedWhatsApp } = useConnectedChannels(tenantId);
@@ -132,19 +134,19 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
               </select>
             </label>
           )}
-          {connectedMailbox && (
+          {activeTab !== 'inbox' && connectedMailbox && (
             <div title={"Connected mailbox: " + connectedMailbox} className="hidden max-w-[190px] items-center gap-1.5 truncate rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-slate-600 sm:flex">
               <Radio className="h-3.5 w-3.5 shrink-0 animate-pulse text-blue-500" />
               <span className="truncate font-mono text-[10px]">{connectedMailbox}</span>
             </div>
           )}
-          {connectedWhatsApp && (
+          {activeTab !== 'inbox' && connectedWhatsApp && (
             <button type="button" onClick={() => setActiveTab('inbox')} title={"Connected WhatsApp Business: " + connectedWhatsApp} className="hidden items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-slate-600 transition hover:bg-slate-100 md:flex">
               <MessageSquare className="h-3.5 w-3.5 shrink-0 text-emerald-500" />
               <span className="font-mono text-[10px]">{connectedWhatsApp}</span>
             </button>
           )}
-          {handoffCount > 0 && (
+          {activeTab !== 'inbox' && handoffCount > 0 && (
             <button type="button" onClick={() => setActiveTab('inbox')} className="flex items-center gap-1.5 rounded-full border border-orange-200 bg-orange-50 px-2.5 py-1.5 text-[10px] font-bold text-orange-800">
               <span className="h-2 w-2 animate-pulse rounded-full bg-orange-500" />
               <span>{handoffCount} Handoff</span>
@@ -159,7 +161,7 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
         </div>
       </div>
 
-      <div className="flex min-h-[48px] items-stretch border-t border-slate-200 bg-white">
+      {!hideModuleNavigation && <div className="flex min-h-[48px] items-stretch border-t border-slate-200 bg-white">
         <div className="flex w-[154px] shrink-0 flex-col justify-center border-r border-slate-200 px-5">
           <span className="text-[9px] font-extrabold uppercase tracking-[0.2em] text-[#0848ef]">Workspace</span>
           <span className="mt-0.5 truncate text-[12px] font-bold text-slate-800">{meta.workspaceLabel}</span>
@@ -185,7 +187,7 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
             );
           })}
         </nav>
-      </div>
+      </div>}
     </header>
   );
 };

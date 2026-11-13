@@ -1333,3 +1333,56 @@
   .uinbox-inline-status-filters button { min-height:23px; }
   .uinbox-inline-channel-filters button { min-height:22px; }
 }
+
+
+/* Filter lanes: independently horizontally scrollable, discoverable on desktop
+   and swipeable on touch devices. Vertical mouse-wheel input is mapped in React. */
+.unified-inbox-layout-root .uinbox-inline-status-filters,
+.unified-inbox-layout-root .uinbox-inline-channel-filters {
+  width:100%;
+  max-width:100%;
+  min-width:0;
+  flex:0 0 auto;
+  flex-wrap:nowrap;
+  overflow-x:auto;
+  overflow-y:hidden;
+  overscroll-behavior-x:contain;
+  -webkit-overflow-scrolling:touch;
+  scrollbar-width:thin;
+  scrollbar-color:#c8d5ee #f5f7fc;
+  padding-bottom:5px;
+  scroll-behavior:smooth;
+  touch-action:pan-x;
+}
+.unified-inbox-layout-root .uinbox-inline-status-filters::-webkit-scrollbar,
+.unified-inbox-layout-root .uinbox-inline-channel-filters::-webkit-scrollbar {
+  display:block;
+  height:4px;
+}
+.unified-inbox-layout-root .uinbox-inline-status-filters::-webkit-scrollbar-track,
+.unified-inbox-layout-root .uinbox-inline-channel-filters::-webkit-scrollbar-track {
+  background:#f3f6fb;
+  border-radius:999px;
+}
+.unified-inbox-layout-root .uinbox-inline-status-filters::-webkit-scrollbar-thumb,
+.unified-inbox-layout-root .uinbox-inline-channel-filters::-webkit-scrollbar-thumb {
+  background:#c8d5ee;
+  border-radius:999px;
+}
+.unified-inbox-layout-root .uinbox-inline-status-filters::-webkit-scrollbar-thumb:hover,
+.unified-inbox-layout-root .uinbox-inline-channel-filters::-webkit-scrollbar-thumb:hover {
+  background:#9eb5e4;
+}
+.unified-inbox-layout-root .uinbox-inline-status-filters button,
+.unified-inbox-layout-root .uinbox-inline-channel-filters button {
+  flex:0 0 auto;
+}
+@media(max-width:680px) {
+  .unified-inbox-layout-root .uinbox-inline-status-filters,
+  .unified-inbox-layout-root .uinbox-inline-channel-filters {
+    scrollbar-width:none;
+    padding-bottom:2px;
+  }
+  .unified-inbox-layout-root .uinbox-inline-status-filters::-webkit-scrollbar,
+  .unified-inbox-layout-root .uinbox-inline-channel-filters::-webkit-scrollbar { height:0; }
+}

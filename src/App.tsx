@@ -2669,7 +2669,7 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
       />
 
       <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
-{activeTab !== 'inbox' && activeTab !== 'crm' && (
+{activeTab !== 'crm' && (
           <HeaderBar
             activeTab={activeTab}
             setActiveTab={setActiveTab}
@@ -2681,10 +2681,11 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
             currentTenant={currentTenant}
             allTenants={allTenants}
             onSwitchTenant={(tenantId) => setCurrentTenantId(tenantId)}
+            hideModuleNavigation={activeTab === 'inbox'}
           />
         )}
 
-        <main className={`flex-1 min-w-0 min-h-0 ${activeTab === 'inbox' ? 'p-0 h-full overflow-hidden flex flex-col' : activeTab === 'agent' ? 'p-3 sm:p-5 overflow-hidden flex flex-col' : 'p-3 sm:p-5 overflow-y-auto'}`}>
+        <main className={`flex-1 min-w-0 min-h-0 ${activeTab === 'inbox' ? 'p-0 overflow-hidden flex flex-col' : activeTab === 'agent' ? 'p-3 sm:p-5 overflow-hidden flex flex-col' : 'p-3 sm:p-5 overflow-y-auto'}`}>
         {entitlements?.billing?.status === 'past_due' && (
           <div className="mb-3 flex items-center justify-between gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-800">
             <span>

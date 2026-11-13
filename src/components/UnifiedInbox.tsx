@@ -600,6 +600,15 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
   const activeLeadHasBookedDemo = STOP_FOLLOWUPS_WHEN_DEMO_BOOKED && (activeLead?.demoStatus === 'BOOKED' || activeLead?.status === 'DEMO_BOOKED');
 
   // Toggle Auto Follow-Up on/off for the active lead
+  const handleFilterLaneWheel = (event: React.WheelEvent<HTMLDivElement>) => {
+    const lane = event.currentTarget;
+    const hasHorizontalOverflow = lane.scrollWidth > lane.clientWidth + 2;
+    if (hasHorizontalOverflow && Math.abs(event.deltaY) > Math.abs(event.deltaX)) {
+      lane.scrollLeft += event.deltaY;
+      event.preventDefault();
+    }
+  };
+
   const handleToggleAutoFollowUp = async (enabled: boolean) => {
     if (!activeLead || !activeConversation) return;
     if (enabled && activeLeadHasBookedDemo) return;
@@ -666,7 +675,7 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
               className="w-full bg-white border border-slate-200 rounded-xl pl-9 pr-3 py-1.5 text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none transition font-medium"
             />
           </div>
-          <div className="uinbox-inline-status-filters" role="group" aria-label="Filter conversations">
+          <div className="uinbox-inline-status-filters" role="group" aria-label="Filter conversations" onWheel={handleFilterLaneWheel}>
             {[
               { key: 'ALL', label: 'All', count: viewCounts.ALL },
               { key: 'UNREAD', label: 'Unread', count: viewCounts.UNREAD },
@@ -682,7 +691,7 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
               </button>
             ))}
           </div>
-          <div className="uinbox-inline-channel-filters" role="group" aria-label="Filter by channel">
+          <div className="uinbox-inline-channel-filters" role="group" aria-label="Filter by channel" onWheel={handleFilterLaneWheel}>
             {[
               { key: 'ALL', label: 'All' },
               { key: 'EMAIL', label: 'Email' },

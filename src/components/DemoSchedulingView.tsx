@@ -845,11 +845,11 @@ export const DemoSchedulingView: React.FC<DemoSchedulingViewProps> = ({ leads = 
   };
 
   return (
-    <div data-umrah360-module="scheduling" className="demo-scheduling-workspace">
+    <div data-umrah360-module="scheduling" className="demo-scheduling-workspace ai-suite-module">
       <header className="schedule-page-header">
         <div className="schedule-heading">
           <div className="schedule-heading-icon"><CalendarDays className="h-5 w-5" /></div>
-          <div><div className="schedule-eyebrow">SALES OPERATIONS</div><h1>Demo Scheduling</h1><p>Manage meetings, calendar availability and automated scheduling in one workspace.</p></div>
+          <div><div className="schedule-eyebrow">AI &amp; AUTOMATION</div><h1>Demo Scheduling Agent</h1><p>Qualify demo requests, manage availability and book meetings from one workspace.</p></div>
         </div>
         <div className="schedule-header-actions">
           <div className={'schedule-calendar-connection ' + (calendarConnected ? 'is-connected' : 'is-disconnected')}><span className="schedule-connection-dot" /><span>{calendarConnected ? (calendarProvider === 'microsoft' ? 'Microsoft Teams connected' : 'Google Meet connected') : 'Calendar not connected'}</span></div>

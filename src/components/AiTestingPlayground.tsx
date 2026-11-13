@@ -259,325 +259,92 @@ export const AiTestingPlayground: React.FC<AiTestingPlaygroundProps> = () => {
   const channelFeedback = feedbackItems.filter((item) => item.channel === selectedChannel);
 
   return (
-    <div className="max-w-7xl mx-auto p-4 space-y-6 font-sans">
-      {/* Title & Scope */}
-      <div className="bg-white border border-slate-200/90 rounded-2xl p-6 shadow-sm">
-        <div className="flex items-center space-x-2">
-          <Sparkles className="w-6 h-6 text-orange-500" />
-          <h2 className="text-xl font-extrabold text-slate-900">AI Testing & Evaluation Sandbox</h2>
-        </div>
-        <p className="text-xs text-slate-500 mt-1 max-w-3xl font-medium">
-          Simulate any incoming customer prompt or reply across channels. Inspect the Gemini generated response,
-          intent classification, lead score, grounded RAG chunks, and human handoff determination{' '}
-          <span className="text-slate-900 font-bold">WITHOUT sending anything to real customers.</span>
-        </p>
-
-        {/* Presets */}
-        <div className="flex flex-wrap gap-2 mt-4 pt-4 border-t border-slate-100">
-          <span className="text-[11px] text-slate-500 font-bold self-center mr-1">Quick Presets:</span>
-          {presets.map((p, idx) => (
-            <button
-              key={idx}
-              onClick={() => {
-                setCustomerMessage(p.message);
-                setSelectedChannel(p.channel);
-              }}
-              className="px-3 py-1 rounded-xl bg-slate-100 hover:bg-orange-50 hover:text-orange-700 hover:border-orange-200 text-slate-700 text-xs font-semibold border border-slate-200 transition"
-            >
-              {p.label}
-            </button>
-          ))}
-        </div>
+    <div data-umrah360-module="ai-testing" className="ai-testing-workspace">
+      <header className="ai-testing-page-header">
+        <div><div className="ai-testing-eyebrow">AI &amp; AUTOMATION / TEST ENVIRONMENT</div><h1>AI Testing</h1><p>Test and evaluate your AI agent with realistic customer scenarios before responses reach live conversations.</p></div>
+        <div className="ai-testing-sandbox-badge"><ShieldCheck className="h-4 w-4" /><span>Sandbox mode · no live messages sent</span></div>
+      </header>
+      <div className="ai-testing-main-grid">
+        <section className="ai-testing-card ai-testing-conversation-card">
+          <div className="ai-testing-card-header">
+            <div className="ai-testing-card-title"><span className="ai-testing-title-icon"><Bot className="h-4 w-4" /></span><div><h2>Test conversation</h2><p>Preview the customer message and generated AI response</p></div></div>
+            <div className="ai-testing-card-actions">
+              <span className="ai-testing-channel-pill">{selectedChannel.replace('_', ' ')}</span>
+              {evaluationResult && <button type="button" onClick={() => { navigator.clipboard.writeText(evaluationResult.responseText || ''); setCopied(true); setTimeout(() => setCopied(false), 2000); }} className="ai-testing-utility-button">{copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}{copied ? 'Copied' : 'Copy response'}</button>}
+            </div>
+          </div>
+          <div className="ai-testing-chat-history">
+            <div className="ai-testing-chat-date">TEST SCENARIO · {prospectName || 'Prospect'} · {companyName || 'Company'}</div>
+            <div className="ai-testing-user-message"><span className="ai-testing-message-author">{prospectName || 'Customer'}</span><p>{customerMessage || 'Enter a customer message to begin testing.'}</p></div>
+            {evaluationResult ? (
+              <div className="ai-testing-assistant-message">
+                <div className="ai-testing-assistant-avatar"><Sparkles className="h-4 w-4" /></div>
+                <div className="ai-testing-assistant-body">
+                  {evaluationResult.humanHandoffTriggered ? <div className="ai-testing-result-banner handoff"><AlertTriangle className="h-4 w-4" /><div><strong>Human handoff triggered</strong><span>Reason: {evaluationResult.handoffReason || 'This request requires a team member.'}</span></div></div> : <div className="ai-testing-result-banner approved"><ShieldCheck className="h-4 w-4" /><span>AI auto-reply approved · grounded in workspace knowledge</span></div>}
+                  <div className="ai-testing-response-text">{evaluationResult.responseText}</div>
+                  {typeof evaluationResult.feedbackAppliedCount === 'number' && evaluationResult.feedbackAppliedCount > 0 && <div className="ai-testing-feedback-applied">{evaluationResult.feedbackAppliedCount} saved feedback instruction(s) applied to this test.</div>}
+                </div>
+              </div>
+            ) : <div className="ai-testing-empty-state"><span><Sparkles className="h-5 w-5" /></span><strong>Your AI response will appear here</strong><p>Send a test message to inspect the generated reply, handoff decision and lead qualification.</p></div>}
+            {testError && <div className="ai-testing-error" role="alert">{testError}</div>}
+          </div>
+          <div className="ai-testing-composer">
+            <textarea rows={2} value={customerMessage} onChange={(event) => setCustomerMessage(event.target.value)} placeholder="Type a customer message to test the AI agent…" />
+            <button type="button" onClick={handleRunTest} disabled={isEvaluating || !customerMessage.trim()} className="ai-testing-run-button">{isEvaluating ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}{isEvaluating ? 'Running test…' : 'Run test'}</button>
+          </div>
+          <div className="ai-testing-conversation-footnote">Tests use the current workspace AI configuration and do not send messages to customers.</div>
+        </section>
+        <aside className="ai-testing-card ai-testing-settings-card">
+          <div className="ai-testing-card-header">
+            <div className="ai-testing-card-title"><span className="ai-testing-title-icon"><Sliders className="h-4 w-4" /></span><div><h2>Test settings</h2><p>Set the context for this simulation</p></div></div><span className="ai-testing-config-label">Configuration</span>
+          </div>
+          <div className="ai-testing-settings-fields">
+            <label><span>Contact name</span><input type="text" value={prospectName} onChange={(event) => setProspectName(event.target.value)} placeholder="Customer name" /></label>
+            <label><span>Company</span><input type="text" value={companyName} onChange={(event) => setCompanyName(event.target.value)} placeholder="Company or agency" /></label>
+            <label><span>Job title</span><input type="text" value={jobTitle} onChange={(event) => setJobTitle(event.target.value)} placeholder="Role or designation" /></label>
+            <label><span>Test channel</span><select value={selectedChannel} onChange={(event) => setSelectedChannel(event.target.value as Channel)}><option value="EMAIL">Email</option><option value="WHATSAPP">WhatsApp</option><option value="INSTAGRAM">Instagram</option><option value="FACEBOOK">Facebook Messenger</option><option value="LINKEDIN">LinkedIn</option><option value="WEBSITE">Website</option></select></label>
+          </div>
+          <div className="ai-testing-presets"><div className="ai-testing-section-label">Quick scenarios</div>
+            <div className="ai-testing-preset-list">{presets.map((preset, index) => <button type="button" key={index} onClick={() => { setCustomerMessage(preset.message); setSelectedChannel(preset.channel); setTestError(''); }}>{preset.label}</button>)}</div>
+          </div>
+          <div className="ai-testing-config-note"><ShieldCheck className="h-4 w-4" /><span>Uses the current workspace knowledge, business rules and response safeguards configured for your live AI agent.</span></div>
+        </aside>
       </div>
-
-      {/* Grid: Test Input vs Evaluation Results */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Left Column: Simulation Inputs */}
-        <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-4">
-          <h3 className="font-extrabold text-sm text-slate-900 flex items-center space-x-2">
-            <Sliders className="w-4 h-4 text-orange-500" />
-            <span>Simulation Parameters</span>
-          </h3>
-
-          <div className="grid grid-cols-3 gap-3 text-xs">
-            <div>
-              <label className="text-slate-700 font-bold block mb-1">Contact Name</label>
-              <input
-                type="text"
-                value={prospectName}
-                onChange={(e) => setProspectName(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-900 font-medium focus:outline-none focus:border-orange-500"
-              />
+      {evaluationResult && (
+        <div className="ai-testing-results-grid">
+          <section className="ai-testing-card ai-testing-feedback-card">
+            <div className="ai-testing-card-header"><div className="ai-testing-card-title"><span className="ai-testing-title-icon"><MessageSquarePlus className="h-4 w-4" /></span><div><h2>Improve future AI responses</h2><p>Saved feedback can guide relevant live {selectedChannel.toLowerCase()} responses.</p></div></div><span className="ai-testing-config-label">{channelFeedback.filter((item) => item.status === 'ACTIVE').length} active</span></div>
+            <div className="ai-testing-feedback-form">
+              <div className="ai-testing-feedback-fields">
+                <label><span>Feedback category</span><select value={feedbackCategory} onChange={(event) => setFeedbackCategory(event.target.value as AiFeedbackItem['category'])}><option value="STYLE">Style and tone</option><option value="LENGTH">Response length</option><option value="MISSING_INFO">Missing information</option><option value="FACTUAL">Factual correction (verify in Knowledge Base)</option><option value="FORMAT">Channel formatting</option><option value="OTHER">Other</option></select></label>
+                <label><span>Apply this feedback to</span><select value={feedbackScope} onChange={(event) => setFeedbackScope(event.target.value as AiFeedbackItem['scope'])}><option value="SIMILAR">Similar questions in this channel</option><option value="CHANNEL">All future responses in this channel</option></select></label>
+              </div>
+              <label className="ai-testing-feedback-instruction"><span>What should the AI do differently?</span><textarea rows={3} value={feedbackText} onChange={(event) => setFeedbackText(event.target.value)} placeholder="Example: Keep pricing replies concise and only use verified plan details." /></label>
+              <p className="ai-testing-helper-text">Factual corrections belong in the approved Knowledge Base. Feedback changes response guidance, not company facts or safety rules.</p>
+              {feedbackError && <p className="ai-testing-error" role="alert">{feedbackError}</p>}
+              {feedbackNotice && <p className="ai-testing-success"><CheckCircle2 className="h-3.5 w-3.5" />{feedbackNotice}</p>}
+              <div className="ai-testing-feedback-actions">
+                <button type="button" onClick={() => handleSaveFeedback(false)} disabled={isSavingFeedback || !feedbackText.trim()} className="ai-testing-secondary-button"><Save className="h-3.5 w-3.5" />{isSavingFeedback ? 'Saving…' : editingFeedbackId ? 'Update feedback' : 'Save feedback'}</button>
+                <button type="button" onClick={() => handleSaveFeedback(true)} disabled={isSavingFeedback || !feedbackText.trim()} className="ai-testing-run-button"><RefreshCw className="h-3.5 w-3.5" />Save &amp; regenerate</button>
+                {editingFeedbackId && <button type="button" onClick={() => { setEditingFeedbackId(null); setFeedbackText(''); }} className="ai-testing-text-button"><X className="h-3.5 w-3.5" />Cancel edit</button>}
+              </div>
             </div>
-            <div>
-              <label className="text-slate-700 font-bold block mb-1">Company</label>
-              <input
-                type="text"
-                value={companyName}
-                onChange={(e) => setCompanyName(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-900 font-medium focus:outline-none focus:border-orange-500"
-              />
+            <div className="ai-testing-saved-feedback">
+              <div className="ai-testing-saved-feedback-header"><strong>Saved {selectedChannel} feedback</strong><button type="button" onClick={() => void refreshFeedback()}>Refresh</button></div>
+              {channelFeedback.length === 0 ? <p className="ai-testing-helper-text">No feedback saved for this channel yet.</p> : channelFeedback.map((item) => (
+                <article key={item.feedbackId} className="ai-testing-saved-feedback-item">
+                  <div className="ai-testing-saved-feedback-copy"><div className="ai-testing-feedback-meta"><strong>{item.category.replace('_', ' ')}</strong><span>{item.scope === 'CHANNEL' ? 'All channel responses' : 'Similar questions'}</span><em className={item.status === 'ACTIVE' ? 'is-active' : ''}>{item.status}</em></div><p>{item.instruction}</p>{item.scope === 'SIMILAR' && item.exampleQuestion && <small>Matched against: {item.exampleQuestion}</small>}</div>
+                  <div className="ai-testing-saved-feedback-actions"><button type="button" onClick={() => handleEditFeedback(item)}><Edit3 className="h-3 w-3" />Edit</button><button type="button" onClick={() => handleToggleFeedback(item)}>{item.status === 'ACTIVE' ? 'Disable' : 'Enable'}</button><button type="button" onClick={() => handleDeleteFeedback(item)}><Trash2 className="h-3 w-3" />Delete</button></div>
+                </article>
+              ))}
             </div>
-            <div>
-              <label className="text-slate-700 font-bold block mb-1">Channel</label>
-              <select
-                value={selectedChannel}
-                onChange={(e) => setSelectedChannel(e.target.value as Channel)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-900 font-bold focus:outline-none focus:border-orange-500"
-              >
-                <option value="EMAIL">Email</option>
-                <option value="WHATSAPP">WhatsApp</option>
-                <option value="INSTAGRAM">Instagram</option>
-                <option value="FACEBOOK">Facebook Messenger</option>
-                <option value="LINKEDIN">LinkedIn</option>
-                <option value="WEBSITE">Website</option>
-              </select>
-            </div>
-          </div>
-
-          <div>
-            <label className="text-slate-400 text-xs block mb-1 font-medium">
-              Simulated Customer Message
-            </label>
-            <textarea
-              rows={4}
-              value={customerMessage}
-              onChange={(e) => setCustomerMessage(e.target.value)}
-              placeholder="Enter customer message to test..."
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs text-slate-900 font-medium leading-relaxed resize-none focus:outline-none focus:border-orange-500"
-            />
-          </div>
-
-          {testError && <div className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg p-2.5">{testError}</div>}
-
-          <button
-            onClick={handleRunTest}
-            disabled={isEvaluating || !customerMessage.trim()}
-            className="w-full py-3 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-bold text-xs transition flex items-center justify-center space-x-2 shadow-md shadow-orange-500/20 disabled:opacity-50 cursor-pointer"
-          >
-            <Play className="w-4 h-4" />
-            <span>{isEvaluating ? 'Evaluating with OpenAI (gpt-4o-mini)...' : 'Execute AI Test'}</span>
-          </button>
+          </section>
+          <section className="ai-testing-card ai-testing-qualification-card">
+            <div className="ai-testing-card-header"><div className="ai-testing-card-title"><span className="ai-testing-title-icon"><Code className="h-4 w-4" /></span><div><h2>Lead qualification</h2><p>Structured result from this sandbox run</p></div></div>{evaluationResult.leadQualification && <span className="ai-testing-score">Score {evaluationResult.leadQualification.leadScore}/100</span>}</div>
+            {evaluationResult.leadQualification ? <div className="ai-testing-qualification-details"><div><span>Intent</span><strong>{evaluationResult.leadQualification.intent}</strong></div><div><span>Buying stage</span><strong>{evaluationResult.leadQualification.buyingStage}</strong></div><div className="ai-testing-next-action"><span>Next action</span><strong>{evaluationResult.leadQualification.nextAction}</strong></div></div> : <p className="ai-testing-helper-text">No structured qualification data was returned for this test.</p>}
+            {evaluationResult.knowledgeSources && evaluationResult.knowledgeSources.length > 0 && <div className="ai-testing-knowledge-sources"><strong>Knowledge sources</strong><p>{evaluationResult.knowledgeSources.join(', ')}</p></div>}
+          </section>
         </div>
-
-        {/* Right Column: AI Output & Qualification Output */}
-        <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-4 flex flex-col">
-          <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-            <h3 className="font-extrabold text-sm text-slate-900 flex items-center space-x-2">
-              <Bot className="w-4 h-4 text-orange-500" />
-              <span>Evaluated AI Output (Sandbox Mode)</span>
-            </h3>
-
-            {evaluationResult && (
-              <button
-                onClick={() => {
-                  navigator.clipboard.writeText(evaluationResult.responseText);
-                  setCopied(true);
-                  setTimeout(() => setCopied(false), 2000);
-                }}
-                className="text-slate-400 hover:text-white text-xs flex items-center space-x-1"
-              >
-                {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                <span>{copied ? 'Copied' : 'Copy'}</span>
-              </button>
-            )}
-          </div>
-
-          {evaluationResult ? (
-            <div className="space-y-4 flex-1 flex flex-col">
-              {/* Human Handoff Status Banner */}
-              {evaluationResult.humanHandoffTriggered ? (
-                <div className="p-3.5 bg-amber-950/60 border border-amber-800/80 rounded-lg text-amber-200 text-xs flex items-start space-x-2.5">
-                  <AlertTriangle className="w-4 h-4 text-amber-400 mt-0.5 shrink-0" />
-                  <div>
-                    <span className="font-bold block text-amber-300">
-                      HUMAN HANDOFF TRIGGERED (AI = OFF)
-                    </span>
-                    <span className="text-[11px] text-amber-300/90">
-                      Reason: {evaluationResult.handoffReason || 'Pricing for 20+ users / Enterprise volume required'}
-                    </span>
-                  </div>
-                </div>
-              ) : (
-                <div className="p-3 bg-emerald-950/40 border border-emerald-800/60 rounded-lg text-emerald-200 text-xs flex items-center space-x-2">
-                  <ShieldCheck className="w-4 h-4 text-emerald-400" />
-                  <span className="font-medium">
-                    AI Auto-Reply Approved (Grounded in Verified Knowledge Base)
-                  </span>
-                </div>
-              )}
-
-              {/* Generated Response Text */}
-              <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 text-xs leading-relaxed text-slate-100 whitespace-pre-wrap flex-1">
-                {evaluationResult.responseText}
-              </div>
-
-              {typeof evaluationResult.feedbackAppliedCount === 'number' && evaluationResult.feedbackAppliedCount > 0 && (
-                <div className="text-[11px] text-emerald-300 bg-emerald-950/30 border border-emerald-800/50 rounded-lg px-3 py-2">
-                  {evaluationResult.feedbackAppliedCount} saved feedback instruction(s) were applied to this test.
-                </div>
-              )}
-
-
-              {/* Persistent AI Feedback */}
-              <div className="rounded-xl border border-orange-200 bg-orange-50/50 p-4 space-y-3">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <h4 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
-                      <MessageSquarePlus className="w-4 h-4 text-orange-600" />
-                      Improve future AI responses
-                    </h4>
-                    <p className="text-[11px] text-slate-600 mt-1">
-                      Saved feedback can guide this workspace's live {selectedChannel.toLowerCase()} responses when relevant.
-                    </p>
-                  </div>
-                  <span className="text-[10px] font-bold text-orange-700 bg-orange-100 rounded-full px-2 py-1">
-                    {channelFeedback.filter((item) => item.status === 'ACTIVE').length} active
-                  </span>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-700 mb-1">Feedback category</label>
-                    <select value={feedbackCategory} onChange={(e) => setFeedbackCategory(e.target.value as AiFeedbackItem['category'])}
-                      className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-800">
-                      <option value="STYLE">Style and tone</option>
-                      <option value="LENGTH">Response length</option>
-                      <option value="MISSING_INFO">Missing information</option>
-                      <option value="FACTUAL">Factual correction (verify in Knowledge Base)</option>
-                      <option value="FORMAT">Channel formatting</option>
-                      <option value="OTHER">Other</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-700 mb-1">Apply this feedback to</label>
-                    <select value={feedbackScope} onChange={(e) => setFeedbackScope(e.target.value as AiFeedbackItem['scope'])}
-                      className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-800">
-                      <option value="SIMILAR">Similar questions in this channel</option>
-                      <option value="CHANNEL">All future responses in this channel</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-700 mb-1">What should the AI do differently?</label>
-                  <textarea rows={3} value={feedbackText} onChange={(e) => setFeedbackText(e.target.value)}
-                    placeholder="Example: For pricing emails, keep the reply concise, explain the relevant plans and inclusions, and avoid adding unsupported prices."
-                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-xs text-slate-800 leading-relaxed resize-y focus:outline-none focus:border-orange-400" />
-                  <p className="text-[10px] text-slate-500 mt-1">
-                    Keep factual corrections in the approved Knowledge Base. Feedback changes response guidance, not company facts or safety rules.
-                  </p>
-                </div>
-
-                {feedbackError && <p className="text-[11px] text-red-700 bg-red-50 border border-red-200 rounded-lg p-2">{feedbackError}</p>}
-                {feedbackNotice && <p className="text-[11px] text-emerald-700 flex items-center gap-1"><CheckCircle2 className="w-3.5 h-3.5" />{feedbackNotice}</p>}
-
-                <div className="flex flex-wrap gap-2">
-                  <button onClick={() => handleSaveFeedback(false)} disabled={isSavingFeedback || !feedbackText.trim()}
-                    className="inline-flex items-center gap-2 rounded-lg border border-orange-300 bg-white px-3 py-2 text-xs font-bold text-orange-800 hover:bg-orange-100 disabled:opacity-50">
-                    <Save className="w-3.5 h-3.5" />{isSavingFeedback ? 'Saving...' : editingFeedbackId ? 'Update feedback' : 'Save feedback'}
-                  </button>
-                  <button onClick={() => handleSaveFeedback(true)} disabled={isSavingFeedback || !feedbackText.trim()}
-                    className="inline-flex items-center gap-2 rounded-lg bg-orange-600 px-3 py-2 text-xs font-bold text-white hover:bg-orange-700 disabled:opacity-50">
-                    <RefreshCw className="w-3.5 h-3.5" />Save & regenerate
-                  </button>
-                  {editingFeedbackId && (
-                    <button onClick={() => { setEditingFeedbackId(null); setFeedbackText(''); }}
-                      className="inline-flex items-center gap-1 rounded-lg px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100">
-                      <X className="w-3.5 h-3.5" />Cancel edit
-                    </button>
-                  )}
-                </div>
-
-                <div className="border-t border-orange-200 pt-3 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <h5 className="text-[11px] font-extrabold text-slate-800">Saved {selectedChannel} feedback</h5>
-                    <button onClick={() => void refreshFeedback()} className="text-[10px] font-semibold text-orange-700 hover:underline">Refresh</button>
-                  </div>
-                  {channelFeedback.length === 0 ? (
-                    <p className="text-[11px] text-slate-500">No feedback saved for this channel yet.</p>
-                  ) : channelFeedback.map((item) => (
-                    <div key={item.feedbackId} className="rounded-lg border border-slate-200 bg-white p-3 space-y-2">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <div className="flex flex-wrap items-center gap-1.5">
-                            <span className="text-[10px] font-bold text-slate-700">{item.category.replace('_', ' ')}</span>
-                            <span className="text-[10px] text-slate-500">· {item.scope === 'CHANNEL' ? 'All channel responses' : 'Similar questions'}</span>
-                            <span className={'text-[9px] font-bold rounded-full px-1.5 py-0.5 ' + (item.status === 'ACTIVE' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500')}>
-                              {item.status}
-                            </span>
-                          </div>
-                          <p className="text-xs text-slate-700 mt-1 whitespace-pre-wrap break-words">{item.instruction}</p>
-                          {item.scope === 'SIMILAR' && item.exampleQuestion && (
-                            <p className="text-[10px] text-slate-500 mt-1">Matched against: {item.exampleQuestion}</p>
-                          )}
-                        </div>
-                      </div>
-                      <div className="flex flex-wrap gap-3">
-                        <button onClick={() => handleEditFeedback(item)} className="text-[10px] font-bold text-blue-700 hover:underline inline-flex items-center gap-1">
-                          <Edit3 className="w-3 h-3" />Edit
-                        </button>
-                        <button onClick={() => handleToggleFeedback(item)} className="text-[10px] font-bold text-slate-600 hover:underline">
-                          {item.status === 'ACTIVE' ? 'Disable' : 'Enable'}
-                        </button>
-                        <button onClick={() => handleDeleteFeedback(item)} className="text-[10px] font-bold text-red-600 hover:underline inline-flex items-center gap-1">
-                          <Trash2 className="w-3 h-3" />Delete
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Structured JSON Qualification (Section 33) */}
-              <div className="p-3.5 bg-slate-800/80 rounded-xl border border-slate-700/80 space-y-2 text-xs">
-                <div className="flex items-center justify-between">
-                  <span className="font-semibold text-slate-300 flex items-center space-x-1">
-                    <Code className="w-3.5 h-3.5 text-purple-400" />
-                    <span>Lead Qualification JSON (Section 33)</span>
-                  </span>
-                  <div className="flex items-center space-x-1 text-emerald-400 font-bold">
-                    <Flame className="w-3.5 h-3.5 text-amber-400" />
-                    <span>Score: {evaluationResult.leadQualification.leadScore}/100</span>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-2 pt-1 text-[11px] text-slate-300">
-                  <div>
-                    <span className="text-slate-500">Intent: </span>
-                    <span className="font-bold text-emerald-400">
-                      {evaluationResult.leadQualification.intent}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-slate-500">Stage: </span>
-                    <span className="font-medium text-slate-200">
-                      {evaluationResult.leadQualification.buyingStage}
-                    </span>
-                  </div>
-                  <div className="col-span-2">
-                    <span className="text-slate-500">Next Action: </span>
-                    <span className="text-slate-200">
-                      {evaluationResult.leadQualification.nextAction}
-                    </span>
-                  </div>
-                </div>
-
-                {evaluationResult.knowledgeSources && evaluationResult.knowledgeSources.length > 0 && (
-                  <div className="pt-2 border-t border-slate-700/60 text-[10px] text-blue-300">
-                    <span className="text-slate-400">Knowledge Sources: </span>
-                    {evaluationResult.knowledgeSources.join(', ')}
-                  </div>
-                )}
-              </div>
-            </div>
-          ) : (
-            <div className="flex-1 flex items-center justify-center text-center p-8 text-slate-500 text-xs">
-              Click &quot;Execute AI Test&quot; to inspect real-time response generation, RAG sources, and lead scoring.
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
+      )}
+    </div>  );
 };

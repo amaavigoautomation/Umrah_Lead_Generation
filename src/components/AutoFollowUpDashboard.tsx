@@ -230,13 +230,13 @@ export const AutoFollowUpDashboard: React.FC<AutoFollowUpDashboardProps> = ({
   };
 
   return (
-    <div className="flex-1 p-6 bg-slate-50 min-h-screen text-slate-900 font-sans">
+    <div data-umrah360-module="auto-followup" className="ai-ops-page auto-followup-module">
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
+      <div className="ai-ops-page-header">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-extrabold text-slate-900 font-display">AI Auto Follow-Up Agent</h1>
-            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-orange-50 text-orange-700 border border-orange-200">
+            <h1>AI Auto Follow-Up Agent</h1>
+            <span className="ai-ops-status-pill">
               <Zap className="w-3 h-3 mr-1 text-orange-500" /> Operational Control Active
             </span>
           </div>
@@ -249,7 +249,7 @@ export const AutoFollowUpDashboard: React.FC<AutoFollowUpDashboardProps> = ({
           <button
             onClick={handleManualTriggerNow}
             disabled={loading}
-            className="inline-flex items-center px-4 py-2 rounded-xl text-xs font-bold bg-orange-500 hover:bg-orange-600 text-white shadow-xs transition-all disabled:opacity-50"
+            className="ai-ops-primary-button"
           >
             <Play className="w-3.5 h-3.5 mr-1.5" />
             Trigger Poller Cycle Now
@@ -257,7 +257,7 @@ export const AutoFollowUpDashboard: React.FC<AutoFollowUpDashboardProps> = ({
           <button
             onClick={fetchDashboard}
             disabled={loading}
-            className="inline-flex items-center p-2 rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 transition-all shadow-2xs"
+            className="ai-ops-icon-button"
             title="Refresh Dashboard"
           >
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-orange-500' : ''}`} />
@@ -265,60 +265,32 @@ export const AutoFollowUpDashboard: React.FC<AutoFollowUpDashboardProps> = ({
         </div>
       </div>
 
-      {/* Metrics Grid */}
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3 mb-6">
-        <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-2xs">
-          <p className="text-xs font-medium text-slate-500">Scheduled</p>
-          <p className="text-xl font-bold text-amber-600 mt-1 font-display">
-            {dashboardData?.metrics.scheduled ?? 0}
-          </p>
-        </div>
-        <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-2xs">
-          <p className="text-xs font-medium text-slate-500">Sent Today</p>
-          <p className="text-xl font-bold text-orange-600 mt-1 font-display">
-            {dashboardData?.metrics.sentToday ?? 0}
-          </p>
-        </div>
-        <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-2xs">
-          <p className="text-xs font-medium text-slate-500">Human Review</p>
-          <p className="text-xl font-bold text-indigo-600 mt-1 font-display">
-            {dashboardData?.metrics.humanReview ?? 0}
-          </p>
-        </div>
-        <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-2xs">
-          <p className="text-xs font-medium text-slate-500">Skipped (No-Op)</p>
-          <p className="text-xl font-bold text-slate-600 mt-1 font-display">
-            {dashboardData?.metrics.skipped ?? 0}
-          </p>
-        </div>
-        <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-2xs">
-          <p className="text-xs font-medium text-slate-500">Cancelled</p>
-          <p className="text-xl font-bold text-slate-600 mt-1 font-display">
-            {dashboardData?.metrics.cancelled ?? 0}
-          </p>
-        </div>
-        <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-2xs">
-          <p className="text-xs font-medium text-slate-500">Failed</p>
-          <p className="text-xl font-bold text-rose-600 mt-1 font-display">
-            {dashboardData?.metrics.failed ?? 0}
-          </p>
-        </div>
-        <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-2xs col-span-2 lg:col-span-1">
-          <p className="text-xs font-medium text-slate-500">Completed</p>
-          <p className="text-xl font-bold text-emerald-600 mt-1 font-display">
-            {dashboardData?.metrics.completed ?? 0}
-          </p>
-        </div>
+      <div className="ai-ops-metrics" aria-label="Follow-up performance metrics">
+        {[
+          { label: 'Scheduled', value: dashboardData?.metrics.scheduled ?? 0, icon: Clock, tone: 'blue' },
+          { label: 'Sent Today', value: dashboardData?.metrics.sentToday ?? 0, icon: Send, tone: 'green' },
+          { label: 'Human Review', value: dashboardData?.metrics.humanReview ?? 0, icon: ShieldCheck, tone: 'violet' },
+          { label: 'Skipped (No-Op)', value: dashboardData?.metrics.skipped ?? 0, icon: Bot, tone: 'slate' },
+          { label: 'Cancelled', value: dashboardData?.metrics.cancelled ?? 0, icon: XCircle, tone: 'slate' },
+          { label: 'Failed', value: dashboardData?.metrics.failed ?? 0, icon: AlertTriangle, tone: 'rose' },
+          { label: 'Completed', value: dashboardData?.metrics.completed ?? 0, icon: CheckCircle2, tone: 'green' },
+        ].map((metric) => {
+          const MetricIcon = metric.icon;
+          return <div className={'ai-ops-metric-card tone-' + metric.tone} key={metric.label}>
+            <span className="ai-ops-metric-icon"><MetricIcon className="w-4 h-4" /></span>
+            <span className="ai-ops-metric-copy"><span>{metric.label}</span><strong>{metric.value}</strong></span>
+          </div>;
+        })}
       </div>
 
       {/* Tabs */}
-      <div className="flex border-b border-slate-200 mb-6 bg-white rounded-t-xl px-4 pt-2 shadow-2xs">
+      <div className="ai-ops-tabs" role="tablist" aria-label="Auto Follow-Up sections">
         <button
           onClick={() => setActiveTab('JOBS')}
           className={`flex items-center gap-2 px-4 py-3 text-xs font-bold border-b-2 transition-all ${
             activeTab === 'JOBS'
-              ? 'border-orange-500 text-orange-600'
-              : 'border-transparent text-slate-600 hover:text-slate-900'
+              ? 'border-blue-600 text-blue-700'
+              : 'border-transparent text-slate-600 hover:text-blue-700'
           }`}
         >
           <Clock className="w-4 h-4" />
@@ -328,8 +300,8 @@ export const AutoFollowUpDashboard: React.FC<AutoFollowUpDashboardProps> = ({
           onClick={() => setActiveTab('SETTINGS')}
           className={`flex items-center gap-2 px-4 py-3 text-xs font-bold border-b-2 transition-all ${
             activeTab === 'SETTINGS'
-              ? 'border-orange-500 text-orange-600'
-              : 'border-transparent text-slate-600 hover:text-slate-900'
+              ? 'border-blue-600 text-blue-700'
+              : 'border-transparent text-slate-600 hover:text-blue-700'
           }`}
         >
           <Sliders className="w-4 h-4" />
@@ -339,8 +311,8 @@ export const AutoFollowUpDashboard: React.FC<AutoFollowUpDashboardProps> = ({
           onClick={() => setActiveTab('LOGS')}
           className={`flex items-center gap-2 px-4 py-3 text-xs font-bold border-b-2 transition-all ${
             activeTab === 'LOGS'
-              ? 'border-orange-500 text-orange-600'
-              : 'border-transparent text-slate-600 hover:text-slate-900'
+              ? 'border-blue-600 text-blue-700'
+              : 'border-transparent text-slate-600 hover:text-blue-700'
           }`}
         >
           <FileText className="w-4 h-4" />
@@ -350,9 +322,9 @@ export const AutoFollowUpDashboard: React.FC<AutoFollowUpDashboardProps> = ({
 
       {/* TAB 1: JOBS TABLE */}
       {activeTab === 'JOBS' && (
-        <div className="bg-white rounded-xl border border-slate-200 shadow-2xs p-4">
+        <div className="ai-ops-panel ai-ops-queue-panel">
           {/* Controls */}
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-4">
+          <div className="ai-ops-toolbar">
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Channel:</span>
               <select
@@ -397,8 +369,8 @@ export const AutoFollowUpDashboard: React.FC<AutoFollowUpDashboardProps> = ({
           </div>
 
           {/* Table */}
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
+          <div className="ai-ops-table-wrap">
+            <table className="ai-ops-table">
               <thead>
                 <tr className="border-b border-slate-200 bg-slate-50 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
                   <th className="py-3 px-3">Lead / Company</th>
@@ -520,7 +492,7 @@ export const AutoFollowUpDashboard: React.FC<AutoFollowUpDashboardProps> = ({
 
       {/* TAB 2: SETTINGS */}
       {activeTab === 'SETTINGS' && (
-        <form onSubmit={handleSaveConfig} className="bg-white rounded-xl border border-slate-200 shadow-2xs p-6 max-w-4xl text-slate-900">
+        <form onSubmit={handleSaveConfig} className="ai-ops-panel ai-ops-settings-form">
           <h2 className="text-lg font-bold text-slate-900 mb-1 font-display">Channel-Specific Timing Configuration</h2>
           <p className="text-xs text-slate-500 mb-6">
             Define independent follow-up delays for each communication channel. The team member enables Auto Follow-Up on a lead, and the agent uses these channel timings.
@@ -693,7 +665,7 @@ export const AutoFollowUpDashboard: React.FC<AutoFollowUpDashboardProps> = ({
           <button
             type="submit"
             disabled={isSavingConfig}
-            className="px-5 py-2.5 rounded-xl text-xs font-bold bg-orange-500 hover:bg-orange-600 text-white transition-all shadow-xs disabled:opacity-50"
+            className="ai-ops-primary-button"
           >
             {isSavingConfig ? 'Saving Settings...' : 'Save Global Channel Rules'}
           </button>
@@ -702,7 +674,7 @@ export const AutoFollowUpDashboard: React.FC<AutoFollowUpDashboardProps> = ({
 
       {/* TAB 3: AUDIT LOGS */}
       {activeTab === 'LOGS' && (
-        <div className="bg-white rounded-xl border border-slate-200 shadow-2xs p-4">
+        <div className="ai-ops-panel ai-ops-activity-panel">
           <h2 className="text-sm font-bold text-slate-900 mb-3 font-display">Operational Activity Feed & Audit Trail</h2>
           <div className="space-y-3">
             {(dashboardData?.logs || []).length === 0 ? (

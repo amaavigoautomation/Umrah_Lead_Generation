@@ -273,8 +273,8 @@ export const WorkspaceView: React.FC<SettingsViewProps> = ({
   }, { AUTO: 0, REVIEW: 0, OFF: 0 });
 
   return (
-    <div className="w-full max-w-7xl mx-auto space-y-4 font-sans">
-      <header className="rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
+    <div className="workspace-module marketing-studio-shell w-full max-w-[1440px] mx-auto font-sans">
+      <header className="workspace-header marketing-studio-header rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0">
             <div className="flex items-center gap-2 text-orange-600">
@@ -306,7 +306,7 @@ export const WorkspaceView: React.FC<SettingsViewProps> = ({
         </div>
       </header>
 
-      <nav aria-label="Workspace sections" className="flex w-full min-w-0 gap-1 overflow-x-auto rounded-2xl border border-slate-200 bg-white p-2 shadow-sm">
+      <nav aria-label="Workspace sections" className="workspace-navigation marketing-studio-tabs flex w-full min-w-0 gap-1 overflow-x-auto rounded-2xl border border-slate-200 bg-white p-2 shadow-sm">
         {sectionItems.map((item) => (
           <button
             key={item.id}
@@ -314,17 +314,17 @@ export const WorkspaceView: React.FC<SettingsViewProps> = ({
             onClick={() => changeSection(item.id)}
             aria-current={activeSection === item.id ? 'page' : undefined}
             title={item.description}
-            className={`inline-flex min-h-10 shrink-0 items-center justify-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold transition ${activeSection === item.id ? 'border-orange-200 bg-orange-50 text-orange-800 shadow-sm' : 'border-transparent text-slate-600 hover:border-slate-200 hover:bg-slate-50 hover:text-slate-900'}`}
+            className={`workspace-navigation-tab marketing-studio-tab inline-flex min-h-10 shrink-0 items-center justify-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold transition ${activeSection === item.id ? 'is-active border-orange-200 bg-orange-50 text-orange-800 shadow-sm' : 'border-transparent text-slate-600 hover:border-slate-200 hover:bg-slate-50 hover:text-slate-900'}`}
           >
-            <span className={`shrink-0 ${activeSection === item.id ? 'text-orange-600' : 'text-slate-400'}`}>{item.icon}</span>
-            <span className="whitespace-nowrap">{item.label}</span>
+            <span className="workspace-navigation-icon">{item.icon}</span>
+            <span className="workspace-navigation-label whitespace-nowrap">{item.label}</span>
           </button>
         ))}
       </nav>
 
-      <main className="min-w-0 w-full rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
+      <main className="workspace-content min-w-0 w-full rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
           {activeSection !== 'company' && activeSection !== 'audit' && (
-            <div className="mb-5 flex flex-col gap-1 border-b border-slate-100 pb-4">
+            <div className="workspace-section-heading mb-5 flex flex-col gap-1 border-b border-slate-100 pb-4">
               <h2 className="text-lg font-extrabold text-slate-950">{activeSectionMeta.label}</h2>
               <p className="text-xs text-slate-500">{activeSectionMeta.description}</p>
             </div>
@@ -423,7 +423,7 @@ export const WorkspaceView: React.FC<SettingsViewProps> = ({
             const companyName = brand?.companyName || workspaceName || tenantId || 'Workspace';
 
             return (
-              <div className="space-y-5">
+              <div className="workspace-panel-stack space-y-5">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div>
                     <h3 className="text-base font-extrabold text-slate-950">Workspace Control Center</h3>
@@ -720,7 +720,7 @@ export const WorkspaceView: React.FC<SettingsViewProps> = ({
           })()}
 
           {activeSection === 'ai' && (
-            <div className="space-y-5">
+            <div className="workspace-panel-stack space-y-5">
       {/* Human Handoff configuration */}
       <div className="bg-white border border-amber-200 rounded-2xl p-6 shadow-sm space-y-4">
         <div className="flex items-center gap-2"><Shield className="w-5 h-5 text-amber-600" /><h3 className="font-extrabold text-sm text-slate-900">Human Handoff</h3></div>
@@ -851,7 +851,7 @@ export const WorkspaceView: React.FC<SettingsViewProps> = ({
           )}
 
           {activeSection === 'channels' && (
-            <div className="space-y-5">
+            <div className="workspace-panel-stack space-y-5">
               <section className="rounded-xl border border-slate-200 bg-white p-4">
                 <h3 className="text-sm font-bold text-slate-900">Channels & Messaging</h3>
                 <p className="mt-1 text-xs text-slate-500">Manage connected channels, email delivery, inbound mailboxes, website webhooks and chatbot integrations.</p>

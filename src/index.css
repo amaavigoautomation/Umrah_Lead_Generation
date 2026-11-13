@@ -3287,3 +3287,294 @@
   .knowledge-base-header {padding:15px}
   .knowledge-base-header>div:last-child {width:100%;justify-content:flex-start}
 }
+
+
+/* Workspace design system — align all Workspace sections with Marketing. */
+.workspace-module {
+  width:100%;
+  max-width:1440px;
+  margin:0 auto;
+  padding:22px 24px 28px;
+  display:flex;
+  flex-direction:column;
+  gap:17px;
+  min-width:0;
+  min-height:100%;
+  background:#f7f9fc;
+  color:#18243b;
+  font-family:inherit;
+}
+.workspace-module > .workspace-header {
+  display:flex;
+  flex-direction:column;
+  gap:14px;
+  padding:18px 19px;
+  border:1px solid #e1e7f0;
+  border-radius:12px;
+  background:#fff;
+  box-shadow:0 2px 7px rgba(20,34,59,.025);
+}
+.workspace-module .workspace-header h1 {
+  margin:3px 0 0;
+  color:#13213a;
+  font-size:23px!important;
+  font-weight:800!important;
+  letter-spacing:-.045em;
+}
+.workspace-module .workspace-header p {
+  margin-top:5px;
+  color:#64748b;
+  font-size:11px!important;
+  line-height:1.55;
+}
+.workspace-module .workspace-header .text-orange-600 {color:#155eef!important}
+.workspace-module .workspace-header .text-orange-600 svg {color:#155eef!important}
+.workspace-module .workspace-navigation {
+  display:flex;
+  align-items:stretch;
+  gap:16px;
+  min-width:0;
+  overflow-x:auto;
+  padding:0 2px;
+  border:0;
+  border-bottom:1px solid #dfe6f0;
+  border-radius:0;
+  background:transparent;
+  box-shadow:none;
+  scrollbar-width:thin;
+}
+.workspace-module .workspace-navigation-tab {
+  display:flex;
+  align-items:center;
+  justify-content:flex-start;
+  gap:9px;
+  flex:0 0 auto;
+  min-height:0;
+  min-width:0;
+  padding:10px 7px 12px;
+  border:0;
+  border-bottom:2px solid transparent;
+  border-radius:0;
+  background:transparent;
+  color:#64748b;
+  box-shadow:none;
+  text-align:left;
+  transition:color .15s ease,border-color .15s ease;
+}
+.workspace-module .workspace-navigation-tab:hover {
+  color:#155eef;
+  border-color:transparent;
+  background:transparent;
+}
+.workspace-module .workspace-navigation-tab.is-active {
+  color:#155eef;
+  border-bottom-color:#155eef;
+  background:transparent;
+  box-shadow:none;
+}
+.workspace-module .workspace-navigation-icon {
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  width:30px;
+  height:30px;
+  flex:0 0 30px;
+  border:1px solid #e3eaf5;
+  border-radius:9px;
+  background:#f3f6fb;
+  color:#64748b;
+}
+.workspace-module .workspace-navigation-tab.is-active .workspace-navigation-icon {
+  border-color:#dbe7ff;
+  background:#edf3ff;
+  color:#155eef;
+}
+.workspace-module .workspace-navigation-label {
+  color:#263650;
+  font-size:11px!important;
+  font-weight:760!important;
+  white-space:nowrap;
+}
+.workspace-module .workspace-navigation-tab.is-active .workspace-navigation-label {color:#155eef}
+.workspace-module > .workspace-content {
+  min-width:0;
+  width:100%;
+  padding:0;
+  border:0;
+  border-radius:0;
+  background:transparent;
+  box-shadow:none;
+}
+.workspace-module .workspace-section-heading {
+  margin:0 0 16px;
+  padding:0 0 12px;
+  border-bottom:1px solid #dfe6f0;
+}
+.workspace-module .workspace-section-heading h2 {
+  margin:0;
+  color:#13213a;
+  font-size:15px!important;
+  font-weight:800!important;
+}
+.workspace-module .workspace-section-heading p {
+  margin-top:4px;
+  color:#74829a;
+  font-size:10px!important;
+}
+.workspace-module .workspace-panel-stack {display:flex;flex-direction:column;gap:16px;min-width:0}
+.workspace-module .workspace-panel-stack>* {margin-top:0!important}
+.workspace-module main section[class*="rounded"],
+.workspace-module main div[class*="rounded-2xl"][class*="border"],
+.workspace-module main div[class*="rounded-xl"][class*="border"] {
+  border-color:#e1e7f0;
+  box-shadow:0 2px 7px rgba(20,34,59,.025);
+}
+.workspace-module main section[class*="rounded-2xl"],
+.workspace-module main div[class*="rounded-2xl"][class*="border"] {border-radius:12px}
+.workspace-module main [class*="border-b"][class*="border-slate"] {border-color:#edf1f6}
+.workspace-module main [class~="bg-slate-50"] {background-color:#f7f9fc}
+.workspace-module main [class~="bg-slate-100"] {background-color:#f1f5fa}
+.workspace-module main [class~="text-slate-950"],
+.workspace-module main [class~="text-slate-900"] {color:#13213a}
+.workspace-module main [class~="text-slate-800"] {color:#263650}
+.workspace-module main [class~="text-slate-600"],
+.workspace-module main [class~="text-slate-500"] {color:#64748b}
+.workspace-module main [class~="bg-orange-500"],
+.workspace-module main [class~="bg-orange-600"] {
+  background:#155eef!important;
+  color:#fff!important;
+}
+.workspace-module main [class~="hover:bg-orange-600"]:hover,
+.workspace-module main [class~="hover:bg-orange-700"]:hover {background:#0d4ed6!important}
+.workspace-module main [class~="text-orange-400"],
+.workspace-module main [class~="text-orange-500"],
+.workspace-module main [class~="text-orange-600"],
+.workspace-module main [class~="text-orange-700"],
+.workspace-module main [class~="text-orange-800"] {color:#155eef!important}
+.workspace-module main [class~="bg-orange-50"],
+.workspace-module main [class~="bg-orange-100"] {background:#edf3ff!important}
+.workspace-module main [class~="border-orange-100"],
+.workspace-module main [class~="border-orange-200"],
+.workspace-module main [class~="border-orange-300"],
+.workspace-module main [class~="border-orange-400"],
+.workspace-module main [class~="border-orange-500"] {border-color:#cfe0ff!important}
+.workspace-module main [class*="from-orange-500"],
+.workspace-module main [class*="to-orange-600"],
+.workspace-module main [class*="to-amber-600"] {
+  background-image:none!important;
+  background-color:#155eef!important;
+}
+.workspace-module main button[class~="bg-slate-900"] {background:#155eef!important;color:#fff!important}
+.workspace-module main button[class~="hover:bg-slate-800"]:hover,
+.workspace-module main button[class~="hover:bg-slate-900"]:hover {background:#0d4ed6!important}
+.workspace-module main input,
+.workspace-module main select,
+.workspace-module main textarea {
+  border-color:#d8e0ed;
+  color:#263650;
+}
+.workspace-module main input:focus,
+.workspace-module main select:focus,
+.workspace-module main textarea:focus {
+  border-color:#7ca5fa!important;
+  outline:none;
+  box-shadow:0 0 0 3px rgba(21,94,239,.09);
+}
+.workspace-module main button:focus-visible {outline:2px solid #8fb0f7;outline-offset:2px}
+.workspace-module main table {border-color:#e1e7f0}
+.workspace-module main table thead {background:#f5f7fb}
+.workspace-module main table thead th {
+  color:#68758b;
+  font-size:9px!important;
+  font-weight:780!important;
+  letter-spacing:.055em;
+  text-transform:uppercase;
+}
+.workspace-module main table tbody td {color:#40506b}
+.workspace-module .workspace-panel-stack section,
+.workspace-module .workspace-panel-stack>div[class*="bg-white"][class*="border"] {
+  border-color:#e1e7f0;
+}
+
+/* Rechecked shared type scale: Marketing / AI & Automation / Workspace / Database / Knowledge Base. */
+:where(.workspace-module,.lead-database-shell,.knowledge-base-shell) {
+  font-family:inherit;
+  font-size:11px;
+  line-height:1.5;
+  color:#40506b;
+}
+:where(.workspace-module,.lead-database-shell,.knowledge-base-shell) :where(p,span,label,a,li,td,th,small,strong,em,code) {
+  font-size:11px!important;
+  line-height:1.5;
+}
+:where(.workspace-module,.lead-database-shell,.knowledge-base-shell) :where(h1,h2,h3,h4,h5,h6) {
+  line-height:1.3!important;
+}
+:where(.workspace-module,.lead-database-shell,.knowledge-base-shell) :where(h1) {
+  font-size:23px!important;
+  font-weight:800!important;
+  letter-spacing:-.045em;
+  color:#13213a;
+}
+:where(.workspace-module,.lead-database-shell,.knowledge-base-shell) :where(h2) {
+  font-size:15px!important;
+  font-weight:800!important;
+  letter-spacing:-.02em;
+  color:#1c2b45;
+}
+:where(.workspace-module,.lead-database-shell,.knowledge-base-shell) :where(h3,h4) {
+  font-size:13px!important;
+  font-weight:760!important;
+  color:#263650;
+}
+:where(.workspace-module,.lead-database-shell,.knowledge-base-shell) :where(button,[role="button"],input,select,textarea) {
+  font-size:11px!important;
+  line-height:1.4;
+}
+:where(.workspace-module,.lead-database-shell,.knowledge-base-shell) :where(th) {
+  font-size:9px!important;
+  font-weight:780!important;
+  letter-spacing:.055em;
+}
+:where(.workspace-module,.lead-database-shell,.knowledge-base-shell) :where(.text-2xl,.text-3xl,.text-4xl,.text-5xl,.text-6xl) {
+  font-size:22px!important;
+  font-weight:820!important;
+  line-height:1.1!important;
+  font-variant-numeric:tabular-nums;
+}
+:where(.workspace-module,.lead-database-shell,.knowledge-base-shell) :where(.text-xl) {
+  font-size:18px!important;
+  font-weight:780!important;
+  line-height:1.2!important;
+}
+:where(.workspace-module,.lead-database-shell,.knowledge-base-shell) :where(.text-lg) {
+  font-size:13px!important;
+}
+:where(.workspace-module,.lead-database-shell,.knowledge-base-shell) :where(.text-xs,.text-sm,.text-base) {
+  font-size:11px!important;
+}
+:where(.workspace-module,.lead-database-shell,.knowledge-base-shell) :where([class*="text-[9px]"]) {font-size:9px!important}
+:where(.workspace-module,.lead-database-shell,.knowledge-base-shell) :where([class*="text-[10px]"]) {font-size:10px!important}
+:where(.workspace-module,.lead-database-shell,.knowledge-base-shell) :where([class*="text-[11px]"]) {font-size:11px!important}
+.lead-database-shell .lead-db-page-heading h1 {font-size:23px!important}
+.lead-database-shell .lead-db-stat-value,
+.lead-database-shell .lead-db-workspace-summary-item strong,
+.lead-database-shell .lead-db-preview-stats strong {font-size:22px!important;line-height:1.12!important}
+.lead-database-shell .lead-db-stat-label,
+.lead-database-shell .lead-db-stat-helper,
+.lead-database-shell .lead-db-person-meta,
+.lead-database-shell .lead-db-cell-sub,
+.lead-database-shell .lead-db-muted-label,
+.lead-database-shell .lead-db-footnote,
+.lead-database-shell .lead-db-pagination {font-size:9px!important}
+.knowledge-base-shell .knowledge-base-header h1 {font-size:23px!important}
+@media(max-width:900px) {
+  .workspace-module {padding:15px}
+}
+@media(max-width:640px) {
+  .workspace-module {padding:13px}
+  .workspace-module > .workspace-header {padding:15px}
+  .workspace-module .workspace-navigation {gap:10px}
+  .workspace-module .workspace-navigation-tab {padding:8px 4px 10px}
+  .workspace-module .workspace-navigation-icon {width:27px;height:27px;flex-basis:27px}
+}

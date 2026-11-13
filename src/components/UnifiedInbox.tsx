@@ -32,6 +32,7 @@ import {
   Clock,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
 } from 'lucide-react';
 import {
   Conversation,
@@ -600,15 +601,6 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
   const activeLeadHasBookedDemo = STOP_FOLLOWUPS_WHEN_DEMO_BOOKED && (activeLead?.demoStatus === 'BOOKED' || activeLead?.status === 'DEMO_BOOKED');
 
   // Toggle Auto Follow-Up on/off for the active lead
-  const handleFilterLaneWheel = (event: React.WheelEvent<HTMLDivElement>) => {
-    const lane = event.currentTarget;
-    const hasHorizontalOverflow = lane.scrollWidth > lane.clientWidth + 2;
-    if (hasHorizontalOverflow && Math.abs(event.deltaY) > Math.abs(event.deltaX)) {
-      lane.scrollLeft += event.deltaY;
-      event.preventDefault();
-    }
-  };
-
   const handleToggleAutoFollowUp = async (enabled: boolean) => {
     if (!activeLead || !activeConversation) return;
     if (enabled && activeLeadHasBookedDemo) return;
@@ -675,37 +667,39 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
               className="w-full bg-white border border-slate-200 rounded-xl pl-9 pr-3 py-1.5 text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none transition font-medium"
             />
           </div>
-          <div className="uinbox-inline-status-filters" role="group" aria-label="Filter conversations" onWheel={handleFilterLaneWheel}>
-            {[
-              { key: 'ALL', label: 'All', count: viewCounts.ALL },
-              { key: 'UNREAD', label: 'Unread', count: viewCounts.UNREAD },
-              { key: 'AI_ACTIVE', label: 'AI active', count: viewCounts.AI_ACTIVE },
-              { key: 'HUMAN_HANDOFF', label: 'Handoff', count: viewCounts.HUMAN_HANDOFF },
-              { key: 'UNASSIGNED', label: 'Unassigned', count: viewCounts.UNASSIGNED },
-              { key: 'HIGH_INTENT', label: 'High intent', count: viewCounts.HIGH_INTENT },
-              { key: 'RESOLVED', label: 'Closed', count: viewCounts.RESOLVED },
-            ].map((view) => (
-              <button key={view.key} type="button" onClick={() => setStatusFilter(view.key)} aria-pressed={statusFilter === view.key}
-                className={statusFilter === view.key ? 'is-active' : ''}>
-                <span>{view.label}</span><span className="uinbox-filter-count">{view.count}</span>
-              </button>
-            ))}
-          </div>
-          <div className="uinbox-inline-channel-filters" role="group" aria-label="Filter by channel" onWheel={handleFilterLaneWheel}>
-            {[
-              { key: 'ALL', label: 'All' },
-              { key: 'EMAIL', label: 'Email' },
-              { key: 'WHATSAPP', label: 'WhatsApp' },
-              { key: 'WEBSITE', label: 'Website' },
-              { key: 'INSTAGRAM', label: 'Instagram' },
-              { key: 'FACEBOOK', label: 'Facebook' },
-              { key: 'LINKEDIN', label: 'LinkedIn' },
-            ].map((channel) => (
-              <button key={channel.key} type="button" onClick={() => setChannelFilter(channel.key)} aria-pressed={channelFilter === channel.key}
-                className={channelFilter === channel.key ? 'is-active' : ''} title={channel.label}>
-                {channel.label}
-              </button>
-            ))}
+          <div className="uinbox-filter-select-grid" aria-label="Conversation filters">
+            <label className="uinbox-filter-select">
+              <span className="uinbox-filter-select-label">Status</span>
+              <span className="uinbox-filter-select-control">
+                <Layers className="uinbox-filter-select-icon" size={13} aria-hidden="true" />
+                <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} aria-label="Filter conversations by status">
+                  <option value="ALL">All ({viewCounts.ALL})</option>
+                  <option value="UNREAD">Unread ({viewCounts.UNREAD})</option>
+                  <option value="AI_ACTIVE">AI active ({viewCounts.AI_ACTIVE})</option>
+                  <option value="HUMAN_HANDOFF">Human handoff ({viewCounts.HUMAN_HANDOFF})</option>
+                  <option value="UNASSIGNED">Unassigned ({viewCounts.UNASSIGNED})</option>
+                  <option value="HIGH_INTENT">High intent ({viewCounts.HIGH_INTENT})</option>
+                  <option value="RESOLVED">Closed ({viewCounts.RESOLVED})</option>
+                </select>
+                <ChevronDown className="uinbox-filter-select-chevron" size={13} aria-hidden="true" />
+              </span>
+            </label>
+            <label className="uinbox-filter-select">
+              <span className="uinbox-filter-select-label">Channel</span>
+              <span className="uinbox-filter-select-control">
+                <Globe className="uinbox-filter-select-icon" size={13} aria-hidden="true" />
+                <select value={channelFilter} onChange={(event) => setChannelFilter(event.target.value)} aria-label="Filter conversations by channel">
+                  <option value="ALL">All channels</option>
+                  <option value="EMAIL">Email</option>
+                  <option value="WHATSAPP">WhatsApp</option>
+                  <option value="WEBSITE">Website</option>
+                  <option value="INSTAGRAM">Instagram</option>
+                  <option value="FACEBOOK">Facebook</option>
+                  <option value="LINKEDIN">LinkedIn</option>
+                </select>
+                <ChevronDown className="uinbox-filter-select-chevron" size={13} aria-hidden="true" />
+              </span>
+            </label>
           </div>
         </div>
 

@@ -1334,55 +1334,81 @@
   .uinbox-inline-channel-filters button { min-height:22px; }
 }
 
-
-/* Filter lanes: independently horizontally scrollable, discoverable on desktop
-   and swipeable on touch devices. Vertical mouse-wheel input is mapped in React. */
-.unified-inbox-layout-root .uinbox-inline-status-filters,
-.unified-inbox-layout-root .uinbox-inline-channel-filters {
+/* Compact status and channel dropdowns: no horizontal filter scrolling. */
+.unified-inbox-layout-root .uinbox-filter-select-grid {
+  display:grid;
+  grid-template-columns:minmax(0,1fr) minmax(0,1fr);
+  gap:8px;
   width:100%;
-  max-width:100%;
   min-width:0;
+}
+.unified-inbox-layout-root .uinbox-filter-select {
+  display:flex;
+  min-width:0;
+  flex-direction:column;
+  gap:4px;
+}
+.unified-inbox-layout-root .uinbox-filter-select-label {
+  color:#7c899f;
+  font-size:8px;
+  font-weight:750;
+  letter-spacing:.055em;
+  line-height:1.2;
+  text-transform:uppercase;
+}
+.unified-inbox-layout-root .uinbox-filter-select-control {
+  position:relative;
+  display:flex;
+  min-width:0;
+  height:33px;
+  align-items:center;
+  border:1px solid #e0e6f0;
+  border-radius:8px;
+  background:#fbfcff;
+  color:#61718e;
+  transition:border-color .15s ease,background .15s ease,box-shadow .15s ease;
+}
+.unified-inbox-layout-root .uinbox-filter-select-control:focus-within {
+  border-color:#9bb8ff;
+  background:#fff;
+  box-shadow:0 0 0 3px rgba(8,72,239,.08);
+}
+.unified-inbox-layout-root .uinbox-filter-select-icon {
   flex:0 0 auto;
-  flex-wrap:nowrap;
-  overflow-x:auto;
-  overflow-y:hidden;
-  overscroll-behavior-x:contain;
-  -webkit-overflow-scrolling:touch;
-  scrollbar-width:thin;
-  scrollbar-color:#c8d5ee #f5f7fc;
-  padding-bottom:5px;
-  scroll-behavior:smooth;
-  touch-action:pan-x;
+  margin-left:9px;
+  color:#7d8ba4;
+  pointer-events:none;
 }
-.unified-inbox-layout-root .uinbox-inline-status-filters::-webkit-scrollbar,
-.unified-inbox-layout-root .uinbox-inline-channel-filters::-webkit-scrollbar {
-  display:block;
-  height:4px;
+.unified-inbox-layout-root .uinbox-filter-select-control select {
+  width:100%;
+  min-width:0;
+  height:100%;
+  appearance:none;
+  border:0;
+  outline:0;
+  background:transparent;
+  padding:0 25px 0 6px;
+  color:#263653;
+  cursor:pointer;
+  font-family:inherit;
+  font-size:9px;
+  font-weight:680;
+  text-overflow:ellipsis;
 }
-.unified-inbox-layout-root .uinbox-inline-status-filters::-webkit-scrollbar-track,
-.unified-inbox-layout-root .uinbox-inline-channel-filters::-webkit-scrollbar-track {
-  background:#f3f6fb;
-  border-radius:999px;
+.unified-inbox-layout-root .uinbox-filter-select-control select option {
+  color:#1c2a43;
+  background:#fff;
+  font-size:12px;
 }
-.unified-inbox-layout-root .uinbox-inline-status-filters::-webkit-scrollbar-thumb,
-.unified-inbox-layout-root .uinbox-inline-channel-filters::-webkit-scrollbar-thumb {
-  background:#c8d5ee;
-  border-radius:999px;
-}
-.unified-inbox-layout-root .uinbox-inline-status-filters::-webkit-scrollbar-thumb:hover,
-.unified-inbox-layout-root .uinbox-inline-channel-filters::-webkit-scrollbar-thumb:hover {
-  background:#9eb5e4;
-}
-.unified-inbox-layout-root .uinbox-inline-status-filters button,
-.unified-inbox-layout-root .uinbox-inline-channel-filters button {
+.unified-inbox-layout-root .uinbox-filter-select-chevron {
+  position:absolute;
+  right:8px;
   flex:0 0 auto;
+  color:#73819a;
+  pointer-events:none;
 }
-@media(max-width:680px) {
-  .unified-inbox-layout-root .uinbox-inline-status-filters,
-  .unified-inbox-layout-root .uinbox-inline-channel-filters {
-    scrollbar-width:none;
-    padding-bottom:2px;
-  }
-  .unified-inbox-layout-root .uinbox-inline-status-filters::-webkit-scrollbar,
-  .unified-inbox-layout-root .uinbox-inline-channel-filters::-webkit-scrollbar { height:0; }
+@media(max-width:360px) {
+  .unified-inbox-layout-root .uinbox-filter-select-grid { gap:5px; }
+  .unified-inbox-layout-root .uinbox-filter-select-control select { font-size:8px;padding-left:4px; }
+  .unified-inbox-layout-root .uinbox-filter-select-icon { margin-left:6px; }
 }

@@ -83,66 +83,17 @@ export async function initPersistentIdempotencyStore(ctx: TenantContext = DEFAUL
   repliedCount: number;
 }> {
   const cache = getTenantCache(ctx.tenantId);
-  if (!isFirebaseConfigured || !db) {
+  if (!isFirebaseConfigured || !db || cache.loaded) {
     return { totalLoaded: cache.processed.size, repliedCount: cache.replied.size };
   }
 
-  try {
-    const repo = tenantRepo(ctx);
-    const colRef = repo.processedInboundEmails();
-    const snapshot = await getDocs(colRef);
-
-    let loadedCount = 0;
-    let repliedCount = 0;
-
-    snapshot.forEach((d) => {
-      const data = d.data() as PersistentProcessedEmailRecord;
-      if (data.messageId) {
-        const norm = normalizeIdentifier(data.messageId);
-        cache.processed.add(norm);
-        cache.processed.add(data.messageId);
-        if (data.cleanKey) cache.processed.add(data.cleanKey);
-
-        if (data.aiReplied || data.status === 'REPLIED') {
-          cache.replied.add(norm);
-          cache.replied.add(data.messageId);
-          repliedCount++;
-        }
-        loadedCount++;
-      }
-    });
-
-    // Also scan tenant's messages collection
-    try {
-      const msgsCol = repo.messages();
-      const msgsSnap = await getDocs(msgsCol);
-      msgsSnap.forEach((d) => {
-        const m = d.data();
-        if (m.gmailMessageId) {
-          const norm = normalizeIdentifier(m.gmailMessageId);
-          cache.processed.add(norm);
-          cache.processed.add(m.gmailMessageId);
-          if (m.direction === 'OUTBOUND' || m.aiReplied) {
-            cache.replied.add(norm);
-            cache.replied.add(m.gmailMessageId);
-          }
-        }
-        if (m.emailMeta?.inReplyTo) {
-          const normReplyTo = normalizeIdentifier(m.emailMeta.inReplyTo);
-          cache.processed.add(normReplyTo);
-          cache.replied.add(normReplyTo);
-        }
-      });
-    } catch (e) {
-      console.warn(`[Firestore Idempotency] Notice loading messages for tenant ${ctx.tenantId}:`, e);
-    }
-
-    cache.loaded = true;
-    return { totalLoaded: loadedCount, repliedCount };
-  } catch (err) {
-    console.error(`[Firestore Idempotency] Failed to load idempotency ledger for tenant ${ctx.tenantId}:`, err);
-    return { totalLoaded: cache.processed.size, repliedCount: cache.replied.size };
-  }
+  // Do not download the complete processed_inbound_emails and messages
+  // collections when a Vercel function starts. Those collections grow over
+  // time and the scan was multiplying Firestore reads across cold instances.
+  // isMessageAlreadyProcessed() performs tenant-scoped point reads for the
+  // exact message being handled, then uses the legacy messages lookup as fallback.
+  cache.loaded = true;
+  return { totalLoaded: cache.processed.size, repliedCount: cache.replied.size };
 }
 
 /**

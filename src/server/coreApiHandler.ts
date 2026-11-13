@@ -114,7 +114,7 @@ import {
   globalDomainRouteDoc,
 } from './tenantRepo.js';
 import { getAdminAuth, createTenantUser, createPasswordSetupLink } from './firebaseAdmin.js';
-import { authenticateRequest } from './authMiddleware.js';
+import { authenticateRequest, rememberTenantStatusCache } from './authMiddleware.js';
 import {
   listAiTestFeedback,
   createAiTestFeedback,
@@ -806,6 +806,7 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
         }
         updates.updatedAt = new Date().toISOString();
         await updateDoc(globalTenantDoc(tId), updates);
+        if (updates.status === 'active' || updates.status === 'suspended') rememberTenantStatusCache(tId, updates.status);
         invalidateEntitlements(tId);
         res.statusCode = 200;
         res.end(JSON.stringify({ success: true, updated: updates }));

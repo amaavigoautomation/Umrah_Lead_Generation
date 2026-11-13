@@ -23,27 +23,66 @@ export interface AuthResult {
   code?: string;
 }
 
-// Short cache so we don't read Firestore on every request. Fails CLOSED.
-const tenantStatusCache = new Map<string, { status: 'active' | 'suspended' | 'missing'; cachedAt: number }>();
-const CACHE_TTL_MS = 30_000;
+// Tenant status is a low-churn value. Cache it long enough to avoid a Firestore
+// document read for every workspace API burst (and each Vercel warm instance).
+type TenantStatus = 'active' | 'suspended' | 'missing';
+interface TenantStatusCacheEntry {
+  status: TenantStatus;
+  cachedAt: number;
+  verified: boolean;
+}
+const tenantStatusCache = new Map<string, TenantStatusCacheEntry>();
+const CACHE_TTL_MS = 5 * 60_000;
+// If Firestore quota is exhausted, keep the signed-in workspace usable in a
+// bounded cache window and retry verification periodically.
+const QUOTA_FALLBACK_TTL_MS = 5 * 60_000;
 
-async function getTenantStatus(tenantId: string): Promise<'active' | 'suspended' | 'missing'> {
+function isFirestoreQuotaExceeded(error: any): boolean {
+  const code = String(error?.code ?? '').toUpperCase();
+  const message = `${error?.message || ''} ${error?.details || ''}`.toUpperCase();
+  return code === '8' || code === 'RESOURCE_EXHAUSTED' || message.includes('RESOURCE_EXHAUSTED') || message.includes('QUOTA EXCEEDED');
+}
+
+async function getTenantStatus(tenantId: string): Promise<TenantStatus> {
   const cached = tenantStatusCache.get(tenantId);
   const now = Date.now();
-  if (cached && now - cached.cachedAt < CACHE_TTL_MS) return cached.status;
+  const ttl = cached?.verified === false ? QUOTA_FALLBACK_TTL_MS : CACHE_TTL_MS;
+  if (cached && now - cached.cachedAt < ttl) return cached.status;
 
-  const snap = await getAdminFirestore().collection('tenants').doc(tenantId).get();
-  const status: 'active' | 'suspended' | 'missing' = !snap.exists
-    ? 'missing'
-    : snap.data()?.status === 'suspended'
-      ? 'suspended'
-      : 'active';
-  tenantStatusCache.set(tenantId, { status, cachedAt: now });
-  return status;
+  try {
+    const snap = await getAdminFirestore().collection('tenants').doc(tenantId).get();
+    const status: TenantStatus = !snap.exists
+      ? 'missing'
+      : snap.data()?.status === 'suspended'
+        ? 'suspended'
+        : 'active';
+    tenantStatusCache.set(tenantId, { status, cachedAt: now, verified: true });
+    return status;
+  } catch (error: any) {
+    if (!isFirestoreQuotaExceeded(error)) throw error;
+
+    // Preserve a last-known denied state. For an active/unknown cache, Firebase
+    // ID-token signature, expiry, revocation and disabled-user checks have
+    // already succeeded before this fallback is reached.
+    const fallbackStatus: TenantStatus =
+      cached?.status === 'suspended' || cached?.status === 'missing'
+        ? cached.status
+        : 'active';
+    tenantStatusCache.set(tenantId, { status: fallbackStatus, cachedAt: now, verified: false });
+    createTenantLogger('system').warn(
+      { tenantId, cachedStatus: cached?.status || 'unavailable' },
+      'Firestore quota exhausted during workspace status verification; using bounded authenticated-session fallback'
+    );
+    return fallbackStatus;
+  }
 }
 
 export function invalidateTenantStatusCache(tenantId: string) {
   tenantStatusCache.delete(tenantId);
+}
+
+export function rememberTenantStatusCache(tenantId: string, status: TenantStatus) {
+  tenantStatusCache.set(tenantId, { status, cachedAt: Date.now(), verified: true });
 }
 
 export function extractBearerToken(req: { headers: Record<string, any> }): string | null {

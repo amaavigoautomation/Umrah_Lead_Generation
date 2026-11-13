@@ -2072,3 +2072,41 @@
   color:#dbe4ff !important;
   box-shadow:0 8px 24px rgba(0,0,0,.22) !important;
 }
+
+/* Home hero: chat-history drawer and uploaded workspace control strip. */
+.dashboard-home-history-backdrop {
+  animation:dashboard-home-history-fade .16s ease-out;
+}
+.dashboard-home-history-panel {
+  animation:dashboard-home-history-slide .2s cubic-bezier(.2,.75,.25,1);
+}
+.dashboard-home-history-list {
+  scrollbar-width:thin;
+  scrollbar-color:rgba(130,150,220,.35) transparent;
+}
+.dashboard-home-history-list::-webkit-scrollbar { width:5px; }
+.dashboard-home-history-list::-webkit-scrollbar-thumb {
+  border-radius:99px;
+  background:rgba(130,150,220,.35);
+}
+.dashboard-home-history-item:focus-visible,
+.dashboard-home-history-toggle:focus-visible {
+  outline:2px solid rgba(174,199,255,.8);
+  outline-offset:2px;
+}
+.dashboard-home-workspace-controls {
+  filter:drop-shadow(0 7px 18px rgba(0,0,0,.24));
+  border-radius:12px;
+}
+@keyframes dashboard-home-history-fade {
+  from { opacity:0; } to { opacity:1; }
+}
+@keyframes dashboard-home-history-slide {
+  from { opacity:0; transform:translateX(-12px); }
+  to { opacity:1; transform:translateX(0); }
+}
+@media(max-width:520px) {
+  .dashboard-home-workspace-controls { width:176px; max-width:58%; }
+  .dashboard-home-history-toggle { padding-left:10px; padding-right:10px; }
+}
+

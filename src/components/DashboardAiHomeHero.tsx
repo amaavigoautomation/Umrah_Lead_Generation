@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Activity, ArrowUpRight, Bot, CalendarClock, Lightbulb, Loader2, Plus, Sparkles, WandSparkles, X } from 'lucide-react';
+import { Activity, ArrowUpRight, Bot, CalendarClock, History, Lightbulb, Loader2, MessageSquareText, PanelLeftClose, PanelLeftOpen, Plus, X } from 'lucide-react';
 import { useAgent } from '../context/AgentContext';
 import type { ActiveTab } from './Navbar';
 
@@ -16,9 +16,36 @@ const QUICK_TASKS = [
 ];
 
 export const DashboardAiHomeHero: React.FC<DashboardAiHomeHeroProps> = ({ userName, canUseAi, onNavigate }) => {
-  const { sending, loading, error, sendMessage, newConversation, clearError } = useAgent();
+  const { conversations, sending, loading, error, sendMessage, newConversation, selectConversation, clearError } = useAgent();
   const [prompt, setPrompt] = useState('');
   const [startingAgent, setStartingAgent] = useState(false);
+  const [showChatHistory, setShowChatHistory] = useState(false);
+  const [openingConversation, setOpeningConversation] = useState<string | null>(null);
+
+  const openConversation = async (conversationId: string) => {
+    if (openingConversation) return;
+    setOpeningConversation(conversationId);
+    try {
+      await selectConversation(conversationId);
+      setShowChatHistory(false);
+      onNavigate('agent');
+    } finally {
+      setOpeningConversation(null);
+    }
+  };
+
+  const startConversationFromHistory = async () => {
+    if (startingAgent || sending) return;
+    setStartingAgent(true);
+    try {
+      const conversationId = await newConversation('agent');
+      if (!conversationId) return;
+      setShowChatHistory(false);
+      onNavigate('agent');
+    } finally {
+      setStartingAgent(false);
+    }
+  };
 
   const openAgentWithMessage = async (message?: string) => {
     if (!canUseAi || sending || startingAgent) return;
@@ -54,14 +81,38 @@ export const DashboardAiHomeHero: React.FC<DashboardAiHomeHeroProps> = ({ userNa
   return (
     <section className="dashboard-ai-hero relative isolate overflow-hidden rounded-2xl border border-white/10 text-white">
       <div className="dashboard-ai-hero-glow" aria-hidden="true" />
+      {showChatHistory && <>
+        <button type="button" aria-label="Close chat history" onClick={() => setShowChatHistory(false)} className="dashboard-home-history-backdrop absolute inset-0 z-20 cursor-default bg-[#03031a]/65 backdrop-blur-[2px]" />
+        <aside id="dashboard-home-history" aria-label="All conversations" className="dashboard-home-history-panel absolute inset-y-0 left-0 z-30 flex w-[min(340px,88vw)] flex-col border-r border-white/10 bg-[#090927]/[.98] p-4 shadow-2xl backdrop-blur-xl">
+          <div className="flex items-center justify-between border-b border-white/10 pb-3">
+            <div className="flex items-center gap-2.5">
+              <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-indigo-300/20 bg-indigo-400/10 text-indigo-200"><History className="h-4 w-4" /></span>
+              <div><div className="text-[12px] font-semibold text-white">All conversations</div><div className="mt-0.5 text-[10px] text-blue-100/55">{conversations.length} saved chats</div></div>
+            </div>
+            <button type="button" onClick={() => setShowChatHistory(false)} aria-label="Close chat history" className="rounded-lg border border-white/10 p-2 text-blue-100/65 transition hover:bg-white/10 hover:text-white"><X className="h-4 w-4" /></button>
+          </div>
+          <button type="button" onClick={() => void startConversationFromHistory()} disabled={!canUseAi || startingAgent || sending} className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl border border-indigo-300/25 bg-gradient-to-r from-[#6656e8] via-[#405fe9] to-[#087edc] px-3 py-2.5 text-[11px] font-semibold text-white shadow-lg shadow-blue-950/30 transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-45">
+            <Plus className="h-4 w-4" /> New conversation
+          </button>
+          <div className="mt-4 flex items-center justify-between text-[9px] font-bold uppercase tracking-[.17em] text-blue-100/45"><span>Recent chats</span><span>{conversations.length}</span></div>
+          <div className="mt-2 min-h-0 flex-1 space-y-1 overflow-y-auto pr-1 dashboard-home-history-list">
+            {conversations.map((item) => <button key={item.id} type="button" disabled={Boolean(openingConversation)} onClick={() => void openConversation(item.id)} className="dashboard-home-history-item group w-full rounded-xl border border-transparent px-3 py-3 text-left transition hover:border-indigo-300/20 hover:bg-indigo-400/[.09] disabled:cursor-wait disabled:opacity-55">
+              <span className="flex min-w-0 items-center gap-2"><MessageSquareText className="h-3.5 w-3.5 shrink-0 text-indigo-200/70" /><span className="min-w-0 flex-1 truncate text-[11px] font-medium text-blue-50/90">{item.title || 'New conversation'}</span><ArrowUpRight className="h-3 w-3 shrink-0 text-blue-100/25 opacity-0 transition group-hover:opacity-100" /></span>
+              <span className="mt-1.5 block pl-[22px] text-[9px] text-blue-100/45">{new Date(item.updatedAt || item.createdAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}</span>
+            </button>)}
+            {conversations.length === 0 && !loading && <div className="rounded-xl border border-dashed border-white/10 px-3 py-8 text-center"><MessageSquareText className="mx-auto h-5 w-5 text-blue-100/35" /><p className="mt-2 text-[11px] text-blue-100/65">Your conversations will appear here.</p></div>}
+            {loading && conversations.length === 0 && <div className="flex items-center justify-center gap-2 py-8 text-[10px] text-blue-100/55"><Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading conversations…</div>}
+          </div>
+        </aside>
+      </>}
       <div className="relative z-10 flex min-h-[370px] flex-col px-4 pb-7 pt-4 sm:min-h-[400px] sm:px-8 sm:pb-8 sm:pt-5">
         <div className="flex items-center justify-between gap-3">
-          <button type="button" onClick={() => void submit(undefined, 'Help me create a complete brand kit for this workspace. Review the existing company profile, logo, brand colors, website and assets. Show me a recommended brand direction and what assets are missing before making changes.')} className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3.5 py-2 text-[10px] font-semibold text-white/90 shadow-sm backdrop-blur transition hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-40" disabled={!canUseAi}>
-            <Sparkles className="h-3.5 w-3.5 text-fuchsia-200" /> Create a Brand Kit
+          <button type="button" aria-expanded={showChatHistory} aria-controls="dashboard-home-history" onClick={() => setShowChatHistory((open) => !open)} className={'dashboard-home-history-toggle inline-flex items-center gap-2 rounded-xl border px-3.5 py-2 text-[10px] font-semibold shadow-sm backdrop-blur transition ' + (showChatHistory ? 'border-indigo-200/40 bg-indigo-300/20 text-white' : 'border-white/20 bg-[#080824]/55 text-white/90 hover:border-indigo-200/40 hover:bg-indigo-300/10')}>
+            {showChatHistory ? <PanelLeftClose className="h-3.5 w-3.5" /> : <PanelLeftOpen className="h-3.5 w-3.5" />}
+            Chat history
+            <span className="rounded-full bg-white/10 px-1.5 py-0.5 text-[9px] text-blue-50/80">{conversations.length}</span>
           </button>
-          <button type="button" onClick={() => onNavigate('agent')} className="inline-flex items-center gap-2 rounded-lg border border-white/20 bg-[#05051f]/75 px-3.5 py-2 text-[10px] font-semibold text-white shadow-sm backdrop-blur transition hover:border-white/40 hover:bg-[#11113a] disabled:cursor-not-allowed disabled:opacity-40" disabled={!canUseAi}>
-            <WandSparkles className="h-3.5 w-3.5" /> Customize your AI
-          </button>
+          <img src="/images/home-workspace-controls.png" alt="Workspace connected, Settings and activity controls" className="dashboard-home-workspace-controls h-auto w-[210px] max-w-[58%] object-contain sm:w-[260px] md:w-[290px]" />
         </div>
 
         <div className="mx-auto mt-8 w-full max-w-[820px] text-center sm:mt-8">

@@ -795,8 +795,11 @@ export async function handleAgentApi(req: any, res: any, ctx: TenantContext, bod
     }
 
     if (url === '/api/agent/notifications/read' && req.method === 'POST') {
-      const executionIds = Array.isArray(body?.executionIds)
-        ? [...new Set(body.executionIds.map((value: any) => cleanText(value, 100)).filter((value: string) => /^[a-zA-Z0-9_-]{12,100}$/.test(value)))].slice(0, 30)
+      const executionIds: string[] = Array.isArray(body?.executionIds)
+        ? [...new Set((body.executionIds as unknown[])
+            .map((value) => String(value ?? '').trim())
+            .filter((value): value is string => /^[a-zA-Z0-9_-]{12,100}$/.test(value)))]
+            .slice(0, 30)
         : [];
       if (!executionIds.length) return send(400, { success: false, error: 'At least one valid execution ID is required.' });
       const readAt = new Date().toISOString();

@@ -112,7 +112,6 @@ export const DashboardAiHomeHero: React.FC<DashboardAiHomeHeroProps> = ({ userNa
             Chat history
             <span className="rounded-full bg-white/10 px-1.5 py-0.5 text-[9px] text-blue-50/80">{conversations.length}</span>
           </button>
-          <img src="/images/home-workspace-controls.png" alt="Workspace connected, Settings and activity controls" className="dashboard-home-workspace-controls h-auto w-[210px] max-w-[58%] object-contain sm:w-[260px] md:w-[290px]" />
         </div>
 
         <div className="mx-auto mt-8 w-full max-w-[820px] text-center sm:mt-8">

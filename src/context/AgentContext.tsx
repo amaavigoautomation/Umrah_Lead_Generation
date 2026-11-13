@@ -67,6 +67,14 @@ export interface AgentMessage {
   artifacts?: AgentArtifact[];
   attachments?: AgentAttachmentMeta[];
 }
+export interface AgentTaskNotification {
+  id: string;
+  conversationId: string;
+  title: string;
+  message: string;
+  status: 'completed' | 'failed';
+  completedAt: string;
+}
 interface AgentContextValue {
   config: AgentConfig;
   conversations: AgentConversation[];
@@ -76,6 +84,10 @@ interface AgentContextValue {
   sending: boolean;
   stopping: boolean;
   activityLabel: string;
+  notifications: AgentTaskNotification[];
+  unreadNotificationCount: number;
+  refreshNotifications: (notifyNew?: boolean) => Promise<void>;
+  markNotificationsRead: (executionIds: string[]) => Promise<void>;
   error: string;
   canManageConfig: boolean;
   selectConversation: (id: string) => Promise<void>;
@@ -104,7 +116,15 @@ function createId(): string {
   try { return crypto.randomUUID(); } catch { return 'exec_' + Date.now() + '_' + Math.random().toString(36).slice(2); }
 }
 
-export const AgentProvider: React.FC<{ tenantId: string; userId: string; enabled?: boolean; children: React.ReactNode }> = ({ tenantId, userId, enabled = true, children }) => {
+export const AgentProvider: React.FC<{
+  tenantId: string;
+  userId: string;
+  enabled?: boolean;
+  activeTab?: string;
+  agentTaskCompletionNotifications?: boolean;
+  onOpenNotification?: () => void;
+  children: React.ReactNode;
+}> = ({ tenantId, userId, enabled = true, activeTab = 'dashboard', agentTaskCompletionNotifications = false, onOpenNotification, children }) => {
   const [config, setConfig] = useState<AgentConfig>(DEFAULT_CONFIG);
   const [conversations, setConversations] = useState<AgentConversation[]>([]);
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
@@ -117,6 +137,18 @@ export const AgentProvider: React.FC<{ tenantId: string; userId: string; enabled
   const [activityLabel, setActivityLabel] = useState('');
   const [error, setError] = useState('');
   const [canManageConfig, setCanManageConfig] = useState(false);
+  const [notifications, setNotifications] = useState<AgentTaskNotification[]>([]);
+  const activeTabRef = useRef(activeTab);
+  const activeConversationIdRef = useRef<string | null>(null);
+  const completionNotificationsEnabledRef = useRef(agentTaskCompletionNotifications);
+  const onOpenNotificationRef = useRef(onOpenNotification);
+  const selectConversationRef = useRef<(id: string) => Promise<void>>(async () => {});
+  const notificationBaselineReadyRef = useRef(false);
+  const seenNotificationIdsRef = useRef<Set<string>>(new Set());
+  activeTabRef.current = activeTab;
+  completionNotificationsEnabledRef.current = agentTaskCompletionNotifications;
+  onOpenNotificationRef.current = onOpenNotification;
+  activeConversationIdRef.current = activeConversationId;
 
   const refresh = useCallback(async () => {
     if (!enabled || !tenantId || !userId) return;
@@ -134,13 +166,20 @@ export const AgentProvider: React.FC<{ tenantId: string; userId: string; enabled
     }
   }, [tenantId, userId, enabled]);
 
-  useEffect(() => {
-    setConfig(DEFAULT_CONFIG);
-    setConversations([]);
-    setActiveConversationId(null);
-    setMessages([]);
-    if (enabled && tenantId && userId) void refresh();
-  }, [tenantId, userId, enabled, refresh]);
+  const markNotificationsRead = useCallback(async (executionIds: string[]) => {
+    const ids = [...new Set(executionIds)].filter(Boolean).slice(0, 30);
+    if (!ids.length) return;
+    try {
+      await api('/api/agent/notifications/read', {
+        method: 'POST',
+        body: JSON.stringify({ executionIds: ids }),
+      });
+      const readSet = new Set(ids);
+      setNotifications((current) => current.filter((item) => !readSet.has(item.id)));
+    } catch (error) {
+      console.warn('[AI Agent] Could not mark task notifications as read:', error);
+    }
+  }, []);
 
   const selectConversation = useCallback(async (id: string) => {
     if (!id) return;
@@ -149,11 +188,57 @@ export const AgentProvider: React.FC<{ tenantId: string; userId: string; enabled
     try {
       const data = await api<{ success: boolean; conversation: AgentConversation; messages: AgentMessage[] }>('/api/agent/conversations/' + encodeURIComponent(id));
       setMessages(data.messages || []);
+      const unreadForConversation = notifications.filter((item) => item.conversationId === id).map((item) => item.id);
+      if (unreadForConversation.length) await markNotificationsRead(unreadForConversation);
     } catch (e: any) {
       setMessages([]);
       setError(e?.message || 'Could not open this conversation.');
     }
-  }, []);
+  }, [notifications, markNotificationsRead]);
+
+  selectConversationRef.current = selectConversation;
+
+  const refreshNotifications = useCallback(async (notifyNew = true): Promise<void> => {
+    if (!enabled || !tenantId || !userId) return;
+    try {
+      const data = await api<{ success: boolean; notifications: AgentTaskNotification[] }>('/api/agent/notifications');
+      const incoming = Array.isArray(data.notifications) ? data.notifications : [];
+      if (!notificationBaselineReadyRef.current) {
+        incoming.forEach((item) => seenNotificationIdsRef.current.add(item.id));
+        notificationBaselineReadyRef.current = true;
+      } else {
+        const unseen = incoming.filter((item) => !seenNotificationIdsRef.current.has(item.id));
+        for (const item of unseen) {
+          seenNotificationIdsRef.current.add(item.id);
+          const shouldAlert = notifyNew &&
+            completionNotificationsEnabledRef.current &&
+            (activeTabRef.current !== 'agent' || (typeof document !== 'undefined' && document.visibilityState !== 'visible')) &&
+            typeof window !== 'undefined' &&
+            'Notification' in window &&
+            Notification.permission === 'granted';
+          if (shouldAlert) {
+            try {
+              const alert = new Notification(item.title || 'AI Agent task completed', {
+                body: item.message || 'Your AI Agent task is ready to review.',
+                tag: 'agent-task-' + item.id,
+              });
+              alert.onclick = () => {
+                window.focus();
+                void selectConversationRef.current(item.conversationId);
+                onOpenNotificationRef.current?.();
+                alert.close();
+              };
+            } catch (error) {
+              console.warn('[AI Agent] Could not show browser notification:', error);
+            }
+          }
+        }
+      }
+      setNotifications(incoming);
+    } catch (error) {
+      console.warn('[AI Agent] Could not refresh task notifications:', error);
+    }
+  }, [enabled, tenantId, userId]);
 
   const newConversation = useCallback(async (moduleContext = ''): Promise<string | null> => {
     setError('');
@@ -202,7 +287,6 @@ export const AgentProvider: React.FC<{ tenantId: string; userId: string; enabled
       }
       let data: { success: boolean; assistantMessage: AgentMessage; conversation: AgentConversation };
       let needsPoll = false;
-      let lastDeliveryError: any = null;
       try {
         const initial = await api<{ success: boolean; status?: string; progress?: string; assistantMessage?: AgentMessage; conversation?: AgentConversation }>('/api/agent/chat', {
           method: 'POST',
@@ -216,18 +300,20 @@ export const AgentProvider: React.FC<{ tenantId: string; userId: string; enabled
         }
       } catch (deliveryError: any) {
         needsPoll = true;
-        lastDeliveryError = deliveryError;
         setActivityLabel('Reconnecting to the same Agent task…');
       }
 
       if (needsPoll) {
-        const deadline = Date.now() + 300000;
         let recovered: { success: boolean; assistantMessage: AgentMessage; conversation: AgentConversation } | null = null;
         let interimMessageId: string | null = null;
-        while (Date.now() < deadline && !recovered) {
-          await new Promise((resolve) => setTimeout(resolve, 1500));
+        let consecutiveMissingExecutions = 0;
+        let consecutivePollErrors = 0;
+        while (!recovered) {
+          await new Promise((resolve) => setTimeout(resolve, 2000));
           try {
             const status = await api<{ success: boolean; status: string; progress?: string; assistantMessage?: AgentMessage | null; error?: string; conversationId?: string }>('/api/agent/executions/' + encodeURIComponent(executionId));
+            consecutiveMissingExecutions = 0;
+            consecutivePollErrors = 0;
             if (status.status === 'cancelled') {
               stopRequestedRef.current = true;
               setMessages((prev) => prev.map((item) => item.id === userMessage.id ? { ...item, id: 'user-' + executionId } : item));
@@ -257,14 +343,19 @@ export const AgentProvider: React.FC<{ tenantId: string; userId: string; enabled
             if (status.status === 'failed') throw new Error(status.error || 'The Agent task failed.');
             setActivityLabel(status.progress || 'The Agent is still working on your request…');
           } catch (pollError: any) {
-            if (String(pollError?.message || '').toLowerCase().includes('execution not found')) {
-              lastDeliveryError = pollError;
+            const errorMessage = String(pollError?.message || '').toLowerCase();
+            if (errorMessage.includes('execution not found')) {
+              consecutiveMissingExecutions += 1;
+              if (consecutiveMissingExecutions >= 20) throw new Error('The Agent execution could not be found. Refresh the conversation before retrying.');
+              setActivityLabel('Reconnecting to your background task…');
               continue;
             }
-            throw pollError;
+            consecutivePollErrors += 1;
+            if (/permission|unauthor|forbidden|invalid|cancelled|agent task failed/.test(errorMessage) || consecutivePollErrors >= 20) throw pollError;
+            setActivityLabel('Connection interrupted. Reconnecting to your background task…');
+            await new Promise((resolve) => setTimeout(resolve, Math.min(10000, 1000 * Math.pow(1.5, consecutivePollErrors))));
           }
         }
-        if (!recovered) throw new Error('The Agent task is still running or the connection was interrupted. Reopen this conversation to check its status; do not submit the same request again yet. ' + (lastDeliveryError?.message || ''));
         data = recovered;
       }
       setMessages((prev) => [
@@ -273,6 +364,13 @@ export const AgentProvider: React.FC<{ tenantId: string; userId: string; enabled
         data.assistantMessage,
       ]);
       if (data.conversation) setConversations((prev) => [data.conversation, ...prev.filter((x) => x.id !== data.conversation.id)]);
+      const isViewingCompletedConversation =
+        activeTabRef.current === 'agent' &&
+        activeConversationIdRef.current === conversationId &&
+        typeof document !== 'undefined' &&
+        document.visibilityState === 'visible';
+      if (isViewingCompletedConversation) await markNotificationsRead([executionId]);
+      else await refreshNotifications(true);
     } catch (e: any) {
       if (stopRequestedRef.current || e?.code === 'AGENT_CANCELLED') {
         if (currentExecutionId) {
@@ -289,7 +387,7 @@ export const AgentProvider: React.FC<{ tenantId: string; userId: string; enabled
       setStopping(false);
       setActivityLabel('');
     }
-  }, [activeConversationId, newConversation, sending]);
+  }, [activeConversationId, newConversation, sending, activeTab, markNotificationsRead, refreshNotifications]);
 
   const cancelMessage = useCallback(async () => {
     const executionId = activeExecutionIdRef.current;
@@ -325,10 +423,48 @@ export const AgentProvider: React.FC<{ tenantId: string; userId: string; enabled
     }
   }, []);
 
+  useEffect(() => {
+    setConfig(DEFAULT_CONFIG);
+    setConversations([]);
+    setActiveConversationId(null);
+    setMessages([]);
+    setNotifications([]);
+    notificationBaselineReadyRef.current = false;
+    seenNotificationIdsRef.current = new Set();
+    if (enabled && tenantId && userId) {
+      void refresh();
+      void refreshNotifications(false);
+    }
+  }, [tenantId, userId, enabled, refresh, refreshNotifications]);
+
+  useEffect(() => {
+    if (!enabled || !tenantId || !userId) return;
+    const poll = () => {
+      if (typeof document === 'undefined' || document.visibilityState !== 'prerender') void refreshNotifications(true);
+    };
+    const interval = window.setInterval(poll, 12000);
+    const onFocus = () => poll();
+    const onVisibility = () => { if (document.visibilityState === 'visible') poll(); };
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, [enabled, tenantId, userId, refreshNotifications]);
+
+  useEffect(() => {
+    if (activeTab !== 'agent' || !activeConversationId || typeof document === 'undefined' || document.visibilityState !== 'visible') return;
+    const ids = notifications.filter((item) => item.conversationId === activeConversationId).map((item) => item.id);
+    if (ids.length) void markNotificationsRead(ids);
+  }, [activeTab, activeConversationId, notifications, markNotificationsRead]);
+
   const value = useMemo<AgentContextValue>(() => ({
     config, conversations, activeConversationId, messages, loading, sending, stopping, activityLabel, error, canManageConfig,
+    notifications, unreadNotificationCount: notifications.length, refreshNotifications, markNotificationsRead,
     selectConversation, newConversation, sendMessage, cancelMessage, saveConfig, refresh, clearError: () => setError(''),
-  }), [config, conversations, activeConversationId, messages, loading, sending, stopping, activityLabel, error, canManageConfig, selectConversation, newConversation, sendMessage, cancelMessage, saveConfig, refresh]);
+  }), [config, conversations, activeConversationId, messages, loading, sending, stopping, activityLabel, error, canManageConfig, notifications, refreshNotifications, markNotificationsRead, selectConversation, newConversation, sendMessage, cancelMessage, saveConfig, refresh]);
 
   return <AgentContext.Provider value={value}>{children}</AgentContext.Provider>;
 };

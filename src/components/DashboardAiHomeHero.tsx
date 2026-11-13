@@ -16,7 +16,7 @@ const QUICK_TASKS = [
 ];
 
 export const DashboardAiHomeHero: React.FC<DashboardAiHomeHeroProps> = ({ userName, canUseAi, onNavigate }) => {
-  const { conversations, sending, loading, error, sendMessage, newConversation, selectConversation, clearError } = useAgent();
+  const { conversations, notifications, unreadNotificationCount, sending, loading, error, sendMessage, newConversation, selectConversation, clearError } = useAgent();
   const [prompt, setPrompt] = useState('');
   const [startingAgent, setStartingAgent] = useState(false);
   const [showChatHistory, setShowChatHistory] = useState(false);
@@ -96,10 +96,13 @@ export const DashboardAiHomeHero: React.FC<DashboardAiHomeHeroProps> = ({ userNa
           </button>
           <div className="mt-4 flex items-center justify-between text-[9px] font-bold uppercase tracking-[.17em] text-blue-100/45"><span>Recent chats</span><span>{conversations.length}</span></div>
           <div className="mt-2 min-h-0 flex-1 space-y-1 overflow-y-auto pr-1 dashboard-home-history-list">
-            {conversations.map((item) => <button key={item.id} type="button" disabled={Boolean(openingConversation)} onClick={() => void openConversation(item.id)} className="dashboard-home-history-item group w-full rounded-xl border border-transparent px-3 py-3 text-left transition hover:border-indigo-300/20 hover:bg-indigo-400/[.09] disabled:cursor-wait disabled:opacity-55">
-              <span className="flex min-w-0 items-center gap-2"><MessageSquareText className="h-3.5 w-3.5 shrink-0 text-indigo-200/70" /><span className="min-w-0 flex-1 truncate text-[11px] font-medium text-blue-50/90">{item.title || 'New conversation'}</span><ArrowUpRight className="h-3 w-3 shrink-0 text-blue-100/25 opacity-0 transition group-hover:opacity-100" /></span>
-              <span className="mt-1.5 block pl-[22px] text-[9px] text-blue-100/45">{new Date(item.updatedAt || item.createdAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}</span>
-            </button>)}
+            {conversations.map((item) => {
+              const hasUnreadTask = notifications.some((notification) => notification.conversationId === item.id);
+              return <button key={item.id} type="button" disabled={Boolean(openingConversation)} onClick={() => void openConversation(item.id)} className="dashboard-home-history-item group w-full rounded-xl border border-transparent px-3 py-3 text-left transition hover:border-indigo-300/20 hover:bg-indigo-400/[.09] disabled:cursor-wait disabled:opacity-55">
+                <span className="flex min-w-0 items-center gap-2"><MessageSquareText className="h-3.5 w-3.5 shrink-0 text-indigo-200/70" /><span className="min-w-0 flex-1 truncate text-[11px] font-medium text-blue-50/90">{item.title || 'New conversation'}</span>{hasUnreadTask && <span title="AI Agent task completed" className="h-2 w-2 shrink-0 rounded-full bg-[#6d91ff] shadow-[0_0_9px_rgba(109,145,255,.7)]" />}<ArrowUpRight className="h-3 w-3 shrink-0 text-blue-100/25 opacity-0 transition group-hover:opacity-100" /></span>
+                <span className="mt-1.5 block pl-[22px] text-[9px] text-blue-100/45">{new Date(item.updatedAt || item.createdAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}</span>
+              </button>;
+            })}
             {conversations.length === 0 && !loading && <div className="rounded-xl border border-dashed border-white/10 px-3 py-8 text-center"><MessageSquareText className="mx-auto h-5 w-5 text-blue-100/35" /><p className="mt-2 text-[11px] text-blue-100/65">Your conversations will appear here.</p></div>}
             {loading && conversations.length === 0 && <div className="flex items-center justify-center gap-2 py-8 text-[10px] text-blue-100/55"><Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading conversations…</div>}
           </div>
@@ -111,6 +114,7 @@ export const DashboardAiHomeHero: React.FC<DashboardAiHomeHeroProps> = ({ userNa
             {showChatHistory ? <PanelLeftClose className="h-3.5 w-3.5" /> : <PanelLeftOpen className="h-3.5 w-3.5" />}
             Chat history
             <span className="rounded-full bg-white/10 px-1.5 py-0.5 text-[9px] text-blue-50/80">{conversations.length}</span>
+            {unreadNotificationCount > 0 && <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-[#5278ff] px-1 text-[8px] font-bold text-white">{unreadNotificationCount > 99 ? '99+' : unreadNotificationCount}</span>}
           </button>
         </div>
 

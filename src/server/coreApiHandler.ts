@@ -3814,6 +3814,7 @@ ${signature || defSig}`;
           notificationPreferences: {
             newMessages: saved.notificationPreferences?.newMessages === true,
             humanHandoff: saved.notificationPreferences?.humanHandoff === true,
+            agentTaskCompletion: saved.notificationPreferences?.agentTaskCompletion === true,
           },
           workspacePreferences: {
             defaultLandingPage: ['dashboard', 'inbox', 'campaigns'].includes(saved.workspacePreferences?.defaultLandingPage)
@@ -3880,14 +3881,16 @@ ${signature || defSig}`;
         const prefs = body.notificationPreferences;
         if (!prefs || typeof prefs !== 'object' || Array.isArray(prefs) ||
             (prefs.newMessages !== undefined && typeof prefs.newMessages !== 'boolean') ||
-            (prefs.humanHandoff !== undefined && typeof prefs.humanHandoff !== 'boolean')) {
+            (prefs.humanHandoff !== undefined && typeof prefs.humanHandoff !== 'boolean') ||
+            (prefs.agentTaskCompletion !== undefined && typeof prefs.agentTaskCompletion !== 'boolean')) {
           res.statusCode = 400;
-          res.end(JSON.stringify({ error: 'notificationPreferences must contain boolean newMessages and humanHandoff values.' }));
+          res.end(JSON.stringify({ error: 'notificationPreferences must contain boolean newMessages, humanHandoff and agentTaskCompletion values.' }));
           return true;
         }
         updates.notificationPreferences = {
           newMessages: prefs.newMessages === true,
           humanHandoff: prefs.humanHandoff === true,
+          agentTaskCompletion: prefs.agentTaskCompletion === true,
         };
       }
       if (body?.workspacePreferences !== undefined) {

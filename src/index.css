@@ -2566,3 +2566,7 @@
   z-index:1;
 }
 
+/* Consistent blue-purple browser text selection across every module. */
+::selection { background:rgba(99,125,255,.34); color:inherit; }
+::-moz-selection { background:rgba(99,125,255,.34); color:inherit; }
+

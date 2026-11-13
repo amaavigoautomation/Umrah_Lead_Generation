@@ -193,6 +193,7 @@ export const WorkspaceView: React.FC<SettingsViewProps> = ({
         notificationPreferences: {
           newMessages: formData.notificationPreferences?.newMessages === true,
           humanHandoff: formData.notificationPreferences?.humanHandoff === true,
+          agentTaskCompletion: formData.notificationPreferences?.agentTaskCompletion === true,
         },
         workspacePreferences: {
           defaultLandingPage: formData.workspacePreferences?.defaultLandingPage || 'dashboard',
@@ -207,10 +208,10 @@ export const WorkspaceView: React.FC<SettingsViewProps> = ({
     }
   };
 
-  const notificationPreferences = formData.notificationPreferences || { newMessages: false, humanHandoff: false };
+  const notificationPreferences = formData.notificationPreferences || { newMessages: false, humanHandoff: false, agentTaskCompletion: false };
   const workspacePreferences = formData.workspacePreferences || { defaultLandingPage: 'dashboard' as const };
 
-  const handleNotificationPreferenceChange = async (key: 'newMessages' | 'humanHandoff', enabled: boolean) => {
+  const handleNotificationPreferenceChange = async (key: 'newMessages' | 'humanHandoff' | 'agentTaskCompletion', enabled: boolean) => {
     setNotificationPermissionError(null);
     if (enabled) {
       if (typeof window === 'undefined' || !('Notification' in window)) {
@@ -231,6 +232,7 @@ export const WorkspaceView: React.FC<SettingsViewProps> = ({
       notificationPreferences: {
         newMessages: current.notificationPreferences?.newMessages === true,
         humanHandoff: current.notificationPreferences?.humanHandoff === true,
+        agentTaskCompletion: current.notificationPreferences?.agentTaskCompletion === true,
         [key]: enabled,
       },
     }));
@@ -611,7 +613,7 @@ export const WorkspaceView: React.FC<SettingsViewProps> = ({
                       </div>
                       <div className="min-w-0">
                         <dt className="text-[10px] text-slate-500">Browser alerts</dt>
-                        <dd className="mt-1 truncate text-xs font-semibold text-slate-900">{notificationPreferences.newMessages || notificationPreferences.humanHandoff ? 'Enabled' : 'Off'}</dd>
+                        <dd className="mt-1 truncate text-xs font-semibold text-slate-900">{notificationPreferences.newMessages || notificationPreferences.humanHandoff || notificationPreferences.agentTaskCompletion ? 'Enabled' : 'Off'}</dd>
                       </div>
                     </dl>
                     <div className="mt-4 flex flex-wrap gap-2 text-[10px] text-slate-500">
@@ -667,6 +669,13 @@ export const WorkspaceView: React.FC<SettingsViewProps> = ({
                             <span className="block text-[10px] text-slate-400">Conversations needing a team member</span>
                           </span>
                           <input type="checkbox" checked={notificationPreferences.humanHandoff} disabled={!canEditEmail} onChange={(event) => void handleNotificationPreferenceChange('humanHandoff', event.target.checked)} className="h-4 w-4 shrink-0 accent-orange-500" />
+                        </label>
+                        <label className="flex items-center justify-between gap-3 rounded-lg border border-slate-100 px-3 py-2.5">
+                          <span className="min-w-0">
+                            <span className="block text-xs font-medium text-slate-800">AI Agent task completions</span>
+                            <span className="block text-[10px] text-slate-400">When a draft, artwork or other Agent task finishes</span>
+                          </span>
+                          <input type="checkbox" checked={notificationPreferences.agentTaskCompletion === true} disabled={!canEditEmail} onChange={(event) => void handleNotificationPreferenceChange('agentTaskCompletion', event.target.checked)} className="h-4 w-4 shrink-0 accent-orange-500" />
                         </label>
                       </div>
                       {notificationPermissionError && <p role="alert" className="mt-2 text-[10px] text-amber-700">{notificationPermissionError}</p>}

@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { AppUser } from '../types';
 import { Umrah360Logo } from './Umrah360Logo';
+import { useAgent } from '../context/AgentContext';
 
 export type ActiveTab =
   | 'dashboard'
@@ -64,6 +65,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   planLocked,
 }) => {
   const [isMobileOpen, setIsMobileOpen] = useState<boolean>(false);
+  const { unreadNotificationCount: agentTaskUnreadCount } = useAgent();
 
   const isModuleAccessible = (tabId: ActiveTab): boolean => {
     if (planLocked?.(tabId)) return false;
@@ -104,12 +106,15 @@ export const Navbar: React.FC<NavbarProps> = ({
         {primaryItems.map((item) => {
           const active = isItemActive(item);
           const accessible = isItemAccessible(item);
-          const badgeCount = item.id === 'conversation' ? unreadCount : 0;
+          const badgeCount = item.id === 'conversation' ? unreadCount : item.id === 'dashboard' ? agentTaskUnreadCount : 0;
           return (
             <button key={item.id} type="button" onClick={() => handleSelectTab(item.route)} title={item.label} aria-label={item.label} aria-current={active ? 'page' : undefined}
               className={`relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl transition-colors ${active ? 'bg-[#0848ef] text-white shadow-[0_3px_10px_rgba(8,72,239,.3)]' : 'text-slate-300 hover:bg-white/10 hover:text-white'} ${!accessible ? 'opacity-45' : ''}`}>
               {item.icon}
-              {badgeCount > 0 && <span className="absolute -right-0.5 -top-0.5 min-w-4 rounded-full bg-rose-500 px-1 text-[9px] font-bold leading-4 text-white">{badgeCount > 99 ? '99+' : badgeCount}</span>}
+              {badgeCount > 0 && (item.id === 'dashboard'
+                ? <span title={badgeCount + ' unread AI Agent task notifications'} className="absolute right-1 top-1 h-2 w-2 rounded-full bg-[#7895ff] shadow-[0_0_8px_rgba(120,149,255,.8)] ring-2 ring-[#05051f]" />
+                : <span className="absolute -right-0.5 -top-0.5 min-w-4 rounded-full bg-rose-500 px-1 text-[9px] font-bold leading-4 text-white">{badgeCount > 99 ? '99+' : badgeCount}</span>
+              )}
               {!accessible && <Lock className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full bg-[#05051f] text-slate-400" />}
             </button>
           );

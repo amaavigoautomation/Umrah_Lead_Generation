@@ -776,6 +776,43 @@ export async function handleAgentApi(req: any, res: any, ctx: TenantContext, bod
       return send(200, { success: true, conversation: { id, title: (data as any).title, moduleContext: (data as any).moduleContext }, messages });
     }
 
+    if (url === '/api/agent/notifications' && req.method === 'GET') {
+      const snapshot = await getDocs(query(repo.collection('agent_executions'), where('actorUid', '==', ctx.uid), orderBy('createdAt', 'desc'), limit(100)));
+      const notifications = snapshot.docs
+        .map((doc: any) => ({ id: doc.id, ...(doc.data() as any) }))
+        .filter((item: any) => ['completed', 'failed'].includes(String(item.status)) && !item.notificationReadAt)
+        .sort((a: any, b: any) => String(b.completedAt || b.failedAt || b.updatedAt || b.createdAt || '').localeCompare(String(a.completedAt || a.failedAt || a.updatedAt || a.createdAt || '')))
+        .slice(0, 30)
+        .map((item: any) => ({
+          id: item.id,
+          conversationId: String(item.conversationId || ''),
+          title: cleanText(item.notificationTitle || (item.status === 'failed' ? 'AI Agent task failed' : 'AI Agent task completed'), 100),
+          message: cleanText(item.notificationMessage || item.progress || '', 180),
+          status: item.status === 'failed' ? 'failed' : 'completed',
+          completedAt: String(item.completedAt || item.failedAt || item.updatedAt || item.createdAt || ''),
+        }));
+      return send(200, { success: true, notifications, unreadCount: notifications.length });
+    }
+
+    if (url === '/api/agent/notifications/read' && req.method === 'POST') {
+      const executionIds = Array.isArray(body?.executionIds)
+        ? [...new Set(body.executionIds.map((value: any) => cleanText(value, 100)).filter((value: string) => /^[a-zA-Z0-9_-]{12,100}$/.test(value)))].slice(0, 30)
+        : [];
+      if (!executionIds.length) return send(400, { success: false, error: 'At least one valid execution ID is required.' });
+      const readAt = new Date().toISOString();
+      let updated = 0;
+      for (const executionId of executionIds) {
+        const executionRef = repo.doc('agent_executions', executionId);
+        const snapshot = await getDoc(executionRef);
+        if (!snapshot.exists()) continue;
+        const data = snapshot.data() as any;
+        if (data.actorUid !== ctx.uid || !['completed', 'failed'].includes(String(data.status))) continue;
+        await setDoc(executionRef, { notificationReadAt: readAt }, { merge: true });
+        updated += 1;
+      }
+      return send(200, { success: true, updated, readAt });
+    }
+
     const cancelExecutionMatch = url.match(/^\/api\/agent\/executions\/([a-zA-Z0-9_-]{12,100})\/cancel$/);
     if (cancelExecutionMatch && req.method === 'POST') {
       const executionId = cancelExecutionMatch[1];
@@ -881,7 +918,15 @@ export async function handleAgentApi(req: any, res: any, ctx: TenantContext, bod
           await setDoc(repo.doc('agent_conversations/' + conversationId + '/messages', assistantId), assistantMessage);
           const title = conversation.title === 'New conversation' ? message.slice(0, 64) : conversation.title;
           await setDoc(conversationRef, { title, updatedAt: assistantMessage.createdAt, moduleContext: moduleContext || conversation.moduleContext }, { merge: true });
-          await setDoc(executionRef, { status: 'completed', progress: 'Completed', assistantMessage, toolsUsed: result.toolsUsed, completedAt: assistantMessage.createdAt }, { merge: true });
+          await setDoc(executionRef, {
+            status: 'completed',
+            progress: 'Completed',
+            assistantMessage,
+            toolsUsed: result.toolsUsed,
+            completedAt: assistantMessage.createdAt,
+            notificationTitle: title || 'AI Agent task completed',
+            notificationMessage: String(result.content || 'Your AI Agent task is complete.').replace(/\s+/g, ' ').slice(0, 180),
+          }, { merge: true });
           await writeTenantAuditEvent(ctx, {
             action: 'AGENT_MESSAGE_COMPLETED',
             module: 'AI_ENGINE',
@@ -903,7 +948,15 @@ export async function handleAgentApi(req: any, res: any, ctx: TenantContext, bod
             await setDoc(conversationRef, { title, updatedAt: new Date().toISOString(), moduleContext: moduleContext || conversation.moduleContext }, { merge: true });
           } else {
             if (currentState?.status !== 'completed') {
-              await setDoc(executionRef, { status: 'failed', progress: 'Failed', error: cleanText(error?.message || 'Agent execution failed.', 300), failedAt: new Date().toISOString() }, { merge: true });
+              const failureMessage = cleanText(error?.message || 'Agent execution failed.', 300);
+              await setDoc(executionRef, {
+                status: 'failed',
+                progress: 'Failed',
+                error: failureMessage,
+                failedAt: new Date().toISOString(),
+                notificationTitle: 'AI Agent task failed',
+                notificationMessage: failureMessage.slice(0, 180),
+              }, { merge: true });
             }
             await writeTenantAuditEvent(ctx, {
               action: 'AGENT_EXECUTION_FAILED',

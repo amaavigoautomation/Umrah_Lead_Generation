@@ -652,6 +652,7 @@ export interface SystemSettings {
   notificationPreferences?: {
     newMessages: boolean;
     humanHandoff: boolean;
+    agentTaskCompletion?: boolean;
   };
   workspacePreferences?: {
     defaultLandingPage: 'dashboard' | 'inbox' | 'campaigns';

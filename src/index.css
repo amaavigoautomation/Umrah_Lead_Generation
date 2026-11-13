@@ -1440,3 +1440,11 @@
   .crm-workspace .crm-leads-table td:nth-child(4) button { padding:4px 6px; }
   .crm-workspace .crm-leads-table td:nth-child(6) button { padding:3px 4px; }
 }
+
+/* Dashboard: ActiveCampaign-inspired navy/blue visual language. */
+.dashboard-view { color:#17213d; font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif; }
+.dashboard-view .dashboard-kpis button { border-radius:11px; box-shadow:0 1px 3px rgba(8,11,50,.035); }
+.dashboard-view .dashboard-kpis button:hover { border-color:#b9caff; box-shadow:0 5px 16px rgba(8,72,239,.08); }
+.dashboard-view section { border-radius:11px; }
+.dashboard-view h2 { color:#080b32; letter-spacing:-.015em; }
+.dashboard-view button:focus-visible { outline:2px solid #0848ef; outline-offset:2px; }

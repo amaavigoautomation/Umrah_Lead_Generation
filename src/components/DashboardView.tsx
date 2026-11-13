@@ -73,7 +73,7 @@ const statusTone = (status: string) => {
   if (status === 'FOLLOW_UP') return 'bg-amber-50 text-amber-700 border-amber-100';
   if (status === 'QUALIFIED' || status === 'PROPOSAL_SENT') return 'bg-blue-50 text-blue-700 border-blue-100';
   if (status === 'HUMAN_HANDOFF') return 'bg-violet-50 text-violet-700 border-violet-100';
-  return 'bg-orange-50 text-orange-700 border-orange-100';
+  return 'bg-orange-50 text-[#0848ef] border-orange-100';
 };
 
 const shortDate = (value?: any) => {
@@ -291,7 +291,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const workspaceName = tenantName || brand.companyName || 'Your workspace';
 
   const kpis = [
-    { label: 'Total leads', value: leads.length, note: 'Across this workspace', icon: <Users className="h-4 w-4" />, tone: 'bg-orange-50 text-orange-600', tab: 'crm' as ActiveTab },
+    { label: 'Total leads', value: leads.length, note: 'Across this workspace', icon: <Users className="h-4 w-4" />, tone: 'bg-[#eaf0ff] text-[#0848ef]', tab: 'crm' as ActiveTab },
     { label: 'Active conversations', value: summary?.activeConversations ?? null, note: summary ? `${summary.unreadMessages.toLocaleString('en-IN')} unread messages` : 'Loading workspace totals', icon: <MessageCircle className="h-4 w-4" />, tone: 'bg-blue-50 text-[#0848ef]', tab: 'inbox' as ActiveTab },
     { label: 'Follow-ups due', value: dueFollowUps.length, note: 'Require attention', icon: <Clock3 className="h-4 w-4" />, tone: 'bg-amber-50 text-amber-600', tab: 'auto-followup' as ActiveTab },
     { label: 'Demo / consultation booked', value: scheduledDemoCount, note: 'CRM demo status + upcoming calendar bookings', icon: <CalendarCheck className="h-4 w-4" />, tone: 'bg-emerald-50 text-emerald-600', tab: 'scheduling' as ActiveTab },
@@ -301,27 +301,27 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
   const activity = [
     { label: 'Active conversations', description: 'Across the entire workspace', count: summary?.activeConversations ?? null, icon: <MessageCircle className="h-4 w-4" />, tone: 'bg-blue-50 text-[#0848ef]', tab: 'inbox' as ActiveTab },
-    { label: 'Human handoffs', description: 'Conversations needing your team', count: summary?.humanHandoffs ?? null, icon: <Activity className="h-4 w-4" />, tone: 'bg-orange-50 text-orange-600', tab: 'inbox' as ActiveTab },
+    { label: 'Human handoffs', description: 'Conversations needing your team', count: summary?.humanHandoffs ?? null, icon: <Activity className="h-4 w-4" />, tone: 'bg-[#eaf0ff] text-[#0848ef]', tab: 'inbox' as ActiveTab },
     { label: 'Follow-ups due', description: 'Review pending follow-up tasks', count: dueFollowUps.length, icon: <Clock3 className="h-4 w-4" />, tone: 'bg-amber-50 text-amber-600', tab: 'auto-followup' as ActiveTab },
     { label: 'Email campaigns', description: 'Manage workspace email campaigns', count: summary?.totalCampaigns ?? null, icon: <Send className="h-4 w-4" />, tone: 'bg-sky-50 text-sky-600', tab: 'campaigns' as ActiveTab },
   ];
 
   return (
-    <div className="mx-auto w-full max-w-[1600px] space-y-6 pb-8">
+    <div className="dashboard-view mx-auto w-full max-w-[1600px] space-y-5 pb-8">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div className="min-w-0">
           <div className="mb-2 flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">
-            <span className="text-[#ef741a]">{workspaceName}</span>
+            <span className="text-[#0848ef]">{workspaceName}</span>
             <span className="text-slate-300">/</span>
             <span>Overview</span>
           </div>
-          <h1 className="flex flex-wrap items-center gap-2 text-2xl font-bold tracking-tight text-slate-950 sm:text-3xl">
-            {greeting}, {userName || 'there'} <Sparkles className="h-5 w-5 fill-[#ef741a] text-[#ef741a]" />
+          <h1 className="flex flex-wrap items-center gap-2 text-[25px] font-semibold tracking-[-.035em] text-[#080b32] sm:text-[28px]">
+            {greeting}, {userName || 'there'} <Sparkles className="h-5 w-5 fill-[#ef741a] text-[#0848ef]" />
           </h1>
           <p className="mt-1 text-sm text-slate-500">Here’s what’s happening across your workspace today.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <button type="button" onClick={onAddLead} className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-bold text-slate-700 shadow-sm transition hover:border-orange-200 hover:bg-orange-50 hover:text-orange-700">
+          <button type="button" onClick={onAddLead} className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-bold text-slate-700 shadow-sm transition hover:border-orange-200 hover:bg-orange-50 hover:text-[#0848ef]">
             <Plus className="h-4 w-4" /> Add lead
           </button>
           <button type="button" onClick={() => onNavigate('campaigns')} className="inline-flex items-center gap-2 rounded-xl bg-[#0848ef] px-4 py-2.5 text-xs font-bold text-white shadow-sm transition hover:bg-blue-700">
@@ -330,15 +330,15 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+      <div className="dashboard-kpis grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
         {kpis.map((card) => (
-          <button key={card.label} type="button" onClick={() => onNavigate(card.tab)} className="group min-h-[142px] rounded-2xl border border-slate-200/80 bg-white p-4 text-left shadow-[0_2px_10px_rgba(15,23,42,0.025)] transition hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md sm:p-5">
+          <button key={card.label} type="button" onClick={() => onNavigate(card.tab)} className="group min-h-[124px] rounded-xl border border-[#dfe5f0] bg-white p-4 text-left shadow-[0_2px_10px_rgba(15,23,42,0.025)] transition hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md sm:p-5">
             <div className="flex items-center justify-between">
               <span className="text-xs font-medium text-slate-500">{card.label}</span>
               <span className={'flex h-9 w-9 items-center justify-center rounded-xl ' + card.tone}>{card.icon}</span>
             </div>
             <div className="mt-4 flex items-end justify-between">
-              <span className="text-3xl font-bold leading-none tracking-tight text-slate-950 tabular-nums">{card.value === null ? '—' : card.value.toLocaleString('en-IN')}</span>
+              <span className="text-3xl font-bold leading-none tracking-tight text-[#080b32] tabular-nums">{card.value === null ? '—' : card.value.toLocaleString('en-IN')}</span>
               <ChevronRight className="mb-1 h-4 w-4 text-slate-300 transition group-hover:translate-x-0.5 group-hover:text-slate-500" />
             </div>
             <p className="mt-2 text-[11px] text-slate-400">{card.note}</p>
@@ -347,17 +347,17 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       </div>
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1.2fr_0.88fr]">
-        <section className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-[0_2px_10px_rgba(15,23,42,0.025)]">
+        <section className="rounded-xl border border-[#dfe5f0] bg-white p-5 shadow-[0_1px_3px_rgba(8,11,50,.035)]">
           <div className="flex items-start justify-between gap-3">
-            <div><h2 className="text-sm font-bold text-slate-900">Lead pipeline overview</h2><p className="mt-1 text-xs text-slate-400">Current distribution by lead status</p></div>
+            <div><h2 className="text-sm font-bold text-[#080b32]">Lead pipeline overview</h2><p className="mt-1 text-xs text-slate-400">Current distribution by lead status</p></div>
             <button type="button" onClick={() => onNavigate('crm')} className="inline-flex shrink-0 items-center gap-1 text-xs font-bold text-[#0848ef] hover:text-blue-700">View CRM <ArrowRight className="h-3.5 w-3.5" /></button>
           </div>
           {leads.length === 0 ? (
             <div className="flex min-h-[190px] flex-col items-center justify-center text-center">
-              <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-orange-50 text-[#ef741a]"><Users className="h-5 w-5" /></span>
+              <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-orange-50 text-[#0848ef]"><Users className="h-5 w-5" /></span>
               <p className="mt-3 text-sm font-semibold text-slate-700">Your pipeline is ready</p>
               <p className="mt-1 max-w-xs text-xs text-slate-400">Add your first lead to see its progress here.</p>
-              <button type="button" onClick={onAddLead} className="mt-3 text-xs font-bold text-[#ef741a] hover:text-orange-700">Add your first lead</button>
+              <button type="button" onClick={onAddLead} className="mt-3 text-xs font-bold text-[#0848ef] hover:text-[#0848ef]">Add your first lead</button>
             </div>
           ) : (
             <div className="mt-6 space-y-4">
@@ -372,9 +372,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           )}
         </section>
 
-        <section className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-[0_2px_10px_rgba(15,23,42,0.025)]">
+        <section className="rounded-xl border border-[#dfe5f0] bg-white p-5 shadow-[0_1px_3px_rgba(8,11,50,.035)]">
           <div className="flex items-center justify-between gap-3">
-            <div><h2 className="text-sm font-bold text-slate-900">Workspace activity</h2><p className="mt-1 text-xs text-slate-400">Live operational snapshot</p></div>
+            <div><h2 className="text-sm font-bold text-[#080b32]">Workspace activity</h2><p className="mt-1 text-xs text-slate-400">Live operational snapshot</p></div>
             <span className={summary ? "inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-bold text-emerald-700" : "inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-bold text-slate-500"}><span className={summary ? "h-1.5 w-1.5 rounded-full bg-emerald-500" : "h-1.5 w-1.5 rounded-full bg-slate-400"} /> {summary ? 'Live data' : 'Syncing totals'}</span>
           </div>
           <div className="mt-4 space-y-1">
@@ -382,7 +382,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               <button key={row.label} type="button" onClick={() => onNavigate(row.tab)} className="group flex w-full items-center gap-3 rounded-xl px-2.5 py-3 text-left transition hover:bg-slate-50">
                 <span className={'flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ' + row.tone}>{row.icon}</span>
                 <span className="min-w-0 flex-1"><span className="block text-xs font-bold text-slate-800">{row.label}</span><span className="mt-0.5 block truncate text-[11px] text-slate-400">{row.description}</span></span>
-                <span className="text-sm font-bold tabular-nums text-slate-900">{row.count === null ? '—' : row.count.toLocaleString('en-IN')}</span><ChevronRight className="h-4 w-4 shrink-0 text-slate-300 transition group-hover:translate-x-0.5" />
+                <span className="text-sm font-bold tabular-nums text-[#080b32]">{row.count === null ? '—' : row.count.toLocaleString('en-IN')}</span><ChevronRight className="h-4 w-4 shrink-0 text-slate-300 transition group-hover:translate-x-0.5" />
               </button>
             ))}
           </div>
@@ -390,9 +390,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       </div>
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1.2fr_0.88fr]">
-        <section className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-[0_2px_10px_rgba(15,23,42,0.025)]">
+        <section className="rounded-xl border border-[#dfe5f0] bg-white p-5 shadow-[0_1px_3px_rgba(8,11,50,.035)]">
           <div className="flex items-start justify-between gap-3">
-            <div><h2 className="text-sm font-bold text-slate-900">Lead acquisition trend</h2><p className="mt-1 text-xs text-slate-400">New leads created in the last six months</p></div>
+            <div><h2 className="text-sm font-bold text-[#080b32]">Lead acquisition trend</h2><p className="mt-1 text-xs text-slate-400">New leads created in the last six months</p></div>
             <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-50 px-2.5 py-1 text-[10px] font-bold text-[#0848ef]"><CalendarDays className="h-3 w-3" /> Monthly</span>
           </div>
           <div className="mt-5 grid h-[150px] grid-cols-6 gap-2 sm:gap-4">
@@ -407,11 +407,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
         </section>
 
-        <section className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-[0_2px_10px_rgba(15,23,42,0.025)]">
-          <div><h2 className="text-sm font-bold text-slate-900">Workspace snapshot</h2><p className="mt-1 text-xs text-slate-400">Live totals from connected modules</p></div>
+        <section className="rounded-xl border border-[#dfe5f0] bg-white p-5 shadow-[0_1px_3px_rgba(8,11,50,.035)]">
+          <div><h2 className="text-sm font-bold text-[#080b32]">Workspace snapshot</h2><p className="mt-1 text-xs text-slate-400">Live totals from connected modules</p></div>
           <div className="mt-4 space-y-2">
             {[
-              { label: 'Leads in CRM', value: leads.length, tone: 'bg-orange-50 text-orange-700' },
+              { label: 'Leads in CRM', value: leads.length, tone: 'bg-orange-50 text-[#0848ef]' },
               { label: 'Total conversations', value: summary?.totalConversations ?? null, tone: 'bg-blue-50 text-[#0848ef]' },
               { label: 'Email campaigns', value: summary?.totalCampaigns ?? null, tone: 'bg-sky-50 text-sky-700' },
               { label: 'Campaign recipients', value: summary?.campaignLeads ?? null, tone: 'bg-cyan-50 text-cyan-700' },
@@ -432,9 +432,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </div>
       )}
 
-      <section className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[0_2px_10px_rgba(15,23,42,0.025)]">
+      <section className="overflow-hidden rounded-xl border border-[#dfe5f0] bg-white shadow-[0_1px_3px_rgba(8,11,50,.035)]">
         <div className="flex items-center justify-between gap-3 px-5 py-4">
-          <div><h2 className="text-sm font-bold text-slate-900">Recently updated leads</h2><p className="mt-1 text-xs text-slate-400">Latest activity recorded in your CRM</p></div>
+          <div><h2 className="text-sm font-bold text-[#080b32]">Recently updated leads</h2><p className="mt-1 text-xs text-slate-400">Latest activity recorded in your CRM</p></div>
           <button type="button" onClick={() => onNavigate('crm')} className="inline-flex shrink-0 items-center gap-1.5 text-xs font-bold text-[#0848ef] hover:text-blue-700">View all leads <ArrowUpRight className="h-3.5 w-3.5" /></button>
         </div>
         <div className="grid grid-cols-[minmax(0,1fr)_100px_90px_54px] gap-3 border-y border-slate-100 px-5 py-2.5 text-[9px] font-bold uppercase tracking-[0.12em] text-slate-400 max-sm:grid-cols-[minmax(0,1fr)_76px_48px]">
@@ -452,7 +452,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               return <button key={lead.leadId} type="button" onClick={() => onOpenLead(lead.leadId)} className="grid w-full grid-cols-[minmax(0,1fr)_100px_90px_54px] items-center gap-3 px-5 py-3 text-left transition hover:bg-slate-50 max-sm:grid-cols-[minmax(0,1fr)_76px_48px]">
                 <span className="min-w-0"><span className="block truncate text-xs font-bold text-slate-800">{name}</span><span className="mt-0.5 block truncate text-[10px] uppercase tracking-wide text-slate-400">{subline}</span></span>
                 <span className="max-sm:hidden"><span className={'inline-flex max-w-full truncate rounded-full border px-2.5 py-1 text-[9px] font-bold ' + statusTone(lead.status)}>{readableStatus(lead.status)}</span></span>
-                <span className="text-[11px] text-slate-500">{shortDate(updated)}</span><span className="text-right text-xs font-bold tabular-nums text-slate-900">{Number(lead.leadScore) || 0}</span>
+                <span className="text-[11px] text-slate-500">{shortDate(updated)}</span><span className="text-right text-xs font-bold tabular-nums text-[#080b32]">{Number(lead.leadScore) || 0}</span>
               </button>;
             })}
           </div>

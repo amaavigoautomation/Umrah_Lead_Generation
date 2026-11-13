@@ -106,13 +106,13 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
   const workspaceName = brand.companyName || 'UMRAH360';
 
   return (
-    <header className="sticky top-0 z-30 shrink-0 border-b border-slate-200 bg-white shadow-2xs">
-      <div className="flex min-h-[68px] items-center justify-between gap-4 px-4 sm:px-6">
+    <header className="sticky top-0 z-30 shrink-0 border-b border-slate-200 bg-white">
+      <div className="flex min-h-[56px] items-center justify-between gap-4 bg-[#05051f] px-4 text-white sm:px-6">
         <div className="flex min-w-0 items-center gap-4">
           <button
             type="button"
             onClick={onToggleCollapse}
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 text-slate-500 shadow-2xs transition hover:border-orange-200 hover:bg-orange-50 hover:text-orange-700"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-white/15 text-slate-200 transition hover:bg-white/10 hover:text-white"
             title={isCollapsed ? 'Expand primary navigation' : 'Collapse primary navigation'}
             aria-label={isCollapsed ? 'Expand primary navigation' : 'Collapse primary navigation'}
           >
@@ -120,13 +120,13 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
           </button>
 
           <div className="min-w-0">
-            <div className="mb-1 flex items-center gap-2 text-[9px] font-bold uppercase tracking-[0.2em] text-slate-400">
+            <div className="mb-0.5 flex items-center gap-2 text-[8px] font-bold uppercase tracking-[0.2em] text-slate-400">
               <span className="truncate">{workspaceName}</span>
               <span className="text-slate-300">/</span>
               <span className="truncate">{meta.category}</span>
             </div>
-            <div className="flex items-center gap-2 text-[16px] font-bold leading-tight text-slate-900">
-              <span className="text-orange-600">{meta.icon}</span>
+            <div className="flex items-center gap-2 text-[14px] font-semibold leading-tight text-white">
+              <span className="text-[#6f9aff]">{meta.icon}</span>
               <h1 className="truncate">{meta.title}</h1>
             </div>
           </div>
@@ -160,9 +160,9 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
         </div>
       </div>
 
-      <div className="flex min-h-[56px] items-stretch border-t border-slate-100 bg-slate-50/70">
+      <div className="flex min-h-[48px] items-stretch border-t border-slate-200 bg-white">
         <div className="flex w-[154px] shrink-0 flex-col justify-center border-r border-slate-200 px-5">
-          <span className="text-[9px] font-extrabold uppercase tracking-[0.2em] text-orange-600">Workspace</span>
+          <span className="text-[9px] font-extrabold uppercase tracking-[0.2em] text-[#0848ef]">Workspace</span>
           <span className="mt-0.5 truncate text-[12px] font-bold text-slate-800">{meta.workspaceLabel}</span>
         </div>
         <nav aria-label={meta.workspaceLabel + ' module navigation'} className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto px-4 py-2 [scrollbar-width:none]">
@@ -176,11 +176,11 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
                 aria-current={active ? 'page' : undefined}
                 className={`inline-flex min-h-9 shrink-0 items-center gap-2 rounded-lg border px-3 py-2 text-[11px] font-semibold transition ${
                   active
-                    ? 'border-orange-200 bg-orange-50 text-orange-700 shadow-2xs'
+                    ? 'border-[#cbd8ff] bg-[#eaf0ff] text-[#0848ef] shadow-2xs'
                     : 'border-transparent bg-transparent text-slate-600 hover:border-slate-200 hover:bg-white hover:text-slate-900'
                 }`}
               >
-                <span className={active ? 'text-orange-600' : 'text-slate-400'}>{tab.icon}</span>
+                <span className={active ? 'text-[#0848ef]' : 'text-slate-400'}>{tab.icon}</span>
                 {tab.label}
               </button>
             );

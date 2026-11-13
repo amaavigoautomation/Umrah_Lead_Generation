@@ -212,7 +212,6 @@ function toAppUser(u: any): AppUser {
 //   const [activeTab, setActiveTab] = useState<ActiveTab>(() =>
 //     typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('mailbox') ? 'settings' : 'inbox'
 //   );
-//   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(true);
 type WorkspaceSection = 'overview' | 'company' | 'channels' | 'ai' | 'team' | 'billing' | 'audit';
 
 const LEGACY_WORKSPACE_SECTIONS: Partial<Record<ActiveTab, WorkspaceSection>> = {
@@ -319,7 +318,6 @@ export default function App() {
     setAgentEmailTemplateKind(kind);
     setActiveTab('email-design-studio');
   }, [setActiveTab]);
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(false);  
 const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ? [] : INITIAL_CONTACTS);
   const [leads, setLeads] = useState<Lead[]>(() => isFirebaseConfigured ? [] : INITIAL_LEADS);
   const [conversations, setConversations] = useState<Conversation[]>(() => isFirebaseConfigured ? [] : INITIAL_CONVERSATIONS);
@@ -2668,11 +2666,6 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
         isFirebaseActive={isFirebaseActive}
         currentUser={currentUser}
         onLogout={handleLogout}
-        currentTenant={currentTenant}
-        allTenants={allTenants}
-        onSwitchTenant={(tenantId) => setCurrentTenantId(tenantId)}
-        isCollapsed={isSidebarCollapsed}
-        onToggleCollapse={() => setIsSidebarCollapsed((prev) => !prev)}
       />
 
       <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
@@ -2680,13 +2673,14 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
           <HeaderBar
             activeTab={activeTab}
             setActiveTab={setActiveTab}
-            isCollapsed={isSidebarCollapsed}
-            onToggleCollapse={() => setIsSidebarCollapsed((prev) => !prev)}
             unreadCount={unreadCount}
             handoffCount={handoffCount}
             tenantId={currentTenantId}
             currentUser={currentUser}
             onLogout={handleLogout}
+            currentTenant={currentTenant}
+            allTenants={allTenants}
+            onSwitchTenant={(tenantId) => setCurrentTenantId(tenantId)}
           />
         )}
 

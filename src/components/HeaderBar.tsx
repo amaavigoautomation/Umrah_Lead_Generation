@@ -1,7 +1,5 @@
 import React from 'react';
 import {
-  PanelLeft,
-  PanelLeftClose,
   Radio,
   MessageSquare,
   LogOut,
@@ -28,13 +26,14 @@ import { useConnectedChannels } from '../hooks/useConnectedChannels';
 interface HeaderBarProps {
   activeTab: ActiveTab;
   setActiveTab: (tab: ActiveTab) => void;
-  isCollapsed: boolean;
-  onToggleCollapse: () => void;
   unreadCount: number;
   handoffCount: number;
   tenantId?: string;
   currentUser?: AppUser | null;
   onLogout?: () => void;
+  currentTenant?: { id: string; name: string; plan?: string } | null;
+  allTenants?: { id: string; name: string; plan?: string }[];
+  onSwitchTenant?: (tenantId: string) => void;
 }
 
 type ModuleTab = { id: ActiveTab; label: string; icon: React.ReactNode };
@@ -91,13 +90,14 @@ const MODULE_TABS: Partial<Record<ActiveTab, ModuleTab[]>> = {
 export const HeaderBar: React.FC<HeaderBarProps> = ({
   activeTab,
   setActiveTab,
-  isCollapsed,
-  onToggleCollapse,
   unreadCount,
   handoffCount,
   tenantId,
   currentUser,
   onLogout,
+  currentTenant,
+  allTenants = [],
+  onSwitchTenant,
 }) => {
   const { brand } = useBrand();
   const { mailbox: connectedMailbox, whatsapp: connectedWhatsApp } = useConnectedChannels(tenantId);
@@ -109,16 +109,6 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
     <header className="sticky top-0 z-30 shrink-0 border-b border-slate-200 bg-white">
       <div className="flex min-h-[56px] items-center justify-between gap-4 bg-[#05051f] px-4 text-white sm:px-6">
         <div className="flex min-w-0 items-center gap-4">
-          <button
-            type="button"
-            onClick={onToggleCollapse}
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-white/15 text-slate-200 transition hover:bg-white/10 hover:text-white"
-            title={isCollapsed ? 'Expand primary navigation' : 'Collapse primary navigation'}
-            aria-label={isCollapsed ? 'Expand primary navigation' : 'Collapse primary navigation'}
-          >
-            {isCollapsed ? <PanelLeft className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
-          </button>
-
           <div className="min-w-0">
             <div className="mb-0.5 flex items-center gap-2 text-[8px] font-bold uppercase tracking-[0.2em] text-slate-400">
               <span className="truncate">{workspaceName}</span>
@@ -133,6 +123,15 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
         </div>
 
         <div className="flex shrink-0 items-center gap-2 text-xs sm:gap-3">
+          {allTenants.length > 1 && onSwitchTenant && (
+            <label className="hidden items-center rounded-lg border border-white/15 bg-white/5 px-2.5 py-1.5 text-[10px] text-slate-200 sm:flex">
+              <span className="mr-2 text-slate-400">Workspace</span>
+              <select value={currentTenant?.id || ''} onChange={(event) => onSwitchTenant(event.target.value)}
+                className="max-w-[150px] bg-transparent font-semibold text-white outline-none" aria-label="Switch workspace">
+                {allTenants.map((item) => <option key={item.id} value={item.id} className="text-slate-900">{item.name} ({item.plan || 'growth'})</option>)}
+              </select>
+            </label>
+          )}
           {connectedMailbox && (
             <div title={"Connected mailbox: " + connectedMailbox} className="hidden max-w-[190px] items-center gap-1.5 truncate rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-slate-600 sm:flex">
               <Radio className="h-3.5 w-3.5 shrink-0 animate-pulse text-blue-500" />

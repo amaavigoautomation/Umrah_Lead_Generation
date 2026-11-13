@@ -3502,12 +3502,27 @@ ${signature || defSig}`;
     return true;
   }
 
+  // Dashboard customization is an AI Agent capability. Enforce the same role boundary
+  // as the navigation UI so a direct API request cannot bypass module permissions.
+  const canManageAiDashboard = async (): Promise<boolean> => {
+    if (activeTenantCtx.isPlatformAdmin || activeTenantCtx.role === 'admin') return true;
+    try {
+      const userSnapshot = await getDoc(globalUserDoc(activeTenantCtx.uid));
+      const userData: any = userSnapshot.exists() ? userSnapshot.data() : {};
+      return userData?.accessLevel === 'ALL' ||
+        userData?.role === 'admin' ||
+        (Array.isArray(userData?.allowedModules) && userData.allowedModules.includes('agent'));
+    } catch {
+      return false;
+    }
+  };
+
   // AI-generated dashboard cards. All data access is derived from the authenticated tenant context.
   if (url === '/api/dashboard/cards' && req.method === 'GET') {
     try {
-      const cards = await dashboardCardService.getSavedDashboardCards(activeTenantCtx);
+      const dashboard = await dashboardCardService.getSavedDashboardCardsWithPreviews(activeTenantCtx);
       res.statusCode = 200;
-      res.end(JSON.stringify({ success: true, cards }));
+      res.end(JSON.stringify({ success: true, cards: dashboard.cards, previews: dashboard.previews }));
     } catch (err: any) {
       console.error('[Dashboard Cards] Could not load tenant cards:', err?.message || err);
       res.statusCode = 500;
@@ -3517,6 +3532,11 @@ ${signature || defSig}`;
   }
 
   if (url === '/api/dashboard/cards/generate' && req.method === 'POST') {
+    if (!(await canManageAiDashboard())) {
+      res.statusCode = 403;
+      res.end(JSON.stringify({ success: false, error: 'AI Agent access is required to generate dashboard cards.' }));
+      return true;
+    }
     try {
       const card = await dashboardCardService.generateDashboardCard(activeTenantCtx, String(body?.prompt || ''));
       res.statusCode = 200;
@@ -3543,6 +3563,11 @@ ${signature || defSig}`;
   }
 
   if (url === '/api/dashboard/cards/save' && req.method === 'POST') {
+    if (!(await canManageAiDashboard())) {
+      res.statusCode = 403;
+      res.end(JSON.stringify({ success: false, error: 'AI Agent access is required to save dashboard cards.' }));
+      return true;
+    }
     try {
       const cards = await dashboardCardService.saveDashboardCard(activeTenantCtx, body?.card || {});
       res.statusCode = 200;
@@ -3556,6 +3581,11 @@ ${signature || defSig}`;
   }
 
   if (url === '/api/dashboard/cards/delete' && req.method === 'POST') {
+    if (!(await canManageAiDashboard())) {
+      res.statusCode = 403;
+      res.end(JSON.stringify({ success: false, error: 'AI Agent access is required to manage dashboard cards.' }));
+      return true;
+    }
     try {
       const cards = await dashboardCardService.deleteDashboardCard(activeTenantCtx, String(body?.cardId || ''));
       res.statusCode = 200;

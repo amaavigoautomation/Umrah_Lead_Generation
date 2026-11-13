@@ -266,6 +266,7 @@ export async function getEffectiveLimits(tenantId: string): Promise<Record<strin
 
 /** URL -> feature, so every gated API route is protected in one place. */
 export function featureForUrl(url: string): string | null {
+  if (['/api/dashboard/cards/generate', '/api/dashboard/cards/save', '/api/dashboard/cards/delete'].includes(url)) return 'ai_agent';
   if (url === '/api/agent' || url.startsWith('/api/agent/')) return 'ai_agent';
   if (/^\/api\/auto-followup\/(toggle|dashboard|config|trigger-now)$/.test(url)) return 'auto_followup';
   if (/^\/api\/campaigns\/(cron|process-active)$/.test(url)) return null; // cron entry points are gated per workspace in the worker

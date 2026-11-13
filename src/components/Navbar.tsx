@@ -96,7 +96,9 @@ export const Navbar: React.FC<NavbarProps> = ({
   const sidebarContent = (
     <div className="flex h-full w-[56px] shrink-0 flex-col items-center overflow-hidden bg-[#05051f] text-white select-none">
       <div className="flex h-[56px] w-full shrink-0 items-center justify-center border-b border-white/10">
-        <Umrah360Logo size="sm" systemBadge="" showSubtitle={false} />
+        <button type="button" onClick={() => handleSelectTab('dashboard')} title="Go to Home dashboard" aria-label="Go to Home dashboard" className="flex h-full w-full items-center justify-center transition hover:bg-white/[.06] focus-visible:outline focus-visible:outline-2 focus-visible:outline-inset focus-visible:outline-blue-400">
+          <Umrah360Logo size="sm" systemBadge="" showSubtitle={false} lightOnDark compactMark />
+        </button>
       </div>
       <nav aria-label="Main modules" className="flex min-h-0 w-full flex-1 flex-col items-center gap-2 overflow-y-auto py-3">
         {primaryItems.map((item) => {
@@ -127,7 +129,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   return (
     <>
       <div className="sticky top-0 z-30 flex items-center justify-between border-b border-white/10 bg-[#05051f] px-4 py-2.5 text-white shadow-2xs md:hidden">
-        <Umrah360Logo size="sm" systemBadge="" showSubtitle={false} />
+        <button type="button" onClick={() => handleSelectTab('dashboard')} title="Go to Home dashboard" aria-label="Go to Home dashboard" className="rounded-md px-1 py-1"><Umrah360Logo size="sm" systemBadge="" showSubtitle={false} lightOnDark compactMark /></button>
         <div className="flex items-center gap-2">
           {unreadCount > 0 && <span className="rounded-full bg-orange-500 px-2 py-0.5 text-[10px] font-bold text-white">{unreadCount}</span>}
           <button type="button" onClick={() => setIsMobileOpen(true)} className="rounded-xl border border-white/20 p-2 text-white hover:bg-white/10" aria-label="Open navigation">

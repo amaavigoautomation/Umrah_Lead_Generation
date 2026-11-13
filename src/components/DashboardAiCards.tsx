@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Activity, Plus, Sparkles, Trash2, X } from 'lucide-react';
+import { Activity, Plus, RefreshCw, Sparkles, Trash2, X } from 'lucide-react';
 
 type ChartType = 'kpi' | 'line' | 'bar' | 'pie' | 'area' | 'table';
 type DashboardCard = {
@@ -94,9 +94,9 @@ const VisualCard:React.FC<{card:DashboardCard;preview?:CardPreview;loading?:bool
   </section>;
 };
 
-interface Props { tenantId: string; }
+interface Props { tenantId: string; canUseAi: boolean; }
 
-export const DashboardAiCards:React.FC<Props>=({tenantId})=>{
+export const DashboardAiCards:React.FC<Props>=({tenantId, canUseAi})=>{
   const [cards,setCards]=useState<DashboardCard[]>([]);
   const [previews,setPreviews]=useState<Record<string,CardPreview>>({});
   const [loading,setLoading]=useState(true);
@@ -107,31 +107,29 @@ export const DashboardAiCards:React.FC<Props>=({tenantId})=>{
   const [generating,setGenerating]=useState(false);
   const [saving,setSaving]=useState(false);
   const [error,setError]=useState('');
+  const [refreshToken,setRefreshToken]=useState(0);
 
   useEffect(()=>{
     let active=true;
-    setLoading(true);setCards([]);setPreviews({});
     const load=async()=>{
       try{
         const response=await fetch('/api/dashboard/cards');
         const payload=await response.json().catch(()=>({}));
         if(!response.ok||!payload?.success)throw new Error(payload?.error||'Could not load saved dashboard cards.');
         const saved=Array.isArray(payload.cards)?payload.cards as DashboardCard[]:[];
-        if(active)setCards(saved);
-        const results=await Promise.all(saved.map(async card=>{
-          try{
-            const res=await fetch('/api/dashboard/cards/preview',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({card})});
-            const data=await res.json().catch(()=>({}));
-            return res.ok&&data?.preview?[card.id,data.preview as CardPreview] as const:null;
-          }catch{return null;}
-        }));
-        if(active)setPreviews(Object.fromEntries(results.filter(Boolean) as Array<readonly [string,CardPreview]>));
+        if(active){
+          setCards(saved);
+          setPreviews(payload.previews && typeof payload.previews==='object' ? payload.previews as Record<string,CardPreview> : {});
+          setError('');
+        }
       }catch(err:any){if(active)setError(err?.message||'Could not load dashboard cards.');}
       finally{if(active)setLoading(false);}
     };
     void load();
-    return()=>{active=false;};
-  },[tenantId]);
+    const interval=window.setInterval(()=>{if(document.visibilityState==='visible')void load();},90_000);
+    window.addEventListener('focus',load);
+    return()=>{active=false;window.clearInterval(interval);window.removeEventListener('focus',load);};
+  },[tenantId,refreshToken]);
 
   const generate=async()=>{
     if(prompt.trim().length<8){setError('Describe your metric or insight in at least 8 characters.');return;}
@@ -181,18 +179,24 @@ export const DashboardAiCards:React.FC<Props>=({tenantId})=>{
   return <section className="dashboard-ai-cards space-y-3">
     <div className="flex flex-wrap items-end justify-between gap-3">
       <div><h2 className="text-[15px] font-bold tracking-[-.025em] text-[#080b32]">Your dashboard cards</h2><p className="mt-1 text-[11px] text-slate-400">AI creates the visualization and every card setting from your prompt, using this workspace’s live data.</p></div>
-      <button type="button" onClick={()=>{setOpen(true);setError('');setGenerated(null);setGeneratedPreview(null);}} className="inline-flex items-center gap-2 rounded-lg bg-[#0848ef] px-3.5 py-2.5 text-[10px] font-bold text-white shadow-sm transition hover:bg-[#063bc7]"><Plus className="h-3.5 w-3.5"/>Add card with AI</button>
+      <div className="flex items-center gap-2">
+        <button type="button" onClick={()=>setRefreshToken(value=>value+1)} title="Refresh dashboard cards" aria-label="Refresh dashboard cards" className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:border-[#b9caff] hover:bg-[#f3f6ff] hover:text-[#0848ef]"><RefreshCw className="h-3.5 w-3.5"/></button>
+        {canUseAi && <button type="button" onClick={()=>{setOpen(true);setError('');setGenerated(null);setGeneratedPreview(null);}} className="inline-flex items-center gap-2 rounded-lg bg-[#0848ef] px-3.5 py-2.5 text-[10px] font-bold text-white shadow-sm transition hover:bg-[#063bc7]"><Plus className="h-3.5 w-3.5"/>Add card with AI</button>}
+      </div>
     </div>
     {loading?<div className="rounded-xl border border-slate-200 bg-white px-4 py-8 text-center text-[11px] text-slate-400"><Activity className="mx-auto mb-2 h-5 w-5 animate-pulse text-[#0848ef]"/>Loading your saved dashboard cards…</div>
-    :cards.length?<div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">{ordered.map(card=><VisualCard key={card.id} card={card} preview={previews[card.id]} onRemove={remove}/>)}</div>
-    :<button type="button" onClick={()=>{setOpen(true);setError('');}} className="group flex min-h-[145px] w-full flex-col items-center justify-center rounded-xl border border-dashed border-[#b9caff] bg-white px-5 py-7 text-center transition hover:border-[#0848ef] hover:bg-[#f8faff]">
+    :cards.length?<div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">{ordered.map(card=><VisualCard key={card.id} card={card} preview={previews[card.id]} onRemove={canUseAi ? remove : undefined}/>)}</div>
+    :canUseAi ? <button type="button" onClick={()=>{setOpen(true);setError('');}} className="group flex min-h-[145px] w-full flex-col items-center justify-center rounded-xl border border-dashed border-[#b9caff] bg-white px-5 py-7 text-center transition hover:border-[#0848ef] hover:bg-[#f8faff]">
       <span className="mb-2 flex h-10 w-10 items-center justify-center rounded-xl bg-[#eaf0ff] text-[#0848ef] transition group-hover:scale-105"><Plus className="h-5 w-5"/></span>
       <span className="text-[12px] font-bold text-[#17213d]">Create your first AI dashboard card</span>
       <span className="mt-1 max-w-md text-[10px] text-slate-400">Describe the metric, trend or comparison. AI chooses the chart, filters, date range and layout.</span>
-    </button>}
+    </button> : <div className="flex min-h-[145px] w-full flex-col items-center justify-center rounded-xl border border-dashed border-slate-700 bg-[#0a0a2a] px-5 py-7 text-center">
+      <span className="text-[12px] font-bold text-slate-100">No custom dashboard cards yet</span>
+      <span className="mt-1 max-w-md text-[10px] text-slate-400">Ask your workspace administrator to enable AI dashboard customization.</span>
+    </div>}
     {error&&!open&&<div role="alert" className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[10px] text-amber-800">{error}</div>}
 
-    {open&&<div className="fixed inset-0 z-[100] flex items-center justify-center bg-[#05051f]/65 p-3 backdrop-blur-sm sm:p-6" role="dialog" aria-modal="true" aria-labelledby="dashboard-card-builder-title">
+    {open&&canUseAi&&<div className="fixed inset-0 z-[100] flex items-center justify-center bg-[#05051f]/65 p-3 backdrop-blur-sm sm:p-6" role="dialog" aria-modal="true" aria-labelledby="dashboard-card-builder-title">
       <div className="w-full max-w-3xl overflow-hidden rounded-2xl border border-white/15 bg-white shadow-2xl">
         <div className="relative overflow-hidden bg-[#05051f] px-5 py-5 text-white sm:px-7 sm:py-6">
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_15%_0%,rgba(164,76,232,.85),transparent_42%),radial-gradient(circle_at_85%_0%,rgba(8,125,239,.85),transparent_48%)] opacity-90"/>

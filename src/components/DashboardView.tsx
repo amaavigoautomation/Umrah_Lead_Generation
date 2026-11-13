@@ -11,13 +11,13 @@ import {
   MessageCircle,
   Plus,
   Send,
-  Sparkles,
   Users,
 } from 'lucide-react';
 import { useBrand } from '../context/BrandContext';
 import type { Booking, Contact, Lead } from '../types';
 import type { ActiveTab } from './Navbar';
 import { DashboardAiCards } from './DashboardAiCards';
+import { DashboardAiHomeHero } from './DashboardAiHomeHero';
 
 interface DashboardSummary {
   totalConversations: number;
@@ -38,6 +38,7 @@ interface DashboardViewProps {
   tenantId: string;
   tenantName?: string;
   userName: string;
+  canUseAi: boolean;
   leads: Lead[];
   contacts: Contact[];
   conversations: Array<{
@@ -88,6 +89,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   tenantId,
   tenantName,
   userName,
+  canUseAi,
   leads,
   contacts,
   conversations,
@@ -287,8 +289,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     [leads]
   );
 
-  const hour = new Date().getHours();
-  const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
   const workspaceName = tenantName || brand.companyName || 'Your workspace';
 
   const kpis = [
@@ -308,25 +308,25 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   ];
 
   return (
-    <div className="dashboard-view mx-auto w-full max-w-[1600px] space-y-5 pb-8">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+    <div className="dashboard-view dashboard-home-view mx-auto w-full max-w-[1600px] space-y-5 rounded-2xl pb-8">
+      <DashboardAiHomeHero userName={userName} canUseAi={canUseAi} onNavigate={onNavigate} />
+
+      <div className="flex flex-col gap-3 pt-1 sm:flex-row sm:items-end sm:justify-between">
         <div className="min-w-0">
-          <div className="mb-2 flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">
-            <span className="text-[#0848ef]">{workspaceName}</span>
-            <span className="text-slate-300">/</span>
+          <div className="mb-1 flex items-center gap-2 text-[9px] font-bold uppercase tracking-[0.18em] text-slate-400">
+            <span className="text-blue-300">{workspaceName}</span>
+            <span className="text-slate-600">/</span>
             <span>Overview</span>
           </div>
-          <h1 className="flex flex-wrap items-center gap-2 text-[25px] font-semibold tracking-[-.035em] text-[#080b32] sm:text-[28px]">
-            {greeting}, {userName || 'there'} <Sparkles className="h-5 w-5 fill-[#ef741a] text-[#0848ef]" />
-          </h1>
-          <p className="mt-1 text-sm text-slate-500">Here’s what’s happening across your workspace today.</p>
+          <h2 className="text-[21px] font-semibold tracking-[-.035em] text-white sm:text-[24px]">Your dashboard</h2>
+          <p className="mt-1 text-[11px] text-slate-400">A live view of the metrics and activity that matter to your workspace.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <button type="button" onClick={onAddLead} className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-bold text-slate-700 shadow-sm transition hover:border-orange-200 hover:bg-orange-50 hover:text-[#0848ef]">
-            <Plus className="h-4 w-4" /> Add lead
+          <button type="button" onClick={onAddLead} className="inline-flex items-center gap-2 rounded-lg border border-white/15 bg-white/[.06] px-3.5 py-2.5 text-[10px] font-semibold text-slate-100 shadow-sm transition hover:border-blue-300/40 hover:bg-white/10">
+            <Plus className="h-3.5 w-3.5" /> Add lead
           </button>
-          <button type="button" onClick={() => onNavigate('campaigns')} className="inline-flex items-center gap-2 rounded-xl bg-[#0848ef] px-4 py-2.5 text-xs font-bold text-white shadow-sm transition hover:bg-blue-700">
-            Create campaign <ArrowUpRight className="h-4 w-4" />
+          <button type="button" onClick={() => onNavigate('campaigns')} className="inline-flex items-center gap-2 rounded-lg bg-[#0848ef] px-3.5 py-2.5 text-[10px] font-semibold text-white shadow-sm transition hover:bg-blue-600">
+            Create campaign <ArrowUpRight className="h-3.5 w-3.5" />
           </button>
         </div>
       </div>
@@ -347,7 +347,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         ))}
       </div>
 
-      <DashboardAiCards tenantId={tenantId} />
+      <DashboardAiCards key={tenantId} tenantId={tenantId} canUseAi={canUseAi} />
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1.2fr_0.88fr]">
         <section className="rounded-xl border border-[#dfe5f0] bg-white p-5 shadow-[0_1px_3px_rgba(8,11,50,.035)]">

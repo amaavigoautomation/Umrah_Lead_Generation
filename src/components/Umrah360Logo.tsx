@@ -7,6 +7,10 @@ interface Umrah360LogoProps {
   showSubtitle?: boolean;
   systemName?: string;
   systemBadge?: string;
+  /** Render the workspace mark in white on the dark application rail. */
+  lightOnDark?: boolean;
+  /** Keep only compact logo artwork when used in the narrow icon rail. */
+  compactMark?: boolean;
 }
 
 export const Umrah360Logo: React.FC<Umrah360LogoProps> = ({
@@ -15,6 +19,8 @@ export const Umrah360Logo: React.FC<Umrah360LogoProps> = ({
   showSubtitle = true,
   systemName,
   systemBadge = 'AI Platform',
+  lightOnDark = false,
+  compactMark = false,
 }) => {
   const [imgError, setImgError] = useState(false);
   const { brand } = useBrand();
@@ -53,19 +59,23 @@ export const Umrah360Logo: React.FC<Umrah360LogoProps> = ({
             <img
               src={brand.logoUrl}
               alt={brand.companyName}
-              className={`${currentSize.logoImg} w-auto object-contain`}
+              className={`${currentSize.logoImg} w-auto max-w-[40px] object-contain ${lightOnDark ? 'brightness-0 invert' : ''}`}
               onError={() => setImgError(true)}
             />
           ) : (
-            <span className="font-display font-extrabold text-slate-900 tracking-tight text-lg truncate max-w-[10rem]">
-              {brand.companyName || 'Workspace'}
-            </span>
+            compactMark ? (
+              <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-white/10 text-[12px] font-extrabold uppercase text-white">{(brand.companyName || 'W').slice(0,1)}</span>
+            ) : (
+              <span className={`font-display font-extrabold tracking-tight text-lg truncate max-w-[10rem] ${lightOnDark ? 'text-white' : 'text-slate-900'}`}>
+                {brand.companyName || 'Workspace'}
+              </span>
+            )
           )
         ) : !imgError ? (
           <img
             src="/amaavigo-logo.png"
             alt="Amaavigo"
-            className={`${currentSize.logoImg} w-auto object-contain`}
+            className={`${currentSize.logoImg} w-auto max-w-[40px] object-contain ${lightOnDark ? 'brightness-0 invert' : ''}`}
             onError={() => setImgError(true)}
           />
         ) : (
@@ -76,31 +86,29 @@ export const Umrah360Logo: React.FC<Umrah360LogoProps> = ({
               fill="none"
               xmlns="http://www.w3.org/2000/svg"
             >
-              <circle cx="20" cy="20" r="18" fill="#fef6f3" stroke="#fed7aa" strokeWidth="2" />
+              <circle cx="20" cy="20" r="18" fill={lightOnDark ? '#05051f' : '#fef6f3'} stroke={lightOnDark ? '#ffffff' : '#fed7aa'} strokeWidth="2" />
               <path
                 d="M12 26C14 20 18 14 26 13C24 18 20 22 14 24"
-                stroke="#ef741a"
+                stroke={lightOnDark ? '#ffffff' : '#ef741a'}
                 strokeWidth="2.5"
                 strokeLinecap="round"
               />
               <path
                 d="M16 27C18 23 22 19 28 17C26 21 23 24 18 26"
-                stroke="#ea580c"
+                stroke={lightOnDark ? '#ffffff' : '#ea580c'}
                 strokeWidth="2.5"
                 strokeLinecap="round"
               />
             </svg>
-            <span className="font-display font-extrabold text-slate-900 tracking-tight text-lg">
-              amaavigo
-            </span>
+            {!compactMark && <span className={`font-display font-extrabold tracking-tight text-lg ${lightOnDark ? 'text-white' : 'text-slate-900'}`}>amaavigo</span>}
           </div>
         )}
 
         {/* Separator / Product Tag */}
-        {useAmaavigoMark && <div className="h-4 w-px bg-slate-200 mx-1 hidden sm:block" />}
+        {useAmaavigoMark && !compactMark && <div className={`h-4 w-px mx-1 hidden sm:block ${lightOnDark ? 'bg-white/30' : 'bg-slate-200'}`} />}
 
-        {useAmaavigoMark && name && (
-          <span className="text-sm font-bold text-slate-800 hidden sm:inline-block font-sans">
+        {useAmaavigoMark && name && !compactMark && (
+          <span className={`text-sm font-bold hidden sm:inline-block font-sans ${lightOnDark ? 'text-white' : 'text-slate-800'}`}>
             {name}
           </span>
         )}

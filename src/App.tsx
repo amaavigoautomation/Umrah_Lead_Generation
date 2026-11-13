@@ -2681,7 +2681,7 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
             currentTenant={currentTenant}
             allTenants={allTenants}
             onSwitchTenant={(tenantId) => setCurrentTenantId(tenantId)}
-            hideModuleNavigation={activeTab === 'inbox'}
+            hideModuleNavigation={activeTab === 'inbox' || activeTab === 'dashboard'}
           />
         )}
 
@@ -2719,6 +2719,7 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
                 tenantId={currentTenantId}
                 tenantName={currentTenant?.name}
                 userName={currentUser.name}
+                canUseAi={!planLocked('agent') && (currentUser.accessLevel === 'ALL' || currentUser.role === 'ADMIN' || (currentUser.allowedModules || []).includes('agent'))}
                 leads={leads}
                 contacts={contacts}
                 conversations={conversations}

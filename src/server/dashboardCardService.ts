@@ -41,7 +41,7 @@ type MetricDefinition = {
   id: string;
   label: string;
   description: string;
-  source: 'leads' | 'conversations' | 'campaigns' | 'campaignLeads';
+  source: 'leads' | 'conversations' | 'campaigns' | 'campaignLeads' | 'leadDatabases' | 'leadDatabaseEntries' | 'bookings' | 'aiUsageEvents';
   kind: 'count' | 'trend' | 'breakdown' | 'rate';
   field?: string;
   value?: string | number | boolean;
@@ -78,6 +78,11 @@ export const DASHBOARD_METRICS: MetricDefinition[] = [
   { id:'campaigns.send_status', label:'Campaign delivery status', description:'Campaign lead distribution by send status', source:'campaignLeads', kind:'breakdown', field:'sendStatus', charts:['bar','pie','table'], defaultChart:'pie', groupBy:['status'], format:'number' },
   { id:'followups.due', label:'Follow-ups due', description:'Leads currently in the Follow Up stage', source:'leads', kind:'count', field:'status', value:'FOLLOW_UP', charts:['kpi'], defaultChart:'kpi', dateField:'createdAt', groupBy:['none'], format:'number' },
   { id:'demos.booked', label:'Demos booked', description:'CRM leads currently marked Demo Booked or Demo Scheduled', source:'leads', kind:'count', field:'status', value:'DEMO_BOOKED', charts:['kpi'], defaultChart:'kpi', dateField:'demoBookedAt', groupBy:['none'], format:'number' },
+  { id:'demos.calendar_bookings', label:'Calendar demo bookings', description:'Demo and consultation appointments booked in the workspace calendar', source:'bookings', kind:'count', charts:['kpi'], defaultChart:'kpi', dateField:'startDateTimeIso', groupBy:['none'], format:'number' },
+  { id:'databases.total', label:'Lead databases', description:'Saved lead databases available to this workspace', source:'leadDatabases', kind:'count', charts:['kpi'], defaultChart:'kpi', dateField:'createdAt', groupBy:['none'], format:'number' },
+  { id:'databases.records', label:'Database records', description:'Lead records stored across this workspace lead databases', source:'leadDatabaseEntries', kind:'count', charts:['kpi'], defaultChart:'kpi', dateField:'createdAt', groupBy:['none'], format:'number' },
+  { id:'ai.requests', label:'AI Agent requests', description:'AI Agent and AI feature usage events recorded for this workspace', source:'aiUsageEvents', kind:'count', charts:['kpi'], defaultChart:'kpi', dateField:'createdAt', groupBy:['none'], format:'number' },
+  { id:'ai.activity_over_time', label:'AI Agent activity', description:'AI requests recorded over time in this workspace', source:'aiUsageEvents', kind:'trend', dateField:'createdAt', charts:['line','area','bar','table'], defaultChart:'line', groupBy:['day','week','month'], format:'number' },
 ];
 
 const DATE_DAYS: Record<DashboardDateRange, number | null> = {
@@ -85,9 +90,16 @@ const DATE_DAYS: Record<DashboardDateRange, number | null> = {
 };
 const COLLECTION = (ctx: TenantContext, source: MetricDefinition['source']) => {
   const tenant = tenantRepo(ctx);
-  return source === 'leads' ? tenant.leads()
-    : source === 'conversations' ? tenant.conversations()
-    : source === 'campaigns' ? tenant.campaigns() : tenant.campaignLeads();
+  switch (source) {
+    case 'leads': return tenant.leads();
+    case 'conversations': return tenant.conversations();
+    case 'campaigns': return tenant.campaigns();
+    case 'campaignLeads': return tenant.campaignLeads();
+    case 'leadDatabases': return tenant.leadDatabases();
+    case 'leadDatabaseEntries': return tenant.leadDatabaseEntries();
+    case 'bookings': return tenant.bookings();
+    case 'aiUsageEvents': return tenant.aiUsageEvents();
+  }
 };
 
 function parseModelJson(raw: string): any {
@@ -122,8 +134,14 @@ export function normalizeDashboardCard(input: any, prompt = ''): DashboardCardCo
     dateRange,
     groupBy,
     comparePrevious: input?.comparePrevious === true && metric.kind !== 'breakdown' && dateRange !== 'all',
-    displayFormat: (['number','percentage','currency','compact'] as string[]).includes(input?.displayFormat)
-      ? input.displayFormat : metric.format,
+    displayFormat: (() => {
+      const allowedFormats = metric.format === 'percentage'
+        ? ['percentage', 'compact']
+        : metric.format === 'currency'
+          ? ['currency', 'compact']
+          : ['number', 'compact'];
+      return allowedFormats.includes(input?.displayFormat) ? input.displayFormat : metric.format;
+    })(),
     width: (['small','medium','large'] as string[]).includes(input?.width) ? input.width : (chartType === 'kpi' ? 'small' : chartType === 'pie' ? 'medium' : 'large'),
     placement: (['top','middle','bottom'] as string[]).includes(input?.placement) ? input.placement : 'bottom',
     filters: {
@@ -160,7 +178,6 @@ export async function generateDashboardCard(ctx: TenantContext, userPrompt: stri
     jsonMode: true,
     temperature: 0.15,
     maxTokens: 900,
-    models: [process.env.DASHBOARD_CARD_MODEL || 'gpt-4o-mini'],
     tenantId: ctx.tenantId,
     usageFeature: 'dashboard_card_builder',
     timeoutMs: 25000,
@@ -252,6 +269,7 @@ async function countMetric(ctx: TenantContext, metric: MetricDefinition, card: D
   else if (metric.id === 'conversations.active') conditions.push({ field:'status', op:'in', value:['ACTIVE','REVIEW'] });
   else if (metric.id === 'conversations.unread') conditions.push({ field:'unread', op:'==', value:true });
   else if (metric.id === 'demos.booked') conditions.push({ field:'status', op:'in', value:['DEMO_BOOKED','DEMO_SCHEDULED'] });
+  else if (metric.id === 'demos.calendar_bookings') conditions.push({ field:'status', op:'in', value:['BOOKED','RESCHEDULED'] });
   else if (metric.field && metric.value !== undefined) conditions.push({ field:metric.field, op:'==', value:metric.value });
   if (card.filters.statuses?.length && metric.source === 'leads' && metric.field !== 'status' && metric.id !== 'leads.hot') conditions.push({ field:'status', op:'in', value:card.filters.statuses });
   if (card.filters.channels?.length && metric.source === 'conversations') conditions.push({ field:'channel', op:'in', value:card.filters.channels });
@@ -348,6 +366,53 @@ export async function previewDashboardCard(ctx: TenantContext, input: any): Prom
     sampled: metric.kind === 'trend' && note.length > 0,
     updatedAt:new Date().toISOString(),
   };
+}
+
+const dashboardPreviewCache = new Map<string, { expiresAt: number; preview: DashboardCardPreview }>();
+const DASHBOARD_PREVIEW_CACHE_TTL_MS = 45_000;
+
+async function getCachedDashboardPreview(ctx: TenantContext, card: DashboardCardConfig): Promise<DashboardCardPreview> {
+  const key = [
+    ctx.tenantId, card.id, card.metricId, card.dateRange, card.groupBy,
+    card.comparePrevious ? 'compare' : 'single', JSON.stringify(card.filters || {}),
+  ].join(':');
+  const cached = dashboardPreviewCache.get(key);
+  if (cached && cached.expiresAt > Date.now()) return cached.preview;
+  const preview = await previewDashboardCard(ctx, card);
+  dashboardPreviewCache.set(key, { expiresAt: Date.now() + DASHBOARD_PREVIEW_CACHE_TTL_MS, preview });
+  if (dashboardPreviewCache.size > 500) {
+    const now = Date.now();
+    for (const [cacheKey, entry] of dashboardPreviewCache.entries()) {
+      if (entry.expiresAt <= now) dashboardPreviewCache.delete(cacheKey);
+    }
+    while (dashboardPreviewCache.size > 400) {
+      const oldest = dashboardPreviewCache.keys().next().value;
+      if (!oldest) break;
+      dashboardPreviewCache.delete(oldest);
+    }
+  }
+  return preview;
+}
+
+export async function getSavedDashboardCardsWithPreviews(ctx: TenantContext): Promise<{
+  cards: DashboardCardConfig[];
+  previews: Record<string, DashboardCardPreview>;
+}> {
+  const cards = await getSavedDashboardCards(ctx);
+  const previews: Record<string, DashboardCardPreview> = {};
+  // Cap parallel Firestore work to avoid a burst when a workspace has many saved cards.
+  for (let index = 0; index < cards.length; index += 4) {
+    const batch = cards.slice(index, index + 4);
+    const results = await Promise.all(batch.map(async (card) => {
+      try { return [card.id, await getCachedDashboardPreview(ctx, card)] as const; }
+      catch (error: any) {
+        console.warn('[Dashboard Cards] Preview unavailable for card:', card.id, error?.message || error);
+        return null;
+      }
+    }));
+    results.forEach((entry) => { if (entry) previews[entry[0]] = entry[1]; });
+  }
+  return { cards, previews };
 }
 
 export async function getSavedDashboardCards(ctx: TenantContext): Promise<DashboardCardConfig[]> {

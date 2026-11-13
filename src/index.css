@@ -3006,3 +3006,284 @@
     font-size: 19px !important;
   }
 }
+
+
+/* Lead Database + Knowledge Base — align both workspaces with the Marketing design system. */
+.lead-database-shell,
+.knowledge-base-shell {
+  display:flex;
+  flex-direction:column;
+  gap:17px;
+  min-width:0;
+  color:#18243b;
+  font-family:inherit;
+  background:#f7f9fc;
+}
+.lead-database-shell {
+  padding:22px 24px 28px;
+  --brand-orange:#155eef;
+  --brand-orange-hover:#0d4ed6;
+  --brand-blue:#155eef;
+}
+.knowledge-base-shell {
+  width:100%;
+  max-width:none;
+  margin:0;
+  padding:22px 24px 28px;
+}
+.lead-db-page-heading {
+  align-items:center;
+  padding:18px 19px;
+  border:1px solid #e1e7f0;
+  border-radius:12px;
+  background:#fff;
+  box-shadow:0 2px 7px rgba(20,34,59,.025);
+}
+.lead-db-eyebrow {
+  color:#155eef;
+  font-size:9px;
+  letter-spacing:.14em;
+  margin-bottom:6px;
+}
+.lead-db-page-heading h1 {
+  color:#13213a;
+  font-size:23px;
+  line-height:1.25;
+  font-weight:800;
+  letter-spacing:-.045em;
+}
+.lead-db-page-heading p {color:#64748b;font-size:11px;line-height:1.55}
+.lead-db-button--primary {
+  background:#155eef;
+  color:#fff;
+  border-color:#155eef;
+  box-shadow:none;
+}
+.lead-db-button--primary:hover:not(:disabled) {
+  background:#0d4ed6;
+  border-color:#0d4ed6;
+  box-shadow:0 5px 12px rgba(21,94,239,.16);
+}
+.lead-db-button--secondary {
+  border-color:#dfe6f0;
+  color:#52627b;
+  background:#fff;
+}
+.lead-db-button--secondary:hover:not(:disabled) {
+  background:#f5f8fd;
+  border-color:#cbdaf4;
+  color:#155eef;
+}
+.lead-db-icon-button {border-color:#dfe6f0;color:#64748b}
+.lead-db-icon-button:hover {border-color:#cbdaf4;color:#155eef;background:#f5f8fd}
+.lead-db-stats-grid {gap:10px}
+.lead-db-stat {
+  padding:14px;
+  gap:10px;
+  border-color:#e1e7f0;
+  border-radius:12px;
+  box-shadow:0 2px 7px rgba(20,34,59,.025);
+}
+.lead-db-stat-icon {width:32px;height:32px;flex-basis:32px;border-radius:9px}
+.lead-db-stat-icon--orange {background:#edf3ff;color:#155eef}
+.lead-db-stat-icon--blue {background:#edf3ff;color:#155eef}
+.lead-db-stat-icon--green {background:#effaf4;color:#16804d}
+.lead-db-stat-label {font-size:10px;font-weight:650;color:#74829a}
+.lead-db-stat-value {font-size:22px;line-height:1.1;letter-spacing:-.035em;color:#13213a}
+.lead-db-stat-helper {font-size:9px;color:#8793a6}
+.lead-db-toolbar {gap:14px}
+.lead-db-view-tabs,.lead-db-workspace-tabs {border-color:#dfe6f0;gap:10px}
+.lead-db-view-tabs button,.lead-db-workspace-tabs button {
+  padding:10px 8px 11px;
+  border-bottom-width:2px;
+  color:#74829a;
+  font-size:11px;
+  font-weight:700;
+}
+.lead-db-view-tabs button.is-active,.lead-db-workspace-tabs button.is-active {
+  color:#155eef;
+  border-color:#155eef;
+}
+.lead-db-panel,.lead-db-workspace-summary {
+  border-color:#e1e7f0;
+  border-radius:12px;
+  box-shadow:0 2px 7px rgba(20,34,59,.025);
+}
+.lead-db-panel-heading {padding:15px 17px;border-color:#edf1f6}
+.lead-db-panel-heading h2,.lead-db-settings-panel h2 {color:#1c2b45;font-size:15px;font-weight:800}
+.lead-db-panel-heading p,.lead-db-settings-panel>div:first-child p {color:#74829a;font-size:10px}
+.lead-db-search {
+  border-color:#d8e0ed;
+  border-radius:9px;
+}
+.lead-db-search:focus-within {
+  border-color:#7ca5fa;
+  box-shadow:0 0 0 3px rgba(21,94,239,.09);
+}
+.lead-db-table th {background:#f5f7fb;color:#68758b;font-size:9px}
+.lead-db-table td {color:#40506b;font-size:11px}
+.lead-db-database-icon,.lead-db-empty-icon,.lead-db-upload-icon {
+  background:#edf3ff;
+  color:#155eef;
+}
+.lead-db-row-actions button:hover {
+  background:#edf3ff;
+  border-color:#cfe0ff;
+  color:#155eef;
+}
+.lead-db-empty h3 {color:#263650;font-size:13px}
+.lead-db-empty p {color:#74829a}
+.lead-db-pagination {border-color:#edf1f6;color:#8793a6}
+.lead-db-pagination button {
+  border-color:#dfe6f0;
+  color:#52627b;
+}
+.lead-db-pagination button:hover {border-color:#cbdaf4;color:#155eef;background:#f5f8fd}
+.lead-db-workspace-summary {background:#fff}
+.lead-db-workspace-summary-item span {color:#8793a6}
+.lead-db-workspace-summary-item strong {color:#13213a;font-size:21px}
+.lead-db-info-strip svg {color:#155eef}
+.lead-db-email-count {background:#effaf4;color:#16804d}
+.lead-db-report-actions button:hover,.lead-db-report-downloads button:hover {
+  background:#edf3ff;
+  border-color:#cfe0ff;
+  color:#155eef;
+}
+.lead-db-settings-panel {border-color:#e1e7f0;border-radius:12px}
+.lead-db-settings-form input:focus,.lead-db-settings-form textarea:focus,
+.lead-db-modal-form input:focus,.lead-db-modal-form textarea:focus,
+.lead-db-sheet-options select:focus,.lead-db-mapping-grid select:focus,.lead-db-filter select:focus {
+  border-color:#7ca5fa;
+  outline:none;
+  box-shadow:0 0 0 3px rgba(21,94,239,.09);
+}
+.lead-db-modal {border-color:#e1e7f0;border-radius:14px;box-shadow:0 24px 90px rgba(15,23,42,.18)}
+.lead-db-modal>header span {color:#155eef}
+.lead-db-wizard-step.is-active {color:#155eef}
+.lead-db-wizard-step.is-active span {background:#155eef;border-color:#155eef}
+.lead-db-upload-drop:hover {border-color:#9dbbf8;background:#f7faff}
+
+/* Knowledge Base uses the same white cards, compact hierarchy and blue action system. */
+.knowledge-base-header {
+  padding:18px 19px;
+  gap:14px;
+  border-color:#e1e7f0;
+  border-radius:12px;
+  background:#fff;
+  box-shadow:0 2px 7px rgba(20,34,59,.025);
+}
+.knowledge-base-header h1 {font-size:23px;color:#13213a}
+.knowledge-base-header p {font-size:11px;color:#64748b;line-height:1.55}
+.knowledge-base-shell section,
+.knowledge-base-shell [class~="rounded-2xl"][class~="border"],
+.knowledge-base-shell [class~="rounded-xl"][class~="border"] {
+  border-color:#e1e7f0;
+  box-shadow:0 2px 7px rgba(20,34,59,.025);
+}
+.knowledge-base-shell [class~="rounded-2xl"] {border-radius:12px}
+.knowledge-base-shell [class~="bg-orange-500"],
+.knowledge-base-shell [class~="bg-orange-600"] {
+  background:#155eef!important;
+  color:#fff!important;
+}
+.knowledge-base-shell [class*="from-orange-500"],
+.knowledge-base-shell [class*="to-amber-600"] {
+  background-image:none!important;
+  background-color:#155eef!important;
+}
+.knowledge-base-shell [class~="hover:bg-orange-600"]:hover,
+.knowledge-base-shell [class~="hover:bg-orange-700"]:hover {background:#0d4ed6!important}
+.knowledge-base-shell [class~="text-orange-500"],
+.knowledge-base-shell [class~="text-orange-600"],
+.knowledge-base-shell [class~="text-orange-700"] {color:#155eef!important}
+.knowledge-base-shell [class~="border-orange-200"],
+.knowledge-base-shell [class~="border-orange-300"],
+.knowledge-base-shell [class~="border-orange-500"] {border-color:#cfe0ff!important}
+.knowledge-base-shell [class~="bg-orange-50"],
+.knowledge-base-shell [class~="bg-orange-50/90"],
+.knowledge-base-shell [class~="bg-orange-100"] {background:#edf3ff!important}
+.knowledge-base-shell [class~="bg-slate-900"] {background:#155eef!important}
+.knowledge-base-shell [class~="hover:bg-slate-800"]:hover {background:#0d4ed6!important}
+.knowledge-base-shell [class~="focus:ring-orange-500/20"]:focus {--tw-ring-color:rgba(21,94,239,.12)!important}
+.knowledge-base-shell [class~="focus:ring-orange-500/30"]:focus {--tw-ring-color:rgba(21,94,239,.12)!important}
+.knowledge-base-shell input,.knowledge-base-shell select,.knowledge-base-shell textarea {
+  border-color:#d8e0ed;
+  color:#263650;
+}
+.knowledge-base-shell input:focus,.knowledge-base-shell select:focus,.knowledge-base-shell textarea:focus {
+  border-color:#7ca5fa!important;
+  outline:none;
+  box-shadow:0 0 0 3px rgba(21,94,239,.09);
+}
+.knowledge-base-shell button:focus-visible {outline:2px solid #8fb0f7;outline-offset:2px}
+.knowledge-base-shell .bg-slate-50 {background-color:#f7f9fc}
+.knowledge-base-shell .text-slate-500 {color:#718099}
+
+/* Shared compact type scale for Lead Database and Knowledge Base. */
+:where(.lead-database-shell,.knowledge-base-shell) {
+  font-family:inherit;
+  font-size:11px;
+  line-height:1.5;
+  color:#40506b;
+}
+:where(.lead-database-shell,.knowledge-base-shell) :where(div,span,p,label,a,li,td,th,small,strong,em) {
+  font-size:11px!important;
+  line-height:1.5;
+}
+:where(.lead-database-shell,.knowledge-base-shell) :where(h1,h2,h3,h4,h5,h6) {line-height:1.3!important}
+:where(.lead-database-shell,.knowledge-base-shell) :where(h1) {
+  font-size:23px!important;
+  font-weight:800!important;
+  letter-spacing:-.045em;
+  color:#13213a;
+}
+:where(.lead-database-shell,.knowledge-base-shell) :where(h2) {
+  font-size:15px!important;
+  font-weight:800!important;
+  letter-spacing:-.02em;
+  color:#1c2b45;
+}
+:where(.lead-database-shell,.knowledge-base-shell) :where(h3,h4) {
+  font-size:13px!important;
+  font-weight:760!important;
+  color:#263650;
+}
+:where(.lead-database-shell,.knowledge-base-shell) :where(button,[role="button"],input,select,textarea) {
+  font-size:11px!important;
+  line-height:1.4;
+}
+:where(.lead-database-shell,.knowledge-base-shell) :where(th) {
+  font-size:9px!important;
+  font-weight:780!important;
+  letter-spacing:.055em;
+}
+:where(.lead-database-shell,.knowledge-base-shell) :where(.text-2xl,.text-3xl,.text-4xl,.text-5xl,.text-6xl) {
+  font-size:22px!important;
+  font-weight:820!important;
+  line-height:1.1!important;
+  font-variant-numeric:tabular-nums;
+}
+:where(.lead-database-shell,.knowledge-base-shell) :where(.text-xs,.text-sm,.text-base,.text-lg,.text-xl) {
+  font-size:11px!important;
+}
+.lead-database-shell :where(
+  .lead-db-eyebrow,.lead-db-stat-label,.lead-db-stat-helper,.lead-db-person-meta,.lead-db-cell-sub,
+  .lead-db-database-name small,.lead-db-muted-label,.lead-db-footnote,.lead-db-pagination,
+  .lead-db-preview-stats small,.lead-db-upload-foot,.lead-db-wizard-step small
+) {font-size:9px!important}
+.lead-database-shell .lead-db-stat-value,.lead-database-shell .lead-db-workspace-summary-item strong,
+.lead-database-shell .lead-db-preview-stats strong {font-size:22px!important;line-height:1.12!important}
+.lead-database-shell .lead-db-person-name,.lead-database-shell .lead-db-cell-main,
+.lead-database-shell .lead-db-database-name strong {font-size:11px!important}
+.lead-database-shell .lead-db-table th {font-size:9px!important}
+.knowledge-base-shell :where([class*="text-[9px]"],[class*="text-[10px]"]) {font-size:10px!important}
+@media(max-width:900px) {
+  .lead-database-shell,.knowledge-base-shell {padding:15px;gap:13px}
+}
+@media(max-width:640px) {
+  .lead-database-shell,.knowledge-base-shell {padding:13px;gap:12px}
+  .lead-db-page-heading {align-items:flex-start;flex-direction:column}
+  .lead-db-heading-actions {width:100%;flex-wrap:wrap}
+  .knowledge-base-header {padding:15px}
+  .knowledge-base-header>div:last-child {width:100%;justify-content:flex-start}
+}

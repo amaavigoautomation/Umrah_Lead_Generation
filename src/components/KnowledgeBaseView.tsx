@@ -270,7 +270,7 @@ export const KnowledgeBaseView: React.FC<KnowledgeBaseViewProps> = ({
   };
 
   return (
-    <div className="max-w-7xl mx-auto p-4 sm:p-6 space-y-6">
+    <div className="knowledge-base-shell marketing-studio-shell max-w-7xl mx-auto p-4 sm:p-6 space-y-6">
       {/* Toast Notification */}
       {saveToast && (
         <div className="fixed top-20 right-6 z-50 bg-white border border-emerald-500 text-emerald-800 px-4 py-3 rounded-xl shadow-lg flex items-center space-x-3 text-xs animate-in fade-in slide-in-from-top-4">
@@ -280,7 +280,7 @@ export const KnowledgeBaseView: React.FC<KnowledgeBaseViewProps> = ({
       )}
 
       {/* 1. HERO HEADER CARD (Matches Screenshot exactly) */}
-      <div className="bg-white border border-slate-200/90 rounded-2xl p-6 md:p-7 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-5">
+      <div className="knowledge-base-header marketing-studio-header bg-white border border-slate-200/90 rounded-2xl p-6 md:p-7 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-5">
         <div>
           <div className="flex items-center space-x-2.5 flex-wrap gap-y-1">
             <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">

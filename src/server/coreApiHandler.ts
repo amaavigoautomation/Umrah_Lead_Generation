@@ -1,4 +1,5 @@
 import OpenAI from 'openai';
+import * as dashboardCardService from './dashboardCardService.js';
 import { sanitizeAiEmailText } from './emailSanitizer.js';
 import { AI_RESPONSE_FORMATTING_INSTRUCTIONS } from '../shared/aiResponseFormatting.js';
 import { verifySmtpConnection, sendLiveEmail, getSmtpConfig, updateSmtpConfig, getResendConfig } from './smtpService.js';
@@ -3497,6 +3498,72 @@ ${signature || defSig}`;
     } catch (err: any) {
       res.statusCode = 400;
       res.end(JSON.stringify({ error: err?.message || 'Could not delete database.' }));
+    }
+    return true;
+  }
+
+  // AI-generated dashboard cards. All data access is derived from the authenticated tenant context.
+  if (url === '/api/dashboard/cards' && req.method === 'GET') {
+    try {
+      const cards = await dashboardCardService.getSavedDashboardCards(activeTenantCtx);
+      res.statusCode = 200;
+      res.end(JSON.stringify({ success: true, cards }));
+    } catch (err: any) {
+      console.error('[Dashboard Cards] Could not load tenant cards:', err?.message || err);
+      res.statusCode = 500;
+      res.end(JSON.stringify({ success: false, error: 'Could not load dashboard cards.' }));
+    }
+    return true;
+  }
+
+  if (url === '/api/dashboard/cards/generate' && req.method === 'POST') {
+    try {
+      const card = await dashboardCardService.generateDashboardCard(activeTenantCtx, String(body?.prompt || ''));
+      res.statusCode = 200;
+      res.end(JSON.stringify({ success: true, card }));
+    } catch (err: any) {
+      console.error('[Dashboard Cards] AI generation failed:', err?.message || err);
+      res.statusCode = 422;
+      res.end(JSON.stringify({ success: false, error: err?.message || 'AI could not create this dashboard card.' }));
+    }
+    return true;
+  }
+
+  if (url === '/api/dashboard/cards/preview' && req.method === 'POST') {
+    try {
+      const preview = await dashboardCardService.previewDashboardCard(activeTenantCtx, body?.card || {});
+      res.statusCode = 200;
+      res.end(JSON.stringify({ success: true, preview }));
+    } catch (err: any) {
+      console.error('[Dashboard Cards] Preview failed:', err?.message || err);
+      res.statusCode = 422;
+      res.end(JSON.stringify({ success: false, error: err?.message || 'Could not calculate a preview for this card.' }));
+    }
+    return true;
+  }
+
+  if (url === '/api/dashboard/cards/save' && req.method === 'POST') {
+    try {
+      const cards = await dashboardCardService.saveDashboardCard(activeTenantCtx, body?.card || {});
+      res.statusCode = 200;
+      res.end(JSON.stringify({ success: true, cards }));
+    } catch (err: any) {
+      console.error('[Dashboard Cards] Save failed:', err?.message || err);
+      res.statusCode = 422;
+      res.end(JSON.stringify({ success: false, error: err?.message || 'Could not save dashboard card.' }));
+    }
+    return true;
+  }
+
+  if (url === '/api/dashboard/cards/delete' && req.method === 'POST') {
+    try {
+      const cards = await dashboardCardService.deleteDashboardCard(activeTenantCtx, String(body?.cardId || ''));
+      res.statusCode = 200;
+      res.end(JSON.stringify({ success: true, cards }));
+    } catch (err: any) {
+      console.error('[Dashboard Cards] Delete failed:', err?.message || err);
+      res.statusCode = 422;
+      res.end(JSON.stringify({ success: false, error: err?.message || 'Could not remove dashboard card.' }));
     }
     return true;
   }

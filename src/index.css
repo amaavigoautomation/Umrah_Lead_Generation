@@ -2105,3 +2105,380 @@
   .dashboard-home-history-toggle { padding-left:10px; padding-right:10px; }
 }
 
+
+/* --------------------------------------------------------------------------
+   ActiveCampaign-inspired clean AI conversation surface.
+   -------------------------------------------------------------------------- */
+.agent-home-workspace {
+  font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+}
+.agent-home-workspace .agent-home-header {
+  min-height:58px !important;
+  padding:10px 22px !important;
+  background:#05051f !important;
+  border-bottom:1px solid rgba(129,143,194,.16) !important;
+}
+.agent-home-workspace .agent-home-header .agent-orb {
+  width:36px !important;
+  height:36px !important;
+}
+.agent-home-workspace .agent-home-header .text-base {
+  font-size:14px !important;
+  font-weight:650 !important;
+  letter-spacing:-.025em;
+}
+.agent-home-workspace .agent-home-header .text-\[11px\] {
+  font-size:10px !important;
+  color:#929bbc !important;
+}
+.agent-home-workspace .agent-home-header .rounded-full.border-orange-200 {
+  border-color:rgba(107,132,255,.32) !important;
+  background:rgba(78,100,207,.13) !important;
+  color:#9fb5ff !important;
+}
+.agent-home-workspace .agent-home-header button {
+  min-height:34px;
+  border:1px solid rgba(129,143,194,.22) !important;
+  border-radius:10px !important;
+  background:rgba(255,255,255,.035) !important;
+  color:#dce3fb !important;
+  font-size:11px !important;
+}
+.agent-home-workspace .agent-home-header button:hover {
+  border-color:rgba(126,155,255,.52) !important;
+  background:rgba(90,115,218,.12) !important;
+}
+.agent-home-workspace .agent-home-sidebar {
+  width:252px !important;
+  padding:14px !important;
+  background:#080823 !important;
+  border-right:1px solid rgba(129,143,194,.16) !important;
+}
+.agent-home-workspace .agent-home-sidebar .agent-home-new-conversation {
+  min-height:38px !important;
+  border:1px solid rgba(113,140,255,.3) !important;
+  border-radius:10px !important;
+  background:linear-gradient(110deg,#6959e8,#3b66ed 58%,#187fda) !important;
+  box-shadow:0 5px 16px rgba(48,75,185,.18) !important;
+  font-size:11px !important;
+}
+.agent-home-workspace .agent-home-sidebar .agent-home-recent-heading {
+  margin-top:22px !important;
+  margin-bottom:4px;
+  color:#8b96b9 !important;
+  font-size:9px !important;
+  letter-spacing:.14em !important;
+}
+.agent-home-workspace .agent-home-conversation-item {
+  margin:0 !important;
+  padding:10px 11px !important;
+  border:1px solid transparent !important;
+  border-radius:9px !important;
+  color:#c2cbe4 !important;
+  font-size:11px !important;
+}
+.agent-home-workspace .agent-home-conversation-item .text-xs {
+  font-size:11px !important;
+  font-weight:500 !important;
+}
+.agent-home-workspace .agent-home-conversation-item .text-slate-600 {
+  color:#7885aa !important;
+  font-size:9px !important;
+}
+.agent-home-workspace .agent-home-conversation-item:hover {
+  background:rgba(99,119,214,.09) !important;
+  border-color:rgba(112,139,242,.16) !important;
+}
+.agent-home-workspace .agent-home-conversation-item.is-active {
+  background:rgba(88,111,222,.16) !important;
+  border-color:rgba(113,139,255,.25) !important;
+  box-shadow:inset 2px 0 0 #6b88ff !important;
+}
+.agent-home-workspace .agent-home-chat-panel {
+  background:#05051f !important;
+}
+.agent-home-workspace .agent-home-thread-header {
+  min-height:48px !important;
+  padding:7px 20px !important;
+  border-bottom:1px solid rgba(129,143,194,.13) !important;
+  background:#05051f !important;
+}
+.agent-home-workspace .agent-home-thread-header button {
+  height:30px;
+  width:30px;
+  padding:6px !important;
+  border-radius:8px !important;
+  border:1px solid rgba(129,143,194,.2) !important;
+  background:rgba(255,255,255,.025) !important;
+  color:#abb6d8 !important;
+}
+.agent-home-workspace .agent-home-thread-header button:hover {
+  border-color:rgba(116,145,255,.45) !important;
+  background:rgba(86,111,220,.12) !important;
+  color:#fff !important;
+}
+.agent-home-workspace .agent-home-thread-header .text-xs {
+  color:#c8d0e8 !important;
+  font-size:11px !important;
+  font-weight:550 !important;
+}
+.agent-home-workspace .agent-home-thread-header .text-slate-600,
+.agent-home-workspace .agent-home-thread-header .text-\[10px\] {
+  color:#8793b3 !important;
+}
+.agent-home-workspace .agent-home-messages {
+  padding:24px 24px 18px !important;
+  background:#05051f !important;
+  scrollbar-width:thin;
+  scrollbar-color:#34385e transparent;
+}
+.agent-home-workspace .agent-home-messages::-webkit-scrollbar {
+  width:6px;
+}
+.agent-home-workspace .agent-home-messages::-webkit-scrollbar-thumb {
+  border-radius:99px;
+  background:#34385e;
+}
+.agent-home-workspace .agent-home-transcript {
+  max-width:760px !important;
+  gap:22px !important;
+  padding:0 !important;
+}
+.agent-home-workspace .agent-home-transcript > .agent-message-enter {
+  width:100%;
+  align-items:flex-start;
+}
+.agent-home-workspace .agent-home-message {
+  font-size:13px !important;
+  line-height:1.65 !important;
+  letter-spacing:-.005em;
+  overflow-wrap:anywhere;
+  box-shadow:none !important;
+}
+.agent-home-workspace .agent-home-user-message {
+  max-width:min(80%,640px) !important;
+  padding:10px 15px !important;
+  border:1px solid rgba(116,133,207,.22) !important;
+  border-radius:15px !important;
+  background:#20213d !important;
+  color:#e9edff !important;
+  font-size:12.5px !important;
+  line-height:1.55 !important;
+  box-shadow:none !important;
+}
+.agent-home-workspace .agent-home-assistant-message {
+  width:100% !important;
+  max-width:100% !important;
+  padding:0 !important;
+  border:0 !important;
+  border-radius:0 !important;
+  background:transparent !important;
+  color:#e9edff !important;
+  box-shadow:none !important;
+}
+.agent-home-workspace .agent-home-assistant-message .agent-response {
+  padding:0 !important;
+  background:transparent !important;
+  color:#e9edff !important;
+  font-size:13px !important;
+  line-height:1.68 !important;
+}
+.agent-home-workspace .agent-home-assistant-message .agent-response p {
+  margin:0 0 11px !important;
+  color:#e6eaff !important;
+  line-height:1.68 !important;
+}
+.agent-home-workspace .agent-home-assistant-message .agent-response strong,
+.agent-home-workspace .agent-home-assistant-message .agent-response b {
+  color:#f6f7ff !important;
+  font-weight:650 !important;
+}
+.agent-home-workspace .agent-home-assistant-message .agent-response ul,
+.agent-home-workspace .agent-home-assistant-message .agent-response ol {
+  margin:8px 0 12px !important;
+  padding-left:22px !important;
+}
+.agent-home-workspace .agent-home-assistant-message .agent-response li {
+  margin:5px 0 !important;
+  padding-left:2px;
+  color:#e6eaff !important;
+}
+.agent-home-workspace .agent-home-assistant-message .agent-response h1,
+.agent-home-workspace .agent-home-assistant-message .agent-response h2,
+.agent-home-workspace .agent-home-assistant-message .agent-response h3,
+.agent-home-workspace .agent-home-assistant-message .agent-response h4 {
+  margin:14px 0 7px !important;
+  color:#f6f7ff !important;
+  font-size:14px !important;
+  font-weight:650 !important;
+  line-height:1.4 !important;
+}
+.agent-home-workspace .agent-home-assistant-message .agent-response code {
+  border:1px solid rgba(132,146,201,.18);
+  border-radius:5px;
+  background:#171934 !important;
+  color:#cbd7ff !important;
+  font-size:12px;
+}
+.agent-home-workspace .agent-home-assistant-message .agent-response a {
+  color:#8fb4ff !important;
+  text-decoration:underline;
+  text-underline-offset:3px;
+}
+.agent-home-workspace .agent-home-assistant-message .agent-response p:last-child {
+  margin-bottom:0 !important;
+}
+.agent-home-workspace .agent-home-assistant-message .agent-response .space-y-1\.5 > :not([hidden]) ~ :not([hidden]) {
+  margin-top:8px !important;
+}
+.agent-home-workspace .agent-home-tool-tags {
+  margin-top:12px !important;
+  border-color:rgba(129,143,194,.15) !important;
+}
+.agent-home-workspace .agent-home-tool-tags span {
+  border:1px solid rgba(120,142,227,.22);
+  border-radius:6px;
+  background:rgba(81,105,206,.12) !important;
+  color:#aebfff !important;
+  font-size:9px !important;
+}
+.agent-home-workspace .agent-home-empty-state {
+  min-height:280px;
+}
+.agent-home-workspace .agent-home-empty-state > div:first-child {
+  color:#f0f2ff !important;
+  font-size:15px !important;
+  font-weight:620 !important;
+}
+.agent-home-workspace .agent-home-composer {
+  padding:10px 18px 12px !important;
+  border-top:0 !important;
+  background:#05051f !important;
+}
+.agent-home-workspace .agent-home-composer > div {
+  max-width:700px;
+  margin-left:auto;
+  margin-right:auto;
+}
+.agent-home-workspace .agent-home-quick-prompt {
+  min-height:30px;
+  padding:6px 11px !important;
+  border:1px solid rgba(122,140,207,.24) !important;
+  border-radius:999px !important;
+  background:#11122f !important;
+  color:#cbd4f0 !important;
+  font-size:10px !important;
+  line-height:1.25 !important;
+}
+.agent-home-workspace .agent-home-quick-prompt:hover {
+  border-color:rgba(124,153,255,.52) !important;
+  background:#171a40 !important;
+  color:#fff !important;
+}
+.agent-home-workspace .agent-home-composer-frame {
+  min-height:86px;
+  gap:8px !important;
+  padding:9px 10px !important;
+  border:1px solid rgba(121,139,215,.24) !important;
+  border-radius:15px !important;
+  background:#080821 !important;
+  box-shadow:0 2px 16px rgba(0,0,0,.18) !important;
+}
+.agent-home-workspace .agent-home-composer-frame:focus-within {
+  border-color:rgba(112,145,255,.65) !important;
+  box-shadow:0 0 0 3px rgba(69,103,221,.12) !important;
+}
+.agent-home-workspace .agent-home-attach {
+  width:34px !important;
+  height:34px !important;
+  margin-bottom:2px !important;
+  border:1px solid rgba(128,144,204,.2) !important;
+  border-radius:9px !important;
+  background:rgba(255,255,255,.025) !important;
+  color:#aebbe0 !important;
+}
+.agent-home-workspace .agent-home-attach:hover {
+  border-color:rgba(120,148,255,.5) !important;
+  background:rgba(87,112,217,.13) !important;
+  color:#fff !important;
+}
+.agent-home-workspace .agent-home-composer-input {
+  min-height:58px !important;
+  max-height:180px !important;
+  padding:7px 5px !important;
+  font-size:13px !important;
+  line-height:1.5 !important;
+  color:#f0f2ff !important;
+}
+.agent-home-workspace .agent-home-composer-input::placeholder {
+  color:#8994b5 !important;
+}
+.agent-home-workspace .agent-home-send {
+  width:34px !important;
+  height:34px !important;
+  margin-bottom:2px !important;
+  border-radius:50% !important;
+  background:linear-gradient(135deg,#6959e8,#315ff1 68%,#1384de) !important;
+  box-shadow:0 3px 12px rgba(48,87,213,.2) !important;
+}
+.agent-home-workspace .agent-home-stop {
+  border:1px solid rgba(140,157,255,.28) !important;
+  background:#26346e !important;
+}
+.agent-home-workspace .agent-home-composer .mt-2.flex.items-center.justify-between {
+  padding:0 3px;
+  font-size:9px !important;
+  color:#7481a5 !important;
+}
+.agent-home-workspace .agent-home-composer .text-rose-600 {
+  color:#ff9cae !important;
+}
+.agent-home-workspace .agent-home-messages .flex.items-center.gap-2.text-xs {
+  margin-top:4px;
+  color:#9aafff !important;
+  font-size:11px !important;
+}
+.agent-home-workspace .agent-home-settings-panel {
+  border-color:rgba(132,146,201,.2) !important;
+  background:#0b0c2a !important;
+}
+.agent-home-workspace .agent-home-settings-header {
+  background:#0e1031 !important;
+}
+@media(max-width:1023px) {
+  .agent-home-workspace .agent-home-sidebar {
+    width:min(290px,86vw) !important;
+  }
+  .agent-home-workspace .agent-home-messages {
+    padding:20px 14px 14px !important;
+  }
+}
+@media(max-width:640px) {
+  .agent-home-workspace .agent-home-header {
+    min-height:54px !important;
+    padding:8px 11px !important;
+  }
+  .agent-home-workspace .agent-home-header .text-base {
+    font-size:12px !important;
+  }
+  .agent-home-workspace .agent-home-thread-header {
+    padding:6px 10px !important;
+  }
+  .agent-home-workspace .agent-home-transcript {
+    gap:18px !important;
+  }
+  .agent-home-workspace .agent-home-user-message {
+    max-width:90% !important;
+    padding:9px 12px !important;
+  }
+  .agent-home-workspace .agent-home-assistant-message .agent-response {
+    font-size:12.5px !important;
+  }
+  .agent-home-workspace .agent-home-composer {
+    padding:7px 9px 10px !important;
+  }
+  .agent-home-workspace .agent-home-composer-frame {
+    min-height:76px;
+  }
+}
+

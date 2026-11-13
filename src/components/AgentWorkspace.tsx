@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Activity, ArrowUpRight, Bot, Check, Database, File, FileDown, FileText, History, Image, Loader2, PanelLeftClose, PanelLeftOpen, Paperclip, Plus, Send, Settings2, ShieldCheck, Sparkles, X } from 'lucide-react';
+import { Activity, ArrowUpRight, Bot, Check, Database, File, FileDown, FileText, History, Image, Loader2, PanelLeftClose, PanelLeftOpen, Paperclip, Plus, Send, Settings2, ShieldCheck, Sparkles, Square, X } from 'lucide-react';
 import { useAgent, AgentAutonomy, AgentMessage, AgentArtifact, AgentAttachmentInput } from '../context/AgentContext';
 import type { AppUser } from '../types';
 import { buildCampaignReportPdfDocument } from './CampaignReports';
@@ -242,33 +242,20 @@ function Messages({ messages, sending, compact, onOpenTemplate, onAction, activi
   onAction?: (query: string) => void;
   activityLabel?: string;
 }) {
-  return <div className={'agent-home-messages agent-messages w-full min-w-0 flex-1 min-h-0 overflow-y-auto ' + (compact ? 'px-3 py-4' : 'px-5 py-6')}>
+  return <div className={'agent-home-messages agent-messages w-full min-w-0 flex-1 min-h-0 overflow-y-auto ' + (compact ? 'px-3 py-4' : 'px-4 py-5 sm:px-6 sm:py-6')}>
     {messages.length === 0 && (
-      <div className="flex h-full min-h-[250px] flex-col items-center justify-center text-center">
-        <Orb />
-        <div className="mt-5 text-lg font-semibold text-slate-900">Where should we start?</div>
-        <p className="mt-2 max-w-sm text-sm leading-6 text-slate-600">Ask about your workspace, company knowledge, lead databases, campaigns, or template design.</p>
-        {!compact && <div className="mt-6 grid w-full max-w-4xl grid-cols-1 gap-2 sm:grid-cols-3">
-          {QUICK_PROMPTS.map((item) => {
-            const Icon = item.icon;
-            return <div key={item.label} className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-left">
-              <Icon className="h-4 w-4 text-orange-600" />
-              <div className="mt-2 text-xs font-semibold text-slate-800">{item.label}</div>
-              <div className="mt-1 text-[11px] leading-4 text-slate-500">Select a starter prompt below</div>
-            </div>;
-          })}
-        </div>}
+      <div className="agent-home-empty-state flex h-full min-h-[250px] flex-col items-center justify-center px-4 text-center">
+        <div className="text-[15px] font-semibold tracking-[-.02em] text-slate-100">How can I help you today?</div>
+        <p className="mt-2 max-w-md text-[12px] leading-6 text-slate-400">Ask about your workspace, company knowledge, lead databases, campaigns or template design.</p>
       </div>
     )}
-    <div className="mx-auto flex w-full min-w-0 max-w-[90rem] flex-col gap-4">
+    <div className="agent-home-transcript mx-auto flex w-full min-w-0 max-w-[860px] flex-col gap-6 px-1 sm:px-2">
       {messages.map((message) => (
         <div key={message.id} className={'agent-message-enter flex ' + (message.role === 'user' ? 'justify-end' : 'justify-start')}>
-          {message.role === 'assistant' && <div className="mr-2 mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-blue-200 bg-orange-50"><Bot className="h-4 w-4 text-orange-600" /></div>}
           <div
-            style={message.role === 'assistant' ? { color: '#172033', opacity: 1, backgroundColor: '#ffffff' } : undefined}
-            className={'agent-home-message max-w-[88%] rounded-2xl px-4 py-3 text-sm leading-6 ' + (message.role === 'user'
-              ? 'agent-home-user-message rounded-br-md border border-orange-200 bg-orange-50 text-slate-900'
-              : 'agent-home-assistant-message agent-response rounded-bl-md border border-slate-200 bg-white text-slate-900 shadow-sm')}>
+            className={'agent-home-message text-[13px] leading-[1.65] ' + (message.role === 'user'
+              ? 'agent-home-user-message ml-auto max-w-[82%] rounded-2xl px-4 py-2.5 text-slate-100'
+              : 'agent-home-assistant-message agent-response w-full max-w-full px-0 py-0 text-slate-100')}>
             {message.role === 'assistant'
               ? <AgentMarkdown content={message.content} />
               : <>
@@ -277,7 +264,7 @@ function Messages({ messages, sending, compact, onOpenTemplate, onAction, activi
                 </>}
             {message.artifacts?.map((artifact, index) => <CampaignEmailArtifactPreview key={(artifact.draftId || artifact.approvalId || artifact.templateId || artifact.type) + '-' + index} artifact={artifact} onOpenTemplate={onOpenTemplate} onAction={onAction} />)}
             {message.toolsUsed && message.toolsUsed.length > 0 && (
-              <div className="mt-3 flex flex-wrap gap-1.5 border-t border-slate-200 pt-2">
+              <div className="agent-home-tool-tags mt-3 flex flex-wrap gap-1.5 border-t border-slate-200 pt-2">
                 {message.toolsUsed.map((tool) => <span key={tool} className="rounded-md bg-orange-50 px-2 py-0.5 text-[10px] text-orange-700">{tool.replaceAll('_', ' ')}</span>)}
               </div>
             )}
@@ -290,7 +277,7 @@ function Messages({ messages, sending, compact, onOpenTemplate, onAction, activi
 }
 
 function ChatComposer({ moduleContext, compact }: { moduleContext: string; compact?: boolean }) {
-  const { sendMessage, sending } = useAgent();
+  const { sendMessage, sending, stopping, cancelMessage } = useAgent();
   const [value, setValue] = useState('');
   const [attachments, setAttachments] = useState<AgentAttachmentInput[]>([]);
   const [attachmentError, setAttachmentError] = useState('');
@@ -365,7 +352,13 @@ function ChatComposer({ moduleContext, compact }: { moduleContext: string; compa
       <input ref={fileInputRef} type="file" multiple className="hidden" accept="image/png,image/jpeg,image/webp,image/gif,application/pdf,.csv,.tsv,.xls,.xlsx,.txt,.md,.json" onChange={(event) => void addFiles(event.target.files)} />
       <button type="button" disabled={sending || attachments.length >= MAX_FILES} onClick={() => fileInputRef.current?.click()} className="agent-home-attach mb-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 text-slate-600 transition hover:border-orange-300 hover:bg-orange-50 hover:text-orange-700 disabled:opacity-40" title="Attach files" aria-label="Attach files"><Paperclip className="h-4 w-4" /></button>
       <textarea value={value} onChange={(e) => setValue(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit(); } }} rows={compact ? 2 : 2} placeholder="Message your AI Agent…" className="agent-home-composer-input max-h-32 min-h-[48px] flex-1 resize-y bg-transparent px-2 py-2 text-sm text-slate-900 outline-none placeholder:text-slate-600" />
-      <button type="button" disabled={(!value.trim() && !attachments.length) || sending} onClick={submit} className="agent-home-send mb-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-orange-500 to-orange-600 text-white shadow-lg shadow-orange-500/10 transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-35"><Send className="h-4 w-4" /></button>
+      {sending ? (
+        <button type="button" onClick={() => void cancelMessage()} disabled={stopping} className="agent-home-send agent-home-stop mb-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-white transition hover:brightness-110 disabled:cursor-wait disabled:opacity-70" title={stopping ? 'Stopping generation…' : 'Stop generating'} aria-label={stopping ? 'Stopping generation' : 'Stop generating'}>
+          {stopping ? <Loader2 className="h-4 w-4 animate-spin" /> : <Square className="h-3.5 w-3.5 fill-current" />}
+        </button>
+      ) : (
+        <button type="button" disabled={(!value.trim() && !attachments.length)} onClick={submit} className="agent-home-send mb-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-35" title="Send message" aria-label="Send message"><Send className="h-4 w-4" /></button>
+      )}
     </div>
     <div className="mt-2 flex items-center justify-between gap-2 text-[10px] text-slate-500"><span>Enter to send · Shift + Enter for a new line</span><span className="text-right">Images · PDFs · Spreadsheets · Text · JSON</span></div>
   </div>;

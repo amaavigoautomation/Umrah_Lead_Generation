@@ -1,4 +1,4 @@
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 
 export type AgentAutonomy = 'ask' | 'balanced' | 'full';
 export interface AgentConfig {
@@ -74,12 +74,14 @@ interface AgentContextValue {
   messages: AgentMessage[];
   loading: boolean;
   sending: boolean;
+  stopping: boolean;
   activityLabel: string;
   error: string;
   canManageConfig: boolean;
   selectConversation: (id: string) => Promise<void>;
   newConversation: (moduleContext?: string) => Promise<string | null>;
   sendMessage: (message: string, moduleContext?: string, attachments?: AgentAttachmentInput[], targetConversationId?: string) => Promise<void>;
+  cancelMessage: () => Promise<void>;
   saveConfig: (patch: Partial<AgentConfig>) => Promise<boolean>;
   refresh: () => Promise<void>;
   clearError: () => void;
@@ -109,6 +111,9 @@ export const AgentProvider: React.FC<{ tenantId: string; userId: string; enabled
   const [messages, setMessages] = useState<AgentMessage[]>([]);
   const [loading, setLoading] = useState(false);
   const [sending, setSending] = useState(false);
+  const [stopping, setStopping] = useState(false);
+  const activeExecutionIdRef = useRef<string | null>(null);
+  const stopRequestedRef = useRef(false);
   const [activityLabel, setActivityLabel] = useState('');
   const [error, setError] = useState('');
   const [canManageConfig, setCanManageConfig] = useState(false);
@@ -174,13 +179,18 @@ export const AgentProvider: React.FC<{ tenantId: string; userId: string; enabled
     if ((!message && !attachments.length) || sending) return;
     const attachmentMeta: AgentAttachmentMeta[] = attachments.map(({ id, name, mimeType, size }) => ({ id, name, mimeType, size }));
     setSending(true);
+    setStopping(false);
+    stopRequestedRef.current = false;
     setActivityLabel(/template|email|campaign|image|design|banner/i.test(message) ? 'Researching your brand, creating campaign artwork and saving the editable draft…' : 'Reviewing your workspace and preparing an answer…');
     setError('');
     let conversationId = targetConversationId || activeConversationId;
+    let currentExecutionId: string | null = null;
     try {
       if (!conversationId) conversationId = await newConversation(moduleContext);
       if (!conversationId) return;
       const executionId = createId();
+      currentExecutionId = executionId;
+      activeExecutionIdRef.current = executionId;
       const userMessage: AgentMessage = { id: 'local-' + executionId, role: 'user', content: message, createdAt: new Date().toISOString(), attachments: attachmentMeta };
       if (targetConversationId) {
         // A Home-to-Agent handoff always targets a new conversation. Reset the transcript
@@ -215,9 +225,19 @@ export const AgentProvider: React.FC<{ tenantId: string; userId: string; enabled
         let recovered: { success: boolean; assistantMessage: AgentMessage; conversation: AgentConversation } | null = null;
         let interimMessageId: string | null = null;
         while (Date.now() < deadline && !recovered) {
-          await new Promise((resolve) => setTimeout(resolve, 2000));
+          await new Promise((resolve) => setTimeout(resolve, 1500));
           try {
             const status = await api<{ success: boolean; status: string; progress?: string; assistantMessage?: AgentMessage | null; error?: string; conversationId?: string }>('/api/agent/executions/' + encodeURIComponent(executionId));
+            if (status.status === 'cancelled') {
+              stopRequestedRef.current = true;
+              setMessages((prev) => prev.map((item) => item.id === userMessage.id ? { ...item, id: 'user-' + executionId } : item));
+              return;
+            }
+            if (status.status === 'cancel_requested') {
+              setStopping(true);
+              setActivityLabel(status.progress || 'Stopping generation…');
+              continue;
+            }
             if (status.assistantMessage && status.status === 'processing') {
               interimMessageId = status.assistantMessage.id;
               setMessages((prev) => [
@@ -254,13 +274,41 @@ export const AgentProvider: React.FC<{ tenantId: string; userId: string; enabled
       ]);
       if (data.conversation) setConversations((prev) => [data.conversation, ...prev.filter((x) => x.id !== data.conversation.id)]);
     } catch (e: any) {
-      setError(e?.message || 'The Agent could not complete that request.');
-      setMessages((prev) => prev.filter((item) => !item.id.startsWith('local-')));
+      if (stopRequestedRef.current || e?.code === 'AGENT_CANCELLED') {
+        if (currentExecutionId) {
+          setMessages((prev) => prev.map((item) => item.id === 'local-' + currentExecutionId ? { ...item, id: 'user-' + currentExecutionId } : item));
+        }
+      } else {
+        setError(e?.message || 'The Agent could not complete that request.');
+        setMessages((prev) => prev.filter((item) => !item.id.startsWith('local-')));
+      }
     } finally {
+      if (activeExecutionIdRef.current === currentExecutionId) activeExecutionIdRef.current = null;
+      stopRequestedRef.current = false;
       setSending(false);
+      setStopping(false);
       setActivityLabel('');
     }
   }, [activeConversationId, newConversation, sending]);
+
+  const cancelMessage = useCallback(async () => {
+    const executionId = activeExecutionIdRef.current;
+    if (!executionId || !sending || stopping) return;
+    stopRequestedRef.current = true;
+    setStopping(true);
+    setActivityLabel('Stopping generation…');
+    setError('');
+    try {
+      await api<{ success: boolean; status: string }>('/api/agent/executions/' + encodeURIComponent(executionId) + '/cancel', {
+        method: 'POST',
+      });
+    } catch (error: any) {
+      stopRequestedRef.current = false;
+      setStopping(false);
+      setActivityLabel('');
+      setError(error?.message || 'Could not stop the Agent response. It may have already finished.');
+    }
+  }, [sending, stopping]);
 
   const saveConfig = useCallback(async (patch: Partial<AgentConfig>): Promise<boolean> => {
     setError('');
@@ -278,9 +326,9 @@ export const AgentProvider: React.FC<{ tenantId: string; userId: string; enabled
   }, []);
 
   const value = useMemo<AgentContextValue>(() => ({
-    config, conversations, activeConversationId, messages, loading, sending, activityLabel, error, canManageConfig,
-    selectConversation, newConversation, sendMessage, saveConfig, refresh, clearError: () => setError(''),
-  }), [config, conversations, activeConversationId, messages, loading, sending, activityLabel, error, canManageConfig, selectConversation, newConversation, sendMessage, saveConfig, refresh]);
+    config, conversations, activeConversationId, messages, loading, sending, stopping, activityLabel, error, canManageConfig,
+    selectConversation, newConversation, sendMessage, cancelMessage, saveConfig, refresh, clearError: () => setError(''),
+  }), [config, conversations, activeConversationId, messages, loading, sending, stopping, activityLabel, error, canManageConfig, selectConversation, newConversation, sendMessage, cancelMessage, saveConfig, refresh]);
 
   return <AgentContext.Provider value={value}>{children}</AgentContext.Provider>;
 };

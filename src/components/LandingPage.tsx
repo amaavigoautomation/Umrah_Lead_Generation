@@ -8,6 +8,7 @@ import {
   Bell,
   Bot,
   CalendarCheck,
+  CalendarDays,
   CalendarClock,
   Check,
   CheckCircle2,
@@ -32,7 +33,6 @@ import {
   Workflow,
   X,
   Zap,
-  type LucideIcon,
   type LucideIcon,
 } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';

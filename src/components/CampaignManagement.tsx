@@ -1727,149 +1727,94 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
                   </div>
                 </div>
 
-                {/* Real-time Metric Cards Grid */}
+                {/* Unified campaign KPI row: all seven key metrics stay together. */}
                 {(() => {
                   const currentRunNum = selectedCampaign.lastRunNumber || 1;
                   const isRestartRun = currentRunNum > 1;
+                  const isEmailCampaign = selectedCampaign.type === 'EMAIL' || !selectedCampaign.type;
 
-                  // All counters come from the campaign document (server-maintained COUNT totals).
-                  // The leads table holds only one page, so it is never counted here.
+                  // Campaign counters are server-maintained totals; do not derive them from the paginated leads table.
                   const liveTotalLeads = selectedCampaign.totalLeads || 0;
                   const liveRepliedCount = selectedCampaign.repliedCount || 0;
-
-                  // For restart follow-up runs, the target pool is the leads that have not replied.
                   const runTargetCount = isRestartRun ? Math.max(0, liveTotalLeads - liveRepliedCount) : liveTotalLeads;
                   const liveSentCount = isRestartRun
                     ? Math.max(0, (selectedCampaign.sentCount || 0) - liveRepliedCount)
                     : selectedCampaign.sentCount || 0;
                   const livePendingCount = selectedCampaign.pendingCount || 0;
                   const liveFailedCount = selectedCampaign.failedCount || 0;
-
                   const percentSent = runTargetCount > 0 ? Math.round((liveSentCount / runTargetCount) * 100) : 0;
+                  const engagementValue = (value?: number) => engagement ? (value ?? 0) : '—';
+                  const engagementPct = (value?: number) => engagement
+                    ? (engagement.delivered > 0 ? `${(((value ?? 0) / engagement.delivered) * 100).toFixed(1)}%` : '0.0%')
+                    : '—';
+                  const tileClass = 'min-w-0 rounded-xl border border-slate-200 bg-white px-3 py-2.5 shadow-2xs';
+                  const labelClass = 'truncate text-[10px] font-medium text-slate-500';
+                  const valueClass = 'mt-1 text-[21px] leading-6 font-bold tabular-nums';
+                  const detailClass = 'mt-1 truncate text-[9px] leading-3 text-slate-400';
 
                   return (
-                    <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-                      <div className="p-4 bg-white border border-slate-200 rounded-xl shadow-2xs">
-                        <p className="text-xs text-slate-500 font-medium">Total Leads</p>
-                        <p className="text-2xl font-bold text-slate-900 mt-1">{liveTotalLeads}</p>
-                        <p className="text-[11px] text-slate-400 mt-1">
-                          {isRestartRun ? `Run #${currentRunNum} Target: ${runTargetCount} unreplied` : 'Uploaded prospect pool'}
-                        </p>
+                    <div className={`grid ${isEmailCampaign ? 'grid-cols-2 sm:grid-cols-4 lg:grid-cols-7' : 'grid-cols-2 md:grid-cols-5'} gap-2`}>
+                      <div className={tileClass}>
+                        <p className={labelClass}>Total Leads</p>
+                        <p className={`${valueClass} text-slate-900`}>{liveTotalLeads}</p>
+                        <p className={detailClass}>{isRestartRun ? `Run #${currentRunNum} target` : 'Uploaded prospect pool'}</p>
                       </div>
 
-                      <div className="p-4 bg-white border border-slate-200 rounded-xl shadow-2xs">
-                        <div className="flex items-center justify-between">
-                          <p className="text-xs text-slate-500 font-medium">Emails Sent</p>
-                          {isRestartRun && (
-                            <span className="text-[10px] font-semibold text-sky-700 bg-sky-50 px-1.5 py-0.5 rounded border border-sky-200">
-                              Run #{currentRunNum}
-                            </span>
-                          )}
+                      <div className={tileClass}>
+                        <div className="flex items-center justify-between gap-1">
+                          <p className={labelClass}>Emails Sent</p>
+                          {isRestartRun && <span className="shrink-0 text-[8px] font-semibold text-sky-700">RUN {currentRunNum}</span>}
                         </div>
-                        <div className="flex items-baseline gap-1 mt-1">
-                          <p className="text-2xl font-bold text-orange-600">{liveSentCount}</p>
-                          <span className="text-xs text-slate-400">
-                            / {runTargetCount}
+                        <div className="mt-1 flex items-baseline gap-1">
+                          <p className={`${valueClass} mt-0 text-blue-600`}>{liveSentCount}</p>
+                          <span className="text-[10px] text-slate-400">/ {runTargetCount}</span>
+                        </div>
+                        <div className="mt-1.5 h-1 w-full overflow-hidden rounded-full bg-slate-100">
+                          <div className="h-full rounded-full bg-blue-600 transition-all duration-500" style={{ width: `${percentSent}%` }} />
+                        </div>
+                      </div>
+
+                      <div className={tileClass}>
+                        <p className={labelClass}>Pending</p>
+                        <p className={`${valueClass} text-amber-600`}>{livePendingCount}</p>
+                        <p className={detailClass}>Awaiting dispatch</p>
+                      </div>
+
+                      <div className={tileClass}>
+                        <p className={labelClass}>Failed / Errors</p>
+                        <p className={`${valueClass} text-rose-600`}>{liveFailedCount}</p>
+                        <p className={detailClass}>SMTP errors / bounced</p>
+                      </div>
+
+                      {isEmailCampaign && (
+                        <>
+                          <div className={tileClass} title="Unique leads with at least one tracked open. Opens are estimates and can include mail-client preloads.">
+                            <div className="flex items-center gap-1">
+                              <p className={labelClass}>Opened</p>
+                              <span className="shrink-0 text-[8px] font-semibold text-amber-600">EST.</span>
+                            </div>
+                            <p className={`${valueClass} text-slate-700`}>{engagementValue(engagement?.uniqueOpened)}</p>
+                            <p className={detailClass}>~{engagementPct(engagement?.uniqueOpened)} · unique leads</p>
+                          </div>
+
+                          <div className={tileClass} title="Unique leads with at least one tracked link click.">
+                            <p className={labelClass}>Clicked</p>
+                            <p className={`${valueClass} text-emerald-700`}>{engagementValue(engagement?.clicked)}</p>
+                            <p className={detailClass}>{engagementPct(engagement?.clicked)} · unique leads</p>
+                          </div>
+                        </>
+                      )}
+
+                      <div className={tileClass}>
+                        <p className={labelClass}>Replies</p>
+                        <div className="mt-1 flex items-baseline gap-1">
+                          <p className={`${valueClass} mt-0 text-sky-600`}>{liveRepliedCount}</p>
+                          <span className="text-[10px] font-medium text-sky-600">
+                            {liveSentCount > 0 ? `(${Math.round((liveRepliedCount / liveSentCount) * 100)}%)` : '(0%)'}
                           </span>
                         </div>
-                        <div className="mt-2 w-full bg-slate-100 rounded-full h-1 overflow-hidden">
-                          <div
-                            className="bg-orange-500 h-full rounded-full transition-all duration-500"
-                            style={{ width: `${percentSent}%` }}
-                          />
-                        </div>
+                        <p className={detailClass}>Inbound replies received</p>
                       </div>
-
-                      <div className="p-4 bg-white border border-slate-200 rounded-xl shadow-2xs">
-                        <p className="text-xs text-slate-500 font-medium">Pending</p>
-                        <p className="text-2xl font-bold text-amber-600 mt-1">{livePendingCount}</p>
-                        <p className="text-[11px] text-slate-400 mt-1">
-                          {isRestartRun ? `Run #${currentRunNum} queued sends` : 'Awaiting dispatch'}
-                        </p>
-                      </div>
-
-                      <div className="p-4 bg-white border border-slate-200 rounded-xl shadow-2xs">
-                        <p className="text-xs text-slate-500 font-medium">Failed / Errors</p>
-                        <p className="text-2xl font-bold text-rose-600 mt-1">{liveFailedCount}</p>
-                        <p className="text-[11px] text-slate-400 mt-1">
-                          {isRestartRun ? `Run #${currentRunNum} delivery errors` : 'SMTP errors / bounced'}
-                        </p>
-                      </div>
-
-                      <div className="p-4 bg-white border border-slate-200 rounded-xl shadow-2xs">
-                        <p className="text-xs text-slate-500 font-medium">Replies</p>
-                        <div className="flex items-baseline gap-1.5 mt-1">
-                          <p className="text-2xl font-bold text-sky-600">{liveRepliedCount}</p>
-                          <span className="text-xs text-sky-600 font-medium">
-                            {liveSentCount > 0
-                              ? `(${Math.round((liveRepliedCount / liveSentCount) * 100)}%)`
-                              : '(0%)'}
-                          </span>
-                        </div>
-                        <p className="text-[11px] text-slate-400 mt-1">Inbound replies received</p>
-                      </div>
-                    </div>
-                  );
-                })()}
-
-                {/* Engagement metrics remain visible for every email campaign, including zero-tracking campaigns. */}
-                {(selectedCampaign.type === 'EMAIL' || !selectedCampaign.type) && (() => {
-                  const stats = engagement;
-                  const pct = (n: number) => (stats && stats.delivered > 0
-                    ? `${((n / stats.delivered) * 100).toFixed(1)}%`
-                    : stats ? '0.0%' : '—');
-                  const value = (n?: number) => stats ? (n ?? 0) : '—';
-                  const trackingNotice = !stats
-                    ? engagementLoadStatus === 'error'
-                      ? 'Engagement metrics could not be loaded. The section will retry automatically.'
-                      : 'Loading engagement metrics…'
-                    : stats.tracked > 0
-                      ? (stats.trackingEnabled === false
-                        ? 'Tracking is currently off. Metrics from recipients tracked when these emails were sent are still shown.'
-                        : '')
-                      : stats.trackingEnabled === false
-                        ? 'Open and click tracking was off when these emails were sent, so these interactions could not be collected.'
-                        : 'No recipients were tracked when these emails were sent. Emails sent before tracking was enabled cannot be measured.';
-                  return (
-                    <div className="p-4 bg-white border border-slate-200 rounded-xl shadow-2xs space-y-3">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Email engagement</span>
-                        <span className="text-[10px] text-slate-400">
-                          {engagementLoadStatus === 'ready' ? 'Updates every minute' : engagementLoadStatus === 'loading' ? 'Loading…' : 'Awaiting data'}
-                        </span>
-                      </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                        <div
-                          className="min-w-0 flex items-center gap-2.5 whitespace-nowrap px-3 py-3 rounded-lg border border-dashed border-slate-300 bg-white"
-                          title="Unique leads with at least one tracked open. Open counts can be estimates because some mail apps pre-load or block tracking images."
-                        >
-                          <span className="text-[11px] text-slate-500 font-medium">Opened <span className="text-[9px] font-semibold text-amber-600">EST.</span></span>
-                          <strong className="text-lg font-bold text-slate-700">{value(stats?.uniqueOpened)}</strong>
-                          <span className="text-[10px] text-slate-400">~{pct(stats?.uniqueOpened ?? 0)} · unique leads</span>
-                        </div>
-                        <div
-                          className="min-w-0 flex items-center gap-2.5 whitespace-nowrap px-3 py-3 rounded-lg border border-emerald-200 bg-emerald-50/50"
-                          title="Unique leads with at least one tracked link click."
-                        >
-                          <span className="text-[11px] text-emerald-700 font-medium">Clicked</span>
-                          <strong className="text-lg font-bold text-emerald-700">{value(stats?.clicked)}</strong>
-                          <span className="text-[10px] text-emerald-700/70">{pct(stats?.clicked ?? 0)} · unique leads</span>
-                        </div>
-                        <div
-                          className="min-w-0 flex items-center gap-2.5 whitespace-nowrap px-3 py-3 rounded-lg border border-slate-200 bg-slate-50"
-                          title={stats
-                            ? `Unique delivered leads with no tracked open, click or reply ${stats.ignoredAfterDays}+ days after sending. ${stats.waiting} leads are still within the waiting window.`
-                            : 'Unique delivered leads with no tracked open, click or reply.'}
-                        >
-                          <span className="text-[11px] text-slate-500 font-medium">Ignored</span>
-                          <strong className="text-lg font-bold text-slate-700">{value(stats?.ignored)}</strong>
-                          <span className="text-[10px] text-slate-400">{value(stats?.waiting)} waiting · {stats?.ignoredAfterDays ?? 5}d window</span>
-                        </div>
-                      </div>
-                      {trackingNotice && <p className="text-[10px] text-amber-700">{trackingNotice}</p>}
-                      <p className="text-[10px] text-slate-400">
-                        Counts show unique leads, not event totals. Repeated opens or clicks increase each lead’s activity count but count only once here. Scanner opens are excluded.
-                      </p>
                     </div>
                   );
                 })()}

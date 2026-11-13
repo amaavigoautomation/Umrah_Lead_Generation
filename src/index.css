@@ -775,7 +775,7 @@
   min-width: 0;
 }
 .crm-workspace .crm-sticky-header {
-  top: 0;
+  top: -1rem;
   padding-top: 12px;
   padding-bottom: 12px;
   background: rgba(245,247,251,.96);
@@ -1160,264 +1160,43 @@
 }
 
 
-/* CRM scroll containment fix: toolbar is fixed in the app viewport;
-   only the lead directory body scrolls vertically and horizontally. */
+/* CRM follows the main-branch page scroll model. The app <main> owns vertical
+   scrolling; this module only handles horizontal overflow for its wide table. */
 .crm-workspace {
-  display:flex;
-  flex-direction:column;
+  display:block;
   width:100%;
-  height:100%;
-  min-height:0;
-  max-height:100%;
-  overflow:hidden;
-  padding:0;
+  height:auto;
+  min-height:100vh;
+  max-height:none;
+  overflow:visible;
+  padding-bottom:4rem;
   box-sizing:border-box;
 }
 .crm-workspace .crm-sticky-header {
-  position:relative;
-  top:auto;
-  z-index:10;
-  flex:0 0 auto;
-  width:100%;
-  min-width:0;
-  margin:0;
-  padding:12px 0 10px;
-  background:#f5f7fb;
-  box-shadow:0 5px 18px rgba(20,34,58,.035);
-}
-.crm-workspace .crm-header-card,
-.crm-workspace .crm-filter-wrap,
-.crm-workspace .crm-filter-toolbar {
-  flex-shrink:0;
-}
-.crm-workspace .crm-filter-wrap {
-  width:100%;
-  margin-top:10px;
-}
-.crm-workspace .crm-bulk-actions {
-  flex:0 0 auto;
-  width:100%;
-  margin-top:10px;
-}
-.crm-workspace .crm-table-wrap {
-  display:flex;
-  flex:1 1 0%;
-  flex-direction:column;
-  width:100%;
-  min-width:0;
-  min-height:0;
-  margin-top:10px;
-  padding-bottom:12px;
-  overflow:hidden;
-}
-.crm-workspace .crm-table-panel {
-  display:flex;
-  flex:1 1 0%;
-  flex-direction:column;
-  width:100%;
-  min-width:0;
-  min-height:0;
-  overflow:hidden;
-}
-.crm-workspace .crm-table-heading {
-  flex:0 0 auto;
-}
-.crm-workspace .crm-table-scroll {
-  flex:1 1 0%;
-  min-width:0;
-  min-height:0;
-  max-width:100%;
-  overflow:auto;
-  overscroll-behavior:contain;
-  scrollbar-gutter:stable;
-}
-.crm-workspace .crm-leads-table {
-  width:max(100%,1320px);
-  min-width:1320px;
-}
-.crm-workspace .crm-leads-table thead th {
   position:sticky;
-  top:0;
-  z-index:6;
-  background:#f7f9fc;
-}
-.crm-workspace .crm-table-pagination {
-  position:relative;
-  z-index:2;
-  flex:0 0 auto;
-  background:#f8fafd;
-}
-@media(max-width:760px) {
-  .crm-workspace .crm-sticky-header {
-    position:relative;
-    top:auto;
-    padding:9px 0 8px;
-  }
-  .crm-workspace .crm-table-wrap {
-    margin-top:8px;
-    padding-bottom:8px;
-  }
-}
-
-
-/* Compact-height CRM layout: reserve real viewport space for lead rows.
-   This prevents the stage/filter chrome from consuming the whole table body
-   on shorter laptop and embedded preview viewports. */
-@media (max-height: 680px) and (min-width: 761px) {
-  .crm-workspace .crm-sticky-header {
-    padding-top: 6px;
-    padding-bottom: 6px;
-  }
-  .crm-workspace .crm-page-header {
-    min-height: 56px;
-    padding: 8px 14px;
-  }
-  .crm-workspace .crm-page-icon {
-    width: 34px;
-    height: 34px;
-    flex: 0 0 34px;
-  }
-  .crm-workspace .crm-page-header h1 {
-    font-size: 16px;
-  }
-  .crm-workspace .crm-page-header p {
-    display: none;
-  }
-  .crm-workspace .crm-header-actions {
-    gap: 6px;
-  }
-  .crm-workspace .crm-secondary-action,
-  .crm-workspace .crm-primary-action {
-    min-height: 31px;
-    padding-left: 10px;
-    padding-right: 10px;
-    font-size: 9px;
-  }
-  .crm-workspace .crm-summary-grid {
-    gap: 7px;
-    padding: 0 12px 8px;
-  }
-  .crm-workspace .crm-summary-card {
-    min-height: 52px;
-    grid-template-columns: 28px minmax(0,1fr);
-    column-gap: 8px;
-    padding: 7px 9px;
-  }
-  .crm-workspace .crm-summary-icon {
-    width: 27px;
-    height: 27px;
-  }
-  .crm-workspace .crm-summary-copy strong {
-    font-size: 15px;
-  }
-  .crm-workspace .crm-summary-copy span {
-    font-size: 8px;
-  }
-  .crm-workspace .crm-summary-foot {
-    display: none;
-  }
-  .crm-workspace .crm-stage-strip {
-    gap: 4px;
-    padding: 7px 12px;
-  }
-  .crm-workspace .crm-stage-tab {
-    min-height: 27px;
-    padding-left: 8px;
-    padding-right: 8px;
-    gap: 5px;
-    font-size: 8px;
-  }
-  .crm-workspace .crm-filter-wrap {
-    margin-top: 6px;
-  }
-  .crm-workspace .crm-filter-toolbar {
-    gap: 6px;
-    padding: 7px;
-  }
-  .crm-workspace .crm-search-input {
-    min-height: 32px;
-  }
-  .crm-workspace .crm-filter-controls {
-    gap: 5px;
-  }
-  .crm-workspace .crm-filter-controls > div {
-    min-height: 29px;
-    padding-left: 7px;
-    padding-right: 7px;
-  }
-  .crm-workspace .crm-table-wrap {
-    margin-top: 7px;
-    padding-bottom: 7px;
-  }
-  .crm-workspace .crm-table-heading {
-    min-height: 44px;
-    padding: 8px 13px;
-  }
-  .crm-workspace .crm-eyebrow,
-  .crm-workspace .crm-table-heading p {
-    display: none;
-  }
-  .crm-workspace .crm-table-heading h2 {
-    margin: 0;
-    font-size: 12px;
-  }
-  .crm-workspace .crm-table-heading-meta {
-    gap: 9px;
-    font-size: 8px;
-  }
-  .crm-workspace .crm-table-scroll {
-    min-height: 124px;
-  }
-  .crm-workspace .crm-leads-table th {
-    padding-top: 8px;
-    padding-bottom: 8px;
-  }
-  .crm-workspace .crm-leads-table td {
-    padding-top: 8px;
-    padding-bottom: 8px;
-  }
-  .crm-workspace .crm-table-pagination {
-    padding-top: 7px;
-    padding-bottom: 7px;
-  }
-}
-
-
-/* CRM page-level scrolling: all 25 paginated rows remain in normal document
-   flow. The CRM toolbar sticks to the top of the app's scrollable main area;
-   only horizontal table overflow is handled by the table wrapper. */
-.crm-workspace {
-  display:block;
-  width:100%;
-  height:auto;
-  min-height:100%;
-  max-height:none;
-  overflow:visible;
-  padding-bottom:40px;
-}
-.crm-workspace .crm-sticky-header {
-  position:sticky;
-  top:0;
+  top:-1rem;
   z-index:30;
-  display:block;
   width:auto;
-  min-width:0;
   height:auto;
-  margin:0;
-  padding:8px 0 10px;
+  margin-left:-0.75rem;
+  margin-right:-0.75rem;
+  padding:0.75rem 0.75rem 0.625rem;
   flex:none;
   background:rgba(245,247,251,.98);
   border-bottom:1px solid #e7ebf2;
   box-shadow:0 5px 18px rgba(20,34,58,.06);
   backdrop-filter:blur(12px);
 }
+@media(min-width:640px) {
+  .crm-workspace .crm-sticky-header { top:-1.25rem; }
+}
 .crm-workspace .crm-table-wrap {
   display:block;
-  width:100%;
+  width:auto;
   height:auto;
   min-height:0;
-  margin-top:13px;
-  padding-bottom:12px;
+  margin-top:0.75rem;
+  padding-bottom:0;
   overflow:visible;
 }
 .crm-workspace .crm-table-panel {
@@ -1425,10 +1204,7 @@
   width:100%;
   height:auto;
   min-height:0;
-  overflow:visible;
-}
-.crm-workspace .crm-table-heading {
-  display:flex;
+  overflow:hidden;
 }
 .crm-workspace .crm-table-scroll {
   display:block;
@@ -1445,6 +1221,7 @@
   width:max(100%,1320px);
   min-width:1320px;
 }
+.crm-workspace .crm-leads-table thead,
 .crm-workspace .crm-leads-table thead th {
   position:static;
   top:auto;
@@ -1459,11 +1236,8 @@
 @media(max-width:760px) {
   .crm-workspace .crm-sticky-header {
     position:sticky;
-    top:0;
-    padding:7px 0 8px;
+    top:-1rem;
+    padding:0.5rem 0.5rem;
   }
-  .crm-workspace .crm-table-wrap {
-    margin-top:9px;
-    padding-bottom:9px;
-  }
+  .crm-workspace .crm-table-wrap { margin-top:0.5rem; }
 }

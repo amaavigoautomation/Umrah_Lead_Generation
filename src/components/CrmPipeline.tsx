@@ -896,9 +896,9 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
   const drawerActivities = drawerLead ? activities.filter((a) => a.leadId === drawerLead.leadId) : [];
 
   return (
-    <div className="crm-workspace w-full min-h-full bg-slate-50 text-slate-800 font-sans pb-10">
+    <div className="crm-workspace w-full min-h-screen bg-slate-50 text-slate-800 font-sans pb-16">
       {/* Sticky Header & Filter Container */}
-      <div className="crm-sticky-header sticky top-0 z-30 bg-slate-50/95 pt-3 pb-2 border-b border-slate-200/60 shadow-xs">
+      <div className="crm-sticky-header sticky -top-4 sm:-top-5 z-30 bg-slate-50/95 backdrop-blur-xs pt-3 pb-2 border-b border-slate-200/60 shadow-xs -mx-3 sm:-mx-5 px-3 sm:px-5">
         {/* 1. TeleCRM Top Header Bar */}
         <div className="crm-header-card bg-white border-b border-slate-200/95 shadow-2xs">
           <div className="crm-page-header max-w-[1700px] mx-auto px-4 py-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
@@ -1214,7 +1214,7 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
       )}
 
       {/* 5. The Pure TeleCRM Leads Table */}
-      <div className="crm-table-wrap max-w-[1700px] w-full mx-auto px-4 mt-3">
+      <div className="crm-table-wrap max-w-[1700px] mx-auto px-4 mt-3">
         <div className="crm-table-panel bg-white border border-slate-200/90 rounded-xl shadow-2xs overflow-hidden">
           <div className="crm-table-heading flex items-center justify-between gap-3">
             <div>

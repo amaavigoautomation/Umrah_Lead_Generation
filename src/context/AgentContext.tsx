@@ -79,7 +79,7 @@ interface AgentContextValue {
   canManageConfig: boolean;
   selectConversation: (id: string) => Promise<void>;
   newConversation: (moduleContext?: string) => Promise<string | null>;
-  sendMessage: (message: string, moduleContext?: string, attachments?: AgentAttachmentInput[]) => Promise<void>;
+  sendMessage: (message: string, moduleContext?: string, attachments?: AgentAttachmentInput[], targetConversationId?: string) => Promise<void>;
   saveConfig: (patch: Partial<AgentConfig>) => Promise<boolean>;
   refresh: () => Promise<void>;
   clearError: () => void;
@@ -167,7 +167,7 @@ export const AgentProvider: React.FC<{ tenantId: string; userId: string; enabled
     }
   }, []);
 
-  const sendMessage = useCallback(async (rawMessage: string, moduleContext = '', attachments: AgentAttachmentInput[] = []) => {
+  const sendMessage = useCallback(async (rawMessage: string, moduleContext = '', attachments: AgentAttachmentInput[] = [], targetConversationId?: string) => {
     const message = rawMessage.trim() || (attachments.length
       ? 'Please inspect the attached files and help me with the appropriate next step. Ask a focused question if my intended action is unclear.'
       : '');
@@ -176,7 +176,7 @@ export const AgentProvider: React.FC<{ tenantId: string; userId: string; enabled
     setSending(true);
     setActivityLabel(/template|email|campaign|image|design|banner/i.test(message) ? 'Researching your brand, creating campaign artwork and saving the editable draft…' : 'Reviewing your workspace and preparing an answer…');
     setError('');
-    let conversationId = activeConversationId;
+    let conversationId = targetConversationId || activeConversationId;
     try {
       if (!conversationId) conversationId = await newConversation(moduleContext);
       if (!conversationId) return;

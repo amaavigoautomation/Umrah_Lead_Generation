@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Activity, ArrowUpRight, Bot, CalendarClock, Lightbulb, Loader2, Plus, Send, Sparkles, WandSparkles, X } from 'lucide-react';
+import { Activity, ArrowUpRight, Bot, CalendarClock, Lightbulb, Loader2, Plus, Sparkles, WandSparkles, X } from 'lucide-react';
 import { useAgent } from '../context/AgentContext';
 import type { ActiveTab } from './Navbar';
 
@@ -16,25 +16,39 @@ const QUICK_TASKS = [
 ];
 
 export const DashboardAiHomeHero: React.FC<DashboardAiHomeHeroProps> = ({ userName, canUseAi, onNavigate }) => {
-  const { messages, sending, loading, activityLabel, error, sendMessage, newConversation, clearError } = useAgent();
+  const { sending, loading, error, sendMessage, newConversation, clearError } = useAgent();
   const [prompt, setPrompt] = useState('');
-  const [showConversation, setShowConversation] = useState(false);
+  const [startingAgent, setStartingAgent] = useState(false);
+
+  const openAgentWithMessage = async (message?: string) => {
+    if (!canUseAi || sending || startingAgent) return;
+    clearError();
+    setStartingAgent(true);
+    const conversationId = await newConversation('agent');
+    if (!conversationId) {
+      setStartingAgent(false);
+      return;
+    }
+    if (message) setPrompt('');
+    setStartingAgent(false);
+    onNavigate('agent');
+    if (message) {
+      // Reuse the exact conversation created above; do not create a second chat.
+      void sendMessage(message, 'agent', [], conversationId);
+    }
+  };
 
   const submit = async (event?: React.FormEvent<HTMLFormElement>, override?: string) => {
     event?.preventDefault();
     const message = String(override ?? prompt).trim();
-    if (!message || sending || !canUseAi) return;
-    setPrompt('');
-    setShowConversation(true);
-    clearError();
-    await sendMessage(message, 'agent');
+    if (!message || sending || startingAgent || !canUseAi) return;
+    await openAgentWithMessage(message);
   };
 
   const startFresh = async () => {
-    clearError();
-    setShowConversation(false);
+    if (!canUseAi || sending || startingAgent) return;
     setPrompt('');
-    await newConversation('agent');
+    await openAgentWithMessage();
   };
 
   return (
@@ -76,13 +90,13 @@ export const DashboardAiHomeHero: React.FC<DashboardAiHomeHeroProps> = ({ userNa
             />
             <div className="flex flex-wrap items-center justify-between gap-2 pt-2">
               <div className="flex flex-wrap items-center gap-2">
-                <button type="button" onClick={() => void startFresh()} title="Start a new AI conversation" className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-white/15 text-slate-300 transition hover:bg-white/10 hover:text-white disabled:opacity-40" disabled={!canUseAi}><Plus className="h-4 w-4" /></button>
+                <button type="button" onClick={() => void startFresh()} title="Start a new AI conversation" className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-white/15 text-slate-300 transition hover:bg-white/10 hover:text-white disabled:opacity-40" disabled={!canUseAi || startingAgent || sending}><Plus className="h-4 w-4" /></button>
                 <button type="button" onClick={() => onNavigate('agent')} className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-white/15 px-2.5 text-[10px] font-medium text-slate-300 transition hover:bg-white/10 hover:text-white disabled:opacity-40" disabled={!canUseAi}><Bot className="h-3.5 w-3.5" /> Tools</button>
                 <button type="button" onClick={() => setPrompt((value) => value ? value + ' Use the approved information and assets in my workspace as context.' : 'Use the approved information and assets in my workspace as context.')} className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-white/15 px-2.5 text-[10px] font-medium text-slate-300 transition hover:bg-white/10 hover:text-white disabled:opacity-40" disabled={!canUseAi}><Lightbulb className="h-3.5 w-3.5" /> Add context</button>
                 <button type="button" onClick={() => void submit(undefined, 'Help me plan a task and schedule the next steps for my workspace. First ask me for any deadline or timing details you need.')} className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-white/15 px-2.5 text-[10px] font-medium text-slate-300 transition hover:bg-white/10 hover:text-white disabled:opacity-40" disabled={!canUseAi}><CalendarClock className="h-3.5 w-3.5" /> Schedule task</button>
               </div>
-              <button type="submit" disabled={!canUseAi || !prompt.trim() || sending} aria-label="Send prompt to AI Agent" className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-[#0848ef] text-white shadow-[0_4px_16px_rgba(8,72,239,.35)] transition hover:bg-[#2864ff] disabled:cursor-not-allowed disabled:opacity-45">
-                {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowUpRight className="h-4 w-4" />}
+              <button type="submit" disabled={!canUseAi || !prompt.trim() || sending || startingAgent} aria-label="Send prompt to AI Agent" className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-[#0848ef] text-white shadow-[0_4px_16px_rgba(8,72,239,.35)] transition hover:bg-[#2864ff] disabled:cursor-not-allowed disabled:opacity-45">
+                {sending || startingAgent ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowUpRight className="h-4 w-4" />}
               </button>
             </div>
           </form>
@@ -92,24 +106,9 @@ export const DashboardAiHomeHero: React.FC<DashboardAiHomeHeroProps> = ({ userNa
             {QUICK_TASKS.map((task) => <button key={task.label} type="button" onClick={() => setPrompt(task.prompt)} disabled={!canUseAi} className="rounded-full border border-white/15 bg-white/[.06] px-3 py-1.5 text-[9px] font-medium text-blue-50/85 transition hover:border-white/30 hover:bg-white/10">{task.label}</button>)}
           </div>
 
-          {(showConversation || messages.length > 0) && (
-            <div className="dashboard-ai-live-thread mx-auto mt-5 max-h-[235px] max-w-[760px] overflow-y-auto rounded-xl border border-white/15 bg-[#05051f]/90 p-3 text-left shadow-2xl sm:p-4">
-              <div className="mb-3 flex items-center justify-between gap-2 border-b border-white/10 pb-2">
-                <div className="flex items-center gap-2 text-[10px] font-semibold text-white/85"><Bot className="h-3.5 w-3.5 text-blue-300" /> AI Agent conversation</div>
-                <button type="button" onClick={() => void startFresh()} disabled={!canUseAi} className="inline-flex items-center gap-1 text-[9px] text-blue-200/70 transition hover:text-white disabled:opacity-40"><Plus className="h-3 w-3" /> New task</button>
-              </div>
-              {messages.slice(-5).map((message) => (
-                <div key={message.id} className={`mb-2 rounded-lg px-3 py-2 text-[10px] leading-5 last:mb-0 ${message.role === 'assistant' ? 'bg-white/[.07] text-blue-50/90' : 'ml-5 bg-[#123478]/60 text-white'}`}>
-                  <div className="mb-1 text-[8px] font-bold uppercase tracking-[.12em] text-blue-200/65">{message.role === 'assistant' ? 'AI Agent' : 'You'}</div>
-                  <div className="whitespace-pre-wrap break-words">{message.content}</div>
-                </div>
-              ))}
-              {sending && <div className="mt-2 flex items-center gap-2 text-[9px] text-blue-100/70"><Loader2 className="h-3 w-3 animate-spin" />{activityLabel || 'Your AI Agent is working…'}</div>}
-            </div>
-          )}
           {error && <div role="alert" className="mx-auto mt-3 flex max-w-[760px] items-start justify-between gap-3 rounded-lg border border-rose-300/25 bg-rose-950/50 px-3 py-2 text-left text-[10px] text-rose-100"><span>{error}</span><button type="button" onClick={clearError} aria-label="Dismiss AI error"><X className="h-3.5 w-3.5" /></button></div>}
           {!canUseAi && <div className="mt-4 inline-flex items-center gap-2 rounded-full border border-amber-200/20 bg-amber-100/10 px-3 py-1.5 text-[9px] text-amber-100/80">AI Agent access is restricted by your workspace role or plan. Contact your administrator for access.</div>}
-          {canUseAi && !showConversation && messages.length === 0 && <div className="mt-4 inline-flex items-center gap-1.5 text-[9px] text-blue-100/45"><Activity className="h-3 w-3" /> Connected to your existing workspace AI Agent {loading ? '· Syncing' : '· Ready'}</div>}
+          {canUseAi && <div className="mt-4 inline-flex items-center gap-1.5 text-[9px] text-blue-100/45"><Activity className="h-3 w-3" /> Connected to your existing workspace AI Agent {loading ? '· Syncing' : '· Ready'}</div>}
         </div>
       </div>
     </section>

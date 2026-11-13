@@ -1643,3 +1643,432 @@
   }
 }
 
+
+/* --------------------------------------------------------------------------
+   AI Agent relocated into Home — shared Home theme, original Agent behavior.
+   -------------------------------------------------------------------------- */
+.agent-home-workspace {
+  --agent-home-bg:#05051f;
+  --agent-home-panel:#0b0b2b;
+  --agent-home-panel-raised:#111132;
+  --agent-home-border:#292a4d;
+  --agent-home-text:#f3f5ff;
+  --agent-home-muted:#9ca8c8;
+  --agent-home-blue:#3975ff;
+  --agent-home-purple:#9561ef;
+  position:relative;
+  isolation:isolate;
+  background:var(--agent-home-bg) !important;
+  color:var(--agent-home-text) !important;
+  font-family:inherit;
+}
+.agent-home-workspace .agent-shell {
+  border:0 !important;
+  border-radius:0 !important;
+  background:var(--agent-home-bg) !important;
+  box-shadow:none !important;
+}
+.agent-home-workspace .agent-grid {
+  background:var(--agent-home-bg) !important;
+}
+.agent-home-workspace .agent-home-header {
+  min-height:76px;
+  background:
+    radial-gradient(ellipse at 0% 0%,rgba(143,75,222,.18),transparent 42%),
+    linear-gradient(105deg,#090927 0%,#090927 58%,#0b1234 100%) !important;
+  border-color:var(--agent-home-border) !important;
+}
+.agent-home-workspace .agent-home-header .text-base,
+.agent-home-workspace .agent-home-header .text-slate-900,
+.agent-home-workspace .agent-home-header .text-slate-700 {
+  color:#f5f6ff !important;
+}
+.agent-home-workspace .agent-home-header .text-slate-500,
+.agent-home-workspace .agent-home-header .text-slate-600 {
+  color:#9ba8c8 !important;
+}
+.agent-home-workspace .agent-orb-core {
+  background:radial-gradient(circle at 35% 32%,#fff 0%,#dce6ff 18%,#7f9fff 36%,#8757e7 68%,#15164a 100%) !important;
+  box-shadow:0 0 18px rgba(88,120,255,.5),0 0 36px rgba(132,84,235,.28) !important;
+}
+.agent-home-workspace .agent-orb-ring {
+  border:1px solid rgba(126,154,255,.6) !important;
+  box-shadow:0 0 12px rgba(87,126,255,.16),inset 0 0 10px rgba(123,94,237,.12) !important;
+}
+.agent-home-workspace .agent-home-header .agent-orb-ring-two {
+  border-color:rgba(192,145,255,.4) !important;
+}
+.agent-home-workspace .agent-home-header button,
+.agent-home-workspace .agent-home-thread-header button {
+  border-color:#37395f !important;
+  background:#10102f !important;
+  color:#dfe5ff !important;
+}
+.agent-home-workspace .agent-home-header button:hover,
+.agent-home-workspace .agent-home-thread-header button:hover {
+  border-color:#637fe0 !important;
+  background:#171942 !important;
+  color:#fff !important;
+}
+.agent-home-workspace .agent-home-header button span {
+  color:inherit;
+}
+.agent-home-workspace .agent-home-header .rounded-full.border-emerald-200 {
+  border-color:rgba(52,211,153,.28) !important;
+  background:rgba(16,185,129,.1) !important;
+  color:#74e7bd !important;
+}
+.agent-home-workspace .agent-home-sidebar {
+  width:260px;
+  background:#090927 !important;
+  border-color:var(--agent-home-border) !important;
+  color:var(--agent-home-text) !important;
+  box-shadow:none !important;
+}
+.agent-home-workspace .agent-home-sidebar .text-slate-500,
+.agent-home-workspace .agent-home-sidebar .text-slate-600 {
+  color:#9ba8c8 !important;
+}
+.agent-home-workspace .agent-home-sidebar .agent-home-recent-heading {
+  color:#aab6d5 !important;
+}
+.agent-home-workspace .agent-home-sidebar .agent-home-new-conversation {
+  min-height:40px;
+  border:1px solid rgba(120,151,255,.28) !important;
+  background:linear-gradient(105deg,#6656e8 0%,#275feb 58%,#087edc 100%) !important;
+  color:#fff !important;
+  box-shadow:0 8px 20px rgba(37,95,235,.2) !important;
+}
+.agent-home-workspace .agent-home-sidebar .agent-home-new-conversation:hover {
+  filter:brightness(1.08);
+  box-shadow:0 10px 24px rgba(37,95,235,.28) !important;
+}
+.agent-home-workspace .agent-home-conversation-item {
+  border:1px solid transparent;
+  color:#c0c9e2 !important;
+  background:transparent !important;
+}
+.agent-home-workspace .agent-home-conversation-item:hover {
+  border-color:#2b315e !important;
+  background:#111332 !important;
+  color:#fff !important;
+}
+.agent-home-workspace .agent-home-conversation-item.is-active {
+  border-color:rgba(110,145,255,.35) !important;
+  background:linear-gradient(100deg,rgba(103,86,232,.23),rgba(39,95,235,.16)) !important;
+  color:#fff !important;
+  box-shadow:inset 3px 0 0 #6786ff !important;
+}
+.agent-home-workspace .agent-home-conversation-item .text-slate-600 {
+  color:#8d9bbc !important;
+}
+.agent-home-workspace .agent-home-chat-panel {
+  background:#05051f !important;
+}
+.agent-home-workspace .agent-home-thread-header {
+  min-height:58px;
+  border-color:var(--agent-home-border) !important;
+  background:#080823 !important;
+}
+.agent-home-workspace .agent-home-thread-header .text-slate-700,
+.agent-home-workspace .agent-home-thread-header .text-slate-600 {
+  color:#e1e7ff !important;
+}
+.agent-home-workspace .agent-home-thread-header .text-slate-600 {
+  color:#a9b4d2 !important;
+}
+.agent-home-workspace .agent-home-messages {
+  background:
+    radial-gradient(ellipse at 50% 0%,rgba(37,72,151,.08),transparent 58%),
+    #05051f !important;
+  scrollbar-width:thin;
+  scrollbar-color:#41446d transparent;
+}
+.agent-home-workspace .agent-home-messages::-webkit-scrollbar,
+.agent-home-workspace .agent-home-sidebar::-webkit-scrollbar {
+  width:6px;
+}
+.agent-home-workspace .agent-home-messages::-webkit-scrollbar-thumb,
+.agent-home-workspace .agent-home-sidebar::-webkit-scrollbar-thumb {
+  border-radius:99px;
+  background:#41446d;
+}
+.agent-home-workspace .agent-home-messages .text-slate-900,
+.agent-home-workspace .agent-home-messages .text-slate-800,
+.agent-home-workspace .agent-home-messages .text-slate-700 {
+  color:#e6eaff !important;
+}
+.agent-home-workspace .agent-home-messages .text-slate-600,
+.agent-home-workspace .agent-home-messages .text-slate-500 {
+  color:#aab5d2 !important;
+}
+.agent-home-workspace .agent-home-messages .agent-orb-core {
+  box-shadow:0 0 28px rgba(88,120,255,.4),0 0 54px rgba(132,84,235,.24) !important;
+}
+.agent-home-workspace .agent-home-messages .agent-home-message {
+  max-width:min(88%,980px);
+  border-radius:18px;
+  line-height:1.7;
+  box-shadow:0 8px 24px rgba(0,0,0,.16) !important;
+}
+.agent-home-workspace .agent-home-user-message {
+  border-color:rgba(96,137,255,.45) !important;
+  background:linear-gradient(125deg,#1b3678 0%,#183b87 55%,#194d9d 100%) !important;
+  color:#f7f9ff !important;
+}
+.agent-home-workspace .agent-home-user-message .border-t {
+  border-color:rgba(211,225,255,.2) !important;
+}
+.agent-home-workspace .agent-home-user-message .bg-white\/80 {
+  background:rgba(255,255,255,.12) !important;
+  border-color:rgba(255,255,255,.15) !important;
+  color:#eef3ff !important;
+}
+.agent-home-workspace .agent-home-assistant-message,
+.agent-home-workspace .agent-response {
+  border-color:#2b2d52 !important;
+  background:linear-gradient(145deg,#111132 0%,#0e102e 100%) !important;
+  color:#e8edff !important;
+}
+.agent-home-workspace .agent-response,
+.agent-home-workspace .agent-response p,
+.agent-home-workspace .agent-response strong,
+.agent-home-workspace .agent-response em,
+.agent-home-workspace .agent-response del,
+.agent-home-workspace .agent-response span,
+.agent-home-workspace .agent-response div {
+  color:#e8edff !important;
+}
+.agent-home-workspace .agent-response code {
+  background:#222449 !important;
+  color:#dce5ff !important;
+}
+.agent-home-workspace .agent-response .text-blue-700,
+.agent-home-workspace .agent-response a {
+  color:#8eb4ff !important;
+}
+.agent-home-workspace .agent-home-assistant-message .border-t {
+  border-color:#303358 !important;
+}
+.agent-home-workspace .agent-home-assistant-message .bg-orange-50,
+.agent-home-workspace .agent-home-assistant-message .bg-slate-50,
+.agent-home-workspace .agent-home-assistant-message .bg-white {
+  background:#191a3e !important;
+}
+.agent-home-workspace .agent-home-assistant-message .text-orange-700,
+.agent-home-workspace .agent-home-assistant-message .text-orange-600 {
+  color:#a9baff !important;
+}
+.agent-home-workspace .agent-home-assistant-message .text-slate-500,
+.agent-home-workspace .agent-home-assistant-message .text-slate-600 {
+  color:#aab5d2 !important;
+}
+.agent-home-workspace .agent-home-assistant-message .border-slate-200,
+.agent-home-workspace .agent-home-assistant-message .border-slate-100 {
+  border-color:#303358 !important;
+}
+.agent-home-workspace .agent-home-messages .text-orange-700 {
+  color:#9db8ff !important;
+}
+.agent-home-workspace .agent-home-composer {
+  padding:12px 16px 10px !important;
+  border-color:var(--agent-home-border) !important;
+  background:#080823 !important;
+}
+.agent-home-workspace .agent-home-quick-prompt {
+  border-color:#30345c !important;
+  background:#111332 !important;
+  color:#c6d0eb !important;
+}
+.agent-home-workspace .agent-home-quick-prompt:hover {
+  border-color:#607ee8 !important;
+  background:#171b46 !important;
+  color:#fff !important;
+}
+.agent-home-workspace .agent-home-composer-frame {
+  border-color:#35385f !important;
+  background:#05051f !important;
+  box-shadow:0 0 28px rgba(26,80,210,.08) !important;
+}
+.agent-home-workspace .agent-home-composer-frame:focus-within {
+  border-color:#698cff !important;
+  box-shadow:0 0 0 3px rgba(67,111,255,.13) !important;
+}
+.agent-home-workspace .agent-home-attach {
+  border-color:#30345c !important;
+  background:#10112f !important;
+  color:#b9c6e7 !important;
+}
+.agent-home-workspace .agent-home-attach:hover {
+  border-color:#698cff !important;
+  background:#171b46 !important;
+  color:#fff !important;
+}
+.agent-home-workspace .agent-home-composer-input {
+  color:#f3f6ff !important;
+  caret-color:#9cb8ff;
+}
+.agent-home-workspace .agent-home-composer-input::placeholder {
+  color:#8b97b8 !important;
+}
+.agent-home-workspace .agent-home-send {
+  background:linear-gradient(135deg,#7a55e8 0%,#315ff1 60%,#087fdc 100%) !important;
+  box-shadow:0 6px 18px rgba(44,92,230,.22) !important;
+}
+.agent-home-workspace .agent-home-send:hover {
+  filter:brightness(1.12);
+}
+.agent-home-workspace .agent-home-composer .text-slate-500,
+.agent-home-workspace .agent-home-composer .text-slate-600 {
+  color:#8795b7 !important;
+}
+.agent-home-workspace .agent-home-composer .text-rose-600 {
+  color:#ff9eae !important;
+}
+.agent-home-workspace .agent-home-settings-backdrop {
+  background:rgba(1,2,22,.72) !important;
+  backdrop-filter:blur(5px);
+}
+.agent-home-workspace .agent-home-settings-panel {
+  border-color:#2c2e55 !important;
+  background:#0b0b2b !important;
+  color:#f3f5ff !important;
+}
+.agent-home-workspace .agent-home-settings-header {
+  border-color:#292a4d !important;
+  background:#10102f !important;
+}
+.agent-home-workspace .agent-home-settings-panel .text-slate-900,
+.agent-home-workspace .agent-home-settings-panel .text-slate-800,
+.agent-home-workspace .agent-home-settings-panel .text-slate-700 {
+  color:#e9edff !important;
+}
+.agent-home-workspace .agent-home-settings-panel .text-slate-600,
+.agent-home-workspace .agent-home-settings-panel .text-slate-500 {
+  color:#a7b2d0 !important;
+}
+.agent-home-workspace .agent-home-settings-panel .border-slate-200,
+.agent-home-workspace .agent-home-settings-panel .border-slate-100 {
+  border-color:#2d3056 !important;
+}
+.agent-home-workspace .agent-home-settings-panel .bg-white,
+.agent-home-workspace .agent-home-settings-panel .bg-slate-50,
+.agent-home-workspace .agent-home-settings-panel .bg-slate-100 {
+  background:#141537 !important;
+}
+.agent-home-workspace .agent-home-settings-panel input {
+  border-color:#37395f !important;
+  background:#10112f !important;
+  color:#f3f5ff !important;
+}
+.agent-home-workspace .agent-home-settings-panel input::placeholder {
+  color:#8895b5 !important;
+}
+.agent-home-workspace .agent-home-settings-panel .text-orange-600,
+.agent-home-workspace .agent-home-settings-panel .text-orange-700 {
+  color:#9fb8ff !important;
+}
+.agent-home-workspace .agent-home-settings-panel .border-orange-400,
+.agent-home-workspace .agent-home-settings-panel .border-orange-200 {
+  border-color:#6684f0 !important;
+}
+.agent-home-workspace .agent-home-settings-panel .bg-orange-50 {
+  background:rgba(73,104,216,.18) !important;
+}
+.agent-home-workspace .agent-home-settings-panel button:focus-visible,
+.agent-home-workspace button:focus-visible,
+.agent-home-workspace textarea:focus-visible,
+.agent-home-workspace input:focus-visible {
+  outline:2px solid rgba(126,160,255,.7);
+  outline-offset:2px;
+}
+.agent-home-workspace .agent-home-error {
+  border-color:rgba(251,113,133,.25) !important;
+  background:rgba(159,18,57,.18) !important;
+  color:#ffc1cd !important;
+}
+.agent-home-workspace .agent-home-error button {
+  color:#ffd1da !important;
+}
+.agent-home-workspace .agent-home-messages .text-blue-600,
+.agent-home-workspace .agent-home-messages .text-blue-700,
+.agent-home-workspace .agent-home-messages .text-orange-600 {
+  color:#a9bdff !important;
+}
+@media(max-width:1023px) {
+  .agent-home-workspace .agent-home-sidebar {
+    width:min(300px,86vw);
+    border-right:1px solid #303358 !important;
+    background:#090927 !important;
+  }
+}
+@media(max-width:640px) {
+  .agent-home-workspace .agent-home-header {
+    min-height:66px;
+    padding:10px 12px !important;
+  }
+  .agent-home-workspace .agent-home-header .text-base {
+    font-size:13px;
+  }
+  .agent-home-workspace .agent-home-header .text-\[11px\] {
+    font-size:9px;
+  }
+  .agent-home-workspace .agent-home-composer {
+    padding:9px !important;
+  }
+  .agent-home-workspace .agent-home-message {
+    max-width:94%;
+    padding:11px 12px;
+    font-size:12px;
+  }
+}
+
+
+/* Agent empty states, helper chips and asynchronous status indicators. */
+.agent-home-workspace .agent-home-messages .bg-slate-50,
+.agent-home-workspace .agent-home-messages .bg-white {
+  background:#111132 !important;
+}
+.agent-home-workspace .agent-home-messages .border-slate-200,
+.agent-home-workspace .agent-home-messages .border-slate-100 {
+  border-color:#303358 !important;
+}
+.agent-home-workspace .agent-home-messages .bg-orange-50 {
+  background:rgba(100,91,225,.16) !important;
+}
+.agent-home-workspace .agent-home-messages .text-orange-600,
+.agent-home-workspace .agent-home-messages .text-orange-700 {
+  color:#a9bdff !important;
+}
+.agent-home-workspace .agent-home-messages .agent-home-assistant-message .bg-slate-50 {
+  background:#191a3e !important;
+}
+.agent-home-workspace .agent-home-messages .agent-home-user-message .text-slate-500,
+.agent-home-workspace .agent-home-messages .agent-home-user-message .text-slate-600,
+.agent-home-workspace .agent-home-messages .agent-home-user-message .text-slate-700 {
+  color:#e2eaff !important;
+}
+.agent-home-workspace .agent-home-composer .border-orange-200 {
+  border-color:#34365d !important;
+}
+.agent-home-workspace .agent-home-composer .bg-orange-50\/70,
+.agent-home-workspace .agent-home-composer .bg-orange-50 {
+  background:#17183c !important;
+}
+.agent-home-workspace .agent-home-composer .text-orange-600,
+.agent-home-workspace .agent-home-composer .text-orange-700 {
+  color:#a9bdff !important;
+}
+.agent-home-workspace .agent-home-settings-panel .bg-emerald-50 {
+  background:rgba(16,185,129,.13) !important;
+}
+.agent-home-workspace .agent-home-settings-panel .text-emerald-700,
+.agent-home-workspace .agent-home-settings-panel .text-emerald-600 {
+  color:#71dfb7 !important;
+}
+.agent-home-workspace > .agent-grid > .absolute.right-4.top-20 {
+  border-color:#303358 !important;
+  background:#111132 !important;
+  color:#dbe4ff !important;
+  box-shadow:0 8px 24px rgba(0,0,0,.22) !important;
+}

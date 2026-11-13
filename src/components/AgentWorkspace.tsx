@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Activity, ArrowUpRight, Bot, Check, Command, Database, File, FileDown, FileText, History, Image, Loader2, PanelLeftClose, PanelLeftOpen, Paperclip, Plus, Send, Settings2, ShieldCheck, Sparkles, X } from 'lucide-react';
+import { Activity, ArrowUpRight, Bot, Check, Database, File, FileDown, FileText, History, Image, Loader2, PanelLeftClose, PanelLeftOpen, Paperclip, Plus, Send, Settings2, ShieldCheck, Sparkles, X } from 'lucide-react';
 import { useAgent, AgentAutonomy, AgentMessage, AgentArtifact, AgentAttachmentInput } from '../context/AgentContext';
 import type { AppUser } from '../types';
 import { buildCampaignReportPdfDocument } from './CampaignReports';
@@ -242,7 +242,7 @@ function Messages({ messages, sending, compact, onOpenTemplate, onAction, activi
   onAction?: (query: string) => void;
   activityLabel?: string;
 }) {
-  return <div className={'agent-messages w-full min-w-0 flex-1 min-h-0 overflow-y-auto ' + (compact ? 'px-3 py-4' : 'px-5 py-6')}>
+  return <div className={'agent-home-messages agent-messages w-full min-w-0 flex-1 min-h-0 overflow-y-auto ' + (compact ? 'px-3 py-4' : 'px-5 py-6')}>
     {messages.length === 0 && (
       <div className="flex h-full min-h-[250px] flex-col items-center justify-center text-center">
         <Orb />
@@ -266,9 +266,9 @@ function Messages({ messages, sending, compact, onOpenTemplate, onAction, activi
           {message.role === 'assistant' && <div className="mr-2 mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-blue-200 bg-orange-50"><Bot className="h-4 w-4 text-orange-600" /></div>}
           <div
             style={message.role === 'assistant' ? { color: '#172033', opacity: 1, backgroundColor: '#ffffff' } : undefined}
-            className={'max-w-[88%] rounded-2xl px-4 py-3 text-sm leading-6 ' + (message.role === 'user'
-              ? 'rounded-br-md border border-orange-200 bg-orange-50 text-slate-900'
-              : 'agent-response rounded-bl-md border border-slate-200 bg-white text-slate-900 shadow-sm')}>
+            className={'agent-home-message max-w-[88%] rounded-2xl px-4 py-3 text-sm leading-6 ' + (message.role === 'user'
+              ? 'agent-home-user-message rounded-br-md border border-orange-200 bg-orange-50 text-slate-900'
+              : 'agent-home-assistant-message agent-response rounded-bl-md border border-slate-200 bg-white text-slate-900 shadow-sm')}>
             {message.role === 'assistant'
               ? <AgentMarkdown content={message.content} />
               : <>
@@ -355,17 +355,17 @@ function ChatComposer({ moduleContext, compact }: { moduleContext: string; compa
     setAttachmentError('');
     void sendMessage(text, moduleContext, selected);
   };
-  return <div className={'border-t border-slate-200 ' + (compact ? 'p-3' : 'p-5')}>
+  return <div className={'agent-home-composer border-t border-slate-200 ' + (compact ? 'p-3' : 'p-5')}>
     {!compact && <div className="mb-2 flex flex-wrap gap-2">
-      {QUICK_PROMPTS.map((item) => <button key={item.label} type="button" onClick={() => { setValue(item.prompt); }} className="rounded-full border border-slate-200 px-3 py-1.5 text-[11px] text-slate-700 transition hover:border-orange-300 hover:bg-orange-50">{item.label}</button>)}
+      {QUICK_PROMPTS.map((item) => <button key={item.label} type="button" onClick={() => { setValue(item.prompt); }} className="agent-home-quick-prompt rounded-full border border-slate-200 px-3 py-1.5 text-[11px] text-slate-700 transition hover:border-orange-300 hover:bg-orange-50">{item.label}</button>)}
     </div>}
     {attachments.length > 0 && <div className="mb-2 flex flex-wrap gap-2">{attachments.map((file) => <div key={file.id} className="flex max-w-full items-center gap-2 rounded-lg border border-orange-200 bg-orange-50/70 px-2.5 py-1.5 text-[11px] text-slate-700"><span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-white text-orange-600">{file.mimeType.startsWith('image/') ? <Image className="h-3.5 w-3.5" /> : <File className="h-3.5 w-3.5" />}</span><span className="max-w-[180px] truncate">{file.name}</span><span className="shrink-0 text-[10px] text-slate-500">{formatSize(file.size)}</span><button type="button" onClick={() => removeAttachment(file.id)} disabled={sending} aria-label={'Remove ' + file.name} className="rounded p-0.5 text-slate-500 hover:bg-white hover:text-rose-600"><X className="h-3 w-3" /></button></div>)}</div>}
     {attachmentError && <div className="mb-2 text-[11px] text-rose-600">{attachmentError}</div>}
-    <div className="flex items-end gap-2 rounded-2xl border border-orange-200 bg-white p-2 shadow-[0_0_24px_rgba(239,116,26,0.07)] focus-within:border-orange-400">
+    <div className="agent-home-composer-frame flex items-end gap-2 rounded-2xl border border-orange-200 bg-white p-2 shadow-[0_0_24px_rgba(239,116,26,0.07)] focus-within:border-orange-400">
       <input ref={fileInputRef} type="file" multiple className="hidden" accept="image/png,image/jpeg,image/webp,image/gif,application/pdf,.csv,.tsv,.xls,.xlsx,.txt,.md,.json" onChange={(event) => void addFiles(event.target.files)} />
-      <button type="button" disabled={sending || attachments.length >= MAX_FILES} onClick={() => fileInputRef.current?.click()} className="mb-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 text-slate-600 transition hover:border-orange-300 hover:bg-orange-50 hover:text-orange-700 disabled:opacity-40" title="Attach files" aria-label="Attach files"><Paperclip className="h-4 w-4" /></button>
-      <textarea value={value} onChange={(e) => setValue(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit(); } }} rows={compact ? 2 : 2} placeholder="Message your AI Agent…" className="max-h-32 min-h-[48px] flex-1 resize-y bg-transparent px-2 py-2 text-sm text-slate-900 outline-none placeholder:text-slate-600" />
-      <button type="button" disabled={(!value.trim() && !attachments.length) || sending} onClick={submit} className="mb-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-orange-500 to-orange-600 text-white shadow-lg shadow-orange-500/10 transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-35"><Send className="h-4 w-4" /></button>
+      <button type="button" disabled={sending || attachments.length >= MAX_FILES} onClick={() => fileInputRef.current?.click()} className="agent-home-attach mb-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 text-slate-600 transition hover:border-orange-300 hover:bg-orange-50 hover:text-orange-700 disabled:opacity-40" title="Attach files" aria-label="Attach files"><Paperclip className="h-4 w-4" /></button>
+      <textarea value={value} onChange={(e) => setValue(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit(); } }} rows={compact ? 2 : 2} placeholder="Message your AI Agent…" className="agent-home-composer-input max-h-32 min-h-[48px] flex-1 resize-y bg-transparent px-2 py-2 text-sm text-slate-900 outline-none placeholder:text-slate-600" />
+      <button type="button" disabled={(!value.trim() && !attachments.length) || sending} onClick={submit} className="agent-home-send mb-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-orange-500 to-orange-600 text-white shadow-lg shadow-orange-500/10 transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-35"><Send className="h-4 w-4" /></button>
     </div>
     <div className="mt-2 flex items-center justify-between gap-2 text-[10px] text-slate-500"><span>Enter to send · Shift + Enter for a new line</span><span className="text-right">Images · PDFs · Spreadsheets · Text · JSON</span></div>
   </div>;
@@ -428,9 +428,9 @@ export const AgentWorkspace: React.FC<{ currentUser: AppUser; onOpenEmailTemplat
   const [showSettings, setShowSettings] = useState(false);
   const [showSidebar, setShowSidebar] = useState(() => typeof window !== 'undefined' && window.innerWidth >= 1024);
 
-  return <div className="agent-shell flex h-full min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white text-slate-900 shadow-2xl">
+  return <div className="agent-home-workspace agent-shell flex h-full min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden rounded-none border-0 bg-[#05051f] text-slate-100 shadow-none">
     <div className="agent-grid relative flex h-full min-h-0 w-full min-w-0 flex-1 flex-col">
-      <div className="relative flex items-center justify-between border-b border-slate-200 px-5 py-4 sm:px-7">
+      <div className="agent-home-header relative flex items-center justify-between border-b border-slate-200 px-5 py-4 sm:px-7">
         <div className="flex items-center gap-3"><Orb small /><div><div className="flex items-center gap-2 text-base font-bold tracking-tight">AI Agent <span className="rounded-full border border-orange-200 bg-orange-50 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.18em] text-orange-700">Workspace</span></div><div className="mt-0.5 text-[11px] text-slate-500">Context-aware assistant · secure execution boundary</div></div></div>
         <div className="flex items-center gap-2">
           <div className="hidden items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-[10px] text-emerald-700 sm:flex"><span className="h-1.5 w-1.5 rounded-full bg-emerald-500 shadow-[0_0_9px_rgba(110,231,183,.8)]" /> Workspace connected</div>
@@ -442,23 +442,22 @@ export const AgentWorkspace: React.FC<{ currentUser: AppUser; onOpenEmailTemplat
       <div className={'relative grid min-h-0 min-w-0 w-full flex-1 ' + (showSidebar ? 'lg:grid-cols-[260px_minmax(0,1fr)]' : 'grid-cols-1')}>
         {showSidebar && <>
           <button type="button" aria-label="Close conversations sidebar" onClick={() => setShowSidebar(false)} className="absolute inset-0 z-20 bg-slate-950/20 lg:hidden" />
-          <aside className="absolute inset-y-0 left-0 z-30 flex w-[280px] flex-col overflow-y-auto border-r border-slate-200 bg-white p-4 shadow-xl lg:relative lg:z-auto lg:w-auto lg:shadow-none">
+          <aside className="agent-home-sidebar absolute inset-y-0 left-0 z-30 flex w-[280px] flex-col overflow-y-auto border-r border-slate-200 bg-white p-4 shadow-xl lg:relative lg:z-auto lg:w-auto lg:shadow-none">
             <div className="mb-3 flex items-center justify-between">
               <div className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">Workspace</div>
               <button type="button" onClick={() => setShowSidebar(false)} className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100 lg:hidden" aria-label="Close sidebar"><X className="h-4 w-4" /></button>
             </div>
-            <button type="button" onClick={() => void newConversation('agent')} className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-orange-500 to-orange-600 px-3 py-2.5 text-xs font-bold text-white shadow-lg shadow-orange-500/10"><Plus className="h-4 w-4" /> New conversation</button>
-            <div className="mt-6 flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-600"><History className="h-3.5 w-3.5" /> Recent conversations</div>
+            <button type="button" onClick={() => void newConversation('agent')} className="agent-home-new-conversation flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-orange-500 to-orange-600 px-3 py-2.5 text-xs font-bold text-white shadow-lg shadow-orange-500/10"><Plus className="h-4 w-4" /> New conversation</button>
+            <div className="agent-home-recent-heading mt-6 flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-600"><History className="h-3.5 w-3.5" /> Recent conversations</div>
             <div className="mt-3 space-y-1.5">
-              {conversations.map((item) => <button key={item.id} type="button" onClick={() => { void selectConversation(item.id); if (typeof window !== 'undefined' && window.innerWidth < 1024) setShowSidebar(false); }} className={'w-full rounded-xl px-3 py-2.5 text-left transition ' + (activeConversationId === item.id ? 'bg-orange-50 text-orange-700' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900')}><div className="truncate text-xs font-medium">{item.title || 'New conversation'}</div><div className="mt-1 text-[10px] text-slate-600">{new Date(item.updatedAt || item.createdAt).toLocaleDateString()}</div></button>)}
+              {conversations.map((item) => <button key={item.id} type="button" onClick={() => { void selectConversation(item.id); if (typeof window !== 'undefined' && window.innerWidth < 1024) setShowSidebar(false); }} className={'agent-home-conversation-item w-full rounded-xl px-3 py-2.5 text-left transition ' + (activeConversationId === item.id ? 'is-active' : '')}><div className="truncate text-xs font-medium">{item.title || 'New conversation'}</div><div className="mt-1 text-[10px] text-slate-600">{new Date(item.updatedAt || item.createdAt).toLocaleDateString()}</div></button>)}
               {conversations.length === 0 && !loading && <div className="px-2 py-3 text-xs text-slate-600">Your recent tasks will appear here.</div>}
             </div>
-            <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-3"><div className="flex items-center gap-2 text-xs font-semibold text-slate-700"><Command className="h-3.5 w-3.5 text-orange-600" /> Workspace content</div><div className="mt-2 text-[11px] leading-5 text-slate-500">The Agent can inspect approved company profile, published knowledge, lead databases, company assets, and email designs.</div></div>
           </aside>
         </>}
 
-        <section className="flex min-h-0 min-w-0 w-full flex-col">
-          <div className="flex items-center justify-between border-b border-slate-200 px-3 py-3 sm:px-5">
+        <section className="agent-home-chat-panel flex min-h-0 min-w-0 w-full flex-col">
+          <div className="agent-home-thread-header flex items-center justify-between border-b border-slate-200 px-3 py-3 sm:px-5">
             <div className="flex min-w-0 items-center gap-2">
               <button type="button" onClick={() => setShowSidebar((value) => !value)} aria-expanded={showSidebar} aria-label={showSidebar ? 'Hide conversations sidebar' : 'Show conversations sidebar'} title={showSidebar ? 'Hide sidebar' : 'Show sidebar'} className="shrink-0 rounded-lg border border-slate-200 p-2 text-slate-600 transition hover:border-orange-200 hover:bg-orange-50 hover:text-orange-700">
                 {showSidebar ? <PanelLeftClose className="h-4 w-4" /> : <PanelLeftOpen className="h-4 w-4" />}
@@ -473,9 +472,9 @@ export const AgentWorkspace: React.FC<{ currentUser: AppUser; onOpenEmailTemplat
       </div>
 
       {showSettings && <>
-        <button type="button" aria-label="Close Agent settings" onClick={() => setShowSettings(false)} className="fixed inset-0 z-[90] bg-slate-950/25" />
-        <section role="dialog" aria-modal="true" aria-label="Agent settings" className="fixed inset-y-0 right-0 z-[91] flex w-full max-w-[440px] flex-col border-l border-slate-200 bg-white text-slate-900 shadow-2xl">
-          <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+        <button type="button" aria-label="Close Agent settings" onClick={() => setShowSettings(false)} className="agent-home-settings-backdrop fixed inset-0 z-[90] bg-slate-950/25" />
+        <section role="dialog" aria-modal="true" aria-label="Agent settings" className="agent-home-settings-panel fixed inset-y-0 right-0 z-[91] flex w-full max-w-[440px] flex-col border-l border-slate-200 bg-white text-slate-900 shadow-2xl">
+          <div className="agent-home-settings-header flex items-center justify-between border-b border-slate-200 px-5 py-4">
             <div className="flex items-center gap-2"><Settings2 className="h-4 w-4 text-orange-600" /><div><div className="text-sm font-bold text-slate-900">Agent settings</div><div className="mt-0.5 text-[11px] text-slate-500">Workspace policy and shared company memory</div></div></div>
             <button type="button" onClick={() => setShowSettings(false)} aria-label="Close settings" className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-900"><X className="h-4 w-4" /></button>
           </div>
@@ -483,7 +482,7 @@ export const AgentWorkspace: React.FC<{ currentUser: AppUser; onOpenEmailTemplat
         </section>
       </>}
 
-      {error && <div className="flex items-center justify-between border-t border-rose-200 bg-rose-50 px-4 py-2 text-xs text-rose-700"><span>{error}</span><button type="button" onClick={clearError}><X className="h-3.5 w-3.5" /></button></div>}
+      {error && <div className="agent-home-error flex items-center justify-between border-t border-rose-200 bg-rose-50 px-4 py-2 text-xs text-rose-700"><span>{error}</span><button type="button" onClick={clearError}><X className="h-3.5 w-3.5" /></button></div>}
       {loading && <div className="absolute right-4 top-20 flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[10px] text-slate-600"><Loader2 className="h-3 w-3 animate-spin" /> Syncing conversations</div>}
     </div>
   </div>;

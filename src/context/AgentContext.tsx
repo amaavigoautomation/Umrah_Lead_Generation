@@ -182,7 +182,14 @@ export const AgentProvider: React.FC<{ tenantId: string; userId: string; enabled
       if (!conversationId) return;
       const executionId = createId();
       const userMessage: AgentMessage = { id: 'local-' + executionId, role: 'user', content: message, createdAt: new Date().toISOString(), attachments: attachmentMeta };
-      setMessages((prev) => [...prev, userMessage]);
+      if (targetConversationId) {
+        // A Home-to-Agent handoff always targets a new conversation. Reset the transcript
+        // explicitly so a batched React update cannot briefly carry over the previous chat.
+        setActiveConversationId(targetConversationId);
+        setMessages([userMessage]);
+      } else {
+        setMessages((prev) => [...prev, userMessage]);
+      }
       let data: { success: boolean; assistantMessage: AgentMessage; conversation: AgentConversation };
       let needsPoll = false;
       let lastDeliveryError: any = null;

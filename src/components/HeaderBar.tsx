@@ -40,9 +40,9 @@ interface HeaderBarProps {
 type ModuleTab = { id: ActiveTab; label: string; icon: React.ReactNode };
 
 const TAB_TITLES: Record<ActiveTab, { title: string; icon: React.ReactNode; category: string; workspaceLabel: string }> = {
-  dashboard: { title: 'Dashboard', icon: <LayoutDashboard className="h-4 w-4" />, category: 'OVERVIEW', workspaceLabel: 'Dashboard' },
+  dashboard: { title: 'Home', icon: <LayoutDashboard className="h-4 w-4" />, category: 'HOME', workspaceLabel: 'Home' },
   inbox: { title: 'Unified Inbox', icon: <Inbox className="h-4 w-4" />, category: 'CONVERSATION', workspaceLabel: 'Conversation' },
-  agent: { title: 'AI Agent', icon: <Sparkles className="h-4 w-4" />, category: 'AI & AUTOMATION', workspaceLabel: 'AI' },
+  agent: { title: 'AI Agent', icon: <Sparkles className="h-4 w-4" />, category: 'HOME', workspaceLabel: 'Home' },
   'auto-followup': { title: 'Auto Follow-Up Agent', icon: <Bot className="h-4 w-4" />, category: 'AI & AUTOMATION', workspaceLabel: 'AI' },
   scheduling: { title: 'Demo Scheduling Agent', icon: <Calendar className="h-4 w-4" />, category: 'AI & AUTOMATION', workspaceLabel: 'AI' },
   playground: { title: 'AI Testing', icon: <Sparkles className="h-4 w-4" />, category: 'AI & AUTOMATION', workspaceLabel: 'AI' },
@@ -59,7 +59,6 @@ const TAB_TITLES: Record<ActiveTab, { title: string; icon: React.ReactNode; cate
 };
 
 const AI_TABS: ModuleTab[] = [
-  { id: 'agent', label: 'AI Agent', icon: <Sparkles className="h-3.5 w-3.5" /> },
   { id: 'auto-followup', label: 'Auto Follow-Up Agent', icon: <Bot className="h-3.5 w-3.5" /> },
   { id: 'scheduling', label: 'Demo Scheduling Agent', icon: <Calendar className="h-3.5 w-3.5" /> },
   { id: 'playground', label: 'AI Testing', icon: <Sparkles className="h-3.5 w-3.5" /> },
@@ -71,7 +70,6 @@ const MARKETING_TABS: ModuleTab[] = [
 ];
 
 const MODULE_TABS: Partial<Record<ActiveTab, ModuleTab[]>> = {
-  agent: AI_TABS,
   'auto-followup': AI_TABS,
   scheduling: AI_TABS,
   playground: AI_TABS,

@@ -1262,9 +1262,9 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
                       )}
                     </div>
                   </th>
-                  <th className="py-3 px-3 min-w-[220px]">Lead / Contact</th>
-                  <th className="py-3 px-3 min-w-[210px]">Phone & Call Action</th>
-                  <th className="py-3 px-3 min-w-[150px]">Status</th>
+                  <th className="py-3 px-2" title="Lead / Contact">Lead / Contact</th>
+                  <th className="py-3 px-2" title="Phone and communication actions">Phone & Actions</th>
+                  <th className="py-3 px-2" title="Lead status">Status</th>
                   <th
                     className="py-3 px-3 cursor-pointer hover:text-slate-900 min-w-[170px]"
                     onClick={() => {
@@ -1276,15 +1276,15 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
                     }}
                   >
                     <div className="flex items-center space-x-1">
-                      <span>AI Auto Follow-Up</span>
+                      <span>Follow-up</span>
                       <Clock className="w-3 h-3 text-slate-400" />
                       {sortField === 'followup' && (
                         <span className="text-orange-600 font-extrabold">{sortAsc ? '↑' : '↓'}</span>
                       )}
                     </div>
                   </th>
-                  <th className="py-3 px-3 min-w-[160px]">Assigned Telecaller</th>
-                  <th className="py-3 px-3 min-w-[120px]">Source</th>
+                  <th className="py-3 px-2" title="Assigned telecaller">Assigned To</th>
+                  <th className="py-3 px-2" title="Lead source">Source</th>
                   <th
                     className="py-3 px-3 cursor-pointer hover:text-slate-900 min-w-[110px]"
                     onClick={() => {
@@ -1303,8 +1303,8 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
                       )}
                     </div>
                   </th>
-                  <th className="py-3 px-3 min-w-[180px]">Latest Note</th>
-                  <th className="py-3 px-3 text-right w-24">Actions</th>
+                  <th className="py-3 px-2" title="Latest note">Note</th>
+                  <th className="py-3 px-2 text-center" title="Lead actions">View</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-xs">

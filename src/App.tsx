@@ -2676,7 +2676,7 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
       />
 
       <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
-{activeTab !== 'inbox' && (
+{activeTab !== 'inbox' && activeTab !== 'crm' && (
           <HeaderBar
             activeTab={activeTab}
             setActiveTab={setActiveTab}

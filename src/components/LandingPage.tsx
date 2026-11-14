@@ -21,6 +21,8 @@ import {
   Globe,
   Headphones,
   Inbox,
+  Instagram,
+  Facebook,
   Layers,
   Mail,
   Menu,
@@ -46,65 +48,42 @@ type LinkItem = { label: string; href: string; description: string };
 type NavGroup = { label: string; href: string; links: LinkItem[] };
 
 const NAV_GROUPS: NavGroup[] = [
-  {
-    label: 'Platform', href: '/platform', links: [
-      { label: 'Platform overview', href: '/platform', description: 'The connected lead-to-revenue workspace' },
-      { label: 'Lead capture', href: '/lead-capture', description: 'Bring enquiries into one place' },
-      { label: 'Unified Inbox', href: '/unified-inbox', description: 'Every customer conversation together' },
-      { label: 'AI Agent', href: '/ai-agents', description: 'Move work forward with one prompt' },
-      { label: 'CRM & lead databases', href: '/crm', description: 'Keep every opportunity organised' },
-      { label: 'Demo scheduling', href: '/demo-scheduling', description: 'Turn interest into a booked meeting' },
-      { label: 'Campaigns & WhatsApp', href: '/campaigns', description: 'Create, send and measure engagement' },
-      { label: 'Analytics', href: '/analytics', description: 'See what happened after every touch' },
-    ],
-  },
-  {
-    label: 'Solutions', href: '/solutions', links: [
-      { label: 'Travel & Umrah operators', href: '/solutions#travel', description: 'Coordinate enquiries through booking' },
-      { label: 'Sales teams', href: '/solutions#sales', description: 'Keep pipeline and conversations aligned' },
-      { label: 'Service businesses', href: '/solutions#service', description: 'Give every customer request a next step' },
-    ],
-  },
-  {
-    label: 'Resources', href: '/resources', links: [
-      { label: 'How it works', href: '/resources#how-it-works', description: 'Follow the lead journey' },
-      { label: 'Integrations', href: '/integrations', description: 'Connect your existing channels' },
-      { label: 'FAQs', href: '/resources#faqs', description: 'Answers about the platform' },
-    ],
-  },
+  {label:'Platform',href:'/platform',links:[
+    {label:'Platform overview',href:'/platform',description:'One workspace for the full lead-to-revenue journey'},
+    {label:'Lead capture',href:'/lead-capture',description:'Bring enquiries from every connected source'},
+    {label:'Unified Inbox',href:'/unified-inbox',description:'WhatsApp, Instagram, Messenger, email and web'},
+    {label:'AI Agent',href:'/ai-agents',description:'Prepare work across the workspace from one prompt'},
+    {label:'Built-in CRM',href:'/crm',description:'Manage contacts, ownership, stages and databases'},
+    {label:'Campaign Builder',href:'/campaigns',description:'Create branded email and WhatsApp campaigns'},
+    {label:'Demo scheduling',href:'/demo-scheduling',description:'Turn buying intent into a booked meeting'},
+    {label:'Analytics & reports',href:'/analytics',description:'Understand engagement and sales progression'},
+  ]},
+  {label:'Solutions',href:'/solutions',links:[
+    {label:'Lead generation teams',href:'/solutions#lead-generation',description:'Capture, qualify and follow up consistently'},
+    {label:'Sales organisations',href:'/solutions#sales-teams',description:'Keep conversations, pipeline and campaigns connected'},
+    {label:'Customer operations',href:'/solutions#customer-operations',description:'Coordinate service conversations and next steps'},
+  ]},
+  {label:'Resources',href:'/resources',links:[
+    {label:'How it works',href:'/resources#how-it-works',description:'See the complete lead-to-revenue workflow'},
+    {label:'Integrations',href:'/integrations',description:'Connect the tools your team already uses'},
+    {label:'FAQs',href:'/resources#faqs',description:'Answers about channels, AI and campaigns'},
+  ]},
 ];
 
-const CAPABILITIES: Array<{ icon: LucideIcon; title: string; copy: string; href: string; tag: string }> = [
-  { icon: Globe, title: 'Lead capture', copy: 'Bring website enquiries, connected channels and imported prospects into one organised workspace.', href: '/lead-capture', tag: 'ATTRACT' },
-  { icon: Inbox, title: 'Unified Inbox', copy: 'Give your team one place to read, reply, review AI drafts and take over conversations.', href: '/unified-inbox', tag: 'RESPOND' },
-  { icon: Bot, title: 'AI Agent', copy: 'Ask for a workflow in plain language. Let the agent prepare work across connected modules.', href: '/ai-agents', tag: 'EXECUTE' },
-  { icon: Users, title: 'CRM & databases', copy: 'Keep lead records, ownership, stages and campaign audiences connected to the conversation.', href: '/crm', tag: 'ORGANISE' },
-  { icon: CalendarCheck, title: 'Demo scheduling', copy: 'Coordinate calendar availability and move a qualified conversation to a confirmed meeting.', href: '/demo-scheduling', tag: 'CONVERT' },
-  { icon: Send, title: 'Campaigns & WhatsApp', copy: 'Create branded communication, build custom templates and follow campaign performance.', href: '/campaigns', tag: 'GROW' },
+const CAPABILITIES: Array<{icon:LucideIcon;title:string;copy:string;href:string;tag:string}> = [
+  {icon:Globe,title:'Lead capture',copy:'Bring website enquiries, connected social and messaging channels, and imported prospects into one workspace.',href:'/lead-capture',tag:'ATTRACT'},
+  {icon:Inbox,title:'Unified Inbox',copy:'Manage WhatsApp, Instagram, Facebook Messenger, email and website conversations in one shared view.',href:'/unified-inbox',tag:'ENGAGE'},
+  {icon:Bot,title:'AI Agent',copy:'Describe a task in plain language and prepare work across your connected workspace.',href:'/ai-agents',tag:'AUTOMATE'},
+  {icon:Users,title:'Built-in CRM',copy:'Keep lead records, ownership, pipeline stages, notes and activity connected.',href:'/crm',tag:'ORGANISE'},
+  {icon:Send,title:'Campaign Builder',copy:'Design branded email and WhatsApp campaigns, select audiences and track engagement.',href:'/campaigns',tag:'CONVERT'},
+  {icon:CalendarCheck,title:'Demo scheduling',copy:'Coordinate calendar availability and move qualified conversations to a confirmed meeting.',href:'/demo-scheduling',tag:'BOOK'},
+  {icon:BarChart3,title:'Analytics & reports',copy:'Understand delivery, engagement, replies, tracked meetings and campaign outcomes.',href:'/analytics',tag:'GROW'},
 ];
 
 const THREADS = [
-  {
-    name: 'Ayesha Khan', initials: 'AK', color: 'mint', channel: 'WhatsApp', time: 'Now',
-    preview: 'I would like to know more about your services.',
-    incoming: 'Hi, I found your website and would like to understand how your service works.',
-    reply: 'Welcome, Ayesha. I can help with that. May I ask what your team is currently using to manage new enquiries?',
-    status: 'AI reply drafted', label: 'New enquiry',
-  },
-  {
-    name: 'Imran Patel', initials: 'IP', color: 'blue', channel: 'Email', time: '4m',
-    preview: 'Could we arrange a product walkthrough?',
-    incoming: 'Our team is exploring a better way to handle inbound leads. Can we schedule a walkthrough?',
-    reply: 'Absolutely. I can help arrange a walkthrough. Which day is generally most convenient for your team?',
-    status: 'Demo intent detected', label: 'High intent',
-  },
-  {
-    name: 'Sara Merchant', initials: 'SM', color: 'peach', channel: 'Website', time: '12m',
-    preview: 'Please share the available options.',
-    incoming: 'I submitted the form a little earlier. Could someone share the available options?',
-    reply: 'Thanks for reaching out, Sara. I have your enquiry. I can share the relevant information or connect you with a specialist.',
-    status: 'Human handoff available', label: 'Needs attention',
-  },
+  {name:'Ayesha Khan',initials:'AK',color:'mint',channel:'WhatsApp',time:'Now',preview:'I would like to know more about your services.',incoming:'Hi, I found your website and would like to understand how your service works.',reply:'Welcome, Ayesha. I can help with that. May I ask what your team is currently using to manage new enquiries?',status:'AI reply drafted',label:'New enquiry'},
+  {name:'Imran Patel',initials:'IP',color:'blue',channel:'Instagram',time:'4m',preview:'Could someone share more details?',incoming:'I saw your recent post. Could someone share more details?',reply:'Absolutely. I can help with that and connect you with the right person if needed.',status:'Intent detected',label:'Social enquiry'},
+  {name:'Sara Merchant',initials:'SM',color:'peach',channel:'Messenger',time:'12m',preview:'Can we arrange a quick call?',incoming:'Could we arrange a quick call to discuss the next step?',reply:'Of course. I can help coordinate a suitable time for your team.',status:'Meeting intent detected',label:'Needs attention'},
 ];
 
 const JOURNEY_STEPS: Array<{ number: string; title: string; short: string; body: string; icon: LucideIcon; signal: string }> = [
@@ -135,7 +114,7 @@ const PROMPT_PRESETS = [
 
 const PAGE_META: Record<string, { eyebrow: string; title: string; accent: string; description: string; icon: LucideIcon; points: string[]; next: Array<{ title: string; copy: string; href: string }> }> = {
   '/platform': {
-    eyebrow: 'THE AMAAVIGO PLATFORM', title: 'The work between a new lead and a customer.', accent: 'Connected.', description: 'Bring lead capture, customer conversations, AI assistance, scheduling, campaigns and reporting into one connected sales operation.',
+    eyebrow: 'PLATFORM OVERVIEW', title: 'The complete sales workspace', accent: 'for growing businesses.', description: 'Capture demand, manage every conversation, run campaigns, organise your customer pipeline and understand performance — all in one connected platform.',
     icon: Layers,
     points: ['Capture enquiries from supported channels and forms', 'Manage every conversation and handoff in one place', 'Use AI to prepare work across connected modules', 'Coordinate follow-up, meetings and campaigns', 'Understand activity across the customer journey'],
     next: [{ title: 'Capture demand', copy: 'Bring new enquiries into one workspace.', href: '/lead-capture' }, { title: 'Work every conversation', copy: 'Keep AI and human responses together.', href: '/unified-inbox' }, { title: 'Move the work forward', copy: 'Ask the AI Agent to prepare next steps.', href: '/ai-agents' }],
@@ -146,7 +125,7 @@ const PAGE_META: Record<string, { eyebrow: string; title: string; accent: string
     next: [{ title: 'Database organisation', copy: 'Keep reusable lead audiences organised.', href: '/crm' }, { title: 'Start the conversation', copy: 'Respond from one shared Inbox.', href: '/unified-inbox' }, { title: 'Run the next action', copy: 'Use AI to prepare follow-up work.', href: '/ai-agents' }],
   },
   '/unified-inbox': {
-    eyebrow: 'UNIFIED INBOX', title: 'One conversation view for every channel you connect.', accent: 'One context.', description: 'Give your team a shared place to manage supported customer conversations, review AI drafts, take over when needed and see lead context alongside the thread.',
+    eyebrow: 'UNIFIED INBOX', title: 'Every conversation.', accent: 'One intelligent Inbox.', description: 'Manage WhatsApp, Instagram, Facebook Messenger, email and website conversations in one shared view, with AI assistance, human handoff and customer context.',
     icon: Inbox, points: ['WhatsApp, email, website and supported social conversations', 'Conversation views, search and status filters', 'AI, review and off operating modes', 'Human handoff, ownership and conversation controls', 'Lead profile and activity alongside messages'],
     next: [{ title: 'AI-assisted replies', copy: 'Let the agent prepare the next response.', href: '/ai-agents' }, { title: 'Lead context', copy: 'Keep records and conversations together.', href: '/crm' }, { title: 'Schedule the next step', copy: 'Turn interest into a meeting.', href: '/demo-scheduling' }],
   },
@@ -156,7 +135,7 @@ const PAGE_META: Record<string, { eyebrow: string; title: string; accent: string
     next: [{ title: 'Create communication', copy: 'Build branded email and WhatsApp drafts.', href: '/campaigns' }, { title: 'Organise leads', copy: 'Use lead databases and CRM context.', href: '/crm' }, { title: 'Measure results', copy: 'Turn campaign data into an action plan.', href: '/analytics' }],
   },
   '/crm': {
-    eyebrow: 'CRM & LEAD DATABASES', title: 'The lead record should never lose the conversation.', accent: 'Keep context connected.', description: 'Organise contacts, manage pipeline stages, assign ownership and maintain reusable campaign databases without losing the history that brought a lead to your team.',
+    eyebrow: 'BUILT-IN CRM', title: 'Keep every lead organised.', accent: 'Keep every opportunity moving.', description: 'Manage contact records, pipeline stages, ownership, notes, activities and follow-ups in a built-in CRM. Keep separate lead databases ready for campaign audiences.',
     icon: Users, points: ['Lead and contact records in a shared workspace', 'Pipeline stages, status and ownership', 'Lead database collections and import history', 'Duplicate handling and audience organisation', 'Conversation and follow-up context close to the record'],
     next: [{ title: 'Bring leads in', copy: 'Capture and import new enquiries.', href: '/lead-capture' }, { title: 'Work the conversation', copy: 'Reply with the right context.', href: '/unified-inbox' }, { title: 'Reach the right audience', copy: 'Build a campaign from a saved database.', href: '/campaigns' }],
   },
@@ -166,7 +145,7 @@ const PAGE_META: Record<string, { eyebrow: string; title: string; accent: string
     next: [{ title: 'Qualify the enquiry', copy: 'Use AI and the conversation context.', href: '/ai-agents' }, { title: 'Keep the lead record', copy: 'Track progress inside CRM.', href: '/crm' }, { title: 'Measure the outcome', copy: 'Review campaign and booking activity.', href: '/analytics' }],
   },
   '/campaigns': {
-    eyebrow: 'CAMPAIGNS & ENGAGEMENT', title: 'Create the message. Reach the right audience. Learn what worked.', accent: 'All connected.', description: 'Build email and WhatsApp communication, select your audience, coordinate delivery and understand engagement without losing the lead context.',
+    eyebrow: 'CAMPAIGN BUILDER', title: 'Create, send and grow.', accent: 'With campaigns that convert.', description: 'Design branded email and WhatsApp campaigns, create your own WhatsApp templates, select audiences, coordinate follow-ups and understand what happened after delivery.',
     icon: Send, points: ['Email campaigns and reusable branded designs', 'Custom WhatsApp template creation in Amaavigo', 'Lead database selection and recipient snapshots', 'Campaign scheduling and delivery tracking', 'Campaign reports, comparisons and AI recommendations'],
     next: [{ title: 'Design communication', copy: 'Create reusable email and WhatsApp drafts.', href: '/whatsapp' }, { title: 'Choose the audience', copy: 'Select a saved lead database.', href: '/crm' }, { title: 'Understand performance', copy: 'Generate campaign insights and reports.', href: '/analytics' }],
   },
@@ -182,7 +161,7 @@ const PAGE_META: Record<string, { eyebrow: string; title: string; accent: string
   },
   '/integrations': {
     eyebrow: 'INTEGRATIONS', title: 'Bring the channels your customers already use.', accent: 'Into one workspace.', description: 'Connect the messaging, email, calendar and website services your team relies on, subject to each provider’s access and eligibility requirements.',
-    icon: Workflow, points: ['WhatsApp Business and supported Meta channels', 'Email inbox and sending connections', 'Google Calendar and Microsoft 365', 'Website forms and inbound lead workflows', 'Workspace APIs and supported webhooks'],
+    icon: Workflow, points: ['WhatsApp Business conversations and template workflows', 'Instagram messaging and Facebook Messenger', 'Email inboxes and sending connections', 'Website forms and inbound lead workflows', 'Google Calendar, Microsoft 365, APIs and supported webhooks'],
     next: [{ title: 'Manage conversations', copy: 'Work across connected channels.', href: '/unified-inbox' }, { title: 'Coordinate meetings', copy: 'Connect calendars and demo availability.', href: '/demo-scheduling' }, { title: 'Capture enquiries', copy: 'Bring forms and inbound leads together.', href: '/lead-capture' }],
   },
 };
@@ -255,7 +234,7 @@ const SiteHeader: React.FC<{ pathname: string }> = ({ pathname }) => {
       </div>
       <AnimatePresence>
         {mobileOpen && <motion.nav className="av-mobile-menu" initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} transition={{ duration: .22 }}>
-          <a href="/platform" onClick={() => setMobileOpen(false)}>Platform</a><a href="/lead-capture" onClick={() => setMobileOpen(false)}>Lead capture</a><a href="/unified-inbox" onClick={() => setMobileOpen(false)}>Unified Inbox</a><a href="/ai-agents" onClick={() => setMobileOpen(false)}>AI Agent</a><a href="/crm" onClick={() => setMobileOpen(false)}>CRM & databases</a><a href="/demo-scheduling" onClick={() => setMobileOpen(false)}>Demo scheduling</a><a href="/campaigns" onClick={() => setMobileOpen(false)}>Campaigns & WhatsApp</a><a href="/solutions" onClick={() => setMobileOpen(false)}>Solutions</a><a href="/integrations" onClick={() => setMobileOpen(false)}>Integrations</a><a href="/pricing" onClick={() => setMobileOpen(false)}>Pricing</a><a href="/resources" onClick={() => setMobileOpen(false)}>Resources</a><a href="/about" onClick={() => setMobileOpen(false)}>About</a><a href="/login" onClick={() => setMobileOpen(false)}>Log in</a>
+          <a href="/platform" onClick={() => setMobileOpen(false)}>Platform</a><a href="/lead-capture" onClick={() => setMobileOpen(false)}>Lead capture</a><a href="/unified-inbox" onClick={() => setMobileOpen(false)}>Unified Inbox</a><a href="/ai-agents" onClick={() => setMobileOpen(false)}>AI Agent</a><a href="/crm" onClick={() => setMobileOpen(false)}>Built-in CRM</a><a href="/demo-scheduling" onClick={() => setMobileOpen(false)}>Demo scheduling</a><a href="/campaigns" onClick={() => setMobileOpen(false)}>Campaign Builder</a><a href="/solutions" onClick={() => setMobileOpen(false)}>Solutions</a><a href="/integrations" onClick={() => setMobileOpen(false)}>Integrations</a><a href="/pricing" onClick={() => setMobileOpen(false)}>Pricing</a><a href="/resources" onClick={() => setMobileOpen(false)}>Resources</a><a href="/about" onClick={() => setMobileOpen(false)}>About</a><a href="/login" onClick={() => setMobileOpen(false)}>Log in</a>
           <a href={DEMO_URL} target="_blank" rel="noreferrer" className="av-mobile-demo" onClick={() => setMobileOpen(false)}>Book a demo <ArrowUpRight size={15} /></a>
         </motion.nav>}
       </AnimatePresence>
@@ -272,7 +251,7 @@ const SiteFooter: React.FC = () => (
         <span className="av-footer-note"><span /> Built around the customer journey</span>
       </div>
       <div className="av-footer-col"><strong>Platform</strong><a href="/platform">Overview</a><a href="/lead-capture">Lead capture</a><a href="/unified-inbox">Unified Inbox</a><a href="/ai-agents">AI Agent</a><a href="/crm">CRM & databases</a><a href="/demo-scheduling">Demo scheduling</a></div>
-      <div className="av-footer-col"><strong>Engagement</strong><a href="/campaigns">Campaigns</a><a href="/whatsapp">WhatsApp templates</a><a href="/analytics">Analytics & reporting</a><a href="/integrations">Integrations</a><a href="/solutions">Solutions</a></div>
+      <div className="av-footer-col"><strong>Engagement</strong><a href="/campaigns">Campaign Builder</a><a href="/whatsapp">WhatsApp templates</a><a href="/analytics">Analytics & reporting</a><a href="/integrations">Integrations</a><a href="/solutions">Solutions</a></div>
       <div className="av-footer-col"><strong>Company</strong><a href="/pricing">Pricing</a><a href="/resources">Resources & FAQs</a><a href="/about">About Amaavigo</a><a href="/contact">Contact</a><a href="/login">Log in</a></div>
       <div className="av-footer-col"><strong>Legal</strong><a href="/privacy">Privacy Policy</a><a href="/terms">Terms of Service</a><a href="/dpa">Data Processing Agreement</a><a href="/aup">Acceptable Use & AI Policy</a></div>
     </div>
@@ -281,72 +260,22 @@ const SiteFooter: React.FC = () => (
 );
 
 const HeroWorkspace: React.FC = () => {
-  const reduced = useReducedMotion();
-  return (
-    <div className="av-hero-product av-hero-art-product">
-      <div className="av-hero-art-aura" />
-      <div className="av-hero-art-orbit av-hero-art-orbit-one" />
-      <div className="av-hero-art-orbit av-hero-art-orbit-two" />
-      <motion.div
-        className="av-hero-art-frame"
-        initial={reduced ? false : { opacity: 0, y: 36, rotateY: -9, rotateX: 4, scale: .94 }}
-        animate={{ opacity: 1, y: 0, rotateY: 0, rotateX: 0, scale: 1 }}
-        transition={{ duration: reduced ? 0 : 1.15, delay: .12, ease: EASE }}
-        style={{ transformPerspective: 1400 }}
-      >
-        <img
-          src="/amaavigo-lead-journey.svg"
-          alt="A 3D illustration of lead capture, AI conversations, demo scheduling and customer growth connected by one glowing path"
-          loading="eager"
-          fetchPriority="high"
-          decoding="async"
-          draggable={false}
-        />
-      </motion.div>
-
-      <motion.div
-        className="av-hero-art-badge av-hero-art-badge-lead"
-        animate={reduced ? { y: 0 } : { y: [0, -9, 0], rotate: [-1.5, -.5, -1.5] }}
-        transition={{ duration: 5.8, repeat: Infinity, ease: 'easeInOut' }}
-      >
-        <span className="av-art-badge-icon av-art-badge-green"><MessageCircle size={16} /></span>
-        <span><b>New lead captured</b><small>WhatsApp · just now</small></span>
-        <i />
-      </motion.div>
-
-      <motion.div
-        className="av-hero-art-badge av-hero-art-badge-ai"
-        animate={reduced ? { y: 0 } : { y: [0, 8, 0], rotate: [1, 2, 1] }}
-        transition={{ duration: 6.4, delay: .4, repeat: Infinity, ease: 'easeInOut' }}
-      >
-        <span className="av-art-badge-icon av-art-badge-blue"><Sparkles size={16} /></span>
-        <span><b>AI conversation</b><small>Lead qualified</small></span>
-        <i className="av-art-live-dot" />
-      </motion.div>
-
-      <motion.div
-        className="av-hero-art-badge av-hero-art-badge-booked"
-        animate={reduced ? { y: 0 } : { y: [0, -7, 0], rotate: [1.2, .2, 1.2] }}
-        transition={{ duration: 5.2, delay: .7, repeat: Infinity, ease: 'easeInOut' }}
-      >
-        <span className="av-art-badge-icon av-art-badge-orange"><CalendarCheck size={16} /></span>
-        <span><b>Demo booked</b><small>Next step confirmed</small></span>
-        <CheckCircle2 size={15} className="av-art-booked-check" />
-      </motion.div>
-
-      <motion.span
-        className="av-hero-art-spark av-hero-art-spark-one"
-        animate={reduced ? { opacity: 1 } : { rotate: [0, 16, 0], scale: [1, 1.18, 1] }}
-        transition={{ duration: 4.2, repeat: Infinity, ease: 'easeInOut' }}
-      ><Sparkles size={20} /></motion.span>
-      <motion.span
-        className="av-hero-art-spark av-hero-art-spark-two"
-        animate={reduced ? { opacity: 1 } : { rotate: [0, -18, 0], scale: [1, .82, 1] }}
-        transition={{ duration: 5.1, delay: .7, repeat: Infinity, ease: 'easeInOut' }}
-      ><Zap size={17} /></motion.span>
-      <div className="av-product-caption"><span>THE CUSTOMER JOURNEY</span><i /><span>CAPTURE · CONVERSE · BOOK · GROW</span></div>
-    </div>
-  );
+ const reduced=useReducedMotion();
+ return <div className="av-hero-product av-hero-product-showcase"><div className="av-hero-product-glow"/>
+  <motion.div className="av-hero-product-window" initial={reduced?false:{opacity:0,y:28,rotateY:-8,scale:.96}} animate={{opacity:1,y:0,rotateY:0,scale:1}} transition={{duration:reduced?0:1.05,delay:.12,ease:EASE}} style={{transformPerspective:1500}}>
+   <div className="av-hero-browser-bar"><span className="av-browser-dots"><i/><i/><i/></span><span className="av-browser-address"><ShieldCheck size={10}/> app.amaavigo.com</span><span className="av-browser-live"><i/> LIVE WORKSPACE</span></div>
+   <div className="av-hero-product-ui">
+    <aside className="av-product-sidebar"><div className="av-product-brand"><span>A</span><b>amaavigo</b></div><div className="av-product-nav"><span><Layers size={13}/> Dashboard</span><span className="is-active"><Inbox size={13}/> Unified Inbox</span><span><Users size={13}/> CRM</span><span><Sparkles size={13}/> AI Agent</span><span><Send size={13}/> Campaigns</span><span><CalendarCheck size={13}/> Scheduling</span><span><BarChart3 size={13}/> Analytics</span></div><div className="av-product-sidebar-foot"><span><Database size={12}/> Databases</span><span><ShieldCheck size={12}/> Workspace</span></div></aside>
+    <div className="av-product-conversations"><div className="av-product-workspace-title"><small>CONVERSATION MANAGEMENT</small><b>Unified Inbox</b></div><div className="av-product-tabs"><span className="is-active">All conversations <i>24</i></span><span>AI active <i>16</i></span><span>Human handoff <i>4</i></span></div>{THREADS.map((thread,index)=><div key={thread.name} className={index===0?'av-product-thread-row is-active':'av-product-thread-row'}><span className={'av-product-avatar '+thread.color}>{thread.initials}</span><span className="av-product-thread-info"><b>{thread.name}</b><small>{thread.preview}</small></span><span className="av-product-thread-meta">{thread.time}</span></div>)}<div className="av-product-channel-footer"><span><MessageCircle/> WhatsApp</span><span><Instagram/> Instagram</span><span><Facebook/> Messenger</span><span><Mail/> Email</span></div></div>
+    <div className="av-product-conversation-view"><div className="av-product-contact-head"><span className="av-product-avatar mint">AK</span><span><b>Ayesha Khan</b><small>WhatsApp · New enquiry</small></span><i>● Active</i></div><div className="av-product-message is-customer">Hi, I would like to understand how your service works. Can you share more details?</div><div className="av-product-message is-ai"><small><Sparkles size={10}/> AI RESPONSE PREPARED</small>Absolutely. I can help you explore the right option and arrange the next step.</div><div className="av-product-booking"><span><CalendarCheck size={15}/></span><span><b>Book a demo</b><small>Choose a time that works for you</small></span><ArrowUpRight size={13}/></div><div className="av-product-composer">Write a message… <span><ArrowUpRight size={13}/></span></div></div>
+    <aside className="av-product-contact-context"><small>CONTACT CONTEXT</small><span className="av-context-avatar">AK</span><b>Ayesha Khan</b><em>New opportunity</em><div><small>CHANNEL</small><b>WhatsApp</b></div><div><small>LEAD STATUS</small><b>New enquiry</b></div><div><small>NEXT STEP</small><b>Qualify & schedule</b></div></aside>
+   </div>
+  </motion.div>
+  <div className="av-hero-channel-stack"><motion.span className="av-hero-channel whatsapp" animate={reduced?{y:0}:{y:[0,-7,0]}} transition={{duration:4.4,repeat:Infinity,ease:'easeInOut'}}><MessageCircle size={23}/></motion.span><motion.span className="av-hero-channel instagram" animate={reduced?{y:0}:{y:[0,6,0]}} transition={{duration:5.1,delay:.25,repeat:Infinity,ease:'easeInOut'}}><Instagram size={23}/></motion.span><motion.span className="av-hero-channel messenger" animate={reduced?{y:0}:{y:[0,-5,0]}} transition={{duration:4.8,delay:.5,repeat:Infinity,ease:'easeInOut'}}><Facebook size={23}/></motion.span><motion.span className="av-hero-channel email" animate={reduced?{y:0}:{y:[0,6,0]}} transition={{duration:5.5,delay:.75,repeat:Infinity,ease:'easeInOut'}}><Mail size={23}/></motion.span><motion.span className="av-hero-channel website" animate={reduced?{y:0}:{y:[0,-6,0]}} transition={{duration:4.9,delay:1,repeat:Infinity,ease:'easeInOut'}}><Globe size={22}/></motion.span></div>
+  <motion.div className="av-hero-float-card av-hero-ai-float" animate={reduced?{y:0}:{y:[0,-8,0]}} transition={{duration:5.8,repeat:Infinity,ease:'easeInOut'}}><span><Sparkles size={17}/></span><div><b>AI Agent</b><small>Qualifying a new lead…</small></div><i/></motion.div>
+  <motion.div className="av-hero-float-card av-hero-booked-float" animate={reduced?{y:0}:{y:[0,7,0]}} transition={{duration:5.2,delay:.35,repeat:Infinity,ease:'easeInOut'}}><span><CalendarCheck size={18}/></span><div><b>Demo booked</b><small>Next step confirmed</small></div><CheckCircle2 size={15}/></motion.div>
+  <div className="av-hero-spark av-hero-spark-one">✳</div><div className="av-hero-spark av-hero-spark-two">✳</div>
+ </div>;
 };
 
 const JourneyVisual: React.FC<{ active: number }> = ({ active }) => {
@@ -440,20 +369,16 @@ const CampaignStudio: React.FC = () => {
       <div className="av-container">
         <div className="av-campaign-heading"><Reveal>
           <div className="av-campaign-artwork">
-            <motion.img
-              src="/amaavigo-campaign-creative.svg"
-              alt="Layered creative cards for email, WhatsApp conversations and campaign analytics"
-              loading="lazy"
-              decoding="async"
-              animate={reduced ? { y: 0 } : { y: [0, -7, 0] }}
-              transition={{ duration: 7, repeat: Infinity, ease: 'easeInOut' }}
-            />
+            <motion.div className="av-campaign-art-scene" animate={reduced ? { y: 0 } : { y: [0, -7, 0] }} transition={{ duration: 7, repeat: Infinity, ease: 'easeInOut' }}>
+              <div className="av-campaign-art-toolbar"><span><Mail size={13}/></span><span><MessageCircle size={13}/></span><span><Workflow size={13}/></span><span><BarChart3 size={13}/></span></div>
+              <div className="av-campaign-art-email"><small>YOUR BRAND</small><div className="av-campaign-art-gradient"><Sparkles size={23}/></div><b>Make the next conversation count.</b><i/><i/><span>Continue <ArrowUpRight size={10}/></span></div>
+              <div className="av-campaign-art-side"><span><CheckCircle2 size={12}/> Audience ready</span><span><CheckCircle2 size={12}/> Content prepared</span><span><CheckCircle2 size={12}/> Tracking enabled</span></div>
+            </motion.div>
             <motion.span className="av-campaign-art-chip av-campaign-art-chip-one" animate={reduced ? { y: 0 } : { y: [0, -6, 0] }} transition={{ duration: 4.8, repeat: Infinity, ease: 'easeInOut' }}><Sparkles size={12} /> Brand-ready creative</motion.span>
             <motion.span className="av-campaign-art-chip av-campaign-art-chip-two" animate={reduced ? { y: 0 } : { y: [0, 5, 0] }} transition={{ duration: 5.6, delay: .4, repeat: Infinity, ease: 'easeInOut' }}><CheckCircle2 size={12} /> Audience connected</motion.span>
           </div>
           <Eyebrow>AFTER THE FIRST CONVERSATION</Eyebrow>
-          <h2>Build the campaign.<br /><span>Keep the customer context.</span></h2>
-          <p>Create communication in your own brand voice, choose the audience and understand what happened after delivery.</p>
+          <h2>Build campaigns that turn conversations <span>into customers.</span></h2><p>Create branded email and WhatsApp campaigns, design your own templates, choose an audience, automate follow-ups and track what happened after delivery.</p>
           <a href="/campaigns" className="av-inline-link">Explore campaigns <ArrowUpRight size={15} /></a>
         </Reveal></div>
         <Reveal className="av-campaign-showcase" delay={.12}>
@@ -472,26 +397,37 @@ const CampaignStudio: React.FC = () => {
   );
 };
 
+const RevenueEngineSection: React.FC = () => (
+ <section className="av-revenue-suite"><div className="av-revenue-suite-glow"/><div className="av-container av-revenue-layout">
+  <Reveal className="av-revenue-intro"><Eyebrow light>THE COMPLETE SALES WORKSPACE</Eyebrow><h2>Everything you need to move from enquiry <span>to revenue.</span></h2><p>Capture demand, keep every conversation moving, manage relationships, launch campaigns and understand what drives your next customer.</p><div className="av-revenue-points"><span><CheckCircle2 size={14}/> Omnichannel conversations</span><span><CheckCircle2 size={14}/> AI agent & automation</span><span><CheckCircle2 size={14}/> Built-in CRM & lead databases</span><span><CheckCircle2 size={14}/> Email & WhatsApp campaigns</span><span><CheckCircle2 size={14}/> Demo scheduling & reporting</span></div><a href="/platform" className="av-revenue-link">Explore the platform <ArrowUpRight size={15}/></a></Reveal>
+  <div className="av-revenue-card-grid">
+   <Reveal delay={.05}><a href="/campaigns" className="av-revenue-card av-revenue-campaign"><div className="av-revenue-card-head"><span><Send size={15}/> CAMPAIGN BUILDER</span><ArrowUpRight size={14}/></div><b>Create campaigns that feel like your brand.</b><div className="av-revenue-editor"><div className="av-revenue-editor-tools"><span>T</span><span><Layers size={11}/></span><span>▤</span><span>↗</span></div><div className="av-revenue-email-preview"><small>YOUR BRAND · EMAIL CAMPAIGN</small><strong>Make the next conversation count.</strong><i/><i/><span>Continue the journey <ArrowUpRight size={10}/></span></div><div className="av-revenue-wa-pill"><MessageCircle size={12}/> WhatsApp template</div></div><div className="av-revenue-card-foot"><span>Visual email design</span><span>Custom WhatsApp templates</span></div></a></Reveal>
+   <Reveal delay={.12}><a href="/crm" className="av-revenue-card av-revenue-crm"><div className="av-revenue-card-head"><span><Users size={15}/> BUILT-IN CRM</span><ArrowUpRight size={14}/></div><b>Keep every lead and next step connected.</b><div className="av-revenue-pipeline"><div><small>NEW LEADS</small><span>AK</span><span>IP</span><span>SM</span></div><div><small>IN PROGRESS</small><span>RA</span><span>NK</span></div><div><small>DEMO BOOKED</small><span>ZS</span><span>FK</span></div></div><div className="av-revenue-database"><Database size={13}/><span><b>Lead databases</b><small>Reusable audiences for campaigns</small></span><CheckCircle2 size={13}/></div><div className="av-revenue-card-foot"><span>Pipeline & ownership</span><span>Lead activity history</span></div></a></Reveal>
+   <Reveal delay={.19}><a href="/analytics" className="av-revenue-card av-revenue-analytics"><div className="av-revenue-card-head"><span><BarChart3 size={15}/> REVENUE GROWTH INSIGHTS</span><ArrowUpRight size={14}/></div><b>Know what moves the numbers.</b><div className="av-revenue-chart"><div className="av-revenue-chart-label"><span>Campaign engagement</span><small>Example view</small></div><svg viewBox="0 0 260 100" role="img" aria-label="Illustrative upward engagement trend"><path d="M0 79H260M0 52H260M0 25H260" stroke="#E5EAF4" strokeDasharray="3 5"/><path d="M4 76C24 71 31 62 48 67S78 57 94 54 123 62 143 42 173 48 191 26 223 32 256 8" stroke="#155EEF" strokeWidth="3" strokeLinecap="round" fill="none"/><path d="M4 76C24 71 31 62 48 67S78 57 94 54 123 62 143 42 173 48 191 26 223 32 256 8V100H4Z" fill="url(#avRevenueFill)" opacity=".16"/><defs><linearGradient id="avRevenueFill" x1="0" y1="0" x2="0" y2="1"><stop stopColor="#155EEF"/><stop offset="1" stopColor="#155EEF" stopOpacity="0"/></linearGradient></defs></svg><div className="av-revenue-chart-bars">{[30,48,42,65,52,76,68,92].map((v,i)=><i key={i} style={{height:v+'%'}}/>)}</div></div><div className="av-revenue-card-foot"><span>Delivery & engagement</span><span>Replies & tracked outcomes</span></div></a></Reveal>
+  </div>
+ </div></section>
+);
+
+const CrmSpotlight: React.FC = () => (
+ <section className="av-crm-spotlight"><div className="av-container av-crm-spotlight-layout">
+  <Reveal className="av-crm-spotlight-copy"><Eyebrow>YOUR BUILT-IN CRM</Eyebrow><h2>Not another contact list.<br/><span>A clearer way to move every lead.</span></h2><p>Keep contact details, conversations, ownership, pipeline stages, notes and the next action together. Add separate lead databases to organise campaign audiences without mixing them into your CRM.</p><div className="av-crm-benefits"><span><Check size={14}/> Lead profiles and conversation history</span><span><Check size={14}/> Pipeline stages and team ownership</span><span><Check size={14}/> Follow-up tasks and activity timeline</span><span><Check size={14}/> Separate reusable lead databases</span></div><a href="/crm" className="av-inline-link">Explore the built-in CRM <ArrowUpRight size={15}/></a></Reveal>
+  <Reveal className="av-crm-board" delay={.1}><div className="av-crm-board-top"><span><Users size={14}/> SALES PIPELINE</span><span>Example workspace view <i/></span></div><div className="av-crm-board-summary"><div><small>CONTACTS</small><b>Lead records</b></div><div><small>PIPELINE</small><b>Stage tracking</b></div><div><small>ACTIVITY</small><b>Next actions</b></div></div>
+   <div className="av-crm-kanban"><div className="av-crm-lane lane-new"><header>New enquiry <i>03</i></header>{[['AK','Ayesha Khan','Website form'],['IP','Imran Patel','Instagram'],['SM','Sara Merchant','WhatsApp']].map(x=><div className="av-crm-person" key={x[0]}><span>{x[0]}</span><b>{x[1]}</b><small>{x[2]}</small></div>)}</div><div className="av-crm-lane lane-progress"><header>In progress <i>02</i></header>{[['RA','Rizwan Ali','Qualification'],['NK','Neha Kapoor','Follow-up']].map(x=><div className="av-crm-person" key={x[0]}><span>{x[0]}</span><b>{x[1]}</b><small>{x[2]}</small></div>)}</div><div className="av-crm-lane lane-booked"><header>Demo booked <i>02</i></header>{[['ZS','Zeeshan Khan','Demo confirmed'],['FK','Farhan Khan','Next step']].map(x=><div className="av-crm-person" key={x[0]}><span>{x[0]}</span><b>{x[1]}</b><small>{x[2]}</small></div>)}</div></div>
+   <div className="av-crm-database-strip"><Database size={15}/><span><b>Lead databases</b><small>Organise audiences · review imports · snapshot campaign recipients</small></span><ArrowUpRight size={15}/></div>
+  </Reveal>
+ </div></section>
+);
+
 const WorkspaceSection: React.FC = () => (
-  <section className="av-workspace-section">
-    <div className="av-container">
-      <Reveal className="av-section-heading"><Eyebrow>THE CONNECTED WORKSPACE</Eyebrow><h2>Everything around the sale.<br /><span>Finally working together.</span></h2><p>Each capability has a job. The value comes from what happens when they share the same customer context.</p></Reveal>
-      <div className="av-capability-grid">{CAPABILITIES.map((item, index) => { const Icon = item.icon; return <Reveal key={item.title} delay={index * .055}><a href={item.href} className="av-capability-card"><div className="av-capability-top"><span className="av-capability-icon"><Icon size={19} /></span><small>{item.tag}</small></div><h3>{item.title}</h3><p>{item.copy}</p><span className="av-capability-link">Explore capability <ArrowUpRight size={14} /></span><span className="av-capability-index">0{index + 1}</span></a></Reveal>; })}</div>
-    </div>
-  </section>
+ <section className="av-workspace-section"><div className="av-container"><Reveal className="av-section-heading"><Eyebrow>THE CONNECTED WORKSPACE</Eyebrow><h2>One platform. Every step<br/><span>working toward the next customer.</span></h2><p>Seven connected capabilities. One shared context from the first enquiry through campaigns, meetings and reporting.</p></Reveal>
+  <div className="av-capability-grid">{CAPABILITIES.map((item,index)=>{const Icon=item.icon;return <Reveal key={item.title} delay={index*.045}><a href={item.href} className="av-capability-card"><div className="av-capability-top"><span className="av-capability-icon"><Icon size={19}/></span><small>{item.tag}</small></div><h3>{item.title}</h3><p>{item.copy}</p><span className="av-capability-link">Explore capability <ArrowUpRight size={14}/></span><span className="av-capability-index">0{index+1}</span></a></Reveal>;})}</div>
+ </div></section>
 );
 
 const SolutionsSection: React.FC = () => (
-  <section className="av-solutions-section">
-    <div className="av-container av-solutions-layout">
-      <Reveal><Eyebrow>BUILT FOR CUSTOMER-LED BUSINESSES</Eyebrow><h2>Different industries.<br /><span>The same need to keep leads moving.</span></h2><p>Start with the journey your team manages every day. Configure the channels, knowledge, workflows and team access around the way your business sells.</p><a href="/solutions" className="av-inline-link">Explore solutions <ArrowUpRight size={15} /></a></Reveal>
-      <div className="av-solution-cards">
-        <Reveal><a href="/solutions#travel" className="av-solution-card av-solution-travel"><span>01 / TRAVEL & UMRAH</span><h3>From package enquiry to consultation.</h3><p>Connect lead capture, travel questions, sales conversations and booking consultations.</p><ArrowUpRight size={17} /></a></Reveal>
-        <Reveal delay={.08}><a href="/solutions#sales" className="av-solution-card av-solution-sales"><span>02 / SALES TEAMS</span><h3>From new lead to next action.</h3><p>Keep lead ownership, conversation history, qualification and demo scheduling aligned.</p><ArrowUpRight size={17} /></a></Reveal>
-        <Reveal delay={.16}><a href="/solutions#service" className="av-solution-card av-solution-service"><span>03 / SERVICE BUSINESSES</span><h3>From customer request to resolution.</h3><p>Give every conversation context, a clear owner and a coordinated follow-up.</p><ArrowUpRight size={17} /></a></Reveal>
-      </div>
-    </div>
-  </section>
+ <section className="av-solutions-section"><div className="av-container av-solutions-layout"><Reveal><Eyebrow>FOR CUSTOMER-LED TEAMS</Eyebrow><h2>Built for the way your business <span>finds and grows customers.</span></h2><p>Whether your team handles inbound enquiries, relationship-led sales or ongoing customer operations, Amaavigo connects the work from first touch to next step.</p><a href="/solutions" className="av-inline-link">Explore solutions <ArrowUpRight size={15}/></a></Reveal>
+  <div className="av-solution-cards"><Reveal><a href="/solutions#lead-generation" className="av-solution-card av-solution-leadgen"><span>01 / LEAD GENERATION</span><h3>Turn more enquiries into qualified opportunities.</h3><p>Bring leads from every connected source into one organised workflow.</p><ArrowUpRight size={17}/></a></Reveal><Reveal delay={.08}><a href="/solutions#sales-teams" className="av-solution-card av-solution-sales"><span>02 / SALES TEAMS</span><h3>Keep every opportunity moving forward.</h3><p>Connect conversations, CRM ownership, campaigns and demo scheduling.</p><ArrowUpRight size={17}/></a></Reveal><Reveal delay={.16}><a href="/solutions#customer-operations" className="av-solution-card av-solution-service"><span>03 / CUSTOMER OPERATIONS</span><h3>Give every customer a clear next step.</h3><p>Keep requests, responses, context and follow-up coordinated as relationships grow.</p><ArrowUpRight size={17}/></a></Reveal></div>
+ </div></section>
 );
 
 const PricingTeaser: React.FC = () => (
@@ -511,53 +447,53 @@ const FinalCta: React.FC<{ title?: string; body?: string }> = ({ title = 'Your n
 );
 
 const HomePage: React.FC = () => (
-  <main className="av-home">
-    <section className="av-hero">
-      <div className="av-hero-lines" /><div className="av-hero-glow av-glow-blue" /><div className="av-hero-glow av-glow-orange" />
-      <div className="av-container av-hero-layout">
-        <div className="av-hero-copy">
-          <Reveal><Eyebrow light>THE LEAD-TO-REVENUE PLATFORM</Eyebrow><h1>You bring in the lead.<br /><span>We keep the sale moving.</span></h1><p className="av-hero-description">Amaavigo connects lead capture, AI conversations, qualification, demo scheduling and campaigns in one workspace—so your team can stop stitching the sales process together.</p><div className="av-hero-actions"><ButtonLink href={DEMO_URL} external>See Amaavigo in action</ButtonLink><a href="#how-it-works" className="av-hero-secondary">See how it works <ArrowDown size={15} /></a></div><div className="av-hero-proof"><span><ShieldCheck size={15} /> Human control stays built in</span><i /><span><Workflow size={15} /> One connected sales journey</span></div></Reveal>
-        </div>
-        <HeroWorkspace />
-      </div>
-      <div className="av-hero-bottom"><span>CAPTURE</span><i /><span>CONVERSE</span><i /><span>QUALIFY</span><i /><span>BOOK</span><i /><span>GROW</span></div>
-    </section>
-    <section className="av-channel-band"><div className="av-container av-channel-inner"><div className="av-channel-label"><small>ONE CUSTOMER JOURNEY</small><b>Across the channels you use.</b></div><div className="av-channel-list"><span><MessageCircle /> WhatsApp</span><span><Mail /> Email</span><span><Globe /> Website</span><span><Users /> CRM</span><span><CalendarCheck /> Calendar</span></div></div></section>
-    <JourneySection />
-    <section className="av-inbox-section">
-      <div className="av-container av-inbox-layout">
-        <Reveal className="av-inbox-visual"><div className="av-inbox-screen"><div className="av-inbox-screen-head"><span><Inbox size={15} /> UNIFIED INBOX</span><span><i /> CONNECTED WORKSPACE</span></div><div className="av-inbox-four-panel"><div className="av-inbox-rail"><span className="is-active"><Inbox size={15} /></span><span><Users size={15} /></span><span><Bot size={15} /></span><span><Send size={15} /></span></div><div className="av-inbox-list"><small>CONVERSATIONS</small><div className="av-inbox-search"><Search size={11} /> Search contacts</div>{THREADS.map((thread, index) => <div key={thread.name} className={index === 0 ? 'av-inbox-contact is-active' : 'av-inbox-contact'}><span className={'av-thread-avatar ' + thread.color}>{thread.initials}</span><span><b>{thread.name}</b><small>{thread.preview}</small></span></div>)}</div><div className="av-inbox-thread"><div><b>Ayesha Khan</b><small>WhatsApp · New enquiry</small></div><p className="av-inbox-bubble">Hi, I would like to know more about your services.</p><p className="av-inbox-bubble is-reply"><small><Sparkles size={10} /> AI response</small>Absolutely. I can help you explore the right option and arrange the next step.</p><span className="av-inbox-input">Write a reply… <ArrowUpRight size={12} /></span></div><div className="av-inbox-profile"><small>LEAD PROFILE</small><span className="av-inbox-profile-avatar">AK</span><b>Ayesha Khan</b><em>Engaged</em><hr /><small>Lead source</small><b>WhatsApp</b><small>Next action</small><b>Qualify enquiry</b></div></div></div><div className="av-inbox-float av-float-handoff"><span><Users size={14} /></span><b>Human handoff</b></div><div className="av-inbox-float av-float-context"><span><BadgeCheck size={14} /></span><b>Lead context attached</b></div></Reveal>
-        <Reveal className="av-inbox-copy"><Eyebrow>THE CONVERSATION LAYER</Eyebrow><h2>Every conversation in context.<br /><span>Not scattered across tabs.</span></h2><p>Bring supported channels into one shared Inbox. Let AI prepare responses, give people a clear way to take over and keep the lead profile beside the conversation.</p><div className="av-inbox-benefits"><div><span><MessageSquare size={16} /></span><div><b>One place to respond</b><small>Work across connected channels from a shared view.</small></div></div><div><span><Bot size={16} /></span><div><b>AI and people together</b><small>Use automatic, review or off modes, with human handoff.</small></div></div><div><span><Users size={16} /></span><div><b>Customer context stays close</b><small>Keep lead details and activity visible while your team replies.</small></div></div></div><a href="/unified-inbox" className="av-inline-link">Explore Unified Inbox <ArrowUpRight size={15} /></a></Reveal>
-      </div>
-    </section>
-    <AgentSection />
-    <CampaignStudio />
-    <WorkspaceSection />
-    <SolutionsSection />
-    <PricingTeaser />
-    <FinalCta />
-  </main>
+ <main className="av-home">
+  <section className="av-hero"><div className="av-hero-lines"/><div className="av-hero-glow av-glow-blue"/><div className="av-hero-glow av-glow-orange"/>
+   <div className="av-container av-hero-layout"><div className="av-hero-copy"><Reveal><Eyebrow>THE AI-POWERED LEAD-TO-REVENUE PLATFORM</Eyebrow><h1>You bring in the lead.<br/>We turn it into a <span>booked sale.</span></h1><p className="av-hero-description">Capture leads from every connected channel. Let AI handle conversations, keep every relationship in your built-in CRM, launch campaigns and turn customer intent into booked meetings — all from one intelligent workspace.</p><div className="av-hero-actions"><ButtonLink href={DEMO_URL} external>See Amaavigo in action</ButtonLink><a href="/platform" className="av-hero-secondary"><span className="av-play-icon">▶</span> Explore the platform</a></div><div className="av-hero-proof"><span><ShieldCheck size={15}/> Human control stays built in</span><i/><span><Workflow size={15}/> One connected sales journey</span></div></Reveal></div><HeroWorkspace/></div>
+   <div className="av-hero-journey-strip"><div><span className="step-capture"><MousePointerClickFallback/></span><b>Capture</b><small>Leads from every channel</small></div><ArrowRight size={18}/><div><span className="step-engage"><Sparkles size={19}/></span><b>Engage</b><small>AI handles the conversation</small></div><ArrowRight size={18}/><div><span className="step-book"><CalendarCheck size={19}/></span><b>Book</b><small>Schedule demos automatically</small></div><ArrowRight size={18}/><div><span className="step-grow"><BarChart3 size={19}/></span><b>Grow</b><small>Run campaigns & track results</small></div></div>
+   <div className="av-hero-bottom"><span>CAPTURE</span><i/><span>ENGAGE</span><i/><span>BOOK</span><i/><span>GROW</span></div>
+  </section>
+  <section className="av-channel-band"><div className="av-container av-channel-inner"><div className="av-channel-label"><small>ONE CUSTOMER JOURNEY</small><b>Wherever your customers start.</b></div><div className="av-channel-list"><span><MessageCircle/> WhatsApp</span><span><Instagram/> Instagram</span><span><Facebook/> Messenger</span><span><Mail/> Email</span><span><Globe/> Website</span></div></div></section>
+  <RevenueEngineSection/><JourneySection/>
+  <section className="av-inbox-section"><div className="av-container av-inbox-layout">
+   <Reveal className="av-inbox-visual"><div className="av-inbox-screen"><div className="av-inbox-screen-head"><span><Inbox size={15}/> UNIFIED INBOX</span><span><i/> CONNECTED CHANNELS</span></div><div className="av-inbox-four-panel"><div className="av-inbox-rail"><span className="is-active"><Inbox size={15}/></span><span><Users size={15}/></span><span><Bot size={15}/></span><span><Send size={15}/></span></div><div className="av-inbox-list"><small>CONVERSATIONS</small><div className="av-inbox-search"><Search size={11}/> Search contacts</div>{THREADS.map((thread,index)=><div key={thread.name} className={index===0?'av-inbox-contact is-active':'av-inbox-contact'}><span className={'av-thread-avatar '+thread.color}>{thread.initials}</span><span><b>{thread.name}</b><small>{thread.channel} · {thread.preview}</small></span></div>)}</div><div className="av-inbox-thread"><div><b>Ayesha Khan</b><small>WhatsApp · New enquiry</small></div><p className="av-inbox-bubble">Hi, I would like to understand how your service works.</p><p className="av-inbox-bubble is-reply"><small><Sparkles size={10}/> AI response</small>Of course. I can help you explore the right option and arrange the next step.</p><span className="av-inbox-input">Write a reply… <ArrowUpRight size={12}/></span></div><div className="av-inbox-profile"><small>LEAD PROFILE</small><span className="av-inbox-profile-avatar">AK</span><b>Ayesha Khan</b><em>New opportunity</em><hr/><small>Channel</small><b>WhatsApp</b><small>Next action</small><b>Qualify enquiry</b></div></div></div><div className="av-inbox-float av-float-handoff"><span><Users size={14}/></span><b>Human handoff</b></div><div className="av-inbox-float av-float-context"><span><BadgeCheck size={14}/></span><b>Lead context attached</b></div></Reveal>
+   <Reveal className="av-inbox-copy"><Eyebrow>THE CONVERSATION LAYER</Eyebrow><h2>Every conversation.<br/><span>One intelligent Inbox.</span></h2><p>Bring customer conversations from WhatsApp, Instagram, Facebook Messenger, email and website into one shared view. Let AI prepare replies, give your team a clear way to take over and keep every lead profile beside the conversation.</p><div className="av-inbox-benefits"><div><span><MessageSquare size={16}/></span><div><b>All channels in one place</b><small>See messages and customer context without switching tools.</small></div></div><div><span><Bot size={16}/></span><div><b>AI and people together</b><small>Choose automatic, review or off modes with human handoff.</small></div></div><div><span><Users size={16}/></span><div><b>Lead context stays close</b><small>Keep ownership, notes and activity visible while replying.</small></div></div></div><a href="/unified-inbox" className="av-inline-link">Explore Unified Inbox <ArrowUpRight size={15}/></a></Reveal>
+  </div></section>
+  <AgentSection/><CampaignStudio/><CrmSpotlight/><WorkspaceSection/><SolutionsSection/><PricingTeaser/>
+  <FinalCta title="Turn the next enquiry into your next customer." body="Give your team one connected place to capture demand, handle conversations, manage relationships and keep revenue moving."/>
+ </main>
 );
+const MousePointerClickFallback: React.FC = () => <Globe size={19}/>;
 
-const CapabilityPage: React.FC<{ path: string }> = ({ path }) => {
-  const page = PAGE_META[path] || PAGE_META['/platform'];
-  const Icon = page.icon;
-  return (
-    <main className="av-subpage">
-      <section className="av-subhero"><div className="av-hero-lines" /><div className="av-subhero-glow" /><div className="av-container av-subhero-layout"><Reveal><Eyebrow light>{page.eyebrow}</Eyebrow><h1>{page.title} <span>{page.accent}</span></h1><p>{page.description}</p><div className="av-subhero-actions"><ButtonLink href={DEMO_URL} external>Talk through your workflow</ButtonLink><a href="/pricing" className="av-hero-secondary">Explore pricing <ArrowUpRight size={15} /></a></div></Reveal><Reveal className="av-subhero-product" delay={.12}><div className="av-subhero-product-orbit" /><div className="av-subhero-product-card"><div className="av-subhero-product-top"><span>A</span><div><b>{page.eyebrow}</b><small>AMAAVIGO WORKSPACE</small></div><i /></div><div className="av-subhero-icon"><Icon size={26} /></div><strong>{page.title.replace(/\.$/, '')}</strong><p>{page.description}</p><div className="av-subhero-product-footer"><span><ShieldCheck size={12} /> Connected workflow</span><ArrowUpRight size={14} /></div></div></Reveal></div></section>
-      <section className="av-subpage-points"><div className="av-container av-subpage-points-layout"><Reveal><Eyebrow>WHAT YOU CAN DO</Eyebrow><h2>Designed around the work.<br /><span>Connected to the outcome.</span></h2><p>Every capability works as part of the wider customer journey, with context and control carried from one step to the next.</p></Reveal><Reveal className="av-subpage-point-list" delay={.1}>{page.points.map((point, index) => <div key={point}><span>{String(index + 1).padStart(2, '0')}</span><b>{point}</b><Check size={15} /></div>)}</Reveal></div></section>
-      <section className="av-subpage-next"><div className="av-container"><Reveal className="av-section-heading"><Eyebrow>CONNECTED BY DESIGN</Eyebrow><h2>The next step is already <span>part of the same workspace.</span></h2></Reveal><div className="av-subpage-next-grid">{page.next.map((item, index) => <Reveal key={item.title} delay={index * .07}><a href={item.href} className="av-next-card"><span>0{index + 1}</span><b>{item.title}</b><p>{item.copy}</p><ArrowUpRight size={16} /></a></Reveal>)}</div></div></section>
-      <FinalCta title="See how the whole journey works together." body="Walk through the platform with our team and map the right lead-to-revenue workflow for your business." />
-    </main>
-  );
+const FeatureIllustration: React.FC<{path:string}> = ({path}) => {
+ const channels=<div className="av-feature-channels"><span className="wa"><MessageCircle/></span><span className="ig"><Instagram/></span><span className="fb"><Facebook/></span><span className="mail"><Mail/></span><span className="web"><Globe/></span></div>;
+ if(path==='/lead-capture') return <div className="av-feature-illustration av-feature-lead-capture">
+  <div className="av-feature-window-head"><span><i/><i/><i/></span><b>Lead Capture</b><small>New enquiry received</small></div>
+  <div className="av-feature-lead-sources"><span><Globe/> Website</span><span><MessageCircle/> WhatsApp</span><span><Instagram/> Instagram</span><span><Facebook/> Messenger</span><span><Mail/> Email</span></div>
+  <div className="av-feature-form-preview"><div className="av-feature-form-top"><span><Sparkles size={13}/> NEW ENQUIRY</span><b>Let’s start a conversation.</b><small>Your details are captured and routed to the right workspace.</small></div>
+   <div className="av-feature-form-fields"><span>Name</span><span>Work email</span><span>Phone number</span><div>Send enquiry <ArrowUpRight size={11}/></div></div>
+  </div>
+  <div className="av-feature-inbox-foot"><Database size={13}/> Contact captured · Source retained · CRM record created</div>
+ </div>;
+ if(path==='/unified-inbox') return <div className="av-feature-illustration av-feature-inbox"><div className="av-feature-window-head"><span><i/><i/><i/></span><b>Unified Inbox</b><small>Live conversation view</small></div>{channels}<div className="av-feature-inbox-ui"><div className="av-feature-inbox-list"><small>CONVERSATIONS</small><b className="active">Ayesha Khan <i>WhatsApp</i></b><b>Imran Patel <i>Instagram</i></b><b>Sara Merchant <i>Messenger</i></b></div><div className="av-feature-inbox-chat"><b>Ayesha Khan <i>● Active</i></b><p>Can you share more details?</p><p className="ai"><Sparkles size={11}/> AI response prepared</p><span>Write a reply…</span></div></div><div className="av-feature-inbox-foot"><ShieldCheck size={13}/> Human handoff · Lead profile · Conversation history</div></div>;
+ if(path==='/campaigns'||path==='/whatsapp') return <div className="av-feature-illustration av-feature-campaign"><div className="av-feature-window-head"><span><i/><i/><i/></span><b>Campaign Builder</b><small>Draft preview</small></div><div className="av-feature-campaign-tabs"><span className="selected"><Mail size={11}/> Email</span><span><MessageCircle size={11}/> WhatsApp</span><span><Workflow size={11}/> Follow-up</span></div><div className="av-feature-campaign-workspace"><div className="av-feature-toolrail"><i>T</i><i><Layers size={11}/></i><i>▤</i><i>↗</i></div><div className="av-feature-email-card"><small>YOUR BRAND</small><div className="av-feature-email-image"><Sparkles size={22}/></div><h4>Make the next conversation count.</h4><p>A helpful message, a clear next step, and a way to keep the relationship moving.</p><span>Continue <ArrowUpRight size={10}/></span></div><div className="av-feature-sequence"><b>FOLLOW-UP JOURNEY</b><i>Send campaign</i><i>Wait for engagement</i><i>Prepare next touch</i></div></div><div className="av-feature-inbox-foot"><Layers size={13}/> Visual design · Custom templates · Audience selection · Reporting</div></div>;
+ if(path==='/crm') return <div className="av-feature-illustration av-feature-crm"><div className="av-feature-window-head"><span><i/><i/><i/></span><b>Built-in CRM</b><small>Pipeline overview</small></div><div className="av-feature-crm-summary"><span><small>CONTACTS</small><b>Lead records</b></span><span><small>PIPELINE</small><b>Stage tracking</b></span><span><small>ACTIVITY</small><b>Next actions</b></span></div><div className="av-feature-crm-board"><div><b>New leads</b><i>AK · Ayesha Khan</i><i>IP · Imran Patel</i><i>SM · Sara Merchant</i></div><div><b>In progress</b><i>RA · Rizwan Ali</i><i>NK · Neha Kapoor</i></div><div><b>Demo booked</b><i>ZS · Zeeshan Khan</i><i>FK · Farhan Khan</i></div></div><div className="av-feature-inbox-foot"><Database size={13}/> Separate lead databases · Import history · Campaign snapshots</div></div>;
+ if(path==='/ai-agents'||path==='/ai-agent') return <div className="av-feature-illustration av-feature-agent"><div className="av-feature-agent-label"><Sparkles size={15}/> AMAAVIGO AI AGENT <i>Balanced mode</i></div><div className="av-feature-agent-prompt">“Prepare a follow-up campaign for leads who haven't booked, and show me the draft.”</div>{['Review recent lead activity','Find the right audience','Prepare campaign content','Create a draft for approval'].map((x,i)=><div className="av-feature-agent-step" key={x}><span><Check size={12}/></span>{x}<small>{String(i+1).padStart(2,'0')}</small></div>)}<div className="av-feature-agent-approval"><ShieldCheck size={14}/> You stay in control of external actions.</div></div>;
+ if(path==='/demo-scheduling') return <div className="av-feature-illustration av-feature-scheduling"><div className="av-feature-window-head"><span><i/><i/><i/></span><b>Demo Scheduling</b><small>Calendar availability</small></div><div className="av-feature-calendar"><div><small>WORKSPACE CALENDAR</small><b>November 2026</b><div className="av-feature-calendar-days">{['M','T','W','T','F','S','S'].map((x,i)=><i key={i}>{x}</i>)}{Array.from({length:28},(_,i)=><i key={'d'+i} className={i===17?'selected':''}>{i+1}</i>)}</div></div><div className="av-feature-calendar-slots"><small>AVAILABLE TIMES</small><b>10:00 AM</b><b>11:30 AM</b><b className="selected">2:00 PM</b><b>3:30 PM</b><span>Confirm booking <ArrowUpRight size={11}/></span></div></div><div className="av-feature-inbox-foot"><CalendarCheck size={13}/> Google Calendar · Microsoft 365 · Meeting links</div></div>;
+ if(path==='/integrations') return <div className="av-feature-illustration av-feature-integrations"><div className="av-feature-integrations-core">a</div>{channels}<div className="av-feature-integration-name">Connected channels & tools</div><div className="av-feature-integration-bottom"><span>Google Calendar</span><span>Microsoft 365</span><span>Website forms</span><span>APIs & webhooks</span></div></div>;
+ if(path==='/analytics') return <div className="av-feature-illustration av-feature-analytics"><div className="av-feature-window-head"><span><i/><i/><i/></span><b>Growth Insights</b><small>Campaign reporting</small></div><div className="av-feature-kpi"><span><small>DELIVERY</small><b>Campaign outcomes</b></span><span><small>ENGAGEMENT</small><b>Opens · Clicks · Replies</b></span><span><small>CONVERSION</small><b>Tracked next steps</b></span></div><div className="av-feature-analytics-chart"><div><i/><i/><i/><i/></div><svg viewBox="0 0 400 130" role="img" aria-label="Illustrative campaign engagement chart"><path d="M0 103 C35 91 41 72 72 83 S115 99 142 59 S188 81 218 54 S266 63 287 32 S340 48 400 8" stroke="#155EEF" strokeWidth="4" fill="none" strokeLinecap="round"/></svg></div><div className="av-feature-inbox-foot"><Sparkles size={13}/> AI-generated findings and recommendations</div></div>;
+ return <div className="av-feature-illustration av-feature-platform"><div className="av-feature-platform-orbit"/><div className="av-feature-platform-core">a</div><span className="node node-leads"><Globe/> Lead capture</span><span className="node node-inbox"><Inbox/> Unified Inbox</span><span className="node node-ai"><Sparkles/> AI Agent</span><span className="node node-crm"><Users/> CRM</span><span className="node node-campaign"><Send/> Campaigns</span><span className="node node-analytics"><BarChart3/> Insights</span></div>;
+};
+
+const CapabilityPage: React.FC<{path:string}> = ({path}) => {
+ const page=PAGE_META[path]||PAGE_META['/platform'];
+ return <main className="av-subpage"><section className="av-subhero av-capability-hero"><div className="av-hero-lines"/><div className="av-subhero-glow"/><div className="av-container av-subhero-layout"><Reveal><Eyebrow light>{page.eyebrow}</Eyebrow><h1>{page.title} <span>{page.accent}</span></h1><p>{page.description}</p><div className="av-subhero-actions"><ButtonLink href={DEMO_URL} external>Book a product demo</ButtonLink><a href="/pricing" className="av-hero-secondary">Explore pricing <ArrowUpRight size={15}/></a></div><div className="av-page-proof"><span><CheckCircle2 size={13}/> Connected customer context</span><span><ShieldCheck size={13}/> Human control built in</span></div></Reveal><Reveal className="av-subhero-product av-feature-visual-wrap" delay={.12}><FeatureIllustration path={path}/></Reveal></div></section><section className="av-subpage-points"><div className="av-container av-subpage-points-layout"><Reveal><Eyebrow>WHAT YOU CAN DO</Eyebrow><h2>Designed around the work.<br/><span>Connected to the outcome.</span></h2><p>Every capability works as part of the wider customer journey, with context and control carried from one step to the next.</p></Reveal><Reveal className="av-subpage-point-list" delay={.1}>{page.points.map((point,index)=><div key={point}><span>{String(index+1).padStart(2,'0')}</span><b>{point}</b><Check size={15}/></div>)}</Reveal></div></section><section className="av-subpage-next"><div className="av-container"><Reveal className="av-section-heading"><Eyebrow>CONNECTED BY DESIGN</Eyebrow><h2>The next step is already <span>part of the same workspace.</span></h2></Reveal><div className="av-subpage-next-grid">{page.next.map((item,index)=><Reveal key={item.title} delay={index*.07}><a href={item.href} className="av-next-card"><span>0{index+1}</span><b>{item.title}</b><p>{item.copy}</p><ArrowUpRight size={16}/></a></Reveal>)}</div></div></section><FinalCta title="See how the whole journey works together." body="Walk through the platform and map the right lead-to-revenue workflow for your team."/></main>;
 };
 
 const SolutionsPage: React.FC = () => (
-  <main className="av-subpage">
-    <section className="av-subhero"><div className="av-hero-lines" /><div className="av-subhero-glow" /><div className="av-container av-subhero-layout"><Reveal><Eyebrow light>SOLUTIONS</Eyebrow><h1>Built around the way your business <span>turns interest into action.</span></h1><p>Start with the sales journey your team manages every day. Configure your channels, knowledge, people and workflows around it.</p><div className="av-subhero-actions"><ButtonLink href={DEMO_URL} external>Talk to our team</ButtonLink><a href="/platform" className="av-hero-secondary">Explore the platform <ArrowUpRight size={15} /></a></div></Reveal><Reveal className="av-subhero-product" delay={.12}><div className="av-solutions-orbit"><span><Globe /></span><span><MessageCircle /></span><span><CalendarCheck /></span><span><Users /></span><div>A</div></div></Reveal></div></section>
-    <section className="av-solution-details"><div className="av-container"><Reveal className="av-section-heading"><Eyebrow>WORKFLOWS, NOT INDUSTRY STEREOTYPES</Eyebrow><h2>Different businesses.<br /><span>The same need for momentum.</span></h2></Reveal><div className="av-solution-detail-grid"><article id="travel"><small>01 / TRAVEL & UMRAH OPERATORS</small><span><Globe size={22} /></span><h3>From package enquiry to consultation.</h3><p>Centralise travel enquiries, answer common questions using configured knowledge, coordinate follow-up and schedule a consultation with the right person.</p><a href="/lead-capture">Explore lead capture <ArrowUpRight size={15} /></a></article><article id="sales"><small>02 / SALES TEAMS</small><span><Users size={22} /></span><h3>From new lead to next action.</h3><p>Keep lead ownership, customer conversations, qualification, demo booking and campaign follow-through in one place.</p><a href="/crm">Explore CRM <ArrowUpRight size={15} /></a></article><article id="service"><small>03 / SERVICE BUSINESSES</small><span><Headphones size={22} /></span><h3>From customer request to resolution.</h3><p>Give each request context, a clear conversation owner and a coordinated follow-up, with AI assistance where it fits.</p><a href="/unified-inbox">Explore Unified Inbox <ArrowUpRight size={15} /></a></article></div></div></section>
-    <FinalCta />
-  </main>
+ <main className="av-subpage av-solutions-page"><section className="av-subhero av-solutions-hero"><div className="av-hero-lines"/><div className="av-subhero-glow"/><div className="av-container av-subhero-layout"><Reveal><Eyebrow light>AMAAVIGO SOLUTIONS</Eyebrow><h1>One connected way to <span>find, win and grow customers.</span></h1><p>Give every team a clearer process for capturing demand, managing conversations, coordinating the sales pipeline and building stronger customer relationships.</p><div className="av-subhero-actions"><ButtonLink href={DEMO_URL} external>Book a product demo</ButtonLink><a href="/platform" className="av-hero-secondary">Explore the platform <ArrowUpRight size={15}/></a></div></Reveal><Reveal className="av-solutions-hero-visual"><div className="av-solutions-visual-orbit"/><div className="av-solutions-visual-core">a</div><span><Globe/> Capture</span><span><MessageCircle/> Engage</span><span><Users/> Organise</span><span><BarChart3/> Grow</span></Reveal></div></section>
+ <section className="av-solution-details"><div className="av-container"><Reveal className="av-section-heading"><Eyebrow>BUILT AROUND YOUR WORKFLOW</Eyebrow><h2>Different teams. <span>One connected growth engine.</span></h2><p>Start with the work your team needs to make easier. Add connected capabilities as your process grows.</p></Reveal><div className="av-solution-detail-grid"><article id="lead-generation"><small>01 / LEAD GENERATION</small><span><Globe size={22}/></span><h3>Turn more enquiries into qualified opportunities.</h3><p>Bring website forms, WhatsApp, Instagram, Messenger, email and imported lead lists into one organised workspace.</p><a href="/lead-capture">Explore lead capture <ArrowUpRight size={15}/></a></article><article id="sales-teams"><small>02 / SALES TEAMS</small><span><Users size={22}/></span><h3>Move every opportunity toward its next step.</h3><p>Give teams a shared Inbox, a built-in CRM, clear ownership, campaign follow-through and demo scheduling.</p><a href="/crm">Explore CRM <ArrowUpRight size={15}/></a></article><article id="customer-operations"><small>03 / CUSTOMER OPERATIONS</small><span><Headphones size={22}/></span><h3>Keep customer requests connected to outcomes.</h3><p>Coordinate conversations, knowledge, handoffs and next actions so no customer request gets lost between tools.</p><a href="/unified-inbox">Explore Unified Inbox <ArrowUpRight size={15}/></a></article></div></div></section>
+ <FinalCta title="Build a sales process that keeps moving." body="See how Amaavigo can connect the way your team captures, engages, manages and grows customer relationships."/></main>
 );
 
 interface PublicPricingPlan {
@@ -715,7 +651,8 @@ const PricingPage: React.FC = () => {
 };
 
 const IntegrationsPage: React.FC = () => (
-  <main className="av-subpage"><section className="av-subhero"><div className="av-hero-lines" /><div className="av-subhero-glow" /><div className="av-container av-subhero-layout"><Reveal><Eyebrow light>INTEGRATIONS</Eyebrow><h1>Bring your customer channels into <span>one operating view.</span></h1><p>Connect the messaging, email, calendar and website services your team already uses, subject to provider permissions and eligibility.</p><div className="av-subhero-actions"><ButtonLink href={DEMO_URL} external>Discuss your integrations</ButtonLink></div></Reveal><Reveal className="av-integration-constellation"><div className="av-integration-core">A</div>{[{icon:MessageCircle,label:'WhatsApp',pos:'wa'},{icon:Mail,label:'Email',pos:'email'},{icon:Globe,label:'Website',pos:'web'},{icon:CalendarCheck,label:'Calendar',pos:'calendar'},{icon:Workflow,label:'Webhooks',pos:'hooks'}].map((item) => {const Icon=item.icon;return <span className={'av-integration-node node-' + item.pos} key={item.label}><Icon size={17}/><b>{item.label}</b></span>;})}</Reveal></div></section><section className="av-integration-list"><div className="av-container"><Reveal className="av-section-heading"><Eyebrow>CONNECTED SERVICES</Eyebrow><h2>Work with the channels<br /><span>your customers already know.</span></h2></Reveal><div className="av-integration-grid">{[{icon:MessageCircle,name:'WhatsApp Business',copy:'Supported WhatsApp Business connections and template workflows.'},{icon:Mail,name:'Email',copy:'Connected mailboxes, email sending and campaign communication.'},{icon:Globe,name:'Website',copy:'Website enquiries, forms and chatbot/webhook workflows.'},{icon:CalendarCheck,name:'Google Calendar',copy:'Calendar availability, events and Google Meet scheduling.'},{icon:CalendarClock,name:'Microsoft 365',copy:'Outlook calendar and Teams meeting workflows where configured.'},{icon:Workflow,name:'Webhooks & APIs',copy:'Connect supported external systems to inbound and outbound workflows.'}].map((item,index)=>{const Icon=item.icon;return <Reveal key={item.name} delay={index*.05}><div className="av-integration-card"><span><Icon size={20}/></span><b>{item.name}</b><p>{item.copy}</p></div></Reveal>;})}</div></div></section><FinalCta /></main>
+ <main className="av-subpage av-integrations-page"><section className="av-subhero"><div className="av-hero-lines"/><div className="av-subhero-glow"/><div className="av-container av-subhero-layout"><Reveal><Eyebrow light>CONNECTED CHANNELS & TOOLS</Eyebrow><h1>Bring your customer channels into <span>one operating view.</span></h1><p>Meet customers on the channels they use, connect the calendars your team relies on, and keep the customer context together inside Amaavigo.</p><div className="av-subhero-actions"><ButtonLink href={DEMO_URL} external>Discuss your integrations</ButtonLink><a href="/unified-inbox" className="av-hero-secondary">Explore Unified Inbox <ArrowUpRight size={15}/></a></div></Reveal><Reveal className="av-integration-constellation"><div className="av-integration-core">a</div><span className="av-integration-node node-wa"><MessageCircle/><b>WhatsApp</b></span><span className="av-integration-node node-instagram"><Instagram/><b>Instagram</b></span><span className="av-integration-node node-messenger"><Facebook/><b>Messenger</b></span><span className="av-integration-node node-email"><Mail/><b>Email</b></span><span className="av-integration-node node-web"><Globe/><b>Website</b></span><span className="av-integration-node node-calendar"><CalendarCheck/><b>Calendar</b></span></Reveal></div></section>
+ <section className="av-integration-list"><div className="av-container"><Reveal className="av-section-heading"><Eyebrow>YOUR CONNECTED ECOSYSTEM</Eyebrow><h2>Where conversations start.<br/><span>Where the next step gets booked.</span></h2><p>Connect supported channels and services through the relevant account permissions and provider setup.</p></Reveal><div className="av-integration-grid">{[{icon:MessageCircle,name:'WhatsApp Business',copy:'Connect WhatsApp Business and manage eligible customer conversations and template workflows.'},{icon:Instagram,name:'Instagram Messaging',copy:'Bring supported Instagram conversations into the shared customer Inbox.'},{icon:Facebook,name:'Facebook Messenger',copy:'Manage supported Messenger conversations with the same customer context.'},{icon:Mail,name:'Email',copy:'Connect business mailboxes and use email for customer conversations and campaigns.'},{icon:Globe,name:'Website & forms',copy:'Capture website enquiries and connect supported form and webhook workflows.'},{icon:CalendarCheck,name:'Google Calendar',copy:'Check calendar availability and coordinate demo bookings and meeting links.'},{icon:CalendarClock,name:'Microsoft 365',copy:'Connect Outlook calendar and Microsoft Teams meeting workflows where configured.'},{icon:Workflow,name:'APIs & webhooks',copy:'Connect supported external systems to inbound and outbound workflows.'}].map((item,index)=>{const Icon=item.icon;return <Reveal key={item.name} delay={index*.045}><div className="av-integration-card"><span><Icon size={20}/></span><b>{item.name}</b><p>{item.copy}</p></div></Reveal>;})}</div><div className="av-integration-note"><ShieldCheck size={15}/> Available connections depend on provider permissions, workspace configuration and account eligibility.</div></div></section><FinalCta/></main>
 );
 
 const ResourcesPage: React.FC = () => (
